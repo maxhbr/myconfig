@@ -148,7 +148,6 @@
       ];
     }
     (myconfig.metadatalib.setupAsBackupTarget "/mnt/2x4t/backup" [
-      "x1extremeG2"
       "p14"
     ])
     (myconfig.metadatalib.fixIp "enp3s0")
