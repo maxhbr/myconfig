@@ -27,17 +27,34 @@ writeScripts() {
 
     cat <<'EOF' | tee "$outDir/dd.sh"
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p parted gptfdisk systemdMinimal e2fsprogs
+#! nix-shell -i bash -p parted gptfdisk systemdMinimal e2fsprogs util-linux
 set -euo pipefail
-set -x
 EOF
     echo "iso=$outFile" | tee -a "$outDir/dd.sh"
     cat <<'EOF' | tee -a "$outDir/dd.sh"
-sdX="$1"
-die() { exit 1; }
-[[ "$(lsblk -no TYPE "$sdX")" = "disk"* ]] || die
+sdX="${1:-}"
+die() {
+    echo "error: $*" >&2
+    exit 1
+}
+[[ -n $sdX ]] || die "usage: ./dd.sh <device>   (e.g. /dev/sdX)"
+[[ -b $sdX ]] || die "$sdX is not a block device"
+# Refuse partitions and other non-disk nodes: we overwrite the partition table.
+[[ "$(lsblk -no TYPE "$sdX")" == "disk"* ]] || die "$sdX is not a whole disk"
 
-sudo dd if="$iso" of="$sdX" bs=4M conv=sync status=progress
+lsblk "$sdX" >&2 || true
+read -r -p "About to OVERWRITE $sdX with ${iso##*/}. Type 'yes' to continue: " ans
+[[ $ans == "yes" ]] || die "aborted."
+
+echo "==> Unmounting any mounted partitions of $sdX ..." >&2
+for part in "$sdX"?*; do
+    [[ -b $part ]] && sudo umount "$part" 2>/dev/null || true
+done
+
+echo "==> Writing $iso to $sdX ..." >&2
+sudo dd if="$iso" of="$sdX" bs=4M conv=fsync status=progress
+sync
+echo "==> Done." >&2
 EOF
     chmod +x "$outDir/dd.sh"
 
