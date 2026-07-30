@@ -358,6 +358,20 @@
               ]
               ++ moreModules
             ) metadataOverride);
+          host-roc =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "aarch64-linux" "roc" (
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "roc") ];
+                  }
+                )
+              ]
+              ++ moreModules
+            ) metadataOverride);
           host-futro =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "futro" (
@@ -417,6 +431,9 @@
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
           test-odroid = self.nixosConfigurationsGen.host-odroid [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-roc = self.nixosConfigurationsGen.host-roc [
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
           # test-pi4 = self.nixosConfigurationsGen.host-pi4 [
