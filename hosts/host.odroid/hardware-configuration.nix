@@ -41,8 +41,19 @@
   # only this console (plus the framebuffer tty0) should be on the kernel
   # command line - the Tegra/QEMU consoles from sd-image-aarch64.nix do not
   # apply here.
+  #
+  # `earlycon` is required to see *early* kernel output on this board: without
+  # it, anything the kernel prints before the real `meson` 8250-style serial
+  # driver probes is silently dropped, so an early-boot panic/oops resets the
+  # board with *no* serial output at all (symptom: "reboot loop, never see any
+  # log").  The bare `earlycon` form auto-configures from the DT `stdout-path`
+  # (serial_AO on the meson-gxbb DTB), so no hard-coded MMIO address is needed.
+  # This is a diagnostics-only change: it does not alter the boot chain, only
+  # makes a pre-userspace failure visible so its root cause can be confirmed on
+  # the console.
   boot.kernelParams = [
     "cma=32M"
+    "earlycon"
     "console=ttyAML0,115200n8"
     "console=tty0"
   ];
