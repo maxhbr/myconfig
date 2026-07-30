@@ -4,6 +4,7 @@
 {
   imports = [
     ./hardware-configuration.nix
+    ./wifi.nix
   ];
 
   config = {
