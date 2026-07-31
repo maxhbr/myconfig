@@ -954,6 +954,14 @@ rec {
             image.baseName = lib.mkForce "nixos-myconfig-${hostName}";
           }
           forceSSHModule
+          # Allow an agent holding the semi-safe keypair to SSH into the
+          # live image for provisioning.  The private key is git-ignored
+          # (see .gitignore), the public key is committed in misc/.
+          {
+            users.extraUsers.root.openssh.authorizedKeys.keys = [
+              (lib.strings.trim (builtins.readFile ./misc/semi-safe-keypair.pub))
+            ];
+          }
           bootstrapModule
           bootstrapInstallModule
           addConfigModule

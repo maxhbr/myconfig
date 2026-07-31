@@ -23,3 +23,6 @@ myconfig.out-link
 __old_modules/
 session-*
 __pycache__
+
+# semi-safe-keypair: only commit the public key
+misc/semi-safe-keypair
