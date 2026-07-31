@@ -186,18 +186,20 @@
 
   # Credential-bearing paths under `$XDG_RUNTIME_DIR` (i.e.
   # `/run/user/<uid>/`) that are **masked** after the read-only `/run` bind
-  # by binding `/dev/null` over them. This prevents a jailed process from
-  # connecting to the host user's ssh-agent (or gpg-agent, keyring, ...)
-  # via its predictable socket path, even though `SSH_AUTH_SOCK` is not
-  # set in the jail environment: read-only binding a unix socket does **not**
-  # protect it — `connect()` still works, so the agent would be fully
-  # usable.
+  # so a jailed process cannot connect to the host user's ssh-agent (or
+  # gpg-agent, keyring, ...) via its predictable socket path — even though
+  # `SSH_AUTH_SOCK` is not set in the jail environment: read-only binding a
+  # unix socket does **not** protect it, `connect()` still works, so the
+  # agent would be fully usable.
   #
   # Each entry is a path relative to `$XDG_RUNTIME_DIR` (e.g. `ssh-agent`,
-  # `gnupg`). Masking is done at runtime (so the uid is resolved correctly)
-  # via `--bind /dev/null <path>`, which is emitted *after* the `/run`
-  # ro-bind so it overrides the socket. Missing entries are skipped
-  # silently. Override to replace; use `extraMaskedRuntimePaths` to append.
+  # `gnupg`). Masking is type-aware and done at runtime (so the uid is
+  # resolved correctly): directories (`gnupg`, `keyring`) get an empty
+  # `--tmpfs` over them — hiding the sockets they contain — while
+  # files/unix sockets (`ssh-agent`) get `--bind /dev/null <path>`. The
+  # mask is emitted *after* the `/run` ro-bind so it overrides the socket.
+  # Missing entries are skipped silently. Override to replace; use
+  # `extraMaskedRuntimePaths` to append.
   #
   # To intentionally re-expose the agent for a specific invocation, use
   # the existing `JAIL_EXTRA_RO_PATHS` / `JAIL_EXTRA_RW_PATHS` escape
@@ -280,15 +282,21 @@ let
   ) extraReadWriteEnvPaths;
 
   # Mask credential-bearing sockets/dirs under `$XDG_RUNTIME_DIR` (e.g.
-  # `ssh-agent`, `gnupg`, `keyring`) by binding `/dev/null` over them. This
-  # runs *after* the `/run` ro-bind (which is a static arg, so it precedes
-  # `$RUNTIME_ARGS`) but *before* the `JAIL_EXTRA_RO_PATHS` /
+  # `ssh-agent`, `gnupg`, `keyring`). The mask is type-aware: directories
+  # (`gnupg/`, `keyring/`) get an empty `--tmpfs` over them so the sockets
+  # they contain (`gnupg/S.gpg-agent`, ...) are hidden, while files/unix
+  # sockets (`ssh-agent`) get `--bind /dev/null` over them. Binding a *file*
+  # source onto a directory target makes bwrap abort with
+  # "Can't create file at ...: Is a directory", hence the split.
+  #
+  # This runs *after* the `/run` ro-bind (which is a static arg, so it
+  # precedes `$RUNTIME_ARGS`) but *before* the `JAIL_EXTRA_RO_PATHS` /
   # `JAIL_EXTRA_RW_PATHS` escape-hatch binds below, so the escape hatch can
-  # re-expose a masked path when the user explicitly opts in. The bind uses
-  # `--bind` (not `--ro-bind-try`) because `/dev/null` always exists and the
-  # destination must already exist (it does, via the `/run` ro-bind); `--bind`
-  # is needed because `--ro-bind-try` would skip a socket that is temporarily
-  # absent and we want the mask to be a no-op in that case anyway.
+  # re-expose a masked path when the user explicitly opts in. The file mask
+  # uses `--bind` (not `--ro-bind-try`) because `/dev/null` always exists
+  # and the destination must already exist (it does, via the `/run` ro-bind);
+  # `--ro-bind-try` would skip a socket that is temporarily absent and we
+  # want the mask to be a no-op in that case anyway.
   maskedRuntimePathsPerm = add-runtime ''
     if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
       for _mp in ${
@@ -296,7 +304,18 @@ let
       }; do
         _target="$XDG_RUNTIME_DIR/$_mp"
         if [ -e "$_target" ]; then
-          RUNTIME_ARGS+=(--bind /dev/null "$_target")
+          if [ -d "$_target" ]; then
+            # Directories (e.g. gnupg/, keyring/) contain the real agent
+            # sockets (gnupg/S.gpg-agent, ...). Mounting an empty tmpfs
+            # over the directory hides every socket inside it. Binding a
+            # *file* source (/dev/null) onto a directory target makes bwrap
+            # abort with "Can't create file at ...: Is a directory".
+            RUNTIME_ARGS+=(--tmpfs "$_target")
+          else
+            # Files / unix sockets (e.g. ssh-agent) are masked by binding
+            # /dev/null over them.
+            RUNTIME_ARGS+=(--bind /dev/null "$_target")
+          fi
         fi
       done
     fi'';
@@ -400,11 +419,11 @@ let
     ]
     ++ [
       # Mask credential-bearing agent sockets under `/run/user/<uid>/`
-      # (ssh-agent, gpg-agent via gnupg/, keyring) by binding `/dev/null`
-      # over them. See `maskedRuntimePaths` above for rationale. Emitted as
-      # a runtime arg so it overrides the static `/run` ro-bind, and before
-      # the `JAIL_EXTRA_*_PATHS` escape hatch so opt-in re-exposure still
-      # works.
+      # (ssh-agent, gpg-agent via gnupg/, keyring). Directories are masked
+      # with an empty `--tmpfs`; files/sockets with `--bind /dev/null`. See
+      # `maskedRuntimePaths` above for rationale. Emitted as a runtime arg
+      # so it overrides the static `/run` ro-bind, and before the
+      # `JAIL_EXTRA_*_PATHS` escape hatch so opt-in re-exposure still works.
       maskedRuntimePathsPerm
     ]
     ++ [
