@@ -38,8 +38,10 @@
       efi.canTouchEfiVariables = true;
       grub.enable = false;
       # Only 8 GB of disk: keep very few boot entries so old kernels/initrds
-      # don't accumulate on the small /boot partition.
-      systemd-boot.configurationLimit = 5;
+      # don't accumulate on the small /boot partition. A switch transiently
+      # needs room for both the old and new system closures, so keep this as
+      # low as is still comfortable for rollback (3 entries).
+      systemd-boot.configurationLimit = lib.mkForce 3;
     };
 
     myconfig = {
@@ -90,7 +92,29 @@
     # ~100 MB and removing it would require shared module changes.
     home-manager.sharedModules = [
       { programs.neovide.enable = lib.mkForce false; }
+      # `modules/nixos.nix-index.nix` enables nix-index (+ comma) for every
+      # host. The prebuilt nix-index database (`index-x86_64-linux`) is
+      # ~92 MB and useless on a headless thin client that is only ever
+      # administered over SSH. Force it off here.
+      {
+        programs.nix-index.enable = lib.mkForce false;
+        programs.nix-index-database.comma.enable = lib.mkForce false;
+      }
     ];
+
+    # `flake.lib.nix` sets `nix.nixPath` to pin the nixpkgs/home-manager/nixos
+    # source trees into the system closure so `<nixpkgs>` works for ad-hoc
+    # `nix-shell`. The nixpkgs source tree alone is ~201 MB. This box is
+    # flake-only and administered over SSH; drop the channel-style NIX_PATH
+    # to reclaim that space. (`nix-shell '<nixpkgs>'` and the `nixTest` fish
+    # helper won't work here, which is fine for a thin client.)
+    nix.nixPath = lib.mkForce [ ];
+    # The flake framework also pins `nixpkgs` into `/etc/nix/registry.json`
+    # (again the ~201 MB nixpkgs source tree). Clear the registry so that
+    # store path isn't a GC root of the system either. `nixos-rebuild
+    # switch --flake` doesn't use the registry; only `nix run nixpkgs#...`
+    # style indirect lookups do, which this box doesn't need.
+    nix.registry = lib.mkForce { };
 
     # The Futro S740 has no built-in WiFi/Bluetooth adapter, so
     # the redistributable firmware bundle (linux-firmware, sof-firmware,
@@ -130,19 +154,38 @@
       MaxRetentionSec=7day
     '';
 
-    # Aggressive but safe GC for an 8 GB disk: keep only one week of
+    # Aggressive GC for a ~7 GB store partition: keep only three days of
     # generations. `auto-optimise-store` is already on globally; the
-    # min-free/max-free thresholds are tightened here so the store is
-    # hard-deduplicated and trimmed when space gets tight.
+    # min-free/max-free thresholds are tightened here so the daemon frees
+    # space automatically (deleting the oldest garbage down to `max-free`
+    # free bytes) whenever the store drops below `min-free` during a build
+    # or a `nixos-rebuild switch` copy.
     nix.gc = {
       automatic = true;
-      dates = lib.mkForce "daily";
-      options = lib.mkForce "--delete-older-than 7d";
+      dates = lib.mkForce "03:15";
+      options = lib.mkForce "--delete-older-than 3d";
+      # Run the missed timer on next boot if the box was off at 03:15.
+      persistent = true;
     };
     nix.extraOptions = ''
-      min-free = ${toString (256 * 1024 * 1024)}
-      max-free = ${toString (1 * 1024 * 1024 * 1024)}
+      min-free = ${toString (512 * 1024 * 1024)}
+      max-free = ${toString (2 * 1024 * 1024 * 1024)}
     '';
+
+    # ------------------------------------------------------------------
+    # ONE-TIME on-device recovery (run these on the box over SSH *now* to
+    # break a full-disk deadlock before this config can be deployed):
+    #
+    #   # 1. delete all old system/user generations and their store paths
+    #   sudo nix-collect-garbage -d
+    #   # 2. hard-link identical files in the store to reclaim duplicates
+    #   sudo nix-store --optimise
+    #   # 3. prune old boot entries (systemd-boot) if /boot is tight
+    #   sudo /run/current-system/bin/switch-to-configuration boot
+    #
+    # After that the store should have enough headroom to realise + copy
+    # the new (smaller) closure and `nixos-rebuild switch` will succeed.
+    # ------------------------------------------------------------------
 
     ##########################################################################
     # Memory

@@ -259,7 +259,6 @@ in
             config.programs.git.package
             tig
             pkgs.git-lfs
-            git-fame
             git-gone
             git-absorb
             git-crypt
