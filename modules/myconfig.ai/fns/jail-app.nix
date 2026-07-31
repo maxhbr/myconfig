@@ -156,7 +156,11 @@
   # the jail at runtime. Each existing entry is bound via
   # `--ro-bind-try` (missing entries are skipped silently). This is the
   # interactive escape hatch for exposing extra directories without
-  # rebuilding — e.g.:
+  # rebuilding. The jail deliberately does **not** bind `/run` (which would
+  # expose the host's D-Bus/PipeWire/Wayland/tmux sockets and the ssh-agent,
+  # gpg-agent and keyring credential sockets under `/run/user/<uid>/`), so
+  # this is also the way to re-expose a specific host runtime path on
+  # demand — e.g.:
   #
   #   JAIL_EXTRA_RO_PATHS=/etc:/run/user/1000 jailed-pi
   #
@@ -183,32 +187,6 @@
   # `*-worktree` wrapper variants are unaffected because they `cd` away
   # from $HOME before exec'ing the jailed binary.
   rejectHomeCwd ? true,
-
-  # Credential-bearing paths under `$XDG_RUNTIME_DIR` (i.e.
-  # `/run/user/<uid>/`) that are **masked** after the read-only `/run` bind
-  # by binding `/dev/null` over them. This prevents a jailed process from
-  # connecting to the host user's ssh-agent (or gpg-agent, keyring, ...)
-  # via its predictable socket path, even though `SSH_AUTH_SOCK` is not
-  # set in the jail environment: read-only binding a unix socket does **not**
-  # protect it — `connect()` still works, so the agent would be fully
-  # usable.
-  #
-  # Each entry is a path relative to `$XDG_RUNTIME_DIR` (e.g. `ssh-agent`,
-  # `gnupg`). Masking is done at runtime (so the uid is resolved correctly)
-  # via `--bind /dev/null <path>`, which is emitted *after* the `/run`
-  # ro-bind so it overrides the socket. Missing entries are skipped
-  # silently. Override to replace; use `extraMaskedRuntimePaths` to append.
-  #
-  # To intentionally re-expose the agent for a specific invocation, use
-  # the existing `JAIL_EXTRA_RO_PATHS` / `JAIL_EXTRA_RW_PATHS` escape
-  # hatch (see `extraReadOnlyPathsEnvVar`): those runtime binds are emitted
-  # *after* the masking, so they override the `/dev/null` mask.
-  maskedRuntimePaths ? [
-    "ssh-agent"
-    "gnupg"
-    "keyring"
-  ],
-  extraMaskedRuntimePaths ? [ ],
 }:
 
 let
@@ -278,28 +256,6 @@ let
         RUNTIME_ARGS+=(--bind "''${${var}}" "''${${var}}")
       fi''
   ) extraReadWriteEnvPaths;
-
-  # Mask credential-bearing sockets/dirs under `$XDG_RUNTIME_DIR` (e.g.
-  # `ssh-agent`, `gnupg`, `keyring`) by binding `/dev/null` over them. This
-  # runs *after* the `/run` ro-bind (which is a static arg, so it precedes
-  # `$RUNTIME_ARGS`) but *before* the `JAIL_EXTRA_RO_PATHS` /
-  # `JAIL_EXTRA_RW_PATHS` escape-hatch binds below, so the escape hatch can
-  # re-expose a masked path when the user explicitly opts in. The bind uses
-  # `--bind` (not `--ro-bind-try`) because `/dev/null` always exists and the
-  # destination must already exist (it does, via the `/run` ro-bind); `--bind`
-  # is needed because `--ro-bind-try` would skip a socket that is temporarily
-  # absent and we want the mask to be a no-op in that case anyway.
-  maskedRuntimePathsPerm = add-runtime ''
-    if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
-      for _mp in ${
-        lib.concatMapStringsSep " " lib.escapeShellArg (maskedRuntimePaths ++ extraMaskedRuntimePaths)
-      }; do
-        _target="$XDG_RUNTIME_DIR/$_mp"
-        if [ -e "$_target" ]; then
-          RUNTIME_ARGS+=(--bind /dev/null "$_target")
-        fi
-      done
-    fi'';
 
   # Colon-separated host paths from a single env var (default
   # `JAIL_EXTRA_RO_PATHS`), bound read-only at runtime. This is the
@@ -393,21 +349,19 @@ let
       ro-bind "/usr/bin" "/usr/bin"
     )
     ++ [
-      # Expose `/run` read-only so the agent can access runtime state such
-      # as D-Bus sockets, PipeWire/PulseAudio sockets, and other system
-      # services without being able to modify them.
-      (try-ro-bind "/run" "/run")
-    ]
-    ++ [
-      # Mask credential-bearing agent sockets under `/run/user/<uid>/`
-      # (ssh-agent, gpg-agent via gnupg/, keyring) by binding `/dev/null`
-      # over them. See `maskedRuntimePaths` above for rationale. Emitted as
-      # a runtime arg so it overrides the static `/run` ro-bind, and before
-      # the `JAIL_EXTRA_*_PATHS` escape hatch so opt-in re-exposure still
-      # works.
-      maskedRuntimePathsPerm
-    ]
-    ++ [
+      # NOTE: `/run` is intentionally *not* bound into the jail. A blanket
+      # `/run` ro-bind would expose the host's D-Bus, PipeWire/PulseAudio,
+      # Wayland and tmux sockets and — under `/run/user/<uid>/` — the
+      # ssh-agent, gpg-agent (`gnupg/`) and keyring credential sockets, none
+      # of which a coding agent needs (and a read-only bind does *not*
+      # protect a unix socket: `connect()` still works). DNS/TLS is provided
+      # by the `network` combinator (which binds `/etc/resolv.conf`,
+      # `/etc/ssl` and `/run/systemd/resolve` itself) and the nix daemon
+      # socket lives under `/nix/var/nix` (bound below), so nothing here
+      # depends on a blanket `/run` bind. To re-expose a specific runtime
+      # path on demand use the `JAIL_EXTRA_RO_PATHS` escape hatch, e.g.
+      # `JAIL_EXTRA_RO_PATHS=/run/user/1000 jailed-pi`.
+
       # Expose `/etc/nix/nix.conf` read-only so that `nix` commands inside
       # the jail pick up the host's Nix configuration (substituters,
       # trusted-users, experimental-features, etc.).
