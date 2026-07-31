@@ -116,12 +116,54 @@
     # style indirect lookups do, which this box doesn't need.
     nix.registry = lib.mkForce { };
 
-    # The Futro S740 has no built-in WiFi/Bluetooth adapter, so
-    # the redistributable firmware bundle (linux-firmware, sof-firmware,
-    # alsa-firmware, ipw2200, rtl8192su, … — ~800 MB closure) is dead
-    # weight. Intel CPU microcode is a *separate* option
-    # (`hardware.cpu.intel.updateMicrocode`, kept enabled) and is unaffected.
+    # The Futro S740 has no built-in WiFi/Bluetooth adapter, so the full
+    # redistributable firmware bundle (linux-firmware, sof-firmware,
+    # alsa-firmware, ipw2200, rtl8192su, … — ~800 MB closure) is dead weight
+    # on this 8 GB box and stays disabled. Intel CPU microcode is a *separate*
+    # option (`hardware.cpu.intel.updateMicrocode`, kept enabled below) and is
+    # unaffected.
     hardware.enableRedistributableFirmware = lib.mkForce false;
+
+    # This box is meant to host a USB WiFi dongle based on the MediaTek
+    # MT7601U chipset (USB id 148f:7601). The in-tree `mt7601u` driver is a
+    # stock loadable module that udev auto-loads on plug-in (via the module's
+    # USB device-id table), so it needs no `boot.kernelModules` entry — but it
+    # does need one firmware blob to bring the interface up. Without it the
+    # driver binds and then fails with
+    #   `Direct firmware load for mt7601u.bin failed`,
+    # and the interface never comes up.
+    #
+    # The blob ships inside the full `linux-firmware` bundle (the ~800 MB we
+    # just disabled above). To keep the disk win, ship *only* this single
+    # ~44 KB blob instead of re-enabling the whole bundle.
+    #
+    # Firmware request path (kernel 6.18, drivers/net/wireless/mediatek/
+    # mt7601u/usb.h): `#define MT7601U_FIRMWARE "mt7601u.bin"` — the driver
+    # requests the *flat* `mt7601u.bin`, NOT `mediatek/mt7601u.bin`. Upstream
+    # `linux-firmware` therefore stores the real blob at
+    # `lib/firmware/mediatek/mt7601u.bin` and adds a flat relative symlink
+    # `lib/firmware/mt7601u.bin -> mediatek/mt7601u.bin` (older kernels
+    # requested the `mediatek/` path, which is why both exist). We mirror that
+    # exact layout here so the blob loads regardless of which request path the
+    # kernel uses, while pulling only this one file (plus a symlink) into the
+    # runtime closure — not the ~800 MB bundle.
+    #
+    # NixOS merges `hardware.firmware` into `/run/current-system/firmware`
+    # via buildEnv, after compressing each blob with zstd (default for kernels
+    # >= 5.19). The compress step produces `mediatek/mt7601u.bin.zst` (the real
+    # compressed blob) and rewrites the flat symlink to
+    # `mt7601u.bin.zst -> mediatek/mt7601u.bin.zst`; both are resolved
+    # transparently by the kernel's zstd firmware loader when the driver asks
+    # for `mt7601u.bin`.
+    hardware.firmware = [
+      (pkgs.runCommand "mt7601u-firmware" { } ''
+        install -Dm444 \
+          ${pkgs.linux-firmware}/lib/firmware/mediatek/mt7601u.bin \
+          $out/lib/firmware/mediatek/mt7601u.bin
+        ln -s mediatek/mt7601u.bin $out/lib/firmware/mt7601u.bin
+      '')
+    ];
+
     # Keep Intel CPU microcode updates (separate, tiny ~14 MB package).
     # hardware-configuration.nix defaults this to
     # `config.hardware.enableRedistributableFirmware`, so set it explicitly.
