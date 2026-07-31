@@ -4,8 +4,8 @@
 # Fujitsu Futro S740 thin client (Intel Celeron J4105, 4GB DDR4, 8GB M.2).
 #
 # Role: lightweight, remote-reachable headless node on the home LAN. It is
-# wired-only (enp2s0, fixed IP 192.168.1.102) and runs eternal-terminal for
-# remote shell access. There is no desktop, no WiFi, no Bluetooth, no sound,
+# primarily wired (enp2s0, fixed IP 192.168.1.102) and runs eternal-terminal
+# for remote shell access. There is no desktop, no Bluetooth, no sound,
 # no printing — the system is tuned for minimal disk and memory footprint.
 #
 # Resource constraints (~4 GB RAM, ~8 GB disk) drive every setting below;
@@ -49,13 +49,46 @@
 
     networking.hostName = "futro";
     networking.hostId = "fdb6854c";
-    networking.networkmanager.enable = true;
+    networking.networkmanager.enable = true; # kept for USB WiFi dongle support
+    # The shared `nixos.networking` module adds `networkmanager-openvpn` as
+    # a NM plugin, which pulls in gtk4 → gstreamer → ffmpeg → clang+llvm+gcc
+    # (~1.6 GB closure). This thin client doesn't need OpenVPN via NM.
+    networking.networkmanager.plugins = lib.mkForce [ ];
+    # NetworkManager defaults to enabling ModemManager (libqmi, ~67 MB).
+    # A WiFi-dongle-only box has no use for cellular modem management.
+    networking.modemmanager.enable = false;
 
     ##########################################################################
-    # Disk footprint
+    # Disk footprint — heavy services pulled in by shared modules
     ##########################################################################
 
-    # The Futro S740 is wired-only; it has no WiFi or Bluetooth adapter, so
+    # `services.dbus.nix` unconditionally enables xdg-desktop-portal with
+    # the wlr backend, which drags in pipewire → ffmpeg → clang+llvm+gcc
+    # (~1.4 GB closure). A headless box has no use for desktop portals.
+    xdg.portal.enable = lib.mkForce false;
+    xdg.portal.wlr.enable = lib.mkForce false;
+
+    # `modules/services.fwupd.nix` enables fwupd for all hosts. Firmware
+    # updates on a thin client are unnecessary and the closure is ~400 MB.
+    services.fwupd.enable = lib.mkForce false;
+
+    # `myconfig.headless.enable` pulls in netdata (~345 MB closure, plus
+    # ~50-100 MB RSS). Too heavy for a 4 GB box that is never monitored
+    # locally.
+    services.netdata.enable = lib.mkForce false;
+
+    # `modules/programs.neovim/default.nix` unconditionally enables neovim
+    # *and* neovide (a GUI Neovim client) plus copilot-vim (which needs
+    # nodejs). We can't disable neovim entirely because the fallback vim
+    # module uses `builtins.fetchurl` from ftp.vim.org at eval time (network
+    # dependency). Instead, disable neovide (GUI, pulls in GTK) via
+    # home-manager and let the copilot-vim nodejs dep stay — it's only
+    # ~100 MB and removing it would require shared module changes.
+    home-manager.sharedModules = [
+      { programs.neovide.enable = lib.mkForce false; }
+    ];
+
+    # The Futro S740 has no built-in WiFi/Bluetooth adapter, so
     # the redistributable firmware bundle (linux-firmware, sof-firmware,
     # alsa-firmware, ipw2200, rtl8192su, … — ~800 MB closure) is dead
     # weight. Intel CPU microcode is a *separate* option
