@@ -4,7 +4,7 @@
 # Fujitsu Futro S740 thin client (Intel Celeron J4105, 4GB DDR4, 8GB M.2).
 #
 # Role: lightweight, remote-reachable headless node on the home LAN. It is
-# primarily wired (enp2s0, fixed IP 192.168.1.102) and runs eternal-terminal
+# primarily wired (eno1, fixed IP 192.168.1.102) and runs eternal-terminal
 # for remote shell access. There is no desktop, no Bluetooth, no sound,
 # no printing — the system is tuned for minimal disk and memory footprint.
 #
@@ -20,7 +20,7 @@
 {
   imports = [
     ./hardware-configuration.nix
-    (myconfig.metadatalib.fixIp "enp2s0")
+    (myconfig.metadatalib.fixIp "eno1")
     {
       services.eternal-terminal = {
         enable = true;
