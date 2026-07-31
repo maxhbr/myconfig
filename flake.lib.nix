@@ -958,7 +958,7 @@ rec {
           # live image for provisioning.  The private key is git-ignored
           # (see .gitignore), the public key is committed in misc/.
           {
-            users.extraUsers.root.openssh.authorizedKeys.keys = [
+            users.extraUsers.mhuber.openssh.authorizedKeys.keys = [
               (lib.strings.trim (builtins.readFile ./misc/semi-safe-keypair.pub))
             ];
           }
