@@ -1,26 +1,28 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# f13 is a laptop that is regularly plugged into / unplugged from a
-# dockingstation whose USB-Ethernet NIC lands on the *same* subnet as the
-# built-in Wi-Fi (e.g. both on 192.168.1.0/24, both via DHCP). With no policy
-# to arbitrate between them the machine ends up dual-homed on one subnet:
+# Opt-in policy for hosts that can end up dual-homed on the *same* subnet
+# (e.g. a wired NIC and Wi-Fi both landing on 192.168.1.0/24 via DHCP). With
+# no arbitration such a machine has:
 #
-#   * two default routes (wired + Wi-Fi) fight over egress,
-#   * return traffic can arrive on the "wrong" interface, and because this
-#     host enables `net.ipv4.ip_forward` (for WireGuard) the default *strict*
-#     reverse-path filter then silently drops those packets, and
-#   * every carrier / DHCP / route change re-triggers WireGuard endpoint
+#   * two default routes (wired + Wi-Fi) fighting over egress,
+#   * return traffic arriving on the "wrong" interface (and, on hosts that
+#     enable `net.ipv4.ip_forward` for WireGuard, the default *strict*
+#     reverse-path filter then silently dropping those packets), and
+#   * every carrier / DHCP / route change re-triggering WireGuard endpoint
 #     roaming re-handshakes.
 #
-# The net effect is several seconds of "flickering" / unstable connectivity
-# whenever the dock is (un)plugged.
+# The practical failure is that the Wi-Fi IP is unreachable from the LAN
+# whenever the wired link is also up (replies for the Wi-Fi address egress the
+# wired NIC → asymmetric path + ARP flux → inbound TCP never completes), plus
+# several seconds of "flickering" connectivity on every (un)plug.
 #
 # This module fixes that with two measures:
 #
 #   1. A NetworkManager dispatcher script that decisively *drops Wi-Fi while a
-#      wired link has carrier* (and brings it back on undock). One active
-#      uplink at a time → no dual-homing, no route fight, no rp_filter drops.
+#      wired link has carrier* (and brings it back when wired drops). One
+#      active uplink at a time → no dual-homing, no route fight, no rp_filter
+#      drops.
 #   2. Loosening the reverse-path filter to "loose" mode (rp_filter = 2) as
 #      defense-in-depth for the brief transition window where both links are
 #      momentarily up.
@@ -31,6 +33,8 @@
   ...
 }:
 let
+  cfg = config.myconfig.networking.preferWired;
+
   # Decides Wi-Fi radio state from the current wired carrier state and toggles
   # it only when it actually needs to change (idempotent → no event storms).
   #
@@ -89,7 +93,11 @@ let
   '';
 in
 {
-  config = {
+  options.myconfig.networking.preferWired = {
+    enable = lib.mkEnableOption "myconfig.networking.preferWired";
+  };
+
+  config = lib.mkIf cfg.enable {
     networking.networkmanager.dispatcherScripts = [
       {
         source = preferWired;
@@ -97,9 +105,9 @@ in
       }
     ];
 
-    # Loose reverse-path filtering. This host sets net.ipv4.ip_forward = 1
-    # (see modules/nixos.networking/default.nix) which makes strict rp_filter
-    # drop asymmetrically-routed replies during the dock (un)plug window.
+    # Loose reverse-path filtering. Hosts that set net.ipv4.ip_forward = 1
+    # (see modules/nixos.networking/default.nix) would otherwise have strict
+    # rp_filter drop asymmetrically-routed replies during the (un)plug window.
     boot.kernel.sysctl = {
       "net.ipv4.conf.all.rp_filter" = lib.mkForce 2;
       "net.ipv4.conf.default.rp_filter" = lib.mkForce 2;
