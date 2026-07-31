@@ -16,20 +16,16 @@ let
   theme =
     let
       light = false;
-      gruvbox = {
-        package = pkgs.gruvbox-gtk-theme;
-        name = "Gruvbox-Dark-BL";
-      };
-      vimix = {
-        package = pkgs.vimix-gtk-themes;
-        name = if light then "vimix-light-doder" else "vimix-doder";
-      };
-      graphite = {
-        package = pkgs.graphite-gtk-theme;
-        name = if light then "Graphite-Light-hdpi" else "Graphite";
+      # graphite-gtk-theme, gruvbox-gtk-theme and vimix-gtk-themes were
+      # removed from nixpkgs (they depended on the dropped gtk-engine-murrine,
+      # which was unmaintained and GTK-2 only). WhiteSur is a maintained,
+      # murrine-free successor providing a flat dark GTK theme.
+      whitesur = {
+        package = pkgs.whitesur-gtk-theme;
+        name = if light then "WhiteSur-Light" else "WhiteSur-Dark";
       };
     in
-    graphite;
+    whitesur;
 
   # currently, there is some friction between sway and gtk:
   # https://github.com/swaywm/sway/wiki/GTK-3-settings-on-Wayland
