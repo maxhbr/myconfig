@@ -45,6 +45,10 @@
     myconfig = {
       desktop.enable = false;
       headless.enable = true;
+      observability = {
+        client.enable = true;
+        client.co2Exporter.enable = true;
+      };
     };
 
     networking.hostName = "futro";
