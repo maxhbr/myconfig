@@ -404,6 +404,28 @@
             ) metadataOverride);
         };
 
+        # ISO builder that already includes the myconfig base modules
+        # (`nixosModules.core`) and all installer logic from this repo.
+        # Intended to be called from a priv flake, which only needs to pass
+        # its own extra `moreModules`.
+        mkMyconfigISO =
+          {
+            system ? "x86_64-linux",
+            hostName ? "iso",
+            metadataOverride ? { },
+            bootstrappedConfig ? null,
+          }:
+          moreModules:
+          self.lib.mkISO {
+            inherit
+              system
+              hostName
+              metadataOverride
+              bootstrappedConfig
+              ;
+            nixosModules = [ self.nixosModules.core ] ++ moreModules;
+          };
+
         ##########################################################################
         ## configurations ########################################################
         ##########################################################################
@@ -491,13 +513,10 @@
         eachDefaultSystem (system: {
           # might be overwritten in priv
           packages = {
-            myconfig-iso = self.lib.mkISO {
+            myconfig-iso = self.mkMyconfigISO {
               inherit system;
               hostName = "iso";
-              nixosModules = [ self.nixosModules.core ];
-              metadataOverride = { };
-              bootstrappedConfig = null;
-            };
+            } [ ];
           };
 
           formatter = nixpkgs.legacyPackages.${system}.nixfmt-tree;
