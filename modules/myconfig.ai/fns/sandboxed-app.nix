@@ -17,6 +17,19 @@
   envVars ? { },
   shareNet ? true,
   hostname ? "${name}-sandbox",
+
+  # Credential-bearing paths under `$XDG_RUNTIME_DIR` (i.e.
+  # `/run/user/<uid>/`) that are **masked** after the read-only `/run` bind by
+  # binding `/dev/null` over them. This prevents a sandboxed process from
+  # connecting to the host user's ssh-agent (or gpg-agent, keyring, ...) via
+  # its predictable socket path. See `jail-app.nix`'s `maskedRuntimePaths` for
+  # the full rationale. Each entry is a path relative to `$XDG_RUNTIME_DIR`
+  # (e.g. `ssh-agent`, `gnupg`). Missing entries are skipped silently.
+  maskedRuntimePaths ? [
+    "ssh-agent"
+    "gnupg"
+    "keyring"
+  ],
 }:
 
 let
@@ -112,6 +125,22 @@ pkgs.writeShellApplication {
     fi
     if [ -n "''${WORKTREE_GIT_DIR:-}" ] && [ -e "''${WORKTREE_GIT_DIR}" ]; then
       args+=( --bind "$WORKTREE_GIT_DIR" "$WORKTREE_GIT_DIR" )
+    fi
+
+    # Mask credential-bearing agent sockets under "$XDG_RUNTIME_DIR" (i.e.
+    # /run/user/<uid>/): ssh-agent, gpg-agent (via gnupg/), and the keyring
+    # daemon. Binding /dev/null over the socket prevents a sandboxed process
+    # from connecting to the host user's agent via its predictable socket
+    # path — read-only binding a unix socket does not protect it, connect()
+    # still works, so the agent would be fully usable. This mirrors the
+    # jail-app.nix `maskedRuntimePaths` mechanism.
+    if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
+      for _mp in ${lib.concatMapStringsSep " " lib.escapeShellArg maskedRuntimePaths}; do
+        _target="$XDG_RUNTIME_DIR/$_mp"
+        if [ -e "$_target" ]; then
+          args+=( --bind /dev/null "$_target" )
+        fi
+      done
     fi
 
     exec ${lib.getExe pkgs.bubblewrap} "''${args[@]}" -- ${lib.getExe pkg} "$@"
