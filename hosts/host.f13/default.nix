@@ -41,7 +41,6 @@ in
     # `privateKeySource = ...` are set in the private repo. See
     # modules/myconfig.wireguard/README.md for the full design.
     ./hardware.framework.do-not-wake-on-input.nix
-    ./networking.prefer-wired.nix
     ./suspend-debug.nix
     ./hardware.hantek
     ./mykeylight
@@ -298,6 +297,10 @@ in
       #       '';
     };
     myconfig = {
+      # f13 docks into a station whose USB-Ethernet NIC lands on the same
+      # subnet as the built-in Wi-Fi; prefer the wired link to avoid
+      # dual-homing. (Previously the host-local ./networking.prefer-wired.nix.)
+      networking.preferWired.enable = true;
       persistence.impermanence = {
         enable = true;
         soft_permanence_for_boot = false;

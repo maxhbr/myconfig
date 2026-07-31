@@ -47,6 +47,13 @@
     myconfig = {
       desktop.enable = false;
       headless.enable = true;
+      # eno1 (fixed IP) and the USB Wi-Fi dongle both land on 192.168.1.0/24,
+      # so with both up the box is dual-homed on one subnet and the Wi-Fi IP
+      # is unreachable from the LAN (replies for it egress eno1 → asymmetric
+      # path + ARP flux). This host is wired-primary with Wi-Fi as failover,
+      # so drop Wi-Fi whenever the wired link has carrier and bring it back
+      # when eno1 goes down.
+      networking.preferWired.enable = true;
       observability = {
         client.enable = true;
         client.co2Exporter.enable = true;
