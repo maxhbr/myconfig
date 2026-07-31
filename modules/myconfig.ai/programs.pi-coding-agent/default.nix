@@ -124,32 +124,88 @@ let
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   # Covers both direct local-provider lookups (raw name) and
   # LiteLLM lookups (providerName:modelName).
-  contextWindowLookup = lib.listToAttrs (
-    lib.concatMap (
-      provider:
-      let
-        hostPort = "${provider.host}:${toString provider.port}";
-        providerName = if provider.name != null then provider.name else hostPort;
-        rawModels = if provider.models != [ ] then provider.models else [ ];
-      in
-      lib.concatMap (
-        m:
-        if builtins.isAttrs m && m.contextWindow != null then
-          [
-            {
-              name = m.name;
-              value = m.contextWindow;
-            }
-            {
-              name = "${providerName}:${m.name}";
-              value = m.contextWindow;
-            }
-          ]
-        else
-          [ ]
-      ) rawModels
-    ) osconfig.myconfig.ai.localModels
-  );
+  #
+  # Two sources are merged (first occurrence wins, in source order):
+  #
+  #  1. `myconfig.ai.localModels` — the per-backend registry (llama-cpp /
+  #     llama-swap). Each model entry may carry a `contextWindow` field.
+  #     This populates lookups for both the raw model name and the
+  #     provider-prefixed form (`providerName:modelName`).
+  #
+  #  2. `services.litellm.settings.model_list` — the LiteLLM proxy's own
+  #     model list. Each entry's `litellm_params.max_input_tokens` (thing,
+  #     auto-generated from the same localModels registry) or
+  #     `model_info.max_input_tokens` (the local-proxy pattern in
+  #     hosts/shared.litellm.proxy.nix, which carries context windows
+  #     scraped by hosts/shared.localModels.update.sh) is the authoritative
+  #     context window for that model as served by LiteLLM.
+  #
+  # Source (2) is essential for hosts that use the *local LiteLLM proxy*
+  # pattern (f13, p14): they deliberately do NOT import
+  # shared.localModels.litellm.nix, so their `localModels` is empty and
+  # source (1) contributes nothing. Without source (2), every LiteLLM
+  # model on those hosts would get contextWindow 0 in pi (the bug this
+  # fixes). Source (2) also covers models provisioned by the private
+  # (tng/priv) flake that register additional `model_list` entries (e.g.
+  # trustedtokens/zai-org/GLM-5.2) — as long as the priv flake sets
+  # `max_input_tokens` on those entries, pi picks it up here.
+  contextWindowLookup =
+    let
+      fromLocalModels = lib.concatMap (
+        provider:
+        let
+          hostPort = "${provider.host}:${toString provider.port}";
+          providerName = if provider.name != null then provider.name else hostPort;
+          rawModels = if provider.models != [ ] then provider.models else [ ];
+        in
+        lib.concatMap (
+          m:
+          if builtins.isAttrs m && m.contextWindow != null then
+            [
+              {
+                name = m.name;
+                value = m.contextWindow;
+              }
+              {
+                name = "${providerName}:${m.name}";
+                value = m.contextWindow;
+              }
+            ]
+          else
+            [ ]
+        ) rawModels
+      ) osconfig.myconfig.ai.localModels;
+
+      # Extract the context window from a litellm model_list entry. The
+      # value lives in `litellm_params.max_input_tokens` (the
+      # auto-generated entries from modules/myconfig.ai/services.litellm.nix
+      # and the local-proxy entries from hosts/shared.litellm.proxy.nix
+      # both put it there) or in `model_info.max_input_tokens` (the
+      # local-proxy entries' `model_info` block, also written by
+      # litellm.proxy.nix). Prefer litellm_params, fall back to model_info.
+      ctxFromLitellmEntry =
+        e:
+        let
+          lp = e.litellm_params or { };
+          mi = e.model_info or { };
+          fromLp = lp.max_input_tokens or null;
+          fromMi = mi.max_input_tokens or null;
+        in
+        if fromLp != null then fromLp else fromMi;
+
+      fromLitellm = lib.concatMap (
+        e:
+        let
+          cw = ctxFromLitellmEntry e;
+          name = e.model_name or null;
+        in
+        lib.optional (name != null && cw != null) {
+          inherit name;
+          value = cw;
+        }
+      ) (osconfig.services.litellm.settings.model_list or [ ]);
+    in
+    lib.listToAttrs (fromLocalModels ++ fromLitellm);
 
   # Build a provider entry for an OpenAI-compatible base URL.
   mkOpenAiCompatibleProvider =
@@ -160,6 +216,18 @@ let
       models,
       contextWindowLookup ? { },
     }:
+    let
+      # Conservative default context window for models whose real value
+      # is not discoverable. Without this, pi receives `contextWindow = 0`
+      # (pi defaults a *missing* contextWindow to 0, which breaks context
+      # budgeting and truncation). 8192 is a safe lower bound that no
+      # modern local model in this config falls below; it only acts as a
+      # last-resort fallback, never overrides a real value from
+      # contextWindowLookup. Models that genuinely need a different value
+      # must set `max_input_tokens` in their litellm model_list entry (or
+      # `contextWindow` in localModels).
+      defaultContextWindow = 8192;
+    in
     {
       inherit key;
       value = {
@@ -185,7 +253,9 @@ let
             };
             maxTokens = 4096;
           }
-          // lib.optionalAttrs (cw != null) { contextWindow = cw; }
+          // {
+            contextWindow = if cw != null then cw else defaultContextWindow;
+          }
         ) models;
       };
     };
