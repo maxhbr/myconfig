@@ -220,13 +220,13 @@ let
       # Conservative default context window for models whose real value
       # is not discoverable. Without this, pi receives `contextWindow = 0`
       # (pi defaults a *missing* contextWindow to 0, which breaks context
-      # budgeting and truncation). 8192 is a safe lower bound that no
-      # modern local model in this config falls below; it only acts as a
+      # budgeting and truncation). 128k is a safe default that most modern
+      # local models in this config provide; it only acts as a
       # last-resort fallback, never overrides a real value from
       # contextWindowLookup. Models that genuinely need a different value
       # must set `max_input_tokens` in their litellm model_list entry (or
       # `contextWindow` in localModels).
-      defaultContextWindow = 8192;
+      defaultContextWindow = 131072;
     in
     {
       inherit key;
