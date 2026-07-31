@@ -960,6 +960,12 @@ rec {
           {
             networking.wireless.enable = false; # managed by network manager
           }
+        ]
+        ++ lib.optionals (system == "aarch64-linux") [
+          {
+            # Work around GICv3 LPI issues on some aarch64 boards
+            boot.kernelParams = [ "irqchip.gicv3_nolpi=1" ];
+          }
         ];
 
     in
