@@ -68,13 +68,12 @@ NixOS hardware status is known.
 > eMMC.  EDK2 on microSD provides that firmware layer, so NVMe becomes a
 > viable NixOS target after the initial boot.
 
-### Alternative: U-Boot / SD-image path
+### Alternative: U-Boot / SD-image path (removed)
 
-Before EDK2 support was added, the host used a U-Boot-based approach where the
-entire NixOS system (including extlinux config and device tree) was built into a
-flashable SD image.  That path is still available and documented in
-[install-nixos-nanopc-t6.md](./install-nixos-nanopc-t6.md).  Use the EDK2 path
-below as the primary approach unless you have a reason to use U-Boot.
+The previous approach used U-Boot and built a complete NixOS SD image via
+`sdImage`.  This path has been **removed** in favour of EDK2/UEFI.  See
+[install-nixos-nanopc-t6.md](./install-nixos-nanopc-t6.md) for recovery
+instructions from git history if the U-Boot path is needed again.
 
 ## Prerequisites
 
@@ -346,8 +345,12 @@ A minimal bring-up configuration can start with:
   # Prefer a recent kernel while RK3588 mainline support is being evaluated.
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
-  # Device tree for the NanoPC-T6.
-  hardware.deviceTree.name = "rockchip/rk3588-nanopc-t6.dtb";
+  # TODO: enable and pin the board device tree only after confirming the
+  # DTB exists in the selected kernel package (see below):
+  #   hardware.deviceTree = {
+  #     enable = true;
+  #     name = "rockchip/rk3588-nanopc-t6.dtb";
+  #   };
 
   # RK3588 debug UART is ttyS2 at 1500000 baud.
   boot.kernelParams = [

@@ -5,6 +5,7 @@
 # following need real, verified values before this host can boot:
 #   - boot.initrd.availableKernelModules (detected storage/USB modules)
 #   - fileSystems."/" and "/boot" device UUIDs
+#   - swapDevices, if any
 #
 # Do NOT invent disk UUIDs here.  The dummy filesystem entries below only
 # exist so the configuration evaluates; they will not produce a bootable
@@ -43,6 +44,8 @@
     device = "/dev/disk/by-label/EFI";
     fsType = "vfat";
   };
+
+  swapDevices = [ ];
 
   # Enables DHCP on each ethernet and wireless interface. In case of scripted
   # networking (the default) this is the recommended approach. When using

@@ -34,6 +34,9 @@
 set -euo pipefail
 
 # Default firmware image to fetch when none is supplied on the command line.
+# Flashing method: dd the whole .img straight to the device (no seek/offset).
+# Reference: https://github.com/edk2-porting/edk2-rk3588 README —
+#   "For the SD card, you can just write the image to the whole device."
 EDK2_URL="${EDK2_URL:-https://github.com/edk2-porting/edk2-rk3588/releases/download/v1.1/nanopc-t6_UEFI_Release_v1.1.img}"
 
 IMG="${EDK2_IMG:-}"

@@ -39,39 +39,34 @@
     # RK3588 debug UART is ttyS2 at 1500000 baud (see nixos-hardware rockchip
     # and the FriendlyElec wiki).
     boot.consoleLogLevel = lib.mkDefault 7;
-    boot.kernelParams = [
+    boot.kernelParams = lib.mkDefault [
       "console=ttyS2,1500000n8"
       "console=tty0"
     ];
 
-    # Device tree for the NanoPC-T6.
-    # For the NanoPC-T6 LTS use "rockchip/rk3588-nanopc-t6-lts.dtb" instead,
-    # if the kernel provides it.
-    hardware.deviceTree.name = "rockchip/rk3588-nanopc-t6.dtb";
-
-    hardware.enableRedistributableFirmware = true;
+    # TODO: enable and pin the board device tree only after confirming the
+    # DTB exists in the selected kernel package (see README.md):
+    #   hardware.deviceTree = {
+    #     enable = true;
+    #     name = "rockchip/rk3588-nanopc-t6.dtb";
+    #     # For the NanoPC-T6 LTS use "rockchip/rk3588-nanopc-t6-lts.dtb"
+    #     # instead, if the kernel provides it.
+    #   };
 
     myconfig = {
-      desktop.enable = false;
       headless.enable = true;
     };
 
     networking.hostName = "t6";
     # TODO: replace with a real, unique 8-hex-digit host id once the machine
     # is provisioned (e.g. `head -c 8 /etc/machine-id`).
-    networking.hostId = "74366e61";
+    networking.hostId = "0c000000";
 
-    networking.networkmanager.enable = true;
+    # Ethernet: 1 × 2.5 GbE (Realtek) + 1 × GbE (RK3588 GMAC); use DHCP
+    # until the interface names have been confirmed from the boot log.
+    networking.useDHCP = lib.mkDefault true;
 
     services.openssh.enable = true;
-
-    swapDevices = [
-      {
-        device = "/swapfile";
-        priority = 0;
-        size = 4096;
-      }
-    ];
 
     # https://github.com/NixOS/nixpkgs/issues/154163
     # Some Rockchip/aarch64 kernels are missing modules referenced by the
