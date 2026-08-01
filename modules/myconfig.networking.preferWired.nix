@@ -19,10 +19,19 @@
 #
 # This module fixes that with two measures:
 #
-#   1. A NetworkManager dispatcher script that decisively *drops Wi-Fi while a
-#      wired link has carrier* (and brings it back when wired drops). One
-#      active uplink at a time → no dual-homing, no route fight, no rp_filter
-#      drops.
+#   1. A systemd service that decisively *drops Wi-Fi while a wired link has
+#      carrier* (and brings it back when wired drops). One active uplink at a
+#      time → no dual-homing, no route fight, no rp_filter drops.
+#
+#      The decision is driven from the kernel's rtnetlink link notifications
+#      (`ip monitor link`) rather than from NetworkManager dispatcher events.
+#      A dispatcher-only implementation misses hosts whose wired NIC is *not*
+#      managed by NetworkManager — e.g. a statically addressed interface set
+#      via `networking.interfaces.<iface>` (as `metadatalib.fixIp` does), which
+#      NM reports as "connected (externally)" and never fires dispatcher
+#      up/down events for. rtnetlink sees every interface's carrier changes
+#      regardless of who manages it, so this works for both DHCP-managed and
+#      externally/statically managed wired links.
 #   2. Loosening the reverse-path filter to "loose" mode (rp_filter = 2) as
 #      defense-in-depth for the brief transition window where both links are
 #      momentarily up.
@@ -34,63 +43,6 @@
 }:
 let
   cfg = config.myconfig.networking.preferWired;
-
-  # Decides Wi-Fi radio state from the current wired carrier state and toggles
-  # it only when it actually needs to change (idempotent → no event storms).
-  #
-  # NetworkManager invokes dispatcher scripts with:
-  #   $1 = interface name, $2 = action (up/down/...)
-  preferWired = pkgs.writeShellScript "nm-prefer-wired" ''
-    set -eu
-    iface="''${1:-}"
-    action="''${2:-}"
-
-    # Ignore events originating from Wi-Fi itself: toggling the Wi-Fi radio
-    # below would otherwise recurse back into this script.
-    if [ -n "$iface" ] && [ -d "/sys/class/net/$iface/wireless" ]; then
-      exit 0
-    fi
-
-    # Only react to link-state transitions.
-    case "$action" in
-      up | down | vpn-up | vpn-down | connectivity-change) ;;
-      *) exit 0 ;;
-    esac
-
-    # Is any *physical wired* interface currently carrying a link?
-    wired_link_up() {
-      for d in /sys/class/net/*; do
-        name="$(basename "$d")"
-        # skip wireless
-        [ -d "$d/wireless" ] && continue
-        # skip virtual / tunnel / loopback interfaces
-        case "$name" in
-          lo | wg* | veth* | docker* | podman* | virbr* | tun* | tap* | br* | vboxnet*)
-            continue
-            ;;
-        esac
-        [ -e "$d/carrier" ] || continue
-        if [ "$(cat "$d/carrier" 2>/dev/null || echo 0)" = "1" ]; then
-          return 0
-        fi
-      done
-      return 1
-    }
-
-    current="$(${pkgs.networkmanager}/bin/nmcli -t radio wifi 2>/dev/null || echo unknown)"
-
-    if wired_link_up; then
-      if [ "$current" = "enabled" ]; then
-        logger -t nm-prefer-wired "wired link up ($iface/$action) -> disabling Wi-Fi"
-        ${pkgs.networkmanager}/bin/nmcli radio wifi off || true
-      fi
-    else
-      if [ "$current" = "disabled" ]; then
-        logger -t nm-prefer-wired "no wired link ($iface/$action) -> enabling Wi-Fi"
-        ${pkgs.networkmanager}/bin/nmcli radio wifi on || true
-      fi
-    fi
-  '';
 in
 {
   options.myconfig.networking.preferWired = {
@@ -98,12 +50,73 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    networking.networkmanager.dispatcherScripts = [
-      {
-        source = preferWired;
-        type = "basic";
-      }
-    ];
+    systemd.services.prefer-wired = {
+      description = "Disable Wi-Fi while a wired uplink has carrier";
+      # NetworkManager owns the Wi-Fi radio (`nmcli radio wifi`), so we need it
+      # running before we can toggle. `ip monitor` itself is pure netlink and
+      # needs nothing.
+      after = [ "NetworkManager.service" ];
+      wants = [ "NetworkManager.service" ];
+      wantedBy = [ "multi-user.target" ];
+      path = [
+        pkgs.iproute2
+        pkgs.networkmanager
+      ];
+      serviceConfig = {
+        # If NetworkManager is not ready yet at first start (nmcli fails), or
+        # the monitor pipe ever dies, come straight back and re-seed the
+        # decision.
+        Restart = "always";
+        RestartSec = 3;
+      };
+      script = ''
+        set -u
+
+        # Is any *physical wired* interface currently carrying a link?
+        wired_link_up() {
+          for d in /sys/class/net/*; do
+            name="$(basename "$d")"
+            # skip wireless
+            [ -d "$d/wireless" ] && continue
+            # skip virtual / tunnel / loopback interfaces
+            case "$name" in
+              lo | wg* | veth* | docker* | podman* | virbr* | tun* | tap* | br* | vboxnet*)
+                continue
+                ;;
+            esac
+            [ -e "$d/carrier" ] || continue
+            if [ "$(cat "$d/carrier" 2>/dev/null || echo 0)" = "1" ]; then
+              return 0
+            fi
+          done
+          return 1
+        }
+
+        # Toggle the Wi-Fi radio only when it actually needs to change
+        # (idempotent → wlan0's own flaps can't cause a toggle storm).
+        apply() {
+          current="$(nmcli -t radio wifi 2>/dev/null || echo unknown)"
+          if wired_link_up; then
+            if [ "$current" = "enabled" ]; then
+              echo "wired link up -> disabling Wi-Fi"
+              nmcli radio wifi off || true
+            fi
+          else
+            if [ "$current" = "disabled" ]; then
+              echo "no wired link -> enabling Wi-Fi"
+              nmcli radio wifi on || true
+            fi
+          fi
+        }
+
+        # Seed the decision from the current state, then re-evaluate on every
+        # rtnetlink link event (carrier flips flip IFF_LOWER_UP -> RTM_NEWLINK).
+        apply
+        ip monitor link | while read -r _line; do
+          apply
+        done
+      '';
+    };
 
     # Loose reverse-path filtering. Hosts that set net.ipv4.ip_forward = 1
     # (see modules/nixos.networking/default.nix) would otherwise have strict
