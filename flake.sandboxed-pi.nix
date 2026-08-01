@@ -204,8 +204,113 @@ let
         ]
         ++ extraGuestModules;
       };
+
+      lib = inputs.nixpkgs.lib;
+
+      # microvm.nix's declared qemu runner. Its `bin/microvm-run` launches
+      # qemu, which connects to the virtiofs daemons over RELATIVE unix
+      # socket paths (`<hostname>-virtiofs-<tag>.sock`) in its working
+      # directory.
+      runner = guest.config.microvm.declaredRunner;
+
+      # All virtiofs shares this guest exposes (the read-only host
+      # /nix/store plus the caller's writable shares). microvm.nix names
+      # each control socket `<hostname>-virtiofs-<tag>.sock` (see
+      # nixos-modules/microvm/options.nix); qemu uses exactly these names.
+      virtiofsShares = builtins.filter (s: (s.proto or "virtiofs") == "virtiofs") (
+        guest.config.microvm.shares
+      );
+
+      virtiofsdPkg = pkgs.virtiofsd;
+
+      # Rootless virtiofsd launch line per share. microvm.nix's own
+      # `virtiofsd-run` drives these daemons through a supervisord config
+      # hard-coded with `user=root`, so it only works from the root-run
+      # `microvm-virtiofsd@` systemd unit — it aborts with "Can't drop
+      # privilege as nonroot user" when a normal user runs it. The
+      # sandboxed-* wrappers deliberately run entirely in user space (no
+      # host rebuild, no systemd unit, no sudo), so we start virtiofsd
+      # ourselves with `--sandbox none` (no daemon-side namespace, which
+      # would need privileges we don't have) instead. virtiofsd runs as the
+      # invoking user and only re-exports directories that user can already
+      # read/write, so this grants the VM no access the user lacks; the
+      # isolation boundary is the guest kernel, exactly as before.
+      virtiofsdLine =
+        share:
+        let
+          socket = "${guest.config.networking.hostName}-virtiofs-${share.tag}.sock";
+        in
+        ''
+          ${lib.getExe virtiofsdPkg} \
+            --socket-path=${lib.escapeShellArg socket} \
+            --shared-dir=${lib.escapeShellArg (toString share.source)} \
+            --sandbox none \
+            --cache=auto \
+            ${lib.optionalString (share.readOnly or false) "--readonly"} \
+            >>"$PWD/virtiofsd.log" 2>&1 &
+          virtiofsd_pids+=("$!")
+        '';
+
+      socketFor = share: "${guest.config.networking.hostName}-virtiofs-${share.tag}.sock";
+
+      # Combined launcher: start the rootless virtiofsd daemon(s), wait for
+      # their sockets to appear, then run qemu — all from the SAME working
+      # directory (the caller cd's into a per-invocation runtime_dir), since
+      # the socket paths are relative. virtiofsd is torn down together with
+      # the VM via the trap.
+      launcher = pkgs.writeShellApplication {
+        name = "sandboxed-launch";
+        runtimeInputs = [ pkgs.coreutils ];
+        text = ''
+          virtiofsd_pids=()
+          vm_pid=""
+          cleanup() {
+            if [ -n "$vm_pid" ] && kill -0 "$vm_pid" 2>/dev/null; then
+              kill "$vm_pid" 2>/dev/null || true
+              wait "$vm_pid" 2>/dev/null || true
+            fi
+            for p in "''${virtiofsd_pids[@]:-}"; do
+              [ -n "$p" ] && kill "$p" 2>/dev/null || true
+            done
+          }
+          trap cleanup EXIT INT TERM
+
+          ${lib.concatMapStrings virtiofsdLine virtiofsShares}
+
+          # Wait for every virtiofs socket to be created before starting qemu
+          # (qemu exits immediately if it cannot connect to a share socket).
+          for sock in ${lib.escapeShellArgs (map socketFor virtiofsShares)}; do
+            ready=0
+            for _ in $(seq 1 100); do
+              if [ -S "$sock" ]; then
+                ready=1
+                break
+              fi
+              sleep 0.1
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "sandboxed-launch: timed out waiting for virtiofs socket: $sock" >&2
+              cat "$PWD/virtiofsd.log" >&2 || true
+              exit 1
+            fi
+          done
+
+          ${lib.getExe' runner "microvm-run"} &
+          vm_pid=$!
+          wait "$vm_pid"
+        '';
+      };
     in
-    guest.config.microvm.declaredRunner;
+    # A thin package exposing both microvm.nix's original scripts (so
+    # `bin/microvm-run`, `bin/microvm-shutdown`, ... stay available) and the
+    # combined `bin/sandboxed-launch` entry point the host wrappers call.
+    pkgs.symlinkJoin {
+      name = "sandboxed-runner-${guest.config.networking.hostName}";
+      paths = [
+        launcher
+        runner
+      ];
+    };
 
 in
 {
