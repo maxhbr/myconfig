@@ -40,6 +40,7 @@
 {
   config,
   lib,
+  pkgs,
   inputs,
   ...
 }:
@@ -50,6 +51,55 @@ let
   # slots.nix and is shared with default.nix (which asserts uniqueness and
   # the slot-count bound over this exact table).
   slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
+
+  # Prefix length of the private subnet (e.g. "192.168.83.0/24" -> 24), used
+  # for the guest-side static address. Derived from the SAME option the host
+  # bridge uses, so host and guest agree.
+  guestPrefixLength = lib.toInt (lib.last (lib.splitString "/" cfg.subnet));
+
+  # --- §19 guest agent entry point (`agent-run`) --------------------------
+  # Refuses root, verifies /workspace is a mounted, writable mount, cds into
+  # it, prints the guest identity + selected agent, then execs the agent from
+  # argv (no `eval`, so the exit status is the agent's own).
+  agent-run = pkgs.writeShellApplication {
+    name = "agent-run";
+    runtimeInputs = with pkgs; [
+      coreutils
+      util-linux # findmnt
+    ];
+    text = ''
+      set -euo pipefail
+
+      if [[ "$(id -u)" -eq 0 ]]; then
+          echo "agent-run: refusing to run as root" >&2
+          exit 1
+      fi
+      if [[ "$#" -lt 1 ]]; then
+          echo "usage: agent-run <agent> [args...]" >&2
+          exit 2
+      fi
+
+      workspace=/workspace
+      if ! findmnt -n -- "$workspace" >/dev/null 2>&1; then
+          echo "agent-run: $workspace is not a mount point" >&2
+          exit 1
+      fi
+      if [[ ! -w "$workspace" ]]; then
+          echo "agent-run: $workspace is not writable" >&2
+          exit 1
+      fi
+
+      cd "$workspace"
+      printf 'agent-run: host=%s agent=%s workspace=%s\n' \
+          "$(uname -n)" "$1" "$workspace" >&2
+
+      exec "$@"
+    '';
+    meta = with lib; {
+      description = "Guest-side agent entry point for myconfig.ai.microvm sandboxes";
+      platforms = platforms.linux;
+    };
+  };
 
   # --- minimal Cloud Hypervisor guest for a given slot --------------------
   mkGuest = slot: {
@@ -87,6 +137,78 @@ let
       createHome = true;
       extraGroups = [ ];
       hashedPassword = "!";
+    }
+    // lib.optionalAttrs (cfg.enableSsh && cfg.sshPublicKeyFile != null) {
+      # §18: exactly one dedicated public key authorises the guest `agent`
+      # user. NOT a host authorized_keys file.
+      openssh.authorizedKeys.keyFiles = [ cfg.sshPublicKeyFile ];
+    };
+
+    # --- §7 minimal guest toolchain + the §19 entry point ----------------
+    # A deliberately small package set; agent binaries (Claude/Pi/Codex/
+    # OpenCode) are added in a later guest-packaging phase.
+    environment.systemPackages = with pkgs; [
+      agent-run
+      bash
+      coreutils
+      curl
+      diffutils
+      fd
+      file
+      findutils
+      git
+      gnugrep
+      gnumake
+      gnused
+      jq
+      less
+      openssh
+      patch
+      procps
+      ripgrep
+      rsync
+      tree
+      unzip
+      util-linux
+      which
+    ];
+
+    # --- §17 guest model-API config (no secrets) -------------------------
+    # The guest reaches the model API ONLY via the bridge-only LiteLLM
+    # forwarder. No real upstream key is ever placed in the guest.
+    environment.variables = {
+      OPENAI_BASE_URL = "http://${cfg.gatewayAddress}:${toString cfg.litellmPort}/v1";
+      OPENAI_API_KEY = "not-needed";
+    };
+
+    # --- guest-side static addressing (deterministic, matches the slot) ---
+    # Assign the slot's fixed IPv4 via systemd-networkd, matched on the
+    # deterministic MAC so it is independent of the kernel interface name.
+    # Default route points at the host bridge address (the only reachable
+    # peer under the proxy-only firewall policy). IPv6 stays disabled (§15).
+    systemd.network = lib.mkIf cfg.enableSsh {
+      enable = true;
+      networks."10-agent" = {
+        matchConfig.MACAddress = slot.mac;
+        address = [ "${slot.ip}/${toString guestPrefixLength}" ];
+        routes = [ { Gateway = cfg.gatewayAddress; } ];
+        networkConfig.LinkLocalAddressing = "no";
+        linkConfig.RequiredForOnline = "no";
+      };
+    };
+
+    # --- §18 hardened SSH, private guest interface only ------------------
+    services.openssh = lib.mkIf cfg.enableSsh {
+      enable = true;
+      settings = {
+        PermitRootLogin = "no";
+        PasswordAuthentication = false;
+        KbdInteractiveAuthentication = false;
+        AllowAgentForwarding = "no";
+        X11Forwarding = false;
+        PermitTunnel = "no";
+        AllowTcpForwarding = "no";
+      };
     };
 
     system.stateVersion = "25.11";
