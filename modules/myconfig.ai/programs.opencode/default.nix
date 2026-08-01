@@ -316,7 +316,10 @@ in
               commit = ''
                 # Commit Command
 
-                Create a git commit with proper message formatting.
+                Create a git commit following the `commit` skill: invoke the
+                `skill` tool with name `commit` and follow its workflow,
+                including its attribution trailer (a final line recording the
+                model and harness that produced the commit).
                 Usage: /commit [message]
               '';
               run = ''
