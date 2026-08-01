@@ -4,9 +4,9 @@
 # Fujitsu Futro S740 thin client (Intel Celeron J4105, 4GB DDR4, 8GB M.2).
 #
 # Role: lightweight, remote-reachable headless node on the home LAN. It is
-# primarily wired (eno1, fixed IP 192.168.1.102) and runs eternal-terminal
-# for remote shell access. There is no desktop, no Bluetooth, no sound,
-# no printing — the system is tuned for minimal disk and memory footprint.
+# primarily wired (eno1, DHCP) and runs eternal-terminal for remote shell
+# access. There is no desktop, no Bluetooth, no sound, no printing — the
+# system is tuned for minimal disk and memory footprint.
 #
 # Resource constraints (~4 GB RAM, ~8 GB disk) drive every setting below;
 # each optimisation is annotated with its rationale.
@@ -20,13 +20,11 @@
 {
   imports = [
     ./hardware-configuration.nix
-    # Event-driven Wi-Fi arbitration. `myconfig.networking.preferWired` below is
-    # ineffective on this host on its own because eno1 is statically addressed
-    # via `fixIp` and is therefore "connected (externally)" — NetworkManager
-    # never fires the dispatcher up/down events the shared module hooks. This
-    # module reinstates the same policy from rtnetlink link events instead.
-    ./networking.preferWired.arbiter.nix
-    (myconfig.metadatalib.fixIp "eno1")
+    # NB: eno1 is intentionally left on DHCP (no `metadatalib.fixIp`). A static
+    # address via `networking.interfaces.eno1` would make NetworkManager report
+    # eno1 as "connected (externally)"; the Wi-Fi arbitration in
+    # `myconfig.networking.preferWired` is now driven from rtnetlink events and
+    # copes with either, but DHCP keeps eno1 NM-managed and the config simpler.
     {
       services.eternal-terminal = {
         enable = true;
@@ -53,17 +51,12 @@
     myconfig = {
       desktop.enable = false;
       headless.enable = true;
-      # eno1 (fixed IP) and the USB Wi-Fi dongle both land on 192.168.1.0/24,
-      # so with both up the box is dual-homed on one subnet and the Wi-Fi IP
-      # is unreachable from the LAN (replies for it egress eno1 → asymmetric
+      # eno1 and the USB Wi-Fi dongle both land on 192.168.1.0/24, so with
+      # both up the box is dual-homed on one subnet and the Wi-Fi IP is
+      # unreachable from the LAN (replies for it egress eno1 → asymmetric
       # path + ARP flux). This host is wired-primary with Wi-Fi as failover,
       # so drop Wi-Fi whenever the wired link has carrier and bring it back
       # when eno1 goes down.
-      #
-      # NB: on this host the shared preferWired module only provides the
-      # rp_filter=2 defense-in-depth; its NetworkManager dispatcher never runs
-      # for eno1 (which is externally managed via `fixIp`). The actual radio
-      # toggling is done by ./networking.preferWired.arbiter.nix.
       networking.preferWired.enable = true;
       observability = {
         client.enable = true;
