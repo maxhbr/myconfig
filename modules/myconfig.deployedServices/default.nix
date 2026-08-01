@@ -99,16 +99,6 @@
       description = "Map of hostnames to their deployed services";
     };
     configureCaddy = mkEnableOption "configure caddy for this machine";
-    center = mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      description = ''
-        The central host. For example "vserver".
-        If set it generats proxy configuration for all services on the other hosts.
-        If another host ("nur") provides "hass.nuc.wg0.maxhbr.local" it generates "hass.nuc.vserver.wg0.maxhbr.local" and redirects to it.
-        It redirects to the https port but ignores the certificate (which is self generated).
-      '';
-    };
   };
 
   config = lib.mkIf (config.myconfig.deployedServices.services != { }) {
@@ -131,8 +121,6 @@
           baseHostName = "${hostName}.wg0.maxhbr.local";
           allServices = config.myconfig.deployedServices.services;
           servicesList = allServices."${hostName}" or [ ];
-          center = config.myconfig.deployedServices.center;
-          isCenter = center != null && center == hostName;
 
           internalCa = config.myconfig.deployedServices.internalCa;
           useAcme = internalCa.enable && internalCa.useAcmeForCaddy;
@@ -157,26 +145,6 @@
             else
               "tls internal";
 
-          # `transport http { ... }` block used inside the `center`
-          # host's `reverse_proxy https://${upstreamFqdn} { ... }`
-          # config (see `httpsProxy` below). When all peers' Caddy
-          # uses real (ACME-issued) certs that chain to the root we
-          # just installed, verification can succeed normally;
-          # otherwise we have to skip verification because peers are
-          # still using `tls internal` (per-host self-signed).
-          #
-          # NOTE: line breaks + indentation are crafted so that the
-          # interpolation site in `httpsProxy` produces the exact same
-          # whitespace as the previous hand-written literal block.
-          # Specifically, the interpolation occurs after two spaces of
-          # leading literal text on the first line, so this string
-          # must start without leading whitespace and embed the
-          # remaining indent verbatim.
-          caddyProxyTlsTransport =
-            if useAcme then
-              "transport http {\n    tls\n  }"
-            else
-              "transport http {\n    tls\n    tls_insecure_skip_verify\n  }";
           indexHtml =
             let
               renderHostSection =
@@ -353,139 +321,17 @@
               '';
             };
           };
-          # When this host is the configured `center`, generate proxy
-          # virtualHosts that re-expose services from every other host
-          # under `${name}.${otherHost}.${centerBase}` and reverse-proxy
-          # to the upstream Caddy at
-          # `https://${name}.${otherHost}.wg0.maxhbr.local`. Whether the
-          # proxy transport verifies the upstream's TLS cert depends on
-          # `myconfig.deployedServices.internalCa.useAcmeForCaddy`:
-          # when ACME is on, all peers serve real internal-CA certs and
-          # verification is enabled; otherwise verification is skipped
-          # because peers use Caddy's `tls internal` self-signed certs.
-          centerProxyHosts =
-            if !isCenter then
-              { }
-            else
-              let
-                centerIp = myconfig.metadatalib.getWgIp hostName;
-                otherHosts = lib.filter (h: h != hostName) (lib.attrNames allServices);
-                proxyForService =
-                  otherHost:
-                  {
-                    name,
-                    port,
-                    forceHttps,
-                    redirect,
-                    ...
-                  }:
-                  if port == null && redirect == null then
-                    [ ]
-                  else
-                    let
-                      upstreamFqdn = "${name}.${otherHost}.wg0.maxhbr.local";
-                      proxiedFqdn = "${name}.${otherHost}.${baseHostName}";
-                      shortAlias = "${name}.${otherHost}.${hostName}.wg0";
-                      # Always proxy via HTTPS for the https variant.
-                      # When the internal-CA / ACME stack is on
-                      # (`useAcme` true), the upstream presents a real
-                      # cert chaining to a root we already installed in
-                      # the system trust store, so the transport block
-                      # uses normal verification. Otherwise the upstream
-                      # is using Caddy's `tls internal` self-signed
-                      # cert and we have to skip verification —
-                      # `caddyProxyTlsTransport` encodes both cases.
-                      # `header_up Origin` and `header_up Referer` rewrite
-                      # those headers to the upstream's own hostname so that
-                      # services that validate allowed_origins (e.g. Grafana)
-                      # see their own FQDN rather than the center-proxy FQDN
-                      # and do not reject the request as a disallowed origin.
-                      httpsProxy = ''
-                        reverse_proxy https://${upstreamFqdn} {
-                          header_up Host {upstream_hostport}
-                          header_up Origin https://{upstream_hostport}
-                          header_up Referer https://{upstream_hostport}{uri}
-                          ${caddyProxyTlsTransport}
-                        }
-                      '';
-                      # When the upstream is `forceHttps = false`, it
-                      # additionally serves the service on plain HTTP;
-                      # proxy via http there to avoid unnecessary TLS.
-                      # `header_up Host` is required so the upstream
-                      # Caddy matches its own `http://${upstreamFqdn}`
-                      # site rather than seeing the center-proxied
-                      # Host and falling through to its auto-https
-                      # redirect (which would otherwise 308 every
-                      # request back to https://*.vserver.*).
-                      httpProxy = ''
-                        reverse_proxy http://${upstreamFqdn} {
-                          header_up Host {upstream_hostport}
-                          header_up Origin http://{upstream_hostport}
-                          header_up Referer http://{upstream_hostport}{uri}
-                        }
-                      '';
-                    in
-                    if forceHttps then
-                      [
-                        (lib.nameValuePair proxiedFqdn {
-                          hostName = proxiedFqdn;
-                          listenAddresses = [ centerIp ];
-                          serverAliases = [ shortAlias ];
-                          extraConfig = ''
-                            ${caddyTlsConfig}
-                            ${httpsProxy}
-                          '';
-                        })
-                      ]
-                    else
-                      [
-                        (lib.nameValuePair "https://${proxiedFqdn}" {
-                          hostName = "https://${proxiedFqdn}";
-                          listenAddresses = [ centerIp ];
-                          serverAliases = [ "https://${shortAlias}" ];
-                          extraConfig = ''
-                            ${caddyTlsConfig}
-                            ${httpsProxy}
-                          '';
-                        })
-                        (lib.nameValuePair "http://${proxiedFqdn}" {
-                          hostName = "http://${proxiedFqdn}";
-                          listenAddresses = [ centerIp ];
-                          serverAliases = [ "http://${shortAlias}" ];
-                          extraConfig = httpProxy;
-                        })
-                      ];
-              in
-              lib.listToAttrs (
-                lib.concatMap (
-                  otherHost: lib.concatMap (proxyForService otherHost) allServices.${otherHost}
-                ) otherHosts
-              );
         in
-        serviceHosts // indexHost // centerProxyHosts;
+        serviceHosts // indexHost;
     };
     networking.extraHosts =
       let
         baseDomain = "wg0.maxhbr.local";
-        center = config.myconfig.deployedServices.center;
         allServices = config.myconfig.deployedServices.services;
         allHosts = lib.attrNames allServices;
-        centerWgIp = if center != null then myconfig.metadatalib.getWgIp center else null;
-        # When a center is configured, also publish
-        # `${name}.${otherHost}.${center}.${baseDomain}` mappings
-        # pointing at the center's WG IP for every service on every
-        # non-center host. Mirrors the vhost names generated above
-        # when this host is the center.
-        centerSuffix = lib.optionalString (center != null) "${center}.${baseDomain}";
-        centerAliasLines = lib.optionals (center != null) (
-          lib.concatMap (
-            hostname:
-            map ({ name, ... }: "${centerWgIp} ${name}.${hostname}.${centerSuffix}") allServices.${hostname}
-          ) (lib.filter (h: h != center) allHosts)
-        );
       in
       lib.concatStringsSep "\n" (
-        (lib.concatMap (
+        lib.concatMap (
           hostname:
           let
             wgIp = myconfig.metadatalib.getWgIp hostname;
@@ -495,8 +341,7 @@
             "${wgIp} ${baseHost}"
           ]
           ++ (map ({ name, ... }: "${wgIp} ${name}.${baseHost}") allServices.${hostname})
-        ) allHosts)
-        ++ centerAliasLines
+        ) allHosts
       );
   };
 }
