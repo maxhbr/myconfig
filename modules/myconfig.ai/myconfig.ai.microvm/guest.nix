@@ -145,10 +145,22 @@ let
     };
 
     # --- §7 minimal guest toolchain + the §19 entry point ----------------
-    # A deliberately small package set; agent binaries (Claude/Pi/Codex/
-    # OpenCode) are added in a later guest-packaging phase.
+    # A deliberately small package set plus the four agent binaries so
+    # `agent-run <bin>` can exec them inside the guest. The agent packages
+    # are the SAME repo package attrs the host coding-agent modules use
+    # (programs.claude-code → pkgs.claude-code, programs.codex → pkgs.codex,
+    # programs.opencode → pkgs.opencode, programs.pi-coding-agent →
+    # pkgs.nixos-unstable.pi-coding-agent). They are baked into the immutable
+    # guest closure (§8: no runtime CLI download, no host Nix daemon). Their
+    # exe names are exactly the launcher's agent set: claude / codex /
+    # opencode / pi.
     environment.systemPackages = with pkgs; [
       agent-run
+      # §7 agent binaries (exe names: claude, codex, opencode, pi).
+      claude-code
+      codex
+      opencode
+      nixos-unstable.pi-coding-agent
       bash
       coreutils
       curl
