@@ -112,8 +112,16 @@ let
       export SANDBOXED_WORKMUX_NETWORK=1
 
       echo "alacritty-sandboxed-workmux-here: building microvm runner for $top" >&2
+      # `path:` flakeref (not a bare store path): a bare `/nix/store/...-source`
+      # argument is re-resolved by Nix to its originating `git+file://`
+      # flakeref, which libgit2 refuses because /nix/store is not owned by the
+      # current user (dubious-ownership, error 7). `path:` forces the path
+      # fetcher and copies the tree, bypassing the git ownership check. The
+      # runner is still built impurely per invocation because it embeds the
+      # per-launch main repo, worktrees dir, SSH port, keys and config via the
+      # SANDBOXED_WORKMUX_* environment variables.
       runner=$(nix build --impure --no-link --print-out-paths \
-        "${flake.outPath}#packages.${system}.sandboxed-workmux-runner")
+        "path:${flake.outPath}#packages.${system}.sandboxed-workmux-runner")
 
       echo "alacritty-sandboxed-workmux-here: starting microvm (guest SSH on 127.0.0.1:$ssh_port)" >&2
       "$runner/bin/microvm-run" >"$runtime_dir/console.log" 2>&1 &

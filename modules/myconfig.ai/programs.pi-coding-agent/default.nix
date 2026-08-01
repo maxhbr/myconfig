@@ -752,8 +752,18 @@ let
       export SANDBOXED_PI_NETWORK=1
 
       echo "sandboxed-pi: building microvm runner for workspace: $workspace" >&2
+      # Use an explicit `path:` flakeref for the flake source store path.
+      # A bare `/nix/store/...-source` argument is re-resolved by Nix back to
+      # its originating `git+file://` flakeref, and libgit2 then refuses the
+      # store path with "repository path ... is not owned by current user"
+      # (dubious-ownership check, error 7) because /nix/store is root-owned.
+      # `path:` forces the path fetcher (copies the tree), sidestepping any
+      # git ownership check. The runner still must be built impurely per
+      # invocation because it embeds the per-launch workspace path, forwarded
+      # SSH port and throwaway authorized-keys file via the SANDBOXED_PI_*
+      # environment variables (read with builtins.getEnv in flake.nix).
       runner=$(nix build --impure --no-link --print-out-paths \
-        "${flake.outPath}#packages.${system}.sandboxed-pi-runner")
+        "path:${flake.outPath}#packages.${system}.sandboxed-pi-runner")
 
       echo "sandboxed-pi: starting microvm (guest SSH forwarded to 127.0.0.1:$ssh_port)" >&2
       "$runner/bin/microvm-run" >"$runtime_dir/console.log" 2>&1 &
