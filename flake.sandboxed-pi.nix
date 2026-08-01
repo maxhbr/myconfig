@@ -1,0 +1,350 @@
+# Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+#
+# Sandboxed microVM runners — the microvm.nix counterparts of the bubblewrap
+# `jailed-*` wrappers. The agent (or the whole workmux/tmux session) runs
+# inside a real VM (its own kernel) with an ephemeral, discarded-on-exit root
+# filesystem and an unprivileged `agent` user, instead of a bubblewrap jail.
+#
+# Exports:
+#   * `mkSandboxedRunner`         — generic parameterized qemu runner builder.
+#   * `mkSandboxedPiRunner`       — thin wrapper: one workspace + `pi`.
+#                                   Backs `sandboxed-pi` (jailed-pi analogue).
+#   * `mkSandboxedWorkmuxRunner`  — main repo + its `__worktrees` sibling +
+#                                   tmux/workmux/pi. Backs
+#                                   `alacritty-sandboxed-workmux-here`
+#                                   (alacritty-workmux-here analogue).
+#
+# The host-side wrappers (see
+# `modules/myconfig.ai/programs.pi-coding-agent/default.nix` and
+# `modules/myconfig.ai/myconfig.ai.workmux/sandbox.nix`) evaluate these per
+# invocation via impure flake outputs, passing the current working directory
+# as the workspace. This is the "wrapper that evaluates a parameterized flake
+# output" execution model — the guest system closure is cached; only a tiny
+# wrapper derivation that embeds the workspace path and the forwarded SSH port
+# rebuilds each launch (sub-second).
+#
+# ── Why qemu + user-mode networking (not cloud-hypervisor) ──────────────────
+# cloud-hypervisor only supports `tap`/`macvtap` interfaces (see
+# microvm.nix/lib/runners/cloud-hypervisor.nix) — it has no user-mode
+# networking and no `forwardPorts`. Using it would require a host bridge,
+# per-VM TAP, NAT and firewall rules plus a system rebuild before the guest
+# could reach the network or be reachable over SSH. That defeats the
+# `jailed-*`-like goal of a self-contained user-space wrapper that "just
+# works" from any project directory with no host changes. qemu supports
+# `type = "user"` SLiRP networking + `forwardPorts` (the same combination the
+# in-repo hermes microVM uses), giving outbound NAT and a host-localhost SSH
+# port with zero host configuration. cloud-hypervisor + a dedicated bridge is
+# the natural follow-up once host networking is provisioned; only
+# `microvm.hypervisor`/`interfaces`/`forwardPorts` differ.
+#
+# ── Security posture (vs the bubblewrap jails) ──────────────────────────────
+# Strictly stronger isolation than the bubblewrap jail: the agent runs in a
+# separate kernel as an unprivileged `agent` user with an ephemeral,
+# discarded-on-exit root filesystem. Only the explicitly listed host
+# directories are shared read-write. The host home directory, credentials,
+# agent/ssh sockets, D-Bus, the nix daemon and the host /nix/store (shared
+# read-only only) are never writable from the guest. LLM credentials are
+# forwarded at launch over the SSH channel's environment (never baked into the
+# Nix store, never in process argv).
+inputs:
+let
+  # Generic sandbox guest/runner builder shared by all sandboxed-* wrappers.
+  #
+  # Arguments:
+  #   system              — e.g. "x86_64-linux".
+  #   hostname            — guest hostname.
+  #   sshPort             — host-localhost TCP port forwarded to guest :22.
+  #   authorizedKeysFile  — throwaway SSH public key authorized for `agent`.
+  #   shares              — list of extra writable virtiofs shares
+  #                         ({ tag; source; mountPoint; }). The read-only
+  #                         host /nix/store share is always added.
+  #   guestPackages       — extra packages on the guest system PATH.
+  #   extraGuestModules   — extra NixOS modules merged into the guest.
+  #   vcpu / mem          — guest resource bounds.
+  #   allowNetwork        — when false, no network interface / SSH (offline).
+  mkSandboxedRunner =
+    {
+      system,
+      hostname,
+      sshPort,
+      authorizedKeysFile,
+      shares ? [ ],
+      guestPackages ? [ ],
+      extraGuestModules ? [ ],
+      vcpu ? 4,
+      mem ? 8192,
+      allowNetwork ? true,
+    }:
+    let
+      pkgs = inputs.nixpkgs.legacyPackages.${system};
+
+      guest = inputs.nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [
+          inputs.microvm.nixosModules.microvm
+          (
+            { lib, ... }:
+            {
+              networking.hostName = hostname;
+
+              microvm = {
+                hypervisor = "qemu";
+                inherit vcpu mem;
+                graphics.enable = false;
+
+                # Read-only host /nix/store share (no store disk image needed,
+                # fast boot) + the caller's writable shares.
+                shares = [
+                  {
+                    tag = "nix-store";
+                    source = "/nix/store";
+                    mountPoint = "/nix/store";
+                    proto = "virtiofs";
+                    readOnly = true;
+                  }
+                ]
+                ++ map (s: s // { proto = "virtiofs"; }) shares;
+
+                # SLiRP user-mode networking: outbound NAT through the host,
+                # no host bridge/tap, no inbound except the forwarded SSH port.
+                interfaces = lib.optionals allowNetwork [
+                  {
+                    type = "user";
+                    id = "qemu";
+                    mac = "02:00:00:5a:9d:01";
+                  }
+                ];
+                forwardPorts = lib.optionals allowNetwork [
+                  {
+                    from = "host";
+                    host.address = "127.0.0.1";
+                    host.port = sshPort;
+                    guest.port = 22;
+                  }
+                ];
+              };
+
+              # Ephemeral root: no `microvm.volumes`, so the root filesystem is
+              # a tmpfs that is discarded when the VM stops. Only the shares
+              # (and the read-only host store) survive.
+
+              # ── Unprivileged agent user ─────────────────────────────────
+              users.users.agent = {
+                isNormalUser = true;
+                home = "/home/agent";
+                createHome = true;
+                extraGroups = [ ];
+                # No password; access is key-only over SSH (or console).
+                hashedPassword = "!";
+                shell = pkgs.bashInteractive;
+                openssh.authorizedKeys.keyFiles = [ authorizedKeysFile ];
+              };
+
+              security.sudo.enable = false;
+
+              # ── SSH: key-only, no root, no forwarding ───────────────────
+              services.openssh = lib.mkIf allowNetwork {
+                enable = true;
+                settings = {
+                  PermitRootLogin = "no";
+                  PasswordAuthentication = false;
+                  KbdInteractiveAuthentication = false;
+                  AllowAgentForwarding = "no";
+                  X11Forwarding = false;
+                  AllowTcpForwarding = "no";
+                  PermitTunnel = "no";
+                  # Allow the launcher to forward LLM credentials at runtime
+                  # via the SSH environment (never baked into the store).
+                  AcceptEnv = [
+                    "OPENAI_API_KEY"
+                    "OPENAI_BASE_URL"
+                    "OPENROUTER_BASE_URL"
+                    "ANTHROPIC_API_KEY"
+                    "PI_*"
+                    "LANG"
+                    "LC_ALL"
+                    "TERM"
+                    "COLORTERM"
+                  ];
+                };
+              };
+              networking.firewall.allowedTCPPorts = lib.optionals allowNetwork [ 22 ];
+
+              # ── Minimal coding-agent environment ────────────────────────
+              environment.systemPackages =
+                (with pkgs; [
+                  bashInteractive
+                  coreutils
+                  curl
+                  diffutils
+                  fd
+                  file
+                  findutils
+                  git
+                  gnugrep
+                  gnumake
+                  gnused
+                  jq
+                  less
+                  openssh
+                  patch
+                  procps
+                  ripgrep
+                  rsync
+                  tree
+                  unzip
+                  which
+                ])
+                ++ guestPackages;
+
+              system.stateVersion = "25.11";
+            }
+          )
+        ]
+        ++ extraGuestModules;
+      };
+    in
+    guest.config.microvm.declaredRunner;
+
+in
+{
+  inherit mkSandboxedRunner;
+
+  # One workspace + `pi`. Backs `sandboxed-pi`.
+  mkSandboxedPiRunner =
+    {
+      system,
+      workspace,
+      sshPort,
+      authorizedKeysFile,
+      piPackage,
+      vcpu ? 4,
+      mem ? 8192,
+      allowNetwork ? true,
+    }:
+    mkSandboxedRunner {
+      inherit
+        system
+        sshPort
+        authorizedKeysFile
+        vcpu
+        mem
+        allowNetwork
+        ;
+      hostname = "sandboxed-pi";
+      shares = [
+        {
+          tag = "workspace";
+          source = workspace;
+          mountPoint = "/workspace";
+        }
+      ];
+      guestPackages = [ piPackage ];
+    };
+
+  # Main repo + its `__worktrees` sibling + tmux/workmux/pi. Backs
+  # `alacritty-sandboxed-workmux-here`.
+  #
+  # The main checkout is shared read-write at /workspace and the sibling
+  # worktrees directory at /workspace__worktrees, so that inside the guest
+  # workmux's `dirname(top)/basename(top)__worktrees` convention resolves
+  # correctly (dirname "/workspace" = "/", basename = "workspace" →
+  # "/workspace__worktrees"). The guest entry point `workmux-sandbox-entry`
+  # installs the supplied workmux config, boots a workmux tmux session and
+  # attaches; the launcher SSHes in and runs it under a TTY.
+  mkSandboxedWorkmuxRunner =
+    {
+      system,
+      workspace,
+      worktrees,
+      sshPort,
+      authorizedKeysFile,
+      piPackage,
+      workmuxPackage,
+      workmuxConfigFile,
+      tmuxConf ? "",
+      vcpu ? 4,
+      mem ? 8192,
+      allowNetwork ? true,
+    }:
+    let
+      pkgs = inputs.nixpkgs.legacyPackages.${system};
+
+      # Guest entry point: install the jail-specific workmux config, boot a
+      # workmux tmux session (mirrors the bubblewrap jail's entry in
+      # myconfig.ai.workmux/jail.nix) and attach. Runs in /workspace so
+      # workmux operates on the shared main checkout.
+      entry = pkgs.writeShellApplication {
+        name = "workmux-sandbox-entry";
+        runtimeInputs = [
+          workmuxPackage
+          pkgs.tmux
+          pkgs.coreutils
+          pkgs.bashInteractive
+          pkgs.git
+          piPackage
+        ];
+        text = ''
+          # Install the sandbox workmux config (plain `pi` agent, not the
+          # bubblewrap-wrapped one — the VM is already the sandbox).
+          mkdir -p ~/.config/workmux
+          install -m 0644 ${workmuxConfigFile} ~/.config/workmux/config.yaml
+
+          cd /workspace
+
+          session=workmux
+          shell=${pkgs.lib.getExe pkgs.bashInteractive}
+          export SHELL="$shell"
+
+          if ! tmux has-session -t "=$session" 2>/dev/null; then
+            tmux \
+              set-option -g default-shell "$shell" \; \
+              set-option -g default-command "$shell" \; \
+              new-session -d -s "$session" -c /workspace
+          fi
+
+          if [ "$(tmux show-options -t "=$session:" -qv @workmux_bootstrapped)" != 1 ]; then
+            tmux set-option -t "=$session:" @workmux_bootstrapped 1
+            tmux send-keys -t "=$session:" 'workmux sidebar --session; workmux dashboard' Enter
+          fi
+
+          exec tmux attach-session -t "=$session"
+        '';
+      };
+    in
+    mkSandboxedRunner {
+      inherit
+        system
+        sshPort
+        authorizedKeysFile
+        vcpu
+        mem
+        allowNetwork
+        ;
+      hostname = "sandboxed-workmux";
+      shares = [
+        {
+          tag = "workspace";
+          source = workspace;
+          mountPoint = "/workspace";
+        }
+        {
+          tag = "worktrees";
+          source = worktrees;
+          mountPoint = "/workspace__worktrees";
+        }
+      ];
+      guestPackages = [
+        piPackage
+        workmuxPackage
+        pkgs.tmux
+        entry
+      ];
+      # Expose the host's tmux configuration inside the guest so the in-VM
+      # tmux server picks up the same keybindings/theme. Skipped when empty.
+      extraGuestModules = pkgs.lib.optional (tmuxConf != "") {
+        environment.etc."tmux.conf".source = tmuxConf;
+      };
+    };
+}

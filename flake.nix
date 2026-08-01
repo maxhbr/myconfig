@@ -87,7 +87,8 @@
         lib = {
           jail = import ./vendor/alexdavid-jail.nix/lib;
         }
-        // import ./flake.lib.nix inputs;
+        // import ./flake.lib.nix inputs
+        // import ./flake.sandboxed-pi.nix inputs;
 
         ##########################################################################
         ## profiles and modules ##################################################
@@ -517,6 +518,77 @@
               inherit system;
               hostName = "iso";
             } [ ];
+          }
+          // lib.optionalAttrs (system == "x86_64-linux" || system == "aarch64-linux") {
+            # Per-invocation microvm runner for `sandboxed-pi`. Built impurely
+            # by the host-side `sandboxed-pi` wrapper, which sets the
+            # SANDBOXED_PI_* environment variables (workspace path, forwarded
+            # SSH port, throwaway authorized-keys file) before
+            # `nix build --impure`. The workspace path therefore never appears
+            # in any tracked file or flake output. See flake.sandboxed-pi.nix
+            # and modules/myconfig.ai/programs.pi-coding-agent/default.nix.
+            sandboxed-pi-runner =
+              let
+                getEnvOr =
+                  name: fallback:
+                  let
+                    v = builtins.getEnv name;
+                  in
+                  if v == "" then fallback else v;
+                workspace = builtins.getEnv "SANDBOXED_PI_WORKSPACE";
+              in
+              if workspace == "" then
+                # Pure eval (e.g. `nix flake check`, `nix flake show`): the
+                # env vars are empty, so emit a harmless placeholder derivation
+                # instead of failing. The real runner is only ever built
+                # impurely by the wrapper.
+                nixpkgs.legacyPackages.${system}.writeShellScriptBin "sandboxed-pi-runner" ''
+                  echo "sandboxed-pi-runner must be built via the sandboxed-pi wrapper (SANDBOXED_PI_WORKSPACE unset)" >&2
+                  exit 1
+                ''
+              else
+                self.lib.mkSandboxedPiRunner {
+                  inherit system workspace;
+                  sshPort = lib.toInt (getEnvOr "SANDBOXED_PI_SSH_PORT" "2222");
+                  authorizedKeysFile = getEnvOr "SANDBOXED_PI_AUTHORIZED_KEYS" "/var/empty/authorized_keys";
+                  piPackage = inputs.nixos-unstable.legacyPackages.${system}.pi-coding-agent;
+                  allowNetwork = getEnvOr "SANDBOXED_PI_NETWORK" "1" != "0";
+                };
+
+            # Per-invocation microvm runner for the whole workmux/tmux session
+            # (`alacritty-sandboxed-workmux-here`). Built impurely by that
+            # wrapper, which sets the SANDBOXED_WORKMUX_* environment variables
+            # (main repo, sibling worktrees dir, forwarded SSH port, throwaway
+            # authorized-keys file, generated workmux config + tmux.conf store
+            # paths). See flake.sandboxed-pi.nix and
+            # modules/myconfig.ai/myconfig.ai.workmux/sandbox.nix.
+            sandboxed-workmux-runner =
+              let
+                getEnvOr =
+                  name: fallback:
+                  let
+                    v = builtins.getEnv name;
+                  in
+                  if v == "" then fallback else v;
+                workspace = builtins.getEnv "SANDBOXED_WORKMUX_REPO";
+              in
+              if workspace == "" then
+                nixpkgs.legacyPackages.${system}.writeShellScriptBin "sandboxed-workmux-runner" ''
+                  echo "sandboxed-workmux-runner must be built via the alacritty-sandboxed-workmux-here wrapper (SANDBOXED_WORKMUX_REPO unset)" >&2
+                  exit 1
+                ''
+              else
+                self.lib.mkSandboxedWorkmuxRunner {
+                  inherit system workspace;
+                  worktrees = getEnvOr "SANDBOXED_WORKMUX_WORKTREES" workspace;
+                  sshPort = lib.toInt (getEnvOr "SANDBOXED_WORKMUX_SSH_PORT" "2222");
+                  authorizedKeysFile = getEnvOr "SANDBOXED_WORKMUX_AUTHORIZED_KEYS" "/var/empty/authorized_keys";
+                  workmuxConfigFile = getEnvOr "SANDBOXED_WORKMUX_CONFIG" "/var/empty/config.yaml";
+                  tmuxConf = getEnvOr "SANDBOXED_WORKMUX_TMUXCONF" "";
+                  piPackage = inputs.nixos-unstable.legacyPackages.${system}.pi-coding-agent;
+                  workmuxPackage = inputs.workmux.packages.${system}.default;
+                  allowNetwork = getEnvOr "SANDBOXED_WORKMUX_NETWORK" "1" != "0";
+                };
           };
 
           formatter = nixpkgs.legacyPackages.${system}.nixfmt-tree;

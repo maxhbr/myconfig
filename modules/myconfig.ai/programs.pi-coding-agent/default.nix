@@ -5,11 +5,13 @@
   lib,
   pkgs,
   jail,
+  flake,
   ...
 }:
 
 let
   osconfig = config;
+  system = pkgs.stdenv.hostPlatform.system;
   callLib = file: import file { inherit lib pkgs; };
   callJailLib =
     file:
@@ -686,6 +688,124 @@ let
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
+
+  # `sandboxed-pi` — the microVM analogue of `jailed-pi`. Same ergonomics
+  # (run it from a project subdirectory; the working directory is the only
+  # writable thing the agent sees), but instead of a bubblewrap jail the
+  # agent runs inside a real microvm.nix VM with its own kernel, an ephemeral
+  # root filesystem and an unprivileged `agent` user. See
+  # ../../../flake.sandboxed-pi.nix for the guest/runner and the rationale for
+  # qemu + user-mode networking over cloud-hypervisor.
+  #
+  # The current working directory is shared read-write at /workspace via
+  # virtiofs; the agent is reached over SSH on a host-localhost forwarded port
+  # using a throwaway keypair generated per invocation. LLM credentials
+  # (OPENAI_API_KEY etc.) are forwarded over the SSH environment at launch —
+  # never baked into the Nix store, never in process argv. The VM is torn down
+  # and all guest state discarded on exit; only the workspace persists.
+  sandboxed-pi = pkgs.writeShellApplication {
+    name = "sandboxed-pi";
+    runtimeInputs = with pkgs; [
+      nix
+      openssh
+      coreutils
+      gnugrep
+    ];
+    text = ''
+      # Refuse to run in $HOME: like jailed-pi, the working directory is
+      # shared writable into the sandbox, and sharing the whole home
+      # directory would defeat the isolation. Run from a project subdirectory.
+      if [ "$PWD" = "$HOME" ]; then
+        echo "sandboxed-pi: refusing to run in home directory ($HOME):" >&2
+        echo "sandboxed-pi: the working directory is shared writable into the VM." >&2
+        echo "sandboxed-pi: run from a project subdirectory instead." >&2
+        exit 1
+      fi
+
+      workspace="$(realpath "$PWD")"
+      if [ ! -d "$workspace" ]; then
+        echo "sandboxed-pi: workspace is not a directory: $workspace" >&2
+        exit 1
+      fi
+
+      # Per-invocation runtime state (throwaway SSH key, VM control socket).
+      runtime_dir="$(mktemp -d "''${XDG_RUNTIME_DIR:-/tmp}/sandboxed-pi.XXXXXX")"
+      # Pick a pseudo-random host-localhost port for the forwarded guest SSH.
+      ssh_port=$(( (RANDOM % 20000) + 20000 ))
+
+      vm_pid=""
+      cleanup() {
+        if [ -n "$vm_pid" ] && kill -0 "$vm_pid" 2>/dev/null; then
+          kill "$vm_pid" 2>/dev/null || true
+          wait "$vm_pid" 2>/dev/null || true
+        fi
+        rm -rf "$runtime_dir"
+      }
+      trap cleanup EXIT INT TERM
+
+      # Throwaway SSH keypair authorizing the launcher into the guest.
+      ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C sandboxed-pi
+
+      export SANDBOXED_PI_WORKSPACE="$workspace"
+      export SANDBOXED_PI_SSH_PORT="$ssh_port"
+      export SANDBOXED_PI_AUTHORIZED_KEYS="$runtime_dir/id.pub"
+      export SANDBOXED_PI_NETWORK=1
+
+      echo "sandboxed-pi: building microvm runner for workspace: $workspace" >&2
+      runner=$(nix build --impure --no-link --print-out-paths \
+        "${flake.outPath}#packages.${system}.sandboxed-pi-runner")
+
+      echo "sandboxed-pi: starting microvm (guest SSH forwarded to 127.0.0.1:$ssh_port)" >&2
+      "$runner/bin/microvm-run" >"$runtime_dir/console.log" 2>&1 &
+      vm_pid=$!
+
+      # Wait for the guest SSH server to accept our key (or the VM to die).
+      ssh_opts=(
+        -p "$ssh_port"
+        -i "$runtime_dir/id"
+        -o StrictHostKeyChecking=no
+        -o UserKnownHostsFile=/dev/null
+        -o ConnectTimeout=3
+        -o LogLevel=ERROR
+      )
+      ready=0
+      for _ in $(seq 1 120); do
+        if ! kill -0 "$vm_pid" 2>/dev/null; then
+          echo "sandboxed-pi: microvm exited before SSH became ready; console log:" >&2
+          tail -n 40 "$runtime_dir/console.log" >&2 || true
+          exit 1
+        fi
+        if ssh "''${ssh_opts[@]}" agent@127.0.0.1 true 2>/dev/null; then
+          ready=1
+          break
+        fi
+        sleep 1
+      done
+      if [ "$ready" -ne 1 ]; then
+        echo "sandboxed-pi: timed out waiting for guest SSH; console log:" >&2
+        tail -n 40 "$runtime_dir/console.log" >&2 || true
+        exit 1
+      fi
+
+      # Forward LLM credentials over the SSH environment (never in argv or the
+      # store). Only forward variables that are actually set on the host.
+      for var in OPENAI_API_KEY OPENAI_BASE_URL OPENROUTER_BASE_URL ANTHROPIC_API_KEY; do
+        if [ -n "''${!var:-}" ]; then
+          ssh_opts+=(-o "SetEnv=$var=''${!var}")
+        fi
+      done
+
+      # Build a safely-quoted remote command: cd into the workspace and exec
+      # pi with the caller's argument vector preserved via printf %q.
+      remote_cmd='cd /workspace && exec pi'
+      for a in "$@"; do
+        remote_cmd+=" $(printf '%q' "$a")"
+      done
+
+      # Interactive session (-t for a TTY so the pi TUI works).
+      ssh -tt "''${ssh_opts[@]}" agent@127.0.0.1 "$remote_cmd"
+    '';
+  };
 in
 {
   options.myconfig = with lib; {
@@ -729,6 +849,7 @@ in
           pkgs.nixos-unstable.pi-coding-agent
           piBwrap
           jailed-pi
+          sandboxed-pi
           (pkgs.writeShellApplication {
             name = "pi-tmp";
             runtimeInputs = with pkgs; [ coreutils ];

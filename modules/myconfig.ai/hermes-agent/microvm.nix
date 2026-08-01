@@ -21,7 +21,15 @@
 # module does *not* load tap/vhost_net modules, enable KSM or create the
 # `microvm` user on hosts that don't use the backend. Hosts that opt in set
 # `myconfig.ai.hermes.microvm.enable = true`, which flips
-# `microvm.host.enable` to `true`.
+# `microvm.host.enable` to `true`.  (Upstream microvm.nix defaults
+# `microvm.host.enable = true` — see nixos-modules/host/options.nix — so this
+# neutralization is load-bearing, not a no-op.)
+#
+# NOTE for a future cloud-hypervisor switch: this backend uses QEMU
+# (`microvm.hypervisor = "qemu"`). The QEMU "memory is exactly 2GB" hang
+# (microvm.nix#171) is worked around in service.nix (`mem` defaults to 2049).
+# cloud-hypervisor does not need that guard; if the hypervisor is ever made
+# configurable, only apply the 2GB bump for qemu.
 #
 # In addition to the VM itself, this module installs a `hermes-microvm`
 # wrapper on the host that runs the hermes CLI pointed at the gateway's
