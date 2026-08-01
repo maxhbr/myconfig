@@ -20,6 +20,12 @@
 {
   imports = [
     ./hardware-configuration.nix
+    # Event-driven Wi-Fi arbitration. `myconfig.networking.preferWired` below is
+    # ineffective on this host on its own because eno1 is statically addressed
+    # via `fixIp` and is therefore "connected (externally)" — NetworkManager
+    # never fires the dispatcher up/down events the shared module hooks. This
+    # module reinstates the same policy from rtnetlink link events instead.
+    ./networking.preferWired.arbiter.nix
     (myconfig.metadatalib.fixIp "eno1")
     {
       services.eternal-terminal = {
@@ -53,6 +59,11 @@
       # path + ARP flux). This host is wired-primary with Wi-Fi as failover,
       # so drop Wi-Fi whenever the wired link has carrier and bring it back
       # when eno1 goes down.
+      #
+      # NB: on this host the shared preferWired module only provides the
+      # rp_filter=2 defense-in-depth; its NetworkManager dispatcher never runs
+      # for eno1 (which is externally managed via `fixIp`). The actual radio
+      # toggling is done by ./networking.preferWired.arbiter.nix.
       networking.preferWired.enable = true;
       observability = {
         client.enable = true;
