@@ -75,7 +75,7 @@ in
       type = lib.types.str;
       description = ''
         Upstream LiteLLM API base URL (e.g.
-        `http://litellm.thing.vserver.wg0.maxhbr.local:80/v1`).
+        `http://litellm.thing.wg0.maxhbr.local:80/v1`).
         Each model is forwarded as `openai/<model>` pointing at this
         base.
       '';

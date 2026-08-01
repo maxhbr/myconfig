@@ -11,14 +11,6 @@
   config = {
     myconfig.deployedServices = {
       services = {
-        # vserver = [
-        #   {
-        #     name = "litellm";
-        #     ip = "litellm.thing.wg0.maxhbr.local";
-        #     port = 80;
-        #     forceHttps = false;
-        #   }
-        # ];
         nuc = [
           (rec {
             name = "hass";
@@ -130,7 +122,6 @@
           # }
         ];
       };
-      center = "vserver";
     };
   };
 }

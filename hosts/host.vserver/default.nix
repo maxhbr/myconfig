@@ -18,7 +18,6 @@
         host_hostname = "nuc";
         client.enable = true;
       };
-      deployedServices.configureCaddy = true;
     };
 
     networking.hostName = "vserver";

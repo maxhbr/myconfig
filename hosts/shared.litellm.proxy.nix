@@ -6,8 +6,8 @@
 # models (currently f13 and p14).
 #
 # It listens on localhost:4000 and forwards all model requests to thing's
-# LiteLLM via vserver's Caddy reverse proxy
-# (litellm.thing.vserver.wg0.maxhbr.local). This is the counterpart to
+# LiteLLM via thing's Caddy reverse proxy
+# (litellm.thing.wg0.maxhbr.local). This is the counterpart to
 # hosts/shared.localModels.litellm.nix: instead of registering thing's
 # LiteLLM as *direct* myconfig.ai.localModels providers (which the AI
 # client configs would point at thing/vserver, bypassing any local
@@ -32,11 +32,11 @@
 # hosts/shared.localModels.{litellm,rtx5090,gfx1151}.nix — those register
 # direct providers that would bypass this proxy.
 #
-# Upstream: vserver's Caddy reverse proxy, which forwards to thing's
-# LiteLLM. The hostname resolves to vserver's wg0 IP via /etc/hosts
-# (see modules/myconfig.deployedServices/default.nix). vserver is the
-# WireGuard rendezvous host and always reachable, whether the importing
-# host is on the home LAN or roaming.
+# Upstream: thing's Caddy reverse proxy, which forwards to thing's
+# LiteLLM. The hostname resolves to thing's wg0 IP via /etc/hosts
+# (see modules/myconfig.deployedServices/default.nix). thing is reachable
+# directly over wg0, whether the importing host is on the home LAN or
+# roaming.
 #
 # Keep the model list in sync by re-running
 # ./hosts/shared.localModels.update.sh (regenerates
@@ -45,7 +45,7 @@
 {
   myconfig.ai.litellm.proxy = {
     enable = true;
-    upstreamApiBase = "http://litellm.thing.vserver.wg0.maxhbr.local:80/v1";
+    upstreamApiBase = "http://litellm.thing.wg0.maxhbr.local:80/v1";
     models = import ./shared.localModels.litellm.models.nix;
   };
 }
