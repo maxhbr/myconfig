@@ -123,8 +123,14 @@ let
       runner=$(nix build --impure --no-link --print-out-paths \
         "path:${flake.outPath}#packages.${system}.sandboxed-workmux-runner")
 
+      # Start the rootless virtiofsd daemon(s) + qemu via the runner's
+      # combined `sandboxed-launch` entry point, from $runtime_dir so the
+      # RELATIVE virtiofs socket paths resolve to a stable per-invocation
+      # directory. (Plain `microvm-run` would exit immediately because
+      # nothing would have created the virtiofs share sockets.)
+      cd "$runtime_dir"
       echo "alacritty-sandboxed-workmux-here: starting microvm (guest SSH on 127.0.0.1:$ssh_port)" >&2
-      "$runner/bin/microvm-run" >"$runtime_dir/console.log" 2>&1 &
+      "$runner/bin/sandboxed-launch" >"$runtime_dir/console.log" 2>&1 &
       vm_pid=$!
 
       ssh_opts=(

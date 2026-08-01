@@ -735,6 +735,8 @@ let
 
       vm_pid=""
       cleanup() {
+        # Killing the launcher triggers its own trap, which tears down the
+        # qemu VM and the virtiofsd daemon(s) it started.
         if [ -n "$vm_pid" ] && kill -0 "$vm_pid" 2>/dev/null; then
           kill "$vm_pid" 2>/dev/null || true
           wait "$vm_pid" 2>/dev/null || true
@@ -765,8 +767,18 @@ let
       runner=$(nix build --impure --no-link --print-out-paths \
         "path:${flake.outPath}#packages.${system}.sandboxed-pi-runner")
 
+      # microvm.nix's qemu runner connects to the virtiofs daemons over
+      # RELATIVE unix socket paths (e.g. `sandboxed-pi-virtiofs-nix-store.sock`),
+      # and virtiofsd creates those sockets in its own working directory.
+      # The runner's `bin/sandboxed-launch` starts the (rootless) virtiofsd
+      # daemon(s), waits for their sockets, then runs qemu — all from the
+      # current directory. Run it from $runtime_dir so the relative socket
+      # paths resolve to a stable, per-invocation location and are cleaned up
+      # on exit.
+      cd "$runtime_dir"
+
       echo "sandboxed-pi: starting microvm (guest SSH forwarded to 127.0.0.1:$ssh_port)" >&2
-      "$runner/bin/microvm-run" >"$runtime_dir/console.log" 2>&1 &
+      "$runner/bin/sandboxed-launch" >"$runtime_dir/console.log" 2>&1 &
       vm_pid=$!
 
       # Wait for the guest SSH server to accept our key (or the VM to die).
