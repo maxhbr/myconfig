@@ -42,7 +42,7 @@
 #   launcher bind-mounts the standalone clone onto
 #   (${stateRoot}/<slot>/workspace). The launcher (launcher.nix) chowns that
 #   clone to uid/gid 1000 so it appears owned by the guest `agent` user and is
-#   read-write inside the guest (§11). See docs/agent-microvm/agent-microvm.md.
+#   read-write inside the guest (§11). See ./docs/agent-microvm.md.
 {
   config,
   lib,

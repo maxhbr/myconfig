@@ -19,7 +19,8 @@
         codex.enable = true;
         skills.enable = true;
 
-        # Cloud Hypervisor agent-sandbox tier (see docs/agent-microvm/agent-microvm.md).
+        # Cloud Hypervisor agent-sandbox tier
+        # (see modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md).
         # Explicitly enabled here — NOT via the broad `myconfig.ai.enable`
         # — because it is a much stronger (and more resource-heavy) isolation
         # tier that must never switch on implicitly with the other AI tools.
