@@ -307,8 +307,8 @@ EXECUTED** and require the real f13 host with KVM. The interactive
   enables the feature on f13 with the secure default profile.
 - `tests/microvm.nix` + `flake.nix` — eval/build test suite wired into
   `nix flake check`.
-- `docs/agent-microvm.md` — user/operator documentation.
-- `docs/agent-microvm-validation.md` — **this document** (phase 7).
+- `docs/agent-microvm/agent-microvm.md` — user/operator documentation.
+- `docs/agent-microvm/agent-microvm-validation.md` — **this document** (phase 7).
 
 ### Architecture
 

@@ -9,7 +9,7 @@ Companion to [`agent-microvm.md`](./agent-microvm.md) (user/operator docs) and
 [`agent-microvm-validation.md`](./agent-microvm-validation.md) (recorded
 eval/build results + §45 checklist). This file answers **"are we there yet?"**
 against the 8-phase plan and the goal spec
-[`../microvm-sandbox-plan.md`](../microvm-sandbox-plan.md), and lists the exact
+[`microvm-sandbox-plan.md`](./microvm-sandbox-plan.md), and lists the exact
 remaining work.
 
 ## 1. Verdict — split
