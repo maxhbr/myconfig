@@ -48,6 +48,7 @@
   lib,
   pkgs,
   inputs,
+  mkGuestHome,
   ...
 }:
 let
@@ -108,7 +109,19 @@ let
   };
 
   # --- minimal Cloud Hypervisor guest for a given slot --------------------
-  mkGuest = slot: {
+  mkGuest =
+    slot:
+    lib.mkMerge [
+      # Guest dotfile provisioning: run home-manager inside the guest for the
+      # `agent` user, copying the host primary user's allowlisted shell +
+      # coding-agent dotfiles (see guest-home.nix). Empty attrset when the
+      # feature is disabled, so a bare guest keeps no home-manager overhead.
+      { imports = [ inputs.home.nixosModules.home-manager ]; }
+      (mkGuestHome { inherit pkgs; })
+      (mkGuestBase slot)
+    ];
+
+  mkGuestBase = slot: {
     # microvm.nix auto-imports its guest `microvm` module for VMs declared
     # via `microvm.vms.<name>.config`, so no explicit import is needed here.
     # Redundant with microvm.nix's `networking.hostName = mkDefault name`,
@@ -175,6 +188,8 @@ let
       createHome = true;
       extraGroups = [ ];
       hashedPassword = "!";
+      # Same interactive login shell as the host primary user.
+      shell = pkgs.fish;
     }
     // lib.optionalAttrs (cfg.enableSsh && cfg.sshPublicKeyFile != null) {
       # §18: exactly one dedicated public key authorises the guest `agent`
@@ -192,8 +207,11 @@ let
     # guest closure (§8: no runtime CLI download, no host Nix daemon). Their
     # exe names are exactly the launcher's agent set: claude / codex /
     # opencode / pi.
+    programs.fish.enable = true;
+
     environment.systemPackages = with pkgs; [
       agent-run
+      fish
       # §7 agent binaries (exe names: claude, codex, opencode, pi).
       claude-code
       codex
@@ -226,9 +244,53 @@ let
     # --- §17 guest model-API config (no secrets) -------------------------
     # The guest reaches the model API ONLY via the bridge-only LiteLLM
     # forwarder. No real upstream key is ever placed in the guest.
+    #
+    # Canonical guest endpoint is loopback 127.0.0.1:<litellmPort> (see the
+    # guest-side forwarder below), NOT the bridge gateway directly: the coding
+    # agents provisioned from the host primary user's dotfiles
+    # (~/.pi/agent/extensions/myconfig-providers.ts, ~/.config/opencode/
+    # opencode.json, ...) hardcode `http://127.0.0.1:<litellmPort>/v1` — the
+    # host's own loopback LiteLLM address. Presenting the SAME loopback
+    # endpoint inside the guest lets those copied configs work verbatim.
     environment.variables = {
-      OPENAI_BASE_URL = "http://${cfg.gatewayAddress}:${toString cfg.litellmPort}/v1";
+      OPENAI_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}/v1";
       OPENAI_API_KEY = "not-needed";
+    };
+
+    # --- guest-side loopback → bridge LiteLLM forwarder ------------------
+    # Reverse of the host's bridge-only forwarder (network.nix): a
+    # socket-activated systemd-socket-proxyd inside the guest listens on
+    # 127.0.0.1:<litellmPort> and forwards to <gatewayAddress>:<litellmPort>
+    # (the host bridge endpoint, the ONLY reachable model-API peer under the
+    # proxy-only firewall). This makes `127.0.0.1:<litellmPort>` — the address
+    # every host-provisioned agent config already points at — transparently
+    # reach the host LiteLLM proxy over the private bridge, so pi / opencode /
+    # codex all "rely on" the host forwarder without per-agent config
+    # rewrites. Pure byte-shuffler: no filesystem, home or privileges needed.
+    systemd.sockets.litellm-forwarder = {
+      description = "Loopback LiteLLM endpoint for host-provisioned agent configs";
+      wantedBy = [ "sockets.target" ];
+      socketConfig = {
+        ListenStream = "127.0.0.1:${toString cfg.litellmPort}";
+        Accept = false;
+      };
+    };
+    systemd.services.litellm-forwarder = {
+      description = "Forward 127.0.0.1:${toString cfg.litellmPort} to the host bridge LiteLLM proxy";
+      requires = [ "litellm-forwarder.socket" ];
+      wants = [ "network-online.target" ];
+      after = [
+        "litellm-forwarder.socket"
+        "network-online.target"
+      ];
+      serviceConfig = {
+        ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd ${cfg.gatewayAddress}:${toString cfg.litellmPort}";
+        DynamicUser = true;
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+      };
     };
 
     # --- guest-side static addressing (deterministic, matches the slot) ---

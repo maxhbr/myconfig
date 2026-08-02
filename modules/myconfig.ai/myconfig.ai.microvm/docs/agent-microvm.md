@@ -74,6 +74,9 @@ myconfig.ai.microvm = {
 | `stateRoot` | `/var/lib/microvms` | microvm.nix per-VM state / bind-mount source. |
 | `enableSsh` | `true` | Guest SSH server on the private interface only. |
 | `sshPublicKeyFile` | `null` | **Required** when `enableSsh`. One dedicated key. |
+| `guestDotfiles.enable` | `true` | Provision the guest `agent` user with the host primary user's fish + coding-agent dotfiles (home-manager in the guest). |
+| `guestDotfiles.homeFilePrefixes` | `.pi/`, `.codex/`, `.agents/`, `.qwen/`, `.config/git/`, `.gitconfig` | Allowlist of `home.file` keys copied from the host primary user. |
+| `guestDotfiles.xdgConfigPrefixes` | `fish/`, `opencode/` | Allowlist of `xdg.configFile` keys copied from the host primary user. |
 | `allowPublicInternet` / `allowPrivateNetworks` / `allowInterVmTraffic` | `false` | Insecure network relaxations. Enabling any one **also** requires `acknowledgeInsecureNetwork = true`. Keep them **false**. |
 
 ### The dedicated SSH key
@@ -344,6 +347,42 @@ read-write, so `agent-run`'s `test -w /workspace` check passes.
   `/var/lib/agent-microvms/workspaces/<task>` is chowned; no other host
   permissions are touched.
 
+## Guest dotfiles & the loopback LiteLLM endpoint
+
+The guest `agent` user is provisioned with the **same shell and coding-agent
+dotfiles as the host primary user**, so a sandboxed agent has the familiar
+fish prompt/abbreviations/functions and the pi / opencode / codex
+configuration, skills and prompts. This is done by `guest-home.nix`, which
+runs **home-manager inside the guest** and copies the host primary user's
+*already-evaluated* `home.file` / `xdg.configFile` entries (their `source`
+fields are store paths, so no host home module is re-evaluated in the guest;
+home-manager bakes the sources into the guest's own store disk).
+
+The copy is an **allowlist**, never a denylist — the same fail-closed posture
+as `myconfig.agentUsers`. Only the prefixes in
+`myconfig.ai.microvm.guestDotfiles.{homeFilePrefixes,xdgConfigPrefixes}` cross
+the boundary, so host secrets (tokens, credentials, keys) are never dragged
+into the sandbox by accident. Defaults cover fish, opencode, pi, codex,
+`.agents/`, and git config. Set `guestDotfiles.enable = false` for a bare
+home.
+
+### Why the agents "just work" against `192.168.83.1:4000`
+
+Every host-provisioned agent config (e.g.
+`~/.pi/agent/extensions/myconfig-providers.ts`,
+`~/.config/opencode/opencode.json`) hardcodes the host's **loopback** LiteLLM
+address `http://127.0.0.1:4000/v1`. To make those copied configs reach the
+real proxy from inside the guest — where LiteLLM is only reachable at the
+bridge gateway `192.168.83.1:4000` — the guest runs a **reverse** of the
+host's bridge-only forwarder: a socket-activated `systemd-socket-proxyd`
+(`litellm-forwarder`) listens on `127.0.0.1:4000` and forwards to
+`${gatewayAddress}:${litellmPort}` (`192.168.83.1:4000`). So the guest
+presents the *same* loopback endpoint the host does, the copied configs work
+verbatim, and `OPENAI_BASE_URL` is likewise set to `http://127.0.0.1:4000/v1`.
+Net effect: pi and every other agent transparently "rely on"
+`192.168.83.1:4000` (the host on the agent bridge) without any per-agent
+config rewrite.
+
 ## Security properties
 
 What the module actually enforces (plan §5, §13–§18, §45):
@@ -393,10 +432,14 @@ What the module actually enforces (plan §5, §13–§18, §45):
   (`BindToDevice=agentbr0`, never `0.0.0.0`/LAN) and forwards to the loopback
   proxy. It runs `DynamicUser`, `NoNewPrivileges`, `PrivateTmp`,
   `ProtectSystem=strict`, `ProtectHome`.
-- **No upstream key in the guest.** `OPENAI_BASE_URL` points at the bridge
-  forwarder; `OPENAI_API_KEY=not-needed` is a placeholder. No real upstream
-  key, and no secrets in the Nix store / flake / scripts / argv / logs /
-  images / workspaces.
+- **No upstream key in the guest.** `OPENAI_BASE_URL` points at the guest
+  loopback endpoint `127.0.0.1:4000`, which the guest `litellm-forwarder`
+  socket-proxy forwards to the bridge-only host endpoint `192.168.83.1:4000`
+  (the only reachable model-API peer); `OPENAI_API_KEY=not-needed` is a
+  placeholder. No real upstream key, and no secrets in the Nix store / flake /
+  scripts / argv / logs / images / workspaces. Guest dotfiles are copied by
+  an **allowlist** (`guestDotfiles.*`), so no credential-bearing path leaks
+  into the guest.
 - **Bounded & lock-protected.** Fixed vCPU/mem and a fixed slot pool bound
   resource use; a global allocator lock plus per-slot `flock`s prevent
   double-allocation.
