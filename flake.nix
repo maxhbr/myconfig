@@ -636,7 +636,16 @@
                   mkdir "$out"
                 '';
               };
-          };
+          }
+          # Automated EVAL / BUILD test suite for the myconfig.ai.microvm
+          # Cloud Hypervisor agent-sandbox tier (plan §38, wired per §39).
+          # Kept in a dedicated file to avoid bloating flake.nix. Only wired
+          # in for x86_64-linux, the system the enabled reference host
+          # `test-f13` is built for. These are eval/build checks ONLY — NOT
+          # KVM/network runtime proof (see tests/microvm.nix header).
+          // lib.optionalAttrs (system == "x86_64-linux") (
+            import ./tests/microvm.nix { inherit self inputs system; }
+          );
 
           devShells.default =
             let

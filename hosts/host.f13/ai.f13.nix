@@ -18,6 +18,30 @@
         claude-code.enable = true;
         codex.enable = true;
         skills.enable = true;
+
+        # Cloud Hypervisor agent-sandbox tier (see docs/agent-microvm.md).
+        # Explicitly enabled here — NOT via the broad `myconfig.ai.enable`
+        # — because it is a much stronger (and more resource-heavy) isolation
+        # tier that must never switch on implicitly with the other AI tools.
+        # All insecure network relaxations stay false, so the secure
+        # proxy-only default applies and no `acknowledgeInsecureNetwork` is
+        # needed.
+        microvm = {
+          enable = true;
+          slotCount = 4;
+          defaultVcpu = 4;
+          defaultMemoryMiB = 8192;
+          allowPublicInternet = false;
+          allowPrivateNetworks = false;
+          allowInterVmTraffic = false;
+          # Dedicated public key authorising ONLY the guest `agent` user —
+          # never the host, and never a host authorized_keys file. A public
+          # key is not a secret, so it is committed in-repo. The MATCHING
+          # PRIVATE key is NOT in this repo: it is managed out-of-band and
+          # lives in the separate ../priv repository. Point ssh at it via
+          # `AGENT_MICROVM_SSH_KEY=/path/to/private-key agent-microvm ssh …`.
+          sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
+        };
       };
     };
 
