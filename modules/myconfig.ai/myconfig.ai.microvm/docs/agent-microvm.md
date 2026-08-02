@@ -225,6 +225,7 @@ Everything is supervised by systemd, so use the journal:
 journalctl -u microvm@agent-0.service     # the guest VM (Cloud Hypervisor + serial console)
 journalctl -u agent-litellm-proxy.service # the bridge-only LiteLLM forwarder
 journalctl -u agent-microvm-agentbr0-disable-ipv6.service  # bridge IPv6-disable oneshot
+journalctl -u agent-microvm-attach-agent-0.service         # enslave TAP vm-agent-0 -> agentbr0
 ```
 
 `agent-microvm console <slot>` is a shortcut for
@@ -369,6 +370,13 @@ What the module actually enforces (plan §5, §13–§18, §45):
   store. The guest environment does not receive `SSH_AUTH_SOCK`,
   `GPG_AGENT_INFO`, `AWS_*`, `GOOGLE_*`, `AZURE_*`, `KUBECONFIG`,
   `GITHUB_TOKEN`, `GH_TOKEN` or `GITLAB_TOKEN`.
+- **TAP enslaved to the bridge.** microvm.nix's `type = "tap"` only *creates*
+  the per-slot tap (`vm-agent-<n>`) and brings it up — it does **not** attach
+  it to any bridge. A per-slot `agent-microvm-attach-<slot>` oneshot (ordered
+  after `microvm-tap-interfaces@<slot>`, before `microvm@<slot>`, `partOf` the
+  VM) runs `ip link set vm-agent-<n> master agentbr0`, giving the guest its L2
+  path to the gateway. Without it the guest boots and runs sshd but is
+  unreachable (SSH readiness times out).
 - **Deny-all, proxy-only network.** Default firewall policy on `agentbr0` is
   deny-all-except-proxy: the only egress a guest gets is
   `guest -> 192.168.83.1:4000`. Dedicated chains `AGENT_MICROVM_INPUT` /
@@ -402,6 +410,13 @@ Honest caveats — read these before trusting the tier:
 - **IPv6 disabled (MVP).** No equivalent IPv6 firewall policy exists, so IPv6
   is simply disabled on the bridge. L2 link-local IPv6 between guests is out of
   scope for the MVP.
+- **TAP-to-bridge enslavement was missing (now fixed).** Earlier revisions
+  created the per-slot tap but never enslaved it to `agentbr0`, so a guest
+  booted and ran sshd yet was unreachable and every `run`/`--attach` timed
+  out at the SSH-readiness wait. This is now handled by the per-slot
+  `agent-microvm-attach-<slot>` oneshot (see Security properties). The rest
+  of the packet path (firewall ordering, proxy egress) is still only
+  lightly exercised on live KVM — see the next bullets.
 - **`/workspace` runtime write is config-wired but not KVM-verified.** The
   guest virtiofs share and the §11 `chown -R 1000:1000` ownership strategy are
   now in place (see [The `/workspace` share & ownership](#the-workspace-share--ownership))

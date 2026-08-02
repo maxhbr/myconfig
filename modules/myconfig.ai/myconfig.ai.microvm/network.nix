@@ -157,6 +157,42 @@ let
         iptables -A AGENT_MICROVM_OUTPUT -j ACCEPT
   '';
 
+  # --- §12 attach each per-slot TAP to the bridge -------------------------
+  # microvm.nix's `type = "tap"` `tap-up` only *creates* the tap
+  # (`ip tuntap add … mode tap` + `ip link set … up`); it does NOT enslave it
+  # to any bridge — bridging is the host's responsibility for `type = "tap"`.
+  # Without this the guest interface has NO L2 path to the bridge / gateway
+  # (192.168.83.1), so the guest IP (192.168.83.10…) is unreachable and the
+  # launcher's SSH-readiness wait always times out even though the guest
+  # boots and sshd runs (plan §12 "Attach each slot TAP"; validation B1
+  # "TAP ∈ bridge / TAP enslaved").
+  #
+  # One oneshot per slot enslaves `vm-agent-<n>` to the bridge. It is ordered
+  # AFTER microvm.nix created the tap (`microvm-tap-interfaces@<slot>`) and
+  # BEFORE the VM boots (`microvm@<slot>`), and is `partOf` the VM so it is
+  # re-run whenever the VM (re)starts — important because `tap-down` deletes
+  # and `tap-up` recreates the tap on every restart, dropping bridge
+  # membership. On VM stop `tap-down` removes the tap (and thus its bridge
+  # port) automatically, so no explicit detach is needed.
+  tapAttachServices = builtins.listToAttrs (
+    map (
+      slot:
+      lib.nameValuePair "agent-microvm-attach-${slot.name}" {
+        description = "Enslave TAP ${slot.tap} to bridge ${bridge} for microVM ${slot.name}";
+        after = [ "microvm-tap-interfaces@${slot.name}.service" ];
+        requires = [ "microvm-tap-interfaces@${slot.name}.service" ];
+        before = [ "microvm@${slot.name}.service" ];
+        partOf = [ "microvm@${slot.name}.service" ];
+        wantedBy = [ "microvm@${slot.name}.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${lib.getExe' pkgs.iproute2 "ip"} link set ${slot.tap} master ${bridge}";
+        };
+      }
+    ) slots
+  );
+
   # --- firewall teardown (must mirror the setup above) --------------------
   firewallExtraStopCommands = ''
     # ==== myconfig.ai.microvm: remove dedicated agent-sandbox chains =====
@@ -173,95 +209,100 @@ let
   '';
 in
 {
-  config = lib.mkIf cfg.enable {
-    # --- §12 private bridge (NetworkManager-compatible) -------------------
-    # Create the bridge with no static members; per-slot TAPs are attached
-    # by microvm.nix / the launcher (later phase). This uses the standard
-    # udev/systemd bridge mechanism, NOT systemd-networkd (§46).
-    networking.bridges.${bridge}.interfaces = [ ];
-
-    # Host-side address on the bridge (the guests' gateway + the address the
-    # LiteLLM forwarder binds).
-    networking.interfaces.${bridge}.ipv4.addresses = [
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      { systemd.services = tapAttachServices; }
       {
-        address = gateway;
-        prefixLength = prefixLength;
+        # --- §12 private bridge (NetworkManager-compatible) -------------------
+        # Create the bridge with no static members; per-slot TAPs are attached
+        # by microvm.nix / the launcher (later phase). This uses the standard
+        # udev/systemd bridge mechanism, NOT systemd-networkd (§46).
+        networking.bridges.${bridge}.interfaces = [ ];
+
+        # Host-side address on the bridge (the guests' gateway + the address the
+        # LiteLLM forwarder binds).
+        networking.interfaces.${bridge}.ipv4.addresses = [
+          {
+            address = gateway;
+            prefixLength = prefixLength;
+          }
+        ];
+
+        # Keep NetworkManager out of the way: it must not try to manage the
+        # bridge or the per-slot TAP interfaces, or it will fight microvm.nix.
+        networking.networkmanager.unmanaged = [
+          "interface-name:${bridge}"
+        ]
+        ++ map (s: "interface-name:${s.tap}") slots;
+
+        # --- §15 disable IPv6 on the bridge ----------------------------------
+        # No IPv6 firewall policy is implemented yet, so prevent IPv6 from being
+        # configured on the bridge at all (MVP limitation).
+        #
+        # The boot.kernel.sysctl key below only applies if the bridge already
+        # exists when systemd-sysctl runs at boot; a scripted/NM-created bridge is
+        # brought up later, so we ALSO re-apply the key from a oneshot ordered
+        # after the bridge's -netdev service, which is when the interface actually
+        # exists. (L2 link-local IPv6 between guests remains out of scope for the
+        # MVP — see §44; verify with `ip -6 addr show ${bridge}` per §40.)
+        boot.kernel.sysctl."net.ipv6.conf.${bridge}.disable_ipv6" = 1;
+
+        systemd.services."agent-microvm-${bridge}-disable-ipv6" = {
+          description = "Disable IPv6 on the agent microVM bridge ${bridge}";
+          after = [ "${bridge}-netdev.service" ];
+          wants = [ "${bridge}-netdev.service" ];
+          wantedBy = [ "network.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            # Re-apply the per-interface sysctl now that the bridge exists.
+            ExecStart = "${pkgs.procps}/bin/sysctl -w net.ipv6.conf.${bridge}.disable_ipv6=1";
+          };
+        };
+
+        # --- §13/§14 firewall: proxy-only default policy ---------------------
+        # Make same-bridge (guest<->guest) L2 frames traverse iptables FORWARD so
+        # the inter-VM DROP rule is actually enforced once TAPs are attached in a
+        # later phase. Without br_netfilter + bridge-nf-call-iptables, bridged
+        # frames are L2-switched and never reach the FORWARD chain.
+        boot.kernelModules = [ "br_netfilter" ];
+        boot.kernel.sysctl."net.bridge.bridge-nf-call-iptables" = 1;
+
+        networking.firewall.extraCommands = firewallExtraCommands;
+        networking.firewall.extraStopCommands = firewallExtraStopCommands;
+
+        # --- §16 bridge-only LiteLLM forwarder -------------------------------
+        # Socket-activated endpoint bound ONLY to the bridge address, never to
+        # 0.0.0.0 / the LAN. FreeBind lets it bind before the bridge address is
+        # assigned during boot; BindToDevice pins it to the bridge interface.
+        systemd.sockets.agent-litellm-proxy = {
+          description = "Bridge-only LiteLLM forwarding endpoint for agent microVMs";
+          wantedBy = [ "sockets.target" ];
+          socketConfig = {
+            ListenStream = "${gateway}:${port}";
+            BindToDevice = bridge;
+            FreeBind = true;
+            Accept = false;
+          };
+        };
+
+        systemd.services.agent-litellm-proxy = {
+          description = "Forward <bridge>:<litellmPort> to the loopback LiteLLM proxy";
+          requires = [ "agent-litellm-proxy.socket" ];
+          after = [ "agent-litellm-proxy.socket" ];
+          serviceConfig = {
+            # Forward accepted connections to the loopback-only LiteLLM proxy.
+            ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd 127.0.0.1:${port}";
+            # Hardening (§16). This process only shuffles bytes between two
+            # sockets, so it needs no filesystem, home or elevated privileges.
+            DynamicUser = true;
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            ProtectSystem = "strict";
+            ProtectHome = true;
+          };
+        };
       }
-    ];
-
-    # Keep NetworkManager out of the way: it must not try to manage the
-    # bridge or the per-slot TAP interfaces, or it will fight microvm.nix.
-    networking.networkmanager.unmanaged = [
-      "interface-name:${bridge}"
     ]
-    ++ map (s: "interface-name:${s.tap}") slots;
-
-    # --- §15 disable IPv6 on the bridge ----------------------------------
-    # No IPv6 firewall policy is implemented yet, so prevent IPv6 from being
-    # configured on the bridge at all (MVP limitation).
-    #
-    # The boot.kernel.sysctl key below only applies if the bridge already
-    # exists when systemd-sysctl runs at boot; a scripted/NM-created bridge is
-    # brought up later, so we ALSO re-apply the key from a oneshot ordered
-    # after the bridge's -netdev service, which is when the interface actually
-    # exists. (L2 link-local IPv6 between guests remains out of scope for the
-    # MVP — see §44; verify with `ip -6 addr show ${bridge}` per §40.)
-    boot.kernel.sysctl."net.ipv6.conf.${bridge}.disable_ipv6" = 1;
-
-    systemd.services."agent-microvm-${bridge}-disable-ipv6" = {
-      description = "Disable IPv6 on the agent microVM bridge ${bridge}";
-      after = [ "${bridge}-netdev.service" ];
-      wants = [ "${bridge}-netdev.service" ];
-      wantedBy = [ "network.target" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        # Re-apply the per-interface sysctl now that the bridge exists.
-        ExecStart = "${pkgs.procps}/bin/sysctl -w net.ipv6.conf.${bridge}.disable_ipv6=1";
-      };
-    };
-
-    # --- §13/§14 firewall: proxy-only default policy ---------------------
-    # Make same-bridge (guest<->guest) L2 frames traverse iptables FORWARD so
-    # the inter-VM DROP rule is actually enforced once TAPs are attached in a
-    # later phase. Without br_netfilter + bridge-nf-call-iptables, bridged
-    # frames are L2-switched and never reach the FORWARD chain.
-    boot.kernelModules = [ "br_netfilter" ];
-    boot.kernel.sysctl."net.bridge.bridge-nf-call-iptables" = 1;
-
-    networking.firewall.extraCommands = firewallExtraCommands;
-    networking.firewall.extraStopCommands = firewallExtraStopCommands;
-
-    # --- §16 bridge-only LiteLLM forwarder -------------------------------
-    # Socket-activated endpoint bound ONLY to the bridge address, never to
-    # 0.0.0.0 / the LAN. FreeBind lets it bind before the bridge address is
-    # assigned during boot; BindToDevice pins it to the bridge interface.
-    systemd.sockets.agent-litellm-proxy = {
-      description = "Bridge-only LiteLLM forwarding endpoint for agent microVMs";
-      wantedBy = [ "sockets.target" ];
-      socketConfig = {
-        ListenStream = "${gateway}:${port}";
-        BindToDevice = bridge;
-        FreeBind = true;
-        Accept = false;
-      };
-    };
-
-    systemd.services.agent-litellm-proxy = {
-      description = "Forward <bridge>:<litellmPort> to the loopback LiteLLM proxy";
-      requires = [ "agent-litellm-proxy.socket" ];
-      after = [ "agent-litellm-proxy.socket" ];
-      serviceConfig = {
-        # Forward accepted connections to the loopback-only LiteLLM proxy.
-        ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd 127.0.0.1:${port}";
-        # Hardening (§16). This process only shuffles bytes between two
-        # sockets, so it needs no filesystem, home or elevated privileges.
-        DynamicUser = true;
-        NoNewPrivileges = true;
-        PrivateTmp = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-      };
-    };
-  };
+  );
 }
