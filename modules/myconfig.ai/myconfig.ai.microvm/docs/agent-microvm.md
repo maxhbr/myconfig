@@ -96,7 +96,21 @@ myconfig.ai.microvm = {
   the dedicated pubkey (e.g. via `/root/.ssh` or an `ssh_config`
   `IdentityFile` entry).
 
-Regenerate the pair (throwaway, private key deleted immediately) with:
+Generate the pair with the helper script in this module directory. It writes
+the **private** key into the priv repo and the **public** key into this repo
+(staging it), and refuses to overwrite an existing private key:
+
+```bash
+./modules/myconfig.ai/myconfig.ai.microvm/mk-dedicated-agent-vm-key.sh [<hostname>]
+# hostname defaults to the current machine's hostname; override the priv
+# repo location with PRIV_ROOT (default: ~/myconfig/priv). Result:
+#   private -> $PRIV_ROOT/hosts/host.<hostname>/secrets/dedicated-agent-vm-key
+#   public  -> hosts/host.<hostname>/dedicated-agent-vm-key.pub  (git add-ed)
+```
+
+Then commit the private key inside the priv repo separately (never here).
+
+Manual equivalent (throwaway, private key deleted immediately):
 
 ```bash
 tmp=$(mktemp -d)
@@ -108,8 +122,9 @@ git add hosts/host.f13/dedicated-agent-vm-key.pub
 ```
 
 > **`git add` reminder.** Nix evaluates from the git tree, so both the `.pub`
-> file and the `ai.f13.nix` change must be `git add`-ed or f13 evaluation
-> fails with a "path does not exist" error.
+> file and the `ai.<host>.nix` change must be `git add`-ed or evaluation
+> fails with a "path does not exist" error. The script stages the `.pub` for
+> you.
 
 ---
 
