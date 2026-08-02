@@ -84,6 +84,13 @@ let
       readonly STATE_ROOT=${lib.escapeShellArg cfg.stateRoot}
       readonly SSH_ENABLED=${lib.escapeShellArg (if cfg.enableSsh then "1" else "0")}
       readonly SSH_USER="agent"
+      # §11 UID/GID ownership: the guest `agent` user is uid/gid 1000
+      # (guest.nix `users.users.agent`). The workspace clone is chowned to
+      # these numeric ids so it appears agent-owned inside the guest via
+      # virtiofs (which passes ownership through unchanged). Keep in sync with
+      # guest.nix's `uid = 1000`.
+      readonly GUEST_AGENT_UID=1000
+      readonly GUEST_AGENT_GID=1000
       readonly RUN_DIR="/run/agent-microvms"
       readonly ALLOC_LOCK="$RUN_DIR/allocator.lock"
       readonly SLOTS_DIR="$RUNTIME_ROOT/slots"
@@ -233,17 +240,28 @@ let
           git clone --no-local -- "$repo" "$clone" \
               || die "git clone --no-local failed"
           verify_clone "$clone"
-          # NOTE (cross-phase, §11 UID/GID mapping — NOT this phase): the clone
-          # is created here as root and bind-mounted/virtiofs-shared into the
-          # guest read-write, but the guest `agent` user is uid 1000 with no
-          # id-map configured yet. Until §11 lands, /workspace will appear
-          # root-owned in the guest and `agent-run`'s writability check will
-          # abort, so the end-to-end `run --attach` flow is expected to fail
-          # at runtime. Left explicit so it is not lost between phases.
           if [[ -n "$branch" ]]; then
               git -C "$clone" checkout -b "$branch" >/dev/null 2>&1 \
                   || log "warning: could not create branch '$branch' (continuing)"
           fi
+          # --- §11 UID/GID ownership --------------------------------------
+          # The clone (and any .git objects/refs just written by the branch
+          # checkout above) is created as root. virtiofsd passes file
+          # ownership through unchanged (no --translate-uid/gid; see the
+          # workspace share in guest.nix), so the numeric owner of this host
+          # tree is exactly what the guest sees. The guest `agent` user is
+          # uid/gid 1000, so chown the WHOLE tree to 1000:1000 here: inside
+          # the guest, /workspace then appears owned by `agent` and is
+          # read-write, satisfying `agent-run`'s `test -w /workspace` check.
+          #
+          # Host-side implication: uid/gid 1000 is the primary UNPRIVILEGED
+          # interactive user on f13 (the human who inspects/exports the
+          # result, per plan §25) — NOT a privileged id — so no guest id maps
+          # to a privileged host id (plan §11), and the host user can still
+          # manage / diff / import the clone directly. Done AFTER the branch
+          # checkout so freshly written git metadata is owned by the agent too.
+          chown -R "$GUEST_AGENT_UID:$GUEST_AGENT_GID" -- "$clone" \
+              || die "failed to chown workspace clone to $GUEST_AGENT_UID:$GUEST_AGENT_GID: $clone"
           printf '%s' "$clone"
       }
 

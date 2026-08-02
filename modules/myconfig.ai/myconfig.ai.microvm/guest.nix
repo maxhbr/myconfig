@@ -34,9 +34,15 @@
 #     forwarder, guest IP addressing / default route. Slots below therefore
 #     declare a deterministic MAC + TAP but no guest-side IP configuration —
 #     the interface is wired up but not yet addressed/routable.
-#   - launcher.nix (plan §20–§28): host launcher, slot allocation, bind-mount
-#     lifecycle, workspace virtiofs share.
 #   - workmux.nix  (plan §29): Workmux agent registrations.
+#
+# IMPLEMENTED HERE (plan §10 workspace share, §11 UID/GID ownership):
+#   Each slot declares EXACTLY ONE `microvm.shares` entry — the writable
+#   virtiofs `/workspace` share, whose host source is the SAME path the
+#   launcher bind-mounts the standalone clone onto
+#   (${stateRoot}/<slot>/workspace). The launcher (launcher.nix) chowns that
+#   clone to uid/gid 1000 so it appears owned by the guest `agent` user and is
+#   read-write inside the guest (§11). See docs/agent-microvm.md.
 {
   config,
   lib,
@@ -126,6 +132,38 @@ let
 
       # No graphics for a headless agent sandbox (also microvm's default).
       graphics.enable = false;
+
+      # --- §10 workspace share (the ONLY share) --------------------------
+      # Exactly one virtiofs share surfaces the slot's host-side workspace
+      # directory into the guest as the single writable `/workspace` mount.
+      # Its `source` is the SAME host path the launcher uses as its
+      # bind-mount target — `mount_point()` in launcher.nix renders
+      # "${cfg.stateRoot}/<slot>/workspace" — so host and guest agree on the
+      # one writable path (plan §10: "Slot references stable relative
+      # workspace path in microVM state dir"). Read-write on purpose
+      # (readOnly is left at its `false` default); the guest agent edits the
+      # clone in place.
+      #
+      # Ownership (§11): virtiofsd passes file ownership through unchanged
+      # (no --translate-uid/gid), and the launcher chowns the clone tree to
+      # uid/gid 1000 on the host, so `/workspace` appears owned by the guest
+      # `agent` user (uid 1000) and is writable — satisfying `agent-run`'s
+      # `test -w /workspace` check. posixAcl stays at its `true` default
+      # (no conflict, since no UID/GID translation is used).
+      #
+      # This is the ONLY share: microvm.nix keeps the guest /nix/store on its
+      # own storeDisk (microvm.storeOnDisk defaults to true unless a share's
+      # source is "/nix/store", which this is not), so it does NOT add a
+      # store share. The guest therefore has EXACTLY this one share. Do NOT
+      # add /nix, /home, host sockets or any other share here (plan §10).
+      shares = [
+        {
+          proto = "virtiofs";
+          tag = "workspace";
+          source = "${cfg.stateRoot}/${slot.name}/workspace";
+          mountPoint = "/workspace";
+        }
+      ];
     };
 
     # Unprivileged guest user that runs the agent (plan §6). Not root; no

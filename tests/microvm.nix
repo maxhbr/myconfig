@@ -28,6 +28,10 @@
 #                                        assertions actually REJECT invalid
 #                                        config (slotCount bound, enableSsh key,
 #                                        insecure-network acknowledgement)
+#   microvm-eval-workspace-share §10/§11 — the agent-0 guest declares EXACTLY
+#                                        one virtiofs share: the writable
+#                                        /workspace whose source matches the
+#                                        launcher bind-mount target (crit. 12)
 #   microvm-guest-evaluates   §38     — the agent-0 guest closure evaluates to a
 #                                        realisable derivation (drvPath marker)
 #   microvm-launcher-shellcheck §38   — host launcher + guest `agent-run` +
@@ -345,6 +349,63 @@ in
       message = "allowPublicInternet without acknowledgeInsecureNetwork must be rejected";
     }
   ];
+
+  # ---------------------------------------------------------------------- #
+  # (g) WORKSPACE SHARE: prove the guest declares EXACTLY ONE virtiofs      #
+  #     share — the writable `/workspace` — whose host `source` matches the  #
+  #     launcher's bind-mount target `${stateRoot}/agent-0/workspace`.       #
+  #     This locks down plan §10/§11 crit. 12 so the previously-missing      #
+  #     guest share can never silently reappear as `[]`. It FAILS if the    #
+  #     share is removed, renamed, made read-only, or repointed.            #
+  # ---------------------------------------------------------------------- #
+  microvm-eval-workspace-share =
+    let
+      shares = guest0Cfg.microvm.shares;
+      virtiofsShares = builtins.filter (s: s.proto == "virtiofs") shares;
+      wsShares = builtins.filter (s: s.mountPoint == "/workspace") shares;
+      ws = if wsShares == [ ] then null else builtins.head wsShares;
+      expectedSource = "${microvmOpts.stateRoot}/agent-0/workspace";
+    in
+    mkEvalCheck "microvm-eval-workspace-share" [
+      {
+        # There must be exactly one share, and it must be the workspace.
+        assertion = builtins.length shares == 1;
+        message = "guest agent-0 must declare exactly ONE share (the workspace); got ${toString (builtins.length shares)}: ${
+          toString (map (s: s.mountPoint or "?") shares)
+        }";
+      }
+      {
+        assertion = ws != null;
+        message = "guest agent-0 has no share mounted at /workspace (mountPoints: ${
+          toString (map (s: s.mountPoint or "?") shares)
+        })";
+      }
+      {
+        assertion = ws != null && ws.proto == "virtiofs";
+        message = "/workspace share must be proto=virtiofs, got '${toString (ws.proto or "<none>")}'";
+      }
+      {
+        assertion = ws != null && ws.tag == "workspace";
+        message = "/workspace share must have tag=workspace, got '${toString (ws.tag or "<none>")}'";
+      }
+      {
+        assertion = ws != null && ws.source == expectedSource;
+        message = "/workspace share source is '${
+          toString (ws.source or "<none>")
+        }', expected '${expectedSource}' (must match launcher.nix mount_point())";
+      }
+      {
+        # Must be read-write so agent-run's `test -w /workspace` can pass.
+        assertion = ws != null && (ws.readOnly or false) == false;
+        message = "/workspace share must be read-write (readOnly=false)";
+      }
+      {
+        # Defence in depth: the ONLY virtiofs share is the workspace — no
+        # /nix, /home or host-socket share leaked in.
+        assertion = builtins.length virtiofsShares == 1;
+        message = "expected exactly one virtiofs share (workspace); got ${toString (builtins.length virtiofsShares)}";
+      }
+    ];
 
   # ---------------------------------------------------------------------- #
   # (d) GUEST EVALUATES: prove the agent-0 guest closure resolves to a      #

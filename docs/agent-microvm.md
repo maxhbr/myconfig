@@ -24,12 +24,13 @@ Every agent process and guest workload is treated as potentially hostile. The
 secure default prioritises **isolation over convenience**.
 
 > **Status / maturity.** The module has been built and evaluated
-> (`nix flake check`, `test-f13` toplevel, real-`f13` eval), but the
-> end-to-end *runtime* path has **not** yet been exercised on live KVM. Read
-> the [Limitations](#limitations) section before relying on it — several
-> controls are currently only eval-tested, and one known gap (§11 UID/GID
-> mapping) means the `run --attach` flow is expected to fail at runtime until
-> fixed.
+> (`nix flake check`, `test-f13` toplevel, real-`f13` eval). The guest
+> `/workspace` virtiofs share and the §11 UID/GID ownership strategy are now
+> **wired up in config** (see [The `/workspace` share & ownership](#the-workspace-share--ownership)),
+> and locked down by an eval test. The end-to-end *runtime* path (actually
+> booting a guest and writing to `/workspace` on live KVM) has **not** yet
+> been exercised. Read the [Limitations](#limitations) section before relying
+> on it — several controls are still only eval-tested.
 
 ---
 
@@ -254,6 +255,52 @@ slot when it starts in detached mode.
 
 ---
 
+## The `/workspace` share & ownership
+
+**§10 — exactly one share.** Each slot's guest declares exactly **one**
+`microvm.shares` entry: a **read-write virtiofs** share tagged `workspace`,
+mounted at `/workspace`. Its host `source` is
+`/var/lib/microvms/<slot>/workspace` (`${stateRoot}/<slot>/workspace`) — the
+**same** path the launcher uses as its `mount --bind` target
+(`mount_point()` in `launcher.nix`). So the launcher bind-mounts the
+standalone clone onto that host directory, and virtiofsd surfaces it into the
+guest as the single writable `/workspace`.
+
+microvm.nix keeps the guest `/nix/store` on its own **storeDisk**
+(`microvm.storeOnDisk` defaults to `true` unless a share's source is
+`/nix/store`, which this one is not), so it does **not** add a store share.
+The guest therefore has **exactly this one share** — no `/nix`, no `/home`, no
+host sockets (verified by the `microvm-eval-workspace-share` check, which
+asserts `microvm.vms.agent-0.….microvm.shares` is exactly one virtiofs
+`/workspace` entry with the expected source).
+
+**§11 — UID/GID ownership.** virtiofsd passes file ownership through
+unchanged (no `--translate-uid/--translate-gid`), so the numeric owner of the
+host clone tree is exactly what the guest sees. The guest `agent` user is
+**uid/gid 1000** (`guest.nix` `users.users.agent`). Therefore, right after
+creating the clone (and its `agent/<task>` branch), the launcher runs:
+
+```bash
+chown -R 1000:1000 -- "$clone"
+```
+
+Inside the guest, `/workspace` then appears owned by `agent` and is
+read-write, so `agent-run`'s `test -w /workspace` check passes.
+
+- **Why 1000:1000 and not a new dedicated host user?** On `f13`, uid/gid 1000
+  is already the primary **unprivileged interactive user** (the human who
+  inspects/exports the agent's result, plan §25). Creating a *new* host user
+  at uid 1000 would collide with them, and picking a different guest uid would
+  add moving parts for no gain. Chowning to 1000:1000 makes the clone owned by
+  that same human on the host — who can then `git -C "$clone" diff` / import
+  the branch directly — while appearing `agent`-owned in the guest.
+- **No privileged mapping.** uid/gid 1000 is **not** a privileged id, so no
+  guest id maps to a privileged host id (plan §11). The guest agent cannot,
+  via the share, create host files owned by root or any system account.
+- **Scope.** Only the per-task clone under
+  `/var/lib/agent-microvms/workspaces/<task>` is chowned; no other host
+  permissions are touched.
+
 ## Security properties
 
 What the module actually enforces (plan §5, §13–§18, §45):
@@ -313,12 +360,14 @@ Honest caveats — read these before trusting the tier:
 - **IPv6 disabled (MVP).** No equivalent IPv6 firewall policy exists, so IPv6
   is simply disabled on the bridge. L2 link-local IPv6 between guests is out of
   scope for the MVP.
-- **§11 UID/GID mapping not done yet.** The standalone clone is created **as
-  root** and shared read-write, but the guest `agent` user is uid 1000 with no
-  id-map configured. Until this lands, `/workspace` appears **root-owned**
-  inside the guest and `agent-run`'s writability check will abort — so the
-  end-to-end `run --attach` flow (the Workmux path) is **expected to fail at
-  runtime**. A root-owned clone vs. uid-1000 guest still needs attention.
+- **`/workspace` runtime write is config-wired but not KVM-verified.** The
+  guest virtiofs share and the §11 `chown -R 1000:1000` ownership strategy are
+  now in place (see [The `/workspace` share & ownership](#the-workspace-share--ownership))
+  and eval-tested, so the previously-known `run --attach` breakage (root-owned
+  clone vs. uid-1000 guest) is **fixed in config**. But actually **booting** a
+  guest and confirming `/workspace` is mounted, writable and correctly-owned
+  is a runtime step (plan §41/§42) that has **not** been executed on live KVM
+  here.
 - **No passwordless sudoers yet.** The Workmux pane runs `sudo agent-microvm`
   with no dedicated sudoers rule, so it will **prompt for a password** on first
   launch. Acceptable for an interactive tmux workflow; a rule is left to a

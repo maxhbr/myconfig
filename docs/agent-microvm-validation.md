@@ -9,10 +9,15 @@ This document records the **actually executed** repository validation
 (plan §39), a **§45 security-acceptance-criteria** checklist mapped to concrete
 config/eval-test evidence, and a **§48-format final report**.
 
-- **Date executed:** 2026-08-02 (UTC)
+- **Date executed:** 2026-08-02 (UTC); **Phase 8 addendum** re-run for the
+  guest `/workspace` share + §11 UID/GID ownership fix.
 - **Repository:** `maxhbr/myconfig`, worktree `improve-sandboxing`
-- **Commit under test:** `2a26b0fc51db2a08edcc3394187d2916749a29cd`
-  (`feat(ai.microvm): enable on f13 and add eval/build test suite (phases 5-6)`)
+- **Commit under test:** phase 8 working tree on top of
+  `2a26b0fc51db2a08edcc3394187d2916749a29cd`
+  (`feat(ai.microvm): enable on f13 and add eval/build test suite (phases 5-6)`).
+  Phase 8 wires the guest virtiofs `/workspace` share (`guest.nix`) and the
+  `chown -R 1000:1000` ownership strategy (`launcher.nix`), adds the
+  `microvm-eval-workspace-share` eval check, and closes criterion 12.
 - **Executed on:** the CI/dev host running this worktree — **no `/dev/kvm`**
   (`test -r /dev/kvm` → absent) and **no `agentbr0` bridge**
   (`ip link show agentbr0` → does not exist). This is an **eval/build-only**
@@ -59,6 +64,7 @@ checking derivation checks.x86_64-linux.microvm-eval-disabled...
 checking derivation checks.x86_64-linux.microvm-eval-enabled...
 checking derivation checks.x86_64-linux.microvm-slot-uniqueness...
 checking derivation checks.x86_64-linux.microvm-eval-rejects-invalid...
+checking derivation checks.x86_64-linux.microvm-eval-workspace-share...
 checking derivation checks.x86_64-linux.microvm-guest-evaluates...
 checking derivation checks.x86_64-linux.microvm-launcher-shellcheck...
 ...
@@ -67,8 +73,8 @@ all checks passed!
 warning: The check omitted these incompatible systems: aarch64-linux
 ```
 
-- **Result:** ✅ PASS (exit 0). All six `microvm-*` checks are present and
-  evaluate cleanly.
+- **Result:** ✅ PASS (exit 0). All seven `microvm-*` checks (six original +
+  the new `microvm-eval-workspace-share`) are present and evaluate cleanly.
 - **Caveat (recorded honestly):** `nix flake check` reported
   `running 0 flake checks` — i.e. it *evaluated* the check derivations but the
   build products were already realisable/cached, so it built nothing new in
@@ -76,7 +82,7 @@ warning: The check omitted these incompatible systems: aarch64-linux
   shellcheck/guest checks, actually **run** their build-time gate), each was
   built explicitly below (§1.3).
 
-### 1.3 Explicit build of each of the 6 `microvm-*` checks
+### 1.3 Explicit build of each of the 7 `microvm-*` checks
 
 ```
 $ nix build .#checks.x86_64-linux.<name> --no-link --print-out-paths
@@ -88,8 +94,9 @@ $ nix build .#checks.x86_64-linux.<name> --no-link --print-out-paths
 | `microvm-eval-enabled` | 0 | `/nix/store/7jwqds3g86r90lw4x9wkd774jvq743vn-microvm-eval-enabled` |
 | `microvm-slot-uniqueness` | 0 | `/nix/store/rs8a3zdw8w4d1pikf3ly17gs5j4ham08-microvm-slot-uniqueness` |
 | `microvm-eval-rejects-invalid` | 0 | `/nix/store/1qi2d2qi07brszalsnh9pi49qj9l9p1a-microvm-eval-rejects-invalid` |
+| `microvm-eval-workspace-share` | 0 | `/nix/store/hbjk2ai4p69v7k99sc4fdsri2x4crsbv-microvm-eval-workspace-share` |
 | `microvm-guest-evaluates` | 0 | `/nix/store/cagfnx6g6j5m3lvnm7jwcg4y8d7qa7l6-microvm-guest-evaluates` |
-| `microvm-launcher-shellcheck` | 0 | `/nix/store/p8hkqa842da37kgmakx17sznahybgd8k-microvm-launcher-shellcheck` |
+| `microvm-launcher-shellcheck` | 0 | `/nix/store/0lnpfdha4p6d46w2wfm5wdfvl1n8wl08-microvm-launcher-shellcheck` |
 
 - **Result:** ✅ ALL PASS (exit 0). Note `microvm-launcher-shellcheck` is a
   real build — the `writeShellApplication` `shellcheck` gate actually executes
@@ -102,8 +109,19 @@ $ nix build .#nixosConfigurations.test-f13.config.system.build.toplevel \
       --no-link --print-out-paths
 ```
 
-- **Result:** ✅ PASS (exit 0). 37 derivations built.
-- **Out path:** `/nix/store/3j118nza42fcpbrkmbm2msxxyifwd403-nixos-system-f13-niri-26.11.20260730.1559d3d`
+- **Result:** ✅ PASS (exit 0).
+- **Out path (phase 8):** `/nix/store/pfdih0f2dk00h1kyvll72j8hw2vgsd0i-nixos-system-f13-niri-26.11.20260730.1559d3d`
+  (changed from the phase-6 `3j118nza…` path because `guest.nix` +
+  `launcher.nix` changed).
+- **Caveat — self-referential hash:** the `nixos-system` toplevel embeds the
+  flake `self` narHash (the whole working tree), so editing *any* tracked file
+  — **including this validation document** — shifts this out-path *without
+  changing system behaviour*. (Verified: reverting only the doc nit-fixes
+  yields the earlier `nlwrqszb…` path; the guest runner and the
+  `microvm-*` check derivations, which depend on specific module files rather
+  than `self`, are unaffected.) The value above is the build observed during
+  validation of the code-complete tree; to reproduce the exact hash for your
+  current tree, re-run the command — a doc-only delta is expected and benign.
 - Benign eval warnings only (deprecated `system`/`xorg.*` renames, a
   `getExe`/`meta.mainProgram` note on `workmux`, and microvm.nix's
   `microvm.vsock.cid` notice). No errors.
@@ -121,8 +139,11 @@ $ nix build \
 ```
 
 - **Result:** ✅ PASS (exit 0) — the full Cloud Hypervisor guest runner
-  (guest kernel + closure) realised.
-- **Out path:** `/nix/store/6x75q9yyiq7hq49g86bh8d31dppi0ip4-microvm-cloud-hypervisor-agent-0`
+  (guest kernel + closure, now including the `/workspace` virtiofsd share
+  program) realised.
+- **Out path (phase 8):** `/nix/store/cyzr3vimaxsz9x91r1nl9nrwihnwlv0h-microvm-cloud-hypervisor-agent-0`
+  (changed from phase-6 `6x75q9yy…` — the guest now declares the workspace
+  virtiofs share).
 
 > This is stronger than the in-CI `microvm-guest-evaluates` check (which only
 > forces the guest to `.drvPath` to keep `nix flake check` affordable). Here
@@ -136,7 +157,9 @@ $ nix build --impure --expr '<find agent-microvm in test-f13 systemPackages>' \
 ```
 
 - **Result:** ✅ PASS (exit 0).
-- **Out path:** `/nix/store/h6yqzj023nd8hq335qryhdwfmb3z8f5v-agent-microvm`
+- **Out path (phase 8):** `/nix/store/h177130vn60p6ih0wzvaj3fp6a2nfnyw-agent-microvm`
+  (changed from phase-6 `h6yqzj02…` — `launcher.nix` now chowns the clone to
+  `1000:1000`).
 
 ### 1.7 Private-input `f13` build — SKIPPED (unavailable)
 
@@ -148,6 +171,22 @@ $ nix build --impure --expr '<find agent-microvm in test-f13 systemPackages>' \
   `nixosConfigurationsGen.host-f13` with the microvm feature enabled via
   `hosts/host.f13/ai.f13.nix`; the private `f13` differs only in private
   secrets/inputs, not in the microvm module wiring.
+
+### 1.8 Guest `/workspace` share — eval now non-empty (§10, crit. 12)
+
+```
+$ nix eval .#nixosConfigurations.test-f13.config.microvm.vms.agent-0.config.config.microvm.shares --json
+[{"cache":"auto","extraArgs":[],"mountPoint":"/workspace","posixAcl":true,
+  "proto":"virtiofs","readOnly":false,"securityModel":"none",
+  "socket":"agent-0-virtiofs-workspace.sock",
+  "source":"/var/lib/microvms/agent-0/workspace","tag":"workspace"}]
+```
+
+- **Result:** ✅ the guest now declares **exactly one** virtiofs share — the
+  writable `/workspace`, `source=/var/lib/microvms/agent-0/workspace` (the
+  launcher's `mount_point()` target). Previously this returned `[]` (crit. 12
+  GAP). The `microvm-eval-workspace-share` check (§1.3) locks this down and was
+  verified to FAIL if the share is removed/renamed/repointed.
 
 ---
 
@@ -183,8 +222,6 @@ Each criterion is marked as one of:
 - **eval-test** — additionally locked down by an executed eval/build check
   (§1.3).
 - **runtime** — cannot be proven here; **requires §40–§44 on real KVM**.
-- **incomplete** — **not** satisfied by the current tree; a real config/wiring
-  gap exists (surfaced honestly below).
 
 Evidence paths are relative to
 `modules/myconfig.ai/myconfig.ai.microvm/` unless noted.
@@ -198,11 +235,11 @@ Evidence paths are relative to
 | 5 | Guest has its own kernel (host store not shared) | config | microvm.nix builds a self-contained guest store disk; guest closure realised independently (§1.5) |
 | 6 | Fixed, bounded slot pool | config + eval-test | `slots.nix` `mkSlots`; `default.nix` `slotCount` `ints.positive`, asserted `<= maxSlotCount`; `microvm-eval-enabled` asserts exactly `slotCount` VMs; `microvm-slot-uniqueness` exercises pools 1..maxSlotCount |
 | 7 | Unique, deterministic MAC/IP per slot | config + eval-test | `slots.nix` derives MAC/IP from index; `default.nix` uniqueness assertions; `microvm-slot-uniqueness` + `microvm-eval-rejects-invalid` |
-| 8 | Disposable root/home; only `/workspace` persists | config (partial) | guest root/home are ephemeral microvm.nix state; the host-side clone under `$WORKSPACE_ROOT/<task>` persists across stop/destroy (`launcher.nix` `cleanup_slot` never deletes the clone). **Caveat:** `/workspace` is not actually surfaced *inside* the guest yet — no guest-side virtiofs share is declared (see crit. 12 GAP). So there is no working end-to-end guest `/workspace` today; **persistence itself is also runtime (§42)** |
+| 8 | Disposable root/home; only `/workspace` persists | config + eval-test | guest root/home are ephemeral microvm.nix state; the host-side clone under `$WORKSPACE_ROOT/<task>` persists across stop/destroy (`launcher.nix` `cleanup_slot` never deletes the clone). `/workspace` is now surfaced into the guest via the virtiofs share (crit. 12), asserted by `microvm-eval-workspace-share`. **Persistence behaviour itself (only `/workspace` survives stop→destroy→restart) is runtime (§42).** |
 | 9 | Standalone clone (`git clone --no-local`) | config | `launcher.nix:233` `git clone --no-local`; §24 |
-| 10 | Original repo hidden from guest | config | only the standalone clone (never the origin) is bind-mounted host-side toward `/workspace`; `launcher.nix` repo validation refuses runtime/workspace/state roots (lines 176-184). Note the guest-side share itself is not wired yet (crit. 12), so nothing — origin or clone — currently reaches the guest; **guest-side confirmation is runtime (§41)** |
+| 10 | Original repo hidden from guest | config | only the standalone clone (never the origin) is bind-mounted host-side onto the slot's `/workspace` source, then surfaced into the guest by the single virtiofs share (crit. 12); `launcher.nix` repo validation refuses runtime/workspace/state roots (lines 176-184). **Guest-side confirmation is runtime (§41)** |
 | 11 | No shared git common dir | config | `launcher.nix:214-222` verifies `git-dir`/`git-common-dir` resolve *inside* the clone; `--no-local` forbids alternates |
-| 12 | Virtiofs workspace | **incomplete** | ⚠️ **GAP — control unwired.** No guest-side `microvm.shares` entry for `/workspace` exists anywhere in the module (`grep 'microvm.shares\|mountPoint\|virtiofs' modules/myconfig.ai/myconfig.ai.microvm/*.nix` returns only comments, no declaration). `launcher.nix:258` performs a *host-side* `mount --bind` of the clone to `$STATE_ROOT/<slot>/workspace` (`launcher.nix:126`), but nothing declares a virtiofs share that surfaces that host path into the guest as `/workspace`. Consequently `/workspace` is **never mounted inside the guest** today. The in-code comments that describe a share (`guest.nix:38` "workspace virtiofs share"; `launcher.nix:237` "bind-mounted/virtiofs-shared into the guest") reference a share that is **not declared** — a known gap to wire up (guest `microvm.shares` + §11 UID/GID mapping). Also blocks the end-to-end `run --attach` flow (see crit. 8 and §4). |
+| 12 | Virtiofs workspace | config + eval-test | ✅ **WIRED (phase 8).** `guest.nix` declares EXACTLY ONE `microvm.shares` entry per slot: `{ proto = "virtiofs"; tag = "workspace"; source = "${cfg.stateRoot}/<slot>/workspace"; mountPoint = "/workspace"; }` (read-write). The `source` is the SAME host path the launcher bind-mounts the clone onto (`mount_point()` = `$STATE_ROOT/<slot>/workspace`), so the standalone clone is surfaced into the guest as `/workspace`. microvm.nix keeps `/nix/store` on its own storeDisk (no store share), so the guest has exactly this one share. **§11 ownership:** `launcher.nix` `chown -R 1000:1000` the clone so it appears owned by the guest `agent` user (uid 1000) — virtiofsd passes ownership through — making `agent-run`'s `test -w /workspace` pass. Locked down by `microvm-eval-workspace-share` (asserts one virtiofs `/workspace` share, correct tag/source, read-write; fails if removed). Eval `microvm.vms.agent-0.….microvm.shares` now returns the workspace share, not `[]` (§1.8). **End-to-end BOOT/write on live KVM is still runtime §41/§42, NOT executed here.** |
 | 13 | Bind mount, not symlink | config | `launcher.nix:258` `mount --bind`; `findmnt` verify line 259 |
 | 14 | Non-root guest agent | config + eval-test | `guest.nix` `users.users.agent` `isNormalUser`, `uid 1000`, `hashedPassword="!"`, `extraGroups=[]`; `agent-run` refuses root (`guest.nix`); `microvm-launcher-shellcheck` builds `agent-run` |
 | 15 | Root SSH disabled | config | `guest.nix` `services.openssh.settings.PermitRootLogin = "no"` |
@@ -228,21 +265,23 @@ Evidence paths are relative to
 | 35 | Workmux stays the UI/frontend | config | `workmux.nix` registers agents into existing `myconfig.ai.workmux.agents`; launcher is backend only; user flow `workmux add --agent microvm-claude …` |
 | 36 | Existing jails still work | config | this branch adds a parallel tier; no change to existing jail/sandboxed-pi modules |
 | 37 | Formatting passes | eval-test (executed) | §1.1 `./nixfmtall.sh --check` exit 0 |
-| 38 | `nix flake check` passes | eval-test (executed) | §1.2 exit 0, all 6 microvm checks present |
+| 38 | `nix flake check` passes | eval-test (executed) | §1.2 exit 0, all 7 microvm checks present (incl. microvm-eval-workspace-share) |
 | 39 | `test-f13` builds | eval-test (executed) | §1.4 toplevel built |
 | 40 | Guest config builds | eval-test (executed) | §1.5 guest runner built in full |
 | 41 | At least one VM tested on real KVM | **runtime** | ❌ NOT YET EXECUTED — no `/dev/kvm` here (§40–§42) |
 | 42 | Firewall tested from guest | **runtime** | ❌ NOT YET EXECUTED — no bridge/guest here (§44) |
 
 **Summary:** criteria **1–40** are satisfied by config and/or the executed
-eval/build suite **except criterion 12 (Virtiofs workspace), which is
-INCOMPLETE** — no guest-side `/workspace` share is declared, so the guest
-workspace is unwired (see the crit. 12 GAP and §4). The two explicitly
-runtime-only items — **41 (a VM tested on real KVM)** and **42 (firewall
-tested from the guest)** — remain **NOT YET EXECUTED** and require the real
-f13 host with KVM. Because of the crit. 12 gap **and** the §11 UID/GID
-mapping still being unimplemented, the interactive `run --attach` end-to-end
-flow is **not functional today** (see §4).
+eval/build suite — including **criterion 12 (Virtiofs workspace), now WIRED
+and eval-tested (phase 8)**: the guest declares exactly one virtiofs
+`/workspace` share whose source matches the launcher bind-mount target, and
+the launcher chowns the clone to uid/gid 1000 (§11) so the guest `agent` user
+can rw it. The two explicitly runtime-only items — **41 (a VM tested on real
+KVM)** and **42 (firewall tested from the guest)** — remain **NOT YET
+EXECUTED** and require the real f13 host with KVM. The interactive
+`run --attach` flow is now **wired end-to-end in config**, but actually
+**booting** a guest and writing to `/workspace` remains a runtime step
+(§41/§42) not executed here.
 
 ---
 
@@ -280,16 +319,18 @@ MAC/IPv4/TAP. A NetworkManager-compatible bridge `agentbr0`
 (`192.168.83.1/24`) carries the TAPs; a dedicated iptables chain set
 (`AGENT_MICROVM_INPUT/FORWARD/OUTPUT`) enforces a **proxy-only, fail-closed**
 policy. The guest is a minimal NixOS with its own kernel, an unprivileged
-`agent` user, an *intended* single writable virtiofs `/workspace` (a
-`--no-local` standalone clone), and model-API access via the bridge-only
-LiteLLM forwarder → loopback `127.0.0.1:4000`.
+`agent` user, a single writable virtiofs `/workspace` (a `--no-local`
+standalone clone, chowned to uid/gid 1000 so the guest `agent` user can rw it,
+§11), and model-API access via the bridge-only LiteLLM forwarder → loopback
+`127.0.0.1:4000`.
 
-> [!WARNING]
-> **Known gap:** the guest-side virtiofs `/workspace` share is **not declared
-> yet** (crit. 12 INCOMPLETE). The launcher bind-mounts the clone on the host
-> only; nothing surfaces it into the guest. Together with the still-unimplemented
-> §11 UID/GID mapping, the end-to-end `run --attach` workspace flow is **not
-> functional today**. See §3 crit. 12 and §4.
+> [!NOTE]
+> **Phase 8 update:** the guest-side virtiofs `/workspace` share is now
+> declared (crit. 12), and the launcher chowns the clone to uid/gid 1000
+> (§11) so the guest `agent` user can rw it. The `run --attach` workspace flow
+> is **wired end-to-end in config** and eval-tested. Actually booting a guest
+> and confirming the write path is still a runtime step (§41/§42) NOT executed
+> here — no `/dev/kvm` in this environment.
 
 ### Workmux integration
 
@@ -305,9 +346,11 @@ stays `workmux add --agent microvm-claude feature-name`.
 
 The guest is treated as hostile. Confinement rests on: a separate guest kernel
 (Cloud Hypervisor/KVM), no shared host store or Nix daemon, no host home/creds
-mounted, at most one *intended* writable host path (`/workspace`, a standalone
-clone with the origin hidden — note this share is **not wired into the guest
-yet**, crit. 12), a non-root agent user with hardened/optional SSH, and a
+mounted, exactly one writable host path (`/workspace`, a standalone clone with the
+origin hidden — now wired into the guest via a single virtiofs share, crit.
+12, owned by uid/gid 1000 so the guest `agent` user can rw it while no guest
+id maps to a privileged host id, §11), a non-root agent user with
+hardened/optional SSH, and a
 fail-closed proxy-only firewall whose only permitted egress is
 `192.168.83.1:4000`. The cloud-metadata IP is dropped unconditionally and
 first. Insecure relaxations are off by default and gated behind an explicit
@@ -316,7 +359,7 @@ first. Insecure relaxations are off by default and gated behind an explicit
 ### Validation performed
 
 - **Executed (eval/build):** `./nixfmtall.sh --check` ✅; `nix flake check` ✅
-  (6 microvm checks); explicit build of all 6 checks ✅; `test-f13` toplevel ✅;
+  (7 microvm checks); explicit build of all 7 checks ✅; `test-f13` toplevel ✅;
   full guest runner ✅; host launcher ✅. See §1 for commands + store paths.
 - **NOT executed (runtime KVM/network/negative, §40–§44):** ❌ NOT YET
   EXECUTED — this environment has no `/dev/kvm` and no `agentbr0`. No guest was
@@ -329,23 +372,19 @@ first. Insecure relaxations are off by default and gated behind an explicit
 - **CH/KVM/guest-kernel/virtiofs attack surface:** a guest kernel + hypervisor
   is trusted at the CH/virtiofsd boundary; a CH or virtiofsd escape would
   breach the sandbox. Untested at runtime here.
-- **Guest `/workspace` is not wired up yet (INCOMPLETE, crit. 12):** the
-  launcher bind-mounts the clone to `$STATE_ROOT/<slot>/workspace` on the
-  *host*, but no guest-side `microvm.shares` virtiofs entry surfaces it into
-  the guest as `/workspace`. As shipped, the guest has no `/workspace` mount.
-- **End-to-end `run --attach` is known to fail at runtime pending §11 (not
-  merely untested):** `launcher.nix:236-242` documents explicitly that until
-  the §11 UID/GID mapping lands, the clone is created root-owned and appears
-  root-owned in the guest, so `agent-run`'s writability check
-  (`guest.nix:87-88`, `test -w /workspace`) aborts. Combined with the missing
-  virtiofs share above, the interactive run flow has **no working guest
-  workspace today** — this is a *known-broken* path, not an unverified one.
-  It must not be read as "presumed working, just untested."
-- **Writable-workspace exposure (once wired):** `/workspace` is intended to be
-  host-backed and writable; the standalone clone's contents (and any host-side
-  ownership mapping, §11) would be exposed to the guest. Host-ownership
-  behaviour is runtime-only (§41) — and, per the two bullets above, currently
-  non-functional.
+- **Guest `/workspace` is wired (phase 8) but not KVM-verified:** `guest.nix`
+  now declares the single virtiofs `/workspace` share (source =
+  `$STATE_ROOT/<slot>/workspace`, the launcher's bind-mount target), and
+  `launcher.nix` chowns the clone to uid/gid 1000 (§11) so the guest `agent`
+  user (uid 1000) sees it as agent-owned and writable (virtiofsd passes
+  ownership through). This closes the previous crit. 12 gap and the
+  known-broken `run --attach` writability failure **in config**. Confirming
+  the mount + write path on a booted guest is runtime (§41/§42), NOT executed
+  here.
+- **Writable-workspace exposure:** `/workspace` is host-backed and writable;
+  the standalone clone's contents (owned by uid/gid 1000 on the host, i.e. the
+  primary unprivileged interactive user) are exposed to the (hostile) guest
+  agent. Runtime host-ownership confirmation is §41.
 - **Prompt/source disclosure:** the agent sends workspace source + prompts to
   the model API via the host LiteLLM proxy — an intentional data-egress path.
 - **Resource exhaustion / host-proxy DoS:** vCPU/mem/slot-count are bounded,
