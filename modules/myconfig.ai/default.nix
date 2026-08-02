@@ -18,6 +18,7 @@ in
     ./myconfig.ai.pull_models.nix
     ./myconfig.ai.llama-cpp
     ./myconfig.ai.jail.nix
+    ./myconfig.ai.microvm
     ./comfyui.nix
     ./container.Kokoro-FastAPI.nix
     ./container.crawl4ai.nix
