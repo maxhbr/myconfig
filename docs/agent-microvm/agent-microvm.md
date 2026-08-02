@@ -89,6 +89,12 @@ myconfig.ai.microvm = {
   private key here.
 - To use a specific private key with the launcher's `ssh` / `--attach` paths,
   export `AGENT_MICROVM_SSH_KEY=/path/to/private-key`.
+- For `run --attach` under `sudo` (the workmux path): `sudo`'s `env_reset`
+  strips the variable, so either export `AGENT_MICROVM_SSH_KEY` and rely on
+  the workmux launcher's `--preserve-env=AGENT_MICROVM_SSH_KEY` passthrough
+  (the sudoers policy must permit it), or give **root** an ssh key matching
+  the dedicated pubkey (e.g. via `/root/.ssh` or an `ssh_config`
+  `IdentityFile` entry).
 
 Regenerate the pair (throwaway, private key deleted immediately) with:
 

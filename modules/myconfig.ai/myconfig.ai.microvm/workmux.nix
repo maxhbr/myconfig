@@ -131,7 +131,14 @@ let
         # cleanup). --attach runs 'agent-run ${spec.bin}' in the guest for
         # this pane and tears the VM down on exit (the workspace clone is
         # kept). No network-relaxation flags -> secure proxy-only profile.
-        exec sudo agent-microvm run --attach \
+        # sudo's env_reset strips AGENT_MICROVM_SSH_KEY, which the launcher's
+        # ssh readiness/attach paths need to pick the dedicated private key;
+        # pass it through explicitly, but only when it is set (sudoers must
+        # permit --preserve-env=AGENT_MICROVM_SSH_KEY for this to apply;
+        # without SETENV sudo fails hard with "sorry, you are not allowed to
+        # preserve the environment" rather than silently dropping the var).
+        exec sudo ''${AGENT_MICROVM_SSH_KEY:+--preserve-env=AGENT_MICROVM_SSH_KEY} \
+          agent-microvm run --attach \
           --name "$task" \
           --repository "$main_repo" \
           --agent ${lib.escapeShellArg spec.bin}

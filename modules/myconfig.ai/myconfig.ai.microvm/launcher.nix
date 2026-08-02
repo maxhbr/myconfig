@@ -614,9 +614,13 @@ let
           service_active "$slot" || die "microvm@$slot is not running"
           [[ "''${1-}" == "--" ]] && shift
           # StrictHostKeyChecking=no + /dev/null known-hosts is intentional:
-          # slots are ephemeral guests with regenerated host keys on a
-          # host-controlled private bridge, so pinning would only add churn.
-          # The trust boundary is the bridge/firewall, not SSH host identity.
+          # slots are ephemeral guests with regenerated host keys, so
+          # pinning would only add churn. Residual risk: the iptables/
+          # br_netfilter firewall does NOT filter ARP, so without per-TAP L2
+          # isolation (open item A1 in agent-microvm-remaining.md) a hostile
+          # co-resident guest could ARP-spoof the gateway or another slot
+          # and MITM this unpinned ssh/--attach session (agent prompts and
+          # commands only — no secrets transit it, §17).
           exec ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
               ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
               -t "$SSH_USER@$ip" "$@"

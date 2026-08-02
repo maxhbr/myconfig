@@ -236,7 +236,10 @@ let
     # deterministic MAC so it is independent of the kernel interface name.
     # Default route points at the host bridge address (the only reachable
     # peer under the proxy-only firewall policy). IPv6 stays disabled (§15).
-    systemd.network = lib.mkIf cfg.enableSsh {
+    # Unconditional (NOT gated on enableSsh): the guest needs its address
+    # and default route to reach the LiteLLM forwarder regardless of SSH
+    # (§17/§31 — model-API access is independent of SSH).
+    systemd.network = {
       enable = true;
       networks."10-agent" = {
         matchConfig.MACAddress = slot.mac;

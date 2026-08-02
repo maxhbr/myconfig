@@ -124,6 +124,13 @@ reaches the model API via `<gateway>:<port>`"), which is independent of SSH.
 Latent on f13 (ssh enabled), but the gate is wrong: addressing should be
 unconditional.
 
+**Resolution (FIXED):** The `lib.mkIf cfg.enableSsh` gate around
+`systemd.network` in `guest.nix` was removed; the block contents are
+unchanged, so the guest's static address and default route are now assigned
+unconditionally (verified via eval that `agent-0` keeps its address with
+`enableSsh` forced off). The adjacent comment notes why the block is
+unconditional.
+
 #### M2 — `AGENT_MICROVM_SSH_KEY` does not survive `sudo` — `launcher.nix:327`, `launcher.nix:487`, `workmux.nix:134`
 
 `run --attach` (the workmux path) runs under `sudo` with `env_reset`, so the
@@ -133,6 +140,14 @@ keys matching the dedicated pubkey — an undocumented assumption. Otherwise
 `wait_ready` times out after 90 s and tears the slot down. Fix options:
 `sudo --preserve-env=AGENT_MICROVM_SSH_KEY` in `workmux.nix`, a fixed
 key-path module option, or explicit operator docs. (Related to open item A2.)
+
+**Resolution (FIXED):** The workmux launcher now execs
+`sudo ${AGENT_MICROVM_SSH_KEY:+--preserve-env=AGENT_MICROVM_SSH_KEY}
+agent-microvm run --attach …`, passing the variable through only when set.
+`agent-microvm.md` documents the operational requirement: either export the
+variable and rely on the passthrough (sudoers must permit
+`--preserve-env=AGENT_MICROVM_SSH_KEY`), or give root a matching key via
+`/root/.ssh` / `ssh_config IdentityFile`.
 
 #### M3 — `StrictHostKeyChecking=no` rationale overstates the trust boundary — `launcher.nix:607–612` vs open item A1
 
@@ -145,6 +160,13 @@ prompts/commands — no secrets, per §17). A1 is honestly documented; this is
 flagged only because the launcher comment contradicts it. Reword the comment,
 and note this strengthens the case for resolving A1 before relying on
 multi-slot concurrency.
+
+**Resolution (FIXED):** Comment-only change in `launcher.nix` (`cmd_ssh`):
+the misleading "trust boundary is the bridge/firewall" claim was replaced
+with an accurate statement of the residual risk (ARP is not filtered by
+iptables/br_netfilter, so absent per-TAP L2 isolation a co-resident guest
+could MITM the unpinned session) with an explicit reference to open item A1
+in `agent-microvm-remaining.md`. No ssh flags changed.
 
 ### LOW
 
