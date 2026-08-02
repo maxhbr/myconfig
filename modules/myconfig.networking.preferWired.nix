@@ -35,6 +35,14 @@
 #   2. Loosening the reverse-path filter to "loose" mode (rp_filter = 2) as
 #      defense-in-depth for the brief transition window where both links are
 #      momentarily up.
+#
+# Escape hatch: `sudo force-wlan on` suspends the policy and keeps Wi-Fi up
+# even while wired has carrier (useful for testing/roaming); `sudo force-wlan
+# off` resumes it, `force-wlan status` reports the current state. The override
+# is persisted under /var/lib so it survives reboots: once you force Wi-Fi on
+# it stays on across reboots until you explicitly `force-wlan off`. This is
+# also what re-enables Wi-Fi early each boot despite NetworkManager and
+# systemd-rfkill restoring a persisted "radio off" state from a prior session.
 {
   config,
   lib,
@@ -43,6 +51,57 @@
 }:
 let
   cfg = config.myconfig.networking.preferWired;
+
+  # Persistent override flag. When this file exists the prefer-wired policy is
+  # suspended and Wi-Fi is kept on regardless of the wired carrier. Lives under
+  # /var/lib (not tmpfs) so `force-wlan on` survives reboots -> Wi-Fi is
+  # re-enabled on every boot until you explicitly `force-wlan off`.
+  stateDir = "/var/lib/prefer-wired";
+  forceFlag = "${stateDir}/force-wlan";
+
+  # `force-wlan [on|off|status]`: manual escape hatch to keep Wi-Fi up while a
+  # wired uplink is present (e.g. you want both links for testing). Needs root
+  # because `nmcli radio` and writing to the service RuntimeDirectory are
+  # privileged -> run via sudo.
+  forceWlan = pkgs.writeShellApplication {
+    name = "force-wlan";
+    runtimeInputs = [
+      pkgs.networkmanager
+      pkgs.coreutils
+      pkgs.systemd
+    ];
+    text = ''
+      flag=${forceFlag}
+      cmd="''${1:-on}"
+      case "$cmd" in
+        on)
+          mkdir -p "$(dirname "$flag")"
+          touch "$flag"
+          nmcli radio wifi on || true
+          echo "force-wlan: ON (Wi-Fi kept on regardless of wired link)"
+          ;;
+        off)
+          rm -f "$flag"
+          echo "force-wlan: OFF (prefer-wired policy resumes)"
+          # Re-seed the decision immediately so Wi-Fi is dropped again right
+          # away if a wired link currently has carrier.
+          systemctl restart prefer-wired.service 2>/dev/null || true
+          ;;
+        status)
+          if [ -e "$flag" ]; then
+            echo "force-wlan: ON (override active)"
+          else
+            echo "force-wlan: OFF (prefer-wired policy active)"
+          fi
+          nmcli -t radio wifi
+          ;;
+        *)
+          echo "usage: force-wlan [on|off|status]" >&2
+          exit 1
+          ;;
+      esac
+    '';
+  };
 in
 {
   options.myconfig.networking.preferWired = {
@@ -50,6 +109,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    environment.systemPackages = [ forceWlan ];
+
     systemd.services.prefer-wired = {
       description = "Disable Wi-Fi while a wired uplink has carrier";
       # NetworkManager owns the Wi-Fi radio (`nmcli radio wifi`), so we need it
@@ -68,9 +129,18 @@ in
         # decision.
         Restart = "always";
         RestartSec = 3;
+        # /var/lib/prefer-wired holds the persistent force-wlan override flag
+        # (see below). StateDirectory survives reboots (unlike RuntimeDirectory).
+        StateDirectory = "prefer-wired";
       };
       script = ''
         set -u
+
+        # Manual override: if force-wlan has been engaged, keep Wi-Fi on and
+        # do not arbitrate against the wired link at all.
+        force_wlan_active() {
+          [ -e ${forceFlag} ]
+        }
 
         # Is any *physical wired* interface currently carrying a link?
         wired_link_up() {
@@ -96,6 +166,13 @@ in
         # (idempotent → wlan0's own flaps can't cause a toggle storm).
         apply() {
           current="$(nmcli -t radio wifi 2>/dev/null || echo unknown)"
+          if force_wlan_active; then
+            if [ "$current" = "disabled" ]; then
+              echo "force-wlan active -> enabling Wi-Fi"
+              nmcli radio wifi on || true
+            fi
+            return
+          fi
           if wired_link_up; then
             if [ "$current" = "enabled" ]; then
               echo "wired link up -> disabling Wi-Fi"
