@@ -261,7 +261,7 @@ Evidence paths are relative to
 | 31 | Bounded CPU/memory | config | `guest.nix` `vcpu=cfg.defaultVcpu`, `mem=cfg.defaultMemoryMiB`; `default.nix` positive-int assertions |
 | 32 | Bounded VM count | config + eval-test | fixed slot pool; `slotCount` bounded (crit. 6) |
 | 33 | Lock-protected allocation | config | `launcher.nix` global `allocator.lock` `flock 9` (`exec 9>`/`flock 9` lines 406-407) + per-slot `flock 8` (lines 416-417); global lock released at `flock -u 9` line 437 (block ~406-438); §21 |
-| 34 | Stop/destroy keep the workspace | config | `launcher.nix` `cmd_destroy` "workspace kept" (line 513); `workspace-remove` is a separate guarded op (`cmd_workspace_remove` ~line 607) refusing uncommitted/unexported work (die at lines 624/629, guard block ~621-630) |
+| 34 | Stop/destroy keep the workspace | config | `launcher.nix` `cmd_destroy` "workspace kept" (line 513); `workspace-remove` is a separate guarded op (`cmd_workspace_remove`) refusing uncommitted/unexported work; guards use scoped `safe.directory` and fail closed on git error (review H2 resolution) |
 | 35 | Workmux stays the UI/frontend | config | `workmux.nix` registers agents into existing `myconfig.ai.workmux.agents`; launcher is backend only; user flow `workmux add --agent microvm-claude …` |
 | 36 | Existing jails still work | config | this branch adds a parallel tier; no change to existing jail/sandboxed-pi modules |
 | 37 | Formatting passes | eval-test (executed) | §1.1 `./nixfmtall.sh --check` exit 0 |

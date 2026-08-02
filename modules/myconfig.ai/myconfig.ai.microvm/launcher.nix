@@ -175,7 +175,11 @@ let
           [[ -e "$input" ]] || die "repository path does not exist: $input"
           real="$(realpath -e -- "$input")" \
               || die "cannot canonicalise repository path: $input"
-          top="$(git -C "$real" rev-parse --show-toplevel 2>/dev/null)" \
+          # Scoped safe.directory override: the launcher runs as root but the
+          # repo is typically owned by uid 1000; git >= 2.35.2 would otherwise
+          # fail the dubious-ownership check even for root. Scoped to exactly
+          # this path — NEVER safe.directory='*'.
+          top="$(git -c safe.directory="$real" -C "$real" rev-parse --show-toplevel 2>/dev/null)" \
               || die "not a git repository: $real"
           top="$(realpath -e -- "$top")" \
               || die "cannot canonicalise git toplevel: $top"
@@ -237,7 +241,12 @@ let
           mkdir -p -- "$WORKSPACE_ROOT"
           # --no-local forbids hardlinks/alternates: a fully independent copy
           # of the objects, so the original repo is never shared into the VM.
-          git clone --no-local -- "$repo" "$clone" \
+          # The scoped safe.directory covers reading the user-owned SOURCE
+          # repo as root (dubious-ownership check); the fresh clone itself is
+          # root-owned at this point, so it needs no override. All later git
+          # calls in create_clone/verify_clone (rev-parse, checkout -b) also
+          # run on the root-owned clone BEFORE the chown to 1000:1000 below.
+          git -c safe.directory="$repo" clone --no-local -- "$repo" "$clone" \
               || die "git clone --no-local failed"
           verify_clone "$clone"
           if [[ -n "$branch" ]]; then
@@ -637,12 +646,26 @@ let
           local clone="$WORKSPACE_ROOT/$task"
           [[ -d "$clone" ]] || die "no such workspace: $clone"
           # §35: guard against losing uncommitted work / unexported commits.
+          # The clone is owned by 1000:1000 and this runs as root, so each git
+          # call needs a scoped safe.directory override (never '*'). The
+          # guards FAIL CLOSED: if git itself errors we cannot determine the
+          # workspace state, so we refuse instead of treating it as clean.
           if (( ! force )); then
-              if [[ -n "$(git -C "$clone" status --porcelain 2>/dev/null)" ]]; then
+              local dirty rc
+              rc=0
+              dirty="$(git -c safe.directory="$clone" -C "$clone" status --porcelain)" || rc=$?
+              if (( rc != 0 )); then
+                  die "cannot determine workspace status (git status failed, exit $rc); refusing (use --force): $clone"
+              fi
+              if [[ -n "$dirty" ]]; then
                   die "workspace has uncommitted changes; refusing (use --force): $clone"
               fi
               local unpushed
-              unpushed="$(git -C "$clone" log --branches --not --remotes --oneline 2>/dev/null || true)"
+              rc=0
+              unpushed="$(git -c safe.directory="$clone" -C "$clone" log --branches --not --remotes --oneline)" || rc=$?
+              if (( rc != 0 )); then
+                  die "cannot determine unexported commits (git log failed, exit $rc); refusing (use --force): $clone"
+              fi
               if [[ -n "$unpushed" ]]; then
                   die "workspace has unexported commits; refusing (use --force): $clone"
               fi
