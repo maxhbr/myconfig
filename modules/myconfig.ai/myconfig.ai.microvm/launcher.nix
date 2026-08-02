@@ -701,12 +701,12 @@ let
                   src="''${src##*[}"
                   src="''${src%]}"
                   [[ "$src" == "$clone" ]] \
-                      && die "workspace is still bind-mounted at slot $slot; stop it first"
+                      && die "workspace is still bind-mounted at slot $slot; stop it first with: $PROG stop $slot"
               fi
               if service_active "$slot" && [[ -e "$(session_file "$slot")" ]]; then
                   sess_ws="$(jq -r '.workspace // ""' "$(session_file "$slot")" 2>/dev/null || true)"
                   [[ "$sess_ws" == "$clone" ]] \
-                      && die "workspace is in use by running slot $slot; stop it first"
+                      && die "workspace is in use by running slot $slot; stop it first with: $PROG stop $slot"
               fi
           done
           log "removing workspace $clone"
