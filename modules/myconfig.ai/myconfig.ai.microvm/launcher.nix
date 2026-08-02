@@ -84,6 +84,19 @@ let
       readonly STATE_ROOT=${lib.escapeShellArg cfg.stateRoot}
       readonly SSH_ENABLED=${lib.escapeShellArg (if cfg.enableSsh then "1" else "0")}
       readonly SSH_USER="agent"
+      # Stable dest of the agenix-decrypted dedicated private key. MUST match
+      # `myconfig.secrets."dedicated-agent-vm-key".dest` in secrets.nix. The
+      # priv repo provisions its `source`; agenix then decrypts it here
+      # (root-owned 0400). Default AGENT_MICROVM_SSH_KEY to it when the caller
+      # set none AND it exists — so `run --attach` / `ssh` under `sudo` (which
+      # strips a user-set AGENT_MICROVM_SSH_KEY via env_reset) still find the
+      # dedicated key. If the secret is unprovisioned the file is absent and we
+      # leave AGENT_MICROVM_SSH_KEY unset (previous behaviour).
+      readonly SSH_KEY_DEST="/run/agenix/dedicated-agent-vm-key"
+      if [[ -z "''${AGENT_MICROVM_SSH_KEY:-}" && -r "$SSH_KEY_DEST" ]]; then
+          AGENT_MICROVM_SSH_KEY="$SSH_KEY_DEST"
+          export AGENT_MICROVM_SSH_KEY
+      fi
       # §11 UID/GID ownership: the guest `agent` user is uid/gid 1000
       # (guest.nix `users.users.agent`). The workspace clone is chowned to
       # these numeric ids so it appears agent-owned inside the guest via

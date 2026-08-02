@@ -87,13 +87,34 @@ myconfig.ai.microvm = {
 - The matching **private** key is **not** in this repo. It is managed
   out-of-band and lives in the separate `../priv` repository. Never commit a
   private key here.
-- To use a specific private key with the launcher's `ssh` / `--attach` paths,
-  export `AGENT_MICROVM_SSH_KEY=/path/to/private-key`.
-- For `run --attach` under `sudo` (the workmux path): `sudo`'s `env_reset`
-  strips the variable, so either export `AGENT_MICROVM_SSH_KEY` and rely on
-  the workmux launcher's `--preserve-env=AGENT_MICROVM_SSH_KEY` passthrough
-  (the sudoers policy must permit it), or give **root** an ssh key matching
-  the dedicated pubkey (e.g. via `/root/.ssh` or an `ssh_config`
+- **Recommended: inject the private key via agenix.** When the feature is
+  enabled (and `enableSsh`), `secrets.nix` declares a `myconfig.secrets`
+  **stub** `dedicated-agent-vm-key` with **no `source`** and a stable
+  `dest = /run/agenix/dedicated-agent-vm-key` (root-owned, `0400`). Fill the
+  `source` from the **priv** repo:
+
+  ```nix
+  # in ../priv (host.<hostname> module)
+  myconfig.secrets."dedicated-agent-vm-key".source =
+    ./secrets/dedicated-agent-vm-key;
+  ```
+
+  agenix then decrypts the private key to that `dest`, and the launcher
+  **defaults `AGENT_MICROVM_SSH_KEY` to it** when the caller set none and the
+  file exists — so the `run --attach` / `ssh` readiness paths (which run as
+  root under `sudo`, losing any user-set env var) find the dedicated key
+  automatically, with **no** sudoers `--preserve-env` rule required. Until the
+  source is provisioned, `myconfig.secrets` emits its standard
+  "source is missing for: dedicated-agent-vm-key" warning and no key is
+  decrypted.
+- To use a *specific* private key with the launcher's `ssh` / `--attach`
+  paths, export `AGENT_MICROVM_SSH_KEY=/path/to/private-key` (this overrides
+  the agenix default above).
+- For `run --attach` under `sudo` **without** the agenix secret: `sudo`'s
+  `env_reset` strips the variable, so either export `AGENT_MICROVM_SSH_KEY`
+  and rely on the workmux launcher's `--preserve-env=AGENT_MICROVM_SSH_KEY`
+  passthrough (the sudoers policy must permit it), or give **root** an ssh key
+  matching the dedicated pubkey (e.g. via `/root/.ssh` or an `ssh_config`
   `IdentityFile` entry).
 
 Generate the pair with the helper script in this module directory. It writes

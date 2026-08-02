@@ -45,6 +45,7 @@ in
     ./guest.nix
     ./network.nix
     ./launcher.nix
+    ./secrets.nix
     ./workmux.nix
   ];
 
