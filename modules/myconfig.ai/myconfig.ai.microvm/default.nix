@@ -43,6 +43,7 @@ in
 {
   imports = [
     ./guest.nix
+    ./guest-home.nix
     ./network.nix
     ./launcher.nix
     ./secrets.nix
