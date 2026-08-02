@@ -465,7 +465,12 @@ let
           # does not exist yet.
           local committed=0
           # shellcheck disable=SC2317  # invoked via trap
-          on_exit() { (( committed )) || cleanup_slot "$slot"; }
+          # ''${committed:-0}: create_clone (and other helpers) run in
+          # command-substitution subshells that inherit this EXIT trap; the
+          # enclosing function's `committed` local is not in scope while the
+          # trap fires there, so a failure path (e.g. "workspace already
+          # exists") would trip `set -u` without the default (§21/§43).
+          on_exit() { (( ''${committed:-0} )) || cleanup_slot "$slot"; }
           trap on_exit EXIT
           trap 'exit 130' INT TERM
 
