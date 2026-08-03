@@ -169,6 +169,53 @@ sudo agent-microvm --help    # lists the declared directories per agent
   which virtiofsd passes through unchanged. Nothing outside the task's own state
   tree is chowned.
 
+### Resource and abuse limits
+
+Sized per resource class, enforced on **both** sides:
+
+| Where | Limit | Value |
+| --- | --- | --- |
+| guest `agent-job` | `CPUQuota` | `vcpu × 100 %` (the class's cpus, no more) |
+| guest `agent-job` | `MemoryMax` | class RAM − `job.guestMemoryHeadroomMiB` (never less than half), so an OOM kills the **agent** instead of wedging the guest |
+| guest `agent-job` | `TasksMax` | `job.tasksMax` (default 4096) — fork-bomb bound |
+| guest `agent-job` | `RuntimeMaxSec` | `job.maxTimeoutSeconds + job.gracePeriodSeconds` |
+| host `microvm@<slot>` | `MemoryMax` | class RAM + `hypervisorMemoryOverheadMiB` — **never below** guest RAM + overhead, or a well-behaved VM would be OOM-killed |
+| host `microvm@<slot>` | `TasksMax` | `hypervisorTasksMax` |
+| host `microvm@<slot>` | `CPUWeight` / `IOWeight` | `50` (relative; sandboxes yield to interactive host work but may use idle capacity) |
+
+The guest root filesystem and `/tmp` are tmpfs inside the VM, so they are bounded
+by the class's RAM. Retained growth is on disk (clones + task state) and is
+reported by:
+
+```bash
+sudo agent-microvm usage
+```
+
+which lists, per task, the workspace-clone and task-state sizes plus the runtime
+roots, and points at `workspace-remove <task>` (which now also drops that task's
+persisted agent state and archived job result).
+
+### Workspace safety (re-verified)
+
+The properties the sandbox depends on, and where they live — all re-checked by
+`microvm-limits-and-workspace-safety`:
+
+1. `.git` resolves **inside** the workspace (`verify_clone`).
+2. The git **common** dir resolves inside the workspace (`verify_clone`).
+3. Bind sources cannot escape through symlinks (every caller-supplied path is
+   `realpath -e`-canonicalised before use).
+4. Repository paths are canonicalised **and** rejected for `/`, the host home,
+   the runtime/workspace/state roots and existing agent workspaces
+   (`validate_repository`).
+5. Cleanup/removal targets stay under the configured roots (`clone` is always
+   `$WORKSPACE_ROOT/<validated task>`; state removal is scoped to
+   `state/tasks/<task>`).
+6. Clones are standalone: `git clone --no-local` (no hardlinks, no alternates).
+7. The host launcher never evaluates anything the repository provides — no
+   `nix`/`nix-shell`, no `direnv`, no `npm`/`yarn`/`pnpm`/`cargo`/`make`, no git
+   hooks (`clone` does not transfer them and `core.hooksPath` is never set), no
+   MCP configuration. The check greps the built launcher for each of these.
+
 ### Network profiles
 
 `myconfig.ai.microvm.networkProfile` replaces the three ambiguous booleans with

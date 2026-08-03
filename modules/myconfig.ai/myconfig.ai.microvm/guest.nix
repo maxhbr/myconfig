@@ -161,7 +161,7 @@ let
       # Unattended batch execution (ticket 4): the `agent-job` runner + its
       # inert-unless-a-job-is-present oneshot. Slot-independent, because the
       # job share always appears at the same guest path.
-      agentJobs.guestModule
+      (agentJobs.mkGuestModule slot)
       # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
       # directories the host prepared for this run; a run without
       # --persist-agent-state sees an empty share and keeps the disposable home.
@@ -522,6 +522,35 @@ in
 
     (lib.mkIf cfg.enable {
       microvm.host.enable = true;
+
+      # --- ticket 5 C: host-side limits on the HYPERVISOR units ------------
+      # Drop-ins on microvm.nix's own `microvm@<slot>` units (it uses the same
+      # `overrideStrategy = "asDropin"` pattern, so the definitions merge).
+      # These bound what one sandbox can take from the HOST:
+      #   * MemoryMax = the class's guest RAM + `hypervisorMemoryOverheadMiB`.
+      #     It must never be BELOW the guest's configured memory plus
+      #     hypervisor overhead, or the VM would be OOM-killed while behaving
+      #     perfectly (virtiofsd, the CH process itself and the guest's page
+      #     cache all live in this cgroup).
+      #   * TasksMax bounds the hypervisor's own thread/process explosion.
+      #   * CPUWeight/IOWeight are RELATIVE weights (default 100): agent
+      #     sandboxes deliberately yield to interactive host work rather than
+      #     being hard-capped, so a long agent run cannot make the laptop
+      #     unusable while still being able to use idle capacity.
+      systemd.services = builtins.listToAttrs (
+        map (slot: {
+          name = "microvm@${slot.name}";
+          value = {
+            overrideStrategy = "asDropin";
+            serviceConfig = {
+              MemoryMax = "${toString (slot.memoryMiB + cfg.hypervisorMemoryOverheadMiB)}M";
+              TasksMax = cfg.hypervisorTasksMax;
+              CPUWeight = cfg.hypervisorCPUWeight;
+              IOWeight = cfg.hypervisorIOWeight;
+            };
+          };
+        }) slots
+      );
 
       # Fixed declarative slot pool → one microvm.nix VM per slot.
       microvm.vms = builtins.listToAttrs (

@@ -268,8 +268,9 @@ let
 
   # --- guest-side NixOS module fragment ---------------------------------
   # Merged into every slot's guest config by guest.nix, next to the workspace /
-  # hostkey shares.
-  guestModule = {
+  # hostkey shares. Takes the SLOT because the resource limits below are derived
+  # from the slot's resource class (ticket 5 C).
+  mkGuestModule = slot: {
     environment.systemPackages = [ agent-job ];
 
     systemd.services.agent-job = {
@@ -319,6 +320,23 @@ let
         # Give the agent the same SIGTERM grace the per-job timeout uses, so a
         # host-side `cancel` still lets it flush work to /workspace.
         TimeoutStopSec = 30;
+
+        # --- ticket 5 C: guest-side resource limits, sized by the CLASS ------
+        # A runaway agent (fork bomb, memory hog, endless build) must not take
+        # the whole guest down before the host's timeout fires. Everything is
+        # derived from the slot's class, so a `small` slot really is small.
+        #
+        # Memory: leave headroom for the guest kernel, the tmpfs root and
+        # sshd/systemd, so hitting the limit kills the AGENT (cgroup OOM) rather
+        # than wedging the whole VM.
+        MemoryMax = "${
+          toString (lib.max (slot.memoryMiB - jobCfg.guestMemoryHeadroomMiB) (slot.memoryMiB / 2))
+        }M";
+        # CPUQuota is expressed in "percent of ONE cpu", so a 4-vCPU class maps
+        # to 400% — i.e. the job may use its slot's cpus, not more.
+        CPUQuota = "${toString (slot.vcpu * 100)}%";
+        # Bound process/thread explosions (default is ~15% of the kernel pid max).
+        TasksMax = jobCfg.tasksMax;
       };
     };
   };
@@ -344,6 +362,28 @@ in
       '';
     };
 
+    tasksMax = mkOption {
+      type = types.ints.positive;
+      default = 4096;
+      description = ''
+        `TasksMax` for the guest batch job: an upper bound on processes and
+        threads, so a fork bomb inside the sandbox cannot exhaust the guest's
+        pid space. Generous enough for compilers and test runners.
+      '';
+    };
+
+    guestMemoryHeadroomMiB = mkOption {
+      type = types.ints.positive;
+      default = 512;
+      description = ''
+        RAM (MiB) subtracted from a slot's class memory to obtain the batch
+        job's `MemoryMax`. The headroom is what the guest kernel, the tmpfs
+        root, systemd and sshd need, so that an out-of-memory AGENT is killed by
+        its cgroup instead of wedging the whole guest. Never more than half the
+        class memory is subtracted.
+      '';
+    };
+
     gracePeriodSeconds = mkOption {
       type = types.ints.positive;
       default = 120;
@@ -360,7 +400,7 @@ in
     # guest.nix (shares + service) and launcher.nix (submit/status/recover).
     {
       _module.args.agentJobs = paths // {
-        inherit guestModule;
+        inherit mkGuestModule;
         runner = agent-job;
       };
     }

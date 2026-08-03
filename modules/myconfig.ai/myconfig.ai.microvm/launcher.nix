@@ -860,6 +860,9 @@ let
                               unmount stale mounts, drop stale markers and job
                               data. Always keeps workspace clones. --dry-run
                               only prints what it would do.
+        usage                 Report RETAINED disk usage per task (workspace
+                              clone + task-scoped agent state) plus the runtime
+                              roots, and how to prune it.
         workspace-remove <task> [--force]
                               Delete the standalone clone. Separate + guarded:
                               refuses on uncommitted changes / unexported
@@ -1290,6 +1293,58 @@ let
           fi
       }
 
+      # ==== retained-usage report (ticket 5 C) =============================
+      # Workspace clones and task-scoped agent state are deliberately KEPT after
+      # a run, so they grow without bound unless the operator prunes them. This
+      # makes that growth visible (and points at the command that removes it).
+      cmd_usage() {
+          require_root usage
+          local task ws_bytes st_bytes total_ws=0 total_st=0 dir
+
+          dir_bytes() {
+              local d="$1"
+              [[ -d "$d" ]] || { printf '0'; return 0; }
+              du -sb --one-file-system -- "$d" 2>/dev/null | cut -f1
+          }
+          human() { numfmt --to=iec --suffix=B -- "$1"; }
+
+          printf '%-32s %12s %12s %s\n' "TASK" "WORKSPACE" "AGENTSTATE" "IN USE BY"
+          for dir in "$WORKSPACE_ROOT"/*; do
+              [[ -d "$dir" ]] || continue
+              task="$(basename -- "$dir")"
+              ws_bytes="$(dir_bytes "$dir")"
+              st_bytes=0
+              if [[ -d "$STATE_TASKS_ROOT/$task" ]]; then
+                  st_bytes="$(dir_bytes "$STATE_TASKS_ROOT/$task")"
+              fi
+              total_ws=$(( total_ws + ws_bytes ))
+              total_st=$(( total_st + st_bytes ))
+              # Which slot (if any) currently holds this task.
+              local holder="-" f
+              for f in "$SLOTS_DIR"/*/session.json; do
+                  [[ -e "$f" ]] || continue
+                  if [[ "$(jq -r '.task // ""' "$f" 2>/dev/null || true)" == "$task" ]]; then
+                      holder="$(jq -r '.slot' "$f")"
+                      break
+                  fi
+              done
+              printf '%-32s %12s %12s %s\n' "$task" "$(human "$ws_bytes")" \
+                  "$(human "$st_bytes")" "$holder"
+          done
+          printf '%-32s %12s %12s\n' "TOTAL" "$(human "$total_ws")" "$(human "$total_st")"
+
+          # Transient runtime data, for completeness: per-slot job dirs and the
+          # archived results. These are small, but a runaway agent could fill the
+          # job output dir.
+          printf '\nruntime:\n'
+          printf '  workspaces:    %s (%s)\n' "$WORKSPACE_ROOT" "$(human "$(dir_bytes "$WORKSPACE_ROOT")")"
+          printf '  agent state:   %s (%s)\n' "$STATE_TASKS_ROOT" "$(human "$(dir_bytes "$STATE_TASKS_ROOT")")"
+          printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(dir_bytes "$JOBS_ROOT")")"
+          printf '  job results:   %s (%s)\n' "$RESULTS_DIR" "$(human "$(dir_bytes "$RESULTS_DIR")")"
+          printf '\nremove a retained workspace (and its task state) with:\n'
+          printf '  %s workspace-remove <task>\n' "$PROG"
+      }
+
       cmd_stop() {
           require_root stop
           [[ $# -ge 1 ]] || die "stop: <slot|task> required"
@@ -1498,6 +1553,15 @@ let
           done
           log "removing workspace $clone"
           rm -rf -- "$clone"
+          # The task's persisted agent state is part of the same task and would
+          # otherwise be orphaned (and keep growing) after its workspace is
+          # gone. Nothing outside <state>/tasks/<task> is touched.
+          if [[ -d "$STATE_TASKS_ROOT/$task" ]]; then
+              log "removing task-scoped agent state $STATE_TASKS_ROOT/$task"
+              rm -rf -- "''${STATE_TASKS_ROOT:?}/$task"
+          fi
+          # Same for the archived job result of that task.
+          rm -f -- "$RESULTS_DIR/$task.json"
       }
 
       main() {
@@ -1508,6 +1572,7 @@ let
               submit)           cmd_submit "$@" ;;
               cancel)           cmd_cancel "$@" ;;
               recover)          cmd_recover "$@" ;;
+              usage)            cmd_usage "$@" ;;
               stop)             cmd_stop "$@" ;;
               destroy)          cmd_destroy "$@" ;;
               status)           cmd_status "$@" ;;

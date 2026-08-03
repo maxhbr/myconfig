@@ -905,6 +905,99 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # (o) LIMITS + WORKSPACE SAFETY (ticket 5 C/D): per-class guest limits, the #
+  #     host-side hypervisor-unit limits (never BELOW guest RAM + overhead),  #
+  #     the retained-usage report, and a re-verification of the seven         #
+  #     workspace-safety properties in the BUILT launcher — including that it #
+  #     never evaluates anything the repository provides.                     #
+  # ---------------------------------------------------------------------- #
+  microvm-limits-and-workspace-safety =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      evalMarker = mkEvalCheck "microvm-limits-eval" (
+        lib.concatMap (
+          slot:
+          let
+            guest = enabledCfg.microvm.vms.${slot.name}.config.config;
+            job = guest.systemd.services.agent-job.serviceConfig;
+            host = enabledCfg.systemd.services."microvm@${slot.name}".serviceConfig;
+            cls = resourceClasses.${slot.class};
+            # "5120M" -> 5120
+            mib = v: lib.toInt (lib.removeSuffix "M" v);
+          in
+          [
+            {
+              assertion = job.CPUQuota == "${toString (cls.vcpu * 100)}%";
+              message = "${slot.name}: guest job CPUQuota must match its class (${toString cls.vcpu} vCPU)";
+            }
+            {
+              assertion = mib job.MemoryMax < cls.memoryMiB && mib job.MemoryMax >= cls.memoryMiB / 2;
+              message = "${slot.name}: guest job MemoryMax must leave headroom but at least half the class memory";
+            }
+            {
+              assertion = (job.TasksMax or 0) > 0;
+              message = "${slot.name}: guest job must bound TasksMax";
+            }
+            {
+              # The load-bearing one: a host limit BELOW guest RAM + overhead
+              # would OOM-kill a well-behaved VM.
+              assertion = mib host.MemoryMax >= cls.memoryMiB + microvmOpts.hypervisorMemoryOverheadMiB;
+              message = "${slot.name}: host MemoryMax (${toString host.MemoryMax}) must be >= class memory + hypervisor overhead";
+            }
+            {
+              assertion = (host.TasksMax or 0) > 0 && (host.CPUWeight or 0) > 0 && (host.IOWeight or 0) > 0;
+              message = "${slot.name}: host hypervisor unit must set TasksMax/CPUWeight/IOWeight";
+            }
+          ]
+        ) enabledSlots
+      );
+    in
+    pkgs.runCommand "microvm-limits-and-workspace-safety"
+      {
+        inherit evalMarker;
+        launcherBin = "${hostLauncher}/bin/agent-microvm";
+      }
+      ''
+        # --- ticket 5 D: the seven workspace-safety properties -------------
+        # 1+2: .git and the git COMMON dir must resolve inside the workspace.
+        grep -q "git-dir escapes the workspace" "$launcherBin" \
+          || { echo "missing git-dir escape check" >&2; exit 1; }
+        grep -q "git-common-dir escapes the workspace" "$launcherBin" \
+          || { echo "missing git-common-dir escape check" >&2; exit 1; }
+        # 3+4: every caller-supplied path is canonicalised with realpath, so a
+        # symlink cannot smuggle an escape.
+        grep -q "realpath -e --" "$launcherBin" \
+          || { echo "paths are not canonicalised with realpath" >&2; exit 1; }
+        # 5: cleanup/removal targets stay under the configured roots.
+        grep -q 'rm -rf -- "$clone"' "$launcherBin" \
+          || { echo "workspace removal is not scoped to the clone" >&2; exit 1; }
+        grep -q "refusing a repository that is itself an agent workspace" "$launcherBin" \
+          || { echo "missing workspace-root repository guard" >&2; exit 1; }
+        # 6: standalone clones only.
+        grep -q "clone --no-local" "$launcherBin" \
+          || { echo "clones are not created with --no-local" >&2; exit 1; }
+        # 7: the host launcher must never EVALUATE anything the repository
+        # provides. Guard against the obvious ways that could creep in.
+        for forbidden in "nix-build" "nix build" "nix-shell" "direnv" "npm " "yarn " \
+                         "pnpm " "cargo " "make " "core.hooksPath" "run-hooks"; do
+          if grep -qF -- "$forbidden" "$launcherBin"; then
+            echo "launcher must not invoke repository-provided tooling: found '$forbidden'" >&2
+            exit 1
+          fi
+        done
+        # The retained-usage report must exist and point at the pruning command.
+        grep -q "cmd_usage()" "$launcherBin" \
+          || { echo "launcher has no retained-usage report" >&2; exit 1; }
+        grep -q "workspace-remove <task>" "$launcherBin" \
+          || { echo "usage report does not point at the pruning command" >&2; exit 1; }
+        {
+          echo "microvm-limits-and-workspace-safety:"
+          echo "  launcher: $launcherBin"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (n) AGENT STATE (ticket 5 B): persistence is OPT-IN and TASK-SCOPED.     #
   #     Only registry-DECLARED directories are ever exposed, each slot has   #
   #     its own share source (so the launcher can bind a per-task dir onto   #

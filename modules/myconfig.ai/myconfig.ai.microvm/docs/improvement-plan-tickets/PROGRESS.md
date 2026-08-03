@@ -10,7 +10,7 @@ commit as the work it describes.
 | 2 | `02-add-hermes-support.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 3 | `03-network-and-control-channel-hardening.md` | DONE | A, B, C (3 commits) |
 | 4 | `04-batch-execution-and-lifecycle.md` | DONE | A, B (2 commits) |
-| 5 | `05-resource-classes-and-state-management.md` | IN PROGRESS (A, B done) | — |
+| 5 | `05-resource-classes-and-state-management.md` | DONE | A, B, C+D (3 commits) |
 | 6 | `06-runtime-validation-and-documentation.md` | TODO | — |
 
 Status values: `TODO`, `IN PROGRESS`, `DONE`, `BLOCKED`.
@@ -224,3 +224,20 @@ Split into commits (A: resource classes, B: task-scoped agent state, C: limits
     empty share (no links), link creation, idempotent rerun, empty-dir
     replacement, non-empty-dir preservation.
   - new check `microvm-agent-state`; the shares check now pins exactly four.
+- **Parts C+D (done).** Limits, usage reporting and the workspace-safety review:
+  - guest `agent-job` limits are now derived from the slot's CLASS
+    (`job.nix`'s guestModule became `mkGuestModule slot`): `CPUQuota =
+    vcpu*100%`, `MemoryMax = classRAM - job.guestMemoryHeadroomMiB` (never below
+    half), `TasksMax = job.tasksMax`, on top of the existing `RuntimeMaxSec`.
+  - host-side drop-ins on `microvm@<slot>`: `MemoryMax = classRAM +
+    hypervisorMemoryOverheadMiB` (asserted NEVER below guest RAM + overhead),
+    `TasksMax`, and relative `CPUWeight`/`IOWeight` = 50 so sandboxes yield to
+    interactive host work without a hard quota wasting idle capacity.
+  - new `agent-microvm usage`: retained disk usage per task (workspace clone +
+    task-scoped agent state), the runtime roots, and the pruning command;
+    `workspace-remove` now also drops the task's agent state and archived result.
+  - ticket 5 D re-verified in the BUILT launcher by
+    `microvm-limits-and-workspace-safety`: git-dir/common-dir escape checks,
+    realpath canonicalisation, scoped removal, `--no-local` clones, and a
+    forbidden-tooling grep proving the host never evaluates repo-provided nix /
+    direnv / npm / cargo / make / git hooks.

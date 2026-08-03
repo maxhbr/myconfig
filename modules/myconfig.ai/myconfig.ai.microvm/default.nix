@@ -454,6 +454,48 @@ in
       '';
     };
 
+    hypervisorMemoryOverheadMiB = mkOption {
+      type = types.ints.positive;
+      default = 1024;
+      description = ''
+        RAM (MiB) added to a slot's class memory to obtain the HOST-side
+        `MemoryMax` of its `microvm@<slot>.service`. The hypervisor process,
+        virtiofsd and the guest's page cache all live in that cgroup, so the
+        limit must never be below "guest memory + overhead" — otherwise a
+        perfectly well-behaved VM gets OOM-killed.
+      '';
+    };
+
+    hypervisorTasksMax = mkOption {
+      type = types.ints.positive;
+      default = 512;
+      description = ''
+        `TasksMax` of a slot's `microvm@<slot>.service` (host side): bounds the
+        hypervisor's own threads/processes.
+      '';
+    };
+
+    hypervisorCPUWeight = mkOption {
+      type = types.ints.positive;
+      default = 50;
+      description = ''
+        RELATIVE cgroup CPU weight of a slot's hypervisor unit (systemd default
+        is 100). Below 100 on purpose: agent sandboxes should yield to
+        interactive host work, while still being allowed to use idle capacity
+        (a hard `CPUQuota` would waste it). The per-class `CPUQuota` inside the
+        guest is what bounds the agent itself.
+      '';
+    };
+
+    hypervisorIOWeight = mkOption {
+      type = types.ints.positive;
+      default = 50;
+      description = ''
+        RELATIVE cgroup IO weight of a slot's hypervisor unit (systemd default
+        is 100), so agent disk traffic yields to interactive host work.
+      '';
+    };
+
     guestAgentUid = mkOption {
       type = types.ints.positive;
       default = 1000;
