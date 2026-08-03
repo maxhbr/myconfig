@@ -1,0 +1,26 @@
+# nvfetcher source declarations.
+#
+# nvfetcher pins third-party GitHub sources (rev + hash) into the committed
+# `_sources/generated.nix`, which modules import via `pkgs.fetchFromGitHub`.
+# This keeps such pins *out* of `flake.lock` (so unrelated hosts are not
+# coupled to a shared lock entry) while still allowing automatic bumps: a
+# scheduled CI job runs `nvfetcher` and opens a PR when a rev/hash changes.
+#
+# Regenerate locally with:
+#   nix run nixpkgs#nvfetcher
+#
+# Each entry tracks the default branch of the given repo; the resolved rev and
+# hash are frozen in `_sources/generated.nix` until the next `nvfetcher` run.
+
+# Pi extensions monorepo; the `pi-simplify` package is deployed as a
+# multi-file pi extension by modules/myconfig.ai/programs.pi-coding-agent.
+[pi-extensions]
+src.git = "https://github.com/MattDevy/pi-extensions"
+src.branch = "main"
+fetch.github = "MattDevy/pi-extensions"
+
+# Grafana agent skills, consumed by modules/myconfig.ai/skills/grafana-core.nix.
+[grafana-skills]
+src.git = "https://github.com/grafana/skills"
+src.branch = "main"
+fetch.github = "grafana/skills"
