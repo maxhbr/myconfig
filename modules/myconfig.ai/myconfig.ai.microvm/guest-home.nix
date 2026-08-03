@@ -99,6 +99,65 @@ in
         matchesAny = prefixes: key: lib.any (p: key == p || lib.hasPrefix p key) prefixes;
 
         pick = fileset: prefixes: lib.filterAttrs (name: _: matchesAny prefixes name) fileset;
+
+        # --- agent skills -------------------------------------------------
+        # The host primary user's skills come from TWO mechanisms:
+        #   1. Handcrafted skills (commit, coordinator, playwright-cli, ...)
+        #      are rendered as ordinary `home.file` / `xdg.configFile`
+        #      entries (pi -> `.agents/skills/*`, codex -> `.codex/skills/*`,
+        #      opencode -> `.config/opencode/skills/*`). Those already cross
+        #      the boundary via the `pick` allowlist copy above.
+        #   2. The `programs.agent-skills` framework (mattpocock's skill set)
+        #      installs into the SAME per-agent skills dirs but via a runtime
+        #      `home.activation` rsync of a composed store-path *bundle*, NOT
+        #      as `home.file` entries — so the allowlist copy misses them
+        #      entirely and the guest agents would see no framework skills.
+        #
+        # Bridge mechanism 2 into the copy-of-rendered-store-paths model by
+        # symlinking the host's ALREADY-BUILT bundle (`bundlePath`, a store
+        # path exactly like every other copied `source`) into each enabled
+        # target's skills dir as a recursive `home.file` tree. This pulls the
+        # framework skills into the guest closure and deploys them verbatim
+        # (same `engineering/`+`productivity/` layout the host uses), for
+        # every agent the host enabled a target for (pi, claude, codex,
+        # opencode). Disjoint from the handcrafted leaf names above, so the
+        # two coexist under the same dir.
+        agentSkills = primaryHome.programs.agent-skills or null;
+        skillsEnabled = agentSkills != null && (agentSkills.enable or false);
+
+        # An agent-skills target `dest` is a shell string that may embed
+        # `$HOME` or a `${VAR:-$HOME/...}` fallback (e.g. claude's
+        # `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills`). `home.file` keys are
+        # static paths relative to $HOME, so reduce each dest to that form —
+        # mirroring the vendored module's own `link`-structure handling.
+        staticSkillDest =
+          dest:
+          let
+            # Resolve a `${VAR:-$HOME/...}` fallback (e.g. claude's
+            # `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills`) by dropping the
+            # `${VAR:-` prefix and the matching `}` — leaving the plain
+            # `$HOME/...` form the else-branch below strips.
+            resolved =
+              if lib.hasPrefix "\${" dest then
+                lib.replaceStrings [ "}" ] [ "" ] (lib.last (lib.splitString ":-" dest))
+              else
+                dest;
+          in
+          if lib.hasPrefix "$HOME/" resolved then
+            lib.removePrefix "$HOME/" resolved
+          else
+            throw "myconfig.ai.microvm guest skills: unsupported agent-skills dest '${dest}'";
+
+        skillFiles = lib.optionalAttrs skillsEnabled (
+          lib.mapAttrs' (
+            _: t:
+            lib.nameValuePair (staticSkillDest t.dest) {
+              source = agentSkills.bundlePath;
+              recursive = true;
+              force = true;
+            }
+          ) (lib.filterAttrs (_: t: t.enable or false) agentSkills.targets)
+        );
       in
       lib.optionalAttrs dc.enable {
         home-manager = {
@@ -106,10 +165,11 @@ in
           useUserPackages = true;
           users.agent = {
             home.stateVersion = "25.11";
-            # Copy the allowlisted, already-rendered file entries verbatim.
-            # Their `source` fields are store paths, so no host home module is
-            # re-evaluated inside the guest.
-            home.file = pick primaryHome.home.file dc.homeFilePrefixes;
+            # Copy the allowlisted, already-rendered file entries verbatim
+            # (their `source` fields are store paths, so no host home module
+            # is re-evaluated inside the guest), plus the framework skill
+            # bundle deployed per enabled agent target (see `skillFiles`).
+            home.file = (pick primaryHome.home.file dc.homeFilePrefixes) // skillFiles;
             xdg.configFile = pick primaryHome.xdg.configFile dc.xdgConfigPrefixes;
           };
         };

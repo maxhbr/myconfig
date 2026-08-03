@@ -252,9 +252,27 @@ let
     # opencode.json, ...) hardcode `http://127.0.0.1:<litellmPort>/v1` — the
     # host's own loopback LiteLLM address. Presenting the SAME loopback
     # endpoint inside the guest lets those copied configs work verbatim.
+    #
+    # Per-agent env coverage of the four guest agents:
+    #   - pi / opencode read the OpenAI-compatible LiteLLM route from their
+    #     copied dotfiles AND honour OPENAI_BASE_URL / OPENAI_API_KEY.
+    #   - codex has no litellm provider in its copied config.toml and falls
+    #     back to its built-in `openai` provider, which reads
+    #     OPENAI_BASE_URL / OPENAI_API_KEY (the same vars the host bwrap
+    #     wrapper forwards).
+    #   - claude-code does NOT read OPENAI_*; it uses the Anthropic-native
+    #     env vars ANTHROPIC_BASE_URL (root, no `/v1`; the client appends
+    #     `/v1/messages`) + ANTHROPIC_API_KEY. Point it at LiteLLM's
+    #     Anthropic-compatible `/v1/messages` endpoint so it too routes
+    #     through the forwarder instead of the real Anthropic API (which the
+    #     proxy-only firewall would block anyway).
+    # All keys are placeholders — the real upstream credential lives only in
+    # the host LiteLLM proxy, never in the guest (§17).
     environment.variables = {
       OPENAI_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}/v1";
       OPENAI_API_KEY = "not-needed";
+      ANTHROPIC_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}";
+      ANTHROPIC_API_KEY = "not-needed";
     };
 
     # --- guest-side loopback → bridge LiteLLM forwarder ------------------
