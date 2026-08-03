@@ -127,6 +127,20 @@ let
 
       log() { printf 'agent-job: %s\n' "$*" >&2; }
 
+      # Structured guest-side lifecycle events (ticket 6 B). They land on the
+      # guest console, which microvm.nix captures into the HOST journal
+      # (`journalctl -u microvm@<slot>`), so host and guest transitions can be
+      # correlated. Never contains the prompt, a key or any env var.
+      emit_event() {
+          local event="$1" state="''${2-}" exit_code="''${3-}"
+          jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg event "$event" \
+              --arg task "$task_id" --arg agent "$agent" --arg state "$state" \
+              --arg exit_code "$exit_code" --arg host "$(uname -n)" \
+              '{ts:$ts, event:$event, task:$task, agent:$agent, slot:$host,
+                state:$state, exit_code:$exit_code}
+               | with_entries(select(.value != ""))' >&2
+      }
+
       task_id="unknown"
       agent="unknown"
       started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -231,6 +245,7 @@ let
 
       log "running agent '$agent' for task '$task_id' (timeout ''${timeout_s}s)"
       write_result running 0 false
+      emit_event agent-started running
 
       rc=0
       case "$agent" in
@@ -253,6 +268,11 @@ let
 
       log "agent '$agent' finished: state=$state exit=$rc"
       write_result "$state" "$rc" "$timed_out"
+      if [[ "$state" == "timed-out" ]]; then
+          emit_event timeout "$state" "$rc"
+      else
+          emit_event agent-finished "$state" "$rc"
+      fi
 
       # Exit 0 for a *reported* agent failure: the authoritative outcome is
       # result.json, and a failed unit would only add noise (and, with

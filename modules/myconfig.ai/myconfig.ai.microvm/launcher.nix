@@ -189,6 +189,9 @@ let
           )
         )
       })
+      # ---- structured lifecycle logs (ticket 6 B) ------------------------
+      readonly LOGS_DIR="$RUNTIME_ROOT/logs"
+      readonly LOG_MAX_BYTES=${toString cfg.taskLogMaxBytes}
       readonly RUN_DIR="/run/agent-microvms"
       readonly ALLOC_LOCK="$RUN_DIR/allocator.lock"
       readonly SLOTS_DIR="$RUNTIME_ROOT/slots"
@@ -204,6 +207,70 @@ let
           exit 1
       }
       log() { printf '%s: %s\n' "$PROG" "$*" >&2; }
+
+      # ==== structured lifecycle events (ticket 6 B) =======================
+      # One JSON object per state transition, emitted to
+      #   * the operator's stderr (so an interactive run shows its own history),
+      #   * the systemd JOURNAL under the `agent-microvm` tag (discoverable with
+      #     `journalctl -t agent-microvm`), and
+      #   * for batch tasks, a BOUNDED per-task log
+      #     <runtimeRoot>/logs/<task>.jsonl (rotated at $LOG_MAX_BYTES, one
+      #     generation kept), so a finished job's history survives the slot.
+      #
+      # Deliberately NEVER logged: api keys, prompts (only the prompt FILE's
+      # path and byte size), repository credentials, secret env vars, private
+      # key material. `emit_event` takes only scalar, non-secret fields.
+      #
+      # EV_* are the ambient fields of the current operation; subcommands set
+      # them once so every later event carries the same identity.
+      EV_TASK=""
+      EV_SLOT=""
+      EV_AGENT=""
+      EV_CLASS=""
+      EV_MODE=""
+      set_event_context() {
+          EV_TASK="''${1-}"; EV_SLOT="''${2-}"; EV_AGENT="''${3-}"
+          EV_CLASS="''${4-}"; EV_MODE="''${5-}"
+      }
+
+      # emit_event <event> [<state>] [<exit_code>] [<message>]
+      emit_event() {
+          local event="$1" state="''${2-}" exit_code="''${3-}" message="''${4-}"
+          local line
+          line="$(jq -nc \
+              --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --arg event "$event" \
+              --arg task "$EV_TASK" --arg slot "$EV_SLOT" --arg agent "$EV_AGENT" \
+              --arg class "$EV_CLASS" --arg mode "$EV_MODE" \
+              --arg state "$state" --arg exit_code "$exit_code" \
+              --arg message "$message" \
+              '{ts:$ts, event:$event, task:$task, slot:$slot, agent:$agent,
+                resource_class:$class, mode:$mode, state:$state,
+                exit_code:$exit_code, message:$message}
+               | with_entries(select(.value != ""))')"
+          printf '%s\n' "$line" >&2
+          # Journal: best-effort, never fatal (a launcher must work even when
+          # the journal is unavailable).
+          logger --tag "$PROG" --priority user.info -- "$line" 2>/dev/null || true
+          append_task_log "$line"
+      }
+
+      # Bounded per-task log: rotate ONE generation once the file exceeds
+      # $LOG_MAX_BYTES, so a long-running or noisy task cannot fill the disk.
+      append_task_log() {
+          local line="$1" f
+          [[ -n "$EV_TASK" ]] || return 0
+          [[ -d "$LOGS_DIR" ]] || mkdir -p -- "$LOGS_DIR" || return 0
+          f="$LOGS_DIR/$EV_TASK.jsonl"
+          if [[ -f "$f" ]]; then
+              local size
+              size="$(stat -c %s -- "$f" 2>/dev/null || echo 0)"
+              if (( size >= LOG_MAX_BYTES )); then
+                  mv -f -- "$f" "$f.1" 2>/dev/null || true
+              fi
+          fi
+          printf '%s\n' "$line" >> "$f" 2>/dev/null || true
+      }
 
       require_root() {
           if [[ "$(id -u)" -ne 0 ]]; then
@@ -949,9 +1016,16 @@ let
           trap on_exit EXIT
           trap 'exit 130' INT TERM
 
+          local run_mode="detached"
+          (( attach )) && run_mode="attached"
+          set_event_context "$task" "" "$agent" "$rclass" "$run_mode"
+          emit_event task-submitted
+
           allocate_slot "$rclass" "$wait_for"
           slot="$ALLOC_SLOT"
           token="$ALLOC_TOKEN"
+          set_event_context "$task" "$slot" "$agent" "$rclass" "$run_mode"
+          emit_event slot-allocated
 
           local clone ip
           ip="$(slot_ip "$slot")"
@@ -960,6 +1034,7 @@ let
           # header) so a failure exits cmd_run and its EXIT trap cleans up.
           clone="$WORKSPACE_ROOT/$task"
           create_clone "$top" "$task" "$branch"
+          emit_event workspace-created
           setup_bind_mount "$slot" "$clone"
           # An interactive slot must not accidentally pick up a stale batch job.
           clear_job "$slot"
@@ -970,11 +1045,10 @@ let
           else
               clear_agent_state_slot "$slot"
           fi
+          emit_event vm-start-requested
           start_vm "$slot"
 
           # Persist the full session record for status/list (§34). No secrets.
-          local run_mode="detached"
-          (( attach )) && run_mode="attached"
           write_session_marker "$slot" "$token" "$run_mode" "$task" "$top" \
               "$clone" "$agent" "$branch" "" "$persist"
 
@@ -985,13 +1059,17 @@ let
               # stopped and the bind unmounted, but the workspace clone is kept.
               require_known_hosts
               wait_ready "$ip" || die "guest not ready; tearing down slot $slot (workspace kept at $clone)"
+              emit_event vm-ready
+              emit_event agent-started
               log "attaching to $slot; running 'agent-run $agent' in /workspace"
               ssh "''${SSH_VERIFY_OPTS[@]}" \
                   ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
                   -t "$SSH_USER@$ip" -- agent-run "$agent" || true
               # Foreground session finished: tear the VM down, keep the clone.
+              emit_event agent-finished
               log "session ended; tearing down $slot (workspace kept at $clone)"
               cleanup_slot "$slot"
+              emit_event cleanup-completed
               committed=1
               trap - EXIT INT TERM
               return 0
@@ -1075,15 +1153,22 @@ let
           trap on_exit EXIT
           trap 'exit 130' INT TERM
 
+          set_event_context "$task" "" "$agent" "$rclass" "batch"
+          # The prompt's PATH and SIZE are safe to log; its CONTENT never is.
+          emit_event task-submitted "" "" "prompt=$prompt_real ($(stat -c %s -- "$prompt_real") bytes), timeout=''${timeout_s}s"
+
           allocate_slot "$rclass" "$wait_for"
           slot="$ALLOC_SLOT"
           token="$ALLOC_TOKEN"
+          set_event_context "$task" "$slot" "$agent" "$rclass" "batch"
+          emit_event slot-allocated
 
           local clone ip
           ip="$(slot_ip "$slot")"
           log "allocated slot $slot ($ip; class $rclass, $(slot_vcpu "$slot") vCPU, $(slot_mem "$slot") MiB) for batch task '$task'"
           clone="$WORKSPACE_ROOT/$task"
           create_clone "$top" "$task" "$branch"
+          emit_event workspace-created
           setup_bind_mount "$slot" "$clone"
           prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s"
           if (( persist )); then
@@ -1093,21 +1178,33 @@ let
           fi
           write_session_marker "$slot" "$token" "batch" "$task" "$top" \
               "$clone" "$agent" "$branch" "$timeout_s" "$persist"
+          emit_event vm-start-requested
           start_vm "$slot"
 
           # --- wait for the structured result -------------------------------
           # HOST timeout = the job's own timeout + a grace period, so the guest
           # (whose `timeout(1)` fires first) still gets to write result.json.
-          local deadline=$(( timeout_s + JOB_GRACE )) waited=0 state="" rc=70
+          local deadline=$(( timeout_s + JOB_GRACE )) waited=0 state="" rc=70 last_state=""
           log "waiting up to ''${deadline}s for the job result"
           while :; do
               state="$(job_state "$slot" || true)"
+              # Mirror the GUEST's state transitions into the host event log, so
+              # one stream tells the whole story.
+              if [[ -n "$state" && "$state" != "$last_state" ]]; then
+                  case "$state" in
+                      running) emit_event agent-started "$state" ;;
+                      completed|failed|infrastructure-error) emit_event agent-finished "$state" ;;
+                      timed-out) emit_event timeout "$state" ;;
+                  esac
+                  last_state="$state"
+              fi
               case "$state" in
                   completed|failed|timed-out|infrastructure-error) break ;;
               esac
               if (( waited >= deadline )); then
                   log "job did not finish within ''${deadline}s; stopping the VM"
                   state="timed-out"
+                  emit_event timeout "$state" "" "host deadline ''${deadline}s exceeded"
                   break
               fi
               # A guest that died without writing a result must not hang us for
@@ -1146,6 +1243,8 @@ let
           # Teardown: stop the VM, unmount, drop job data + marker. The
           # workspace clone is ALWAYS kept (§35).
           cleanup_slot "$slot"
+          emit_event vm-stopped "$state"
+          emit_event cleanup-completed "$state" "$rc"
           committed=1
           trap - EXIT INT TERM
 
@@ -1197,11 +1296,15 @@ let
                 message:"cancelled by the operator"}' > "$archived.tmp" \
               && mv -f -- "$archived.tmp" "$archived"
 
+          set_event_context "$task" "$slot" "$(marker_field "$slot" agent || true)" \
+              "$(slot_class "$slot")" "$(marker_field "$slot" mode || true)"
+          emit_event cancellation "cancelled" "130"
           log "cancelling task '$task' on slot $slot (workspace kept)"
           # Requests a clean shutdown first, waits a bounded interval, then
           # force-kills — all inside cleanup_slot/stop_vm — and unmounts + drops
           # the runtime job data. Token-guarded.
           cleanup_slot_owned "$slot" "$token"
+          emit_event cleanup-completed "cancelled" "130"
           log "cancelled; result recorded at $archived"
       }
 
@@ -1270,6 +1373,8 @@ let
               fi
 
               printf '%s: recovering — %s\n' "$slot" "$reason"
+              set_event_context "''${task:-}" "$slot" "" "$(slot_class "$slot")" "''${mode:-}"
+              emit_event recovery-action "" "" "$reason"
               if (( active )); then
                   printf '%s:   stopping %s\n' "$slot" "microvm@$slot.service"
                   stop_vm "$slot"
@@ -1350,8 +1455,13 @@ let
           [[ $# -ge 1 ]] || die "stop: <slot|task> required"
           local slot
           slot="$(resolve_slot "$1")" || die "no such slot or task: $1"
+          set_event_context "$(marker_field "$slot" task || true)" "$slot" \
+              "$(marker_field "$slot" agent || true)" "$(slot_class "$slot")" \
+              "$(marker_field "$slot" mode || true)"
           log "stopping $slot (workspace kept)"
           cleanup_slot "$slot"
+          emit_event vm-stopped
+          emit_event cleanup-completed
       }
 
       cmd_destroy() {

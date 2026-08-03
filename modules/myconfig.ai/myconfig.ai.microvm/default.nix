@@ -496,6 +496,16 @@ in
       '';
     };
 
+    taskLogMaxBytes = mkOption {
+      type = types.ints.positive;
+      default = 1048576;
+      description = ''
+        Size cap (bytes) of a per-task structured lifecycle log under
+        `<runtimeRoot>/logs/<task>.jsonl`. When exceeded, ONE generation is
+        rotated to `<task>.jsonl.1`, so batch logs are retained but bounded.
+      '';
+    };
+
     guestAgentUid = mkOption {
       type = types.ints.positive;
       default = 1000;

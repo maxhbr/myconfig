@@ -681,6 +681,36 @@ activated together with the noninteractive control channel that uses it
 
 ---
 
+## Structured lifecycle events
+
+Every transition is emitted as **one JSON record** — to the operator's stderr,
+to the journal under the `agent-microvm` tag, and (per task) to a bounded log:
+
+```bash
+journalctl -t agent-microvm -f                     # all lifecycle events
+journalctl -t agent-microvm | jq -c 'select(.task=="fix-parser")'
+cat /var/lib/agent-microvms/logs/fix-parser.jsonl   # per-task history
+```
+
+Events: `task-submitted`, `slot-allocated`, `workspace-created`,
+`vm-start-requested`, `vm-ready`, `agent-started`, `agent-finished`, `timeout`,
+`cancellation`, `vm-stopped`, `cleanup-completed`, `recovery-action`. Each record
+carries `ts`, `event`, `task`, `slot`, `agent`, `resource_class`, `mode`, and —
+where applicable — `state` and `exit_code`.
+
+The guest emits its own `agent-started` / `agent-finished` / `timeout` records to
+the guest console, which microvm.nix captures into
+`journalctl -u microvm@<slot>`, so host and guest transitions can be correlated.
+
+Per-task logs are **bounded**: at `taskLogMaxBytes` (default 1 MiB) one
+generation is rotated to `<task>.jsonl.1`.
+
+**Never logged:** API keys, prompt *content* (only the prompt file's path and
+byte size), repository credentials, secret environment variables, private key
+material.
+
+---
+
 ## Logs
 
 Everything is supervised by systemd, so use the journal:

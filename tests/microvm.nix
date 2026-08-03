@@ -905,6 +905,65 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # (p) OBSERVABILITY (ticket 6 B): every lifecycle transition is emitted as  #
+  #     ONE structured JSON record, to stderr + the journal (tag             #
+  #     `agent-microvm`) + a BOUNDED per-task log; the guest emits its own    #
+  #     transitions; and nothing secret is ever logged.                       #
+  # ---------------------------------------------------------------------- #
+  microvm-observability =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      guestJob = findPkg guest0Cfg.environment.systemPackages "agent-job";
+      evalMarker = mkEvalCheck "microvm-observability-eval" [
+        {
+          assertion = microvmOpts.taskLogMaxBytes > 0;
+          message = "per-task logs must be bounded (taskLogMaxBytes > 0)";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-observability"
+      {
+        inherit evalMarker;
+        launcherBin = "${hostLauncher}/bin/agent-microvm";
+        guestJobBin = "${guestJob}/bin/agent-job";
+        # The transitions ticket 6 B requires from the HOST side.
+        hostEvents = "task-submitted slot-allocated workspace-created vm-start-requested vm-ready agent-started agent-finished timeout cancellation vm-stopped cleanup-completed recovery-action";
+        # ... and from the guest side.
+        guestEvents = "agent-started agent-finished timeout";
+      }
+      ''
+        for e in $hostEvents; do
+          grep -q "emit_event $e" "$launcherBin" \
+            || { echo "host launcher never emits the '$e' lifecycle event" >&2; exit 1; }
+        done
+        for e in $guestEvents; do
+          grep -q "emit_event $e" "$guestJobBin" \
+            || { echo "guest runner never emits the '$e' lifecycle event" >&2; exit 1; }
+        done
+        # Records must carry the identifying fields.
+        for f in task slot agent resource_class state exit_code; do
+          grep -q "$f:" "$launcherBin" \
+            || { echo "lifecycle records lack the '$f' field" >&2; exit 1; }
+        done
+        # Discoverable in the journal, and bounded on disk.
+        grep -q 'logger --tag "$PROG"' "$launcherBin" \
+          || { echo "lifecycle events are not sent to the journal" >&2; exit 1; }
+        grep -q "LOG_MAX_BYTES" "$launcherBin" \
+          || { echo "per-task logs are not bounded" >&2; exit 1; }
+        # The prompt CONTENT must never be logged: the launcher may reference the
+        # prompt file's path/size, but must not cat/read it into a log line.
+        if grep -qE 'emit_event[^\n]*\$\(cat' "$launcherBin"; then
+          echo "launcher logs prompt content" >&2; exit 1
+        fi
+        {
+          echo "microvm-observability:"
+          echo "  host events : $hostEvents"
+          echo "  guest events: $guestEvents"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (o) LIMITS + WORKSPACE SAFETY (ticket 5 C/D): per-class guest limits, the #
   #     host-side hypervisor-unit limits (never BELOW guest RAM + overhead),  #
   #     the retained-usage report, and a re-verification of the seven         #

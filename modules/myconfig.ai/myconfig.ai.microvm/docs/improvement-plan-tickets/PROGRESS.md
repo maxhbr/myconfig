@@ -11,7 +11,7 @@ commit as the work it describes.
 | 3 | `03-network-and-control-channel-hardening.md` | DONE | A, B, C (3 commits) |
 | 4 | `04-batch-execution-and-lifecycle.md` | DONE | A, B (2 commits) |
 | 5 | `05-resource-classes-and-state-management.md` | DONE | A, B, C+D (3 commits) |
-| 6 | `06-runtime-validation-and-documentation.md` | TODO | — |
+| 6 | `06-runtime-validation-and-documentation.md` | IN PROGRESS (B done) | — |
 
 Status values: `TODO`, `IN PROGRESS`, `DONE`, `BLOCKED`.
 
@@ -241,3 +241,21 @@ Split into commits (A: resource classes, B: task-scoped agent state, C: limits
     realpath canonicalisation, scoped removal, `--no-local` clones, and a
     forbidden-tooling grep proving the host never evaluates repo-provided nix /
     direnv / npm / cargo / make / git hooks.
+
+### Ticket 6 — runtime validation, observability, documentation
+
+Split into commits (B: observability, A: real-KVM validation suite, C+D: doc
+sync + backward-compat confirmation).
+
+- **Part B (done).** Structured lifecycle events: `emit_event` writes ONE JSON
+  record per transition to stderr, to the journal (`journalctl -t agent-microvm`)
+  and to a BOUNDED per-task log (`<runtimeRoot>/logs/<task>.jsonl`, one rotated
+  generation at `taskLogMaxBytes`). Records carry ts/event/task/slot/agent/
+  resource_class/mode/state/exit_code; the guest runner emits its own
+  agent-started/agent-finished/timeout records to the console (captured by
+  `microvm@<slot>`), so host and guest streams correlate. Prompt CONTENT, keys,
+  credentials and env vars are never logged (only the prompt file's path+size).
+  VERIFIED BY RUNNING: full batch stream (submitted→allocated→created→start→
+  finished→stopped→cleanup), the timeout path, cancellation, recovery actions,
+  and a grep proving no secrets/prompt text reach the task log. New check
+  `microvm-observability`.
