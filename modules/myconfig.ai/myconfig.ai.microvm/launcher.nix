@@ -251,6 +251,17 @@ let
           [[ "$gcd" == "$cr"/* ]] || die "git-common-dir escapes the workspace: $gcd"
       }
 
+      # Creates the standalone clone at $WORKSPACE_ROOT/<task>. Runs in the
+      # CALLER's shell (NOT a command substitution) so a `die` here exits
+      # cmd_run directly and its EXIT trap fires with `slot` still in scope,
+      # tearing the just-allocated slot down. The clone path is deterministic
+      # ($WORKSPACE_ROOT/<task>), so the caller derives it itself rather than
+      # capturing it from this function's stdout. Running create_clone in a
+      # `$(...)` subshell instead would fire the EXIT trap inside that
+      # subshell, where the enclosing `slot`/`committed` locals are NOT in
+      # scope: cleanup would no-op AND the parent trap would never run, so a
+      # failure (e.g. "workspace already exists") both tripped `set -u`
+      # ("slot: unbound variable") and leaked the allocated slot forever.
       create_clone() {
           local repo="$1" task="$2" branch="$3"
           local clone="$WORKSPACE_ROOT/$task"
@@ -289,7 +300,6 @@ let
           # checkout so freshly written git metadata is owned by the agent too.
           chown -R "$GUEST_AGENT_UID:$GUEST_AGENT_GID" -- "$clone" \
               || die "failed to chown workspace clone to $GUEST_AGENT_UID:$GUEST_AGENT_GID: $clone"
-          printf '%s' "$clone"
       }
 
       # ---- §26 bind-mount lifecycle --------------------------------------
@@ -494,7 +504,10 @@ let
           ip="$(slot_ip "$slot")"
           mac="$(slot_mac "$slot")"
           log "allocated slot $slot ($ip)"
-          clone="$(create_clone "$top" "$task" "$branch")"
+          # Deterministic clone path; create_clone runs in THIS shell (see its
+          # header) so a failure exits cmd_run and its EXIT trap cleans up.
+          clone="$WORKSPACE_ROOT/$task"
+          create_clone "$top" "$task" "$branch"
           setup_bind_mount "$slot" "$clone"
           start_vm "$slot"
 

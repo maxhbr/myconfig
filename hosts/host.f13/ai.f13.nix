@@ -29,7 +29,8 @@
         # needed.
         microvm = {
           enable = true;
-          slotCount = 4;
+          # Reduced to a single slot for testing.
+          slotCount = 1;
           defaultVcpu = 4;
           defaultMemoryMiB = 8192;
           allowPublicInternet = false;
