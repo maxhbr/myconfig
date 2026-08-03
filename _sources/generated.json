@@ -1,0 +1,23 @@
+{
+    "grafana-skills": {
+        "cargoLock": null,
+        "date": "2026-07-31",
+        "extract": null,
+        "name": "grafana-skills",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
+            "name": null,
+            "owner": "grafana",
+            "repo": "skills",
+            "rev": "80bb2938892c71f27360c936e68a27fa018e086f",
+            "sha256": "sha256-dDmINDx9AmIUyDkNp8+dzjItErqAWkiq8zF03zgoZg0=",
+            "sparseCheckout": [],
+            "type": "github"
+        },
+        "version": "80bb2938892c71f27360c936e68a27fa018e086f"
+    }
+}
