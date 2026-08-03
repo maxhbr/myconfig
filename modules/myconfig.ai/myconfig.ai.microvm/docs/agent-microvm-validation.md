@@ -34,6 +34,48 @@ config/eval-test evidence, and a **§48-format final report**.
 
 ---
 
+## 0. Addendum — improvement tickets 1–6 (2026-08-03)
+
+The six improvement tickets under
+[`improvement-plan-tickets/`](./improvement-plan-tickets/) landed **after** the
+phase-8 record below. What changed for validation purposes:
+
+- **The check suite grew** from 7 to 14 named `microvm-*` checks. The current
+  list is authoritative in `tests/microvm.nix`; at the time of writing:
+  `microvm-eval-disabled`, `microvm-eval-enabled`, `microvm-slot-uniqueness`,
+  `microvm-eval-rejects-invalid`, `microvm-eval-workspace-share`,
+  `microvm-guest-evaluates`, `microvm-launcher-shellcheck`,
+  `microvm-agent-registry`, `microvm-agent-executables`,
+  `microvm-host-identity`, `microvm-network-profiles`, `microvm-batch-jobs`,
+  `microvm-resource-classes`, `microvm-agent-state`,
+  `microvm-limits-and-workspace-safety`, `microvm-observability`. All were built
+  green while the tickets were implemented.
+- **Slot names changed** from `agent-<i>` to `agent-<class>-<i>` (fixed resource
+  classes, ticket 5 A), so the phase-8 out-paths and `agent-0` references below
+  are historical.
+- **The guest has four shares now** (workspace rw, hostkey ro, job rw,
+  agent-state rw), not one — see
+  [the architecture document](./agent-microvm-architecture.md). The "exactly one
+  share" statements below are historical; the current invariant is "exactly these
+  four, nothing else", asserted by `microvm-eval-workspace-share`.
+- **Shell components were additionally exercised by RUNNING them** (not just
+  shellcheck): the guest batch runner under `bwrap` with a stubbed agent and a
+  faked `/run/agent-job` + `/workspace`; the host launcher against stubbed
+  `systemctl`/`mount`/`findmnt` with a stub that simulates a guest writing
+  `result.json`; and the guest state linker under `bwrap`. Covered: batch
+  success/failure/timeout/no-result paths and exit codes, every spec-rejection
+  path, allocation/teardown state, token-guarded cancel (accept + refuse),
+  all `recover` branches (dry-run and real), per-class allocation incl. "class
+  full" without substitution and the bounded `--wait`, opt-in agent-state
+  persistence incl. task isolation, and the structured event stream.
+- **The real-KVM tier is still NOT executed.** It is now a repeatable suite —
+  [`runtime-validation.sh`](../runtime-validation.sh) with
+  [its guide](./agent-microvm-runtime-validation.md) — but it has not been run.
+  The honesty boundary below therefore still holds, unchanged, for everything
+  runtime.
+
+---
+
 ## 1. Executed — EVAL / BUILD validation (plan §39)
 
 All commands were run from the repository root. Store paths are recorded so the

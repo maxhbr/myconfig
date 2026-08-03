@@ -5,6 +5,17 @@ SPDX-License-Identifier: MIT
 
 # `myconfig.ai.microvm` — Merge-Readiness Code Review (branch `improve-sandboxing`)
 
+> [!NOTE]
+> **Historical (pre-improvement-tickets).** This review was written against the
+> phase-8 implementation. Several findings have since been addressed by the six
+> improvement tickets — notably **M3** (`StrictHostKeyChecking=no`): the launcher
+> now verifies guests strictly against per-slot SSH host identities, and
+> guest↔guest MITM is additionally blocked at layer 2. Slot names, the share set
+> and the check list have also changed. See
+> [`improvement-plan-tickets/PROGRESS.md`](./improvement-plan-tickets/PROGRESS.md)
+> and the [security model](./agent-microvm-security-model.md) for the current
+> state.
+
 Companion to [`agent-microvm.md`](./agent-microvm.md) (user/operator docs),
 [`agent-microvm-validation.md`](./agent-microvm-validation.md) (eval/build
 results + §45 checklist) and

@@ -12,25 +12,48 @@ Hypervisor microVM** (via the `microvm.nix` flake input) with:
 
 - its **own kernel** and a self-contained guest store disk (the host
   `/nix/store` is **not** shared),
-- a **disposable** root and `/home/agent`; **only `/workspace` persists**,
+- a **disposable** root and `/home/agent`; **only `/workspace` persists** (plus,
+  opt-in and task-scoped, an agent's declared state directories),
 - a single writable **virtiofs `/workspace`** mount that is a standalone git
   clone of your repo,
-- a dedicated **private bridge** (`agentbr0`, `192.168.83.0/24`), and
+- a dedicated **private bridge** (`agentbr0`, `192.168.83.0/24`) with **per-TAP
+  layer-2 isolation**, and
 - model-API access restricted to the **host LiteLLM proxy** through a
   bridge-only forwarding endpoint — no upstream API key ever reaches the
   guest.
 
+Both an **interactive** (`run --attach`) and an **unattended batch**
+(`submit`) execution path are supported, with structured results, hard
+timeouts, cancellation and recovery.
+
 Every agent process and guest workload is treated as potentially hostile. The
 secure default prioritises **isolation over convenience**.
 
-> **Status / maturity.** The module has been built and evaluated
-> (`nix flake check`, `test-f13` toplevel, real-`f13` eval). The guest
-> `/workspace` virtiofs share and the §11 UID/GID ownership strategy are now
-> **wired up in config** (see [The `/workspace` share & ownership](#the-workspace-share--ownership)),
-> and locked down by an eval test. The end-to-end *runtime* path (actually
-> booting a guest and writing to `/workspace` on live KVM) has **not** yet
-> been exercised. Read the [Limitations](#limitations) section before relying
-> on it — several controls are still only eval-tested.
+> **Status / maturity.** Everything described here is implemented and covered by
+> the eval/build tier (`nix flake check` — see
+> [`agent-microvm-validation.md`](./agent-microvm-validation.md) for recorded
+> results and the check list). Shell code is additionally exercised by running
+> the built launcher and guest runners against stubbed systemd/mounts and a
+> faked guest filesystem.
+>
+> The **real-KVM tier has NOT been executed**: no guest has been booted, no
+> packet moved and no cgroup limit observed from the environment this was
+> developed in. The procedure exists and is repeatable —
+> [`runtime-validation.sh`](../runtime-validation.sh) plus
+> [the test guide](./agent-microvm-runtime-validation.md) — but until it is run
+> on `f13`, treat every *runtime* property (firewall enforcement, L2 isolation,
+> credential absence, limit containment) as **unverified by measurement**. Read
+> [Limitations](#limitations) first.
+
+### Companion documents
+
+| Document | Contents |
+| --- | --- |
+| [Architecture](./agent-microvm-architecture.md) | prebuilt slot pool, workspace indirection, guest store, network path, credential boundary, interactive vs batch path, state persistence, resource classes |
+| [Operator guide](./agent-microvm-operator-guide.md) | exact procedures: start, submit, status, attach, cancel, collect, remove, recover, logs |
+| [Security model](./agent-microvm-security-model.md) | trusted vs untrusted components, what the VM boundary protects, what virtiofs still shares, mitigated attacks, residual risks |
+| [Runtime validation guide](./agent-microvm-runtime-validation.md) | the real-KVM test procedure and its (not yet executed) status |
+| [Recorded validation results](./agent-microvm-validation.md) | what has actually been executed, with out-paths |
 
 ---
 
@@ -47,12 +70,13 @@ It is enabled **only on `f13`**, and **explicitly** — never via the broad
 ```nix
 myconfig.ai.microvm = {
   enable = true;
-  slotCount = 4;          # agent-0 .. agent-3 (max concurrent sandboxes)
-  defaultVcpu = 4;        # vCPUs per guest
-  defaultMemoryMiB = 8192;# guest RAM (MiB) per guest
-  allowPublicInternet = false;
-  allowPrivateNetworks = false;
-  allowInterVmTraffic = false;
+  # Fixed, prebuilt resource classes → slots agent-<class>-<i>.
+  resourceClasses = lib.mkForce {
+    small  = { count = 1; vcpu = 2; memoryMiB = 4096; };
+    normal = { count = 1; vcpu = 4; memoryMiB = 8192; };
+  };
+  networkProfile = "proxy-only";   # the secure default
+  passwordlessControl = true;      # operator convenience on an interactive laptop
   sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
 };
 ```
@@ -607,7 +631,7 @@ detached mode) and is never recovered.
 ```bash
 sudo agent-microvm list             # one line per slot
 sudo agent-microvm status           # detailed, all slots
-sudo agent-microvm status agent-0   # a single slot
+sudo agent-microvm status agent-normal-0   # a single slot
 sudo agent-microvm status <task>    # resolve a running task to its slot
 ```
 
@@ -625,9 +649,9 @@ lock owner — **never** secrets (the allocation token is not printed).
 ## Connecting
 
 ```bash
-sudo agent-microvm ssh agent-0            # interactive shell as guest `agent`
-sudo agent-microvm ssh agent-0 -- id      # run a command
-sudo agent-microvm console agent-0        # follow the serial console (journal)
+sudo agent-microvm ssh agent-normal-0     # interactive shell as guest `agent`
+sudo agent-microvm ssh agent-normal-0 -- id  # run a command
+sudo agent-microvm console agent-normal-0    # follow the serial console (journal)
 ```
 
 `ssh` verifies the guest **strictly**
@@ -716,10 +740,10 @@ material.
 Everything is supervised by systemd, so use the journal:
 
 ```bash
-journalctl -u microvm@agent-0.service     # the guest VM (Cloud Hypervisor + serial console)
+journalctl -u microvm@agent-normal-0.service   # the guest VM (Cloud Hypervisor + serial console)
 journalctl -u agent-litellm-proxy.service # the bridge-only LiteLLM forwarder
 journalctl -u agent-microvm-agentbr0-disable-ipv6.service  # bridge IPv6-disable oneshot
-journalctl -u agent-microvm-attach-agent-0.service         # enslave + L2-isolate TAP vm-agent-0
+journalctl -u agent-microvm-attach-agent-normal-0.service   # enslave + L2-isolate TAP vm-normal-0
 journalctl -u agent-microvm-hostkeys.service               # per-slot SSH host keys + known_hosts
 ```
 
@@ -741,8 +765,8 @@ clone except `workspace-remove`.**
 | `workspace-remove <task> [--force]` | (must already be stopped) | — | — | **deleted** |
 
 ```bash
-sudo agent-microvm stop agent-0             # end the session, keep everything on disk
-sudo agent-microvm destroy agent-0          # clear ephemeral slot runtime, keep the clone
+sudo agent-microvm stop agent-normal-0      # end the session, keep everything on disk
+sudo agent-microvm destroy agent-normal-0   # clear ephemeral slot runtime, keep the clone
 sudo agent-microvm workspace-remove feature-name   # delete the standalone clone
 ```
 
@@ -967,6 +991,41 @@ What the module actually enforces (plan §5, §13–§18, §45):
 
 ---
 
+## Backward compatibility & migration
+
+The interactive commands are unchanged:
+
+```bash
+sudo agent-microvm run --attach --agent pi       --name t --repository ~/src/repo
+sudo agent-microvm run --attach --agent opencode --name t --repository ~/src/repo
+sudo agent-microvm run --attach --agent hermes   --name t --repository ~/src/repo
+workmux add --agent microvm-pi my-feature
+```
+
+`stop`, `destroy`, `status`, `list`, `ssh`, `console` and `workspace-remove` keep
+their behaviour; `submit`, `cancel`, `recover` and `usage` are additions. New
+flags (`--resource-class`, `--wait`, `--persist-agent-state`) all default to the
+previous behaviour.
+
+Deprecated options — each **warns**, has a documented replacement, translates
+safe configurations, and rejects ambiguity rather than silently reducing
+isolation:
+
+| Deprecated | Replacement | Behaviour |
+| --- | --- | --- |
+| `slotCount`, `defaultVcpu`, `defaultMemoryMiB` | `resourceClasses` | still honoured as a synthesized single `normal` class (warns). Setting **both** spellings is **rejected** as ambiguous. |
+| `allowPublicInternet` | `networkProfile = "internet"` | translated **with a warning** when `networkProfile` is unset; **rejected** as ambiguous when combined with a different explicit profile. |
+| `allowPrivateNetworks` | *(none — no profile grants it)* | `true` is **rejected** by an assertion; use `networkProfile = "package-access"` with an explicit host proxy if a guest needs packages. |
+| `allowInterVmTraffic` | *(none — isolation is unconditional)* | `true` is **rejected**: guest↔guest is blocked at layer 2 in every profile, so honouring the flag would misrepresent the policy. |
+
+Slot names changed from `agent-<i>` to `agent-<class>-<i>` when resource classes
+landed. Old per-slot state (`/var/lib/microvms/agent-<i>`, and the matching
+`hostkeys/`, `jobs/`, `state/slots/` entries) is simply unused afterwards and can
+be deleted; workspace clones are keyed by **task**, not slot, so they are
+unaffected.
+
+---
+
 ## Limitations
 
 Honest caveats — read these before trusting the tier:
@@ -981,7 +1040,7 @@ Honest caveats — read these before trusting the tier:
   `agent-microvm-attach-<slot>` oneshot (see Security properties). The rest
   of the packet path (firewall ordering, proxy egress) is still only
   lightly exercised on live KVM — see the next bullets.
-- **`/workspace` runtime write is config-wired but not KVM-verified.** The
+- **`/workspace` runtime write is config-wired but not KVM-measured.** The
   guest virtiofs share and the §11 `chown -R 1000:1000` ownership strategy are
   now in place (see [The `/workspace` share & ownership](#the-workspace-share--ownership))
   and eval-tested, so the previously-known `run --attach` breakage (root-owned
@@ -989,23 +1048,32 @@ Honest caveats — read these before trusting the tier:
   guest and confirming `/workspace` is mounted, writable and correctly-owned
   is a runtime step (plan §41/§42) that has **not** been executed on live KVM
   here.
-- **No passwordless sudoers yet.** The Workmux pane runs `sudo agent-microvm`
-  with no dedicated sudoers rule, so it will **prompt for a password** on first
-  launch. Acceptable for an interactive tmux workflow; a rule is left to a
-  later phase.
+- **Sudo policy.** The launcher requires root and is always invoked via `sudo`.
+  With `passwordlessControl = true` (opt-in; enabled on `f13`) members of the
+  `agent-microvm` group get a `NOPASSWD`+`SETENV` rule for **exactly**
+  `/run/current-system/sw/bin/agent-microvm` — nothing broader — so the workmux
+  panes launch without a prompt. With the secure default (`false`) sudo prompts
+  as usual. This is host-operator convenience only: the untrusted guest can
+  never reach host `sudo`.
 - **Runtime attack surface.** Cloud Hypervisor, KVM, the guest kernel and
   virtiofsd are all part of the trusted computing base; a guest escape through
   any of them defeats the isolation.
 - **Writable workspace + disclosure.** `/workspace` is writable by the (hostile)
   agent, and the agent's prompts and your source are disclosed to whatever the
   LiteLLM proxy forwards to. This tier does not change that.
-- **Firewall-ordering-dependent, eval-only so far.** The network controls
-  depend on iptables rule ordering and on `br_netfilter` +
-  `bridge-nf-call-iptables` for inter-VM enforcement. They have been
-  **eval-tested only** — the packet path has **not** yet been verified from a
-  live guest on real KVM. Do not treat a successful build as proof the runtime
-  firewall is secure.
-- **`test-f13` vs real `f13`.** The `test-f13` configuration builds with the
-  feature **disabled**; the real `f13` enables it. CI eval/build does not
-  exercise KVM, the bridge, the forwarder socket or the guest-to-host packet
-  path.
+- **Firewall + L2 isolation are eval-tested, not yet measured.** The network
+  controls depend on iptables rule ordering, on `br_netfilter` +
+  `bridge-nf-call-iptables` for the IPv4 inter-VM rule, and on the per-TAP
+  `isolated` bridge flag for everything below IP. The rendered ruleset and the
+  attach units are asserted at eval time for all four profiles, but the packet
+  path has **not** yet been verified from a live guest. Run
+  [`runtime-validation.sh --section net,l2`](./agent-microvm-runtime-validation.md)
+  on real KVM before trusting it. Do not treat a successful build as proof.
+- **`test-f13` vs real `f13`.** `test-f13` IS the `f13` configuration (generated
+  from the same `nixosConfigurationsGen.host-f13`) and has the feature
+  **enabled**, which is what makes the eval/build checks meaningful. What CI
+  still does not exercise is KVM itself: no boot, no bridge traffic, no forwarder
+  socket, no guest-to-host packet path — that is the
+  [real-KVM tier](./agent-microvm-runtime-validation.md).
+- **Not equivalent to a hardened multi-tenant cloud sandbox.** See the
+  [security model](./agent-microvm-security-model.md#why-this-is-not-a-hardened-multi-tenant-cloud-sandbox).

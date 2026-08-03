@@ -12,6 +12,26 @@ against the 8-phase plan and the goal spec
 [`microvm-sandbox-plan.md`](./microvm-sandbox-plan.md), and lists the exact
 remaining work.
 
+> [!NOTE]
+> **Superseded in part (2026-08-03).** This file tracks the ORIGINAL 8-phase
+> plan. The six improvement tickets under
+> [`improvement-plan-tickets/`](./improvement-plan-tickets/) have since landed
+> (registry, hermes, L2 isolation + per-slot SSH identities + network profiles,
+> batch execution + recovery, resource classes + task-scoped state + limits,
+> observability + the runtime-validation suite). Consequences for this file:
+>
+> - **A1 is resolved** (per-TAP L2 isolation), **A2 is resolved**
+>   (`passwordlessControl`), A3 is unchanged.
+> - The check count grew from 7 to 14+; slot names are now `agent-<class>-<i>`;
+>   the guest has four shares, not one.
+> - The **(B) runtime KVM tier is still not executed**, but it is now a
+>   repeatable script + guide:
+>   [`runtime-validation.sh`](../runtime-validation.sh),
+>   [guide](./agent-microvm-runtime-validation.md).
+>
+> Current state of the improvement work:
+> [`improvement-plan-tickets/PROGRESS.md`](./improvement-plan-tickets/PROGRESS.md).
+
 ## 1. Verdict — split
 
 **Config + eval/build tier: REACHED.** All 8 phases are implemented and wired.
@@ -58,7 +78,7 @@ validation evidence*.
 | # | Item | Plan | File(s) | Acceptance | Effort/Risk |
 | --- | --- | --- | --- | --- | --- |
 | A1 | ~~Guest-to-guest isolation: blocked only by terminal `FORWARD -j DROP`; no per-TAP L2 `isolated` flag.~~ **RESOLVED (improvement ticket 3 A):** each slot's `agent-microvm-attach-<slot>` oneshot now runs `bridge link set dev <tap> isolated on` after enslaving the TAP, so the bridge drops guest↔guest frames for EVERY EtherType (ARP / IPv6 ND included), independently of iptables. Locked down per slot by `microvm-eval-enabled`. Runtime guest→guest DROP proof is still B4. | §14, §44 | `network.nix` | `isolated` set on each TAP ✅ | Low / Med (defense-in-depth) |
-| A2 | Passwordless sudoers scoped to `agent-microvm` so `workmux add --agent microvm-*` doesn't prompt. Currently deferred. | §29 | new sudoers snippet + `workmux.nix` | Launch without password prompt; rule tightly scoped to the launcher only. | Low / Low-Med (privilege surface) |
+| A2 | ~~Passwordless sudoers scoped to `agent-microvm`.~~ **RESOLVED:** `passwordlessControl` (opt-in, enabled on f13) grants members of the `agent-microvm` group a `NOPASSWD`+`SETENV` rule for exactly `/run/current-system/sw/bin/agent-microvm`; asserted by `microvm-eval-enabled`. | §29 | `launcher.nix` + `workmux.nix` | Launch without password prompt; rule scoped to the launcher only ✅ | Low / Low-Med (privilege surface) |
 | A3 | Build the real private `f13` toplevel (not just `test-f13`). §44 explicitly requires the real host config. | §44, §45 | `hosts/host.f13` | `nix build .#nixosConfigurations.f13...toplevel` succeeds with `../priv` present. | Low / Low (needs private inputs) |
 
 Constraint-safe: none add a new microvm.nix input, none add KVM checks to

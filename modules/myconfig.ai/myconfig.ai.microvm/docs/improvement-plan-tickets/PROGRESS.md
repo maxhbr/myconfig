@@ -11,7 +11,7 @@ commit as the work it describes.
 | 3 | `03-network-and-control-channel-hardening.md` | DONE | A, B, C (3 commits) |
 | 4 | `04-batch-execution-and-lifecycle.md` | DONE | A, B (2 commits) |
 | 5 | `05-resource-classes-and-state-management.md` | DONE | A, B, C+D (3 commits) |
-| 6 | `06-runtime-validation-and-documentation.md` | IN PROGRESS (A, B done) | — |
+| 6 | `06-runtime-validation-and-documentation.md` | DONE | A, B, C+D (3 commits) |
 
 Status values: `TODO`, `IN PROGRESS`, `DONE`, `BLOCKED`.
 
@@ -271,3 +271,45 @@ sync + backward-compat confirmation).
   journal streams) and how to interpret failures. Both state clearly that the
   suite has NOT been run from the development environment (no /dev/kvm, no root),
   so nothing in them may be read as runtime evidence.
+- **Parts C+D (done).** Documentation synchronised with the implementation and
+  backward compatibility confirmed:
+  - new `docs/agent-microvm-architecture.md` (module map, prebuilt pool,
+    workspace indirection, self-contained guest store, network path, credential
+    boundary, interactive vs batch path, state lifetimes, classes + limits,
+    control-channel identities),
+    `docs/agent-microvm-operator-guide.md` (ten exact procedures: start, submit,
+    status, attach, cancel, collect, remove, recover, logs, triage) and
+    `docs/agent-microvm-security-model.md` (trusted/untrusted, what the VM
+    boundary protects, what virtiofs still shares — per share, with its risk —
+    what LiteLLM protects, mitigated attacks, residual risks, and an explicit
+    "why this is not a hardened multi-tenant cloud sandbox").
+  - `agent-microvm.md`: status block rewritten (eval/build + stubbed-run
+    verified; real KVM NOT executed), activation example migrated to
+    resourceClasses/networkProfile, the stale "no passwordless sudoers" and
+    "test-f13 builds with the feature disabled" claims fixed, a new
+    "Backward compatibility & migration" section (unchanged commands + the four
+    deprecated options with translate/reject semantics + the slot-rename note),
+    and a companion-document index.
+  - `agent-microvm-validation.md` gained an addendum listing the grown check
+    suite, the slot rename, the four shares, the run-verified shell components,
+    and a restatement that the runtime tier is still unexecuted.
+    `agent-microvm-remaining.md` and `agent-microvm-review.md` carry
+    "superseded/historical" notes (A1 + A2 resolved, M3 addressed).
+
+## Definition of done (ticket 6)
+
+| Criterion | State |
+|---|---|
+| Claude, Codex, Pi, OpenCode, Hermes from ONE registry | done (`agents.nix`) |
+| Interactive and batch modes both work | done (batch verified against stubs; real KVM pending) |
+| Batch: structured status, cancellation, recovery, hard timeouts | done |
+| All TAP ports use layer-2 isolation | done (unconditional) |
+| SSH host identity verified / VSOCK for batch control | SSH done; VSOCK CIDs reserved, transport deferred (documented) |
+| Network behaviour via explicit profiles | done (4 profiles) |
+| Upstream provider credentials never enter guests | done (placeholders only) |
+| Guest root and home disposable by default | done |
+| Agent persistence task-scoped and explicit | done |
+| Fixed resource classes, no per-job Nix evaluation | done |
+| Real-KVM filesystem/network/lifecycle/malicious-repo tests pass | **NOT executed** (suite + guide exist) |
+| Documentation matches the implementation | done |
+| Residual risks documented rather than implied solved | done (security model) |
