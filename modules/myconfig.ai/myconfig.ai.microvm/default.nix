@@ -177,6 +177,31 @@ in
       '';
     };
 
+    passwordlessControl = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Allow the host primary operator (`myconfig.user`, added to a
+        dedicated `agent-microvm` group) to drive the `agent-microvm`
+        launcher through `sudo` WITHOUT an interactive password prompt.
+
+        This is HOST-OPERATOR CONVENIENCE ONLY and does not weaken the
+        untrusted-guest isolation boundary: `agent-microvm` already requires
+        root (it mounts virtiofs sources, drives
+        `systemctl start/stop microvm@<slot>.service`, chowns clones to the
+        guest agent uid/gid and manages runtime state) and is always invoked
+        via `sudo`. The hostile guest can never reach host `sudo`; this only
+        spares the human operator (who is already a full sudoer) from typing
+        their password for each launcher invocation.
+
+        Secure default is false (operator authenticates to sudo as usual).
+        When true it grants members of the `agent-microvm` group a scoped
+        `NOPASSWD` (plus `SETENV`, so workmux's
+        `--preserve-env=AGENT_MICROVM_SSH_KEY` is permitted) rule for exactly
+        the `agent-microvm` launcher — nothing broader.
+      '';
+    };
+
     enableSsh = mkOption {
       type = types.bool;
       default = true;

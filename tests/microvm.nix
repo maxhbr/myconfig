@@ -237,6 +237,12 @@ in
       assertion = disabledCfg.microvm.host.enable == false;
       message = "disabled feature still enables microvm.host";
     }
+    {
+      # No passwordless-control group leaks while the feature is off, so the
+      # scoped NOPASSWD sudo rule cannot exist either.
+      assertion = !(disabledCfg.users.groups ? agent-microvm);
+      message = "disabled feature still defines the agent-microvm control group";
+    }
   ];
 
   # ---------------------------------------------------------------------- #
@@ -286,6 +292,29 @@ in
         # Cloud-metadata IP explicitly dropped (§13).
         assertion = lib.hasInfix "169.254.169.254" fw;
         message = "firewall missing 169.254.169.254 metadata drop";
+      }
+      {
+        # passwordlessControl is opted-in on f13: the dedicated control group
+        # exists and the operator (myconfig.user) is a member.
+        assertion =
+          (enabledCfg.users.groups ? agent-microvm)
+          && builtins.elem "agent-microvm" enabledCfg.users.users.mhuber.extraGroups;
+        message = "passwordlessControl should create the agent-microvm group and add mhuber to it";
+      }
+      {
+        # The NOPASSWD+SETENV rule is scoped to EXACTLY the launcher binary
+        # for the agent-microvm group — never a blanket ALL command.
+        assertion = builtins.any (
+          r:
+          (builtins.elem "agent-microvm" (r.groups or [ ]))
+          && builtins.any (
+            c:
+            (c.command or "") == "/run/current-system/sw/bin/agent-microvm"
+            && builtins.elem "NOPASSWD" (c.options or [ ])
+            && builtins.elem "SETENV" (c.options or [ ])
+          ) (r.commands or [ ])
+        ) enabledCfg.security.sudo.extraRules;
+        message = "passwordlessControl should grant a scoped NOPASSWD+SETENV sudo rule for agent-microvm";
       }
     ];
 

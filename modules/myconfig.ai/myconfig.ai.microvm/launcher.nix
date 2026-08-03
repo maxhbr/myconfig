@@ -45,6 +45,7 @@
   config,
   lib,
   pkgs,
+  myconfig,
   ...
 }:
 let
@@ -761,9 +762,54 @@ let
   };
 in
 {
-  config = lib.mkIf cfg.enable {
-    # Host-side tool: it mounts, drives systemctl and manages runtime state,
-    # so it belongs in the system environment (invoked via sudo).
-    environment.systemPackages = [ agent-microvm ];
-  };
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      {
+        # Host-side tool: it mounts, drives systemctl and manages runtime
+        # state, so it belongs in the system environment (invoked via sudo).
+        environment.systemPackages = [ agent-microvm ];
+      }
+
+      # --- optional passwordless operator control (secure default: off) ---
+      # `agent-microvm` already REQUIRES root (mounts, systemctl on
+      # microvm@<slot>.service, chown to the guest agent uid/gid, runtime
+      # state) and is always run via sudo. When opted in, grant the host
+      # primary operator a scoped NOPASSWD rule for exactly this one launcher
+      # so the interactive workflow (and the workmux per-agent panes) no
+      # longer prompt for a password. This is OPERATOR CONVENIENCE ONLY: the
+      # untrusted guest can never invoke host sudo, so the guest/agent
+      # isolation boundary is unchanged; the operator (already a full sudoer)
+      # simply skips the password for this specific command.
+      (lib.mkIf cfg.passwordlessControl {
+        users.groups.agent-microvm = { };
+        # Add the primary operator to the control group. Membership — not a
+        # blanket `ALL` rule — is what gates the NOPASSWD rule below.
+        users.users.${myconfig.user}.extraGroups = [ "agent-microvm" ];
+        security.sudo.extraRules = [
+          {
+            groups = [ "agent-microvm" ];
+            commands = [
+              {
+                # Match the PATH-resolved command the operator / workmux run
+                # (`sudo agent-microvm ...`): sudoers `secure_path` resolves
+                # the bare name to the current-system wrapper dir, exactly
+                # like the existing shell.common systemctl NOPASSWD rules.
+                command = "/run/current-system/sw/bin/agent-microvm";
+                # SETENV is required so workmux's
+                # `sudo --preserve-env=AGENT_MICROVM_SSH_KEY agent-microvm`
+                # is accepted (without it sudo hard-fails on --preserve-env).
+                # The target is a single fixed, shellcheck-gated launcher
+                # that reads only a small known env set, so scoping SETENV to
+                # just this command is a narrow, deliberate grant.
+                options = [
+                  "NOPASSWD"
+                  "SETENV"
+                ];
+              }
+            ];
+          }
+        ];
+      })
+    ]
+  );
 }
