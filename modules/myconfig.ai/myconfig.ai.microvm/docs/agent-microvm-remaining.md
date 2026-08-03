@@ -57,7 +57,7 @@ validation evidence*.
 
 | # | Item | Plan | File(s) | Acceptance | Effort/Risk |
 | --- | --- | --- | --- | --- | --- |
-| A1 | Guest-to-guest isolation: currently blocked only by terminal `FORWARD -j DROP`; no per-TAP L2 `isolated` flag. Either add L2 isolation belt-and-suspenders, or document the reliance explicitly. | §14, §44 | `network.nix` | `isolated` set on each TAP **or** documented decision + runtime guest→guest DROP proof (B4). | Low / Med (defense-in-depth) |
+| A1 | ~~Guest-to-guest isolation: blocked only by terminal `FORWARD -j DROP`; no per-TAP L2 `isolated` flag.~~ **RESOLVED (improvement ticket 3 A):** each slot's `agent-microvm-attach-<slot>` oneshot now runs `bridge link set dev <tap> isolated on` after enslaving the TAP, so the bridge drops guest↔guest frames for EVERY EtherType (ARP / IPv6 ND included), independently of iptables. Locked down per slot by `microvm-eval-enabled`. Runtime guest→guest DROP proof is still B4. | §14, §44 | `network.nix` | `isolated` set on each TAP ✅ | Low / Med (defense-in-depth) |
 | A2 | Passwordless sudoers scoped to `agent-microvm` so `workmux add --agent microvm-*` doesn't prompt. Currently deferred. | §29 | new sudoers snippet + `workmux.nix` | Launch without password prompt; rule tightly scoped to the launcher only. | Low / Low-Med (privilege surface) |
 | A3 | Build the real private `f13` toplevel (not just `test-f13`). §44 explicitly requires the real host config. | §44, §45 | `hosts/host.f13` | `nix build .#nixosConfigurations.f13...toplevel` succeeds with `../priv` present. | Low / Low (needs private inputs) |
 
@@ -128,7 +128,9 @@ Hard chain: B2⇐B1; B3/B4/B5⇐B2; C1/C2⇐B1–B6; A1/A2 precede B (else re-ru
 - [ ] B6 §43 negative-launcher cases handled.
 - [ ] §45 crit 41 ("≥1 VM on real KVM") ticked.
 - [ ] §45 crit 42 ("firewall tested from guest") ticked.
-- [ ] (A1) Guest-to-guest isolation decision documented + runtime-verified.
+- [x] (A1) Guest-to-guest isolation implemented at L2 (`isolated` per TAP) —
+      runtime verification (`bridge link show`, guest→guest ping/ARP) still
+      pending as part of B4.
 
 ### Deferred / optional (not blocking)
 - [ ] A2 passwordless sudoers UX.
@@ -136,12 +138,12 @@ Hard chain: B2⇐B1; B3/B4/B5⇐B2; C1/C2⇐B1–B6; A1/A2 precede B (else re-ru
 ## 6. Residual risks
 - **First-boot ownership:** virtiofsd may enforce ownership/ACL differently than the eval-modeled `chown` assumes (B2).
 - **Firewall ordering:** B4 is the single highest-risk gate — controls depend on `br_netfilter` + `bridge-nf-call-iptables` + exact iptables rule ordering, none proven at packet level.
-- **Guest-to-guest:** FORWARD-DROP-only, no per-TAP L2 `isolated` — a rule-ordering regression could silently open it (A1/B4).
+- **Guest-to-guest:** now belt-and-suspenders — per-TAP L2 `isolated` (bridge-level, all EtherTypes) *plus* the IPv4 `FORWARD` DROP, so an iptables rule-ordering regression alone can no longer open it. Packet-level proof is still B4.
 - **test-f13 vs private f13:** §44 requires the real host config; skipping A3 risks validating the wrong config.
 - **Constraint adherence:** keep all runtime tests OUT of `nix flake check`; keep any sudoers rule tightly scoped.
 
 **Bottom line:** implemented and fully eval-verified across all 8 phases;
 the goal is **config-complete but not fully reached**. Remaining work is
 exclusively the **§40–44 runtime/KVM tier on real f13** (plus §45 crit 41–42 and
-the §48 final report), with the sudoers nicety (A2) and the guest-to-guest
-L2-isolation decision (A1) as minor open items.
+the §48 final report), with the sudoers nicety (A2) as a minor open item
+(A1's L2 isolation has since been implemented, see the (A) table).

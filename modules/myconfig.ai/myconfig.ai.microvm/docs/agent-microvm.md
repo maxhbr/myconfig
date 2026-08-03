@@ -516,6 +516,18 @@ What the module actually enforces (plan §5, §13–§18, §45):
   VM) runs `ip link set vm-agent-<n> master agentbr0`, giving the guest its L2
   path to the gateway. Without it the guest boots and runs sshd but is
   unreachable (SSH readiness times out).
+- **Per-TAP Layer 2 isolation.** The same oneshot then runs
+  `bridge link set dev vm-agent-<n> isolated on`. The kernel bridge refuses to
+  forward frames **between isolated ports**, in either direction and for
+  *every* EtherType — so guest↔guest ARP spoofing, IPv6 ND and non-IP traffic
+  are impossible even though iptables cannot filter them. Isolated ports can
+  still reach non-isolated ports and the bridge itself, so guest↔host
+  (gateway, LiteLLM forwarder, SSH) is unaffected; the bridge's host-facing
+  side is deliberately **not** isolated. This makes the IPv4 inter-VM
+  `FORWARD` DROP a second line of defence rather than the only one, and
+  removes the co-resident-guest MITM risk for the unpinned
+  `agent-microvm ssh` / `--attach` sessions. Verify at runtime with
+  `bridge link show` (each active guest TAP reports `isolated on`).
 - **Deny-all, proxy-only network.** Default firewall policy on `agentbr0` is
   deny-all-except-proxy: the only egress a guest gets is
   `guest -> 192.168.83.1:4000`. Dedicated chains `AGENT_MICROVM_INPUT` /

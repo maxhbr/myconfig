@@ -131,9 +131,11 @@ let
         # NOTE: same-bridge L2 (guest<->guest) frames only reach iptables
         # FORWARD when net.bridge.bridge-nf-call-iptables=1 (needs br_netfilter);
         # both are enabled in the config section below so this rule actually
-        # fires once TAPs are attached to the bridge in a later phase. For
-        # additional defence in depth, per-port L2 isolation (bridge `isolated`
-        # flag) should be set at TAP-attachment time.
+        # fires once TAPs are attached to the bridge. This IPv4 rule is now the
+        # second line of defence only: every guest TAP is additionally marked
+        # `isolated` at attach time (see tapAttachServices), which blocks
+        # guest<->guest frames in the bridge itself — including ARP, IPv6 ND
+        # and every other EtherType that iptables cannot see.
         iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -d ${subnet} -j ${interVmVerdict}
         # Private / special-use ranges (host LAN, VPN peers, RFC1918, CGNAT,
         # loopback, link-local, multicast, reserved) unless allowPrivateNetworks.
@@ -174,11 +176,30 @@ let
   # and `tap-up` recreates the tap on every restart, dropping bridge
   # membership. On VM stop `tap-down` removes the tap (and thus its bridge
   # port) automatically, so no explicit detach is needed.
+  #
+  # --- per-TAP LAYER 2 isolation (ticket 3 A / open item A1) --------------
+  # Enslaving alone leaves every guest port in the same L2 broadcast domain:
+  # `br_netfilter` + `bridge-nf-call-iptables` gets bridged IPv4 frames into
+  # the FORWARD chain (where the inter-VM DROP fires), but iptables does NOT
+  # filter ARP — nor IPv6 ND, nor any non-IP EtherType. A hostile guest could
+  # therefore still ARP-spoof the gateway or a co-resident guest and MITM
+  # host<->guest traffic (the unpinned `agent-microvm ssh` / `--attach`
+  # sessions included).
+  #
+  # `bridge link set dev <tap> isolated on` closes that at L2: the kernel
+  # bridge refuses to forward frames between two isolated ports, in EITHER
+  # direction and for EVERY EtherType, before any netfilter hook runs. Ports
+  # marked isolated can still talk to non-isolated ports and to the bridge
+  # itself, so guest<->host (gateway, LiteLLM forwarder, SSH) keeps working.
+  #
+  # Applied ONLY to guest TAP ports. The bridge's own host-facing interface is
+  # deliberately NOT isolated (it is the bridge master, not a port — isolating
+  # host connectivity would break the proxy-only egress the design depends on).
   tapAttachServices = builtins.listToAttrs (
     map (
       slot:
       lib.nameValuePair "agent-microvm-attach-${slot.name}" {
-        description = "Enslave TAP ${slot.tap} to bridge ${bridge} for microVM ${slot.name}";
+        description = "Enslave + L2-isolate TAP ${slot.tap} on bridge ${bridge} for microVM ${slot.name}";
         after = [ "microvm-tap-interfaces@${slot.name}.service" ];
         requires = [ "microvm-tap-interfaces@${slot.name}.service" ];
         before = [ "microvm@${slot.name}.service" ];
@@ -187,7 +208,13 @@ let
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
-          ExecStart = "${lib.getExe' pkgs.iproute2 "ip"} link set ${slot.tap} master ${bridge}";
+          # Order matters: `isolated` is a bridge-PORT flag, so the interface
+          # must already be a port of the bridge. Both steps run on every VM
+          # (re)start, because the tap is destroyed and recreated each time.
+          ExecStart = [
+            "${lib.getExe' pkgs.iproute2 "ip"} link set ${slot.tap} master ${bridge}"
+            "${lib.getExe' pkgs.iproute2 "bridge"} link set dev ${slot.tap} isolated on"
+          ];
         };
       }
     ) slots

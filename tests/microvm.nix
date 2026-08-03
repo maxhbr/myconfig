@@ -63,6 +63,11 @@ let
     }).config;
 
   microvmOpts = enabledCfg.myconfig.ai.microvm;
+  # The deterministic slot table of the ENABLED reference host, from the same
+  # generator the module uses.
+  enabledSlots =
+    (import ../modules/myconfig.ai/myconfig.ai.microvm/slots.nix { inherit lib; }).mkSlots
+      microvmOpts.slotCount;
   gateway = microvmOpts.gatewayAddress; # 192.168.83.1
   port = toString microvmOpts.litellmPort; # 4000
   slotCount = microvmOpts.slotCount; # 4
@@ -265,91 +270,117 @@ in
       socket = enabledCfg.systemd.sockets.agent-litellm-proxy.socketConfig;
       fw = enabledCfg.networking.firewall.extraCommands;
     in
-    mkEvalCheck "microvm-eval-enabled" [
-      {
-        assertion = enabledCfg.myconfig.ai.microvm.enable == true;
-        message = "test-f13 should have the feature enabled";
-      }
-      {
-        assertion = vmNames == expectedNames;
-        message = "expected VMs ${toString expectedNames} but got ${toString vmNames}";
-      }
-      {
-        assertion = enabledCfg.microvm.host.enable == true;
-        message = "microvm.host.enable should be true when the feature is enabled";
-      }
-      {
-        # Bridge-only: listens on <gateway>:<port>, NOT 0.0.0.0 / the LAN.
-        assertion = socket.ListenStream == "${gateway}:${port}";
-        message = "agent-litellm-proxy ListenStream is '${toString socket.ListenStream}', expected '${gateway}:${port}'";
-      }
-      {
-        assertion = !(lib.hasInfix "0.0.0.0" (toString socket.ListenStream));
-        message = "agent-litellm-proxy must never listen on 0.0.0.0";
-      }
-      {
-        assertion = (socket.BindToDevice or null) == microvmOpts.bridgeName;
-        message = "agent-litellm-proxy should BindToDevice the bridge ${microvmOpts.bridgeName}";
-      }
-      {
-        # Terminal fail-closed FORWARD drop (§13/§14).
-        assertion = lib.hasInfix "AGENT_MICROVM_FORWARD -j DROP" fw;
-        message = "firewall missing terminal 'AGENT_MICROVM_FORWARD -j DROP'";
-      }
-      {
-        # Cloud-metadata IP explicitly dropped (§13).
-        assertion = lib.hasInfix "169.254.169.254" fw;
-        message = "firewall missing 169.254.169.254 metadata drop";
-      }
-      {
-        # passwordlessControl is opted-in on f13: the dedicated control group
-        # exists and the operator (myconfig.user) is a member.
-        assertion =
-          (enabledCfg.users.groups ? agent-microvm)
-          && builtins.elem "agent-microvm" enabledCfg.users.users.mhuber.extraGroups;
-        message = "passwordlessControl should create the agent-microvm group and add mhuber to it";
-      }
-      {
-        # The NOPASSWD+SETENV rule is scoped to EXACTLY the launcher binary
-        # for the agent-microvm group — never a blanket ALL command.
-        assertion = builtins.any (
-          r:
-          (builtins.elem "agent-microvm" (r.groups or [ ]))
-          && builtins.any (
-            c:
-            (c.command or "") == "/run/current-system/sw/bin/agent-microvm"
-            && builtins.elem "NOPASSWD" (c.options or [ ])
-            && builtins.elem "SETENV" (c.options or [ ])
-          ) (r.commands or [ ])
-        ) enabledCfg.security.sudo.extraRules;
-        message = "passwordlessControl should grant a scoped NOPASSWD+SETENV sudo rule for agent-microvm";
-      }
-      {
-        # The dedicated private key stays root:root 0400 (OpenSSH rejects a
-        # group/world-readable private key) — it must NOT be widened even
-        # under passwordlessControl.
-        assertion =
-          enabledCfg.myconfig.secrets."dedicated-agent-vm-key".group == "root"
-          && enabledCfg.myconfig.secrets."dedicated-agent-vm-key".permissions == "0400";
-        message = "dedicated-agent-vm-key must stay root:root 0400 (got group '${
-          enabledCfg.myconfig.secrets."dedicated-agent-vm-key".group
-        }' perms '${enabledCfg.myconfig.secrets."dedicated-agent-vm-key".permissions}')";
-      }
-      {
-        # passwordlessControl authorises the host operator's OWN public keys
-        # on the guest `agent` user (so non-root `agent-microvm ssh` works
-        # with the operator's default identity), in ADDITION to the dedicated
-        # key file. The operator has >=1 declared key, so this is non-empty
-        # and matches the host user's keys exactly.
-        assertion =
-          let
-            guestKeys = guest0Cfg.users.users.agent.openssh.authorizedKeys.keys;
-            hostKeys = enabledCfg.users.users.mhuber.openssh.authorizedKeys.keys;
-          in
-          hostKeys != [ ] && guestKeys == hostKeys;
-        message = "passwordlessControl should authorise the host operator's public keys on the guest agent user";
-      }
-    ];
+    mkEvalCheck "microvm-eval-enabled" (
+      [
+        {
+          assertion = enabledCfg.myconfig.ai.microvm.enable == true;
+          message = "test-f13 should have the feature enabled";
+        }
+        {
+          assertion = vmNames == expectedNames;
+          message = "expected VMs ${toString expectedNames} but got ${toString vmNames}";
+        }
+        {
+          assertion = enabledCfg.microvm.host.enable == true;
+          message = "microvm.host.enable should be true when the feature is enabled";
+        }
+        {
+          # Bridge-only: listens on <gateway>:<port>, NOT 0.0.0.0 / the LAN.
+          assertion = socket.ListenStream == "${gateway}:${port}";
+          message = "agent-litellm-proxy ListenStream is '${toString socket.ListenStream}', expected '${gateway}:${port}'";
+        }
+        {
+          assertion = !(lib.hasInfix "0.0.0.0" (toString socket.ListenStream));
+          message = "agent-litellm-proxy must never listen on 0.0.0.0";
+        }
+        {
+          assertion = (socket.BindToDevice or null) == microvmOpts.bridgeName;
+          message = "agent-litellm-proxy should BindToDevice the bridge ${microvmOpts.bridgeName}";
+        }
+        {
+          # Terminal fail-closed FORWARD drop (§13/§14).
+          assertion = lib.hasInfix "AGENT_MICROVM_FORWARD -j DROP" fw;
+          message = "firewall missing terminal 'AGENT_MICROVM_FORWARD -j DROP'";
+        }
+        {
+          # Cloud-metadata IP explicitly dropped (§13).
+          assertion = lib.hasInfix "169.254.169.254" fw;
+          message = "firewall missing 169.254.169.254 metadata drop";
+        }
+        {
+          # passwordlessControl is opted-in on f13: the dedicated control group
+          # exists and the operator (myconfig.user) is a member.
+          assertion =
+            (enabledCfg.users.groups ? agent-microvm)
+            && builtins.elem "agent-microvm" enabledCfg.users.users.mhuber.extraGroups;
+          message = "passwordlessControl should create the agent-microvm group and add mhuber to it";
+        }
+        {
+          # The NOPASSWD+SETENV rule is scoped to EXACTLY the launcher binary
+          # for the agent-microvm group — never a blanket ALL command.
+          assertion = builtins.any (
+            r:
+            (builtins.elem "agent-microvm" (r.groups or [ ]))
+            && builtins.any (
+              c:
+              (c.command or "") == "/run/current-system/sw/bin/agent-microvm"
+              && builtins.elem "NOPASSWD" (c.options or [ ])
+              && builtins.elem "SETENV" (c.options or [ ])
+            ) (r.commands or [ ])
+          ) enabledCfg.security.sudo.extraRules;
+          message = "passwordlessControl should grant a scoped NOPASSWD+SETENV sudo rule for agent-microvm";
+        }
+        {
+          # The dedicated private key stays root:root 0400 (OpenSSH rejects a
+          # group/world-readable private key) — it must NOT be widened even
+          # under passwordlessControl.
+          assertion =
+            enabledCfg.myconfig.secrets."dedicated-agent-vm-key".group == "root"
+            && enabledCfg.myconfig.secrets."dedicated-agent-vm-key".permissions == "0400";
+          message = "dedicated-agent-vm-key must stay root:root 0400 (got group '${
+            enabledCfg.myconfig.secrets."dedicated-agent-vm-key".group
+          }' perms '${enabledCfg.myconfig.secrets."dedicated-agent-vm-key".permissions}')";
+        }
+        {
+          # passwordlessControl authorises the host operator's OWN public keys
+          # on the guest `agent` user (so non-root `agent-microvm ssh` works
+          # with the operator's default identity), in ADDITION to the dedicated
+          # key file. The operator has >=1 declared key, so this is non-empty
+          # and matches the host user's keys exactly.
+          assertion =
+            let
+              guestKeys = guest0Cfg.users.users.agent.openssh.authorizedKeys.keys;
+              hostKeys = enabledCfg.users.users.mhuber.openssh.authorizedKeys.keys;
+            in
+            hostKeys != [ ] && guestKeys == hostKeys;
+          message = "passwordlessControl should authorise the host operator's public keys on the guest agent user";
+        }
+      ]
+      # --- per-TAP L2 isolation (ticket 3 A) -------------------------------
+      # Every slot's attach oneshot must BOTH enslave the TAP to the bridge and
+      # mark that bridge port `isolated`, so guest<->guest frames are dropped by
+      # the bridge itself (ARP / IPv6 ND / any EtherType included) and not only
+      # by the IPv4 FORWARD rule. Asserted per slot so a partially-isolated pool
+      # cannot pass.
+      ++ lib.concatMap (
+        slot:
+        let
+          execStart = toString (
+            enabledCfg.systemd.services."agent-microvm-attach-${slot.name}".serviceConfig.ExecStart
+          );
+        in
+        [
+          {
+            assertion = lib.hasInfix "link set ${slot.tap} master ${microvmOpts.bridgeName}" execStart;
+            message = "slot ${slot.name}: attach unit does not enslave ${slot.tap} to ${microvmOpts.bridgeName}";
+          }
+          {
+            assertion = lib.hasInfix "link set dev ${slot.tap} isolated on" execStart;
+            message = "slot ${slot.name}: attach unit does not mark ${slot.tap} as an isolated bridge port (L2 guest-to-guest isolation)";
+          }
+        ]
+      ) enabledSlots
+    );
 
   # ---------------------------------------------------------------------- #
   # (c) PURE-EVAL slot pool: unique + well-formed IPs/MACs, contiguous      #

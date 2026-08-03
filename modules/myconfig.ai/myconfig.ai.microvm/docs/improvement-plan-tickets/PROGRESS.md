@@ -8,7 +8,7 @@ commit as the work it describes.
 |---|--------|--------|--------|
 | 1 | `01-agent-registry-refactor.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 2 | `02-add-hermes-support.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
-| 3 | `03-network-and-control-channel-hardening.md` | TODO | — |
+| 3 | `03-network-and-control-channel-hardening.md` | IN PROGRESS (A done) | — |
 | 4 | `04-batch-execution-and-lifecycle.md` | TODO | — |
 | 5 | `05-resource-classes-and-state-management.md` | TODO | — |
 | 6 | `06-runtime-validation-and-documentation.md` | TODO | — |
@@ -55,3 +55,17 @@ Status values: `TODO`, `IN PROGRESS`, `DONE`, `BLOCKED`.
 - New check `microvm-agent-executables` BUILDS every registry agent package
   and asserts `bin/<executable>` exists (the `command -v hermes` criterion).
 - Manual interactive smoke test documented in `docs/agent-microvm.md`.
+
+### Ticket 3 — network + control-channel hardening
+
+Split into three commits (A: L2 isolation, B: SSH host keys + VSOCK,
+C: network profiles).
+
+- **Part A (done).** `agent-microvm-attach-<slot>` now also runs
+  `bridge link set dev <tap> isolated on`, so the bridge itself drops
+  guest↔guest frames for every EtherType (ARP / IPv6 ND included) — the IPv4
+  `FORWARD` inter-VM DROP becomes the second line of defence. Host-facing
+  bridge side deliberately not isolated. Locked down per slot in
+  `microvm-eval-enabled`; resolves open item A1 in
+  `docs/agent-microvm-remaining.md`. Runtime proof (`bridge link show`,
+  guest→guest ping/ARP) remains part of the B4 runtime tier.
