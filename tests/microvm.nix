@@ -122,6 +122,9 @@ let
   # the same reason: the checks must not hardcode a second copy of them.
   hostKeys = self.nixosConfigurations.test-f13._module.args.agentHostKeys;
 
+  # Likewise the ONE definition of the batch-job format / paths (job.nix).
+  jobs = self.nixosConfigurations.test-f13._module.args.agentJobs;
+
   # Slot counts to exercise. Includes small pools, pools with index >= 10
   # (which exercise 2-hex-digit MAC formatting, e.g. i=10 → ...:1a), and the
   # generator's declared maximum.
@@ -580,14 +583,35 @@ in
       hkShares = builtins.filter (s: s.mountPoint == hostKeys.guestMountPoint) shares;
       hk = if hkShares == [ ] then null else builtins.head hkShares;
       expectedHkSource = hostKeys.slotDir "agent-0";
+      jobShares = builtins.filter (s: s.mountPoint == jobs.guestMountPoint) shares;
+      jobShare = if jobShares == [ ] then null else builtins.head jobShares;
+      expectedJobSource = jobs.slotDir "agent-0";
     in
     mkEvalCheck "microvm-eval-workspace-share" [
       {
-        # Exactly two shares: the writable workspace + the read-only hostkey.
-        assertion = builtins.length shares == 2;
-        message = "guest agent-0 must declare exactly TWO shares (workspace + hostkey); got ${toString (builtins.length shares)}: ${
+        # Exactly three shares: writable workspace, read-only hostkey, and the
+        # per-slot batch job directory.
+        assertion = builtins.length shares == 3;
+        message = "guest agent-0 must declare exactly THREE shares (workspace + hostkey + job); got ${toString (builtins.length shares)}: ${
           toString (map (s: s.mountPoint or "?") shares)
         }";
+      }
+      {
+        assertion = jobShare != null && jobShare.proto == "virtiofs" && jobShare.tag == jobs.guestTag;
+        message = "guest agent-0 must declare a virtiofs share tagged '${jobs.guestTag}' at ${jobs.guestMountPoint}";
+      }
+      {
+        assertion = jobShare != null && jobShare.source == expectedJobSource;
+        message = "job share source is '${
+          toString (jobShare.source or "<none>")
+        }', expected the PER-SLOT dir '${expectedJobSource}' (must match job.nix)";
+      }
+      {
+        # Read-WRITE on purpose (the guest writes out/result.json); the spec and
+        # prompt inside are root-owned 0444, so the guest still cannot rewrite
+        # its own job — that part is enforced by file modes, not the share flag.
+        assertion = jobShare != null && (jobShare.readOnly or false) == false;
+        message = "job share must be read-write so the guest can write result.json";
       }
       {
         assertion = hk != null && hk.proto == "virtiofs" && hk.tag == hostKeys.guestTag;
@@ -633,8 +657,8 @@ in
       {
         # Defence in depth: the ONLY virtiofs shares are the workspace and the
         # hostkey dir — no /nix, /home or host-socket share leaked in.
-        assertion = builtins.length virtiofsShares == 2;
-        message = "expected exactly two virtiofs shares (workspace + hostkey); got ${toString (builtins.length virtiofsShares)}";
+        assertion = builtins.length virtiofsShares == 3;
+        message = "expected exactly three virtiofs shares (workspace + hostkey + job); got ${toString (builtins.length virtiofsShares)}";
       }
       {
         assertion = builtins.all (
@@ -642,6 +666,7 @@ in
           builtins.elem s.mountPoint [
             "/workspace"
             hostKeys.guestMountPoint
+            jobs.guestMountPoint
           ]
         ) shares;
         message = "unexpected share mountPoint(s): ${toString (map (s: s.mountPoint or "?") shares)}";
@@ -721,6 +746,127 @@ in
           echo "  agents        : $agentNames"
           echo "  host launcher : $launcherBin"
           echo "  guest dispatch: $agentRunBin"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (l) BATCH JOBS (ticket 4 A): the guest-side batch runner + its unit.     #
+  #     Eval part: the unit is inert without a job, waits for BOTH mounts,   #
+  #     runs as the unprivileged agent in /workspace, carries the required   #
+  #     hardening and a STATIC RuntimeMaxSec ceiling; the registry's batch   #
+  #     metadata is consistent; every slot's job directory is pre-created    #
+  #     (virtiofsd needs the share source to exist). Build part: the runner  #
+  #     builds (shellcheck) and its generated dispatch has an arm for every  #
+  #     batch-capable agent.                                                #
+  # ---------------------------------------------------------------------- #
+  microvm-batch-jobs =
+    let
+      unit = guest0Cfg.systemd.services.agent-job;
+      svc = unit.serviceConfig;
+      runner = findPkg guest0Cfg.environment.systemPackages "agent-job";
+      batchAgents = builtins.filter (a: a.batchArgs != null) (lib.attrValues agentRegistry.agents);
+      tmpfiles = enabledCfg.systemd.tmpfiles.rules;
+      evalMarker = mkEvalCheck "microvm-batch-jobs-eval" (
+        [
+          {
+            # Inert unless the host placed a spec in the share: an interactive
+            # slot must never accidentally run a batch job.
+            assertion = (unit.unitConfig.ConditionPathExists or null) == jobs.guestSpec;
+            message = "agent-job must be conditional on ${jobs.guestSpec}";
+          }
+          {
+            assertion =
+              let
+                m = unit.unitConfig.RequiresMountsFor or "";
+              in
+              lib.hasInfix "/workspace" m && lib.hasInfix jobs.guestMountPoint m;
+            message = "agent-job must wait for the workspace AND job mounts (RequiresMountsFor)";
+          }
+          {
+            assertion = svc.User == "agent" && svc.Group == "users";
+            message = "agent-job must run as the unprivileged guest agent user";
+          }
+          {
+            assertion = svc.WorkingDirectory == "/workspace";
+            message = "agent-job must run with /workspace as its working directory";
+          }
+          {
+            assertion = svc.Type == "oneshot";
+            message = "agent-job must be a oneshot";
+          }
+          {
+            # A static ceiling ON TOP of the per-job timeout(1), so even a spec
+            # that slipped through validation cannot run forever.
+            assertion =
+              svc.RuntimeMaxSec == microvmOpts.job.maxTimeoutSeconds + microvmOpts.job.gracePeriodSeconds;
+            message = "agent-job must carry a static RuntimeMaxSec ceiling derived from job.maxTimeoutSeconds";
+          }
+          {
+            assertion = microvmOpts.job.defaultTimeoutSeconds <= microvmOpts.job.maxTimeoutSeconds;
+            message = "the default job timeout must not exceed the maximum";
+          }
+          {
+            # Registry consistency: batch metadata must be usable.
+            assertion = agentRegistry.batchNames != [ ] && agentRegistry.errors == [ ];
+            message = "the registry must declare at least one batch-capable agent and be well-formed";
+          }
+          {
+            assertion = builtins.all (a: a.batchStdin || builtins.elem "%PROMPT%" a.batchArgs) batchAgents;
+            message = "every batch agent must either take the prompt on stdin or contain the %PROMPT% placeholder";
+          }
+          {
+            # The runner needs the agent binaries on its unit PATH.
+            assertion = builtins.all (
+              a: builtins.elem a.package.outPath (map (p: p.outPath) unit.path)
+            ) batchAgents;
+            message = "agent-job's unit PATH must contain every batch agent package";
+          }
+          {
+            # No upstream provider credential may reach a batch job: the guest
+            # env only ever carries placeholders + endpoint URLs.
+            assertion =
+              let
+                env = guest0Cfg.environment.variables;
+              in
+              (env.OPENAI_API_KEY or "") == "not-needed" && (env.ANTHROPIC_API_KEY or "") == "not-needed";
+            message = "the guest must carry only placeholder API keys, never an upstream credential";
+          }
+        ]
+        # Every slot's job dir (and its guest-writable out/) must be
+        # pre-created, otherwise virtiofsd refuses to start for that slot.
+        ++ lib.concatMap (slot: [
+          {
+            assertion = builtins.elem "d ${jobs.slotDir slot.name} 0755 root root - -" tmpfiles;
+            message = "missing tmpfiles rule for the job dir of ${slot.name}";
+          }
+          {
+            assertion = builtins.elem "d ${jobs.hostOutDir slot.name} 0755 1000 1000 - -" tmpfiles;
+            message = "missing tmpfiles rule for the guest-writable out/ dir of ${slot.name}";
+          }
+        ]) enabledSlots
+      );
+    in
+    pkgs.runCommand "microvm-batch-jobs"
+      {
+        inherit evalMarker;
+        runnerBin = "${runner}/bin/agent-job";
+        batchNames = lib.concatStringsSep " " agentRegistry.batchNames;
+      }
+      ''
+        for n in $batchNames; do
+          grep -q "$n) run_agent" "$runnerBin" \
+            || { echo "batch agent '$n' missing from the generated agent-job dispatch" >&2; exit 1; }
+        done
+        # The runner must reject a spec that names an executable, and must
+        # validate the schema version and the prompt path.
+        grep -q "spec must not contain an executable path" "$runnerBin" \
+          || { echo "agent-job does not reject executable paths in the spec" >&2; exit 1; }
+        grep -q "unsupported spec version" "$runnerBin" \
+          || { echo "agent-job does not validate the spec version" >&2; exit 1; }
+        {
+          echo "microvm-batch-jobs: guest batch runner $runnerBin"
+          echo "  batch agents: $batchNames"
           cat "$evalMarker"
         } > "$out"
       '';
@@ -1052,6 +1198,7 @@ in
       # writeShellApplication; pull it in via the unit's ExecStart so its
       # shellcheck gate runs too.
       hostKeyProvisioner = toString enabledCfg.systemd.services.agent-microvm-hostkeys.serviceConfig.ExecStart;
+      guestAgentJob = findPkg guest0Cfg.environment.systemPackages "agent-job";
       # The workmux agent `command`s are `lib.getExe <launcher>` strings whose
       # string context references the launcher derivation, so building against
       # them pulls the writeShellApplication (and its shellcheck) in.
@@ -1066,6 +1213,7 @@ in
         launchers = [
           hostLauncher
           guestAgentRun
+          guestAgentJob
         ];
         # Pull in the workmux launcher drvs via their exe-path string context.
         workmuxCmds = workmuxLauncherCmds;
@@ -1078,6 +1226,7 @@ in
           echo "  host launcher : ${hostLauncher}"
           echo "  guest agent-run: ${guestAgentRun}"
           echo "  hostkey provisioner: $hostKeyProvisioner"
+          echo "  guest agent-job: ${guestAgentJob}"
           for c in $workmuxCmds; do echo "  workmux launcher: $c"; done
         } > "$out"
       '';

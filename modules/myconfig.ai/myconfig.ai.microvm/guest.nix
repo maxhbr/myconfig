@@ -56,6 +56,9 @@
   # The ONE definition of the per-slot SSH host-key paths (host + guest side),
   # from hostkeys.nix (`_module.args.agentHostKeys`).
   agentHostKeys,
+  # The ONE definition of the batch-job format/paths plus the guest-side
+  # `agent-job` runner + service, from job.nix (`_module.args.agentJobs`).
+  agentJobs,
   # The ONE resolved network decision (profile + capabilities + DNS policy),
   # from default.nix (`_module.args.agentNetwork`). The guest-side proxy / DNS /
   # forwarder configuration below is derived from the SAME decision the host
@@ -146,6 +149,10 @@ let
       # feature is disabled, so a bare guest keeps no home-manager overhead.
       { imports = [ inputs.home.nixosModules.home-manager ]; }
       (mkGuestHome { inherit pkgs; })
+      # Unattended batch execution (ticket 4): the `agent-job` runner + its
+      # inert-unless-a-job-is-present oneshot. Slot-independent, because the
+      # job share always appears at the same guest path.
+      agentJobs.guestModule
       (mkGuestBase slot)
     ];
 
@@ -224,7 +231,21 @@ let
         source = agentHostKeys.slotDir slot.name;
         mountPoint = agentHostKeys.guestMountPoint;
         readOnly = true;
-      };
+      }
+      # THIRD share (ticket 4) — the per-slot batch JOB directory. Read-write,
+      # because the guest must write `out/result.json`; but the spec and the
+      # prompt inside it are root-owned 0444 in a root-owned 0755 directory
+      # (see job.nix), so the guest can only read them and can only write
+      # inside `out/`. The prompt therefore never travels as a process
+      # argument, and the guest cannot rewrite its own job.
+      ++ [
+        {
+          proto = "virtiofs";
+          tag = agentJobs.guestTag;
+          source = agentJobs.slotDir slot.name;
+          mountPoint = agentJobs.guestMountPoint;
+        }
+      ];
     };
 
     # Unprivileged guest user that runs the agent (plan §6). Not root; no

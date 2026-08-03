@@ -121,6 +121,7 @@ in
     ./guest.nix
     ./guest-home.nix
     ./hostkeys.nix
+    ./job.nix
     ./network.nix
     ./launcher.nix
     ./secrets.nix

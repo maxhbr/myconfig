@@ -8,8 +8,9 @@
 # from it; there must be no second, hand-maintained list anywhere:
 #
 #   guest.nix    — the guest closure's agent packages (§7), the per-agent
-#                  guest environment, and the generated `agent-run`
-#                  guest-side dispatch table (§19).
+#                  guest environment, the generated `agent-run` guest-side
+#                  dispatch table (§19) and the generated `agent-job` BATCH
+#                  dispatch table (ticket 4).
 #   launcher.nix — `--agent` validation (`validate_agent_name`) and the
 #                  `agent-microvm --help` output.
 #   workmux.nix  — the `myconfig.ai.workmux.agents.microvm-*` registrations
@@ -34,6 +35,15 @@
 #                    interactive `--attach` session. Defaults to `[ ]`.
 #                    Deliberately NOT a place for dangerous auto-approve
 #                    flags — those stay explicit per workmux agent (§19).
+#   batchArgs        argv for UNATTENDED batch execution (`agent-job`, ticket
+#                    4), VERIFIED against the pinned build's `--help`. The
+#                    token `%PROMPT%` is replaced with the prompt TEXT read
+#                    from the job directory. `null` (the default) means the
+#                    agent cannot run unattended, and `submit --agent <name>`
+#                    is rejected for it.
+#   batchStdin       when true, `agent-job` pipes the prompt FILE on stdin
+#                    instead of substituting `%PROMPT%` (for CLIs that read
+#                    instructions from stdin). Defaults to `false`.
 #   guestEnvironment attrs merged into the guest's `environment.variables`.
 #                    Model-endpoint plumbing ONLY — never a real credential
 #                    (§17: the upstream key lives only in the host LiteLLM
@@ -65,26 +75,59 @@ let
   # The single OpenAI-compatible endpoint every guest agent must use (§17).
   litellmBaseUrl = "http://127.0.0.1:${toString litellmPort}/v1";
 
+  # Model selection for hermes, identical in interactive and batch mode.
+  hermesModelArgs = [
+    "--model"
+    hermesModel
+  ];
+
   # ---- the registry ----------------------------------------------------
   # Keys are the `--agent` CLI tokens. Attribute-set order is alphabetical in
   # Nix, so every generated list (guest packages, help text, validation) has a
   # stable, deterministic order.
   specs = {
+    # Batch invocations below are taken from each pinned build's own `--help`:
+    #   claude   "-p, --print   Print response and exit (useful for pipes)"
+    #   codex    "codex exec [PROMPT] … if `-` is used, instructions are read
+    #             from stdin"
+    #   opencode "opencode run [message..]"
+    #   pi       "--print, -p   Non-interactive mode: process prompt and exit"
+    #   hermes   "-z/--oneshot PROMPT   One-shot mode: send a single prompt and
+    #             print ONLY the final response text"
     claude = {
       package = pkgs.claude-code;
       executable = "claude";
+      batchArgs = [
+        "-p"
+        "%PROMPT%"
+      ];
     };
     codex = {
       package = pkgs.codex;
       executable = "codex";
+      # `codex exec -` reads the instructions from stdin, so the prompt file
+      # never becomes an argv element.
+      batchArgs = [
+        "exec"
+        "-"
+      ];
+      batchStdin = true;
     };
     opencode = {
       package = pkgs.opencode;
       executable = "opencode";
+      batchArgs = [
+        "run"
+        "%PROMPT%"
+      ];
     };
     pi = {
       package = pkgs.nixos-unstable.pi-coding-agent;
       executable = "pi";
+      batchArgs = [
+        "--print"
+        "%PROMPT%"
+      ];
     };
     # Hermes Agent (NousResearch). The SAME flake input + package attr the
     # host `myconfig.ai.hermes` backends use, so the guest runs the identical
@@ -101,10 +144,11 @@ let
       workmuxType = "hermes";
       # Hermes has no model auto-discovery: with no provider configured it
       # drops into `hermes setup`. Pin the LiteLLM route explicitly (the same
-      # model name the host `myconfig.ai.hermes` backends use).
-      interactiveArgs = [
-        "--model"
-        hermesModel
+      # model name the host `myconfig.ai.hermes` backends use) in BOTH modes.
+      interactiveArgs = hermesModelArgs;
+      batchArgs = hermesModelArgs ++ [
+        "--oneshot"
+        "%PROMPT%"
       ];
       # Hermes resolves its endpoint via config.yaml base_url →
       # CUSTOM_BASE_URL → OPENROUTER_BASE_URL → openrouter.ai
@@ -137,6 +181,8 @@ let
       executable = name;
       workmuxType = name;
       interactiveArgs = [ ];
+      batchArgs = null;
+      batchStdin = false;
       guestEnvironment = { };
       persistentState = {
         enabledByDefault = false;
@@ -172,6 +218,21 @@ let
     ++ lib.optional (
       !lib.isList a.interactiveArgs
     ) "myconfig.ai.microvm: agent '${a.name}' interactiveArgs must be a list."
+    ++ lib.optional (
+      a.batchArgs != null && !lib.isList a.batchArgs
+    ) "myconfig.ai.microvm: agent '${a.name}' batchArgs must be a list or null."
+    ++ lib.optional (
+      a.batchArgs != null && !lib.all lib.isString a.batchArgs
+    ) "myconfig.ai.microvm: agent '${a.name}' batchArgs must contain only strings."
+    ++ lib.optional (
+      a.batchStdin && a.batchArgs == null
+    ) "myconfig.ai.microvm: agent '${a.name}' sets batchStdin but has no batchArgs."
+    ++ lib.optional (
+      a.batchStdin && lib.elem "%PROMPT%" (a.batchArgs or [ ])
+    ) "myconfig.ai.microvm: agent '${a.name}' cannot combine batchStdin with the %PROMPT% placeholder."
+    ++ lib.optional (
+      a.batchArgs != null && !a.batchStdin && !lib.elem "%PROMPT%" a.batchArgs
+    ) "myconfig.ai.microvm: agent '${a.name}' batchArgs must contain %PROMPT% (or set batchStdin)."
     ++ lib.optional (
       !lib.isAttrs a.guestEnvironment
     ) "myconfig.ai.microvm: agent '${a.name}' guestEnvironment must be an attrset."
@@ -242,4 +303,31 @@ rec {
   # A bash `case` pattern (`claude | codex | ...`) for host-side `--agent`
   # validation in launcher.nix.
   namesCasePattern = lib.concatStringsSep " | " names;
+
+  # ---- batch execution (ticket 4) --------------------------------------
+  batchAgents = lib.filter (a: a.batchArgs != null) agentList;
+
+  # `--agent` tokens usable with `agent-microvm submit`.
+  batchNames = map (a: a.name) batchAgents;
+  batchNamesAlternation = lib.concatStringsSep "|" batchNames;
+  batchNamesCasePattern = lib.concatStringsSep " | " batchNames;
+
+  # A bash `case` body for the GUEST batch runner (`agent-job`). Each arm calls
+  # one of the runner's two helpers, which wrap the invocation in the per-job
+  # `timeout`:
+  #   run_agent        argv…   (prompt substituted for %PROMPT%)
+  #   run_agent_stdin  argv…   (prompt FILE piped on stdin)
+  # The prompt therefore never appears in a HOST command line, and the guest
+  # can only ever run an executable this registry declares.
+  batchDispatchCases = lib.concatStringsSep "\n" (
+    map (
+      a:
+      let
+        runner = if a.batchStdin then "run_agent_stdin" else "run_agent";
+        argv = [ a.executable ] ++ a.batchArgs;
+        render = tok: if tok == "%PROMPT%" then "\"$prompt\"" else lib.escapeShellArg tok;
+      in
+      "    ${a.name}) ${runner} ${lib.concatMapStringsSep " " render argv} ;;"
+    ) batchAgents
+  );
 }

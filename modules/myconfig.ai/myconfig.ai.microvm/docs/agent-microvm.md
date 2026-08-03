@@ -333,6 +333,95 @@ deliberately chose otherwise.
 
 ---
 
+## Unattended batch jobs
+
+Interactive `run --attach` is unchanged. In addition, a slot can run a job
+**unattended** from a versioned job specification (improvement ticket 4). The
+host-side `submit` / `cancel` / `recover` commands are documented in the next
+section; the format and the guest side are described here.
+
+### Job directory (runtime only — never in the Nix store)
+
+```text
+/var/lib/agent-microvms/jobs/<slot>/            root:root 0755   guest: read-only*
+/var/lib/agent-microvms/jobs/<slot>/spec.json   root:root 0444   the job spec (v1)
+/var/lib/agent-microvms/jobs/<slot>/prompt.md   root:root 0444   the prompt TEXT
+/var/lib/agent-microvms/jobs/<slot>/out/        1000:1000 0755   guest-writable
+/var/lib/agent-microvms/jobs/<slot>/out/result.json              the guest's result
+```
+
+The directory is surfaced into the guest at `/run/agent-job` by a third
+virtiofs share. \* The share is read-**write** because the guest must write
+`out/result.json`, but the spec and prompt are root-owned `0444` inside a
+root-owned `0755` directory and virtiofsd passes ownership through — so the
+untrusted `agent` user can only **read** them (and can only write inside
+`out/`). A guest therefore cannot lift its own timeout or swap its own agent.
+
+Prompts never travel as process arguments and never enter the Nix store.
+
+`spec.json` (schema `version = 1`, validated on **both** sides):
+
+```json
+{
+  "version": 1,
+  "taskId": "fix-parser",
+  "agent": "opencode",
+  "workspace": "/workspace",
+  "promptFile": "/run/agent-job/prompt.md",
+  "timeoutSeconds": 3600
+}
+```
+
+The guest runner rejects (as `infrastructure-error`): an unknown schema
+version, an invalid `taskId`, an agent that is not batch-capable in the
+registry, a `workspace` other than `/workspace`, a `promptFile` that is not
+*exactly* `/run/agent-job/prompt.md` (so traversal and symlink games fail), a
+non-integer/out-of-range `timeoutSeconds`, and **any** attempt to name an
+executable (`command` / `exec` / `executable`) — the agent is always resolved
+through [the registry](#supported-agents--the-authoritative-registry).
+
+### `result.json`
+
+Written with tmp-file + `rename`, so the host never reads a half-written
+result:
+
+```json
+{
+  "version": 1, "taskId": "fix-parser", "agent": "opencode",
+  "state": "completed", "exitCode": 0,
+  "startedAt": "…Z", "finishedAt": "…Z", "timedOut": false, "message": ""
+}
+```
+
+States: `starting`, `running`, `completed`, `failed`, `timed-out`,
+`cancelled` (written by the host), `infrastructure-error`.
+
+### Guest service
+
+`agent-job.service` is **inert unless a job is present**
+(`ConditionPathExists=/run/agent-job/spec.json`), waits for both the workspace
+and job mounts (`RequiresMountsFor`), and runs the generated batch dispatch as
+the unprivileged `agent` user in `/workspace` with
+`NoNewPrivileges`, `PrivateDevices`, `PrivateTmp`, `ProtectKernelTunables`,
+`ProtectKernelModules`, `ProtectControlGroups` and `RestrictSUIDSGID`.
+
+The timeout is enforced **three** times: per-job `timeout(1)` in the guest, the
+unit's static `RuntimeMaxSec` ceiling
+(`job.maxTimeoutSeconds + job.gracePeriodSeconds`), and the host's own wait
+(`job.gracePeriodSeconds` beyond the job's timeout).
+
+> **No guest-side power-off.** microvm.nix runs `microvm@<slot>` with
+> `Restart = "always"`, so a guest that powered itself off after the job would
+> be rebooted immediately. Stopping the VM is the host's part of the lifecycle.
+
+Per-agent batch invocations come from the registry (`batchArgs` / `batchStdin`),
+verified against each pinned build's own `--help`:
+`claude -p <prompt>`, `codex exec -` (prompt on **stdin**),
+`opencode run <prompt>`, `pi --print <prompt>`,
+`hermes --model <m> --oneshot <prompt>`.
+
+---
+
 ## Listing & status
 
 ```bash

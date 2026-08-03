@@ -9,7 +9,7 @@ commit as the work it describes.
 | 1 | `01-agent-registry-refactor.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 2 | `02-add-hermes-support.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 3 | `03-network-and-control-channel-hardening.md` | DONE | A, B, C (3 commits) |
-| 4 | `04-batch-execution-and-lifecycle.md` | TODO | — |
+| 4 | `04-batch-execution-and-lifecycle.md` | IN PROGRESS (A done) | — |
 | 5 | `05-resource-classes-and-state-management.md` | TODO | — |
 | 6 | `06-runtime-validation-and-documentation.md` | TODO | — |
 
@@ -119,3 +119,32 @@ C: network profiles).
   - new check `microvm-network-profiles` (43 assertions) renders all four
     profiles and asserts both what each allows and what it must NOT allow;
     `microvm-eval-rejects-invalid` grew the migration/ambiguity cases.
+
+### Ticket 4 — batch execution + lifecycle
+
+Split into two commits (A: job format + guest runner, B: host submit/cancel/
+recover + allocation tokens).
+
+- **Part A (done).** New `job.nix` owns the versioned job format, the per-slot
+  host job directories (tmpfiles-created, because virtiofsd needs its share
+  source to exist), the `myconfig.ai.microvm.job.*` timeout options and the
+  guest-side `agent-job` runner + hardened oneshot.
+  - THIRD virtiofs share per slot at `/run/agent-job`: read-write (the guest
+    writes `out/result.json`) but spec+prompt are root-owned 0444 inside a
+    root-owned 0755 dir, so the untrusted agent can only read them. Prompts
+    never become process arguments and never enter the Nix store.
+  - registry gained `batchArgs` (with a `%PROMPT%` placeholder) + `batchStdin`,
+    taken from each pinned build's own `--help`; `batchDispatchCases` generates
+    the guest runner's case table, so batch mode cannot drift from the registry.
+  - timeout enforced twice in the guest (per-job `timeout(1)` + static
+    `RuntimeMaxSec` ceiling); the host adds a third in part B.
+  - deliberately NO guest power-off: `microvm@<slot>` has `Restart=always`, so
+    a self-powering-off guest would boot-loop. The host stops the VM.
+  - VERIFIED BY RUNNING the built runner under bwrap with a stubbed agent and
+    faked `/run/agent-job` + `/workspace`: success, agent failure (exit code
+    propagated), timeout (`state=timed-out`, `timedOut=true`), stdin-mode agent
+    (codex), inert-without-spec, and every rejection path (bad version,
+    smuggled `command`, traversal `promptFile`, excessive timeout, non-batch
+    agent).
+  - new check `microvm-batch-jobs` (13 eval assertions + dispatch/rejection
+    greps of the BUILT runner); shares check now pins exactly three shares.
