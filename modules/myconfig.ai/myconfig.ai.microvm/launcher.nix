@@ -46,6 +46,8 @@
   lib,
   pkgs,
   myconfig,
+  # The effective resource-class table (see default.nix).
+  agentResourceClasses,
   # The ONE authoritative supported-agent registry instance, built in
   # default.nix (`_module.args.agentRegistry`). `--agent` validation and the
   # help output below are GENERATED from it, so the host launcher can never
@@ -63,7 +65,11 @@
 let
   cfg = config.myconfig.ai.microvm;
 
-  slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
+  # The slot pool of the effective resource classes (ticket 5 A). The class
+  # table comes from default.nix (`_module.args.agentResourceClasses`), which
+  # also performs the legacy `slotCount` migration, so every module builds the
+  # SAME pool.
+  slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   # Render the deterministic slot table as bash arrays. Using the shared slot
   # helper guarantees the launcher sees exactly the names/IPs/MACs/TAPs that
@@ -94,6 +100,17 @@ let
       # `status` so the operator can see the slot's control-channel identity;
       # not yet used as a transport (see slots.nix `cid`).
       readonly SLOT_CIDS=(${bashList "cid"})
+      # Resource class of each slot plus its prebuilt sizing (ticket 5 A). The
+      # allocator only ever considers slots of the REQUESTED class — it never
+      # silently substitutes a smaller one.
+      readonly SLOT_CLASSES=(${bashList "class"})
+      readonly SLOT_VCPUS=(${bashList "vcpu"})
+      readonly SLOT_MEMS=(${bashList "memoryMiB"})
+      # Alphabetically ordered class names, generated from the module options.
+      readonly RESOURCE_CLASSES=(${
+        lib.concatMapStringsSep " " lib.escapeShellArg (lib.attrNames agentResourceClasses)
+      })
+      readonly DEFAULT_RESOURCE_CLASS=${lib.escapeShellArg (lib.head (lib.attrNames agentResourceClasses))}
 
       # ==== configuration (from the Nix module options) ====================
       readonly WORKSPACE_ROOT=${lib.escapeShellArg cfg.workspaceRoot}
@@ -196,6 +213,18 @@ let
       slot_mac() { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_MACS[$i]}"; }
       slot_tap() { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_TAPS[$i]}"; }
       slot_cid() { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_CIDS[$i]}"; }
+      slot_class() { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_CLASSES[$i]}"; }
+      slot_vcpu()  { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_VCPUS[$i]}"; }
+      slot_mem()   { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_MEMS[$i]}"; }
+
+      # ---- resource classes (ticket 5 A) ---------------------------------
+      validate_resource_class() {
+          local want="$1" c
+          for c in "''${RESOURCE_CLASSES[@]}"; do
+              [[ "$c" == "$want" ]] && return 0
+          done
+          die "unknown --resource-class '$want' (expected: $(IFS='|'; echo "''${RESOURCE_CLASSES[*]}"))"
+      }
 
       session_file() { printf '%s' "$SLOTS_DIR/$1/session.json"; }
       mount_point()  { printf '%s' "$STATE_ROOT/$1/workspace"; }
@@ -271,20 +300,35 @@ let
       # The caller MUST have armed its cleanup trap before calling this.
       ALLOC_SLOT=""
       ALLOC_TOKEN=""
+      # Args: <resource-class> <wait-seconds>. Only slots of THAT class are
+      # considered (never a different/smaller one). With wait-seconds > 0 the
+      # allocation is retried, releasing the global lock between attempts, until
+      # the bounded window expires.
       allocate_slot() {
-          local name
+          local want_class="$1" wait_for="$2" name waited=0
           ALLOC_SLOT=""
           ALLOC_TOKEN="$(new_token)"
           mkdir -p -- "$RUN_DIR" "$SLOTS_DIR"
-          exec 9>"$ALLOC_LOCK"
-          flock 9
-          for name in "''${SLOT_NAMES[@]}"; do
-              if slot_is_free "$name"; then ALLOC_SLOT="$name"; break; fi
-          done
-          if [[ -z "$ALLOC_SLOT" ]]; then
+          while :; do
+              exec 9>"$ALLOC_LOCK"
+              flock 9
+              for name in "''${SLOT_NAMES[@]}"; do
+                  [[ "$(slot_class "$name")" == "$want_class" ]] || continue
+                  if slot_is_free "$name"; then ALLOC_SLOT="$name"; break; fi
+              done
+              [[ -n "$ALLOC_SLOT" ]] && break
+              # Nothing free in the requested class: release the lock so another
+              # launcher can finish, then either wait or fail loudly.
               flock -u 9
-              die "no free slot (all ''${#SLOT_NAMES[@]} in use)"
-          fi
+              exec 9>&-
+              if (( waited >= wait_for )); then
+                  local waited_note=""
+                  (( wait_for > 0 )) && waited_note=" after ''${wait_for}s"
+                  die "no free slot in resource class '$want_class' ($(class_slot_count "$want_class") slot(s) total)$waited_note"
+              fi
+              sleep 5
+              waited=$(( waited + 5 ))
+          done
           # Per-slot lock, held for the remainder of this process (§21).
           exec 8>"$RUN_DIR/$ALLOC_SLOT.lock"
           if ! flock -n 8; then
@@ -301,6 +345,14 @@ let
               > "$(session_file "$ALLOC_SLOT")"
           flock -u 9
           exec 9>&-
+      }
+
+      class_slot_count() {
+          local want="$1" n=0 name
+          for name in "''${SLOT_NAMES[@]}"; do
+              [[ "$(slot_class "$name")" == "$want" ]] && n=$(( n + 1 ))
+          done
+          printf '%s' "$n"
       }
 
       # Full session record for status/list/cancel/recover (§34 + ticket 4).
@@ -406,6 +458,13 @@ let
               ${agentRegistry.batchNamesCasePattern}) return 0 ;;
               *) die "--agent '$1' cannot run unattended (expected: ${agentRegistry.batchNamesAlternation})" ;;
           esac
+      }
+
+      # A bounded allocation wait: 0 (fail immediately) or a positive integer.
+      validate_wait() {
+          local w="$1"
+          [[ "$w" =~ ^[0-9]+$ ]] || die "--wait must be a non-negative integer (got '$w')"
+          (( w <= JOB_MAX_TIMEOUT )) || die "--wait $w is unreasonably long (max $JOB_MAX_TIMEOUT)"
       }
 
       # A job timeout must be a plain positive integer within the module's
@@ -683,7 +742,8 @@ let
       Usage: $PROG <command> [options]
 
       Commands:
-        run --name <task> --repository <path> [--agent <name>] [--branch <br>] [--attach]
+        run --name <task> --repository <path> [--agent <name>] [--branch <br>]
+            [--resource-class <class>] [--wait <sec>] [--attach]
                               Allocate a free slot, create a standalone clone,
                               bind-mount it at the slot's /workspace source and
                               start the microVM. With --attach, SSH in running
@@ -700,6 +760,7 @@ let
         console <slot|task>   Attach to the VM serial console (journal).
         submit --name <task> --repository <path> --agent <name>
                --prompt-file <path> [--timeout <sec>] [--branch <br>]
+               [--resource-class <class>] [--wait <sec>]
                               UNATTENDED batch run: allocate a slot, clone the
                               repo, write a versioned job spec + the prompt into
                               the slot's job dir, boot the VM, wait for the
@@ -723,6 +784,15 @@ let
 
       Supported agents (--agent), generated from the module's agent registry:
         ${lib.concatStringsSep "\n  " agentRegistry.names}
+
+      Resource classes (--resource-class), generated from the module options
+      (the allocator NEVER substitutes a different class; --wait <sec> bounds
+      how long it waits for a free slot in the requested one):
+        ${lib.concatStringsSep "\n  " (
+          lib.mapAttrsToList (
+            n: c: "${n}: ${toString c.count} slot(s), ${toString c.vcpu} vCPU, ${toString c.memoryMiB} MiB"
+          ) agentResourceClasses
+        )}
       EOF
           exit 2
       }
@@ -730,20 +800,27 @@ let
       cmd_run() {
           require_root run
           local task="" repo="" agent="" branch="" attach=0
+          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0
           while [[ $# -gt 0 ]]; do
               case "$1" in
                   --name)       task="''${2-}"; shift 2 ;;
                   --repository) repo="''${2-}"; shift 2 ;;
                   --agent)      agent="''${2-}"; shift 2 ;;
                   --branch)     branch="''${2-}"; shift 2 ;;
+                  --resource-class) rclass="''${2-}"; shift 2 ;;
+                  --wait)       wait_for="''${2-}"; shift 2 ;;
                   --attach)     attach=1; shift ;;
                   --name=*)       task="''${1#*=}"; shift ;;
                   --repository=*) repo="''${1#*=}"; shift ;;
                   --agent=*)      agent="''${1#*=}"; shift ;;
                   --branch=*)     branch="''${1#*=}"; shift ;;
+                  --resource-class=*) rclass="''${1#*=}"; shift ;;
+                  --wait=*)       wait_for="''${1#*=}"; shift ;;
                   *) die "run: unknown argument '$1'" ;;
               esac
           done
+          validate_resource_class "$rclass"
+          validate_wait "$wait_for"
           [[ -n "$task" ]] || die "run: --name <task> is required"
           [[ -n "$repo" ]] || die "run: --repository <path> is required"
           validate_task_name "$task"
@@ -772,13 +849,13 @@ let
           trap on_exit EXIT
           trap 'exit 130' INT TERM
 
-          allocate_slot
+          allocate_slot "$rclass" "$wait_for"
           slot="$ALLOC_SLOT"
           token="$ALLOC_TOKEN"
 
           local clone ip
           ip="$(slot_ip "$slot")"
-          log "allocated slot $slot ($ip)"
+          log "allocated slot $slot ($ip; class $rclass, $(slot_vcpu "$slot") vCPU, $(slot_mem "$slot") MiB)"
           # Deterministic clone path; create_clone runs in THIS shell (see its
           # header) so a failure exits cmd_run and its EXIT trap cleans up.
           clone="$WORKSPACE_ROOT/$task"
@@ -837,6 +914,7 @@ let
       cmd_submit() {
           require_root submit
           local task="" repo="" agent="" branch="" prompt="" timeout_s=""
+          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0
           while [[ $# -gt 0 ]]; do
               case "$1" in
                   --name)        task="''${2-}"; shift 2 ;;
@@ -845,15 +923,21 @@ let
                   --branch)      branch="''${2-}"; shift 2 ;;
                   --prompt-file) prompt="''${2-}"; shift 2 ;;
                   --timeout)     timeout_s="''${2-}"; shift 2 ;;
+                  --resource-class) rclass="''${2-}"; shift 2 ;;
+                  --wait)        wait_for="''${2-}"; shift 2 ;;
                   --name=*)        task="''${1#*=}"; shift ;;
                   --repository=*)  repo="''${1#*=}"; shift ;;
                   --agent=*)       agent="''${1#*=}"; shift ;;
                   --branch=*)      branch="''${1#*=}"; shift ;;
                   --prompt-file=*) prompt="''${1#*=}"; shift ;;
                   --timeout=*)     timeout_s="''${1#*=}"; shift ;;
+                  --resource-class=*) rclass="''${1#*=}"; shift ;;
+                  --wait=*)        wait_for="''${1#*=}"; shift ;;
                   *) die "submit: unknown argument '$1'" ;;
               esac
           done
+          validate_resource_class "$rclass"
+          validate_wait "$wait_for"
           [[ -n "$task" ]]   || die "submit: --name <task> is required"
           [[ -n "$repo" ]]   || die "submit: --repository <path> is required"
           [[ -n "$agent" ]]  || die "submit: --agent <name> is required"
@@ -883,13 +967,13 @@ let
           trap on_exit EXIT
           trap 'exit 130' INT TERM
 
-          allocate_slot
+          allocate_slot "$rclass" "$wait_for"
           slot="$ALLOC_SLOT"
           token="$ALLOC_TOKEN"
 
           local clone ip
           ip="$(slot_ip "$slot")"
-          log "allocated slot $slot ($ip) for batch task '$task'"
+          log "allocated slot $slot ($ip; class $rclass, $(slot_vcpu "$slot") vCPU, $(slot_mem "$slot") MiB) for batch task '$task'"
           clone="$WORKSPACE_ROOT/$task"
           create_clone "$top" "$task" "$branch"
           setup_bind_mount "$slot" "$clone"
@@ -1163,6 +1247,7 @@ let
               fi
               cat <<EOF
       slot:        $slot
+        class:     $(slot_class "$slot") ($(slot_vcpu "$slot") vCPU, $(slot_mem "$slot") MiB)
         service:   $state
         ip:        $ip
         mac:       $mac
@@ -1190,7 +1275,8 @@ let
               task=""
               [[ -e "$(session_file "$slot")" ]] \
                   && task="$(jq -r '.task // ""' "$(session_file "$slot")")"
-              printf '%-10s %-8s %-16s %s\n' "$slot" "$state" "$(slot_ip "$slot")" "''${task:-<free>}"
+              printf '%-18s %-8s %-8s %-16s %s\n' "$slot" "$(slot_class "$slot")" \
+                  "$state" "$(slot_ip "$slot")" "''${task:-<free>}"
           done
       }
 

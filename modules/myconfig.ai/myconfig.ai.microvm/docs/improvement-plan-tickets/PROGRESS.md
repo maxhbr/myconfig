@@ -10,7 +10,7 @@ commit as the work it describes.
 | 2 | `02-add-hermes-support.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 3 | `03-network-and-control-channel-hardening.md` | DONE | A, B, C (3 commits) |
 | 4 | `04-batch-execution-and-lifecycle.md` | DONE | A, B (2 commits) |
-| 5 | `05-resource-classes-and-state-management.md` | TODO | — |
+| 5 | `05-resource-classes-and-state-management.md` | IN PROGRESS (A done) | — |
 | 6 | `06-runtime-validation-and-documentation.md` | TODO | — |
 
 Status values: `TODO`, `IN PROGRESS`, `DONE`, `BLOCKED`.
@@ -173,3 +173,30 @@ recover + allocation tokens).
     `recover` branch in both dry-run and real mode. The HOST-generated
     `spec.json` was then fed to the real GUEST runner to prove the format
     contract end-to-end.
+
+### Ticket 5 — resource classes + state management
+
+Split into commits (A: resource classes, B: task-scoped agent state, C: limits
++ usage reporting + workspace-safety review).
+
+- **Part A (done).** `resourceClasses` (attrsOf { count; vcpu; memoryMiB; })
+  replaces `slotCount`/`defaultVcpu`/`defaultMemoryMiB` (deprecated, still
+  honoured as a synthesized single `normal` class; setting both spellings is
+  rejected as ambiguous, and using the legacy ones warns).
+  - `slots.nix` now takes the class table and assigns a per-class `classIndex`
+    (→ name `agent-<class>-<i>`, tap `vm-<class>-<i>`) plus a pool-wide
+    `globalIndex` (→ MAC/IPv4/CID). New assertions: non-empty pool, total ≤
+    maxSlotCount, class-name charset, TAP ≤ 15 chars (IFNAMSIZ), unique
+    names/taps.
+  - the effective class table is resolved ONCE in default.nix and shared via
+    `_module.args.agentResourceClasses`, so guest/network/hostkeys/job/launcher
+    all build the SAME pool; guests are sized from their slot's class.
+  - launcher: `--resource-class` (validated, generated from the options) and
+    `--wait <sec>` (bounded); the allocator filters by class and NEVER
+    substitutes another one; `status`/`list`/`--help` show classes and sizing.
+  - f13 migrated to an explicit `mkForce { small; normal; }` pool.
+  - VERIFIED BY RUNNING the built launcher (stubbed systemctl/mount): unknown
+    class rejected, per-class allocation, "class full" refusal WITHOUT
+    substitution, bounded `--wait` (measured 5s), class-aware status/list.
+  - new check `microvm-resource-classes` (11 eval assertions + launcher greps);
+    the slot-pool check now exercises six class tables (66 assertions).

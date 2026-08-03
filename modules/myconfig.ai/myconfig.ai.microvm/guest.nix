@@ -50,6 +50,8 @@
   inputs,
   myconfig,
   mkGuestHome,
+  # The effective resource-class table (see default.nix).
+  agentResourceClasses,
   # The ONE authoritative supported-agent registry instance, built in
   # default.nix (`_module.args.agentRegistry`). See ./agents.nix.
   agentRegistry,
@@ -73,7 +75,11 @@ let
   # Deterministic fixed slot pool — the single source of truth lives in
   # slots.nix and is shared with default.nix (which asserts uniqueness and
   # the slot-count bound over this exact table).
-  slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
+  # The slot pool of the effective resource classes (ticket 5 A). The class
+  # table comes from default.nix (`_module.args.agentResourceClasses`), which
+  # also performs the legacy `slotCount` migration, so every module builds the
+  # SAME pool.
+  slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   netCaps = agentNetwork.caps;
 
@@ -165,8 +171,10 @@ let
 
     microvm = {
       hypervisor = "cloud-hypervisor";
-      vcpu = cfg.defaultVcpu;
-      mem = cfg.defaultMemoryMiB;
+      # Sizing comes from the slot's RESOURCE CLASS (ticket 5 A), so all slots
+      # of a class are identical and prebuilt — no per-job Nix evaluation.
+      vcpu = slot.vcpu;
+      mem = slot.memoryMiB;
 
       # Deterministic per-slot TAP + MAC (plan §4). Guest-side IP
       # addressing / routing is intentionally deferred to network.nix.

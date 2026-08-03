@@ -48,12 +48,18 @@
   config,
   lib,
   pkgs,
+  # The effective resource-class table (see default.nix).
+  agentResourceClasses,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
 
-  slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
+  # The slot pool of the effective resource classes (ticket 5 A). The class
+  # table comes from default.nix (`_module.args.agentResourceClasses`), which
+  # also performs the legacy `slotCount` migration, so every module builds the
+  # SAME pool.
+  slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   # --- the ONE definition of every host-key path ------------------------
   # Exported as a module argument (see `_module.args.agentHostKeys` below) so

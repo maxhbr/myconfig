@@ -62,9 +62,8 @@ myconfig.ai.microvm = {
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `enable` | `false` | Turn the whole tier on for a host. |
-| `slotCount` | `4` | Fixed pool size (`agent-0 .. agent-<n-1>`); bounds max concurrency. |
-| `defaultVcpu` | `4` | vCPUs per guest. |
-| `defaultMemoryMiB` | `8192` | Guest RAM per guest (MiB). |
+| `resourceClasses` | `{ normal = { count = 4; vcpu = 4; memoryMiB = 8192; }; }` | Fixed, **prebuilt** resource classes. See [Resource classes](#resource-classes). |
+| `slotCount` / `defaultVcpu` / `defaultMemoryMiB` | `4` / `4` / `8192` | **DEPRECATED** → `resourceClasses`. Still honoured (as a single `normal` class) while `resourceClasses` is unset; setting both is rejected. |
 | `bridgeName` | `agentbr0` | Private bridge name. |
 | `subnet` | `192.168.83.0/24` | Private subnet. |
 | `gatewayAddress` | `192.168.83.1` | Host-side bridge address + LiteLLM forwarder bind address. |
@@ -83,6 +82,48 @@ myconfig.ai.microvm = {
 | `acknowledgeInsecureNetwork` | `false` | **Required** by the insecure profiles (`package-access`, `internet`). |
 | `allowPublicInternet` | `false` | **DEPRECATED** → `networkProfile = "internet"`. Translated with a warning when `networkProfile` is unset; rejected as ambiguous when it contradicts an explicit profile. |
 | `allowPrivateNetworks` / `allowInterVmTraffic` | `false` | **REMOVED** — setting either to `true` is rejected by an assertion. See [Network profiles](#network-profiles). |
+
+### Resource classes
+
+The slot pool is grouped into **fixed, prebuilt** resource classes. Each class
+contributes `count` slots named `agent-<class>-<i>`, sized by the class:
+
+```nix
+myconfig.ai.microvm.resourceClasses = lib.mkForce {
+  small  = { count = 2; vcpu = 2; memoryMiB = 4096; };
+  normal = { count = 4; vcpu = 4; memoryMiB = 8192; };
+  large  = { count = 1; vcpu = 8; memoryMiB = 16384; };
+};
+```
+
+```bash
+sudo agent-microvm run    --resource-class large  …
+sudo agent-microvm submit --resource-class small  … [--wait 300]
+sudo agent-microvm list          # slot, class, state, ip, task
+sudo agent-microvm --help        # lists the configured classes
+```
+
+- Every slot keeps its **own** deterministic TAP, MAC, IPv4, VSOCK CID,
+  workspace bind-mount target, job directory and SSH host identity — across
+  classes, not just within one.
+- There is **no per-job Nix evaluation**: the pool is built with the system.
+- The allocator only ever considers the **requested** class; it never
+  substitutes a different (e.g. smaller) one. If the class is full it fails with
+  a clear error, or waits at most `--wait <sec>` for a free slot.
+- Sizing lives in the class, so all slots of a class are identical.
+- `mkForce` is important: defining a single class **merges** with the module's
+  default `normal` class instead of replacing the pool.
+- Class names must match `[a-z][a-z0-9-]*` **and** be short enough that
+  `vm-<class>-<i>` stays within the 15-character Linux interface-name limit —
+  both are asserted at eval time.
+- Global index order (which drives MAC/IPv4/CID) walks the classes
+  alphabetically, so adding or resizing a class re-numbers the *addresses* of
+  later classes. Slot **names** are stable, and every host-side directory is
+  keyed by name.
+
+> Renaming note: slots were called `agent-<i>` before resource classes existed.
+> Old per-slot state under `/var/lib/microvms/agent-<i>` (and the matching
+> hostkey/job dirs) is simply unused after the switch and can be deleted.
 
 ### Network profiles
 

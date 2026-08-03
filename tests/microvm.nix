@@ -28,11 +28,11 @@
 #                                        assertions actually REJECT invalid
 #                                        config (slotCount bound, enableSsh key,
 #                                        insecure-network acknowledgement)
-#   microvm-eval-workspace-share §10/§11 — the agent-0 guest declares EXACTLY
+#   microvm-eval-workspace-share §10/§11 — the reference guest declares EXACTLY
 #                                        one virtiofs share: the writable
 #                                        /workspace whose source matches the
 #                                        launcher bind-mount target (crit. 12)
-#   microvm-guest-evaluates   §38     — the agent-0 guest closure evaluates to a
+#   microvm-guest-evaluates   §38     — the reference guest closure evaluates to a
 #                                        realisable derivation (drvPath marker)
 #   microvm-launcher-shellcheck §38   — host launcher + guest `agent-run` +
 #                                        workmux per-agent launchers BUILD, so
@@ -67,10 +67,16 @@ let
   # generator the module uses.
   enabledSlots =
     (import ../modules/myconfig.ai/myconfig.ai.microvm/slots.nix { inherit lib; }).mkSlots
-      microvmOpts.slotCount;
+      resourceClasses;
+  # The EFFECTIVE resource-class table of the reference host (ticket 5 A),
+  # including default.nix's legacy `slotCount` migration.
+  resourceClasses = self.nixosConfigurations.test-f13._module.args.agentResourceClasses;
+  # The reference slot every guest-level check inspects: the first slot of the
+  # first class, taken from the generated pool rather than hardcoded.
+  refSlot = lib.head enabledSlots;
   gateway = microvmOpts.gatewayAddress; # 192.168.83.1
   port = toString microvmOpts.litellmPort; # 4000
-  slotCount = microvmOpts.slotCount; # 4
+  slotCount = lib.length enabledSlots;
 
   # Turn a list of { assertion; message; } into a marker derivation. If any
   # assertion is false the eval THROWS (so the check fails at eval time with a
@@ -94,7 +100,7 @@ let
   # The evaluated guest NixOS config for a declarative slot. microvm.nix
   # stores it under `microvm.vms.<name>.config.config` (see the vms submodule
   # `config` option in the host module). declaredRunner is the CH runner drv.
-  guest0Cfg = enabledCfg.microvm.vms."agent-0".config.config;
+  guest0Cfg = enabledCfg.microvm.vms.${refSlot.name}.config.config;
 
   # Look up a package by its `name`/`pname` in an evaluated systemPackages
   # list (used to fish the module's internal `let`-bound writeShellApplication
@@ -128,13 +134,62 @@ let
   # Slot counts to exercise. Includes small pools, pools with index >= 10
   # (which exercise 2-hex-digit MAC formatting, e.g. i=10 → ...:1a), and the
   # generator's declared maximum.
-  slotCountsUnderTest = [
-    1
-    2
-    4
-    8
-    16
-    slotLib.maxSlotCount
+  # Class tables to exercise: single class (incl. the generator's declared
+  # maximum), multiple classes, and pools with a global index >= 10 (which
+  # exercises 2-hex-digit MAC formatting, e.g. i=10 -> ...:1a).
+  slotPoolsUnderTest = [
+    {
+      normal = {
+        count = 1;
+        vcpu = 2;
+        memoryMiB = 1024;
+      };
+    }
+    {
+      normal = {
+        count = 4;
+        vcpu = 4;
+        memoryMiB = 8192;
+      };
+    }
+    {
+      small = {
+        count = 2;
+        vcpu = 2;
+        memoryMiB = 4096;
+      };
+      normal = {
+        count = 4;
+        vcpu = 4;
+        memoryMiB = 8192;
+      };
+      large = {
+        count = 1;
+        vcpu = 8;
+        memoryMiB = 16384;
+      };
+    }
+    {
+      small = {
+        count = 8;
+        vcpu = 2;
+        memoryMiB = 4096;
+      };
+      normal = {
+        count = 8;
+        vcpu = 4;
+        memoryMiB = 8192;
+      };
+    }
+    {
+      normal = {
+        count = slotLib.maxSlotCount;
+        vcpu = 4;
+        memoryMiB = 8192;
+      };
+    }
+    # The reference host's own pool.
+    resourceClasses
   ];
 
   ipv4Re = "([0-9]{1,3}\\.){3}[0-9]{1,3}";
@@ -143,19 +198,33 @@ let
   # drift if slots.nix ever changes the OUI. The trailing `[0-9a-f]{2}`
   # bound is intentional: it would correctly fail if maxSlotCount were ever
   # raised past the single-byte MAC ceiling (255).
-  macPrefix = builtins.substring 0 15 (slotLib.mkSlot 0).mac; # "02:00:00:83:00:"
+  macPrefix =
+    builtins.substring 0 15
+      (slotLib.mkSlot {
+        class = "normal";
+        classIndex = 0;
+        globalIndex = 0;
+        vcpu = 1;
+        memoryMiB = 1;
+      }).mac; # "02:00:00:83:00:"
   macRe = "${macPrefix}[0-9a-f]{2}";
 
   # Per-pool structural assertions for slot count `n`.
   slotPoolChecks =
-    n:
+    classes:
     let
-      pool = slotLib.mkSlots n;
+      n = lib.foldl' (acc: c: acc + c.count) 0 (lib.attrValues classes);
+      pool = slotLib.mkSlots classes;
       ips = map (s: s.ip) pool;
       macs = map (s: s.mac) pool;
       cids = map (s: s.cid) pool;
       names = map (s: s.name) pool;
-      expectedNames = builtins.genList (i: "agent-${toString i}") n;
+      taps = map (s: s.tap) pool;
+      # Names are per-class contiguous: agent-<class>-0 .. agent-<class>-<c-1>,
+      # with the classes in alphabetical order.
+      expectedNames = lib.concatMap (
+        cn: lib.genList (i: "agent-${cn}-${toString i}") classes.${cn}.count
+      ) (lib.attrNames classes);
       ipsWellFormed = builtins.all (ip: builtins.match ipv4Re ip != null) ips;
       macsWellFormed = builtins.all (mac: builtins.match macRe mac != null) macs;
       indicesContiguous = builtins.all (i: (builtins.elemAt pool i).index == i) (
@@ -181,7 +250,23 @@ let
       }
       {
         assertion = names == expectedNames;
-        message = "slotCount=${toString n}: names not contiguous agent-0.. (${toString names})";
+        message = "pool ${toString n}: names not the expected agent-<class>-<i> sequence (${toString names})";
+      }
+      {
+        # Ticket 5 A: every slot needs its OWN tap, within the 15-char limit.
+        assertion = lib.length (lib.unique taps) == n;
+        message = "pool ${toString n}: TAP names not unique (${toString taps})";
+      }
+      {
+        assertion = builtins.all (t: lib.stringLength t <= slotLib.maxInterfaceNameLength) taps;
+        message = "pool ${toString n}: a TAP name exceeds ${toString slotLib.maxInterfaceNameLength} chars (${toString taps})";
+      }
+      {
+        # Sizing comes from the class, so a class's slots are identical.
+        assertion = builtins.all (
+          sl: sl.vcpu == classes.${sl.class}.vcpu && sl.memoryMiB == classes.${sl.class}.memoryMiB
+        ) pool;
+        message = "pool ${toString n}: a slot's vcpu/memory does not match its class";
       }
       {
         assertion = indicesContiguous;
@@ -308,7 +393,7 @@ in
   microvm-eval-enabled =
     let
       vmNames = lib.sort (a: b: a < b) (builtins.attrNames enabledCfg.microvm.vms);
-      expectedNames = builtins.genList (i: "agent-${toString i}") slotCount;
+      expectedNames = lib.sort (a: b: a < b) (map (sl: sl.name) enabledSlots);
       socket = enabledCfg.systemd.sockets.agent-litellm-proxy.socketConfig;
       fw = enabledCfg.networking.firewall.extraCommands;
     in
@@ -430,7 +515,7 @@ in
   #     detection as an executable test against the real slots.nix.         #
   # ---------------------------------------------------------------------- #
   microvm-slot-uniqueness = mkEvalCheck "microvm-slot-uniqueness" (
-    lib.concatMap slotPoolChecks slotCountsUnderTest
+    lib.concatMap slotPoolChecks slotPoolsUnderTest
   );
 
   # ---------------------------------------------------------------------- #
@@ -452,18 +537,69 @@ in
       }";
     }
     {
-      # slotCount=0 is rejected at the option-TYPE level (`positive integer`),
-      # a strictly stronger guard than the slotCount>0 assertion.
+      # count=0 is rejected at the option-TYPE level (`positive integer`), a
+      # strictly stronger guard than any assertion.
       assertion = rejectsWith [
-        { myconfig.ai.microvm.slotCount = lib.mkForce 0; }
-      ] "slotCount must be > 0";
-      message = "slotCount=0 must be rejected (type `positive integer` / slotCount>0 assertion)";
+        {
+          myconfig.ai.microvm.resourceClasses = lib.mkForce {
+            normal.count = 0;
+            normal.vcpu = 2;
+            normal.memoryMiB = 1024;
+          };
+        }
+      ] "resource-class pool is empty";
+      message = "a resource class with count=0 must be rejected (type `positive integer`)";
     }
     {
       assertion = rejectsWith [
-        { myconfig.ai.microvm.slotCount = lib.mkForce (slotLib.maxSlotCount + 1); }
-      ] "slotCount must be <=";
-      message = "slotCount>maxSlotCount (${toString slotLib.maxSlotCount}) must be rejected";
+        {
+          myconfig.ai.microvm.resourceClasses = lib.mkForce {
+            normal.count = slotLib.maxSlotCount + 1;
+            normal.vcpu = 2;
+            normal.memoryMiB = 1024;
+          };
+        }
+      ] "total number of slots";
+      message = "a pool larger than maxSlotCount (${toString slotLib.maxSlotCount}) must be rejected";
+    }
+    {
+      # A class name long enough to overflow the 15-char interface-name limit.
+      assertion = rejectsWith [
+        {
+          myconfig.ai.microvm.resourceClasses = lib.mkForce {
+            "ludicrously-large".count = 1;
+            "ludicrously-large".vcpu = 2;
+            "ludicrously-large".memoryMiB = 1024;
+          };
+        }
+      ] "generated TAP names must be";
+      message = "a class name that overflows the TAP name limit must be rejected";
+    }
+    {
+      assertion = rejectsWith [
+        {
+          myconfig.ai.microvm.resourceClasses = lib.mkForce {
+            "Bad_Name".count = 1;
+            "Bad_Name".vcpu = 2;
+            "Bad_Name".memoryMiB = 1024;
+          };
+        }
+      ] "class names must match";
+      message = "an invalid class name must be rejected";
+    }
+    {
+      # Setting BOTH spellings would silently drop one of them.
+      assertion = rejectsWith [
+        {
+          myconfig.ai.microvm.resourceClasses = lib.mkForce {
+            normal.count = 1;
+            normal.vcpu = 2;
+            normal.memoryMiB = 1024;
+          };
+          myconfig.ai.microvm.slotCount = lib.mkForce 3;
+        }
+      ] "ambiguous slot configuration";
+      message = "resourceClasses together with the deprecated slotCount must be rejected";
     }
     {
       assertion = rejectsWith [
@@ -566,7 +702,7 @@ in
   # ---------------------------------------------------------------------- #
   # (g) GUEST SHARES: prove the guest declares EXACTLY TWO virtiofs shares  #
   #     — the WRITABLE `/workspace` (host `source` == the launcher's         #
-  #     bind-mount target `${stateRoot}/agent-0/workspace`) and the          #
+  #     bind-mount target `${stateRoot}/<slot>/workspace`) and the           #
   #     READ-ONLY per-slot SSH host-key share (ticket 3 B). This locks down  #
   #     plan §10/§11 crit. 12 (the workspace share can never silently       #
   #     vanish, be renamed, be made read-only or be repointed) AND the       #
@@ -579,26 +715,26 @@ in
       virtiofsShares = builtins.filter (s: s.proto == "virtiofs") shares;
       wsShares = builtins.filter (s: s.mountPoint == "/workspace") shares;
       ws = if wsShares == [ ] then null else builtins.head wsShares;
-      expectedSource = "${microvmOpts.stateRoot}/agent-0/workspace";
+      expectedSource = "${microvmOpts.stateRoot}/${refSlot.name}/workspace";
       hkShares = builtins.filter (s: s.mountPoint == hostKeys.guestMountPoint) shares;
       hk = if hkShares == [ ] then null else builtins.head hkShares;
-      expectedHkSource = hostKeys.slotDir "agent-0";
+      expectedHkSource = hostKeys.slotDir refSlot.name;
       jobShares = builtins.filter (s: s.mountPoint == jobs.guestMountPoint) shares;
       jobShare = if jobShares == [ ] then null else builtins.head jobShares;
-      expectedJobSource = jobs.slotDir "agent-0";
+      expectedJobSource = jobs.slotDir refSlot.name;
     in
     mkEvalCheck "microvm-eval-workspace-share" [
       {
         # Exactly three shares: writable workspace, read-only hostkey, and the
         # per-slot batch job directory.
         assertion = builtins.length shares == 3;
-        message = "guest agent-0 must declare exactly THREE shares (workspace + hostkey + job); got ${toString (builtins.length shares)}: ${
+        message = "guest ${refSlot.name} must declare exactly THREE shares (workspace + hostkey + job); got ${toString (builtins.length shares)}: ${
           toString (map (s: s.mountPoint or "?") shares)
         }";
       }
       {
         assertion = jobShare != null && jobShare.proto == "virtiofs" && jobShare.tag == jobs.guestTag;
-        message = "guest agent-0 must declare a virtiofs share tagged '${jobs.guestTag}' at ${jobs.guestMountPoint}";
+        message = "guest ${refSlot.name} must declare a virtiofs share tagged '${jobs.guestTag}' at ${jobs.guestMountPoint}";
       }
       {
         assertion = jobShare != null && jobShare.source == expectedJobSource;
@@ -615,7 +751,7 @@ in
       }
       {
         assertion = hk != null && hk.proto == "virtiofs" && hk.tag == hostKeys.guestTag;
-        message = "guest agent-0 must declare a virtiofs share tagged '${hostKeys.guestTag}' at ${hostKeys.guestMountPoint}";
+        message = "guest ${refSlot.name} must declare a virtiofs share tagged '${hostKeys.guestTag}' at ${hostKeys.guestMountPoint}";
       }
       {
         assertion = hk != null && hk.source == expectedHkSource;
@@ -631,7 +767,7 @@ in
       }
       {
         assertion = ws != null;
-        message = "guest agent-0 has no share mounted at /workspace (mountPoints: ${
+        message = "guest ${refSlot.name} has no share mounted at /workspace (mountPoints: ${
           toString (map (s: s.mountPoint or "?") shares)
         })";
       }
@@ -746,6 +882,107 @@ in
           echo "  agents        : $agentNames"
           echo "  host launcher : $launcherBin"
           echo "  guest dispatch: $agentRunBin"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (m) RESOURCE CLASSES (ticket 5 A): the pool is grouped into fixed,       #
+  #     PREBUILT classes; every slot keeps a unique network/control identity #
+  #     AND its own host-side directories; the guest's sizing comes from its #
+  #     class; and the host launcher can only allocate from the REQUESTED    #
+  #     class (never a substitute).                                          #
+  # ---------------------------------------------------------------------- #
+  microvm-resource-classes =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      classNames = lib.attrNames resourceClasses;
+      # Per-slot host-side directories must be pairwise distinct, otherwise two
+      # slots (possibly of different classes) would share state.
+      dirsOf = f: map f enabledSlots;
+      allDistinct = xs: lib.length (lib.unique xs) == lib.length xs;
+      evalMarker = mkEvalCheck "microvm-resource-classes-eval" (
+        [
+          {
+            assertion = classNames != [ ] && enabledSlots != [ ];
+            message = "the reference host must declare at least one resource class with slots";
+          }
+          {
+            # No per-job Nix evaluation: one prebuilt VM per slot, all declared.
+            assertion =
+              lib.sort (a: b: a < b) (builtins.attrNames enabledCfg.microvm.vms)
+              == lib.sort (a: b: a < b) (map (sl: sl.name) enabledSlots);
+            message = "microvm.vms must be exactly the prebuilt slot pool";
+          }
+          {
+            assertion = allDistinct (dirsOf (sl: sl.tap));
+            message = "slot TAP names must be unique across classes";
+          }
+          {
+            assertion = allDistinct (dirsOf (sl: sl.mac));
+            message = "slot MACs must be unique across classes";
+          }
+          {
+            assertion = allDistinct (dirsOf (sl: sl.ip));
+            message = "slot IPs must be unique across classes";
+          }
+          {
+            assertion = allDistinct (dirsOf (sl: sl.cid));
+            message = "slot VSOCK CIDs must be unique across classes";
+          }
+          {
+            assertion = allDistinct (dirsOf (sl: hostKeys.slotDir sl.name));
+            message = "each slot must have its OWN SSH host-key directory";
+          }
+          {
+            assertion = allDistinct (dirsOf (sl: jobs.slotDir sl.name));
+            message = "each slot must have its OWN job directory";
+          }
+          {
+            assertion = allDistinct (dirsOf (sl: "${microvmOpts.stateRoot}/${sl.name}/workspace"));
+            message = "each slot must have its OWN workspace bind-mount target";
+          }
+        ]
+        # Every prebuilt guest must be sized by ITS class.
+        ++ map (sl: {
+          assertion =
+            let
+              g = enabledCfg.microvm.vms.${sl.name}.config.config;
+            in
+            g.microvm.vcpu == resourceClasses.${sl.class}.vcpu
+            && g.microvm.mem == resourceClasses.${sl.class}.memoryMiB;
+          message = "guest ${sl.name} is not sized by its class '${sl.class}'";
+        }) enabledSlots
+      );
+    in
+    pkgs.runCommand "microvm-resource-classes"
+      {
+        inherit evalMarker;
+        launcherBin = "${hostLauncher}/bin/agent-microvm";
+        classNames = lib.concatStringsSep " " classNames;
+        slotNames = lib.concatStringsSep " " (map (sl: sl.name) enabledSlots);
+      }
+      ''
+        for c in $classNames; do
+          grep -q "$c" "$launcherBin" \
+            || { echo "resource class '$c' missing from the host launcher" >&2; exit 1; }
+        done
+        for sl in $slotNames; do
+          grep -q "$sl" "$launcherBin" \
+            || { echo "slot '$sl' missing from the launcher slot table" >&2; exit 1; }
+        done
+        # The allocator must filter by class and must offer a bounded wait
+        # instead of silently substituting another class.
+        grep -q "validate_resource_class()" "$launcherBin" \
+          || { echo "launcher cannot validate --resource-class" >&2; exit 1; }
+        grep -q 'no free slot in resource class' "$launcherBin" \
+          || { echo "launcher does not fail loudly when the requested class is full" >&2; exit 1; }
+        grep -q "validate_wait()" "$launcherBin" \
+          || { echo "launcher has no bounded --wait" >&2; exit 1; }
+        {
+          echo "microvm-resource-classes: prebuilt pool"
+          echo "  classes: $classNames"
+          echo "  slots  : $slotNames"
           cat "$evalMarker"
         } > "$out"
       '';
@@ -941,7 +1178,7 @@ in
           ];
         });
       fwOf = profile: (variant profile).config.networking.firewall.extraCommands;
-      guestOf = profile: (variant profile).config.microvm.vms."agent-0".config.config;
+      guestOf = profile: (variant profile).config.microvm.vms.${refSlot.name}.config.config;
       subnet = microvmOpts.subnet;
       litellmAccept = "AGENT_MICROVM_INPUT -s ${subnet} -d ${gateway} -p tcp --dport ${port} -j ACCEPT";
       proxyAccept = "AGENT_MICROVM_INPUT -s ${subnet} -d ${gateway} -p tcp --dport 3128 -j ACCEPT";
@@ -1219,8 +1456,8 @@ in
       ''
         {
           echo "microvm-guest-evaluates: EVAL-DEPTH check (see comment in tests/microvm.nix)"
-          echo "guest agent-0 toplevel drv: $toplevelDrv"
-          echo "guest agent-0 CH runner drv: $runnerDrv"
+          echo "reference guest toplevel drv: $toplevelDrv"
+          echo "reference guest CH runner drv: $runnerDrv"
         } > "$out"
       '';
 

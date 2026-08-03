@@ -43,10 +43,50 @@ let
   # helper guest.nix uses to actually build the VMs — so these uniqueness /
   # bound assertions (§37) always guard the exact table that builds the VMs.
   slotLib = import ./slots.nix { inherit lib; };
-  slots = slotLib.mkSlots cfg.slotCount;
+  slots = slotLib.mkSlots effectiveResourceClasses;
   slotIPs = map (s: s.ip) slots;
   slotMACs = map (s: s.mac) slots;
   slotCIDs = map (s: s.cid) slots;
+  slotNames = map (s: s.name) slots;
+  slotTaps = map (s: s.tap) slots;
+
+  # --- ticket 5 A: fixed resource classes + legacy-option migration --------
+  # The pool is grouped into PREBUILT classes; `slotCount` / `defaultVcpu` /
+  # `defaultMemoryMiB` are the deprecated single-class spelling of the same
+  # thing. Exactly like the ticket-3 network booleans, "explicitly defined" is
+  # decided by option PRIORITY (see `isExplicit`), never by `isDefined`.
+  legacySlotOpts = {
+    slotCount = options.myconfig.ai.microvm.slotCount;
+    defaultVcpu = options.myconfig.ai.microvm.defaultVcpu;
+    defaultMemoryMiB = options.myconfig.ai.microvm.defaultMemoryMiB;
+  };
+  definedLegacySlotOpts = lib.attrNames (lib.filterAttrs (_: isExplicit) legacySlotOpts);
+  classesExplicit = isExplicit options.myconfig.ai.microvm.resourceClasses;
+
+  # A host that sets BOTH spellings would silently lose one of them, so that is
+  # rejected (assertion below) instead of resolved.
+  slotOptsAmbiguous = classesExplicit && definedLegacySlotOpts != [ ];
+
+  # Without an explicit `resourceClasses`, synthesize the single `normal` class
+  # the legacy options describe — so the pool (and every slot's identity) is
+  # exactly what those options meant, just named `agent-normal-<i>`.
+  legacyResourceClasses = {
+    normal = {
+      count = cfg.slotCount;
+      vcpu = cfg.defaultVcpu;
+      memoryMiB = cfg.defaultMemoryMiB;
+    };
+  };
+  effectiveResourceClasses = if classesExplicit then cfg.resourceClasses else legacyResourceClasses;
+
+  # "Explicitly defined" means a definition with a HIGHER priority than the
+  # option default. `isDefined` cannot be used: nixpkgs implements
+  # `mkOption { default = ...; }` as a low-priority (1500) definition, so every
+  # option with a default is always "defined". `lib.mkOptionDefault`'s priority
+  # (1500) is exactly that boundary — `mkDefault` (1000) and a plain
+  # host-level definition (100) both rank above it (lower number == stronger).
+  optionDefaultPriority = 1500;
+  isExplicit = opt: opt.highestPrio < optionDefaultPriority;
 
   # --- authoritative supported-agent registry -----------------------------
   # ./agents.nix is the SINGLE SOURCE OF TRUTH for the supported agents (guest
@@ -81,14 +121,6 @@ let
     allowInterVmTraffic = options.myconfig.ai.microvm.allowInterVmTraffic;
     allowPrivateNetworks = options.myconfig.ai.microvm.allowPrivateNetworks;
   };
-  # "Explicitly defined" means a definition with a HIGHER priority than the
-  # option default. `isDefined` cannot be used: nixpkgs implements
-  # `mkOption { default = ...; }` as a low-priority (1500) definition, so every
-  # option with a default is always "defined". `lib.mkOptionDefault`'s priority
-  # (1500) is exactly that boundary — `mkDefault` (1000) and a plain
-  # host-level definition (100) both rank above it (lower number == stronger).
-  optionDefaultPriority = 1500;
-  isExplicit = opt: opt.highestPrio < optionDefaultPriority;
   definedLegacyOpts = lib.attrNames (lib.filterAttrs (_: isExplicit) legacyOpts);
   profileExplicit = isExplicit options.myconfig.ai.microvm.networkProfile;
 
@@ -131,26 +163,95 @@ in
   options.myconfig.ai.microvm = with lib; {
     enable = mkEnableOption "myconfig.ai.microvm (Cloud Hypervisor agent sandboxes)";
 
+    resourceClasses = mkOption {
+      type = types.attrsOf (
+        types.submodule {
+          options = {
+            count = mkOption {
+              type = types.ints.positive;
+              description = "Number of PREBUILT slots in this class.";
+            };
+            vcpu = mkOption {
+              type = types.ints.positive;
+              description = "vCPUs per guest in this class.";
+            };
+            memoryMiB = mkOption {
+              type = types.ints.positive;
+              description = "Guest RAM per guest in this class, in MiB.";
+            };
+          };
+        }
+      );
+      default = {
+        normal = {
+          count = 4;
+          vcpu = 4;
+          memoryMiB = 8192;
+        };
+      };
+      defaultText = literalExpression ''
+        { normal = { count = slotCount; vcpu = defaultVcpu; memoryMiB = defaultMemoryMiB; }; }
+      '';
+      example = literalExpression ''
+        {
+          small  = { count = 2; vcpu = 2; memoryMiB = 4096; };
+          normal = { count = 4; vcpu = 4; memoryMiB = 8192; };
+          large  = { count = 1; vcpu = 8; memoryMiB = 16384; };
+        }
+      '';
+      description = ''
+        Fixed, PREBUILT resource classes. Each class contributes `count` slots
+        named `agent-<class>-<i>` with the class's `vcpu` / `memoryMiB` sizing;
+        every slot keeps its own deterministic TAP, MAC, IPv4, VSOCK CID, state
+        directory, job directory and (with `enableSsh`) SSH host identity.
+
+        There is deliberately NO per-job Nix evaluation: `submit`/`run` allocate
+        from this fixed pool with `--resource-class <name>`, and the allocator
+        only ever considers the requested class (it never silently substitutes
+        a smaller one).
+
+        NOTE (merge semantics): defining a single class, e.g.
+        `resourceClasses.large = { … }`, MERGES with the default `normal` class
+        rather than replacing it. Use `lib.mkForce { … }` to define the pool
+        exhaustively.
+
+        When this option is not set explicitly, it is derived from the
+        deprecated `slotCount` / `defaultVcpu` / `defaultMemoryMiB` options, so
+        an existing configuration keeps exactly its previous sizing (as a single
+        `normal` class).
+      '';
+    };
+
     slotCount = mkOption {
       type = types.ints.positive;
       default = 4;
       description = ''
-        Number of fixed, declaratively defined microVM slots
-        (agent-0 .. agent-<slotCount-1>). Bounds the maximum concurrent
-        agent sandboxes. Must be positive.
+        DEPRECATED (ticket 5) — use `resourceClasses`.
+
+        Number of fixed, declaratively defined microVM slots. Still honoured
+        when `resourceClasses` is not set explicitly: the pool then consists of
+        one `normal` class with this many slots. Setting BOTH spellings is
+        rejected as ambiguous.
       '';
     };
 
     defaultVcpu = mkOption {
       type = types.ints.positive;
       default = 4;
-      description = "Default number of vCPUs per agent microVM.";
+      description = ''
+        DEPRECATED (ticket 5) — use `resourceClasses.<name>.vcpu`. vCPUs of the
+        single `normal` class synthesized from the legacy options.
+      '';
     };
 
     defaultMemoryMiB = mkOption {
       type = types.ints.positive;
       default = 8192;
-      description = "Default guest RAM per agent microVM, in MiB.";
+      description = ''
+        DEPRECATED (ticket 5) — use `resourceClasses.<name>.memoryMiB`. Guest
+        RAM (MiB) of the single `normal` class synthesized from the legacy
+        options.
+      '';
     };
 
     bridgeName = mkOption {
@@ -390,25 +491,55 @@ in
       # DNS policy), consumed by network.nix (firewall/NAT) and guest.nix
       # (proxy/DNS/forwarder).
       _module.args.agentNetwork = agentNetwork;
+      # The ONE effective resource-class table, so guest.nix / network.nix /
+      # launcher.nix / hostkeys.nix / job.nix all build the SAME slot pool
+      # (including the legacy-option migration above).
+      _module.args.agentResourceClasses = effectiveResourceClasses;
     }
 
     (lib.mkIf cfg.enable {
       assertions = [
         {
-          assertion = cfg.slotCount > 0;
-          message = "myconfig.ai.microvm.slotCount must be > 0.";
+          assertion = slots != [ ];
+          message = "myconfig.ai.microvm: the resource-class pool is empty (no class with count > 0).";
         }
         {
-          assertion = cfg.slotCount <= slotLib.maxSlotCount;
-          message = "myconfig.ai.microvm.slotCount must be <= ${toString slotLib.maxSlotCount} (deterministic MAC/IPv4 generator bound).";
+          assertion = lib.length slots <= slotLib.maxSlotCount;
+          message = "myconfig.ai.microvm: the total number of slots (${toString (lib.length slots)}) must be <= ${toString slotLib.maxSlotCount} (deterministic MAC/IPv4 generator bound).";
         }
         {
-          assertion = cfg.defaultVcpu > 0;
-          message = "myconfig.ai.microvm.defaultVcpu must be positive.";
+          # Class names end up in slot names, hostnames, interface names and
+          # host directories, and cross the host->guest control channel.
+          assertion = lib.all (n: builtins.match "[a-z][a-z0-9-]*" n != null) (
+            lib.attrNames effectiveResourceClasses
+          );
+          message = "myconfig.ai.microvm.resourceClasses: class names must match [a-z][a-z0-9-]*.";
         }
         {
-          assertion = cfg.defaultMemoryMiB > 0;
-          message = "myconfig.ai.microvm.defaultMemoryMiB must be positive.";
+          # Linux caps interface names at 15 chars, so a long class name would
+          # otherwise fail late, at TAP creation time.
+          assertion = lib.all (t: lib.stringLength t <= slotLib.maxInterfaceNameLength) slotTaps;
+          message = "myconfig.ai.microvm.resourceClasses: class names are too long — generated TAP names must be <= ${toString slotLib.maxInterfaceNameLength} chars (got ${
+            toString (lib.filter (t: lib.stringLength t > slotLib.maxInterfaceNameLength) slotTaps)
+          }).";
+        }
+        {
+          assertion = lib.length (lib.unique slotNames) == lib.length slotNames;
+          message = "myconfig.ai.microvm: generated slot names are not unique.";
+        }
+        {
+          assertion = lib.length (lib.unique slotTaps) == lib.length slotTaps;
+          message = "myconfig.ai.microvm: generated slot TAP names are not unique.";
+        }
+        {
+          assertion = !slotOptsAmbiguous;
+          message = ''
+            myconfig.ai.microvm: ambiguous slot configuration — `resourceClasses`
+            is set explicitly AND the deprecated ${lib.concatStringsSep " / " definedLegacySlotOpts} ${
+              if lib.length definedLegacySlotOpts == 1 then "is" else "are"
+            } also
+            set. Keep only `resourceClasses`.
+          '';
         }
         {
           assertion = isAbsolutePath cfg.workspaceRoot;
@@ -524,7 +655,13 @@ in
       # Emitted for any legacy boolean a host still DEFINES, even when it is
       # false, so the migration is visible before the options are dropped.
       warnings =
-        lib.optional (definedLegacyOpts != [ ]) ''
+        lib.optional (definedLegacySlotOpts != [ ] && !classesExplicit) ''
+          myconfig.ai.microvm: ${lib.concatStringsSep ", " definedLegacySlotOpts} ${
+            if lib.length definedLegacySlotOpts == 1 then "is" else "are"
+          } deprecated; use `myconfig.ai.microvm.resourceClasses` instead. The
+          pool is currently a single `normal` class with ${toString cfg.slotCount} slot(s) (${toString cfg.defaultVcpu} vCPU, ${toString cfg.defaultMemoryMiB} MiB).
+        ''
+        ++ lib.optional (definedLegacyOpts != [ ]) ''
           myconfig.ai.microvm: the network booleans ${lib.concatStringsSep ", " definedLegacyOpts} are deprecated; use `myconfig.ai.microvm.networkProfile` instead
           (currently effective: "${effectiveProfile}").
         ''

@@ -45,13 +45,19 @@
   lib,
   pkgs,
   agentRegistry,
+  # The effective resource-class table (see default.nix).
+  agentResourceClasses,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
   jobCfg = cfg.job;
 
-  slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
+  # The slot pool of the effective resource classes (ticket 5 A). The class
+  # table comes from default.nix (`_module.args.agentResourceClasses`), which
+  # also performs the legacy `slotCount` migration, so every module builds the
+  # SAME pool.
+  slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   # --- the ONE definition of every job path (host + guest side) ----------
   paths = rec {
