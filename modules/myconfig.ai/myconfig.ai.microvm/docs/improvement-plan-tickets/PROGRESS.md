@@ -9,7 +9,7 @@ commit as the work it describes.
 | 1 | `01-agent-registry-refactor.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 2 | `02-add-hermes-support.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 3 | `03-network-and-control-channel-hardening.md` | DONE | A, B, C (3 commits) |
-| 4 | `04-batch-execution-and-lifecycle.md` | IN PROGRESS (A done) | — |
+| 4 | `04-batch-execution-and-lifecycle.md` | DONE | A, B (2 commits) |
 | 5 | `05-resource-classes-and-state-management.md` | TODO | — |
 | 6 | `06-runtime-validation-and-documentation.md` | TODO | — |
 
@@ -148,3 +148,28 @@ recover + allocation tokens).
     agent).
   - new check `microvm-batch-jobs` (13 eval assertions + dispatch/rejection
     greps of the BUILT runner); shares check now pins exactly three shares.
+- **Part B (done).** Host lifecycle in `launcher.nix`:
+  - `submit` (validate → allocate → clone → job dir → mount → start → wait for
+    the structured result with `timeout + job.gracePeriodSeconds`, breaking
+    early if the VM dies → archive result → stop/unmount/clear → release), exit
+    codes 0/1/124/70.
+  - `cancel <task>` records a `cancelled` result and tears the slot down only
+    while the allocation TOKEN still matches (`cleanup_slot_owned`).
+  - `recover [--dry-run]` classifies every slot (stale marker, orphaned unit,
+    orphaned attached/batch run with a dead launcher, stale mount, stale job
+    data), prints every action and always keeps clones. A `detached` slot with
+    a dead launcher is explicitly NOT recovered — that is normal.
+  - allocation markers now carry token, mode, unit, launcher pid AND that pid's
+    /proc start time (`owner_alive` compares both, so a recycled pid cannot
+    impersonate the owner); allocation itself was factored into
+    `allocate_slot` + `write_session_marker`, shared by `run` and `submit`.
+  - `status` additionally shows mode, job state (live result, else the archived
+    one) and the job timeout; results are archived OUTSIDE every guest share.
+  - VERIFIED BY RUNNING the built launcher against stubbed
+    systemctl/mount/findmnt (with the stub simulating a guest that writes
+    result.json): validation rejections, completed/failed/timed-out/no-result
+    runs incl. exit codes, teardown state (marker+mount+job cleared, clone
+    kept), token-guarded cancel (valid + refused-on-mismatch), and every
+    `recover` branch in both dry-run and real mode. The HOST-generated
+    `spec.json` was then fed to the real GUEST runner to prove the format
+    contract end-to-end.

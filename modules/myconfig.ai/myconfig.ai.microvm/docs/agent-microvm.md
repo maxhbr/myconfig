@@ -420,6 +420,54 @@ verified against each pinned build's own `--help`:
 `opencode run <prompt>`, `pi --print <prompt>`,
 `hermes --model <m> --oneshot <prompt>`.
 
+### Submitting, cancelling, recovering
+
+```bash
+sudo agent-microvm submit \
+  --name fix-parser --repository ~/src/my-repo \
+  --agent opencode --prompt-file ./prompt.md --timeout 3600
+
+sudo agent-microvm cancel fix-parser      # token-guarded, keeps the workspace
+sudo agent-microvm recover --dry-run      # reconcile slots with systemd
+sudo agent-microvm recover
+```
+
+`submit` exit codes: **0** completed, **1** the agent failed, **124** timed out,
+**70** infrastructure error (no/invalid result). The final `result.json` is
+archived on the host at `/var/lib/agent-microvms/results/<task>.json` — outside
+every guest share — so `status <task>` still reports the outcome after the slot
+has been released.
+
+Host lifecycle: validate → allocate slot → standalone clone → job dir (spec +
+prompt) → bind-mount → start VM → wait for the structured result (job timeout +
+`job.gracePeriodSeconds`, and it stops waiting early if the VM dies) → stop VM →
+archive result → unmount → clear runtime job data → release slot. The workspace
+clone is **always** kept.
+
+### Allocation ownership
+
+Every allocation marker (`/var/lib/agent-microvms/slots/<slot>/session.json`)
+records the task, slot, workspace, VM unit, mode
+(`attached` / `detached` / `batch`), the owning launcher's **pid together with
+that pid's start time** (so a recycled pid cannot impersonate the owner) and a
+**random allocation token**. Operations that act on a slot they did not allocate
+(`cancel`, `recover`) compare the **token**, never just the slot name — a slot
+that has meanwhile been re-allocated to a different task is never touched.
+
+`recover` classifies each slot and prints every action (`--dry-run` prints only
+and changes nothing):
+
+| Situation | Action |
+| --- | --- |
+| marker, unit inactive | stale marker → unmount, drop marker |
+| no marker, unit active | orphaned unit → stop it |
+| marker + unit active, `attached`/`batch`, owning launcher gone | orphaned run → stop, unmount, clear job, drop marker |
+| no marker, no unit, mount present | stale mount → unmount |
+| no marker, no unit, job data present | stale job → clear |
+
+A `detached` slot whose launcher exited is **normal** (that is the point of
+detached mode) and is never recovered.
+
 ---
 
 ## Listing & status
@@ -432,8 +480,9 @@ sudo agent-microvm status <task>    # resolve a running task to its slot
 ```
 
 `status` reports slot, service state, IP, MAC, VSOCK CID, task, workspace path,
-bind-mount status, agent type, start time, SSH readiness, session state, a
-`stale` flag, and the lock owner — **never** secrets.
+bind-mount status, agent type, mode (`attached`/`detached`/`batch`), job state,
+job timeout, start time, SSH readiness, session state, a `stale` flag, and the
+lock owner — **never** secrets (the allocation token is not printed).
 
 > A slot with a persisted session marker but an inactive unit is flagged
 > `stale: yes` (e.g. after a hard kill / power loss where the cleanup trap did

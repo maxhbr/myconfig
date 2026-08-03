@@ -63,6 +63,12 @@ let
     hostOutDir = slotName: "${slotDir slotName}/out";
     hostResult = slotName: "${hostOutDir slotName}/${resultName}";
 
+    # Host-only archive of finished job results, so `status <task>` still knows
+    # the outcome after the slot has been released and its job dir cleared.
+    # NOT shared into any guest.
+    resultsDir = "${cfg.runtimeRoot}/results";
+    hostArchivedResult = taskId: "${resultsDir}/${taskId}.json";
+
     specName = "spec.json";
     promptName = "prompt.md";
     resultName = "result.json";
@@ -367,6 +373,7 @@ in
       # because only the guest writes result.json.
       systemd.tmpfiles.rules = [
         "d ${paths.root} 0755 root root - -"
+        "d ${paths.resultsDir} 0755 root root - -"
       ]
       ++ lib.concatMap (slot: [
         "d ${paths.slotDir slot.name} 0755 root root - -"

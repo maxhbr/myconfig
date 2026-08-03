@@ -762,6 +762,7 @@ in
   # ---------------------------------------------------------------------- #
   microvm-batch-jobs =
     let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
       unit = guest0Cfg.systemd.services.agent-job;
       svc = unit.serviceConfig;
       runner = findPkg guest0Cfg.environment.systemPackages "agent-job";
@@ -805,6 +806,18 @@ in
           {
             assertion = microvmOpts.job.defaultTimeoutSeconds <= microvmOpts.job.maxTimeoutSeconds;
             message = "the default job timeout must not exceed the maximum";
+          }
+          {
+            # The host archives finished results OUTSIDE any guest share, so a
+            # guest can neither read nor forge another task's outcome.
+            assertion =
+              lib.hasPrefix "${microvmOpts.runtimeRoot}/" jobs.resultsDir
+              && !lib.hasPrefix jobs.root jobs.resultsDir;
+            message = "the host result archive must live under the runtime root and OUTSIDE the shared job dirs";
+          }
+          {
+            assertion = builtins.elem "d ${jobs.resultsDir} 0755 root root - -" tmpfiles;
+            message = "missing tmpfiles rule for the host result archive";
           }
           {
             # Registry consistency: batch metadata must be usable.
@@ -851,13 +864,40 @@ in
       {
         inherit evalMarker;
         runnerBin = "${runner}/bin/agent-job";
+        launcherBin = "${hostLauncher}/bin/agent-microvm";
         batchNames = lib.concatStringsSep " " agentRegistry.batchNames;
+        # Agents that exist but cannot run unattended — empty today, but the
+        # guard stays honest if one is added later.
+        nonBatchNames = lib.concatStringsSep " " (
+          lib.subtractLists agentRegistry.batchNames agentRegistry.names
+        );
+        jobSpecPath = jobs.guestSpec;
+        jobPromptPath = jobs.guestPrompt;
       }
       ''
         for n in $batchNames; do
           grep -q "$n) run_agent" "$runnerBin" \
             || { echo "batch agent '$n' missing from the generated agent-job dispatch" >&2; exit 1; }
         done
+        # --- host lifecycle surface (ticket 4 B) --------------------------
+        for c in cmd_submit cmd_cancel cmd_recover validate_batch_agent_name \
+                 validate_timeout prepare_job clear_job cleanup_slot_owned \
+                 write_session_marker allocate_slot owner_alive proc_start_time; do
+          grep -q "$c()" "$launcherBin" \
+            || { echo "host launcher is missing the '$c' helper" >&2; exit 1; }
+        done
+        # The spec must name the guest-side prompt path the guest validates by
+        # exact match, so host and guest cannot drift.
+        grep -q "$jobPromptPath" "$launcherBin" \
+          || { echo "launcher does not reference the guest prompt path" >&2; exit 1; }
+        # Cancellation must be token-guarded, not slot-name-guarded.
+        grep -q "allocation token changed" "$launcherBin" \
+          || { echo "launcher does not guard destructive ops with the allocation token" >&2; exit 1; }
+        # recover --dry-run must exist and must never delete a clone.
+        grep -q -- "--dry-run" "$launcherBin" \
+          || { echo "launcher has no recover --dry-run" >&2; exit 1; }
+        grep -q "keeping the workspace clone" "$launcherBin" \
+          || { echo "recover does not promise to keep workspace clones" >&2; exit 1; }
         # The runner must reject a spec that names an executable, and must
         # validate the schema version and the prompt path.
         grep -q "spec must not contain an executable path" "$runnerBin" \
@@ -866,7 +906,10 @@ in
           || { echo "agent-job does not validate the spec version" >&2; exit 1; }
         {
           echo "microvm-batch-jobs: guest batch runner $runnerBin"
+          echo "  host launcher: $launcherBin"
           echo "  batch agents: $batchNames"
+          echo "  non-batch agents: ''${nonBatchNames:-<none>}"
+          echo "  job spec (guest): $jobSpecPath"
           cat "$evalMarker"
         } > "$out"
       '';

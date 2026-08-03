@@ -55,6 +55,9 @@
   # (`_module.args.agentHostKeys`). Supplies the known_hosts file the launcher
   # verifies guests against.
   agentHostKeys,
+  # The ONE definition of the batch-job format/paths (job.nix). `submit` writes
+  # the spec + prompt there and reads the guest's result from it.
+  agentJobs,
   ...
 }:
 let
@@ -141,6 +144,20 @@ let
       # guest.nix's `uid = 1000`.
       readonly GUEST_AGENT_UID=1000
       readonly GUEST_AGENT_GID=1000
+      # ---- batch jobs (ticket 4) -----------------------------------------
+      readonly JOBS_ROOT=${lib.escapeShellArg agentJobs.root}
+      readonly RESULTS_DIR=${lib.escapeShellArg agentJobs.resultsDir}
+      readonly JOB_SPEC_NAME=${lib.escapeShellArg agentJobs.specName}
+      readonly JOB_PROMPT_NAME=${lib.escapeShellArg agentJobs.promptName}
+      readonly JOB_RESULT_NAME=${lib.escapeShellArg agentJobs.resultName}
+      readonly JOB_SPEC_VERSION=${toString agentJobs.specVersion}
+      # Guest-side prompt path, as it must appear in spec.json (the guest
+      # validates it by EXACT match against its own mount point).
+      readonly GUEST_PROMPT=${lib.escapeShellArg agentJobs.guestPrompt}
+      readonly GUEST_WORKSPACE=/workspace
+      readonly JOB_DEFAULT_TIMEOUT=${toString cfg.job.defaultTimeoutSeconds}
+      readonly JOB_MAX_TIMEOUT=${toString cfg.job.maxTimeoutSeconds}
+      readonly JOB_GRACE=${toString cfg.job.gracePeriodSeconds}
       readonly RUN_DIR="/run/agent-microvms"
       readonly ALLOC_LOCK="$RUN_DIR/allocator.lock"
       readonly SLOTS_DIR="$RUNTIME_ROOT/slots"
@@ -182,6 +199,46 @@ let
 
       session_file() { printf '%s' "$SLOTS_DIR/$1/session.json"; }
       mount_point()  { printf '%s' "$STATE_ROOT/$1/workspace"; }
+      job_dir()      { printf '%s' "$JOBS_ROOT/$1"; }
+      job_spec()     { printf '%s' "$JOBS_ROOT/$1/$JOB_SPEC_NAME"; }
+      job_prompt()   { printf '%s' "$JOBS_ROOT/$1/$JOB_PROMPT_NAME"; }
+      job_result()   { printf '%s' "$JOBS_ROOT/$1/out/$JOB_RESULT_NAME"; }
+
+      # ---- allocation-marker helpers (§21 + ticket 4 ownership) ----------
+      # A marker records WHO owns the slot: the task, the launcher pid together
+      # with that pid's start time (so a recycled pid cannot masquerade as the
+      # owner), the VM unit and a random allocation token. Destructive
+      # operations that act on a slot they did not allocate (cancel, recover)
+      # compare the TOKEN, never just the slot name.
+      marker_field() {
+          local slot="$1" field="$2" f
+          f="$(session_file "$slot")"
+          [[ -e "$f" ]] || return 1
+          jq -r --arg f "$field" '.[$f] // ""' "$f" 2>/dev/null || return 1
+      }
+
+      new_token() { cat /proc/sys/kernel/random/uuid; }
+
+      # Start time (clock ticks since boot) of a pid, from /proc/<pid>/stat.
+      # The comm field can contain spaces and parentheses, so cut everything up
+      # to the LAST ')' first; starttime is then the 20th remaining field.
+      proc_start_time() {
+          local pid="$1" rest
+          [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+          rest="$(sed -e 's/^.*) //' "/proc/$pid/stat" 2>/dev/null)" || return 1
+          [[ -n "$rest" ]] || return 1
+          printf '%s' "$rest" | awk '{print $20}'
+      }
+
+      # True when the recorded launcher process is STILL the one that allocated
+      # the slot (same pid AND same start time).
+      owner_alive() {
+          local pid="$1" start="$2" now
+          [[ -n "$pid" && -n "$start" ]] || return 1
+          [[ -d "/proc/$pid" ]] || return 1
+          now="$(proc_start_time "$pid")" || return 1
+          [[ "$now" == "$start" ]]
+      }
 
       service_active() { systemctl is-active --quiet "microvm@$1.service"; }
 
@@ -202,6 +259,75 @@ let
           [[ -e "$(session_file "$name")" ]] && return 1
           service_active "$name" && return 1
           return 0
+      }
+
+      # ---- shared allocation (§21) ---------------------------------------
+      # Selects a free slot under the GLOBAL allocator lock, takes the per-slot
+      # lock, writes the atomic `allocating` marker and releases the global
+      # lock. Results are returned in GLOBALS (never via stdout): the fds 9/8
+      # holding the locks must belong to THIS shell, and a command
+      # substitution would place them in a subshell that closes them again.
+      #
+      # The caller MUST have armed its cleanup trap before calling this.
+      ALLOC_SLOT=""
+      ALLOC_TOKEN=""
+      allocate_slot() {
+          local name
+          ALLOC_SLOT=""
+          ALLOC_TOKEN="$(new_token)"
+          mkdir -p -- "$RUN_DIR" "$SLOTS_DIR"
+          exec 9>"$ALLOC_LOCK"
+          flock 9
+          for name in "''${SLOT_NAMES[@]}"; do
+              if slot_is_free "$name"; then ALLOC_SLOT="$name"; break; fi
+          done
+          if [[ -z "$ALLOC_SLOT" ]]; then
+              flock -u 9
+              die "no free slot (all ''${#SLOT_NAMES[@]} in use)"
+          fi
+          # Per-slot lock, held for the remainder of this process (§21).
+          exec 8>"$RUN_DIR/$ALLOC_SLOT.lock"
+          if ! flock -n 8; then
+              flock -u 9
+              die "slot $ALLOC_SLOT is locked by another launcher"
+          fi
+          mkdir -p -- "$SLOTS_DIR/$ALLOC_SLOT"
+          # Atomic allocation marker written while the allocator lock is held,
+          # so a concurrent run/submit can no longer pick this slot. It already
+          # carries the ownership token, so even this early state can be
+          # attributed to a launcher.
+          jq -n --arg slot "$ALLOC_SLOT" --arg token "$ALLOC_TOKEN" \
+              '{slot:$slot, state:"allocating", token:$token}' \
+              > "$(session_file "$ALLOC_SLOT")"
+          flock -u 9
+          exec 9>&-
+      }
+
+      # Full session record for status/list/cancel/recover (§34 + ticket 4).
+      # Contains NO secrets: task, slot, workspace, unit, mode, agent, timeout,
+      # the owning launcher's pid + pid start time, and the allocation token.
+      write_session_marker() {
+          local slot="$1" token="$2" mode="$3" task="$4" repo="$5" clone="$6" \
+                agent="$7" branch="$8" timeout_s="$9"
+          local tmp
+          tmp="$(mktemp "$SLOTS_DIR/$slot/.session.XXXXXX")"
+          jq -n \
+              --arg slot "$slot" --arg task "$task" --arg repo "$repo" \
+              --arg workspace "$clone" --arg mount "$(mount_point "$slot")" \
+              --arg agent "$agent" --arg branch "$branch" \
+              --arg ip "$(slot_ip "$slot")" --arg mac "$(slot_mac "$slot")" \
+              --arg start "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --arg owner "$(id -un)($(id -u))" \
+              --arg token "$token" --arg mode "$mode" \
+              --arg unit "microvm@$slot.service" \
+              --arg pid "$$" --arg pid_start "$(proc_start_time "$$")" \
+              --arg timeout "$timeout_s" \
+              '{slot:$slot, state:"running", task:$task, repository:$repo,
+                workspace:$workspace, mount:$mount, agent:$agent, branch:$branch,
+                ip:$ip, mac:$mac, start:$start, lock_owner:$owner,
+                token:$token, mode:$mode, unit:$unit, pid:$pid,
+                pid_start:$pid_start, timeout:$timeout}' > "$tmp"
+          mv -f -- "$tmp" "$(session_file "$slot")"
       }
 
       # ---- §22 strict task-name validation -------------------------------
@@ -270,6 +396,26 @@ let
               ${agentRegistry.namesCasePattern}) return 0 ;;
               *) die "unknown --agent '$1' (expected: ${agentRegistry.namesAlternation})" ;;
           esac
+      }
+
+      # Batch mode additionally requires the agent to declare a non-interactive
+      # invocation (`batchArgs` in the registry), so `submit` cannot start an
+      # agent that would sit waiting for a TTY forever. Also generated.
+      validate_batch_agent_name() {
+          case "$1" in
+              ${agentRegistry.batchNamesCasePattern}) return 0 ;;
+              *) die "--agent '$1' cannot run unattended (expected: ${agentRegistry.batchNamesAlternation})" ;;
+          esac
+      }
+
+      # A job timeout must be a plain positive integer within the module's
+      # bounds; the guest re-validates it against the same maximum.
+      validate_timeout() {
+          local t="$1"
+          [[ "$t" =~ ^[0-9]+$ ]] || die "--timeout must be a positive integer (got '$t')"
+          (( t >= 1 )) || die "--timeout must be >= 1"
+          (( t <= JOB_MAX_TIMEOUT )) \
+              || die "--timeout $t exceeds the configured maximum $JOB_MAX_TIMEOUT"
       }
 
       # ---- §24 standalone clone creation ---------------------------------
@@ -402,6 +548,57 @@ let
           done
       }
 
+      # ---- batch-job data (ticket 4) -------------------------------------
+      # Writes the versioned spec + the prompt into the slot's job directory
+      # (mounted read-write into the guest at $GUEST_JOB_DIR, but with these
+      # files root-owned 0444 inside a root-owned 0755 dir, so the guest can
+      # only READ them). The prompt is COPIED, never passed as an argument, and
+      # neither file ever enters the Nix store.
+      prepare_job() {
+          local slot="$1" task="$2" agent="$3" prompt_src="$4" timeout_s="$5"
+          local dir spec
+          dir="$(job_dir "$slot")"
+          spec="$(job_spec "$slot")"
+          install -d -m 0755 -o root -g root -- "$dir"
+          # out/ is written by the guest `agent` user (uid/gid 1000, §11).
+          install -d -m 0755 -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$dir/out"
+          # A stale result from an earlier job would be mistaken for this one.
+          rm -f -- "$(job_result "$slot")"
+          install -m 0444 -o root -g root -- "$prompt_src" "$(job_prompt "$slot")" \
+              || die "could not install the prompt file into $dir"
+          jq -n \
+              --argjson version "$JOB_SPEC_VERSION" \
+              --arg taskId "$task" --arg agent "$agent" \
+              --arg workspace "$GUEST_WORKSPACE" --arg promptFile "$GUEST_PROMPT" \
+              --argjson timeoutSeconds "$timeout_s" \
+              '{version:$version, taskId:$taskId, agent:$agent,
+                workspace:$workspace, promptFile:$promptFile,
+                timeoutSeconds:$timeoutSeconds}' > "$spec.tmp" \
+              || die "could not render the job spec"
+          chmod 0444 -- "$spec.tmp"
+          chown root:root -- "$spec.tmp"
+          # Rename last: the guest unit is conditional on spec.json existing, so
+          # it must only appear once it is complete.
+          mv -f -- "$spec.tmp" "$spec"
+      }
+
+      # Removes the runtime job data of a slot (spec, prompt, result). Called on
+      # teardown and before an interactive run, so no slot ever inherits another
+      # task's job. The workspace clone is NEVER touched here (§35).
+      clear_job() {
+          local slot="$1" dir
+          dir="$(job_dir "$slot")"
+          rm -f -- "$dir/$JOB_SPEC_NAME" "$dir/$JOB_SPEC_NAME.tmp" \
+                   "$dir/$JOB_PROMPT_NAME" "$dir/out/$JOB_RESULT_NAME"
+      }
+
+      job_state() {
+          local slot="$1" f
+          f="$(job_result "$slot")"
+          [[ -e "$f" ]] || return 1
+          jq -r '.state // ""' "$f" 2>/dev/null || return 1
+      }
+
       # ---- §21 slot cleanup / interrupt handling -------------------------
       # Tear a slot down WITHOUT deleting the workspace clone (§26/§35): stop
       # the VM, unmount the bind, remove the slot transient state. Locks are
@@ -411,7 +608,23 @@ let
           [[ -n "$slot" ]] || return 0
           stop_vm "$slot"
           teardown_bind_mount "$slot"
+          # Runtime job data (spec/prompt/result) is transient per task: drop it
+          # with the slot, exactly like the session marker. The workspace clone
+          # is deliberately kept (§26/§35).
+          clear_job "$slot"
           rm -rf -- "''${SLOTS_DIR:?}/$slot"
+      }
+
+      # Tear a slot down ONLY while it still belongs to `token` (ticket 4
+      # "allocation safety"): used by operations that act on a slot they did not
+      # allocate themselves, so a `cancel` can never stop a slot that has since
+      # been re-allocated to a different task.
+      cleanup_slot_owned() {
+          local slot="$1" token="$2" cur
+          cur="$(marker_field "$slot" token || true)"
+          [[ "$cur" == "$token" ]] \
+              || die "slot $slot no longer belongs to that task (allocation token changed); refusing to touch it"
+          cleanup_slot "$slot"
       }
 
       # ---- readiness (§34) -----------------------------------------------
@@ -485,6 +698,22 @@ let
         list                  One-line status for every slot.
         ssh <slot|task> [--] [cmd...]   SSH into the guest 'agent' user.
         console <slot|task>   Attach to the VM serial console (journal).
+        submit --name <task> --repository <path> --agent <name>
+               --prompt-file <path> [--timeout <sec>] [--branch <br>]
+                              UNATTENDED batch run: allocate a slot, clone the
+                              repo, write a versioned job spec + the prompt into
+                              the slot's job dir, boot the VM, wait for the
+                              guest's structured result, then tear the VM down
+                              (the workspace clone is always kept). Exit code:
+                              0 completed, 1 agent failed, 124 timed out,
+                              70 infrastructure error.
+        cancel <task>         Cancel a running job/session by task name. Refuses
+                              unless the slot still carries that task's
+                              allocation token. Keeps the workspace.
+        recover [--dry-run]   Reconcile slots with systemd: stop orphaned units,
+                              unmount stale mounts, drop stale markers and job
+                              data. Always keeps workspace clones. --dry-run
+                              only prints what it would do.
         workspace-remove <task> [--force]
                               Delete the standalone clone. Separate + guarded:
                               refuses on uncommitted changes / unexported
@@ -528,70 +757,42 @@ let
 
           mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT"
 
-          # --- §21 lock-protected allocation -------------------------------
-          local slot="" name
-          exec 9>"$ALLOC_LOCK"
-          flock 9
-          for name in "''${SLOT_NAMES[@]}"; do
-              if slot_is_free "$name"; then slot="$name"; break; fi
-          done
-          if [[ -z "$slot" ]]; then
-              flock -u 9
-              die "no free slot (all ''${#SLOT_NAMES[@]} in use)"
-          fi
-          # Per-slot lock, held for the remainder of this process (§21).
-          exec 8>"$RUN_DIR/$slot.lock"
-          if ! flock -n 8; then
-              flock -u 9
-              die "slot $slot is locked by another launcher"
-          fi
-
           # Arm the cleanup trap BEFORE creating any slot state, so a signal
-          # in the marker-writing window still tears the slot down (keeping
-          # the workspace clone; §43). cleanup_slot is a no-op for state that
-          # does not exist yet.
-          local committed=0
+          # in the allocation window still tears the slot down (keeping the
+          # workspace clone; §43). cleanup_slot is a no-op for state that does
+          # not exist yet, and for the still-empty `slot`.
+          local slot="" token="" committed=0
           # shellcheck disable=SC2317  # invoked via trap
-          # ''${committed:-0}: create_clone (and other helpers) run in
-          # command-substitution subshells that inherit this EXIT trap; the
-          # enclosing function's `committed` local is not in scope while the
-          # trap fires there, so a failure path (e.g. "workspace already
-          # exists") would trip `set -u` without the default (§21/§43).
-          on_exit() { (( ''${committed:-0} )) || cleanup_slot "$slot"; }
+          # ''${committed:-0} / ''${slot:-}: create_clone (and other helpers) run
+          # in command-substitution subshells that inherit this EXIT trap; the
+          # enclosing function's locals are not in scope while the trap fires
+          # there, so a failure path (e.g. "workspace already exists") would
+          # trip `set -u` without the defaults (§21/§43).
+          on_exit() { (( ''${committed:-0} )) || cleanup_slot "''${slot:-}"; }
           trap on_exit EXIT
           trap 'exit 130' INT TERM
 
-          mkdir -p -- "$SLOTS_DIR/$slot"
-          # Atomic allocation marker written while the allocator lock is held,
-          # so a concurrent 'run' can no longer pick this slot.
-          jq -n --arg slot "$slot" --arg state "allocating" \
-              '{slot:$slot, state:$state}' > "$(session_file "$slot")"
-          flock -u 9
-          exec 9>&-
+          allocate_slot
+          slot="$ALLOC_SLOT"
+          token="$ALLOC_TOKEN"
 
-          local clone ip mac
+          local clone ip
           ip="$(slot_ip "$slot")"
-          mac="$(slot_mac "$slot")"
           log "allocated slot $slot ($ip)"
           # Deterministic clone path; create_clone runs in THIS shell (see its
           # header) so a failure exits cmd_run and its EXIT trap cleans up.
           clone="$WORKSPACE_ROOT/$task"
           create_clone "$top" "$task" "$branch"
           setup_bind_mount "$slot" "$clone"
+          # An interactive slot must not accidentally pick up a stale batch job.
+          clear_job "$slot"
           start_vm "$slot"
 
           # Persist the full session record for status/list (§34). No secrets.
-          jq -n \
-              --arg slot "$slot" --arg task "$task" --arg repo "$top" \
-              --arg workspace "$clone" --arg mount "$(mount_point "$slot")" \
-              --arg agent "$agent" --arg branch "$branch" \
-              --arg ip "$ip" --arg mac "$mac" \
-              --arg start "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              --arg owner "$(id -un)($(id -u))" \
-              '{slot:$slot, state:"running", task:$task, repository:$repo,
-                workspace:$workspace, mount:$mount, agent:$agent, branch:$branch,
-                ip:$ip, mac:$mac, start:$start, lock_owner:$owner}' \
-              > "$(session_file "$slot")"
+          local run_mode="detached"
+          (( attach )) && run_mode="attached"
+          write_session_marker "$slot" "$token" "$run_mode" "$task" "$top" \
+              "$clone" "$agent" "$branch" ""
 
           if (( attach )); then
               [[ "$SSH_ENABLED" == "1" ]] || die "--attach requires enableSsh = true"
@@ -630,6 +831,271 @@ let
       EOF
       }
 
+      # ==== batch submission (ticket 4) ====================================
+      # Mirrors cmd_run's allocation/trap structure, then waits for the GUEST's
+      # structured result instead of attaching a terminal.
+      cmd_submit() {
+          require_root submit
+          local task="" repo="" agent="" branch="" prompt="" timeout_s=""
+          while [[ $# -gt 0 ]]; do
+              case "$1" in
+                  --name)        task="''${2-}"; shift 2 ;;
+                  --repository)  repo="''${2-}"; shift 2 ;;
+                  --agent)       agent="''${2-}"; shift 2 ;;
+                  --branch)      branch="''${2-}"; shift 2 ;;
+                  --prompt-file) prompt="''${2-}"; shift 2 ;;
+                  --timeout)     timeout_s="''${2-}"; shift 2 ;;
+                  --name=*)        task="''${1#*=}"; shift ;;
+                  --repository=*)  repo="''${1#*=}"; shift ;;
+                  --agent=*)       agent="''${1#*=}"; shift ;;
+                  --branch=*)      branch="''${1#*=}"; shift ;;
+                  --prompt-file=*) prompt="''${1#*=}"; shift ;;
+                  --timeout=*)     timeout_s="''${1#*=}"; shift ;;
+                  *) die "submit: unknown argument '$1'" ;;
+              esac
+          done
+          [[ -n "$task" ]]   || die "submit: --name <task> is required"
+          [[ -n "$repo" ]]   || die "submit: --repository <path> is required"
+          [[ -n "$agent" ]]  || die "submit: --agent <name> is required"
+          [[ -n "$prompt" ]] || die "submit: --prompt-file <path> is required"
+          validate_task_name "$task"
+          validate_batch_agent_name "$agent"
+          [[ -z "$timeout_s" ]] && timeout_s="$JOB_DEFAULT_TIMEOUT"
+          validate_timeout "$timeout_s"
+          # The prompt must be a readable regular FILE (not a fifo/device, not a
+          # directory); it is copied into the job dir, never referenced.
+          local prompt_real
+          prompt_real="$(realpath -e -- "$prompt")" \
+              || die "submit: --prompt-file does not exist: $prompt"
+          [[ -f "$prompt_real" && -r "$prompt_real" ]] \
+              || die "submit: --prompt-file must be a readable regular file: $prompt"
+          [[ -s "$prompt_real" ]] || die "submit: --prompt-file is empty: $prompt"
+          local top
+          top="$(validate_repository "$repo")"
+          [[ -z "$branch" ]] && branch="agent/$task"
+          validate_branch_name "$branch"
+
+          mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT" "$RESULTS_DIR"
+
+          local slot="" token="" committed=0
+          # shellcheck disable=SC2317  # invoked via trap
+          on_exit() { (( ''${committed:-0} )) || cleanup_slot "''${slot:-}"; }
+          trap on_exit EXIT
+          trap 'exit 130' INT TERM
+
+          allocate_slot
+          slot="$ALLOC_SLOT"
+          token="$ALLOC_TOKEN"
+
+          local clone ip
+          ip="$(slot_ip "$slot")"
+          log "allocated slot $slot ($ip) for batch task '$task'"
+          clone="$WORKSPACE_ROOT/$task"
+          create_clone "$top" "$task" "$branch"
+          setup_bind_mount "$slot" "$clone"
+          prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s"
+          write_session_marker "$slot" "$token" "batch" "$task" "$top" \
+              "$clone" "$agent" "$branch" "$timeout_s"
+          start_vm "$slot"
+
+          # --- wait for the structured result -------------------------------
+          # HOST timeout = the job's own timeout + a grace period, so the guest
+          # (whose `timeout(1)` fires first) still gets to write result.json.
+          local deadline=$(( timeout_s + JOB_GRACE )) waited=0 state="" rc=70
+          log "waiting up to ''${deadline}s for the job result"
+          while :; do
+              state="$(job_state "$slot" || true)"
+              case "$state" in
+                  completed|failed|timed-out|infrastructure-error) break ;;
+              esac
+              if (( waited >= deadline )); then
+                  log "job did not finish within ''${deadline}s; stopping the VM"
+                  state="timed-out"
+                  break
+              fi
+              # A guest that died without writing a result must not hang us for
+              # the full timeout window.
+              if (( waited > 0 )) && ! service_active "$slot"; then
+                  log "microvm@$slot stopped without a terminal result"
+                  state="''${state:-infrastructure-error}"
+                  [[ "$state" == "starting" || "$state" == "running" ]] \
+                      && state="infrastructure-error"
+                  break
+              fi
+              sleep 3
+              waited=$(( waited + 3 ))
+          done
+
+          # Archive the result (host-only) BEFORE the job dir is cleared, so
+          # `status <task>` can still report the outcome.
+          local archived="$RESULTS_DIR/$task.json"
+          if [[ -e "$(job_result "$slot")" ]]; then
+              cp -f -- "$(job_result "$slot")" "$archived.tmp" && mv -f -- "$archived.tmp" "$archived"
+          else
+              jq -n --argjson version "$JOB_SPEC_VERSION" --arg taskId "$task" \
+                  --arg agent "$agent" --arg state "$state" \
+                  '{version:$version, taskId:$taskId, agent:$agent, state:$state,
+                    exitCode:70, timedOut:($state=="timed-out"), message:"no guest result"}' \
+                  > "$archived.tmp" && mv -f -- "$archived.tmp" "$archived"
+          fi
+
+          case "$state" in
+              completed) rc=0 ;;
+              failed)    rc=1 ;;
+              timed-out) rc=124 ;;
+              *)         rc=70 ;;
+          esac
+
+          # Teardown: stop the VM, unmount, drop job data + marker. The
+          # workspace clone is ALWAYS kept (§35).
+          cleanup_slot "$slot"
+          committed=1
+          trap - EXIT INT TERM
+
+          cat >&2 <<EOF
+      $PROG: batch task '$task' finished with state '$state'.
+        workspace: $clone
+        result:    $archived
+        inspect changes:
+          git -C "$clone" diff
+          git -C "$clone" format-patch "origin/HEAD..$branch"
+      EOF
+          jq . "$archived" || true
+          return "$rc"
+      }
+
+      # ==== cancellation (ticket 4) ========================================
+      cmd_cancel() {
+          require_root cancel
+          [[ $# -ge 1 ]] || die "cancel: <task> required"
+          local task="$1"
+          validate_task_name "$task"
+
+          # Resolve the slot from the TASK, then remember its token and only act
+          # while that token is unchanged — so a slot that has meanwhile been
+          # re-allocated to another task is never stopped.
+          local slot="" f cur_task
+          for f in "$SLOTS_DIR"/*/session.json; do
+              [[ -e "$f" ]] || continue
+              cur_task="$(jq -r '.task // empty' "$f" 2>/dev/null || true)"
+              if [[ "$cur_task" == "$task" ]]; then
+                  slot="$(jq -r '.slot' "$f")"
+                  break
+              fi
+          done
+          [[ -n "$slot" ]] || die "no running task named '$task'"
+          local token
+          token="$(marker_field "$slot" token || true)"
+          [[ -n "$token" ]] || die "slot $slot has no allocation token; refusing (use 'recover')"
+
+          # Record the cancellation in the archived result, so the outcome of a
+          # cancelled job is not silently indistinguishable from a crash.
+          mkdir -p -- "$RESULTS_DIR"
+          local archived="$RESULTS_DIR/$task.json"
+          jq -n --argjson version "$JOB_SPEC_VERSION" --arg taskId "$task" \
+              --arg agent "$(marker_field "$slot" agent || true)" \
+              --arg finishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              '{version:$version, taskId:$taskId, agent:$agent, state:"cancelled",
+                exitCode:130, finishedAt:$finishedAt, timedOut:false,
+                message:"cancelled by the operator"}' > "$archived.tmp" \
+              && mv -f -- "$archived.tmp" "$archived"
+
+          log "cancelling task '$task' on slot $slot (workspace kept)"
+          # Requests a clean shutdown first, waits a bounded interval, then
+          # force-kills — all inside cleanup_slot/stop_vm — and unmounts + drops
+          # the runtime job data. Token-guarded.
+          cleanup_slot_owned "$slot" "$token"
+          log "cancelled; result recorded at $archived"
+      }
+
+      # ==== recovery (ticket 4) ============================================
+      # Reconciles every slot's marker with the actual systemd/mount state.
+      # NEVER deletes a workspace clone. --dry-run only prints.
+      cmd_recover() {
+          require_root recover
+          local dry=0
+          while [[ $# -gt 0 ]]; do
+              case "$1" in
+                  --dry-run) dry=1; shift ;;
+                  *) die "recover: unknown argument '$1'" ;;
+              esac
+          done
+          local slot marker active mounted mode pid pid_start task acted=0
+          for slot in "''${SLOT_NAMES[@]}"; do
+              marker=0
+              [[ -e "$(session_file "$slot")" ]] && marker=1
+              active=0
+              service_active "$slot" && active=1
+              mounted=0
+              findmnt -n -- "$(mount_point "$slot")" >/dev/null 2>&1 && mounted=1
+              task="$(marker_field "$slot" task 2>/dev/null || true)"
+              mode="$(marker_field "$slot" mode 2>/dev/null || true)"
+              pid="$(marker_field "$slot" pid 2>/dev/null || true)"
+              pid_start="$(marker_field "$slot" pid_start 2>/dev/null || true)"
+
+              local reason=""
+              if (( marker && ! active )); then
+                  # The EXIT trap never ran (hard kill / power loss): the slot is
+                  # reserved but nothing is running.
+                  reason="stale marker (unit inactive)"
+              elif (( ! marker && active )); then
+                  # A VM nobody claims: no task can be harmed by stopping it.
+                  reason="orphaned unit (no allocation marker)"
+              elif (( marker && active )) \
+                   && [[ "$mode" == "attached" || "$mode" == "batch" ]] \
+                   && ! owner_alive "$pid" "$pid_start"; then
+                  # `attached`/`batch` slots are supervised by a live launcher;
+                  # `detached` ones are not, so their dead pid is EXPECTED and
+                  # must never trigger recovery.
+                  reason="orphaned $mode run (launcher pid $pid is gone)"
+              elif (( ! marker && ! active && mounted )); then
+                  reason="stale bind mount"
+              elif (( ! marker && ! active )) && [[ -e "$(job_spec "$slot")" ]]; then
+                  reason="stale job data"
+              fi
+
+              if [[ -z "$reason" ]]; then
+                  printf '%s: ok%s\n' "$slot" \
+                      "$( (( marker )) && printf " (task %s, mode %s)" "''${task:-<none>}" "''${mode:-<none>}" )"
+                  continue
+              fi
+
+              acted=1
+              if (( dry )); then
+                  printf '%s: would recover — %s\n' "$slot" "$reason"
+                  (( active )) && printf '%s:   would stop %s\n' "$slot" "microvm@$slot.service"
+                  (( mounted )) && printf '%s:   would unmount %s\n' "$slot" "$(mount_point "$slot")"
+                  [[ -e "$(job_spec "$slot")" ]] \
+                      && printf '%s:   would clear job data in %s\n' "$slot" "$(job_dir "$slot")"
+                  (( marker )) && printf '%s:   would drop the allocation marker\n' "$slot"
+                  printf '%s:   would KEEP the workspace clone\n' "$slot"
+                  continue
+              fi
+
+              printf '%s: recovering — %s\n' "$slot" "$reason"
+              if (( active )); then
+                  printf '%s:   stopping %s\n' "$slot" "microvm@$slot.service"
+                  stop_vm "$slot"
+              fi
+              if (( mounted )); then
+                  printf '%s:   unmounting %s\n' "$slot" "$(mount_point "$slot")"
+                  teardown_bind_mount "$slot"
+              fi
+              if [[ -e "$(job_spec "$slot")" || -e "$(job_prompt "$slot")" ]]; then
+                  printf '%s:   clearing job data in %s\n' "$slot" "$(job_dir "$slot")"
+                  clear_job "$slot"
+              fi
+              if (( marker )); then
+                  printf '%s:   dropping the allocation marker\n' "$slot"
+                  rm -rf -- "''${SLOTS_DIR:?}/$slot"
+              fi
+              printf '%s:   keeping the workspace clone\n' "$slot"
+          done
+          if (( ! acted )); then
+              log "nothing to recover"
+          fi
+      }
+
       cmd_stop() {
           require_root stop
           [[ $# -ge 1 ]] || die "stop: <slot|task> required"
@@ -660,6 +1126,7 @@ let
               targets=("''${SLOT_NAMES[@]}")
           fi
           local slot f state task workspace agent start owner ip mac cid mnt ssh_ready
+          local mode timeout_s jstate
           for slot in "''${targets[@]}"; do
               f="$(session_file "$slot")"
               ip="$(slot_ip "$slot")"
@@ -667,6 +1134,7 @@ let
               cid="$(slot_cid "$slot")"
               if service_active "$slot"; then state="running"; else state="stopped"; fi
               task=""; workspace=""; agent=""; start=""; owner=""
+              mode=""; timeout_s=""
               local sstate="" stale="no"
               if [[ -e "$f" ]]; then
                   task="$(jq -r '.task // ""' "$f")"
@@ -675,6 +1143,14 @@ let
                   start="$(jq -r '.start // ""' "$f")"
                   owner="$(jq -r '.lock_owner // ""' "$f")"
                   sstate="$(jq -r '.state // ""' "$f")"
+                  mode="$(jq -r '.mode // ""' "$f")"
+                  timeout_s="$(jq -r '.timeout // ""' "$f")"
+              fi
+              # Job state: the live guest result while the slot runs, else the
+              # archived result of the last run of that task.
+              jstate="$(job_state "$slot" 2>/dev/null || true)"
+              if [[ -z "$jstate" && -n "$task" && -e "$RESULTS_DIR/$task.json" ]]; then
+                  jstate="$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null || true)"
               fi
               # A slot with a persisted marker but an inactive unit is stale
               # (see slot_is_free NOTE): clear it with 'destroy <slot>'.
@@ -695,6 +1171,9 @@ let
         workspace: ''${workspace:-<none>}
         bind-mount: $mnt
         agent:     ''${agent:-<none>}
+        mode:      ''${mode:-<none>}
+        job:       ''${jstate:-<none>}
+        timeout:   ''${timeout_s:-<n/a>}
         started:   ''${start:-<n/a>}
         ssh:       $ssh_ready
         state:     ''${sstate:-<none>}
@@ -828,6 +1307,9 @@ let
           local cmd="$1"; shift
           case "$cmd" in
               run)              cmd_run "$@" ;;
+              submit)           cmd_submit "$@" ;;
+              cancel)           cmd_cancel "$@" ;;
+              recover)          cmd_recover "$@" ;;
               stop)             cmd_stop "$@" ;;
               destroy)          cmd_destroy "$@" ;;
               status)           cmd_status "$@" ;;
