@@ -160,6 +160,38 @@ in
         );
       in
       lib.optionalAttrs dc.enable {
+        # home-manager's activation runs as the guest `home-manager-agent`
+        # system service at boot. Its very first step (`setupVars` in
+        # home-manager's activation-init.sh) aborts with
+        #   "Could not find suitable profile directory"
+        # (exit 1, before ANY dotfile is linked) unless a per-user Nix
+        # profile directory exists — it probes, in order,
+        # `~/.local/state/nix/profiles` then
+        # `/nix/var/nix/profiles/per-user/<user>`.
+        #
+        # On a persistent host those dirs were created long ago by
+        # nix-daemon the first time the user ran nix, and survive reboots.
+        # This guest, by contrast, has an EPHEMERAL tmpfs rootfs rebuilt
+        # every boot, and the unprivileged `agent` user never runs nix
+        # before the activation service fires — so nix-daemon never lazily
+        # creates the dir and nixpkgs' own tmpfiles rules do not pre-create
+        # it either. The result was a guest home containing only the runtime
+        # dirs `fish` makes for itself and NONE of the provisioned coding-
+        # agent dotfiles / skills / extensions.
+        #
+        # Pre-create the `agent` per-user profile + gcroots dirs so
+        # `setupVars` finds a suitable profile directory and activation
+        # proceeds to link the dotfiles. systemd-tmpfiles runs at
+        # sysinit.target, well before the multi-user `home-manager-agent`
+        # service, so the dirs are guaranteed present in time. `/nix/var` is
+        # on the writable rootfs (only `/nix/store` is the read-only store
+        # disk), so these are writable. Owned by `agent` to match what
+        # nix-daemon would have created on first use.
+        systemd.tmpfiles.rules = [
+          "d /nix/var/nix/profiles/per-user/agent 0755 agent users - -"
+          "d /nix/var/nix/gcroots/per-user/agent 0755 agent users - -"
+        ];
+
         home-manager = {
           useGlobalPkgs = true;
           useUserPackages = true;
