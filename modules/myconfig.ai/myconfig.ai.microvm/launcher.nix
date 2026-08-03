@@ -88,11 +88,15 @@ let
       # Stable dest of the agenix-decrypted dedicated private key. MUST match
       # `myconfig.secrets."dedicated-agent-vm-key".dest` in secrets.nix. The
       # priv repo provisions its `source`; agenix then decrypts it here
-      # (root-owned 0400). Default AGENT_MICROVM_SSH_KEY to it when the caller
-      # set none AND it exists — so `run --attach` / `ssh` under `sudo` (which
-      # strips a user-set AGENT_MICROVM_SSH_KEY via env_reset) still find the
-      # dedicated key. If the secret is unprovisioned the file is absent and we
-      # leave AGENT_MICROVM_SSH_KEY unset (previous behaviour).
+      # (root:root 0400 by default; root:agent-microvm 0440 when
+      # passwordlessControl is on, so the non-root operator can read it and
+      # `ssh`/`console` need no sudo — see secrets.nix). Default
+      # AGENT_MICROVM_SSH_KEY to it when the caller set none AND it is
+      # readable — so `run --attach` / `ssh` (whether run directly by a group
+      # member or under `sudo`, which strips a user-set AGENT_MICROVM_SSH_KEY
+      # via env_reset) still find the dedicated key. If the secret is
+      # unprovisioned/unreadable the file check fails and we leave
+      # AGENT_MICROVM_SSH_KEY unset (previous behaviour).
       readonly SSH_KEY_DEST="/run/agenix/dedicated-agent-vm-key"
       if [[ -z "''${AGENT_MICROVM_SSH_KEY:-}" && -r "$SSH_KEY_DEST" ]]; then
           AGENT_MICROVM_SSH_KEY="$SSH_KEY_DEST"
