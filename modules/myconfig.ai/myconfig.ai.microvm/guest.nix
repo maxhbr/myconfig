@@ -48,6 +48,7 @@
   lib,
   pkgs,
   inputs,
+  myconfig,
   mkGuestHome,
   ...
 }:
@@ -192,9 +193,26 @@ let
       shell = pkgs.fish;
     }
     // lib.optionalAttrs (cfg.enableSsh && cfg.sshPublicKeyFile != null) {
-      # §18: exactly one dedicated public key authorises the guest `agent`
-      # user. NOT a host authorized_keys file.
-      openssh.authorizedKeys.keyFiles = [ cfg.sshPublicKeyFile ];
+      openssh.authorizedKeys = {
+        # §18: the dedicated public key authorises the guest `agent` user.
+        # NOT a host authorized_keys file.
+        keyFiles = [ cfg.sshPublicKeyFile ];
+        # When passwordlessControl is on, ALSO authorise the host operator's
+        # own declared public keys, so `agent-microvm ssh <slot>` works
+        # without sudo using the operator's default `~/.ssh/id_*` identity:
+        # a non-root operator cannot read the root:root 0400 dedicated
+        # private key, so the launcher passes no `-i` and ssh falls back to
+        # the operator's own key, which the guest now accepts.
+        #
+        # Deliberate, opt-in relaxation of §18's "exactly one dedicated key":
+        # these are the ALREADY-TRUSTED host operator's PUBLIC keys (never a
+        # credential handed to the untrusted guest), added only when the
+        # operator explicitly opts into passwordless control. `config` here
+        # is the HOST config, so this reads the host `myconfig.user`'s keys.
+        keys =
+          lib.optionals cfg.passwordlessControl
+            config.users.users.${myconfig.user}.openssh.authorizedKeys.keys;
+      };
     };
 
     # --- §7 minimal guest toolchain + the §19 entry point ----------------
