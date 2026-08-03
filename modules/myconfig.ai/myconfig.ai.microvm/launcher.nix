@@ -406,7 +406,10 @@ let
         console <slot|task>   Attach to the VM serial console (journal).
         workspace-remove <task> [--force]
                               Delete the standalone clone. Separate + guarded:
-                              refuses on uncommitted changes without --force.
+                              refuses on uncommitted changes / unexported
+                              commits, and on a slot still using the clone,
+                              without --force. With --force it also stops any
+                              slot still holding the clone before removing it.
       EOF
           exit 2
       }
@@ -698,20 +701,32 @@ let
           # strip the bracketed suffix before comparing. Cross-check the
           # recorded session workspace too, so an active slot bound to this
           # clone always blocks even if the mount source parsing changes.
-          local slot mp src sess_ws
+          # When a slot still holds this clone (bind-mounted or recorded as the
+          # running slot's workspace), --force tears that slot down first
+          # (stop VM + unmount + drop slot transient, exactly like `stop`)
+          # instead of refusing. Without --force we still fail closed and tell
+          # the user which slot to stop.
+          local slot mp src sess_ws matched
           for slot in "''${SLOT_NAMES[@]}"; do
+              matched=0
               mp="$(mount_point "$slot")"
               if findmnt -n -- "$mp" >/dev/null 2>&1; then
                   src="$(findmnt -no SOURCE -- "$mp" 2>/dev/null || true)"
                   src="''${src##*[}"
                   src="''${src%]}"
-                  [[ "$src" == "$clone" ]] \
-                      && die "workspace is still bind-mounted at slot $slot; stop it first with: $PROG stop $slot"
+                  [[ "$src" == "$clone" ]] && matched=1
               fi
               if service_active "$slot" && [[ -e "$(session_file "$slot")" ]]; then
                   sess_ws="$(jq -r '.workspace // ""' "$(session_file "$slot")" 2>/dev/null || true)"
-                  [[ "$sess_ws" == "$clone" ]] \
-                      && die "workspace is in use by running slot $slot; stop it first with: $PROG stop $slot"
+                  [[ "$sess_ws" == "$clone" ]] && matched=1
+              fi
+              if (( matched )); then
+                  if (( force )); then
+                      log "workspace in use by slot $slot; stopping it first (--force)"
+                      cleanup_slot "$slot"
+                  else
+                      die "workspace is in use by slot $slot; stop it first with: $PROG stop $slot"
+                  fi
               fi
           done
           log "removing workspace $clone"
