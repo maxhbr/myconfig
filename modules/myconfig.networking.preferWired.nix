@@ -143,17 +143,30 @@ in
         }
 
         # Is any *physical wired* interface currently carrying a link?
+        #
+        # We must distinguish real wired NICs from the pile of virtual
+        # interfaces a host may bring up (bridges, TAPs, veth pairs, WireGuard,
+        # tun/tap, loopback, ...). A name-based blocklist is fragile and was the
+        # original bug: f13 runs agent microVMs which create a bridge
+        # (`agentbr0`) and per-slot TAPs (`vm-agent-0`, `vm-agent-1`, ...).
+        # Neither matches the old `br*` / `tap*` globs, so while a microVM was
+        # running those carrier-up virtual interfaces made this function report
+        # a "wired link" forever — Wi-Fi was disabled and never came back when
+        # the real Ethernet cable was unplugged.
+        #
+        # Instead of enumerating what to exclude, allow-list what a physical
+        # interface *is*: the kernel exposes a `device` symlink under
+        # /sys/class/net/<if>/ only for interfaces backed by a real hardware
+        # device (PCI/USB NICs). Bridges, TAP/TUN, veth, WireGuard and loopback
+        # have no such symlink. Combined with the existing wireless skip, that
+        # leaves exactly the physical wired NICs — robust against however many
+        # virtual interfaces (and however they are named) come and go.
         wired_link_up() {
           for d in /sys/class/net/*; do
-            name="$(basename "$d")"
-            # skip wireless
+            # skip wireless NICs (they have a `wireless`/`phy80211` dir)
             [ -d "$d/wireless" ] && continue
-            # skip virtual / tunnel / loopback interfaces
-            case "$name" in
-              lo | wg* | veth* | docker* | podman* | virbr* | tun* | tap* | br* | vboxnet*)
-                continue
-                ;;
-            esac
+            # skip virtual interfaces: only hardware-backed NICs have `device`
+            [ -e "$d/device" ] || continue
             [ -e "$d/carrier" ] || continue
             if [ "$(cat "$d/carrier" 2>/dev/null || echo 0)" = "1" ]; then
               return 0
