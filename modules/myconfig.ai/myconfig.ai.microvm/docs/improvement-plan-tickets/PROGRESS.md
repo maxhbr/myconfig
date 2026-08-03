@@ -11,7 +11,7 @@ commit as the work it describes.
 | 3 | `03-network-and-control-channel-hardening.md` | DONE | A, B, C (3 commits) |
 | 4 | `04-batch-execution-and-lifecycle.md` | DONE | A, B (2 commits) |
 | 5 | `05-resource-classes-and-state-management.md` | DONE | A, B, C+D (3 commits) |
-| 6 | `06-runtime-validation-and-documentation.md` | IN PROGRESS (B done) | — |
+| 6 | `06-runtime-validation-and-documentation.md` | IN PROGRESS (A, B done) | — |
 
 Status values: `TODO`, `IN PROGRESS`, `DONE`, `BLOCKED`.
 
@@ -259,3 +259,15 @@ sync + backward-compat confirmation).
   finished→stopped→cleanup), the timeout path, cancellation, recovery actions,
   and a grep proving no secrets/prompt text reach the task log. New check
   `microvm-observability`.
+- **Part A (defined, NOT executed).** New `runtime-validation.sh` (shellcheck +
+  shfmt clean) is a repeatable, root+KVM-only suite with six sections — boot/
+  filesystem, proxy-only network matrix, two-guest layer 2, credential boundary,
+  forced lifecycle failures, hostile repository fixture — printing PASS/FAIL/SKIP
+  per check and exiting non-zero on any failure. `SKIP` is honest (e.g. "fewer
+  than two slots"), never a disguised pass. Deliberately kept OUT of
+  `nix flake check` (no KVM in CI, it boots real VMs).
+  New `docs/agent-microvm-runtime-validation.md` is the test guide: prerequisites,
+  per-section expected outcomes, manual extras (tcpdump, cgroup inspection,
+  journal streams) and how to interpret failures. Both state clearly that the
+  suite has NOT been run from the development environment (no /dev/kvm, no root),
+  so nothing in them may be read as runtime evidence.
