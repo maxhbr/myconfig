@@ -60,6 +60,8 @@
   # The ONE definition of the batch-job format/paths (job.nix). `submit` writes
   # the spec + prompt there and reads the guest's result from it.
   agentJobs,
+  # The ONE definition of the task-scoped agent-state paths (state.nix).
+  agentState,
   ...
 }:
 let
@@ -158,9 +160,9 @@ let
       # (guest.nix `users.users.agent`). The workspace clone is chowned to
       # these numeric ids so it appears agent-owned inside the guest via
       # virtiofs (which passes ownership through unchanged). Keep in sync with
-      # guest.nix's `uid = 1000`.
-      readonly GUEST_AGENT_UID=1000
-      readonly GUEST_AGENT_GID=1000
+      # the `guestAgentUid`/`guestAgentGid` options guest.nix uses.
+      readonly GUEST_AGENT_UID=${toString cfg.guestAgentUid}
+      readonly GUEST_AGENT_GID=${toString cfg.guestAgentGid}
       # ---- batch jobs (ticket 4) -----------------------------------------
       readonly JOBS_ROOT=${lib.escapeShellArg agentJobs.root}
       readonly RESULTS_DIR=${lib.escapeShellArg agentJobs.resultsDir}
@@ -175,6 +177,18 @@ let
       readonly JOB_DEFAULT_TIMEOUT=${toString cfg.job.defaultTimeoutSeconds}
       readonly JOB_MAX_TIMEOUT=${toString cfg.job.maxTimeoutSeconds}
       readonly JOB_GRACE=${toString cfg.job.gracePeriodSeconds}
+      # ---- task-scoped agent state (ticket 5 B) --------------------------
+      readonly STATE_TASKS_ROOT=${lib.escapeShellArg agentState.tasksRoot}
+      readonly STATE_SLOTS_ROOT=${lib.escapeShellArg agentState.slotsRoot}
+      # The DECLARED per-agent state directories, as "<agent>:<dir>" pairs
+      # generated from the registry. Only these are ever exposed to a guest.
+      readonly AGENT_STATE_DIRS=(${
+        lib.concatMapStringsSep " " lib.escapeShellArg (
+          lib.concatMap (a: map (d: "${a.name}:${d}") a.persistentState.directories) (
+            lib.attrValues agentRegistry.agents
+          )
+        )
+      })
       readonly RUN_DIR="/run/agent-microvms"
       readonly ALLOC_LOCK="$RUN_DIR/allocator.lock"
       readonly SLOTS_DIR="$RUNTIME_ROOT/slots"
@@ -360,7 +374,7 @@ let
       # the owning launcher's pid + pid start time, and the allocation token.
       write_session_marker() {
           local slot="$1" token="$2" mode="$3" task="$4" repo="$5" clone="$6" \
-                agent="$7" branch="$8" timeout_s="$9"
+                agent="$7" branch="$8" timeout_s="$9" persist="''${10:-0}"
           local tmp
           tmp="$(mktemp "$SLOTS_DIR/$slot/.session.XXXXXX")"
           jq -n \
@@ -374,11 +388,13 @@ let
               --arg unit "microvm@$slot.service" \
               --arg pid "$$" --arg pid_start "$(proc_start_time "$$")" \
               --arg timeout "$timeout_s" \
+              --arg persist "$persist" \
               '{slot:$slot, state:"running", task:$task, repository:$repo,
                 workspace:$workspace, mount:$mount, agent:$agent, branch:$branch,
                 ip:$ip, mac:$mac, start:$start, lock_owner:$owner,
                 token:$token, mode:$mode, unit:$unit, pid:$pid,
-                pid_start:$pid_start, timeout:$timeout}' > "$tmp"
+                pid_start:$pid_start, timeout:$timeout,
+                persist_agent_state:$persist}' > "$tmp"
           mv -f -- "$tmp" "$(session_file "$slot")"
       }
 
@@ -658,6 +674,71 @@ let
           jq -r '.state // ""' "$f" 2>/dev/null || return 1
       }
 
+      # ---- task-scoped agent state (ticket 5 B) ---------------------------
+      state_slot_dir() { printf '%s' "$STATE_SLOTS_ROOT/$1"; }
+      state_task_dir() { printf '%s' "$STATE_TASKS_ROOT/$1/$2"; }
+
+      agent_state_dirs() {
+          local agent="$1" pair
+          for pair in ''${AGENT_STATE_DIRS[@]+"''${AGENT_STATE_DIRS[@]}"}; do
+              [[ "''${pair%%:*}" == "$agent" ]] || continue
+              printf '%s\n' "''${pair#*:}"
+          done
+      }
+
+      # Opt-in, task-scoped persistence: create ONLY the directories the
+      # registry declares for this agent under
+      # <runtimeRoot>/state/tasks/<task>/<agent>/, then bind-mount that
+      # per-task directory onto the slot's share source. Nothing else is ever
+      # exposed — no host home, no ~/.ssh, no sockets, no other task's state.
+      setup_agent_state() {
+          local slot="$1" task="$2" agent="$3" mp dir dirs=()
+          # Refuse BEFORE creating anything: an agent without declared state
+          # directories cannot persist, and silently doing nothing would be a
+          # lie (the operator asked for persistence).
+          mapfile -t dirs < <(agent_state_dirs "$agent")
+          (( ''${#dirs[@]} > 0 )) \
+              || die "--persist-agent-state: agent '$agent' declares no persistent state directories"
+          mp="$(state_slot_dir "$slot")"
+          install -d -m 0755 -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$mp"
+          local task_dir
+          task_dir="$(state_task_dir "$task" "$agent")"
+          install -d -m 0755 -o root -g root -- "$STATE_TASKS_ROOT"
+          install -d -m 0755 -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- \
+              "$STATE_TASKS_ROOT/$task" "$task_dir"
+          for dir in "''${dirs[@]}"; do
+              [[ -n "$dir" ]] || continue
+              install -d -m 0700 -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$task_dir/$dir"
+          done
+          if findmnt -n -- "$mp" >/dev/null 2>&1; then
+              umount -- "$mp" || die "could not unmount stale agent-state bind at $mp"
+          fi
+          mount --bind -- "$task_dir" "$mp" \
+              || die "agent-state bind mount failed: $task_dir -> $mp"
+          findmnt -n -- "$mp" >/dev/null 2>&1 \
+              || die "agent-state bind mount verification failed: $mp"
+          log "persisting agent state for '$task' ($agent): $task_dir"
+      }
+
+      teardown_agent_state() {
+          local mp
+          mp="$(state_slot_dir "$1")"
+          if findmnt -n -- "$mp" >/dev/null 2>&1; then
+              umount -- "$mp" 2>/dev/null || umount -l -- "$mp" 2>/dev/null || true
+          fi
+      }
+
+      # Without persistence the slot's share source must be EMPTY, so the
+      # guest-side linker finds nothing and the agent keeps its disposable home
+      # (and no state leaks from a previous task on this slot).
+      clear_agent_state_slot() {
+          local mp
+          mp="$(state_slot_dir "$1")"
+          teardown_agent_state "$1"
+          [[ -d "$mp" ]] || return 0
+          find "$mp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
+      }
+
       # ---- §21 slot cleanup / interrupt handling -------------------------
       # Tear a slot down WITHOUT deleting the workspace clone (§26/§35): stop
       # the VM, unmount the bind, remove the slot transient state. Locks are
@@ -671,6 +752,9 @@ let
           # with the slot, exactly like the session marker. The workspace clone
           # is deliberately kept (§26/§35).
           clear_job "$slot"
+          # Unmount the per-task agent state (the task's DIRECTORY is kept, like
+          # the workspace clone) and leave the slot's share source empty.
+          clear_agent_state_slot "$slot"
           rm -rf -- "''${SLOTS_DIR:?}/$slot"
       }
 
@@ -743,7 +827,8 @@ let
 
       Commands:
         run --name <task> --repository <path> [--agent <name>] [--branch <br>]
-            [--resource-class <class>] [--wait <sec>] [--attach]
+            [--resource-class <class>] [--wait <sec>] [--persist-agent-state]
+            [--attach]
                               Allocate a free slot, create a standalone clone,
                               bind-mount it at the slot's /workspace source and
                               start the microVM. With --attach, SSH in running
@@ -760,7 +845,7 @@ let
         console <slot|task>   Attach to the VM serial console (journal).
         submit --name <task> --repository <path> --agent <name>
                --prompt-file <path> [--timeout <sec>] [--branch <br>]
-               [--resource-class <class>] [--wait <sec>]
+               [--resource-class <class>] [--wait <sec>] [--persist-agent-state]
                               UNATTENDED batch run: allocate a slot, clone the
                               repo, write a versioned job spec + the prompt into
                               the slot's job dir, boot the VM, wait for the
@@ -785,6 +870,15 @@ let
       Supported agents (--agent), generated from the module's agent registry:
         ${lib.concatStringsSep "\n  " agentRegistry.names}
 
+      --persist-agent-state keeps ONLY the agent's declared state directories,
+      scoped to the task, under ${agentState.tasksRoot}/<task>/<agent>/.
+      Without it the guest home stays disposable. Declared directories:
+        ${lib.concatStringsSep "\n  " (
+          lib.concatMap (a: map (d: "${a.name}: ~/${d}") a.persistentState.directories) (
+            lib.attrValues agentRegistry.agents
+          )
+        )}
+
       Resource classes (--resource-class), generated from the module options
       (the allocator NEVER substitutes a different class; --wait <sec> bounds
       how long it waits for a free slot in the requested one):
@@ -800,9 +894,10 @@ let
       cmd_run() {
           require_root run
           local task="" repo="" agent="" branch="" attach=0
-          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0
+          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0
           while [[ $# -gt 0 ]]; do
               case "$1" in
+                  --persist-agent-state) persist=1; shift ;;
                   --name)       task="''${2-}"; shift 2 ;;
                   --repository) repo="''${2-}"; shift 2 ;;
                   --agent)      agent="''${2-}"; shift 2 ;;
@@ -821,6 +916,8 @@ let
           done
           validate_resource_class "$rclass"
           validate_wait "$wait_for"
+          (( ! persist )) || [[ -n "$agent" ]] \
+              || die "run: --persist-agent-state requires --agent <name>"
           [[ -n "$task" ]] || die "run: --name <task> is required"
           [[ -n "$repo" ]] || die "run: --repository <path> is required"
           validate_task_name "$task"
@@ -863,13 +960,20 @@ let
           setup_bind_mount "$slot" "$clone"
           # An interactive slot must not accidentally pick up a stale batch job.
           clear_job "$slot"
+          # Agent state is DISPOSABLE unless explicitly requested (ticket 5 B).
+          if (( persist )); then
+              [[ -n "$agent" ]] || die "--persist-agent-state requires --agent <name>"
+              setup_agent_state "$slot" "$task" "$agent"
+          else
+              clear_agent_state_slot "$slot"
+          fi
           start_vm "$slot"
 
           # Persist the full session record for status/list (§34). No secrets.
           local run_mode="detached"
           (( attach )) && run_mode="attached"
           write_session_marker "$slot" "$token" "$run_mode" "$task" "$top" \
-              "$clone" "$agent" "$branch" ""
+              "$clone" "$agent" "$branch" "" "$persist"
 
           if (( attach )); then
               [[ "$SSH_ENABLED" == "1" ]] || die "--attach requires enableSsh = true"
@@ -914,9 +1018,10 @@ let
       cmd_submit() {
           require_root submit
           local task="" repo="" agent="" branch="" prompt="" timeout_s=""
-          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0
+          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0
           while [[ $# -gt 0 ]]; do
               case "$1" in
+                  --persist-agent-state) persist=1; shift ;;
                   --name)        task="''${2-}"; shift 2 ;;
                   --repository)  repo="''${2-}"; shift 2 ;;
                   --agent)       agent="''${2-}"; shift 2 ;;
@@ -978,8 +1083,13 @@ let
           create_clone "$top" "$task" "$branch"
           setup_bind_mount "$slot" "$clone"
           prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s"
+          if (( persist )); then
+              setup_agent_state "$slot" "$task" "$agent"
+          else
+              clear_agent_state_slot "$slot"
+          fi
           write_session_marker "$slot" "$token" "batch" "$task" "$top" \
-              "$clone" "$agent" "$branch" "$timeout_s"
+              "$clone" "$agent" "$branch" "$timeout_s" "$persist"
           start_vm "$slot"
 
           # --- wait for the structured result -------------------------------
@@ -1210,7 +1320,7 @@ let
               targets=("''${SLOT_NAMES[@]}")
           fi
           local slot f state task workspace agent start owner ip mac cid mnt ssh_ready
-          local mode timeout_s jstate
+          local mode timeout_s jstate persisted
           for slot in "''${targets[@]}"; do
               f="$(session_file "$slot")"
               ip="$(slot_ip "$slot")"
@@ -1218,7 +1328,7 @@ let
               cid="$(slot_cid "$slot")"
               if service_active "$slot"; then state="running"; else state="stopped"; fi
               task=""; workspace=""; agent=""; start=""; owner=""
-              mode=""; timeout_s=""
+              mode=""; timeout_s=""; persisted=""
               local sstate="" stale="no"
               if [[ -e "$f" ]]; then
                   task="$(jq -r '.task // ""' "$f")"
@@ -1229,6 +1339,7 @@ let
                   sstate="$(jq -r '.state // ""' "$f")"
                   mode="$(jq -r '.mode // ""' "$f")"
                   timeout_s="$(jq -r '.timeout // ""' "$f")"
+                  persisted="$(jq -r '.persist_agent_state // ""' "$f")"
               fi
               # Job state: the live guest result while the slot runs, else the
               # archived result of the last run of that task.
@@ -1259,6 +1370,7 @@ let
         mode:      ''${mode:-<none>}
         job:       ''${jstate:-<none>}
         timeout:   ''${timeout_s:-<n/a>}
+        agent state: $( [[ "''${persisted:-0}" == "1" ]] && echo "persisted (task-scoped)" || echo "disposable" )
         started:   ''${start:-<n/a>}
         ssh:       $ssh_ready
         state:     ''${sstate:-<none>}

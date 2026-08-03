@@ -383,7 +383,7 @@ in
       ]
       ++ lib.concatMap (slot: [
         "d ${paths.slotDir slot.name} 0755 root root - -"
-        "d ${paths.hostOutDir slot.name} 0755 1000 1000 - -"
+        "d ${paths.hostOutDir slot.name} 0755 ${toString cfg.guestAgentUid} ${toString cfg.guestAgentGid} - -"
       ]) slots;
     })
   ];

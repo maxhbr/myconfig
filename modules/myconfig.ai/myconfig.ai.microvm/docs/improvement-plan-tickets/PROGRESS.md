@@ -10,7 +10,7 @@ commit as the work it describes.
 | 2 | `02-add-hermes-support.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 3 | `03-network-and-control-channel-hardening.md` | DONE | A, B, C (3 commits) |
 | 4 | `04-batch-execution-and-lifecycle.md` | DONE | A, B (2 commits) |
-| 5 | `05-resource-classes-and-state-management.md` | IN PROGRESS (A done) | — |
+| 5 | `05-resource-classes-and-state-management.md` | IN PROGRESS (A, B done) | — |
 | 6 | `06-runtime-validation-and-documentation.md` | TODO | — |
 
 Status values: `TODO`, `IN PROGRESS`, `DONE`, `BLOCKED`.
@@ -200,3 +200,27 @@ Split into commits (A: resource classes, B: task-scoped agent state, C: limits
     substitution, bounded `--wait` (measured 5s), class-aware status/list.
   - new check `microvm-resource-classes` (11 eval assertions + launcher greps);
     the slot-pool check now exercises six class tables (66 assertions).
+- **Part B (done).** Opt-in, task-scoped agent state:
+  - new `state.nix` owns the paths (`state/tasks/<task>/<agent>/<dir>` kept,
+    `state/slots/<slot>` = the share source), the registry-driven guest linker
+    (`agent-state-link.service`, ordered before `agent-job`) and the tmpfiles
+    rules (virtiofsd needs the per-slot source to exist).
+  - FOURTH virtiofs share at `/var/lib/agent-state`; the launcher `mount --bind`s
+    the per-TASK dir onto the per-slot source only for `--persist-agent-state`
+    runs and otherwise leaves it EMPTY, so the default stays disposable and no
+    state leaks between tasks on the same slot.
+  - only registry-DECLARED dirs are created/exposed; requesting persistence for
+    an agent that declares none is an error, not a silent no-op; the linker
+    refuses to replace a non-empty home directory (never clobbers dotfiles).
+  - new options `guestAgentUid`/`guestAgentGid` (default 1000, asserted
+    unprivileged) replace the hardcoded 1000 in guest.nix/launcher.nix/job.nix
+    (ticket 5's "make the UID configurable or assert it").
+  - assertion that declared state dirs stay disjoint from
+    `guestDotfiles.homeFilePrefixes` (HM activation vs. linker).
+  - VERIFIED BY RUNNING: launcher (stubbed mounts) — refusal without `--agent`,
+    refusal for an agent without declared dirs (and no dirs created), per-task
+    dir + bind for hermes, task isolation across two tasks, disposable runs
+    clearing a dirty slot share, `status` reporting; guest linker under bwrap —
+    empty share (no links), link creation, idempotent rerun, empty-dir
+    replacement, non-empty-dir preservation.
+  - new check `microvm-agent-state`; the shares check now pins exactly four.

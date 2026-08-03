@@ -71,6 +71,8 @@ myconfig.ai.microvm = {
 | `workspaceRoot` | `/var/lib/agent-microvms/workspaces` | Where per-task standalone clones are created. |
 | `runtimeRoot` | `/var/lib/agent-microvms` | Runtime state (locks, slot session metadata). |
 | `stateRoot` | `/var/lib/microvms` | microvm.nix per-VM state / bind-mount source. |
+| `guestAgentUid` / `guestAgentGid` | `1000` | Numeric ids of the guest `agent` user; also the host-side owner of every guest-writable path (workspace clone, job output, agent state). Asserted unprivileged. |
+| `job.defaultTimeoutSeconds` / `job.maxTimeoutSeconds` / `job.gracePeriodSeconds` | `3600` / `86400` / `120` | Batch-job timeouts (see [Unattended batch jobs](#unattended-batch-jobs)). |
 | `enableSsh` | `true` | Guest SSH server on the private interface only. |
 | `sshPublicKeyFile` | `null` | **Required** when `enableSsh`. One dedicated key. |
 | `guestDotfiles.enable` | `true` | Provision the guest `agent` user with the host primary user's fish + coding-agent dotfiles (home-manager in the guest). |
@@ -124,6 +126,48 @@ sudo agent-microvm --help        # lists the configured classes
 > Renaming note: slots were called `agent-<i>` before resource classes existed.
 > Old per-slot state under `/var/lib/microvms/agent-<i>` (and the matching
 > hostkey/job dirs) is simply unused after the switch and can be deleted.
+
+### Agent state — disposable by default, opt-in and task-scoped
+
+The guest home is a tmpfs, so by default a sandbox starts with **no** agent
+memories, skills, sessions or caches, and nothing an agent writes there survives.
+Agents that benefit from persistence declare — from **verified** source paths —
+which directories are worth keeping
+([the registry](#supported-agents--the-authoritative-registry),
+`persistentState.directories`; today only hermes, `~/.hermes`).
+
+```bash
+sudo agent-microvm run    --agent hermes --persist-agent-state …
+sudo agent-microvm submit --agent hermes --persist-agent-state …
+sudo agent-microvm --help    # lists the declared directories per agent
+```
+
+```text
+/var/lib/agent-microvms/state/tasks/<task>/<agent>/<dir>   per task+agent, kept
+/var/lib/agent-microvms/state/slots/<slot>                 the share source
+```
+
+- **Opt-in only.** Without `--persist-agent-state` the launcher leaves the
+  slot's share source **empty**, the guest-side linker finds nothing to link, and
+  the agent uses its disposable home. Persistence is never enabled for every
+  task.
+- **Task-scoped.** The per-task directory is `mount --bind`-ed onto the slot's
+  share source only while that slot runs (the same mechanism the workspace clone
+  uses), so task B can never see task A's state — there is no shared parent
+  inside the guest.
+- **Only declared directories.** `agent-state-link.service` (registry-driven,
+  ordered before `agent-job`) symlinks `~/<dir>` → the share for each declared
+  directory the host prepared. It refuses to replace a **non-empty** directory in
+  the home, so it can never clobber provisioned dotfiles.
+- **Nothing else is exposed:** no host home, no `~/.ssh`, no SSH-agent socket, no
+  Docker/Podman socket, no Nix daemon socket, no host-wide agent configuration,
+  no other task's state.
+- Requesting persistence for an agent that declares nothing is an **error**, not
+  a silent no-op.
+- Ownership: the host creates the state tree owned by
+  `guestAgentUid`/`guestAgentGid` (default `1000:1000`, asserted unprivileged),
+  which virtiofsd passes through unchanged. Nothing outside the task's own state
+  tree is chowned.
 
 ### Network profiles
 

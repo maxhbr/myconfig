@@ -154,6 +154,7 @@ in
     ./guest-home.nix
     ./hostkeys.nix
     ./job.nix
+    ./state.nix
     ./network.nix
     ./launcher.nix
     ./secrets.nix
@@ -453,6 +454,31 @@ in
       '';
     };
 
+    guestAgentUid = mkOption {
+      type = types.ints.positive;
+      default = 1000;
+      description = ''
+        Numeric uid of the unprivileged guest `agent` user. virtiofsd passes
+        ownership through unchanged, so this is ALSO the host-side owner of
+        everything the guest must write: the workspace clone, the job output
+        directory and any task-scoped agent-state directory.
+
+        Must be unprivileged (never 0). The default 1000 is the primary
+        interactive user on a workstation, which is deliberate: the human
+        operator can inspect, diff and import the clone directly, and no guest
+        id maps to a privileged host id (plan §11).
+      '';
+    };
+
+    guestAgentGid = mkOption {
+      type = types.ints.positive;
+      default = 1000;
+      description = ''
+        Numeric gid used for the host-side ownership of guest-writable paths
+        (see `guestAgentUid`). Must be unprivileged (never 0).
+      '';
+    };
+
     enableSsh = mkOption {
       type = types.bool;
       default = true;
@@ -499,6 +525,11 @@ in
 
     (lib.mkIf cfg.enable {
       assertions = [
+        {
+          # §11: no guest id may map to a privileged host id.
+          assertion = cfg.guestAgentUid > 0 && cfg.guestAgentGid > 0;
+          message = "myconfig.ai.microvm.guestAgentUid/guestAgentGid must be unprivileged (> 0).";
+        }
         {
           assertion = slots != [ ];
           message = "myconfig.ai.microvm: the resource-class pool is empty (no class with count > 0).";

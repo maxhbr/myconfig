@@ -61,6 +61,9 @@
   # The ONE definition of the batch-job format/paths plus the guest-side
   # `agent-job` runner + service, from job.nix (`_module.args.agentJobs`).
   agentJobs,
+  # The ONE definition of the task-scoped agent-state paths + the guest-side
+  # linker, from state.nix (`_module.args.agentState`).
+  agentState,
   # The ONE resolved network decision (profile + capabilities + DNS policy),
   # from default.nix (`_module.args.agentNetwork`). The guest-side proxy / DNS /
   # forwarder configuration below is derived from the SAME decision the host
@@ -159,6 +162,10 @@ let
       # inert-unless-a-job-is-present oneshot. Slot-independent, because the
       # job share always appears at the same guest path.
       agentJobs.guestModule
+      # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
+      # directories the host prepared for this run; a run without
+      # --persist-agent-state sees an empty share and keeps the disposable home.
+      agentState.guestModule
       (mkGuestBase slot)
     ];
 
@@ -253,6 +260,18 @@ let
           source = agentJobs.slotDir slot.name;
           mountPoint = agentJobs.guestMountPoint;
         }
+        # FOURTH share (ticket 5 B) — the slot's agent-state directory. The
+        # launcher bind-mounts the per-TASK, per-AGENT state onto this per-slot
+        # path while the slot runs, and leaves it EMPTY unless the run asked for
+        # `--persist-agent-state`. Read-write and owned by the guest agent, so
+        # only the declared directories (never the host home, ~/.ssh, sockets or
+        # another task's state) are exposed.
+        {
+          proto = "virtiofs";
+          tag = agentState.guestTag;
+          source = agentState.slotDir slot.name;
+          mountPoint = agentState.guestMountPoint;
+        }
       ];
     };
 
@@ -260,7 +279,7 @@ let
     # wheel/docker/kvm/host groups; login disabled (`!` = locked password).
     users.users.agent = {
       isNormalUser = true;
-      uid = 1000;
+      uid = cfg.guestAgentUid;
       home = "/home/agent";
       createHome = true;
       extraGroups = [ ];

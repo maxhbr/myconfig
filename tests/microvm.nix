@@ -131,6 +131,9 @@ let
   # Likewise the ONE definition of the batch-job format / paths (job.nix).
   jobs = self.nixosConfigurations.test-f13._module.args.agentJobs;
 
+  # ... and of the task-scoped agent-state paths (state.nix).
+  agentStatePaths = self.nixosConfigurations.test-f13._module.args.agentState;
+
   # Slot counts to exercise. Includes small pools, pools with index >= 10
   # (which exercise 2-hex-digit MAC formatting, e.g. i=10 → ...:1a), and the
   # generator's declared maximum.
@@ -722,15 +725,29 @@ in
       jobShares = builtins.filter (s: s.mountPoint == jobs.guestMountPoint) shares;
       jobShare = if jobShares == [ ] then null else builtins.head jobShares;
       expectedJobSource = jobs.slotDir refSlot.name;
+      stShares = builtins.filter (s: s.mountPoint == agentStatePaths.guestMountPoint) shares;
+      stShare = if stShares == [ ] then null else builtins.head stShares;
+      expectedStSource = agentStatePaths.slotDir refSlot.name;
     in
     mkEvalCheck "microvm-eval-workspace-share" [
       {
-        # Exactly three shares: writable workspace, read-only hostkey, and the
-        # per-slot batch job directory.
-        assertion = builtins.length shares == 3;
-        message = "guest ${refSlot.name} must declare exactly THREE shares (workspace + hostkey + job); got ${toString (builtins.length shares)}: ${
+        # Exactly four shares: writable workspace, read-only hostkey, the
+        # per-slot batch job directory and the per-slot agent-state directory.
+        assertion = builtins.length shares == 4;
+        message = "guest ${refSlot.name} must declare exactly FOUR shares (workspace + hostkey + job + agent-state); got ${toString (builtins.length shares)}: ${
           toString (map (s: s.mountPoint or "?") shares)
         }";
+      }
+      {
+        assertion =
+          stShare != null && stShare.proto == "virtiofs" && stShare.tag == agentStatePaths.guestTag;
+        message = "guest ${refSlot.name} must declare a virtiofs share tagged '${agentStatePaths.guestTag}' at ${agentStatePaths.guestMountPoint}";
+      }
+      {
+        assertion = stShare != null && stShare.source == expectedStSource;
+        message = "agent-state share source is '${
+          toString (stShare.source or "<none>")
+        }', expected the PER-SLOT dir '${expectedStSource}' (the launcher binds the per-TASK dir onto it)";
       }
       {
         assertion = jobShare != null && jobShare.proto == "virtiofs" && jobShare.tag == jobs.guestTag;
@@ -793,8 +810,8 @@ in
       {
         # Defence in depth: the ONLY virtiofs shares are the workspace and the
         # hostkey dir — no /nix, /home or host-socket share leaked in.
-        assertion = builtins.length virtiofsShares == 3;
-        message = "expected exactly three virtiofs shares (workspace + hostkey + job); got ${toString (builtins.length virtiofsShares)}";
+        assertion = builtins.length virtiofsShares == 4;
+        message = "expected exactly four virtiofs shares (workspace + hostkey + job + agent-state); got ${toString (builtins.length virtiofsShares)}";
       }
       {
         assertion = builtins.all (
@@ -803,6 +820,7 @@ in
             "/workspace"
             hostKeys.guestMountPoint
             jobs.guestMountPoint
+            agentStatePaths.guestMountPoint
           ]
         ) shares;
         message = "unexpected share mountPoint(s): ${toString (map (s: s.mountPoint or "?") shares)}";
@@ -882,6 +900,103 @@ in
           echo "  agents        : $agentNames"
           echo "  host launcher : $launcherBin"
           echo "  guest dispatch: $agentRunBin"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (n) AGENT STATE (ticket 5 B): persistence is OPT-IN and TASK-SCOPED.     #
+  #     Only registry-DECLARED directories are ever exposed, each slot has   #
+  #     its own share source (so the launcher can bind a per-task dir onto   #
+  #     it), the guest linker is registry-driven, and nothing about the host  #
+  #     home / sockets / other tasks is reachable.                           #
+  # ---------------------------------------------------------------------- #
+  microvm-agent-state =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      linker = agentStatePaths.linker;
+      declared = agentStatePaths.declaredDirs;
+      registryDeclared = lib.unique (
+        lib.concatMap (a: a.persistentState.directories) (lib.attrValues agentRegistry.agents)
+      );
+      unit = guest0Cfg.systemd.services.agent-state-link;
+      evalMarker = mkEvalCheck "microvm-agent-state-eval" (
+        [
+          {
+            # The linker's directory list IS the registry's, never a copy.
+            assertion = lib.sort (a: b: a < b) declared == lib.sort (a: b: a < b) registryDeclared;
+            message = "the guest linker's directory list must equal the registry's declared state dirs";
+          }
+          {
+            assertion = declared != [ ];
+            message = "at least one agent must declare persistent state (hermes today)";
+          }
+          {
+            # DISPOSABLE by default: no agent may opt itself in.
+            assertion = builtins.all (a: a.persistentState.enabledByDefault == false) (
+              lib.attrValues agentRegistry.agents
+            );
+            message = "no agent may enable persistence by default — the guest home stays disposable";
+          }
+          {
+            # Only relative, traversal-free paths inside the guest home.
+            assertion = builtins.all (d: !lib.hasPrefix "/" d && !lib.hasInfix ".." d && d != "") declared;
+            message = "declared state dirs must be relative, non-empty and '..'-free";
+          }
+          {
+            assertion = (unit.serviceConfig.Type or "") == "oneshot";
+            message = "agent-state-link must be a oneshot";
+          }
+          {
+            assertion = builtins.elem "agent-job.service" (unit.before or [ ]);
+            message = "agent-state-link must run BEFORE agent-job (a batch job must see its state)";
+          }
+          {
+            assertion = (unit.unitConfig.RequiresMountsFor or "") == agentStatePaths.guestMountPoint;
+            message = "agent-state-link must wait for the agent-state mount";
+          }
+          {
+            # The share source is per SLOT (the pool is prebuilt), and the
+            # per-task dirs live in a directory the guest never sees.
+            assertion =
+              lib.hasPrefix "${microvmOpts.runtimeRoot}/" agentStatePaths.tasksRoot
+              && !lib.hasPrefix agentStatePaths.slotsRoot agentStatePaths.tasksRoot;
+            message = "per-task state must live outside the per-slot share sources";
+          }
+        ]
+        ++ map (slot: {
+          assertion = builtins.elem ("d ${agentStatePaths.slotDir slot.name} 0755 ${toString microvmOpts.guestAgentUid} ${toString microvmOpts.guestAgentGid} - -") enabledCfg.systemd.tmpfiles.rules;
+          message = "missing tmpfiles rule for the agent-state share source of ${slot.name}";
+        }) enabledSlots
+      );
+    in
+    pkgs.runCommand "microvm-agent-state"
+      {
+        inherit evalMarker;
+        linkerBin = "${linker}/bin/agent-state-link";
+        launcherBin = "${hostLauncher}/bin/agent-microvm";
+        declaredDirs = lib.concatStringsSep " " declared;
+      }
+      ''
+        for d in $declaredDirs; do
+          grep -q "link_one $d" "$linkerBin" \
+            || { echo "declared state dir '$d' missing from the guest linker" >&2; exit 1; }
+        done
+        # Persistence must be explicitly requested, task-scoped, and refuse
+        # agents that declare nothing.
+        grep -q -- "--persist-agent-state" "$launcherBin" \
+          || { echo "launcher has no --persist-agent-state flag" >&2; exit 1; }
+        grep -q "declares no persistent state directories" "$launcherBin" \
+          || { echo "launcher does not refuse persistence for agents without declared dirs" >&2; exit 1; }
+        grep -q "clear_agent_state_slot()" "$launcherBin" \
+          || { echo "launcher does not clear the per-slot state share for disposable runs" >&2; exit 1; }
+        # The linker must never clobber real data in the home.
+        grep -q "refusing to replace non-empty" "$linkerBin" \
+          || { echo "guest linker would clobber existing home data" >&2; exit 1; }
+        {
+          echo "microvm-agent-state: opt-in, task-scoped agent state"
+          echo "  declared dirs : $declaredDirs"
+          echo "  guest linker  : $linkerBin"
           cat "$evalMarker"
         } > "$out"
       '';
