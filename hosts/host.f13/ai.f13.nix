@@ -35,6 +35,11 @@
           allowPublicInternet = false;
           allowPrivateNetworks = false;
           allowInterVmTraffic = false;
+          # Operator convenience on this interactive laptop: mhuber (already a
+          # full sudoer) drives `agent-microvm` / the workmux microvm-* panes
+          # without a password prompt. Does not affect guest isolation — the
+          # untrusted guest can never reach host sudo (see module option doc).
+          passwordlessControl = true;
           # Dedicated public key authorising ONLY the guest `agent` user —
           # never the host, and never a host authorized_keys file. A public
           # key is not a secret, so it is committed in-repo. The MATCHING

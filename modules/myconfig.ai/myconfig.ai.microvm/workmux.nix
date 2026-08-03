@@ -80,14 +80,16 @@ let
   # from PATH; `sudo` is the system wrapper (the launcher requires root for
   # mounts + systemctl, §20).
   #
-  # NOTE (implicit deps / follow-up): `sudo` and `agent-microvm` are resolved
-  # from the inherited/ambient PATH rather than `runtimeInputs` — post-`sudo`,
+  # NOTE (implicit deps): `sudo` and `agent-microvm` are resolved from the
+  # inherited/ambient PATH rather than `runtimeInputs` — post-`sudo`,
   # `agent-microvm` resolves via sudoers `secure_path` ->
-  # /run/current-system/sw/bin (where launcher.nix installs it). This phase
-  # adds NO passwordless-sudoers rule for `agent-microvm`, so the pane will
-  # prompt interactively for a password on first launch. That is acceptable
-  # for an interactive tmux workflow; a dedicated sudoers rule is left to a
-  # later phase.
+  # /run/current-system/sw/bin (where launcher.nix installs it). Whether the
+  # pane prompts for a password depends on `myconfig.ai.microvm`
+  # `.passwordlessControl`: when true (opt-in), launcher.nix grants the
+  # operator a scoped NOPASSWD+SETENV rule for exactly `agent-microvm`, so
+  # these panes launch without a prompt AND the `--preserve-env` below is
+  # accepted; when false (secure default) sudo prompts interactively on first
+  # launch, which is acceptable for an interactive tmux workflow.
   mkLauncher =
     agentName: spec:
     pkgs.writeShellApplication {
