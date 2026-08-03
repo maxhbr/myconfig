@@ -325,6 +325,19 @@ let
 
       # ---- §27 VM lifecycle (systemd only) -------------------------------
       start_vm() {
+          # Refresh the declarative VM's `current` runner symlink so the guest
+          # we boot always matches the CURRENTLY-BOOTED host system generation
+          # rather than a stale runner left over from an earlier build. For
+          # fully-declarative microVMs, microvm.nix only re-links
+          # <stateRoot>/<slot>/current from `install-microvm-<slot>.service`,
+          # which runs on host activation. A slot started after a host rebuild
+          # whose install step has not re-run would otherwise boot the OLD
+          # guest config (e.g. missing the home-manager dotfile provisioning),
+          # which looks like "the sandbox is not provisioned". The unit is an
+          # idempotent host oneshot that only re-links a symlink; ignore any
+          # failure so a refresh problem never blocks launch. Safe here because
+          # the freshly-allocated slot is not yet running.
+          systemctl restart "install-microvm-$1.service" 2>/dev/null || true
           systemctl start "microvm@$1.service" \
               || die "failed to start microvm@$1.service"
       }
