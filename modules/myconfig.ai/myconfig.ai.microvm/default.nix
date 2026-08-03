@@ -42,6 +42,7 @@ let
   slots = slotLib.mkSlots cfg.slotCount;
   slotIPs = map (s: s.ip) slots;
   slotMACs = map (s: s.mac) slots;
+  slotCIDs = map (s: s.cid) slots;
 
   # --- authoritative supported-agent registry -----------------------------
   # ./agents.nix is the SINGLE SOURCE OF TRUTH for the supported agents (guest
@@ -69,6 +70,7 @@ in
   imports = [
     ./guest.nix
     ./guest-home.nix
+    ./hostkeys.nix
     ./network.nix
     ./launcher.nix
     ./secrets.nix
@@ -323,6 +325,16 @@ in
         {
           assertion = lib.length (lib.unique slotMACs) == lib.length slotMACs;
           message = "myconfig.ai.microvm: generated slot MAC addresses are not unique.";
+        }
+        {
+          assertion = lib.length (lib.unique slotCIDs) == lib.length slotCIDs;
+          message = "myconfig.ai.microvm: generated slot VSOCK CIDs are not unique.";
+        }
+        {
+          # 0 (hypervisor), 1 (loopback) and 2 (host) are reserved VSOCK CIDs;
+          # 0xffffffff is VMADDR_CID_ANY.
+          assertion = lib.all (c: c > 2 && c < 4294967295) slotCIDs;
+          message = "myconfig.ai.microvm: generated slot VSOCK CIDs must avoid the reserved values 0/1/2 and VMADDR_CID_ANY.";
         }
         {
           assertion = agentRegistry.names != [ ];

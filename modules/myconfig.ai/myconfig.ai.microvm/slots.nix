@@ -10,11 +10,17 @@
 # (which actually builds one microvm.nix VM per slot), so the assertions
 # always guard the exact table that builds the VMs.
 #
-#   agent-0  02:00:00:83:00:10  192.168.83.10  tap vm-agent-0
-#   agent-1  02:00:00:83:00:11  192.168.83.11  tap vm-agent-1
+#   agent-0  02:00:00:83:00:10  192.168.83.10  tap vm-agent-0  vsock cid 8300
+#   agent-1  02:00:00:83:00:11  192.168.83.11  tap vm-agent-1  vsock cid 8301
 #   ...
 { lib }:
 rec {
+  # Base of the deterministic per-slot AF_VSOCK context id (CID). VSOCK CIDs
+  # 0 (hypervisor), 1 (loopback) and 2 (host) are RESERVED, and 0xffffffff is
+  # VMADDR_CID_ANY; starting at 8300 (mnemonic: the 192.168.83.0/24 agent
+  # subnet) keeps every slot far away from those and from any other microVM on
+  # the host — no other VM in this repo assigns a CID.
+  cidBase = 8300;
   # Upper bound on the number of slots the deterministic MAC/IPv4 generator
   # can safely produce:
   #   - MAC last octet = 0x10 + i must stay a single byte  → i <= 239
@@ -37,6 +43,19 @@ rec {
     # Host-side TAP interface name (<= 15 chars). microvm.nix uses the
     # interface `id` as the tap device name.
     tap = "vm-${name}";
+    # RESERVED per-slot AF_VSOCK context id (ticket 3 B). Part of the slot's
+    # deterministic identity (asserted unique and non-reserved in
+    # default.nix), so the future noninteractive control channel (batch job
+    # readiness / status / cancellation / results — ticket 4) has a stable,
+    # collision-free address per concurrently runnable slot.
+    #
+    # NOT yet handed to `microvm.vsock.cid`: doing so flips
+    # `microvm@<slot>.service` to `Type=notify` (microvm.nix wires a
+    # socat<->vsock systemd-notify bridge as soon as a CID is set), which
+    # changes VM startup semantics and can only be validated by actually
+    # booting a guest on KVM. It is therefore activated together with the
+    # control channel that uses it, not here.
+    cid = cidBase + i;
   };
 
   mkSlots = slotCount: builtins.genList mkSlot slotCount;

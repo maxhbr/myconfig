@@ -295,7 +295,7 @@ sudo agent-microvm status agent-0   # a single slot
 sudo agent-microvm status <task>    # resolve a running task to its slot
 ```
 
-`status` reports slot, service state, IP, MAC, task, workspace path,
+`status` reports slot, service state, IP, MAC, VSOCK CID, task, workspace path,
 bind-mount status, agent type, start time, SSH readiness, session state, a
 `stale` flag, and the lock owner — **never** secrets.
 
@@ -313,10 +313,54 @@ sudo agent-microvm ssh agent-0 -- id      # run a command
 sudo agent-microvm console agent-0        # follow the serial console (journal)
 ```
 
-`ssh` uses `StrictHostKeyChecking=no` with a `/dev/null` known-hosts file on
-purpose: slots are ephemeral guests with regenerated host keys on a
-host-controlled private bridge; the trust boundary is the bridge/firewall, not
-SSH host identity. Set `AGENT_MICROVM_SSH_KEY` to pick the private key.
+`ssh` verifies the guest **strictly**
+(`StrictHostKeyChecking=yes`, `UserKnownHostsFile=/var/lib/agent-microvms/known_hosts`):
+every slot has a **stable, per-slot ed25519 host identity**, so a wrong or
+unknown host key aborts the connection instead of being accepted. Set
+`AGENT_MICROVM_SSH_KEY` to pick the client private key.
+
+### Per-slot SSH host identities
+
+`agent-microvm-hostkeys.service` (see `hostkeys.nix`) provisions, on the host
+and at runtime:
+
+```text
+/var/lib/agent-microvms/hostkeys/<slot>/ssh_host_ed25519_key      root:root 0400
+/var/lib/agent-microvms/hostkeys/<slot>/ssh_host_ed25519_key.pub  root:root 0444
+/var/lib/agent-microvms/known_hosts                               root:root 0444
+```
+
+- **One key per slot, never shared.** Keys are generated once and kept, so a
+  slot's identity is stable across reboots and rebuilds. They are **not** in
+  the Nix store (which is world-readable) and **not** agenix secrets (they are
+  host-local, per-slot, regenerable identities).
+- **Delivered through a read-only, per-slot virtiofs share** mounted at
+  `/var/lib/agent-hostkey` in the guest. virtiofsd passes ownership through,
+  so the private key stays `root:root 0400` inside the guest: the untrusted
+  `agent` user cannot read it, the guest cannot rewrite its own identity, and
+  no other slot's directory is visible. This is a deliberate, documented
+  amendment to the original "exactly one share" rule — see
+  [The `/workspace` share](#the-workspace-share--ownership).
+- **The guest generates no host keys of its own**
+  (`services.openssh.generateHostKeys = false`), so the identity in
+  `known_hosts` is the only one it can present.
+- `known_hosts` holds public keys only and is world-readable, so a non-root
+  operator can also run `agent-microvm ssh` with strict verification.
+
+If the file is missing the launcher fails closed with a pointer to
+`systemctl start agent-microvm-hostkeys.service` (which `run` also invokes
+before booting a slot).
+
+### Reserved VSOCK control-channel identity
+
+Every slot additionally owns a unique, deterministic AF_VSOCK context id
+(`cid = 8300 + <index>`, reported by `agent-microvm status`), avoiding the
+reserved CIDs `0`/`1`/`2` and `VMADDR_CID_ANY`. It is **reserved, not yet
+wired**: handing it to `microvm.vsock.cid` flips `microvm@<slot>.service` to
+`Type=notify` (microvm.nix adds a socat↔vsock systemd-notify bridge), a startup
+change that can only be validated by booting a guest on KVM. It is therefore
+activated together with the noninteractive control channel that uses it
+(batch job readiness / status / cancellation / results).
 
 ---
 
@@ -328,7 +372,8 @@ Everything is supervised by systemd, so use the journal:
 journalctl -u microvm@agent-0.service     # the guest VM (Cloud Hypervisor + serial console)
 journalctl -u agent-litellm-proxy.service # the bridge-only LiteLLM forwarder
 journalctl -u agent-microvm-agentbr0-disable-ipv6.service  # bridge IPv6-disable oneshot
-journalctl -u agent-microvm-attach-agent-0.service         # enslave TAP vm-agent-0 -> agentbr0
+journalctl -u agent-microvm-attach-agent-0.service         # enslave + L2-isolate TAP vm-agent-0
+journalctl -u agent-microvm-hostkeys.service               # per-slot SSH host keys + known_hosts
 ```
 
 `agent-microvm console <slot>` is a shortcut for
@@ -403,9 +448,9 @@ slot when it starts in detached mode.
 
 ## The `/workspace` share & ownership
 
-**§10 — exactly one share.** Each slot's guest declares exactly **one**
-`microvm.shares` entry: a **read-write virtiofs** share tagged `workspace`,
-mounted at `/workspace`. Its host `source` is
+**§10 — exactly one *writable* share.** Each slot's guest declares exactly
+**one** read-write `microvm.shares` entry: a **read-write virtiofs** share
+tagged `workspace`, mounted at `/workspace`. Its host `source` is
 `/var/lib/microvms/<slot>/workspace` (`${stateRoot}/<slot>/workspace`) — the
 **same** path the launcher uses as its `mount --bind` target
 (`mount_point()` in `launcher.nix`). So the launcher bind-mounts the
@@ -415,10 +460,20 @@ guest as the single writable `/workspace`.
 microvm.nix keeps the guest `/nix/store` on its own **storeDisk**
 (`microvm.storeOnDisk` defaults to `true` unless a share's source is
 `/nix/store`, which this one is not), so it does **not** add a store share.
-The guest therefore has **exactly this one share** — no `/nix`, no `/home`, no
-host sockets (verified by the `microvm-eval-workspace-share` check, which
-asserts `microvm.vms.agent-0.….microvm.shares` is exactly one virtiofs
-`/workspace` entry with the expected source).
+The guest therefore has **exactly two shares** — the writable `/workspace`
+above and the **read-only, per-slot SSH host-key share** at
+`/var/lib/agent-hostkey` (only when `enableSsh` is true; see
+[Per-slot SSH host identities](#per-slot-ssh-host-identities)). No `/nix`, no
+`/home`, no host sockets, no cross-slot paths. The
+`microvm-eval-workspace-share` check asserts exactly this: two virtiofs
+shares, the workspace read-write at the expected source, the hostkey share
+**read-only** at the per-slot source, and no other mount point.
+
+> The hostkey share is a deliberate amendment to the original "exactly one
+> share" rule, required to give each slot a verifiable SSH identity
+> (improvement ticket 3 B). It is read-only, root-only (`0400` passed through
+> by virtiofsd), single-purpose and per-slot, so it exposes no host state to
+> the untrusted agent.
 
 **§11 — UID/GID ownership.** virtiofsd passes file ownership through
 unchanged (no `--translate-uid/--translate-gid`), so the numeric owner of the
@@ -503,6 +558,12 @@ What the module actually enforces (plan §5, §13–§18, §45):
   `AllowAgentForwarding=no`, `X11Forwarding=false`, `PermitTunnel=no`,
   `AllowTcpForwarding=no`; exactly one dedicated public key; not reachable from
   the LAN.
+- **Authenticated control channel.** Each slot has its own stable ed25519 host
+  key (read-only per-slot share; the guest generates none) and the launcher
+  connects with `StrictHostKeyChecking=yes` against the host-generated
+  `known_hosts` — so the operator always talks to *the* slot, not to whatever
+  answers on its address. See
+  [Per-slot SSH host identities](#per-slot-ssh-host-identities).
 - **No host creds / sockets / home.** The guest gets no host home, no host SSH
   keys, no SSH/GPG agent sockets, no password store, no Docker/Podman sockets,
   no D-Bus/systemd sockets, no host Nix daemon socket, and no writable host Nix

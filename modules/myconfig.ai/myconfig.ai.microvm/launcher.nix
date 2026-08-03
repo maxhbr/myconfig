@@ -51,6 +51,10 @@
   # help output below are GENERATED from it, so the host launcher can never
   # drift from the guest's dispatch table. See ./agents.nix.
   agentRegistry,
+  # The ONE definition of the per-slot SSH host-key paths, from hostkeys.nix
+  # (`_module.args.agentHostKeys`). Supplies the known_hosts file the launcher
+  # verifies guests against.
+  agentHostKeys,
   ...
 }:
 let
@@ -83,6 +87,10 @@ let
       readonly SLOT_IPS=(${bashList "ip"})
       readonly SLOT_MACS=(${bashList "mac"})
       readonly SLOT_TAPS=(${bashList "tap"})
+      # RESERVED per-slot AF_VSOCK context ids (ticket 3 B). Reported by
+      # `status` so the operator can see the slot's control-channel identity;
+      # not yet used as a transport (see slots.nix `cid`).
+      readonly SLOT_CIDS=(${bashList "cid"})
 
       # ==== configuration (from the Nix module options) ====================
       readonly WORKSPACE_ROOT=${lib.escapeShellArg cfg.workspaceRoot}
@@ -90,6 +98,25 @@ let
       readonly STATE_ROOT=${lib.escapeShellArg cfg.stateRoot}
       readonly SSH_ENABLED=${lib.escapeShellArg (if cfg.enableSsh then "1" else "0")}
       readonly SSH_USER="agent"
+      # ---- §18 / ticket 3 B: AUTHENTICATED control channel ---------------
+      # Every slot has a STABLE ed25519 host identity, provisioned on the host
+      # by `agent-microvm-hostkeys.service` and handed to exactly that slot
+      # through a read-only virtiofs share (hostkeys.nix / guest.nix). Their
+      # public keys are aggregated, keyed by slot IP, in this world-readable
+      # known_hosts file, so every ssh invocation below can run with
+      # StrictHostKeyChecking=yes instead of the previous
+      # `StrictHostKeyChecking=no` + /dev/null known-hosts (which accepted ANY
+      # key, i.e. an unauthenticated channel).
+      readonly KNOWN_HOSTS=${lib.escapeShellArg agentHostKeys.knownHosts}
+      # Strict verification against exactly that file. Kept in ONE place so
+      # readiness probing, `--attach` and `ssh` cannot drift apart.
+      SSH_VERIFY_OPTS=(
+          -o StrictHostKeyChecking=yes
+          -o UserKnownHostsFile="$KNOWN_HOSTS"
+          -o GlobalKnownHostsFile=/dev/null
+          -o HashKnownHosts=no
+      )
+      readonly SSH_VERIFY_OPTS
       # Stable dest of the agenix-decrypted dedicated private key. MUST match
       # `myconfig.secrets."dedicated-agent-vm-key".dest` in secrets.nix. The
       # priv repo provisions its `source`; agenix then decrypts it here
@@ -151,6 +178,7 @@ let
       slot_ip()  { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_IPS[$i]}"; }
       slot_mac() { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_MACS[$i]}"; }
       slot_tap() { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_TAPS[$i]}"; }
+      slot_cid() { local i; i="$(slot_index "$1")" || return 1; printf '%s' "''${SLOT_CIDS[$i]}"; }
 
       session_file() { printf '%s' "$SLOTS_DIR/$1/session.json"; }
       mount_point()  { printf '%s' "$STATE_ROOT/$1/workspace"; }
@@ -345,6 +373,17 @@ let
           # failure so a refresh problem never blocks launch. Safe here because
           # the freshly-allocated slot is not yet running.
           systemctl restart "install-microvm-$1.service" 2>/dev/null || true
+          # Make sure the slot's SSH host identity exists BEFORE the VM (and
+          # thus its virtiofsd for the read-only hostkey share) starts: the
+          # provisioning unit is an idempotent RemainAfterExit oneshot, so this
+          # is a no-op once it has run. It is also wantedBy multi-user.target,
+          # so on a booted host this only covers the "key dir deleted by hand"
+          # / "slotCount just increased" cases. Failure is fatal: without the
+          # key sshd cannot start in the guest.
+          if [[ "$SSH_ENABLED" == "1" ]]; then
+              systemctl start agent-microvm-hostkeys.service \
+                  || die "failed to provision per-slot SSH host keys (agent-microvm-hostkeys.service)"
+          fi
           systemctl start "microvm@$1.service" \
               || die "failed to start microvm@$1.service"
       }
@@ -376,11 +415,18 @@ let
       }
 
       # ---- readiness (§34) -----------------------------------------------
+      # Fails closed: without the known_hosts file every ssh below would fail
+      # verification, so say so once, clearly, instead of timing out.
+      require_known_hosts() {
+          [[ -r "$KNOWN_HOSTS" ]] || die \
+              "missing host-key database $KNOWN_HOSTS; run: systemctl start agent-microvm-hostkeys.service"
+      }
+
       guest_ssh_ready() {
           local ip="$1"
           [[ "$SSH_ENABLED" == "1" ]] || return 1
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
-              -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 \
+          [[ -r "$KNOWN_HOSTS" ]] || return 1
+          ssh -o BatchMode=yes "''${SSH_VERIFY_OPTS[@]}" -o ConnectTimeout=3 \
               ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
               "$SSH_USER@$ip" true >/dev/null 2>&1
       }
@@ -552,9 +598,10 @@ let
               [[ -n "$agent" ]] || die "--attach requires --agent <name>"
               # On readiness failure the EXIT trap runs cleanup_slot: the VM is
               # stopped and the bind unmounted, but the workspace clone is kept.
+              require_known_hosts
               wait_ready "$ip" || die "guest not ready; tearing down slot $slot (workspace kept at $clone)"
               log "attaching to $slot; running 'agent-run $agent' in /workspace"
-              ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              ssh "''${SSH_VERIFY_OPTS[@]}" \
                   ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
                   -t "$SSH_USER@$ip" -- agent-run "$agent" || true
               # Foreground session finished: tear the VM down, keep the clone.
@@ -612,11 +659,12 @@ let
           else
               targets=("''${SLOT_NAMES[@]}")
           fi
-          local slot f state task workspace agent start owner ip mac mnt ssh_ready
+          local slot f state task workspace agent start owner ip mac cid mnt ssh_ready
           for slot in "''${targets[@]}"; do
               f="$(session_file "$slot")"
               ip="$(slot_ip "$slot")"
               mac="$(slot_mac "$slot")"
+              cid="$(slot_cid "$slot")"
               if service_active "$slot"; then state="running"; else state="stopped"; fi
               task=""; workspace=""; agent=""; start=""; owner=""
               local sstate="" stale="no"
@@ -642,6 +690,7 @@ let
         service:   $state
         ip:        $ip
         mac:       $mac
+        vsock cid: $cid
         task:      ''${task:-<none>}
         workspace: ''${workspace:-<none>}
         bind-mount: $mnt
@@ -675,14 +724,15 @@ let
           ip="$(slot_ip "$slot")"
           service_active "$slot" || die "microvm@$slot is not running"
           [[ "''${1-}" == "--" ]] && shift
-          # StrictHostKeyChecking=no + /dev/null known-hosts is intentional:
-          # slots are ephemeral guests with regenerated host keys, so
-          # pinning would only add churn. The co-resident-guest MITM that
-          # would otherwise make this dangerous is closed at L2 instead:
-          # every guest TAP is marked `isolated` on the bridge (network.nix),
-          # so a hostile guest cannot ARP-spoof the gateway or another slot,
-          # for ANY EtherType, independently of the iptables rules.
-          exec ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          # AUTHENTICATED channel (ticket 3 B): the slot's host key is stable
+          # and pinned in $KNOWN_HOSTS, so verification is STRICT — a wrong or
+          # unknown key aborts the connection instead of being accepted. Two
+          # independent layers now protect this session: strict host-key
+          # verification here, and per-TAP L2 `isolated` on the bridge
+          # (network.nix), which prevents a co-resident guest from ARP-spoofing
+          # the gateway or another slot in the first place.
+          require_known_hosts
+          exec ssh "''${SSH_VERIFY_OPTS[@]}" \
               ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
               -t "$SSH_USER@$ip" "$@"
       }

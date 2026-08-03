@@ -118,6 +118,10 @@ let
   # `.config`, which strips `_module`.)
   agentRegistry = self.nixosConfigurations.test-f13._module.args.agentRegistry;
 
+  # The ONE definition of the per-slot SSH host-key paths (hostkeys.nix), for
+  # the same reason: the checks must not hardcode a second copy of them.
+  hostKeys = self.nixosConfigurations.test-f13._module.args.agentHostKeys;
+
   # Slot counts to exercise. Includes small pools, pools with index >= 10
   # (which exercise 2-hex-digit MAC formatting, e.g. i=10 → ...:1a), and the
   # generator's declared maximum.
@@ -146,6 +150,7 @@ let
       pool = slotLib.mkSlots n;
       ips = map (s: s.ip) pool;
       macs = map (s: s.mac) pool;
+      cids = map (s: s.cid) pool;
       names = map (s: s.name) pool;
       expectedNames = builtins.genList (i: "agent-${toString i}") n;
       ipsWellFormed = builtins.all (ip: builtins.match ipv4Re ip != null) ips;
@@ -178,6 +183,18 @@ let
       {
         assertion = indicesContiguous;
         message = "slotCount=${toString n}: slot .index values not contiguous 0..${toString (n - 1)}";
+      }
+      {
+        # ticket 3 B: every concurrently runnable slot needs a UNIQUE VSOCK
+        # control-channel identity ...
+        assertion = lib.length (lib.unique cids) == n;
+        message = "slotCount=${toString n}: VSOCK CIDs not unique (${toString cids})";
+      }
+      {
+        # ... that avoids the reserved CIDs 0 (hypervisor), 1 (loopback),
+        # 2 (host) and VMADDR_CID_ANY (0xffffffff).
+        assertion = builtins.all (c: c > 2 && c < 4294967295) cids;
+        message = "slotCount=${toString n}: VSOCK CIDs must avoid reserved values (${toString cids})";
       }
     ];
 
@@ -444,12 +461,14 @@ in
   ];
 
   # ---------------------------------------------------------------------- #
-  # (g) WORKSPACE SHARE: prove the guest declares EXACTLY ONE virtiofs      #
-  #     share — the writable `/workspace` — whose host `source` matches the  #
-  #     launcher's bind-mount target `${stateRoot}/agent-0/workspace`.       #
-  #     This locks down plan §10/§11 crit. 12 so the previously-missing      #
-  #     guest share can never silently reappear as `[]`. It FAILS if the    #
-  #     share is removed, renamed, made read-only, or repointed.            #
+  # (g) GUEST SHARES: prove the guest declares EXACTLY TWO virtiofs shares  #
+  #     — the WRITABLE `/workspace` (host `source` == the launcher's         #
+  #     bind-mount target `${stateRoot}/agent-0/workspace`) and the          #
+  #     READ-ONLY per-slot SSH host-key share (ticket 3 B). This locks down  #
+  #     plan §10/§11 crit. 12 (the workspace share can never silently       #
+  #     vanish, be renamed, be made read-only or be repointed) AND the       #
+  #     ticket-3 amendment: the hostkey share must stay read-only, per-slot  #
+  #     and nothing else may be shared (no /nix, /home, host sockets).       #
   # ---------------------------------------------------------------------- #
   microvm-eval-workspace-share =
     let
@@ -458,14 +477,33 @@ in
       wsShares = builtins.filter (s: s.mountPoint == "/workspace") shares;
       ws = if wsShares == [ ] then null else builtins.head wsShares;
       expectedSource = "${microvmOpts.stateRoot}/agent-0/workspace";
+      hkShares = builtins.filter (s: s.mountPoint == hostKeys.guestMountPoint) shares;
+      hk = if hkShares == [ ] then null else builtins.head hkShares;
+      expectedHkSource = hostKeys.slotDir "agent-0";
     in
     mkEvalCheck "microvm-eval-workspace-share" [
       {
-        # There must be exactly one share, and it must be the workspace.
-        assertion = builtins.length shares == 1;
-        message = "guest agent-0 must declare exactly ONE share (the workspace); got ${toString (builtins.length shares)}: ${
+        # Exactly two shares: the writable workspace + the read-only hostkey.
+        assertion = builtins.length shares == 2;
+        message = "guest agent-0 must declare exactly TWO shares (workspace + hostkey); got ${toString (builtins.length shares)}: ${
           toString (map (s: s.mountPoint or "?") shares)
         }";
+      }
+      {
+        assertion = hk != null && hk.proto == "virtiofs" && hk.tag == hostKeys.guestTag;
+        message = "guest agent-0 must declare a virtiofs share tagged '${hostKeys.guestTag}' at ${hostKeys.guestMountPoint}";
+      }
+      {
+        assertion = hk != null && hk.source == expectedHkSource;
+        message = "hostkey share source is '${
+          toString (hk.source or "<none>")
+        }', expected the PER-SLOT dir '${expectedHkSource}' (must match hostkeys.nix)";
+      }
+      {
+        # Read-only is load-bearing: the guest must not be able to replace its
+        # own host identity, and only guest root may read the 0400 private key.
+        assertion = hk != null && (hk.readOnly or false) == true;
+        message = "hostkey share MUST be readOnly (the guest must not be able to rewrite its host identity)";
       }
       {
         assertion = ws != null;
@@ -493,10 +531,20 @@ in
         message = "/workspace share must be read-write (readOnly=false)";
       }
       {
-        # Defence in depth: the ONLY virtiofs share is the workspace — no
-        # /nix, /home or host-socket share leaked in.
-        assertion = builtins.length virtiofsShares == 1;
-        message = "expected exactly one virtiofs share (workspace); got ${toString (builtins.length virtiofsShares)}";
+        # Defence in depth: the ONLY virtiofs shares are the workspace and the
+        # hostkey dir — no /nix, /home or host-socket share leaked in.
+        assertion = builtins.length virtiofsShares == 2;
+        message = "expected exactly two virtiofs shares (workspace + hostkey); got ${toString (builtins.length virtiofsShares)}";
+      }
+      {
+        assertion = builtins.all (
+          s:
+          builtins.elem s.mountPoint [
+            "/workspace"
+            hostKeys.guestMountPoint
+          ]
+        ) shares;
+        message = "unexpected share mountPoint(s): ${toString (map (s: s.mountPoint or "?") shares)}";
       }
     ];
 
@@ -578,6 +626,80 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # (j) HOST IDENTITY / AUTHENTICATED CONTROL CHANNEL (ticket 3 B):         #
+  #     prove that (1) every slot gets its OWN deterministic ed25519 host   #
+  #     key from a read-only per-slot share, (2) the guest does NOT         #
+  #     generate throwaway keys, (3) the host provisioning unit exists, and #
+  #     (4) the launcher verifies guests STRICTLY against the generated     #
+  #     known_hosts file — with no `StrictHostKeyChecking=no` /             #
+  #     `UserKnownHostsFile=/dev/null` left anywhere in the script.         #
+  # ---------------------------------------------------------------------- #
+  microvm-host-identity =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      guestSsh = guest0Cfg.services.openssh;
+      # Per-slot key dirs must be pairwise distinct (no shared private key).
+      slotKeyDirs = map (slot: hostKeys.slotDir slot.name) enabledSlots;
+      evalMarker = mkEvalCheck "microvm-host-identity-eval" [
+        {
+          assertion = guestSsh.generateHostKeys == false;
+          message = "guest must NOT generate its own throwaway host keys (generateHostKeys must be false)";
+        }
+        {
+          assertion = map (k: k.path) guestSsh.hostKeys == [ hostKeys.guestKeyPath ];
+          message = "guest sshd must use exactly the provisioned key ${hostKeys.guestKeyPath}, got ${
+            toString (map (k: k.path) guestSsh.hostKeys)
+          }";
+        }
+        {
+          assertion = builtins.all (k: k.type == "ed25519") guestSsh.hostKeys;
+          message = "guest host key must be ed25519";
+        }
+        {
+          assertion = enabledCfg.systemd.services ? agent-microvm-hostkeys;
+          message = "host must provision per-slot host keys via agent-microvm-hostkeys.service";
+        }
+        {
+          assertion = lib.length (lib.unique slotKeyDirs) == lib.length slotKeyDirs;
+          message = "each slot must have its OWN host-key directory (no shared private key): ${toString slotKeyDirs}";
+        }
+        {
+          # The known_hosts file must live under the runtime root, not in the
+          # world-writable /tmp or inside a guest-writable path.
+          assertion = lib.hasPrefix "${microvmOpts.runtimeRoot}/" hostKeys.knownHosts;
+          message = "known_hosts must live under the runtime root, got ${hostKeys.knownHosts}";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-host-identity"
+      {
+        inherit evalMarker;
+        launcherBin = "${hostLauncher}/bin/agent-microvm";
+        knownHosts = hostKeys.knownHosts;
+      }
+      ''
+        grep -q "StrictHostKeyChecking=yes" "$launcherBin" \
+          || { echo "launcher does not use StrictHostKeyChecking=yes" >&2; exit 1; }
+        grep -q "UserKnownHostsFile=\"\$KNOWN_HOSTS\"" "$launcherBin" \
+          || { echo "launcher does not pin UserKnownHostsFile to the generated known_hosts" >&2; exit 1; }
+        grep -q "KNOWN_HOSTS=$knownHosts" "$launcherBin" \
+          || { echo "launcher does not reference $knownHosts" >&2; exit 1; }
+        # Fail if ANY unauthenticated ssh invocation survives.
+        if grep -n "StrictHostKeyChecking=no" "$launcherBin" | grep -v "^[0-9]*:#"; then
+          echo "launcher still contains StrictHostKeyChecking=no" >&2; exit 1
+        fi
+        if grep -n "UserKnownHostsFile=/dev/null" "$launcherBin" | grep -v "^[0-9]*:#"; then
+          echo "launcher still contains UserKnownHostsFile=/dev/null" >&2; exit 1
+        fi
+        {
+          echo "microvm-host-identity: authenticated control channel"
+          echo "  launcher    : $launcherBin"
+          echo "  known_hosts : $knownHosts"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (i) AGENT EXECUTABLES (ticket 2): actually BUILD every registry agent   #
   #     package and prove it ships the declared `executable`. This is the   #
   #     `command -v <agent>` acceptance criterion turned into a build       #
@@ -653,6 +775,10 @@ in
     let
       hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
       guestAgentRun = findPkg guest0Cfg.environment.systemPackages "agent-run";
+      # The per-slot SSH host-key provisioner (hostkeys.nix) is also a
+      # writeShellApplication; pull it in via the unit's ExecStart so its
+      # shellcheck gate runs too.
+      hostKeyProvisioner = toString enabledCfg.systemd.services.agent-microvm-hostkeys.serviceConfig.ExecStart;
       # The workmux agent `command`s are `lib.getExe <launcher>` strings whose
       # string context references the launcher derivation, so building against
       # them pulls the writeShellApplication (and its shellcheck) in.
@@ -670,6 +796,7 @@ in
         ];
         # Pull in the workmux launcher drvs via their exe-path string context.
         workmuxCmds = workmuxLauncherCmds;
+        inherit hostKeyProvisioner;
       }
       ''
         {
@@ -677,6 +804,7 @@ in
           echo "derivations built successfully, so their shellcheck gate passed:"
           echo "  host launcher : ${hostLauncher}"
           echo "  guest agent-run: ${guestAgentRun}"
+          echo "  hostkey provisioner: $hostKeyProvisioner"
           for c in $workmuxCmds; do echo "  workmux launcher: $c"; done
         } > "$out"
       '';

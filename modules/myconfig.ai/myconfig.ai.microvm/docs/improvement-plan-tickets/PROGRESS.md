@@ -8,7 +8,7 @@ commit as the work it describes.
 |---|--------|--------|--------|
 | 1 | `01-agent-registry-refactor.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 2 | `02-add-hermes-support.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
-| 3 | `03-network-and-control-channel-hardening.md` | IN PROGRESS (A done) | — |
+| 3 | `03-network-and-control-channel-hardening.md` | IN PROGRESS (A, B done) | — |
 | 4 | `04-batch-execution-and-lifecycle.md` | TODO | — |
 | 5 | `05-resource-classes-and-state-management.md` | TODO | — |
 | 6 | `06-runtime-validation-and-documentation.md` | TODO | — |
@@ -69,3 +69,26 @@ C: network profiles).
   `microvm-eval-enabled`; resolves open item A1 in
   `docs/agent-microvm-remaining.md`. Runtime proof (`bridge link show`,
   guest→guest ping/ARP) remains part of the B4 runtime tier.
+- **Part B (done).** Authenticated control channel + reserved VSOCK identity:
+  - new `hostkeys.nix` provisions ONE stable ed25519 host key per slot at
+    runtime under `${runtimeRoot}/hostkeys/<slot>` (root:root 0400, never in
+    the Nix store, not agenix — host-local regenerable identities) and
+    rebuilds `${runtimeRoot}/known_hosts` (0444, public keys only) atomically.
+  - delivery to the guest is a SECOND virtiofs share, per slot, READ-ONLY,
+    mounted at `/var/lib/agent-hostkey`; virtiofsd passes 0400 root:root
+    through, so the untrusted `agent` user cannot read it and the guest cannot
+    rewrite its identity. Documented amendment to plan §10's "exactly one
+    share" (the `microvm-eval-workspace-share` check now pins exactly two).
+    `microvm.credentialFiles` was NOT usable: cloud-hypervisor throws on it.
+  - guest sshd uses only that key (`generateHostKeys = false`).
+  - launcher: single `SSH_VERIFY_OPTS` array with
+    `StrictHostKeyChecking=yes` + `UserKnownHostsFile=<known_hosts>`, a
+    fail-closed `require_known_hosts`, and `run` starts the (idempotent)
+    provisioning unit before booting a slot. No `StrictHostKeyChecking=no`
+    remains — asserted by the new `microvm-host-identity` check.
+  - slots.nix gained a deterministic `cid = 8300 + index` (unique, avoids
+    reserved 0/1/2 and VMADDR_CID_ANY, asserted in default.nix + the slot-pool
+    check, shown by `status`). Deliberately NOT yet passed to
+    `microvm.vsock.cid`: that flips `microvm@<slot>` to `Type=notify` (socat
+    ↔ vsock notify bridge), a startup change only verifiable by booting on
+    KVM — so it is activated together with the ticket-4 control channel.

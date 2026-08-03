@@ -53,6 +53,9 @@
   # The ONE authoritative supported-agent registry instance, built in
   # default.nix (`_module.args.agentRegistry`). See ./agents.nix.
   agentRegistry,
+  # The ONE definition of the per-slot SSH host-key paths (host + guest side),
+  # from hostkeys.nix (`_module.args.agentHostKeys`).
+  agentHostKeys,
   ...
 }:
 let
@@ -186,6 +189,19 @@ let
       # source is "/nix/store", which this is not), so it does NOT add a
       # store share. The guest therefore has EXACTLY this one share. Do NOT
       # add /nix, /home, host sockets or any other share here (plan §10).
+      # SECOND share (ticket 3 B) — the per-slot SSH host identity, READ-ONLY:
+      # `${runtimeRoot}/hostkeys/<slot>` holds exactly that slot's ed25519 host
+      # key, provisioned on the host by `agent-microvm-hostkeys.service` (see
+      # hostkeys.nix). virtiofsd passes ownership through unchanged, so the
+      # private key stays root:root 0400 inside the guest — the unprivileged,
+      # untrusted `agent` user cannot read it, and no other slot's directory is
+      # visible. This gives the launcher a STABLE host identity per slot so it
+      # can use `StrictHostKeyChecking=yes`, instead of the previous throwaway
+      # key + unauthenticated `StrictHostKeyChecking=no` control channel.
+      #
+      # Deliberate, documented amendment to plan §10's "EXACTLY ONE share":
+      # read-only, root-only, single-purpose, per-slot. Do NOT add further
+      # shares — no /nix, /home, host sockets or cross-slot paths.
       shares = [
         {
           proto = "virtiofs";
@@ -193,7 +209,14 @@ let
           source = "${cfg.stateRoot}/${slot.name}/workspace";
           mountPoint = "/workspace";
         }
-      ];
+      ]
+      ++ lib.optional cfg.enableSsh {
+        proto = "virtiofs";
+        tag = agentHostKeys.guestTag;
+        source = agentHostKeys.slotDir slot.name;
+        mountPoint = agentHostKeys.guestMountPoint;
+        readOnly = true;
+      };
     };
 
     # Unprivileged guest user that runs the agent (plan §6). Not root; no
@@ -374,6 +397,19 @@ let
     # --- §18 hardened SSH, private guest interface only ------------------
     services.openssh = lib.mkIf cfg.enableSsh {
       enable = true;
+      # Deterministic per-slot host identity (ticket 3 B): use ONLY the
+      # ed25519 key from the read-only hostkey share, and do NOT let the guest
+      # generate its own throwaway keys (`generateHostKeys = false` disables
+      # `sshd-keygen.service`, which would anyway fail against the read-only
+      # mount). The host's known_hosts file pins exactly this key per slot IP,
+      # so `agent-microvm ssh` can verify the guest strictly.
+      generateHostKeys = false;
+      hostKeys = [
+        {
+          type = "ed25519";
+          path = agentHostKeys.guestKeyPath;
+        }
+      ];
       settings = {
         PermitRootLogin = "no";
         PasswordAuthentication = false;
