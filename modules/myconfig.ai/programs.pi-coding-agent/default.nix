@@ -579,6 +579,52 @@ let
   # `myconfig-*` extensions above which only use type-only imports.
   handoffExtension = "${pi-coding-agent-pkg}/lib/node_modules/pi-monorepo/examples/extensions/handoff.ts";
 
+  # The `pi-simplify` extension (from the MattDevy/pi-extensions monorepo,
+  # pinned via `fetchFromGitHub` below) adds a `/simplify` command that
+  # detects recently changed files/line ranges via `git diff` and instructs
+  # the agent to review only those lines for clarity and maintainability.
+  # Upstream ships a multi-file TypeScript package meant to be compiled to
+  # `dist/` and installed via `pi install npm:pi-simplify`; here we deploy the
+  # TypeScript sources directly as a multi-file extension under
+  # ~/.pi/agent/extensions/pi-simplify/ (pi loads `*/index.ts`), mirroring the
+  # subagent example above.
+  #
+  # Upstream's cross-file imports use compiled-output `.js` specifiers (e.g.
+  # `./simplify-command.js`); pi's TypeScript loader resolves sibling modules
+  # by their real `.ts` extension (as the subagent example's `./agents.ts`
+  # import shows), so each `from "./<name>.js"` is rewritten to `.ts` at eval
+  # time. All `@earendil-works/pi-*` imports in the sources are type-only and
+  # are erased by the loader, so no runtime dependency is introduced. The
+  # store originals are read-only, so each file is re-emitted via
+  # `pkgs.writeText` with the specifiers rewritten; `*.test.ts` files are
+  # excluded.
+  pi-extensions-src = pkgs.fetchFromGitHub {
+    owner = "MattDevy";
+    repo = "pi-extensions";
+    rev = "2ae490f16d669ea101b0811a50cbc37a2514e9a5";
+    hash = "sha256-FRZxyt6d0pxr2MMKU3ZBrpvgchH6m00Mc9MtSwwX3L0=";
+  };
+  simplifyExtensionDir = "${pi-extensions-src}/packages/pi-simplify/src";
+
+  simplifyExtensionFiles =
+    let
+      rewriteJsImports = builtins.replaceStrings [ ".js\"" ] [ ".ts\"" ];
+    in
+    lib.mapAttrs'
+      (
+        name: _:
+        lib.nameValuePair ".pi/agent/extensions/pi-simplify/${name}" {
+          source = pkgs.writeText name (
+            rewriteJsImports (builtins.readFile "${simplifyExtensionDir}/${name}")
+          );
+        }
+      )
+      (
+        lib.filterAttrs (name: _: lib.hasSuffix ".ts" name && !lib.hasSuffix ".test.ts" name) (
+          builtins.readDir simplifyExtensionDir
+        )
+      );
+
   piBwrap = callLib ../fns/sandboxed-app.nix {
     name = "pi";
     pkg = pkgs.nixos-unstable.pi-coding-agent;
@@ -866,6 +912,7 @@ in
           subagentExtensionFiles
           subagentAgentFiles
           subagentPromptFiles
+          simplifyExtensionFiles
         ];
         home.packages = [
           pkgs.nixos-unstable.pi-coding-agent
