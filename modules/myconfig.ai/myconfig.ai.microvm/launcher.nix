@@ -53,6 +53,11 @@ let
 
   slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
 
+  # Authoritative supported-agent registry (see ./agents.nix). `--agent`
+  # validation and the help output below are GENERATED from it, so the host
+  # launcher can never drift from the guest's dispatch table.
+  agentRegistry = import ./agents.nix { inherit lib pkgs; };
+
   # Render the deterministic slot table as bash arrays. Using the shared slot
   # helper guarantees the launcher sees exactly the names/IPs/MACs/TAPs that
   # guest.nix builds and network.nix wires up.
@@ -230,10 +235,12 @@ let
       # The agent name crosses the SSH boundary into the (untrusted) guest;
       # constrain it to the known agent set so it can never carry guest-side
       # metacharacters. This is defence-in-depth, not a host-side control.
+      # The accepted set is GENERATED from ./agents.nix — the same registry
+      # that builds the guest packages and the guest `agent-run` dispatch.
       validate_agent_name() {
           case "$1" in
-              claude | pi | codex | opencode) return 0 ;;
-              *) die "unknown --agent '$1' (expected: claude|pi|codex|opencode)" ;;
+              ${agentRegistry.namesCasePattern}) return 0 ;;
+              *) die "unknown --agent '$1' (expected: ${agentRegistry.namesAlternation})" ;;
           esac
       }
 
@@ -438,6 +445,9 @@ let
                               commits, and on a slot still using the clone,
                               without --force. With --force it also stops any
                               slot still holding the clone before removing it.
+
+      Supported agents (--agent), generated from the module's agent registry:
+        ${lib.concatStringsSep "\n  " agentRegistry.names}
       EOF
           exit 2
       }

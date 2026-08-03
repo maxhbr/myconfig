@@ -152,6 +152,40 @@ git add hosts/host.f13/dedicated-agent-vm-key.pub
 
 ---
 
+## Supported agents — the authoritative registry
+
+[`agents.nix`](../agents.nix) is the **single source of truth** for which
+coding agents a sandbox supports. Everything agent-shaped is generated from
+it; there is no second list to keep in sync:
+
+| Consumer | What is generated |
+|---|---|
+| `guest.nix` | the agent packages baked into the immutable guest closure, and the `agent-run` dispatch table |
+| `launcher.nix` | `--agent` validation (`validate_agent_name`) and the `agent-microvm --help` agent listing |
+| `workmux.nix` | the `myconfig.ai.workmux.agents.microvm-*` entries and their pane launchers |
+| `default.nix` | assertions that every registry entry is well-formed |
+| `tests/microvm.nix` | the `microvm-agent-registry` / shellcheck checks |
+
+A registry entry is:
+
+```nix
+<name> = {
+  package = pkgs.<attr>;      # baked into the guest closure (never installed at runtime)
+  executable = "<bin>";        # what `agent-run <name>` execs inside the guest
+  workmuxType = "<type>";      # optional, defaults to <name>
+  interactiveArgs = [ ];       # optional extra argv for the interactive session
+};
+```
+
+`workmuxName` is derived (`microvm-<name>`), so adding an agent is a one-entry
+change. To list the currently supported agents:
+
+```bash
+sudo agent-microvm --help      # "Supported agents (--agent)" section
+```
+
+---
+
 ## Launching via Workmux
 
 Workmux stays the **frontend** — it owns the worktree, the tmux pane, task
@@ -164,6 +198,10 @@ workmux add --agent microvm-pi      feature-name
 workmux add --agent microvm-codex   feature-name
 workmux add --agent microvm-opencode feature-name
 ```
+
+The `microvm-*` agent set is generated from
+[the agent registry](#supported-agents--the-authoritative-registry); the list
+above is illustrative, not a second source of truth.
 
 Each agent's pane command:
 

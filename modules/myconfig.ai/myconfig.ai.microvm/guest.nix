@@ -60,6 +60,11 @@ let
   # the slot-count bound over this exact table).
   slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
 
+  # Authoritative supported-agent registry (see ./agents.nix). The guest
+  # package set (§7) and the `agent-run` dispatch table (§19) below are both
+  # GENERATED from it — never hand-maintain an agent list here.
+  agentRegistry = import ./agents.nix { inherit lib pkgs; };
+
   # Prefix length of the private subnet (e.g. "192.168.83.0/24" -> 24), used
   # for the guest-side static address. Derived from the SAME option the host
   # bridge uses, so host and guest agree.
@@ -67,8 +72,12 @@ let
 
   # --- §19 guest agent entry point (`agent-run`) --------------------------
   # Refuses root, verifies /workspace is a mounted, writable mount, cds into
-  # it, prints the guest identity + selected agent, then execs the agent from
-  # argv (no `eval`, so the exit status is the agent's own).
+  # it, prints the guest identity + selected agent, then execs the selected
+  # agent (no `eval`, so the exit status is the agent's own).
+  #
+  # The agent name is dispatched through a table GENERATED from ./agents.nix,
+  # so the guest accepts exactly the agents the registry declares (and applies
+  # their `interactiveArgs`). Extra argv after the agent name is forwarded.
   agent-run = pkgs.writeShellApplication {
     name = "agent-run";
     runtimeInputs = with pkgs; [
@@ -83,7 +92,7 @@ let
           exit 1
       fi
       if [[ "$#" -lt 1 ]]; then
-          echo "usage: agent-run <agent> [args...]" >&2
+          echo "usage: agent-run <${agentRegistry.namesAlternation}> [args...]" >&2
           exit 2
       fi
 
@@ -101,7 +110,16 @@ let
       printf 'agent-run: host=%s agent=%s workspace=%s\n' \
           "$(uname -n)" "$1" "$workspace" >&2
 
-      exec "$@"
+      # Generated dispatch table (single source of truth: ./agents.nix).
+      agent="$1"
+      shift
+      case "$agent" in
+      ${agentRegistry.guestDispatchCases}
+          *)
+              echo "agent-run: unknown agent '$agent' (expected: ${agentRegistry.namesAlternation})" >&2
+              exit 2
+              ;;
+      esac
     '';
     meta = with lib; {
       description = "Guest-side agent entry point for myconfig.ai.microvm sandboxes";
@@ -216,25 +234,23 @@ let
     };
 
     # --- §7 minimal guest toolchain + the §19 entry point ----------------
-    # A deliberately small package set plus the four agent binaries so
-    # `agent-run <bin>` can exec them inside the guest. The agent packages
-    # are the SAME repo package attrs the host coding-agent modules use
-    # (programs.claude-code → pkgs.claude-code, programs.codex → pkgs.codex,
-    # programs.opencode → pkgs.opencode, programs.pi-coding-agent →
-    # pkgs.nixos-unstable.pi-coding-agent). They are baked into the immutable
-    # guest closure (§8: no runtime CLI download, no host Nix daemon). Their
-    # exe names are exactly the launcher's agent set: claude / codex /
-    # opencode / pi.
+    # A deliberately small package set plus the registry's agent binaries so
+    # `agent-run <agent>` can exec them inside the guest. The agent packages
+    # come from ./agents.nix — the SAME repo package attrs the host
+    # coding-agent modules use (programs.claude-code → pkgs.claude-code,
+    # programs.codex → pkgs.codex, programs.opencode → pkgs.opencode,
+    # programs.pi-coding-agent → pkgs.nixos-unstable.pi-coding-agent). They
+    # are baked into the immutable guest closure (§8: no runtime CLI
+    # download, no host Nix daemon).
     programs.fish.enable = true;
 
-    environment.systemPackages = with pkgs; [
+    environment.systemPackages = [
       agent-run
-      fish
-      # §7 agent binaries (exe names: claude, codex, opencode, pi).
-      claude-code
-      codex
-      opencode
-      nixos-unstable.pi-coding-agent
+      pkgs.fish
+    ]
+    # §7 agent binaries, GENERATED from the authoritative registry.
+    ++ agentRegistry.packages
+    ++ (with pkgs; [
       bash
       coreutils
       curl
@@ -257,7 +273,7 @@ let
       unzip
       util-linux
       which
-    ];
+    ]);
 
     # --- §17 guest model-API config (no secrets) -------------------------
     # The guest reaches the model API ONLY via the bridge-only LiteLLM

@@ -24,6 +24,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -37,6 +38,14 @@ let
   slots = slotLib.mkSlots cfg.slotCount;
   slotIPs = map (s: s.ip) slots;
   slotMACs = map (s: s.mac) slots;
+
+  # --- authoritative supported-agent registry -----------------------------
+  # ./agents.nix is the SINGLE SOURCE OF TRUTH for the supported agents (guest
+  # packages, guest `agent-run` dispatch, launcher validation + help, workmux
+  # registrations). Surface its well-formedness errors as NixOS assertions so
+  # a malformed entry fails loudly here instead of producing a broken guest
+  # closure or a launcher that accepts an agent the guest cannot run.
+  agentRegistry = import ./agents.nix { inherit lib pkgs; };
 
   isAbsolutePath = p: lib.hasPrefix "/" p;
 in
@@ -289,6 +298,15 @@ in
         assertion = lib.length (lib.unique slotMACs) == lib.length slotMACs;
         message = "myconfig.ai.microvm: generated slot MAC addresses are not unique.";
       }
-    ];
+      {
+        assertion = agentRegistry.names != [ ];
+        message = "myconfig.ai.microvm: the agent registry (agents.nix) must declare at least one agent.";
+      }
+    ]
+    # One assertion per malformed registry entry (empty when well-formed).
+    ++ map (msg: {
+      assertion = false;
+      message = msg;
+    }) agentRegistry.errors;
   };
 }

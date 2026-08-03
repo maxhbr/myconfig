@@ -105,6 +105,16 @@ let
   # duplicate-IP/MAC detection against the real generator.
   slotLib = import ../modules/myconfig.ai/myconfig.ai.microvm/slots.nix { inherit lib; };
 
+  # Import the SAME authoritative agent registry the module uses, so the
+  # checks below cannot carry their own (drifting) list of supported agents.
+  # It must be instantiated with the HOST's overlaid pkgs (the registry
+  # references repo overlay attrs such as `nixos-unstable.pi-coding-agent`),
+  # not the bare `inputs.nixpkgs.legacyPackages` used for the marker drvs.
+  agentRegistry = import ../modules/myconfig.ai/myconfig.ai.microvm/agents.nix {
+    inherit lib;
+    pkgs = self.nixosConfigurations.test-f13.pkgs;
+  };
+
   # Slot counts to exercise. Includes small pools, pools with index >= 10
   # (which exercise 2-hex-digit MAC formatting, e.g. i=10 → ...:1a), and the
   # generator's declared maximum.
@@ -462,6 +472,83 @@ in
     ];
 
   # ---------------------------------------------------------------------- #
+  # (h) AGENT REGISTRY (ticket 1): prove that agents.nix really is the ONE  #
+  #     source of truth — the guest closure, the workmux registrations, the #
+  #     host launcher's `--agent` validation/help and the guest `agent-run` #
+  #     dispatch are all derived from it. Eval part: registry well-formed,  #
+  #     workmux keys == registry workmuxNames, every agent package in the   #
+  #     guest closure. Build part: grep the BUILT launcher scripts for each #
+  #     registry agent, so a registry entry that never reaches the shell    #
+  #     code fails the check.                                              #
+  # ---------------------------------------------------------------------- #
+  microvm-agent-registry =
+    let
+      registryAgents = lib.attrValues agentRegistry.agents;
+      workmuxAgents = enabledCfg.myconfig.ai.workmux.agents;
+      guestPkgPaths = map (p: p.outPath) guest0Cfg.environment.systemPackages;
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      guestAgentRun = findPkg guest0Cfg.environment.systemPackages "agent-run";
+      evalMarker = mkEvalCheck "microvm-agent-registry-eval" (
+        [
+          {
+            assertion = agentRegistry.errors == [ ];
+            message = "agent registry is malformed: ${toString agentRegistry.errors}";
+          }
+          {
+            assertion = agentRegistry.names != [ ];
+            message = "agent registry declares no agents";
+          }
+          {
+            # The workmux registry contains EXACTLY the registry's microvm-*
+            # agents — no hand-written extra, none missing.
+            assertion =
+              lib.sort (a: b: a < b) (
+                builtins.filter (lib.hasPrefix "microvm-") (builtins.attrNames workmuxAgents)
+              ) == lib.sort (a: b: a < b) (map (a: a.workmuxName) registryAgents);
+            message = "workmux microvm-* agents do not match the registry: ${toString (builtins.filter (lib.hasPrefix "microvm-") (builtins.attrNames workmuxAgents))} vs ${
+              toString (map (a: a.workmuxName) registryAgents)
+            }";
+          }
+        ]
+        ++ map (a: {
+          assertion = builtins.elem a.package.outPath guestPkgPaths;
+          message = "agent '${a.name}': package ${a.package.outPath} is not in the guest closure";
+        }) registryAgents
+        ++ map (a: {
+          assertion = (workmuxAgents.${a.workmuxName}.type or null) == a.workmuxType;
+          message = "workmux agent '${a.workmuxName}' type is '${
+            toString (workmuxAgents.${a.workmuxName}.type or null)
+          }', expected '${a.workmuxType}'";
+        }) registryAgents
+      );
+    in
+    pkgs.runCommand "microvm-agent-registry"
+      {
+        inherit evalMarker;
+        launcherBin = "${hostLauncher}/bin/agent-microvm";
+        agentRunBin = "${guestAgentRun}/bin/agent-run";
+        agentNames = lib.concatStringsSep " " agentRegistry.names;
+      }
+      ''
+        for n in $agentNames; do
+          # Host-side: the generated `validate_agent_name` case pattern and
+          # the generated help listing both mention every registry agent.
+          grep -qE "(^| |\()$n( |\||\))" "$launcherBin" \
+            || { echo "agent '$n' missing from host launcher $launcherBin" >&2; exit 1; }
+          # Guest-side: the generated `agent-run` dispatch table has a case arm.
+          grep -q "$n) exec " "$agentRunBin" \
+            || { echo "agent '$n' missing from guest agent-run dispatch" >&2; exit 1; }
+        done
+        {
+          echo "microvm-agent-registry: agents.nix is the single source of truth for:"
+          echo "  agents        : $agentNames"
+          echo "  host launcher : $launcherBin"
+          echo "  guest dispatch: $agentRunBin"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (d) GUEST EVALUATES: prove the agent-0 guest closure resolves to a      #
   #     realisable derivation. Plan §38 ("guest config builds").            #
   #                                                                         #
@@ -512,12 +599,9 @@ in
       # string context references the launcher derivation, so building against
       # them pulls the writeShellApplication (and its shellcheck) in.
       workmuxAgents = enabledCfg.myconfig.ai.workmux.agents;
-      workmuxLauncherCmds = map (n: workmuxAgents.${n}.command) [
-        "microvm-claude"
-        "microvm-pi"
-        "microvm-codex"
-        "microvm-opencode"
-      ];
+      workmuxLauncherCmds = map (a: workmuxAgents.${a.workmuxName}.command) (
+        lib.attrValues agentRegistry.agents
+      );
     in
     pkgs.runCommand "microvm-launcher-shellcheck"
       {
