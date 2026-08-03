@@ -50,6 +50,9 @@
   inputs,
   myconfig,
   mkGuestHome,
+  # The ONE authoritative supported-agent registry instance, built in
+  # default.nix (`_module.args.agentRegistry`). See ./agents.nix.
+  agentRegistry,
   ...
 }:
 let
@@ -59,11 +62,6 @@ let
   # slots.nix and is shared with default.nix (which asserts uniqueness and
   # the slot-count bound over this exact table).
   slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
-
-  # Authoritative supported-agent registry (see ./agents.nix). The guest
-  # package set (§7) and the `agent-run` dispatch table (§19) below are both
-  # GENERATED from it — never hand-maintain an agent list here.
-  agentRegistry = import ./agents.nix { inherit lib pkgs; };
 
   # Prefix length of the private subnet (e.g. "192.168.83.0/24" -> 24), used
   # for the guest-side static address. Derived from the SAME option the host
@@ -302,12 +300,21 @@ let
     #     proxy-only firewall would block anyway).
     # All keys are placeholders — the real upstream credential lives only in
     # the host LiteLLM proxy, never in the guest (§17).
+    #   - hermes reads OPENROUTER_BASE_URL (its config.yaml → CUSTOM_BASE_URL
+    #     → OPENROUTER_BASE_URL → openrouter.ai fallback chain) and, for a
+    #     non-openrouter base_url, OPENAI_API_KEY. That var is contributed by
+    #     the hermes entry's `guestEnvironment` in ./agents.nix, i.e. by the
+    #     registry rather than by a hand-maintained list here.
     environment.variables = {
       OPENAI_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}/v1";
       OPENAI_API_KEY = "not-needed";
       ANTHROPIC_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}";
       ANTHROPIC_API_KEY = "not-needed";
-    };
+    }
+    # Per-agent endpoint plumbing from the authoritative registry. Endpoint
+    # URLs / placeholder keys ONLY — the real upstream credential never
+    # leaves the host LiteLLM proxy (§17).
+    // agentRegistry.guestEnvironment;
 
     # --- guest-side loopback → bridge LiteLLM forwarder ------------------
     # Reverse of the host's bridge-only forwarder (network.nix): a

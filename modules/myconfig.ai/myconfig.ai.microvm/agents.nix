@@ -7,8 +7,9 @@
 # sandbox supports. Everything agent-shaped in this module tree is derived
 # from it; there must be no second, hand-maintained list anywhere:
 #
-#   guest.nix    — the guest closure's agent packages (§7) and the generated
-#                  `agent-run` guest-side dispatch table (§19).
+#   guest.nix    — the guest closure's agent packages (§7), the per-agent
+#                  guest environment, and the generated `agent-run`
+#                  guest-side dispatch table (§19).
 #   launcher.nix — `--agent` validation (`validate_agent_name`) and the
 #                  `agent-microvm --help` output.
 #   workmux.nix  — the `myconfig.ai.workmux.agents.microvm-*` registrations
@@ -26,15 +27,44 @@
 #   executable       binary name `agent-run` execs inside the guest, resolved
 #                    from the guest PATH. Defaults to the registry key.
 #   workmuxType      the workmux built-in agent `type` (prompt injection /
-#                    resume flags). Defaults to the registry key.
+#                    resume flags). Defaults to the registry key. An unknown
+#                    type is NOT an error — workmux falls back to its default
+#                    profile (no prompt injection / resume flags).
 #   interactiveArgs  extra argv prepended by `agent-run <name>` for the
 #                    interactive `--attach` session. Defaults to `[ ]`.
 #                    Deliberately NOT a place for dangerous auto-approve
 #                    flags — those stay explicit per workmux agent (§19).
+#   guestEnvironment attrs merged into the guest's `environment.variables`.
+#                    Model-endpoint plumbing ONLY — never a real credential
+#                    (§17: the upstream key lives only in the host LiteLLM
+#                    proxy). Defaults to `{ }`.
+#   persistentState  the agent's declared, VERIFIED state paths, relative to
+#                    the guest `agent` home. `enabledByDefault = false` keeps
+#                    the guest home DISPOSABLE (the secure default); ticket 5
+#                    turns `directories` into opt-in, task-scoped mounts.
+#                    Never GUESS these paths — read the agent's source.
 #
 # Derived (never write these by hand): `workmuxName` = "microvm-<name>".
-{ lib, pkgs }:
+#
+# The registry is instantiated EXACTLY ONCE (default.nix) and handed to the
+# other modules via `_module.args.agentRegistry`, so every consumer shares the
+# same instance and the same context arguments below.
+{
+  lib,
+  pkgs,
+  inputs,
+  # Guest-visible loopback LiteLLM port (`myconfig.ai.microvm.litellmPort`).
+  # The guest-side socket proxy forwards 127.0.0.1:<port> to the host bridge
+  # endpoint, which is the ONLY model-API peer a guest can reach (§17).
+  litellmPort,
+  # Model name for agents that cannot discover one themselves
+  # (`config.myconfig.ai.hermes.model.default`, a LiteLLM route).
+  hermesModel,
+}:
 let
+  # The single OpenAI-compatible endpoint every guest agent must use (§17).
+  litellmBaseUrl = "http://127.0.0.1:${toString litellmPort}/v1";
+
   # ---- the registry ----------------------------------------------------
   # Keys are the `--agent` CLI tokens. Attribute-set order is alphabetical in
   # Nix, so every generated list (guest packages, help text, validation) has a
@@ -56,6 +86,48 @@ let
       package = pkgs.nixos-unstable.pi-coding-agent;
       executable = "pi";
     };
+    # Hermes Agent (NousResearch). The SAME flake input + package attr the
+    # host `myconfig.ai.hermes` backends use, so the guest runs the identical
+    # build — baked into the immutable guest closure, never installed at
+    # runtime through the upstream `curl | bash` installer, pip or npm (§8).
+    # The package wraps its own PATH with nodejs/ripgrep/git, so it needs no
+    # extra guest packages.
+    hermes = {
+      package = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      executable = "hermes";
+      # workmux knows no `hermes` profile, so it resolves to workmux's DEFAULT
+      # profile (no prompt injection / resume flags). Not an error — the pane
+      # still launches (see workmux `resolve_profile_with_type`).
+      workmuxType = "hermes";
+      # Hermes has no model auto-discovery: with no provider configured it
+      # drops into `hermes setup`. Pin the LiteLLM route explicitly (the same
+      # model name the host `myconfig.ai.hermes` backends use).
+      interactiveArgs = [
+        "--model"
+        hermesModel
+      ];
+      # Hermes resolves its endpoint via config.yaml base_url →
+      # CUSTOM_BASE_URL → OPENROUTER_BASE_URL → openrouter.ai
+      # (hermes_cli/runtime_provider.py). Point it at the guest loopback
+      # LiteLLM endpoint. For a non-openrouter base_url it picks up
+      # OPENAI_API_KEY, which guest.nix already sets to a placeholder; that
+      # also satisfies hermes' first-run "any provider configured?" guard, so
+      # no setup wizard appears on the disposable guest home.
+      guestEnvironment = {
+        OPENROUTER_BASE_URL = litellmBaseUrl;
+      };
+      # VERIFIED against the pinned hermes source (`hermes_constants.py`
+      # `get_hermes_home()`, default `~/.hermes`, overridable via
+      # `HERMES_HOME`): config.yaml, .env, auth.json, state.db, sessions/,
+      # memories/, skills/, logs/, plugins/, cron/, scripts/ all live under
+      # that ONE root. Disposable by default — a fresh sandbox therefore
+      # starts with no memories, skills or sessions (see ticket 5 for the
+      # opt-in, task-scoped persistence that consumes this declaration).
+      persistentState = {
+        enabledByDefault = false;
+        directories = [ ".hermes" ];
+      };
+    };
   };
 
   normalise =
@@ -65,6 +137,11 @@ let
       executable = name;
       workmuxType = name;
       interactiveArgs = [ ];
+      guestEnvironment = { };
+      persistentState = {
+        enabledByDefault = false;
+        directories = [ ];
+      };
     }
     // spec
     // {
@@ -95,6 +172,26 @@ let
     ++ lib.optional (
       !lib.isList a.interactiveArgs
     ) "myconfig.ai.microvm: agent '${a.name}' interactiveArgs must be a list."
+    ++ lib.optional (
+      !lib.isAttrs a.guestEnvironment
+    ) "myconfig.ai.microvm: agent '${a.name}' guestEnvironment must be an attrset."
+    ++ lib.optional (
+      !lib.all lib.isString (lib.attrValues a.guestEnvironment)
+    ) "myconfig.ai.microvm: agent '${a.name}' guestEnvironment values must be strings."
+    ++ lib.optional (
+      !lib.isBool a.persistentState.enabledByDefault
+    ) "myconfig.ai.microvm: agent '${a.name}' persistentState.enabledByDefault must be a bool."
+    ++ lib.optional (
+      !lib.isList a.persistentState.directories
+    ) "myconfig.ai.microvm: agent '${a.name}' persistentState.directories must be a list."
+    ++
+      lib.optional
+        (
+          !lib.all (
+            d: lib.isString d && d != "" && !lib.hasPrefix "/" d && !lib.hasInfix ".." d
+          ) a.persistentState.directories
+        )
+        "myconfig.ai.microvm: agent '${a.name}' persistentState.directories must be non-empty, relative, '..'-free paths."
     ++
       lib.optional (builtins.match "[a-z][a-z0-9-]*" a.name == null)
         "myconfig.ai.microvm: agent name '${a.name}' must match [a-z][a-z0-9-]* (it crosses the host→guest control channel).";
@@ -112,8 +209,22 @@ rec {
   # in the guest dispatch's `case` fallback message.
   namesAlternation = lib.concatStringsSep "|" names;
 
+  # Merged per-agent guest environment (§17 endpoint plumbing only, never a
+  # credential). Two agents may declare the SAME key only with the same value;
+  # a conflicting declaration is a registry error, not a silent last-one-wins
+  # merge.
+  guestEnvironment = lib.foldl' (acc: a: acc // a.guestEnvironment) { } agentList;
+
+  guestEnvironmentConflicts = lib.concatMap (
+    a:
+    lib.mapAttrsToList (
+      k: _:
+      "myconfig.ai.microvm: agent '${a.name}' guestEnvironment.${k} conflicts with another agent's value."
+    ) (lib.filterAttrs (k: v: guestEnvironment.${k} != v) a.guestEnvironment)
+  ) agentList;
+
   # Every malformed-entry error message; empty list == registry is well-formed.
-  errors = lib.concatMap entryErrors agentList;
+  errors = lib.concatMap entryErrors agentList ++ guestEnvironmentConflicts;
 
   # ---- generated shell fragments ---------------------------------------
   # A bash `case` body dispatching `$1` (already shifted off) to the agent's

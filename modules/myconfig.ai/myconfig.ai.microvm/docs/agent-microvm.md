@@ -160,7 +160,7 @@ it; there is no second list to keep in sync:
 
 | Consumer | What is generated |
 |---|---|
-| `guest.nix` | the agent packages baked into the immutable guest closure, and the `agent-run` dispatch table |
+| `guest.nix` | the agent packages baked into the immutable guest closure, the per-agent guest environment, and the `agent-run` dispatch table |
 | `launcher.nix` | `--agent` validation (`validate_agent_name`) and the `agent-microvm --help` agent listing |
 | `workmux.nix` | the `myconfig.ai.workmux.agents.microvm-*` entries and their pane launchers |
 | `default.nix` | assertions that every registry entry is well-formed |
@@ -170,10 +170,15 @@ A registry entry is:
 
 ```nix
 <name> = {
-  package = pkgs.<attr>;      # baked into the guest closure (never installed at runtime)
+  package = pkgs.<attr>;       # baked into the guest closure (never installed at runtime)
   executable = "<bin>";        # what `agent-run <name>` execs inside the guest
   workmuxType = "<type>";      # optional, defaults to <name>
   interactiveArgs = [ ];       # optional extra argv for the interactive session
+  guestEnvironment = { };      # optional endpoint plumbing (NEVER a credential)
+  persistentState = {          # verified state paths, relative to the guest home
+    enabledByDefault = false;  # guest home stays DISPOSABLE by default
+    directories = [ ];
+  };
 };
 ```
 
@@ -182,6 +187,63 @@ change. To list the currently supported agents:
 
 ```bash
 sudo agent-microvm --help      # "Supported agents (--agent)" section
+```
+
+The registry is instantiated **exactly once** (in `default.nix`) and passed to
+the other modules through `_module.args.agentRegistry`, so no consumer can
+re-instantiate it with different context (LiteLLM port, model name).
+
+### Hermes
+
+Hermes (`--agent hermes`, workmux `microvm-hermes`) is the same
+`inputs.hermes-agent` package the host `myconfig.ai.hermes` backends use, baked
+into the guest closure — never fetched by the upstream `curl | bash` installer,
+`pip` or `npm` at boot (§8).
+
+```bash
+# Directly:
+sudo agent-microvm run --attach --agent hermes \
+  --name my-task --repository ~/src/my-repo
+
+# Or through workmux (the normal frontend):
+workmux add --agent microvm-hermes my-feature
+```
+
+- **Model routing.** Hermes resolves its endpoint as `config.yaml` `base_url` →
+  `CUSTOM_BASE_URL` → `OPENROUTER_BASE_URL` → `openrouter.ai`. The registry
+  therefore sets `OPENROUTER_BASE_URL=http://127.0.0.1:4000/v1` (the guest
+  loopback LiteLLM endpoint) and pins `--model` to
+  `myconfig.ai.hermes.model.default` — the same LiteLLM route the host hermes
+  backends use. No upstream provider credential exists in the guest: the
+  placeholder `OPENAI_API_KEY` is what hermes picks for a non-OpenRouter
+  `base_url`, and it also satisfies hermes' first-run "any provider
+  configured?" guard, so the setup wizard never appears.
+- **State (verified, not guessed).** All hermes state lives under one root,
+  `$HERMES_HOME` (default `~/.hermes`; see `hermes_constants.py`
+  `get_hermes_home()`): `config.yaml`, `.env`, `auth.json`, `state.db`,
+  `sessions/`, `memories/`, `skills/`, `logs/`, `plugins/`, `cron/`,
+  `scripts/`. It is declared in the registry as
+  `persistentState.directories = [ ".hermes" ]` with
+  `enabledByDefault = false`, i.e. **disposable**: the guest home is a tmpfs
+  rebuilt every boot, so a fresh sandbox starts with no memories, skills or
+  sessions and nothing hermes writes escapes the VM (opt-in, task-scoped
+  persistence is ticket 5).
+- **Workmux profile.** workmux has no `hermes` profile, so the pane falls back
+  to workmux's default profile (no prompt injection / resume flags). The pane
+  still launches and status hooks still work.
+
+#### Interactive smoke test
+
+```bash
+sudo agent-microvm run --name hermes-smoke --repository ~/src/my-repo \
+  --agent hermes --attach
+# inside the guest (or: sudo agent-microvm ssh hermes-smoke):
+command -v hermes                  # -> /run/current-system/sw/bin/hermes
+hermes version                     # prints the baked-in hermes version
+env | grep -E 'OPENROUTER|OPENAI'   # endpoint + placeholder key only
+env | grep -Ei 'anthropic_api|token|secret'  # must show no real credential
+ls -a "$HOME"                      # ~/.hermes appears only after first run
+curl -sS http://127.0.0.1:4000/v1/models | head -c 200   # LiteLLM reachable
 ```
 
 ---

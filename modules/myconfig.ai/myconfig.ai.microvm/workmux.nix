@@ -42,6 +42,9 @@
   config,
   lib,
   pkgs,
+  # The ONE authoritative supported-agent registry instance, built in
+  # default.nix (`_module.args.agentRegistry`). See ./agents.nix.
+  agentRegistry,
   ...
 }:
 let
@@ -55,7 +58,6 @@ let
   # resume flags). Never hand-maintain an agent list here — the same registry
   # drives launcher validation and the guest `agent-run` dispatch, so the
   # three can no longer drift.
-  agentRegistry = import ./agents.nix { inherit lib pkgs; };
 
   # The command workmux launches inside the worktree pane for a given agent.
   # It resolves the main repo from the worktree (the same git-common-dir ->

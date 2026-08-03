@@ -14,7 +14,10 @@
 # over convenience.
 #
 # PHASE 0 — this file only *defines the option namespace, assertions and
-# registration*. The feature is disabled by default and, while disabled,
+# registration*. It also instantiates the authoritative supported-agent
+# registry (./agents.nix) EXACTLY ONCE and passes it to the sibling modules as
+# `_module.args.agentRegistry`. The feature is disabled by default and, while
+# disabled,
 # produces no config side effects: it does NOT import the microvm.nix host
 # module, create the bridge/firewall rules, define VM slots, build the guest,
 # or register Workmux agents. Those are implemented in later phases inside
@@ -25,6 +28,7 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 let
@@ -41,11 +45,23 @@ let
 
   # --- authoritative supported-agent registry -----------------------------
   # ./agents.nix is the SINGLE SOURCE OF TRUTH for the supported agents (guest
-  # packages, guest `agent-run` dispatch, launcher validation + help, workmux
-  # registrations). Surface its well-formedness errors as NixOS assertions so
-  # a malformed entry fails loudly here instead of producing a broken guest
+  # packages + guest env, guest `agent-run` dispatch, launcher validation +
+  # help, workmux registrations). Instantiated EXACTLY ONCE here and handed to
+  # the sibling modules through `_module.args.agentRegistry`, so every
+  # consumer sees the same registry with the same context (endpoint, model)
+  # and cannot re-instantiate it with different arguments.
+  #
+  # Its well-formedness errors are surfaced as NixOS assertions below, so a
+  # malformed entry fails loudly here instead of producing a broken guest
   # closure or a launcher that accepts an agent the guest cannot run.
-  agentRegistry = import ./agents.nix { inherit lib pkgs; };
+  agentRegistry = import ./agents.nix {
+    inherit lib pkgs inputs;
+    litellmPort = cfg.litellmPort;
+    # Hermes cannot discover a model on its own; reuse the model name the host
+    # `myconfig.ai.hermes` backends use (a LiteLLM route). Reading the option
+    # (not `cfg`) keeps ONE model definition for host and sandbox alike.
+    hermesModel = config.myconfig.ai.hermes.model.default;
+  };
 
   isAbsolutePath = p: lib.hasPrefix "/" p;
 in
@@ -231,82 +247,93 @@ in
     };
   };
 
-  # Phase 0: the only config the module produces is its assertions, and even
-  # those apply only when the feature is enabled — so importing the module
-  # with the secure defaults (disabled) has no config side effects and never
-  # blocks evaluation. Later phases add the microvm.nix host module, bridge,
+  # Phase 0: the only config the module produces is its assertions plus the
+  # shared `agentRegistry` module argument, and the assertions apply only when
+  # the feature is enabled — so importing the module with the secure defaults
+  # (disabled) has no config side effects, forces no agent package (Nix is
+  # lazy) and never blocks evaluation. Later phases add the microvm.nix host module, bridge,
   # firewall, slot definitions and Workmux registrations under this same
   # `lib.mkIf cfg.enable`.
-  config = lib.mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = cfg.slotCount > 0;
-        message = "myconfig.ai.microvm.slotCount must be > 0.";
-      }
-      {
-        assertion = cfg.slotCount <= slotLib.maxSlotCount;
-        message = "myconfig.ai.microvm.slotCount must be <= ${toString slotLib.maxSlotCount} (deterministic MAC/IPv4 generator bound).";
-      }
-      {
-        assertion = cfg.defaultVcpu > 0;
-        message = "myconfig.ai.microvm.defaultVcpu must be positive.";
-      }
-      {
-        assertion = cfg.defaultMemoryMiB > 0;
-        message = "myconfig.ai.microvm.defaultMemoryMiB must be positive.";
-      }
-      {
-        assertion = isAbsolutePath cfg.workspaceRoot;
-        message = "myconfig.ai.microvm.workspaceRoot must be an absolute path.";
-      }
-      {
-        assertion = isAbsolutePath cfg.runtimeRoot;
-        message = "myconfig.ai.microvm.runtimeRoot must be an absolute path.";
-      }
-      {
-        assertion = isAbsolutePath cfg.stateRoot;
-        message = "myconfig.ai.microvm.stateRoot must be an absolute path.";
-      }
-      {
-        assertion = cfg.bridgeName != "";
-        message = "myconfig.ai.microvm.bridgeName must be non-empty.";
-      }
-      {
-        assertion = cfg.gatewayAddress != "";
-        message = "myconfig.ai.microvm.gatewayAddress must be non-empty.";
-      }
-      {
-        assertion = !cfg.enableSsh || cfg.sshPublicKeyFile != null;
-        message = "myconfig.ai.microvm.enableSsh requires an explicit sshPublicKeyFile.";
-      }
-      {
-        assertion =
-          !(cfg.allowPublicInternet || cfg.allowInterVmTraffic || cfg.allowPrivateNetworks)
-          || cfg.acknowledgeInsecureNetwork;
-        message = ''
-          myconfig.ai.microvm: allowPublicInternet / allowInterVmTraffic /
-          allowPrivateNetworks must remain false for the secure default.
-          To deliberately relax one of them, also set
-          `myconfig.ai.microvm.acknowledgeInsecureNetwork = true`.
-        '';
-      }
-      {
-        assertion = lib.length (lib.unique slotIPs) == lib.length slotIPs;
-        message = "myconfig.ai.microvm: generated slot IPv4 addresses are not unique.";
-      }
-      {
-        assertion = lib.length (lib.unique slotMACs) == lib.length slotMACs;
-        message = "myconfig.ai.microvm: generated slot MAC addresses are not unique.";
-      }
-      {
-        assertion = agentRegistry.names != [ ];
-        message = "myconfig.ai.microvm: the agent registry (agents.nix) must declare at least one agent.";
-      }
-    ]
-    # One assertion per malformed registry entry (empty when well-formed).
-    ++ map (msg: {
-      assertion = false;
-      message = msg;
-    }) agentRegistry.errors;
-  };
+  config = lib.mkMerge [
+    {
+      # Hand the single registry instance to guest.nix / launcher.nix /
+      # workmux.nix. Set unconditionally (outside the `mkIf`) because those
+      # modules take it as a module argument; Nix laziness means a disabled
+      # feature never forces any agent package.
+      _module.args.agentRegistry = agentRegistry;
+    }
+
+    (lib.mkIf cfg.enable {
+      assertions = [
+        {
+          assertion = cfg.slotCount > 0;
+          message = "myconfig.ai.microvm.slotCount must be > 0.";
+        }
+        {
+          assertion = cfg.slotCount <= slotLib.maxSlotCount;
+          message = "myconfig.ai.microvm.slotCount must be <= ${toString slotLib.maxSlotCount} (deterministic MAC/IPv4 generator bound).";
+        }
+        {
+          assertion = cfg.defaultVcpu > 0;
+          message = "myconfig.ai.microvm.defaultVcpu must be positive.";
+        }
+        {
+          assertion = cfg.defaultMemoryMiB > 0;
+          message = "myconfig.ai.microvm.defaultMemoryMiB must be positive.";
+        }
+        {
+          assertion = isAbsolutePath cfg.workspaceRoot;
+          message = "myconfig.ai.microvm.workspaceRoot must be an absolute path.";
+        }
+        {
+          assertion = isAbsolutePath cfg.runtimeRoot;
+          message = "myconfig.ai.microvm.runtimeRoot must be an absolute path.";
+        }
+        {
+          assertion = isAbsolutePath cfg.stateRoot;
+          message = "myconfig.ai.microvm.stateRoot must be an absolute path.";
+        }
+        {
+          assertion = cfg.bridgeName != "";
+          message = "myconfig.ai.microvm.bridgeName must be non-empty.";
+        }
+        {
+          assertion = cfg.gatewayAddress != "";
+          message = "myconfig.ai.microvm.gatewayAddress must be non-empty.";
+        }
+        {
+          assertion = !cfg.enableSsh || cfg.sshPublicKeyFile != null;
+          message = "myconfig.ai.microvm.enableSsh requires an explicit sshPublicKeyFile.";
+        }
+        {
+          assertion =
+            !(cfg.allowPublicInternet || cfg.allowInterVmTraffic || cfg.allowPrivateNetworks)
+            || cfg.acknowledgeInsecureNetwork;
+          message = ''
+            myconfig.ai.microvm: allowPublicInternet / allowInterVmTraffic /
+            allowPrivateNetworks must remain false for the secure default.
+            To deliberately relax one of them, also set
+            `myconfig.ai.microvm.acknowledgeInsecureNetwork = true`.
+          '';
+        }
+        {
+          assertion = lib.length (lib.unique slotIPs) == lib.length slotIPs;
+          message = "myconfig.ai.microvm: generated slot IPv4 addresses are not unique.";
+        }
+        {
+          assertion = lib.length (lib.unique slotMACs) == lib.length slotMACs;
+          message = "myconfig.ai.microvm: generated slot MAC addresses are not unique.";
+        }
+        {
+          assertion = agentRegistry.names != [ ];
+          message = "myconfig.ai.microvm: the agent registry (agents.nix) must declare at least one agent.";
+        }
+      ]
+      # One assertion per malformed registry entry (empty when well-formed).
+      ++ map (msg: {
+        assertion = false;
+        message = msg;
+      }) agentRegistry.errors;
+    })
+  ];
 }

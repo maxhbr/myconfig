@@ -105,15 +105,13 @@ let
   # duplicate-IP/MAC detection against the real generator.
   slotLib = import ../modules/myconfig.ai/myconfig.ai.microvm/slots.nix { inherit lib; };
 
-  # Import the SAME authoritative agent registry the module uses, so the
-  # checks below cannot carry their own (drifting) list of supported agents.
-  # It must be instantiated with the HOST's overlaid pkgs (the registry
-  # references repo overlay attrs such as `nixos-unstable.pi-coding-agent`),
-  # not the bare `inputs.nixpkgs.legacyPackages` used for the marker drvs.
-  agentRegistry = import ../modules/myconfig.ai/myconfig.ai.microvm/agents.nix {
-    inherit lib;
-    pkgs = self.nixosConfigurations.test-f13.pkgs;
-  };
+  # The SAME authoritative agent registry INSTANCE the module uses (built once
+  # in default.nix and handed around via `_module.args.agentRegistry`), so the
+  # checks below cannot carry their own drifting list of supported agents, nor
+  # re-instantiate the registry with different context (endpoint / model).
+  # (`nixosSystem` exposes module args on the TOP-LEVEL attrset, not under
+  # `.config`, which strips `_module`.)
+  agentRegistry = self.nixosConfigurations.test-f13._module.args.agentRegistry;
 
   # Slot counts to exercise. Includes small pools, pools with index >= 10
   # (which exercise 2-hex-digit MAC formatting, e.g. i=10 → ...:1a), and the
@@ -546,6 +544,35 @@ in
           echo "  guest dispatch: $agentRunBin"
           cat "$evalMarker"
         } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (i) AGENT EXECUTABLES (ticket 2): actually BUILD every registry agent   #
+  #     package and prove it ships the declared `executable`. This is the   #
+  #     `command -v <agent>` acceptance criterion turned into a build       #
+  #     check: a registry entry whose package/executable pair is wrong (a   #
+  #     renamed CLI, a wrong package attr) fails HERE instead of inside a   #
+  #     booted guest. The same packages are part of the guest closure the   #
+  #     host toplevel already needs, so this adds no new heavy build.       #
+  # ---------------------------------------------------------------------- #
+  microvm-agent-executables =
+    let
+      registryAgents = lib.attrValues agentRegistry.agents;
+    in
+    pkgs.runCommand "microvm-agent-executables"
+      {
+        # "<name> <store-path> <executable>" per agent.
+        agentTriples = lib.concatMapStringsSep "\n" (
+          a: "${a.name} ${a.package} ${a.executable}"
+        ) registryAgents;
+      }
+      ''
+        printf '%s\n' "$agentTriples" | while read -r name path exe; do
+          [ -n "$name" ] || continue
+          test -x "$path/bin/$exe" \
+            || { echo "agent '$name': $path/bin/$exe is missing or not executable" >&2; exit 1; }
+          echo "agent $name -> $path/bin/$exe"
+        done > "$out"
       '';
 
   # ---------------------------------------------------------------------- #

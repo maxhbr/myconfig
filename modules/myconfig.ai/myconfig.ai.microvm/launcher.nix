@@ -46,17 +46,17 @@
   lib,
   pkgs,
   myconfig,
+  # The ONE authoritative supported-agent registry instance, built in
+  # default.nix (`_module.args.agentRegistry`). `--agent` validation and the
+  # help output below are GENERATED from it, so the host launcher can never
+  # drift from the guest's dispatch table. See ./agents.nix.
+  agentRegistry,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
 
   slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
-
-  # Authoritative supported-agent registry (see ./agents.nix). `--agent`
-  # validation and the help output below are GENERATED from it, so the host
-  # launcher can never drift from the guest's dispatch table.
-  agentRegistry = import ./agents.nix { inherit lib pkgs; };
 
   # Render the deterministic slot table as bash arrays. Using the shared slot
   # helper guarantees the launcher sees exactly the names/IPs/MACs/TAPs that
