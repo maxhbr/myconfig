@@ -316,6 +316,16 @@ in
         ) enabledCfg.security.sudo.extraRules;
         message = "passwordlessControl should grant a scoped NOPASSWD+SETENV sudo rule for agent-microvm";
       }
+      {
+        # The dedicated SSH key is made group-readable by the control group so
+        # non-root `ssh`/`console` work; it is NEVER world-readable.
+        assertion =
+          enabledCfg.myconfig.secrets."dedicated-agent-vm-key".group == "agent-microvm"
+          && enabledCfg.myconfig.secrets."dedicated-agent-vm-key".permissions == "0440";
+        message = "passwordlessControl should make dedicated-agent-vm-key group=agent-microvm 0440 (got group '${
+          enabledCfg.myconfig.secrets."dedicated-agent-vm-key".group
+        }' perms '${enabledCfg.myconfig.secrets."dedicated-agent-vm-key".permissions}')";
+      }
     ];
 
   # ---------------------------------------------------------------------- #
