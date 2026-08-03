@@ -195,6 +195,20 @@ in
         home-manager = {
           useGlobalPkgs = true;
           useUserPackages = true;
+          # Fail-OPEN on collisions instead of aborting the whole activation.
+          # home-manager's `checkNewGenCollision` step aborts the ENTIRE
+          # activation (linking NOTHING) if any single target path already
+          # holds a non-HM file. On this ephemeral guest the `agent` login
+          # shell is fish, which eagerly creates ~/.config/fish/{config.fish,
+          # functions,conf.d,completions} the instant it runs; should any such
+          # file exist before the boot-time `home-manager-agent` activation
+          # links its own copies, the collision would silently leave the guest
+          # home with ONLY fish's runtime dirs and none of the provisioned
+          # coding-agent dotfiles/skills — the exact "sandbox not provisioned"
+          # symptom. Backing the offending file up (rather than aborting) lets
+          # activation proceed and link everything. Backups land on the
+          # throwaway tmpfs home, so they never accumulate across boots.
+          backupFileExtension = "hm-bak";
           users.agent = {
             home.stateVersion = "25.11";
             # Copy the allowlisted, already-rendered file entries verbatim
