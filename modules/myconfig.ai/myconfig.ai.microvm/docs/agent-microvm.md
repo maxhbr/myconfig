@@ -77,7 +77,53 @@ myconfig.ai.microvm = {
 | `guestDotfiles.enable` | `true` | Provision the guest `agent` user with the host primary user's fish + coding-agent dotfiles (home-manager in the guest). |
 | `guestDotfiles.homeFilePrefixes` | `.pi/`, `.codex/`, `.agents/`, `.qwen/`, `.config/git/`, `.gitconfig` | Allowlist of `home.file` keys copied from the host primary user. |
 | `guestDotfiles.xdgConfigPrefixes` | `fish/`, `opencode/` | Allowlist of `xdg.configFile` keys copied from the host primary user. |
-| `allowPublicInternet` / `allowPrivateNetworks` / `allowInterVmTraffic` | `false` | Insecure network relaxations. Enabling any one **also** requires `acknowledgeInsecureNetwork = true`. Keep them **false**. |
+| `networkProfile` | `"proxy-only"` | Named guest network policy: `offline`, `proxy-only`, `package-access`, `internet`. See [Network profiles](#network-profiles). |
+| `packageProxyPort` | `null` | **Required** by `networkProfile = "package-access"`: the explicit host proxy port guests may reach. |
+| `dnsServers` | `[ ]` | Explicit DNS policy for `networkProfile = "internet"` (empty = the host on the bridge). |
+| `acknowledgeInsecureNetwork` | `false` | **Required** by the insecure profiles (`package-access`, `internet`). |
+| `allowPublicInternet` | `false` | **DEPRECATED** → `networkProfile = "internet"`. Translated with a warning when `networkProfile` is unset; rejected as ambiguous when it contradicts an explicit profile. |
+| `allowPrivateNetworks` / `allowInterVmTraffic` | `false` | **REMOVED** — setting either to `true` is rejected by an assertion. See [Network profiles](#network-profiles). |
+
+### Network profiles
+
+`myconfig.ai.microvm.networkProfile` replaces the three ambiguous booleans with
+four named, coherent policies. The authoritative capability table is
+[`network-profiles.nix`](../network-profiles.nix); it is resolved **once** (in
+`default.nix`) and drives both the host firewall (`network.nix`) and the
+guest-side proxy/DNS/forwarder configuration (`guest.nix`), so host policy and
+guest configuration can never disagree.
+
+| Profile | Additionally allowed | Guest-side effect |
+| --- | --- | --- |
+| `offline` | nothing — only host→guest control traffic (ssh/console) and its replies | no loopback LiteLLM forwarder |
+| `proxy-only` **(default)** | `guest → <gatewayAddress>:<litellmPort>` (the model API) | loopback LiteLLM forwarder |
+| `package-access` | additionally `guest → <gatewayAddress>:<packageProxyPort>`, one explicit host proxy port. **No routing, NAT or DNS**, so it is *not* unrestricted internet | `http_proxy`/`https_proxy` point at that proxy |
+| `internet` | routing **plus** NAT/masquerading, DNS restricted to `dnsServers`, rate-limited drop logging | guest resolvers set to `dnsServers` |
+
+In **every** profile:
+
+- guest↔guest traffic is blocked — per-TAP L2 `isolated` *and* the IPv4 inter-VM
+  `FORWARD` DROP. There is no way to relax it (hence the removal of
+  `allowInterVmTraffic`);
+- the cloud-metadata IP `169.254.169.254` is dropped first, in `INPUT` and
+  `FORWARD`;
+- private/special-use IPv4 ranges (host LAN, VPN peers, RFC1918, CGNAT,
+  loopback, link-local, multicast, reserved) are dropped — the only exception is
+  a resolver the operator **explicitly** lists in `dnsServers` (hence the
+  removal of `allowPrivateNetworks`);
+- `INPUT` and `FORWARD` end in a terminal `DROP` (fail closed);
+- host→guest control traffic is allowed (the host is trusted).
+
+`package-access` and `internet` require `acknowledgeInsecureNetwork = true`.
+
+**Migration.** `allowPublicInternet = true` is still honoured: with no explicit
+`networkProfile` it is translated to `internet` and a warning is emitted;
+combined with a *different* explicit profile it is rejected as ambiguous rather
+than silently resolved. Merely *defining* any of the three booleans emits a
+deprecation warning. `allowPrivateNetworks = true` / `allowInterVmTraffic = true`
+are rejected outright — no profile grants those, and silently ignoring them
+would misrepresent the policy. Every case is locked down by
+`microvm-eval-rejects-invalid` and `microvm-network-profiles`.
 
 ### The dedicated SSH key
 
@@ -277,8 +323,9 @@ Each agent's pane command:
      --name <task> --repository <main-repo> --agent <bin>
    ```
 
-No network-relaxation flags are passed, so the guest always runs under the
-secure **proxy-only** profile.
+No network-relaxation flags are passed, so the guest runs under the host's
+configured `networkProfile` — the secure **proxy-only** default unless the host
+deliberately chose otherwise.
 
 > The pane runs `sudo agent-microvm …`; there is currently **no**
 > passwordless-sudoers rule, so the first launch **will prompt for a
@@ -589,9 +636,10 @@ What the module actually enforces (plan §5, §13–§18, §45):
   removes the co-resident-guest MITM risk for the unpinned
   `agent-microvm ssh` / `--attach` sessions. Verify at runtime with
   `bridge link show` (each active guest TAP reports `isolated on`).
-- **Deny-all, proxy-only network.** Default firewall policy on `agentbr0` is
-  deny-all-except-proxy: the only egress a guest gets is
-  `guest -> 192.168.83.1:4000`. Dedicated chains `AGENT_MICROVM_INPUT` /
+- **Deny-all, proxy-only network.** The default `networkProfile = "proxy-only"`
+  firewall policy on `agentbr0` is deny-all-except-proxy: the only egress a
+  guest gets is `guest -> 192.168.83.1:4000` (see
+  [Network profiles](#network-profiles) for the other three). Dedicated chains `AGENT_MICROVM_INPUT` /
   `_FORWARD` / `_OUTPUT` (built on the existing NixOS firewall, no nftables
   migration) block all other host ports, the host LAN, RFC1918 / CGNAT /
   loopback / link-local / multicast / reserved ranges, inter-VM (TAP-to-TAP)

@@ -56,6 +56,12 @@
   # The ONE definition of the per-slot SSH host-key paths (host + guest side),
   # from hostkeys.nix (`_module.args.agentHostKeys`).
   agentHostKeys,
+  # The ONE resolved network decision (profile + capabilities + DNS policy),
+  # from default.nix (`_module.args.agentNetwork`). The guest-side proxy / DNS /
+  # forwarder configuration below is derived from the SAME decision the host
+  # firewall is rendered from, so guest and host can never disagree about what
+  # the guest is allowed to reach.
+  agentNetwork,
   ...
 }:
 let
@@ -65,6 +71,8 @@ let
   # slots.nix and is shared with default.nix (which asserts uniqueness and
   # the slot-count bound over this exact table).
   slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
+
+  netCaps = agentNetwork.caps;
 
   # Prefix length of the private subnet (e.g. "192.168.83.0/24" -> 24), used
   # for the guest-side static address. Derived from the SAME option the host
@@ -337,7 +345,25 @@ let
     # Per-agent endpoint plumbing from the authoritative registry. Endpoint
     # URLs / placeholder keys ONLY — the real upstream credential never
     # leaves the host LiteLLM proxy (§17).
-    // agentRegistry.guestEnvironment;
+    // agentRegistry.guestEnvironment
+    # --- networkProfile = "package-access" (ticket 3 C) ------------------
+    # The ONLY egress this profile grants besides LiteLLM is one explicit host
+    # proxy port, so point the guest's proxy variables at it. Without this the
+    # guest would try direct connections that the firewall drops. Loopback is
+    # excluded so the in-guest LiteLLM forwarder is not proxied.
+    // lib.optionalAttrs netCaps.packageProxy (
+      let
+        proxyUrl = "http://${cfg.gatewayAddress}:${toString cfg.packageProxyPort}";
+      in
+      {
+        http_proxy = proxyUrl;
+        https_proxy = proxyUrl;
+        HTTP_PROXY = proxyUrl;
+        HTTPS_PROXY = proxyUrl;
+        no_proxy = "127.0.0.1,localhost";
+        NO_PROXY = "127.0.0.1,localhost";
+      }
+    );
 
     # --- guest-side loopback → bridge LiteLLM forwarder ------------------
     # Reverse of the host's bridge-only forwarder (network.nix): a
@@ -349,7 +375,9 @@ let
     # reach the host LiteLLM proxy over the private bridge, so pi / opencode /
     # codex all "rely on" the host forwarder without per-agent config
     # rewrites. Pure byte-shuffler: no filesystem, home or privileges needed.
-    systemd.sockets.litellm-forwarder = {
+    # Only exists when the profile actually allows the model API: under
+    # `offline` there is nothing to forward to, so no listener is created.
+    systemd.sockets.litellm-forwarder = lib.mkIf netCaps.litellm {
       description = "Loopback LiteLLM endpoint for host-provisioned agent configs";
       wantedBy = [ "sockets.target" ];
       socketConfig = {
@@ -357,7 +385,7 @@ let
         Accept = false;
       };
     };
-    systemd.services.litellm-forwarder = {
+    systemd.services.litellm-forwarder = lib.mkIf netCaps.litellm {
       description = "Forward 127.0.0.1:${toString cfg.litellmPort} to the host bridge LiteLLM proxy";
       requires = [ "litellm-forwarder.socket" ];
       wants = [ "network-online.target" ];
@@ -383,6 +411,12 @@ let
     # Unconditional (NOT gated on enableSsh): the guest needs its address
     # and default route to reach the LiteLLM forwarder regardless of SSH
     # (§17/§31 — model-API access is independent of SSH).
+    # --- explicit DNS policy (`internet` profile only) -------------------
+    # The firewall allows port 53 ONLY towards these servers, so configure the
+    # guest to use exactly them. In every other profile the guest gets no
+    # resolver at all (and port 53 is dropped), which is intentional.
+    networking.nameservers = lib.mkIf netCaps.dns agentNetwork.dnsServers;
+
     systemd.network = {
       enable = true;
       networks."10-agent" = {

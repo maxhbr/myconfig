@@ -8,7 +8,7 @@ commit as the work it describes.
 |---|--------|--------|--------|
 | 1 | `01-agent-registry-refactor.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
 | 2 | `02-add-hermes-support.md` | DONE | see `git log --oneline -- modules/myconfig.ai/myconfig.ai.microvm/agents.nix` |
-| 3 | `03-network-and-control-channel-hardening.md` | IN PROGRESS (A, B done) | — |
+| 3 | `03-network-and-control-channel-hardening.md` | DONE | A, B, C (3 commits) |
 | 4 | `04-batch-execution-and-lifecycle.md` | TODO | — |
 | 5 | `05-resource-classes-and-state-management.md` | TODO | — |
 | 6 | `06-runtime-validation-and-documentation.md` | TODO | — |
@@ -92,3 +92,30 @@ C: network profiles).
     `microvm.vsock.cid`: that flips `microvm@<slot>` to `Type=notify` (socat
     ↔ vsock notify bridge), a startup change only verifiable by booting on
     KVM — so it is activated together with the ticket-4 control channel.
+- **Part C (done).** Network booleans replaced by named profiles:
+  - new `network-profiles.nix` is the authoritative capability table
+    (`litellm` / `packageProxy` / `dns` / `internetEgress` / `nat` /
+    `logDrops`) for `offline` / `proxy-only` / `package-access` / `internet`.
+  - resolved ONCE in `default.nix` → `_module.args.agentNetwork`, consumed by
+    `network.nix` (firewall + NAT chain) and `guest.nix` (loopback LiteLLM
+    forwarder gating, `http_proxy` for package-access, resolvers for
+    internet), so host policy and guest config cannot disagree.
+  - `internet` is real egress: dedicated `AGENT_MICROVM_NAT` POSTROUTING chain
+    with MASQUERADE (symmetric teardown), DNS restricted to `dnsServers` with
+    every other port-53 destination dropped, rate-limited drop logging.
+    `ip_forward` is already 1 repo-wide (`modules/nixos.networking`).
+  - unconditional in every profile: metadata drop, guest↔guest drop,
+    private-range drop, terminal DROPs, host→guest control traffic.
+  - migration: `allowPublicInternet = true` translates to `internet` (with a
+    warning) only when `networkProfile` is not explicitly defined, otherwise it
+    is rejected as ambiguous; `allowPrivateNetworks` / `allowInterVmTraffic`
+    are rejected outright (no profile grants them; L2 isolation is
+    unconditional). Any *defined* legacy boolean warns.
+  - NOTE for future work: "was this option explicitly set?" must use
+    `opt.highestPrio < 1500`, NOT `opt.isDefined` — current nixpkgs implements
+    `mkOption { default = …; }` as a priority-1500 definition, so `isDefined`
+    is true for every option with a default.
+  - `hosts/host.f13/ai.f13.nix` migrated to `networkProfile = "proxy-only"`.
+  - new check `microvm-network-profiles` (43 assertions) renders all four
+    profiles and asserts both what each allows and what it must NOT allow;
+    `microvm-eval-rejects-invalid` grew the migration/ambiguity cases.

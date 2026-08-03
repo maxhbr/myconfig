@@ -24,18 +24,20 @@
         # Explicitly enabled here — NOT via the broad `myconfig.ai.enable`
         # — because it is a much stronger (and more resource-heavy) isolation
         # tier that must never switch on implicitly with the other AI tools.
-        # All insecure network relaxations stay false, so the secure
-        # proxy-only default applies and no `acknowledgeInsecureNetwork` is
-        # needed.
+        # The secure `proxy-only` network profile applies, so no
+        # `acknowledgeInsecureNetwork` opt-in is needed.
         microvm = {
           enable = true;
           # Reduced to a single slot for testing.
           slotCount = 1;
           defaultVcpu = 4;
           defaultMemoryMiB = 8192;
-          allowPublicInternet = false;
-          allowPrivateNetworks = false;
-          allowInterVmTraffic = false;
+          # Named network profile (the secure default): the guest's only egress
+          # is the bridge-only host LiteLLM endpoint. Guest-to-guest traffic,
+          # the host LAN/VPN, cloud metadata and the public internet are all
+          # blocked. Replaces the old allowPublicInternet /
+          # allowPrivateNetworks / allowInterVmTraffic booleans.
+          networkProfile = "proxy-only";
           # Operator convenience on this interactive laptop: mhuber (already a
           # full sudoer) drives `agent-microvm` / the workmux microvm-* panes
           # without a password prompt. Does not affect guest isolation — the

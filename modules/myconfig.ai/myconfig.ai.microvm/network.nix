@@ -19,6 +19,14 @@
 #        / link-local / multicast / reserved ranges, the cloud-metadata IP,
 #        inter-VM (TAP-to-TAP) traffic and the general internet.
 #
+#        Since improvement ticket 3 C the policy is selected by the NAMED
+#        profile `myconfig.ai.microvm.networkProfile`
+#        (offline / proxy-only / package-access / internet) rather than by
+#        three independent booleans. The capability table lives in
+#        ./network-profiles.nix and is resolved ONCE in default.nix
+#        (`_module.args.agentNetwork`), so this firewall and the guest-side
+#        proxy/DNS configuration in guest.nix always agree.
+#
 #   §14  Implemented with the EXISTING NixOS firewall (no nftables/iptables
 #        backend migration, §46). Dedicated chains AGENT_MICROVM_INPUT /
 #        _FORWARD / _OUTPUT are created idempotently in
@@ -36,13 +44,21 @@
 #        loopback-only LiteLLM proxy on 127.0.0.1:<litellmPort>. The main
 #        LiteLLM proxy stays loopback-only and is NOT touched here.
 #
-# The insecure-relaxation flags (allowInterVmTraffic / allowPrivateNetworks /
-# allowPublicInternet) gate the corresponding *allow* rules; all three
-# default to false, so the default policy is deny-all-except-proxy.
+# Invariants that hold in EVERY profile (not configurable):
+#   * cloud-metadata 169.254.169.254 dropped first, in INPUT and FORWARD;
+#   * guest<->guest dropped (this chain's inter-VM rule, plus the per-TAP L2
+#     `isolated` flag from ticket 3 A, which is the real enforcement);
+#   * private / special-use IPv4 ranges dropped (host LAN, VPN peers, RFC1918,
+#     CGNAT, loopback, link-local, multicast, reserved) — the only exception is
+#     a resolver the operator EXPLICITLY listed in `dnsServers`;
+#   * terminal DROP at the end of INPUT and FORWARD (fail closed).
 {
   config,
   lib,
   pkgs,
+  # The ONE resolved network decision (profile + capability flags + effective
+  # DNS servers), from default.nix (`_module.args.agentNetwork`).
+  agentNetwork,
   ...
 }:
 let
@@ -77,86 +93,177 @@ let
     "240.0.0.0/4"
   ];
 
-  # Verdicts driven by the insecure-relaxation flags. Default (all false) →
-  # deny-all-except-proxy.
-  interVmVerdict = if cfg.allowInterVmTraffic then "ACCEPT" else "DROP";
-  privateVerdict = if cfg.allowPrivateNetworks then "ACCEPT" else "DROP";
-  internetVerdict = if cfg.allowPublicInternet then "ACCEPT" else "DROP";
+  # --- profile-derived capabilities (ticket 3 C) --------------------------
+  caps = agentNetwork.caps;
+  profile = agentNetwork.profile;
 
-  privateRuleLines = lib.concatMapStringsSep "\n" (
-    range: "    iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -d ${range} -j ${privateVerdict}"
+  # DNS servers the guests may use under the `internet` profile, split by
+  # whether they are the host itself on the bridge (INPUT) or off-host and
+  # therefore routed (FORWARD).
+  dnsServers = lib.optionals caps.dns agentNetwork.dnsServers;
+  hostDnsServers = lib.filter (a: a == gateway) dnsServers;
+  routedDnsServers = lib.filter (a: a != gateway) dnsServers;
+
+  # Replies to routed guest traffic need conntrack ACCEPTs in FORWARD; in the
+  # profiles that route NOTHING we deliberately do not even allow those, so the
+  # chain is a pure DROP for forwarded packets.
+  forwardConntrack = caps.internetEgress || routedDnsServers != [ ];
+
+  indent = lines: lib.concatMapStringsSep "\n" (l: "    ${l}") lines;
+
+  # Host-local ports a guest may reach on the bridge address, per profile.
+  inputAllowLines =
+    lib.optional caps.litellm "iptables -A AGENT_MICROVM_INPUT -s ${subnet} -d ${gateway} -p tcp --dport ${port} -j ACCEPT"
+    ++ lib.optional caps.packageProxy "iptables -A AGENT_MICROVM_INPUT -s ${subnet} -d ${gateway} -p tcp --dport ${packageProxyPort} -j ACCEPT"
+    ++ lib.concatMap (addr: [
+      "iptables -A AGENT_MICROVM_INPUT -s ${subnet} -d ${addr} -p udp --dport 53 -j ACCEPT"
+      "iptables -A AGENT_MICROVM_INPUT -s ${subnet} -d ${addr} -p tcp --dport 53 -j ACCEPT"
+    ]) hostDnsServers;
+
+  # Explicit DNS policy (`internet` profile): ONLY the configured resolvers,
+  # and only on port 53. Placed before the private-range drops because an
+  # operator may legitimately point at a resolver inside a private range — an
+  # explicit allow, never a blanket one.
+  dnsForwardLines = lib.concatMap (addr: [
+    "iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -d ${addr} -p udp --dport 53 -j ACCEPT"
+    "iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -d ${addr} -p tcp --dport 53 -j ACCEPT"
+  ]) routedDnsServers;
+
+  # Everything else on port 53 is dropped, so a guest cannot pick its own
+  # resolver / DNS tunnel even when general egress is allowed.
+  dnsDenyLines = lib.optionals caps.internetEgress [
+    "iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -p udp --dport 53 -j DROP"
+    "iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -p tcp --dport 53 -j DROP"
+  ];
+
+  privateRuleLines = map (
+    range: "iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -d ${range} -j DROP"
   ) privateRanges;
 
+  internetLines = lib.optional caps.internetEgress "iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -j ACCEPT";
+
+  # Auditable egress: rate-limited log of what the terminal DROP below kills.
+  logLines = lib.optional caps.logDrops (
+    "iptables -A AGENT_MICROVM_FORWARD -m limit --limit 5/min --limit-burst 10"
+    + " -j LOG --log-prefix \"agent-microvm-drop: \" --log-level info"
+  );
+
+  packageProxyPort = toString (if cfg.packageProxyPort == null then 0 else cfg.packageProxyPort);
+
+  # --- NAT (only the `internet` profile) ---------------------------------
+  # Masquerade the guest subnet so `internetEgress` is FUNCTIONAL egress and
+  # not just a firewall verdict. Deliberately not `networking.nat` (which needs
+  # an externalInterface and would fight the host's own NAT config): a
+  # dedicated chain hooked from POSTROUTING, torn down again symmetrically.
+  natSetup = lib.optionalString caps.nat ''
+    iptables -t nat -N AGENT_MICROVM_NAT 2>/dev/null || iptables -t nat -F AGENT_MICROVM_NAT
+    iptables -t nat -C POSTROUTING -s ${subnet} -j AGENT_MICROVM_NAT 2>/dev/null \
+      || iptables -t nat -I POSTROUTING 1 -s ${subnet} -j AGENT_MICROVM_NAT
+    # Only leaving the bridge subnet is masqueraded; guest<->guest is
+    # dropped in FORWARD (and at L2) long before it could be NATed.
+    iptables -t nat -A AGENT_MICROVM_NAT -s ${subnet} ! -d ${subnet} -j MASQUERADE
+  '';
+
+  natTeardown = lib.optionalString caps.nat ''
+    iptables -t nat -D POSTROUTING -s ${subnet} -j AGENT_MICROVM_NAT 2>/dev/null || true
+    iptables -t nat -F AGENT_MICROVM_NAT 2>/dev/null || true
+    iptables -t nat -X AGENT_MICROVM_NAT 2>/dev/null || true
+  '';
+
   # --- firewall setup (runs after NixOS' own rules) -----------------------
+  # Rendered from the effective network PROFILE (see ./network-profiles.nix):
+  # the invariants below are unconditional, and only the marked ACCEPT blocks
+  # are profile-dependent. Effective profile: ${profile}.
   firewallExtraCommands = ''
-        # ==== myconfig.ai.microvm: dedicated agent-sandbox chains ============
-        # Idempotently (re)create the chains: on a fresh run -N succeeds; on a
-        # reload where extraStopCommands did not run, -F clears stale rules.
-        iptables -N AGENT_MICROVM_INPUT 2>/dev/null || iptables -F AGENT_MICROVM_INPUT
-        iptables -N AGENT_MICROVM_FORWARD 2>/dev/null || iptables -F AGENT_MICROVM_FORWARD
-        iptables -N AGENT_MICROVM_OUTPUT 2>/dev/null || iptables -F AGENT_MICROVM_OUTPUT
+            # ==== myconfig.ai.microvm: dedicated agent-sandbox chains ============
+            # network profile: ${profile}
+            # Idempotently (re)create the chains: on a fresh run -N succeeds; on a
+            # reload where extraStopCommands did not run, -F clears stale rules.
+            iptables -N AGENT_MICROVM_INPUT 2>/dev/null || iptables -F AGENT_MICROVM_INPUT
+            iptables -N AGENT_MICROVM_FORWARD 2>/dev/null || iptables -F AGENT_MICROVM_FORWARD
+            iptables -N AGENT_MICROVM_OUTPUT 2>/dev/null || iptables -F AGENT_MICROVM_OUTPUT
 
-        # Hook the dedicated chains from the built-ins, scoped to the bridge so
-        # no other traffic is touched. -C guards make the -I inserts idempotent.
-        iptables -C INPUT -i ${bridge} -j AGENT_MICROVM_INPUT 2>/dev/null \
-          || iptables -I INPUT 1 -i ${bridge} -j AGENT_MICROVM_INPUT
-        iptables -C FORWARD -i ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null \
-          || iptables -I FORWARD 1 -i ${bridge} -j AGENT_MICROVM_FORWARD
-        iptables -C FORWARD -o ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null \
-          || iptables -I FORWARD 1 -o ${bridge} -j AGENT_MICROVM_FORWARD
-        iptables -C OUTPUT -o ${bridge} -j AGENT_MICROVM_OUTPUT 2>/dev/null \
-          || iptables -I OUTPUT 1 -o ${bridge} -j AGENT_MICROVM_OUTPUT
+            # Hook the dedicated chains from the built-ins, scoped to the bridge so
+            # no other traffic is touched. -C guards make the -I inserts idempotent.
+            iptables -C INPUT -i ${bridge} -j AGENT_MICROVM_INPUT 2>/dev/null \
+              || iptables -I INPUT 1 -i ${bridge} -j AGENT_MICROVM_INPUT
+            iptables -C FORWARD -i ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null \
+              || iptables -I FORWARD 1 -i ${bridge} -j AGENT_MICROVM_FORWARD
+            iptables -C FORWARD -o ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null \
+              || iptables -I FORWARD 1 -o ${bridge} -j AGENT_MICROVM_FORWARD
+            iptables -C OUTPUT -o ${bridge} -j AGENT_MICROVM_OUTPUT 2>/dev/null \
+              || iptables -I OUTPUT 1 -o ${bridge} -j AGENT_MICROVM_OUTPUT
+    ${natSetup}
+            # --- INPUT: guest -> host -------------------------------------------
+            # Unconditional cloud-metadata block FIRST, so no later ACCEPT (incl.
+            # ESTABLISHED) or future relaxation can ever shadow it (defence in
+            # depth; also covered by the 169.254/16 FORWARD rule).
+            iptables -A AGENT_MICROVM_INPUT -d 169.254.169.254 -j DROP
+            # Replies to HOST-initiated control traffic (ssh / console). Required in
+            # every profile, including `offline`, since the host manages the VM.
+            iptables -A AGENT_MICROVM_INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+            # Profile-dependent host-local ACCEPTs: the bridge-only LiteLLM endpoint
+            # (all profiles except `offline`), the explicit package proxy
+            # (`package-access`) and the configured host resolver (`internet`).
+            # `offline` adds NOTHING here.
+    ${indent inputAllowLines}
+            # Deny every other host port / service reachable via the bridge.
+            iptables -A AGENT_MICROVM_INPUT -j DROP
 
-        # --- INPUT: guest -> host -------------------------------------------
-        # Unconditional cloud-metadata block FIRST, so no later ACCEPT (incl.
-        # ESTABLISHED) or future relaxation can ever shadow it (defence in
-        # depth; also covered by the 169.254/16 FORWARD rule).
-        iptables -A AGENT_MICROVM_INPUT -d 169.254.169.254 -j DROP
-        iptables -A AGENT_MICROVM_INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-        # Proxy-only exception (§13/§31): guests may reach ONLY the bridge-local
-        # LiteLLM forwarder on <gateway>:<litellmPort>.
-        iptables -A AGENT_MICROVM_INPUT -s ${subnet} -d ${gateway} -p tcp --dport ${port} -j ACCEPT
-        # Deny every other host port / service reachable via the bridge.
-        iptables -A AGENT_MICROVM_INPUT -j DROP
+            # --- FORWARD: guest -> {other guests, host LAN, internet} -----------
+            # Cloud-metadata IP is ALWAYS blocked FIRST, in every profile, so no
+            # later ACCEPT can shadow it.
+            iptables -A AGENT_MICROVM_FORWARD -d 169.254.169.254 -j DROP
+    ${indent (
+      lib.optional forwardConntrack "iptables -A AGENT_MICROVM_FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT"
+    )}
+            # No TAP-to-TAP / guest-to-guest forwarding, in ANY profile. Placed
+            # before the 192.168/16 rule below, which would otherwise subsume the
+            # bridge subnet.
+            #
+            # NOTE: same-bridge L2 (guest<->guest) frames only reach iptables
+            # FORWARD when net.bridge.bridge-nf-call-iptables=1 (needs br_netfilter);
+            # both are enabled in the config section below so this rule actually
+            # fires once TAPs are attached to the bridge. This IPv4 rule is the
+            # second line of defence only: every guest TAP is additionally marked
+            # `isolated` at attach time (see tapAttachServices), which blocks
+            # guest<->guest frames in the bridge itself — including ARP, IPv6 ND
+            # and every other EtherType that iptables cannot see.
+            iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -d ${subnet} -j DROP
+            # Explicit DNS policy (`internet` profile only): exactly the configured
+            # resolvers, port 53 only. An operator-listed resolver inside a private
+            # range is allowed HERE on purpose — an explicit allow, not a blanket
+            # one — hence before the private-range drops.
+    ${indent dnsForwardLines}
+            # Private / special-use ranges (host LAN, VPN peers, RFC1918, CGNAT,
+            # loopback, link-local, multicast, reserved) are dropped in EVERY
+            # profile: no profile grants access to the host LAN or VPN peers.
+    ${indent privateRuleLines}
+            # Any other port-53 destination is dropped even under `internet`, so a
+            # guest cannot choose its own resolver or tunnel over DNS.
+    ${indent dnsDenyLines}
+            # General internet: only the `internet` profile adds this ACCEPT, and
+            # only together with the NAT rule above, so egress actually works
+            # instead of being a firewall verdict that black-holes.
+    ${indent internetLines}
+            # Rate-limited audit log of what the terminal DROP below kills
+            # (`internet` profile).
+    ${indent logLines}
+            # Unconditional terminal DROP (fail CLOSED). The built-in FORWARD policy
+            # is ACCEPT (networking.firewall.filterForward defaults false) and the
+            # host has net.ipv4.ip_forward=1, so anything falling out the bottom of
+            # this chain would otherwise be routed out the WAN. Every ACCEPT above is
+            # scoped to -s ${subnet}; this catch-all denies packets that match none
+            # of them — a guest spoofing a non-subnet source IP, the -o ${bridge}
+            # (LAN -> guest) direction, and any unexpected protocol — mirroring
+            # AGENT_MICROVM_INPUT's terminal DROP.
+            iptables -A AGENT_MICROVM_FORWARD -j DROP
 
-        # --- FORWARD: guest -> {other guests, host LAN, internet} -----------
-        # Cloud-metadata IP is ALWAYS blocked FIRST, regardless of relaxation
-        # flags, so no later ACCEPT can shadow it.
-        iptables -A AGENT_MICROVM_FORWARD -d 169.254.169.254 -j DROP
-        iptables -A AGENT_MICROVM_FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
-        # No TAP-to-TAP / guest-to-guest forwarding unless explicitly relaxed
-        # (allowInterVmTraffic). Placed before the 192.168/16 rule below, which
-        # would otherwise subsume the bridge subnet.
-        #
-        # NOTE: same-bridge L2 (guest<->guest) frames only reach iptables
-        # FORWARD when net.bridge.bridge-nf-call-iptables=1 (needs br_netfilter);
-        # both are enabled in the config section below so this rule actually
-        # fires once TAPs are attached to the bridge. This IPv4 rule is now the
-        # second line of defence only: every guest TAP is additionally marked
-        # `isolated` at attach time (see tapAttachServices), which blocks
-        # guest<->guest frames in the bridge itself — including ARP, IPv6 ND
-        # and every other EtherType that iptables cannot see.
-        iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -d ${subnet} -j ${interVmVerdict}
-        # Private / special-use ranges (host LAN, VPN peers, RFC1918, CGNAT,
-        # loopback, link-local, multicast, reserved) unless allowPrivateNetworks.
-    ${privateRuleLines}
-        # General internet unless allowPublicInternet. Permits legitimate egress
-        # from the bridge subnet only when allowPublicInternet=true.
-        iptables -A AGENT_MICROVM_FORWARD -s ${subnet} -j ${internetVerdict}
-        # Unconditional terminal DROP (fail CLOSED). The built-in FORWARD policy
-        # is ACCEPT (networking.firewall.filterForward defaults false) and the
-        # host has net.ipv4.ip_forward=1, so anything falling out the bottom of
-        # this chain would otherwise be routed out the WAN. Every rule above is
-        # scoped to -s ${subnet}; this catch-all denies packets that match none
-        # of them — a guest spoofing a non-subnet source IP, the -o ${bridge}
-        # (LAN -> guest) direction, and any unexpected protocol — mirroring
-        # AGENT_MICROVM_INPUT's terminal DROP.
-        iptables -A AGENT_MICROVM_FORWARD -j DROP
-
-        # --- OUTPUT: host -> guest ------------------------------------------
-        # The host is trusted; permit host-originated traffic to guests over the
-        # bridge (SSH/console management in later phases).
-        iptables -A AGENT_MICROVM_OUTPUT -j ACCEPT
+            # --- OUTPUT: host -> guest ------------------------------------------
+            # The host is trusted; permit host-originated traffic to guests over the
+            # bridge (ssh / console management). Unchanged by the profile: this is
+            # the control channel, not guest egress.
+            iptables -A AGENT_MICROVM_OUTPUT -j ACCEPT
   '';
 
   # --- §12 attach each per-slot TAP to the bridge -------------------------
@@ -222,17 +329,18 @@ let
 
   # --- firewall teardown (must mirror the setup above) --------------------
   firewallExtraStopCommands = ''
-    # ==== myconfig.ai.microvm: remove dedicated agent-sandbox chains =====
-    iptables -D INPUT -i ${bridge} -j AGENT_MICROVM_INPUT 2>/dev/null || true
-    iptables -D FORWARD -i ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null || true
-    iptables -D FORWARD -o ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null || true
-    iptables -D OUTPUT -o ${bridge} -j AGENT_MICROVM_OUTPUT 2>/dev/null || true
-    iptables -F AGENT_MICROVM_INPUT 2>/dev/null || true
-    iptables -F AGENT_MICROVM_FORWARD 2>/dev/null || true
-    iptables -F AGENT_MICROVM_OUTPUT 2>/dev/null || true
-    iptables -X AGENT_MICROVM_INPUT 2>/dev/null || true
-    iptables -X AGENT_MICROVM_FORWARD 2>/dev/null || true
-    iptables -X AGENT_MICROVM_OUTPUT 2>/dev/null || true
+        # ==== myconfig.ai.microvm: remove dedicated agent-sandbox chains =====
+        iptables -D INPUT -i ${bridge} -j AGENT_MICROVM_INPUT 2>/dev/null || true
+        iptables -D FORWARD -i ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null || true
+        iptables -D FORWARD -o ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null || true
+        iptables -D OUTPUT -o ${bridge} -j AGENT_MICROVM_OUTPUT 2>/dev/null || true
+        iptables -F AGENT_MICROVM_INPUT 2>/dev/null || true
+        iptables -F AGENT_MICROVM_FORWARD 2>/dev/null || true
+        iptables -F AGENT_MICROVM_OUTPUT 2>/dev/null || true
+        iptables -X AGENT_MICROVM_INPUT 2>/dev/null || true
+        iptables -X AGENT_MICROVM_FORWARD 2>/dev/null || true
+        iptables -X AGENT_MICROVM_OUTPUT 2>/dev/null || true
+    ${natTeardown}
   '';
 in
 {

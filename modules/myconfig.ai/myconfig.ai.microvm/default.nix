@@ -26,6 +26,10 @@
 # option/assertion requirements.
 {
   config,
+  # `options` is used to detect whether a DEPRECATED legacy network boolean was
+  # explicitly defined by a host, so the migration can warn / translate / reject
+  # instead of silently ignoring it (ticket 3 C).
+  options,
   lib,
   pkgs,
   inputs,
@@ -62,6 +66,52 @@ let
     # `myconfig.ai.hermes` backends use (a LiteLLM route). Reading the option
     # (not `cfg`) keeps ONE model definition for host and sandbox alike.
     hermesModel = config.myconfig.ai.hermes.model.default;
+  };
+
+  # --- ticket 3 C: network profiles + legacy-boolean migration ------------
+  # `network-profiles.nix` is the authoritative capability table; the effective
+  # profile is resolved HERE (the only place that can see whether a host
+  # explicitly defined an option) and handed to network.nix / guest.nix through
+  # `_module.args.agentNetwork`, so host firewall policy and guest-side proxy /
+  # DNS configuration are derived from ONE decision.
+  profileLib = import ./network-profiles.nix { inherit lib; };
+
+  legacyOpts = {
+    allowPublicInternet = options.myconfig.ai.microvm.allowPublicInternet;
+    allowInterVmTraffic = options.myconfig.ai.microvm.allowInterVmTraffic;
+    allowPrivateNetworks = options.myconfig.ai.microvm.allowPrivateNetworks;
+  };
+  # "Explicitly defined" means a definition with a HIGHER priority than the
+  # option default. `isDefined` cannot be used: nixpkgs implements
+  # `mkOption { default = ...; }` as a low-priority (1500) definition, so every
+  # option with a default is always "defined". `lib.mkOptionDefault`'s priority
+  # (1500) is exactly that boundary — `mkDefault` (1000) and a plain
+  # host-level definition (100) both rank above it (lower number == stronger).
+  optionDefaultPriority = 1500;
+  isExplicit = opt: opt.highestPrio < optionDefaultPriority;
+  definedLegacyOpts = lib.attrNames (lib.filterAttrs (_: isExplicit) legacyOpts);
+  profileExplicit = isExplicit options.myconfig.ai.microvm.networkProfile;
+
+  # Translate the ONE legacy boolean that has an exact profile equivalent.
+  # `allowPrivateNetworks` / `allowInterVmTraffic` have none and are rejected
+  # by the assertions below (never silently downgraded to something laxer OR
+  # silently ignored).
+  legacyWantsInternet = cfg.allowPublicInternet;
+  legacyAmbiguous = legacyWantsInternet && profileExplicit && cfg.networkProfile != "internet";
+  effectiveProfile =
+    if profileExplicit then
+      cfg.networkProfile
+    else if legacyWantsInternet then
+      "internet"
+    else
+      cfg.networkProfile;
+
+  agentNetwork = {
+    profile = effectiveProfile;
+    caps = profileLib.forProfile effectiveProfile;
+    # Effective DNS policy for the `internet` profile: an empty `dnsServers`
+    # means "the host itself on the bridge".
+    dnsServers = if cfg.dnsServers == [ ] then [ cfg.gatewayAddress ] else cfg.dnsServers;
   };
 
   isAbsolutePath = p: lib.hasPrefix "/" p;
@@ -161,13 +211,81 @@ in
       '';
     };
 
+    networkProfile = mkOption {
+      type = types.enum profileLib.names;
+      default = "proxy-only";
+      description = ''
+        Named, coherent guest network policy. Replaces the ambiguous
+        allowPublicInternet / allowPrivateNetworks / allowInterVmTraffic
+        booleans (which are deprecated, see their descriptions).
+
+        - `offline`        only the control traffic required to manage the VM
+                          (host -> guest SSH/console). No model API, no DNS,
+                          no package proxy, no routing.
+        - `proxy-only`     THE SECURE DEFAULT: additionally the bridge-only
+                          LiteLLM endpoint <gatewayAddress>:<litellmPort>, and
+                          nothing else.
+        - `package-access` additionally ONE explicit host package-proxy port
+                          (`packageProxyPort`), with http_proxy/https_proxy
+                          pointed at it. Still no routing, NAT or DNS, so it
+                          is NOT unrestricted internet.
+        - `internet`       full functional egress: routing, NAT/masquerading,
+                          an explicit DNS policy (`dnsServers`) and
+                          rate-limited drop logging. INSECURE.
+
+        In EVERY profile: guest-to-guest traffic is blocked (per-TAP L2
+        `isolated` + IPv4 FORWARD DROP), and the cloud-metadata IP plus all
+        private/special-use IPv4 ranges (host LAN, VPN peers, RFC1918, CGNAT,
+        loopback, link-local, multicast, reserved) are dropped.
+
+        `package-access` and `internet` require
+        `acknowledgeInsecureNetwork = true`.
+
+        See ./network-profiles.nix for the authoritative capability table.
+      '';
+    };
+
+    packageProxyPort = mkOption {
+      type = types.nullOr types.port;
+      default = null;
+      description = ''
+        TCP port of an EXPLICIT host-side package proxy (e.g. a caching HTTP
+        proxy) reachable by guests at <gatewayAddress>:<packageProxyPort>.
+        Required by — and only used by — `networkProfile = "package-access"`.
+        This module does not start the proxy; it only opens that single port
+        for the guest subnet and points the guest's http_proxy/https_proxy at
+        it. Deliberately a single host-controlled port rather than general
+        egress.
+      '';
+    };
+
+    dnsServers = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = ''
+        Explicit DNS policy for `networkProfile = "internet"`: the ONLY
+        resolvers a guest may reach (port 53, udp+tcp). Every other port-53
+        destination stays blocked, so a guest cannot use an arbitrary public
+        resolver or a DNS tunnel of its choosing. The guests are also
+        configured to use exactly these servers.
+
+        Empty means "the host itself on the bridge" (<gatewayAddress>), which
+        requires a resolver listening on the agent bridge. Unused by the other
+        profiles (which allow no DNS at all).
+      '';
+    };
+
     allowPublicInternet = mkOption {
       type = types.bool;
       default = false;
       description = ''
-        Allow agent guests to reach the public internet. INSECURE — must
-        remain false for the secure default. Enabling it requires
-        `acknowledgeInsecureNetwork = true`.
+        DEPRECATED (ticket 3 C) — use `networkProfile = "internet"`.
+
+        Still honoured for migration: when set to true and `networkProfile` is
+        not explicitly set, the effective profile becomes `internet` and a
+        warning is emitted. Setting it together with a DIFFERENT explicit
+        `networkProfile` is rejected as ambiguous rather than silently
+        resolved.
       '';
     };
 
@@ -175,9 +293,11 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Allow traffic between agent microVMs (guest-to-guest / TAP-to-TAP).
-        INSECURE — must remain false for the secure default. Enabling it
-        requires `acknowledgeInsecureNetwork = true`.
+        REMOVED (ticket 3 A/C) — guest-to-guest isolation is now
+        unconditional: every guest TAP is an `isolated` bridge port, which
+        blocks guest<->guest frames for every EtherType before netfilter even
+        runs. There is no supported way to relax it, so setting this to true
+        is REJECTED with an assertion instead of silently having no effect.
       '';
     };
 
@@ -185,10 +305,11 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Allow agent guests to reach private IPv4 ranges (host LAN, VPN
-        peers, RFC1918, link-local, cloud metadata, ...). INSECURE — must
-        remain false for the secure default. Enabling it requires
-        `acknowledgeInsecureNetwork = true`.
+        REMOVED (ticket 3 C) — no profile grants access to private IPv4 ranges
+        (host LAN, VPN peers, RFC1918, CGNAT, link-local, metadata). Setting
+        this to true is REJECTED with an assertion rather than silently
+        ignored; if a guest genuinely needs to fetch packages, use
+        `networkProfile = "package-access"` with an explicit host proxy.
       '';
     };
 
@@ -196,11 +317,12 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Explicit opt-in acknowledging that one of the insecure network
-        relaxations (allowPublicInternet / allowInterVmTraffic /
-        allowPrivateNetworks) has been deliberately enabled. Without this,
-        those flags must stay false (§37: "private-network / inter-VM /
-        public internet without override").
+        Explicit opt-in acknowledging that an INSECURE network profile
+        (`package-access` or `internet`) — or the deprecated
+        `allowPublicInternet` boolean — has been deliberately enabled. Without
+        it, the secure `proxy-only`/`offline` profiles are the only accepted
+        configuration (§37: "private-network / inter-VM / public internet
+        without override").
       '';
     };
 
@@ -263,6 +385,10 @@ in
       # modules take it as a module argument; Nix laziness means a disabled
       # feature never forces any agent package.
       _module.args.agentRegistry = agentRegistry;
+      # Likewise the ONE resolved network decision (profile + capabilities +
+      # DNS policy), consumed by network.nix (firewall/NAT) and guest.nix
+      # (proxy/DNS/forwarder).
+      _module.args.agentNetwork = agentNetwork;
     }
 
     (lib.mkIf cfg.enable {
@@ -308,15 +434,61 @@ in
           message = "myconfig.ai.microvm.enableSsh requires an explicit sshPublicKeyFile.";
         }
         {
+          # The secure default must stay the default: widening the guest's
+          # reach beyond the model API needs an explicit acknowledgement.
           assertion =
-            !(cfg.allowPublicInternet || cfg.allowInterVmTraffic || cfg.allowPrivateNetworks)
-            || cfg.acknowledgeInsecureNetwork;
+            !(builtins.elem effectiveProfile profileLib.insecureProfiles) || cfg.acknowledgeInsecureNetwork;
           message = ''
-            myconfig.ai.microvm: allowPublicInternet / allowInterVmTraffic /
-            allowPrivateNetworks must remain false for the secure default.
-            To deliberately relax one of them, also set
+            myconfig.ai.microvm: networkProfile = "${effectiveProfile}" is an
+            INSECURE profile (it widens the guest's reach beyond the host
+            LiteLLM endpoint). To use it deliberately, also set
             `myconfig.ai.microvm.acknowledgeInsecureNetwork = true`.
           '';
+        }
+        {
+          # Migration: never resolve a contradiction silently.
+          assertion = !legacyAmbiguous;
+          message = ''
+            myconfig.ai.microvm: ambiguous network configuration — the
+            deprecated `allowPublicInternet = true` asks for the `internet`
+            profile, but `networkProfile` is explicitly set to
+            "${cfg.networkProfile}". Remove `allowPublicInternet` and keep only
+            `networkProfile`.
+          '';
+        }
+        {
+          assertion = !cfg.allowInterVmTraffic;
+          message = ''
+            myconfig.ai.microvm: `allowInterVmTraffic` has been REMOVED.
+            Guest-to-guest isolation is now unconditional (every guest TAP is
+            an `isolated` bridge port, which blocks guest<->guest frames for
+            every EtherType). Keeping the option true would be a lie, so it is
+            rejected — drop it from your configuration.
+          '';
+        }
+        {
+          assertion = !cfg.allowPrivateNetworks;
+          message = ''
+            myconfig.ai.microvm: `allowPrivateNetworks` has been REMOVED. No
+            network profile grants guests access to private IPv4 ranges (host
+            LAN, VPN peers, RFC1918, CGNAT, link-local, cloud metadata). If a
+            guest needs to fetch packages, use
+            `networkProfile = "package-access"` together with an explicit host
+            proxy (`packageProxyPort`).
+          '';
+        }
+        {
+          assertion = effectiveProfile != "package-access" || cfg.packageProxyPort != null;
+          message = ''
+            myconfig.ai.microvm: networkProfile = "package-access" requires
+            `packageProxyPort` (the host proxy port guests are allowed to
+            reach). Without it the profile would grant nothing beyond
+            proxy-only.
+          '';
+        }
+        {
+          assertion = cfg.packageProxyPort == null || cfg.packageProxyPort != cfg.litellmPort;
+          message = "myconfig.ai.microvm.packageProxyPort must differ from litellmPort.";
         }
         {
           assertion = lib.length (lib.unique slotIPs) == lib.length slotIPs;
@@ -346,6 +518,20 @@ in
         assertion = false;
         message = msg;
       }) agentRegistry.errors;
+
+      # --- deprecation warnings (ticket 3 C migration) -------------------
+      # Emitted for any legacy boolean a host still DEFINES, even when it is
+      # false, so the migration is visible before the options are dropped.
+      warnings =
+        lib.optional (definedLegacyOpts != [ ]) ''
+          myconfig.ai.microvm: the network booleans ${lib.concatStringsSep ", " definedLegacyOpts} are deprecated; use `myconfig.ai.microvm.networkProfile` instead
+          (currently effective: "${effectiveProfile}").
+        ''
+        ++ lib.optional (legacyWantsInternet && !profileExplicit) ''
+          myconfig.ai.microvm: translated the deprecated
+          `allowPublicInternet = true` into `networkProfile = "internet"`.
+          Set `networkProfile` explicitly and drop the boolean.
+        '';
     })
   ];
 }

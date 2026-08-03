@@ -231,6 +231,28 @@ let
       r = builtins.tryEval (failedAssertions mods);
     in
     if !r.success then true else builtins.any (m: lib.hasInfix needle m) r.value;
+  # Warnings of a variant host, for the ticket-3 C migration checks.
+  warningsOf =
+    mods: (self.nixosConfigurations.test-f13.extendModules { modules = mods; }).config.warnings;
+  # Migration variants that must NOT inherit test-f13's explicit
+  # `networkProfile` definition (a definition cannot be removed by
+  # extendModules, only outranked — and `profileExplicit` deliberately keys off
+  # the DEFINITION, not the value). test-workstation has the feature disabled
+  # and defines no profile, so enabling it there yields a host whose profile is
+  # genuinely unset. `enableSsh = false` keeps it key-free.
+  unsetProfileHost =
+    mods:
+    (self.nixosConfigurations.test-workstation.extendModules {
+      modules = [
+        {
+          myconfig.ai.microvm = {
+            enable = true;
+            enableSsh = false;
+          };
+        }
+      ]
+      ++ mods;
+    }).config;
   # The unmodified host must have NO failed assertions — positive control so
   # the rejectsWith checks below can't pass vacuously.
   baselineClean = failedAssertions [ ] == [ ];
@@ -450,13 +472,91 @@ in
       message = "enableSsh without sshPublicKeyFile must be rejected";
     }
     {
+      # On a host whose profile is genuinely unset, the deprecated boolean
+      # translates to the `internet` profile — which is insecure and therefore
+      # still needs the explicit acknowledgement.
+      assertion =
+        let
+          cfg = unsetProfileHost [ { myconfig.ai.microvm.allowPublicInternet = true; } ];
+          msgs = map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
+        in
+        builtins.any (m: lib.hasInfix "INSECURE profile" m) msgs;
+      message = "allowPublicInternet (-> internet profile) without acknowledgeInsecureNetwork must be rejected";
+    }
+    # --- ticket 3 C: profile model + legacy-boolean migration -------------
+    {
+      assertion = rejectsWith [
+        {
+          myconfig.ai.microvm.networkProfile = "internet";
+          myconfig.ai.microvm.acknowledgeInsecureNetwork = lib.mkForce false;
+        }
+      ] "is an\nINSECURE profile";
+      message = "networkProfile = internet without acknowledgeInsecureNetwork must be rejected";
+    }
+    {
+      assertion = rejectsWith [
+        {
+          myconfig.ai.microvm.networkProfile = "package-access";
+          myconfig.ai.microvm.packageProxyPort = 3128;
+          myconfig.ai.microvm.acknowledgeInsecureNetwork = lib.mkForce false;
+        }
+      ] "is an\nINSECURE profile";
+      message = "networkProfile = package-access without acknowledgeInsecureNetwork must be rejected";
+    }
+    {
+      assertion = rejectsWith [
+        {
+          myconfig.ai.microvm.networkProfile = "package-access";
+          myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
+        }
+      ] "requires\n`packageProxyPort`";
+      message = "networkProfile = package-access without packageProxyPort must be rejected";
+    }
+    {
+      # Ambiguity must never be resolved silently in either direction.
       assertion = rejectsWith [
         {
           myconfig.ai.microvm.allowPublicInternet = lib.mkForce true;
-          myconfig.ai.microvm.acknowledgeInsecureNetwork = lib.mkForce false;
+          myconfig.ai.microvm.networkProfile = "proxy-only";
+          myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
         }
-      ] "must remain false for the secure default";
-      message = "allowPublicInternet without acknowledgeInsecureNetwork must be rejected";
+      ] "ambiguous network configuration";
+      message = "allowPublicInternet together with an explicit, different networkProfile must be rejected";
+    }
+    {
+      assertion = rejectsWith [
+        { myconfig.ai.microvm.allowInterVmTraffic = lib.mkForce true; }
+      ] "`allowInterVmTraffic` has been REMOVED";
+      message = "allowInterVmTraffic = true must be rejected (guest isolation is unconditional)";
+    }
+    {
+      assertion = rejectsWith [
+        { myconfig.ai.microvm.allowPrivateNetworks = lib.mkForce true; }
+      ] "`allowPrivateNetworks` has been REMOVED";
+      message = "allowPrivateNetworks = true must be rejected (no profile grants private-range access)";
+    }
+    {
+      # A host that still defines a deprecated boolean must be WARNED, not
+      # silently migrated.
+      assertion = builtins.any (
+        w: lib.hasInfix "network booleans" w && lib.hasInfix "deprecated" w
+      ) (warningsOf [ { myconfig.ai.microvm.allowPrivateNetworks = false; } ]);
+      message = "defining a deprecated network boolean must emit a deprecation warning";
+    }
+    {
+      # ... and a translated boolean must say so explicitly (again on a host
+      # whose profile is genuinely unset).
+      assertion =
+        let
+          cfg = unsetProfileHost [
+            {
+              myconfig.ai.microvm.allowPublicInternet = true;
+              myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
+            }
+          ];
+        in
+        builtins.any (w: lib.hasInfix "translated the deprecated" w) cfg.warnings;
+      message = "translating allowPublicInternet -> networkProfile = internet must warn";
     }
   ];
 
@@ -624,6 +724,179 @@ in
           cat "$evalMarker"
         } > "$out"
       '';
+
+  # ---------------------------------------------------------------------- #
+  # (k) NETWORK PROFILES (ticket 3 C): render all four profiles and assert   #
+  #     the rules each one must and must NOT contain, plus the guest-side    #
+  #     configuration derived from the SAME decision (LiteLLM forwarder,     #
+  #     http_proxy, resolvers). This is what keeps `internet` from being a   #
+  #     mere firewall verdict (it must also carry NAT + a DNS policy) and    #
+  #     `package-access` from silently becoming general egress.              #
+  # ---------------------------------------------------------------------- #
+  microvm-network-profiles =
+    let
+      # One variant host per profile; only the firewall strings and a few
+      # guest attrs are forced, never a toplevel (see the note on
+      # `failedAssertions` above about eval cost).
+      variant =
+        profile:
+        (self.nixosConfigurations.test-f13.extendModules {
+          modules = [
+            {
+              myconfig.ai.microvm = {
+                networkProfile = lib.mkForce profile;
+                acknowledgeInsecureNetwork = true;
+                packageProxyPort = 3128;
+              };
+            }
+          ];
+        });
+      fwOf = profile: (variant profile).config.networking.firewall.extraCommands;
+      guestOf = profile: (variant profile).config.microvm.vms."agent-0".config.config;
+      subnet = microvmOpts.subnet;
+      litellmAccept = "AGENT_MICROVM_INPUT -s ${subnet} -d ${gateway} -p tcp --dport ${port} -j ACCEPT";
+      proxyAccept = "AGENT_MICROVM_INPUT -s ${subnet} -d ${gateway} -p tcp --dport 3128 -j ACCEPT";
+      internetAccept = "AGENT_MICROVM_FORWARD -s ${subnet} -j ACCEPT";
+      has = profile: needle: lib.hasInfix needle (fwOf profile);
+      # Invariants that must hold in EVERY profile.
+      invariants = profile: [
+        {
+          assertion = has profile "AGENT_MICROVM_INPUT -d 169.254.169.254 -j DROP";
+          message = "${profile}: cloud-metadata must be dropped in INPUT";
+        }
+        {
+          assertion = has profile "AGENT_MICROVM_FORWARD -d 169.254.169.254 -j DROP";
+          message = "${profile}: cloud-metadata must be dropped in FORWARD";
+        }
+        {
+          assertion = has profile "AGENT_MICROVM_FORWARD -s ${subnet} -d ${subnet} -j DROP";
+          message = "${profile}: guest-to-guest traffic must be dropped";
+        }
+        {
+          assertion = has profile "AGENT_MICROVM_FORWARD -s ${subnet} -d 10.0.0.0/8 -j DROP";
+          message = "${profile}: private ranges must be dropped";
+        }
+        {
+          assertion =
+            has profile "AGENT_MICROVM_INPUT -j DROP" && has profile "AGENT_MICROVM_FORWARD -j DROP";
+          message = "${profile}: INPUT and FORWARD must end in a terminal DROP";
+        }
+        {
+          # Host -> guest control traffic must survive in every profile.
+          assertion = has profile "AGENT_MICROVM_OUTPUT -j ACCEPT";
+          message = "${profile}: host-originated control traffic must be allowed";
+        }
+      ];
+    in
+    mkEvalCheck "microvm-network-profiles" (
+      lib.concatMap invariants [
+        "offline"
+        "proxy-only"
+        "package-access"
+        "internet"
+      ]
+      ++ [
+        # --- offline ----------------------------------------------------
+        {
+          assertion = !(has "offline" litellmAccept);
+          message = "offline must NOT allow the LiteLLM endpoint";
+        }
+        {
+          assertion = !(has "offline" "MASQUERADE") && !(has "offline" internetAccept);
+          message = "offline must NOT allow routing/NAT";
+        }
+        {
+          assertion = !(has "offline" "--dport 53");
+          message = "offline must NOT allow DNS";
+        }
+        {
+          # No conntrack ACCEPT in FORWARD: nothing is routed at all.
+          assertion = !(lib.hasInfix "AGENT_MICROVM_FORWARD -m state" (fwOf "offline"));
+          message = "offline must not allow ESTABLISHED forwarding";
+        }
+        {
+          assertion = !((guestOf "offline").systemd.sockets ? litellm-forwarder);
+          message = "offline guest must not run the loopback LiteLLM forwarder";
+        }
+        # --- proxy-only (the secure default) ----------------------------
+        {
+          assertion = microvmOpts.networkProfile == "proxy-only";
+          message = "proxy-only must remain the default profile on the reference host";
+        }
+        {
+          assertion = has "proxy-only" litellmAccept;
+          message = "proxy-only must allow the LiteLLM endpoint";
+        }
+        {
+          assertion =
+            !(has "proxy-only" internetAccept)
+            && !(has "proxy-only" "MASQUERADE")
+            && !(has "proxy-only" "--dport 53")
+            && !(has "proxy-only" proxyAccept);
+          message = "proxy-only must allow NOTHING besides LiteLLM (no internet, NAT, DNS or package proxy)";
+        }
+        {
+          assertion = (guestOf "proxy-only").systemd.sockets ? litellm-forwarder;
+          message = "proxy-only guest must run the loopback LiteLLM forwarder";
+        }
+        # --- package-access ---------------------------------------------
+        {
+          assertion = has "package-access" litellmAccept && has "package-access" proxyAccept;
+          message = "package-access must allow LiteLLM and the explicit host proxy port";
+        }
+        {
+          # Explicitly NOT general egress.
+          assertion =
+            !(has "package-access" internetAccept)
+            && !(has "package-access" "MASQUERADE")
+            && !(has "package-access" "--dport 53");
+          message = "package-access must NOT provide routing, NAT or DNS (it is not unrestricted internet)";
+        }
+        {
+          assertion =
+            (guestOf "package-access").environment.variables.http_proxy or null == "http://${gateway}:3128";
+          message = "package-access guest must point http_proxy at the host package proxy";
+        }
+        # --- internet ---------------------------------------------------
+        {
+          assertion = has "internet" internetAccept;
+          message = "internet must allow egress from the guest subnet";
+        }
+        {
+          # Functional egress, not just a verdict.
+          assertion = lib.hasInfix "AGENT_MICROVM_NAT -s ${subnet} ! -d ${subnet} -j MASQUERADE" (
+            fwOf "internet"
+          );
+          message = "internet must masquerade the guest subnet (functional egress, not just a firewall verdict)";
+        }
+        {
+          assertion = lib.hasInfix "AGENT_MICROVM_NAT" (
+            (variant "internet").config.networking.firewall.extraStopCommands
+          );
+          message = "the NAT chain must be torn down symmetrically";
+        }
+        {
+          # Explicit DNS policy: allow the configured resolver, drop the rest.
+          assertion =
+            has "internet" "-d ${gateway} -p udp --dport 53 -j ACCEPT"
+            && has "internet" "AGENT_MICROVM_FORWARD -s ${subnet} -p udp --dport 53 -j DROP";
+          message = "internet must allow ONLY the configured resolvers on port 53 and drop other DNS";
+        }
+        {
+          assertion = (guestOf "internet").networking.nameservers == [ gateway ];
+          message = "internet guest must be configured with exactly the allowed resolvers";
+        }
+        {
+          assertion = has "internet" "--log-prefix \"agent-microvm-drop: \"";
+          message = "internet must log dropped guest packets (rate-limited audit trail)";
+        }
+        {
+          # Even with full egress, the host LAN stays unreachable.
+          assertion = has "internet" "AGENT_MICROVM_FORWARD -s ${subnet} -d 192.168.0.0/16 -j DROP";
+          message = "internet must still block private ranges";
+        }
+      ]
+    );
 
   # ---------------------------------------------------------------------- #
   # (j) HOST IDENTITY / AUTHENTICATED CONTROL CHANNEL (ticket 3 B):         #
