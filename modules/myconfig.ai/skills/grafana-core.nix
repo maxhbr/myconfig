@@ -8,10 +8,12 @@
 }:
 let
   cfg = config.myconfig.ai.skills.grafana-core;
-  # `rev`+`hash` pin lives in the nvfetcher-generated `_sources/generated.nix`
-  # (bumped by `nix run nixpkgs#nvfetcher` / a scheduled CI job), not in
-  # flake.lock. See ../../../nvfetcher.toml.
-  grafana-skills = (pkgs.callPackage ../../../_sources/generated.nix { }).grafana-skills.src;
+  grafana-skills = pkgs.fetchFromGitHub {
+    owner = "grafana";
+    repo = "skills";
+    rev = "bc09fe7272b13a6ca32ca12ae3b8f3dff542af54";
+    hash = "sha256-Y1ZpLl8IvPE4r/fOPsRPUWm7bdYLj8vle2ss7Assj0M=";
+  };
   pluginName = "grafana-core";
   skillNames = [
     "alerting-irm"
