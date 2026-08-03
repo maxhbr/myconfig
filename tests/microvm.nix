@@ -317,14 +317,29 @@ in
         message = "passwordlessControl should grant a scoped NOPASSWD+SETENV sudo rule for agent-microvm";
       }
       {
-        # The dedicated SSH key is made group-readable by the control group so
-        # non-root `ssh`/`console` work; it is NEVER world-readable.
+        # The dedicated private key stays root:root 0400 (OpenSSH rejects a
+        # group/world-readable private key) — it must NOT be widened even
+        # under passwordlessControl.
         assertion =
-          enabledCfg.myconfig.secrets."dedicated-agent-vm-key".group == "agent-microvm"
-          && enabledCfg.myconfig.secrets."dedicated-agent-vm-key".permissions == "0440";
-        message = "passwordlessControl should make dedicated-agent-vm-key group=agent-microvm 0440 (got group '${
+          enabledCfg.myconfig.secrets."dedicated-agent-vm-key".group == "root"
+          && enabledCfg.myconfig.secrets."dedicated-agent-vm-key".permissions == "0400";
+        message = "dedicated-agent-vm-key must stay root:root 0400 (got group '${
           enabledCfg.myconfig.secrets."dedicated-agent-vm-key".group
         }' perms '${enabledCfg.myconfig.secrets."dedicated-agent-vm-key".permissions}')";
+      }
+      {
+        # passwordlessControl authorises the host operator's OWN public keys
+        # on the guest `agent` user (so non-root `agent-microvm ssh` works
+        # with the operator's default identity), in ADDITION to the dedicated
+        # key file. The operator has >=1 declared key, so this is non-empty
+        # and matches the host user's keys exactly.
+        assertion =
+          let
+            guestKeys = guest0Cfg.users.users.agent.openssh.authorizedKeys.keys;
+            hostKeys = enabledCfg.users.users.mhuber.openssh.authorizedKeys.keys;
+          in
+          hostKeys != [ ] && guestKeys == hostKeys;
+        message = "passwordlessControl should authorise the host operator's public keys on the guest agent user";
       }
     ];
 
