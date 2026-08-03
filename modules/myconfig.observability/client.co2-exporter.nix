@@ -77,6 +77,25 @@ let
       mainProgram = "co2-exporter";
     };
   };
+  # Stable /dev symlink created by the udev rule below. Checking a
+  # fixed path (instead of the dynamic /dev/bus/usb/<bus>/<dev> node)
+  # lets the service's ExecCondition cheaply detect whether the sensor
+  # is plugged in.
+  deviceLink = "/dev/air-co2ntrol";
+
+  # Runs before ExecStart. If the sensor is not connected we log a
+  # warning and exit 1, which systemd treats as a *skipped* (not
+  # failed) start — so a crash loop is avoided and `nixos-rebuild
+  # switch` does not block/fail on a missing device. Exit 0 proceeds
+  # to ExecStart. See systemd.service(5) ExecCondition semantics
+  # (exit 1-254 = clean skip, 255+ = failure).
+  deviceCheck = pkgs.writeShellScript "air-co2-exporter-device-check" ''
+    if [ -e "${deviceLink}" ]; then
+      exit 0
+    fi
+    echo "air-co2-exporter: AirCO2NTROL USB device (${vendorId}:${productId}) not connected at ${deviceLink}; skipping start, will retry when the device appears." >&2
+    exit 1
+  '';
 in
 {
   options.myconfig.observability.client.co2Exporter = with lib; {
@@ -143,19 +162,47 @@ in
     # KERNEL=="*" + ENV{DEVTYPE}=="usb_device" restricts the rule to
     # the per-device node (not the per-interface nodes), which is
     # what /dev/bus/usb/<bus>/<dev> actually corresponds to.
+    #
+    # SYMLINK creates the stable ${deviceLink} node used by the
+    # service's ExecCondition. TAG+="systemd" + SYSTEMD_WANTS make
+    # systemd (re)start the exporter the moment the device is plugged
+    # in, so no polling is needed for the happy path.
     services.udev.extraRules = ''
-      SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="${vendorId}", ATTR{idProduct}=="${productId}", MODE="0660", GROUP="${co2Cfg.group}", TAG+="uaccess"
+      SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="${vendorId}", ATTR{idProduct}=="${productId}", MODE="0660", GROUP="${co2Cfg.group}", TAG+="uaccess", SYMLINK+="${lib.removePrefix "/dev/" deviceLink}", TAG+="systemd", ENV{SYSTEMD_WANTS}+="prometheus-air-co2-exporter.service"
     '';
+
+    # Periodic retry safety net: if the device is present but the
+    # udev-triggered start was missed (e.g. rule reload races), this
+    # re-attempts the unit every few minutes. When the device is
+    # absent the ExecCondition simply skips the start again — cheap
+    # and never fails.
+    systemd.timers.prometheus-air-co2-exporter = {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "2min";
+        OnUnitInactiveSec = "2min";
+      };
+    };
 
     systemd.services.prometheus-air-co2-exporter = {
       description = "Prometheus air_co2_exporter (TFA Dostmann AirCO2NTROL)";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
+      # Disable systemd's start rate limiting: a missing device is a
+      # clean ExecCondition skip (not a failure), but repeated
+      # restarts while the device is flapping must never push the unit
+      # into a permanent `failed` state that would break activation.
+      startLimitIntervalSec = 0;
       # The exporter exits with non-zero if the device is unplugged;
       # rather than crash-looping forever we let it restart on a 10s
       # backoff and rely on prometheus `up{job="co2"}` to flag the
-      # outage.
+      # outage. If the device is unplugged entirely, the ExecCondition
+      # below turns each (re)start into a clean skip instead of a
+      # failure, so the unit never blocks `nixos-rebuild switch`.
       serviceConfig = {
+        # Warn + cleanly skip the start when the sensor is absent.
+        ExecCondition = "${deviceCheck}";
+
         # On `nixos-rebuild switch`, udev reloads its rules but does
         # NOT reapply them to already-plugged devices. Without this
         # ExecStartPre the first start of the service after a rebuild
