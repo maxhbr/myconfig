@@ -1,0 +1,46 @@
+# Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+#
+# Scheduled bump of the nvfetcher-pinned third-party GitHub sources declared
+# in nvfetcher.toml. Runs `nvfetcher`, and if `_sources/generated.nix`
+# changed, opens (or updates) a pull request. The pins deliberately live
+# outside flake.lock so unrelated hosts are not coupled to a shared lock
+# entry; this job keeps them fresh without a flake input.
+
+name: update-sources
+
+on:
+  schedule:
+    # Weekly, Monday 05:00 UTC.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  nvfetcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: Run nvfetcher
+        run: nix run nixpkgs#nvfetcher
+      - name: Open pull request on changes
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automated/update-sources
+          title: "chore(sources): bump nvfetcher-pinned sources"
+          commit-message: "chore(sources): bump nvfetcher-pinned sources"
+          body: |
+            Automated `nvfetcher` run bumping the GitHub sources pinned in
+            `_sources/generated.nix` (see `nvfetcher.toml`).
+          add-paths: |
+            _sources/generated.nix
+            _sources/generated.json

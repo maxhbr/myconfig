@@ -598,12 +598,10 @@ let
   # store originals are read-only, so each file is re-emitted via
   # `pkgs.writeText` with the specifiers rewritten; `*.test.ts` files are
   # excluded.
-  pi-extensions-src = pkgs.fetchFromGitHub {
-    owner = "MattDevy";
-    repo = "pi-extensions";
-    rev = "2ae490f16d669ea101b0811a50cbc37a2514e9a5";
-    hash = "sha256-FRZxyt6d0pxr2MMKU3ZBrpvgchH6m00Mc9MtSwwX3L0=";
-  };
+  # `rev`+`hash` pin lives in the nvfetcher-generated `_sources/generated.nix`
+  # (bumped by `nix run nixpkgs#nvfetcher` / a scheduled CI job), not in
+  # flake.lock. See ../../../nvfetcher.toml.
+  pi-extensions-src = (pkgs.callPackage ../../../_sources/generated.nix { }).pi-extensions.src;
   simplifyExtensionDir = "${pi-extensions-src}/packages/pi-simplify/src";
 
   simplifyExtensionFiles =
