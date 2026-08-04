@@ -46,6 +46,9 @@ GUEST_JOB_DIR="/run/agent-job"
 GUEST_INPUT_DIR="$GUEST_JOB_DIR/input"
 GUEST_CTRL_DIR="$GUEST_JOB_DIR/controller"
 GUEST_WORKER_DIR="$GUEST_JOB_DIR/worker"
+# ROOT-owned: the guest's systemd opens the worker's stdout/stderr in here as
+# root, so the worker must not be able to write, replace or rename any of it.
+GUEST_WORKER_LOGS_DIR="$GUEST_JOB_DIR/worker-logs"
 
 REPO=""
 SECTION="all"
@@ -88,6 +91,11 @@ check() {
 # `check_fails <description> <command...>` — PASS when the command FAILS. Used
 # for every "the guest must NOT be able to ..." property, where a success is a
 # security failure.
+#
+# CAVEAT: any non-zero exit counts, including a transient SSH failure, so a
+# broken control channel would make a whole block pass vacuously. For the
+# security-critical "the guest agent must not be able to ..." checks use
+# `check_denied` below, which re-proves the channel afterwards.
 check_fails() {
     local desc="$1"
     shift
@@ -95,6 +103,25 @@ check_fails() {
         fail "$desc (expected failure, but it succeeded)"
     else
         pass "$desc"
+    fi
+}
+
+# `check_denied <description> <slot> <cmd...>` — the guest-side variant of
+# check_fails that cannot pass vacuously: after the command failed we re-prove
+# that the SSH channel to that slot still WORKS. A failure caused by a dead
+# channel is reported as SKIP (undecidable), never as a pass, because "the
+# attack failed" and "the connection failed" must not look the same.
+check_denied() {
+    local desc="$1" slot="$2"
+    shift 2
+    if guest "$slot" "$@" >/dev/null 2>&1; then
+        fail "$desc (expected denial, but it SUCCEEDED)"
+        return
+    fi
+    if guest "$slot" true >/dev/null 2>&1; then
+        pass "$desc"
+    else
+        skip "$desc (the guest channel died — the denial could not be decided)"
     fi
 }
 
@@ -139,10 +166,6 @@ command -v "$LAUNCHER" >/dev/null || die "$LAUNCHER is not on PATH (is the featu
 [[ -d "$REPO/.git" ]] || die "--repository must be a git repository: $REPO"
 
 # --- helpers ---------------------------------------------------------------
-slots_of_class() {
-    "$LAUNCHER" list | awk -v c="$1" '$2 == c { print $1 }'
-}
-
 all_classes() {
     "$LAUNCHER" list | awk '{ print $2 }' | sort -u
 }
@@ -604,34 +627,64 @@ section_forgery() {
     info "forgery target: slot $slot (task $task)"
 
     # --- (A) direct result forgery ---------------------------------------
-    check_fails "the guest agent cannot write the authoritative result" \
-        guest "$slot" sh -c "echo '{\"version\":2,\"state\":\"completed\"}' > $GUEST_CTRL_DIR/result.json"
-    check_fails "the guest agent cannot even LIST the controller directory" \
-        guest "$slot" sh -c "ls $GUEST_CTRL_DIR"
-    check_fails "the guest agent cannot read the controller result" \
-        guest "$slot" sh -c "cat $GUEST_CTRL_DIR/result.json"
-    check_fails "the guest agent cannot read the job spec (it holds the allocation token)" \
-        guest "$slot" sh -c "cat $GUEST_INPUT_DIR/spec.json"
-    check_fails "the guest agent cannot delete the controller result" \
-        guest "$slot" sh -c "rm -f $GUEST_CTRL_DIR/result.json"
-    check_fails "the guest agent cannot modify its own job spec" \
-        guest "$slot" sh -c "echo x >> $GUEST_INPUT_DIR/spec.json"
-    check_fails "the guest agent cannot modify its own prompt" \
-        guest "$slot" sh -c "echo x >> $GUEST_INPUT_DIR/prompt.md"
-    check_fails "the guest agent cannot forge a cancellation request" \
-        guest "$slot" sh -c "echo '{}' > $GUEST_INPUT_DIR/cancel.json"
+    # check_denied (not check_fails): a dead SSH channel must not be mistaken
+    # for a successful denial.
+    check_denied "the guest agent cannot write the authoritative result" "$slot" \
+        sh -c "echo '{\"version\":2,\"state\":\"completed\"}' > $GUEST_CTRL_DIR/result.json"
+    check_denied "the guest agent cannot even LIST the controller directory" "$slot" \
+        sh -c "ls $GUEST_CTRL_DIR"
+    check_denied "the guest agent cannot read the controller result" "$slot" \
+        sh -c "cat $GUEST_CTRL_DIR/result.json"
+    check_denied "the guest agent cannot read the job spec (it holds the allocation token)" "$slot" \
+        sh -c "cat $GUEST_INPUT_DIR/spec.json"
+    check_denied "the guest agent cannot delete the controller result" "$slot" \
+        sh -c "rm -f $GUEST_CTRL_DIR/result.json"
+    check_denied "the guest agent cannot modify its own job spec" "$slot" \
+        sh -c "echo x >> $GUEST_INPUT_DIR/spec.json"
+    check_denied "the guest agent cannot modify its own prompt" "$slot" \
+        sh -c "echo x >> $GUEST_INPUT_DIR/prompt.md"
+    check_denied "the guest agent cannot forge a cancellation request" "$slot" \
+        sh -c "echo '{}' > $GUEST_INPUT_DIR/cancel.json"
+    # The allocation token must not be readable off a running process either:
+    # /proc/<pid>/cmdline is 0444, so nothing may carry the token in its argv.
+    # (The controller's processes are additionally hidden from the worker by
+    # ProtectProc=invisible.)
+    # Search for the SHAPE of a token (64 hex chars) rather than the value, so
+    # the check itself never discloses it to the guest.
+    check_denied "no 64-hex allocation token is visible in any /proc/*/cmdline" "$slot" \
+        sh -c "grep -aoE '[0-9a-f]{64}' /proc/*/cmdline 2>/dev/null | grep -q ."
+    check_denied "the guest agent cannot see the controller's processes at all" "$slot" \
+        sh -c "grep -a -l agent-job-controller /proc/*/cmdline 2>/dev/null | grep -q ."
 
     # --- (B) directory replacement ---------------------------------------
-    check_fails "the guest agent cannot rename the controller directory" \
-        guest "$slot" sh -c "mv $GUEST_CTRL_DIR $GUEST_JOB_DIR/stolen"
-    check_fails "the guest agent cannot remove the controller directory" \
-        guest "$slot" sh -c "rmdir $GUEST_CTRL_DIR"
-    check_fails "the guest agent cannot shadow the controller directory with a symlink" \
-        guest "$slot" sh -c "ln -sfn $GUEST_WORKER_DIR $GUEST_JOB_DIR/controller"
-    check_fails "the guest agent cannot create anything in the job share root" \
-        guest "$slot" sh -c "touch $GUEST_JOB_DIR/x"
-    check_fails "the guest agent cannot rename the input directory" \
-        guest "$slot" sh -c "mv $GUEST_INPUT_DIR $GUEST_JOB_DIR/stolen-input"
+    check_denied "the guest agent cannot rename the controller directory" "$slot" \
+        sh -c "mv $GUEST_CTRL_DIR $GUEST_JOB_DIR/stolen"
+    check_denied "the guest agent cannot remove the controller directory" "$slot" \
+        sh -c "rmdir $GUEST_CTRL_DIR"
+    check_denied "the guest agent cannot shadow the controller directory with a symlink" "$slot" \
+        sh -c "ln -sfn $GUEST_WORKER_DIR $GUEST_JOB_DIR/controller"
+    check_denied "the guest agent cannot create anything in the job share root" "$slot" \
+        sh -c "touch $GUEST_JOB_DIR/x"
+    check_denied "the guest agent cannot rename the input directory" "$slot" \
+        sh -c "mv $GUEST_INPUT_DIR $GUEST_JOB_DIR/stolen-input"
+
+    # --- (B2) the worker's own LOG files are root-owned -------------------
+    # systemd opens them as root and follows symlinks, so the worker must not be
+    # able to write them, replace them with a symlink, or rename their
+    # directory (which is why they do NOT live inside the agent-owned worker/).
+    check_denied "the guest agent cannot overwrite its own stdout log" "$slot" \
+        sh -c "echo forged > $GUEST_WORKER_LOGS_DIR/stdout.log"
+    check_denied "the guest agent cannot replace a log file with a symlink" "$slot" \
+        sh -c "ln -sfn /etc/passwd $GUEST_WORKER_LOGS_DIR/stdout.log"
+    check_denied "the guest agent cannot rename the worker log directory" "$slot" \
+        sh -c "mv $GUEST_WORKER_LOGS_DIR $GUEST_JOB_DIR/stolen-logs"
+    check_denied "the guest agent cannot create a new file in the worker log directory" "$slot" \
+        sh -c "touch $GUEST_WORKER_LOGS_DIR/x"
+    if [[ "$(stat -c '%u %a' "$JOBS_ROOT/$slot/worker-logs")" == "0 755" ]]; then
+        pass "the worker log directory is root:root 0755 on the host side"
+    else
+        fail "the worker log directory changed owner/mode: $(stat -c '%u %a' "$JOBS_ROOT/$slot/worker-logs")"
+    fi
 
     # --- (C) worker-side fake results ------------------------------------
     # The worker MAY write these; the host must ignore them entirely.
@@ -690,29 +743,61 @@ section_forgery() {
     # --- (D/E/F) stale, foreign and malformed results ---------------------
     # Plant documents in the CONTROLLER directory as root (i.e. give the
     # attacker strictly more power than a guest worker has) and check that the
-    # host still refuses to accept them for a NEW allocation.
+    # host still refuses to accept them for the RUNNING allocation.
+    #
+    # The document MUST be planted AFTER the slot has been allocated: the
+    # launcher's prepare_job deletes controller/result.json before it starts the
+    # VM, so anything planted beforehand is gone by the time the host reads it
+    # (and which slot the submit picks is not known in advance).
     task=rtv-stale
     cleanup_task "$task"
-    local victim
-    victim="$(slots_of_class "$class" | head -1)"
-    install -d -m 0700 -o root -g root "$JOBS_ROOT/$victim/controller"
-    # A syntactically perfect result — but from an older allocation.
-    jq -n '{version:2, controllerVersion:1, taskId:"rtv-stale",
-            allocationToken:"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-            slot:$slot, agent:"pi", state:"completed", exitCode:0,
-            startedAt:"2020-01-01T00:00:00Z", finishedAt:"2020-01-01T00:00:01Z",
-            timedOut:false, message:"stale"}' --arg slot "$victim" \
-        >"$JOBS_ROOT/$victim/controller/result.json"
-    chmod 0600 "$JOBS_ROOT/$victim/controller/result.json"
     local rc=0
     "$LAUNCHER" submit --name "$task" --repository "$REPO" --agent pi \
         --prompt-file "$prompt" --timeout 120 --resource-class "$class" \
-        >/tmp/rtv-stale-submit.log 2>&1 || rc=$?
-    if grep -q "allocation token does not belong" /tmp/rtv-stale-submit.log ||
-        [[ "$(jq -r '.message // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)" != "stale" ]]; then
-        pass "a stale result from an earlier allocation is rejected (token mismatch)"
+        >/tmp/rtv-stale-submit.log 2>&1 &
+    submit_pid=$!
+    waited=0
+    slot=""
+    while ((waited < 120)); do
+        slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
+        [[ -n $slot ]] && break
+        sleep 3
+        waited=$((waited + 3))
+    done
+    if [[ -z $slot ]]; then
+        skip "stale result: no slot came up for $task"
+        kill "$submit_pid" 2>/dev/null || true
+        wait "$submit_pid" 2>/dev/null || true
     else
-        fail "the host accepted a STALE result (exit $rc)"
+        # A syntactically PERFECT result — but with a foreign allocation token.
+        jq -n '{version:2, controllerVersion:1, taskId:"rtv-stale",
+                allocationToken:"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+                slot:$slot, agent:"pi", state:"completed", exitCode:0,
+                startedAt:"2020-01-01T00:00:00Z", finishedAt:"2020-01-01T00:00:01Z",
+                timedOut:false, message:"stale"}' --arg slot "$slot" \
+            >"$JOBS_ROOT/$slot/controller/result.json"
+        chmod 0600 "$JOBS_ROOT/$slot/controller/result.json"
+        rc=0
+        wait "$submit_pid" || rc=$?
+        local archived_msg archived_src archived_state
+        archived_msg="$(jq -r '.message // ""' "$RESULTS_DIR/$task.json" 2>/dev/null || true)"
+        archived_src="$(jq -r '.source // ""' "$RESULTS_DIR/$task.json" 2>/dev/null || true)"
+        archived_state="$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null || true)"
+        if [[ $archived_msg == "stale" ]]; then
+            fail "the host ACCEPTED a planted result with a foreign allocation token (exit $rc)"
+        elif grep -q "allocation token does not belong" /tmp/rtv-stale-submit.log; then
+            pass "a result with a foreign allocation token is REJECTED by name (exit $rc)"
+            if ((rc == 70)); then
+                pass "the rejection is reported as an infrastructure error (exit 70)"
+            else
+                fail "a rejected result did not produce exit 70 (got $rc)"
+            fi
+        elif [[ $archived_src == "controller" ]]; then
+            # The real controller finished before the document was planted.
+            skip "stale result: the genuine controller result (state=$archived_state) won the race; the planted document was never read"
+        else
+            fail "the planted result was neither rejected by name nor superseded (exit $rc, source=$archived_src, state=$archived_state)"
+        fi
     fi
     cleanup_task "$task"
 
