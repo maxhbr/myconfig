@@ -210,6 +210,32 @@ Handles: stale markers (unit inactive), orphaned units (no marker), orphaned
 data. A `detached` slot whose launcher exited is normal and left alone. Clones
 are always kept.
 
+An unmount is **verified**: `recover` stops the slot's
+`microvm-virtiofsd@<slot>.service` if the share is still held (which is what a
+SIGKILLed guest leaves behind), then re-checks with `findmnt`. It never falls
+back to a lazy unmount, because that leaves the mount in `findmnt` while
+reporting success. A mount it cannot release is printed as
+`FAILED to unmount …`, emitted as a `mount-leak` lifecycle event, and makes
+`recover` exit non-zero.
+
+### Foreign per-slot state
+
+Every command iterates the slot pool of the **current** generation, so per-slot
+state under a name this generation does not define — e.g. `slots/agent-0/` from
+before the `agent-<class>-<i>` rename — is invisible to `list` and `status`.
+`recover` reports it separately:
+
+```text
+foreign: 5 per-slot path(s) whose slot name is NOT in the current pool
+foreign:   /var/lib/agent-microvms/slots/agent-0 (slot name agent-0)
+foreign:     left alone; remove it with: agent-microvm recover --prune-foreign
+```
+
+It is **never** removed implicitly. `--prune-foreign` removes it (and unmounts a
+stale foreign bind through the same verified path); combine it with `--dry-run`
+to see what that would do first. Reporting foreign state alone is a finding, not
+an error: `recover` still exits 0.
+
 ## 10. Inspect logs
 
 ```bash

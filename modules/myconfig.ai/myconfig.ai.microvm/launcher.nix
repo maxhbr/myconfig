@@ -130,6 +130,8 @@ let
       # `StrictHostKeyChecking=no` + /dev/null known-hosts (which accepted ANY
       # key, i.e. an unauthenticated channel).
       readonly KNOWN_HOSTS=${lib.escapeShellArg agentHostKeys.knownHosts}
+      # Per-slot host-key directory root; scanned by the foreign-slot report.
+      readonly HOSTKEYS_ROOT=${lib.escapeShellArg agentHostKeys.root}
       # Strict verification against exactly that file. Kept in ONE place so
       # readiness probing, `--attach` and `ssh` cannot drift apart.
       SSH_VERIFY_OPTS=(
@@ -1239,10 +1241,15 @@ let
         cancel <task>         Cancel a running job/session by task name. Refuses
                               unless the slot still carries that task's
                               allocation token. Keeps the workspace.
-        recover [--dry-run]   Reconcile slots with systemd: stop orphaned units,
+        recover [--dry-run] [--prune-foreign]
+                              Reconcile slots with systemd: stop orphaned units,
                               unmount stale mounts, drop stale markers and job
                               data. Always keeps workspace clones. --dry-run
-                              only prints what it would do.
+                              only prints what it would do. Per-slot state whose
+                              slot name is NOT in the current pool (left over
+                              from a generation with different slot names) is
+                              always REPORTED as a 'foreign:' finding, and only
+                              removed with --prune-foreign.
         usage                 Report RETAINED disk usage per task (workspace
                               clone + task-scoped agent state) plus the runtime
                               roots, and how to prune it.
@@ -1700,15 +1707,67 @@ let
           fi
       }
 
+      # ==== FOREIGN per-slot state =========================================
+      # Several host directories are keyed by SLOT NAME. Every command here
+      # iterates "''${SLOT_NAMES[@]}", i.e. the pool of the CURRENT generation, so
+      # per-slot state written under a name this generation does not define — e.g.
+      # `slots/agent-0/` from before the `agent-<class>-<i>` rename — is invisible
+      # to `list`, `status` and `recover` alike, and nothing ever cleans it up.
+      # "Unused" was true; "silent" was the problem.
+      #
+      # Only directories this feature OWNS are scanned. $STATE_ROOT is
+      # deliberately NOT in the list: it is microvm.nix's state dir for EVERY
+      # microVM on the host, so it is handled separately and restricted to the
+      # `agent-*` naming plus the one mount point we create there.
+      readonly FOREIGN_SCAN_DIRS=(
+          "$SLOTS_DIR"
+          "$JOBS_ROOT"
+          "$STATE_SLOTS_ROOT"
+          "$HOSTKEYS_ROOT"
+      )
+
+      # "<foreign slot name> <path>" per line. Nothing is deleted here.
+      foreign_slot_paths() {
+          local dir entry name
+          for dir in "''${FOREIGN_SCAN_DIRS[@]}"; do
+              [[ -d "$dir" ]] || continue
+              for entry in "$dir"/*; do
+                  [[ -e "$entry" ]] || continue
+                  name="''${entry##*/}"
+                  is_slot_name "$name" && continue
+                  printf '%s %s\n' "$name" "$entry"
+              done
+          done
+          for entry in "$STATE_ROOT"/agent-*; do
+              [[ -d "$entry" ]] || continue
+              name="''${entry##*/}"
+              is_slot_name "$name" && continue
+              # Only the workspace mount point we created, never the VM state dir
+              # itself (that belongs to microvm.nix).
+              [[ -d "$entry/workspace" ]] || continue
+              printf '%s %s\n' "$name" "$entry/workspace"
+          done
+      }
+
+      # Defensive: only ever remove something under a root this feature owns.
+      foreign_path_is_ours() {
+          case "$1" in
+              "$RUNTIME_ROOT"/*) return 0 ;;
+              "$STATE_ROOT"/*)   return 0 ;;
+              *) return 1 ;;
+          esac
+      }
+
       # ==== recovery (ticket 4) ============================================
       # Reconciles every slot's marker with the actual systemd/mount state.
       # NEVER deletes a workspace clone. --dry-run only prints.
       cmd_recover() {
           require_root recover
-          local dry=0
+          local dry=0 prune=0
           while [[ $# -gt 0 ]]; do
               case "$1" in
                   --dry-run) dry=1; shift ;;
+                  --prune-foreign) prune=1; shift ;;
                   *) die "recover: unknown argument '$1'" ;;
               esac
           done
@@ -1794,10 +1853,67 @@ let
               fi
               printf '%s:   keeping the workspace clone\n' "$slot"
           done
-          if (( ! acted )); then
+
+          # --- per-slot state under a name the current pool does not define ---
+          # Reported as its OWN finding, never mixed into the per-slot lines
+          # above, and never removed unless --prune-foreign says so: it may be
+          # the only remaining copy of something the operator still wants.
+          local fname fpath found_foreign=0
+          local -a fnames=() fpaths=()
+          while read -r fname fpath; do
+              [[ -n "$fname" ]] || continue
+              fnames+=("$fname")
+              fpaths+=("$fpath")
+          done < <(foreign_slot_paths)
+          if (( ''${#fpaths[@]} )); then
+              found_foreign=1
+              printf 'foreign: %d per-slot path(s) whose slot name is NOT in the current pool\n' \
+                  "''${#fpaths[@]}"
+              printf 'foreign:   (left over from a generation with different slot names; no other\n'
+              printf 'foreign:    command iterates them, and no workspace clone is keyed by slot)\n'
+              local i mounted_foreign
+              for i in "''${!fpaths[@]}"; do
+                  fname="''${fnames[$i]}"
+                  fpath="''${fpaths[$i]}"
+                  mounted_foreign=0
+                  findmnt -n -- "$fpath" >/dev/null 2>&1 && mounted_foreign=1
+                  printf 'foreign:   %s (slot name %s)%s\n' "$fpath" "$fname" \
+                      "$( (( mounted_foreign )) && printf ' [STILL MOUNTED]' )"
+                  if (( ! prune )); then
+                      printf 'foreign:     left alone; remove it with: %s recover --prune-foreign\n' "$PROG"
+                      continue
+                  fi
+                  if (( dry )); then
+                      (( mounted_foreign )) && printf 'foreign:     would unmount %s\n' "$fpath"
+                      printf 'foreign:     would remove %s\n' "$fpath"
+                      continue
+                  fi
+                  foreign_path_is_ours "$fpath" \
+                      || die "refusing to remove a path outside the feature's roots: $fpath"
+                  set_event_context "" "$fname" "" "" ""
+                  emit_event recovery-action "" "" "foreign per-slot state: $fpath"
+                  if (( mounted_foreign )); then
+                      printf 'foreign:     unmounting %s\n' "$fpath"
+                      # The SAME verified path as every other unmount: a foreign
+                      # bind may be held by a virtiofsd of that old slot name.
+                      if ! unmount_verified "$fpath" "$fname"; then
+                          printf 'foreign:     FAILED to unmount %s (still mounted); not removing it\n' "$fpath"
+                          failed=1
+                          continue
+                      fi
+                  fi
+                  printf 'foreign:     removing %s\n' "$fpath"
+                  rm -rf -- "''${fpath:?}"
+              done
+          elif (( prune )); then
+              printf 'foreign: no per-slot state outside the current pool\n'
+          fi
+
+          if (( ! acted && ! found_foreign )); then
               log "nothing to recover"
           fi
           # Nothing to do is success; a recovery that could not complete is not.
+          # Merely REPORTING foreign state is not a failure — it is a finding.
           (( ! failed )) || die "recover could not release every resource (see the FAILED lines above)"
       }
 

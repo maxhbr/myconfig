@@ -130,9 +130,14 @@ myconfig.ai.microvm.resourceClasses = lib.mkForce {
   VSOCK CID) walks classes alphabetically, so adding or resizing a class
   re-numbers the *addresses* of later classes. Every host-side directory is
   keyed by name, not address.
-- Old per-slot state left over from a resized pool (`/var/lib/microvms/<slot>`
-  and the matching `hostkeys/`, `jobs/`, `state/slots/` entries) is simply
-  unused and can be deleted; workspace clones are keyed by **task**.
+- Old per-slot state left over from a resized or renamed pool
+  (`/var/lib/microvms/<slot>/workspace` and the matching `slots/`, `hostkeys/`,
+  `jobs/`, `state/slots/` entries) is unused, but no longer *silent*:
+  `agent-microvm recover` reports it as a `foreign:` finding, and
+  `agent-microvm recover --prune-foreign` removes it (unmounting a stale foreign
+  bind through the same verified path as any other unmount). It is never removed
+  implicitly. Workspace clones are keyed by **task**, so none of this touches
+  them.
 
 ### Agent state persistence
 

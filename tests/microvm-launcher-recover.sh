@@ -22,10 +22,14 @@
 #      success).
 #   2. When the mount survives no matter what, `recover` must say so, emit the
 #      `mount-leak` lifecycle event and exit NON-ZERO.
+#   3. Per-slot state whose slot name is NOT in the current pool (e.g. `agent-0`
+#      from before the `agent-<class>-<i>` rename) is REPORTED as its own
+#      `foreign:` finding and left strictly alone — unless `--prune-foreign` is
+#      given, and even then `--dry-run` still only prints.
 set -euo pipefail
 
 for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET MOUNT_TARGET \
-    UMOUNT_TARGET FINDMNT_TARGET RUNTIME_ROOT STATE_ROOT SLOT; do
+    UMOUNT_TARGET FINDMNT_TARGET RUNTIME_ROOT STATE_ROOT SLOT FOREIGN_SLOT; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
@@ -192,6 +196,43 @@ mounts_left() {
     find "$WORK/stub-$name/mounts" -type f 2>/dev/null | wc -l
 }
 
+# The five host directories that are keyed by SLOT NAME, as seen from outside
+# the sandbox. `foreign_paths <scenario>` prints them for $FOREIGN_SLOT.
+foreign_paths() {
+    local name="$1"
+    printf '%s\n' \
+        "$WORK/runtime-$name/slots/$FOREIGN_SLOT" \
+        "$WORK/runtime-$name/jobs/$FOREIGN_SLOT" \
+        "$WORK/runtime-$name/hostkeys/$FOREIGN_SLOT" \
+        "$WORK/runtime-$name/state/slots/$FOREIGN_SLOT" \
+        "$WORK/state-$name/$FOREIGN_SLOT/workspace"
+}
+
+# A fixture with NO current-slot residue at all, but per-slot state under a slot
+# name this generation does not define — plus, when $2 is given, a stale bind
+# mount on the foreign workspace path.
+fixture_foreign() {
+    local name="$1" with_mount="''${2:-}"
+    local stub_dir="$WORK/stub-$name" p
+    rm -rf "$stub_dir" "$WORK/runtime-$name" "$WORK/state-$name"
+    mkdir -p "$stub_dir/mounts" "$WORK/runtime-$name" "$WORK/state-$name"
+    while read -r p; do mkdir -p "$p"; done < <(foreign_paths "$name")
+    : >"$WORK/runtime-$name/slots/$FOREIGN_SLOT/session.json"
+    # A CURRENT-pool per-slot directory that recover must never touch.
+    mkdir -p "$WORK/runtime-$name/hostkeys/$SLOT"
+    : >"$WORK/runtime-$name/hostkeys/$SLOT/ssh_host_ed25519_key"
+    if [[ -n $with_mount ]]; then
+        printf '%s' "$RUNTIME_ROOT/workspaces/old-task" \
+            >"$stub_dir/mounts/$(printf '%s' "$STATE_ROOT/$FOREIGN_SLOT/workspace" | tr / _)"
+    fi
+}
+
+foreign_paths_present() {
+    local name="$1" p n=0
+    while read -r p; do [[ -e $p ]] && n=$((n + 1)); done < <(foreign_paths "$name")
+    printf '%s' "$n"
+}
+
 printf '=== 1. nothing to recover is a success ===\n'
 fixture clean
 rm -f "$WORK/stub-clean/mounts"/*
@@ -269,6 +310,136 @@ if grep -q "LAZY-UNMOUNT-ATTEMPTED" "$WORK/stub-wedged/mount.log"; then
     fail "recover fell back to a LAZY unmount instead of reporting the leak"
 else
     pass "recover reported the leak instead of hiding it behind a lazy unmount"
+fi
+
+printf '\n=== 4. foreign per-slot state is REPORTED and left alone ===\n'
+if [[ $FOREIGN_SLOT == "$SLOT" ]]; then
+    fail "the harness fixture uses a slot name that IS in the pool ($FOREIGN_SLOT)"
+fi
+for mode in dry live; do
+    scen="foreign-$mode"
+    fixture_foreign "$scen" mounted
+    if [[ $mode == dry ]]; then
+        rc="$(run_recover "$scen" holder --dry-run)"
+    else
+        rc="$(run_recover "$scen" holder)"
+    fi
+    log="$WORK/recover-$scen.log"
+    if [[ $rc != 0 ]]; then sed 's/^/      /' "$log"; fi
+    expect "recover ($mode) exits 0 with only foreign state present" 0 "$rc"
+    if grep -q "^foreign: " "$log"; then
+        pass "recover ($mode) reports the foreign state as its own finding"
+    else
+        fail "recover ($mode) never mentioned the foreign state: $(cat "$log")"
+    fi
+    if grep -q "slot name $FOREIGN_SLOT" "$log"; then
+        pass "recover ($mode) names the foreign slot ($FOREIGN_SLOT)"
+    else
+        fail "recover ($mode) does not name the foreign slot"
+    fi
+    missing=0
+    for d in slots jobs hostkeys state/slots; do
+        grep -q "$RUNTIME_ROOT/$d/$FOREIGN_SLOT" "$log" || {
+            missing=1
+            printf '      not reported: %s\n' "$RUNTIME_ROOT/$d/$FOREIGN_SLOT"
+        }
+    done
+    grep -q "$STATE_ROOT/$FOREIGN_SLOT/workspace" "$log" || missing=1
+    if ((missing)); then
+        fail "recover ($mode) does not report every foreign per-slot path"
+    else
+        pass "recover ($mode) reports every foreign per-slot path"
+    fi
+    if grep -q "STILL MOUNTED" "$log"; then
+        pass "recover ($mode) flags the foreign path that is still mounted"
+    else
+        fail "recover ($mode) does not flag the mounted foreign path"
+    fi
+    expect "recover ($mode) removed nothing without --prune-foreign" 5 \
+        "$(foreign_paths_present "$scen")"
+    expect "recover ($mode) left the foreign mount in place" 1 "$(mounts_left "$scen")"
+    if grep -q "recover --prune-foreign" "$log"; then
+        pass "recover ($mode) says how to remove it"
+    else
+        fail "recover ($mode) does not point at --prune-foreign"
+    fi
+done
+
+printf '\n=== 5. --dry-run --prune-foreign still only prints ===\n'
+fixture_foreign foreign-dryprune mounted
+rc="$(run_recover foreign-dryprune holder --dry-run --prune-foreign)"
+expect "recover --dry-run --prune-foreign exits 0" 0 "$rc"
+if grep -q "would remove $RUNTIME_ROOT/slots/$FOREIGN_SLOT" "$WORK/recover-foreign-dryprune.log" &&
+    grep -q "would unmount $STATE_ROOT/$FOREIGN_SLOT/workspace" "$WORK/recover-foreign-dryprune.log"; then
+    pass "it says what it WOULD remove and unmount"
+else
+    fail "no would-remove/would-unmount lines: $(cat "$WORK/recover-foreign-dryprune.log")"
+fi
+expect "nothing was actually removed" 5 "$(foreign_paths_present foreign-dryprune)"
+expect "nothing was actually unmounted" 1 "$(mounts_left foreign-dryprune)"
+
+printf '\n=== 6. --prune-foreign removes it, through the VERIFIED unmount ===\n'
+fixture_foreign foreign-prune mounted
+rc="$(run_recover foreign-prune holder --prune-foreign)"
+if [[ $rc != 0 ]]; then sed 's/^/      /' "$WORK/recover-foreign-prune.log"; fi
+expect "recover --prune-foreign exits 0" 0 "$rc"
+expect "every foreign per-slot path is gone" 0 "$(foreign_paths_present foreign-prune)"
+expect "the foreign bind mount is gone" 0 "$(mounts_left foreign-prune)"
+if grep -q "stop microvm-virtiofsd@$FOREIGN_SLOT.service" "$WORK/stub-foreign-prune/systemctl.log"; then
+    pass "the foreign mount was released through the same verified path (virtiofsd stopped)"
+else
+    fail "the foreign unmount did not go through the verified path"
+fi
+if grep -q "LAZY-UNMOUNT-ATTEMPTED" "$WORK/stub-foreign-prune/mount.log"; then
+    fail "the foreign unmount fell back to a lazy unmount"
+else
+    pass "the foreign unmount never used a lazy unmount"
+fi
+if [[ -f "$WORK/runtime-foreign-prune/hostkeys/$SLOT/ssh_host_ed25519_key" ]]; then
+    pass "per-slot state of the CURRENT pool was left untouched"
+else
+    fail "--prune-foreign deleted state belonging to a current slot"
+fi
+if grep -h '"event":"recovery-action"' "$WORK/recover-foreign-prune.log" \
+    >"$WORK/foreign-events.json"; then
+    if jq -e 'select(.message | test("foreign per-slot state")) | .slot == "'"$FOREIGN_SLOT"'"' \
+        <"$WORK/foreign-events.json" >/dev/null; then
+        pass "a well-formed recovery-action event names the foreign slot"
+    else
+        fail "no well-formed foreign recovery-action event: $(cat "$WORK/foreign-events.json")"
+    fi
+else
+    fail "no recovery-action event was emitted for the foreign state"
+fi
+
+printf '\n=== 7. a foreign mount that cannot be released is not deleted ===\n'
+fixture_foreign foreign-wedged mounted
+rc="$(run_recover foreign-wedged wedged --prune-foreign)"
+if [[ $rc == 0 ]]; then
+    fail "recover --prune-foreign exited 0 although the foreign mount survived"
+else
+    pass "recover --prune-foreign exited non-zero for a wedged foreign mount (rc $rc)"
+fi
+if grep -q "FAILED to unmount $STATE_ROOT/$FOREIGN_SLOT/workspace" "$WORK/recover-foreign-wedged.log"; then
+    pass "it names the foreign mount it could not release"
+else
+    fail "no FAILED-to-unmount line for the foreign mount"
+fi
+if [[ -d "$WORK/state-foreign-wedged/$FOREIGN_SLOT/workspace" ]]; then
+    pass "the still-mounted foreign path was NOT removed"
+else
+    fail "a still-mounted foreign path was removed anyway"
+fi
+
+printf '\n=== 8. --prune-foreign with nothing foreign is a quiet success ===\n'
+fixture clean
+rm -f "$WORK/stub-clean/mounts"/*
+rc="$(run_recover clean free --prune-foreign)"
+expect "recover --prune-foreign exits 0 with nothing to prune" 0 "$rc"
+if grep -q "no per-slot state outside the current pool" "$WORK/recover-clean.log"; then
+    pass "it says there was nothing foreign to prune"
+else
+    fail "no 'nothing foreign' line: $(cat "$WORK/recover-clean.log")"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

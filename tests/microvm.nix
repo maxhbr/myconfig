@@ -1987,6 +1987,11 @@ in
         RUNTIME_ROOT = microvmOpts.runtimeRoot;
         STATE_ROOT = microvmOpts.stateRoot;
         SLOT = refSlot.name;
+        # A slot name from the PREVIOUS naming scheme (`agent-<i>`, before the
+        # per-class `agent-<class>-<i>` rename). Asserted by the harness not to
+        # be in the current pool, so the "foreign per-slot state" scenarios
+        # cannot silently degrade into "current slot" ones.
+        FOREIGN_SLOT = "agent-0";
       }
       ''
         mkdir -p work && cd work
