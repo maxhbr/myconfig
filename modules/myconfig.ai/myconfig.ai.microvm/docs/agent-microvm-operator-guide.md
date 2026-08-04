@@ -82,8 +82,9 @@ Where things live while a batch task runs (`<jobs> =
 | `<jobs>/input/cancel.json` | `root:root 0400` | a token-bound cancellation request |
 | `<jobs>/controller/state.json` | `root:root 0600` | trusted **progress** (`validating` → `starting-worker` → `running` → `timing-out`/`cancelling` → `finished`). Not an outcome |
 | `<jobs>/controller/result.json` | `root:root 0600` | the **AUTHORITATIVE** result. Written only by the guest controller; the guest agent cannot read or write this directory |
-| `<jobs>/worker/stdout.log`, `stderr.log`, `artifacts/` | guest `agent` | **UNTRUSTED** agent output. Useful for debugging, never evidence |
-| `/var/lib/agent-microvms/results/<task>.json` | host-only | the archived, *validated* result (`source: "controller"`) or an explicitly host-generated record (`source: "host"`) |
+| `<jobs>/worker/artifacts/` | guest `agent` | **UNTRUSTED** agent output. Useful for debugging, never evidence |
+| `<jobs>/worker-logs/stdout.log`, `stderr.log` | `root:root 0644` | the worker's stdout/stderr. systemd opens them as root, so the agent can read but not rewrite them; the CONTENT is **UNTRUSTED** all the same |
+| `/var/lib/agent-microvms/results/<task>.json` | `root:root 0600` (dir `0700`) | the archived, *validated* result (`source: "controller"`) or an explicitly host-generated record (`source: "host"`). Root-only because it still carries the run's allocation token |
 
 A "result" the agent writes anywhere else — `worker/result.json`,
 `/workspace/result.json`, a completion marker — is ignored by design.
@@ -101,6 +102,15 @@ workspace, bind-mount state, agent, mode, job state, timeout, agent-state mode,
 start time, SSH readiness, session state, `stale` flag, lock owner. Never
 secrets.
 
+`status` works without root, but the LIVE job state does not: the controller
+channel is root-only `0700`, so a non-root caller cannot distinguish "no result
+yet" from "permission denied" and the `job:` field says
+`unreadable (run as root)` instead of implying the job has no state. Two other
+`job:` values are worth knowing: `rejected (protocol error)` means the guest
+wrote a document that does not belong to the active allocation, while
+`unverifiable (host-side verifier error)` means the LAUNCHER called the verifier
+wrongly (or it is missing) — a host-side bug, not a guest incident.
+
 ## 4. Attach for debugging
 
 ```bash
@@ -111,7 +121,7 @@ sudo agent-microvm ssh fix-parser -- systemctl status 'agent-job-worker@*'
 sudo agent-microvm console agent-normal-0      # serial console (journal)
 
 # untrusted worker output (host side, no SSH needed):
-sudo tail -f /var/lib/agent-microvms/jobs/<slot>/worker/stdout.log
+sudo tail -f /var/lib/agent-microvms/jobs/<slot>/worker-logs/stdout.log
 ```
 
 The two guest units are deliberately separate: `agent-job-controller` is the

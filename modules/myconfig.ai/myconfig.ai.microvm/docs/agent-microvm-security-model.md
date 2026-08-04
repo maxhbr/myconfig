@@ -44,9 +44,9 @@ the host/guest protocol — not the guest kernel's enforcement.
   MCP config, scripts, symlinks);
 - prompts and any data the agent fetches through LiteLLM;
 - **everything the batch worker produces** (`agent-job-worker@<agent>.service`,
-  guest `agent`): its stdout/stderr, its artifacts, any file it writes into
-  `/workspace` or `/run/agent-job/worker/`, and any JSON that *looks* like a
-  result. None of it is evidence of anything;
+  guest `agent`): the CONTENT of its stdout/stderr logs, its artifacts, any file
+  it writes into `/workspace` or `/run/agent-job/worker/`, and any JSON that
+  *looks* like a result. None of it is evidence of anything;
 - other guests.
 
 ## The batch result channel
@@ -66,8 +66,32 @@ reports an exit code. So the result must be attributable, not merely readable.
   read, delete or list it, and cannot rename or shadow it either, because
   `/run/agent-job` is root-owned `0755`.
 - **The spec is root-only (`0400`).** It carries the allocation token, so the
-  worker cannot even learn the value it would need to mint a plausible result.
-  The prompt is `0444`: readable by the worker, writable by nobody.
+  worker cannot read the value it would need to mint a plausible result. The
+  prompt is `0444`: readable by the worker, writable by nobody.
+- **The token never travels in an argument vector.** `/proc/<pid>/cmdline` is
+  world-readable (`0444`) and the worker shares the guest PID namespace, so a
+  helper invoked as `jq --arg allocationToken <token>` would hand the token to
+  the worker (and, on the host, to every local user) for as long as it lived.
+  Both sides therefore pass it in the ENVIRONMENT (`/proc/<pid>/environ` is
+  `0400`), and the host result verifier reads the expected token from
+  `AGENT_JOB_EXPECTED_TOKEN` and *refuses* a `--token` argument. The worker unit
+  additionally sets `ProtectProc=invisible`, so processes it does not own — i.e.
+  every process of the trusted controller — have no visible `/proc` entry at all.
+  This is checked BY EXECUTION: `microvm-batch-controller-smoke` and
+  `microvm-batch-launcher-submit` bind an argv recorder over the exact `jq` the
+  controller/launcher resolve and require that the active token never appears in
+  any recorded argv (while also requiring that the recorder saw invocations and
+  that the token *is* in the resulting documents, so the check cannot pass
+  vacuously).
+- **The worker's log files are root-owned, outside its own directory.** systemd
+  (PID 1, root) opens `worker-logs/stdout.log`/`stderr.log` with `append:` and
+  follows symlinks, so they must not sit in a directory the worker uid can write:
+  `worker/` is agent-owned, so anything running as uid 1000 could otherwise
+  rename it and plant a symlink between the controller's check and the worker
+  start, redirecting a root-opened append fd. `worker-logs/` is `root:root 0755`
+  directly under the root-owned `0755` share root, and the files are
+  `root:root 0644` — the worker can read its own logs but cannot truncate,
+  replace or redirect them. Their CONTENT is untrusted all the same.
 - **Allocation tokens.** Each allocation gets 256 bits from `/dev/urandom`,
   recorded in the host session marker, in the guest's immutable input and in the
   result. The host rejects a result unless schema version, controller version,
@@ -124,7 +148,7 @@ Exactly four shares, all per-slot:
 | --- | --- | --- | --- |
 | `/workspace` | rw | the task's standalone clone | the agent can write anything into your task's clone; you review it before importing |
 | `/var/lib/agent-hostkey` | **ro** | that slot's SSH host key, `root:root 0400` | unreadable by the guest agent user; the guest cannot change its own identity |
-| `/run/agent-job` | rw | `input/` (`spec.json` `root:root 0400`, `prompt.md` `0444`), `controller/` (`root:root 0700`, the authoritative result), `worker/` (agent-owned) | the agent can write junk into `worker/`; it cannot read or write `controller/`, cannot read the token-bearing spec, and cannot alter its own spec/prompt |
+| `/run/agent-job` | rw | `input/` (`spec.json` `root:root 0400`, `prompt.md` `0444`), `controller/` (`root:root 0700`, the authoritative result), `worker/` (agent-owned), `worker-logs/` (`root:root 0755`, the log files systemd opens as root) | the agent can write junk into `worker/`; it cannot read or write `controller/`, cannot read the token-bearing spec, cannot alter its own spec/prompt, and cannot replace or redirect its own log files |
 | `/var/lib/agent-state` | rw | only when `--persist-agent-state`: the task's declared agent-state dirs | the agent can poison ITS OWN task's future state; other tasks are unreachable |
 
 virtiofsd is in the TCB for all four. Ownership is passed through unchanged, so
@@ -192,13 +216,21 @@ host-side modes are what the guest sees.
   without booting on real KVM.
 - **The result channel's kernel-level enforcement is not yet measured.** The
   layout, the validators, the controller's own logic and the unit properties are
-  covered by `nix flake check` (`microvm-batch-result-integrity`, 56 executed
-  fixtures; `microvm-batch-controller-smoke`, 33 executed controller assertions;
-  `microvm-batch-launcher-submit`, 33 executed host-submit assertions), but
+  covered by `nix flake check` (`microvm-batch-result-integrity`, 63 executed
+  fixtures; `microvm-batch-controller-smoke`, 39 executed controller assertions;
+  `microvm-batch-launcher-submit`, 39 executed host-submit assertions), but
   "a uid-1000 worker really cannot write `controller/result.json`" is only
   observable in a booted guest — see the `forgery` section of the
   [runtime suite](./agent-microvm-runtime-validation.md), currently recorded as
-  NOT EXECUTED.
+  NOT EXECUTED. The same applies to "the timeout stopped the worker's whole
+  cgroup": the checks prove the controller *issues* the cgroup-wide stop
+  (`systemctl kill --kill-whom=all`, observed in a stub's call log), not that
+  systemd reaped a double-forked descendant.
+- **An archived result still contains its allocation token.** It is kept for
+  forensic correlation with the session marker, so both the archive directory and
+  the files in it are root-only (`0700`/`0600`). A local user who can read root's
+  files can read a *finished* run's token; that token no longer authorises
+  anything, since the allocation is gone.
 - **Operator convenience trades some strictness.** `passwordlessControl` grants a
   scoped `NOPASSWD`+`SETENV` sudo rule and authorises the operator's own public
   keys on the guest agent user. The guest cannot reach host sudo, but the blast

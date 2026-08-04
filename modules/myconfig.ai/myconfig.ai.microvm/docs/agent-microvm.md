@@ -173,6 +173,7 @@ Sized per resource class, enforced on **both** sides:
 | guest `agent-job-worker@<a>` | `TasksMax` | `job.tasksMax` (default 4096) — fork-bomb bound |
 | guest `agent-job-worker@<a>` | `TimeoutStartSec` | `job.maxTimeoutSeconds + job.gracePeriodSeconds` — static ceiling (`Type=oneshot` ignores `RuntimeMaxSec`) |
 | guest `agent-job-worker@<a>` | `KillMode` | `control-group` — the controller kills the whole worker tree, not just a pid |
+| guest `agent-job-controller` | `TimeoutStartSec` | `job.maxTimeoutSeconds + 2 × job.gracePeriodSeconds` — the controller's own ceiling. Also `TimeoutStartSec`, because for `Type=oneshot` `RuntimeMaxSec` has no effect and the start timeout would otherwise be **infinite** |
 | host `microvm@<slot>` | `MemoryMax` | class RAM + `hypervisorMemoryOverheadMiB` (never below guest RAM + overhead) |
 | host `microvm@<slot>` | `TasksMax` | `hypervisorTasksMax` |
 | host `microvm@<slot>` | `CPUWeight` / `IOWeight` | `50` — sandboxes yield to interactive host work but may use idle capacity |
@@ -281,7 +282,9 @@ of the authoritative result. See the
                               controller/state.json    root:root 0600  trusted progress
                               controller/result.json   root:root 0600  AUTHORITATIVE result
                               worker/                  1000:1000 0755  UNTRUSTED output
-                              worker/{stdout,stderr}.log, worker/artifacts/
+                              worker/artifacts/
+                              worker-logs/             root:root 0755  log dir (root-owned)
+                              worker-logs/{stdout,stderr}.log  root:root 0644  UNTRUSTED content
 ```
 
 Surfaced into the guest at `/run/agent-job`. The share is read-**write**, but
@@ -290,14 +293,26 @@ through unchanged:
 
 - `input/` is root-owned, so the guest cannot lift its own timeout or swap its
   own agent. `spec.json` is `0400` because it carries the **allocation token**
-  (256 bits from `/dev/urandom`), which the untrusted worker must not learn.
+  (256 bits from `/dev/urandom`), which the untrusted worker must not be able to
+  read.
 - `controller/` is `root:root 0700`: the worker can neither write nor read it,
   and cannot rename or shadow it (its parent is root-owned `0755`, and the worker
   unit masks it via `InaccessiblePaths`).
 - `worker/` is the only worker-writable part. Everything in it is untrusted.
+- `worker-logs/` holds the two files the guest's systemd opens for the worker
+  with `append:`. systemd opens them **as root and follows symlinks**, so they
+  live in a root-owned directory *outside* `worker/` — otherwise anything running
+  as uid 1000 could rename `worker/` contents and plant a symlink that redirects a
+  root-opened fd. The worker may read its logs; it cannot truncate, replace or
+  redirect them, and their content is untrusted regardless.
 
 Prompts never travel as process arguments from the host and never enter the Nix
-store.
+store. Neither does the **allocation token**: `/proc/<pid>/cmdline` is
+world-readable (`0444`) while `/proc/<pid>/environ` is `0400`, so every helper
+that needs the token (`jq` on both sides, the host result verifier) receives it
+in its ENVIRONMENT. The verifier reads `AGENT_JOB_EXPECTED_TOKEN` and refuses a
+`--token` argument outright; the worker unit additionally sets
+`ProtectProc=invisible`, so it cannot see the controller's processes at all.
 
 `spec.json` (schema `version = 2`, validated on **both** sides):
 
@@ -352,7 +367,16 @@ Anything else — including a v1 result (there is **no** compatibility mode) —
 infrastructure error, never a success. The validated document is archived at
 `/var/lib/agent-microvms/results/<task>.json` (outside every guest share) tagged
 `source: "controller"`; a record the host had to invent itself is tagged
-`source: "host"`.
+`source: "host"`. The archive directory is `0700` and each archived file `0600`,
+because the document still carries that run's allocation token.
+
+The controller's deadline is measured against a **clock**, not a count of poll
+iterations: each iteration also spends one or two `systemctl show` round-trips, so
+counting iterations would drift by a few percent — at the 24 h ceiling by tens of
+minutes, enough for the HOST deadline to fire first and take the verdict away
+from the controller. A worker that never starts at all is an
+`infrastructure-error`, not a `timed-out`, even when the job's own timeout is
+shorter than the 60 s worker-startup grace.
 
 `submit` exit codes: **0** completed, **1** the agent failed, **124** timed out,
 **70** infrastructure error (no/invalid/unauthentic result).

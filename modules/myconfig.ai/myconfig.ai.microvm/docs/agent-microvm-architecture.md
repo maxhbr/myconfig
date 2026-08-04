@@ -150,6 +150,7 @@ agent-microvm submit --agent <a> --prompt-file <f> --timeout <s> …
     jobs/<slot>/input/prompt.md      root:root 0444
     jobs/<slot>/controller/          root:root 0700  (empty; controller-only)
     jobs/<slot>/worker/              agent-owned     (empty)
+    jobs/<slot>/worker-logs/         root:root 0755  (systemd opens the logs as root)
   → systemctl start microvm@<slot>
   guest: agent-job-controller.service   (root; ConditionPathExists=input/spec.json)
      assert the share's ownership/permissions (incl. every parent of controller/)
@@ -157,18 +158,23 @@ agent-microvm submit --agent <a> --prompt-file <f> --timeout <s> …
      controller/state.json: validating → starting-worker → running   (progress only)
      → systemctl start agent-job-worker@<agent>.service  (uid agent, cgroup-killable)
           guest: the registry's batch argv, cwd /workspace,
-                 stdout/stderr → worker/{stdout,stderr}.log (UNTRUSTED)
+                 stdout/stderr → worker-logs/{stdout,stderr}.log (root-owned
+                 files, UNTRUSTED content), ProtectProc=invisible
      supervise: deadline | cancellation (input/cancel.json, token-bound) | exit
      → collect ExecMainCode/ExecMainStatus/Result from systemd
      → controller/result.json (0600, tmp+rename): the ONE terminal verdict
   host: poll controller/result.json through agent-job-verify-result
         (ownership + strict schema + version + task + token + slot + agent)
-  → archive the VALIDATED document to results/<task>.json (source:"controller")
+  → archive the VALIDATED document to results/<task>.json (0600 in a 0700 dir,
+    source:"controller")
   → stop VM, unmount, clear job data; KEEP the clone
   → exit 0 / 1 / 124 / 70
 ```
 
-The prompt never travels as an argument and never enters the Nix store; the spec
+The prompt never travels as an argument and never enters the Nix store, and
+neither does the allocation token: every helper that needs it gets it in its
+ENVIRONMENT, because `/proc/<pid>/cmdline` is world-readable while
+`/proc/<pid>/environ` is `0400`. The spec
 cannot name an executable (the agent is resolved through the registry, keyed by
 the worker unit's instance name). Nothing the worker writes is ever read as a
 result, and a document that fails verification is an infrastructure error — never

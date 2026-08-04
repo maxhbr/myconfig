@@ -138,32 +138,52 @@ the guest kernel that enforces it over virtiofs.
 | the guest agent cannot read `input/spec.json` (`0400` — it carries the allocation token) |
 | the guest agent cannot modify `input/spec.json` / `input/prompt.md`, nor forge `input/cancel.json` |
 | the guest agent cannot rename, remove or symlink-shadow `controller/`, and cannot create anything in the share root |
+| the guest agent cannot write, symlink-replace or rename its own `worker-logs/` files or directory (root-owned; systemd opens them as root), and the host still sees `root:root 0755` afterwards |
+| no 64-hex allocation token is visible in any `/proc/*/cmdline` the guest agent can read, and the controller's processes are not visible to it at all (`ProtectProc=invisible`) |
 | a worker-written `worker/result.json` and `/workspace/result.json` are possible but **ignored**: the host keeps waiting and the archived result carries `source:"controller"` |
-| a stale result from an earlier allocation (valid schema, old allocation token) is **rejected** and cannot terminate the new job |
+| a result with a foreign allocation token, planted as **root** in `controller/` *after* the slot was allocated, is **rejected by name** (`allocation token does not belong`) and yields exit `70` |
 | a malformed controller result yields an **infrastructure error** (`submit` exit `70`), never success |
 | a job that exceeds its deadline is `timed-out` (exit `124`) with the verdict coming from the controller, and the whole worker cgroup (including double-forked descendants) is gone |
 | `cancel` records `cancelled`; replaying that cancellation request against a **new** allocation of the same slot does nothing (token mismatch) |
+
+Every "the guest agent cannot ..." check in this section uses `check_denied`,
+which re-proves the SSH channel *after* the attempt failed: a dead channel is
+reported as `SKIP` (undecidable), never as a pass, so a transient connection
+failure cannot make the whole block pass vacuously. `check_fails` (used in the
+other sections) does not have that guard — any non-zero exit counts.
 
 What the eval/build tier already executes for the same properties (run by
 `nix flake check`, no KVM needed):
 
 - `microvm-batch-result-integrity` runs the real host verifier and the real
-  guest-side permission assertions against 56 forged / stale / malformed /
-  symlinked / world-writable fixtures under `fakeroot`;
+  guest-side permission assertions against 63 forged / stale / malformed /
+  symlinked / world-writable fixtures under `fakeroot` — including a
+  worker-owned, world-writable or symlink-shadowed `worker-logs/`;
 - `microvm-batch-controller-smoke` runs the real, unmodified guest **controller**
-  (33 assertions) inside `bwrap` with a stubbed `systemctl`: healthy job, failing
+  (39 assertions) inside `bwrap` with a stubbed `systemctl`: healthy job, failing
   agent, deadline, token-bound cancellation, stale cancellation, six rejected
   specs, and a broken trust boundary — then feeds the documents it produced to
   the host verifier, which must accept them for this allocation and reject them
-  for another;
+  for another. It also binds an **argv recorder** over the exact `jq` the
+  controller resolves and requires that the allocation token never appears in any
+  recorded argv (`/proc/<pid>/cmdline` is world-readable `0444`), while requiring
+  that the recorder actually observed invocations and that the token *is* in the
+  documents produced — so the check cannot pass vacuously;
 - `microvm-batch-launcher-submit` runs the real **host** `agent-microvm submit`
-  (33 assertions) with `systemctl`/`mount`/`umount`/`findmnt` stubbed, where the
+  (39 assertions) with `systemctl`/`mount`/`umount`/`findmnt` stubbed, where the
   `systemctl start microvm@<slot>` stub plays the guest: it records the effective
   ownership/modes of the job share the launcher created (input `0755`, spec
-  `0400`, controller `0700`, worker agent-owned) and plants a genuine, a
-  foreign-token, a foreign-slot, a v1, a malformed or a worker-only "result".
-  Only the genuine one may yield exit 0; everything else must be exit 70, and the
-  clone must survive every case.
+  `0400`, controller `0700`, worker agent-owned, worker-logs root-owned) and
+  plants a genuine, a foreign-token, a foreign-slot, a v1, a malformed or a
+  worker-only "result". Only the genuine one may yield exit 0; everything else
+  must be exit 70, the clone must survive every case, the archived result must be
+  `0600` in a `0700` directory, and the same argv recorder must not see the token.
+
+What is deliberately NOT established by that tier: that the guest KERNEL denies a
+uid-1000 worker access to `controller/` or `worker-logs/` (fakeroot fakes
+metadata, not enforcement), and that systemd really reaps a double-forked
+descendant on the cgroup-wide stop — the checks only prove the controller ISSUES
+`systemctl kill --kill-whom=all`. Both need this suite on real KVM.
 
 Both prove the *validators, the protocol and the layout*, not the guest kernel's
 enforcement or systemd's cgroup kill — which is exactly what this section adds.
