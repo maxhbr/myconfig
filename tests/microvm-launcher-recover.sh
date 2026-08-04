@@ -153,9 +153,9 @@ exit 0
 EOF
 chmod +x "$STUBS"/*
 
-# --- running `recover` ------------------------------------------------------
-# run_recover <stub-dir-name> <umount-mode> [recover args...]
-run_recover() {
+# --- running the launcher ---------------------------------------------------
+# run_launcher <stub-dir-name> <umount-mode> <subcommand> [args...]
+run_launcher() {
     local name="$1" umount_mode="$2"
     shift 2
     local stub_dir="$WORK/stub-$name"
@@ -174,9 +174,16 @@ run_recover() {
         --setenv STUB_UMOUNT "$umount_mode" \
         --setenv HOME "$WORK" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
-            exec '$LAUNCHER' recover $*
+            exec '$LAUNCHER' $*
         " >"$WORK/recover-$name.log" 2>&1 || rc=$?
     printf '%s' "$rc"
+}
+
+# run_recover <stub-dir-name> <umount-mode> [recover args...]
+run_recover() {
+    local name="$1" umount_mode="$2"
+    shift 2
+    run_launcher "$name" "$umount_mode" recover "$@"
 }
 
 # Lay out the per-scenario fixture OUTSIDE the sandbox: a stale workspace bind
@@ -212,7 +219,11 @@ foreign_paths() {
 # name this generation does not define — plus, when $2 is given, a stale bind
 # mount on the foreign workspace path.
 fixture_foreign() {
-    local name="$1" with_mount="''${2:-}"
+    # `${2:-}`, NOT `''${2:-}`: this is a plain bash file (tests/microvm.nix
+    # passes it as `harness = ./...sh`), so the Nix escape would make
+    # `with_mount` the two-character string `''` whenever $2 is unset — and the
+    # "no foreign mount" variant below would be unreachable.
+    local name="$1" with_mount="${2:-}"
     local stub_dir="$WORK/stub-$name" p
     rm -rf "$stub_dir" "$WORK/runtime-$name" "$WORK/state-$name"
     mkdir -p "$stub_dir/mounts" "$WORK/runtime-$name" "$WORK/state-$name"
@@ -311,6 +322,86 @@ if grep -q "LAZY-UNMOUNT-ATTEMPTED" "$WORK/stub-wedged/mount.log"; then
 else
     pass "recover reported the leak instead of hiding it behind a lazy unmount"
 fi
+# The event must carry the slot as a STRUCTURED field, not only inside the
+# free-text message, so a consumer can act on it without parsing prose.
+if jq -e --arg s "$SLOT" '.slot == $s' <"$WORK/leak-events.json" >/dev/null; then
+    pass "the mount-leak event names the slot in its own field"
+else
+    fail "the mount-leak event has no/!wrong slot field: $(cat "$WORK/leak-events.json")"
+fi
+
+printf '\n=== 3b. a leaked AGENT-STATE bind is recovered too ===\n'
+# <runtimeRoot>/state/slots/<slot> (ticket 5 B) is held by the SAME per-slot
+# virtiofsd as the workspace bind, so a SIGKILLed guest leaks it the same way.
+# `recover` used to look at the workspace mount ONLY and print `ok`.
+fixture state-holder
+rm -f "$WORK/stub-state-holder/mounts"/*
+printf '%s' "$RUNTIME_ROOT/state/tasks/some-task/pi" \
+    >"$WORK/stub-state-holder/mounts/$(printf '%s' "$RUNTIME_ROOT/state/slots/$SLOT" | tr / _)"
+rc="$(run_recover state-holder holder)"
+if [[ $rc != 0 ]]; then sed 's/^/      /' "$WORK/recover-state-holder.log"; fi
+expect "recover exits 0 after releasing a leaked agent-state bind" 0 "$rc"
+expect "the agent-state bind is really gone afterwards" 0 "$(mounts_left state-holder)"
+if grep -q "unmounting $RUNTIME_ROOT/state/slots/$SLOT" "$WORK/recover-state-holder.log"; then
+    pass "recover names the agent-state bind it released"
+else
+    fail "recover never mentioned the agent-state bind: $(cat "$WORK/recover-state-holder.log")"
+fi
+if grep -q "agent-state bind mount" "$WORK/recover-state-holder.log"; then
+    pass "recover classifies it as a stale agent-state bind mount"
+else
+    fail "recover did not classify the leaked agent-state bind"
+fi
+if grep -q "stop microvm-virtiofsd@$SLOT.service" "$WORK/stub-state-holder/systemctl.log"; then
+    pass "the agent-state bind went through the same verified unmount path"
+else
+    fail "the agent-state unmount did not stop the slot's virtiofsd"
+fi
+if grep -q "LAZY-UNMOUNT-ATTEMPTED" "$WORK/stub-state-holder/mount.log"; then
+    fail "the agent-state unmount fell back to a lazy unmount"
+else
+    pass "the agent-state unmount never used a lazy unmount"
+fi
+
+printf '\n=== 3c. a leaked agent-state bind that WEDGES fails the run ===\n'
+fixture state-wedged
+rm -f "$WORK/stub-state-wedged/mounts"/*
+printf '%s' "$RUNTIME_ROOT/state/tasks/some-task/pi" \
+    >"$WORK/stub-state-wedged/mounts/$(printf '%s' "$RUNTIME_ROOT/state/slots/$SLOT" | tr / _)"
+rc="$(run_recover state-wedged wedged)"
+if [[ $rc == 0 ]]; then
+    fail "recover exited 0 although the agent-state bind survived"
+else
+    pass "recover exited non-zero for an agent-state bind it could not release (rc $rc)"
+fi
+if grep -q "FAILED to unmount $RUNTIME_ROOT/state/slots/$SLOT" "$WORK/recover-state-wedged.log"; then
+    pass "recover names the agent-state bind it could not release"
+else
+    fail "no FAILED-to-unmount line for the agent-state bind: $(cat "$WORK/recover-state-wedged.log")"
+fi
+
+printf '\n=== 3d. destroy/stop must not exit 0 while a bind survives ===\n'
+# The operator-facing commands propagate the leak; only the EXIT-trap callers
+# swallow it. A `destroy` that says nothing and exits 0 over a surviving bind is
+# exactly the "claimed success" this feature refuses everywhere else.
+fixture destroy-wedged
+rc="$(run_launcher destroy-wedged wedged destroy "$SLOT")"
+if [[ $rc == 0 ]]; then
+    fail "destroy exited 0 although the bind mount survived"
+else
+    pass "destroy exited non-zero for a surviving bind mount (rc $rc)"
+fi
+if grep -q "bind mount SURVIVED" "$WORK/recover-destroy-wedged.log"; then
+    pass "destroy says WHY it failed"
+else
+    fail "destroy gave no reason: $(cat "$WORK/recover-destroy-wedged.log")"
+fi
+# POSITIVE CONTROL: the same command over a releasable bind must still exit 0.
+fixture destroy-free
+rc="$(run_launcher destroy-free free destroy "$SLOT")"
+if [[ $rc != 0 ]]; then sed 's/^/      /' "$WORK/recover-destroy-free.log"; fi
+expect "destroy exits 0 when the bind is really released" 0 "$rc"
+expect "destroy really released the bind" 0 "$(mounts_left destroy-free)"
 
 printf '\n=== 4. foreign per-slot state is REPORTED and left alone ===\n'
 if [[ $FOREIGN_SLOT == "$SLOT" ]]; then
@@ -364,6 +455,24 @@ for mode in dry live; do
         fail "recover ($mode) does not point at --prune-foreign"
     fi
 done
+
+printf '\n=== 4b. foreign state WITHOUT a mount is reported and not flagged ===\n'
+# The unmounted branch of fixture_foreign really is reachable (it was not while
+# the Nix escape above made every call look "mounted").
+fixture_foreign foreign-nomount
+expect "the no-mount fixture really has no mount" 0 "$(mounts_left foreign-nomount)"
+rc="$(run_recover foreign-nomount free)"
+expect "recover exits 0 for unmounted foreign state" 0 "$rc"
+if grep -q "^foreign: " "$WORK/recover-foreign-nomount.log"; then
+    pass "unmounted foreign state is still reported"
+else
+    fail "unmounted foreign state was not reported: $(cat "$WORK/recover-foreign-nomount.log")"
+fi
+if grep -q "STILL MOUNTED" "$WORK/recover-foreign-nomount.log"; then
+    fail "recover claims an unmounted foreign path is STILL MOUNTED"
+else
+    pass "recover does not claim an unmounted foreign path is mounted"
+fi
 
 printf '\n=== 5. --dry-run --prune-foreign still only prints ===\n'
 fixture_foreign foreign-dryprune mounted

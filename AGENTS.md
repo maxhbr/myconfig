@@ -27,8 +27,10 @@ This file contains guidelines for agentic coding agents working on this NixOS fl
 ### Pre-commit Hooks
 The `pre-commit-check` git-hook only enables **nixfmt-rfc-style** (Nix
 formatting). `shfmt` and `shellcheck` are commented out in the git-hook block;
-they instead run via a separate `shell-fmt-check` check derivation, scoped to
-`switch.sh` only (see the `files` list in `flake.nix`). `typos` is not enabled.
+they instead run via a separate `shell-fmt-check` check derivation, scoped to an
+explicit `files` list in `flake.nix` (`switch.sh` plus the executed
+`myconfig.ai.microvm` harnesses and the real-KVM validation suite). `typos` is
+not enabled.
 
 Run manually: `nix run .#checks.x86_64-linux.pre-commit-check`
 
