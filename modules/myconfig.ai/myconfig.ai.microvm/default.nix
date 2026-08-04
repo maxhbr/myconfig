@@ -705,6 +705,29 @@ in
           message = "myconfig.ai.microvm.packageProxyPort must differ from litellmPort.";
         }
         {
+          # The guest-side forwarder and the host-side socket both point the
+          # model API at the loopback LiteLLM proxy on
+          # 127.0.0.1:<litellmPort>, and every guest agent config assumes that
+          # endpoint exists. A host that enables a litellm-capable profile
+          # (`proxy-only` / `package-access` / `internet`) WITHOUT
+          # `services.litellm.enable` produces a sandbox whose guest can reach
+          # the bridge endpoint but finds nothing behind it — so every batch
+          # job dies a few seconds in with no actionable message. Fail this at
+          # EVAL instead, naming the missing backend. (`offline` needs no
+          # backend: its guests get no litellm capability.)
+          assertion = !agentNetwork.caps.litellm || (config.services.litellm.enable or false);
+          message = ''
+            myconfig.ai.microvm: the effective network profile
+            `${effectiveProfile}` lets guests reach the model API, but
+            `services.litellm.enable` is false (or the litellm module is not
+            imported). The guest-side loopback forwarder hands connections to
+            `127.0.0.1:${toString cfg.litellmPort}`, which only exists when the
+            host LiteLLM proxy is enabled — without it every agent batch job
+            dies within seconds. Either enable `services.litellm` on this host
+            or switch the microVM profile to `offline`.
+          '';
+        }
+        {
           assertion = lib.length (lib.unique slotIPs) == lib.length slotIPs;
           message = "myconfig.ai.microvm: generated slot IPv4 addresses are not unique.";
         }
