@@ -1277,12 +1277,14 @@ let
       Commands:
         run --name <task> --repository <path> [--agent <name>] [--branch <br>]
             [--resource-class <class>] [--wait <sec>] [--persist-agent-state]
-            [--attach]
+            [--attach] [--no-preflight]
                               Allocate a free slot, create a standalone clone,
                               bind-mount it at the slot's /workspace source and
                               start the microVM. With --attach, SSH in running
                               'agent-run <agent>' and tear the VM down on exit
-                              (the workspace clone is always kept).
+                              (the workspace clone is always kept). --no-preflight
+                              skips the model-endpoint preflight (an interactive
+                              escape hatch for debugging; 'submit' has none).
         stop <slot|task>      Stop the VM, unmount the bind, drop slot transient
                               state. Keeps workspace/git/patches.
         destroy <slot|task>   Like stop, plus clear ephemeral slot runtime.
@@ -1468,10 +1470,11 @@ let
       cmd_run() {
           require_root run
           local task="" repo="" agent="" branch="" attach=0
-          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0
+          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0 no_preflight=0
           while [[ $# -gt 0 ]]; do
               case "$1" in
                   --persist-agent-state) persist=1; shift ;;
+                  --no-preflight) no_preflight=1; shift ;;
                   --name)       task="''${2-}"; shift 2 ;;
                   --repository) repo="''${2-}"; shift 2 ;;
                   --agent)      agent="''${2-}"; shift 2 ;;
@@ -1485,6 +1488,10 @@ let
                   --branch=*)     branch="''${1#*=}"; shift ;;
                   --resource-class=*) rclass="''${1#*=}"; shift ;;
                   --wait=*)       wait_for="''${1#*=}"; shift ;;
+                  # --no-preflight is a bare boolean flag (like --attach and
+                  # --persist-agent-state): no `=value` form is accepted, so
+                  # `--no-preflight=anything` is rejected as an unknown argument
+                  # rather than silently coercing a non-numeric value to 0.
                   *) die "run: unknown argument '$1'" ;;
               esac
           done
@@ -1507,7 +1514,19 @@ let
           # sandbox whose agent cannot reach LiteLLM dies within seconds and
           # the 95-min real-KVM runs only surfaced that by accident. This is
           # the cheap, read-only host-side check; `doctor` is the deep one.
-          preflight_model_endpoint
+          #
+          # `--no-preflight` is the documented escape hatch for the INTERACTIVE
+          # `run` (a human is present, and a shell in the workspace is still
+          # useful for debugging even when the endpoint is down). `submit`
+          # (batch, no human watching) keeps the preflight FAIL-CLOSED and has
+          # NO such flag, so an unattended run can never boot a doomed VM
+          # silently. The test-only AGENT_MICROVM_SKIP_PREFLIGHT=1 remains the
+          # harness override for both.
+          if (( no_preflight )); then
+              log "WARNING: --no-preflight: skipping the model-endpoint preflight; if the endpoint is unreachable the guest agent will die within seconds (run 'sudo $PROG doctor' to diagnose)"
+          else
+              preflight_model_endpoint
+          fi
 
           mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT"
 

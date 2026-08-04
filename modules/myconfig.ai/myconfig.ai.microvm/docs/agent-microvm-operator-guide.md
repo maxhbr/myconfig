@@ -54,6 +54,9 @@ Options worth knowing:
 --wait <sec>                      bounded wait for a free slot in that class
 --branch <name>                   default: agent/<task>
 --persist-agent-state             keep the agent's DECLARED state for this task
+--no-preflight                    skip the model-endpoint preflight (interactive
+                                  `run` only; `submit` has no such flag — batch
+                                  runs stay fail-closed)
 ```
 
 ## 2. Submit a batch task
@@ -94,6 +97,12 @@ FAST and LOUD instead of a 95-minute investigation. The preflight retries up to
 request) is not mistaken for a dead one. It is skipped under the `offline`
 profile (no endpoint to probe). The `AGENT_MICROVM_SKIP_PREFLIGHT=1` escape
 hatch is **test-only** — production callers must never set it.
+
+Interactive `run` accepts `--no-preflight` to skip the probe deliberately (a
+human is present, and a shell in the workspace is still useful for debugging
+when the endpoint is down); it prints a `WARNING` pointing at `doctor`. Batch
+`submit` has **no** such flag, so an unattended run can never boot a doomed VM
+silently.
 
 ### Failed-job stderr surfacing
 
