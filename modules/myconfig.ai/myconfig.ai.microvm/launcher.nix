@@ -1799,10 +1799,34 @@ let
               waited=$(( waited + 3 ))
           done
 
+          # A concurrent `cancel` for THIS allocation may have already recorded
+          # the authoritative `cancelled` verdict and released the slot while
+          # this loop was sleeping. When that happens the loop above sees a
+          # stopped VM with no readable result and calls it an
+          # infrastructure-error — but a cancellation must NEVER silently
+          # degrade into another state, and this run must not overwrite the
+          # archive that `cancel` already wrote. Detect it by the only
+          # host-side evidence that survives cancel's teardown: the archived
+          # result. Only an archive for THIS task naming state `cancelled` is
+          # accepted (the archive is per-task and written by root only).
+          local cancel_adopted=0
+          if [[ -z "$result_json" && -f "$RESULTS_DIR/$task.json" ]] \
+              && [[ "$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null || true)" == "cancelled" ]]; then
+              log "a concurrent cancel already recorded 'cancelled' for '$task'; keeping that verdict (not '$state')"
+              state="cancelled"
+              cancel_adopted=1
+          fi
+
           case "$state" in
               completed) rc=0 ;;
               failed)    rc=1 ;;
               timed-out) rc=124 ;;
+              # A cancellation is an EXPECTED terminal state, not an
+              # infrastructure error: report the conventional "terminated by
+              # SIGINT" code (128+2), the same code the guest controller puts
+              # in the authoritative result, instead of falling into the 70
+              # bucket below.
+              cancelled) rc=130 ;;
               *)         rc=70 ;;
           esac
 
@@ -1825,6 +1849,11 @@ let
           if [[ -n "$result_json" ]]; then
               archive_controller_result "$task" "$result_json" \
                   || archived_note="<NOT ARCHIVED, see the warning above>"
+          elif (( cancel_adopted )); then
+              # The concurrent `cancel` owns this archive; overwriting it with a
+              # host-generated record would replace the controller's verdict
+              # with a weaker one.
+              [[ -f "$archived" ]] || archived_note="<NOT ARCHIVED>"
           else
               archive_result "$task" "$(host_result_json "$task" "$token" "$slot" \
                   "$agent" "$state" "$rc" "''${reject_reason:-no valid controller result}")" \
@@ -1839,7 +1868,14 @@ let
           # that leaked a mount must not exit 0. It only upgrades a success — a
           # real job failure/timeout keeps its own, more specific code.
           local leaked=0
-          cleanup_slot "$slot" || leaked=1
+          if (( cancel_adopted )); then
+              # `cancel` already ran the token-guarded teardown for this
+              # allocation. Repeating it here would report phantom leaks for
+              # mounts that are legitimately gone.
+              log "slot $slot was already released by the concurrent cancel; skipping teardown"
+          else
+              cleanup_slot "$slot" || leaked=1
+          fi
           emit_event vm-stopped "$state"
           emit_event cleanup-completed "$state" "$rc"
           committed=1
@@ -1897,13 +1933,32 @@ let
           # differently-tokened (i.e. newly allocated) job.
           install -d -m "$JOB_ARCHIVE_DIR_MODE" -o root -g root -- "$RESULTS_DIR"
           request_guest_cancel "$slot" "$task" "$token"
-          local waited=0 vrc=0 cancelled_json=""
+          local waited=0 vrc=0 cancelled_json="" preexisting_json="" terminal_state=""
           if [[ "$(marker_field "$slot" mode || true)" == "batch" ]] && service_active "$slot"; then
               log "waiting up to ''${CANCEL_WAIT}s for the guest controller to confirm"
               while (( waited < CANCEL_WAIT )); do
                   vrc=0
                   verify_job_result "$slot" "$task" "$token" "$agent" || vrc=$?
-                  if (( vrc == 0 )); then cancelled_json="$VERIFY_JSON"; break; fi
+                  if (( vrc == 0 )); then
+                      # A VALID result is not necessarily a CANCELLATION. The
+                      # worker may have finished, failed or hit its deadline
+                      # between planting the request and this poll, and the
+                      # controller then wrote that verdict instead. Adopting it
+                      # as "the cancellation" is how a cancelled task came to be
+                      # archived as `timed-out`: only `.state == "cancelled"`
+                      # confirms the cancellation. Any other terminal state is
+                      # the truthful outcome and is preserved verbatim — the
+                      # host must never rewrite it into a cancellation that did
+                      # not happen.
+                      terminal_state="$(jq -r '.state // ""' <<<"$VERIFY_JSON")"
+                      if [[ "$terminal_state" == "cancelled" ]]; then
+                          cancelled_json="$VERIFY_JSON"
+                      else
+                          preexisting_json="$VERIFY_JSON"
+                          log "task '$task' had already terminated as '$terminal_state' before the cancellation took effect; recording THAT verdict"
+                      fi
+                      break
+                  fi
                   if (( vrc == 3 )); then
                       log "cannot verify the guest result while cancelling: $VERIFY_REASON"
                       emit_event result-rejected infrastructure-error "" "$VERIFY_REASON"
@@ -1926,6 +1981,10 @@ let
           local archived="$RESULTS_DIR/$task.json"
           if [[ -n "$cancelled_json" ]]; then
               archive_controller_result "$task" "$cancelled_json" || true
+          elif [[ -n "$preexisting_json" ]]; then
+              # The job had ALREADY reached a different terminal state; archive
+              # the controller's real verdict rather than a forged cancellation.
+              archive_controller_result "$task" "$preexisting_json" || true
           else
               archive_result "$task" "$(host_result_json "$task" "$token" "$slot" \
                   "$agent" cancelled 130 "cancelled by the operator; the guest controller did not confirm")" \
@@ -1938,7 +1997,11 @@ let
           cleanup_slot_owned "$slot" "$token" || leaked=1
           emit_event cleanup-completed "cancelled" "130"
           if [[ -e "$archived" ]]; then
-              log "cancelled; result recorded at $archived"
+              if [[ -n "$preexisting_json" ]]; then
+                  log "the task had already finished as '$terminal_state' (NOT cancelled); that verdict is recorded at $archived"
+              else
+                  log "cancelled; result recorded at $archived"
+              fi
           else
               log "cancelled; the result could NOT be archived (see the warning above)"
           fi

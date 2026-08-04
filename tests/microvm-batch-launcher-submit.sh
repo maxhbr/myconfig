@@ -155,6 +155,23 @@ plant() {
                 > "$STATE_ROOT/\$slot/workspace/$RESULT_NAME" 2>/dev/null || true
             ;;
         none) ;;
+        # The VM stays "running" and NO result is planted by the stub: the test
+        # plants the authoritative controller document itself. Used by
+        # run_cancel, which needs service_active to keep saying yes so that
+        # cmd_cancel takes its batch confirmation path.
+        stay-active) ;;
+        cancelled)
+            # The guest controller's authoritative CANCELLATION verdict.
+            result "$SPEC_VERSION" "\$task" "\$token" "\$slot" cancelled 130 \\
+                > "\$dir/$CONTROLLER_SUBDIR/$RESULT_NAME"
+            ;;
+        pre-timed-out)
+            # A job that reached its deadline BEFORE any cancellation took
+            # effect. cancel must preserve this verdict verbatim instead of
+            # rewriting it into a cancellation that never happened.
+            result "$SPEC_VERSION" "\$task" "\$token" "\$slot" timed-out 124 \\
+                > "\$dir/$CONTROLLER_SUBDIR/$RESULT_NAME"
+            ;;
         failed)
             # A genuinely-failed agent: the controller records 'failed' + a
             # non-zero exit code, and the worker's own stderr (root-owned,
@@ -344,6 +361,70 @@ run_preflight_fail() {
             exec '$LAUNCHER' submit --name preflight --repository '$REPO' \
                 --agent '$AGENT' --prompt-file '$WORK/prompt-preflight.md' --timeout 30
         " >"$WORK/submit-preflight.log" 2>&1 || rc=$?
+    printf '%s' "$rc"
+}
+
+# run_cancel <state> <exitCode> <task> — allocate a slot with a detached `run`,
+# make its marker look like a BATCH allocation, plant an authoritative
+# CONTROLLER result carrying THAT allocation's own identity (task, token, slot,
+# agent — read back from the session marker, so `verify_job_result` accepts it),
+# then run `cancel`.
+#
+# Deterministic on purpose: the terminal result exists before cancel's first
+# poll, so there is no race to lose. What this pins down is cmd_cancel's
+# DECISION — which document it treats as "the cancellation".
+run_cancel() {
+    local state="$1" code="$2" task="$3"
+    local stub_dir="$WORK/stub-$task"
+    rm -rf "$stub_dir"
+    mkdir -p "$stub_dir" "$WORK/runtime" "$WORK/state"
+    local rc=0
+    "$BWRAP" --unshare-user --uid 0 --gid 0 --unshare-uts --hostname launcher-host \
+        --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc \
+        --dev /dev --proc /proc --tmpfs /tmp \
+        --bind "$WORK" "$WORK" \
+        --bind "$WORK/runtime" "$RUNTIME_ROOT" \
+        --bind "$WORK/state" "$STATE_ROOT" \
+        --bind "$STUBS/systemctl" "$SYSTEMCTL_TARGET" \
+        --bind "$STUBS/mount" "$MOUNT_TARGET" \
+        --bind "$STUBS/umount" "$UMOUNT_TARGET" \
+        --bind "$STUBS/findmnt" "$FINDMNT_TARGET" \
+        --bind "$STUBS/jq" "$JQ_TARGET" \
+        --setenv JQ_ARGV_LOG "$JQ_ARGV_LOG" \
+        --setenv STUB_DIR "$stub_dir" \
+        --setenv STUB_MODE stay-active \
+        --setenv AGENT_MICROVM_SKIP_PREFLIGHT 1 \
+        --setenv HOME "$WORK" \
+        --setenv PLANT_STATE "$state" \
+        --setenv PLANT_CODE "$code" \
+        -- "$FAKEROOT" -- "$BASH_BIN" -c "
+            set -e
+            '$LAUNCHER' run --name '$task' --repository '$REPO' \
+                --agent '$AGENT' >/dev/null 2>&1
+            slot=\"\$('$LAUNCHER' list | awk '\$5 == \"$task\" { print \$1 }')\"
+            [[ -n \$slot ]] || { echo 'NO SLOT ALLOCATED'; exit 64; }
+            marker='$RUNTIME_ROOT'/slots/\$slot/session.json
+            tmp=\$(mktemp)
+            jq '.mode = \"batch\"' \"\$marker\" > \"\$tmp\" && mv -f \"\$tmp\" \"\$marker\"
+            cdir='$RUNTIME_ROOT'/jobs/\$slot/'$CONTROLLER_SUBDIR'
+            mkdir -p \"\$cdir\"
+            ALLOC_TOKEN=\"\$(jq -r .token \"\$marker\")\" \
+            jq -nc --argjson version $SPEC_VERSION \
+                --argjson controllerVersion $CONTROLLER_VERSION \
+                --arg taskId '$task' --arg slot \"\$slot\" \
+                --arg agent '$AGENT' --arg state \"\$PLANT_STATE\" \
+                --argjson exitCode \"\$PLANT_CODE\" \
+                --argjson timedOut \"\$([[ \$PLANT_STATE == timed-out ]] && echo true || echo false)\" \
+                '{version:\$version, controllerVersion:\$controllerVersion,
+                  taskId:\$taskId, allocationToken:\$ENV.ALLOC_TOKEN, slot:\$slot,
+                  agent:\$agent, state:\$state, exitCode:\$exitCode,
+                  startedAt:\"2025-01-01T00:00:00Z\",
+                  finishedAt:\"2025-01-01T00:00:05Z\",
+                  timedOut:\$timedOut, message:\"\"}' > \"\$cdir/$RESULT_NAME\"
+            chown 0:0 \"\$cdir/$RESULT_NAME\"
+            chmod 0600 \"\$cdir/$RESULT_NAME\"
+            exec '$LAUNCHER' cancel '$task'
+        " >"$WORK/cancel-$task.log" 2>&1 || rc=$?
     printf '%s' "$rc"
 }
 
@@ -567,6 +648,61 @@ if grep -q "doctor" "$WORK/submit-preflight.log"; then
     pass "the preflight message points to doctor for diagnosis"
 else
     fail "the preflight message does not mention doctor"
+fi
+
+# --- cancellation: exit code and verdict fidelity --------------------------
+# Observed on real KVM: a cancelled batch task was archived as `timed-out`, and
+# a cancellation exited 70 (the infrastructure-error bucket). Both are host-side
+# defects; the guest controller's own state machine is covered by
+# `microvm-batch-controller-smoke` §4 (token-bound cancel → `cancelled`, foreign
+# token ignored), which is what proves the controller was innocent.
+printf '\n=== 12. a controller CANCELLATION is reported as such ===\n'
+rc="$(run_submit cancelled cancel-state --timeout 30)"
+# 130 = 128+SIGINT, the code the controller itself records. Exit 70 here means
+# `cancelled` fell into the `*)` infrastructure-error bucket of cmd_submit.
+if [[ $rc -eq 130 ]]; then
+    pass "submit exits 130 on a cancelled job (not the 70 infra bucket)"
+else
+    fail "submit exited $rc on a cancelled job, expected 130"
+fi
+if [[ "$(archived cancel-state .state)" == cancelled ]]; then
+    pass "the archived state is 'cancelled'"
+else
+    fail "archived state is '$(archived cancel-state .state)', expected 'cancelled'"
+fi
+if [[ "$(archived cancel-state .source)" == controller ]]; then
+    pass "the cancellation verdict came from the controller"
+else
+    fail "cancellation source is '$(archived cancel-state .source)', expected 'controller'"
+fi
+
+printf '\n=== 13. cancel CONFIRMS only a real cancellation ===\n'
+rc="$(run_cancel cancelled 130 cancel-ok)"
+if [[ "$(archived cancel-ok .state)" == cancelled ]]; then
+    pass "cancel archives the controller's 'cancelled' verdict (exit $rc)"
+else
+    fail "cancel archived '$(archived cancel-ok .state)', expected 'cancelled'"
+fi
+
+# THE REGRESSION: the job had already hit its deadline when cancel ran. Cancel
+# must NOT adopt that result as "the cancellation" — the archive has to keep
+# saying `timed-out`, because that is what actually happened.
+rc="$(run_cancel timed-out 124 cancel-late)"
+case "$(archived cancel-late .state)" in
+    timed-out)
+        pass "cancel preserved the pre-existing 'timed-out' verdict"
+        ;;
+    cancelled)
+        fail "cancel RELABELLED a timed-out job as 'cancelled' (a verdict that never happened)"
+        ;;
+    *)
+        fail "cancel archived '$(archived cancel-late .state)', expected 'timed-out'"
+        ;;
+esac
+if grep -q "already terminated as 'timed-out'" "$WORK/cancel-cancel-late.log"; then
+    pass "cancel told the operator the task had already terminated"
+else
+    fail "cancel did not report the pre-existing terminal state: $(tail -3 "$WORK/cancel-cancel-late.log")"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"
