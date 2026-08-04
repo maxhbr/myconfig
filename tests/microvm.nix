@@ -2110,9 +2110,68 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
-  # (k) NETWORK PROFILES (ticket 3 C): render all four profiles and assert   #
-  #     the rules each one must and must NOT contain, plus the guest-side    #
-  #     configuration derived from the SAME decision (LiteLLM forwarder,     #
+  # (l5-doctor) `agent-microvm doctor` against STUBBED host state. Bug 1:    #
+  #     `doctor` false-failed the LiteLLM ACCEPT rule because it grepped     #
+  #     `iptables -S`'s PRINTED form for `-d <addr> <space> ...`, but       #
+  #     `iptables -S` canonicalises the address (`-d 192.168.83.1` ->        #
+  #     `-d 192.168.83.1/32`), so the pattern's required space never          #
+  #     matched and `doctor` ALWAYS exited non-zero on a healthy host.       #
+  #     The fix tests the rule with `iptables -C <spec>` (exit 0 = exists),  #
+  #     built from the SAME variables network.nix installs the rule with.    #
+  #     This harness drives the REAL `cmd_doctor` through stubs (systemctl,  #
+  #     curl, ip, iptables) the way tests/microvm-batch-*.sh drive the      #
+  #     launcher: a stubbed HEALTHY host must report OK (exit 0), and a      #
+  #     stubbed BROKEN one (the rule genuinely absent) must report non-OK   #
+  #     (exit non-zero) and name the broken check — a negative control that #
+  #     the check was not loosened into something that passes vacuously.     #
+  # ---------------------------------------------------------------------- #
+  microvm-doctor =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+    in
+    pkgs.runCommand "microvm-doctor"
+      {
+        nativeBuildInputs = [
+          pkgs.bubblewrap
+          pkgs.fakeroot
+          pkgs.coreutils
+        ];
+        harness = ./microvm-doctor.sh;
+        LAUNCHER = "${hostLauncher}/bin/agent-microvm";
+        BWRAP = lib.getExe pkgs.bubblewrap;
+        FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
+        BASH_BIN = "${pkgs.bash}/bin/bash";
+        # The EXACT binaries the launcher resolves from its own runtimeInputs;
+        # the harness bind-mounts its stubs over these, so the launcher under
+        # test stays byte-identical to the installed one.
+        SYSTEMCTL_TARGET = "${pkgs.systemd}/bin/systemctl";
+        IP_TARGET = "${pkgs.iproute2}/bin/ip";
+        IPTABLES_TARGET = "${pkgs.iptables}/bin/iptables";
+        CURL_TARGET = "${pkgs.curl}/bin/curl";
+        RUNTIME_ROOT = microvmOpts.runtimeRoot;
+        # The SAME variables the launcher bakes in (and network.nix installs
+        # the rule with), so the harness can assert the doctor's `iptables -C`
+        # spec matches the rule exactly.
+        GATEWAY = microvmOpts.gatewayAddress;
+        SUBNET = microvmOpts.subnet;
+        LITELLM_PORT = toString microvmOpts.litellmPort;
+        BRIDGE = microvmOpts.bridgeName;
+        SLOT_NAMES = lib.concatStringsSep " " (map (s: s.name) enabledSlots);
+      }
+      ''
+        mkdir -p work && cd work
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- doctor harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "microvm-doctor"
+          echo "  launcher: $LAUNCHER"
+          echo
+          cat report.txt
+        } > "$out"
+      '';
   #     http_proxy, resolvers). This is what keeps `internet` from being a   #
   #     mere firewall verdict (it must also carry NAT + a DNS policy) and    #
   #     `package-access` from silently becoming general egress.              #

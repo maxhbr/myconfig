@@ -133,6 +133,12 @@ let
       readonly BRIDGE=${lib.escapeShellArg cfg.bridgeName}
       readonly GATEWAY=${lib.escapeShellArg cfg.gatewayAddress}
       readonly LITELLM_PORT=${toString cfg.litellmPort}
+      # The private subnet the guest slots live in (network.nix). `doctor`
+      # builds the EXACT `iptables -C AGENT_MICROVM_INPUT -s $SUBNET -d
+      # $GATEWAY -p tcp --dport $LITELLM_PORT -j ACCEPT` spec from these SAME
+      # variables network.nix installs the rule with (its `inputAllowLines`),
+      # so the check and the rule it verifies can never drift apart.
+      readonly SUBNET=${lib.escapeShellArg cfg.subnet}
       # Whether the effective profile grants model-API access at all. Under
       # `offline` there is no endpoint to probe, so the preflight/doctor skip
       # the LiteLLM checks rather than reporting a spurious failure.
@@ -2541,7 +2547,8 @@ let
           else
               fail "bridge interface $BRIDGE does NOT exist"
           fi
-          if ip -br addr show "$BRIDGE" 2>/dev/null | grep -qw "$GATEWAY"; then
+          if ip -br addr show "$BRIDGE" 2>/dev/null \
+                  | grep -qw -- "''${GATEWAY//./\\.}"; then
               ok "bridge carries the gateway address $GATEWAY"
           else
               fail "bridge $BRIDGE does NOT carry the gateway address $GATEWAY"
@@ -2553,10 +2560,21 @@ let
           else
               fail "AGENT_MICROVM_INPUT chain is NOT installed (reload the firewall / switch-to-configuration)"
           fi
-          # Escape the dots in $GATEWAY so grep treats them literally (basic
-          # regex `.` matches any char); the `.*` wildcards stay regex.
-          if iptables -S AGENT_MICROVM_INPUT 2>/dev/null \
-                  | grep -q -- "-d ''${GATEWAY//./\\.} .* --dport $LITELLM_PORT .* ACCEPT"; then
+          # Test the rule instead of parsing `iptables -S`'s printed form.
+          # `iptables -S` CANONICALISES the destination address: a rule added
+          # as `-d 192.168.83.1` is printed back as `-d 192.168.83.1/32`, and a
+          # grep for "-d <addr> <space> ..." therefore never matched — so the
+          # check ALWAYS reported a problem and `doctor` exited non-zero on a
+          # healthy host (breaking `sudo agent-microvm doctor && ...`).
+          # `iptables -C <chain> <spec>` exits 0 iff a rule matching <spec>
+          # exists; it is exactly what network.nix itself uses to guard its own
+          # idempotent `-I` inserts. The spec is built from the SAME
+          # `$SUBNET`/`$GATEWAY`/`$LITELLM_PORT` variables network.nix's
+          # `inputAllowLines` installs the rule with, so the two cannot drift —
+          # and `-C` still returns non-zero when the rule is genuinely absent.
+          if iptables -C AGENT_MICROVM_INPUT \
+                  -s "$SUBNET" -d "$GATEWAY" -p tcp --dport "$LITELLM_PORT" -j ACCEPT \
+                  2>/dev/null; then
               ok "INPUT chain ACCEPTs tcp dport $LITELLM_PORT to $GATEWAY from the subnet"
           else
               fail "INPUT chain does NOT ACCEPT the LiteLLM endpoint (guest -> $GATEWAY:$LITELLM_PORT)"
