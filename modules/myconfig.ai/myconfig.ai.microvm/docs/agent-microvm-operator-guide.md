@@ -72,6 +72,39 @@ The command blocks until the guest **controller** writes a terminal result (or t
 host deadline `timeout + job.gracePeriodSeconds` expires), prints the result JSON,
 stops the VM and keeps the clone.
 
+### Model-endpoint preflight
+
+Before booting a VM, `run` and `submit` open a bounded HTTP connection to the
+**same** bridge endpoint a guest would use
+(`http://192.168.83.1:4000/v1/models`, forwarded to the loopback LiteLLM). A
+successful 2xx means the host backend, the bridge address, the bridge-only
+socket and the loopback LiteLLM are all wired up. A failure **aborts before any
+VM is booted** and prints the most likely component to check:
+
+```text
+agent-microvm: PREFLIGHT FAILED: the model endpoint a guest must reach is not
+  reachable at http://192.168.83.1:4000/v1/models (bounded to 3s).
+  …
+  or run: sudo agent-microvm doctor   (full diagnosis)
+```
+
+This makes the "worker dies after 2 s because it cannot reach LiteLLM" failure
+FAST and LOUD instead of a 95-minute investigation. The preflight retries up to
+3 times (3 s each, 2 s apart) so a cold LiteLLM (DB init on first post-boot
+request) is not mistaken for a dead one. It is skipped under the `offline`
+profile (no endpoint to probe). The `AGENT_MICROVM_SKIP_PREFLIGHT=1` escape
+hatch is **test-only** — production callers must never set it.
+
+### Failed-job stderr surfacing
+
+A batch job that exits `failed` (exit 1) surfaces a **bounded** tail (last
+8192 bytes) of the worker's own stderr to the operator's terminal, labelled
+`UNTRUSTED WORKER STDERR`. The worker is untrusted, so its stderr is run through
+`cat -v` (which renders terminal-control bytes as visible `^X`/`M-X`) — a
+hostile worker cannot inject ANSI/OSC escapes into the operator's TTY. The tail
+is written **only** to stderr, never into the authoritative result JSON or the
+structured event stream.
+
 Where things live while a batch task runs (`<jobs> =
 /var/lib/agent-microvms/jobs/<slot>`):
 
@@ -269,12 +302,40 @@ allocation tokens.
 ```bash
 sudo agent-microvm status                 # any slot marked stale: yes ?
 sudo agent-microvm recover --dry-run      # what recovery WOULD do
+sudo agent-microvm doctor                 # diagnose the model-API path
 bridge -d link show | grep -A2 vm-        # every guest TAP must say "isolated on"
                                           # (-d is REQUIRED: plain `bridge link
                                           #  show` prints no port flags)
 sudo iptables -S | grep AGENT_MICROVM     # the rendered profile ruleset
 ss -ltnp | grep 4000                      # forwarder on the BRIDGE address only
 ```
+
+### `agent-microvm doctor`
+
+When `run`/`submit` fails the endpoint preflight (or a guest mysteriously
+cannot reach the model API), `doctor` is the deep, read-only host-side
+diagnosis. It checks every component the model-API path depends on and exits
+non-zero if any check fails, so it is scriptable:
+
+```bash
+sudo agent-microvm doctor
+```
+
+It reports, section by section:
+
+- **host LiteLLM backend** — is `litellm.service` active, and does
+  `127.0.0.1:<litellmPort>/v1/models` answer?
+- **bridge-only forwarder socket** — is `agent-litellm-proxy.socket` active,
+  and is it ordered after `<bridge>-netdev.service` (so `SO_BINDTODEVICE`
+  succeeds at boot)?
+- **private bridge + gateway address** — does the bridge interface exist and
+carry the gateway address?
+- **firewall** — are the `AGENT_MICROVM_INPUT` / `AGENT_MICROVM_FORWARD` chains
+installed, and does the INPUT chain ACCEPT the LiteLLM endpoint?
+- **per-slot SSH host keys** — does every slot have a host-key directory?
+
+Each line is prefixed `OK` or `FAIL` with a concrete remediation hint. Run it
+whenever the preflight fires, before investigating anything else.
 
 ### Infrastructure / protocol errors
 
