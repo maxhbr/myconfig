@@ -65,7 +65,10 @@
         host_hostname = "nuc";
         client = {
           enable = true;
-          co2Exporter.enable = true;
+          co2Exporter = {
+            enable = true;
+            room = "Wohnzimmer";
+          };
         };
       };
     };

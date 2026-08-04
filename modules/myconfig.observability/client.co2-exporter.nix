@@ -128,6 +128,28 @@ in
       '';
     };
 
+    room = mkOption {
+      type = types.str;
+      default = "";
+      example = "Schlafzimmer";
+      description = ''
+        Human-readable name of the room this host's CO2 sensor sits
+        in (e.g. "Schlafzimmer"). When non-empty it is attached as a
+        `room` label to every sample of the `co2` scrape job — i.e.
+        to `air_co2`, `air_temp` *and* `up{job="co2"}` — so the
+        Grafana dashboards can label panels by room instead of by
+        hostname.
+
+        The label is set as a static target label in the host-local
+        vmagent scrape config rather than via the exporter's own
+        `--label.*` flags, because upstream only supports the single
+        hard-coded `tag` label.
+
+        Empty (the default) means no `room` label is emitted at all;
+        the dashboards then fall back to the `host` label.
+      '';
+    };
+
     user = mkOption {
       type = types.str;
       default = "co2-exporter";
@@ -258,7 +280,15 @@ in
           {
             job_name = "co2";
             static_configs = [
-              { targets = [ "127.0.0.1:${toString co2Cfg.port}" ]; }
+              (
+                {
+                  targets = [ "127.0.0.1:${toString co2Cfg.port}" ];
+                }
+                # Only emit the label when a room was configured, so
+                # unconfigured hosts keep their previous (label-free)
+                # time series instead of gaining an empty `room=""`.
+                // lib.optionalAttrs (co2Cfg.room != "") { labels.room = co2Cfg.room; }
+              )
             ];
           }
         ];

@@ -15,6 +15,13 @@
 #   - `air_co2{tag="<…>"}`   CO2 concentration in ppm (gauge)
 #   - `air_temp{tag="<…>"}`  Ambient temperature in °C (gauge)
 #
+# Hosts that set `myconfig.observability.client.co2Exporter.room`
+# additionally carry a `room` label (e.g. `room="Schlafzimmer"`),
+# attached as a static target label by the host-local vmagent. The
+# dashboard prefers that label for panel legends and offers a `room`
+# template variable; sensors without a room fall back to their `host`
+# label (see `withRoom` below).
+#
 # The dashboard provides:
 #   - Big current CO2 + temperature stat tiles with IAQ-coloured
 #     thresholds (green < 600, yellow ≤ 1000, orange ≤ 1500, red
@@ -81,8 +88,32 @@ let
   };
 
   # Label-filter fragment reused in every query so dashboard template
-  # variables are honoured everywhere.
-  filt = ''host=~"$host", tag=~"$tag"'';
+  # variables are honoured everywhere. `$room` has `allValue = ".*"`,
+  # which also matches series that carry no `room` label at all.
+  filt = ''host=~"$host", room=~"$room", tag=~"$tag"'';
+
+  # Not every CO2 sensor has a room configured. To keep legends
+  # readable we synthesise a `room` label from `host` for those
+  # series. `label_replace` unconditionally overwrites its destination
+  # label, so the metric is split into two disjoint halves: the
+  # roomless series (`room=""`, which also matches an absent label)
+  # get the fallback, the ones that already have a room pass through
+  # untouched. `f` wraps each half in whatever function/subquery the
+  # panel needs before the labels are rewritten.
+  perRoom =
+    metric: f:
+    let
+      sel = op: ''${metric}{${filt}, room${op}""}'';
+    in
+    ''(label_replace(${f (sel "=")}, "room", "$1", "host", "(.*)") or ${f (sel "!=")})'';
+
+  # Plain instant-vector selector with the room fallback applied.
+  withRoom = metric: perRoom metric (sel: sel);
+
+  # Legend shown wherever a single series may come from several
+  # sensors: room first (it is what one actually cares about), host
+  # and tag kept as a disambiguator.
+  seriesLegend = "{{room}} ({{host}} / {{tag}})";
 
   co2Dashboard = {
     uid = "myconfig-co2";
@@ -114,6 +145,27 @@ let
         sort = 1;
       }
       {
+        name = "room";
+        label = "room";
+        type = "query";
+        datasource = "VictoriaMetrics";
+        query = ''label_values(air_co2{host=~"$host"}, room)'';
+        refresh = 2;
+        includeAll = true;
+        multi = true;
+        sort = 1;
+        # Sensors without a configured room have no `room` label, so
+        # they are not listed in this dropdown. `.*` (the "All" value)
+        # matches them nonetheless, which keeps the default view
+        # complete.
+        allValue = ".*";
+        current = {
+          selected = true;
+          text = [ "All" ];
+          value = [ "$__all" ];
+        };
+      }
+      {
         name = "tag";
         label = "tag";
         type = "query";
@@ -134,9 +186,10 @@ let
         type = "stat";
         title = "Current CO2 (ppm)";
         description = ''
-          Latest CO2 reading. Coloured against standard indoor air
-          quality guidance: green < 600 ppm, yellow ≤ 1000 ppm,
-          orange ≤ 1500 ppm, red above.
+          Latest CO2 reading per room. Coloured against standard
+          indoor air quality guidance: green < 600 ppm, yellow ≤ 1000
+          ppm, orange ≤ 1500 ppm, red above. Sensors without a
+          configured room are labelled by hostname instead.
         '';
         datasource = "VictoriaMetrics";
         gridPos = {
@@ -153,7 +206,7 @@ let
           };
           colorMode = "background";
           graphMode = "area";
-          textMode = "auto";
+          textMode = "value_and_name";
         };
         fieldConfig.defaults = {
           unit = "ppm";
@@ -162,8 +215,8 @@ let
         };
         targets = [
           {
-            expr = "avg(air_co2{${filt}})";
-            legendFormat = "CO2";
+            expr = "avg by (room) (${withRoom "air_co2"})";
+            legendFormat = "{{room}}";
             refId = "A";
           }
         ];
@@ -171,7 +224,7 @@ let
       {
         id = 2;
         type = "stat";
-        title = "Current temperature (°C)";
+        title = "Current temperature (°C) per room";
         datasource = "VictoriaMetrics";
         gridPos = {
           h = 6;
@@ -187,7 +240,7 @@ let
           };
           colorMode = "background";
           graphMode = "area";
-          textMode = "auto";
+          textMode = "value_and_name";
         };
         fieldConfig.defaults = {
           unit = "celsius";
@@ -196,8 +249,8 @@ let
         };
         targets = [
           {
-            expr = "avg(air_temp{${filt}})";
-            legendFormat = "temperature";
+            expr = "avg by (room) (${withRoom "air_temp"})";
+            legendFormat = "{{room}}";
             refId = "A";
           }
         ];
@@ -207,9 +260,10 @@ let
         type = "stat";
         title = "Max CO2 (last 24h)";
         description = ''
-          Highest CO2 value seen in the dashboard's time window —
-          useful for catching short spikes (closed-door meetings,
-          cooking, etc.) that the current-value tile would miss.
+          Highest CO2 value per room seen in the dashboard's time
+          window — useful for catching short spikes (closed-door
+          meetings, cooking, etc.) that the current-value tile would
+          miss.
         '';
         datasource = "VictoriaMetrics";
         gridPos = {
@@ -226,7 +280,7 @@ let
           };
           colorMode = "background";
           graphMode = "none";
-          textMode = "auto";
+          textMode = "value_and_name";
         };
         fieldConfig.defaults = {
           unit = "ppm";
@@ -235,8 +289,8 @@ let
         };
         targets = [
           {
-            expr = "max_over_time(air_co2{${filt}}[$__range])";
-            legendFormat = "max CO2";
+            expr = "max by (room) (${perRoom "air_co2" (sel: "max_over_time(${sel}[$__range])")})";
+            legendFormat = "{{room}}";
             refId = "A";
           }
         ];
@@ -250,7 +304,8 @@ let
         type = "timeseries";
         title = "CO2 over time (ppm)";
         description = ''
-          CO2 concentration per host/tag. Threshold bands at 600,
+          CO2 concentration per room (falling back to host/tag for
+          sensors without a configured room). Threshold bands at 600,
           1000 and 1500 ppm mirror the IAQ guidance used in the stat
           tiles above.
         '';
@@ -286,8 +341,8 @@ let
         };
         targets = [
           {
-            expr = "air_co2{${filt}}";
-            legendFormat = "{{host}} / {{tag}}";
+            expr = withRoom "air_co2";
+            legendFormat = seriesLegend;
             refId = "A";
           }
         ];
@@ -446,12 +501,12 @@ let
         targets =
           let
             outdoor = ''weather_temperature_celsius{location="Augsburg"}'';
-            indoor = "air_temp{${filt}}";
+            indoor = withRoom "air_temp";
           in
           [
             {
               expr = indoor;
-              legendFormat = "{{host}} / {{tag}}";
+              legendFormat = seriesLegend;
               refId = "A";
             }
             # Only show when outdoor < min(indoor) — opening a window cools the room.
@@ -497,7 +552,8 @@ let
         description = ''
           Share of the dashboard time window during which the CO2
           reading exceeded 1000 ppm (the threshold above which most
-          people start reporting drowsiness / loss of concentration).
+          people start reporting drowsiness / loss of concentration),
+          broken down per room.
         '';
         datasource = "VictoriaMetrics";
         gridPos = {
@@ -514,7 +570,7 @@ let
           };
           colorMode = "background";
           graphMode = "none";
-          textMode = "auto";
+          textMode = "value_and_name";
         };
         fieldConfig.defaults = {
           unit = "percentunit";
@@ -545,8 +601,10 @@ let
         };
         targets = [
           {
-            expr = "avg_over_time((air_co2{${filt}} > bool 1000)[$__range:1m])";
-            legendFormat = "share > 1000 ppm";
+            expr = "avg by (room) (${
+              perRoom "air_co2" (sel: "avg_over_time((${sel} > bool 1000)[$__range:1m])")
+            })";
+            legendFormat = "{{room}}";
             refId = "A";
           }
         ];
@@ -557,8 +615,8 @@ let
         title = "Time above 1500 ppm";
         description = ''
           Share of the dashboard time window in the "poor" CO2 band
-          (> 1500 ppm). Anything above 0 here is a strong nudge to
-          open a window.
+          (> 1500 ppm), broken down per room. Anything above 0 here
+          is a strong nudge to open a window.
         '';
         datasource = "VictoriaMetrics";
         gridPos = {
@@ -575,7 +633,7 @@ let
           };
           colorMode = "background";
           graphMode = "none";
-          textMode = "auto";
+          textMode = "value_and_name";
         };
         fieldConfig.defaults = {
           unit = "percentunit";
@@ -602,8 +660,10 @@ let
         };
         targets = [
           {
-            expr = "avg_over_time((air_co2{${filt}} > bool 1500)[$__range:1m])";
-            legendFormat = "share > 1500 ppm";
+            expr = "avg by (room) (${
+              perRoom "air_co2" (sel: "avg_over_time((${sel} > bool 1500)[$__range:1m])")
+            })";
+            legendFormat = "{{room}}";
             refId = "A";
           }
         ];
@@ -646,8 +706,15 @@ let
         };
         targets = [
           {
-            expr = ''up{job="co2", host=~"$host"}'';
-            legendFormat = "{{host}}";
+            # `up` carries the same static target labels as the
+            # exporter's own samples, so the room fallback applies
+            # here too.
+            expr =
+              let
+                sel = op: ''up{job="co2", host=~"$host", room=~"$room", room${op}""}'';
+              in
+              ''(label_replace(${sel "="}, "room", "$1", "host", "(.*)") or ${sel "!="})'';
+            legendFormat = "{{room}} ({{host}})";
             refId = "A";
           }
         ];

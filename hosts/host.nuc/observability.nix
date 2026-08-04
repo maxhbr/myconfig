@@ -12,7 +12,10 @@
     # on this host (VID:PID 04d9:a052). Exposes `air_co2` (ppm) and
     # `air_temp` (°C); the central Grafana dashboard is provisioned
     # via host.co2.nix.
-    client.co2Exporter.enable = true;
+    client.co2Exporter = {
+      enable = true;
+      room = "Arbeitszimmer";
+    };
 
     # Outdoor weather metrics for Augsburg, fetched from Open-Meteo
     # every 10 minutes and emitted via the node_exporter textfile
