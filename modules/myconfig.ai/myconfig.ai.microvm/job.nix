@@ -443,6 +443,11 @@ let
       readonly WORKER_GID=${toString paths.workerGid}
       readonly WORKER_KILL_GRACE=${toString workerKillGraceSeconds}
       readonly POLL_INTERVAL=2
+      # `systemctl start --no-block` only ENQUEUES the job, so the unit can
+      # legitimately still read `inactive` for a moment (or longer, if it is
+      # waiting for one of its dependencies). Only after this window does a
+      # still-inactive worker count as "it never ran".
+      readonly WORKER_STARTUP_GRACE=60
       readonly ASSERT_PATHS=${lib.getExe agent-job-assert-paths}
       # Every key a v${toString paths.specVersion} spec may carry. Anything else
       # is rejected: an unknown field means host and guest disagree about the
@@ -734,8 +739,14 @@ let
       # --- (f) supervise: deadline + cancellation + exit collection --------
       waited=0
       active_state=""
+      # Set once the worker unit has actually been seen running, so a queued
+      # start is never mistaken for a finished job.
+      worker_seen=0
       while :; do
           active_state="$(unit_prop ActiveState)"
+          case "$active_state" in
+              activating|active|deactivating|reloading) worker_seen=1 ;;
+          esac
           # Type=oneshot + RemainAfterExit: a finished worker is `active`
           # (SubState=exited) or `failed`, and its exit status stays readable
           # until the controller stops the unit.
@@ -746,8 +757,10 @@ let
               break
           fi
           # Gone without ever reporting a status: treat as an infrastructure
-          # error below, never as success.
-          if [[ -z "$active_state" || "$active_state" == "inactive" ]] && (( waited > 0 )); then
+          # error below, never as success. Only once the startup window is over
+          # (or the worker was seen running and then vanished).
+          if [[ -z "$active_state" || "$active_state" == "inactive" ]] \
+              && (( worker_seen || waited >= WORKER_STARTUP_GRACE )); then
               break
           fi
           if cancel_requested; then
