@@ -97,6 +97,10 @@ myconfig.ai.microvm = {
 | `guestDotfiles.enable` | `true` | Provision the guest `agent` user with the host primary user's fish + coding-agent dotfiles (home-manager in the guest). |
 | `guestDotfiles.homeFilePrefixes` | `.pi/`, `.codex/`, `.agents/`, `.qwen/`, `.config/git/`, `.gitconfig` | Allowlist of `home.file` keys copied from the host primary user. |
 | `guestDotfiles.xdgConfigPrefixes` | `fish/`, `opencode/` | Allowlist of `xdg.configFile` keys copied from the host primary user. |
+| `guestModelConfig.enable` | `true` | Guest boot-time model discovery: query the loopback LiteLLM endpoint and render the **live** model list into pi + opencode config. See [Boot-time model discovery](#boot-time-model-discovery). |
+| `guestModelConfig.providerKey` / `providerName` | `litellm` / `LiteLLM (microVM)` | Provider key/name written into the generated configs. The key matches the host-side generators, so the runtime list *replaces* the build-time one. |
+| `guestModelConfig.defaultContextWindow` / `maxTokens` | `131072` / `4096` | Fallbacks for models whose real values the endpoint does not expose. |
+| `guestModelConfig.attempts` / `retryDelaySeconds` / `timeoutSeconds` | `5` / `2` / `5` | Endpoint query retry/timeout budget. Exhausting it is **not** an error (fail soft). |
 | `networkProfile` | `"proxy-only"` | Named guest network policy. See [Network profiles](#network-profiles). |
 | `packageProxyPort` | `null` | **Required** by `networkProfile = "package-access"`: the one host proxy port guests may reach. |
 | `dnsServers` | `[ ]` | Explicit DNS policy for `networkProfile = "internet"` (empty = the host on the bridge). |
@@ -105,6 +109,40 @@ myconfig.ai.microvm = {
 Deprecated / removed spellings (each warns or fails with a pointer; see
 [Migration](#migration)): `slotCount`, `defaultVcpu`, `defaultMemoryMiB`,
 `allowPublicInternet`, `allowPrivateNetworks`, `allowInterVmTraffic`.
+
+### Boot-time model discovery
+
+The agent configs a sandbox receives are **copies of build-time-rendered host
+dotfiles** (see `guest-home.nix`): pi's
+`~/.pi/agent/extensions/myconfig-providers.ts` and opencode's
+`~/.config/opencode/opencode.json` both freeze
+`services.litellm.settings.model_list` as of the guest image build. The host
+proxy decides its real model list at *runtime*, so those copies drift.
+
+`agent-model-config.service` (guest, oneshot, user `agent`, ordered after the
+guest home-manager activation and before the batch-job controller) queries
+`http://127.0.0.1:<litellmPort>/v1/models` — the same loopback forwarder every
+guest agent talks to — optionally enriches context windows from
+`/model/info`, and renders:
+
+| Agent | Written to | Picked up because |
+| --- | --- | --- |
+| pi | `~/.pi/agent/extensions/zz-microvm-models.ts` | pi auto-discovers `~/.pi/agent/extensions/*.ts`; the `zz-` prefix loads after `myconfig-providers.ts` and re-registering the same provider key wins. |
+| opencode | `/run/agent-model-config/opencode.json` (`OPENCODE_CONFIG`) | opencode loads `$OPENCODE_CONFIG` *in addition to*, and after, the global config, deep-merging it. |
+
+The build-time copies are read-only store symlinks and are never modified. No
+secrets are involved: only model IDs are discovered and the API key stays the
+`not-needed` placeholder (§17).
+
+Fail-soft: if the endpoint is unreachable (profile `offline`, host proxy down,
+boot race) the unit logs and exits 0, leaving the copied configs in place. Under
+`networkProfile = "offline"` there is no forwarder at all, so the unit is not
+even created. Inspect a live sandbox with:
+
+```bash
+agent-microvm ssh agent-normal-0 -- systemctl status agent-model-config
+agent-microvm ssh agent-normal-0 -- agent-model-config   # re-render on demand
+```
 
 ### Resource classes
 

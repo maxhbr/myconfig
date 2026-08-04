@@ -665,6 +665,56 @@ section_boot() {
     fi
 }
 
+# Assert the guest rendered its agent model configs from the LIVE endpoint.
+# Property checked: the number of models the generated configs advertise equals
+# the number the endpoint actually serves — a stale (build-time) config would
+# almost always disagree, and an unreachable endpoint yields SKIP, never a pass.
+assert_model_config() {
+    local slot="$1" state endpoint_count opencode_count pi_file opencode_file got_cfg
+    opencode_file=/run/agent-model-config/opencode.json
+    pi_file=/home/agent/.pi/agent/extensions/zz-microvm-models.ts
+
+    state="$(guest "$slot" sh -c "systemctl show agent-model-config.service --property=Result --value" 2>/dev/null || true)"
+    state="${state//$'\r'/}"
+    if [[ -z $state ]]; then
+        skip "boot-time model discovery: agent-model-config.service is not readable in $slot"
+        return
+    fi
+    if [[ $state == success ]]; then
+        pass "agent-model-config.service completed successfully in $slot"
+    else
+        fail "agent-model-config.service did not succeed in $slot (Result=$state)"
+    fi
+
+    check "the generated opencode overlay config exists and lists models" \
+        guest "$slot" sh -c "jq -e '.provider.litellm.models | length > 0' $opencode_file >/dev/null"
+    check "the generated pi provider extension exists and registers the provider" \
+        guest "$slot" sh -c "grep -q '\"litellm\"' $pi_file"
+
+    # The rendered lists must match the LIVE endpoint, not the frozen host copy.
+    endpoint_count="$(guest "$slot" sh -c "curl -fsS -m 10 http://127.0.0.1:$LITELLM_PORT/v1/models | jq -r '[.data[].id] | unique | length'" 2>/dev/null || true)"
+    opencode_count="$(guest "$slot" sh -c "jq -r '.provider.litellm.models | length' $opencode_file" 2>/dev/null || true)"
+    endpoint_count="${endpoint_count//$'\r'/}"
+    opencode_count="${opencode_count//$'\r'/}"
+    if [[ ! $endpoint_count =~ ^[0-9]+$ ]] || ((endpoint_count == 0)); then
+        skip "boot-time model discovery: the endpoint reported no usable model count, so freshness cannot be decided"
+    elif [[ $opencode_count == "$endpoint_count" ]]; then
+        pass "the generated agent configs list exactly the $endpoint_count model(s) the endpoint serves"
+    else
+        fail "the generated agent configs list $opencode_count model(s) but the endpoint serves $endpoint_count (stale config)"
+    fi
+
+    # The overlay only takes effect if opencode is actually pointed at it.
+    # shellcheck disable=SC2016  # the variable must expand in the GUEST
+    got_cfg="$(guest_login "$slot" 'printf %s "${OPENCODE_CONFIG-}"' 2>/dev/null || true)"
+    got_cfg="${got_cfg//$'\r'/}"
+    if [[ $got_cfg == "$opencode_file" ]]; then
+        pass "the guest login environment points opencode at $opencode_file"
+    else
+        fail "OPENCODE_CONFIG is '$got_cfg', expected '$opencode_file' (the generated overlay would be ignored)"
+    fi
+}
+
 # --- (2) network (proxy-only) ---------------------------------------------
 section_net() {
     section "network: proxy-only allow/deny matrix (ticket 6 A.2)"
@@ -684,6 +734,12 @@ section_net() {
         guest "$slot" curl -fsS -m 10 -o /dev/null "http://127.0.0.1:$LITELLM_PORT/v1/models"
     check "guest reaches the LiteLLM endpoint on the bridge gateway" \
         guest "$slot" curl -fsS -m 10 -o /dev/null "http://$GATEWAY:$LITELLM_PORT/v1/models"
+
+    # Boot-time model discovery (guest-model-config.nix): the guest must have
+    # turned the LIVE /v1/models answer into pi + opencode config, replacing the
+    # build-time model lists copied from the host dotfiles. Only decidable while
+    # the endpoint above is reachable, which the two checks just proved.
+    assert_model_config "$slot"
 
     # DENIED — every one of these succeeding is a security failure, so all of
     # them use check_denied: the SSH channel is re-proved after each denial and a

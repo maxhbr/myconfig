@@ -202,6 +202,14 @@ Denied (each success here is a security failure):
 public IP, a public DNS server, public name resolution, and any IPv6 default
 route that could bypass the IPv4 policy.
 
+Also asserted here (it is only decidable while the endpoint above is reachable):
+boot-time model discovery — `agent-model-config.service` succeeded, the
+generated `/run/agent-model-config/opencode.json` and
+`~/.pi/agent/extensions/zz-microvm-models.ts` exist and register the provider,
+their model count **equals** the count the live endpoint serves (a stale
+build-time list disagrees), and `OPENCODE_CONFIG` points opencode at the
+overlay. See [Boot-time model discovery](agent-microvm.md#boot-time-model-discovery).
+
 ### `l2` — two-guest layer-2 isolation
 
 | Expected outcome |

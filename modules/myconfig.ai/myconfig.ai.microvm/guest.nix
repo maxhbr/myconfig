@@ -71,6 +71,11 @@
   # firewall is rendered from, so guest and host can never disagree about what
   # the guest is allowed to reach.
   agentNetwork,
+  # The ONE definition of the guest boot-time model discovery (the
+  # `agent-model-config` oneshot + the env var pointing the agents at its
+  # output), from guest-model-config.nix
+  # (`_module.args.agentModelConfig`).
+  agentModelConfig,
   ...
 }:
 let
@@ -118,6 +123,10 @@ let
     ANTHROPIC_API_KEY = "not-needed";
   }
   // agentRegistry.guestEnvironment
+  # Points opencode at the boot-time-rendered overlay config carrying the LIVE
+  # model list of the host LiteLLM proxy (see guest-model-config.nix). Empty
+  # when that discovery is disabled or the profile forbids the model API.
+  // agentModelConfig.guestEnvironment
   // lib.optionalAttrs netCaps.packageProxy (
     let
       proxyUrl = "http://${cfg.gatewayAddress}:${toString cfg.packageProxyPort}";
@@ -205,6 +214,11 @@ let
       # starts. Slot-independent, because the job share always appears at the
       # same guest path.
       (agentJobs.mkGuestModule slot)
+      # Boot-time model discovery: query the loopback LiteLLM endpoint and
+      # render the LIVE model list into pi + opencode config, overriding the
+      # build-time lists copied from the host dotfiles. Empty attrset when
+      # disabled or when the profile has no model API at all.
+      agentModelConfig.guestModule
       # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
       # directories the host prepared for this run; a run without
       # --persist-agent-state sees an empty share and keeps the disposable home.
