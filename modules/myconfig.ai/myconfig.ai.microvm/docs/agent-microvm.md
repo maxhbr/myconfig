@@ -40,6 +40,7 @@ secure default prioritises **isolation over convenience**.
 
 | Document | Contents |
 | --- | --- |
+| [How-to](./agent-microvm-howto.md) | **start here**: one full, linear journey — `doctor`, interactive `run`/workmux, one batch `submit`, importing the branch, cleanup |
 | this file | activation, option reference, agent registry, network profiles, the dedicated SSH key, batch job format, limitations |
 | [Architecture](./agent-microvm-architecture.md) | module map, slot pool, workspace indirection, network path, credential boundary, execution paths, state lifetimes |
 | [Operator guide](./agent-microvm-operator-guide.md) | exact procedures: start, submit, status, attach, cancel, collect, remove, recover, logs |
