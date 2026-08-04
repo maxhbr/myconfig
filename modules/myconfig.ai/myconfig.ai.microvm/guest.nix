@@ -59,7 +59,8 @@
   # from hostkeys.nix (`_module.args.agentHostKeys`).
   agentHostKeys,
   # The ONE definition of the batch-job format/paths plus the guest-side
-  # `agent-job` runner + service, from job.nix (`_module.args.agentJobs`).
+  # TRUSTED controller + UNTRUSTED worker units, from job.nix
+  # (`_module.args.agentJobs`).
   agentJobs,
   # The ONE definition of the task-scoped agent-state paths + the guest-side
   # linker, from state.nix (`_module.args.agentState`).
@@ -158,9 +159,11 @@ let
       # feature is disabled, so a bare guest keeps no home-manager overhead.
       { imports = [ inputs.home.nixosModules.home-manager ]; }
       (mkGuestHome { inherit pkgs; })
-      # Unattended batch execution (ticket 4): the `agent-job` runner + its
-      # inert-unless-a-job-is-present oneshot. Slot-independent, because the
-      # job share always appears at the same guest path.
+      # Unattended batch execution (ticket 4, trust-split in ticket 7): the
+      # TRUSTED `agent-job-controller` oneshot (inert unless the host placed a
+      # spec in the share) plus the UNTRUSTED `agent-job-worker@` template it
+      # starts. Slot-independent, because the job share always appears at the
+      # same guest path.
       (agentJobs.mkGuestModule slot)
       # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
       # directories the host prepared for this run; a run without

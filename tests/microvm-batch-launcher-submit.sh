@@ -29,9 +29,9 @@
 set -euo pipefail
 
 for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET MOUNT_TARGET \
-    UMOUNT_TARGET FINDMNT_TARGET RUNTIME_ROOT STATE_ROOT INPUT_SUBDIR \
-    CONTROLLER_SUBDIR WORKER_SUBDIR SPEC_NAME PROMPT_NAME RESULT_NAME \
-    SPEC_VERSION CONTROLLER_VERSION AGENT WORKER_UID; do
+    UMOUNT_TARGET FINDMNT_TARGET JQ_TARGET RUNTIME_ROOT STATE_ROOT INPUT_SUBDIR \
+    CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR SPEC_NAME PROMPT_NAME \
+    RESULT_NAME SPEC_VERSION CONTROLLER_VERSION AGENT WORKER_UID; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
@@ -96,7 +96,8 @@ plant() {
     local slot="\$1" dir="\$jobs_root/\$slot" token
     # Record what the launcher actually created (this is the trust boundary).
     for p in "\$dir" "\$dir/$INPUT_SUBDIR" "\$dir/$CONTROLLER_SUBDIR" \\
-             "\$dir/$WORKER_SUBDIR" "\$dir/$INPUT_SUBDIR/$SPEC_NAME" \\
+             "\$dir/$WORKER_SUBDIR" "\$dir/$WORKER_LOGS_SUBDIR" \\
+             "\$dir/$INPUT_SUBDIR/$SPEC_NAME" \\
              "\$dir/$INPUT_SUBDIR/$PROMPT_NAME"; do
         if [[ -e \$p ]]; then
             stat -c '%n %u %g %a' -- "\$p" >> "\$STUB_DIR/layout"
@@ -109,12 +110,16 @@ plant() {
     printf '%s' "\$token" > "\$STUB_DIR/token"
     local task
     task="\$(jq -r '.taskId // ""' "\$dir/$INPUT_SUBDIR/$SPEC_NAME")"
+    # The token goes through the ENVIRONMENT here too, so that the argv
+    # recorder below only ever sees the LAUNCHER's own jq invocations
+    # (/proc/<pid>/cmdline is world-readable, which is the whole point).
     result() {
-        jq -nc --argjson version "\$1" --argjson controllerVersion "$CONTROLLER_VERSION" \\
-            --arg taskId "\$2" --arg allocationToken "\$3" --arg slot "\$4" \\
+        ALLOC_TOKEN="\$3" jq -nc --argjson version "\$1" \\
+            --argjson controllerVersion "$CONTROLLER_VERSION" \\
+            --arg taskId "\$2" --arg slot "\$4" \\
             --arg agent "$AGENT" --arg state "\$5" --argjson exitCode "\$6" \\
             '{version:\$version, controllerVersion:\$controllerVersion,
-              taskId:\$taskId, allocationToken:\$allocationToken, slot:\$slot,
+              taskId:\$taskId, allocationToken:\$ENV.ALLOC_TOKEN, slot:\$slot,
               agent:\$agent, state:\$state, exitCode:\$exitCode,
               startedAt:"2025-01-01T00:00:00Z", finishedAt:"2025-01-01T00:00:05Z",
               timedOut:false, message:""}'
@@ -226,7 +231,25 @@ done
 printf '%s\n' "\$target"
 exit 0
 EOF
+# --- an ARGV RECORDER over the exact `jq` the launcher resolves -------------
+# The allocation token must never appear in a process's ARGUMENT VECTOR:
+# /proc/<pid>/cmdline is world-readable (0444) for every local user, while
+# /proc/<pid>/environ is 0400. This records the argv of every jq run inside the
+# sandbox; the assertions below require that the ACTIVE token never shows up in
+# it (and that the recorder actually fired, so the check cannot pass vacuously).
+JQ_ARGV_LOG="$WORK/jq-argv.log"
+: >"$JQ_ARGV_LOG"
+cp -L "$JQ_TARGET" "$WORK/jq-real"
+chmod +x "$WORK/jq-real"
+cat >"$STUBS/jq" <<EOF
+#!$BASH_BIN
+printf '%s\n' "\$*" >> "\$JQ_ARGV_LOG"
+exec "$WORK/jq-real" "\$@"
+EOF
 chmod +x "$STUBS"/*
+if ! "$WORK/jq-real" -n '1' >/dev/null 2>&1; then
+    skip_all "the copied jq does not run here (cannot record argv)"
+fi
 
 # --- running the launcher ---------------------------------------------------
 # run_submit <mode> <task> [extra submit args...]
@@ -247,6 +270,8 @@ run_submit() {
         --bind "$STUBS/mount" "$MOUNT_TARGET" \
         --bind "$STUBS/umount" "$UMOUNT_TARGET" \
         --bind "$STUBS/findmnt" "$FINDMNT_TARGET" \
+        --bind "$STUBS/jq" "$JQ_TARGET" \
+        --setenv JQ_ARGV_LOG "$JQ_ARGV_LOG" \
         --setenv STUB_DIR "$stub_dir" \
         --setenv STUB_MODE "$mode" \
         --setenv HOME "$WORK" \
@@ -294,6 +319,11 @@ check_layout() {
 check_layout "/$INPUT_SUBDIR" "0 755" "input/ is root-owned 0755"
 check_layout "/$CONTROLLER_SUBDIR" "0 700" "controller/ is root-owned 0700 (worker cannot read it)"
 check_layout "/$WORKER_SUBDIR" "$WORKER_UID 755" "worker/ belongs to the guest agent"
+# The worker's stdout/stderr are opened by the guest's systemd AS ROOT (and it
+# follows symlinks), so their directory must be root-owned and must NOT sit
+# inside the agent-owned worker/ dir, where the agent could rename it and plant
+# a symlink.
+check_layout "/$WORKER_LOGS_SUBDIR" "0 755" "worker-logs/ is ROOT-owned (systemd opens the logs as root)"
 check_layout "/$INPUT_SUBDIR/$SPEC_NAME" "0 400" "the spec is root-only 0400 (it carries the token)"
 check_layout "/$INPUT_SUBDIR/$PROMPT_NAME" "0 444" "the prompt is world-readable, writable by nobody"
 if jq -e '.allocationToken | test("^[0-9a-f]{64}$")' "$WORK/stub-ok-task/spec.json" >/dev/null; then
@@ -307,6 +337,33 @@ if jq -e 'has("command") or has("exec") or has("executable")' \
 else
     pass "the spec names no executable"
 fi
+
+printf '\n=== 2b. the allocation token stays out of every process ARGV ===\n'
+# EXECUTED property: every jq run inside the sandbox was recorded argv-for-argv
+# (the recorder is bound over the exact store path the launcher resolves). The
+# ACTIVE allocation token must not appear in any of them, because
+# /proc/<pid>/cmdline is world-readable while the launcher runs.
+token="$(cat "$WORK/stub-ok-task/token")"
+if [[ -s $JQ_ARGV_LOG ]]; then
+    pass "the argv recorder actually observed jq invocations ($(wc -l <"$JQ_ARGV_LOG") of them)"
+else
+    fail "the argv recorder saw nothing: the wrapper was not the jq the launcher ran"
+fi
+if [[ -n $token ]] && grep -qF -- "$token" "$JQ_ARGV_LOG"; then
+    fail "the allocation token appeared in a process argv: $(grep -F -- "$token" "$JQ_ARGV_LOG" | head -1)"
+else
+    pass "no process the launcher ran received the allocation token in its argv"
+fi
+if [[ "$(archived ok-task .allocationToken)" == "$token" ]]; then
+    pass "the token IS recorded in the archived result (so the check is not vacuous)"
+else
+    fail "the archived result does not carry the allocation token"
+fi
+
+printf '\n=== 2c. the archived result is root-only (it carries the token) ===\n'
+# Real modes, not fakeroot metadata: mktemp+chmod / install -d set them.
+expect "the result archive directory is 0700" 700 "$(stat -c %a "$OUT_RUNTIME/results")"
+expect "the archived result file is 0600" 600 "$(stat -c %a "$OUT_RUNTIME/results/ok-task.json")"
 
 printf '\n=== 3. a result from another allocation is rejected ===\n'
 rc="$(run_submit wrong-token stale-task --timeout 30)"

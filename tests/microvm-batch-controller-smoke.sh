@@ -30,9 +30,10 @@
 # runtime-validation.sh --section forgery.
 set -euo pipefail
 
-for v in BWRAP FAKEROOT CONTROLLER VERIFIER SYSTEMCTL_TARGET BASH_BIN \
-    SPEC_VERSION INPUT_SUBDIR CONTROLLER_SUBDIR WORKER_SUBDIR SPEC_NAME \
-    PROMPT_NAME CANCEL_NAME RESULT_NAME STATE_NAME WORKER_UID SLOT TASK AGENT; do
+for v in BWRAP FAKEROOT CONTROLLER VERIFIER SYSTEMCTL_TARGET BASH_BIN JQ_TARGET \
+    SPEC_VERSION INPUT_SUBDIR CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR \
+    SPEC_NAME PROMPT_NAME CANCEL_NAME RESULT_NAME STATE_NAME WORKER_STDOUT_NAME \
+    WORKER_UID SLOT TASK AGENT; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
@@ -131,6 +132,31 @@ exit 0
 EOF
 chmod +x "$STUB"
 
+# --- an ARGV RECORDER over the exact `jq` the controller resolves -----------
+# The allocation token must never appear in a process's ARGUMENT VECTOR:
+# /proc/<pid>/cmdline is world-readable (0444) and the untrusted worker shares
+# the guest PID namespace, so an argument would hand it the one value it needs
+# to mint a result the host would accept. /proc/<pid>/environ is 0400, so the
+# token travels in the environment instead.
+#
+# This records the argv of EVERY jq the controller runs (the wrapper is
+# bind-mounted over the store path the controller's own PATH resolves) and the
+# assertions below require that none of them ever contained the token. The
+# recorder must also actually fire — an empty log fails the check rather than
+# passing vacuously.
+JQ_ARGV_LOG="$WORK/jq-argv.log"
+cp -L "$JQ_TARGET" "$WORK/jq-real"
+chmod +x "$WORK/jq-real"
+cat >"$WORK/jq-wrapper" <<EOF
+#!$BASH_BIN
+printf '%s\n' "\$*" >> "\$JQ_ARGV_LOG"
+exec "$WORK/jq-real" "\$@"
+EOF
+chmod +x "$WORK/jq-wrapper"
+if ! "$WORK/jq-real" -n '1' >/dev/null 2>&1; then
+    skip_all "the copied jq does not run here (cannot record argv)"
+fi
+
 # --- fixture ---------------------------------------------------------------
 FIXTURE="$WORK/share"
 WSFIXTURE="$WORK/workspace"
@@ -175,7 +201,8 @@ run_controller() {
     export STUB_LOG="$WORK/systemctl.log"
     export STUB_STATE="$WORK/stub"
     : >"$STUB_LOG"
-    rm -f "$STUB_STATE.n" "$STUB_STATE.stopped"
+    : >"$JQ_ARGV_LOG"
+    rm -f "$STUB_STATE.n" "$STUB_STATE.stopped" "$WORK/logs.stat"
     # A fresh tmpfs root, so bwrap may create the mount points the controller
     # hard-codes (`/run/agent-job`, `/workspace`) even where `/` is not
     # writable — which is the case inside the Nix build sandbox. Only the store,
@@ -190,7 +217,9 @@ run_controller() {
         --setenv STUB_MODE "$mode"
         --setenv STUB_LOG "$STUB_LOG"
         --setenv STUB_STATE "$STUB_STATE"
+        --setenv JQ_ARGV_LOG "$JQ_ARGV_LOG"
         --bind "$STUB" "$SYSTEMCTL_TARGET"
+        --bind "$WORK/jq-wrapper" "$JQ_TARGET"
         --
     )
     if [[ $fake == fakeroot ]]; then
@@ -201,7 +230,13 @@ run_controller() {
                 chown -R 0:0 /run/agent-job
                 chown $WORKER_UID:$WORKER_UID /run/agent-job/$WORKER_SUBDIR
                 chown -R $WORKER_UID:$WORKER_UID /workspace
-                exec $CONTROLLER"
+                crc=0
+                $CONTROLLER || crc=\$?
+                # Ownership/mode of the worker LOG area as seen INSIDE the
+                # namespace (the only place fakeroot's ownership is visible).
+                stat -c '%n %u %a' /run/agent-job/$WORKER_LOGS_SUBDIR \
+                    /run/agent-job/$WORKER_LOGS_SUBDIR/* > $WORK/logs.stat 2>&1 || true
+                exit \$crc"
         )
     else
         cmd+=("$CONTROLLER")
@@ -223,9 +258,13 @@ verify() {
     local name="$RESULT_NAME"
     [[ $kind == state ]] && name="$STATE_NAME"
     VERIFY_RC=0
-    "$BWRAP" --unshare-user --uid 0 --gid 0 --bind / / --dev-bind /dev /dev --proc /proc \
+    # The expected token goes in the ENVIRONMENT: the verifier refuses a
+    # `--token` argument, because argv is world-readable via /proc.
+    AGENT_JOB_EXPECTED_TOKEN="$token" \
+        "$BWRAP" --unshare-user --uid 0 --gid 0 --bind / / --dev-bind /dev /dev --proc /proc \
+        --setenv AGENT_JOB_EXPECTED_TOKEN "$token" \
         -- "$VERIFIER" --result "$FIXTURE/$CONTROLLER_SUBDIR/$name" --kind "$kind" \
-        --task "$TASK" --token "$token" --slot "$SLOT" --agent "$AGENT" \
+        --task "$TASK" --slot "$SLOT" --agent "$AGENT" \
         >"$WORK/verify.out" 2>&1 || VERIFY_RC=$?
     VERIFY_OUT="$(cat "$WORK/verify.out")"
 }
@@ -269,6 +308,53 @@ if grep -q "start --no-block agent-job-worker@$AGENT.service" "$WORK/systemctl.l
     pass "the worker was started as agent-job-worker@$AGENT.service"
 else
     fail "the worker unit was not started as expected: $(cat "$WORK/systemctl.log")"
+fi
+
+printf '\n=== 1b. the allocation token never appears in a process ARGV ===\n'
+# EXECUTED property (not a grep over the source): every jq the controller ran
+# was recorded argv-for-argv by the wrapper bound over the store path the
+# controller resolves. If the token had been passed with `--arg`, it would be
+# in this log — and, at runtime, in /proc/<pid>/cmdline, which is 0444 and
+# readable by the untrusted worker.
+if [[ -s $JQ_ARGV_LOG ]]; then
+    pass "the argv recorder actually observed jq invocations ($(wc -l <"$JQ_ARGV_LOG") of them)"
+else
+    fail "the argv recorder saw nothing: the wrapper was not the jq the controller ran"
+fi
+if grep -qF -- "$TOKEN" "$JQ_ARGV_LOG"; then
+    fail "the allocation token appeared in a process argv: $(grep -F -- "$TOKEN" "$JQ_ARGV_LOG" | head -1)"
+else
+    pass "no jq the controller ran received the allocation token in its argv"
+fi
+# ... but the token IS in the documents it wrote, i.e. it really did have it.
+if [[ "$(result_field .allocationToken)" == "$TOKEN" ]]; then
+    pass "the controller nevertheless recorded the token in its result (so the check is not vacuous)"
+else
+    fail "the controller did not record the allocation token at all"
+fi
+
+printf '\n=== 1c. the worker log files are ROOT-owned, next to the worker dir ===\n'
+# systemd (root) opens stdout.log/stderr.log with `append:` and follows
+# symlinks, so neither the files nor their directory may be replaceable by the
+# worker uid. Observed INSIDE the namespace, where fakeroot's ownership applies.
+if [[ -s "$WORK/logs.stat" ]]; then
+    if awk '{ if ($2 != 0) exit 1 }' "$WORK/logs.stat"; then
+        pass "the worker log directory and its files are owned by uid 0"
+    else
+        fail "a worker log path is not root-owned: $(cat "$WORK/logs.stat")"
+    fi
+    if grep -q "$WORKER_LOGS_SUBDIR/$WORKER_STDOUT_NAME 0 644" "$WORK/logs.stat"; then
+        pass "the worker's stdout log is root:root 0644 (the worker may read, never write it)"
+    else
+        fail "unexpected worker log layout: $(cat "$WORK/logs.stat")"
+    fi
+else
+    fail "the controller created no worker log area"
+fi
+if [[ -d "$FIXTURE/$WORKER_LOGS_SUBDIR" && ! -e "$FIXTURE/$WORKER_SUBDIR/$WORKER_STDOUT_NAME" ]]; then
+    pass "the logs live in $WORKER_LOGS_SUBDIR/, not inside the worker-writable dir"
+else
+    fail "the worker log files are inside the worker-writable directory"
 fi
 
 printf '\n=== 2. a failing agent is reported as failed, not as an error ===\n'

@@ -25,9 +25,10 @@
 set -euo pipefail
 
 for v in VERIFIER ASSERT_PATHS SPEC_VERSION CONTROLLER_VERSION INPUT_SUBDIR \
-    CONTROLLER_SUBDIR WORKER_SUBDIR SPEC_NAME PROMPT_NAME CANCEL_NAME \
-    RESULT_NAME STATE_NAME WORKER_UID SLOT TASK AGENT SPEC_MODE PROMPT_MODE \
-    INPUT_DIR_MODE CONTROLLER_DIR_MODE WORKER_DIR_MODE; do
+    CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR SPEC_NAME PROMPT_NAME \
+    CANCEL_NAME RESULT_NAME STATE_NAME WORKER_STDOUT_NAME WORKER_STDERR_NAME \
+    WORKER_UID SLOT TASK AGENT SPEC_MODE PROMPT_MODE \
+    INPUT_DIR_MODE CONTROLLER_DIR_MODE WORKER_DIR_MODE WORKER_LOGS_DIR_MODE; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
@@ -60,13 +61,22 @@ build_share() {
     rm -rf "$base"
     mkdir -p "$base/jobs/$SLOT/$INPUT_SUBDIR" \
         "$base/jobs/$SLOT/$CONTROLLER_SUBDIR" \
-        "$base/jobs/$SLOT/$WORKER_SUBDIR/artifacts"
+        "$base/jobs/$SLOT/$WORKER_SUBDIR/artifacts" \
+        "$base/jobs/$SLOT/$WORKER_LOGS_SUBDIR"
+    : >"$base/jobs/$SLOT/$WORKER_LOGS_SUBDIR/$WORKER_STDOUT_NAME"
+    : >"$base/jobs/$SLOT/$WORKER_LOGS_SUBDIR/$WORKER_STDERR_NAME"
     printf '{}\n' >"$base/jobs/$SLOT/$INPUT_SUBDIR/$SPEC_NAME"
     printf 'do the thing\n' >"$base/jobs/$SLOT/$INPUT_SUBDIR/$PROMPT_NAME"
     chown -R 0:0 "$base"
     chmod 0755 "$base" "$base/jobs" "$base/jobs/$SLOT"
     chmod "$INPUT_DIR_MODE" "$base/jobs/$SLOT/$INPUT_SUBDIR"
     chmod "$CONTROLLER_DIR_MODE" "$base/jobs/$SLOT/$CONTROLLER_SUBDIR"
+    # The worker's log files stay ROOT-owned in a ROOT-owned directory: the
+    # guest's systemd opens them as root (following symlinks), so nothing
+    # running as the worker uid may be able to replace them or their directory.
+    chmod "$WORKER_LOGS_DIR_MODE" "$base/jobs/$SLOT/$WORKER_LOGS_SUBDIR"
+    chmod 0644 "$base/jobs/$SLOT/$WORKER_LOGS_SUBDIR/$WORKER_STDOUT_NAME" \
+        "$base/jobs/$SLOT/$WORKER_LOGS_SUBDIR/$WORKER_STDERR_NAME"
     chmod "$SPEC_MODE" "$base/jobs/$SLOT/$INPUT_SUBDIR/$SPEC_NAME"
     chmod "$PROMPT_MODE" "$base/jobs/$SLOT/$INPUT_SUBDIR/$PROMPT_NAME"
     # The ONLY worker-writable part of the share.
@@ -115,12 +125,18 @@ put_controller_result() {
 # ---------------------------------------------------------------------------
 # assertion helpers
 # ---------------------------------------------------------------------------
+# The EXPECTED allocation token the verifier is run with. It is passed in the
+# ENVIRONMENT (AGENT_JOB_EXPECTED_TOKEN), never in argv, because
+# /proc/<pid>/cmdline is world-readable while /proc/<pid>/environ is 0400 — the
+# verifier rejects a `--token` argument outright.
+EXPECT_TOKEN="$TOKEN"
+
 # verify <want-rc> <needle-in-output> <description>
 verify() {
     local want="$1" needle="$2" desc="$3"
     shift 3
     local out rc=0
-    out="$("$VERIFIER" "$@" 2>&1)" || rc=$?
+    out="$(AGENT_JOB_EXPECTED_TOKEN="$EXPECT_TOKEN" "$VERIFIER" "$@" 2>&1)" || rc=$?
     if [[ $rc -ne $want ]]; then
         fail "$desc (expected rc=$want, got rc=$rc: $out)"
         return
@@ -135,7 +151,7 @@ verify() {
 verify_result() {
     local want="$1" needle="$2" desc="$3" path="${4:-$RESULT}"
     verify "$want" "$needle" "$desc" \
-        --result "$path" --task "$TASK" --token "$TOKEN" \
+        --result "$path" --task "$TASK" \
         --slot "$SLOT" --agent "$AGENT"
 }
 
@@ -268,28 +284,38 @@ state_json >"$STATE"
 chown 0:0 "$STATE"
 chmod 0600 "$STATE"
 verify 0 "" "a controller state document validates as --kind state" \
-    --result "$STATE" --kind state --task "$TASK" --token "$TOKEN" \
+    --result "$STATE" --kind state --task "$TASK" \
     --slot "$SLOT" --agent "$AGENT"
 verify 2 "unknown field" "a state document is NOT accepted as a result" \
-    --result "$STATE" --task "$TASK" --token "$TOKEN" \
+    --result "$STATE" --task "$TASK" \
     --slot "$SLOT" --agent "$AGENT"
 state_json | jq '.phase="totally-done"' >"$STATE"
 chmod 0600 "$STATE"
 verify 2 "not a known controller phase" "an invented phase is rejected" \
-    --result "$STATE" --kind state --task "$TASK" --token "$TOKEN" \
+    --result "$STATE" --kind state --task "$TASK" \
     --slot "$SLOT" --agent "$AGENT"
 
 printf '\n=== H. the verifier refuses ambiguous callers ===\n'
 verify 64 "absolute path" "a relative result path is a usage error" \
-    --result relative/result.json --task "$TASK" --token "$TOKEN" \
+    --result relative/result.json --task "$TASK" \
     --slot "$SLOT" --agent "$AGENT"
-verify 64 "--token" "a malformed expected token is a usage error" \
-    --result "$RESULT" --task "$TASK" --token nope --slot "$SLOT" --agent "$AGENT"
+EXPECT_TOKEN=nope
+verify 64 "AGENT_JOB_EXPECTED_TOKEN" "a malformed expected token is a usage error" \
+    --result "$RESULT" --task "$TASK" --slot "$SLOT" --agent "$AGENT"
+EXPECT_TOKEN=""
+verify 64 "AGENT_JOB_EXPECTED_TOKEN" "a MISSING expected token is a usage error, never a pass" \
+    --result "$RESULT" --task "$TASK" --slot "$SLOT" --agent "$AGENT"
+EXPECT_TOKEN="$TOKEN"
+# The token must not be acceptable on the command line at all: an argv would
+# publish the ACTIVE allocation token via /proc/<pid>/cmdline (0444).
+verify 64 "AGENT_JOB_EXPECTED_TOKEN" \
+    "passing the token as --token is refused (it would leak via /proc/<pid>/cmdline)" \
+    --result "$RESULT" --task "$TASK" --token "$TOKEN" --slot "$SLOT" --agent "$AGENT"
 verify 64 "--task" "a malformed expected task is a usage error" \
-    --result "$RESULT" --task 'evil task/../..' --token "$TOKEN" \
+    --result "$RESULT" --task 'evil task/../..' \
     --slot "$SLOT" --agent "$AGENT"
 verify 64 "--kind" "an unknown --kind is a usage error" \
-    --result "$RESULT" --kind whatever --task "$TASK" --token "$TOKEN" \
+    --result "$RESULT" --kind whatever --task "$TASK" \
     --slot "$SLOT" --agent "$AGENT"
 
 printf '\n=== I. the guest-side trust-boundary assertions ===\n'
@@ -354,6 +380,36 @@ build_share "$ROOT"
 chown 0:0 "$ROOT/jobs/$SLOT/$WORKER_SUBDIR"
 assert_paths 1 "worker directory must be owned by uid" \
     "a worker dir the worker cannot write is refused"
+
+# --- the worker's LOG directory is root-owned on purpose -------------------
+# systemd opens stdout.log/stderr.log as ROOT and FOLLOWS symlinks, so a
+# directory (or file) the worker uid could replace would redirect a
+# root-opened append fd. All three of these must be refused BEFORE the worker
+# is started.
+build_share "$ROOT"
+chown -R "$WORKER_UID:$WORKER_UID" "$ROOT/jobs/$SLOT/$WORKER_LOGS_SUBDIR"
+assert_paths 1 "the worker log directory must be owned by uid 0" \
+    "a worker-owned log directory is refused"
+
+build_share "$ROOT"
+chmod 0777 "$ROOT/jobs/$SLOT/$WORKER_LOGS_SUBDIR"
+assert_paths 1 "group/other-writable" \
+    "a group/other-writable worker log directory is refused"
+
+build_share "$ROOT"
+ln -sfn /etc/passwd "$ROOT/jobs/$SLOT/$WORKER_LOGS_SUBDIR/$WORKER_STDOUT_NAME"
+assert_paths 1 "worker log file is a symlink" \
+    "a symlinked worker log file is refused"
+
+build_share "$ROOT"
+chmod 0666 "$ROOT/jobs/$SLOT/$WORKER_LOGS_SUBDIR/$WORKER_STDERR_NAME"
+assert_paths 1 "too permissive" \
+    "a worker-writable worker log file is refused"
+
+build_share "$ROOT"
+rm -rf "$ROOT/jobs/$SLOT/$WORKER_LOGS_SUBDIR"
+ln -s "$ROOT/jobs/$SLOT/$WORKER_SUBDIR" "$ROOT/jobs/$SLOT/$WORKER_LOGS_SUBDIR"
+assert_paths 1 "symlink" "a log directory replaced by a symlink is refused"
 
 build_share "$ROOT"
 rm -f "$ROOT/jobs/$SLOT/$INPUT_SUBDIR/$SPEC_NAME"

@@ -931,10 +931,13 @@ in
         inherit evalMarker;
         launcherBin = "${hostLauncher}/bin/agent-microvm";
         guestJobBin = "${guestJob}/bin/agent-job-controller";
-        # The transitions ticket 6 B requires from the HOST side.
-        hostEvents = "task-submitted slot-allocated workspace-created vm-start-requested vm-ready agent-started agent-finished timeout cancellation vm-stopped cleanup-completed recovery-action";
-        # ... and from the guest side.
-        guestEvents = "agent-started agent-finished timeout";
+        # The transitions ticket 6 B requires from the HOST side (including
+        # `result-rejected`, the ticket-7 transition for a guest document that
+        # does not belong to the active allocation).
+        hostEvents = "task-submitted slot-allocated workspace-created vm-start-requested vm-ready agent-started agent-finished timeout cancellation result-rejected vm-stopped cleanup-completed recovery-action";
+        # ... and from the guest side (the controller also reports the
+        # cancellations it performed itself).
+        guestEvents = "agent-started agent-finished timeout cancellation";
       }
       ''
         for e in $hostEvents; do
@@ -1346,13 +1349,22 @@ in
             message = "the host result archive must live under the runtime root and OUTSIDE the shared job dirs";
           }
           {
-            assertion = builtins.elem "d ${jobs.resultsDir} 0755 root root - -" tmpfiles;
-            message = "missing tmpfiles rule for the host result archive";
+            # 0700: an archived result carries the allocation token of its run.
+            assertion = builtins.elem "d ${jobs.resultsDir} 0700 root root - -" tmpfiles;
+            message = "missing (or not root-only) tmpfiles rule for the host result archive";
           }
           {
             # Registry consistency: batch metadata must be usable.
             assertion = agentRegistry.batchNames != [ ] && agentRegistry.errors == [ ];
             message = "the registry must declare at least one batch-capable agent and be well-formed";
+          }
+          {
+            # Every agent name must satisfy the STRICTER pattern the host result
+            # verifier enforces for `--agent` (`^[a-z][a-z0-9-]{0,32}$`).
+            # Without this, a 33+ character registry entry would evaluate fine
+            # and then break every submit at RUNTIME with a usage error.
+            assertion = builtins.all (n: builtins.match "[a-z][a-z0-9-]{0,32}" n != null) agentRegistry.names;
+            message = "every registry agent name must match [a-z][a-z0-9-]{0,32} (the batch result verifier rejects anything else): ${toString agentRegistry.names}";
           }
           {
             assertion = builtins.all (a: a.batchStdin || builtins.elem "%PROMPT%" a.batchArgs) batchAgents;
@@ -1560,10 +1572,52 @@ in
         }
         {
           # Timeout/cancellation kill a CGROUP, not a pid, so a double-forked
-          # repository process cannot outlive the job.
-          assertion = (worker.KillMode or "control-group") == "control-group";
-          message = "the worker unit must be killed as a control group";
+          # repository process cannot outlive the job. Asserted EXPLICITLY (a
+          # `worker.KillMode or "control-group"` default would also pass if the
+          # setting were deleted, because that is systemd's default).
+          assertion = (worker ? KillMode) && worker.KillMode == "control-group";
+          message = "the worker unit must explicitly set KillMode=control-group";
         }
+        {
+          # BLOCKER regression guard (token secrecy, layer 3): /proc/<pid>/cmdline
+          # is world-readable 0444 and the worker shares the guest PID
+          # namespace, so every process it does not own must be hidden from it.
+          assertion = (worker.ProtectProc or "") == "invisible";
+          message = "the worker unit must set ProtectProc=invisible (foreign /proc entries would otherwise expose a root process's argv)";
+        }
+        {
+          # The worker's stdout/stderr are opened by the guest's systemd AS
+          # ROOT, following symlinks, so they must NOT live in the
+          # worker-writable directory (whose owner could rename it and plant a
+          # symlink); they live next to it, root-owned.
+          assertion =
+            lib.hasPrefix "${jobs.guestWorkerLogsDir}/" jobs.guestWorkerStdout
+            && !lib.hasPrefix "${jobs.guestWorkerDir}/" jobs.guestWorkerStdout
+            && !lib.hasPrefix "${jobs.guestWorkerDir}/" jobs.guestWorkerStderr;
+          message = "the worker's log files must live in the ROOT-owned worker-logs directory, not inside the worker-writable one";
+        }
+        {
+          assertion = builtins.elem "d ${jobs.hostWorkerLogsDir refSlot.name} ${jobs.workerLogsDirMode} root root - -" tmpfiles;
+          message = "the worker log directory must be pre-created root:root ${jobs.workerLogsDirMode}";
+        }
+        {
+          # An archived result carries the run's allocation token, so the
+          # archive is root-only — not world-readable 0755/0644.
+          assertion = builtins.elem "d ${jobs.resultsDir} 0700 root root - -" tmpfiles;
+          message = "the host result archive must be root-only 0700 (an archived result carries the allocation token)";
+        }
+        {
+          # The CONTROLLER needs an effective runtime ceiling of its own.
+          # `Type=oneshot` ignores RuntimeMaxSec and defaults TimeoutStartSec to
+          # infinity, so the ceiling must be TimeoutStartSec.
+          assertion =
+            ctrl.Type == "oneshot"
+            && !(ctrl ? RuntimeMaxSec)
+            &&
+              ctrl.TimeoutStartSec == microvmOpts.job.maxTimeoutSeconds + 2 * microvmOpts.job.gracePeriodSeconds;
+          message = "the controller must carry its ceiling as TimeoutStartSec (Type=oneshot ignores RuntimeMaxSec), sized above the worker's own ceiling";
+        }
+
         {
           assertion = (worker.TimeoutStopSec or 0) == jobs.workerKillGraceSeconds;
           message = "the worker unit must give the same SIGTERM grace the controller uses";
@@ -1586,12 +1640,16 @@ in
           message = "the worker unit instance must be the registry agent name";
         }
         {
-          # Untrusted worker output stays in the worker area.
+          # Untrusted worker output goes to the log files systemd opens for it,
+          # inside the ROOT-owned log directory of the job share (never into the
+          # controller channel, and never into a directory the worker could
+          # rename — see the guestWorkerLogsDir assertion below).
           assertion =
             (worker.StandardOutput or "") == "append:${jobs.guestWorkerStdout}"
             && (worker.StandardError or "") == "append:${jobs.guestWorkerStderr}"
-            && lib.hasPrefix "${jobs.guestWorkerDir}/" jobs.guestWorkerStdout;
-          message = "worker stdout/stderr must be written into the worker's own (untrusted) directory";
+            && lib.hasPrefix "${jobs.guestWorkerLogsDir}/" jobs.guestWorkerStdout
+            && !lib.hasPrefix "${jobs.guestControllerDir}/" jobs.guestWorkerStdout;
+          message = "worker stdout/stderr must be written into the root-owned worker log directory of the job share";
         }
         {
           # The schema was bumped together with the layout change; there is no
@@ -1630,6 +1688,7 @@ in
         INPUT_SUBDIR = jobs.inputSubdir;
         CONTROLLER_SUBDIR = jobs.controllerSubdir;
         WORKER_SUBDIR = jobs.workerSubdir;
+        WORKER_LOGS_SUBDIR = jobs.workerLogsSubdir;
         SPEC_NAME = jobs.specName;
         # Guest paths the worker must never mention (checked by grep below).
         CONTROLLER_DIR = jobs.guestControllerDir;
@@ -1639,6 +1698,8 @@ in
         CANCEL_NAME = jobs.cancelName;
         RESULT_NAME = jobs.resultName;
         STATE_NAME = jobs.controllerStateName;
+        WORKER_STDOUT_NAME = jobs.workerStdoutName;
+        WORKER_STDERR_NAME = jobs.workerStderrName;
         WORKER_UID = toString jobs.workerUid;
         SLOT = refSlot.name;
         TASK = "integrity-task";
@@ -1648,6 +1709,7 @@ in
         INPUT_DIR_MODE = jobs.inputDirMode;
         CONTROLLER_DIR_MODE = jobs.controllerDirMode;
         WORKER_DIR_MODE = jobs.workerDirMode;
+        WORKER_LOGS_DIR_MODE = jobs.workerLogsDirMode;
       }
       ''
         # --- (1) the host launcher must read results ONLY via the verifier ---
@@ -1683,6 +1745,33 @@ in
           || { echo "the controller does not record the allocation token" >&2; exit 1; }
         grep -q "kill-whom=all" "$controllerBin" \
           || { echo "the controller does not force-kill the whole worker cgroup" >&2; exit 1; }
+        # --- (2b) the allocation token never travels in an ARGUMENT VECTOR ---
+        # /proc/<pid>/cmdline is world-readable (0444) while /proc/<pid>/environ
+        # is 0400, so `--arg allocationToken <token>` would publish the ACTIVE
+        # token to every local process — inside the guest, to the untrusted
+        # worker. (The EXECUTED proof that no jq the controller runs ever sees
+        # the token in its argv lives in microvm-batch-controller-smoke; this is
+        # the cheap structural guard against a regression.)
+        for b in "$controllerBin" "$launcherBin"; do
+          if grep -q -- "--arg allocationToken" "$b"; then
+            echo "$b passes the allocation token as a jq ARGUMENT (readable via /proc/<pid>/cmdline)" >&2
+            exit 1
+          fi
+          grep -q 'ALLOC_TOKEN=' "$b" \
+            || { echo "$b does not hand the allocation token to jq in the environment" >&2; exit 1; }
+        done
+        if grep -q -- "--token" "$launcherBin"; then
+          echo "the launcher still passes --token to the verifier (world-readable argv)" >&2
+          exit 1
+        fi
+        grep -q "AGENT_JOB_EXPECTED_TOKEN" "$launcherBin" \
+          || { echo "the launcher does not pass the expected token in the environment" >&2; exit 1; }
+        # --- (2c) the deadline is measured on a CLOCK, not in poll iterations -
+        grep -q "SECONDS >= timeout_s" "$controllerBin" \
+          || { echo "the controller does not measure its deadline against the wall clock" >&2; exit 1; }
+        if grep -q "waited >= timeout_s" "$controllerBin"; then
+          echo "the controller still counts poll iterations as its deadline" >&2; exit 1
+        fi
         # The worker must not know anything about the result channel or the
         # spec: it only ever reads the prompt and runs one registry agent.
         for forbidden in "$CONTROLLER_DIR" "$RESULT_PATH" "$SPEC_PATH"; do
@@ -1747,15 +1836,22 @@ in
         # harness bind-mounts its stub over this path, so the script under test
         # stays byte-identical to the one in the guest closure.
         SYSTEMCTL_TARGET = "${pkgs.systemd}/bin/systemctl";
+        # The exact `jq` the controller resolves. The harness bind-mounts an
+        # ARGV RECORDER over it, so it can PROVE (by execution, not by reading
+        # the source) that the allocation token never reaches a process's
+        # world-readable /proc/<pid>/cmdline.
+        JQ_TARGET = "${pkgs.jq}/bin/jq";
         SPEC_VERSION = toString jobs.specVersion;
         INPUT_SUBDIR = jobs.inputSubdir;
         CONTROLLER_SUBDIR = jobs.controllerSubdir;
         WORKER_SUBDIR = jobs.workerSubdir;
+        WORKER_LOGS_SUBDIR = jobs.workerLogsSubdir;
         SPEC_NAME = jobs.specName;
         PROMPT_NAME = jobs.promptName;
         CANCEL_NAME = jobs.cancelName;
         RESULT_NAME = jobs.resultName;
         STATE_NAME = jobs.controllerStateName;
+        WORKER_STDOUT_NAME = jobs.workerStdoutName;
         WORKER_UID = toString jobs.workerUid;
         SLOT = refSlot.name;
         TASK = "smoke-task";
@@ -1821,11 +1917,16 @@ in
         MOUNT_TARGET = "${pkgs.util-linux.mount}/bin/mount";
         UMOUNT_TARGET = "${pkgs.util-linux.mount}/bin/umount";
         FINDMNT_TARGET = "${pkgs.util-linux.bin}/bin/findmnt";
+        # The exact `jq` the launcher resolves: the harness binds an ARGV
+        # RECORDER over it to PROVE, by execution, that the allocation token
+        # never lands in a world-readable /proc/<pid>/cmdline.
+        JQ_TARGET = "${pkgs.jq}/bin/jq";
         RUNTIME_ROOT = microvmOpts.runtimeRoot;
         STATE_ROOT = microvmOpts.stateRoot;
         INPUT_SUBDIR = jobs.inputSubdir;
         CONTROLLER_SUBDIR = jobs.controllerSubdir;
         WORKER_SUBDIR = jobs.workerSubdir;
+        WORKER_LOGS_SUBDIR = jobs.workerLogsSubdir;
         SPEC_NAME = jobs.specName;
         PROMPT_NAME = jobs.promptName;
         RESULT_NAME = jobs.resultName;

@@ -164,20 +164,24 @@ let
       readonly GUEST_AGENT_UID=${toString cfg.guestAgentUid}
       readonly GUEST_AGENT_GID=${toString cfg.guestAgentGid}
       # ---- batch jobs (ticket 4; result channel hardened in ticket 7) ------
-      # The job share is split into THREE areas with different owners, and that
+      # The job share is split into FOUR areas with different owners, and that
       # split IS the security boundary (see job.nix):
       #   input/       root:root — the immutable spec (0400, it carries the
       #                allocation token) and prompt (0444)
       #   controller/  root:root 0700 — the guest CONTROLLER's private channel;
       #                the AUTHORITATIVE result lives here and the untrusted
       #                guest agent can neither write nor read it
-      #   worker/      the guest agent — untrusted logs/artifacts, never read
-      #                as a result
+      #   worker/      the guest agent — untrusted artifacts, never read as a
+      #                result
+      #   worker-logs/ root:root 0755 — the worker's stdout/stderr, opened as
+      #                root by the guest's systemd; untrusted CONTENT, but no
+      #                path the guest agent could redirect
       readonly JOBS_ROOT=${lib.escapeShellArg agentJobs.root}
       readonly RESULTS_DIR=${lib.escapeShellArg agentJobs.resultsDir}
       readonly JOB_INPUT_SUBDIR=${lib.escapeShellArg agentJobs.inputSubdir}
       readonly JOB_CONTROLLER_SUBDIR=${lib.escapeShellArg agentJobs.controllerSubdir}
       readonly JOB_WORKER_SUBDIR=${lib.escapeShellArg agentJobs.workerSubdir}
+      readonly JOB_WORKER_LOGS_SUBDIR=${lib.escapeShellArg agentJobs.workerLogsSubdir}
       readonly JOB_SPEC_NAME=${lib.escapeShellArg agentJobs.specName}
       readonly JOB_PROMPT_NAME=${lib.escapeShellArg agentJobs.promptName}
       readonly JOB_CANCEL_NAME=${lib.escapeShellArg agentJobs.cancelName}
@@ -189,6 +193,11 @@ let
       readonly JOB_INPUT_DIR_MODE=${lib.escapeShellArg agentJobs.inputDirMode}
       readonly JOB_CONTROLLER_DIR_MODE=${lib.escapeShellArg agentJobs.controllerDirMode}
       readonly JOB_WORKER_DIR_MODE=${lib.escapeShellArg agentJobs.workerDirMode}
+      readonly JOB_WORKER_LOGS_DIR_MODE=${lib.escapeShellArg agentJobs.workerLogsDirMode}
+      # Mode of an ARCHIVED result: it carries the allocation token of the run
+      # it belongs to, so it is root-only — like the archive directory itself.
+      readonly JOB_ARCHIVE_MODE=0600
+      readonly JOB_ARCHIVE_DIR_MODE=0700
       readonly JOB_SPEC_VERSION=${toString agentJobs.specVersion}
       readonly JOB_CONTROLLER_VERSION=${toString agentJobs.controllerVersion}
       # THE one result parser (job.nix). Every read of a guest-written document
@@ -341,6 +350,9 @@ let
       job_input_dir()      { printf '%s' "$JOBS_ROOT/$1/$JOB_INPUT_SUBDIR"; }
       job_controller_dir() { printf '%s' "$JOBS_ROOT/$1/$JOB_CONTROLLER_SUBDIR"; }
       job_worker_dir()     { printf '%s' "$JOBS_ROOT/$1/$JOB_WORKER_SUBDIR"; }
+      # The worker's stdout/stderr: ROOT-owned, next to (never inside) the
+      # worker-writable dir, because the guest's systemd opens them as root.
+      job_worker_logs_dir() { printf '%s' "$JOBS_ROOT/$1/$JOB_WORKER_LOGS_SUBDIR"; }
       job_spec()     { printf '%s' "$(job_input_dir "$1")/$JOB_SPEC_NAME"; }
       job_prompt()   { printf '%s' "$(job_input_dir "$1")/$JOB_PROMPT_NAME"; }
       job_cancel()   { printf '%s' "$(job_input_dir "$1")/$JOB_CANCEL_NAME"; }
@@ -463,8 +475,10 @@ let
           # so a concurrent run/submit can no longer pick this slot. It already
           # carries the ownership token, so even this early state can be
           # attributed to a launcher.
-          jq -n --arg slot "$ALLOC_SLOT" --arg token "$ALLOC_TOKEN" \
-              '{slot:$slot, state:"allocating", token:$token}' \
+          # The token is handed to jq in the ENVIRONMENT, never in argv (see
+          # write_session_marker).
+          ALLOC_TOKEN="$ALLOC_TOKEN" jq -n --arg slot "$ALLOC_SLOT" \
+              '{slot:$slot, state:"allocating", token:$ENV.ALLOC_TOKEN}' \
               > "$(session_file "$ALLOC_SLOT")"
           flock -u 9
           exec 9>&-
@@ -486,14 +500,18 @@ let
                 agent="$7" branch="$8" timeout_s="$9" persist="''${10:-0}"
           local tmp
           tmp="$(mktemp "$SLOTS_DIR/$slot/.session.XXXXXX")"
-          jq -n \
+          # ALLOC_TOKEN goes through the ENVIRONMENT, never through argv:
+          # /proc/<pid>/cmdline is world-readable (0444) for every local user,
+          # /proc/<pid>/environ is 0400. The token identifies the ACTIVE
+          # allocation, so it must not be readable off a running launcher.
+          ALLOC_TOKEN="$token" jq -n \
               --arg slot "$slot" --arg task "$task" --arg repo "$repo" \
               --arg workspace "$clone" --arg mount "$(mount_point "$slot")" \
               --arg agent "$agent" --arg branch "$branch" \
               --arg ip "$(slot_ip "$slot")" --arg mac "$(slot_mac "$slot")" \
               --arg start "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               --arg owner "$(id -un)($(id -u))" \
-              --arg token "$token" --arg mode "$mode" \
+              --arg mode "$mode" \
               --arg unit "microvm@$slot.service" \
               --arg pid "$$" --arg pid_start "$(proc_start_time "$$")" \
               --arg timeout "$timeout_s" \
@@ -501,7 +519,7 @@ let
               '{slot:$slot, state:"running", task:$task, repository:$repo,
                 workspace:$workspace, mount:$mount, agent:$agent, branch:$branch,
                 ip:$ip, mac:$mac, start:$start, lock_owner:$owner,
-                token:$token, mode:$mode, unit:$unit, pid:$pid,
+                token:$ENV.ALLOC_TOKEN, mode:$mode, unit:$unit, pid:$pid,
                 pid_start:$pid_start, timeout:$timeout,
                 persist_agent_state:$persist}' > "$tmp"
           mv -f -- "$tmp" "$(session_file "$slot")"
@@ -746,21 +764,27 @@ let
       #                the authoritative result. NOT writable and NOT readable
       #                by the guest agent, and it cannot be renamed either
       #                because its parent is root-owned 0755.
-      #   worker/      agent-owned     — untrusted logs/artifacts
+      #   worker/      agent-owned     — untrusted artifacts
+      #   worker-logs/ root:root 0755  — the worker's stdout/stderr. ROOT-owned
+      #                because the guest's systemd opens them as root (and
+      #                follows symlinks), so no path component may be
+      #                creatable/renameable by the guest agent.
       prepare_job() {
           local slot="$1" task="$2" agent="$3" prompt_src="$4" timeout_s="$5" \
                 token="$6" rclass="$7" persist="$8"
-          local dir spec input ctrl worker
+          local dir spec input ctrl worker logs
           dir="$(job_dir "$slot")"
           input="$(job_input_dir "$slot")"
           ctrl="$(job_controller_dir "$slot")"
           worker="$(job_worker_dir "$slot")"
+          logs="$(job_worker_logs_dir "$slot")"
           spec="$(job_spec "$slot")"
           install -d -m 0755 -o root -g root -- "$dir"
           install -d -m "$JOB_INPUT_DIR_MODE" -o root -g root -- "$input"
           install -d -m "$JOB_CONTROLLER_DIR_MODE" -o root -g root -- "$ctrl"
           install -d -m "$JOB_WORKER_DIR_MODE" \
               -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$worker"
+          install -d -m "$JOB_WORKER_LOGS_DIR_MODE" -o root -g root -- "$logs"
           # Fail closed if the controller directory is not what we just asked
           # for (e.g. pre-existing with wrong ownership): the guest would
           # otherwise get a result channel the agent can write.
@@ -777,20 +801,25 @@ let
           rm -f -- "$(job_result "$slot")" "$(job_ctrl_state "$slot")" \
                    "$(job_cancel "$slot")" "$spec" "$spec.tmp"
           find "$worker" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
+          find "$logs" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
           # Migration (spec v1 -> v2): drop the old guest-writable out/ dir,
           # which used to be the (forgeable) result channel.
           rm -rf -- "$dir/out"
           install -m "$JOB_PROMPT_MODE" -o root -g root -- "$prompt_src" "$(job_prompt "$slot")" \
               || die "could not install the prompt file into $input"
-          jq -n \
+          # ALLOC_TOKEN via the ENVIRONMENT, never argv: /proc/<pid>/cmdline is
+          # world-readable (0444), /proc/<pid>/environ is 0400 — the ACTIVE
+          # allocation token must not be readable off a running launcher.
+          ALLOC_TOKEN="$token" jq -n \
               --argjson version "$JOB_SPEC_VERSION" \
-              --arg taskId "$task" --arg allocationToken "$token" \
+              --arg taskId "$task" \
               --arg slot "$slot" --arg agent "$agent" \
               --arg workspace "$GUEST_WORKSPACE" --arg promptFile "$GUEST_PROMPT" \
               --argjson timeoutSeconds "$timeout_s" \
               --arg resourceClass "$rclass" \
               --argjson persistAgentState "$( (( persist )) && echo true || echo false )" \
-              '{version:$version, taskId:$taskId, allocationToken:$allocationToken,
+              '{version:$version, taskId:$taskId,
+                allocationToken:$ENV.ALLOC_TOKEN,
                 slot:$slot, agent:$agent, workspace:$workspace,
                 promptFile:$promptFile, timeoutSeconds:$timeoutSeconds,
                 resourceClass:$resourceClass, persistAgentState:$persistAgentState}' \
@@ -816,10 +845,12 @@ let
           dir="$(job_input_dir "$slot")"
           [[ -d "$dir" ]] || return 0
           tmp="$(mktemp "$dir/.cancel.XXXXXX")" || return 0
-          if jq -n --argjson version "$JOB_SPEC_VERSION" --arg taskId "$task" \
-              --arg allocationToken "$token" \
+          # The token is handed to jq in the ENVIRONMENT (see prepare_job).
+          if ALLOC_TOKEN="$token" jq -n --argjson version "$JOB_SPEC_VERSION" \
+              --arg taskId "$task" \
               --arg requestedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              '{version:$version, taskId:$taskId, allocationToken:$allocationToken,
+              '{version:$version, taskId:$taskId,
+                allocationToken:$ENV.ALLOC_TOKEN,
                 requestedAt:$requestedAt}' > "$tmp"; then
               chmod "$JOB_CANCEL_MODE" -- "$tmp"
               chown root:root -- "$tmp"
@@ -835,14 +866,18 @@ let
       # slot ever inherits another task's job. The workspace clone is NEVER
       # touched here (§35).
       clear_job() {
-          local slot="$1" dir worker
+          local slot="$1" dir worker logs
           dir="$(job_dir "$slot")"
           worker="$(job_worker_dir "$slot")"
+          logs="$(job_worker_logs_dir "$slot")"
           rm -f -- "$(job_spec "$slot")" "$(job_spec "$slot").tmp" \
                    "$(job_prompt "$slot")" "$(job_cancel "$slot")" \
                    "$(job_result "$slot")" "$(job_ctrl_state "$slot")"
           if [[ -d "$worker" ]]; then
               find "$worker" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
+          fi
+          if [[ -d "$logs" ]]; then
+              find "$logs" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
           fi
           # Legacy v1 layout, if this slot still has one.
           rm -rf -- "$dir/out"
@@ -859,22 +894,42 @@ let
       #
       # Return codes: 0 = valid (VERIFY_JSON is set), 1 = nothing written yet,
       # 2 = REJECTED (VERIFY_REASON is set) — a protocol/infrastructure error,
-      # never a result.
+      # never a result, 3 = the CALLER is broken (usage error / verifier
+      # missing): also fail-closed, but never blamed on the guest.
       VERIFY_JSON=""
       VERIFY_REASON=""
       verify_job_document() {
           local path="$1" kind="$2" task="$3" token="$4" slot="$5" agent="$6"
-          local out rc=0
+          local rc=0 err=""
           VERIFY_JSON=""
           VERIFY_REASON=""
-          # stderr is merged in on purpose: the verifier prints its rejection
-          # reason there and nothing at all when the document is valid.
-          out="$("$RESULT_VERIFIER" --result "$path" --kind "$kind" --task "$task" \
-              --token "$token" --slot "$slot" --agent "$agent" 2>&1)" || rc=$?
+          # stdout and stderr are captured SEPARATELY: the validated document
+          # must never be contaminated by a diagnostic, and a diagnostic must
+          # never be parsed as JSON.
+          #
+          # The expected allocation token is passed in the ENVIRONMENT, not in
+          # argv: /proc/<pid>/cmdline is world-readable (0444) and this runs
+          # every few seconds for the whole runtime of a job.
+          local errf
+          errf="$(mktemp)" || die "could not create a temp file for the verifier's stderr"
+          VERIFY_JSON="$(AGENT_JOB_EXPECTED_TOKEN="$token" "$RESULT_VERIFIER" \
+              --result "$path" --kind "$kind" --task "$task" \
+              --slot "$slot" --agent "$agent" 2>"$errf")" || rc=$?
+          err="$(cat -- "$errf")"
+          rm -f -- "$errf"
           case "$rc" in
-              0) VERIFY_JSON="$out" ;;
-              1) ;;
-              *) VERIFY_REASON="$out"; rc=2 ;;
+              0) ;;
+              1) VERIFY_JSON="" ;;
+              2) VERIFY_JSON=""; VERIFY_REASON="$err" ;;
+              # 64 = the LAUNCHER passed a malformed --task/--slot/--agent or an
+              # unusable token; 127 = the verifier is not installed. Neither is
+              # evidence about the guest, so it must not be reported as "the
+              # guest sent a bad result".
+              *)
+                  VERIFY_JSON=""
+                  VERIFY_REASON="host-side verifier error (exit $rc): ''${err:-<no output>}"
+                  rc=3
+                  ;;
           esac
           return "$rc"
       }
@@ -900,17 +955,18 @@ let
       # actually authenticated.
       host_result_json() {
           local task="$1" token="$2" slot="$3" agent="$4" state="$5" rc="$6" message="$7"
-          jq -nc \
+          # The token is handed to jq in the ENVIRONMENT (see prepare_job).
+          ALLOC_TOKEN="$token" jq -nc \
               --argjson version "$JOB_SPEC_VERSION" \
               --argjson controllerVersion "$JOB_CONTROLLER_VERSION" \
-              --arg taskId "$task" --arg allocationToken "$token" \
+              --arg taskId "$task" \
               --arg slot "$slot" --arg agent "$agent" --arg state "$state" \
               --argjson exitCode "$rc" \
               --arg finishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               --argjson timedOut "$( [[ "$state" == "timed-out" ]] && echo true || echo false )" \
               --arg message "$message" \
               '{version:$version, controllerVersion:$controllerVersion,
-                taskId:$taskId, allocationToken:$allocationToken, slot:$slot,
+                taskId:$taskId, allocationToken:$ENV.ALLOC_TOKEN, slot:$slot,
                 agent:$agent, state:$state, exitCode:$exitCode,
                 finishedAt:$finishedAt, timedOut:$timedOut, message:$message,
                 source:"host"}'
@@ -920,12 +976,25 @@ let
       # knows the outcome after the slot was released. Only ever the VALIDATED
       # controller document (tagged `source:"controller"`) or a host-generated
       # record — never a raw guest file.
+      # The archived document contains the run's allocation token, so both the
+      # directory and the file are ROOT-ONLY (0700/0600) — never world-readable.
+      # A write failure is reported: `submit` prints the archive path, so
+      # silently not having written it would be a lie.
       archive_result() {
-          local task="$1" json="$2" archived
+          local task="$1" json="$2" archived tmp
           archived="$RESULTS_DIR/$task.json"
-          mkdir -p -- "$RESULTS_DIR"
-          printf '%s\n' "$json" > "$archived.tmp" \
-              && mv -f -- "$archived.tmp" "$archived"
+          install -d -m "$JOB_ARCHIVE_DIR_MODE" -o root -g root -- "$RESULTS_DIR" \
+              || { log "warning: could not create the result archive $RESULTS_DIR"; return 1; }
+          tmp="$(mktemp "$RESULTS_DIR/.$task.XXXXXX")" \
+              || { log "warning: could not create a temp file in $RESULTS_DIR"; return 1; }
+          if printf '%s\n' "$json" > "$tmp" \
+              && chmod "$JOB_ARCHIVE_MODE" -- "$tmp" \
+              && mv -f -- "$tmp" "$archived"; then
+              return 0
+          fi
+          rm -f -- "$tmp"
+          log "warning: could not archive the result of '$task' at $archived"
+          return 1
       }
 
       archive_controller_result() {
@@ -1337,7 +1406,9 @@ let
           [[ -z "$branch" ]] && branch="agent/$task"
           validate_branch_name "$branch"
 
-          mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT" "$RESULTS_DIR"
+          mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT"
+          # Root-only: an archived result carries its run's allocation token.
+          install -d -m "$JOB_ARCHIVE_DIR_MODE" -o root -g root -- "$RESULTS_DIR"
 
           local slot="" token="" committed=0
           # shellcheck disable=SC2317  # invoked via trap
@@ -1394,7 +1465,18 @@ let
                   state="$(jq -r '.state' <<< "$result_json")"
                   break
               fi
-              if (( vrc >= 2 )); then
+              if (( vrc == 3 )); then
+                  # A HOST-side bug (bad arguments, verifier missing), not a
+                  # guest protocol violation. Fail closed, but say whose fault
+                  # it is — otherwise this sends the operator hunting a
+                  # guest-side security incident.
+                  reject_reason="$VERIFY_REASON"
+                  log "cannot verify the guest result: $reject_reason"
+                  emit_event result-rejected infrastructure-error "" "$reject_reason"
+                  state="infrastructure-error"
+                  break
+              fi
+              if (( vrc == 2 )); then
                   reject_reason="$VERIFY_REASON"
                   log "REJECTED the guest result: $reject_reason"
                   emit_event result-rejected infrastructure-error "" "$reject_reason"
@@ -1443,12 +1525,17 @@ let
           # job dir is cleared, so `status <task>` can still report the outcome.
           # Either the VALIDATED controller document or an explicitly
           # host-generated record — never a raw guest file.
-          local archived="$RESULTS_DIR/$task.json"
+          local archived="$RESULTS_DIR/$task.json" archived_note=""
+          archived_note="$archived"
+          # A failed archive write must not abort the teardown below (and must
+          # not be reported as a path that exists).
           if [[ -n "$result_json" ]]; then
-              archive_controller_result "$task" "$result_json"
+              archive_controller_result "$task" "$result_json" \
+                  || archived_note="<NOT ARCHIVED, see the warning above>"
           else
               archive_result "$task" "$(host_result_json "$task" "$token" "$slot" \
-                  "$agent" "$state" "$rc" "''${reject_reason:-no valid controller result}")"
+                  "$agent" "$state" "$rc" "''${reject_reason:-no valid controller result}")" \
+                  || archived_note="<NOT ARCHIVED, see the warning above>"
           fi
 
           # Teardown: stop the VM, unmount, drop job data + marker. The
@@ -1462,7 +1549,7 @@ let
           cat >&2 <<EOF
       $PROG: batch task '$task' finished with state '$state'.
         workspace: $clone
-        result:    $archived
+        result:    $archived_note
         inspect changes:
           git -C "$clone" diff
           git -C "$clone" format-patch "origin/HEAD..$branch"
@@ -1505,7 +1592,7 @@ let
           # token: it stops the worker's whole cgroup, records `cancelled` and
           # writes the authoritative result. A stale request cannot affect a
           # differently-tokened (i.e. newly allocated) job.
-          mkdir -p -- "$RESULTS_DIR"
+          install -d -m "$JOB_ARCHIVE_DIR_MODE" -o root -g root -- "$RESULTS_DIR"
           request_guest_cancel "$slot" "$task" "$token"
           local waited=0 vrc=0 cancelled_json=""
           if [[ "$(marker_field "$slot" mode || true)" == "batch" ]] && service_active "$slot"; then
@@ -1514,7 +1601,12 @@ let
                   vrc=0
                   verify_job_result "$slot" "$task" "$token" "$agent" || vrc=$?
                   if (( vrc == 0 )); then cancelled_json="$VERIFY_JSON"; break; fi
-                  if (( vrc >= 2 )); then
+                  if (( vrc == 3 )); then
+                      log "cannot verify the guest result while cancelling: $VERIFY_REASON"
+                      emit_event result-rejected infrastructure-error "" "$VERIFY_REASON"
+                      break
+                  fi
+                  if (( vrc == 2 )); then
                       log "REJECTED the guest result while cancelling: $VERIFY_REASON"
                       emit_event result-rejected infrastructure-error "" "$VERIFY_REASON"
                       break
@@ -1530,17 +1622,22 @@ let
           # (validated) record wins; otherwise the host says so explicitly.
           local archived="$RESULTS_DIR/$task.json"
           if [[ -n "$cancelled_json" ]]; then
-              archive_controller_result "$task" "$cancelled_json"
+              archive_controller_result "$task" "$cancelled_json" || true
           else
               archive_result "$task" "$(host_result_json "$task" "$token" "$slot" \
-                  "$agent" cancelled 130 "cancelled by the operator; the guest controller did not confirm")"
+                  "$agent" cancelled 130 "cancelled by the operator; the guest controller did not confirm")" \
+                  || true
           fi
           # Requests a clean shutdown first, waits a bounded interval, then
           # force-kills — all inside cleanup_slot/stop_vm — and unmounts + drops
           # the runtime job data. Token-guarded.
           cleanup_slot_owned "$slot" "$token"
           emit_event cleanup-completed "cancelled" "130"
-          log "cancelled; result recorded at $archived"
+          if [[ -e "$archived" ]]; then
+              log "cancelled; result recorded at $archived"
+          else
+              log "cancelled; the result could NOT be archived (see the warning above)"
+          fi
       }
 
       # ==== recovery (ticket 4) ============================================
@@ -1750,11 +1847,19 @@ let
                   local stoken sagent svrc=0
                   stoken="$(jq -r '.token // ""' "$f" 2>/dev/null || true)"
                   sagent="$(jq -r '.agent // ""' "$f" 2>/dev/null || true)"
-                  if [[ -n "$task" && -n "$stoken" && -n "$sagent" ]]; then
+                  if [[ "$(id -u)" -ne 0 ]]; then
+                      # The live controller channel is root-only 0700, so for a
+                      # non-root caller "no result yet" and "permission denied"
+                      # are indistinguishable. Say so instead of silently
+                      # implying the job has no state.
+                      jstate="unreadable (run as root)"
+                  elif [[ -n "$task" && -n "$stoken" && -n "$sagent" ]]; then
                       verify_job_result "$slot" "$task" "$stoken" "$sagent" || svrc=$?
                       if (( svrc == 0 )); then
                           jstate="$(jq -r '.state // ""' <<< "$VERIFY_JSON")"
-                      elif (( svrc >= 2 )); then
+                      elif (( svrc == 3 )); then
+                          jstate="unverifiable (host-side verifier error)"
+                      elif (( svrc == 2 )); then
                           jstate="rejected (protocol error)"
                       else
                           jstate="$(job_phase "$slot" "$task" "$stoken" "$sagent" || true)"

@@ -40,11 +40,19 @@
 #       state.json                               root:root 0600   trusted progress
 #       result.json                              root:root 0600   AUTHORITATIVE
 #     worker/                                    1000:1000 0755  (5)
-#       stdout.log stderr.log artifacts/                          untrusted
+#       artifacts/                                                untrusted
+#     worker-logs/                               root:root 0755  (6)
+#       stdout.log stderr.log                    root:root 0644   untrusted content
 #
 #   (1) 0400 root-only: the spec carries the allocation token, which the worker
-#       must not learn (it would otherwise be able to mint a result that passes
-#       the host's identity checks if it ever gained write access).
+#       must not be able to read (it would otherwise be able to mint a result
+#       that passes the host's identity checks if it ever gained write
+#       access). The token
+#       therefore also never travels through a process ARGUMENT VECTOR on
+#       either side: /proc/<pid>/cmdline is world-readable (0444) while
+#       /proc/<pid>/environ is 0400, so every helper that needs the token is
+#       handed it in its ENVIRONMENT (and the worker unit additionally hides
+#       other processes' /proc entries with ProtectProc=invisible).
 #   (2) 0444: the worker must READ the prompt; nobody may modify it.
 #   (3) the host's cancellation request, bound to the allocation token.
 #   (4) 0700 root-only: NOT writable and NOT readable by the worker. virtiofsd
@@ -53,6 +61,12 @@
 #       because its parent (`/run/agent-job`) is root-owned 0755, and the guest
 #       unit additionally lists it as `InaccessiblePaths`.
 #   (5) the only worker-writable part of the share.
+#   (6) the worker's stdout/stderr. systemd (PID 1, root) opens these with
+#       `append:` and FOLLOWS symlinks, so they must not live anywhere the
+#       worker uid can create, rename or replace a path: `worker-logs/` is
+#       root-owned and sits directly under the root-owned 0755 share root, so
+#       only root can touch the directory or the files in it. The worker may
+#       READ its own logs; their CONTENT is untrusted all the same.
 #
 # Design rules taken from the ticket:
 #   * prompts and specs NEVER go through process arguments (the host writes
@@ -111,6 +125,10 @@ let
     inputSubdir = "input";
     controllerSubdir = "controller";
     workerSubdir = "worker";
+    # The worker's log files live NEXT TO its writable directory, not inside it:
+    # systemd opens them as root and follows symlinks, so the whole path must be
+    # root-controlled (see (6) in the header).
+    workerLogsSubdir = "worker-logs";
     artifactsSubdir = "artifacts";
 
     specName = "spec.json";
@@ -124,6 +142,7 @@ let
     hostInputDir = s: "${slotDir s}/${inputSubdir}";
     hostControllerDir = s: "${slotDir s}/${controllerSubdir}";
     hostWorkerDir = s: "${slotDir s}/${workerSubdir}";
+    hostWorkerLogsDir = s: "${slotDir s}/${workerLogsSubdir}";
     hostSpec = s: "${hostInputDir s}/${specName}";
     hostPrompt = s: "${hostInputDir s}/${promptName}";
     hostCancel = s: "${hostInputDir s}/${cancelName}";
@@ -140,6 +159,10 @@ let
     inputDirMode = "0755";
     controllerDirMode = "0700";
     workerDirMode = "0755";
+    # root-owned: the worker must not be able to rename or replace the directory
+    # whose files systemd opens as root.
+    workerLogsDirMode = "0755";
+    workerLogMode = "0644";
     specMode = "0400";
     promptMode = "0444";
     cancelMode = "0400";
@@ -147,6 +170,15 @@ let
     # The UNPRIVILEGED guest identity that runs the coding agent. The
     # controller asserts this is never 0.
     workerUid = cfg.guestAgentUid;
+    # NOTE (deliberate mismatch): this is the numeric GID the HOST chowns the
+    # worker-writable directory to, NOT the worker's primary group. The guest
+    # `agent` user is an `isNormalUser`, so its primary group is `users`
+    # (gid 100); `worker/` therefore ends up group-owned by a gid the worker is
+    # not a member of. That is harmless — access is granted by the OWNER bits
+    # (uid matches `workerUid`) and the group bits never grant more than the
+    # owner bits — and it keeps the host-side chown symmetrical with the
+    # workspace clone (`chown 1000:1000`). Do not "fix" this by widening group
+    # access.
     workerGid = cfg.guestAgentGid;
     workerUser = "agent";
     # `isNormalUser` puts the guest agent into the `users` group.
@@ -163,8 +195,9 @@ let
     guestCancel = "${guestInputDir}/${cancelName}";
     guestResult = "${guestControllerDir}/${resultName}";
     guestControllerState = "${guestControllerDir}/${controllerStateName}";
-    guestWorkerStdout = "${guestWorkerDir}/${workerStdoutName}";
-    guestWorkerStderr = "${guestWorkerDir}/${workerStderrName}";
+    guestWorkerLogsDir = "${guestMountPoint}/${workerLogsSubdir}";
+    guestWorkerStdout = "${guestWorkerLogsDir}/${workerStdoutName}";
+    guestWorkerStderr = "${guestWorkerLogsDir}/${workerStderrName}";
     guestWorkerArtifacts = "${guestWorkerDir}/${artifactsSubdir}";
 
     controllerUnit = "agent-job-controller.service";
@@ -286,7 +319,9 @@ let
       }
 
       # The controller channel: additionally UNREADABLE and UNSEARCHABLE for
-      # everyone but root, so the worker cannot even learn the allocation token.
+      # everyone but root, so the worker cannot read the documents that carry
+      # the allocation token. (The token is kept out of process argv on both
+      # sides for the same reason — see the note on (1) in the header.)
       assert_controller_dir() {
           local d="$1" mode
           assert_root_dir "$d" "the controller directory"
@@ -350,6 +385,23 @@ let
       owner="$(owner_of "$w")"
       (( owner == worker_uid )) \
           || bad "the worker directory must be owned by uid $worker_uid, is owned by $owner: $w"
+
+      # --- the worker's LOG directory (root-owned on purpose) ---------------
+      # systemd opens stdout.log/stderr.log as root, following symlinks, so the
+      # directory must not be one the worker uid can write, rename or replace.
+      # Absent is fine (the controller creates it before it starts the worker).
+      l="$root/${paths.workerLogsSubdir}"
+      if [[ -e "$l" || -L "$l" ]]; then
+          assert_root_dir "$l" "the worker log directory"
+          for f in ${paths.workerStdoutName} ${paths.workerStderrName}; do
+              target="$l/$f"
+              [[ ! -L "$target" ]] || bad "worker log file is a symlink: $target"
+              if [[ -e "$target" ]]; then
+                  # 0022: root-owned, writable by nobody else (0644 is expected).
+                  assert_root_file "$target" "worker log file" 0022
+              fi
+          done
+      fi
 
       exit 0
     '';
@@ -432,6 +484,7 @@ let
       readonly RESULT=${lib.escapeShellArg paths.guestResult}
       readonly STATE_FILE=${lib.escapeShellArg paths.guestControllerState}
       readonly WORKER_DIR=${lib.escapeShellArg paths.guestWorkerDir}
+      readonly WORKER_LOG_DIR=${lib.escapeShellArg paths.guestWorkerLogsDir}
       readonly WORKER_STDOUT=${lib.escapeShellArg paths.guestWorkerStdout}
       readonly WORKER_STDERR=${lib.escapeShellArg paths.guestWorkerStderr}
       readonly WORKER_ARTIFACTS=${lib.escapeShellArg paths.guestWorkerArtifacts}
@@ -446,7 +499,10 @@ let
       # `systemctl start --no-block` only ENQUEUES the job, so the unit can
       # legitimately still read `inactive` for a moment (or longer, if it is
       # waiting for one of its dependencies). Only after this window does a
-      # still-inactive worker count as "it never ran".
+      # still-inactive worker count as "it never ran". Measured on the same
+      # wall clock as the deadline, but INDEPENDENT of it: a worker that never
+      # started is an infrastructure error, not a timeout, even when the job's
+      # own timeout is shorter than this grace.
       readonly WORKER_STARTUP_GRACE=60
       readonly ASSERT_PATHS=${lib.getExe agent-job-assert-paths}
       # Every key a v${toString paths.specVersion} spec may carry. Anything else
@@ -456,7 +512,8 @@ let
 
       log() { printf 'agent-job-controller: %s\n' "$*" >&2; }
 
-      # Structured guest-side lifecycle events. They land on the guest console,
+      # Structured guest-side lifecycle events. The controller unit's
+      # StandardError is `journal+console`, so they land on the guest console,
       # which microvm.nix captures into the HOST journal
       # (`journalctl -u microvm@<slot>`), so host and guest transitions can be
       # correlated. Never contains the prompt, a key, the allocation token or
@@ -506,11 +563,15 @@ let
       # event log but must never treat it as a terminal outcome.
       write_state() {
           local phase="$1" message="''${2-}"
-          jq -n \
+          # ALLOC_TOKEN goes through the ENVIRONMENT, never through argv:
+          # /proc/<pid>/cmdline is world-readable (0444), so `--arg
+          # allocationToken <token>` would publish the active allocation token
+          # to the untrusted worker (which shares the guest PID namespace) for
+          # as long as this jq lives. /proc/<pid>/environ is 0400.
+          ALLOC_TOKEN="$allocation_token" jq -n \
               --argjson version "$SPEC_VERSION" \
               --argjson controllerVersion "$CONTROLLER_VERSION" \
               --arg taskId "$task_id" \
-              --arg allocationToken "$allocation_token" \
               --arg slot "$slot" \
               --arg agent "$agent" \
               --arg phase "$phase" \
@@ -519,7 +580,7 @@ let
               --arg workerUnit "$worker_unit" \
               --arg message "$message" \
               '{version:$version, controllerVersion:$controllerVersion,
-                taskId:$taskId, allocationToken:$allocationToken, slot:$slot,
+                taskId:$taskId, allocationToken:$ENV.ALLOC_TOKEN, slot:$slot,
                 agent:$agent, phase:$phase, startedAt:$startedAt,
                 updatedAt:$updatedAt, workerUnit:$workerUnit, message:$message}' \
               | write_controller_file "$STATE_FILE" || true
@@ -529,11 +590,11 @@ let
       # here, only ever derived from what the controller itself observed.
       write_result() {
           local state="$1" exit_code="$2" timed_out="$3" message="''${4-}"
-          jq -n \
+          # The token is passed in the ENVIRONMENT (see write_state).
+          ALLOC_TOKEN="$allocation_token" jq -n \
               --argjson version "$SPEC_VERSION" \
               --argjson controllerVersion "$CONTROLLER_VERSION" \
               --arg taskId "$task_id" \
-              --arg allocationToken "$allocation_token" \
               --arg slot "$slot" \
               --arg agent "$agent" \
               --arg state "$state" \
@@ -543,7 +604,7 @@ let
               --argjson timedOut "$timed_out" \
               --arg message "$message" \
               '{version:$version, controllerVersion:$controllerVersion,
-                taskId:$taskId, allocationToken:$allocationToken, slot:$slot,
+                taskId:$taskId, allocationToken:$ENV.ALLOC_TOKEN, slot:$slot,
                 agent:$agent, state:$state, exitCode:$exitCode,
                 startedAt:$startedAt, finishedAt:$finishedAt,
                 timedOut:$timedOut, message:$message}' \
@@ -669,15 +730,29 @@ let
       # --- (c) prepare the worker's own (untrusted) area --------------------
       [[ -d "$WORKER_DIR" && ! -L "$WORKER_DIR" ]] \
           || infra_fail "the worker directory $WORKER_DIR is missing"
-      # systemd opens the log files with append: BEFORE the worker starts. A
-      # symlink there (e.g. left by an earlier hostile worker) would redirect
-      # a root-opened fd, so replace anything that is not a regular file.
+      # systemd (PID 1, root) opens the log files with `append:` BEFORE the
+      # worker starts, and it FOLLOWS symlinks. They therefore live in a
+      # ROOT-OWNED directory next to (never inside) the worker-writable one:
+      # `worker/` is agent-owned, so anything running as the worker uid could
+      # otherwise re-plant a symlink between this check and `systemctl start`
+      # and redirect a root-opened append fd. With `worker-logs/` root-owned
+      # under the root-owned 0755 share root there is no such window, and the
+      # worker cannot truncate or replace its own logs mid-run either.
+      if [[ -L "$WORKER_LOG_DIR" || ( -e "$WORKER_LOG_DIR" && ! -d "$WORKER_LOG_DIR" ) ]]; then
+          log "replacing non-directory worker log path $WORKER_LOG_DIR"
+          rm -f -- "$WORKER_LOG_DIR"
+      fi
+      # `install -d` also RESETS mode and ownership of an existing directory.
+      install -d -m ${paths.workerLogsDirMode} -o 0 -g 0 -- "$WORKER_LOG_DIR" \
+          || infra_fail "could not create the worker log directory $WORKER_LOG_DIR"
+      log_dir_owner="$(stat -c %u -- "$WORKER_LOG_DIR")"
+      [[ "$log_dir_owner" == "0" ]] \
+          || infra_fail "the worker log directory must be root-owned (is uid $log_dir_owner)"
+      # A fresh, root-owned file per job: `install` replaces whatever was there
+      # (including a symlink) instead of writing through it.
       for f in "$WORKER_STDOUT" "$WORKER_STDERR"; do
-          if [[ -L "$f" || ( -e "$f" && ! -f "$f" ) ]]; then
-              log "replacing non-regular worker log file $f"
-              rm -f -- "$f"
-          fi
-          [[ -e "$f" ]] || install -m 0644 -o "$WORKER_UID" -g "$WORKER_GID" /dev/null "$f"
+          install -m ${paths.workerLogMode} -o 0 -g 0 /dev/null "$f" \
+              || infra_fail "could not create the worker log file $f"
       done
       if [[ -L "$WORKER_ARTIFACTS" || ( -e "$WORKER_ARTIFACTS" && ! -d "$WORKER_ARTIFACTS" ) ]]; then
           rm -f -- "$WORKER_ARTIFACTS"
@@ -743,7 +818,13 @@ let
       emit_event agent-started running
 
       # --- (f) supervise: deadline + cancellation + exit collection --------
-      waited=0
+      # The deadline is measured against the WALL CLOCK (bash's own `SECONDS`,
+      # reset here), never by counting poll iterations: every iteration also
+      # spends one or two `systemctl show` round-trips, so an iteration counter
+      # under-counts real time by a few percent. At the 24h ceiling that is
+      # tens of minutes — enough for the HOST deadline to fire first and take
+      # the verdict away from the controller, which owns the timeout.
+      SECONDS=0
       active_state=""
       # Set once the worker unit has actually been seen running, so a queued
       # start is never mistaken for a finished job.
@@ -766,7 +847,7 @@ let
           # error below, never as success. Only once the startup window is over
           # (or the worker was seen running and then vanished).
           if [[ -z "$active_state" || "$active_state" == "inactive" ]] \
-              && (( worker_seen || waited >= WORKER_STARTUP_GRACE )); then
+              && (( worker_seen || SECONDS >= WORKER_STARTUP_GRACE )); then
               break
           fi
           if cancel_requested; then
@@ -776,15 +857,17 @@ let
               stop_worker
               break
           fi
-          if (( waited >= timeout_s )); then
-              log "worker exceeded its ''${timeout_s}s deadline; stopping its cgroup"
+          # Only a worker that was actually seen running can TIME OUT; one that
+          # never started falls through to the startup-grace branch above and
+          # becomes an infrastructure error instead.
+          if (( worker_seen && SECONDS >= timeout_s )); then
+              log "worker exceeded its ''${timeout_s}s deadline (''${SECONDS}s elapsed); stopping its cgroup"
               controller_verdict=timed-out
               write_state timing-out
               stop_worker
               break
           fi
           sleep "$POLL_INTERVAL"
-          waited=$(( waited + POLL_INTERVAL ))
       done
 
       # --- (g) derive the outcome from what WE observed ---------------------
@@ -882,13 +965,20 @@ let
   # guest controller can write it: ownership separation is a control, not a
   # proof, and a bug on either side must fail CLOSED.
   #
+  # The EXPECTED allocation token is read from the environment variable
+  # AGENT_JOB_EXPECTED_TOKEN, never from argv: /proc/<pid>/cmdline is
+  # world-readable 0444 (while /proc/<pid>/environ is 0400), so a `--token`
+  # argument would publish the active allocation token to every local process
+  # for the lifetime of each check — and the host polls this verifier every few
+  # seconds for the whole runtime of a job.
+  #
   # Exit codes:
   #   0   the document is valid AND belongs to the active allocation; the
   #       canonical (compact) JSON is printed on stdout
   #   1   nothing to read yet (the file does not exist)
   #   2   REJECTED — the reason is printed on stderr; callers must treat this
   #       as an infrastructure/protocol error, never as a result
-  #   64  usage error
+  #   64  usage error (a caller-side bug, NEVER evidence about the guest)
   resultSchema = pkgs.writeText "agent-job-result-schema.jq" ''
     # Validate a controller-written job document against the ACTIVE allocation.
     # Emits "ok" or "reject: <first reason>".
@@ -910,7 +1000,7 @@ let
         then "controller version mismatch (expected \($expController))" else empty end
       , if (.taskId | type) != "string" or .taskId != $expTask
         then "task id does not belong to the active allocation" else empty end
-      , if (.allocationToken | type) != "string" or .allocationToken != $expToken
+      , if (.allocationToken | type) != "string" or .allocationToken != $ENV.EXPECTED_TOKEN
         then "allocation token does not belong to the active allocation" else empty end
       , if (.slot | type) != "string" or .slot != $expSlot
         then "slot does not belong to the active allocation" else empty end
@@ -998,7 +1088,8 @@ let
       path=""
       kind="result"
       task=""
-      token=""
+      # The one input that must NOT be an argument (see the header).
+      token="''${AGENT_JOB_EXPECTED_TOKEN-}"
       slot=""
       agent=""
       while [[ $# -gt 0 ]]; do
@@ -1006,9 +1097,11 @@ let
               --result) path="''${2-}"; shift 2 ;;
               --kind)   kind="''${2-}"; shift 2 ;;
               --task)   task="''${2-}"; shift 2 ;;
-              --token)  token="''${2-}"; shift 2 ;;
               --slot)   slot="''${2-}"; shift 2 ;;
               --agent)  agent="''${2-}"; shift 2 ;;
+              --token)
+                  usage_error "the expected allocation token must be passed in the environment (AGENT_JOB_EXPECTED_TOKEN), never as a --token argument (/proc/<pid>/cmdline is world-readable)"
+                  ;;
               *) usage_error "unknown argument '$1'" ;;
           esac
       done
@@ -1023,7 +1116,8 @@ let
       # constrain it here too: a malformed expectation would silently weaken
       # every comparison below.
       [[ "$task"  =~ ^[a-zA-Z0-9._-]{1,64}$ ]] || usage_error "--task is missing or malformed"
-      [[ "$token" =~ ^[0-9a-f]{32,128}$ ]]     || usage_error "--token is missing or malformed"
+      [[ "$token" =~ ^[0-9a-f]{32,128}$ ]] \
+          || usage_error "AGENT_JOB_EXPECTED_TOKEN is missing or malformed"
       [[ "$slot"  =~ ^[a-zA-Z0-9._-]{1,64}$ ]] || usage_error "--slot is missing or malformed"
       [[ "$agent" =~ ^[a-z][a-z0-9-]{0,32}$ ]] || usage_error "--agent is missing or malformed"
 
@@ -1055,16 +1149,23 @@ let
       (( size <= MAX_BYTES )) || reject "the result file is larger than $MAX_BYTES bytes ($size)"
 
       # --- content level: strict parse + identity + schema ------------------
-      jq -e . -- "$path" >/dev/null 2>&1 || reject "the result is not valid JSON"
-      verdict="$(jq -r \
+      # Read the document EXACTLY ONCE. Everything below validates this byte
+      # string, and the very same byte string is what the caller archives:
+      # re-opening the path between the checks and the output would leave a
+      # window in which the archived bytes were never validated.
+      doc="$(cat -- "$path")" || reject "the result could not be read"
+      [[ -n "$doc" ]] || reject "the result file is empty"
+      jq -e . <<< "$doc" >/dev/null 2>&1 || reject "the result is not valid JSON"
+      # The expected TOKEN is passed to jq in the environment for the same
+      # reason the launcher passes it to us that way (world-readable argv).
+      verdict="$(EXPECTED_TOKEN="$token" jq -r \
           --argjson expVersion "$EXP_VERSION" \
           --argjson expController "$EXP_CONTROLLER" \
           --arg expTask "$task" \
-          --arg expToken "$token" \
           --arg expSlot "$slot" \
           --arg expAgent "$agent" \
           --arg kind "$kind" \
-          -f "$SCHEMA" -- "$path")" \
+          -f "$SCHEMA" <<< "$doc")" \
           || reject "the result could not be validated"
       case "$verdict" in
           ok) ;;
@@ -1072,8 +1173,9 @@ let
           *) reject "the validator produced no verdict" ;;
       esac
 
-      # Canonical, compact form — the caller archives THIS, never the raw file.
-      jq -c . -- "$path"
+      # Canonical, compact form of the bytes we just validated — the caller
+      # archives THIS, and never re-reads the file.
+      jq -c . <<< "$doc"
     '';
     meta = with lib; {
       description = "Validate a myconfig.ai.microvm batch result against the active allocation";
@@ -1133,15 +1235,25 @@ let
         ReadWritePaths = [
           "-${paths.guestControllerDir}"
           "-${paths.guestWorkerDir}"
+          "-${paths.guestWorkerLogsDir}"
         ];
+        # The controller's own lifecycle events must be correlatable with the
+        # host's, and the guest journal dies with the (ephemeral) guest. Sending
+        # them to the CONSOLE too gets them into the host journal, because
+        # microvm.nix captures the serial console of `microvm@<slot>.service`.
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
         # NOTE: no ProtectSystem= here. It would need a verified list of
         # writable paths for the D-Bus socket and systemd's runtime dirs, which
         # cannot be validated without booting on real KVM; the controller is a
         # small, fixed, non-repository-driven script instead.
         #
         # Static ceiling for the CONTROLLER itself: the worker's own ceiling
-        # plus room for the stop grace and the result write.
-        RuntimeMaxSec = workerCeilingSeconds + jobCfg.gracePeriodSeconds;
+        # plus room for the stop grace and the result write. `Type=oneshot`
+        # IGNORES RuntimeMaxSec and defaults TimeoutStartSec to infinity, so the
+        # ceiling has to be TimeoutStartSec — otherwise a wedged systemctl /
+        # D-Bus call would leave this unit activating forever.
+        TimeoutStartSec = workerCeilingSeconds + jobCfg.gracePeriodSeconds;
         TimeoutStopSec = 30;
       };
     };
@@ -1186,6 +1298,25 @@ let
         # SECOND layer under the 0700 ownership of the controller directory: the
         # worker's mount namespace does not even contain it.
         InaccessiblePaths = [ "-${paths.guestControllerDir}" ];
+        # THIRD layer under "the worker must not learn the allocation token":
+        # /proc/<pid>/cmdline of ANY process is world-readable (0444) and the
+        # worker shares the guest PID namespace, so hide every process the
+        # worker does not own — which is every process of the trusted, root-run
+        # controller. Neither side puts the token in an argv any more (see
+        # write_state/write_result), but a future helper that did must not
+        # immediately hand it to the worker.
+        #
+        # `ProcSubset=pid` is deliberately NOT set: it would also hide
+        # /proc/cpuinfo, /proc/meminfo and friends, which the node-based coding
+        # agents read (e.g. os.cpus()), and it adds nothing here — the token
+        # could only ever appear in a ROOT-owned process's cmdline, which
+        # ProtectProc=invisible already hides.
+        ProtectProc = "invisible";
+        # NOTE: `${paths.guestWorkerLogsDir}` is deliberately NOT listed here.
+        # Its files are root:root ${paths.workerLogMode} in a root-owned
+        # directory, so DAC already denies the worker every write; marking the
+        # path read-only in the unit's mount namespace would additionally risk
+        # the `append:` open itself, which systemd performs for this unit.
         ReadOnlyPaths = [ "-${paths.guestInputDir}" ];
         ReadWritePaths = [
           "-${paths.guestWorkerDir}"
@@ -1317,13 +1448,21 @@ in
       # only `worker/` belongs to the unprivileged guest agent.
       systemd.tmpfiles.rules = [
         "d ${paths.root} 0755 root root - -"
-        "d ${paths.resultsDir} 0755 root root - -"
+        # 0700: an archived result carries the allocation token of the run it
+        # belongs to, so it is root-only — not world-readable.
+        "d ${paths.resultsDir} 0700 root root - -"
+        # Migration: archives written before the mode was tightened are 0644.
+        "z ${paths.resultsDir}/*.json 0600 root root - -"
       ]
       ++ lib.concatMap (slot: [
         "d ${paths.slotDir slot.name} 0755 root root - -"
         "d ${paths.hostInputDir slot.name} ${paths.inputDirMode} root root - -"
         "d ${paths.hostControllerDir slot.name} ${paths.controllerDirMode} root root - -"
         "d ${paths.hostWorkerDir slot.name} ${paths.workerDirMode} ${toString paths.workerUid} ${toString paths.workerGid} - -"
+        # ROOT-owned on purpose: systemd opens the worker's stdout/stderr here
+        # as root and follows symlinks, so nothing running as the worker uid may
+        # be able to create, rename or replace anything in it.
+        "d ${paths.hostWorkerLogsDir slot.name} ${paths.workerLogsDirMode} root root - -"
         # Migration (spec v1 -> v2): the old guest-writable `out/` directory
         # was the forgeable result channel. Remove it, so no stale v1 result
         # lingers in a shared, worker-writable place.

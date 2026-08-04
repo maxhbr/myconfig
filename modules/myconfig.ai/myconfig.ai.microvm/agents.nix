@@ -9,8 +9,8 @@
 #
 #   guest.nix    — the guest closure's agent packages (§7), the per-agent
 #                  guest environment, the generated `agent-run` guest-side
-#                  dispatch table (§19) and the generated `agent-job` BATCH
-#                  dispatch table (ticket 4).
+#                  dispatch table (§19) and the generated BATCH dispatch table
+#                  of the untrusted `agent-job-worker` (ticket 4/7).
 #   launcher.nix — `--agent` validation (`validate_agent_name`) and the
 #                  `agent-microvm --help` output.
 #   workmux.nix  — the `myconfig.ai.workmux.agents.microvm-*` registrations
@@ -35,13 +35,13 @@
 #                    interactive `--attach` session. Defaults to `[ ]`.
 #                    Deliberately NOT a place for dangerous auto-approve
 #                    flags — those stay explicit per workmux agent (§19).
-#   batchArgs        argv for UNATTENDED batch execution (`agent-job`, ticket
-#                    4), VERIFIED against the pinned build's `--help`. The
+#   batchArgs        argv for UNATTENDED batch execution (`agent-job-worker`,
+#                    ticket 4/7), VERIFIED against the pinned build's `--help`. The
 #                    token `%PROMPT%` is replaced with the prompt TEXT read
 #                    from the job directory. `null` (the default) means the
 #                    agent cannot run unattended, and `submit --agent <name>`
 #                    is rejected for it.
-#   batchStdin       when true, `agent-job` pipes the prompt FILE on stdin
+#   batchStdin       when true, the worker pipes the prompt FILE on stdin
 #                    instead of substituting `%PROMPT%` (for CLIs that read
 #                    instructions from stdin). Defaults to `false`.
 #   guestEnvironment attrs merged into the guest's `environment.variables`.
@@ -254,8 +254,8 @@ let
         )
         "myconfig.ai.microvm: agent '${a.name}' persistentState.directories must be non-empty, relative, '..'-free paths."
     ++
-      lib.optional (builtins.match "[a-z][a-z0-9-]*" a.name == null)
-        "myconfig.ai.microvm: agent name '${a.name}' must match [a-z][a-z0-9-]* (it crosses the host→guest control channel).";
+      lib.optional (builtins.match "[a-z][a-z0-9-]{0,32}" a.name == null)
+        "myconfig.ai.microvm: agent name '${a.name}' must match [a-z][a-z0-9-]{0,32} (it crosses the host→guest control channel and is re-validated by the batch result verifier, which bounds it to 33 characters).";
 in
 rec {
   inherit agents;
@@ -312,11 +312,14 @@ rec {
   batchNamesAlternation = lib.concatStringsSep "|" batchNames;
   batchNamesCasePattern = lib.concatStringsSep " | " batchNames;
 
-  # A bash `case` body for the GUEST batch runner (`agent-job`). Each arm calls
-  # one of the runner's two helpers, which wrap the invocation in the per-job
-  # `timeout`:
+  # A bash `case` body for the UNTRUSTED guest batch worker
+  # (`agent-job-worker`). Each arm calls one of its two helpers:
   #   run_agent        argv…   (prompt substituted for %PROMPT%)
   #   run_agent_stdin  argv…   (prompt FILE piped on stdin)
+  # Neither wraps the invocation in a timeout: the deadline belongs to the
+  # TRUSTED controller (which stops the worker's whole cgroup) plus the worker
+  # unit's own static `TimeoutStartSec` ceiling — a limit enforced by the
+  # untrusted worker itself would be worthless as evidence.
   # The prompt therefore never appears in a HOST command line, and the guest
   # can only ever run an executable this registry declares.
   batchDispatchCases = lib.concatStringsSep "\n" (
