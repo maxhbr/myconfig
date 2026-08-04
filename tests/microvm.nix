@@ -934,7 +934,9 @@ in
         # The transitions ticket 6 B requires from the HOST side (including
         # `result-rejected`, the ticket-7 transition for a guest document that
         # does not belong to the active allocation).
-        hostEvents = "task-submitted slot-allocated workspace-created vm-start-requested vm-ready agent-started agent-finished timeout cancellation result-rejected vm-stopped cleanup-completed recovery-action";
+        # `mount-leak` is the ticket-8 transition: a bind mount that survived its
+        # unmount (the launcher no longer accepts a lazy unmount as success).
+        hostEvents = "task-submitted slot-allocated workspace-created vm-start-requested vm-ready agent-started agent-finished timeout cancellation result-rejected vm-stopped cleanup-completed recovery-action mount-leak";
         # ... and from the guest side (the controller also reports the
         # cancellations it performed itself).
         guestEvents = "agent-started agent-finished timeout cancellation";
@@ -1944,6 +1946,57 @@ in
         }
         {
           echo "microvm-batch-launcher-submit"
+          echo "  launcher: $LAUNCHER"
+          echo
+          cat report.txt
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (l5) RECOVERY PATH: actually RUN `agent-microvm recover` against a stale   #
+  #      workspace bind mount whose holder (the slot's virtiofsd) only lets    #
+  #      go once its unit is stopped, and against one that never lets go.      #
+  #      Same stubbing technique as (l4). This is a BEHAVIOURAL test of the     #
+  #      "never accept a lazy unmount" rule: the `umount` stub refuses `-l`     #
+  #      outright and returns EBUSY until `microvm-virtiofsd@<slot>` has been   #
+  #      stopped, and `findmnt` keeps reporting the mount until it is really    #
+  #      gone — so a launcher that lazily unmounted (or ignored the failure)    #
+  #      fails this check instead of printing "unmounting …" and exiting 0.    #
+  # ---------------------------------------------------------------------- #
+  microvm-launcher-recover =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+    in
+    pkgs.runCommand "microvm-launcher-recover"
+      {
+        nativeBuildInputs = [
+          pkgs.bubblewrap
+          pkgs.fakeroot
+          pkgs.jq
+          pkgs.coreutils
+        ];
+        harness = ./microvm-launcher-recover.sh;
+        LAUNCHER = "${hostLauncher}/bin/agent-microvm";
+        BWRAP = lib.getExe pkgs.bubblewrap;
+        FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
+        BASH_BIN = "${pkgs.bash}/bin/bash";
+        SYSTEMCTL_TARGET = "${pkgs.systemd}/bin/systemctl";
+        MOUNT_TARGET = "${pkgs.util-linux.mount}/bin/mount";
+        UMOUNT_TARGET = "${pkgs.util-linux.mount}/bin/umount";
+        FINDMNT_TARGET = "${pkgs.util-linux.bin}/bin/findmnt";
+        RUNTIME_ROOT = microvmOpts.runtimeRoot;
+        STATE_ROOT = microvmOpts.stateRoot;
+        SLOT = refSlot.name;
+      }
+      ''
+        mkdir -p work && cd work
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- recover harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "microvm-launcher-recover"
           echo "  launcher: $LAUNCHER"
           echo
           cat report.txt

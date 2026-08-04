@@ -686,24 +686,66 @@ let
       }
 
       # ---- §26 bind-mount lifecycle --------------------------------------
+      # Release whatever still holds a slot's shared directories open.
+      #
+      # microvm.nix runs ONE virtiofsd unit per VM,
+      # `microvm-virtiofsd@<slot>.service` (see its nixos-modules/host, which
+      # declares the `microvm-virtiofsd@` template with `Restart=always` and
+      # `partOf = microvm@%i.service`). Because it is `partOf`, a clean
+      # `systemctl stop microvm@<slot>` already takes it down — but a SIGKILLed
+      # guest does NOT: `microvm@<slot>` goes to `failed` without propagating a
+      # stop, `Restart=always` brings virtiofsd back, and it keeps the workspace
+      # bind open. Stopping it explicitly is idempotent and safe when the unit
+      # does not exist.
+      release_mount_holders() {
+          systemctl stop "microvm-virtiofsd@$1.service" 2>/dev/null || true
+      }
+
+      # Unmount $1 and PROVE it is gone. Returns 0 when nothing is mounted there
+      # any more (either it never was, or we unmounted it), 1 when the mount
+      # SURVIVED — which the caller must report, never swallow.
+      #
+      # A lazy unmount is deliberately NOT used as a fallback. `umount -l`
+      # detaches the mount from the namespace but keeps it alive until the last
+      # reference is dropped, so `findmnt` still lists it and the kernel still
+      # holds the clone. Every caller here either re-binds the same mount point
+      # (setup_bind_mount) or tells the operator "no stale mount remains"
+      # (recover) — both are lies while the mount lives on. So the only accepted
+      # outcomes are "gone" and "reported".
+      unmount_verified() {
+          local mp="$1" slot="''${2-}"
+          findmnt -n -- "$mp" >/dev/null 2>&1 || return 0
+          if ! umount -- "$mp" 2>/dev/null; then
+              # EBUSY is the expected case after a hard-killed guest: virtiofsd
+              # still holds the share. Drop that reference and retry ONCE.
+              [[ -n "$slot" ]] && release_mount_holders "$slot"
+              umount -- "$mp" 2>/dev/null || true
+          fi
+          if findmnt -n -- "$mp" >/dev/null 2>&1; then
+              log "ERROR: $mp is STILL mounted after unmounting it — something is holding it open (a lazy unmount would hide this, so it is not used)"
+              emit_event mount-leak "" "" "could not unmount $mp"
+              return 1
+          fi
+          return 0
+      }
+
       setup_bind_mount() {
           local slot="$1" clone="$2" mp
           mp="$(mount_point "$slot")"
           mkdir -p -- "$mp"
-          if findmnt -n -- "$mp" >/dev/null 2>&1; then
-              umount -- "$mp" || die "could not unmount stale bind at $mp"
-          fi
+          unmount_verified "$mp" "$slot" \
+              || die "could not unmount stale bind at $mp"
           mount --bind -- "$clone" "$mp" || die "bind mount failed: $clone -> $mp"
           findmnt -n -- "$mp" >/dev/null 2>&1 \
               || die "bind mount verification failed: $mp"
       }
 
+      # Returns non-zero when the mount survived (see unmount_verified). The
+      # cleanup path deliberately CONTINUES on failure — dropping the allocation
+      # marker matters more than the leaked mount, and leaving the slot reserved
+      # forever would be a second fault — but it must never report success.
       teardown_bind_mount() {
-          local mp
-          mp="$(mount_point "$1")"
-          if findmnt -n -- "$mp" >/dev/null 2>&1; then
-              umount -- "$mp" 2>/dev/null || umount -l -- "$mp" 2>/dev/null || true
-          fi
+          unmount_verified "$(mount_point "$1")" "$1"
       }
 
       # ---- §27 VM lifecycle (systemd only) -------------------------------
@@ -1038,9 +1080,8 @@ let
               [[ -n "$dir" ]] || continue
               install -d -m 0700 -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$task_dir/$dir"
           done
-          if findmnt -n -- "$mp" >/dev/null 2>&1; then
-              umount -- "$mp" || die "could not unmount stale agent-state bind at $mp"
-          fi
+          unmount_verified "$mp" "$slot" \
+              || die "could not unmount stale agent-state bind at $mp"
           mount --bind -- "$task_dir" "$mp" \
               || die "agent-state bind mount failed: $task_dir -> $mp"
           findmnt -n -- "$mp" >/dev/null 2>&1 \
@@ -1048,12 +1089,11 @@ let
           log "persisting agent state for '$task' ($agent): $task_dir"
       }
 
+      # Same contract as teardown_bind_mount: verified, never lazy. The agent
+      # state share is held by the SAME per-slot virtiofsd, so a hard-killed
+      # guest wedges it the same way.
       teardown_agent_state() {
-          local mp
-          mp="$(state_slot_dir "$1")"
-          if findmnt -n -- "$mp" >/dev/null 2>&1; then
-              umount -- "$mp" 2>/dev/null || umount -l -- "$mp" 2>/dev/null || true
-          fi
+          unmount_verified "$(state_slot_dir "$1")" "$1"
       }
 
       # Without persistence the slot's share source must be EMPTY, so the
@@ -1062,7 +1102,13 @@ let
       clear_agent_state_slot() {
           local mp
           mp="$(state_slot_dir "$1")"
-          teardown_agent_state "$1"
+          # While the bind is still in place, this directory IS the task's
+          # persisted state — emptying it would delete that state through the
+          # bind. So a surviving mount must abort the clearing, not be ignored.
+          teardown_agent_state "$1" || {
+              log "ERROR: refusing to clear $mp while its bind mount is still in place (that would delete the task's persisted state)"
+              return 1
+          }
           [[ -d "$mp" ]] || return 0
           find "$mp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
       }
@@ -1072,18 +1118,27 @@ let
       # the VM, unmount the bind, remove the slot transient state. Locks are
       # released implicitly when this process exits and closes their fds.
       cleanup_slot() {
-          local slot="$1"
+          local slot="$1" leaked=0
           [[ -n "$slot" ]] || return 0
           stop_vm "$slot"
-          teardown_bind_mount "$slot"
+          # A surviving mount is LOGGED and emitted as `mount-leak` by
+          # unmount_verified; we still finish the teardown, because leaving the
+          # allocation marker behind would reserve the slot forever — a second
+          # fault on top of the leak. What we must never do is call this a clean
+          # release, hence the warning below.
+          teardown_bind_mount "$slot" || leaked=1
           # Runtime job data (spec/prompt/result) is transient per task: drop it
           # with the slot, exactly like the session marker. The workspace clone
           # is deliberately kept (§26/§35).
           clear_job "$slot"
           # Unmount the per-task agent state (the task's DIRECTORY is kept, like
           # the workspace clone) and leave the slot's share source empty.
-          clear_agent_state_slot "$slot"
+          clear_agent_state_slot "$slot" || leaked=1
           rm -rf -- "''${SLOTS_DIR:?}/$slot"
+          if (( leaked )); then
+              log "WARNING: slot $slot was released with a LEAKED mount; re-run '$PROG recover' once the holder is gone"
+          fi
+          return 0
       }
 
       # Tear a slot down ONLY while it still belongs to `token` (ticket 4
@@ -1304,7 +1359,10 @@ let
               [[ -n "$agent" ]] || die "--persist-agent-state requires --agent <name>"
               setup_agent_state "$slot" "$task" "$agent"
           else
-              clear_agent_state_slot "$slot"
+              # Fail CLOSED: if the previous task's state share could not be
+              # released, booting now would show that state to this task.
+              clear_agent_state_slot "$slot" \
+                  || die "could not clear the agent-state share of slot $slot"
           fi
           emit_event vm-start-requested
           start_vm "$slot"
@@ -1438,7 +1496,9 @@ let
           if (( persist )); then
               setup_agent_state "$slot" "$task" "$agent"
           else
-              clear_agent_state_slot "$slot"
+              # Fail CLOSED, as in cmd_run.
+              clear_agent_state_slot "$slot" \
+                  || die "could not clear the agent-state share of slot $slot"
           fi
           write_session_marker "$slot" "$token" "batch" "$task" "$top" \
               "$clone" "$agent" "$branch" "$timeout_s" "$persist"
@@ -1652,7 +1712,7 @@ let
                   *) die "recover: unknown argument '$1'" ;;
               esac
           done
-          local slot marker active mounted mode pid pid_start task acted=0
+          local slot marker active mounted mode pid pid_start task acted=0 failed=0
           for slot in "''${SLOT_NAMES[@]}"; do
               marker=0
               [[ -e "$(session_file "$slot")" ]] && marker=1
@@ -1713,7 +1773,16 @@ let
               fi
               if (( mounted )); then
                   printf '%s:   unmounting %s\n' "$slot" "$(mount_point "$slot")"
-                  teardown_bind_mount "$slot"
+                  # "unmounting X" must not be printed for a mount that is still
+                  # there afterwards. teardown_bind_mount verifies (and stops the
+                  # slot's virtiofsd, which is what holds the share after a
+                  # SIGKILLed guest); if the mount survives anyway, say so, and
+                  # let the whole recover run exit non-zero.
+                  if ! teardown_bind_mount "$slot"; then
+                      printf '%s:   FAILED to unmount %s (still mounted)\n' \
+                          "$slot" "$(mount_point "$slot")"
+                      failed=1
+                  fi
               fi
               if [[ -e "$(job_spec "$slot")" || -e "$(job_prompt "$slot")" ]]; then
                   printf '%s:   clearing job data in %s\n' "$slot" "$(job_dir "$slot")"
@@ -1728,6 +1797,8 @@ let
           if (( ! acted )); then
               log "nothing to recover"
           fi
+          # Nothing to do is success; a recovery that could not complete is not.
+          (( ! failed )) || die "recover could not release every resource (see the FAILED lines above)"
       }
 
       # ==== retained-usage report (ticket 5 C) =============================

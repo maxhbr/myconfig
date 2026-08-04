@@ -228,7 +228,7 @@ the `agent-microvm` tag, and in the per-task log (rotated once at
 `taskLogMaxBytes`, default 1 MiB). Events: `task-submitted`, `slot-allocated`,
 `workspace-created`, `vm-start-requested`, `vm-ready`, `agent-started`,
 `agent-finished`, `timeout`, `cancellation`, `vm-stopped`, `cleanup-completed`,
-`recovery-action`, `result-rejected`; each carries `ts`, `event`, `task`, `slot`,
+`recovery-action`, `result-rejected`, `mount-leak`; each carries `ts`, `event`, `task`, `slot`,
 `agent`, `resource_class`, `mode` and, where applicable, `state` / `exit_code`.
 The guest **controller** emits its own `agent-started` / `agent-finished` /
 `timeout` / `cancellation` records to the console, so host and guest transitions
