@@ -934,7 +934,9 @@ in
         # The transitions ticket 6 B requires from the HOST side (including
         # `result-rejected`, the ticket-7 transition for a guest document that
         # does not belong to the active allocation).
-        hostEvents = "task-submitted slot-allocated workspace-created vm-start-requested vm-ready agent-started agent-finished timeout cancellation result-rejected vm-stopped cleanup-completed recovery-action";
+        # `mount-leak` is the ticket-8 transition: a bind mount that survived its
+        # unmount (the launcher no longer accepts a lazy unmount as success).
+        hostEvents = "task-submitted slot-allocated workspace-created vm-start-requested vm-ready agent-started agent-finished timeout cancellation result-rejected vm-stopped cleanup-completed recovery-action mount-leak";
         # ... and from the guest side (the controller also reports the
         # cancellations it performed itself).
         guestEvents = "agent-started agent-finished timeout cancellation";
@@ -1945,6 +1947,101 @@ in
         {
           echo "microvm-batch-launcher-submit"
           echo "  launcher: $LAUNCHER"
+          echo
+          cat report.txt
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (l5) RECOVERY PATH: actually RUN `agent-microvm recover` against a stale   #
+  #      workspace bind mount whose holder (the slot's virtiofsd) only lets    #
+  #      go once its unit is stopped, and against one that never lets go.      #
+  #      Same stubbing technique as (l4). This is a BEHAVIOURAL test of the     #
+  #      "never accept a lazy unmount" rule: the `umount` stub refuses `-l`     #
+  #      outright and returns EBUSY until `microvm-virtiofsd@<slot>` has been   #
+  #      stopped, and `findmnt` keeps reporting the mount until it is really    #
+  #      gone — so a launcher that lazily unmounted (or ignored the failure)    #
+  #      fails this check instead of printing "unmounting …" and exiting 0.    #
+  # ---------------------------------------------------------------------- #
+  microvm-launcher-recover =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+    in
+    pkgs.runCommand "microvm-launcher-recover"
+      {
+        nativeBuildInputs = [
+          pkgs.bubblewrap
+          pkgs.fakeroot
+          pkgs.jq
+          pkgs.coreutils
+        ];
+        harness = ./microvm-launcher-recover.sh;
+        LAUNCHER = "${hostLauncher}/bin/agent-microvm";
+        BWRAP = lib.getExe pkgs.bubblewrap;
+        FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
+        BASH_BIN = "${pkgs.bash}/bin/bash";
+        SYSTEMCTL_TARGET = "${pkgs.systemd}/bin/systemctl";
+        MOUNT_TARGET = "${pkgs.util-linux.mount}/bin/mount";
+        UMOUNT_TARGET = "${pkgs.util-linux.mount}/bin/umount";
+        FINDMNT_TARGET = "${pkgs.util-linux.bin}/bin/findmnt";
+        RUNTIME_ROOT = microvmOpts.runtimeRoot;
+        STATE_ROOT = microvmOpts.stateRoot;
+        SLOT = refSlot.name;
+        # A slot name from the PREVIOUS naming scheme (`agent-<i>`, before the
+        # per-class `agent-<class>-<i>` rename). Asserted by the harness not to
+        # be in the current pool, so the "foreign per-slot state" scenarios
+        # cannot silently degrade into "current slot" ones.
+        FOREIGN_SLOT = "agent-0";
+      }
+      ''
+        mkdir -p work && cd work
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- recover harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "microvm-launcher-recover"
+          echo "  launcher: $LAUNCHER"
+          echo
+          cat report.txt
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (l6) The GUEST COMMAND TRANSPORT of the real-KVM suite. That suite needs   #
+  #      /dev/kvm and root, so CI can never run it — but the mechanism that    #
+  #      decides whether ANY of its guest-side denials mean anything (does the  #
+  #      command reach the guest as written, through OpenSSH's argv flattening  #
+  #      and the agent's fish login shell?) can be executed here, against a     #
+  #      stub that reproduces exactly that path. Includes a NEGATIVE CONTROL:   #
+  #      the previous, unquoted transport must FAIL this check.                 #
+  # ---------------------------------------------------------------------- #
+  microvm-rtv-transport =
+    pkgs.runCommand "microvm-rtv-transport"
+      {
+        nativeBuildInputs = [
+          pkgs.coreutils
+          pkgs.fish
+        ];
+        harness = ./microvm-rtv-transport.sh;
+        # The suite under test, and the very shell guest.nix gives the agent
+        # user (`users.users.agent.shell = pkgs.fish`) — the re-parsing side of
+        # the transport, so the stub is not a guess about which shell runs.
+        SUITE = ../modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh;
+        FISH = lib.getExe pkgs.fish;
+      }
+      ''
+        mkdir -p work && cd work
+        export HOME=$PWD
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- runtime-validation transport harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "microvm-rtv-transport"
+          echo "  suite: $SUITE"
           echo
           cat report.txt
         } > "$out"

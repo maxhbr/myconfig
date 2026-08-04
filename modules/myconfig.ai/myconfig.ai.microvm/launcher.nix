@@ -130,6 +130,8 @@ let
       # `StrictHostKeyChecking=no` + /dev/null known-hosts (which accepted ANY
       # key, i.e. an unauthenticated channel).
       readonly KNOWN_HOSTS=${lib.escapeShellArg agentHostKeys.knownHosts}
+      # Per-slot host-key directory root; scanned by the foreign-slot report.
+      readonly HOSTKEYS_ROOT=${lib.escapeShellArg agentHostKeys.root}
       # Strict verification against exactly that file. Kept in ONE place so
       # readiness probing, `--attach` and `ssh` cannot drift apart.
       SSH_VERIFY_OPTS=(
@@ -686,24 +688,79 @@ let
       }
 
       # ---- §26 bind-mount lifecycle --------------------------------------
+      # Release whatever still holds a slot's shared directories open.
+      #
+      # microvm.nix runs ONE virtiofsd unit per VM,
+      # `microvm-virtiofsd@<slot>.service` (see its nixos-modules/host, which
+      # declares the `microvm-virtiofsd@` template with `Restart=always` and
+      # `partOf = microvm@%i.service`). Because it is `partOf`, a clean
+      # `systemctl stop microvm@<slot>` already takes it down — but a SIGKILLed
+      # guest does NOT: `microvm@<slot>` goes to `failed` without propagating a
+      # stop, `Restart=always` brings virtiofsd back, and it keeps the workspace
+      # bind open. Stopping it explicitly is idempotent and safe when the unit
+      # does not exist.
+      #
+      # CAUTION: `microvm@%i` REQUIRES `microvm-virtiofsd@%i` (pinned
+      # microvm.nix, nixos-modules/host/default.nix), so stopping virtiofsd also
+      # stops a LIVE VM on that slot. That is correct on every path that reaches
+      # here — all of them have already run stop_vm (cleanup_slot, recover) or
+      # are re-binding a slot that is not running (setup_bind_mount,
+      # setup_agent_state) — but it makes this a teardown-only helper: never
+      # call it while a VM is meant to keep running.
+      release_mount_holders() {
+          systemctl stop "microvm-virtiofsd@$1.service" 2>/dev/null || true
+      }
+
+      # Unmount $1 and PROVE it is gone. Returns 0 when nothing is mounted there
+      # any more (either it never was, or we unmounted it), 1 when the mount
+      # SURVIVED — which the caller must report, never swallow.
+      #
+      # A lazy unmount is deliberately NOT used as a fallback. `umount -l`
+      # detaches the mount from the namespace but keeps it alive until the last
+      # reference is dropped, so `findmnt` still lists it and the kernel still
+      # holds the clone. Every caller here either re-binds the same mount point
+      # (setup_bind_mount) or tells the operator "no stale mount remains"
+      # (recover) — both are lies while the mount lives on. So the only accepted
+      # outcomes are "gone" and "reported".
+      unmount_verified() {
+          local mp="$1" slot="''${2-}"
+          findmnt -n -- "$mp" >/dev/null 2>&1 || return 0
+          if ! umount -- "$mp" 2>/dev/null; then
+              # EBUSY is the expected case after a hard-killed guest: virtiofsd
+              # still holds the share. Drop that reference and retry ONCE.
+              [[ -n "$slot" ]] && release_mount_holders "$slot"
+              umount -- "$mp" 2>/dev/null || true
+          fi
+          if findmnt -n -- "$mp" >/dev/null 2>&1; then
+              log "ERROR: $mp is STILL mounted after unmounting it — something is holding it open (a lazy unmount would hide this, so it is not used)"
+              # The slot is set as STRUCTURED context (not only mentioned in the
+              # free-text message), so a consumer of the lifecycle stream can
+              # act on the event without parsing prose. The rest of the context
+              # (task/agent/class/mode) is whatever the caller established.
+              if [[ -n "$slot" ]]; then EV_SLOT="$slot"; fi
+              emit_event mount-leak "" "" "could not unmount $mp"
+              return 1
+          fi
+          return 0
+      }
+
       setup_bind_mount() {
           local slot="$1" clone="$2" mp
           mp="$(mount_point "$slot")"
           mkdir -p -- "$mp"
-          if findmnt -n -- "$mp" >/dev/null 2>&1; then
-              umount -- "$mp" || die "could not unmount stale bind at $mp"
-          fi
+          unmount_verified "$mp" "$slot" \
+              || die "could not unmount stale bind at $mp"
           mount --bind -- "$clone" "$mp" || die "bind mount failed: $clone -> $mp"
           findmnt -n -- "$mp" >/dev/null 2>&1 \
               || die "bind mount verification failed: $mp"
       }
 
+      # Returns non-zero when the mount survived (see unmount_verified). The
+      # cleanup path deliberately CONTINUES on failure — dropping the allocation
+      # marker matters more than the leaked mount, and leaving the slot reserved
+      # forever would be a second fault — but it must never report success.
       teardown_bind_mount() {
-          local mp
-          mp="$(mount_point "$1")"
-          if findmnt -n -- "$mp" >/dev/null 2>&1; then
-              umount -- "$mp" 2>/dev/null || umount -l -- "$mp" 2>/dev/null || true
-          fi
+          unmount_verified "$(mount_point "$1")" "$1"
       }
 
       # ---- §27 VM lifecycle (systemd only) -------------------------------
@@ -1038,9 +1095,8 @@ let
               [[ -n "$dir" ]] || continue
               install -d -m 0700 -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$task_dir/$dir"
           done
-          if findmnt -n -- "$mp" >/dev/null 2>&1; then
-              umount -- "$mp" || die "could not unmount stale agent-state bind at $mp"
-          fi
+          unmount_verified "$mp" "$slot" \
+              || die "could not unmount stale agent-state bind at $mp"
           mount --bind -- "$task_dir" "$mp" \
               || die "agent-state bind mount failed: $task_dir -> $mp"
           findmnt -n -- "$mp" >/dev/null 2>&1 \
@@ -1048,12 +1104,11 @@ let
           log "persisting agent state for '$task' ($agent): $task_dir"
       }
 
+      # Same contract as teardown_bind_mount: verified, never lazy. The agent
+      # state share is held by the SAME per-slot virtiofsd, so a hard-killed
+      # guest wedges it the same way.
       teardown_agent_state() {
-          local mp
-          mp="$(state_slot_dir "$1")"
-          if findmnt -n -- "$mp" >/dev/null 2>&1; then
-              umount -- "$mp" 2>/dev/null || umount -l -- "$mp" 2>/dev/null || true
-          fi
+          unmount_verified "$(state_slot_dir "$1")" "$1"
       }
 
       # Without persistence the slot's share source must be EMPTY, so the
@@ -1062,7 +1117,13 @@ let
       clear_agent_state_slot() {
           local mp
           mp="$(state_slot_dir "$1")"
-          teardown_agent_state "$1"
+          # While the bind is still in place, this directory IS the task's
+          # persisted state — emptying it would delete that state through the
+          # bind. So a surviving mount must abort the clearing, not be ignored.
+          teardown_agent_state "$1" || {
+              log "ERROR: refusing to clear $mp while its bind mount is still in place (that would delete the task's persisted state)"
+              return 1
+          }
           [[ -d "$mp" ]] || return 0
           find "$mp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
       }
@@ -1072,18 +1133,33 @@ let
       # the VM, unmount the bind, remove the slot transient state. Locks are
       # released implicitly when this process exits and closes their fds.
       cleanup_slot() {
-          local slot="$1"
+          local slot="$1" leaked=0
           [[ -n "$slot" ]] || return 0
           stop_vm "$slot"
-          teardown_bind_mount "$slot"
+          # A surviving mount is LOGGED and emitted as `mount-leak` by
+          # unmount_verified; we still finish the teardown, because leaving the
+          # allocation marker behind would reserve the slot forever — a second
+          # fault on top of the leak. What we must never do is call this a clean
+          # release, hence the warning below.
+          teardown_bind_mount "$slot" || leaked=1
           # Runtime job data (spec/prompt/result) is transient per task: drop it
           # with the slot, exactly like the session marker. The workspace clone
           # is deliberately kept (§26/§35).
           clear_job "$slot"
           # Unmount the per-task agent state (the task's DIRECTORY is kept, like
           # the workspace clone) and leave the slot's share source empty.
-          clear_agent_state_slot "$slot"
+          clear_agent_state_slot "$slot" || leaked=1
           rm -rf -- "''${SLOTS_DIR:?}/$slot"
+          if (( leaked )); then
+              log "WARNING: slot $slot was released with a LEAKED mount; re-run '$PROG recover' once the holder is gone"
+              # The teardown CONTINUED (see above) but it did not succeed, and
+              # an operator running `stop`/`destroy` must learn that from the
+              # EXIT CODE, not only from a log line. The EXIT-trap callers are
+              # the ones that must never abort; they say so explicitly with
+              # `|| true`.
+              return 1
+          fi
+          return 0
       }
 
       # Tear a slot down ONLY while it still belongs to `token` (ticket 4
@@ -1184,10 +1260,15 @@ let
         cancel <task>         Cancel a running job/session by task name. Refuses
                               unless the slot still carries that task's
                               allocation token. Keeps the workspace.
-        recover [--dry-run]   Reconcile slots with systemd: stop orphaned units,
+        recover [--dry-run] [--prune-foreign]
+                              Reconcile slots with systemd: stop orphaned units,
                               unmount stale mounts, drop stale markers and job
                               data. Always keeps workspace clones. --dry-run
-                              only prints what it would do.
+                              only prints what it would do. Per-slot state whose
+                              slot name is NOT in the current pool (left over
+                              from a generation with different slot names) is
+                              always REPORTED as a 'foreign:' finding, and only
+                              removed with --prune-foreign.
         usage                 Report RETAINED disk usage per task (workspace
                               clone + task-scoped agent state) plus the runtime
                               roots, and how to prune it.
@@ -1273,7 +1354,10 @@ let
           # enclosing function's locals are not in scope while the trap fires
           # there, so a failure path (e.g. "workspace already exists") would
           # trip `set -u` without the defaults (§21/§43).
-          on_exit() { (( ''${committed:-0} )) || cleanup_slot "''${slot:-}"; }
+          # `|| true`: an EXIT trap must complete every step it can, so a leaked
+          # mount (cleanup_slot's non-zero) must not abort it. The leak is
+          # logged and emitted as a `mount-leak` event by unmount_verified.
+          on_exit() { (( ''${committed:-0} )) || cleanup_slot "''${slot:-}" || true; }
           trap on_exit EXIT
           trap 'exit 130' INT TERM
 
@@ -1304,7 +1388,10 @@ let
               [[ -n "$agent" ]] || die "--persist-agent-state requires --agent <name>"
               setup_agent_state "$slot" "$task" "$agent"
           else
-              clear_agent_state_slot "$slot"
+              # Fail CLOSED: if the previous task's state share could not be
+              # released, booting now would show that state to this task.
+              clear_agent_state_slot "$slot" \
+                  || die "could not clear the agent-state share of slot $slot"
           fi
           emit_event vm-start-requested
           start_vm "$slot"
@@ -1329,10 +1416,13 @@ let
               # Foreground session finished: tear the VM down, keep the clone.
               emit_event agent-finished
               log "session ended; tearing down $slot (workspace kept at $clone)"
-              cleanup_slot "$slot"
+              local leaked=0
+              cleanup_slot "$slot" || leaked=1
               emit_event cleanup-completed
               committed=1
               trap - EXIT INT TERM
+              (( ! leaked )) \
+                  || die "slot $slot was released but a bind mount SURVIVED; run '$PROG recover' once its holder is gone"
               return 0
           fi
 
@@ -1412,7 +1502,9 @@ let
 
           local slot="" token="" committed=0
           # shellcheck disable=SC2317  # invoked via trap
-          on_exit() { (( ''${committed:-0} )) || cleanup_slot "''${slot:-}"; }
+          # `|| true` as in cmd_run: the trap must finish, the leak is reported
+          # by unmount_verified (log + `mount-leak` event).
+          on_exit() { (( ''${committed:-0} )) || cleanup_slot "''${slot:-}" || true; }
           trap on_exit EXIT
           trap 'exit 130' INT TERM
 
@@ -1438,7 +1530,9 @@ let
           if (( persist )); then
               setup_agent_state "$slot" "$task" "$agent"
           else
-              clear_agent_state_slot "$slot"
+              # Fail CLOSED, as in cmd_run.
+              clear_agent_state_slot "$slot" \
+                  || die "could not clear the agent-state share of slot $slot"
           fi
           write_session_marker "$slot" "$token" "batch" "$task" "$top" \
               "$clone" "$agent" "$branch" "$timeout_s" "$persist"
@@ -1540,11 +1634,21 @@ let
 
           # Teardown: stop the VM, unmount, drop job data + marker. The
           # workspace clone is ALWAYS kept (§35).
-          cleanup_slot "$slot"
+          #
+          # A surviving bind mount is an INFRASTRUCTURE failure of this run: the
+          # job's own verdict is still archived and reported, but a batch run
+          # that leaked a mount must not exit 0. It only upgrades a success — a
+          # real job failure/timeout keeps its own, more specific code.
+          local leaked=0
+          cleanup_slot "$slot" || leaked=1
           emit_event vm-stopped "$state"
           emit_event cleanup-completed "$state" "$rc"
           committed=1
           trap - EXIT INT TERM
+          if (( leaked && rc == 0 )); then
+              log "ERROR: the job succeeded but slot $slot was released with a LEAKED bind mount"
+              rc=70
+          fi
 
           cat >&2 <<EOF
       $PROG: batch task '$task' finished with state '$state'.
@@ -1631,13 +1735,68 @@ let
           # Requests a clean shutdown first, waits a bounded interval, then
           # force-kills — all inside cleanup_slot/stop_vm — and unmounts + drops
           # the runtime job data. Token-guarded.
-          cleanup_slot_owned "$slot" "$token"
+          local leaked=0
+          cleanup_slot_owned "$slot" "$token" || leaked=1
           emit_event cleanup-completed "cancelled" "130"
           if [[ -e "$archived" ]]; then
               log "cancelled; result recorded at $archived"
           else
               log "cancelled; the result could NOT be archived (see the warning above)"
           fi
+          # Report the cancellation as done ONLY if it really released the slot.
+          (( ! leaked )) \
+              || die "cancelled, but slot $slot was released with a LEAKED bind mount; run '$PROG recover' once its holder is gone"
+      }
+
+      # ==== FOREIGN per-slot state =========================================
+      # Several host directories are keyed by SLOT NAME. Every command here
+      # iterates "''${SLOT_NAMES[@]}", i.e. the pool of the CURRENT generation, so
+      # per-slot state written under a name this generation does not define — e.g.
+      # `slots/agent-0/` from before the `agent-<class>-<i>` rename — is invisible
+      # to `list`, `status` and `recover` alike, and nothing ever cleans it up.
+      # "Unused" was true; "silent" was the problem.
+      #
+      # Only directories this feature OWNS are scanned. $STATE_ROOT is
+      # deliberately NOT in the list: it is microvm.nix's state dir for EVERY
+      # microVM on the host, so it is handled separately and restricted to the
+      # `agent-*` naming plus the one mount point we create there.
+      readonly FOREIGN_SCAN_DIRS=(
+          "$SLOTS_DIR"
+          "$JOBS_ROOT"
+          "$STATE_SLOTS_ROOT"
+          "$HOSTKEYS_ROOT"
+      )
+
+      # "<foreign slot name> <path>" per line. Nothing is deleted here.
+      foreign_slot_paths() {
+          local dir entry name
+          for dir in "''${FOREIGN_SCAN_DIRS[@]}"; do
+              [[ -d "$dir" ]] || continue
+              for entry in "$dir"/*; do
+                  [[ -e "$entry" ]] || continue
+                  name="''${entry##*/}"
+                  is_slot_name "$name" && continue
+                  printf '%s %s\n' "$name" "$entry"
+              done
+          done
+          for entry in "$STATE_ROOT"/agent-*; do
+              [[ -d "$entry" ]] || continue
+              name="''${entry##*/}"
+              is_slot_name "$name" && continue
+              # Only the workspace mount point we created, never the VM state dir
+              # itself (that belongs to microvm.nix).
+              [[ -d "$entry/workspace" ]] || continue
+              printf '%s %s\n' "$name" "$entry/workspace"
+          done
+      }
+
+      # Defensive: only ever remove something under a root this feature owns.
+      foreign_path_is_ours() {
+          case "$1" in
+              "$RUNTIME_ROOT"/*) return 0 ;;
+              "$STATE_ROOT"/*)   return 0 ;;
+              *) return 1 ;;
+          esac
       }
 
       # ==== recovery (ticket 4) ============================================
@@ -1645,14 +1804,15 @@ let
       # NEVER deletes a workspace clone. --dry-run only prints.
       cmd_recover() {
           require_root recover
-          local dry=0
+          local dry=0 prune=0
           while [[ $# -gt 0 ]]; do
               case "$1" in
                   --dry-run) dry=1; shift ;;
+                  --prune-foreign) prune=1; shift ;;
                   *) die "recover: unknown argument '$1'" ;;
               esac
           done
-          local slot marker active mounted mode pid pid_start task acted=0
+          local slot marker active mounted state_mounted mode pid pid_start task acted=0 failed=0
           for slot in "''${SLOT_NAMES[@]}"; do
               marker=0
               [[ -e "$(session_file "$slot")" ]] && marker=1
@@ -1660,6 +1820,16 @@ let
               service_active "$slot" && active=1
               mounted=0
               findmnt -n -- "$(mount_point "$slot")" >/dev/null 2>&1 && mounted=1
+              # BOTH binds a slot can hold. The agent-state bind
+              # (<runtimeRoot>/state/slots/<slot>, ticket 5 B) is held by the
+              # SAME per-slot virtiofsd as the workspace bind, so a SIGKILLed
+              # guest leaks it exactly the same way — and while it survives, the
+              # task's persisted state is still reachable through it and
+              # clear_agent_state_slot refuses to run. Recovering only the
+              # workspace bind left that leak undetected AND unreported: recover
+              # printed `ok`.
+              state_mounted=0
+              findmnt -n -- "$(state_slot_dir "$slot")" >/dev/null 2>&1 && state_mounted=1
               task="$(marker_field "$slot" task 2>/dev/null || true)"
               mode="$(marker_field "$slot" mode 2>/dev/null || true)"
               pid="$(marker_field "$slot" pid 2>/dev/null || true)"
@@ -1680,8 +1850,14 @@ let
                   # `detached` ones are not, so their dead pid is EXPECTED and
                   # must never trigger recovery.
                   reason="orphaned $mode run (launcher pid $pid is gone)"
-              elif (( ! marker && ! active && mounted )); then
-                  reason="stale bind mount"
+              elif (( ! marker && ! active && (mounted || state_mounted) )); then
+                  if (( mounted && state_mounted )); then
+                      reason="stale bind mounts (workspace + agent state)"
+                  elif (( mounted )); then
+                      reason="stale bind mount"
+                  else
+                      reason="stale agent-state bind mount"
+                  fi
               elif (( ! marker && ! active )) && [[ -e "$(job_spec "$slot")" ]]; then
                   reason="stale job data"
               fi
@@ -1697,6 +1873,7 @@ let
                   printf '%s: would recover — %s\n' "$slot" "$reason"
                   (( active )) && printf '%s:   would stop %s\n' "$slot" "microvm@$slot.service"
                   (( mounted )) && printf '%s:   would unmount %s\n' "$slot" "$(mount_point "$slot")"
+                  (( state_mounted )) && printf '%s:   would unmount %s\n' "$slot" "$(state_slot_dir "$slot")"
                   [[ -e "$(job_spec "$slot")" ]] \
                       && printf '%s:   would clear job data in %s\n' "$slot" "$(job_dir "$slot")"
                   (( marker )) && printf '%s:   would drop the allocation marker\n' "$slot"
@@ -1713,7 +1890,26 @@ let
               fi
               if (( mounted )); then
                   printf '%s:   unmounting %s\n' "$slot" "$(mount_point "$slot")"
-                  teardown_bind_mount "$slot"
+                  # "unmounting X" must not be printed for a mount that is still
+                  # there afterwards. teardown_bind_mount verifies (and stops the
+                  # slot's virtiofsd, which is what holds the share after a
+                  # SIGKILLed guest); if the mount survives anyway, say so, and
+                  # let the whole recover run exit non-zero.
+                  if ! teardown_bind_mount "$slot"; then
+                      printf '%s:   FAILED to unmount %s (still mounted)\n' \
+                          "$slot" "$(mount_point "$slot")"
+                      failed=1
+                  fi
+              fi
+              if (( state_mounted )); then
+                  printf '%s:   unmounting %s\n' "$slot" "$(state_slot_dir "$slot")"
+                  # Same contract as the workspace bind: VERIFIED, never lazy,
+                  # and a survivor is named and makes the whole run fail.
+                  if ! teardown_agent_state "$slot"; then
+                      printf '%s:   FAILED to unmount %s (still mounted)\n' \
+                          "$slot" "$(state_slot_dir "$slot")"
+                      failed=1
+                  fi
               fi
               if [[ -e "$(job_spec "$slot")" || -e "$(job_prompt "$slot")" ]]; then
                   printf '%s:   clearing job data in %s\n' "$slot" "$(job_dir "$slot")"
@@ -1725,9 +1921,71 @@ let
               fi
               printf '%s:   keeping the workspace clone\n' "$slot"
           done
-          if (( ! acted )); then
+
+          # --- per-slot state under a name the current pool does not define ---
+          # Reported as its OWN finding, never mixed into the per-slot lines
+          # above, and never removed unless --prune-foreign says so: it may be
+          # the only remaining copy of something the operator still wants.
+          local fname fpath found_foreign=0
+          local -a fnames=() fpaths=()
+          while read -r fname fpath; do
+              [[ -n "$fname" ]] || continue
+              fnames+=("$fname")
+              fpaths+=("$fpath")
+          done < <(foreign_slot_paths)
+          if (( ''${#fpaths[@]} )); then
+              found_foreign=1
+              printf 'foreign: %d per-slot path(s) whose slot name is NOT in the current pool\n' \
+                  "''${#fpaths[@]}"
+              printf 'foreign:   (left over from a generation with different slot names; no other\n'
+              printf 'foreign:    command iterates them, and no workspace clone is keyed by slot)\n'
+              local i mounted_foreign
+              for i in "''${!fpaths[@]}"; do
+                  fname="''${fnames[$i]}"
+                  fpath="''${fpaths[$i]}"
+                  mounted_foreign=0
+                  findmnt -n -- "$fpath" >/dev/null 2>&1 && mounted_foreign=1
+                  printf 'foreign:   %s (slot name %s)%s\n' "$fpath" "$fname" \
+                      "$( (( mounted_foreign )) && printf ' [STILL MOUNTED]' )"
+                  if (( ! prune )); then
+                      printf 'foreign:     left alone; remove it with: %s recover --prune-foreign\n' "$PROG"
+                      continue
+                  fi
+                  if (( dry )); then
+                      (( mounted_foreign )) && printf 'foreign:     would unmount %s\n' "$fpath"
+                      printf 'foreign:     would remove %s\n' "$fpath"
+                      continue
+                  fi
+                  foreign_path_is_ours "$fpath" \
+                      || die "refusing to remove a path outside the feature's roots: $fpath"
+                  set_event_context "" "$fname" "" "" ""
+                  if (( mounted_foreign )); then
+                      printf 'foreign:     unmounting %s\n' "$fpath"
+                      # The SAME verified path as every other unmount: a foreign
+                      # bind may be held by a virtiofsd of that old slot name.
+                      if ! unmount_verified "$fpath" "$fname"; then
+                          printf 'foreign:     FAILED to unmount %s (still mounted); not removing it\n' "$fpath"
+                          failed=1
+                          continue
+                      fi
+                  fi
+                  # Emitted HERE, not before the unmount: an action that could
+                  # not be carried out (a wedged foreign bind, handled above)
+                  # must not appear in the lifecycle stream as if it had been.
+                  emit_event recovery-action "" "" "foreign per-slot state: $fpath"
+                  printf 'foreign:     removing %s\n' "$fpath"
+                  rm -rf -- "''${fpath:?}"
+              done
+          elif (( prune )); then
+              printf 'foreign: no per-slot state outside the current pool\n'
+          fi
+
+          if (( ! acted && ! found_foreign )); then
               log "nothing to recover"
           fi
+          # Nothing to do is success; a recovery that could not complete is not.
+          # Merely REPORTING foreign state is not a failure — it is a finding.
+          (( ! failed )) || die "recover could not release every resource (see the FAILED lines above)"
       }
 
       # ==== retained-usage report (ticket 5 C) =============================
@@ -1791,9 +2049,16 @@ let
               "$(marker_field "$slot" agent || true)" "$(slot_class "$slot")" \
               "$(marker_field "$slot" mode || true)"
           log "stopping $slot (workspace kept)"
-          cleanup_slot "$slot"
+          # A leaked bind must reach the OPERATOR as a non-zero exit: `stop`
+          # returning 0 while a bind survives is exactly the "claimed success"
+          # this feature refuses everywhere else. The events are still emitted
+          # first, because the teardown itself did happen.
+          local leaked=0
+          cleanup_slot "$slot" || leaked=1
           emit_event vm-stopped
           emit_event cleanup-completed
+          (( ! leaked )) \
+              || die "slot $slot was released but a bind mount SURVIVED; run '$PROG recover' once its holder is gone"
       }
 
       cmd_destroy() {
@@ -1804,7 +2069,8 @@ let
           # §35: destroy removes ephemeral runtime + slot transient + bind
           # mount + VM process state, but must NOT delete workspace/git/patches.
           log "destroying $slot ephemeral state (workspace kept)"
-          cleanup_slot "$slot"
+          cleanup_slot "$slot" \
+              || die "slot $slot was released but a bind mount SURVIVED; run '$PROG recover' once its holder is gone"
       }
 
       cmd_status() {
@@ -2013,7 +2279,11 @@ let
               if (( matched )); then
                   if (( force )); then
                       log "workspace in use by slot $slot; stopping it first (--force)"
-                      cleanup_slot "$slot"
+                      # A surviving bind here is FATAL, not a warning: the very
+                      # next step is `rm -rf` of the clone, which would delete
+                      # the task's files THROUGH the mount.
+                      cleanup_slot "$slot" \
+                          || die "refusing to remove $clone: slot $slot still has a bind mount on it (run '$PROG recover' once its holder is gone)"
                   else
                       die "workspace is in use by slot $slot; stop it first with: $PROG stop $slot"
                   fi
