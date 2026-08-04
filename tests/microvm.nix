@@ -2217,6 +2217,10 @@ in
           cat report.txt
         } > "$out"
       '';
+  # ---------------------------------------------------------------------- #
+  # (k) NETWORK PROFILES (ticket 3 C): render all four profiles and assert   #
+  #     the rules each one must and must NOT contain, plus the guest-side    #
+  #     configuration derived from the SAME decision (LiteLLM forwarder,     #
   #     http_proxy, resolvers). This is what keeps `internet` from being a   #
   #     mere firewall verdict (it must also carry NAT + a DNS policy) and    #
   #     `package-access` from silently becoming general egress.              #
