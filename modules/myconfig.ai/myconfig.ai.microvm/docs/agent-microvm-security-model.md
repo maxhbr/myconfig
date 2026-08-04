@@ -202,7 +202,9 @@ host-side modes are what the guest sees.
 - **Guest ARP/L2 relies on a kernel bridge flag.** `isolated on` is set by a
   per-slot oneshot; if that unit fails, only the IPv4 FORWARD DROP remains
   (which does not cover ARP). The `recover`/status path does not currently
-  re-check the flag — `bridge link show` does.
+  re-check the flag — `bridge -d link show` does (the plain `bridge link show`
+  prints no port flags at all, which is why the runtime-validation suite's first
+  real run reported a false negative here).
 - **VSOCK is reserved, not used.** Batch control still rides SSH-less file
   exchange through the job share; the CID exists but no vsock transport is wired.
   The result channel's authenticity therefore rests on virtiofs passing ownership

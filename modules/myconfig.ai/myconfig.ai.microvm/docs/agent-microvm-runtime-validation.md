@@ -59,7 +59,7 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section forgery
 
 | Section | Last executed on real KVM |
 | --- | --- |
-| `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED** (no KVM host was available when they were written) |
+| `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED in the present form.** They were run once on f13 (root + `/dev/kvm`) as originally written. That run produced 20 `FAIL`s, of which all but two turned out to be defects of the HARNESS — and the same defects made roughly 25 of the reported `PASS`es vacuous. The harness has since been repaired (see “Harness validity invariants” below); the repaired suite has **not** been run yet. |
 | `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties are the three eval/build checks `microvm-batch-result-integrity`, `microvm-batch-controller-smoke` and `microvm-batch-launcher-submit` (see below). |
 
 This table is deliberately pessimistic: update it only with a pasted log.
@@ -68,16 +68,56 @@ Every check prints one line — `PASS`, `FAIL` or `SKIP` — and the script exit
 non-zero if anything failed. `SKIP` is honest (e.g. "fewer than two slots in the
 pool"), never a disguised pass.
 
+## Harness validity invariants
+
+The first real run showed that a validation suite has its own failure modes, and
+that the dangerous one is not a false `FAIL` — it is a false `PASS`. These rules
+now hold throughout `runtime-validation.sh`; break one and the suite starts
+lying:
+
+1. **Wait for the control channel, never sleep.** A detached
+   `agent-microvm run` does *not* wait for guest readiness (`launcher.nix` calls
+   its own `wait_ready` only under `--attach`), so every start path in the suite
+   goes through the single `wait_guest_ready` helper, which polls
+   `agent-microvm ssh <slot> -- true` until it succeeds (120 s by default,
+   `AGENT_RTV_READY_TIMEOUT`). A start that never becomes reachable is reported
+   by `report_start_failure`, not silently used.
+2. **Every guest-side denial uses `check_denied`, never `check_fails`.**
+   `check_denied` re-proves the SSH channel *after* the attempt failed and
+   reports `SKIP` when the channel is dead, so “the attack failed” and “the
+   connection failed” cannot look the same. `check_fails` is reserved for
+   commands that run on the **host** (`test -e /tmp/rtv-HOOK-RAN`, a launcher
+   invocation that must be rejected).
+3. **Every block that asserts an absence carries a positive control.** The
+   environment block asserts `OPENAI_BASE_URL` *is* set to the expected value
+   before concluding anything from the absence of other variables; the hostile
+   repository block asserts the fixture's symlink *is* in the guest workspace
+   before concluding that it cannot be followed; the batch-environment block
+   asserts the answer contains `PATH`. If the control fails the block `SKIP`s.
+4. **Environment assertions run in a LOGIN shell.** `environment.variables`
+   reaches a process only through `/etc/profile`, and
+   `agent-microvm ssh <slot> -- <cmd>` is neither a login nor an interactive
+   shell. `guest_login` (`sh -lc`) exists for exactly this.
+5. **Introspection commands must actually print what is asserted.**
+   `bridge link show` does not print port flags; only `bridge -d link show`
+   does.
+6. **Host-side channels use the launcher's own `ssh` subcommand**, so they get
+   the same pinned host key *and the same identity* the operator would use. A
+   raw `ssh -o BatchMode=yes` with no `-i` fails for authentication reasons
+   whatever the property under test does.
+7. **A subtest that could not set its fixture up must `SKIP`**, loudly, rather
+   than assert against a situation it never created.
+
 ## What each section asserts
 
 ### `boot` — boot, filesystem, persistence, isolation
 
 | Expected outcome |
 | --- |
-| every resource class boots and becomes SSH-ready |
+| every resource class boots and becomes SSH-ready (polled, see invariant 1) |
 | `/workspace` is a mount point and is writable by the guest `agent` user |
 | the host `/nix/store` is **not** shared into the guest |
-| exactly four virtiofs shares: `/workspace`, `/var/lib/agent-hostkey`, `/run/agent-job`, `/var/lib/agent-state` |
+| exactly four virtiofs shares: `/workspace`, `/var/lib/agent-hostkey`, `/run/agent-job`, `/var/lib/agent-state` (an empty enumeration is a `FAIL`, not a pass) |
 | workspace changes survive shutdown (they are in the standalone clone) |
 | guest root and guest home changes do **not** survive a restart |
 | `--persist-agent-state` persists **only** declared paths (`~/.hermes`), never undeclared ones |
@@ -99,11 +139,11 @@ route that could bypass the IPv4 policy.
 
 | Expected outcome |
 | --- |
-| `bridge link show` reports `isolated on` for **every** guest TAP |
+| `bridge -d link show` reports `isolated on` for the TAP of **every running** slot, and every running slot has its TAP (the TAP name is `vm-<class>-<i>` for slot `agent-<class>-<i>`) |
 | guest A cannot ping or TCP-connect to guest B |
 | guest A cannot reach guest B over IPv6 link-local / multicast |
 | guest A cannot even learn guest B's MAC (ARP is dropped in the bridge) |
-| while A adds B's IP to its own interface, the **host** still reaches the real B |
+| while A adds B's IP to its own interface, the **host** still reaches the real B — through `agent-microvm ssh`, after a positive control proved the host could reach B *before* the impersonation |
 
 ### `creds` — credential boundary
 
@@ -112,8 +152,22 @@ Only names and paths are printed, never values. Asserts that
 `OPENROUTER_API_KEY`/`GITHUB_TOKEN`/`GH_TOKEN`/`GITLAB_TOKEN`/`AWS_*`/`GOOGLE_*`/
 `AZURE_*`/`KUBECONFIG`/`SSH_AUTH_SOCK`/`GPG_AGENT_INFO` exist, and that none of
 `~/.ssh/id_*`, `~/.aws`, `~/.config/gcloud`, `~/.kube`, `~/.password-store`,
-`~/.gnupg`, a Docker/Podman socket, the Nix daemon socket or the system D-Bus
-socket is reachable — plus no git credential helper and no other user's home.
+`~/.gnupg`, a Docker/Podman socket or the Nix daemon socket is reachable — plus
+no git credential helper and no other user's home.
+
+Two scoping notes that cost a round of false results:
+
+- The environment facts are asserted **twice**: once in a login shell (the
+  interactive path, where `/etc/profile` exports them) and once against what the
+  batch **worker unit** would inherit (`systemctl show-environment` plus the
+  unit's `Environment=`), because the batch path never sees a profile. Both
+  blocks have a positive control.
+- `/run/dbus/system_bus_socket` is **not** asserted absent. The guest runs its
+  own systemd and therefore its own system bus; the socket existing is expected
+  and is not a leak. The property that matters — no *host* bus is shared in — is
+  covered by the share-set assertion in `boot`. What is asserted here is the
+  cheap positive fact that the socket, if present, is on a guest-local
+  filesystem rather than on a virtiofs share.
 
 ### `lifecycle` — forced failures
 
@@ -123,6 +177,24 @@ each one the suite asserts: no slot stays falsely allocated, no stale workspace
 bind mount remains, no stale job spec remains, the workspace clone is preserved,
 and a slot can still be allocated afterwards. `recover --dry-run` is run before
 `recover` so its output can be compared.
+
+The killed-launcher subtest submits a **real, non-empty** prompt file (the
+launcher rejects `--prompt-file /dev/null` twice over — not a regular file, and
+empty — so a submit started that way dies in milliseconds and killing it later
+tests nothing) and waits until the submit has really allocated a slot *and*
+created the clone before the `kill -9`. If it never gets that far the subtest
+`SKIP`s with that reason instead of asserting against a situation it never
+created.
+
+Residue is checked with the **same scope the launcher uses**: `list`, `status`
+and `recover` iterate the *current* slot pool only. Per-slot state under a slot
+name from an earlier generation's naming (e.g. `slots/agent-0/` from before the
+`agent-<class>-<i>` rename) is therefore reported as a separate, clearly
+labelled `FOREIGN SLOT STATE` diagnostic, never counted as residue of the run
+under test — and when such state exists the suite additionally asserts that
+`agent-microvm recover --dry-run` **reports** it (as a `foreign:` finding).
+State the launcher cannot see is state nobody will clean up, so its absence from
+`recover` is itself a `FAIL`.
 
 ### `forgery` — the batch result channel (ticket 7)
 
@@ -149,8 +221,10 @@ the guest kernel that enforces it over virtiofs.
 Every "the guest agent cannot ..." check in this section uses `check_denied`,
 which re-proves the SSH channel *after* the attempt failed: a dead channel is
 reported as `SKIP` (undecidable), never as a pass, so a transient connection
-failure cannot make the whole block pass vacuously. `check_fails` (used in the
-other sections) does not have that guard — any non-zero exit counts.
+failure cannot make the whole block pass vacuously. This section was the first
+to use it; invariant 2 above now extends the same rule to every other section
+(`check_fails` gives no such guard — any non-zero exit counts — so it is used
+only for host-side commands).
 
 What the eval/build tier already executes for the same properties (run by
 `nix flake check`, no KVM needed):
@@ -197,6 +271,12 @@ evaluated, an `.envrc`, an `.mcp.json` that would run `touch`, symlinks to
 ran the MCP command; the guest cannot read `/etc/shadow` through the symlink; a
 fork bomb and a disk-filling attempt leave both the guest and the host healthy;
 the guest cannot enumerate host block devices.
+
+The fixture is the **source repository of the guest under test** (it used to be
+built and then not used, so the in-guest assertions ran against a workspace that
+never contained any of it). A positive control asserts that
+`/workspace/escape-shadow` really is a symlink in the guest before the escape
+check concludes anything.
 
 ## Manual extras (not automated)
 

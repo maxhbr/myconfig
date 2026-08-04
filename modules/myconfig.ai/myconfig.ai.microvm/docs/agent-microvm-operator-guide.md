@@ -269,7 +269,9 @@ allocation tokens.
 ```bash
 sudo agent-microvm status                 # any slot marked stale: yes ?
 sudo agent-microvm recover --dry-run      # what recovery WOULD do
-bridge link show | grep vm-               # every guest TAP must say "isolated on"
+bridge -d link show | grep -A2 vm-        # every guest TAP must say "isolated on"
+                                          # (-d is REQUIRED: plain `bridge link
+                                          #  show` prints no port flags)
 sudo iptables -S | grep AGENT_MICROVM     # the rendered profile ruleset
 ss -ltnp | grep 4000                      # forwarder on the BRIDGE address only
 ```
