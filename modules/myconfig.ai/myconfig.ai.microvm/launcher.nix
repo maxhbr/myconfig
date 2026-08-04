@@ -1387,7 +1387,12 @@ let
           esac
           local stderr_file
           stderr_file="$(job_worker_logs_dir "$slot")/$JOB_WORKER_STDERR_NAME"
-          [[ -s "$stderr_file" ]] || return 0
+          # Require a NON-EMPTY REGULAR FILE: `[[ -s ]]` alone would also be
+          # true for a FIFO or a character/block device, on which the bounded
+          # `tail -c` below would BLOCK (a FIFO with no writer) or read device
+          # state — a path the UNTRUSTED guest cannot create here (the logs dir
+          # is root-owned), but one the launcher must never take regardless.
+          [[ -f "$stderr_file" && -s "$stderr_file" ]] || return 0
           local bound=$WORKER_STDERR_TAIL_BYTES
           (( LOG_MAX_BYTES < bound )) && bound=$LOG_MAX_BYTES
           printf '%s: task %q FAILED — tail of the UNTRUSTED worker stderr (last %d bytes, root-owned; NOT the authoritative result):\n' \
