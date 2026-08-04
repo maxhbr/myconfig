@@ -168,10 +168,11 @@ Sized per resource class, enforced on **both** sides:
 
 | Where | Limit | Value |
 | --- | --- | --- |
-| guest `agent-job` | `CPUQuota` | `vcpu × 100 %` |
-| guest `agent-job` | `MemoryMax` | class RAM − `job.guestMemoryHeadroomMiB` (never below half), so an OOM kills the **agent**, not the guest |
-| guest `agent-job` | `TasksMax` | `job.tasksMax` (default 4096) — fork-bomb bound |
-| guest `agent-job` | `RuntimeMaxSec` | `job.maxTimeoutSeconds + job.gracePeriodSeconds` |
+| guest `agent-job-worker@<a>` | `CPUQuota` | `vcpu × 100 %` |
+| guest `agent-job-worker@<a>` | `MemoryMax` | class RAM − `job.guestMemoryHeadroomMiB` (never below half), so an OOM kills the **agent**, not the guest or the trusted controller |
+| guest `agent-job-worker@<a>` | `TasksMax` | `job.tasksMax` (default 4096) — fork-bomb bound |
+| guest `agent-job-worker@<a>` | `TimeoutStartSec` | `job.maxTimeoutSeconds + job.gracePeriodSeconds` — static ceiling (`Type=oneshot` ignores `RuntimeMaxSec`) |
+| guest `agent-job-worker@<a>` | `KillMode` | `control-group` — the controller kills the whole worker tree, not just a pid |
 | host `microvm@<slot>` | `MemoryMax` | class RAM + `hypervisorMemoryOverheadMiB` (never below guest RAM + overhead) |
 | host `microvm@<slot>` | `TasksMax` | `hypervisorTasksMax` |
 | host `microvm@<slot>` | `CPUWeight` / `IOWeight` | `50` — sandboxes yield to interactive host work but may use idle capacity |
@@ -261,58 +262,100 @@ the pane falls back to workmux's default profile.
 
 ## Unattended batch jobs
 
+A batch job runs as **two guest identities**: a TRUSTED controller
+(`agent-job-controller.service`, guest root) and an UNTRUSTED worker
+(`agent-job-worker@<agent>.service`, guest `agent`). The controller validates the
+job, starts the worker, enforces the deadline/cancellation and is the ONLY writer
+of the authoritative result. See the
+[security model](./agent-microvm-security-model.md#the-batch-result-channel).
+
 ### Job directory (runtime only — never in the Nix store)
 
 ```text
-/var/lib/agent-microvms/jobs/<slot>/            root:root 0755   guest: read-only*
-/var/lib/agent-microvms/jobs/<slot>/spec.json   root:root 0444   the job spec (v1)
-/var/lib/agent-microvms/jobs/<slot>/prompt.md   root:root 0444   the prompt TEXT
-/var/lib/agent-microvms/jobs/<slot>/out/        1000:1000 0755   guest-writable
-/var/lib/agent-microvms/jobs/<slot>/out/result.json              the guest's result
+/var/lib/agent-microvms/jobs/<slot>/                   root:root 0755
+                              input/                   root:root 0755
+                              input/spec.json          root:root 0400  the job spec (v2)
+                              input/prompt.md          root:root 0444  the prompt TEXT
+                              input/cancel.json        root:root 0400  cancellation request
+                              controller/              root:root 0700  CONTROLLER ONLY
+                              controller/state.json    root:root 0600  trusted progress
+                              controller/result.json   root:root 0600  AUTHORITATIVE result
+                              worker/                  1000:1000 0755  UNTRUSTED output
+                              worker/{stdout,stderr}.log, worker/artifacts/
 ```
 
-Surfaced into the guest at `/run/agent-job`. \* The share is read-**write**
-because the guest must write `out/result.json`, but spec and prompt are
-root-owned `0444` and virtiofsd passes ownership through — so a guest cannot
-lift its own timeout or swap its own agent. Prompts never travel as process
-arguments and never enter the Nix store.
+Surfaced into the guest at `/run/agent-job`. The share is read-**write**, but
+*who* may write *what* is decided by ownership and modes, which virtiofsd passes
+through unchanged:
 
-`spec.json` (schema `version = 1`, validated on **both** sides):
+- `input/` is root-owned, so the guest cannot lift its own timeout or swap its
+  own agent. `spec.json` is `0400` because it carries the **allocation token**
+  (256 bits from `/dev/urandom`), which the untrusted worker must not learn.
+- `controller/` is `root:root 0700`: the worker can neither write nor read it,
+  and cannot rename or shadow it (its parent is root-owned `0755`, and the worker
+  unit masks it via `InaccessiblePaths`).
+- `worker/` is the only worker-writable part. Everything in it is untrusted.
+
+Prompts never travel as process arguments from the host and never enter the Nix
+store.
+
+`spec.json` (schema `version = 2`, validated on **both** sides):
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "taskId": "fix-parser",
+  "allocationToken": "…64 hex chars…",
+  "slot": "agent-normal-0",
   "agent": "opencode",
   "workspace": "/workspace",
-  "promptFile": "/run/agent-job/prompt.md",
-  "timeoutSeconds": 3600
+  "promptFile": "/run/agent-job/input/prompt.md",
+  "timeoutSeconds": 3600,
+  "resourceClass": "normal",
+  "persistAgentState": false
 }
 ```
 
-The guest runner rejects (as `infrastructure-error`) an unknown schema version,
-an invalid `taskId`, an agent that is not batch-capable, a `workspace` other
-than `/workspace`, a `promptFile` that is not *exactly*
-`/run/agent-job/prompt.md`, an out-of-range `timeoutSeconds`, and **any**
-attempt to name an executable (`command` / `exec` / `executable`).
+The guest controller rejects (as `infrastructure-error`) an unknown schema
+version, **any unknown field**, an invalid `taskId`, a malformed or missing
+`allocationToken`, a `slot` that is not this guest, an agent that is not
+batch-capable, a `workspace` other than `/workspace`, a `promptFile` that is not
+*exactly* `/run/agent-job/input/prompt.md`, an out-of-range `timeoutSeconds`, a
+malformed `resourceClass`, a non-boolean `persistAgentState`, and **any** attempt
+to name an executable (`command` / `exec` / `executable`). If the share's
+ownership/permissions are not exactly as above it refuses to run at all.
 
-`result.json`, written with tmp-file + `rename`:
+`controller/result.json` — written by the controller only, with tmp-file +
+`rename` (which gives *consistency*; **authenticity** comes from ownership plus
+the allocation token) — always carries a TERMINAL state:
 
 ```json
 {
-  "version": 1, "taskId": "fix-parser", "agent": "opencode",
+  "version": 2, "controllerVersion": 1, "taskId": "fix-parser",
+  "allocationToken": "…", "slot": "agent-normal-0", "agent": "opencode",
   "state": "completed", "exitCode": 0,
   "startedAt": "…Z", "finishedAt": "…Z", "timedOut": false, "message": ""
 }
 ```
 
-States: `starting`, `running`, `completed`, `failed`, `timed-out`, `cancelled`
-(written by the host), `infrastructure-error`. The final result is archived at
-`/var/lib/agent-microvms/results/<task>.json` — outside every guest share — so
-`status <task>` still reports the outcome after the slot was released.
+Terminal states: `completed`, `failed`, `timed-out`, `cancelled`,
+`infrastructure-error`. Progress lives in `controller/state.json` as a `phase`
+(`validating`, `starting-worker`, `running`, `timing-out`, `cancelling`,
+`finished`) and is never an outcome.
+
+The host reads the result through ONE verifier (`agent-job-verify-result`), which
+requires a regular, non-symlink, root-owned, size-bounded file in a root-owned,
+non-group/other-writable directory and a document whose `version`,
+`controllerVersion`, `taskId`, `allocationToken`, `slot` and `agent` match the
+ACTIVE allocation, with a valid terminal state, exit code and timestamps.
+Anything else — including a v1 result (there is **no** compatibility mode) — is an
+infrastructure error, never a success. The validated document is archived at
+`/var/lib/agent-microvms/results/<task>.json` (outside every guest share) tagged
+`source: "controller"`; a record the host had to invent itself is tagged
+`source: "host"`.
 
 `submit` exit codes: **0** completed, **1** the agent failed, **124** timed out,
-**70** infrastructure error (no/invalid result).
+**70** infrastructure error (no/invalid/unauthentic result).
 
 ---
 

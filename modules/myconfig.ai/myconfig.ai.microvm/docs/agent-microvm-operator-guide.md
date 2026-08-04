@@ -68,9 +68,25 @@ sudo agent-microvm submit \
 echo "exit=$?"     # 0 completed | 1 agent failed | 124 timed out | 70 infra error
 ```
 
-The command blocks until the guest writes a terminal result (or the host deadline
-`timeout + job.gracePeriodSeconds` expires), prints the result JSON, stops the VM
-and keeps the clone.
+The command blocks until the guest **controller** writes a terminal result (or the
+host deadline `timeout + job.gracePeriodSeconds` expires), prints the result JSON,
+stops the VM and keeps the clone.
+
+Where things live while a batch task runs (`<jobs> =
+/var/lib/agent-microvms/jobs/<slot>`):
+
+| Path | Owner | Meaning |
+| --- | --- | --- |
+| `<jobs>/input/spec.json` | `root:root 0400` | the job. Root-only because it carries the allocation token |
+| `<jobs>/input/prompt.md` | `root:root 0444` | the prompt |
+| `<jobs>/input/cancel.json` | `root:root 0400` | a token-bound cancellation request |
+| `<jobs>/controller/state.json` | `root:root 0600` | trusted **progress** (`validating` → `starting-worker` → `running` → `timing-out`/`cancelling` → `finished`). Not an outcome |
+| `<jobs>/controller/result.json` | `root:root 0600` | the **AUTHORITATIVE** result. Written only by the guest controller; the guest agent cannot read or write this directory |
+| `<jobs>/worker/stdout.log`, `stderr.log`, `artifacts/` | guest `agent` | **UNTRUSTED** agent output. Useful for debugging, never evidence |
+| `/var/lib/agent-microvms/results/<task>.json` | host-only | the archived, *validated* result (`source: "controller"`) or an explicitly host-generated record (`source: "host"`) |
+
+A "result" the agent writes anywhere else — `worker/result.json`,
+`/workspace/result.json`, a completion marker — is ignored by design.
 
 ## 3. Inspect status
 
@@ -89,10 +105,18 @@ secrets.
 
 ```bash
 sudo agent-microvm ssh fix-parser              # shell as the guest `agent` user
-sudo agent-microvm ssh fix-parser -- systemctl status agent-job
-sudo agent-microvm ssh fix-parser -- journalctl -u agent-job -n 50
+sudo agent-microvm ssh fix-parser -- systemctl status agent-job-controller
+sudo agent-microvm ssh fix-parser -- journalctl -u agent-job-controller -n 50
+sudo agent-microvm ssh fix-parser -- systemctl status 'agent-job-worker@*'
 sudo agent-microvm console agent-normal-0      # serial console (journal)
+
+# untrusted worker output (host side, no SSH needed):
+sudo tail -f /var/lib/agent-microvms/jobs/<slot>/worker/stdout.log
 ```
+
+The two guest units are deliberately separate: `agent-job-controller` is the
+trusted half (it validates the job and writes the result),
+`agent-job-worker@<agent>` is the untrusted half that runs the coding agent.
 
 Host-key verification is **strict**; if it fails, the slot's identity is not what
 the host expects — investigate rather than bypass. If `known_hosts` is missing:
@@ -107,15 +131,23 @@ sudo systemctl start agent-microvm-hostkeys.service
 sudo agent-microvm cancel fix-parser
 ```
 
-Records a `cancelled` result, requests a clean shutdown, force-stops if needed,
-unmounts and drops the slot's runtime data — **only** while the slot still
-carries that task's allocation token. The clone is kept.
+Writes a token-bound cancellation request into the job's immutable input, waits up
+to 20 s for the guest controller to stop the worker's whole cgroup and record
+`cancelled`, then requests a clean shutdown, force-stops if needed, unmounts and
+drops the slot's runtime data — **only** while the slot still carries that task's
+allocation token. The clone is kept.
+
+Because the request carries the allocation token, a cancellation can never affect
+a slot that has meanwhile been re-allocated to another task, and a leftover
+request file cannot stop a newly allocated job. If the controller does not
+confirm in time, the archived record says so explicitly (`source: "host"`).
 
 ## 6. Collect results
 
 ```bash
-# batch result (also printed by submit):
+# batch result (also printed by submit) — the VALIDATED controller document:
 cat /var/lib/agent-microvms/results/fix-parser.json
+jq -r '.state, .exitCode, .source' /var/lib/agent-microvms/results/fix-parser.json
 
 # what the agent changed:
 git -C /var/lib/agent-microvms/workspaces/fix-parser diff
@@ -186,10 +218,11 @@ the `agent-microvm` tag, and in the per-task log (rotated once at
 `taskLogMaxBytes`, default 1 MiB). Events: `task-submitted`, `slot-allocated`,
 `workspace-created`, `vm-start-requested`, `vm-ready`, `agent-started`,
 `agent-finished`, `timeout`, `cancellation`, `vm-stopped`, `cleanup-completed`,
-`recovery-action`; each carries `ts`, `event`, `task`, `slot`, `agent`,
-`resource_class`, `mode` and, where applicable, `state` / `exit_code`. The guest
-emits its own `agent-started` / `agent-finished` / `timeout` records to the
-console, so host and guest transitions can be correlated.
+`recovery-action`, `result-rejected`; each carries `ts`, `event`, `task`, `slot`,
+`agent`, `resource_class`, `mode` and, where applicable, `state` / `exit_code`.
+The guest **controller** emits its own `agent-started` / `agent-finished` /
+`timeout` / `cancellation` records to the console, so host and guest transitions
+can be correlated. The untrusted worker deliberately emits no lifecycle events.
 
 **Never logged:** API keys, prompt *content* (only path and byte size),
 repository credentials, secret environment variables, private key material, or
@@ -204,6 +237,45 @@ bridge link show | grep vm-               # every guest TAP must say "isolated o
 sudo iptables -S | grep AGENT_MICROVM     # the rendered profile ruleset
 ss -ltnp | grep 4000                      # forwarder on the BRIDGE address only
 ```
+
+### Infrastructure / protocol errors
+
+`submit` exits **70** and the archived state is `infrastructure-error` whenever
+the job never really ran *or* its result could not be trusted:
+
+```bash
+# what the host decided, and why:
+journalctl -t agent-microvm | jq -c 'select(.task=="fix-parser")'
+# a rejected result shows up as:
+#   {"event":"result-rejected","state":"infrastructure-error","message":"…reject: …"}
+cat /var/lib/agent-microvms/logs/fix-parser.jsonl
+```
+
+`status <task>` prints `job: rejected (protocol error)` while such a document is
+still present. Common reasons and what they mean:
+
+| Rejection reason | Meaning |
+| --- | --- |
+| `allocation token does not belong to the active allocation` | a **stale** result from an earlier allocation of that slot (or a forgery attempt). The job data of a previous run was not cleared — `recover` fixes it |
+| `task id` / `slot` / `agent does not belong …` | the document belongs to a different job; never accepted |
+| `schema version mismatch` / `controller version mismatch` | host and guest closure disagree — the running VM predates the current host generation. Stop the slot and re-`submit` (the launcher refreshes the runner on start) |
+| `not by the guest controller (uid 0)` / `group/other-writable` / `is a symlink` | the result was **not** written by the trusted controller. Treat as a security finding |
+| `not valid JSON` / `unknown field` / `not a terminal state` / `exitCode …` | a malformed or non-terminal document; the guest controller crashed mid-write or a version drifted |
+| `the VM stopped without a valid controller result` | the guest died before the controller could write. Check `journalctl -u microvm@<slot>` |
+
+To look at the trusted state by hand (root only, and read-only — never edit it):
+
+```bash
+sudo cat /var/lib/agent-microvms/jobs/<slot>/controller/state.json | jq .
+sudo ls -ld /var/lib/agent-microvms/jobs/<slot>/{input,controller,worker}
+#   input/       root root 0755   (spec.json 0400, prompt.md 0444)
+#   controller/  root root 0700
+#   worker/      1000 1000 0755
+```
+
+If those owners/modes are not exactly that, the guest controller refuses to run
+at all (`agent-job-assert-paths` fails) — that is intentional: the modes *are* the
+trust boundary.
 
 For a full runtime re-validation (real KVM, boots VMs, sends packets) see the
 [runtime validation guide](./agent-microvm-runtime-validation.md).

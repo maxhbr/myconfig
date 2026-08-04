@@ -22,7 +22,7 @@ How the pieces fit together. Option-level reference lives in
 | `guest-home.nix` | allowlisted copy of the host operator's dotfiles into the guest (home-manager inside the guest) |
 | `network.nix` | private bridge, TAP enslavement + L2 isolation, firewall chains, NAT, bridge-only LiteLLM forwarder |
 | `hostkeys.nix` | per-slot SSH host identities + the host `known_hosts` |
-| `job.nix` | versioned batch job format, per-slot job dirs, guest `agent-job` runner + hardened unit |
+| `job.nix` | versioned batch job format, per-slot job dirs, the TRUSTED guest job controller, the UNTRUSTED guest worker unit, the guest-side permission assertions and the HOST-side result verifier |
 | `state.nix` | opt-in, task-scoped agent state and the guest-side linker |
 | `launcher.nix` | the host `agent-microvm` CLI: allocation, clones, mounts, lifecycle, events |
 | `workmux.nix` | registers `microvm-<agent>` agents with workmux |
@@ -50,10 +50,12 @@ closure, only the *content* of the paths mounted into it.
 Every per-slot host-side directory is keyed by the slot **name**:
 
 ```text
-/var/lib/microvms/<slot>/workspace          bind target -> the task's clone
-/var/lib/agent-microvms/hostkeys/<slot>/    the slot's SSH host identity
-/var/lib/agent-microvms/jobs/<slot>/        the batch job (spec, prompt, out/)
-/var/lib/agent-microvms/state/slots/<slot>  bind target -> task-scoped agent state
+/var/lib/microvms/<slot>/workspace              bind target -> the task's clone
+/var/lib/agent-microvms/hostkeys/<slot>/        the slot's SSH host identity
+/var/lib/agent-microvms/jobs/<slot>/input/      the job (spec 0400, prompt 0444)
+/var/lib/agent-microvms/jobs/<slot>/controller/ root:root 0700 — the AUTHORITATIVE result
+/var/lib/agent-microvms/jobs/<slot>/worker/     agent-owned — untrusted logs/artifacts
+/var/lib/agent-microvms/state/slots/<slot>      bind target -> task-scoped agent state
 ```
 
 ## Workspace indirection
@@ -136,23 +138,42 @@ the slot allocated for `ssh`/`console`/`stop`.
 
 ## Batch execution path
 
+The batch path has **two guest identities**, because the host acts on the result:
+a TRUSTED controller (guest root) owns the result channel, and an UNTRUSTED
+worker (guest `agent`) runs the coding agent and therefore whatever the
+repository asks for.
+
 ```text
 agent-microvm submit --agent <a> --prompt-file <f> --timeout <s> …
-  … same allocation/clone/mount …
-  → write /var/lib/agent-microvms/jobs/<slot>/{spec.json,prompt.md}  (root:root 0444)
+  … same allocation/clone/mount … (the allocation gets a 256-bit token)
+  → jobs/<slot>/input/spec.json     root:root 0400  (carries the token)
+    jobs/<slot>/input/prompt.md      root:root 0444
+    jobs/<slot>/controller/          root:root 0700  (empty; controller-only)
+    jobs/<slot>/worker/              agent-owned     (empty)
   → systemctl start microvm@<slot>
-  guest: agent-job.service (ConditionPathExists=spec.json)
-     validate spec → write out/result.json: starting → running
-     → timeout(1) <timeout> <agent batch argv>       (registry-generated)
-     → write out/result.json: completed | failed | timed-out
-  host: poll result.json until terminal or deadline (timeout + grace)
-  → archive result to state/results/<task>.json
+  guest: agent-job-controller.service   (root; ConditionPathExists=input/spec.json)
+     assert the share's ownership/permissions (incl. every parent of controller/)
+     validate the spec (version, token, slot, agent, paths, bounds, no extra keys)
+     controller/state.json: validating → starting-worker → running   (progress only)
+     → systemctl start agent-job-worker@<agent>.service  (uid agent, cgroup-killable)
+          guest: the registry's batch argv, cwd /workspace,
+                 stdout/stderr → worker/{stdout,stderr}.log (UNTRUSTED)
+     supervise: deadline | cancellation (input/cancel.json, token-bound) | exit
+     → collect ExecMainCode/ExecMainStatus/Result from systemd
+     → controller/result.json (0600, tmp+rename): the ONE terminal verdict
+  host: poll controller/result.json through agent-job-verify-result
+        (ownership + strict schema + version + task + token + slot + agent)
+  → archive the VALIDATED document to results/<task>.json (source:"controller")
   → stop VM, unmount, clear job data; KEEP the clone
   → exit 0 / 1 / 124 / 70
 ```
 
 The prompt never travels as an argument and never enters the Nix store; the spec
-cannot name an executable (the agent is resolved through the registry).
+cannot name an executable (the agent is resolved through the registry, keyed by
+the worker unit's instance name). Nothing the worker writes is ever read as a
+result, and a document that fails verification is an infrastructure error — never
+a success. See the [security model](./agent-microvm-security-model.md#the-batch-result-channel)
+for why atomic rename alone would not be enough.
 
 ## State persistence
 
@@ -172,25 +193,35 @@ the host prepared, and refuses to replace a non-empty directory.
 Each allocation marker (`/var/lib/agent-microvms/slots/<slot>/session.json`)
 records the task, slot, workspace, VM unit, mode (`attached` / `detached` /
 `batch`), the owning launcher's **pid plus that pid's start time** (so a recycled
-pid cannot impersonate the owner) and a **random allocation token**. Operations
-that act on a slot they did not allocate (`cancel`, `recover`) compare the
-**token**, never just the slot name, so a slot that has meanwhile been
+pid cannot impersonate the owner) and a **256-bit random allocation token**.
+Operations that act on a slot they did not allocate (`cancel`, `recover`) compare
+the **token**, never just the slot name, so a slot that has meanwhile been
 re-allocated to another task is never touched.
+
+For batch tasks the same token also crosses into the guest (in the root-only
+`input/spec.json`) and must reappear in `controller/result.json`, which is what
+makes stale results and replayed cancellations harmless. It is never logged.
 
 ## Resource classes and limits
 
 Sizing is a property of the class (prebuilt), and limits are enforced twice:
 
 ```text
-guest  agent-job:      CPUQuota = vcpu*100%, MemoryMax = classRAM - headroom,
-                       TasksMax, RuntimeMaxSec
-host   microvm@<slot>: MemoryMax = classRAM + hypervisor overhead,
-                       TasksMax, CPUWeight/IOWeight (relative, yield to the operator)
+guest  agent-job-worker@<a>: CPUQuota = vcpu*100%, MemoryMax = classRAM - headroom,
+                            TasksMax, TimeoutStartSec (static ceiling)
+host   microvm@<slot>:       MemoryMax = classRAM + hypervisor overhead,
+                            TasksMax, CPUWeight/IOWeight (relative, yield to the operator)
 ```
 
-Timeouts are enforced three times: `timeout(1)` per job in the guest, the guest
-unit's static `RuntimeMaxSec` ceiling, and the host's own deadline
-(`timeout + job.gracePeriodSeconds`).
+The limits sit on the **worker** unit, so an OOM kills the agent rather than the
+trusted controller or the guest.
+
+Timeouts are enforced three times: the controller's own deadline (it stops the
+worker's whole `control-group`, so double-forked repository processes die too),
+the worker unit's static `TimeoutStartSec` ceiling, and the host's own deadline
+(`timeout + job.gracePeriodSeconds`). Only the controller's observation ends up
+in the result — a timeout the untrusted worker reported about itself would be
+worthless as evidence.
 
 ## Control-channel identities
 

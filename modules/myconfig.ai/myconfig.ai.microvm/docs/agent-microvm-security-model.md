@@ -12,7 +12,11 @@ Mechanisms are described in the
 **Verification status:** every property below is covered by the eval/build tier
 (`nix flake check`), i.e. *designed and eval-asserted*. Runtime properties are
 only *measured* once the [runtime suite](./agent-microvm-runtime-validation.md)
-is run on real KVM.
+is run on real KVM. The batch result channel additionally has *executed* checks
+that are not runtime proofs: `microvm-batch-result-integrity` really runs the
+host result verifier and the guest-side permission assertions against forged,
+stale and malformed fixtures — inside a build sandbox, so it validates the
+layout and the validators, not the guest kernel's enforcement.
 
 ## Trusted vs untrusted
 
@@ -24,6 +28,10 @@ is run on real KVM.
 - the host operator (already a full sudoer) and systemd on the host;
 - the agent packages as *builds* (their content is baked in at build time).
 
+- the guest-side **batch job controller** (`agent-job-controller.service`, guest
+  root): it validates the job, starts the worker under another uid, enforces the
+  deadline and writes the authoritative result. A bug here is a bug in the TCB.
+
 **Untrusted (assumed hostile):**
 
 - everything the agent does inside the guest, including the agent binary's
@@ -31,7 +39,61 @@ is run on real KVM.
 - the repository content that becomes `/workspace` (hooks, `flake.nix`, `.envrc`,
   MCP config, scripts, symlinks);
 - prompts and any data the agent fetches through LiteLLM;
+- **everything the batch worker produces** (`agent-job-worker@<agent>.service`,
+  guest `agent`): its stdout/stderr, its artifacts, any file it writes into
+  `/workspace` or `/run/agent-job/worker/`, and any JSON that *looks* like a
+  result. None of it is evidence of anything;
 - other guests.
+
+## The batch result channel
+
+The host acts on the batch result: it decides success/failure, stops the VM and
+reports an exit code. So the result must be attributable, not merely readable.
+
+- **Two guest identities.** The trusted controller (root) and the untrusted
+  worker (`agent`, uid `guestAgentUid`) are separate units. The controller never
+  executes a repository- or spec-provided command; the executable and argv come
+  from the build-time registry (`agents.nix`), keyed by the worker unit's
+  instance name.
+- **The result directory is not reachable by the worker.**
+  `/run/agent-job/controller/` is `root:root 0700` (virtiofsd passes ownership
+  through, so that is the *effective* permission inside the guest) and the worker
+  unit additionally masks it with `InaccessiblePaths`. The worker cannot write,
+  read, delete or list it, and cannot rename or shadow it either, because
+  `/run/agent-job` is root-owned `0755`.
+- **The spec is root-only (`0400`).** It carries the allocation token, so the
+  worker cannot even learn the value it would need to mint a plausible result.
+  The prompt is `0444`: readable by the worker, writable by nobody.
+- **Allocation tokens.** Each allocation gets 256 bits from `/dev/urandom`,
+  recorded in the host session marker, in the guest's immutable input and in the
+  result. The host rejects a result unless schema version, controller version,
+  task id, allocation token, slot and agent all match the ACTIVE allocation, so a
+  stale or cross-allocation result cannot terminate a job — and a stale
+  cancellation request cannot stop a newly allocated one.
+- **Atomic rename gives consistency, not authenticity.** Writing a temp file and
+  renaming it means the host never reads a half-written document. It says nothing
+  about *who* wrote it. Authenticity comes from ownership plus the token.
+- **Worker output is never authoritative.** The controller derives the outcome
+  only from what it observed itself: the worker's exit status (from systemd), its
+  own timeout, its own cancellation decision, or an infrastructure error it hit.
+  Never from agent output text, a workspace file, a worker-written JSON document
+  or a "completion marker".
+- **The host treats the result as untrusted input anyway.** One verifier
+  (`agent-job-verify-result`) requires a regular, non-symlink, root-owned,
+  size-bounded file in a root-owned, non-group/other-writable directory, parses
+  it strictly, rejects unknown fields, and checks the identity, the terminal-state
+  enum, the exit-code range and the timestamps. A malformed or foreign document
+  becomes an INFRASTRUCTURE ERROR — never a success. The archived result is the
+  validated document (tagged `source: "controller"`) or an explicitly
+  host-generated record (`source: "host"`), never a raw guest file.
+- **virtiofs permissions are part of the trusted configuration.** The modes in
+  `job.nix`/tmpfiles *are* the boundary. The guest controller therefore asserts
+  them at startup (`agent-job-assert-paths`) — including every parent of the
+  result directory — and refuses to run if they are wrong, because mode `0600` on
+  a file is worthless if a parent directory can be replaced.
+- **Future direction.** VSOCK may replace the filesystem result channel (a
+  per-slot CID is already reserved). That would remove the shared-directory
+  question entirely; it does not change the trust split described here.
 
 ## What the VM boundary protects
 
@@ -58,7 +120,7 @@ Exactly four shares, all per-slot:
 | --- | --- | --- | --- |
 | `/workspace` | rw | the task's standalone clone | the agent can write anything into your task's clone; you review it before importing |
 | `/var/lib/agent-hostkey` | **ro** | that slot's SSH host key, `root:root 0400` | unreadable by the guest agent user; the guest cannot change its own identity |
-| `/run/agent-job` | rw | `spec.json` + `prompt.md` (`root:root 0444`) and a guest-writable `out/` | the agent can write junk into `out/`; it cannot alter its own spec/prompt |
+| `/run/agent-job` | rw | `input/` (`spec.json` `root:root 0400`, `prompt.md` `0444`), `controller/` (`root:root 0700`, the authoritative result), `worker/` (agent-owned) | the agent can write junk into `worker/`; it cannot read or write `controller/`, cannot read the token-bearing spec, and cannot alter its own spec/prompt |
 | `/var/lib/agent-state` | rw | only when `--persist-agent-state`: the task's declared agent-state dirs | the agent can poison ITS OWN task's future state; other tasks are unreachable |
 
 virtiofsd is in the TCB for all four. Ownership is passed through unchanged, so
@@ -91,6 +153,10 @@ host-side modes are what the guest sees.
 | host code execution from a hostile repo | the launcher never evaluates repo-provided nix/direnv/hooks/npm/make/MCP (asserted by a check); clones use `--no-local`; git-dir/common-dir escapes rejected; all paths canonicalised |
 | runaway resource use | per-class cgroup limits on both sides; three timeout layers; `usage` makes retained disk visible |
 | stale/lost slots after crashes | allocation tokens + pid/pid-start ownership, `recover` (with `--dry-run`) |
+| **forging a batch result** (report success, hide a failure, fake an exit code, stop the VM early) | the result is written only by the trusted guest controller into a `root:root 0700` directory the worker cannot write, read, rename or shadow; the host verifies ownership, schema, task, slot, agent and allocation token |
+| **replaying a result / cancellation from an earlier allocation** | 256-bit per-allocation token in marker + guest input + result; a mismatch is an infrastructure error, and cancellation requests are token-bound |
+| **misreporting via malformed output** | one strict verifier; unknown fields, wrong types, non-terminal states, bad exit codes and unparsable JSON all become infrastructure errors, never success |
+| **a repository process outliving its job** | the worker is a separate systemd unit killed as a `control-group`, so double-forked descendants die with it |
 | prompt/secret leakage into logs | structured events log identities only — never prompt content, keys or env vars |
 
 ## Residual risks
@@ -111,6 +177,22 @@ host-side modes are what the guest sees.
   re-check the flag — `bridge link show` does.
 - **VSOCK is reserved, not used.** Batch control still rides SSH-less file
   exchange through the job share; the CID exists but no vsock transport is wired.
+  The result channel's authenticity therefore rests on virtiofs passing ownership
+  through unchanged — a property of virtiofsd, which is in the TCB.
+- **The guest batch controller runs as guest root.** It is a small, fixed script
+  that never executes anything the repository or the spec supplied, and it is
+  hardened (`NoNewPrivileges`, `PrivateDevices`, `ProtectHome`, `ProtectKernel*`,
+  `ProtectControlGroups`, `RestrictSUIDSGID`, read-only input, write access only
+  to its own directory). It deliberately does *not* set `ProtectSystem=`, because
+  the writable-path set it would need (D-Bus, systemd runtime) cannot be validated
+  without booting on real KVM.
+- **The result channel's kernel-level enforcement is not yet measured.** The
+  layout, the validators and the unit properties are covered by
+  `nix flake check` (`microvm-batch-result-integrity`, 56 executed fixtures), but
+  "a uid-1000 worker really cannot write `controller/result.json`" is only
+  observable in a booted guest — see the `forgery` section of the
+  [runtime suite](./agent-microvm-runtime-validation.md), currently recorded as
+  NOT EXECUTED.
 - **Operator convenience trades some strictness.** `passwordlessControl` grants a
   scoped `NOPASSWD`+`SETENV` sudo rule and authorises the operator's own public
   keys on the guest agent user. The guest cannot reach host sudo, but the blast
