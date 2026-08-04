@@ -247,12 +247,21 @@ let
         mountPoint = agentHostKeys.guestMountPoint;
         readOnly = true;
       }
-      # THIRD share (ticket 4) — the per-slot batch JOB directory. Read-write,
-      # because the guest must write `out/result.json`; but the spec and the
-      # prompt inside it are root-owned 0444 in a root-owned 0755 directory
-      # (see job.nix), so the guest can only read them and can only write
-      # inside `out/`. The prompt therefore never travels as a process
-      # argument, and the guest cannot rewrite its own job.
+      # THIRD share (ticket 4, trust-split in ticket 7) — the per-slot batch JOB
+      # directory. Read-write, because the guest must write its result; but WHO
+      # may write WHAT inside it is decided by ownership and modes, which
+      # virtiofsd passes through unchanged (see job.nix):
+      #   input/       root:root      the spec (0400 — it carries the allocation
+      #                               token) and the prompt (0444)
+      #   controller/  root:root 0700 the TRUSTED guest controller's channel,
+      #                               where the AUTHORITATIVE result is written.
+      #                               The unprivileged guest agent can neither
+      #                               write nor read it, and cannot rename or
+      #                               shadow it (this share root is root-owned
+      #                               0755).
+      #   worker/      agent-owned    the UNTRUSTED worker's logs/artifacts
+      # The prompt therefore never travels as a process argument, the guest
+      # cannot rewrite its own job, and repository code cannot forge a result.
       ++ [
         {
           proto = "virtiofs";
