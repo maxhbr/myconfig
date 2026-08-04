@@ -58,6 +58,9 @@ GUEST_WORKER_DIR="$GUEST_JOB_DIR/worker"
 # ROOT-owned: the guest's systemd opens the worker's stdout/stderr in here as
 # root, so the worker must not be able to write, replace or rename any of it.
 GUEST_WORKER_LOGS_DIR="$GUEST_JOB_DIR/worker-logs"
+# The COMPLETE set of virtiofs shares a guest may see (sorted, space-separated).
+# Asserted for equality, never as a substring.
+EXPECTED_SHARES="/run/agent-job /var/lib/agent-hostkey /var/lib/agent-state /workspace"
 
 REPO=""
 SECTION="all"
@@ -116,18 +119,29 @@ check_fails() {
 }
 
 # `check_denied <description> <slot> <cmd...>` — the guest-side variant of
-# check_fails that cannot pass vacuously: after the command failed we re-prove
-# that the SSH channel to that slot still WORKS. A failure caused by a dead
-# channel is reported as SKIP (undecidable), never as a pass, because "the
-# attack failed" and "the connection failed" must not look the same.
+# check_fails that cannot pass vacuously. THREE ways a guest-side denial can be
+# fake, all of them handled here:
+#
+#   1. the SSH channel is dead        -> SKIP (re-proved after every denial)
+#   2. the command never reached the guest intact, because
+#      `agent-microvm ssh -- <argv>` flattens argv and the guest LOGIN SHELL
+#      re-parses it (see the transport block below)  -> SKIP
+#   3. the command really ran and was refused  -> PASS
+#
+# "the attack failed", "the connection failed" and "the command was mangled"
+# must never look the same.
 check_denied() {
     local desc="$1" slot="$2"
     shift 2
+    if ! guest_transport_ok "$slot"; then
+        skip "$desc (the guest command transport is unusable — the denial could not be decided)"
+        return
+    fi
     if guest "$slot" "$@" >/dev/null 2>&1; then
         fail "$desc (expected denial, but it SUCCEEDED)"
         return
     fi
-    if guest "$slot" true >/dev/null 2>&1; then
+    if guest_channel_ok "$slot"; then
         pass "$desc"
     else
         skip "$desc (the guest channel died — the denial could not be decided)"
@@ -187,11 +201,15 @@ running_slots() { "$LAUNCHER" list | awk '$3 == "running" { print $1 }'; }
 # name that is NOT in the pool is left over from an earlier slot naming and
 # must be reported separately (see check_no_residue) rather than counted as
 # residue of the run under test.
+# The pool is fixed for the lifetime of a host generation, so ask the launcher
+# ONCE instead of once per candidate (check_no_residue calls this in two loops).
+CURRENT_SLOTS_CACHE=""
 is_current_slot() {
     local want="$1" s
+    [[ -n $CURRENT_SLOTS_CACHE ]] || CURRENT_SLOTS_CACHE="$(current_slots)"
     while read -r s; do
         [[ $s == "$want" ]] && return 0
-    done < <(current_slots)
+    done <<<"$CURRENT_SLOTS_CACHE"
     return 1
 }
 
@@ -206,11 +224,165 @@ slot_of_task() {
 # 15 characters), so the mapping is a pure prefix swap.
 slot_tap() { printf 'vm-%s' "${1#agent-}"; }
 
-# Run a command INSIDE a guest slot, as the unprivileged agent user.
-guest() {
+# --- the guest command TRANSPORT -------------------------------------------
+#
+# `agent-microvm ssh <slot> -- <argv...>` CANNOT preserve argument boundaries:
+# OpenSSH joins the remaining argv with single spaces into one string and the
+# guest's LOGIN SHELL re-parses it — and that shell is fish (guest.nix gives the
+# agent user `shell = pkgs.fish`). Sending
+#
+#     ssh <slot> -- sh -c "timeout 5 sh -c '</dev/tcp/GW/22'"
+#
+# therefore made the guest run `sh -c timeout 5 sh -c '...'`, i.e. `sh -c` got
+# only the word `timeout` (`5` became $0) — "timeout: missing operand", non-zero,
+# and every `check_denied` built on such a payload passed VACUOUSLY. Payloads
+# containing `${VAR:-}` fared even worse: `${` is a fish SYNTAX ERROR, so the
+# environment assertions could never have run at all.
+#
+# The fix has three parts and none of them may be dropped:
+#   * guest_sh_as sends the ENTIRE script as ONE token, escaped for the guest's
+#     login shell;
+#   * the escaping dialect is DETECTED per slot (fish and POSIX single-quoting
+#     are mutually incompatible) with a probe that only succeeds when word
+#     boundaries, embedded single quotes, `${VAR:-}` expansion AND the exit code
+#     all survive the round trip;
+#   * every guest-side assertion consults that probe first, so a transport that
+#     is broken again in the future produces SKIPs and a loud FAIL of the
+#     transport control itself — never a green suite.
+declare -A GUEST_QUOTE_MODE=()
+
+# Quote one argument for the /bin/sh that will run INSIDE the guest.
+sh_quote() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
+
+# Quote a whole script into ONE token for the guest's login shell. fish and
+# POSIX shells disagree about backslashes inside single quotes, so both
+# dialects exist and the probe below decides which one this guest speaks.
+quote_for_fish() {
+    local s=${1//\\/\\\\}
+    printf "'%s'" "${s//\'/\\\'}"
+}
+quote_for_posix() { sh_quote "$1"; }
+
+guest_sh_as() {
+    local slot="$1" mode="$2" script="$3" quoted
+    case "$mode" in
+        fish) quoted="$(quote_for_fish "$script")" ;;
+        *) quoted="$(quote_for_posix "$script")" ;;
+    esac
+    "$LAUNCHER" ssh "$slot" -- /bin/sh -c "$quoted"
+}
+
+# Is the plain control channel alive? Deliberately a payload that survives ANY
+# re-parsing (a single word), so it answers "is the guest reachable", nothing
+# else.
+guest_channel_ok() { "$LAUNCHER" ssh "$1" -- true >/dev/null 2>&1; }
+
+# The transport probe. It fails unless ALL of these survive the trip:
+#   * argument boundaries  (a flattened `printf %s 'a b'` prints nothing)
+#   * an embedded single quote
+#   * `${VAR:-}` parameter expansion (a fish syntax error if it is re-parsed)
+#   * the exit code (7, not 0 and not 1)
+TRANSPORT_PROBE=$'printf %s \'a b\'; test -n "${HOME:-}" || exit 3; exit 7'
+
+# Run TRANSPORT_PROBE through one of the production entry points and check both
+# its output and its exit code. `guest_sh <slot> <script>` and
+# `guest <slot> sh -c <script>` must both reproduce it.
+probe_via() {
+    local how="$1" slot="$2" out rc=0
+    case "$how" in
+        guest_sh) out="$(guest_sh "$slot" "$TRANSPORT_PROBE" 2>/dev/null)" || rc=$? ;;
+        *) out="$(guest "$slot" sh -c "$TRANSPORT_PROBE" 2>/dev/null)" || rc=$? ;;
+    esac
+    out="${out//$'\r'/}"
+    out="${out//$'\n'/}"
+    [[ $out == "a b" ]] && ((rc == 7))
+}
+
+# Echo the quoting dialect that works for <slot>, or return 1. Memoised: a
+# POSITIVE verdict always, a NEGATIVE one only when the channel itself is alive
+# (otherwise a probe issued while the guest is still booting would poison the
+# cache for the whole run).
+guest_transport_mode() {
+    local slot="$1" mode out rc
+    if [[ -n ${GUEST_QUOTE_MODE[$slot]:-} ]]; then
+        [[ ${GUEST_QUOTE_MODE[$slot]} == none ]] && return 1
+        printf '%s' "${GUEST_QUOTE_MODE[$slot]}"
+        return 0
+    fi
+    for mode in fish posix; do
+        rc=0
+        out="$(guest_sh_as "$slot" "$mode" "$TRANSPORT_PROBE" 2>/dev/null)" || rc=$?
+        out="${out//$'\r'/}"
+        out="${out//$'\n'/}"
+        if [[ $out == "a b" ]] && ((rc == 7)); then
+            GUEST_QUOTE_MODE["$slot"]="$mode"
+            # Re-run the SAME probe through the two entry points the checks
+            # really use (guest_sh for scripts, guest for argv), so the control
+            # can never validate a code path no assertion goes through.
+            if probe_via guest_sh "$slot" && probe_via guest "$slot"; then
+                printf '%s' "$mode"
+                return 0
+            fi
+            GUEST_QUOTE_MODE["$slot"]=""
+        fi
+    done
+    guest_channel_ok "$slot" && GUEST_QUOTE_MODE["$slot"]=none
+    return 1
+}
+
+guest_transport_ok() { guest_transport_mode "$1" >/dev/null; }
+
+# Report the transport verdict for a slot as its OWN check line, so a mangled
+# transport is visible as a FAIL instead of silently turning the slot's whole
+# assertion block into SKIPs.
+assert_transport() {
+    local slot="$1" desc="$2" mode
+    if mode="$(guest_transport_mode "$slot")"; then
+        pass "$desc: the guest command transport preserves argument boundaries, quoting, \${VAR} expansion and exit codes ($mode quoting)"
+    else
+        fail "$desc: the guest command transport is BROKEN — commands do not reach the guest as written, so every guest-side assertion on $slot can only be SKIPPED"
+    fi
+}
+
+# POSITIVE CONTROL for every `</dev/tcp/host/port>` reachability probe: the
+# very same mechanism must SUCCEED against the ONE endpoint the policy allows
+# (LiteLLM on the bridge gateway). A guest shell without /dev/tcp support would
+# otherwise refuse every connection for a reason that has nothing to do with
+# the firewall, and the whole matrix would pass vacuously. Memoised per slot;
+# reports itself once as a PASS/FAIL line.
+declare -A TCP_PROBE_STATE=()
+tcp_probe_works() {
     local slot="$1"
+    if [[ -z ${TCP_PROBE_STATE[$slot]:-} ]]; then
+        if guest "$slot" bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/$LITELLM_PORT'" >/dev/null 2>&1; then
+            TCP_PROBE_STATE["$slot"]=ok
+            pass "the /dev/tcp probe really works in $slot (it reaches the ALLOWED $GATEWAY:$LITELLM_PORT)"
+        else
+            TCP_PROBE_STATE["$slot"]=broken
+            fail "the /dev/tcp probe cannot reach the ALLOWED endpoint $GATEWAY:$LITELLM_PORT from $slot — every /dev/tcp denial would be vacuous"
+        fi
+    fi
+    [[ ${TCP_PROBE_STATE[$slot]} == ok ]]
+}
+
+# Run a SCRIPT inside a guest slot, as the unprivileged agent user, with the
+# script intact. Returns 125 when the transport is unusable (a value no payload
+# here produces), so callers can tell "could not ask" from "the guest said no".
+guest_sh() {
+    local slot="$1" mode
     shift
-    "$LAUNCHER" ssh "$slot" -- "$@"
+    mode="$(guest_transport_mode "$slot")" || return 125
+    guest_sh_as "$slot" "$mode" "$*"
+}
+
+# Run a command INSIDE a guest slot, as the unprivileged agent user. Each
+# argument is quoted for the guest's /bin/sh first, so `guest <slot> sh -c
+# '<script>'` and every other multi-word payload arrives exactly as written.
+guest() {
+    local slot="$1" a script=""
+    shift
+    for a in "$@"; do script+=" $(sh_quote "$a")"; done
+    guest_sh "$slot" "${script# }"
 }
 
 # Run a command inside a guest in a LOGIN shell. The guest's
@@ -237,7 +409,7 @@ guest_login() {
 wait_guest_ready() {
     local slot="$1" waited=0
     while ((waited < READY_TIMEOUT)); do
-        guest "$slot" true >/dev/null 2>&1 && return 0
+        guest_channel_ok "$slot" && return 0
         sleep "$READY_INTERVAL"
         waited=$((waited + READY_INTERVAL))
     done
@@ -287,6 +459,26 @@ wait_task_slot_ready() {
     return 1
 }
 
+# Wait until <task> has been ALLOCATED a slot (readiness NOT required) and echo
+# it; return 1 if none appeared within READY_TIMEOUT. Used where the point is to
+# plant something on the HOST side while the job runs. Sequencing those subtests
+# by `sleep N` (and then asserting anyway) is what let them "decide" properties
+# of a job that had not started yet — invariant 1 of the suite: never sleep and
+# hope, and never assert against a fixture that did not run.
+wait_task_slot() {
+    local task="$1" waited=0 slot=""
+    while ((waited < READY_TIMEOUT)); do
+        slot="$(slot_of_task "$task")"
+        if [[ -n $slot ]]; then
+            printf '%s' "$slot"
+            return 0
+        fi
+        sleep "$READY_INTERVAL"
+        waited=$((waited + READY_INTERVAL))
+    done
+    return 1
+}
+
 # Report a failed start_task. MUST run in the caller's shell (see above).
 report_start_failure() {
     local rc="$1" ctx="$2"
@@ -322,6 +514,10 @@ section_boot() {
         # POSITIVE CONTROL for everything below: the channel the assertions run
         # over really works, so a denial below means denial, not "not up yet".
         check "class $class: guest is SSH-ready" guest "$slot" true
+        # ... and the commands really arrive as written (see the transport
+        # block): without this, a quoting slip turns every denial into a
+        # vacuous PASS.
+        assert_transport "$slot" "class $class"
         check "class $class: /workspace is a mount point" \
             guest "$slot" findmnt -n /workspace
         check "class $class: /workspace is writable" \
@@ -333,18 +529,38 @@ section_boot() {
         # a pass and not a fail of the property — it means the enumeration
         # itself did not run, so say that instead of guessing.
         shares="$(guest "$slot" sh -c 'findmnt -t virtiofs -o TARGET -n | sort | tr "\n" " "' 2>/dev/null || true)"
+        # EQUALITY, not a substring match: a substring match accepted any
+        # ADDITIONAL share that happens to sort after /workspace.
+        local shares_norm
+        shares_norm="$(printf '%s' "$shares" | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//')"
         if [[ -z ${shares//[[:space:]]/} ]]; then
             fail "class $class: could not enumerate the guest's virtiofs shares (empty answer)"
-        elif [[ $shares == *"/run/agent-job /var/lib/agent-hostkey /var/lib/agent-state /workspace"* ]]; then
+        elif [[ $shares_norm == "$EXPECTED_SHARES" ]]; then
             pass "class $class: exactly the expected virtiofs shares"
         else
             fail "class $class: unexpected virtiofs share set: $shares"
         fi
 
-        # Workspace changes must survive shutdown; guest root/home must not.
+        # Workspace changes must survive shutdown; the guest's own filesystem
+        # must not.
+        #
+        # The markers are placed where the UNPRIVILEGED agent can really create
+        # them ($HOME and /tmp) and their existence is ASSERTED here, in the
+        # first run. The suite used to write `/root-marker`, which the agent
+        # user cannot create at all (`/` is root-owned, the agent has no sudo
+        # and no groups, guest.nix:292-301) — so "it did not persist" was true
+        # of a file that never existed.
         guest "$slot" sh -c 'echo persisted > /workspace/rtv-persisted.txt' >/dev/null 2>&1 || true
         # shellcheck disable=SC2016  # $HOME must expand in the GUEST, not here
-        guest "$slot" sh -c 'echo ephemeral > /root-marker 2>/dev/null || true; echo ephemeral > "$HOME/rtv-home-marker"' >/dev/null 2>&1 || true
+        guest "$slot" sh -c 'echo ephemeral > "$HOME/rtv-home-marker"; echo ephemeral > /tmp/rtv-fs-marker' >/dev/null 2>&1 || true
+        local markers_planted=0
+        # shellcheck disable=SC2016  # $HOME must expand in the GUEST, not here
+        if guest "$slot" sh -c 'test -f "$HOME/rtv-home-marker" && test -f /tmp/rtv-fs-marker' >/dev/null 2>&1; then
+            markers_planted=1
+            pass "class $class: the ephemerality markers were really created in the first run"
+        else
+            fail "class $class: could not create the ephemerality markers in the guest, so 'they did not persist' would prove nothing"
+        fi
         "$LAUNCHER" stop "$task" >/dev/null 2>&1 || true
         if [[ -f "$WORKSPACE_ROOT/$task/rtv-persisted.txt" ]]; then
             pass "class $class: workspace changes persist in the clone"
@@ -354,11 +570,15 @@ section_boot() {
         # Restart the same task on the same slot and check the guest's own state.
         rc=0
         slot="$(start_task "$task-again" "$class")" || rc=$?
-        if ((rc == 0)) && [[ -n $slot ]]; then
+        if ((rc == 0)) && [[ -n $slot ]] && ((markers_planted)); then
+            assert_transport "$slot" "class $class (restart)"
             check_denied "class $class: guest home does not persist between runs" "$slot" \
                 test -f /home/agent/rtv-home-marker
-            check_denied "class $class: guest root does not persist between runs" "$slot" \
-                test -f /root-marker
+            check_denied "class $class: the guest filesystem outside /workspace does not persist between runs" "$slot" \
+                test -f /tmp/rtv-fs-marker
+            cleanup_task "$task-again"
+        elif ((rc == 0)) && [[ -n $slot ]]; then
+            skip "class $class: the markers were never planted, so persistence cannot be decided"
             cleanup_task "$task-again"
         else
             skip "class $class: could not restart for the persistence check (rc $rc)"
@@ -373,17 +593,47 @@ section_boot() {
     cleanup_task rtv-iso-a
     cleanup_task rtv-iso-b
     rc=0
+    # A SECOND workspace must really EXIST on the host while A is asked about
+    # it: `rtv-iso-b` used to be cleaned up and never started, so the path
+    # `$WORKSPACE_ROOT/rtv-iso-b` did not exist anywhere and "A cannot see it"
+    # was unconditionally true. Start B if the pool allows it; otherwise create
+    # the host path directly (that alone is enough for the property under test:
+    # the guest must not be able to reach ANY host workspace path).
+    local iso_b_started=0
+    rc=0
+    slot_b="$(start_task rtv-iso-b "$class_a" 2>/dev/null)" || rc=$?
+    if ((rc == 0)) && [[ -n $slot_b ]]; then
+        iso_b_started=1
+    else
+        cleanup_task rtv-iso-b
+        mkdir -p "$WORKSPACE_ROOT/rtv-iso-b"
+        printf 'other task data\n' >"$WORKSPACE_ROOT/rtv-iso-b/secret.txt"
+        info "task isolation: could not start a second guest; created the host path $WORKSPACE_ROOT/rtv-iso-b directly"
+    fi
+    rc=0
     slot_a="$(start_task rtv-iso-a "$class_a" hermes)" || rc=$?
     if ((rc == 0)) && [[ -n $slot_a ]]; then
-        # Task A must not see task B's workspace (there is no path to it at all).
-        check_denied "task A cannot see another task's workspace" "$slot_a" \
-            test -e "$WORKSPACE_ROOT/rtv-iso-b"
+        assert_transport "$slot_a" "task isolation"
+        # The path really is there on the host — stated, not assumed.
+        if [[ -e "$WORKSPACE_ROOT/rtv-iso-b" ]]; then
+            pass "task isolation: the other task's workspace really exists on the host ($WORKSPACE_ROOT/rtv-iso-b)"
+            # Task A must not see it (there is no path to it at all).
+            check_denied "task A cannot see another task's workspace" "$slot_a" \
+                test -e "$WORKSPACE_ROOT/rtv-iso-b"
+        else
+            skip "task A cannot see another task's workspace (the other workspace could not be created, so the denial would prove nothing)"
+        fi
         check_denied "task A cannot see the host workspace root" "$slot_a" \
             test -d "$WORKSPACE_ROOT"
         cleanup_task rtv-iso-a
     else
         report_start_failure "$rc" "task isolation (rtv-iso-a)"
         cleanup_task rtv-iso-a
+    fi
+    if ((iso_b_started)); then
+        cleanup_task rtv-iso-b
+    else
+        rm -rf "${WORKSPACE_ROOT:?}/rtv-iso-b"
     fi
     # Declared-path-only persistence. Uses the SAME start path (and therefore
     # the same readiness gate) as everything else — it used to inline `run`
@@ -392,6 +642,7 @@ section_boot() {
     rc=0
     slot_b="$(start_task rtv-persist "$class_a" hermes --persist-agent-state)" || rc=$?
     if ((rc == 0)) && [[ -n $slot_b ]]; then
+        assert_transport "$slot_b" "agent-state persistence"
         check "persisted state: ~/.hermes is a symlink into the share" \
             guest "$slot_b" test -L /home/agent/.hermes
         guest "$slot_b" sh -c 'mkdir -p ~/.hermes && echo kept > ~/.hermes/rtv' >/dev/null 2>&1 || true
@@ -426,6 +677,7 @@ section_net() {
         cleanup_task rtv-net
         return
     fi
+    assert_transport "$slot" "network"
     # ALLOWED: the bridge-only LiteLLM endpoint, reached via the guest's own
     # loopback forwarder AND directly at the gateway.
     check "guest reaches the LiteLLM endpoint via loopback" \
@@ -439,20 +691,24 @@ section_net() {
     # passed vacuously whenever the guest was not up yet.)
     check_denied "guest cannot reach the cloud-metadata endpoint" "$slot" \
         curl -fsS -m 5 -o /dev/null http://169.254.169.254/
-    check_denied "guest cannot reach host SSH on the gateway" "$slot" \
-        sh -c "timeout 5 sh -c '</dev/tcp/$GATEWAY/22'"
-    check_denied "guest cannot reach an arbitrary host port (8080)" "$slot" \
-        sh -c "timeout 5 sh -c '</dev/tcp/$GATEWAY/8080'"
-    check_denied "guest cannot reach RFC1918 10.0.0.0/8" "$slot" \
-        sh -c "timeout 5 sh -c '</dev/tcp/10.0.0.1/80'"
-    check_denied "guest cannot reach RFC1918 172.16.0.0/12" "$slot" \
-        sh -c "timeout 5 sh -c '</dev/tcp/172.16.0.1/80'"
-    check_denied "guest cannot reach RFC1918 192.168.0.0/16 (outside the agent subnet)" "$slot" \
-        sh -c "timeout 5 sh -c '</dev/tcp/192.168.1.1/80'"
-    check_denied "guest cannot reach a public IP" "$slot" \
-        sh -c "timeout 5 sh -c '</dev/tcp/1.1.1.1/80'"
-    check_denied "guest cannot reach a public DNS server" "$slot" \
-        sh -c "timeout 5 sh -c '</dev/tcp/8.8.8.8/53'"
+    if tcp_probe_works "$slot"; then
+        check_denied "guest cannot reach host SSH on the gateway" "$slot" \
+            bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/22'"
+        check_denied "guest cannot reach an arbitrary host port (8080)" "$slot" \
+            bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/8080'"
+        check_denied "guest cannot reach RFC1918 10.0.0.0/8" "$slot" \
+            bash -c "timeout 5 bash -c '</dev/tcp/10.0.0.1/80'"
+        check_denied "guest cannot reach RFC1918 172.16.0.0/12" "$slot" \
+            bash -c "timeout 5 bash -c '</dev/tcp/172.16.0.1/80'"
+        check_denied "guest cannot reach RFC1918 192.168.0.0/16 (outside the agent subnet)" "$slot" \
+            bash -c "timeout 5 bash -c '</dev/tcp/192.168.1.1/80'"
+        check_denied "guest cannot reach a public IP" "$slot" \
+            bash -c "timeout 5 bash -c '</dev/tcp/1.1.1.1/80'"
+        check_denied "guest cannot reach a public DNS server" "$slot" \
+            bash -c "timeout 5 bash -c '</dev/tcp/8.8.8.8/53'"
+    else
+        skip "the seven /dev/tcp reachability denials (the probe cannot even reach the ALLOWED endpoint, so a refusal would prove nothing)"
+    fi
     check_denied "guest cannot resolve public DNS names" "$slot" \
         sh -c "timeout 5 getent hosts example.com"
     # IPv6 must not provide a bypass: the bridge has IPv6 disabled.
@@ -501,6 +757,8 @@ section_l2() {
         cleanup_task rtv-l2b
         return
     fi
+    assert_transport "$slot_a" "layer 2 (guest A)"
+    assert_transport "$slot_b" "layer 2 (guest B)"
     ip_a="$("$LAUNCHER" status "$slot_a" | awk '/^  ip:/ { print $2 }')"
     ip_b="$("$LAUNCHER" status "$slot_b" | awk '/^  ip:/ { print $2 }')"
     info "guest A=$slot_a ($ip_a)  guest B=$slot_b ($ip_b)"
@@ -540,8 +798,12 @@ section_l2() {
 
     check_denied "guest A cannot ping guest B (IPv4)" "$slot_a" \
         ping -c 2 -W 2 "$ip_b"
-    check_denied "guest A cannot open a TCP connection to guest B" "$slot_a" \
-        sh -c "timeout 5 sh -c '</dev/tcp/$ip_b/22'"
+    if tcp_probe_works "$slot_a"; then
+        check_denied "guest A cannot open a TCP connection to guest B" "$slot_a" \
+            bash -c "timeout 5 bash -c '</dev/tcp/$ip_b/22'"
+    else
+        skip "guest A cannot open a TCP connection to guest B (the /dev/tcp probe does not work at all here)"
+    fi
     check_denied "guest A cannot reach guest B over IPv6 link-local" "$slot_a" \
         sh -c "ping -6 -c 2 -W 2 ff02::1%eth0 2>/dev/null | grep -q 'bytes from'"
     # ARP: after an explicit request, guest B's MAC must never appear in A's
@@ -562,15 +824,28 @@ section_l2() {
     #
     # POSITIVE CONTROL first: if the host cannot reach B BEFORE the impersonation
     # is set up, the check is undecidable — SKIP instead of blaming the guest.
-    if ! guest "$slot_b" true >/dev/null 2>&1; then
+    #
+    # ... and the ATTACK ITSELF must be proved to have HAPPENED. `ip addr add`
+    # needs CAP_NET_ADMIN, and the guest agent is an unprivileged user with no
+    # groups and no sudo (guest.nix:292-301), so the add is normally rejected
+    # with EPERM — the suite used to swallow that with `|| true` and then
+    # "prove" that the host still reached B, which it trivially did because
+    # nothing had been done to it. So: assert B's address is really on A's
+    # eth0; if it is not, the result is UNDECIDABLE, not a pass.
+    if ! guest_channel_ok "$slot_b"; then
         skip "impersonation: the host cannot reach guest B even before the attack (baseline failed)"
     else
         pass "impersonation baseline: the host reaches the real guest B"
         guest "$slot_a" sh -c "ip addr add $ip_b/24 dev eth0 2>/dev/null || true" >/dev/null 2>&1 || true
-        if guest "$slot_b" true >/dev/null 2>&1; then
-            pass "host still reaches the REAL guest B while A impersonates its IP"
+        if guest "$slot_a" sh -c "ip -o addr show dev eth0 | grep -q ' $ip_b/'" >/dev/null 2>&1; then
+            pass "impersonation: guest A really did take guest B's address ($ip_b) on eth0"
+            if guest_channel_ok "$slot_b"; then
+                pass "host still reaches the REAL guest B while A impersonates its IP"
+            else
+                fail "host lost/redirected its connection to guest B during impersonation"
+            fi
         else
-            fail "host lost/redirected its connection to guest B during impersonation"
+            skip "impersonation: the guest agent cannot configure addresses (no CAP_NET_ADMIN), so the impersonation could not be attempted at all"
         fi
         guest "$slot_a" sh -c "ip addr del $ip_b/24 dev eth0 2>/dev/null || true" >/dev/null 2>&1 || true
     fi
@@ -590,6 +865,7 @@ section_creds() {
         cleanup_task rtv-creds
         return
     fi
+    assert_transport "$slot" "credential boundary"
     # NOTE: only names/paths are ever printed, never values.
     #
     # Every environment assertion runs in a LOGIN shell (guest_login): the guest's
@@ -630,12 +906,27 @@ section_creds() {
     # a login profile, so the shell type above says nothing about it. Assert the
     # same facts against what `agent-job-worker@<agent>` would inherit: the
     # systemd manager environment plus the unit's declared Environment=.
-    local batch_env
+    # The two halves are read SEPARATELY and BOTH must carry a PATH= of their
+    # own. Concatenating them was a vacuity hole: `systemctl show-environment`
+    # alone always prints PATH, so a unit read that returned nothing at all (a
+    # renamed unit, an unknown instance — `systemctl show` exits 0 with empty
+    # properties for those) still satisfied the control, and all thirteen
+    # assertions about the UNIT's Environment= passed against an empty string.
+    # The worker template really does set PATH via `path = workerPackages`
+    # (job.nix), so requiring it of each half is a property, not a formality.
+    local manager_env unit_env batch_env
+    manager_env="$(guest "$slot" sh -c "systemctl show-environment" 2>/dev/null || true)"
     # `pi` is the agent every other section in this suite submits with; the unit
     # is a template, so its Environment= is the same for every instance.
-    batch_env="$(guest "$slot" sh -c "systemctl show-environment; systemctl show 'agent-job-worker@pi.service' --property=Environment --value" 2>/dev/null || true)"
-    if [[ $batch_env == *PATH=* ]]; then
-        pass "the batch worker's environment could be read (positive control: it contains PATH)"
+    unit_env="$(guest "$slot" sh -c "systemctl show 'agent-job-worker@pi.service' --property=Environment --value" 2>/dev/null || true)"
+    batch_env="$manager_env
+$unit_env"
+    if [[ $manager_env != *PATH=* ]]; then
+        skip "batch worker environment: the guest's systemd MANAGER environment could not be read (no PATH in the answer)"
+    elif [[ $unit_env != *PATH=* ]]; then
+        skip "batch worker environment: agent-job-worker@pi.service reported no Environment= containing PATH (the unit was not readable, so its environment cannot be decided)"
+    else
+        pass "both halves of the batch worker's environment could be read (positive control: each contains PATH)"
         for var in OPENROUTER_API_KEY GITHUB_TOKEN GH_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID \
             AWS_SECRET_ACCESS_KEY GOOGLE_APPLICATION_CREDENTIALS AZURE_CLIENT_SECRET \
             KUBECONFIG SSH_AUTH_SOCK GPG_AGENT_INFO; do
@@ -655,8 +946,6 @@ section_creds() {
                 fail "the batch worker's $var is set to something other than the placeholder"
             fi
         done
-    else
-        skip "batch worker environment: could not read it from the guest (no PATH in the answer)"
     fi
 
     local path
@@ -832,6 +1121,29 @@ check_no_residue() {
         pass "no stale workspace bind mount remains $when"
     fi
 
+    # The SECOND bind a slot can hold: the agent-state share
+    # (<runtimeRoot>/state/slots/<slot>, ticket 5 B). It is held by the same
+    # per-slot virtiofsd as the workspace bind, so a SIGKILLed guest leaks it
+    # the same way — and scanning only for `<stateRoot>/<slot>/workspace` made
+    # that leak invisible to this suite exactly as it was invisible to
+    # `recover`.
+    residue=0
+    while read -r mp; do
+        [[ -n $mp ]] || continue
+        slot="${mp##*/}"
+        if is_current_slot "$slot"; then
+            residue=1
+            info "agent-state bind mount still present for current slot $slot ($mp)"
+        else
+            foreign_mounts+=("$mp")
+        fi
+    done < <(findmnt -rn -o TARGET | grep -E "^${RUNTIME_ROOT}/state/slots/[^/]+$" || true)
+    if ((residue)); then
+        fail "no stale agent-state bind mount remains $when"
+    else
+        pass "no stale agent-state bind mount remains $when"
+    fi
+
     if find "$RUNTIME_ROOT/jobs" -name spec.json 2>/dev/null | grep -q .; then
         fail "no stale job spec remains $when"
     else
@@ -882,8 +1194,17 @@ touch /tmp/rtv-HOOK-RAN
 HOOK
     chmod +x "$dir/.git/hooks/post-checkout"
     # Nix / direnv / MCP files that must never be evaluated by the HOST.
+    #
+    # NOTE on flake.nix: a Nix EVALUATION cannot create a marker file (there is
+    # no such builtin), so "the host never evaluated flake.nix" has no direct
+    # observable. The fixture keeps a flake that would `throw` — so an
+    # evaluation would be LOUD in the launcher output — but this suite makes no
+    # assertion about it any more: the assertion that used to carry that name
+    # actually tested the DIRENV marker (see below) and is now named after what
+    # it measures.
     printf '{ outputs = _: builtins.throw "rtv-flake-evaluated"; }\n' >"$dir/flake.nix"
     printf 'touch /tmp/rtv-DIRENV-RAN\n' >"$dir/.envrc"
+    printf 'export RTV_DIRENV=1\n' >>"$dir/.envrc"
     printf '{"mcpServers":{"evil":{"command":"touch","args":["/tmp/rtv-MCP-RAN"]}}}\n' >"$dir/.mcp.json"
     # Symlink escapes and a nested repository.
     ln -s /etc/shadow "$dir/escape-shadow"
@@ -912,8 +1233,9 @@ HOOK
     fi
     # These three run on the HOST, so check_fails is the right tool.
     check_fails "the host never ran the repository's git hook" test -e /tmp/rtv-HOOK-RAN
-    check_fails "the host never evaluated the repository's flake.nix" test -e /tmp/rtv-DIRENV-RAN
+    check_fails "the host never sourced the repository's .envrc (direnv)" test -e /tmp/rtv-DIRENV-RAN
     check_fails "the host never ran the repository's MCP command" test -e /tmp/rtv-MCP-RAN
+    assert_transport "$slot" "hostile repository"
     # POSITIVE CONTROL: the fixture's symlink really is in the guest's workspace.
     # Without it, "the guest cannot read /etc/shadow through it" says nothing.
     if guest "$slot" test -L /workspace/escape-shadow >/dev/null 2>&1; then
@@ -929,8 +1251,23 @@ HOOK
     guest "$slot" sh -c ':(){ :|:& };: 2>/dev/null &' >/dev/null 2>&1 || true
     sleep 5
     check "the guest is still reachable after a fork bomb" guest "$slot" true
-    guest "$slot" sh -c 'dd if=/dev/zero of=/workspace/rtv-fill bs=1M count=20000 2>/dev/null || true' >/dev/null 2>&1 || true
-    check "the guest is still reachable after a disk-filling attempt" guest "$slot" true
+    # The workspace is a BIND MOUNT of a host directory, so this writes onto the
+    # HOST filesystem. Writing a fixed 20 GiB could wedge the host under test on
+    # a small /var — which the very next check then reports as a host-health
+    # failure caused by the suite itself. Bound the attempt by what the host can
+    # spare (at most 2 GiB, and only if 4 GiB remain free afterwards).
+    local avail_mb fill_mb=0
+    avail_mb="$(df -Pm --output=avail "$WORKSPACE_ROOT" 2>/dev/null | tail -1 | tr -dc '0-9')"
+    if [[ -n ${avail_mb:-} ]] && ((avail_mb > 6144)); then
+        fill_mb=2048
+        ((avail_mb - fill_mb > 4096)) || fill_mb=$((avail_mb - 4096))
+    fi
+    if ((fill_mb > 0)); then
+        guest "$slot" sh -c "dd if=/dev/zero of=/workspace/rtv-fill bs=1M count=$fill_mb 2>/dev/null || true" >/dev/null 2>&1 || true
+        check "the guest is still reachable after a disk-filling attempt (${fill_mb} MiB)" guest "$slot" true
+    else
+        skip "disk-filling attempt: the host has too little free space under $WORKSPACE_ROOT (${avail_mb:-unknown} MiB) to run it safely"
+    fi
     check "the host is still healthy (systemd is running)" systemctl is-system-running --quiet
     guest "$slot" sh -c 'rm -f /workspace/rtv-fill' >/dev/null 2>&1 || true
     check_denied "the guest cannot enumerate host block devices" "$slot" \
@@ -982,6 +1319,7 @@ section_forgery() {
         return
     fi
     info "forgery target: slot $slot (task $task)"
+    assert_transport "$slot" "batch result channel"
 
     # --- (A) direct result forgery ---------------------------------------
     # check_denied (not check_fails): a dead SSH channel must not be mistaken
@@ -1113,14 +1451,7 @@ section_forgery() {
         --prompt-file "$prompt" --timeout 120 --resource-class "$class" \
         >/tmp/rtv-stale-submit.log 2>&1 &
     submit_pid=$!
-    waited=0
-    slot=""
-    while ((waited < 120)); do
-        slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
-        [[ -n $slot ]] && break
-        sleep 3
-        waited=$((waited + 3))
-    done
+    slot="$(wait_task_slot "$task")" || slot=""
     if [[ -z $slot ]]; then
         skip "stale result: no slot came up for $task"
         kill "$submit_pid" 2>/dev/null || true
@@ -1167,34 +1498,52 @@ section_forgery() {
         --prompt-file "$prompt" --timeout 60 --resource-class "$class" \
         >/tmp/rtv-malformed-submit.log 2>&1 &
     submit_pid=$!
-    sleep 20
-    slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
+    slot="$(wait_task_slot "$task")" || slot=""
     if [[ -n $slot ]]; then
         printf '{ "version": 2, "state": ' >"$JOBS_ROOT/$slot/controller/result.json"
         chmod 0600 "$JOBS_ROOT/$slot/controller/result.json"
     fi
     rc=0
     wait "$submit_pid" || rc=$?
-    if ((rc == 70)); then
+    if [[ -z $slot ]]; then
+        # Nothing was planted, so the exit code says nothing about malformed
+        # documents — asserting 70 here would have tested the empty pool.
+        skip "malformed result: no slot came up for $task, so no malformed document was ever planted (exit $rc)"
+    elif ((rc == 70)); then
         pass "a malformed result becomes an infrastructure error (exit 70)"
     else
         fail "a malformed result did not produce exit 70 (got $rc)"
     fi
     cleanup_task "$task"
 
-    # --- (H) timeout kills the whole worker cgroup ------------------------
+    # --- (H) deadline enforcement -----------------------------------------
+    # A long-running DOUBLE-FORKED descendant is planted in the guest so the
+    # teardown has something to kill that is not the worker's direct child. Its
+    # existence is a POSITIVE CONTROL and is asserted; whether it died *with the
+    # worker cgroup* specifically is NOT measurable from here, and is reported
+    # as such rather than claimed (the host stops the whole VM as part of the
+    # timeout path, so "the cgroup was killed" and "the VM was destroyed" have
+    # the same observable).
     task=rtv-timeout
     cleanup_task "$task"
     rc=0
     "$LAUNCHER" submit --name "$task" --repository "$REPO" --agent pi \
-        --prompt-file "$prompt" --timeout 20 --resource-class "$class" \
+        --prompt-file "$prompt" --timeout 60 --resource-class "$class" \
         >/tmp/rtv-timeout-submit.log 2>&1 &
     submit_pid=$!
-    sleep 20
-    slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
-    if [[ -n $slot ]]; then
-        # A double-forked descendant that must die with the cgroup.
-        guest "$slot" sh -c 'setsid sh -c "sleep 3600" >/dev/null 2>&1 &' >/dev/null 2>&1 || true
+    local planted=0 timeout_slot=""
+    rc=0
+    timeout_slot="$(wait_task_slot_ready "$task")" || rc=$?
+    if ((rc == 0)) && [[ -n $timeout_slot ]]; then
+        guest "$timeout_slot" sh -c 'setsid sh -c "sleep 3600 # rtv-orphan" >/dev/null 2>&1 &' >/dev/null 2>&1 || true
+        if guest "$timeout_slot" sh -c "pgrep -f 'sleep 3600' >/dev/null" >/dev/null 2>&1; then
+            planted=1
+            pass "a double-forked descendant really exists in the guest while the job runs"
+        else
+            fail "the double-forked descendant could not be planted, so nothing about the teardown of orphans can be decided"
+        fi
+    else
+        info "timeout: no reachable slot for $task (rc $rc)"
     fi
     rc=0
     wait "$submit_pid" || rc=$?
@@ -1211,6 +1560,17 @@ section_forgery() {
         info "archived: $(cat "$RESULTS_DIR/$task.json" 2>/dev/null)"
         fail "the timeout verdict did not come from the controller"
     fi
+    if ((planted)); then
+        # What IS decidable: after the timeout the slot must be released and its
+        # VM gone, so no descendant of the worker survives ON THE HOST.
+        if [[ -n "$(slot_of_task "$task")" ]] ||
+            "$LAUNCHER" list | awk -v s="$timeout_slot" '$1 == s && $3 == "running"' | grep -q .; then
+            fail "the timed-out job left $timeout_slot allocated/running, so its processes outlived the deadline"
+        else
+            pass "the timed-out job released $timeout_slot and stopped its VM (no worker descendant survives on the host)"
+        fi
+        skip "whether the timeout killed the worker CGROUP specifically: the host stops the whole VM on the timeout path, so this cannot be distinguished from the VM teardown from outside the guest"
+    fi
     cleanup_task "$task"
 
     # --- (I) cancellation is bound to the allocation token ----------------
@@ -1220,8 +1580,7 @@ section_forgery() {
         --prompt-file "$prompt" --timeout 300 --resource-class "$class" \
         >/tmp/rtv-cancel-submit.log 2>&1 &
     submit_pid=$!
-    sleep 25
-    slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
+    slot="$(wait_task_slot "$task")" || slot=""
     if [[ -z $slot ]]; then
         skip "cancellation: no slot came up"
         kill "$submit_pid" 2>/dev/null || true
@@ -1245,15 +1604,19 @@ section_forgery() {
             --prompt-file "$prompt" --timeout 120 --resource-class "$class" \
             >/tmp/rtv-replay-submit.log 2>&1 &
         submit_pid=$!
-        sleep 20
-        slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
+        local replayed=0
+        slot="$(wait_task_slot "$task")" || slot=""
         if [[ -n $slot && -f /tmp/rtv-cancel-request.json ]]; then
             install -m 0400 -o root -g root /tmp/rtv-cancel-request.json \
                 "$JOBS_ROOT/$slot/input/cancel.json"
+            replayed=1
         fi
         rc=0
         wait "$submit_pid" || rc=$?
-        if [[ "$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)" == "cancelled" ]]; then
+        if ((!replayed)); then
+            # Without a planted request there was no replay to survive.
+            skip "stale cancellation replay: the request could not be planted (slot='$slot'), so the new allocation was never attacked"
+        elif [[ "$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)" == "cancelled" ]]; then
             fail "a STALE cancellation request stopped a newly allocated job"
         else
             pass "a stale cancellation request does not affect a new allocation"

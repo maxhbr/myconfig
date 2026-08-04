@@ -62,7 +62,14 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section forgery
 | `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED in the present form.** They were run once on f13 (root + `/dev/kvm`) as originally written. That run produced 20 `FAIL`s, of which all but two turned out to be defects of the HARNESS — and the same defects made roughly 25 of the reported `PASS`es vacuous. The harness has since been repaired (see “Harness validity invariants” below); the repaired suite has **not** been run yet. |
 | `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties are the three eval/build checks `microvm-batch-result-integrity`, `microvm-batch-controller-smoke` and `microvm-batch-launcher-submit` (see below). |
 
-This table is deliberately pessimistic: update it only with a pasted log.
+This table is deliberately pessimistic: update it only with a pasted log. The
+repairs listed under “Harness validity invariants” (in particular the guest
+command transport, invariant 2b) were made in an environment **without**
+`/dev/kvm` and without root; what *was* executed there is the CI tier, including
+the new `microvm-rtv-transport` check, which runs the suite's own transport
+block against a stub that reproduces OpenSSH's argv flattening plus the guest's
+fish login shell — with a negative control that fails for the previous,
+unquoted transport.
 
 Every check prints one line — `PASS`, `FAIL` or `SKIP` — and the script exits
 non-zero if anything failed. `SKIP` is honest (e.g. "fewer than two slots in the
@@ -88,12 +95,49 @@ lying:
    connection failed” cannot look the same. `check_fails` is reserved for
    commands that run on the **host** (`test -e /tmp/rtv-HOOK-RAN`, a launcher
    invocation that must be rejected).
-3. **Every block that asserts an absence carries a positive control.** The
-   environment block asserts `OPENAI_BASE_URL` *is* set to the expected value
-   before concluding anything from the absence of other variables; the hostile
+2b. **The command must reach the guest as written — and that is *measured*.**
+   `agent-microvm ssh <slot> -- <argv…>` cannot preserve argument boundaries:
+   OpenSSH joins the remaining argv with single spaces and the guest's **login
+   shell** re-parses the string — and that shell is `fish` (`guest.nix`:
+   `users.users.agent.shell = pkgs.fish`). A payload such as
+   `sh -c "timeout 5 sh -c '</dev/tcp/GW/22'"` therefore used to arrive as
+   `sh -c timeout 5 sh -c '…'`, i.e. `sh -c` received only the word `timeout`:
+   the command failed for a **quoting** reason and the denial passed
+   *vacuously*. `${VAR:-}` was worse — `${` is a fish syntax error, so the whole
+   credential-environment block could never be evaluated.
+   The suite now sends every payload as ONE token escaped for the guest's login
+   shell (`guest_sh`/`guest`), **detects** the quoting dialect per slot, and
+   gates every guest-side assertion on a transport probe that only succeeds when
+   word boundaries, embedded quotes, `${VAR:-}` expansion *and* the exit code
+   survive the round trip. Each started slot reports the verdict as its own
+   check line (`assert_transport`); a broken transport is a `FAIL` plus `SKIP`s,
+   never a green run. The probe and its payload classes are executed in CI by
+   the `microvm-rtv-transport` check (`tests/microvm-rtv-transport.sh`), which
+   contains a negative control: the previous, unquoted transport must fail it.
+2c. **A probe mechanism needs its own positive control.** Every
+   `</dev/tcp/host/port>` denial is preceded by `tcp_probe_works`, which
+   requires the same mechanism to SUCCEED against the one endpoint the policy
+   allows (LiteLLM on the gateway). Otherwise a guest shell without `/dev/tcp`
+   support would “prove” the whole firewall matrix.
+3. **Every block that asserts an absence carries a positive control, and the
+   control must be able to distinguish which half answered.** The environment
+   block asserts `OPENAI_BASE_URL` *is* set to the expected value before
+   concluding anything from the absence of other variables; the hostile
    repository block asserts the fixture's symlink *is* in the guest workspace
    before concluding that it cannot be followed; the batch-environment block
-   asserts the answer contains `PATH`. If the control fails the block `SKIP`s.
+   reads the systemd **manager** environment and the **unit's** `Environment=`
+   *separately* and requires `PATH=` in **each** (concatenating them was a
+   vacuity hole: `show-environment` alone always contains `PATH`, so an
+   unreadable unit still satisfied the control). The ephemerality markers are
+   asserted to EXIST in the first run before their absence in the second means
+   anything, and “task A cannot see task B's workspace” is only asserted once
+   that workspace really exists on the host. If a control fails the block
+   `SKIP`s.
+3b. **An attack that could not be mounted is `SKIP`, not `PASS`.** The
+   impersonation check asserts that guest A really took B's address
+   (`ip -o addr show dev eth0`) before concluding anything from the host still
+   reaching B — `ip addr add` needs `CAP_NET_ADMIN`, which the unprivileged
+   guest `agent` user does not have, so the attack normally never happens.
 4. **Environment assertions run in a LOGIN shell.** `environment.variables`
    reaches a process only through `/etc/profile`, and
    `agent-microvm ssh <slot> -- <cmd>` is neither a login nor an interactive
@@ -119,7 +163,7 @@ lying:
 | the host `/nix/store` is **not** shared into the guest |
 | exactly four virtiofs shares: `/workspace`, `/var/lib/agent-hostkey`, `/run/agent-job`, `/var/lib/agent-state` (an empty enumeration is a `FAIL`, not a pass) |
 | workspace changes survive shutdown (they are in the standalone clone) |
-| guest root and guest home changes do **not** survive a restart |
+| guest home and guest `/tmp` changes do **not** survive a restart — asserted only after the markers were proved to have been CREATED in the first run (the suite used to write `/root-marker`, which the unprivileged agent cannot create at all, and then “prove” it had not persisted) |
 | `--persist-agent-state` persists **only** declared paths (`~/.hermes`), never undeclared ones |
 | a task cannot see another task's workspace, nor the host workspace root |
 
@@ -143,7 +187,7 @@ route that could bypass the IPv4 policy.
 | guest A cannot ping or TCP-connect to guest B |
 | guest A cannot reach guest B over IPv6 link-local / multicast |
 | guest A cannot even learn guest B's MAC (ARP is dropped in the bridge) |
-| while A adds B's IP to its own interface, the **host** still reaches the real B — through `agent-microvm ssh`, after a positive control proved the host could reach B *before* the impersonation |
+| while A adds B's IP to its own interface, the **host** still reaches the real B — through `agent-microvm ssh`, after a positive control proved the host could reach B *before* the impersonation, and only if A's `eth0` really carries B's address afterwards (otherwise: `SKIP`, because the attack could not be attempted) |
 
 ### `creds` — credential boundary
 
@@ -215,7 +259,7 @@ the guest kernel that enforces it over virtiofs.
 | a worker-written `worker/result.json` and `/workspace/result.json` are possible but **ignored**: the host keeps waiting and the archived result carries `source:"controller"` |
 | a result with a foreign allocation token, planted as **root** in `controller/` *after* the slot was allocated, is **rejected by name** (`allocation token does not belong`) and yields exit `70` |
 | a malformed controller result yields an **infrastructure error** (`submit` exit `70`), never success |
-| a job that exceeds its deadline is `timed-out` (exit `124`) with the verdict coming from the controller, and the whole worker cgroup (including double-forked descendants) is gone |
+| a job that exceeds its deadline is `timed-out` (exit `124`) with the verdict coming from the controller, a double-forked descendant planted in the guest is proved to have EXISTED while the job ran, and the slot is released with its VM stopped afterwards. Whether the **worker cgroup specifically** was killed is reported as an explicit `SKIP`: the host stops the whole VM on the timeout path, so from outside the guest that is indistinguishable from the VM teardown |
 | `cancel` records `cancelled`; replaying that cancellation request against a **new** allocation of the same slot does nothing (token mismatch) |
 
 Every "the guest agent cannot ..." check in this section uses `check_denied`,
@@ -267,10 +311,22 @@ enforcement or systemd's cgroup kill — which is exactly what this section adds
 The fixture contains a git `post-checkout` hook, a `flake.nix` that throws when
 evaluated, an `.envrc`, an `.mcp.json` that would run `touch`, symlinks to
 `/etc/shadow` and `/`, a nested repository, and a `.git` **file** pointing at
-`/etc`. Expected: the host never ran the hook, never evaluated the flake, never
+`/etc`. Expected: the host never ran the hook, never sourced the `.envrc`, never
 ran the MCP command; the guest cannot read `/etc/shadow` through the symlink; a
-fork bomb and a disk-filling attempt leave both the guest and the host healthy;
-the guest cannot enumerate host block devices.
+fork bomb and a bounded disk-filling attempt leave both the guest and the host
+healthy; the guest cannot enumerate host block devices.
+
+Two honesty notes:
+
+- **flake evaluation is not asserted.** A Nix evaluation cannot create a marker
+  file, so there is no observable to test; the check that used to carry that
+  name actually tested the *direnv* marker and is now named after what it
+  measures. The throwing `flake.nix` stays in the fixture: an evaluation would
+  be loud in the launcher output.
+- **the disk filler is bounded by the host's free space** (at most 2 GiB, and
+  only when ≥ 4 GiB would remain). `/workspace` is a bind mount of a HOST
+  directory, so an unbounded 20 GiB write could wedge the very host whose health
+  the next check asserts.
 
 The fixture is the **source repository of the guest under test** (it used to be
 built and then not used, so the in-guest assertions ran against a workspace that
