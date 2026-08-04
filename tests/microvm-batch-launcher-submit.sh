@@ -29,8 +29,8 @@
 set -euo pipefail
 
 for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET MOUNT_TARGET \
-    UMOUNT_TARGET FINDMNT_TARGET JQ_TARGET RUNTIME_ROOT STATE_ROOT INPUT_SUBDIR \
-    CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR SPEC_NAME PROMPT_NAME \
+    UMOUNT_TARGET FINDMNT_TARGET JQ_TARGET CURL_TARGET RUNTIME_ROOT STATE_ROOT INPUT_SUBDIR \
+    CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR WORKER_STDERR_NAME SPEC_NAME PROMPT_NAME \
     RESULT_NAME SPEC_VERSION CONTROLLER_VERSION AGENT WORKER_UID; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
@@ -155,6 +155,20 @@ plant() {
                 > "$STATE_ROOT/\$slot/workspace/$RESULT_NAME" 2>/dev/null || true
             ;;
         none) ;;
+        failed)
+            # A genuinely-failed agent: the controller records 'failed' + a
+            # non-zero exit code, and the worker's own stderr (root-owned,
+            # opened by systemd) holds the real reason. Plant UNTRUSTED worker
+            # stderr containing a terminal-control byte (ESC, 0x1b) that
+            # cat -v MUST neutralise -- if it reaches the operator's TTY raw,
+            # a hostile worker could clear the screen / forge a launcher line.
+            result "$SPEC_VERSION" "\$task" "\$token" "\$slot" failed 1 \\
+                > "\$dir/$CONTROLLER_SUBDIR/$RESULT_NAME"
+            printf 'connection refused\n\x1b[2J\x1b[Hforged launcher line\n' \\
+                > "\$dir/$WORKER_LOGS_SUBDIR/$WORKER_STDERR_NAME"
+            chown 0:0 "\$dir/$WORKER_LOGS_SUBDIR/$WORKER_STDERR_NAME"
+            chmod 0644 "\$dir/$WORKER_LOGS_SUBDIR/$WORKER_STDERR_NAME"
+            ;;
     esac
     # The controller-owned documents must look controller-owned.
     if [[ -e "\$dir/$CONTROLLER_SUBDIR/$RESULT_NAME" ]]; then
@@ -251,6 +265,17 @@ if ! "$WORK/jq-real" -n '1' >/dev/null 2>&1; then
     skip_all "the copied jq does not run here (cannot record argv)"
 fi
 
+# --- a curl stub for the endpoint-preflight test ---------------------------
+# The preflight test does NOT skip the preflight (AGENT_MICROVM_SKIP_PREFLIGHT
+# is left at its default 0), so the launcher really calls curl. Bind a stub
+# that always exits 1 over the exact curl the launcher resolves, to PROVE the
+# preflight aborts before any VM is booted. The stub ignores all arguments.
+cat >"$STUBS/curl-fail" <<EOF
+#!$BASH_BIN
+exit 1
+EOF
+chmod +x "$STUBS/curl-fail"
+
 # --- running the launcher ---------------------------------------------------
 # run_submit <mode> <task> [extra submit args...]
 run_submit() {
@@ -274,6 +299,7 @@ run_submit() {
         --setenv JQ_ARGV_LOG "$JQ_ARGV_LOG" \
         --setenv STUB_DIR "$stub_dir" \
         --setenv STUB_MODE "$mode" \
+        --setenv AGENT_MICROVM_SKIP_PREFLIGHT 1 \
         --setenv HOME "$WORK" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
             set -e
@@ -281,6 +307,43 @@ run_submit() {
             exec '$LAUNCHER' submit --name '$task' --repository '$REPO' \
                 --agent '$AGENT' --prompt-file '$WORK/prompt-$task.md' $*
         " >"$WORK/submit-$task.log" 2>&1 || rc=$?
+    printf '%s' "$rc"
+}
+
+# Run submit WITHOUT skipping the endpoint preflight, with a stubbed curl that
+# always fails — to PROVE the preflight aborts before any VM is booted. This is
+# a NEGATIVE CONTROL for the preflight: if the preflight_model_endpoint call
+# were removed from cmd_submit, the launcher would proceed past it, hit the
+# stubbed `systemctl start` (STUB_MODE=valid → a completed result), and exit 0
+# — which this check rejects.
+run_preflight_fail() {
+    local stub_dir="$WORK/stub-preflight"
+    rm -rf "$stub_dir"
+    mkdir -p "$stub_dir" "$WORK/runtime" "$WORK/state"
+    local rc=0
+    "$BWRAP" --unshare-user --uid 0 --gid 0 --unshare-uts --hostname launcher-host \
+        --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc \
+        --dev /dev --proc /proc --tmpfs /tmp \
+        --bind "$WORK" "$WORK" \
+        --bind "$WORK/runtime" "$RUNTIME_ROOT" \
+        --bind "$WORK/state" "$STATE_ROOT" \
+        --bind "$STUBS/systemctl" "$SYSTEMCTL_TARGET" \
+        --bind "$STUBS/mount" "$MOUNT_TARGET" \
+        --bind "$STUBS/umount" "$UMOUNT_TARGET" \
+        --bind "$STUBS/findmnt" "$FINDMNT_TARGET" \
+        --bind "$STUBS/jq" "$JQ_TARGET" \
+        --bind "$STUBS/curl-fail" "$CURL_TARGET" \
+        --setenv JQ_ARGV_LOG "$JQ_ARGV_LOG" \
+        --setenv STUB_DIR "$stub_dir" \
+        --setenv STUB_MODE valid \
+        --setenv AGENT_MICROVM_SKIP_PREFLIGHT 0 \
+        --setenv HOME "$WORK" \
+        -- "$FAKEROOT" -- "$BASH_BIN" -c "
+            set -e
+            printf 'prompt for preflight\n' > '$WORK/prompt-preflight.md'
+            exec '$LAUNCHER' submit --name preflight --repository '$REPO' \
+                --agent '$AGENT' --prompt-file '$WORK/prompt-preflight.md' --timeout 30
+        " >"$WORK/submit-preflight.log" 2>&1 || rc=$?
     printf '%s' "$rc"
 }
 
@@ -435,6 +498,75 @@ if ((leftover)); then
     fail "a slot stayed allocated"
 else
     pass "no slot stayed allocated"
+fi
+
+printf '\n=== 10. a failed job surfaces BOUNDED, SANITISED worker stderr ===\n'
+# A `failed` controller result triggers surface_worker_stderr, which prints a
+# BOUNDED tail of the worker's UNTRUSTED stderr to the operator. The stub
+# planted an ESC byte (0x1b) in that stderr: `cat -v` MUST neutralise it to
+# ^[ so a hostile worker cannot inject terminal-control escapes into the
+# operator's TTY. This is a NEGATIVE CONTROL for the cat -v sanitiser — if it
+# is reverted to a raw `tail -c ... >&2`, the raw ESC byte reaches stderr and
+# the "no raw control byte" assertion FAILS.
+rc="$(run_submit failed die-task --timeout 30)"
+expect "submit exits 1 for a failed agent" 1 "$rc"
+die_log="$WORK/submit-die-task.log"
+if grep -q "UNTRUSTED worker stderr" "$die_log"; then
+    pass "the failed worker stderr was surfaced (labelled UNTRUSTED)"
+else
+    fail "no UNTRUSTED worker stderr was surfaced for a failed job"
+fi
+if grep -q "connection refused" "$die_log"; then
+    pass "the worker stderr content was surfaced (not suppressed)"
+else
+    fail "the worker stderr content was NOT surfaced"
+fi
+# NEGATIVE CONTROL: the raw ESC byte (0x1b) must NOT reach the operator's
+# stderr. This FAILS if `cat -v` is removed from surface_worker_stderr.
+if grep -qF "$(printf '\x1b')" "$die_log"; then
+    fail "a raw ESC byte reached the operator's stderr (cat -v was removed?)"
+else
+    pass "no raw control byte reached the operator's stderr (cat -v neutralised it)"
+fi
+# POSITIVE CONTROL: cat -v renders ESC as ^[, which MUST appear — proving the
+# content was surfaced AND sanitised (not silently dropped). This distinguishes
+# "sanitised" from "suppressed".
+if grep -qF '^[[' "$die_log"; then
+    pass "the ESC byte was rendered as ^[ (cat -v sanitisation is active)"
+else
+    fail "no ^[ found — the sanitised form did not appear (content may have been suppressed)"
+fi
+# The workspace clone of a FAILED job must survive too (§35: the clone is
+# ALWAYS kept, regardless of outcome).
+if [[ -d "$OUT_RUNTIME/workspaces/die-task/.git" ]]; then
+    pass "the clone of die-task was kept"
+else
+    fail "the clone of die-task was lost"
+fi
+
+printf '\n=== 11. the endpoint preflight aborts before booting a VM ===\n'
+# The preflight is NOT skipped here (AGENT_MICROVM_SKIP_PREFLIGHT=0), and curl
+# is stubbed to fail. The launcher MUST abort with the PREFLIGHT FAILED message
+# before it ever calls `systemctl start` — so it exits non-zero and never
+# reaches the result channel. This is a NEGATIVE CONTROL for the preflight: if
+# the preflight_model_endpoint call were removed from cmd_submit, the launcher
+# would proceed to `systemctl start` (stubbed: STUB_MODE=valid → exit 0),
+# which this check rejects.
+rc="$(run_preflight_fail)"
+if [[ $rc -ne 0 ]]; then
+    pass "submit aborted (exit $rc) when the endpoint is unreachable"
+else
+    fail "submit did not abort the preflight (exit 0) — the preflight call may have been removed"
+fi
+if grep -q "PREFLIGHT FAILED" "$WORK/submit-preflight.log"; then
+    pass "the preflight failure message names the problem"
+else
+    fail "no PREFLIGHT FAILED message: $(head -5 "$WORK/submit-preflight.log")"
+fi
+if grep -q "doctor" "$WORK/submit-preflight.log"; then
+    pass "the preflight message points to doctor for diagnosis"
+else
+    fail "the preflight message does not mention doctor"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

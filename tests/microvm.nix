@@ -428,6 +428,26 @@ in
           message = "agent-litellm-proxy should BindToDevice the bridge ${microvmOpts.bridgeName}";
         }
         {
+          # BOOT ORDERING (the fix for the ~2s worker death): the bridge-only
+          # socket uses `BindToDevice` (SO_BINDTODEVICE), which fails with
+          # ENODEV if the bridge device does not exist at bind time. The socket
+          # is `wantedBy sockets.target` (early), but the bridge is created by
+          # `<bridge>-netdev.service` (`wantedBy network.target`, later), so
+          # without an explicit `after`/`requires` the socket failed once at
+          # boot and never retried — the bridge endpoint had no listener and
+          # every guest -> LiteLLM connection was refused. Assert the ORDERING
+          # property (After= + requires= the bridge netdev), not a substring,
+          # so a future edit that drops either half fails this check.
+          assertion =
+            builtins.elem "${microvmOpts.bridgeName}-netdev.service" (
+              enabledCfg.systemd.sockets.agent-litellm-proxy.after or [ ]
+            )
+            && builtins.elem "${microvmOpts.bridgeName}-netdev.service" (
+              enabledCfg.systemd.sockets.agent-litellm-proxy.requires or [ ]
+            );
+          message = "agent-litellm-proxy.socket must be ordered after (after= + requires=) ${microvmOpts.bridgeName}-netdev.service so SO_BINDTODEVICE succeeds at boot";
+        }
+        {
           # Terminal fail-closed FORWARD drop (§13/§14).
           assertion = lib.hasInfix "AGENT_MICROVM_FORWARD -j DROP" fw;
           message = "firewall missing terminal 'AGENT_MICROVM_FORWARD -j DROP'";
@@ -484,6 +504,31 @@ in
             in
             hostKeys != [ ] && guestKeys == hostKeys;
           message = "passwordlessControl should authorise the host operator's public keys on the guest agent user";
+        }
+        {
+          # BATCH WORKER ENDPOINT ENV (the fix for the ~2s worker death):
+          # `agent-job-worker@<agent>.service` is a NON-LOGIN systemd oneshot,
+          # so it does NOT source /etc/set-environment (where NixOS puts
+          # `environment.variables`). Without an explicit `environment=` on the
+          # unit the worker inherited only PATH and had no model endpoint —
+          # pi/codex/hermes batch jobs died within seconds. Assert the worker
+          # unit's OWN environment carries the loopback LiteLLM endpoint (and
+          # the registry's per-agent plumbing, e.g. hermes' OPENROUTER_BASE_URL),
+          # matching what the login shell gets. `guest0Cfg` is the reference
+          # guest; the template is identical for every slot.
+          assertion =
+            let
+              we = guest0Cfg.systemd.services."agent-job-worker@".environment or { };
+              want = "http://127.0.0.1:${port}/v1";
+            in
+            we ? OPENAI_BASE_URL
+            && we.OPENAI_BASE_URL == want
+            && we ? OPENROUTER_BASE_URL
+            && we.OPENROUTER_BASE_URL == want
+            && we ? ANTHROPIC_BASE_URL
+            && we.ANTHROPIC_BASE_URL == "http://127.0.0.1:${port}"
+            && we ? PATH;
+          message = "agent-job-worker@.environment must carry the model-endpoint vars (OPENAI/OPENROUTER/ANTHROPIC_BASE_URL) the non-login batch worker cannot get from a login profile";
         }
       ]
       # --- per-TAP L2 isolation (ticket 3 A) -------------------------------
@@ -589,6 +634,18 @@ in
         }
       ] "class names must match";
       message = "an invalid class name must be rejected";
+    }
+    {
+      # The litellm-capable profiles (proxy-only/package-access/internet)
+      # assume the host's `services.litellm` backend exists: the guest-side
+      # forwarder hands connections to 127.0.0.1:<litellmPort>, which only
+      # exists when litellm is enabled. A host that enables a litellm-capable
+      # sandbox WITHOUT the backend must fail at EVAL (not 2s into every
+      # batch job). `mkForce` wins over the host's own `enable = true`.
+      assertion = rejectsWith [
+        { services.litellm.enable = lib.mkForce false; }
+      ] "lets guests reach the model API";
+      message = "a litellm-capable profile with services.litellm.enable=false must be rejected at eval";
     }
     {
       # Setting BOTH spellings would silently drop one of them.
@@ -1923,12 +1980,17 @@ in
         # RECORDER over it to PROVE, by execution, that the allocation token
         # never lands in a world-readable /proc/<pid>/cmdline.
         JQ_TARGET = "${pkgs.jq}/bin/jq";
+        # The exact `curl` the launcher resolves (from its runtimeInputs): the
+        # harness binds a stub over it for the endpoint-preflight test, so the
+        # launcher under test stays byte-identical to the installed one.
+        CURL_TARGET = "${pkgs.curl}/bin/curl";
         RUNTIME_ROOT = microvmOpts.runtimeRoot;
         STATE_ROOT = microvmOpts.stateRoot;
         INPUT_SUBDIR = jobs.inputSubdir;
         CONTROLLER_SUBDIR = jobs.controllerSubdir;
         WORKER_SUBDIR = jobs.workerSubdir;
         WORKER_LOGS_SUBDIR = jobs.workerLogsSubdir;
+        WORKER_STDERR_NAME = jobs.workerStderrName;
         SPEC_NAME = jobs.specName;
         PROMPT_NAME = jobs.promptName;
         RESULT_NAME = jobs.resultName;
