@@ -60,7 +60,7 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section forgery
 | Section | Last executed on real KVM |
 | --- | --- |
 | `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED** (no KVM host was available when they were written) |
-| `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties are the two eval/build checks `microvm-batch-result-integrity` and `microvm-batch-controller-smoke` (see below). |
+| `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties are the three eval/build checks `microvm-batch-result-integrity`, `microvm-batch-controller-smoke` and `microvm-batch-launcher-submit` (see below). |
 
 This table is deliberately pessimistic: update it only with a pasted log.
 
@@ -155,7 +155,15 @@ What the eval/build tier already executes for the same properties (run by
   agent, deadline, token-bound cancellation, stale cancellation, six rejected
   specs, and a broken trust boundary — then feeds the documents it produced to
   the host verifier, which must accept them for this allocation and reject them
-  for another.
+  for another;
+- `microvm-batch-launcher-submit` runs the real **host** `agent-microvm submit`
+  (33 assertions) with `systemctl`/`mount`/`umount`/`findmnt` stubbed, where the
+  `systemctl start microvm@<slot>` stub plays the guest: it records the effective
+  ownership/modes of the job share the launcher created (input `0755`, spec
+  `0400`, controller `0700`, worker agent-owned) and plants a genuine, a
+  foreign-token, a foreign-slot, a v1, a malformed or a worker-only "result".
+  Only the genuine one may yield exit 0; everything else must be exit 70, and the
+  clone must survive every case.
 
 Both prove the *validators, the protocol and the layout*, not the guest kernel's
 enforcement or systemd's cgroup kill — which is exactly what this section adds.

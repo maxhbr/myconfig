@@ -1778,6 +1778,78 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # (l4) HOST SUBMIT PATH (ticket 7): actually RUN `agent-microvm submit`.     #
+  #      `bwrap` (tmpfs root) + `fakeroot` give the launcher the absolute      #
+  #      roots and the uid 0 it needs; `systemctl`, `mount`, `umount` and      #
+  #      `findmnt` are stubbed by bind-mounting over the exact store paths it   #
+  #      resolves, and the `systemctl start microvm@<slot>` stub PLAYS THE      #
+  #      GUEST: it records the effective ownership/modes of the job share the   #
+  #      launcher just created and plants the scenario's "result".             #
+  #                                                                          #
+  #      So this really exercises: the layout (input 0755/spec 0400/controller  #
+  #      0700/worker agent-owned), the 256-bit allocation token in the spec,    #
+  #      and that ONLY a controller-authenticated result for the ACTIVE         #
+  #      allocation is accepted — a foreign token, a foreign slot, a v1         #
+  #      document, a malformed one, worker-written fakes and silence all become #
+  #      exit 70. It SKIPS honestly if the sandbox forbids user namespaces.     #
+  # ---------------------------------------------------------------------- #
+  microvm-batch-launcher-submit =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+    in
+    pkgs.runCommand "microvm-batch-launcher-submit"
+      {
+        nativeBuildInputs = [
+          pkgs.bubblewrap
+          pkgs.fakeroot
+          pkgs.jq
+          pkgs.git
+          pkgs.coreutils
+        ];
+        harness = ./microvm-batch-launcher-submit.sh;
+        LAUNCHER = "${hostLauncher}/bin/agent-microvm";
+        BWRAP = lib.getExe pkgs.bubblewrap;
+        FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
+        BASH_BIN = "${pkgs.bash}/bin/bash";
+        # The EXACT binaries the launcher resolves from its own runtimeInputs;
+        # the harness bind-mounts its stubs over these, so the launcher under
+        # test stays byte-identical to the installed one.
+        SYSTEMCTL_TARGET = "${pkgs.systemd}/bin/systemctl";
+        # `util-linux`'s bin/mount and bin/umount are SYMLINKS into its
+        # separate `mount` output; bwrap resolves the destination, so bind over
+        # the real files.
+        MOUNT_TARGET = "${pkgs.util-linux.mount}/bin/mount";
+        UMOUNT_TARGET = "${pkgs.util-linux.mount}/bin/umount";
+        FINDMNT_TARGET = "${pkgs.util-linux.bin}/bin/findmnt";
+        RUNTIME_ROOT = microvmOpts.runtimeRoot;
+        STATE_ROOT = microvmOpts.stateRoot;
+        INPUT_SUBDIR = jobs.inputSubdir;
+        CONTROLLER_SUBDIR = jobs.controllerSubdir;
+        WORKER_SUBDIR = jobs.workerSubdir;
+        SPEC_NAME = jobs.specName;
+        PROMPT_NAME = jobs.promptName;
+        RESULT_NAME = jobs.resultName;
+        SPEC_VERSION = toString jobs.specVersion;
+        CONTROLLER_VERSION = toString jobs.controllerVersion;
+        WORKER_UID = toString jobs.workerUid;
+        AGENT = lib.head agentRegistry.batchNames;
+      }
+      ''
+        mkdir -p work && cd work
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- host submit harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "microvm-batch-launcher-submit"
+          echo "  launcher: $LAUNCHER"
+          echo
+          cat report.txt
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (k) NETWORK PROFILES (ticket 3 C): render all four profiles and assert   #
   #     the rules each one must and must NOT contain, plus the guest-side    #
   #     configuration derived from the SAME decision (LiteLLM forwarder,     #
