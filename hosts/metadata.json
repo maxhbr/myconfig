@@ -165,7 +165,7 @@
     },
     "futro": {
       "network": "home",
-      "ip4": "192.168.1.171",
+      "ip4": "192.168.1.188",
       "pubkeys": {
         "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBtnZsQE3liTMFv4FGxMAAs/DR47HOtKsgycQATvYPDw root@futro",
         "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCM4LOnjCjrsLH4+yOX2M7I7voWh60d9qOy2fZXIna3hjjQsIin8CJjb4kSGUOH/g31H6vF3VgQXJvtfQh/iQwFCjzb+IFZj2+Ucr0k2C0J5pA25iVpSH90AowHABZLlwE0rmnfO0erFq010+yUg/BSzWtjA0TyvYAm5Yx0ZIDbxNYVBF3SJXAxptfPP7kn3f2B65Qkg9x04zDt1BZKjDhnLdMVTkD7sMUq58oR+Tb3VZXyf5UxgkaXADe6k5xK4DnN4mFtgR88O3z8ZPYU4dMy9GPm3t1PYRhjfjn9ecRZtaz9NHEvvASSkINETYzYyZ52XtwHN3X30rBQ5bdxNxWXtKWBxTLyjjyNALBRjZHSmZgieatVaZd3e7hrxvyOamGlGElBWJ4hpvgK1Z9EHjYqZm24ClZoeXLijEErUV4g2oMvpq2LBLHaY/wQsnkdh34KrZ+tc/Oy9CQM3a2fTHpPCvp+2sZBXtm+8oJmeTtKXrIaYuTrXee7ovaO1mcDMz06ON9t4dKNEqFpJAxACiN+q0UGPmm7z+R5PDJlL4fZWVtjMEq1l7TLZV+KVz9MD6dAe4glLUBT8ZgBLiEjeQO3MGh7zz9+H6+1A+vFASvWTKu4kV4igk7C6ZsKot1g7M6rl0vHqOktSSjhSEp4rgsqirdfPLUSV72T2DZltTGbBw== root@futro"
