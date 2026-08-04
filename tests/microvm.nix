@@ -1714,6 +1714,70 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # (l3) BATCH CONTROLLER SMOKE TEST (ticket 7): actually RUN the trusted     #
+  #      guest-side controller. `bwrap` supplies the paths it hard-codes and   #
+  #      the guest hostname, `systemctl` is stubbed by bind-mounting a script  #
+  #      over the exact store path the controller resolves, and `fakeroot`     #
+  #      gives the fixture the real ownership split (a single-uid namespace    #
+  #      cannot express two owners). Then the HOST verifier is run against     #
+  #      the documents the controller produced.                               #
+  #                                                                          #
+  #      This is NOT a KVM test: it proves that host and guest agree on the    #
+  #      protocol and that the controller's validation / deadline /            #
+  #      cancellation / result-writing logic works, not that the guest kernel  #
+  #      denies the worker access (see runtime-validation.sh --section        #
+  #      forgery). It SKIPS honestly if the sandbox forbids user namespaces.   #
+  # ---------------------------------------------------------------------- #
+  microvm-batch-controller-smoke =
+    pkgs.runCommand "microvm-batch-controller-smoke"
+      {
+        nativeBuildInputs = [
+          pkgs.bubblewrap
+          pkgs.fakeroot
+          pkgs.jq
+          pkgs.coreutils
+        ];
+        harness = ./microvm-batch-controller-smoke.sh;
+        BWRAP = lib.getExe pkgs.bubblewrap;
+        FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
+        BASH_BIN = "${pkgs.bash}/bin/bash";
+        CONTROLLER = lib.getExe jobs.controller;
+        VERIFIER = lib.getExe jobs.resultVerifier;
+        # The exact `systemctl` the controller resolves from its own PATH; the
+        # harness bind-mounts its stub over this path, so the script under test
+        # stays byte-identical to the one in the guest closure.
+        SYSTEMCTL_TARGET = "${pkgs.systemd}/bin/systemctl";
+        SPEC_VERSION = toString jobs.specVersion;
+        INPUT_SUBDIR = jobs.inputSubdir;
+        CONTROLLER_SUBDIR = jobs.controllerSubdir;
+        WORKER_SUBDIR = jobs.workerSubdir;
+        SPEC_NAME = jobs.specName;
+        PROMPT_NAME = jobs.promptName;
+        CANCEL_NAME = jobs.cancelName;
+        RESULT_NAME = jobs.resultName;
+        STATE_NAME = jobs.controllerStateName;
+        WORKER_UID = toString jobs.workerUid;
+        SLOT = refSlot.name;
+        TASK = "smoke-task";
+        AGENT = lib.head agentRegistry.batchNames;
+      }
+      ''
+        mkdir -p work && cd work
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- batch controller smoke test FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "microvm-batch-controller-smoke"
+          echo "  controller: $CONTROLLER"
+          echo "  verifier:   $VERIFIER"
+          echo
+          cat report.txt
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (k) NETWORK PROFILES (ticket 3 C): render all four profiles and assert   #
   #     the rules each one must and must NOT contain, plus the guest-side    #
   #     configuration derived from the SAME decision (LiteLLM forwarder,     #

@@ -582,17 +582,11 @@ let
       jq -e . "$SPEC" >/dev/null 2>&1 || infra_fail "spec is not valid JSON"
       jq -e 'type == "object"' "$SPEC" >/dev/null 2>&1 || infra_fail "spec is not a JSON object"
 
-      # Strict: no unknown fields. This also subsumes the older explicit
-      # "spec must not contain an executable path" guard for
-      # command/exec/executable, which stays below as a NAMED rejection so the
-      # intent is greppable and testable.
-      if jq -e 'has("command") or has("exec") or has("executable")' "$SPEC" >/dev/null; then
-          infra_fail "spec must not contain an executable path"
-      fi
-      unknown="$(jq -r --argjson allowed "$SPEC_KEYS" \
-          '[keys[] | select(. as $k | $allowed | index($k) | not)] | join(",")' "$SPEC")"
-      [[ -z "$unknown" ]] || infra_fail "spec carries unknown field(s): $unknown"
-
+      # --- (b1) IDENTITY first ----------------------------------------------
+      # Everything the host needs to attribute a result (and therefore to
+      # believe a reported infrastructure error at all) is parsed before any
+      # other check, so a rejection further down still lands in a result
+      # document the host can match to this allocation.
       version="$(jq -r '.version // empty' "$SPEC")"
       [[ "$version" == "$SPEC_VERSION" ]] \
           || infra_fail "unsupported spec version '$version' (expected $SPEC_VERSION)"
@@ -625,6 +619,18 @@ let
               ;;
       esac
       worker_unit="agent-job-worker@$agent.service"
+
+      # --- (b2) the rest of the spec ----------------------------------------
+      # Strict: no unknown fields. This also subsumes the older explicit
+      # "spec must not contain an executable path" guard for
+      # command/exec/executable, which stays as a NAMED rejection so the intent
+      # is greppable and testable.
+      if jq -e 'has("command") or has("exec") or has("executable")' "$SPEC" >/dev/null; then
+          infra_fail "spec must not contain an executable path"
+      fi
+      unknown="$(jq -r --argjson allowed "$SPEC_KEYS" \
+          '[keys[] | select(. as $k | $allowed | index($k) | not)] | join(",")' "$SPEC")"
+      [[ -z "$unknown" ]] || infra_fail "spec carries unknown field(s): $unknown"
 
       workspace="$(jq -r '.workspace // empty' "$SPEC")"
       [[ "$workspace" == "$WORKSPACE" ]] \

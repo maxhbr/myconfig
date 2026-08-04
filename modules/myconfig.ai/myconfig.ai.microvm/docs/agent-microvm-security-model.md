@@ -15,8 +15,10 @@ only *measured* once the [runtime suite](./agent-microvm-runtime-validation.md)
 is run on real KVM. The batch result channel additionally has *executed* checks
 that are not runtime proofs: `microvm-batch-result-integrity` really runs the
 host result verifier and the guest-side permission assertions against forged,
-stale and malformed fixtures — inside a build sandbox, so it validates the
-layout and the validators, not the guest kernel's enforcement.
+stale and malformed fixtures, and `microvm-batch-controller-smoke` really runs
+the guest controller (with `systemctl` stubbed) and feeds its output to the host
+verifier. Both run inside a build sandbox, so they validate the layout, the
+validators and the host/guest protocol — not the guest kernel's enforcement.
 
 ## Trusted vs untrusted
 
@@ -187,8 +189,10 @@ host-side modes are what the guest sees.
   the writable-path set it would need (D-Bus, systemd runtime) cannot be validated
   without booting on real KVM.
 - **The result channel's kernel-level enforcement is not yet measured.** The
-  layout, the validators and the unit properties are covered by
-  `nix flake check` (`microvm-batch-result-integrity`, 56 executed fixtures), but
+  layout, the validators, the controller's own logic and the unit properties are
+  covered by `nix flake check` (`microvm-batch-result-integrity`, 56 executed
+  fixtures; `microvm-batch-controller-smoke`, 33 executed controller
+  assertions), but
   "a uid-1000 worker really cannot write `controller/result.json`" is only
   observable in a booted guest — see the `forgery` section of the
   [runtime suite](./agent-microvm-runtime-validation.md), currently recorded as

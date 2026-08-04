@@ -60,7 +60,7 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section forgery
 | Section | Last executed on real KVM |
 | --- | --- |
 | `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED** (no KVM host was available when they were written) |
-| `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties is the eval/build check `microvm-batch-result-integrity` (see below). |
+| `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties are the two eval/build checks `microvm-batch-result-integrity` and `microvm-batch-controller-smoke` (see below). |
 
 This table is deliberately pessimistic: update it only with a pasted log.
 
@@ -145,11 +145,20 @@ the guest kernel that enforces it over virtiofs.
 | `cancel` records `cancelled`; replaying that cancellation request against a **new** allocation of the same slot does nothing (token mismatch) |
 
 What the eval/build tier already executes for the same properties (run by
-`nix flake check`, no KVM needed): `microvm-batch-result-integrity` runs the real
-host verifier and the real guest-side permission assertions against 56 forged /
-stale / malformed / symlinked / world-writable fixtures under `fakeroot`. That
-proves the *validators and the layout*, not the kernel's enforcement — which is
-exactly what this section adds.
+`nix flake check`, no KVM needed):
+
+- `microvm-batch-result-integrity` runs the real host verifier and the real
+  guest-side permission assertions against 56 forged / stale / malformed /
+  symlinked / world-writable fixtures under `fakeroot`;
+- `microvm-batch-controller-smoke` runs the real, unmodified guest **controller**
+  (33 assertions) inside `bwrap` with a stubbed `systemctl`: healthy job, failing
+  agent, deadline, token-bound cancellation, stale cancellation, six rejected
+  specs, and a broken trust boundary — then feeds the documents it produced to
+  the host verifier, which must accept them for this allocation and reject them
+  for another.
+
+Both prove the *validators, the protocol and the layout*, not the guest kernel's
+enforcement or systemd's cgroup kill — which is exactly what this section adds.
 
 ### `malrepo` — hostile repository fixture
 
