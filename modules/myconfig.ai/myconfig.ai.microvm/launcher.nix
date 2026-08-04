@@ -2551,8 +2551,12 @@ let
           else
               fail "agent-litellm-proxy.socket is NOT active (it needs $BRIDGE-netdev.service; try: systemctl restart agent-litellm-proxy.socket)"
           fi
+          # Match the unit name LITERALLY: `.` is a regex wildcard in grep,
+          # and a bare "$BRIDGE-netdev.service" would also match a (hypothetical)
+          # `agentbr0-netdevXservice`. Escape every `.` — the same hardening the
+          # gateway-address grep below uses — so the match is exact.
           if systemctl show -p After --value agent-litellm-proxy.socket 2>/dev/null \
-                  | grep -qw "$BRIDGE-netdev.service"; then
+                  | grep -qw -- "''${BRIDGE//./\\.}-netdev\\.service"; then
               ok "socket is ordered after $BRIDGE-netdev.service"
           else
               fail "socket is NOT ordered after $BRIDGE-netdev.service (a boot race leaves it with no listener)"
