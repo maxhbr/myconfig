@@ -1773,14 +1773,14 @@ for s in "${PLAN[@]}"; do
     if [[ $ENDPOINT_DOWN == 1 ]] && is_endpoint_section "$s"; then
         continue
     fi
-    local_before_pass=$PASS local_before_fail=$FAIL local_before_skip=$SKIP
+    before_pass=$PASS before_fail=$FAIL before_skip=$SKIP
     rc=0
     "section_$s" || rc=$?
     if ((rc != 0)); then
         fail "section '$s' returned non-zero (rc $rc) — its checks may be incomplete; see the lines above"
     fi
     RAN_SECTIONS+=("$s")
-    info "section $s: $((PASS - local_before_pass)) passed, $((FAIL - local_before_fail)) failed, $((SKIP - local_before_skip)) skipped"
+    info "section $s: $((PASS - before_pass)) passed, $((FAIL - before_fail)) failed, $((SKIP - before_skip)) skipped"
 done
 
 # --- final summary ---------------------------------------------------------
