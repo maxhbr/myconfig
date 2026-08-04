@@ -163,13 +163,38 @@ let
       # the `guestAgentUid`/`guestAgentGid` options guest.nix uses.
       readonly GUEST_AGENT_UID=${toString cfg.guestAgentUid}
       readonly GUEST_AGENT_GID=${toString cfg.guestAgentGid}
-      # ---- batch jobs (ticket 4) -----------------------------------------
+      # ---- batch jobs (ticket 4; result channel hardened in ticket 7) ------
+      # The job share is split into THREE areas with different owners, and that
+      # split IS the security boundary (see job.nix):
+      #   input/       root:root — the immutable spec (0400, it carries the
+      #                allocation token) and prompt (0444)
+      #   controller/  root:root 0700 — the guest CONTROLLER's private channel;
+      #                the AUTHORITATIVE result lives here and the untrusted
+      #                guest agent can neither write nor read it
+      #   worker/      the guest agent — untrusted logs/artifacts, never read
+      #                as a result
       readonly JOBS_ROOT=${lib.escapeShellArg agentJobs.root}
       readonly RESULTS_DIR=${lib.escapeShellArg agentJobs.resultsDir}
+      readonly JOB_INPUT_SUBDIR=${lib.escapeShellArg agentJobs.inputSubdir}
+      readonly JOB_CONTROLLER_SUBDIR=${lib.escapeShellArg agentJobs.controllerSubdir}
+      readonly JOB_WORKER_SUBDIR=${lib.escapeShellArg agentJobs.workerSubdir}
       readonly JOB_SPEC_NAME=${lib.escapeShellArg agentJobs.specName}
       readonly JOB_PROMPT_NAME=${lib.escapeShellArg agentJobs.promptName}
+      readonly JOB_CANCEL_NAME=${lib.escapeShellArg agentJobs.cancelName}
       readonly JOB_RESULT_NAME=${lib.escapeShellArg agentJobs.resultName}
+      readonly JOB_CTRL_STATE_NAME=${lib.escapeShellArg agentJobs.controllerStateName}
+      readonly JOB_SPEC_MODE=${lib.escapeShellArg agentJobs.specMode}
+      readonly JOB_PROMPT_MODE=${lib.escapeShellArg agentJobs.promptMode}
+      readonly JOB_CANCEL_MODE=${lib.escapeShellArg agentJobs.cancelMode}
+      readonly JOB_INPUT_DIR_MODE=${lib.escapeShellArg agentJobs.inputDirMode}
+      readonly JOB_CONTROLLER_DIR_MODE=${lib.escapeShellArg agentJobs.controllerDirMode}
+      readonly JOB_WORKER_DIR_MODE=${lib.escapeShellArg agentJobs.workerDirMode}
       readonly JOB_SPEC_VERSION=${toString agentJobs.specVersion}
+      readonly JOB_CONTROLLER_VERSION=${toString agentJobs.controllerVersion}
+      # THE one result parser (job.nix). Every read of a guest-written document
+      # goes through it, so there is exactly one place that decides whether a
+      # result belongs to the active allocation.
+      readonly RESULT_VERIFIER=${lib.getExe agentJobs.resultVerifier}
       # Guest-side prompt path, as it must appear in spec.json (the guest
       # validates it by EXACT match against its own mount point).
       readonly GUEST_PROMPT=${lib.escapeShellArg agentJobs.guestPrompt}
@@ -177,6 +202,9 @@ let
       readonly JOB_DEFAULT_TIMEOUT=${toString cfg.job.defaultTimeoutSeconds}
       readonly JOB_MAX_TIMEOUT=${toString cfg.job.maxTimeoutSeconds}
       readonly JOB_GRACE=${toString cfg.job.gracePeriodSeconds}
+      # Bounded window `cancel` waits for the guest controller's own
+      # `cancelled` result before it force-stops the VM.
+      readonly CANCEL_WAIT=20
       # ---- task-scoped agent state (ticket 5 B) --------------------------
       readonly STATE_TASKS_ROOT=${lib.escapeShellArg agentState.tasksRoot}
       readonly STATE_SLOTS_ROOT=${lib.escapeShellArg agentState.slotsRoot}
@@ -310,9 +338,17 @@ let
       session_file() { printf '%s' "$SLOTS_DIR/$1/session.json"; }
       mount_point()  { printf '%s' "$STATE_ROOT/$1/workspace"; }
       job_dir()      { printf '%s' "$JOBS_ROOT/$1"; }
-      job_spec()     { printf '%s' "$JOBS_ROOT/$1/$JOB_SPEC_NAME"; }
-      job_prompt()   { printf '%s' "$JOBS_ROOT/$1/$JOB_PROMPT_NAME"; }
-      job_result()   { printf '%s' "$JOBS_ROOT/$1/out/$JOB_RESULT_NAME"; }
+      job_input_dir()      { printf '%s' "$JOBS_ROOT/$1/$JOB_INPUT_SUBDIR"; }
+      job_controller_dir() { printf '%s' "$JOBS_ROOT/$1/$JOB_CONTROLLER_SUBDIR"; }
+      job_worker_dir()     { printf '%s' "$JOBS_ROOT/$1/$JOB_WORKER_SUBDIR"; }
+      job_spec()     { printf '%s' "$(job_input_dir "$1")/$JOB_SPEC_NAME"; }
+      job_prompt()   { printf '%s' "$(job_input_dir "$1")/$JOB_PROMPT_NAME"; }
+      job_cancel()   { printf '%s' "$(job_input_dir "$1")/$JOB_CANCEL_NAME"; }
+      # THE authoritative result path: inside the controller-only directory.
+      # Nothing else is ever read as a result — in particular nothing under
+      # $(job_worker_dir) or /workspace, which the untrusted agent can write.
+      job_result()   { printf '%s' "$(job_controller_dir "$1")/$JOB_RESULT_NAME"; }
+      job_ctrl_state() { printf '%s' "$(job_controller_dir "$1")/$JOB_CTRL_STATE_NAME"; }
 
       # ---- allocation-marker helpers (§21 + ticket 4 ownership) ----------
       # A marker records WHO owns the slot: the task, the launcher pid together
@@ -327,7 +363,13 @@ let
           jq -r --arg f "$field" '.[$f] // ""' "$f" 2>/dev/null || return 1
       }
 
-      new_token() { cat /proc/sys/kernel/random/uuid; }
+      # 256 bits of kernel randomness, hex-encoded. This is the ALLOCATION
+      # TOKEN: it identifies one allocation of one slot, is recorded in the
+      # session marker, handed to the guest in the (root-only) job spec, and
+      # must reappear in the guest's result. It is what makes a stale or
+      # cross-allocation result — and a stale cancellation — harmless. Never
+      # logged.
+      new_token() { od -An -tx1 -N32 /dev/urandom | tr -d ' \n'; }
 
       # Start time (clock ticks since boot) of a pid, from /proc/<pid>/stat.
       # The comm field can contain spaces and parentheses, so cut everything up
@@ -690,55 +732,205 @@ let
           done
       }
 
-      # ---- batch-job data (ticket 4) -------------------------------------
-      # Writes the versioned spec + the prompt into the slot's job directory
-      # (mounted read-write into the guest at $GUEST_JOB_DIR, but with these
-      # files root-owned 0444 inside a root-owned 0755 dir, so the guest can
-      # only READ them). The prompt is COPIED, never passed as an argument, and
-      # neither file ever enters the Nix store.
+      # ---- batch-job data (ticket 4 / hardened in ticket 7) ----------------
+      # Lays out the slot's job directory and writes the versioned spec + the
+      # prompt into its IMMUTABLE input area. The prompt is COPIED, never passed
+      # as an argument, and neither file ever enters the Nix store.
+      #
+      # The MODES are load-bearing (virtiofsd passes ownership through, so these
+      # are the effective permissions inside the guest):
+      #   input/       root:root 0755  — spec 0400 (it carries the allocation
+      #                token, which the untrusted agent must not learn),
+      #                prompt 0444 (the worker must read it)
+      #   controller/  root:root 0700  — the guest controller's private channel;
+      #                the authoritative result. NOT writable and NOT readable
+      #                by the guest agent, and it cannot be renamed either
+      #                because its parent is root-owned 0755.
+      #   worker/      agent-owned     — untrusted logs/artifacts
       prepare_job() {
-          local slot="$1" task="$2" agent="$3" prompt_src="$4" timeout_s="$5"
-          local dir spec
+          local slot="$1" task="$2" agent="$3" prompt_src="$4" timeout_s="$5" \
+                token="$6" rclass="$7" persist="$8"
+          local dir spec input ctrl worker
           dir="$(job_dir "$slot")"
+          input="$(job_input_dir "$slot")"
+          ctrl="$(job_controller_dir "$slot")"
+          worker="$(job_worker_dir "$slot")"
           spec="$(job_spec "$slot")"
           install -d -m 0755 -o root -g root -- "$dir"
-          # out/ is written by the guest `agent` user (uid/gid 1000, §11).
-          install -d -m 0755 -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$dir/out"
-          # A stale result from an earlier job would be mistaken for this one.
-          rm -f -- "$(job_result "$slot")"
-          install -m 0444 -o root -g root -- "$prompt_src" "$(job_prompt "$slot")" \
-              || die "could not install the prompt file into $dir"
+          install -d -m "$JOB_INPUT_DIR_MODE" -o root -g root -- "$input"
+          install -d -m "$JOB_CONTROLLER_DIR_MODE" -o root -g root -- "$ctrl"
+          install -d -m "$JOB_WORKER_DIR_MODE" \
+              -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$worker"
+          # Fail closed if the controller directory is not what we just asked
+          # for (e.g. pre-existing with wrong ownership): the guest would
+          # otherwise get a result channel the agent can write.
+          local ctrl_owner ctrl_mode
+          ctrl_owner="$(stat -c %u -- "$ctrl")"
+          ctrl_mode="$(stat -c %a -- "$ctrl")"
+          [[ "$ctrl_owner" == "0" && "$ctrl_mode" == "700" ]] \
+              || die "the job controller directory $ctrl is not root:root $JOB_CONTROLLER_DIR_MODE (owner $ctrl_owner, mode $ctrl_mode)"
+          # Nothing of an earlier allocation may survive into this one: a stale
+          # result, controller state, cancellation request or worker log would
+          # otherwise be read as if it belonged to this task. (The allocation
+          # token makes a stale result harmless anyway — this is the second
+          # layer, not the only one.)
+          rm -f -- "$(job_result "$slot")" "$(job_ctrl_state "$slot")" \
+                   "$(job_cancel "$slot")" "$spec" "$spec.tmp"
+          find "$worker" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
+          # Migration (spec v1 -> v2): drop the old guest-writable out/ dir,
+          # which used to be the (forgeable) result channel.
+          rm -rf -- "$dir/out"
+          install -m "$JOB_PROMPT_MODE" -o root -g root -- "$prompt_src" "$(job_prompt "$slot")" \
+              || die "could not install the prompt file into $input"
           jq -n \
               --argjson version "$JOB_SPEC_VERSION" \
-              --arg taskId "$task" --arg agent "$agent" \
+              --arg taskId "$task" --arg allocationToken "$token" \
+              --arg slot "$slot" --arg agent "$agent" \
               --arg workspace "$GUEST_WORKSPACE" --arg promptFile "$GUEST_PROMPT" \
               --argjson timeoutSeconds "$timeout_s" \
-              '{version:$version, taskId:$taskId, agent:$agent,
-                workspace:$workspace, promptFile:$promptFile,
-                timeoutSeconds:$timeoutSeconds}' > "$spec.tmp" \
+              --arg resourceClass "$rclass" \
+              --argjson persistAgentState "$( (( persist )) && echo true || echo false )" \
+              '{version:$version, taskId:$taskId, allocationToken:$allocationToken,
+                slot:$slot, agent:$agent, workspace:$workspace,
+                promptFile:$promptFile, timeoutSeconds:$timeoutSeconds,
+                resourceClass:$resourceClass, persistAgentState:$persistAgentState}' \
+              > "$spec.tmp" \
               || die "could not render the job spec"
-          chmod 0444 -- "$spec.tmp"
+          # 0400 root:root: the guest CONTROLLER reads it, the guest AGENT
+          # cannot — so the allocation token stays out of the untrusted world.
+          chmod "$JOB_SPEC_MODE" -- "$spec.tmp"
           chown root:root -- "$spec.tmp"
-          # Rename last: the guest unit is conditional on spec.json existing, so
-          # it must only appear once it is complete.
+          # Rename last: the guest controller unit is conditional on spec.json
+          # existing, so it must only appear once it is complete.
           mv -f -- "$spec.tmp" "$spec"
       }
 
-      # Removes the runtime job data of a slot (spec, prompt, result). Called on
-      # teardown and before an interactive run, so no slot ever inherits another
-      # task's job. The workspace clone is NEVER touched here (§35).
-      clear_job() {
-          local slot="$1" dir
-          dir="$(job_dir "$slot")"
-          rm -f -- "$dir/$JOB_SPEC_NAME" "$dir/$JOB_SPEC_NAME.tmp" \
-                   "$dir/$JOB_PROMPT_NAME" "$dir/out/$JOB_RESULT_NAME"
+      # Asks the GUEST controller to cancel — bound to the allocation token, so
+      # a request can never affect a slot that has since been re-allocated to a
+      # different task (and a stale request file cannot stop a new job). Written
+      # root-only into the immutable input area, so the untrusted agent can
+      # neither forge nor remove it.
+      request_guest_cancel() {
+          local slot="$1" task="$2" token="$3" f dir tmp
+          f="$(job_cancel "$slot")"
+          dir="$(job_input_dir "$slot")"
+          [[ -d "$dir" ]] || return 0
+          tmp="$(mktemp "$dir/.cancel.XXXXXX")" || return 0
+          if jq -n --argjson version "$JOB_SPEC_VERSION" --arg taskId "$task" \
+              --arg allocationToken "$token" \
+              --arg requestedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              '{version:$version, taskId:$taskId, allocationToken:$allocationToken,
+                requestedAt:$requestedAt}' > "$tmp"; then
+              chmod "$JOB_CANCEL_MODE" -- "$tmp"
+              chown root:root -- "$tmp"
+              mv -f -- "$tmp" "$f"
+          else
+              rm -f -- "$tmp"
+              log "warning: could not write the cancellation request $f"
+          fi
       }
 
-      job_state() {
-          local slot="$1" f
-          f="$(job_result "$slot")"
-          [[ -e "$f" ]] || return 1
-          jq -r '.state // ""' "$f" 2>/dev/null || return 1
+      # Removes the runtime job data of a slot (input, controller channel,
+      # worker output). Called on teardown and before an interactive run, so no
+      # slot ever inherits another task's job. The workspace clone is NEVER
+      # touched here (§35).
+      clear_job() {
+          local slot="$1" dir worker
+          dir="$(job_dir "$slot")"
+          worker="$(job_worker_dir "$slot")"
+          rm -f -- "$(job_spec "$slot")" "$(job_spec "$slot").tmp" \
+                   "$(job_prompt "$slot")" "$(job_cancel "$slot")" \
+                   "$(job_result "$slot")" "$(job_ctrl_state "$slot")"
+          if [[ -d "$worker" ]]; then
+              find "$worker" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
+          fi
+          # Legacy v1 layout, if this slot still has one.
+          rm -rf -- "$dir/out"
+      }
+
+      # ---- reading a guest-written document (ticket 7) ---------------------
+      # The result is UNTRUSTED INPUT even though only the guest controller can
+      # write it: ownership separation is a control, not a proof. Every read
+      # goes through the ONE verifier, which checks that the path is a regular,
+      # root-owned, non-symlink file in a root-owned non-group/other-writable
+      # directory, parses it strictly, and requires the schema version,
+      # controller version, task id, allocation token, slot and agent of the
+      # ACTIVE allocation plus a valid terminal state and exit code.
+      #
+      # Return codes: 0 = valid (VERIFY_JSON is set), 1 = nothing written yet,
+      # 2 = REJECTED (VERIFY_REASON is set) — a protocol/infrastructure error,
+      # never a result.
+      VERIFY_JSON=""
+      VERIFY_REASON=""
+      verify_job_document() {
+          local path="$1" kind="$2" task="$3" token="$4" slot="$5" agent="$6"
+          local out rc=0
+          VERIFY_JSON=""
+          VERIFY_REASON=""
+          # stderr is merged in on purpose: the verifier prints its rejection
+          # reason there and nothing at all when the document is valid.
+          out="$("$RESULT_VERIFIER" --result "$path" --kind "$kind" --task "$task" \
+              --token "$token" --slot "$slot" --agent "$agent" 2>&1)" || rc=$?
+          case "$rc" in
+              0) VERIFY_JSON="$out" ;;
+              1) ;;
+              *) VERIFY_REASON="$out"; rc=2 ;;
+          esac
+          return "$rc"
+      }
+
+      verify_job_result() {
+          local slot="$1" task="$2" token="$3" agent="$4"
+          verify_job_document "$(job_result "$slot")" result "$task" "$token" "$slot" "$agent"
+      }
+
+      # The controller's own PROGRESS phase (never a terminal outcome, and never
+      # a reason to stop waiting). Best-effort: it is only used for events.
+      job_phase() {
+          local slot="$1" task="$2" token="$3" agent="$4"
+          verify_job_document "$(job_ctrl_state "$slot")" state "$task" "$token" "$slot" "$agent" \
+              || return 1
+          jq -r '.phase // ""' <<< "$VERIFY_JSON"
+      }
+
+      # A HOST-generated result record, for the cases where no VALID controller
+      # result exists (no result at all, a rejected one, a dead VM, an operator
+      # cancellation the guest never confirmed). `source` marks it, so an
+      # archived record can never be mistaken for one the guest controller
+      # actually authenticated.
+      host_result_json() {
+          local task="$1" token="$2" slot="$3" agent="$4" state="$5" rc="$6" message="$7"
+          jq -nc \
+              --argjson version "$JOB_SPEC_VERSION" \
+              --argjson controllerVersion "$JOB_CONTROLLER_VERSION" \
+              --arg taskId "$task" --arg allocationToken "$token" \
+              --arg slot "$slot" --arg agent "$agent" --arg state "$state" \
+              --argjson exitCode "$rc" \
+              --arg finishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --argjson timedOut "$( [[ "$state" == "timed-out" ]] && echo true || echo false )" \
+              --arg message "$message" \
+              '{version:$version, controllerVersion:$controllerVersion,
+                taskId:$taskId, allocationToken:$allocationToken, slot:$slot,
+                agent:$agent, state:$state, exitCode:$exitCode,
+                finishedAt:$finishedAt, timedOut:$timedOut, message:$message,
+                source:"host"}'
+      }
+
+      # Archive a result outside every guest share, so `status <task>` still
+      # knows the outcome after the slot was released. Only ever the VALIDATED
+      # controller document (tagged `source:"controller"`) or a host-generated
+      # record — never a raw guest file.
+      archive_result() {
+          local task="$1" json="$2" archived
+          archived="$RESULTS_DIR/$task.json"
+          mkdir -p -- "$RESULTS_DIR"
+          printf '%s\n' "$json" > "$archived.tmp" \
+              && mv -f -- "$archived.tmp" "$archived"
+      }
+
+      archive_controller_result() {
+          local task="$1" json="$2"
+          archive_result "$task" "$(jq -c '. + {source:"controller"}' <<< "$json")"
       }
 
       # ---- task-scoped agent state (ticket 5 B) ---------------------------
@@ -1170,7 +1362,8 @@ let
           create_clone "$top" "$task" "$branch"
           emit_event workspace-created
           setup_bind_mount "$slot" "$clone"
-          prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s"
+          prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s" \
+              "$token" "$rclass" "$persist"
           if (( persist )); then
               setup_agent_state "$slot" "$task" "$agent"
           else
@@ -1181,57 +1374,63 @@ let
           emit_event vm-start-requested
           start_vm "$slot"
 
-          # --- wait for the structured result -------------------------------
+          # --- wait for the AUTHORITATIVE controller result ------------------
           # HOST timeout = the job's own timeout + a grace period, so the guest
-          # (whose `timeout(1)` fires first) still gets to write result.json.
-          local deadline=$(( timeout_s + JOB_GRACE )) waited=0 state="" rc=70 last_state=""
-          log "waiting up to ''${deadline}s for the job result"
+          # CONTROLLER (which stops the worker's cgroup at the job's own
+          # deadline) still gets to write its result.
+          #
+          # Only the verified controller document ends this wait. A result
+          # written by the untrusted worker (in worker/, in /workspace, or
+          # anywhere else) is never even looked at, and a document that fails
+          # verification is an INFRASTRUCTURE error, never a success.
+          local deadline=$(( timeout_s + JOB_GRACE )) waited=0 state="" rc=70
+          local last_phase="" phase="" vrc=0 reject_reason="" result_json=""
+          log "waiting up to ''${deadline}s for the guest controller's result"
           while :; do
-              state="$(job_state "$slot" || true)"
-              # Mirror the GUEST's state transitions into the host event log, so
-              # one stream tells the whole story.
-              if [[ -n "$state" && "$state" != "$last_state" ]]; then
-                  case "$state" in
-                      running) emit_event agent-started "$state" ;;
-                      completed|failed|infrastructure-error) emit_event agent-finished "$state" ;;
-                      timed-out) emit_event timeout "$state" ;;
-                  esac
-                  last_state="$state"
+              vrc=0
+              verify_job_result "$slot" "$task" "$token" "$agent" || vrc=$?
+              if (( vrc == 0 )); then
+                  result_json="$VERIFY_JSON"
+                  state="$(jq -r '.state' <<< "$result_json")"
+                  break
               fi
-              case "$state" in
-                  completed|failed|timed-out|infrastructure-error) break ;;
-              esac
+              if (( vrc >= 2 )); then
+                  reject_reason="$VERIFY_REASON"
+                  log "REJECTED the guest result: $reject_reason"
+                  emit_event result-rejected infrastructure-error "" "$reject_reason"
+                  state="infrastructure-error"
+                  break
+              fi
+              # No result yet: mirror the CONTROLLER's (trusted, but
+              # non-authoritative) progress phase into the host event log, so
+              # one stream tells the whole story.
+              phase="$(job_phase "$slot" "$task" "$token" "$agent" || true)"
+              if [[ -n "$phase" && "$phase" != "$last_phase" ]]; then
+                  case "$phase" in
+                      running)    emit_event agent-started "$phase" ;;
+                      timing-out) emit_event timeout "$phase" ;;
+                      cancelling) emit_event cancellation "$phase" ;;
+                  esac
+                  last_phase="$phase"
+              fi
               if (( waited >= deadline )); then
                   log "job did not finish within ''${deadline}s; stopping the VM"
                   state="timed-out"
-                  emit_event timeout "$state" "" "host deadline ''${deadline}s exceeded"
+                  reject_reason="host deadline ''${deadline}s exceeded"
+                  emit_event timeout "$state" "" "$reject_reason"
                   break
               fi
               # A guest that died without writing a result must not hang us for
               # the full timeout window.
               if (( waited > 0 )) && ! service_active "$slot"; then
-                  log "microvm@$slot stopped without a terminal result"
-                  state="''${state:-infrastructure-error}"
-                  [[ "$state" == "starting" || "$state" == "running" ]] \
-                      && state="infrastructure-error"
+                  log "microvm@$slot stopped without a valid controller result"
+                  state="infrastructure-error"
+                  reject_reason="the VM stopped without a valid controller result"
                   break
               fi
               sleep 3
               waited=$(( waited + 3 ))
           done
-
-          # Archive the result (host-only) BEFORE the job dir is cleared, so
-          # `status <task>` can still report the outcome.
-          local archived="$RESULTS_DIR/$task.json"
-          if [[ -e "$(job_result "$slot")" ]]; then
-              cp -f -- "$(job_result "$slot")" "$archived.tmp" && mv -f -- "$archived.tmp" "$archived"
-          else
-              jq -n --argjson version "$JOB_SPEC_VERSION" --arg taskId "$task" \
-                  --arg agent "$agent" --arg state "$state" \
-                  '{version:$version, taskId:$taskId, agent:$agent, state:$state,
-                    exitCode:70, timedOut:($state=="timed-out"), message:"no guest result"}' \
-                  > "$archived.tmp" && mv -f -- "$archived.tmp" "$archived"
-          fi
 
           case "$state" in
               completed) rc=0 ;;
@@ -1239,6 +1438,18 @@ let
               timed-out) rc=124 ;;
               *)         rc=70 ;;
           esac
+
+          # Archive the result (host-only, outside every guest share) BEFORE the
+          # job dir is cleared, so `status <task>` can still report the outcome.
+          # Either the VALIDATED controller document or an explicitly
+          # host-generated record — never a raw guest file.
+          local archived="$RESULTS_DIR/$task.json"
+          if [[ -n "$result_json" ]]; then
+              archive_controller_result "$task" "$result_json"
+          else
+              archive_result "$task" "$(host_result_json "$task" "$token" "$slot" \
+                  "$agent" "$state" "$rc" "''${reject_reason:-no valid controller result}")"
+          fi
 
           # Teardown: stop the VM, unmount, drop job data + marker. The
           # workspace clone is ALWAYS kept (§35).
@@ -1280,26 +1491,50 @@ let
               fi
           done
           [[ -n "$slot" ]] || die "no running task named '$task'"
-          local token
+          local token agent
           token="$(marker_field "$slot" token || true)"
           [[ -n "$token" ]] || die "slot $slot has no allocation token; refusing (use 'recover')"
+          agent="$(marker_field "$slot" agent || true)"
 
-          # Record the cancellation in the archived result, so the outcome of a
-          # cancelled job is not silently indistinguishable from a crash.
-          mkdir -p -- "$RESULTS_DIR"
-          local archived="$RESULTS_DIR/$task.json"
-          jq -n --argjson version "$JOB_SPEC_VERSION" --arg taskId "$task" \
-              --arg agent "$(marker_field "$slot" agent || true)" \
-              --arg finishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              '{version:$version, taskId:$taskId, agent:$agent, state:"cancelled",
-                exitCode:130, finishedAt:$finishedAt, timedOut:false,
-                message:"cancelled by the operator"}' > "$archived.tmp" \
-              && mv -f -- "$archived.tmp" "$archived"
-
-          set_event_context "$task" "$slot" "$(marker_field "$slot" agent || true)" \
+          set_event_context "$task" "$slot" "$agent" \
               "$(slot_class "$slot")" "$(marker_field "$slot" mode || true)"
           emit_event cancellation "cancelled" "130"
           log "cancelling task '$task' on slot $slot (workspace kept)"
+
+          # Ask the GUEST CONTROLLER to cancel first, bound to THIS allocation's
+          # token: it stops the worker's whole cgroup, records `cancelled` and
+          # writes the authoritative result. A stale request cannot affect a
+          # differently-tokened (i.e. newly allocated) job.
+          mkdir -p -- "$RESULTS_DIR"
+          request_guest_cancel "$slot" "$task" "$token"
+          local waited=0 vrc=0 cancelled_json=""
+          if [[ "$(marker_field "$slot" mode || true)" == "batch" ]] && service_active "$slot"; then
+              log "waiting up to ''${CANCEL_WAIT}s for the guest controller to confirm"
+              while (( waited < CANCEL_WAIT )); do
+                  vrc=0
+                  verify_job_result "$slot" "$task" "$token" "$agent" || vrc=$?
+                  if (( vrc == 0 )); then cancelled_json="$VERIFY_JSON"; break; fi
+                  if (( vrc >= 2 )); then
+                      log "REJECTED the guest result while cancelling: $VERIFY_REASON"
+                      emit_event result-rejected infrastructure-error "" "$VERIFY_REASON"
+                      break
+                  fi
+                  service_active "$slot" || break
+                  sleep 2
+                  waited=$(( waited + 2 ))
+              done
+          fi
+
+          # Record the cancellation, so the outcome of a cancelled job is not
+          # silently indistinguishable from a crash. The controller's own
+          # (validated) record wins; otherwise the host says so explicitly.
+          local archived="$RESULTS_DIR/$task.json"
+          if [[ -n "$cancelled_json" ]]; then
+              archive_controller_result "$task" "$cancelled_json"
+          else
+              archive_result "$task" "$(host_result_json "$task" "$token" "$slot" \
+                  "$agent" cancelled 130 "cancelled by the operator; the guest controller did not confirm")"
+          fi
           # Requests a clean shutdown first, waits a bounded interval, then
           # force-kills — all inside cleanup_slot/stop_vm — and unmounts + drops
           # the runtime job data. Token-guarded.
@@ -1506,9 +1741,27 @@ let
                   timeout_s="$(jq -r '.timeout // ""' "$f")"
                   persisted="$(jq -r '.persist_agent_state // ""' "$f")"
               fi
-              # Job state: the live guest result while the slot runs, else the
-              # archived result of the last run of that task.
-              jstate="$(job_state "$slot" 2>/dev/null || true)"
+              # Job state: the VERIFIED live controller result while the slot
+              # runs (or its progress phase, or `rejected` when the document
+              # does not belong to this allocation), else the archived result of
+              # the last run of that task. A worker-written file is never read.
+              jstate=""
+              if [[ -e "$f" ]]; then
+                  local stoken sagent svrc=0
+                  stoken="$(jq -r '.token // ""' "$f" 2>/dev/null || true)"
+                  sagent="$(jq -r '.agent // ""' "$f" 2>/dev/null || true)"
+                  if [[ -n "$task" && -n "$stoken" && -n "$sagent" ]]; then
+                      verify_job_result "$slot" "$task" "$stoken" "$sagent" || svrc=$?
+                      if (( svrc == 0 )); then
+                          jstate="$(jq -r '.state // ""' <<< "$VERIFY_JSON")"
+                      elif (( svrc >= 2 )); then
+                          jstate="rejected (protocol error)"
+                      else
+                          jstate="$(job_phase "$slot" "$task" "$stoken" "$sagent" || true)"
+                          [[ -z "$jstate" ]] || jstate="running ($jstate)"
+                      fi
+                  fi
+              fi
               if [[ -z "$jstate" && -n "$task" && -e "$RESULTS_DIR/$task.json" ]]; then
                   jstate="$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null || true)"
               fi

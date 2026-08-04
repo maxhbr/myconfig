@@ -33,10 +33,14 @@
 #     `~/.ssh`, an SSH agent socket, a Docker/Podman socket, the Nix daemon
 #     socket, host-wide agent configuration, or another task's state.
 #
-# Guest side: `agent-state-link.service` (root, oneshot, ordered before
-# `agent-job` and before logins) symlinks each declared directory that exists in
-# the share into the guest home. It is driven by the registry, so a newly
-# declared directory needs no change here.
+# Guest side: `agent-state-link.service` (root, oneshot, ordered before the
+# batch job CONTROLLER and before logins) symlinks each declared directory that
+# exists in the share into the guest home. Ordering against the controller — not
+# against the worker — is deliberate: the controller starts the (untrusted)
+# worker only after it has validated the job, so the symlinks are in place
+# before any agent process exists, and a template unit cannot be ordered
+# against without an instance name anyway. It is driven by the registry, so a
+# newly declared directory needs no change here.
 {
   config,
   lib,
@@ -133,10 +137,11 @@ let
     systemd.services.agent-state-link = {
       description = "Link task-scoped agent state into the guest home";
       wantedBy = [ "multi-user.target" ];
-      # The share must be mounted first; the linker runs before any batch job
-      # and, in practice, well before an interactive login.
+      # The share must be mounted first; the linker runs before the batch job
+      # controller (which is what starts the untrusted worker) and, in practice,
+      # well before an interactive login.
       unitConfig.RequiresMountsFor = paths.guestMountPoint;
-      before = [ "agent-job.service" ];
+      before = [ "agent-job-controller.service" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;

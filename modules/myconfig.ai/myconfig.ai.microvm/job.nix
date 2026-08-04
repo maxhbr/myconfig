@@ -2,25 +2,57 @@
 # SPDX-License-Identifier: MIT
 #
 # myconfig.ai.microvm — UNATTENDED BATCH JOBS: the versioned job format, the
-# host-side job directories and the guest-side `agent-job` runner
-# (improvement ticket 4, part A).
+# host-side job directories, the TRUSTED guest-side job CONTROLLER, the
+# UNTRUSTED guest-side WORKER and the host-side result VERIFIER.
 #
-# Layout (per slot, created by the host launcher's `submit`; the directories
-# themselves are pre-created by tmpfiles because virtiofsd needs its share
-# source to exist before the VM starts):
+# ---------------------------------------------------------------------------
+# TRUST SPLIT (the whole point of this file)
+# ---------------------------------------------------------------------------
+# The coding agent and every process the repository can start are UNTRUSTED.
+# They must not be able to create, replace, delete, rename or shadow the
+# authoritative job result, because the HOST acts on that result (it decides
+# success/failure, stops the VM and reports an exit code to the operator).
 #
-#   ${runtimeRoot}/jobs/<slot>/            root:root 0755  guest: read-only *
-#   ${runtimeRoot}/jobs/<slot>/spec.json   root:root 0444  the job spec (v1)
-#   ${runtimeRoot}/jobs/<slot>/prompt.md   root:root 0444  the prompt TEXT
-#   ${runtimeRoot}/jobs/<slot>/out/        1000:1000 0755  guest-writable
-#   ${runtimeRoot}/jobs/<slot>/out/result.json             the guest's result
+# Therefore a batch job runs as TWO guest identities:
 #
-#   * The share itself is read-WRITE (the guest must write `out/result.json`),
-#     but the spec and the prompt are root-owned 0444 inside a root-owned 0755
-#     directory. virtiofsd passes ownership through unchanged, so the guest
-#     `agent` (uid 1000) can READ them and cannot modify, replace or unlink
-#     them — only `out/` is writable. The guest therefore cannot rewrite its
-#     own job (e.g. to lift the timeout or change the agent).
+#   * `agent-job-controller.service` — TRUSTED, runs as guest root. It is the
+#     only writer of the authoritative result. It validates the immutable job
+#     spec, starts the worker as an unprivileged user, enforces the timeout and
+#     cancellation, collects the worker's exit status from systemd and writes
+#     the result. It NEVER executes a repository- or spec-provided command: the
+#     worker's executable and argv come from the Nix-generated registry
+#     (./agents.nix) only.
+#
+#   * `agent-job-worker@<agent>.service` — UNTRUSTED, runs as the guest `agent`
+#     user (uid `guestAgentUid`, the same identity as the interactive session).
+#     It runs the coding agent, and therefore transitively whatever the
+#     repository asks for. Its stdout/stderr/artifacts are untrusted output.
+#
+# Layout (per slot; the directories are pre-created by tmpfiles because
+# virtiofsd needs its share source to exist before the VM starts):
+#
+#   ${runtimeRoot}/jobs/<slot>/                  root:root 0755
+#     input/                                     root:root 0755
+#       spec.json                                root:root 0400  (1)
+#       prompt.md                                root:root 0444  (2)
+#       cancel.json                              root:root 0400  (3)
+#     controller/                                root:root 0700  (4)
+#       state.json                               root:root 0600   trusted progress
+#       result.json                              root:root 0600   AUTHORITATIVE
+#     worker/                                    1000:1000 0755  (5)
+#       stdout.log stderr.log artifacts/                          untrusted
+#
+#   (1) 0400 root-only: the spec carries the allocation token, which the worker
+#       must not learn (it would otherwise be able to mint a result that passes
+#       the host's identity checks if it ever gained write access).
+#   (2) 0444: the worker must READ the prompt; nobody may modify it.
+#   (3) the host's cancellation request, bound to the allocation token.
+#   (4) 0700 root-only: NOT writable and NOT readable by the worker. virtiofsd
+#       passes ownership through unchanged, so this is the EFFECTIVE permission
+#       inside the guest. The worker also cannot rename/replace this directory,
+#       because its parent (`/run/agent-job`) is root-owned 0755, and the guest
+#       unit additionally lists it as `InaccessiblePaths`.
+#   (5) the only worker-writable part of the share.
 #
 # Design rules taken from the ticket:
 #   * prompts and specs NEVER go through process arguments (the host writes
@@ -30,10 +62,21 @@
 #   * the spec cannot name an executable — the agent is resolved through the
 #     authoritative registry (./agents.nix), so a job can only ever run an
 #     agent this module declares;
-#   * `result.json` is written with tmp-file + rename, so the host never reads
-#     a partially written result;
-#   * the timeout is enforced TWICE in the guest (per-job `timeout(1)` plus the
-#     unit's static `RuntimeMaxSec` ceiling) and once more on the host.
+#   * every allocation carries a 256-bit random ALLOCATION TOKEN. It is written
+#     into the host allocation marker, into the guest's immutable input and into
+#     the authoritative result, and the host rejects any result whose version,
+#     task id, token, slot or agent does not match the ACTIVE allocation. This
+#     is what makes a stale or cross-allocation result harmless;
+#   * `result.json` is written with tmp-file + rename. That gives CONSISTENCY
+#     (the host never reads a half-written file) — it does NOT establish
+#     authenticity. Authenticity comes from ownership (only guest root can
+#     write `controller/`) plus the allocation token;
+#   * the timeout is enforced by the CONTROLLER (which stops the worker's whole
+#     cgroup), by the worker unit's static `TimeoutStartSec` ceiling, and once
+#     more by the host;
+#   * the host treats the result as untrusted input regardless: it is parsed and
+#     identity-checked by ONE verifier (`agent-job-verify-result`), and anything
+#     malformed becomes an INFRASTRUCTURE ERROR, never a success.
 #
 # NOTE (deliberately no guest-side power-off): microvm.nix's `microvm@<slot>`
 # unit runs with `Restart = "always"`, so a guest that powers itself off after
@@ -59,15 +102,33 @@ let
   # SAME pool.
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
-  # --- the ONE definition of every job path (host + guest side) ----------
+  # --- the ONE definition of every job path / mode / schema fact ----------
   paths = rec {
-    # Host side.
+    # ---- host side ----------------------------------------------------
     root = "${cfg.runtimeRoot}/jobs";
     slotDir = slotName: "${root}/${slotName}";
-    hostSpec = slotName: "${slotDir slotName}/${specName}";
-    hostPrompt = slotName: "${slotDir slotName}/${promptName}";
-    hostOutDir = slotName: "${slotDir slotName}/out";
-    hostResult = slotName: "${hostOutDir slotName}/${resultName}";
+
+    inputSubdir = "input";
+    controllerSubdir = "controller";
+    workerSubdir = "worker";
+    artifactsSubdir = "artifacts";
+
+    specName = "spec.json";
+    promptName = "prompt.md";
+    cancelName = "cancel.json";
+    resultName = "result.json";
+    controllerStateName = "state.json";
+    workerStdoutName = "stdout.log";
+    workerStderrName = "stderr.log";
+
+    hostInputDir = s: "${slotDir s}/${inputSubdir}";
+    hostControllerDir = s: "${slotDir s}/${controllerSubdir}";
+    hostWorkerDir = s: "${slotDir s}/${workerSubdir}";
+    hostSpec = s: "${hostInputDir s}/${specName}";
+    hostPrompt = s: "${hostInputDir s}/${promptName}";
+    hostCancel = s: "${hostInputDir s}/${cancelName}";
+    hostResult = s: "${hostControllerDir s}/${resultName}";
+    hostControllerState = s: "${hostControllerDir s}/${controllerStateName}";
 
     # Host-only archive of finished job results, so `status <task>` still knows
     # the outcome after the slot has been released and its job dir cleared.
@@ -75,62 +136,326 @@ let
     resultsDir = "${cfg.runtimeRoot}/results";
     hostArchivedResult = taskId: "${resultsDir}/${taskId}.json";
 
-    specName = "spec.json";
-    promptName = "prompt.md";
-    resultName = "result.json";
+    # ---- permission facts (host tmpfiles + guest assertions agree) -----
+    inputDirMode = "0755";
+    controllerDirMode = "0700";
+    workerDirMode = "0755";
+    specMode = "0400";
+    promptMode = "0444";
+    cancelMode = "0400";
+    resultMode = "0600";
+    # The UNPRIVILEGED guest identity that runs the coding agent. The
+    # controller asserts this is never 0.
+    workerUid = cfg.guestAgentUid;
+    workerGid = cfg.guestAgentGid;
+    workerUser = "agent";
+    # `isNormalUser` puts the guest agent into the `users` group.
+    workerGroup = "users";
 
-    # Guest side (identical for every slot — the share hides which slot it is).
+    # ---- guest side (identical for every slot — the share hides the slot) --
     guestTag = "job";
     guestMountPoint = "/run/agent-job";
-    guestSpec = "${guestMountPoint}/${specName}";
-    guestPrompt = "${guestMountPoint}/${promptName}";
-    guestOutDir = "${guestMountPoint}/out";
-    guestResult = "${guestOutDir}/${resultName}";
+    guestInputDir = "${guestMountPoint}/${inputSubdir}";
+    guestControllerDir = "${guestMountPoint}/${controllerSubdir}";
+    guestWorkerDir = "${guestMountPoint}/${workerSubdir}";
+    guestSpec = "${guestInputDir}/${specName}";
+    guestPrompt = "${guestInputDir}/${promptName}";
+    guestCancel = "${guestInputDir}/${cancelName}";
+    guestResult = "${guestControllerDir}/${resultName}";
+    guestControllerState = "${guestControllerDir}/${controllerStateName}";
+    guestWorkerStdout = "${guestWorkerDir}/${workerStdoutName}";
+    guestWorkerStderr = "${guestWorkerDir}/${workerStderrName}";
+    guestWorkerArtifacts = "${guestWorkerDir}/${artifactsSubdir}";
 
-    # Schema version understood by BOTH sides. Bump only together with the
-    # validation in the host launcher and in `agent-job` below.
-    specVersion = 1;
+    controllerUnit = "agent-job-controller.service";
+    workerUnitTemplate = "agent-job-worker@";
+    # The instance is the AGENT NAME, which the registry constrains to
+    # [a-z][a-z0-9-]* — never a task id or any other caller-supplied string
+    # (a hostile task name must not be able to reach a unit name).
+    workerUnit = agent: "agent-job-worker@${agent}.service";
 
-    # The terminal / transitional job states written to result.json.
-    states = [
-      "starting"
-      "running"
+    # Schema version understood by BOTH sides. Bumped from 1 to 2 for the
+    # controller/worker split: results gained `allocationToken`, `slot` and
+    # `controllerVersion`, and moved from `out/result.json` to
+    # `controller/result.json`. There is NO compatibility mode — a v1 result is
+    # rejected (fail closed).
+    specVersion = 2;
+    # Version of the CONTROLLER protocol (the writer of the result). Bumped
+    # independently of the spec when the controller's own semantics change.
+    controllerVersion = 1;
+
+    # The terminal states the controller may write into result.json. A
+    # non-terminal state in result.json is a protocol violation (progress goes
+    # into controller/state.json instead).
+    terminalStates = [
       "completed"
       "failed"
       "timed-out"
       "cancelled"
       "infrastructure-error"
     ];
+    # The controller's non-authoritative progress phases (state.json).
+    phases = [
+      "validating"
+      "starting-worker"
+      "running"
+      "timing-out"
+      "cancelling"
+      "finished"
+    ];
   };
 
-  # --- guest-side batch runner -------------------------------------------
-  # Runs as the unprivileged `agent` user from `agent-job.service` below.
-  agent-job = pkgs.writeShellApplication {
-    name = "agent-job";
-    runtimeInputs = with pkgs; [
-      coreutils # timeout, cat, mv, date, id
+  # Seconds the controller gives the worker cgroup between SIGTERM and SIGKILL,
+  # so the agent can still flush partial work to /workspace. Also the worker
+  # unit's TimeoutStopSec, so systemd's own stop path uses the same grace.
+  workerKillGraceSeconds = 10;
+
+  # Static ceiling for the worker unit. `Type=oneshot` ignores RuntimeMaxSec,
+  # so the ceiling is expressed as TimeoutStartSec (which kills the whole
+  # cgroup on expiry with Result=timeout).
+  workerCeilingSeconds = jobCfg.maxTimeoutSeconds + jobCfg.gracePeriodSeconds;
+
+  # The worker's unit PATH: the agent binaries plus a small toolchain. Rendered
+  # exactly the way NixOS renders `systemd.services.<n>.path`.
+  workerPackages =
+    agentRegistry.packages
+    ++ (with pkgs; [
+      bash
+      coreutils
+      git
+      gnugrep
+      gnused
       jq
+      ripgrep
+    ]);
+
+  # ======================================================================
+  # (1) guest-side PATH/PERMISSION ASSERTIONS (trusted, runs as root)
+  # ======================================================================
+  # Fails the controller before anything is started when the job share does not
+  # have the EFFECTIVE permissions the trust split depends on. Mode 0600 on
+  # result.json is worthless if a parent directory can be replaced, so every
+  # parent component up to the boundary is checked too.
+  #
+  # Kept as a SEPARATE, argument-driven program on purpose: the check suite
+  # runs it against deliberately broken fixtures, so this logic is actually
+  # exercised rather than merely read.
+  agent-job-assert-paths = pkgs.writeShellApplication {
+    name = "agent-job-assert-paths";
+    runtimeInputs = with pkgs; [ coreutils ];
+    text = ''
+      set -euo pipefail
+
+      root=${lib.escapeShellArg paths.guestMountPoint}
+      worker_uid=${toString paths.workerUid}
+      # Walk parent directories up to and including this one. Defaults to `/`
+      # (the guest case); the check suite passes its fixture's parent.
+      boundary=/
+
+      while [[ $# -gt 0 ]]; do
+          case "$1" in
+              --root)       root="''${2-}"; shift 2 ;;
+              --worker-uid) worker_uid="''${2-}"; shift 2 ;;
+              --boundary)   boundary="''${2-}"; shift 2 ;;
+              *) printf 'agent-job-assert-paths: unknown argument %s\n' "$1" >&2; exit 64 ;;
+          esac
+      done
+
+      bad() {
+          printf 'agent-job-assert-paths: %s\n' "$*" >&2
+          exit 1
+      }
+
+      [[ "$worker_uid" =~ ^[0-9]+$ ]] || bad "--worker-uid must be numeric"
+      (( worker_uid != 0 )) || bad "the worker uid must be unprivileged (never 0)"
+
+      # `stat -c` on the path itself (never dereferencing a symlink).
+      owner_of() { stat -c %u -- "$1"; }
+      mode_of()  { printf '%d' "0$(stat -c %a -- "$1")"; }
+
+      # A directory that only root may modify: root-owned, no group/other write.
+      assert_root_dir() {
+          local d="$1" what="$2" owner mode
+          [[ ! -L "$d" ]] || bad "$what is a symlink: $d"
+          [[ -d "$d" ]] || bad "$what is missing or not a directory: $d"
+          owner="$(owner_of "$d")"
+          (( owner == 0 )) || bad "$what must be owned by uid 0, is owned by $owner: $d"
+          mode="$(mode_of "$d")"
+          (( (mode & 0022) == 0 )) \
+              || bad "$what is group/other-writable (mode $(stat -c %a -- "$d")): $d"
+      }
+
+      # The controller channel: additionally UNREADABLE and UNSEARCHABLE for
+      # everyone but root, so the worker cannot even learn the allocation token.
+      assert_controller_dir() {
+          local d="$1" mode
+          assert_root_dir "$d" "the controller directory"
+          mode="$(mode_of "$d")"
+          (( (mode & 0077) == 0 )) \
+              || bad "the controller directory grants group/other access (mode $(stat -c %a -- "$d")): $d"
+      }
+
+      # A root-owned file nobody else may write. `max_mode` masks the bits that
+      # must be clear (e.g. 0177 for a root-only 0400 file).
+      assert_root_file() {
+          local f="$1" what="$2" forbidden="$3" owner mode
+          [[ ! -L "$f" ]] || bad "$what is a symlink: $f"
+          [[ -f "$f" ]] || bad "$what is missing or not a regular file: $f"
+          owner="$(owner_of "$f")"
+          (( owner == 0 )) || bad "$what must be owned by uid 0, is owned by $owner: $f"
+          mode="$(mode_of "$f")"
+          (( (mode & forbidden) == 0 )) \
+              || bad "$what has too permissive a mode ($(stat -c %a -- "$f")): $f"
+      }
+
+      # --- the share root and every parent up to the boundary --------------
+      # A worker that could rename or replace any of these could shadow the
+      # authoritative result no matter what mode the file itself has.
+      assert_root_dir "$root" "the job share root"
+      boundary="$(realpath -m -- "$boundary")"
+      p="$(realpath -m -- "$root")"
+      while :; do
+          assert_root_dir "$p" "job-share parent directory"
+          [[ "$p" == "$boundary" ]] && break
+          [[ "$p" == "/" ]] && break
+          p="$(dirname -- "$p")"
+      done
+
+      # --- the immutable input --------------------------------------------
+      assert_root_dir "$root/${paths.inputSubdir}" "the job input directory"
+      # 0177: root-only. The spec carries the allocation token.
+      assert_root_file "$root/${paths.inputSubdir}/${paths.specName}" "the job spec" 0177
+      # 0222: readable by all, writable by none.
+      assert_root_file "$root/${paths.inputSubdir}/${paths.promptName}" "the prompt file" 0222
+      if [[ -e "$root/${paths.inputSubdir}/${paths.cancelName}" || -L "$root/${paths.inputSubdir}/${paths.cancelName}" ]]; then
+          assert_root_file "$root/${paths.inputSubdir}/${paths.cancelName}" "the cancellation request" 0177
+      fi
+
+      # --- the authoritative result channel --------------------------------
+      assert_controller_dir "$root/${paths.controllerSubdir}"
+      for f in ${paths.resultName} ${paths.controllerStateName}; do
+          target="$root/${paths.controllerSubdir}/$f"
+          # A symlink here would let a writer of the target path escape the
+          # controller directory; absent is fine (nothing written yet).
+          [[ ! -L "$target" ]] || bad "controller file is a symlink: $target"
+          if [[ -e "$target" ]]; then
+              assert_root_file "$target" "controller file" 0177
+          fi
+      done
+
+      # --- the worker's own (untrusted, writable) area ----------------------
+      w="$root/${paths.workerSubdir}"
+      [[ ! -L "$w" ]] || bad "the worker directory is a symlink: $w"
+      [[ -d "$w" ]] || bad "the worker directory is missing: $w"
+      owner="$(owner_of "$w")"
+      (( owner == worker_uid )) \
+          || bad "the worker directory must be owned by uid $worker_uid, is owned by $owner: $w"
+
+      exit 0
+    '';
+    meta = with lib; {
+      description = "Assert the effective permissions of the myconfig.ai.microvm job share";
+      platforms = platforms.linux;
+    };
+  };
+
+  # ======================================================================
+  # (2) guest-side WORKER (UNTRUSTED, runs as the guest `agent` user)
+  # ======================================================================
+  # Started ONLY by the controller, through the predeclared templated unit
+  # `agent-job-worker@<agent>.service`. It receives the already-validated agent
+  # NAME as its single argument (the unit instance) and resolves the executable
+  # and argv from the generated registry dispatch — never from the spec, which
+  # it cannot even read.
+  #
+  # Everything this process writes (stdout, stderr, artifacts, /workspace) is
+  # UNTRUSTED output. It has no way to influence the authoritative result:
+  # `controller/` is root-owned 0700 and additionally masked by the unit's
+  # `InaccessiblePaths`.
+  agent-job-worker = pkgs.writeShellApplication {
+    name = "agent-job-worker";
+    runtimeInputs = with pkgs; [ coreutils ];
+    text = ''
+      set -euo pipefail
+
+      readonly PROMPT_FILE=${lib.escapeShellArg paths.guestPrompt}
+
+      log() { printf 'agent-job-worker: %s\n' "$*" >&2; }
+
+      [[ $# -eq 1 ]] || { log "usage: agent-job-worker <agent>"; exit 64; }
+      agent="$1"
+
+      [[ -r "$PROMPT_FILE" ]] || { log "prompt file $PROMPT_FILE is not readable"; exit 70; }
+      # The prompt TEXT, for the registry entries that take it as an argument.
+      prompt="$(cat -- "$PROMPT_FILE")"
+
+      # The two invocation shapes the generated dispatch below calls. There is
+      # deliberately NO timeout(1) here: the deadline belongs to the trusted
+      # controller (which stops this unit's whole cgroup) plus the unit's own
+      # static TimeoutStartSec ceiling. A timeout enforced by the untrusted
+      # worker would be worthless as evidence anyway.
+      run_agent() { "$@"; }
+      run_agent_stdin() { "$@" < "$PROMPT_FILE"; }
+
+      log "running agent '$agent' in $PWD"
+      case "$agent" in
+      ${agentRegistry.batchDispatchCases}
+          *)
+              log "agent '$agent' cannot run unattended (expected: ${agentRegistry.batchNamesAlternation})"
+              exit 64
+              ;;
+      esac
+    '';
+    meta = with lib; {
+      description = "Untrusted guest-side batch worker for myconfig.ai.microvm sandboxes";
+      platforms = platforms.linux;
+    };
+  };
+
+  # ======================================================================
+  # (3) guest-side CONTROLLER (TRUSTED, runs as guest root)
+  # ======================================================================
+  agent-job-controller = pkgs.writeShellApplication {
+    name = "agent-job-controller";
+    runtimeInputs = with pkgs; [
+      coreutils # date, install, mktemp, mv, stat, uname
+      jq
+      systemd # systemctl
     ];
     text = ''
       set -euo pipefail
 
       readonly SPEC=${lib.escapeShellArg paths.guestSpec}
       readonly PROMPT_FILE=${lib.escapeShellArg paths.guestPrompt}
-      readonly OUT_DIR=${lib.escapeShellArg paths.guestOutDir}
+      readonly CANCEL_FILE=${lib.escapeShellArg paths.guestCancel}
+      readonly CTRL_DIR=${lib.escapeShellArg paths.guestControllerDir}
       readonly RESULT=${lib.escapeShellArg paths.guestResult}
+      readonly STATE_FILE=${lib.escapeShellArg paths.guestControllerState}
+      readonly WORKER_DIR=${lib.escapeShellArg paths.guestWorkerDir}
+      readonly WORKER_STDOUT=${lib.escapeShellArg paths.guestWorkerStdout}
+      readonly WORKER_STDERR=${lib.escapeShellArg paths.guestWorkerStderr}
+      readonly WORKER_ARTIFACTS=${lib.escapeShellArg paths.guestWorkerArtifacts}
       readonly WORKSPACE=/workspace
       readonly SPEC_VERSION=${toString paths.specVersion}
+      readonly CONTROLLER_VERSION=${toString paths.controllerVersion}
       readonly MAX_TIMEOUT=${toString jobCfg.maxTimeoutSeconds}
-      # Grace given to the agent after SIGTERM before SIGKILL, inside the
-      # guest, so it can still flush partial work to /workspace.
-      readonly KILL_GRACE=10
+      readonly WORKER_UID=${toString paths.workerUid}
+      readonly WORKER_GID=${toString paths.workerGid}
+      readonly WORKER_KILL_GRACE=${toString workerKillGraceSeconds}
+      readonly POLL_INTERVAL=2
+      readonly ASSERT_PATHS=${lib.getExe agent-job-assert-paths}
+      # Every key a v${toString paths.specVersion} spec may carry. Anything else
+      # is rejected: an unknown field means host and guest disagree about the
+      # protocol, and guessing is how privilege ends up smuggled in.
+      readonly SPEC_KEYS='["version","taskId","allocationToken","slot","agent","workspace","promptFile","timeoutSeconds","resourceClass","persistAgentState"]'
 
-      log() { printf 'agent-job: %s\n' "$*" >&2; }
+      log() { printf 'agent-job-controller: %s\n' "$*" >&2; }
 
-      # Structured guest-side lifecycle events (ticket 6 B). They land on the
-      # guest console, which microvm.nix captures into the HOST journal
+      # Structured guest-side lifecycle events. They land on the guest console,
+      # which microvm.nix captures into the HOST journal
       # (`journalctl -u microvm@<slot>`), so host and guest transitions can be
-      # correlated. Never contains the prompt, a key or any env var.
+      # correlated. Never contains the prompt, a key, the allocation token or
+      # any env var.
       emit_event() {
           local event="$1" state="''${2-}" exit_code="''${3-}"
           jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg event "$event" \
@@ -143,18 +468,68 @@ let
 
       task_id="unknown"
       agent="unknown"
+      allocation_token=""
+      slot="$(uname -n)"
+      timeout_s=0
+      worker_unit=""
       started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      # How the CONTROLLER itself ended the worker, if it did. This — never the
+      # worker's own claim — is what makes a result `timed-out` or `cancelled`.
+      controller_verdict=""
 
-      # Atomic state transition: write a temp file in the SAME (guest-writable)
-      # directory, then rename, so the host either sees the old or the new
-      # result — never a half-written one.
-      write_result() {
-          local state="$1" exit_code="$2" timed_out="$3" message="''${4-}"
-          local tmp
-          tmp="$(mktemp "$OUT_DIR/.result.XXXXXX")"
+      # Write a file into the controller directory atomically: mktemp in the
+      # SAME directory, write the complete document, tighten the mode, rename.
+      # The temp file is removed on every error path.
+      write_controller_file() {
+          local dest="$1" tmp
+          tmp="$(mktemp "$CTRL_DIR/.tmp.XXXXXX")" || {
+              log "could not create a temp file in $CTRL_DIR"
+              return 1
+          }
+          if cat > "$tmp" \
+              && chmod ${paths.resultMode} -- "$tmp" \
+              && mv -f -- "$tmp" "$dest"; then
+              return 0
+          fi
+          # Never leave a partial document behind for the host to trip over.
+          rm -f -- "$tmp"
+          log "could not write $dest"
+          return 1
+      }
+
+      # Non-authoritative, TRUSTED progress. The host may mirror it into its
+      # event log but must never treat it as a terminal outcome.
+      write_state() {
+          local phase="$1" message="''${2-}"
           jq -n \
               --argjson version "$SPEC_VERSION" \
+              --argjson controllerVersion "$CONTROLLER_VERSION" \
               --arg taskId "$task_id" \
+              --arg allocationToken "$allocation_token" \
+              --arg slot "$slot" \
+              --arg agent "$agent" \
+              --arg phase "$phase" \
+              --arg startedAt "$started_at" \
+              --arg updatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --arg workerUnit "$worker_unit" \
+              --arg message "$message" \
+              '{version:$version, controllerVersion:$controllerVersion,
+                taskId:$taskId, allocationToken:$allocationToken, slot:$slot,
+                agent:$agent, phase:$phase, startedAt:$startedAt,
+                updatedAt:$updatedAt, workerUnit:$workerUnit, message:$message}' \
+              | write_controller_file "$STATE_FILE" || true
+      }
+
+      # THE authoritative result. Only ever a TERMINAL state, only ever written
+      # here, only ever derived from what the controller itself observed.
+      write_result() {
+          local state="$1" exit_code="$2" timed_out="$3" message="''${4-}"
+          jq -n \
+              --argjson version "$SPEC_VERSION" \
+              --argjson controllerVersion "$CONTROLLER_VERSION" \
+              --arg taskId "$task_id" \
+              --arg allocationToken "$allocation_token" \
+              --arg slot "$slot" \
               --arg agent "$agent" \
               --arg state "$state" \
               --argjson exitCode "$exit_code" \
@@ -162,10 +537,12 @@ let
               --arg finishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               --argjson timedOut "$timed_out" \
               --arg message "$message" \
-              '{version:$version, taskId:$taskId, agent:$agent, state:$state,
-                exitCode:$exitCode, startedAt:$startedAt, finishedAt:$finishedAt,
-                timedOut:$timedOut, message:$message}' > "$tmp"
-          mv -f -- "$tmp" "$RESULT"
+              '{version:$version, controllerVersion:$controllerVersion,
+                taskId:$taskId, allocationToken:$allocationToken, slot:$slot,
+                agent:$agent, state:$state, exitCode:$exitCode,
+                startedAt:$startedAt, finishedAt:$finishedAt,
+                timedOut:$timedOut, message:$message}' \
+              | write_controller_file "$RESULT"
       }
 
       # Any problem that is NOT the agent's own failure is reported as
@@ -173,106 +550,299 @@ let
       # from "the job never ran".
       infra_fail() {
           log "infrastructure error: $*"
-          write_result infrastructure-error 70 false "$*"
+          write_result infrastructure-error 70 false "$*" || true
           exit 70
       }
 
-      # --- inert without a job (ticket 4: "remain inert when no batch job") --
+      # A problem so early/severe that the result channel itself cannot be
+      # trusted: do NOT write anything, fail loudly. The host then finds no
+      # valid result and reports an infrastructure error itself.
+      hard_fail() {
+          log "REFUSING TO RUN: $*"
+          exit 70
+      }
+
+      # --- inert without a job ---------------------------------------------
       # The unit also carries ConditionPathExists, so this is belt-and-braces
       # for a manual invocation.
       if [[ ! -e "$SPEC" ]]; then
           log "no job spec at $SPEC; nothing to do"
           exit 0
       fi
-      [[ -d "$OUT_DIR" && -w "$OUT_DIR" ]] \
-          || { log "job output dir $OUT_DIR is missing or not writable"; exit 70; }
 
-      # --- validate the spec (guest side; the host validated it too) --------
+      # --- (a) the trust boundary must be intact BEFORE anything runs -------
+      "$ASSERT_PATHS" || hard_fail "the job share does not have the required ownership/permissions"
+
+      # --- (b) validate the immutable spec ---------------------------------
       jq -e . "$SPEC" >/dev/null 2>&1 || infra_fail "spec is not valid JSON"
+      jq -e 'type == "object"' "$SPEC" >/dev/null 2>&1 || infra_fail "spec is not a JSON object"
+
+      # Strict: no unknown fields. This also subsumes the older explicit
+      # "spec must not contain an executable path" guard for
+      # command/exec/executable, which stays below as a NAMED rejection so the
+      # intent is greppable and testable.
+      if jq -e 'has("command") or has("exec") or has("executable")' "$SPEC" >/dev/null; then
+          infra_fail "spec must not contain an executable path"
+      fi
+      unknown="$(jq -r --argjson allowed "$SPEC_KEYS" \
+          '[keys[] | select(. as $k | $allowed | index($k) | not)] | join(",")' "$SPEC")"
+      [[ -z "$unknown" ]] || infra_fail "spec carries unknown field(s): $unknown"
 
       version="$(jq -r '.version // empty' "$SPEC")"
       [[ "$version" == "$SPEC_VERSION" ]] \
           || infra_fail "unsupported spec version '$version' (expected $SPEC_VERSION)"
 
-      # A spec must NEVER be able to name a command: the agent is resolved from
-      # the generated registry dispatch below. Refuse loudly if a future host
-      # version tries to smuggle one in.
-      if jq -e 'has("command") or has("exec") or has("executable")' "$SPEC" >/dev/null; then
-          infra_fail "spec must not contain an executable path"
-      fi
-
       task_id="$(jq -r '.taskId // empty' "$SPEC")"
       [[ "$task_id" =~ ^[a-zA-Z0-9._-]{1,64}$ ]] \
-          || infra_fail "invalid taskId '$task_id'"
+          || { task_id="unknown"; infra_fail "invalid taskId"; }
+
+      allocation_token="$(jq -r '.allocationToken // empty' "$SPEC")"
+      [[ "$allocation_token" =~ ^[0-9a-f]{32,128}$ ]] \
+          || { allocation_token=""; infra_fail "missing or malformed allocationToken"; }
+
+      spec_slot="$(jq -r '.slot // empty' "$SPEC")"
+      [[ "$spec_slot" =~ ^[a-zA-Z0-9._-]{1,64}$ ]] \
+          || infra_fail "invalid slot in spec"
+      # The guest hostname IS the slot name (guest.nix), so a spec that claims a
+      # different slot means host and guest disagree about which VM this is.
+      [[ "$spec_slot" == "$slot" ]] \
+          || infra_fail "spec slot '$spec_slot' does not match this guest ($slot)"
 
       agent="$(jq -r '.agent // empty' "$SPEC")"
+      # The agent must be one this build declares as batch-capable. The
+      # executable and argv are resolved from the registry INSIDE the worker,
+      # never from the spec.
+      case "$agent" in
+      ${lib.concatMapStringsSep "\n" (n: "          ${n}) ;;") agentRegistry.batchNames}
+          *)
+              agent="''${agent//[^a-zA-Z0-9._-]/?}"
+              infra_fail "agent '$agent' cannot run unattended (expected: ${agentRegistry.batchNamesAlternation})"
+              ;;
+      esac
+      worker_unit="agent-job-worker@$agent.service"
 
       workspace="$(jq -r '.workspace // empty' "$SPEC")"
       [[ "$workspace" == "$WORKSPACE" ]] \
-          || infra_fail "workspace must be exactly $WORKSPACE (got '$workspace')"
-      [[ -d "$WORKSPACE" && -w "$WORKSPACE" ]] \
-          || infra_fail "$WORKSPACE is not a writable directory"
+          || infra_fail "workspace must be exactly $WORKSPACE"
+      [[ "$workspace" == /* ]] || infra_fail "workspace must be an absolute path"
+      [[ -d "$WORKSPACE" && ! -L "$WORKSPACE" ]] \
+          || infra_fail "$WORKSPACE is not a directory"
+      # The controller deliberately does NOT need write access to /workspace —
+      # the WORKER does. Assert the worker can write there instead of testing
+      # `-w` as root (which is always true and therefore proves nothing).
+      ws_owner="$(stat -c %u -- "$WORKSPACE")"
+      [[ "$ws_owner" == "$WORKER_UID" ]] \
+          || infra_fail "$WORKSPACE must be owned by the worker uid $WORKER_UID (is $ws_owner)"
 
       prompt_path="$(jq -r '.promptFile // empty' "$SPEC")"
       # Exact match, not a prefix check: this rejects traversal
-      # ("$JOB_DIR/../x"), symlink games and any path outside the job dir.
+      # ("$JOB_DIR/../x"), symlink games and any path outside the job input dir.
       [[ "$prompt_path" == "$PROMPT_FILE" ]] \
-          || infra_fail "promptFile must be exactly $PROMPT_FILE (got '$prompt_path')"
+          || infra_fail "promptFile must be exactly $PROMPT_FILE"
       [[ -r "$PROMPT_FILE" ]] || infra_fail "prompt file $PROMPT_FILE is not readable"
 
       timeout_s="$(jq -r '.timeoutSeconds // empty' "$SPEC")"
-      [[ "$timeout_s" =~ ^[0-9]+$ ]] || infra_fail "timeoutSeconds must be an integer"
+      [[ "$timeout_s" =~ ^[0-9]+$ ]] || infra_fail "timeoutSeconds must be a non-negative integer"
       (( timeout_s >= 1 )) || infra_fail "timeoutSeconds must be >= 1"
       (( timeout_s <= MAX_TIMEOUT )) \
-          || infra_fail "timeoutSeconds $timeout_s exceeds the guest maximum $MAX_TIMEOUT"
+          || infra_fail "timeoutSeconds exceeds the guest maximum $MAX_TIMEOUT"
 
-      # --- run the agent ----------------------------------------------------
-      cd "$WORKSPACE"
-      write_result starting 0 false
+      rclass="$(jq -r '.resourceClass // empty' "$SPEC")"
+      [[ "$rclass" =~ ^[a-zA-Z0-9._-]{1,32}$ ]] || infra_fail "invalid resourceClass"
 
-      prompt="$(cat -- "$PROMPT_FILE")"
+      jq -e '.persistAgentState | type == "boolean"' "$SPEC" >/dev/null \
+          || infra_fail "persistAgentState must be a boolean"
 
-      # Per-job hard limit (the unit adds a second, static RuntimeMaxSec
-      # ceiling, and the host enforces a third with a grace period).
-      run_agent() {
-          timeout --kill-after="$KILL_GRACE" -- "$timeout_s" "$@"
+      write_state validating
+
+      # --- (c) prepare the worker's own (untrusted) area --------------------
+      [[ -d "$WORKER_DIR" && ! -L "$WORKER_DIR" ]] \
+          || infra_fail "the worker directory $WORKER_DIR is missing"
+      # systemd opens the log files with append: BEFORE the worker starts. A
+      # symlink there (e.g. left by an earlier hostile worker) would redirect
+      # a root-opened fd, so replace anything that is not a regular file.
+      for f in "$WORKER_STDOUT" "$WORKER_STDERR"; do
+          if [[ -L "$f" || ( -e "$f" && ! -f "$f" ) ]]; then
+              log "replacing non-regular worker log file $f"
+              rm -f -- "$f"
+          fi
+          [[ -e "$f" ]] || install -m 0644 -o "$WORKER_UID" -g "$WORKER_GID" /dev/null "$f"
+      done
+      if [[ -L "$WORKER_ARTIFACTS" || ( -e "$WORKER_ARTIFACTS" && ! -d "$WORKER_ARTIFACTS" ) ]]; then
+          rm -f -- "$WORKER_ARTIFACTS"
+      fi
+      [[ -d "$WORKER_ARTIFACTS" ]] \
+          || install -d -m 0755 -o "$WORKER_UID" -g "$WORKER_GID" "$WORKER_ARTIFACTS"
+
+      # --- (d) is this allocation already cancelled? -----------------------
+      # A cancellation only ever applies to the allocation whose token it
+      # carries, so a stale cancel file from an earlier task cannot stop this
+      # one (and vice versa).
+      cancel_requested() {
+          local tok
+          [[ -f "$CANCEL_FILE" && ! -L "$CANCEL_FILE" ]] || return 1
+          tok="$(jq -r '.allocationToken // empty' "$CANCEL_FILE" 2>/dev/null)" || return 1
+          [[ "$tok" == "$allocation_token" ]]
       }
-      # Same, for CLIs that read their instructions from stdin — the prompt
-      # then never becomes an argv element at all.
-      run_agent_stdin() {
-          timeout --kill-after="$KILL_GRACE" -- "$timeout_s" "$@" < "$PROMPT_FILE"
+
+      if cancel_requested; then
+          log "cancellation already requested for this allocation; not starting the worker"
+          write_state cancelling
+          write_result cancelled 130 false "cancelled before the worker started"
+          emit_event cancellation cancelled 130
+          exit 0
+      fi
+
+      # --- (e) start the UNTRUSTED worker under its own identity -----------
+      # A predeclared TEMPLATED unit, so every property (uid, cgroup limits,
+      # sandboxing, the static timeout ceiling) is a build-time fact in
+      # job.nix rather than something assembled at runtime. The instance name
+      # is the registry-validated agent name — never a task id.
+      systemctl reset-failed "$worker_unit" >/dev/null 2>&1 || true
+      write_state starting-worker
+      log "starting worker $worker_unit for task '$task_id' (timeout ''${timeout_s}s)"
+      systemctl start --no-block "$worker_unit" \
+          || infra_fail "could not start the worker unit $worker_unit"
+
+      # A systemd property of the worker unit, or the empty string when it
+      # cannot be read (the caller must never treat that as success).
+      unit_prop() {
+          systemctl show -P "$1" "$worker_unit" 2>/dev/null || true
       }
 
-      log "running agent '$agent' for task '$task_id' (timeout ''${timeout_s}s)"
-      write_result running 0 false
+      # Stop the worker's WHOLE cgroup: SIGTERM, bounded grace, then SIGKILL of
+      # whatever is left. Never "kill the initial pid" — a repository process
+      # that double-forked must die too.
+      stop_worker() {
+          local waited=0
+          systemctl stop --no-block "$worker_unit" >/dev/null 2>&1 || true
+          while (( waited < WORKER_KILL_GRACE + 5 )); do
+              case "$(unit_prop ActiveState)" in
+                  inactive|failed|"") return 0 ;;
+              esac
+              sleep 1
+              waited=$(( waited + 1 ))
+          done
+          log "worker $worker_unit still active after ''${waited}s; SIGKILLing its cgroup"
+          systemctl kill --kill-whom=all --signal=SIGKILL "$worker_unit" >/dev/null 2>&1 || true
+          systemctl stop "$worker_unit" >/dev/null 2>&1 || true
+      }
+
+      write_state running
       emit_event agent-started running
 
-      rc=0
-      case "$agent" in
-      ${agentRegistry.batchDispatchCases}
-          *)
-              infra_fail "agent '$agent' cannot run unattended (expected: ${agentRegistry.batchNamesAlternation})"
-              ;;
-      esac || rc=$?
+      # --- (f) supervise: deadline + cancellation + exit collection --------
+      waited=0
+      active_state=""
+      while :; do
+          active_state="$(unit_prop ActiveState)"
+          # Type=oneshot + RemainAfterExit: a finished worker is `active`
+          # (SubState=exited) or `failed`, and its exit status stays readable
+          # until the controller stops the unit.
+          if [[ "$active_state" == "failed" ]]; then
+              break
+          fi
+          if [[ "$active_state" == "active" && "$(unit_prop SubState)" == "exited" ]]; then
+              break
+          fi
+          # Gone without ever reporting a status: treat as an infrastructure
+          # error below, never as success.
+          if [[ -z "$active_state" || "$active_state" == "inactive" ]] && (( waited > 0 )); then
+              break
+          fi
+          if cancel_requested; then
+              log "cancellation requested for this allocation; stopping the worker"
+              controller_verdict=cancelled
+              write_state cancelling
+              stop_worker
+              break
+          fi
+          if (( waited >= timeout_s )); then
+              log "worker exceeded its ''${timeout_s}s deadline; stopping its cgroup"
+              controller_verdict=timed-out
+              write_state timing-out
+              stop_worker
+              break
+          fi
+          sleep "$POLL_INTERVAL"
+          waited=$(( waited + POLL_INTERVAL ))
+      done
 
-      # timeout(1) reports 124 when it had to signal the child, and 128+9=137
-      # when --kill-after had to SIGKILL it.
+      # --- (g) derive the outcome from what WE observed ---------------------
+      unit_result="$(unit_prop Result)"
+      exec_code="$(unit_prop ExecMainCode)"
+      exec_status="$(unit_prop ExecMainStatus)"
+      active_state="$(unit_prop ActiveState)"
+      log "worker $worker_unit: ActiveState=$active_state Result=$unit_result ExecMainCode=$exec_code ExecMainStatus=$exec_status"
+
+      state=""
+      rc=70
       timed_out=false
-      state=completed
-      if (( rc == 124 || rc == 137 )); then
-          timed_out=true
-          state=timed-out
-      elif (( rc != 0 )); then
-          state=failed
-      fi
+      message=""
+      case "$controller_verdict" in
+          timed-out)
+              state=timed-out; rc=124; timed_out=true
+              message="the controller stopped the worker after ''${timeout_s}s"
+              ;;
+          cancelled)
+              state=cancelled; rc=130
+              message="cancelled by the operator"
+              ;;
+          *)
+              case "$unit_result" in
+                  timeout)
+                      # The unit's own static ceiling fired.
+                      state=timed-out; rc=124; timed_out=true
+                      message="the worker unit hit its static runtime ceiling"
+                      ;;
+                  oom-kill)
+                      state=failed; rc=137
+                      message="the worker was killed by the cgroup OOM killer"
+                      ;;
+                  *)
+                      case "$exec_code" in
+                          1) # exited normally
+                              if [[ "$exec_status" =~ ^[0-9]+$ ]]; then
+                                  rc="$exec_status"
+                                  if (( rc == 0 )); then state=completed; else state=failed; fi
+                              else
+                                  state=infrastructure-error
+                                  message="the worker's exit status could not be read"
+                              fi
+                              ;;
+                          2) # killed by a signal
+                              state=failed
+                              if [[ "$exec_status" =~ ^[0-9]+$ ]]; then
+                                  rc=$(( 128 + exec_status ))
+                              else
+                                  rc=137
+                              fi
+                              message="the worker was killed by a signal"
+                              ;;
+                          *)
+                              state=infrastructure-error
+                              message="the worker never reported an exit status (result=''${unit_result:-unknown})"
+                              ;;
+                      esac
+                      ;;
+              esac
+              ;;
+      esac
 
-      log "agent '$agent' finished: state=$state exit=$rc"
-      write_result "$state" "$rc" "$timed_out"
-      if [[ "$state" == "timed-out" ]]; then
-          emit_event timeout "$state" "$rc"
-      else
-          emit_event agent-finished "$state" "$rc"
-      fi
+      # Release the unit (RemainAfterExit keeps it around) and make sure no
+      # descendant of the worker survives into the next phase.
+      stop_worker
+      systemctl reset-failed "$worker_unit" >/dev/null 2>&1 || true
+
+      log "task '$task_id' finished: state=$state exit=$rc"
+      write_state finished "$state"
+      write_result "$state" "$rc" "$timed_out" "$message" \
+          || hard_fail "could not write the authoritative result"
+      case "$state" in
+          timed-out) emit_event timeout "$state" "$rc" ;;
+          cancelled) emit_event cancellation "$state" "$rc" ;;
+          *)         emit_event agent-finished "$state" "$rc" ;;
+      esac
 
       # Exit 0 for a *reported* agent failure: the authoritative outcome is
       # result.json, and a failed unit would only add noise (and, with
@@ -281,7 +851,213 @@ let
       exit 0
     '';
     meta = with lib; {
-      description = "Guest-side unattended batch runner for myconfig.ai.microvm sandboxes";
+      description = "Trusted guest-side batch job controller for myconfig.ai.microvm sandboxes";
+      platforms = platforms.linux;
+    };
+  };
+
+  # ======================================================================
+  # (4) HOST-side result VERIFIER (the ONE result parser)
+  # ======================================================================
+  # The host must treat the result as untrusted input even though only the
+  # guest controller can write it: ownership separation is a control, not a
+  # proof, and a bug on either side must fail CLOSED.
+  #
+  # Exit codes:
+  #   0   the document is valid AND belongs to the active allocation; the
+  #       canonical (compact) JSON is printed on stdout
+  #   1   nothing to read yet (the file does not exist)
+  #   2   REJECTED — the reason is printed on stderr; callers must treat this
+  #       as an infrastructure/protocol error, never as a result
+  #   64  usage error
+  resultSchema = pkgs.writeText "agent-job-result-schema.jq" ''
+    # Validate a controller-written job document against the ACTIVE allocation.
+    # Emits "ok" or "reject: <first reason>".
+    def isoTs: type == "string"
+      and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$");
+    def isInt: type == "number" and (. == floor);
+
+    def terminalStates: ${builtins.toJSON paths.terminalStates};
+    def phases: ${builtins.toJSON paths.phases};
+    def commonKeys: ["version","controllerVersion","taskId","allocationToken",
+                     "slot","agent","message"];
+    def resultKeys: commonKeys + ["state","exitCode","startedAt","finishedAt","timedOut"];
+    def stateKeys:  commonKeys + ["phase","startedAt","updatedAt","workerUnit"];
+
+    def identityErrors:
+      [ if (.version | isInt | not) or .version != $expVersion
+        then "schema version mismatch (expected \($expVersion))" else empty end
+      , if (.controllerVersion | isInt | not) or .controllerVersion != $expController
+        then "controller version mismatch (expected \($expController))" else empty end
+      , if (.taskId | type) != "string" or .taskId != $expTask
+        then "task id does not belong to the active allocation" else empty end
+      , if (.allocationToken | type) != "string" or .allocationToken != $expToken
+        then "allocation token does not belong to the active allocation" else empty end
+      , if (.slot | type) != "string" or .slot != $expSlot
+        then "slot does not belong to the active allocation" else empty end
+      , if (.agent | type) != "string" or .agent != $expAgent
+        then "agent does not belong to the active allocation" else empty end
+      ];
+
+    def resultErrors:
+      # NOTE: bind the value BEFORE `index()` — `terminalStates | index(.)` would
+      # search the array for ITSELF (jq treats an array argument as a
+      # subsequence search) and therefore always match.
+      [ (.state as $s
+         | if ($s | type) != "string" then "state is not a string"
+           elif (terminalStates | index($s)) == null
+           then "state is not a terminal state" else empty end)
+      , if (.exitCode | isInt | not) then "exitCode is not an integer"
+        elif .exitCode < 0 or .exitCode > 255 then "exitCode out of range"
+        else empty end
+      , if (.timedOut | type) != "boolean" then "timedOut is not a boolean" else empty end
+      , if (.startedAt | isoTs | not) then "startedAt is not an ISO-8601 UTC timestamp" else empty end
+      , if (.finishedAt | isoTs | not) then "finishedAt is not an ISO-8601 UTC timestamp" else empty end
+      , if .state == "timed-out" and .timedOut != true
+        then "state/timedOut disagree" else empty end
+      , if .state != "timed-out" and .timedOut == true
+        then "state/timedOut disagree" else empty end
+      , if .state == "completed" and .exitCode != 0
+        then "a completed job must report exitCode 0" else empty end
+      , if .state != "completed" and .exitCode == 0
+        then "a non-completed job must not report exitCode 0" else empty end
+      ];
+
+    def stateErrors:
+      [ (.phase as $p
+         | if ($p | type) != "string" then "phase is not a string"
+           elif (phases | index($p)) == null
+           then "phase is not a known controller phase" else empty end)
+      , if (.startedAt | isoTs | not) then "startedAt is not an ISO-8601 UTC timestamp" else empty end
+      , if (.updatedAt | isoTs | not) then "updatedAt is not an ISO-8601 UTC timestamp" else empty end
+      ];
+
+    def unknownKeys(allowed): [keys[] | select(. as $k | allowed | index($k) | not)];
+    def missingKeys(required): . as $doc | [required[] | select(. as $k | ($doc | has($k)) | not)];
+
+    def errors:
+      if type != "object" then ["document is not a JSON object"]
+      else
+        (if $kind == "result" then resultKeys else stateKeys end) as $allowed
+        # Structural problems first: identity comparisons on a document with
+        # missing or extra fields would only produce confusing reasons.
+        | [ (unknownKeys($allowed) | if length > 0 then "unknown field(s): \(join(","))" else empty end)
+          , (missingKeys($allowed - ["message","workerUnit"])
+             | if length > 0 then "missing required field(s): \(join(","))" else empty end)
+          ] as $structural
+        | if ($structural | length) > 0 then $structural
+          else
+            identityErrors
+            + (if $kind == "result" then resultErrors else stateErrors end)
+          end
+      end;
+
+    errors as $e
+    | if ($e | length) == 0 then "ok" else "reject: " + $e[0] end
+  '';
+
+  agent-job-verify-result = pkgs.writeShellApplication {
+    name = "agent-job-verify-result";
+    runtimeInputs = with pkgs; [
+      coreutils
+      jq
+    ];
+    text = ''
+      set -euo pipefail
+
+      readonly SCHEMA=${resultSchema}
+      readonly EXP_VERSION=${toString paths.specVersion}
+      readonly EXP_CONTROLLER=${toString paths.controllerVersion}
+      # A result document is a handful of scalars; anything larger is junk we
+      # refuse to parse.
+      readonly MAX_BYTES=65536
+
+      readonly PROG="agent-job-verify-result"
+      reject() { printf '%s: reject: %s\n' "$PROG" "$*" >&2; exit 2; }
+      usage_error() { printf '%s: %s\n' "$PROG" "$*" >&2; exit 64; }
+
+      path=""
+      kind="result"
+      task=""
+      token=""
+      slot=""
+      agent=""
+      while [[ $# -gt 0 ]]; do
+          case "$1" in
+              --result) path="''${2-}"; shift 2 ;;
+              --kind)   kind="''${2-}"; shift 2 ;;
+              --task)   task="''${2-}"; shift 2 ;;
+              --token)  token="''${2-}"; shift 2 ;;
+              --slot)   slot="''${2-}"; shift 2 ;;
+              --agent)  agent="''${2-}"; shift 2 ;;
+              *) usage_error "unknown argument '$1'" ;;
+          esac
+      done
+
+      [[ -n "$path" ]] || usage_error "--result <path> is required"
+      [[ "$path" == /* ]] || usage_error "--result must be an absolute path"
+      case "$kind" in
+          result|state) ;;
+          *) usage_error "--kind must be 'result' or 'state'" ;;
+      esac
+      # The EXPECTED identity comes from the host's own allocation marker, so
+      # constrain it here too: a malformed expectation would silently weaken
+      # every comparison below.
+      [[ "$task"  =~ ^[a-zA-Z0-9._-]{1,64}$ ]] || usage_error "--task is missing or malformed"
+      [[ "$token" =~ ^[0-9a-f]{32,128}$ ]]     || usage_error "--token is missing or malformed"
+      [[ "$slot"  =~ ^[a-zA-Z0-9._-]{1,64}$ ]] || usage_error "--slot is missing or malformed"
+      [[ "$agent" =~ ^[a-z][a-z0-9-]{0,32}$ ]] || usage_error "--agent is missing or malformed"
+
+      # --- file-system level: WHO could have written this? -----------------
+      # A symlink would mean the path we open is not the path we authorised.
+      [[ ! -L "$path" ]] || reject "the result path is a symlink: $path"
+      if [[ ! -e "$path" ]]; then
+          exit 1
+      fi
+      [[ -f "$path" ]] || reject "the result path is not a regular file: $path"
+
+      owner="$(stat -c %u -- "$path")"
+      [[ "$owner" == 0 ]] || reject "the result is owned by uid $owner, not by the guest controller (uid 0)"
+      mode="$(printf '%d' "0$(stat -c %a -- "$path")")"
+      (( (mode & 0022) == 0 )) \
+          || reject "the result is group/other-writable (mode $(stat -c %a -- "$path"))"
+
+      parent="''${path%/*}"
+      [[ ! -L "$parent" ]] || reject "the controller directory is a symlink: $parent"
+      [[ -d "$parent" ]] || reject "the controller directory is missing: $parent"
+      powner="$(stat -c %u -- "$parent")"
+      [[ "$powner" == 0 ]] || reject "the controller directory is owned by uid $powner, not 0"
+      pmode="$(printf '%d' "0$(stat -c %a -- "$parent")")"
+      (( (pmode & 0022) == 0 )) \
+          || reject "the controller directory is group/other-writable (mode $(stat -c %a -- "$parent"))"
+
+      size="$(stat -c %s -- "$path")"
+      (( size > 0 )) || reject "the result file is empty"
+      (( size <= MAX_BYTES )) || reject "the result file is larger than $MAX_BYTES bytes ($size)"
+
+      # --- content level: strict parse + identity + schema ------------------
+      jq -e . -- "$path" >/dev/null 2>&1 || reject "the result is not valid JSON"
+      verdict="$(jq -r \
+          --argjson expVersion "$EXP_VERSION" \
+          --argjson expController "$EXP_CONTROLLER" \
+          --arg expTask "$task" \
+          --arg expToken "$token" \
+          --arg expSlot "$slot" \
+          --arg expAgent "$agent" \
+          --arg kind "$kind" \
+          -f "$SCHEMA" -- "$path")" \
+          || reject "the result could not be validated"
+      case "$verdict" in
+          ok) ;;
+          reject:*) reject "''${verdict#reject: }" ;;
+          *) reject "the validator produced no verdict" ;;
+      esac
+
+      # Canonical, compact form — the caller archives THIS, never the raw file.
+      jq -c . -- "$path"
+    '';
+    meta = with lib; {
+      description = "Validate a myconfig.ai.microvm batch result against the active allocation";
       platforms = platforms.linux;
     };
   };
@@ -291,10 +1067,15 @@ let
   # hostkey shares. Takes the SLOT because the resource limits below are derived
   # from the slot's resource class (ticket 5 C).
   mkGuestModule = slot: {
-    environment.systemPackages = [ agent-job ];
+    environment.systemPackages = [
+      agent-job-controller
+      agent-job-worker
+      agent-job-assert-paths
+    ];
 
-    systemd.services.agent-job = {
-      description = "Unattended agent batch job (myconfig.ai.microvm)";
+    # ---- TRUSTED controller (guest root) --------------------------------
+    systemd.services.agent-job-controller = {
+      description = "Trusted unattended agent batch job controller (myconfig.ai.microvm)";
       wantedBy = [ "multi-user.target" ];
       # Only run when the host actually placed a job in the share. Without a
       # spec the unit is skipped entirely, so an interactive slot is unaffected.
@@ -305,28 +1086,74 @@ let
         RequiresMountsFor = "/workspace ${paths.guestMountPoint}";
       };
       wants = [ "network-online.target" ];
-      after = [ "network-online.target" ];
-      # The agent binaries plus the runner's own tools. Explicit, so the unit
-      # does not depend on the ambient systemd PATH.
-      path =
-        agentRegistry.packages
-        ++ (with pkgs; [
-          bash
-          coreutils
-          git
-          gnugrep
-          gnused
-          jq
-          ripgrep
-        ]);
+      after = [
+        "network-online.target"
+        # It talks to PID 1 over D-Bus to start/stop/inspect the worker unit.
+        "dbus.service"
+      ];
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = lib.getExe agent-job;
-        # §6/ticket 4: the job runs as the SAME unprivileged guest user as the
+        ExecStart = lib.getExe agent-job-controller;
+        # Deliberately root: it must start the worker under a DIFFERENT uid and
+        # own a directory the worker cannot touch. It never executes anything
+        # the spec, the repository or the agent supplied.
+        NoNewPrivileges = true;
+        PrivateDevices = true;
+        PrivateTmp = true;
+        # The controller has no business in the worker's home.
+        ProtectHome = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        RestrictSUIDSGID = true;
+        # The immutable input is read-only even for the controller, and the only
+        # part of the share it may write is its OWN directory (plus the worker's
+        # log/artifact area it has to prepare). `-` tolerates a slot whose share
+        # predates this layout.
+        ReadOnlyPaths = [ "-${paths.guestInputDir}" ];
+        ReadWritePaths = [
+          "-${paths.guestControllerDir}"
+          "-${paths.guestWorkerDir}"
+        ];
+        # NOTE: no ProtectSystem= here. It would need a verified list of
+        # writable paths for the D-Bus socket and systemd's runtime dirs, which
+        # cannot be validated without booting on real KVM; the controller is a
+        # small, fixed, non-repository-driven script instead.
+        #
+        # Static ceiling for the CONTROLLER itself: the worker's own ceiling
+        # plus room for the stop grace and the result write.
+        RuntimeMaxSec = workerCeilingSeconds + jobCfg.gracePeriodSeconds;
+        TimeoutStopSec = 30;
+      };
+    };
+
+    # ---- UNTRUSTED worker (the guest agent user) ------------------------
+    # Predeclared TEMPLATE, started ONLY by the controller with the
+    # registry-validated agent name as the instance. Not `wantedBy` anything,
+    # so it never starts on its own.
+    systemd.services."${paths.workerUnitTemplate}" = {
+      description = "Unattended agent batch worker (UNTRUSTED; agent %i)";
+      unitConfig = {
+        RequiresMountsFor = "/workspace ${paths.guestMountPoint}";
+      };
+      # The agent binaries plus the worker's own tools. Explicit, so the unit
+      # does not depend on the ambient systemd PATH.
+      path = workerPackages;
+      serviceConfig = {
+        # oneshot + RemainAfterExit: the unit stays loaded after the worker
+        # exits, so the CONTROLLER can still read ExecMainCode/ExecMainStatus
+        # (its only source of truth for the outcome).
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${lib.getExe agent-job-worker} %i";
+        # §6/ticket 4: the agent runs as the SAME unprivileged guest user as the
         # interactive session, in the workspace, with no way to gain privileges.
-        User = "agent";
-        Group = "users";
+        User = paths.workerUser;
+        Group = paths.workerGroup;
         WorkingDirectory = "/workspace";
+        # Untrusted output, in the worker's own area.
+        StandardOutput = "append:${paths.guestWorkerStdout}";
+        StandardError = "append:${paths.guestWorkerStderr}";
         NoNewPrivileges = true;
         PrivateDevices = true;
         PrivateTmp = true;
@@ -334,12 +1161,31 @@ let
         ProtectKernelModules = true;
         ProtectControlGroups = true;
         RestrictSUIDSGID = true;
-        # STATIC ceiling on top of the per-job `timeout(1)`: even a job spec
-        # that somehow passed validation cannot run longer than this.
-        RuntimeMaxSec = jobCfg.maxTimeoutSeconds + jobCfg.gracePeriodSeconds;
-        # Give the agent the same SIGTERM grace the per-job timeout uses, so a
-        # host-side `cancel` still lets it flush work to /workspace.
-        TimeoutStopSec = 30;
+        # /usr, /boot, /efi and /etc read-only. The agent writes to /workspace,
+        # its home and /tmp, none of which this affects.
+        ProtectSystem = "full";
+        # SECOND layer under the 0700 ownership of the controller directory: the
+        # worker's mount namespace does not even contain it.
+        InaccessiblePaths = [ "-${paths.guestControllerDir}" ];
+        ReadOnlyPaths = [ "-${paths.guestInputDir}" ];
+        ReadWritePaths = [
+          "-${paths.guestWorkerDir}"
+          "-/workspace"
+        ];
+        # STATIC ceiling on top of the controller's own deadline: even a worker
+        # the controller somehow stopped supervising cannot run longer than
+        # this. (`Type=oneshot` ignores RuntimeMaxSec, hence TimeoutStartSec.)
+        TimeoutStartSec = workerCeilingSeconds;
+        # Grace between SIGTERM and SIGKILL for the WHOLE cgroup, so the agent
+        # can still flush partial work to /workspace.
+        TimeoutStopSec = workerKillGraceSeconds;
+        # A repository process that double-forked must die with the job: the
+        # controller stops a CGROUP, not a pid.
+        KillMode = "control-group";
+        KillSignal = "SIGTERM";
+        # One worker per allocation; never restarted behind the controller's
+        # back.
+        Restart = "no";
 
         # --- ticket 5 C: guest-side resource limits, sized by the CLASS ------
         # A runaway agent (fork bomb, memory hog, endless build) must not take
@@ -377,8 +1223,8 @@ in
       default = 86400;
       description = ''
         Upper bound for a job's `--timeout`. Enforced by the host launcher,
-        re-validated by the guest runner, and used for the guest unit's static
-        `RuntimeMaxSec` ceiling.
+        re-validated by the guest controller, and used for the guest worker
+        unit's static `TimeoutStartSec` ceiling.
       '';
     };
 
@@ -386,7 +1232,7 @@ in
       type = types.ints.positive;
       default = 4096;
       description = ''
-        `TasksMax` for the guest batch job: an upper bound on processes and
+        `TasksMax` for the guest batch worker: an upper bound on processes and
         threads, so a fork bomb inside the sandbox cannot exhaust the guest's
         pid space. Generous enough for compilers and test runners.
       '';
@@ -397,7 +1243,7 @@ in
       default = 512;
       description = ''
         RAM (MiB) subtracted from a slot's class memory to obtain the batch
-        job's `MemoryMax`. The headroom is what the guest kernel, the tmpfs
+        worker's `MemoryMax`. The headroom is what the guest kernel, the tmpfs
         root, systemd and sshd need, so that an out-of-memory AGENT is killed by
         its cgroup instead of wedging the whole guest. Never more than half the
         class memory is subtracted.
@@ -409,19 +1255,23 @@ in
       default = 120;
       description = ''
         Extra time the HOST waits beyond a job's own timeout before it
-        force-stops the VM, so the guest can finish writing `result.json`
-        after its in-guest `timeout(1)` fired.
+        force-stops the VM, so the guest controller can finish writing its
+        authoritative `controller/result.json` after the worker was stopped.
       '';
     };
   };
 
   config = lib.mkMerge [
     # Path/format definitions + the guest module fragment, exported for
-    # guest.nix (shares + service) and launcher.nix (submit/status/recover).
+    # guest.nix (shares + services) and launcher.nix (submit/status/recover).
     {
       _module.args.agentJobs = paths // {
         inherit mkGuestModule;
-        runner = agent-job;
+        controller = agent-job-controller;
+        worker = agent-job-worker;
+        assertPaths = agent-job-assert-paths;
+        resultVerifier = agent-job-verify-result;
+        inherit workerKillGraceSeconds workerCeilingSeconds;
       };
     }
 
@@ -431,19 +1281,34 @@ in
           assertion = cfg.job.defaultTimeoutSeconds <= cfg.job.maxTimeoutSeconds;
           message = "myconfig.ai.microvm.job.defaultTimeoutSeconds must be <= job.maxTimeoutSeconds.";
         }
+        {
+          # The whole trust split collapses if the worker is root.
+          assertion = paths.workerUid != 0;
+          message = "myconfig.ai.microvm: the batch worker uid (guestAgentUid) must never be 0.";
+        }
       ];
 
       # virtiofsd refuses to start when a share source is missing, so every
       # slot's job directory must exist before any VM starts — including slots
-      # that never ran a job. `out/` is owned by the guest agent uid/gid (§11)
-      # because only the guest writes result.json.
+      # that never ran a job.
+      #
+      # The MODES here ARE the trust boundary (virtiofsd passes ownership
+      # through unchanged, so these are the effective permissions inside the
+      # guest): `controller/` is root-only 0700, `input/` is root-owned, and
+      # only `worker/` belongs to the unprivileged guest agent.
       systemd.tmpfiles.rules = [
         "d ${paths.root} 0755 root root - -"
         "d ${paths.resultsDir} 0755 root root - -"
       ]
       ++ lib.concatMap (slot: [
         "d ${paths.slotDir slot.name} 0755 root root - -"
-        "d ${paths.hostOutDir slot.name} 0755 ${toString cfg.guestAgentUid} ${toString cfg.guestAgentGid} - -"
+        "d ${paths.hostInputDir slot.name} ${paths.inputDirMode} root root - -"
+        "d ${paths.hostControllerDir slot.name} ${paths.controllerDirMode} root root - -"
+        "d ${paths.hostWorkerDir slot.name} ${paths.workerDirMode} ${toString paths.workerUid} ${toString paths.workerGid} - -"
+        # Migration (spec v1 -> v2): the old guest-writable `out/` directory
+        # was the forgeable result channel. Remove it, so no stale v1 result
+        # lingers in a shared, worker-writable place.
+        "R ${paths.slotDir slot.name}/out - - - - -"
       ]) slots;
     })
   ];
