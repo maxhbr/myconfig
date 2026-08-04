@@ -392,6 +392,11 @@ in
           description = "Disable IPv6 on the agent microVM bridge ${bridge}";
           after = [ "${bridge}-netdev.service" ];
           wants = [ "${bridge}-netdev.service" ];
+          # `wants` (not `requires`): unlike the LiteLLM forwarder socket below
+          # (whose `BindToDevice` FAILS hard without the bridge device, so a
+          # missing bridge must be a visible socket failure), a missing bridge
+          # here only leaves IPv6 un-disabled on it — a cosmetic hardening gap,
+          # not a broken listener — so a `wants` pull-in is the right strength.
           wantedBy = [ "network.target" ];
           serviceConfig = {
             Type = "oneshot";
