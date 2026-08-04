@@ -2110,6 +2110,51 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # (rtv-dispatch) the real-KVM suite's SECTION DISPATCH (Bug 2 / Gap 3).    #
+  #     The suite needs /dev/kvm + root, so CI cannot run its section         #
+  #     bodies. But CI CAN run the part that decides WHICH sections run      #
+  #     and which are SKIPPED: the endpoint preflight + section planning.    #
+  #     Bug 2: under `--section all`, an unreachable endpoint used to abort    #
+  #     the ENTIRE run (so the operator validated nothing, incl. forgery).    #
+  #     The fix runs the five endpoint-independent sections and skips only    #
+  #     net+forgery with a loud reason; hard-abort only for `--section         #
+  #     net`/`--section forgery` alone. This harness sources the dispatch      #
+  #     block verbatim with stubbed section bodies + a stub curl, asserting: #
+  #       * all+up -> all 7 run, exit 0, plan + per-section tallies + summary; #
+  #       * all+down -> 5 run, net+forgery SKIPPED (loud, counted, with the    #
+  #       doctor hint), exit non-zero (so the skipped security-critical        #
+  #       forgery section cannot pass silently);                              #
+  #       * net+down / forgery+down -> hard-abort;                            #
+  #       * boot+down -> runs (endpoint not needed);                          #
+  #       * an unknown section is rejected, not silently dropped.             #
+  # ---------------------------------------------------------------------- #
+  microvm-rtv-dispatch =
+    pkgs.runCommand "microvm-rtv-dispatch"
+      {
+        nativeBuildInputs = [
+          pkgs.coreutils
+          pkgs.bash
+        ];
+        harness = ./microvm-rtv-dispatch.sh;
+        SUITE = ../modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh;
+      }
+      ''
+        mkdir -p work && cd work
+        export HOME=$PWD
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- runtime-validation dispatch harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "microvm-rtv-dispatch"
+          echo "  suite: $SUITE"
+          echo
+          cat report.txt
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (l5-doctor) `agent-microvm doctor` against STUBBED host state. Bug 1:    #
   #     `doctor` false-failed the LiteLLM ACCEPT rule because it grepped     #
   #     `iptables -S`'s PRINTED form for `-d <addr> <space> ...`, but       #
