@@ -6,66 +6,60 @@ SPDX-License-Identifier: MIT
 # Agent microVM sandboxes (`myconfig.ai.microvm`)
 
 A second, stronger isolation tier for autonomous coding agents, alongside the
-existing QEMU/SLiRP `flake.sandboxed-pi.nix` tier and the process-jail /
-dedicated-host-user tiers. Each agent session runs inside a **Cloud
-Hypervisor microVM** (via the `microvm.nix` flake input) with:
+QEMU/SLiRP `flake.sandboxed-pi.nix` tier and the process-jail /
+dedicated-host-user tiers. Each agent session runs inside a **Cloud Hypervisor
+microVM** (via the `microvm.nix` flake input) with:
 
 - its **own kernel** and a self-contained guest store disk (the host
   `/nix/store` is **not** shared),
 - a **disposable** root and `/home/agent`; **only `/workspace` persists** (plus,
   opt-in and task-scoped, an agent's declared state directories),
-- a single writable **virtiofs `/workspace`** mount that is a standalone git
-  clone of your repo,
+- a writable **virtiofs `/workspace`** that is a standalone git clone of your
+  repository,
 - a dedicated **private bridge** (`agentbr0`, `192.168.83.0/24`) with **per-TAP
   layer-2 isolation**, and
 - model-API access restricted to the **host LiteLLM proxy** through a
-  bridge-only forwarding endpoint — no upstream API key ever reaches the
-  guest.
+  bridge-only forwarding endpoint — no upstream API key ever reaches the guest.
 
-Both an **interactive** (`run --attach`) and an **unattended batch**
-(`submit`) execution path are supported, with structured results, hard
-timeouts, cancellation and recovery.
+Both an **interactive** (`run --attach`) and an **unattended batch** (`submit`)
+execution path exist, with structured results, hard timeouts, cancellation and
+recovery.
 
-Every agent process and guest workload is treated as potentially hostile. The
+Every agent process and guest workload is treated as potentially hostile; the
 secure default prioritises **isolation over convenience**.
 
-> **Status / maturity.** Everything described here is implemented and covered by
-> the eval/build tier (`nix flake check` — see
-> [`agent-microvm-validation.md`](./agent-microvm-validation.md) for recorded
-> results and the check list). Shell code is additionally exercised by running
-> the built launcher and guest runners against stubbed systemd/mounts and a
-> faked guest filesystem.
->
-> The **real-KVM tier has NOT been executed**: no guest has been booted, no
-> packet moved and no cgroup limit observed from the environment this was
-> developed in. The procedure exists and is repeatable —
-> [`runtime-validation.sh`](../runtime-validation.sh) plus
-> [the test guide](./agent-microvm-runtime-validation.md) — but until it is run
-> on `f13`, treat every *runtime* property (firewall enforcement, L2 isolation,
-> credential absence, limit containment) as **unverified by measurement**. Read
-> [Limitations](#limitations) first.
+> **Verification boundary.** The eval/build tier (`nix flake check`,
+> `tests/microvm.nix`) covers the module's configuration; the shell components
+> were additionally exercised against stubbed systemd/mounts. **Runtime**
+> properties (firewall enforcement, L2 isolation, credential absence, cgroup
+> limits) are designed and eval-asserted but must be *measured* with the
+> [runtime validation guide](./agent-microvm-runtime-validation.md) on real
+> KVM. Read [Limitations](#limitations) before trusting the tier.
 
-### Companion documents
+## This document set
 
 | Document | Contents |
 | --- | --- |
-| [Architecture](./agent-microvm-architecture.md) | prebuilt slot pool, workspace indirection, guest store, network path, credential boundary, interactive vs batch path, state persistence, resource classes |
+| this file | activation, option reference, agent registry, network profiles, the dedicated SSH key, batch job format, limitations |
+| [Architecture](./agent-microvm-architecture.md) | module map, slot pool, workspace indirection, network path, credential boundary, execution paths, state lifetimes |
 | [Operator guide](./agent-microvm-operator-guide.md) | exact procedures: start, submit, status, attach, cancel, collect, remove, recover, logs |
-| [Security model](./agent-microvm-security-model.md) | trusted vs untrusted components, what the VM boundary protects, what virtiofs still shares, mitigated attacks, residual risks |
-| [Runtime validation guide](./agent-microvm-runtime-validation.md) | the real-KVM test procedure and its (not yet executed) status |
-| [Recorded validation results](./agent-microvm-validation.md) | what has actually been executed, with out-paths |
+| [Security model](./agent-microvm-security-model.md) | trusted vs untrusted, what the boundary protects, mitigated attacks, residual risks |
+| [Runtime validation](./agent-microvm-runtime-validation.md) | the real-KVM test procedure for `runtime-validation.sh` |
+
+> Module comments still cite `§<n>` sections of the original implementation
+> spec and numbered improvement tickets. Those planning documents are gone;
+> the markers are historical only.
 
 ---
 
 ## Activation
 
-The module lives in `modules/myconfig.ai/myconfig.ai.microvm/` and is
-**disabled by default**. While disabled it produces zero config side effects:
-it does not import the microvm.nix host module, create the bridge/firewall,
-define VM slots, build the guest, or register Workmux agents.
+The module is **disabled by default** and produces zero config side effects
+while disabled: no microvm.nix host module, no bridge/firewall, no VM slots, no
+guest build, no Workmux agents.
 
-It is enabled **only on `f13`**, and **explicitly** — never via the broad
-`myconfig.ai.enable`. See `hosts/host.f13/ai.f13.nix`:
+It is enabled **only per host, and explicitly** — never via the broad
+`myconfig.ai.enable`. On `f13` (`hosts/host.f13/ai.f13.nix`):
 
 ```nix
 myconfig.ai.microvm = {
@@ -81,38 +75,40 @@ myconfig.ai.microvm = {
 };
 ```
 
-### Knobs
+### Options
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `enable` | `false` | Turn the whole tier on for a host. |
 | `resourceClasses` | `{ normal = { count = 4; vcpu = 4; memoryMiB = 8192; }; }` | Fixed, **prebuilt** resource classes. See [Resource classes](#resource-classes). |
-| `slotCount` / `defaultVcpu` / `defaultMemoryMiB` | `4` / `4` / `8192` | **DEPRECATED** → `resourceClasses`. Still honoured (as a single `normal` class) while `resourceClasses` is unset; setting both is rejected. |
 | `bridgeName` | `agentbr0` | Private bridge name. |
 | `subnet` | `192.168.83.0/24` | Private subnet. |
 | `gatewayAddress` | `192.168.83.1` | Host-side bridge address + LiteLLM forwarder bind address. |
 | `litellmPort` | `4000` | LiteLLM proxy port. |
 | `workspaceRoot` | `/var/lib/agent-microvms/workspaces` | Where per-task standalone clones are created. |
-| `runtimeRoot` | `/var/lib/agent-microvms` | Runtime state (locks, slot session metadata). |
+| `runtimeRoot` | `/var/lib/agent-microvms` | Runtime state (locks, markers, jobs, results, logs). |
 | `stateRoot` | `/var/lib/microvms` | microvm.nix per-VM state / bind-mount source. |
-| `guestAgentUid` / `guestAgentGid` | `1000` | Numeric ids of the guest `agent` user; also the host-side owner of every guest-writable path (workspace clone, job output, agent state). Asserted unprivileged. |
-| `job.defaultTimeoutSeconds` / `job.maxTimeoutSeconds` / `job.gracePeriodSeconds` | `3600` / `86400` / `120` | Batch-job timeouts (see [Unattended batch jobs](#unattended-batch-jobs)). |
-| `enableSsh` | `true` | Guest SSH server on the private interface only. |
-| `sshPublicKeyFile` | `null` | **Required** when `enableSsh`. One dedicated key. |
+| `guestAgentUid` / `guestAgentGid` | `1000` | Numeric ids of the guest `agent` user, and the host-side owner of every guest-writable path. Asserted unprivileged. |
+| `job.defaultTimeoutSeconds` / `job.maxTimeoutSeconds` / `job.gracePeriodSeconds` | `3600` / `86400` / `120` | Batch-job timeouts. |
+| `enableSsh` | `true` | Guest SSH server, private interface only. |
+| `sshPublicKeyFile` | `null` | **Required** when `enableSsh`. See [The dedicated SSH key](#the-dedicated-ssh-key). |
+| `passwordlessControl` | `false` | Scoped `NOPASSWD`+`SETENV` sudo rule for exactly `agent-microvm`, for members of the `agent-microvm` group. |
 | `guestDotfiles.enable` | `true` | Provision the guest `agent` user with the host primary user's fish + coding-agent dotfiles (home-manager in the guest). |
 | `guestDotfiles.homeFilePrefixes` | `.pi/`, `.codex/`, `.agents/`, `.qwen/`, `.config/git/`, `.gitconfig` | Allowlist of `home.file` keys copied from the host primary user. |
 | `guestDotfiles.xdgConfigPrefixes` | `fish/`, `opencode/` | Allowlist of `xdg.configFile` keys copied from the host primary user. |
-| `networkProfile` | `"proxy-only"` | Named guest network policy: `offline`, `proxy-only`, `package-access`, `internet`. See [Network profiles](#network-profiles). |
-| `packageProxyPort` | `null` | **Required** by `networkProfile = "package-access"`: the explicit host proxy port guests may reach. |
+| `networkProfile` | `"proxy-only"` | Named guest network policy. See [Network profiles](#network-profiles). |
+| `packageProxyPort` | `null` | **Required** by `networkProfile = "package-access"`: the one host proxy port guests may reach. |
 | `dnsServers` | `[ ]` | Explicit DNS policy for `networkProfile = "internet"` (empty = the host on the bridge). |
 | `acknowledgeInsecureNetwork` | `false` | **Required** by the insecure profiles (`package-access`, `internet`). |
-| `allowPublicInternet` | `false` | **DEPRECATED** → `networkProfile = "internet"`. Translated with a warning when `networkProfile` is unset; rejected as ambiguous when it contradicts an explicit profile. |
-| `allowPrivateNetworks` / `allowInterVmTraffic` | `false` | **REMOVED** — setting either to `true` is rejected by an assertion. See [Network profiles](#network-profiles). |
+
+Deprecated / removed spellings (each warns or fails with a pointer; see
+[Migration](#migration)): `slotCount`, `defaultVcpu`, `defaultMemoryMiB`,
+`allowPublicInternet`, `allowPrivateNetworks`, `allowInterVmTraffic`.
 
 ### Resource classes
 
-The slot pool is grouped into **fixed, prebuilt** resource classes. Each class
-contributes `count` slots named `agent-<class>-<i>`, sized by the class:
+Each class contributes `count` slots named `agent-<class>-<i>`, sized by the
+class:
 
 ```nix
 myconfig.ai.microvm.resourceClasses = lib.mkForce {
@@ -122,43 +118,28 @@ myconfig.ai.microvm.resourceClasses = lib.mkForce {
 };
 ```
 
-```bash
-sudo agent-microvm run    --resource-class large  …
-sudo agent-microvm submit --resource-class small  … [--wait 300]
-sudo agent-microvm list          # slot, class, state, ip, task
-sudo agent-microvm --help        # lists the configured classes
-```
-
-- Every slot keeps its **own** deterministic TAP, MAC, IPv4, VSOCK CID,
-  workspace bind-mount target, job directory and SSH host identity — across
-  classes, not just within one.
-- There is **no per-job Nix evaluation**: the pool is built with the system.
+- `mkForce` matters: defining a single class otherwise **merges** with the
+  module's default `normal` class instead of replacing the pool.
 - The allocator only ever considers the **requested** class; it never
-  substitutes a different (e.g. smaller) one. If the class is full it fails with
-  a clear error, or waits at most `--wait <sec>` for a free slot.
-- Sizing lives in the class, so all slots of a class are identical.
-- `mkForce` is important: defining a single class **merges** with the module's
-  default `normal` class instead of replacing the pool.
-- Class names must match `[a-z][a-z0-9-]*` **and** be short enough that
-  `vm-<class>-<i>` stays within the 15-character Linux interface-name limit —
-  both are asserted at eval time.
-- Global index order (which drives MAC/IPv4/CID) walks the classes
-  alphabetically, so adding or resizing a class re-numbers the *addresses* of
-  later classes. Slot **names** are stable, and every host-side directory is
-  keyed by name.
+  substitutes a smaller one. If the class is full it fails, or waits at most
+  `--wait <sec>`.
+- Class names must match `[a-z][a-z0-9-]*` and be short enough that
+  `vm-<class>-<i>` stays within the 15-character interface-name limit — both
+  asserted at eval time.
+- Slot **names** are stable, but the pool-wide index (which drives MAC / IPv4 /
+  VSOCK CID) walks classes alphabetically, so adding or resizing a class
+  re-numbers the *addresses* of later classes. Every host-side directory is
+  keyed by name, not address.
+- Old per-slot state left over from a resized pool (`/var/lib/microvms/<slot>`
+  and the matching `hostkeys/`, `jobs/`, `state/slots/` entries) is simply
+  unused and can be deleted; workspace clones are keyed by **task**.
 
-> Renaming note: slots were called `agent-<i>` before resource classes existed.
-> Old per-slot state under `/var/lib/microvms/agent-<i>` (and the matching
-> hostkey/job dirs) is simply unused after the switch and can be deleted.
+### Agent state persistence
 
-### Agent state — disposable by default, opt-in and task-scoped
-
-The guest home is a tmpfs, so by default a sandbox starts with **no** agent
-memories, skills, sessions or caches, and nothing an agent writes there survives.
-Agents that benefit from persistence declare — from **verified** source paths —
-which directories are worth keeping
-([the registry](#supported-agents--the-authoritative-registry),
-`persistentState.directories`; today only hermes, `~/.hermes`).
+The guest home is a tmpfs, so a sandbox starts with **no** agent memories,
+skills, sessions or caches by default. Agents may declare, in the registry,
+which directories are worth keeping (`persistentState.directories`; today only
+hermes, `~/.hermes`).
 
 ```bash
 sudo agent-microvm run    --agent hermes --persist-agent-state …
@@ -171,27 +152,15 @@ sudo agent-microvm --help    # lists the declared directories per agent
 /var/lib/agent-microvms/state/slots/<slot>                 the share source
 ```
 
-- **Opt-in only.** Without `--persist-agent-state` the launcher leaves the
-  slot's share source **empty**, the guest-side linker finds nothing to link, and
-  the agent uses its disposable home. Persistence is never enabled for every
-  task.
-- **Task-scoped.** The per-task directory is `mount --bind`-ed onto the slot's
-  share source only while that slot runs (the same mechanism the workspace clone
-  uses), so task B can never see task A's state — there is no shared parent
-  inside the guest.
-- **Only declared directories.** `agent-state-link.service` (registry-driven,
-  ordered before `agent-job`) symlinks `~/<dir>` → the share for each declared
-  directory the host prepared. It refuses to replace a **non-empty** directory in
-  the home, so it can never clobber provisioned dotfiles.
-- **Nothing else is exposed:** no host home, no `~/.ssh`, no SSH-agent socket, no
-  Docker/Podman socket, no Nix daemon socket, no host-wide agent configuration,
-  no other task's state.
+- **Opt-in only** — without the flag the slot's share source stays empty and the
+  agent uses its disposable home.
+- **Task-scoped** — the per-task directory is bind-mounted onto the slot's share
+  source only while that slot runs, so task B never sees task A's state.
+- **Only declared directories** are linked, and the guest-side linker refuses to
+  replace a **non-empty** directory in the home, so provisioned dotfiles are
+  never clobbered.
 - Requesting persistence for an agent that declares nothing is an **error**, not
   a silent no-op.
-- Ownership: the host creates the state tree owned by
-  `guestAgentUid`/`guestAgentGid` (default `1000:1000`, asserted unprivileged),
-  which virtiofsd passes through unchanged. Nothing outside the task's own state
-  tree is chowned.
 
 ### Resource and abuse limits
 
@@ -199,302 +168,98 @@ Sized per resource class, enforced on **both** sides:
 
 | Where | Limit | Value |
 | --- | --- | --- |
-| guest `agent-job` | `CPUQuota` | `vcpu × 100 %` (the class's cpus, no more) |
-| guest `agent-job` | `MemoryMax` | class RAM − `job.guestMemoryHeadroomMiB` (never less than half), so an OOM kills the **agent** instead of wedging the guest |
+| guest `agent-job` | `CPUQuota` | `vcpu × 100 %` |
+| guest `agent-job` | `MemoryMax` | class RAM − `job.guestMemoryHeadroomMiB` (never below half), so an OOM kills the **agent**, not the guest |
 | guest `agent-job` | `TasksMax` | `job.tasksMax` (default 4096) — fork-bomb bound |
 | guest `agent-job` | `RuntimeMaxSec` | `job.maxTimeoutSeconds + job.gracePeriodSeconds` |
-| host `microvm@<slot>` | `MemoryMax` | class RAM + `hypervisorMemoryOverheadMiB` — **never below** guest RAM + overhead, or a well-behaved VM would be OOM-killed |
+| host `microvm@<slot>` | `MemoryMax` | class RAM + `hypervisorMemoryOverheadMiB` (never below guest RAM + overhead) |
 | host `microvm@<slot>` | `TasksMax` | `hypervisorTasksMax` |
-| host `microvm@<slot>` | `CPUWeight` / `IOWeight` | `50` (relative; sandboxes yield to interactive host work but may use idle capacity) |
+| host `microvm@<slot>` | `CPUWeight` / `IOWeight` | `50` — sandboxes yield to interactive host work but may use idle capacity |
 
-The guest root filesystem and `/tmp` are tmpfs inside the VM, so they are bounded
-by the class's RAM. Retained growth is on disk (clones + task state) and is
-reported by:
+Guest root and `/tmp` are tmpfs, so they are bounded by the class's RAM.
+Retained growth is on disk (clones + task state) and is reported by
+`agent-microvm usage`.
 
-```bash
-sudo agent-microvm usage
-```
+---
 
-which lists, per task, the workspace-clone and task-state sizes plus the runtime
-roots, and points at `workspace-remove <task>` (which now also drops that task's
-persisted agent state and archived job result).
+## Network profiles
 
-### Workspace safety (re-verified)
-
-The properties the sandbox depends on, and where they live — all re-checked by
-`microvm-limits-and-workspace-safety`:
-
-1. `.git` resolves **inside** the workspace (`verify_clone`).
-2. The git **common** dir resolves inside the workspace (`verify_clone`).
-3. Bind sources cannot escape through symlinks (every caller-supplied path is
-   `realpath -e`-canonicalised before use).
-4. Repository paths are canonicalised **and** rejected for `/`, the host home,
-   the runtime/workspace/state roots and existing agent workspaces
-   (`validate_repository`).
-5. Cleanup/removal targets stay under the configured roots (`clone` is always
-   `$WORKSPACE_ROOT/<validated task>`; state removal is scoped to
-   `state/tasks/<task>`).
-6. Clones are standalone: `git clone --no-local` (no hardlinks, no alternates).
-7. The host launcher never evaluates anything the repository provides — no
-   `nix`/`nix-shell`, no `direnv`, no `npm`/`yarn`/`pnpm`/`cargo`/`make`, no git
-   hooks (`clone` does not transfer them and `core.hooksPath` is never set), no
-   MCP configuration. The check greps the built launcher for each of these.
-
-### Network profiles
-
-`myconfig.ai.microvm.networkProfile` replaces the three ambiguous booleans with
-four named, coherent policies. The authoritative capability table is
-[`network-profiles.nix`](../network-profiles.nix); it is resolved **once** (in
-`default.nix`) and drives both the host firewall (`network.nix`) and the
-guest-side proxy/DNS/forwarder configuration (`guest.nix`), so host policy and
-guest configuration can never disagree.
+`networkProfile` replaces three ambiguous booleans with four named policies. The
+capability table ([`network-profiles.nix`](../network-profiles.nix)) is resolved
+**once** in `default.nix` and drives both the host firewall (`network.nix`) and
+the guest-side proxy/DNS configuration (`guest.nix`), so host policy and guest
+configuration cannot disagree.
 
 | Profile | Additionally allowed | Guest-side effect |
 | --- | --- | --- |
-| `offline` | nothing — only host→guest control traffic (ssh/console) and its replies | no loopback LiteLLM forwarder |
+| `offline` | nothing — only host→guest control traffic and its replies | no loopback LiteLLM forwarder |
 | `proxy-only` **(default)** | `guest → <gatewayAddress>:<litellmPort>` (the model API) | loopback LiteLLM forwarder |
-| `package-access` | additionally `guest → <gatewayAddress>:<packageProxyPort>`, one explicit host proxy port. **No routing, NAT or DNS**, so it is *not* unrestricted internet | `http_proxy`/`https_proxy` point at that proxy |
+| `package-access` | additionally one explicit host proxy port `<packageProxyPort>`. **No routing, NAT or DNS** — this is *not* unrestricted internet | `http_proxy`/`https_proxy` point at that proxy |
 | `internet` | routing **plus** NAT/masquerading, DNS restricted to `dnsServers`, rate-limited drop logging | guest resolvers set to `dnsServers` |
 
 In **every** profile:
 
-- guest↔guest traffic is blocked — per-TAP L2 `isolated` *and* the IPv4 inter-VM
-  `FORWARD` DROP. There is no way to relax it (hence the removal of
-  `allowInterVmTraffic`);
+- guest↔guest traffic is blocked — per-TAP L2 `isolated` *and* an IPv4 inter-VM
+  `FORWARD` DROP; there is no option to relax it;
 - the cloud-metadata IP `169.254.169.254` is dropped first, in `INPUT` and
   `FORWARD`;
 - private/special-use IPv4 ranges (host LAN, VPN peers, RFC1918, CGNAT,
   loopback, link-local, multicast, reserved) are dropped — the only exception is
-  a resolver the operator **explicitly** lists in `dnsServers` (hence the
-  removal of `allowPrivateNetworks`);
+  a resolver explicitly listed in `dnsServers`;
 - `INPUT` and `FORWARD` end in a terminal `DROP` (fail closed);
 - host→guest control traffic is allowed (the host is trusted).
 
 `package-access` and `internet` require `acknowledgeInsecureNetwork = true`.
 
-**Migration.** `allowPublicInternet = true` is still honoured: with no explicit
-`networkProfile` it is translated to `internet` and a warning is emitted;
-combined with a *different* explicit profile it is rejected as ambiguous rather
-than silently resolved. Merely *defining* any of the three booleans emits a
-deprecation warning. `allowPrivateNetworks = true` / `allowInterVmTraffic = true`
-are rejected outright — no profile grants those, and silently ignoring them
-would misrepresent the policy. Every case is locked down by
-`microvm-eval-rejects-invalid` and `microvm-network-profiles`.
-
-### The dedicated SSH key
-
-`sshPublicKeyFile` must point at a **dedicated** public key that authorises
-**only the guest `agent` user** — never the host, and never a host
-`authorized_keys` file (asserted intent, plan §18).
-
-- The **public** key is committed in-repo at
-  `hosts/host.f13/dedicated-agent-vm-key.pub` (a public key is not a secret).
-- The matching **private** key is **not** in this repo. It is managed
-  out-of-band and lives in the separate `../priv` repository. Never commit a
-  private key here.
-- **Recommended: inject the private key via agenix.** When the feature is
-  enabled (and `enableSsh`), `secrets.nix` declares a `myconfig.secrets`
-  **stub** `dedicated-agent-vm-key` with **no `source`** and a stable
-  `dest = /run/agenix/dedicated-agent-vm-key` (root-owned, `0400`). Fill the
-  `source` from the **priv** repo:
-
-  ```nix
-  # in ../priv (host.<hostname> module)
-  myconfig.secrets."dedicated-agent-vm-key".source =
-    ./secrets/dedicated-agent-vm-key;
-  ```
-
-  agenix then decrypts the private key to that `dest`, and the launcher
-  **defaults `AGENT_MICROVM_SSH_KEY` to it** when the caller set none and the
-  file exists — so the `run --attach` / `ssh` readiness paths (which run as
-  root under `sudo`, losing any user-set env var) find the dedicated key
-  automatically, with **no** sudoers `--preserve-env` rule required. Until the
-  source is provisioned, `myconfig.secrets` emits its standard
-  "source is missing for: dedicated-agent-vm-key" warning and no key is
-  decrypted.
-- To use a *specific* private key with the launcher's `ssh` / `--attach`
-  paths, export `AGENT_MICROVM_SSH_KEY=/path/to/private-key` (this overrides
-  the agenix default above).
-- For `run --attach` under `sudo` **without** the agenix secret: `sudo`'s
-  `env_reset` strips the variable, so either export `AGENT_MICROVM_SSH_KEY`
-  and rely on the workmux launcher's `--preserve-env=AGENT_MICROVM_SSH_KEY`
-  passthrough (the sudoers policy must permit it), or give **root** an ssh key
-  matching the dedicated pubkey (e.g. via `/root/.ssh` or an `ssh_config`
-  `IdentityFile` entry).
-
-Generate the pair with the helper script in this module directory. It writes
-the **private** key into the priv repo and the **public** key into this repo
-(staging it), and refuses to overwrite an existing private key:
-
-```bash
-./modules/myconfig.ai/myconfig.ai.microvm/mk-dedicated-agent-vm-key.sh [<hostname>]
-# hostname defaults to the current machine's hostname; override the priv
-# repo location with PRIV_ROOT (default: ~/myconfig/priv). Result:
-#   private -> $PRIV_ROOT/hosts/host.<hostname>/secrets/dedicated-agent-vm-key
-#   public  -> hosts/host.<hostname>/dedicated-agent-vm-key.pub  (git add-ed)
-```
-
-Then commit the private key inside the priv repo separately (never here).
-
-Manual equivalent (throwaway, private key deleted immediately):
-
-```bash
-tmp=$(mktemp -d)
-ssh-keygen -t ed25519 -N '' -C 'agent-microvm@f13' -f "$tmp/key"
-cp "$tmp/key.pub" hosts/host.f13/dedicated-agent-vm-key.pub
-# store "$tmp/key" (the PRIVATE key) in ../priv, then:
-rm -rf "$tmp"
-git add hosts/host.f13/dedicated-agent-vm-key.pub
-```
-
-> **`git add` reminder.** Nix evaluates from the git tree, so both the `.pub`
-> file and the `ai.<host>.nix` change must be `git add`-ed or evaluation
-> fails with a "path does not exist" error. The script stages the `.pub` for
-> you.
-
 ---
 
 ## Supported agents — the authoritative registry
 
-[`agents.nix`](../agents.nix) is the **single source of truth** for which
-coding agents a sandbox supports. Everything agent-shaped is generated from
-it; there is no second list to keep in sync:
-
-| Consumer | What is generated |
-|---|---|
-| `guest.nix` | the agent packages baked into the immutable guest closure, the per-agent guest environment, and the `agent-run` dispatch table |
-| `launcher.nix` | `--agent` validation (`validate_agent_name`) and the `agent-microvm --help` agent listing |
-| `workmux.nix` | the `myconfig.ai.workmux.agents.microvm-*` entries and their pane launchers |
-| `default.nix` | assertions that every registry entry is well-formed |
-| `tests/microvm.nix` | the `microvm-agent-registry` / shellcheck checks |
-
-A registry entry is:
+[`agents.nix`](../agents.nix) is the **single source of truth** for which agents
+a sandbox supports: guest closure packages, guest environment, interactive and
+batch argv, `--agent` validation, the `microvm-*` workmux agents and the
+declared state paths are all generated from it. It is instantiated exactly once
+(in `default.nix`) and passed to consumers via `_module.args.agentRegistry`.
 
 ```nix
 <name> = {
-  package = pkgs.<attr>;       # baked into the guest closure (never installed at runtime)
+  package = pkgs.<attr>;       # baked into the guest closure, never fetched at runtime
   executable = "<bin>";        # what `agent-run <name>` execs inside the guest
   workmuxType = "<type>";      # optional, defaults to <name>
   interactiveArgs = [ ];       # optional extra argv for the interactive session
-  guestEnvironment = { };      # optional endpoint plumbing (NEVER a credential)
-  persistentState = {          # verified state paths, relative to the guest home
-    enabledByDefault = false;  # guest home stays DISPOSABLE by default
-    directories = [ ];
+  batchArgs = [ ];             # argv for unattended batch execution
+  batchStdin = false;          # pass the prompt on stdin instead of as argv
+  guestEnvironment = { };      # endpoint plumbing only — NEVER a credential
+  persistentState = {
+    enabledByDefault = false;  # the guest home stays DISPOSABLE by default
+    directories = [ ];         # verified paths, relative to the guest home
   };
 };
 ```
 
 `workmuxName` is derived (`microvm-<name>`), so adding an agent is a one-entry
-change. To list the currently supported agents:
+change. `sudo agent-microvm --help` lists the currently supported agents.
 
-```bash
-sudo agent-microvm --help      # "Supported agents (--agent)" section
-```
+Batch invocations are verified against each pinned build's own `--help`:
+`claude -p <prompt>`, `codex exec -` (prompt on **stdin**),
+`opencode run <prompt>`, `pi --print <prompt>`,
+`hermes --model <m> --oneshot <prompt>`.
 
-The registry is instantiated **exactly once** (in `default.nix`) and passed to
-the other modules through `_module.args.agentRegistry`, so no consumer can
-re-instantiate it with different context (LiteLLM port, model name).
+### Hermes specifics
 
-### Hermes
-
-Hermes (`--agent hermes`, workmux `microvm-hermes`) is the same
-`inputs.hermes-agent` package the host `myconfig.ai.hermes` backends use, baked
-into the guest closure — never fetched by the upstream `curl | bash` installer,
-`pip` or `npm` at boot (§8).
-
-```bash
-# Directly:
-sudo agent-microvm run --attach --agent hermes \
-  --name my-task --repository ~/src/my-repo
-
-# Or through workmux (the normal frontend):
-workmux add --agent microvm-hermes my-feature
-```
-
-- **Model routing.** Hermes resolves its endpoint as `config.yaml` `base_url` →
-  `CUSTOM_BASE_URL` → `OPENROUTER_BASE_URL` → `openrouter.ai`. The registry
-  therefore sets `OPENROUTER_BASE_URL=http://127.0.0.1:4000/v1` (the guest
-  loopback LiteLLM endpoint) and pins `--model` to
-  `myconfig.ai.hermes.model.default` — the same LiteLLM route the host hermes
-  backends use. No upstream provider credential exists in the guest: the
-  placeholder `OPENAI_API_KEY` is what hermes picks for a non-OpenRouter
-  `base_url`, and it also satisfies hermes' first-run "any provider
-  configured?" guard, so the setup wizard never appears.
-- **State (verified, not guessed).** All hermes state lives under one root,
-  `$HERMES_HOME` (default `~/.hermes`; see `hermes_constants.py`
-  `get_hermes_home()`): `config.yaml`, `.env`, `auth.json`, `state.db`,
-  `sessions/`, `memories/`, `skills/`, `logs/`, `plugins/`, `cron/`,
-  `scripts/`. It is declared in the registry as
-  `persistentState.directories = [ ".hermes" ]` with
-  `enabledByDefault = false`, i.e. **disposable**: the guest home is a tmpfs
-  rebuilt every boot, so a fresh sandbox starts with no memories, skills or
-  sessions and nothing hermes writes escapes the VM (opt-in, task-scoped
-  persistence is ticket 5).
-- **Workmux profile.** workmux has no `hermes` profile, so the pane falls back
-  to workmux's default profile (no prompt injection / resume flags). The pane
-  still launches and status hooks still work.
-
-#### Interactive smoke test
-
-```bash
-sudo agent-microvm run --name hermes-smoke --repository ~/src/my-repo \
-  --agent hermes --attach
-# inside the guest (or: sudo agent-microvm ssh hermes-smoke):
-command -v hermes                  # -> /run/current-system/sw/bin/hermes
-hermes version                     # prints the baked-in hermes version
-env | grep -E 'OPENROUTER|OPENAI'   # endpoint + placeholder key only
-env | grep -Ei 'anthropic_api|token|secret'  # must show no real credential
-ls -a "$HOME"                      # ~/.hermes appears only after first run
-curl -sS http://127.0.0.1:4000/v1/models | head -c 200   # LiteLLM reachable
-```
-
----
-
-## Launching via Workmux
-
-Workmux stays the **frontend** — it owns the worktree, the tmux pane, task
-naming, status hooks and cleanup (`workmux merge` / `workmux remove`). The
-host launcher `agent-microvm` is only the **backend**.
-
-```bash
-workmux add --agent microvm-claude feature-name
-workmux add --agent microvm-pi      feature-name
-workmux add --agent microvm-codex   feature-name
-workmux add --agent microvm-opencode feature-name
-```
-
-The `microvm-*` agent set is generated from
-[the agent registry](#supported-agents--the-authoritative-registry); the list
-above is illustrative, not a second source of truth.
-
-Each agent's pane command:
-
-1. resolves the linked main repository from the worktree's shared git dir,
-2. maps the workmux branch to a launcher-safe task name
-   (`[a-zA-Z0-9._-]`, `<= 64` chars), and
-3. execs, as separate argv (never a shell string):
-
-   ```bash
-   sudo agent-microvm run --attach \
-     --name <task> --repository <main-repo> --agent <bin>
-   ```
-
-No network-relaxation flags are passed, so the guest runs under the host's
-configured `networkProfile` — the secure **proxy-only** default unless the host
-deliberately chose otherwise.
-
-> The pane runs `sudo agent-microvm …`; there is currently **no**
-> passwordless-sudoers rule, so the first launch **will prompt for a
-> password** (see [Limitations](#limitations)).
+Hermes resolves its endpoint as `config.yaml` `base_url` → `CUSTOM_BASE_URL` →
+`OPENROUTER_BASE_URL` → `openrouter.ai`, so the registry sets
+`OPENROUTER_BASE_URL` to the guest loopback LiteLLM endpoint and pins `--model`
+to `myconfig.ai.hermes.model.default`. The placeholder `OPENAI_API_KEY` is what
+hermes picks for a non-OpenRouter `base_url` and also satisfies its first-run
+"any provider configured?" guard, so the setup wizard never appears. All hermes
+state lives under `$HERMES_HOME` (`~/.hermes`), which is why that single
+directory is the declared `persistentState`. workmux has no `hermes` profile, so
+the pane falls back to workmux's default profile.
 
 ---
 
 ## Unattended batch jobs
-
-Interactive `run --attach` is unchanged. In addition, a slot can run a job
-**unattended** from a versioned job specification (improvement ticket 4). The
-host-side `submit` / `cancel` / `recover` commands are documented in the next
-section; the format and the guest side are described here.
 
 ### Job directory (runtime only — never in the Nix store)
 
@@ -506,14 +271,11 @@ section; the format and the guest side are described here.
 /var/lib/agent-microvms/jobs/<slot>/out/result.json              the guest's result
 ```
 
-The directory is surfaced into the guest at `/run/agent-job` by a third
-virtiofs share. \* The share is read-**write** because the guest must write
-`out/result.json`, but the spec and prompt are root-owned `0444` inside a
-root-owned `0755` directory and virtiofsd passes ownership through — so the
-untrusted `agent` user can only **read** them (and can only write inside
-`out/`). A guest therefore cannot lift its own timeout or swap its own agent.
-
-Prompts never travel as process arguments and never enter the Nix store.
+Surfaced into the guest at `/run/agent-job`. \* The share is read-**write**
+because the guest must write `out/result.json`, but spec and prompt are
+root-owned `0444` and virtiofsd passes ownership through — so a guest cannot
+lift its own timeout or swap its own agent. Prompts never travel as process
+arguments and never enter the Nix store.
 
 `spec.json` (schema `version = 1`, validated on **both** sides):
 
@@ -528,18 +290,13 @@ Prompts never travel as process arguments and never enter the Nix store.
 }
 ```
 
-The guest runner rejects (as `infrastructure-error`): an unknown schema
-version, an invalid `taskId`, an agent that is not batch-capable in the
-registry, a `workspace` other than `/workspace`, a `promptFile` that is not
-*exactly* `/run/agent-job/prompt.md` (so traversal and symlink games fail), a
-non-integer/out-of-range `timeoutSeconds`, and **any** attempt to name an
-executable (`command` / `exec` / `executable`) — the agent is always resolved
-through [the registry](#supported-agents--the-authoritative-registry).
+The guest runner rejects (as `infrastructure-error`) an unknown schema version,
+an invalid `taskId`, an agent that is not batch-capable, a `workspace` other
+than `/workspace`, a `promptFile` that is not *exactly*
+`/run/agent-job/prompt.md`, an out-of-range `timeoutSeconds`, and **any**
+attempt to name an executable (`command` / `exec` / `executable`).
 
-### `result.json`
-
-Written with tmp-file + `rename`, so the host never reads a half-written
-result:
+`result.json`, written with tmp-file + `rename`:
 
 ```json
 {
@@ -549,531 +306,109 @@ result:
 }
 ```
 
-States: `starting`, `running`, `completed`, `failed`, `timed-out`,
-`cancelled` (written by the host), `infrastructure-error`.
-
-### Guest service
-
-`agent-job.service` is **inert unless a job is present**
-(`ConditionPathExists=/run/agent-job/spec.json`), waits for both the workspace
-and job mounts (`RequiresMountsFor`), and runs the generated batch dispatch as
-the unprivileged `agent` user in `/workspace` with
-`NoNewPrivileges`, `PrivateDevices`, `PrivateTmp`, `ProtectKernelTunables`,
-`ProtectKernelModules`, `ProtectControlGroups` and `RestrictSUIDSGID`.
-
-The timeout is enforced **three** times: per-job `timeout(1)` in the guest, the
-unit's static `RuntimeMaxSec` ceiling
-(`job.maxTimeoutSeconds + job.gracePeriodSeconds`), and the host's own wait
-(`job.gracePeriodSeconds` beyond the job's timeout).
-
-> **No guest-side power-off.** microvm.nix runs `microvm@<slot>` with
-> `Restart = "always"`, so a guest that powered itself off after the job would
-> be rebooted immediately. Stopping the VM is the host's part of the lifecycle.
-
-Per-agent batch invocations come from the registry (`batchArgs` / `batchStdin`),
-verified against each pinned build's own `--help`:
-`claude -p <prompt>`, `codex exec -` (prompt on **stdin**),
-`opencode run <prompt>`, `pi --print <prompt>`,
-`hermes --model <m> --oneshot <prompt>`.
-
-### Submitting, cancelling, recovering
-
-```bash
-sudo agent-microvm submit \
-  --name fix-parser --repository ~/src/my-repo \
-  --agent opencode --prompt-file ./prompt.md --timeout 3600
-
-sudo agent-microvm cancel fix-parser      # token-guarded, keeps the workspace
-sudo agent-microvm recover --dry-run      # reconcile slots with systemd
-sudo agent-microvm recover
-```
+States: `starting`, `running`, `completed`, `failed`, `timed-out`, `cancelled`
+(written by the host), `infrastructure-error`. The final result is archived at
+`/var/lib/agent-microvms/results/<task>.json` — outside every guest share — so
+`status <task>` still reports the outcome after the slot was released.
 
 `submit` exit codes: **0** completed, **1** the agent failed, **124** timed out,
-**70** infrastructure error (no/invalid result). The final `result.json` is
-archived on the host at `/var/lib/agent-microvms/results/<task>.json` — outside
-every guest share — so `status <task>` still reports the outcome after the slot
-has been released.
-
-Host lifecycle: validate → allocate slot → standalone clone → job dir (spec +
-prompt) → bind-mount → start VM → wait for the structured result (job timeout +
-`job.gracePeriodSeconds`, and it stops waiting early if the VM dies) → stop VM →
-archive result → unmount → clear runtime job data → release slot. The workspace
-clone is **always** kept.
-
-### Allocation ownership
-
-Every allocation marker (`/var/lib/agent-microvms/slots/<slot>/session.json`)
-records the task, slot, workspace, VM unit, mode
-(`attached` / `detached` / `batch`), the owning launcher's **pid together with
-that pid's start time** (so a recycled pid cannot impersonate the owner) and a
-**random allocation token**. Operations that act on a slot they did not allocate
-(`cancel`, `recover`) compare the **token**, never just the slot name — a slot
-that has meanwhile been re-allocated to a different task is never touched.
-
-`recover` classifies each slot and prints every action (`--dry-run` prints only
-and changes nothing):
-
-| Situation | Action |
-| --- | --- |
-| marker, unit inactive | stale marker → unmount, drop marker |
-| no marker, unit active | orphaned unit → stop it |
-| marker + unit active, `attached`/`batch`, owning launcher gone | orphaned run → stop, unmount, clear job, drop marker |
-| no marker, no unit, mount present | stale mount → unmount |
-| no marker, no unit, job data present | stale job → clear |
-
-A `detached` slot whose launcher exited is **normal** (that is the point of
-detached mode) and is never recovered.
+**70** infrastructure error (no/invalid result).
 
 ---
 
-## Listing & status
+## The dedicated SSH key
+
+`sshPublicKeyFile` must point at a **dedicated** public key that authorises
+**only the guest `agent` user** — never the host, and never a host
+`authorized_keys` file (asserted intent).
+
+- The **public** key is committed in-repo (e.g.
+  `hosts/host.f13/dedicated-agent-vm-key.pub`); a public key is not a secret.
+- The matching **private** key lives in the separate `../priv` repository and is
+  never committed here.
+- **Recommended: inject the private key via agenix.** `secrets.nix` declares a
+  `myconfig.secrets` **stub** `dedicated-agent-vm-key` with no `source` and a
+  stable `dest = /run/agenix/dedicated-agent-vm-key` (root-owned, `0400`). Fill
+  the source from the priv repo:
+
+  ```nix
+  # in ../priv (host.<hostname> module)
+  myconfig.secrets."dedicated-agent-vm-key".source =
+    ./secrets/dedicated-agent-vm-key;
+  ```
+
+  The launcher **defaults `AGENT_MICROVM_SSH_KEY` to that path** when the caller
+  set none and the file exists, so `run --attach` / `ssh` (which run as root
+  under `sudo`, losing any user-set env var) find the key automatically with no
+  sudoers `--preserve-env` rule required. Until the source is provisioned,
+  `myconfig.secrets` warns and no key is decrypted.
+- To use a *specific* private key, export
+  `AGENT_MICROVM_SSH_KEY=/path/to/private-key` (this overrides the agenix
+  default). Under `sudo` **without** the agenix secret, `env_reset` strips the
+  variable — rely on the workmux launcher's
+  `--preserve-env=AGENT_MICROVM_SSH_KEY` passthrough, or give **root** a key
+  matching the dedicated pubkey.
+
+Generate the pair with the helper in this module directory (it writes the
+private key into the priv repo, stages the public key here, and refuses to
+overwrite an existing private key):
 
 ```bash
-sudo agent-microvm list             # one line per slot
-sudo agent-microvm status           # detailed, all slots
-sudo agent-microvm status agent-normal-0   # a single slot
-sudo agent-microvm status <task>    # resolve a running task to its slot
+./modules/myconfig.ai/myconfig.ai.microvm/mk-dedicated-agent-vm-key.sh [<hostname>]
+# hostname defaults to the current machine's hostname; override the priv repo
+# location with PRIV_ROOT (default: ~/myconfig/priv). Result:
+#   private -> $PRIV_ROOT/hosts/host.<hostname>/secrets/dedicated-agent-vm-key
+#   public  -> hosts/host.<hostname>/dedicated-agent-vm-key.pub  (git add-ed)
 ```
 
-`status` reports slot, service state, IP, MAC, VSOCK CID, task, workspace path,
-bind-mount status, agent type, mode (`attached`/`detached`/`batch`), job state,
-job timeout, start time, SSH readiness, session state, a `stale` flag, and the
-lock owner — **never** secrets (the allocation token is not printed).
+Then commit the private key inside the priv repo separately.
 
-> A slot with a persisted session marker but an inactive unit is flagged
-> `stale: yes` (e.g. after a hard kill / power loss where the cleanup trap did
-> not run). Reclaim it with `agent-microvm destroy <slot>`.
+> **`git add` reminder.** Nix evaluates from the git tree, so both the `.pub`
+> file and the `ai.<host>.nix` change must be `git add`-ed or evaluation fails
+> with a "path does not exist" error.
 
 ---
 
-## Connecting
+## Migration
 
-```bash
-sudo agent-microvm ssh agent-normal-0     # interactive shell as guest `agent`
-sudo agent-microvm ssh agent-normal-0 -- id  # run a command
-sudo agent-microvm console agent-normal-0    # follow the serial console (journal)
-```
-
-`ssh` verifies the guest **strictly**
-(`StrictHostKeyChecking=yes`, `UserKnownHostsFile=/var/lib/agent-microvms/known_hosts`):
-every slot has a **stable, per-slot ed25519 host identity**, so a wrong or
-unknown host key aborts the connection instead of being accepted. Set
-`AGENT_MICROVM_SSH_KEY` to pick the client private key.
-
-### Per-slot SSH host identities
-
-`agent-microvm-hostkeys.service` (see `hostkeys.nix`) provisions, on the host
-and at runtime:
-
-```text
-/var/lib/agent-microvms/hostkeys/<slot>/ssh_host_ed25519_key      root:root 0400
-/var/lib/agent-microvms/hostkeys/<slot>/ssh_host_ed25519_key.pub  root:root 0444
-/var/lib/agent-microvms/known_hosts                               root:root 0444
-```
-
-- **One key per slot, never shared.** Keys are generated once and kept, so a
-  slot's identity is stable across reboots and rebuilds. They are **not** in
-  the Nix store (which is world-readable) and **not** agenix secrets (they are
-  host-local, per-slot, regenerable identities).
-- **Delivered through a read-only, per-slot virtiofs share** mounted at
-  `/var/lib/agent-hostkey` in the guest. virtiofsd passes ownership through,
-  so the private key stays `root:root 0400` inside the guest: the untrusted
-  `agent` user cannot read it, the guest cannot rewrite its own identity, and
-  no other slot's directory is visible. This is a deliberate, documented
-  amendment to the original "exactly one share" rule — see
-  [The `/workspace` share](#the-workspace-share--ownership).
-- **The guest generates no host keys of its own**
-  (`services.openssh.generateHostKeys = false`), so the identity in
-  `known_hosts` is the only one it can present.
-- `known_hosts` holds public keys only and is world-readable, so a non-root
-  operator can also run `agent-microvm ssh` with strict verification.
-
-If the file is missing the launcher fails closed with a pointer to
-`systemctl start agent-microvm-hostkeys.service` (which `run` also invokes
-before booting a slot).
-
-### Reserved VSOCK control-channel identity
-
-Every slot additionally owns a unique, deterministic AF_VSOCK context id
-(`cid = 8300 + <index>`, reported by `agent-microvm status`), avoiding the
-reserved CIDs `0`/`1`/`2` and `VMADDR_CID_ANY`. It is **reserved, not yet
-wired**: handing it to `microvm.vsock.cid` flips `microvm@<slot>.service` to
-`Type=notify` (microvm.nix adds a socat↔vsock systemd-notify bridge), a startup
-change that can only be validated by booting a guest on KVM. It is therefore
-activated together with the noninteractive control channel that uses it
-(batch job readiness / status / cancellation / results).
-
----
-
-## Structured lifecycle events
-
-Every transition is emitted as **one JSON record** — to the operator's stderr,
-to the journal under the `agent-microvm` tag, and (per task) to a bounded log:
-
-```bash
-journalctl -t agent-microvm -f                     # all lifecycle events
-journalctl -t agent-microvm | jq -c 'select(.task=="fix-parser")'
-cat /var/lib/agent-microvms/logs/fix-parser.jsonl   # per-task history
-```
-
-Events: `task-submitted`, `slot-allocated`, `workspace-created`,
-`vm-start-requested`, `vm-ready`, `agent-started`, `agent-finished`, `timeout`,
-`cancellation`, `vm-stopped`, `cleanup-completed`, `recovery-action`. Each record
-carries `ts`, `event`, `task`, `slot`, `agent`, `resource_class`, `mode`, and —
-where applicable — `state` and `exit_code`.
-
-The guest emits its own `agent-started` / `agent-finished` / `timeout` records to
-the guest console, which microvm.nix captures into
-`journalctl -u microvm@<slot>`, so host and guest transitions can be correlated.
-
-Per-task logs are **bounded**: at `taskLogMaxBytes` (default 1 MiB) one
-generation is rotated to `<task>.jsonl.1`.
-
-**Never logged:** API keys, prompt *content* (only the prompt file's path and
-byte size), repository credentials, secret environment variables, private key
-material.
-
----
-
-## Logs
-
-Everything is supervised by systemd, so use the journal:
-
-```bash
-journalctl -u microvm@agent-normal-0.service   # the guest VM (Cloud Hypervisor + serial console)
-journalctl -u agent-litellm-proxy.service # the bridge-only LiteLLM forwarder
-journalctl -u agent-microvm-agentbr0-disable-ipv6.service  # bridge IPv6-disable oneshot
-journalctl -u agent-microvm-attach-agent-normal-0.service   # enslave + L2-isolate TAP vm-normal-0
-journalctl -u agent-microvm-hostkeys.service               # per-slot SSH host keys + known_hosts
-```
-
-`agent-microvm console <slot>` is a shortcut for
-`journalctl -f -u microvm@<slot>.service`. No secrets, env dumps, prompts,
-source or tokens are logged.
-
----
-
-## Stop vs destroy vs remove workspace
-
-These have **distinct** semantics (plan §26/§35). **None of them delete your
-clone except `workspace-remove`.**
-
-| Command | VM | bind mount | slot transient state | workspace / git / patches |
-| --- | --- | --- | --- | --- |
-| `stop <slot\|task>` | stopped | unmounted | removed | **kept** |
-| `destroy <slot\|task>` | stopped | unmounted | removed | **kept** |
-| `workspace-remove <task> [--force]` | (must already be stopped) | — | — | **deleted** |
-
-```bash
-sudo agent-microvm stop agent-normal-0      # end the session, keep everything on disk
-sudo agent-microvm destroy agent-normal-0   # clear ephemeral slot runtime, keep the clone
-sudo agent-microvm workspace-remove feature-name   # delete the standalone clone
-```
-
-`workspace-remove` is separate and **guarded**:
-
-- it **refuses** if the clone has **uncommitted changes** (`git status`) or
-  **unexported commits** (commits on local branches not in any remote) unless
-  you pass `--force`;
-- it **refuses** while the clone is still bind-mounted into (or recorded as
-  in use by) any running slot — stop that slot first.
-
-`--attach` sessions (the Workmux path) tear the VM down automatically on exit
-via a cleanup trap, always **keeping** the workspace clone. Interrupted
-launches also clean up the VM / bind mount / lock / TAP but keep the clone.
-
----
-
-## Inspecting & importing changes
-
-The workspace is a **standalone clone** (`git clone --no-local`), so the
-original repo is never shared into the guest and there is **no** shared git
-common dir. Work happens on branch **`agent/<task>`** by default. The launcher
-performs **no** auto push/merge/commit/delete — importing is always explicit.
-
-From the workspace clone:
-
-```bash
-clone=/var/lib/agent-microvms/workspaces/<task>
-git -C "$clone" diff
-git -C "$clone" format-patch "origin/HEAD..agent/<task>"
-```
-
-> **Note.** `format-patch` here assumes `origin/HEAD` resolves in the
-> standalone clone. If it is unset (e.g. the remote never advertised a default
-> branch), substitute the concrete base branch, e.g.
-> `git -C "$clone" format-patch "origin/main..agent/<task>"`.
-
-To pull the branch back into your original repo:
-
-```bash
-# from your original repo checkout
-git fetch "$clone" "agent/<task>:refs/heads/agent/<task>"
-git log agent/<task>          # review, then merge/cherry-pick as you see fit
-```
-
-`agent-microvm run` prints the exact `diff` / `format-patch` commands for the
-slot when it starts in detached mode.
-
----
-
-## The `/workspace` share & ownership
-
-**§10 — exactly one *writable* share.** Each slot's guest declares exactly
-**one** read-write `microvm.shares` entry: a **read-write virtiofs** share
-tagged `workspace`, mounted at `/workspace`. Its host `source` is
-`/var/lib/microvms/<slot>/workspace` (`${stateRoot}/<slot>/workspace`) — the
-**same** path the launcher uses as its `mount --bind` target
-(`mount_point()` in `launcher.nix`). So the launcher bind-mounts the
-standalone clone onto that host directory, and virtiofsd surfaces it into the
-guest as the single writable `/workspace`.
-
-microvm.nix keeps the guest `/nix/store` on its own **storeDisk**
-(`microvm.storeOnDisk` defaults to `true` unless a share's source is
-`/nix/store`, which this one is not), so it does **not** add a store share.
-The guest therefore has **exactly two shares** — the writable `/workspace`
-above and the **read-only, per-slot SSH host-key share** at
-`/var/lib/agent-hostkey` (only when `enableSsh` is true; see
-[Per-slot SSH host identities](#per-slot-ssh-host-identities)). No `/nix`, no
-`/home`, no host sockets, no cross-slot paths. The
-`microvm-eval-workspace-share` check asserts exactly this: two virtiofs
-shares, the workspace read-write at the expected source, the hostkey share
-**read-only** at the per-slot source, and no other mount point.
-
-> The hostkey share is a deliberate amendment to the original "exactly one
-> share" rule, required to give each slot a verifiable SSH identity
-> (improvement ticket 3 B). It is read-only, root-only (`0400` passed through
-> by virtiofsd), single-purpose and per-slot, so it exposes no host state to
-> the untrusted agent.
-
-**§11 — UID/GID ownership.** virtiofsd passes file ownership through
-unchanged (no `--translate-uid/--translate-gid`), so the numeric owner of the
-host clone tree is exactly what the guest sees. The guest `agent` user is
-**uid/gid 1000** (`guest.nix` `users.users.agent`). Therefore, right after
-creating the clone (and its `agent/<task>` branch), the launcher runs:
-
-```bash
-chown -R 1000:1000 -- "$clone"
-```
-
-Inside the guest, `/workspace` then appears owned by `agent` and is
-read-write, so `agent-run`'s `test -w /workspace` check passes.
-
-- **Why 1000:1000 and not a new dedicated host user?** On `f13`, uid/gid 1000
-  is already the primary **unprivileged interactive user** (the human who
-  inspects/exports the agent's result, plan §25). Creating a *new* host user
-  at uid 1000 would collide with them, and picking a different guest uid would
-  add moving parts for no gain. Chowning to 1000:1000 makes the clone owned by
-  that same human on the host — who can then `git -C "$clone" diff` / import
-  the branch directly — while appearing `agent`-owned in the guest.
-- **No privileged mapping.** uid/gid 1000 is **not** a privileged id, so no
-  guest id maps to a privileged host id (plan §11). The guest agent cannot,
-  via the share, create host files owned by root or any system account.
-- **Scope.** Only the per-task clone under
-  `/var/lib/agent-microvms/workspaces/<task>` is chowned; no other host
-  permissions are touched.
-
-## Guest dotfiles & the loopback LiteLLM endpoint
-
-The guest `agent` user is provisioned with the **same shell and coding-agent
-dotfiles as the host primary user**, so a sandboxed agent has the familiar
-fish prompt/abbreviations/functions and the pi / opencode / codex
-configuration, skills and prompts. This is done by `guest-home.nix`, which
-runs **home-manager inside the guest** and copies the host primary user's
-*already-evaluated* `home.file` / `xdg.configFile` entries (their `source`
-fields are store paths, so no host home module is re-evaluated in the guest;
-home-manager bakes the sources into the guest's own store disk).
-
-The copy is an **allowlist**, never a denylist — the same fail-closed posture
-as `myconfig.agentUsers`. Only the prefixes in
-`myconfig.ai.microvm.guestDotfiles.{homeFilePrefixes,xdgConfigPrefixes}` cross
-the boundary, so host secrets (tokens, credentials, keys) are never dragged
-into the sandbox by accident. Defaults cover fish, opencode, pi, codex,
-`.agents/`, and git config. Set `guestDotfiles.enable = false` for a bare
-home.
-
-### Why the agents "just work" against `192.168.83.1:4000`
-
-Every host-provisioned agent config (e.g.
-`~/.pi/agent/extensions/myconfig-providers.ts`,
-`~/.config/opencode/opencode.json`) hardcodes the host's **loopback** LiteLLM
-address `http://127.0.0.1:4000/v1`. To make those copied configs reach the
-real proxy from inside the guest — where LiteLLM is only reachable at the
-bridge gateway `192.168.83.1:4000` — the guest runs a **reverse** of the
-host's bridge-only forwarder: a socket-activated `systemd-socket-proxyd`
-(`litellm-forwarder`) listens on `127.0.0.1:4000` and forwards to
-`${gatewayAddress}:${litellmPort}` (`192.168.83.1:4000`). So the guest
-presents the *same* loopback endpoint the host does, the copied configs work
-verbatim, and `OPENAI_BASE_URL` is likewise set to `http://127.0.0.1:4000/v1`.
-Net effect: pi and every other agent transparently "rely on"
-`192.168.83.1:4000` (the host on the agent bridge) without any per-agent
-config rewrite.
-
-## Security properties
-
-What the module actually enforces (plan §5, §13–§18, §45):
-
-- **Own kernel & disposable state.** Cloud Hypervisor guest with its own
-  kernel; root and `/home/agent` are disposable; **only `/workspace`
-  persists** across stop/destroy/restart.
-- **Standalone clone only.** The single writable host-backed path is the
-  per-task `git clone --no-local` at `/workspace`, shared via **virtiofs**
-  (mounted via `mount --bind`, not a symlink). No primary checkout, no linked
-  worktree, no shared git metadata.
-- **Non-root guest user.** The agent runs as `agent` (uid 1000, no extra
-  groups, locked password). `agent-run` **refuses to run as root** and verifies
-  `/workspace` is a mounted, writable mount before `cd`-ing in and exec-ing the
-  agent.
-- **Hardened SSH, private interface only.** `PermitRootLogin=no`,
-  `PasswordAuthentication=false`, `KbdInteractiveAuthentication=false`,
-  `AllowAgentForwarding=no`, `X11Forwarding=false`, `PermitTunnel=no`,
-  `AllowTcpForwarding=no`; exactly one dedicated public key; not reachable from
-  the LAN.
-- **Authenticated control channel.** Each slot has its own stable ed25519 host
-  key (read-only per-slot share; the guest generates none) and the launcher
-  connects with `StrictHostKeyChecking=yes` against the host-generated
-  `known_hosts` — so the operator always talks to *the* slot, not to whatever
-  answers on its address. See
-  [Per-slot SSH host identities](#per-slot-ssh-host-identities).
-- **No host creds / sockets / home.** The guest gets no host home, no host SSH
-  keys, no SSH/GPG agent sockets, no password store, no Docker/Podman sockets,
-  no D-Bus/systemd sockets, no host Nix daemon socket, and no writable host Nix
-  store. The guest environment does not receive `SSH_AUTH_SOCK`,
-  `GPG_AGENT_INFO`, `AWS_*`, `GOOGLE_*`, `AZURE_*`, `KUBECONFIG`,
-  `GITHUB_TOKEN`, `GH_TOKEN` or `GITLAB_TOKEN`.
-- **TAP enslaved to the bridge.** microvm.nix's `type = "tap"` only *creates*
-  the per-slot tap (`vm-agent-<n>`) and brings it up — it does **not** attach
-  it to any bridge. A per-slot `agent-microvm-attach-<slot>` oneshot (ordered
-  after `microvm-tap-interfaces@<slot>`, before `microvm@<slot>`, `partOf` the
-  VM) runs `ip link set vm-agent-<n> master agentbr0`, giving the guest its L2
-  path to the gateway. Without it the guest boots and runs sshd but is
-  unreachable (SSH readiness times out).
-- **Per-TAP Layer 2 isolation.** The same oneshot then runs
-  `bridge link set dev vm-agent-<n> isolated on`. The kernel bridge refuses to
-  forward frames **between isolated ports**, in either direction and for
-  *every* EtherType — so guest↔guest ARP spoofing, IPv6 ND and non-IP traffic
-  are impossible even though iptables cannot filter them. Isolated ports can
-  still reach non-isolated ports and the bridge itself, so guest↔host
-  (gateway, LiteLLM forwarder, SSH) is unaffected; the bridge's host-facing
-  side is deliberately **not** isolated. This makes the IPv4 inter-VM
-  `FORWARD` DROP a second line of defence rather than the only one, and
-  removes the co-resident-guest MITM risk for the unpinned
-  `agent-microvm ssh` / `--attach` sessions. Verify at runtime with
-  `bridge link show` (each active guest TAP reports `isolated on`).
-- **Deny-all, proxy-only network.** The default `networkProfile = "proxy-only"`
-  firewall policy on `agentbr0` is deny-all-except-proxy: the only egress a
-  guest gets is `guest -> 192.168.83.1:4000` (see
-  [Network profiles](#network-profiles) for the other three). Dedicated chains `AGENT_MICROVM_INPUT` /
-  `_FORWARD` / `_OUTPUT` (built on the existing NixOS firewall, no nftables
-  migration) block all other host ports, the host LAN, RFC1918 / CGNAT /
-  loopback / link-local / multicast / reserved ranges, inter-VM (TAP-to-TAP)
-  traffic, and the general internet. The **cloud-metadata IP
-  `169.254.169.254` is blocked unconditionally and first**, so no later ACCEPT
-  can shadow it. The FORWARD chain ends in a **terminal `DROP` (fail
-  closed)**.
-- **LiteLLM boundary.** The main LiteLLM proxy stays **loopback-only**
-  (`127.0.0.1:4000`). A **bridge-only** `systemd-socket-proxyd` endpoint
-  (`agent-litellm-proxy`) binds **only** to `192.168.83.1:4000`
-  (`BindToDevice=agentbr0`, never `0.0.0.0`/LAN) and forwards to the loopback
-  proxy. It runs `DynamicUser`, `NoNewPrivileges`, `PrivateTmp`,
-  `ProtectSystem=strict`, `ProtectHome`.
-- **No upstream key in the guest.** `OPENAI_BASE_URL` points at the guest
-  loopback endpoint `127.0.0.1:4000`, which the guest `litellm-forwarder`
-  socket-proxy forwards to the bridge-only host endpoint `192.168.83.1:4000`
-  (the only reachable model-API peer); `OPENAI_API_KEY=not-needed` is a
-  placeholder. No real upstream key, and no secrets in the Nix store / flake /
-  scripts / argv / logs / images / workspaces. Guest dotfiles are copied by
-  an **allowlist** (`guestDotfiles.*`), so no credential-bearing path leaks
-  into the guest.
-- **Bounded & lock-protected.** Fixed vCPU/mem and a fixed slot pool bound
-  resource use; a global allocator lock plus per-slot `flock`s prevent
-  double-allocation.
-
----
-
-## Backward compatibility & migration
-
-The interactive commands are unchanged:
-
-```bash
-sudo agent-microvm run --attach --agent pi       --name t --repository ~/src/repo
-sudo agent-microvm run --attach --agent opencode --name t --repository ~/src/repo
-sudo agent-microvm run --attach --agent hermes   --name t --repository ~/src/repo
-workmux add --agent microvm-pi my-feature
-```
-
-`stop`, `destroy`, `status`, `list`, `ssh`, `console` and `workspace-remove` keep
-their behaviour; `submit`, `cancel`, `recover` and `usage` are additions. New
-flags (`--resource-class`, `--wait`, `--persist-agent-state`) all default to the
-previous behaviour.
-
-Deprecated options — each **warns**, has a documented replacement, translates
-safe configurations, and rejects ambiguity rather than silently reducing
-isolation:
-
-| Deprecated | Replacement | Behaviour |
+| Deprecated / removed | Replacement | Behaviour |
 | --- | --- | --- |
 | `slotCount`, `defaultVcpu`, `defaultMemoryMiB` | `resourceClasses` | still honoured as a synthesized single `normal` class (warns). Setting **both** spellings is **rejected** as ambiguous. |
 | `allowPublicInternet` | `networkProfile = "internet"` | translated **with a warning** when `networkProfile` is unset; **rejected** as ambiguous when combined with a different explicit profile. |
-| `allowPrivateNetworks` | *(none — no profile grants it)* | `true` is **rejected** by an assertion; use `networkProfile = "package-access"` with an explicit host proxy if a guest needs packages. |
+| `allowPrivateNetworks` | *(none — no profile grants it)* | `true` is **rejected**; use `networkProfile = "package-access"` with an explicit host proxy if a guest needs packages. |
 | `allowInterVmTraffic` | *(none — isolation is unconditional)* | `true` is **rejected**: guest↔guest is blocked at layer 2 in every profile, so honouring the flag would misrepresent the policy. |
 
-Slot names changed from `agent-<i>` to `agent-<class>-<i>` when resource classes
-landed. Old per-slot state (`/var/lib/microvms/agent-<i>`, and the matching
-`hostkeys/`, `jobs/`, `state/slots/` entries) is simply unused afterwards and can
-be deleted; workspace clones are keyed by **task**, not slot, so they are
-unaffected.
+The interactive commands themselves are unchanged; `submit`, `cancel`,
+`recover`, `usage` and the flags `--resource-class`, `--wait`,
+`--persist-agent-state` are additions that default to previous behaviour.
 
 ---
 
 ## Limitations
 
-Honest caveats — read these before trusting the tier:
-
-- **IPv6 disabled (MVP).** No equivalent IPv6 firewall policy exists, so IPv6
-  is simply disabled on the bridge. L2 link-local IPv6 between guests is out of
-  scope for the MVP.
-- **TAP-to-bridge enslavement was missing (now fixed).** Earlier revisions
-  created the per-slot tap but never enslaved it to `agentbr0`, so a guest
-  booted and ran sshd yet was unreachable and every `run`/`--attach` timed
-  out at the SSH-readiness wait. This is now handled by the per-slot
-  `agent-microvm-attach-<slot>` oneshot (see Security properties). The rest
-  of the packet path (firewall ordering, proxy egress) is still only
-  lightly exercised on live KVM — see the next bullets.
-- **`/workspace` runtime write is config-wired but not KVM-measured.** The
-  guest virtiofs share and the §11 `chown -R 1000:1000` ownership strategy are
-  now in place (see [The `/workspace` share & ownership](#the-workspace-share--ownership))
-  and eval-tested, so the previously-known `run --attach` breakage (root-owned
-  clone vs. uid-1000 guest) is **fixed in config**. But actually **booting** a
-  guest and confirming `/workspace` is mounted, writable and correctly-owned
-  is a runtime step (plan §41/§42) that has **not** been executed on live KVM
-  here.
-- **Sudo policy.** The launcher requires root and is always invoked via `sudo`.
-  With `passwordlessControl = true` (opt-in; enabled on `f13`) members of the
-  `agent-microvm` group get a `NOPASSWD`+`SETENV` rule for **exactly**
-  `/run/current-system/sw/bin/agent-microvm` — nothing broader — so the workmux
-  panes launch without a prompt. With the secure default (`false`) sudo prompts
-  as usual. This is host-operator convenience only: the untrusted guest can
-  never reach host `sudo`.
-- **Runtime attack surface.** Cloud Hypervisor, KVM, the guest kernel and
-  virtiofsd are all part of the trusted computing base; a guest escape through
-  any of them defeats the isolation.
-- **Writable workspace + disclosure.** `/workspace` is writable by the (hostile)
-  agent, and the agent's prompts and your source are disclosed to whatever the
-  LiteLLM proxy forwards to. This tier does not change that.
-- **Firewall + L2 isolation are eval-tested, not yet measured.** The network
-  controls depend on iptables rule ordering, on `br_netfilter` +
-  `bridge-nf-call-iptables` for the IPv4 inter-VM rule, and on the per-TAP
-  `isolated` bridge flag for everything below IP. The rendered ruleset and the
-  attach units are asserted at eval time for all four profiles, but the packet
-  path has **not** yet been verified from a live guest. Run
-  [`runtime-validation.sh --section net,l2`](./agent-microvm-runtime-validation.md)
-  on real KVM before trusting it. Do not treat a successful build as proof.
-- **`test-f13` vs real `f13`.** `test-f13` IS the `f13` configuration (generated
-  from the same `nixosConfigurationsGen.host-f13`) and has the feature
-  **enabled**, which is what makes the eval/build checks meaningful. What CI
-  still does not exercise is KVM itself: no boot, no bridge traffic, no forwarder
-  socket, no guest-to-host packet path — that is the
-  [real-KVM tier](./agent-microvm-runtime-validation.md).
-- **Not equivalent to a hardened multi-tenant cloud sandbox.** See the
+- **IPv6 is disabled, not policed.** No equivalent IPv6 firewall policy exists,
+  so IPv6 is switched off on the bridge. L2 link-local IPv6 between guests is
+  out of scope.
+- **Runtime properties are not measured.** The firewall ordering (including the
+  `br_netfilter` dependency of the IPv4 inter-VM rule), the per-TAP `isolated`
+  flag, `/workspace` writability, credential absence and cgroup containment are
+  asserted at eval time only. Run
+  [`runtime-validation.sh`](../runtime-validation.sh) on real KVM before
+  trusting them; a successful build is not proof.
+- **The hypervisor is the boundary.** Cloud Hypervisor, KVM, the guest kernel
+  and virtiofsd are all in the trusted computing base; an escape through any of
+  them defeats the tier.
+- **Writable workspace + model disclosure.** `/workspace` is writable by the
+  (hostile) agent, and prompts plus source are disclosed to whatever the LiteLLM
+  proxy forwards to. Review diffs before importing.
+- **Sudo policy.** The launcher requires root via `sudo`. With
+  `passwordlessControl = true` the `agent-microvm` group gets a
+  `NOPASSWD`+`SETENV` rule for **exactly**
+  `/run/current-system/sw/bin/agent-microvm`; with the secure default sudo
+  prompts, which the workmux panes will surface on first launch.
+- **CI cannot exercise KVM.** The `test-f13` configuration *is* `f13` with the
+  feature enabled, which is what makes the eval/build checks meaningful, but no
+  boot, bridge traffic, forwarder socket or guest-to-host packet path is
+  exercised.
+- **Not a hardened multi-tenant cloud sandbox.** See the
   [security model](./agent-microvm-security-model.md#why-this-is-not-a-hardened-multi-tenant-cloud-sandbox).

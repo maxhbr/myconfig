@@ -73,13 +73,19 @@ hardlinks, no alternates, no shared git metadata with your checkout) — and the
 clone survives everything except an explicit `workspace-remove`. The same
 indirection is reused for the job directory and for task-scoped agent state.
 
+virtiofsd passes ownership through unchanged, so the launcher `chown -R
+guestAgentUid:guestAgentGid`s the clone (default `1000:1000`). On a workstation
+that is the primary interactive user, so the same tree is agent-owned inside the
+guest and operator-owned on the host — no privileged host id is ever reachable
+from the guest, and only the per-task clone is chowned.
+
 ## Self-contained guest store
 
 `microvm.storeOnDisk` stays at its default, so each guest boots its **own**
 erofs store image built with the system. The host `/nix/store` is never shared,
 there is no Nix daemon socket in the guest, and the guest cannot build or fetch
-anything — every binary it can run was baked in at host build time (§8). Agent
-CLIs come from the registry, so "which agents exist" is a build-time fact.
+anything — every binary it can run was baked in at host build time. Agent CLIs
+come from the registry, so "which agents exist" is a build-time fact.
 
 ## Network path
 
@@ -161,6 +167,16 @@ Three lifetimes, by design:
 The guest-side linker symlinks `~/<dir>` → the share for each declared directory
 the host prepared, and refuses to replace a non-empty directory.
 
+## Allocation ownership
+
+Each allocation marker (`/var/lib/agent-microvms/slots/<slot>/session.json`)
+records the task, slot, workspace, VM unit, mode (`attached` / `detached` /
+`batch`), the owning launcher's **pid plus that pid's start time** (so a recycled
+pid cannot impersonate the owner) and a **random allocation token**. Operations
+that act on a slot they did not allocate (`cancel`, `recover`) compare the
+**token**, never just the slot name, so a slot that has meanwhile been
+re-allocated to another task is never touched.
+
 ## Resource classes and limits
 
 Sizing is a property of the class (prebuilt), and limits are enforced twice:
@@ -179,7 +195,21 @@ unit's static `RuntimeMaxSec` ceiling, and the host's own deadline
 ## Control-channel identities
 
 - **Interactive/SSH**: one stable ed25519 host key per slot, delivered read-only,
-  pinned in a host `known_hosts`; the launcher verifies strictly.
+  pinned in a host `known_hosts`; the launcher verifies strictly
+  (`StrictHostKeyChecking=yes`). `agent-microvm-hostkeys.service` generates and
+  keeps them on the host — not in the world-readable Nix store, and not as
+  agenix secrets (they are host-local, per-slot, regenerable identities):
+
+  ```text
+  /var/lib/agent-microvms/hostkeys/<slot>/ssh_host_ed25519_key      root:root 0400
+  /var/lib/agent-microvms/hostkeys/<slot>/ssh_host_ed25519_key.pub  root:root 0444
+  /var/lib/agent-microvms/known_hosts                               root:root 0444
+  ```
+
+  The guest generates no host keys of its own
+  (`services.openssh.generateHostKeys = false`), so the pinned identity is the
+  only one it can present; `known_hosts` holds public keys only, so a non-root
+  operator can verify strictly too.
 - **VSOCK**: a unique CID is *reserved* per slot (`8300+idx`) for a future
   noninteractive control channel. It is deliberately **not** yet passed to
   `microvm.vsock.cid`, because that flips `microvm@<slot>` to `Type=notify` — a

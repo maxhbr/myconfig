@@ -9,12 +9,10 @@ What this tier does and does not protect, stated so it can be argued with.
 Mechanisms are described in the
 [architecture document](./agent-microvm-architecture.md).
 
-**Verification status:** every property below is implemented and covered by the
-eval/build tier, and the shell components were exercised against stubbed
-systemd/mounts. The **real-KVM measurements have not been run**
-([guide](./agent-microvm-runtime-validation.md)), so runtime properties are
-*designed and eval-asserted*, not *measured*. Nothing here should be read as
-"tested in production".
+**Verification status:** every property below is covered by the eval/build tier
+(`nix flake check`), i.e. *designed and eval-asserted*. Runtime properties are
+only *measured* once the [runtime suite](./agent-microvm-runtime-validation.md)
+is run on real KVM.
 
 ## Trusted vs untrusted
 

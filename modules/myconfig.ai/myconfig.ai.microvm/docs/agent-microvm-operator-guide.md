@@ -128,7 +128,22 @@ git -C ~/src/my-repo log --oneline FETCH_HEAD
 git -C /var/lib/agent-microvms/workspaces/fix-parser format-patch origin/HEAD..agent/fix-parser -o /tmp/patches
 ```
 
-## 7. Remove a retained workspace
+## 7. Stop, destroy, remove
+
+These are distinct; **only `workspace-remove` deletes your clone**:
+
+| Command | VM | bind mount | slot runtime state | workspace / git |
+| --- | --- | --- | --- | --- |
+| `stop <slot\|task>` | stopped | unmounted | removed | **kept** |
+| `destroy <slot\|task>` | stopped | unmounted | removed | **kept** |
+| `workspace-remove <task> [--force]` | (must already be stopped) | — | — | **deleted** |
+
+`--attach` sessions tear the VM down on exit via a cleanup trap, always keeping
+the clone; interrupted launches clean up VM / mount / lock / TAP and keep it too.
+A slot with a session marker but an inactive unit is reported `stale: yes` (e.g.
+after a hard kill) — reclaim it with `destroy` or `recover`.
+
+## 8. Remove a retained workspace
 
 ```bash
 sudo agent-microvm usage                        # what is retained, and how big
@@ -141,7 +156,7 @@ a slot still holds the clone (it tells you which). It also removes that task's
 persisted agent state and archived result, so pruning frees everything the task
 retained.
 
-## 8. Recover stale slots
+## 9. Recover stale slots
 
 ```bash
 sudo agent-microvm recover --dry-run    # prints, changes nothing
@@ -153,7 +168,7 @@ Handles: stale markers (unit inactive), orphaned units (no marker), orphaned
 data. A `detached` slot whose launcher exited is normal and left alone. Clones
 are always kept.
 
-## 9. Inspect logs
+## 10. Inspect logs
 
 ```bash
 journalctl -t agent-microvm -f                      # structured lifecycle events
@@ -166,7 +181,21 @@ journalctl -u agent-microvm-attach-agent-normal-0   # TAP enslave + L2 isolation
 journalctl -u agent-microvm-hostkeys            # per-slot SSH host keys
 ```
 
-## 10. When something looks wrong
+One JSON record per transition, on the operator's stderr, in the journal under
+the `agent-microvm` tag, and in the per-task log (rotated once at
+`taskLogMaxBytes`, default 1 MiB). Events: `task-submitted`, `slot-allocated`,
+`workspace-created`, `vm-start-requested`, `vm-ready`, `agent-started`,
+`agent-finished`, `timeout`, `cancellation`, `vm-stopped`, `cleanup-completed`,
+`recovery-action`; each carries `ts`, `event`, `task`, `slot`, `agent`,
+`resource_class`, `mode` and, where applicable, `state` / `exit_code`. The guest
+emits its own `agent-started` / `agent-finished` / `timeout` records to the
+console, so host and guest transitions can be correlated.
+
+**Never logged:** API keys, prompt *content* (only path and byte size),
+repository credentials, secret environment variables, private key material, or
+allocation tokens.
+
+## 11. When something looks wrong
 
 ```bash
 sudo agent-microvm status                 # any slot marked stale: yes ?

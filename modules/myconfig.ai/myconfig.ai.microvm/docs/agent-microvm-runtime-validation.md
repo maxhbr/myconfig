@@ -3,18 +3,11 @@ Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 SPDX-License-Identifier: MIT
 -->
 
-# `myconfig.ai.microvm` — real-KVM validation guide (ticket 6 A)
+# `myconfig.ai.microvm` — real-KVM validation guide
 
-**Status: NOT EXECUTED yet.** This guide and the accompanying script
-([`../runtime-validation.sh`](../runtime-validation.sh)) define the procedure;
-they have **not** been run on real hardware from within the development
-environment used to write them (no `/dev/kvm`, no root). Nothing in this file may
-be read as evidence that the runtime properties hold — only the eval/build tier
-(`nix flake check`, see [`agent-microvm-validation.md`](./agent-microvm-validation.md))
-has been executed.
-
-Record actual results in [`agent-microvm-validation.md`](./agent-microvm-validation.md)
-when the suite is run.
+This guide describes how to run [`../runtime-validation.sh`](../runtime-validation.sh)
+on a host with real KVM. Nothing in this file is evidence that the runtime
+properties hold — only running the suite is.
 
 ## Why a separate tier
 

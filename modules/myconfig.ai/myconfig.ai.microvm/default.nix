@@ -21,9 +21,8 @@
 # produces no config side effects: it does NOT import the microvm.nix host
 # module, create the bridge/firewall rules, define VM slots, build the guest,
 # or register Workmux agents. Those are implemented in later phases inside
-# guest.nix / network.nix / launcher.nix / workmux.nix. See
-# `./docs/microvm-sandbox-plan.md` (§1, §37) for the authoritative
-# option/assertion requirements.
+# guest.nix / network.nix / launcher.nix / workmux.nix. The option reference
+# lives in `./docs/agent-microvm.md`.
 {
   config,
   # `options` is used to detect whether a DEPRECATED legacy network boolean was

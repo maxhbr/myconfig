@@ -24,8 +24,8 @@
 # things this environment cannot decide (e.g. only one slot in a class), never
 # silent passes.
 #
-# Record the output in docs/agent-microvm-validation.md (see the test guide,
-# docs/agent-microvm-runtime-validation.md).
+# The procedure and the meaning of each section are documented in
+# docs/agent-microvm-runtime-validation.md.
 set -euo pipefail
 
 PROG="agent-microvm-runtime-validation"
