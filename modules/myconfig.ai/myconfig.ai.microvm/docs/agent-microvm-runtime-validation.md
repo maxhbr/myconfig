@@ -52,7 +52,17 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section l2
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section creds
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section lifecycle
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section malrepo
+sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section forgery
 ```
+
+## Execution status
+
+| Section | Last executed on real KVM |
+| --- | --- |
+| `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED** (no KVM host was available when they were written) |
+| `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties is the eval/build check `microvm-batch-result-integrity` (see below). |
+
+This table is deliberately pessimistic: update it only with a pasted log.
 
 Every check prints one line — `PASS`, `FAIL` or `SKIP` — and the script exits
 non-zero if anything failed. `SKIP` is honest (e.g. "fewer than two slots in the
@@ -114,6 +124,33 @@ bind mount remains, no stale job spec remains, the workspace clone is preserved,
 and a slot can still be allocated afterwards. `recover --dry-run` is run before
 `recover` so its output can be compared.
 
+### `forgery` — the batch result channel (ticket 7)
+
+The authoritative batch result (`/run/agent-job/controller/result.json`) is
+written by the TRUSTED guest controller (root) and consumed by the host. The
+coding agent and every repository process run as the unprivileged guest `agent`
+user. This section measures that separation on a *booted* guest, because it is
+the guest kernel that enforces it over virtiofs.
+
+| Expected outcome |
+| --- |
+| the guest agent cannot write, read, delete or list `controller/` (root:root `0700`) |
+| the guest agent cannot read `input/spec.json` (`0400` — it carries the allocation token) |
+| the guest agent cannot modify `input/spec.json` / `input/prompt.md`, nor forge `input/cancel.json` |
+| the guest agent cannot rename, remove or symlink-shadow `controller/`, and cannot create anything in the share root |
+| a worker-written `worker/result.json` and `/workspace/result.json` are possible but **ignored**: the host keeps waiting and the archived result carries `source:"controller"` |
+| a stale result from an earlier allocation (valid schema, old allocation token) is **rejected** and cannot terminate the new job |
+| a malformed controller result yields an **infrastructure error** (`submit` exit `70`), never success |
+| a job that exceeds its deadline is `timed-out` (exit `124`) with the verdict coming from the controller, and the whole worker cgroup (including double-forked descendants) is gone |
+| `cancel` records `cancelled`; replaying that cancellation request against a **new** allocation of the same slot does nothing (token mismatch) |
+
+What the eval/build tier already executes for the same properties (run by
+`nix flake check`, no KVM needed): `microvm-batch-result-integrity` runs the real
+host verifier and the real guest-side permission assertions against 56 forged /
+stale / malformed / symlinked / world-writable fixtures under `fakeroot`. That
+proves the *validators and the layout*, not the kernel's enforcement — which is
+exactly what this section adds.
+
 ### `malrepo` — hostile repository fixture
 
 The fixture contains a git `post-checkout` hook, a `flake.nix` that throws when
@@ -133,8 +170,13 @@ the guest cannot enumerate host block devices.
 - `tcpdump -ni agentbr0` / `tcpdump -ni vm-<class>-<i>` while the `net`/`l2`
   sections run, to *see* the drops rather than infer them.
 - `systemd-cgtop` / `systemctl show microvm@<slot> -p MemoryMax,TasksMax` to
-  confirm the host-side limits, and `systemctl show agent-job -p MemoryMax,CPUQuota`
-  inside the guest for the per-class guest limits.
+  confirm the host-side limits, and, inside the guest,
+  `systemctl show agent-job-worker@<agent> -p MemoryMax,CPUQuota,TasksMax` for
+  the per-class guest limits (they live on the WORKER unit) plus
+  `systemctl status agent-job-controller` for the trusted half.
+- inside the guest: `sudo -u agent ls -ld /run/agent-job/*` — `input/` and
+  `controller/` must be root-owned (the latter `0700`), only `worker/` may be
+  agent-owned.
 - `iptables-save | grep AGENT_MICROVM` to review the rendered ruleset for the
   active network profile.
 

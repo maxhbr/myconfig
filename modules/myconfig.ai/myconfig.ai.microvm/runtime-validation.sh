@@ -17,7 +17,8 @@
 #
 # Usage:
 #   sudo ./modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh \
-#        --repository /home/mhuber/some-git-repo [--section all|boot|net|l2|creds|lifecycle|malrepo]
+#        --repository /home/mhuber/some-git-repo \
+#        [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery]
 #
 # Every check prints exactly one line: `PASS`, `FAIL` or `SKIP` plus a reason.
 # The script exits non-zero if any check FAILED. SKIPs are honest: they mark
@@ -38,6 +39,13 @@ RUNTIME_ROOT="${AGENT_RUNTIME_ROOT:-/var/lib/agent-microvms}"
 STATE_ROOT="${AGENT_STATE_ROOT:-/var/lib/microvms}"
 WORKSPACE_ROOT="$RUNTIME_ROOT/workspaces"
 LAUNCHER="${AGENT_LAUNCHER:-agent-microvm}"
+# Batch job share (job.nix). The guest sees the same paths under /run/agent-job.
+JOBS_ROOT="$RUNTIME_ROOT/jobs"
+RESULTS_DIR="$RUNTIME_ROOT/results"
+GUEST_JOB_DIR="/run/agent-job"
+GUEST_INPUT_DIR="$GUEST_JOB_DIR/input"
+GUEST_CTRL_DIR="$GUEST_JOB_DIR/controller"
+GUEST_WORKER_DIR="$GUEST_JOB_DIR/worker"
 
 REPO=""
 SECTION="all"
@@ -92,7 +100,7 @@ check_fails() {
 
 usage() {
     cat >&2 <<EOF
-Usage: sudo $0 --repository <git-repo> [--section all|boot|net|l2|creds|lifecycle|malrepo]
+Usage: sudo $0 --repository <git-repo> [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery]
 
 Sections:
   boot       per-class boot, readiness, /workspace, persistence, shares
@@ -101,6 +109,10 @@ Sections:
   creds      absence of host credentials/sockets inside a guest
   lifecycle  forced failures at every stage + slot reusability
   malrepo    hostile repository fixture (hooks, flake.nix, direnv, symlinks)
+  forgery    batch RESULT CHANNEL: a hostile worker must not be able to write,
+             replace, delete or shadow the authoritative result, stale results
+             must be rejected, timeouts must kill the whole worker cgroup, and
+             cancellation must be bound to the allocation token
 EOF
     exit 2
 }
@@ -547,6 +559,268 @@ HOOK
     rm -rf "$dir"
 }
 
+# --- (7) batch result channel: forgery, stale results, timeout, cancel -----
+# THIS is the section that measures the trust split introduced with spec v2:
+# the guest CONTROLLER (root) is the only writer of
+# /run/agent-job/controller/result.json, and the WORKER (uid 1000, the same
+# identity as the coding agent and every repository process) must not be able to
+# influence it in any way.
+#
+# Everything here needs a booted guest, because it is the guest KERNEL that
+# enforces the ownership/permission split over virtiofs. The eval/build suite
+# can only prove the layout and the validators (see
+# tests/microvm-batch-result-integrity.sh).
+section_forgery() {
+    section "batch result channel: forgery + stale results (ticket 7)"
+    local class slot task prompt
+    class="$(all_classes | head -1)"
+    prompt="$(mktemp /tmp/rtv-prompt.XXXXXX)"
+    # A prompt whose agent run is irrelevant: what matters is what the guest
+    # user can do to the result channel WHILE a job is running.
+    printf 'Print the word ok and exit.\n' >"$prompt"
+
+    # A long-running batch job, so the forgery attempts happen while the
+    # controller is still supervising the worker.
+    task=rtv-forge
+    cleanup_task "$task"
+    "$LAUNCHER" submit --name "$task" --repository "$REPO" --agent pi \
+        --prompt-file "$prompt" --timeout 300 --resource-class "$class" \
+        >/tmp/rtv-forge-submit.log 2>&1 &
+    local submit_pid=$!
+    # Wait for the slot to appear and the guest to be reachable.
+    local waited=0 slot=""
+    while ((waited < 120)); do
+        slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
+        if [[ -n $slot ]] && guest "$slot" true >/dev/null 2>&1; then break; fi
+        sleep 5
+        waited=$((waited + 5))
+    done
+    if [[ -z $slot ]]; then
+        skip "forgery: no slot came up for $task"
+        kill "$submit_pid" 2>/dev/null || true
+        rm -f "$prompt"
+        return
+    fi
+    info "forgery target: slot $slot (task $task)"
+
+    # --- (A) direct result forgery ---------------------------------------
+    check_fails "the guest agent cannot write the authoritative result" \
+        guest "$slot" sh -c "echo '{\"version\":2,\"state\":\"completed\"}' > $GUEST_CTRL_DIR/result.json"
+    check_fails "the guest agent cannot even LIST the controller directory" \
+        guest "$slot" sh -c "ls $GUEST_CTRL_DIR"
+    check_fails "the guest agent cannot read the controller result" \
+        guest "$slot" sh -c "cat $GUEST_CTRL_DIR/result.json"
+    check_fails "the guest agent cannot read the job spec (it holds the allocation token)" \
+        guest "$slot" sh -c "cat $GUEST_INPUT_DIR/spec.json"
+    check_fails "the guest agent cannot delete the controller result" \
+        guest "$slot" sh -c "rm -f $GUEST_CTRL_DIR/result.json"
+    check_fails "the guest agent cannot modify its own job spec" \
+        guest "$slot" sh -c "echo x >> $GUEST_INPUT_DIR/spec.json"
+    check_fails "the guest agent cannot modify its own prompt" \
+        guest "$slot" sh -c "echo x >> $GUEST_INPUT_DIR/prompt.md"
+    check_fails "the guest agent cannot forge a cancellation request" \
+        guest "$slot" sh -c "echo '{}' > $GUEST_INPUT_DIR/cancel.json"
+
+    # --- (B) directory replacement ---------------------------------------
+    check_fails "the guest agent cannot rename the controller directory" \
+        guest "$slot" sh -c "mv $GUEST_CTRL_DIR $GUEST_JOB_DIR/stolen"
+    check_fails "the guest agent cannot remove the controller directory" \
+        guest "$slot" sh -c "rmdir $GUEST_CTRL_DIR"
+    check_fails "the guest agent cannot shadow the controller directory with a symlink" \
+        guest "$slot" sh -c "ln -sfn $GUEST_WORKER_DIR $GUEST_JOB_DIR/controller"
+    check_fails "the guest agent cannot create anything in the job share root" \
+        guest "$slot" sh -c "touch $GUEST_JOB_DIR/x"
+    check_fails "the guest agent cannot rename the input directory" \
+        guest "$slot" sh -c "mv $GUEST_INPUT_DIR $GUEST_JOB_DIR/stolen-input"
+
+    # --- (C) worker-side fake results ------------------------------------
+    # The worker MAY write these; the host must ignore them entirely.
+    guest "$slot" sh -c "echo '{\"version\":2,\"state\":\"completed\",\"exitCode\":0}' > $GUEST_WORKER_DIR/result.json" \
+        >/dev/null 2>&1 || true
+    guest "$slot" sh -c "echo '{\"version\":2,\"state\":\"completed\",\"exitCode\":0}' > /workspace/result.json" \
+        >/dev/null 2>&1 || true
+    check "a worker-written result in worker/ is possible (it is untrusted output)" \
+        test -f "$JOBS_ROOT/$slot/worker/result.json"
+    # ... and the controller-owned result is still absent or controller-owned.
+    if [[ -e "$JOBS_ROOT/$slot/controller/result.json" ]]; then
+        if [[ "$(stat -c %u "$JOBS_ROOT/$slot/controller/result.json")" == "0" ]]; then
+            pass "the authoritative result is still owned by the guest controller (uid 0)"
+        else
+            fail "the authoritative result is NOT root-owned any more"
+        fi
+    else
+        pass "no authoritative result exists yet (the controller is still supervising)"
+    fi
+    if [[ "$(stat -c '%u %a' "$JOBS_ROOT/$slot/controller")" == "0 700" ]]; then
+        pass "the controller directory is still root:root 0700"
+    else
+        fail "the controller directory changed owner/mode: $(stat -c '%u %a' "$JOBS_ROOT/$slot/controller")"
+    fi
+
+    # --- (G) forged early completion must not end the job ----------------
+    sleep 5
+    if kill -0 "$submit_pid" 2>/dev/null; then
+        pass "the host is still waiting despite the forged worker results"
+    else
+        fail "the host stopped waiting after a forged worker result"
+    fi
+
+    # Let the real job finish and check the outcome the HOST reports.
+    wait "$submit_pid" 2>/dev/null || true
+    if [[ -f "$RESULTS_DIR/$task.json" ]]; then
+        local src state
+        src="$(jq -r '.source // ""' "$RESULTS_DIR/$task.json")"
+        state="$(jq -r '.state // ""' "$RESULTS_DIR/$task.json")"
+        info "archived result: state=$state source=$src"
+        if [[ $src == "controller" ]]; then
+            pass "the archived result came from the guest CONTROLLER"
+        else
+            fail "the archived result did not come from the controller (source=$src)"
+        fi
+        if [[ $state == "completed" || $state == "failed" || $state == "timed-out" ]]; then
+            pass "the archived state reflects a real controller verdict ($state)"
+        else
+            fail "unexpected archived state '$state'"
+        fi
+    else
+        fail "no archived result for $task"
+    fi
+    cleanup_task "$task"
+
+    # --- (D/E/F) stale, foreign and malformed results ---------------------
+    # Plant documents in the CONTROLLER directory as root (i.e. give the
+    # attacker strictly more power than a guest worker has) and check that the
+    # host still refuses to accept them for a NEW allocation.
+    task=rtv-stale
+    cleanup_task "$task"
+    local victim
+    victim="$(slots_of_class "$class" | head -1)"
+    install -d -m 0700 -o root -g root "$JOBS_ROOT/$victim/controller"
+    # A syntactically perfect result — but from an older allocation.
+    jq -n '{version:2, controllerVersion:1, taskId:"rtv-stale",
+            allocationToken:"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            slot:$slot, agent:"pi", state:"completed", exitCode:0,
+            startedAt:"2020-01-01T00:00:00Z", finishedAt:"2020-01-01T00:00:01Z",
+            timedOut:false, message:"stale"}' --arg slot "$victim" \
+        >"$JOBS_ROOT/$victim/controller/result.json"
+    chmod 0600 "$JOBS_ROOT/$victim/controller/result.json"
+    local rc=0
+    "$LAUNCHER" submit --name "$task" --repository "$REPO" --agent pi \
+        --prompt-file "$prompt" --timeout 120 --resource-class "$class" \
+        >/tmp/rtv-stale-submit.log 2>&1 || rc=$?
+    if grep -q "allocation token does not belong" /tmp/rtv-stale-submit.log ||
+        [[ "$(jq -r '.message // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)" != "stale" ]]; then
+        pass "a stale result from an earlier allocation is rejected (token mismatch)"
+    else
+        fail "the host accepted a STALE result (exit $rc)"
+    fi
+    cleanup_task "$task"
+
+    # A malformed result must become an INFRASTRUCTURE error (exit 70), never
+    # a success.
+    task=rtv-malformed
+    cleanup_task "$task"
+    rc=0
+    "$LAUNCHER" submit --name "$task" --repository "$REPO" --agent pi \
+        --prompt-file "$prompt" --timeout 60 --resource-class "$class" \
+        >/tmp/rtv-malformed-submit.log 2>&1 &
+    submit_pid=$!
+    sleep 20
+    slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
+    if [[ -n $slot ]]; then
+        printf '{ "version": 2, "state": ' >"$JOBS_ROOT/$slot/controller/result.json"
+        chmod 0600 "$JOBS_ROOT/$slot/controller/result.json"
+    fi
+    rc=0
+    wait "$submit_pid" || rc=$?
+    if ((rc == 70)); then
+        pass "a malformed result becomes an infrastructure error (exit 70)"
+    else
+        fail "a malformed result did not produce exit 70 (got $rc)"
+    fi
+    cleanup_task "$task"
+
+    # --- (H) timeout kills the whole worker cgroup ------------------------
+    task=rtv-timeout
+    cleanup_task "$task"
+    rc=0
+    "$LAUNCHER" submit --name "$task" --repository "$REPO" --agent pi \
+        --prompt-file "$prompt" --timeout 20 --resource-class "$class" \
+        >/tmp/rtv-timeout-submit.log 2>&1 &
+    submit_pid=$!
+    sleep 20
+    slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
+    if [[ -n $slot ]]; then
+        # A double-forked descendant that must die with the cgroup.
+        guest "$slot" sh -c 'setsid sh -c "sleep 3600" >/dev/null 2>&1 &' >/dev/null 2>&1 || true
+    fi
+    rc=0
+    wait "$submit_pid" || rc=$?
+    if ((rc == 124)); then
+        pass "a job that exceeds its deadline reports timed-out (exit 124)"
+    else
+        fail "a timed-out job did not produce exit 124 (got $rc)"
+    fi
+    if [[ -f "$RESULTS_DIR/$task.json" ]] &&
+        [[ "$(jq -r '.state' "$RESULTS_DIR/$task.json")" == "timed-out" ]] &&
+        [[ "$(jq -r '.source' "$RESULTS_DIR/$task.json")" == "controller" ]]; then
+        pass "the timeout verdict came from the guest controller"
+    else
+        info "archived: $(cat "$RESULTS_DIR/$task.json" 2>/dev/null)"
+        fail "the timeout verdict did not come from the controller"
+    fi
+    cleanup_task "$task"
+
+    # --- (I) cancellation is bound to the allocation token ----------------
+    task=rtv-cancel
+    cleanup_task "$task"
+    "$LAUNCHER" submit --name "$task" --repository "$REPO" --agent pi \
+        --prompt-file "$prompt" --timeout 300 --resource-class "$class" \
+        >/tmp/rtv-cancel-submit.log 2>&1 &
+    submit_pid=$!
+    sleep 25
+    slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
+    if [[ -z $slot ]]; then
+        skip "cancellation: no slot came up"
+        kill "$submit_pid" 2>/dev/null || true
+    else
+        # Keep a copy of the cancellation request, then cancel for real.
+        "$LAUNCHER" cancel "$task" >/tmp/rtv-cancel.log 2>&1 || true
+        cp "$JOBS_ROOT/$slot/input/cancel.json" /tmp/rtv-cancel-request.json 2>/dev/null || true
+        rc=0
+        wait "$submit_pid" || rc=$?
+        if [[ "$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)" == "cancelled" ]]; then
+            pass "cancellation is recorded as 'cancelled'"
+        else
+            fail "cancellation was not recorded (got '$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)')"
+        fi
+        cleanup_task "$task"
+        # Now replay the STALE cancellation request against a NEW allocation of
+        # the same slot: the token no longer matches, so the new job must run.
+        task=rtv-cancel-replay
+        cleanup_task "$task"
+        "$LAUNCHER" submit --name "$task" --repository "$REPO" --agent pi \
+            --prompt-file "$prompt" --timeout 120 --resource-class "$class" \
+            >/tmp/rtv-replay-submit.log 2>&1 &
+        submit_pid=$!
+        sleep 20
+        slot="$($LAUNCHER list | awk -v t="$task" '$5 == t { print $1 }')"
+        if [[ -n $slot && -f /tmp/rtv-cancel-request.json ]]; then
+            install -m 0400 -o root -g root /tmp/rtv-cancel-request.json \
+                "$JOBS_ROOT/$slot/input/cancel.json"
+        fi
+        rc=0
+        wait "$submit_pid" || rc=$?
+        if [[ "$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)" == "cancelled" ]]; then
+            fail "a STALE cancellation request stopped a newly allocated job"
+        else
+            pass "a stale cancellation request does not affect a new allocation"
+        fi
+        cleanup_task "$task"
+    fi
+    rm -f "$prompt" /tmp/rtv-cancel-request.json
+}
+
 # --- main -----------------------------------------------------------------
 printf '%s: starting real-KVM validation (host %s, bridge %s)\n' \
     "$PROG" "$(uname -n)" "$BRIDGE"
@@ -560,6 +834,7 @@ case "$SECTION" in
         section_creds
         section_lifecycle
         section_malrepo
+        section_forgery
         ;;
     boot) section_boot ;;
     net) section_net ;;
@@ -567,6 +842,7 @@ case "$SECTION" in
     creds) section_creds ;;
     lifecycle) section_lifecycle ;;
     malrepo) section_malrepo ;;
+    forgery) section_forgery ;;
     *) die "unknown --section '$SECTION'" ;;
 esac
 
