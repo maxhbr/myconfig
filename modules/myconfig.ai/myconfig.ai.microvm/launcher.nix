@@ -62,6 +62,11 @@
   agentJobs,
   # The ONE definition of the task-scoped agent-state paths (state.nix).
   agentState,
+  # The ONE resolved network decision (profile + capabilities + DNS policy),
+  # from default.nix (`_module.args.agentNetwork`). The host launcher's
+  # endpoint preflight and `doctor` use `caps.litellm` so they only fire when
+  # the effective profile actually grants model-API access.
+  agentNetwork,
   ...
 }:
 let
@@ -89,6 +94,9 @@ let
       systemd # systemctl, systemd-escape
       gnugrep
       gnused
+      curl # endpoint preflight + `doctor` HTTP probes
+      iproute2 # ip, bridge — `doctor` bridge / address / TAP checks
+      iptables # `doctor` firewall-chain inspection (read-only)
     ];
     text = ''
       set -euo pipefail
@@ -118,6 +126,36 @@ let
       readonly WORKSPACE_ROOT=${lib.escapeShellArg cfg.workspaceRoot}
       readonly RUNTIME_ROOT=${lib.escapeShellArg cfg.runtimeRoot}
       readonly STATE_ROOT=${lib.escapeShellArg cfg.stateRoot}
+      # The private bridge + the bridge-only LiteLLM endpoint a guest reaches
+      # (network.nix §16, guest.nix forwarder). The host launcher's endpoint
+      # preflight and `doctor` probe exactly this address, and the per-task
+      # stderr surfacing labels the endpoint in its hint.
+      readonly BRIDGE=${lib.escapeShellArg cfg.bridgeName}
+      readonly GATEWAY=${lib.escapeShellArg cfg.gatewayAddress}
+      readonly LITELLM_PORT=${toString cfg.litellmPort}
+      # Whether the effective profile grants model-API access at all. Under
+      # `offline` there is no endpoint to probe, so the preflight/doctor skip
+      # the LiteLLM checks rather than reporting a spurious failure.
+      readonly LITELLM_CAPABLE=${if agentNetwork.caps.litellm then "1" else "0"}
+      readonly NETWORK_PROFILE=${lib.escapeShellArg agentNetwork.profile}
+      # Bounded connect timeout (seconds) for a single preflight attempt. Short
+      # on purpose: a reachable endpoint answers in well under a second; a dead
+      # one must fail fast, not hold up boot for the full TCP retransmit cycle.
+      readonly PREFLIGHT_TIMEOUT=3
+      # A COLD LiteLLM (DB init/migration on the first post-boot request) can
+      # take a few seconds to answer even though it is healthy. Retry a bounded
+      # number of times so a slow-but-working endpoint is not mistaken for a
+      # dead one; a genuinely dead endpoint still fails within
+      # PREFLIGHT_RETRIES*PREFLIGHT_TIMEOUT + sleeps, which is negligible vs.
+      # booting a doomed VM (the 95-min real-KVM runs this was built for).
+      readonly PREFLIGHT_RETRIES=3
+      readonly PREFLIGHT_RETRY_DELAY=2
+      # Escape hatch for the EXECUTED test harnesses (tests/microvm-batch-*.sh):
+      # they run the REAL launcher against a stubbed environment with no real
+      # LiteLLM listener, so the production preflight would abort every
+      # result-channel scenario before it started. Production callers MUST NOT
+      # set this — a skipped preflight is strictly less safe than a real one.
+      readonly SKIP_PREFLIGHT="''${AGENT_MICROVM_SKIP_PREFLIGHT:-0}"
       readonly SSH_ENABLED=${lib.escapeShellArg (if cfg.enableSsh then "1" else "0")}
       readonly SSH_USER="agent"
       # ---- §18 / ticket 3 B: AUTHENTICATED control channel ---------------
@@ -184,6 +222,7 @@ let
       readonly JOB_CONTROLLER_SUBDIR=${lib.escapeShellArg agentJobs.controllerSubdir}
       readonly JOB_WORKER_SUBDIR=${lib.escapeShellArg agentJobs.workerSubdir}
       readonly JOB_WORKER_LOGS_SUBDIR=${lib.escapeShellArg agentJobs.workerLogsSubdir}
+      readonly JOB_WORKER_STDERR_NAME=${lib.escapeShellArg agentJobs.workerStderrName}
       readonly JOB_SPEC_NAME=${lib.escapeShellArg agentJobs.specName}
       readonly JOB_PROMPT_NAME=${lib.escapeShellArg agentJobs.promptName}
       readonly JOB_CANCEL_NAME=${lib.escapeShellArg agentJobs.cancelName}
@@ -1244,6 +1283,12 @@ let
                               Keeps workspace/git/patches.
         status [slot|task]    Show slot/service/IP/MAC/task/workspace/mount/
                               agent/start-time/SSH-readiness/lock-owner.
+        doctor               Read-only host-side diagnosis of the model-API path
+                              (host LiteLLM, the bridge-only forwarder socket,
+                              the bridge + gateway address, the firewall chains
+                              and per-slot host keys). Exits non-zero if any
+                              component is broken; run it when run/submit
+                              fails the endpoint preflight.
         list                  One-line status for every slot.
         ssh <slot|task> [--] [cmd...]   SSH into the guest 'agent' user.
         console <slot|task>   Attach to the VM serial console (journal).
@@ -1303,6 +1348,112 @@ let
           exit 2
       }
 
+      # ==== surface a FAILED batch worker's stderr ==========================
+      # A batch job that dies in seconds tells the operator nothing in its
+      # AUTHORITATIVE result (the controller only records `failed` + an exit
+      # code). The worker's own stderr — captured by the guest's systemd into
+      # the host-visible, ROOT-owned `$JOBS_ROOT/<slot>/worker-logs/stderr.log`
+      # — is where the real reason lives ("connection refused", "no API key",
+      # a stack trace, …). On a FAILED job, surface a BOUNDED tail of it to the
+      # operator's stderr so the next step is obvious instead of another
+      # 95-min investigation.
+      #
+      # Trust boundary (do not weaken): the worker is UNTRUSTED, so its stderr
+      # is UNTRUSTED output. It is therefore
+      #   * clearly labelled `UNTRUSTED WORKER STDERR`,
+      #   * bounded to the last WORKER_STDERR_TAIL_BYTES bytes (capped under
+      #     `taskLogMaxBytes`), never the whole file,
+      #   * written ONLY to the operator's stderr — never into the authoritative
+      #     result JSON, never into the structured event stream (which the
+      #     controller / host share), and never `eval`d or parsed.
+      # `cat` (not `tail -n`) on the byte-bounded tail keeps a half-line at
+      # the start honest (it is clearly partial) without running the untrusted
+      # text through any interpreter.
+      readonly WORKER_STDERR_TAIL_BYTES=8192
+      surface_worker_stderr() {
+          local slot="$1" task="$2" state="$3"
+          # Only a FAILED (or infrastructurally-broken) job is worth surfacing;
+          # `completed`/`timed-out`/`cancelled` either succeeded or were
+          # explained by their own state.
+          case "$state" in
+              failed|infrastructure-error) ;;
+              *) return 0 ;;
+          esac
+          local stderr_file
+          stderr_file="$(job_worker_logs_dir "$slot")/$JOB_WORKER_STDERR_NAME"
+          [[ -s "$stderr_file" ]] || return 0
+          local bound=$WORKER_STDERR_TAIL_BYTES
+          (( LOG_MAX_BYTES < bound )) && bound=$LOG_MAX_BYTES
+          printf '%s: task %q FAILED — tail of the UNTRUSTED worker stderr (last %d bytes, root-owned; NOT the authoritative result):\n' \
+              "$PROG" "$task" "$bound" >&2
+          # Bound in bytes, then print through `cat -v`, which renders
+          # non-printing bytes (ESC sequences, OSC title-set, NUL, …) as visible
+          # ^X / M-X — so a hostile worker CANNOT inject terminal-control
+          # escapes into the operator's TTY or forge a plausible-looking
+          # launcher line. LF and TAB are preserved, so the tail stays readable.
+          # `cat` and `tail` are in coreutils; the file is root-owned 0644 so
+          # the launcher (root) can read it directly. `cat -v` does NOT
+          # interpret the text — every byte is still printed, only the
+          # non-printing ones are rendered visible.
+          tail -c "$bound" -- "$stderr_file" 2>/dev/null | cat -v >&2 || true
+          # Guarantee the labelled block ends on its own line even if the worker
+          # stderr did not (it is UNTRUSTED text — never assume it is clean).
+          printf '\n%s: end of UNTRUSTED worker stderr for task %q\n' "$PROG" "$task" >&2
+      }
+
+      # ==== model-endpoint preflight ==========================================
+      # A guest agent that cannot reach the model API dies within seconds and
+      # leaves nothing actionable in the authoritative result. The two real-KVM
+      # runs that surfaced this both spent ~95 min before anyone noticed the
+      # worker exited after 2 s. This preflight makes that failure FAST and
+      # LOUD, BEFORE a VM is booted: it opens a bounded HTTP connection to the
+      # SAME bridge endpoint a guest would use
+      # (http://<gateway>:<litellmPort>/v1/models, forwarded by the
+      # `agent-litellm-proxy` socket to the loopback LiteLLM). A successful 2xx
+      # means the host backend, the bridge address, the bridge-only socket and
+      # the loopback LiteLLM are all wired up; a failure names the most likely
+      # component to check.
+      #
+      # Read-only and side-effect-free. Skipped under `offline` (no endpoint)
+      # and when AGENT_MICROVM_SKIP_PREFLIGHT=1 (the EXECUTED test harnesses run
+      # the launcher against stubs with no listener — they exercise the result
+      # channel, not the endpoint).
+      preflight_model_endpoint() {
+          [[ "$LITELLM_CAPABLE" == "1" ]] || return 0
+          [[ "$SKIP_PREFLIGHT" == "1" ]] && return 0
+          local url="http://$GATEWAY:$LITELLM_PORT/v1/models"
+          local attempt
+          # A COLD LiteLLM (DB init/migration on the first post-boot request)
+          # can take a few seconds to answer even though it is healthy. Retry
+          # a bounded number of times so a slow-but-working endpoint is not
+          # mistaken for a dead one; a genuinely dead endpoint still fails fast
+          # (each attempt is bounded to PREFLIGHT_TIMEOUT by -m and
+          # --connect-timeout).
+          for attempt in $(seq 1 "$PREFLIGHT_RETRIES"); do
+              if curl -fsS -m "$PREFLIGHT_TIMEOUT" \
+                  --connect-timeout "$PREFLIGHT_TIMEOUT" -o /dev/null "$url" 2>/dev/null; then
+                  return 0
+              fi
+              (( attempt < PREFLIGHT_RETRIES )) && sleep "$PREFLIGHT_RETRY_DELAY"
+          done
+          cat >&2 <<EOF
+      $PROG: PREFLIGHT FAILED: the model endpoint a guest must reach is not
+        reachable at $url (bounded to ''${PREFLIGHT_TIMEOUT}s).
+        The guest agent would die within seconds of starting. Before booting a
+        sandbox, check on THIS host:
+          - systemctl is-active agent-litellm-proxy.socket  (must be active;
+            it needs the bridge device, so it is ordered after
+            $BRIDGE-netdev.service)
+          - systemctl is-active litellm.service  (the loopback backend on
+            127.0.0.1:$LITELLM_PORT)
+          - ip -br addr show $BRIDGE  (the bridge + its $GATEWAY address)
+          - curl -fsS http://127.0.0.1:$LITELLM_PORT/v1/models  (the backend)
+        or run: sudo $PROG doctor   (full diagnosis)
+        (set AGENT_MICROVM_SKIP_PREFLIGHT=1 only in the stubbed test harness.)
+      EOF
+          return 1
+      }
+
       cmd_run() {
           require_root run
           local task="" repo="" agent="" branch="" attach=0
@@ -1340,6 +1491,12 @@ let
           # The default `agent/<task>` is safe (task is regex-validated); a
           # caller-supplied branch is validated so it cannot look like a flag.
           validate_branch_name "$branch"
+
+          # Fail FAST if the model endpoint a guest must reach is not up: a
+          # sandbox whose agent cannot reach LiteLLM dies within seconds and
+          # the 95-min real-KVM runs only surfaced that by accident. This is
+          # the cheap, read-only host-side check; `doctor` is the deep one.
+          preflight_model_endpoint
 
           mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT"
 
@@ -1496,6 +1653,10 @@ let
           [[ -z "$branch" ]] && branch="agent/$task"
           validate_branch_name "$branch"
 
+          # Same fast-fail host-side endpoint check as `run`: do not boot a VM
+          # whose agent can only die in seconds. See preflight_model_endpoint.
+          preflight_model_endpoint
+
           mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT"
           # Root-only: an archived result carries its run's allocation token.
           install -d -m "$JOB_ARCHIVE_DIR_MODE" -o root -g root -- "$RESULTS_DIR"
@@ -1614,6 +1775,14 @@ let
               timed-out) rc=124 ;;
               *)         rc=70 ;;
           esac
+
+          # A FAILED (or infrastructure-error) job is the one case where the
+          # worker's own stderr is worth showing: it holds the real reason the
+          # agent died (e.g. "connection refused" from the dead LiteLLM
+          # endpoint) that the authoritative result does not. Surface a BOUNDED
+          # tail BEFORE cleanup_slot clears the job dir, labelled UNTRUSTED and
+          # never written into the result JSON or the event stream.
+          surface_worker_stderr "$slot" "$task" "$state"
 
           # Archive the result (host-only, outside every guest share) BEFORE the
           # job dir is cleared, so `status <task>` can still report the outcome.
@@ -2302,6 +2471,117 @@ let
           rm -f -- "$RESULTS_DIR/$task.json"
       }
 
+      # ==== `doctor`: read-only host-side diagnosis ==========================
+      # The preflight inside `run`/`submit` is a single fast go/no-go. `doctor`
+      # is the DEEP, read-only diagnosis an operator runs when that preflight
+      # fires (or when a guest mysteriously cannot reach the model API): it
+      # reports the state of every component the model-API path depends on, so
+      # the 95-min “why does the worker die after 2 s?” investigation collapses
+      # to one command. Root-only: it reads root-owned host keys and inspects
+      # iptables. Exits non-zero if ANY check fails, so it is scriptable.
+      cmd_doctor() {
+          require_root doctor
+          local problems=0 url loopback_url
+          # A one-line summary line per component; prefixed `OK` / `FAIL`.
+          report() { printf '%-7s %s\n' "$1" "$2"; }
+          fail()   { report FAIL "$1"; problems=$((problems + 1)); }
+          ok()     { report OK   "$1"; }
+
+          printf '%s: host-side diagnosis (bridge=%s gateway=%s litellmPort=%s profile=%s)\n' \
+              "$PROG" "$BRIDGE" "$GATEWAY" "$LITELLM_PORT" "''${NETWORK_PROFILE:-<unset>}"
+          section_hdr() { printf '\n== %s ==\n' "$1"; }
+
+          if [[ "$LITELLM_CAPABLE" != "1" ]]; then
+              ok "effective profile grants no model-API access (no LiteLLM checks needed)"
+              printf '\n%s: %d problem(s)\n' "$PROG" "$problems"
+              (( problems == 0 ))
+              return
+          fi
+
+          section_hdr "host LiteLLM backend (loopback 127.0.0.1:$LITELLM_PORT)"
+          if systemctl is-active --quiet litellm.service 2>/dev/null; then
+              ok "litellm.service is active"
+          else
+              fail "litellm.service is NOT active (systemctl start litellm)"
+          fi
+          loopback_url="http://127.0.0.1:$LITELLM_PORT/v1/models"
+          if curl -fsS -m "$PREFLIGHT_TIMEOUT" --connect-timeout "$PREFLIGHT_TIMEOUT" \
+                  -o /dev/null "$loopback_url" 2>/dev/null; then
+              ok "loopback LiteLLM answers GET $loopback_url"
+          else
+              fail "loopback LiteLLM does NOT answer $loopback_url (is litellm.service running on port $LITELLM_PORT?)"
+          fi
+
+          section_hdr "bridge-only forwarder socket ($GATEWAY:$LITELLM_PORT)"
+          # The socket must be active AND ordered after the bridge netdev; a
+          # socket that failed at boot (BindToDevice before the bridge exists)
+          # stays failed and has no listener.
+          if systemctl is-active --quiet agent-litellm-proxy.socket 2>/dev/null; then
+              ok "agent-litellm-proxy.socket is active"
+          else
+              fail "agent-litellm-proxy.socket is NOT active (it needs $BRIDGE-netdev.service; try: systemctl restart agent-litellm-proxy.socket)"
+          fi
+          if systemctl show -p After --value agent-litellm-proxy.socket 2>/dev/null \
+                  | grep -qw "$BRIDGE-netdev.service"; then
+              ok "socket is ordered after $BRIDGE-netdev.service"
+          else
+              fail "socket is NOT ordered after $BRIDGE-netdev.service (a boot race leaves it with no listener)"
+          fi
+          url="http://$GATEWAY:$LITELLM_PORT/v1/models"
+          if curl -fsS -m "$PREFLIGHT_TIMEOUT" --connect-timeout "$PREFLIGHT_TIMEOUT" \
+                  -o /dev/null "$url" 2>/dev/null; then
+              ok "bridge endpoint answers GET $url"
+          else
+              fail "bridge endpoint does NOT answer $url (the guest-forwarded path is broken)"
+          fi
+
+          section_hdr "private bridge + gateway address"
+          if ip -br link show "$BRIDGE" >/dev/null 2>&1; then
+              ok "bridge interface $BRIDGE exists"
+          else
+              fail "bridge interface $BRIDGE does NOT exist"
+          fi
+          if ip -br addr show "$BRIDGE" 2>/dev/null | grep -qw "$GATEWAY"; then
+              ok "bridge carries the gateway address $GATEWAY"
+          else
+              fail "bridge $BRIDGE does NOT carry the gateway address $GATEWAY"
+          fi
+
+          section_hdr "firewall (AGENT_MICROVM_* chains)"
+          if iptables -L AGENT_MICROVM_INPUT -n >/dev/null 2>&1; then
+              ok "AGENT_MICROVM_INPUT chain is installed"
+          else
+              fail "AGENT_MICROVM_INPUT chain is NOT installed (reload the firewall / switch-to-configuration)"
+          fi
+          # Escape the dots in $GATEWAY so grep treats them literally (basic
+          # regex `.` matches any char); the `.*` wildcards stay regex.
+          if iptables -S AGENT_MICROVM_INPUT 2>/dev/null \
+                  | grep -q -- "-d ''${GATEWAY//./\\.} .* --dport $LITELLM_PORT .* ACCEPT"; then
+              ok "INPUT chain ACCEPTs tcp dport $LITELLM_PORT to $GATEWAY from the subnet"
+          else
+              fail "INPUT chain does NOT ACCEPT the LiteLLM endpoint (guest -> $GATEWAY:$LITELLM_PORT)"
+          fi
+          if iptables -L AGENT_MICROVM_FORWARD -n >/dev/null 2>&1; then
+              ok "AGENT_MICROVM_FORWARD chain is installed"
+          else
+              fail "AGENT_MICROVM_FORWARD chain is NOT installed"
+          fi
+
+          section_hdr "per-slot SSH host keys"
+          local missing=0 s
+          for s in "''${SLOT_NAMES[@]}"; do
+              [[ -e "$HOSTKEYS_ROOT/$s" ]] || missing=$((missing + 1))
+          done
+          if (( missing == 0 )); then
+              ok "every slot has a host-key directory under $HOSTKEYS_ROOT"
+          else
+              fail "$missing slot(s) lack a host-key directory (systemctl start agent-microvm-hostkeys.service)"
+          fi
+
+          printf '\n%s: %d problem(s)\n' "$PROG" "$problems"
+          (( problems == 0 ))
+      }
+
       main() {
           [[ $# -ge 1 ]] || usage
           local cmd="$1"; shift
@@ -2314,6 +2594,7 @@ let
               stop)             cmd_stop "$@" ;;
               destroy)          cmd_destroy "$@" ;;
               status)           cmd_status "$@" ;;
+              doctor)           cmd_doctor "$@" ;;
               list)             cmd_list "$@" ;;
               ssh)              cmd_ssh "$@" ;;
               console)          cmd_console "$@" ;;

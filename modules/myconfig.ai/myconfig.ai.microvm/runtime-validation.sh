@@ -927,6 +927,30 @@ $unit_env"
         skip "batch worker environment: agent-job-worker@pi.service reported no Environment= containing PATH (the unit was not readable, so its environment cannot be decided)"
     else
         pass "both halves of the batch worker's environment could be read (positive control: each contains PATH)"
+        # POSITIVE CONTROL for the endpoint plumbing: the batch worker is a
+        # non-login oneshot, so it gets its endpoint vars ONLY from the unit's
+        # `Environment=` (NixOS puts `environment.variables` in login profiles
+        # only). Without an explicit `environment=` on the unit these were ABSENT
+        # — the worker had no model endpoint and died in ~2s — yet the old
+        # check passed, because it only asserted secrets-absent, never
+        # endpoint-present. Assert each endpoint var is present in the UNIT's
+        # own Environment= (not the manager's) with its expected loopback value.
+        local want_base="http://127.0.0.1:$LITELLM_PORT/v1" want_anth="http://127.0.0.1:$LITELLM_PORT"
+        if grep -qE "(^|[[:space:]])OPENAI_BASE_URL=$want_base([[:space:]]|$)" <<<"$unit_env"; then
+            pass "the batch worker's unit Environment= carries OPENAI_BASE_URL=$want_base"
+        else
+            fail "the batch worker's unit Environment= does NOT carry OPENAI_BASE_URL=$want_base (the batch path has no model endpoint)"
+        fi
+        if grep -qE "(^|[[:space:]])OPENROUTER_BASE_URL=$want_base([[:space:]]|$)" <<<"$unit_env"; then
+            pass "the batch worker's unit Environment= carries OPENROUTER_BASE_URL=$want_base"
+        else
+            fail "the batch worker's unit Environment= does NOT carry OPENROUTER_BASE_URL=$want_base (hermes batch jobs would have no endpoint)"
+        fi
+        if grep -qE "(^|[[:space:]])ANTHROPIC_BASE_URL=$want_anth([[:space:]]|$)" <<<"$unit_env"; then
+            pass "the batch worker's unit Environment= carries ANTHROPIC_BASE_URL=$want_anth"
+        else
+            fail "the batch worker's unit Environment= does NOT carry ANTHROPIC_BASE_URL=$want_anth (claude-code batch jobs would have no endpoint)"
+        fi
         for var in OPENROUTER_API_KEY GITHUB_TOKEN GH_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID \
             AWS_SECRET_ACCESS_KEY GOOGLE_APPLICATION_CREDENTIALS AZURE_CLIENT_SECRET \
             KUBECONFIG SSH_AUTH_SOCK GPG_AGENT_INFO; do
@@ -1630,6 +1654,57 @@ section_forgery() {
 printf '%s: starting real-KVM validation (host %s, bridge %s)\n' \
     "$PROG" "$(uname -n)" "$BRIDGE"
 "$LAUNCHER" list | sed 's/^/#     /'
+
+# --- host-side model-endpoint preflight -------------------------------------
+# Sections `net` and `forgery` are MEANINGLESS (and produce dozens of
+# misleading FAILs) when the guest cannot reach the model API: a batch worker
+# that dies in seconds fails every forgery subtest, and the two `net` endpoint
+# checks fail for the same root cause. Probe the SAME bridge endpoint a guest
+# would use (the host's `agent-litellm-proxy` socket forwarding to the loopback
+# LiteLLM) ONCE, before any VM boots, and ABORT the endpoint-dependent
+# sections with a precise reason instead of running them into the ground.
+# `boot`/`l2`/`creds`/`lifecycle`/`malrepo` may still be meaningful without the
+# endpoint, so they are not aborted here.
+# shellcheck disable=SC2317  # reached via the case below
+preflight_endpoint() {
+    local url="http://$GATEWAY:$LITELLM_PORT/v1/models"
+    local attempt
+    # A COLD LiteLLM (DB init/migration on the first post-boot request) can
+    # take a few seconds to answer even though it is healthy. Retry a bounded
+    # number of times so a slow-but-working endpoint is not mistaken for a
+    # dead one (matching the launcher's preflight_model_endpoint).
+    for attempt in 1 2 3; do
+        if curl -fsS -m 3 --connect-timeout 3 -o /dev/null "$url" 2>/dev/null; then
+            pass "preflight: the model endpoint answers at $url"
+            return 0
+        fi
+        ((attempt < 3)) && sleep 2
+    done
+    fail "preflight: the model endpoint is NOT reachable at $url"
+    info "the guest agent cannot reach the model API; the endpoint-dependent"
+    info "sections would only produce misleading failures. Diagnose on the host:"
+    info "  sudo $LAUNCHER doctor"
+    info "  systemctl is-active agent-litellm-proxy.socket litellm.service"
+    info "  curl -fsS http://127.0.0.1:$LITELLM_PORT/v1/models   (the backend)"
+    info "  ip -br addr show $BRIDGE                          (bridge + gateway)"
+    return 1
+}
+# Sections whose results are invalid (not merely uninteresting) without a
+# reachable model endpoint. `all` is included because it runs both.
+endpoint_sections() {
+    case "$1" in
+        net | forgery | all) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+if endpoint_sections "$SECTION" && ! preflight_endpoint; then
+    printf '%s: ABORTING section %q: the model endpoint is not reachable,\n' \
+        "$PROG" "$SECTION" >&2
+    printf '%s: fix the host backend first (run: sudo %s doctor), then re-run.\n' \
+        "$PROG" "$LAUNCHER" >&2
+    exit 1
+fi
 
 case "$SECTION" in
     all)
