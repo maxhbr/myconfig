@@ -59,14 +59,24 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section forgery
 
 Before `net`, `forgery`, or `all` boot any VMs, the suite probes the SAME bridge
 endpoint a guest would use (`http://192.168.83.1:4000/v1/models`, forwarded by
-the `agent-litellm-proxy` socket to the loopback LiteLLM). If it is not
-reachable the suite **aborts** those sections with a precise reason instead
-of running them into the ground (a batch worker that dies in seconds fails
-every forgery subtest, and the `net` endpoint checks fail for the same root
-cause). `boot`/`l2`/`creds`/`lifecycle`/`malrepo` are still meaningful without
-the endpoint and are not aborted. The preflight retries up to 3 times (3 s
-each, 2 s apart) so a cold LiteLLM is not mistaken for a dead one; if it
-fails, run `sudo agent-microvm doctor` on the host and re-run the section.
+the `agent-litellm-proxy` socket to the loopback LiteLLM). Running the two
+endpoint-dependent sections (`net`, `forgery`) into the ground when that probe
+fails would only produce misleading failures (a batch worker that dies in
+seconds fails every forgery subtest, and the `net` endpoint checks fail for the
+same root cause), so the suite does not run them. What happens instead depends
+on what the operator asked for:
+
+- under `--section all`, the five endpoint-INDEPENDENT sections
+  (`boot`/`l2`/`creds`/`lifecycle`/`malrepo`) still RUN, while `net` and
+  `forgery` are **skipped** with a loud, counted reason and the run exits
+  non-zero — so the security-critical `forgery` section cannot pass simply by
+  not being run (Bug 2);
+- under `--section net` or `--section forgery` alone, the run **hard-aborts**
+  (exit 1) instead, since running just that one section would decide nothing.
+
+The preflight retries up to 3 times (3 s each, 2 s apart) so a cold LiteLLM is
+not mistaken for a dead one; if it fails, run `sudo agent-microvm doctor` on
+the host and re-run the section.
 
 ## Execution status
 
