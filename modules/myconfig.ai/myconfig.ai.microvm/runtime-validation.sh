@@ -1599,6 +1599,7 @@ section_forgery() {
 
     # --- (I) cancellation is bound to the allocation token ----------------
     task=rtv-cancel
+    local cancel_waited=0 cancel_state="" plant_waited=0
     cleanup_task "$task"
     "$LAUNCHER" submit --name "$task" --repository "$REPO" --agent pi \
         --prompt-file "$prompt" --timeout 300 --resource-class "$class" \
@@ -1609,15 +1610,42 @@ section_forgery() {
         skip "cancellation: no slot came up"
         kill "$submit_pid" 2>/dev/null || true
     else
+        # The worker must actually be RUNNING before we cancel: cancelling a
+        # job whose worker has not started yet exercises the controller's
+        # "cancelled before the worker started" path instead, and a cancel that
+        # races the very first controller poll is not what test I is about.
+        cancel_waited=0
+        while ((cancel_waited < 60)); do
+            [[ "$(jq -r '.state // ""' "$JOBS_ROOT/$slot/controller/state.json" 2>/dev/null)" == running ]] && break
+            sleep 2
+            cancel_waited=$((cancel_waited + 2))
+        done
+        info "cancelling after ${cancel_waited}s (controller phase: $(jq -r '.state // "<none>"' "$JOBS_ROOT/$slot/controller/state.json" 2>/dev/null))"
         # Keep a copy of the cancellation request, then cancel for real.
         "$LAUNCHER" cancel "$task" >/tmp/rtv-cancel.log 2>&1 || true
         cp "$JOBS_ROOT/$slot/input/cancel.json" /tmp/rtv-cancel-request.json 2>/dev/null || true
         rc=0
         wait "$submit_pid" || rc=$?
-        if [[ "$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)" == "cancelled" ]]; then
+        cancel_state="$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)"
+        if [[ $cancel_state == cancelled ]]; then
             pass "cancellation is recorded as 'cancelled'"
         else
-            fail "cancellation was not recorded (got '$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)')"
+            fail "cancellation was not recorded (got '$cancel_state')"
+            # DIAGNOSABILITY: `cleanup_task` below deletes the archived result,
+            # so without this dump the next run cannot tell WHO wrote the wrong
+            # verdict (the guest controller, the host `cancel`, or the still-
+            # waiting `submit` overwriting cancel's archive). Print every
+            # artefact that decides it, before it is destroyed.
+            info "--- archived result ($RESULTS_DIR/$task.json) ---"
+            jq -c . "$RESULTS_DIR/$task.json" 2>/dev/null | sed 's/^/#     /' ||
+                info "  (no archived result)"
+            info "--- cancel exit=$? log ---"
+            sed 's/^/#     /' /tmp/rtv-cancel.log 2>/dev/null | tail -20
+            info "--- submit exit=$rc log ---"
+            sed 's/^/#     /' /tmp/rtv-cancel-submit.log 2>/dev/null | tail -20
+            info "--- guest controller journal ---"
+            "$LAUNCHER" ssh "$slot" -- journalctl -u agent-job-controller --no-pager -n 40 \
+                2>/dev/null | sed 's/^/#     /' || info "  (guest already gone)"
         fi
         cleanup_task "$task"
         # Now replay the STALE cancellation request against a NEW allocation of
@@ -1630,10 +1658,23 @@ section_forgery() {
         submit_pid=$!
         local replayed=0
         slot="$(wait_task_slot "$task")" || slot=""
-        if [[ -n $slot && -f /tmp/rtv-cancel-request.json ]]; then
+        # `wait_task_slot` returns as soon as the slot is ALLOCATED, which can be
+        # before the launcher has populated the job input directory — the reason
+        # the previous run could not plant the stale request and had to SKIP.
+        # Wait for the directory that must receive it.
+        if [[ -n $slot ]]; then
+            plant_waited=0
+            while ((plant_waited < 60)) && [[ ! -d "$JOBS_ROOT/$slot/input" ]]; do
+                sleep 2
+                plant_waited=$((plant_waited + 2))
+            done
+        fi
+        if [[ -n $slot && -f /tmp/rtv-cancel-request.json && -d "$JOBS_ROOT/$slot/input" ]]; then
             install -m 0400 -o root -g root /tmp/rtv-cancel-request.json \
                 "$JOBS_ROOT/$slot/input/cancel.json"
             replayed=1
+        else
+            info "could not plant: slot='$slot' request=$([[ -f /tmp/rtv-cancel-request.json ]] && echo yes || echo NO) inputdir=$([[ -n $slot && -d "$JOBS_ROOT/$slot/input" ]] && echo yes || echo NO)"
         fi
         rc=0
         wait "$submit_pid" || rc=$?
