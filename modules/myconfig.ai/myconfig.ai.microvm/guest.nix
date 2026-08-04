@@ -92,6 +92,46 @@ let
   # bridge uses, so host and guest agree.
   guestPrefixLength = lib.toInt (lib.last (lib.splitString "/" cfg.subnet));
 
+  # The model-endpoint environment EVERY guest agent path must see: the
+  # loopback LiteLLM forwarder address (127.0.0.1:<litellmPort>) plus the
+  # per-agent endpoint plumbing from the registry (e.g. hermes'
+  # OPENROUTER_BASE_URL), and — under `package-access` only — the package
+  # proxy variables. Placeholder keys only (§17): the real upstream credential
+  # never leaves the host LiteLLM proxy.
+  #
+  # This is the SINGLE source of truth consumed by BOTH agent entry paths:
+  #   * the interactive LOGIN shell, via `environment.variables` (NixOS writes
+  #     those to /etc/set-environment, which /etc/profile sources); and
+  #   * the non-login batch WORKER unit, via its `environment=` below.
+  # The batch worker (`agent-job-worker@<agent>.service`) is a systemd oneshot
+  # that does NOT source /etc/profile, and NixOS does NOT inject
+  # `environment.variables` into systemd's `DefaultEnvironment`, so without an
+  # explicit `environment=` the worker would inherit only PATH — and pi/codex/
+  # hermes batch jobs would have no model endpoint at all (the worker died ~2s
+  # in for exactly this reason). Giving the worker the SAME attrset keeps the
+  # two paths from drifting: there is one place that decides the endpoint, not
+  # two.
+  modelEndpointEnv = {
+    OPENAI_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}/v1";
+    OPENAI_API_KEY = "not-needed";
+    ANTHROPIC_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}";
+    ANTHROPIC_API_KEY = "not-needed";
+  }
+  // agentRegistry.guestEnvironment
+  // lib.optionalAttrs netCaps.packageProxy (
+    let
+      proxyUrl = "http://${cfg.gatewayAddress}:${toString cfg.packageProxyPort}";
+    in
+    {
+      http_proxy = proxyUrl;
+      https_proxy = proxyUrl;
+      HTTP_PROXY = proxyUrl;
+      HTTPS_PROXY = proxyUrl;
+      no_proxy = "127.0.0.1,localhost";
+      NO_PROXY = "127.0.0.1,localhost";
+    }
+  );
+
   # --- §19 guest agent entry point (`agent-run`) --------------------------
   # Refuses root, verifies /workspace is a mounted, writable mount, cds into
   # it, prints the guest identity + selected agent, then execs the selected
@@ -396,34 +436,22 @@ let
     #     non-openrouter base_url, OPENAI_API_KEY. That var is contributed by
     #     the hermes entry's `guestEnvironment` in ./agents.nix, i.e. by the
     #     registry rather than by a hand-maintained list here.
-    environment.variables = {
-      OPENAI_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}/v1";
-      OPENAI_API_KEY = "not-needed";
-      ANTHROPIC_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}";
-      ANTHROPIC_API_KEY = "not-needed";
-    }
-    # Per-agent endpoint plumbing from the authoritative registry. Endpoint
-    # URLs / placeholder keys ONLY — the real upstream credential never
-    # leaves the host LiteLLM proxy (§17).
-    // agentRegistry.guestEnvironment
-    # --- networkProfile = "package-access" (ticket 3 C) ------------------
-    # The ONLY egress this profile grants besides LiteLLM is one explicit host
-    # proxy port, so point the guest's proxy variables at it. Without this the
-    # guest would try direct connections that the firewall drops. Loopback is
-    # excluded so the in-guest LiteLLM forwarder is not proxied.
-    // lib.optionalAttrs netCaps.packageProxy (
-      let
-        proxyUrl = "http://${cfg.gatewayAddress}:${toString cfg.packageProxyPort}";
-      in
-      {
-        http_proxy = proxyUrl;
-        https_proxy = proxyUrl;
-        HTTP_PROXY = proxyUrl;
-        HTTPS_PROXY = proxyUrl;
-        no_proxy = "127.0.0.1,localhost";
-        NO_PROXY = "127.0.0.1,localhost";
-      }
-    );
+    #
+    # `modelEndpointEnv` (defined once in the `let` above) is applied to BOTH
+    # the login shell (here, via `environment.variables`) AND the non-login
+    # batch worker unit (next block), so the two paths cannot drift. See its
+    # header for why the worker needs an explicit `environment=`.
+    environment.variables = modelEndpointEnv;
+
+    # The BATCH worker (`agent-job-worker@<agent>.service`) is a non-login
+    # systemd oneshot: it never sources /etc/set-environment, so the endpoint
+    # vars above would not reach it (NixOS puts `environment.variables` ONLY in
+    # login profiles, not in systemd's `DefaultEnvironment`). Give it the SAME
+    # endpoint environment the interactive login shell gets, so pi/codex/
+    # hermes batch workers can actually reach the loopback forwarder. The
+    # `creds` section of runtime-validation.sh asserts BOTH halves carry these
+    # (and the negative controls stay absent). Placeholder keys only (§17).
+    systemd.services."${agentJobs.workerUnitTemplate}".environment = modelEndpointEnv;
 
     # --- guest-side loopback → bridge LiteLLM forwarder ------------------
     # Reverse of the host's bridge-only forwarder (network.nix): a
