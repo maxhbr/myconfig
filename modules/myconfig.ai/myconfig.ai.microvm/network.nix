@@ -414,11 +414,29 @@ in
 
         # --- §16 bridge-only LiteLLM forwarder -------------------------------
         # Socket-activated endpoint bound ONLY to the bridge address, never to
-        # 0.0.0.0 / the LAN. FreeBind lets it bind before the bridge address is
-        # assigned during boot; BindToDevice pins it to the bridge interface.
+        # 0.0.0.0 / the LAN. BindToDevice pins the listener to the bridge
+        # interface (SO_BINDTODEVICE); FreeBind (IP_FREEBIND) lets it bind the
+        # <gateway>:<port> address before it is assigned to the bridge.
+        #
+        # BOOT ORDERING (do not drop): `BindToDevice` requires the bridge
+        # DEVICE to exist at bind time — `SO_BINDTODEVICE` fails with ENODEV
+        # otherwise, and `FreeBind` (IP_FREEBIND) does NOT cover it (it covers
+        # the *address*, not the *device*). The socket is `wantedBy
+        # sockets.target`, which starts early in boot — BEFORE the
+        # `${bridge}-netdev.service` (`wantedBy network.target`) creates the
+        # bridge. Without an explicit `after`/`requires` against that netdev
+        # unit the socket therefore failed once at boot and never retried, so
+        # the bridge endpoint had no listener and every guest -> LiteLLM
+        # connection was refused (the worker died ~2s in). `requires` +
+        # `after` make systemd defer the socket until the bridge exists, so
+        # `SO_BINDTODEVICE` succeeds; `requires` (not merely `wants`) also
+        # turns a missing bridge into a VISIBLE failure of this socket rather
+        # than a silent dead listener.
         systemd.sockets.agent-litellm-proxy = {
           description = "Bridge-only LiteLLM forwarding endpoint for agent microVMs";
           wantedBy = [ "sockets.target" ];
+          after = [ "${bridge}-netdev.service" ];
+          requires = [ "${bridge}-netdev.service" ];
           socketConfig = {
             ListenStream = "${gateway}:${port}";
             BindToDevice = bridge;
