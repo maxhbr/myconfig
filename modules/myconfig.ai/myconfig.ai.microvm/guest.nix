@@ -50,6 +50,27 @@
   inputs,
   myconfig,
   mkGuestHome,
+  # The effective resource-class table (see default.nix).
+  agentResourceClasses,
+  # The ONE authoritative supported-agent registry instance, built in
+  # default.nix (`_module.args.agentRegistry`). See ./agents.nix.
+  agentRegistry,
+  # The ONE definition of the per-slot SSH host-key paths (host + guest side),
+  # from hostkeys.nix (`_module.args.agentHostKeys`).
+  agentHostKeys,
+  # The ONE definition of the batch-job format/paths plus the guest-side
+  # TRUSTED controller + UNTRUSTED worker units, from job.nix
+  # (`_module.args.agentJobs`).
+  agentJobs,
+  # The ONE definition of the task-scoped agent-state paths + the guest-side
+  # linker, from state.nix (`_module.args.agentState`).
+  agentState,
+  # The ONE resolved network decision (profile + capabilities + DNS policy),
+  # from default.nix (`_module.args.agentNetwork`). The guest-side proxy / DNS /
+  # forwarder configuration below is derived from the SAME decision the host
+  # firewall is rendered from, so guest and host can never disagree about what
+  # the guest is allowed to reach.
+  agentNetwork,
   ...
 }:
 let
@@ -58,7 +79,13 @@ let
   # Deterministic fixed slot pool — the single source of truth lives in
   # slots.nix and is shared with default.nix (which asserts uniqueness and
   # the slot-count bound over this exact table).
-  slots = (import ./slots.nix { inherit lib; }).mkSlots cfg.slotCount;
+  # The slot pool of the effective resource classes (ticket 5 A). The class
+  # table comes from default.nix (`_module.args.agentResourceClasses`), which
+  # also performs the legacy `slotCount` migration, so every module builds the
+  # SAME pool.
+  slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
+
+  netCaps = agentNetwork.caps;
 
   # Prefix length of the private subnet (e.g. "192.168.83.0/24" -> 24), used
   # for the guest-side static address. Derived from the SAME option the host
@@ -67,8 +94,12 @@ let
 
   # --- §19 guest agent entry point (`agent-run`) --------------------------
   # Refuses root, verifies /workspace is a mounted, writable mount, cds into
-  # it, prints the guest identity + selected agent, then execs the agent from
-  # argv (no `eval`, so the exit status is the agent's own).
+  # it, prints the guest identity + selected agent, then execs the selected
+  # agent (no `eval`, so the exit status is the agent's own).
+  #
+  # The agent name is dispatched through a table GENERATED from ./agents.nix,
+  # so the guest accepts exactly the agents the registry declares (and applies
+  # their `interactiveArgs`). Extra argv after the agent name is forwarded.
   agent-run = pkgs.writeShellApplication {
     name = "agent-run";
     runtimeInputs = with pkgs; [
@@ -83,7 +114,7 @@ let
           exit 1
       fi
       if [[ "$#" -lt 1 ]]; then
-          echo "usage: agent-run <agent> [args...]" >&2
+          echo "usage: agent-run <${agentRegistry.namesAlternation}> [args...]" >&2
           exit 2
       fi
 
@@ -101,7 +132,16 @@ let
       printf 'agent-run: host=%s agent=%s workspace=%s\n' \
           "$(uname -n)" "$1" "$workspace" >&2
 
-      exec "$@"
+      # Generated dispatch table (single source of truth: ./agents.nix).
+      agent="$1"
+      shift
+      case "$agent" in
+      ${agentRegistry.guestDispatchCases}
+          *)
+              echo "agent-run: unknown agent '$agent' (expected: ${agentRegistry.namesAlternation})" >&2
+              exit 2
+              ;;
+      esac
     '';
     meta = with lib; {
       description = "Guest-side agent entry point for myconfig.ai.microvm sandboxes";
@@ -119,6 +159,16 @@ let
       # feature is disabled, so a bare guest keeps no home-manager overhead.
       { imports = [ inputs.home.nixosModules.home-manager ]; }
       (mkGuestHome { inherit pkgs; })
+      # Unattended batch execution (ticket 4, trust-split in ticket 7): the
+      # TRUSTED `agent-job-controller` oneshot (inert unless the host placed a
+      # spec in the share) plus the UNTRUSTED `agent-job-worker@` template it
+      # starts. Slot-independent, because the job share always appears at the
+      # same guest path.
+      (agentJobs.mkGuestModule slot)
+      # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
+      # directories the host prepared for this run; a run without
+      # --persist-agent-state sees an empty share and keeps the disposable home.
+      agentState.guestModule
       (mkGuestBase slot)
     ];
 
@@ -131,8 +181,10 @@ let
 
     microvm = {
       hypervisor = "cloud-hypervisor";
-      vcpu = cfg.defaultVcpu;
-      mem = cfg.defaultMemoryMiB;
+      # Sizing comes from the slot's RESOURCE CLASS (ticket 5 A), so all slots
+      # of a class are identical and prebuilt — no per-job Nix evaluation.
+      vcpu = slot.vcpu;
+      mem = slot.memoryMiB;
 
       # Deterministic per-slot TAP + MAC (plan §4). Guest-side IP
       # addressing / routing is intentionally deferred to network.nix.
@@ -170,12 +222,67 @@ let
       # source is "/nix/store", which this is not), so it does NOT add a
       # store share. The guest therefore has EXACTLY this one share. Do NOT
       # add /nix, /home, host sockets or any other share here (plan §10).
+      # SECOND share (ticket 3 B) — the per-slot SSH host identity, READ-ONLY:
+      # `${runtimeRoot}/hostkeys/<slot>` holds exactly that slot's ed25519 host
+      # key, provisioned on the host by `agent-microvm-hostkeys.service` (see
+      # hostkeys.nix). virtiofsd passes ownership through unchanged, so the
+      # private key stays root:root 0400 inside the guest — the unprivileged,
+      # untrusted `agent` user cannot read it, and no other slot's directory is
+      # visible. This gives the launcher a STABLE host identity per slot so it
+      # can use `StrictHostKeyChecking=yes`, instead of the previous throwaway
+      # key + unauthenticated `StrictHostKeyChecking=no` control channel.
+      #
+      # Deliberate, documented amendment to plan §10's "EXACTLY ONE share":
+      # read-only, root-only, single-purpose, per-slot. Do NOT add further
+      # shares — no /nix, /home, host sockets or cross-slot paths.
       shares = [
         {
           proto = "virtiofs";
           tag = "workspace";
           source = "${cfg.stateRoot}/${slot.name}/workspace";
           mountPoint = "/workspace";
+        }
+      ]
+      ++ lib.optional cfg.enableSsh {
+        proto = "virtiofs";
+        tag = agentHostKeys.guestTag;
+        source = agentHostKeys.slotDir slot.name;
+        mountPoint = agentHostKeys.guestMountPoint;
+        readOnly = true;
+      }
+      # THIRD share (ticket 4, trust-split in ticket 7) — the per-slot batch JOB
+      # directory. Read-write, because the guest must write its result; but WHO
+      # may write WHAT inside it is decided by ownership and modes, which
+      # virtiofsd passes through unchanged (see job.nix):
+      #   input/       root:root      the spec (0400 — it carries the allocation
+      #                               token) and the prompt (0444)
+      #   controller/  root:root 0700 the TRUSTED guest controller's channel,
+      #                               where the AUTHORITATIVE result is written.
+      #                               The unprivileged guest agent can neither
+      #                               write nor read it, and cannot rename or
+      #                               shadow it (this share root is root-owned
+      #                               0755).
+      #   worker/      agent-owned    the UNTRUSTED worker's logs/artifacts
+      # The prompt therefore never travels as a process argument, the guest
+      # cannot rewrite its own job, and repository code cannot forge a result.
+      ++ [
+        {
+          proto = "virtiofs";
+          tag = agentJobs.guestTag;
+          source = agentJobs.slotDir slot.name;
+          mountPoint = agentJobs.guestMountPoint;
+        }
+        # FOURTH share (ticket 5 B) — the slot's agent-state directory. The
+        # launcher bind-mounts the per-TASK, per-AGENT state onto this per-slot
+        # path while the slot runs, and leaves it EMPTY unless the run asked for
+        # `--persist-agent-state`. Read-write and owned by the guest agent, so
+        # only the declared directories (never the host home, ~/.ssh, sockets or
+        # another task's state) are exposed.
+        {
+          proto = "virtiofs";
+          tag = agentState.guestTag;
+          source = agentState.slotDir slot.name;
+          mountPoint = agentState.guestMountPoint;
         }
       ];
     };
@@ -184,7 +291,7 @@ let
     # wheel/docker/kvm/host groups; login disabled (`!` = locked password).
     users.users.agent = {
       isNormalUser = true;
-      uid = 1000;
+      uid = cfg.guestAgentUid;
       home = "/home/agent";
       createHome = true;
       extraGroups = [ ];
@@ -216,25 +323,23 @@ let
     };
 
     # --- §7 minimal guest toolchain + the §19 entry point ----------------
-    # A deliberately small package set plus the four agent binaries so
-    # `agent-run <bin>` can exec them inside the guest. The agent packages
-    # are the SAME repo package attrs the host coding-agent modules use
-    # (programs.claude-code → pkgs.claude-code, programs.codex → pkgs.codex,
-    # programs.opencode → pkgs.opencode, programs.pi-coding-agent →
-    # pkgs.nixos-unstable.pi-coding-agent). They are baked into the immutable
-    # guest closure (§8: no runtime CLI download, no host Nix daemon). Their
-    # exe names are exactly the launcher's agent set: claude / codex /
-    # opencode / pi.
+    # A deliberately small package set plus the registry's agent binaries so
+    # `agent-run <agent>` can exec them inside the guest. The agent packages
+    # come from ./agents.nix — the SAME repo package attrs the host
+    # coding-agent modules use (programs.claude-code → pkgs.claude-code,
+    # programs.codex → pkgs.codex, programs.opencode → pkgs.opencode,
+    # programs.pi-coding-agent → pkgs.nixos-unstable.pi-coding-agent). They
+    # are baked into the immutable guest closure (§8: no runtime CLI
+    # download, no host Nix daemon).
     programs.fish.enable = true;
 
-    environment.systemPackages = with pkgs; [
+    environment.systemPackages = [
       agent-run
-      fish
-      # §7 agent binaries (exe names: claude, codex, opencode, pi).
-      claude-code
-      codex
-      opencode
-      nixos-unstable.pi-coding-agent
+      pkgs.fish
+    ]
+    # §7 agent binaries, GENERATED from the authoritative registry.
+    ++ agentRegistry.packages
+    ++ (with pkgs; [
       bash
       coreutils
       curl
@@ -257,7 +362,7 @@ let
       unzip
       util-linux
       which
-    ];
+    ]);
 
     # --- §17 guest model-API config (no secrets) -------------------------
     # The guest reaches the model API ONLY via the bridge-only LiteLLM
@@ -286,12 +391,39 @@ let
     #     proxy-only firewall would block anyway).
     # All keys are placeholders — the real upstream credential lives only in
     # the host LiteLLM proxy, never in the guest (§17).
+    #   - hermes reads OPENROUTER_BASE_URL (its config.yaml → CUSTOM_BASE_URL
+    #     → OPENROUTER_BASE_URL → openrouter.ai fallback chain) and, for a
+    #     non-openrouter base_url, OPENAI_API_KEY. That var is contributed by
+    #     the hermes entry's `guestEnvironment` in ./agents.nix, i.e. by the
+    #     registry rather than by a hand-maintained list here.
     environment.variables = {
       OPENAI_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}/v1";
       OPENAI_API_KEY = "not-needed";
       ANTHROPIC_BASE_URL = "http://127.0.0.1:${toString cfg.litellmPort}";
       ANTHROPIC_API_KEY = "not-needed";
-    };
+    }
+    # Per-agent endpoint plumbing from the authoritative registry. Endpoint
+    # URLs / placeholder keys ONLY — the real upstream credential never
+    # leaves the host LiteLLM proxy (§17).
+    // agentRegistry.guestEnvironment
+    # --- networkProfile = "package-access" (ticket 3 C) ------------------
+    # The ONLY egress this profile grants besides LiteLLM is one explicit host
+    # proxy port, so point the guest's proxy variables at it. Without this the
+    # guest would try direct connections that the firewall drops. Loopback is
+    # excluded so the in-guest LiteLLM forwarder is not proxied.
+    // lib.optionalAttrs netCaps.packageProxy (
+      let
+        proxyUrl = "http://${cfg.gatewayAddress}:${toString cfg.packageProxyPort}";
+      in
+      {
+        http_proxy = proxyUrl;
+        https_proxy = proxyUrl;
+        HTTP_PROXY = proxyUrl;
+        HTTPS_PROXY = proxyUrl;
+        no_proxy = "127.0.0.1,localhost";
+        NO_PROXY = "127.0.0.1,localhost";
+      }
+    );
 
     # --- guest-side loopback → bridge LiteLLM forwarder ------------------
     # Reverse of the host's bridge-only forwarder (network.nix): a
@@ -303,7 +435,9 @@ let
     # reach the host LiteLLM proxy over the private bridge, so pi / opencode /
     # codex all "rely on" the host forwarder without per-agent config
     # rewrites. Pure byte-shuffler: no filesystem, home or privileges needed.
-    systemd.sockets.litellm-forwarder = {
+    # Only exists when the profile actually allows the model API: under
+    # `offline` there is nothing to forward to, so no listener is created.
+    systemd.sockets.litellm-forwarder = lib.mkIf netCaps.litellm {
       description = "Loopback LiteLLM endpoint for host-provisioned agent configs";
       wantedBy = [ "sockets.target" ];
       socketConfig = {
@@ -311,7 +445,7 @@ let
         Accept = false;
       };
     };
-    systemd.services.litellm-forwarder = {
+    systemd.services.litellm-forwarder = lib.mkIf netCaps.litellm {
       description = "Forward 127.0.0.1:${toString cfg.litellmPort} to the host bridge LiteLLM proxy";
       requires = [ "litellm-forwarder.socket" ];
       wants = [ "network-online.target" ];
@@ -337,6 +471,12 @@ let
     # Unconditional (NOT gated on enableSsh): the guest needs its address
     # and default route to reach the LiteLLM forwarder regardless of SSH
     # (§17/§31 — model-API access is independent of SSH).
+    # --- explicit DNS policy (`internet` profile only) -------------------
+    # The firewall allows port 53 ONLY towards these servers, so configure the
+    # guest to use exactly them. In every other profile the guest gets no
+    # resolver at all (and port 53 is dropped), which is intentional.
+    networking.nameservers = lib.mkIf netCaps.dns agentNetwork.dnsServers;
+
     systemd.network = {
       enable = true;
       networks."10-agent" = {
@@ -351,6 +491,19 @@ let
     # --- §18 hardened SSH, private guest interface only ------------------
     services.openssh = lib.mkIf cfg.enableSsh {
       enable = true;
+      # Deterministic per-slot host identity (ticket 3 B): use ONLY the
+      # ed25519 key from the read-only hostkey share, and do NOT let the guest
+      # generate its own throwaway keys (`generateHostKeys = false` disables
+      # `sshd-keygen.service`, which would anyway fail against the read-only
+      # mount). The host's known_hosts file pins exactly this key per slot IP,
+      # so `agent-microvm ssh` can verify the guest strictly.
+      generateHostKeys = false;
+      hostKeys = [
+        {
+          type = "ed25519";
+          path = agentHostKeys.guestKeyPath;
+        }
+      ];
       settings = {
         PermitRootLogin = "no";
         PasswordAuthentication = false;
@@ -381,6 +534,35 @@ in
 
     (lib.mkIf cfg.enable {
       microvm.host.enable = true;
+
+      # --- ticket 5 C: host-side limits on the HYPERVISOR units ------------
+      # Drop-ins on microvm.nix's own `microvm@<slot>` units (it uses the same
+      # `overrideStrategy = "asDropin"` pattern, so the definitions merge).
+      # These bound what one sandbox can take from the HOST:
+      #   * MemoryMax = the class's guest RAM + `hypervisorMemoryOverheadMiB`.
+      #     It must never be BELOW the guest's configured memory plus
+      #     hypervisor overhead, or the VM would be OOM-killed while behaving
+      #     perfectly (virtiofsd, the CH process itself and the guest's page
+      #     cache all live in this cgroup).
+      #   * TasksMax bounds the hypervisor's own thread/process explosion.
+      #   * CPUWeight/IOWeight are RELATIVE weights (default 100): agent
+      #     sandboxes deliberately yield to interactive host work rather than
+      #     being hard-capped, so a long agent run cannot make the laptop
+      #     unusable while still being able to use idle capacity.
+      systemd.services = builtins.listToAttrs (
+        map (slot: {
+          name = "microvm@${slot.name}";
+          value = {
+            overrideStrategy = "asDropin";
+            serviceConfig = {
+              MemoryMax = "${toString (slot.memoryMiB + cfg.hypervisorMemoryOverheadMiB)}M";
+              TasksMax = cfg.hypervisorTasksMax;
+              CPUWeight = cfg.hypervisorCPUWeight;
+              IOWeight = cfg.hypervisorIOWeight;
+            };
+          };
+        }) slots
+      );
 
       # Fixed declarative slot pool → one microvm.nix VM per slot.
       microvm.vms = builtins.listToAttrs (

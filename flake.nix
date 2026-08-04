@@ -618,6 +618,13 @@
                 pkgs = inputs.nixpkgs.legacyPackages."${system}";
                 files = pkgs.lib.concatStringsSep " " [
                   "switch.sh"
+                  # The EXECUTED myconfig.ai.microvm batch-job harnesses and the
+                  # real-KVM validation suite. They are plain scripts (not
+                  # writeShellApplication), so nothing else gates them.
+                  "tests/microvm-batch-result-integrity.sh"
+                  "tests/microvm-batch-controller-smoke.sh"
+                  "tests/microvm-batch-launcher-submit.sh"
+                  "modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {

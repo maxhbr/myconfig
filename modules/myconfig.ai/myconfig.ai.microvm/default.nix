@@ -14,16 +14,24 @@
 # over convenience.
 #
 # PHASE 0 — this file only *defines the option namespace, assertions and
-# registration*. The feature is disabled by default and, while disabled,
+# registration*. It also instantiates the authoritative supported-agent
+# registry (./agents.nix) EXACTLY ONCE and passes it to the sibling modules as
+# `_module.args.agentRegistry`. The feature is disabled by default and, while
+# disabled,
 # produces no config side effects: it does NOT import the microvm.nix host
 # module, create the bridge/firewall rules, define VM slots, build the guest,
 # or register Workmux agents. Those are implemented in later phases inside
-# guest.nix / network.nix / launcher.nix / workmux.nix. See
-# `./docs/microvm-sandbox-plan.md` (§1, §37) for the authoritative
-# option/assertion requirements.
+# guest.nix / network.nix / launcher.nix / workmux.nix. The option reference
+# lives in `./docs/agent-microvm.md`.
 {
   config,
+  # `options` is used to detect whether a DEPRECATED legacy network boolean was
+  # explicitly defined by a host, so the migration can warn / translate / reject
+  # instead of silently ignoring it (ticket 3 C).
+  options,
   lib,
+  pkgs,
+  inputs,
   ...
 }:
 let
@@ -34,9 +42,108 @@ let
   # helper guest.nix uses to actually build the VMs — so these uniqueness /
   # bound assertions (§37) always guard the exact table that builds the VMs.
   slotLib = import ./slots.nix { inherit lib; };
-  slots = slotLib.mkSlots cfg.slotCount;
+  slots = slotLib.mkSlots effectiveResourceClasses;
   slotIPs = map (s: s.ip) slots;
   slotMACs = map (s: s.mac) slots;
+  slotCIDs = map (s: s.cid) slots;
+  slotNames = map (s: s.name) slots;
+  slotTaps = map (s: s.tap) slots;
+
+  # --- ticket 5 A: fixed resource classes + legacy-option migration --------
+  # The pool is grouped into PREBUILT classes; `slotCount` / `defaultVcpu` /
+  # `defaultMemoryMiB` are the deprecated single-class spelling of the same
+  # thing. Exactly like the ticket-3 network booleans, "explicitly defined" is
+  # decided by option PRIORITY (see `isExplicit`), never by `isDefined`.
+  legacySlotOpts = {
+    slotCount = options.myconfig.ai.microvm.slotCount;
+    defaultVcpu = options.myconfig.ai.microvm.defaultVcpu;
+    defaultMemoryMiB = options.myconfig.ai.microvm.defaultMemoryMiB;
+  };
+  definedLegacySlotOpts = lib.attrNames (lib.filterAttrs (_: isExplicit) legacySlotOpts);
+  classesExplicit = isExplicit options.myconfig.ai.microvm.resourceClasses;
+
+  # A host that sets BOTH spellings would silently lose one of them, so that is
+  # rejected (assertion below) instead of resolved.
+  slotOptsAmbiguous = classesExplicit && definedLegacySlotOpts != [ ];
+
+  # Without an explicit `resourceClasses`, synthesize the single `normal` class
+  # the legacy options describe — so the pool (and every slot's identity) is
+  # exactly what those options meant, just named `agent-normal-<i>`.
+  legacyResourceClasses = {
+    normal = {
+      count = cfg.slotCount;
+      vcpu = cfg.defaultVcpu;
+      memoryMiB = cfg.defaultMemoryMiB;
+    };
+  };
+  effectiveResourceClasses = if classesExplicit then cfg.resourceClasses else legacyResourceClasses;
+
+  # "Explicitly defined" means a definition with a HIGHER priority than the
+  # option default. `isDefined` cannot be used: nixpkgs implements
+  # `mkOption { default = ...; }` as a low-priority (1500) definition, so every
+  # option with a default is always "defined". `lib.mkOptionDefault`'s priority
+  # (1500) is exactly that boundary — `mkDefault` (1000) and a plain
+  # host-level definition (100) both rank above it (lower number == stronger).
+  optionDefaultPriority = 1500;
+  isExplicit = opt: opt.highestPrio < optionDefaultPriority;
+
+  # --- authoritative supported-agent registry -----------------------------
+  # ./agents.nix is the SINGLE SOURCE OF TRUTH for the supported agents (guest
+  # packages + guest env, guest `agent-run` dispatch, launcher validation +
+  # help, workmux registrations). Instantiated EXACTLY ONCE here and handed to
+  # the sibling modules through `_module.args.agentRegistry`, so every
+  # consumer sees the same registry with the same context (endpoint, model)
+  # and cannot re-instantiate it with different arguments.
+  #
+  # Its well-formedness errors are surfaced as NixOS assertions below, so a
+  # malformed entry fails loudly here instead of producing a broken guest
+  # closure or a launcher that accepts an agent the guest cannot run.
+  agentRegistry = import ./agents.nix {
+    inherit lib pkgs inputs;
+    litellmPort = cfg.litellmPort;
+    # Hermes cannot discover a model on its own; reuse the model name the host
+    # `myconfig.ai.hermes` backends use (a LiteLLM route). Reading the option
+    # (not `cfg`) keeps ONE model definition for host and sandbox alike.
+    hermesModel = config.myconfig.ai.hermes.model.default;
+  };
+
+  # --- ticket 3 C: network profiles + legacy-boolean migration ------------
+  # `network-profiles.nix` is the authoritative capability table; the effective
+  # profile is resolved HERE (the only place that can see whether a host
+  # explicitly defined an option) and handed to network.nix / guest.nix through
+  # `_module.args.agentNetwork`, so host firewall policy and guest-side proxy /
+  # DNS configuration are derived from ONE decision.
+  profileLib = import ./network-profiles.nix { inherit lib; };
+
+  legacyOpts = {
+    allowPublicInternet = options.myconfig.ai.microvm.allowPublicInternet;
+    allowInterVmTraffic = options.myconfig.ai.microvm.allowInterVmTraffic;
+    allowPrivateNetworks = options.myconfig.ai.microvm.allowPrivateNetworks;
+  };
+  definedLegacyOpts = lib.attrNames (lib.filterAttrs (_: isExplicit) legacyOpts);
+  profileExplicit = isExplicit options.myconfig.ai.microvm.networkProfile;
+
+  # Translate the ONE legacy boolean that has an exact profile equivalent.
+  # `allowPrivateNetworks` / `allowInterVmTraffic` have none and are rejected
+  # by the assertions below (never silently downgraded to something laxer OR
+  # silently ignored).
+  legacyWantsInternet = cfg.allowPublicInternet;
+  legacyAmbiguous = legacyWantsInternet && profileExplicit && cfg.networkProfile != "internet";
+  effectiveProfile =
+    if profileExplicit then
+      cfg.networkProfile
+    else if legacyWantsInternet then
+      "internet"
+    else
+      cfg.networkProfile;
+
+  agentNetwork = {
+    profile = effectiveProfile;
+    caps = profileLib.forProfile effectiveProfile;
+    # Effective DNS policy for the `internet` profile: an empty `dnsServers`
+    # means "the host itself on the bridge".
+    dnsServers = if cfg.dnsServers == [ ] then [ cfg.gatewayAddress ] else cfg.dnsServers;
+  };
 
   isAbsolutePath = p: lib.hasPrefix "/" p;
 in
@@ -44,6 +151,9 @@ in
   imports = [
     ./guest.nix
     ./guest-home.nix
+    ./hostkeys.nix
+    ./job.nix
+    ./state.nix
     ./network.nix
     ./launcher.nix
     ./secrets.nix
@@ -53,26 +163,95 @@ in
   options.myconfig.ai.microvm = with lib; {
     enable = mkEnableOption "myconfig.ai.microvm (Cloud Hypervisor agent sandboxes)";
 
+    resourceClasses = mkOption {
+      type = types.attrsOf (
+        types.submodule {
+          options = {
+            count = mkOption {
+              type = types.ints.positive;
+              description = "Number of PREBUILT slots in this class.";
+            };
+            vcpu = mkOption {
+              type = types.ints.positive;
+              description = "vCPUs per guest in this class.";
+            };
+            memoryMiB = mkOption {
+              type = types.ints.positive;
+              description = "Guest RAM per guest in this class, in MiB.";
+            };
+          };
+        }
+      );
+      default = {
+        normal = {
+          count = 4;
+          vcpu = 4;
+          memoryMiB = 8192;
+        };
+      };
+      defaultText = literalExpression ''
+        { normal = { count = slotCount; vcpu = defaultVcpu; memoryMiB = defaultMemoryMiB; }; }
+      '';
+      example = literalExpression ''
+        {
+          small  = { count = 2; vcpu = 2; memoryMiB = 4096; };
+          normal = { count = 4; vcpu = 4; memoryMiB = 8192; };
+          large  = { count = 1; vcpu = 8; memoryMiB = 16384; };
+        }
+      '';
+      description = ''
+        Fixed, PREBUILT resource classes. Each class contributes `count` slots
+        named `agent-<class>-<i>` with the class's `vcpu` / `memoryMiB` sizing;
+        every slot keeps its own deterministic TAP, MAC, IPv4, VSOCK CID, state
+        directory, job directory and (with `enableSsh`) SSH host identity.
+
+        There is deliberately NO per-job Nix evaluation: `submit`/`run` allocate
+        from this fixed pool with `--resource-class <name>`, and the allocator
+        only ever considers the requested class (it never silently substitutes
+        a smaller one).
+
+        NOTE (merge semantics): defining a single class, e.g.
+        `resourceClasses.large = { … }`, MERGES with the default `normal` class
+        rather than replacing it. Use `lib.mkForce { … }` to define the pool
+        exhaustively.
+
+        When this option is not set explicitly, it is derived from the
+        deprecated `slotCount` / `defaultVcpu` / `defaultMemoryMiB` options, so
+        an existing configuration keeps exactly its previous sizing (as a single
+        `normal` class).
+      '';
+    };
+
     slotCount = mkOption {
       type = types.ints.positive;
       default = 4;
       description = ''
-        Number of fixed, declaratively defined microVM slots
-        (agent-0 .. agent-<slotCount-1>). Bounds the maximum concurrent
-        agent sandboxes. Must be positive.
+        DEPRECATED (ticket 5) — use `resourceClasses`.
+
+        Number of fixed, declaratively defined microVM slots. Still honoured
+        when `resourceClasses` is not set explicitly: the pool then consists of
+        one `normal` class with this many slots. Setting BOTH spellings is
+        rejected as ambiguous.
       '';
     };
 
     defaultVcpu = mkOption {
       type = types.ints.positive;
       default = 4;
-      description = "Default number of vCPUs per agent microVM.";
+      description = ''
+        DEPRECATED (ticket 5) — use `resourceClasses.<name>.vcpu`. vCPUs of the
+        single `normal` class synthesized from the legacy options.
+      '';
     };
 
     defaultMemoryMiB = mkOption {
       type = types.ints.positive;
       default = 8192;
-      description = "Default guest RAM per agent microVM, in MiB.";
+      description = ''
+        DEPRECATED (ticket 5) — use `resourceClasses.<name>.memoryMiB`. Guest
+        RAM (MiB) of the single `normal` class synthesized from the legacy
+        options.
+      '';
     };
 
     bridgeName = mkOption {
@@ -134,13 +313,81 @@ in
       '';
     };
 
+    networkProfile = mkOption {
+      type = types.enum profileLib.names;
+      default = "proxy-only";
+      description = ''
+        Named, coherent guest network policy. Replaces the ambiguous
+        allowPublicInternet / allowPrivateNetworks / allowInterVmTraffic
+        booleans (which are deprecated, see their descriptions).
+
+        - `offline`        only the control traffic required to manage the VM
+                          (host -> guest SSH/console). No model API, no DNS,
+                          no package proxy, no routing.
+        - `proxy-only`     THE SECURE DEFAULT: additionally the bridge-only
+                          LiteLLM endpoint <gatewayAddress>:<litellmPort>, and
+                          nothing else.
+        - `package-access` additionally ONE explicit host package-proxy port
+                          (`packageProxyPort`), with http_proxy/https_proxy
+                          pointed at it. Still no routing, NAT or DNS, so it
+                          is NOT unrestricted internet.
+        - `internet`       full functional egress: routing, NAT/masquerading,
+                          an explicit DNS policy (`dnsServers`) and
+                          rate-limited drop logging. INSECURE.
+
+        In EVERY profile: guest-to-guest traffic is blocked (per-TAP L2
+        `isolated` + IPv4 FORWARD DROP), and the cloud-metadata IP plus all
+        private/special-use IPv4 ranges (host LAN, VPN peers, RFC1918, CGNAT,
+        loopback, link-local, multicast, reserved) are dropped.
+
+        `package-access` and `internet` require
+        `acknowledgeInsecureNetwork = true`.
+
+        See ./network-profiles.nix for the authoritative capability table.
+      '';
+    };
+
+    packageProxyPort = mkOption {
+      type = types.nullOr types.port;
+      default = null;
+      description = ''
+        TCP port of an EXPLICIT host-side package proxy (e.g. a caching HTTP
+        proxy) reachable by guests at <gatewayAddress>:<packageProxyPort>.
+        Required by — and only used by — `networkProfile = "package-access"`.
+        This module does not start the proxy; it only opens that single port
+        for the guest subnet and points the guest's http_proxy/https_proxy at
+        it. Deliberately a single host-controlled port rather than general
+        egress.
+      '';
+    };
+
+    dnsServers = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = ''
+        Explicit DNS policy for `networkProfile = "internet"`: the ONLY
+        resolvers a guest may reach (port 53, udp+tcp). Every other port-53
+        destination stays blocked, so a guest cannot use an arbitrary public
+        resolver or a DNS tunnel of its choosing. The guests are also
+        configured to use exactly these servers.
+
+        Empty means "the host itself on the bridge" (<gatewayAddress>), which
+        requires a resolver listening on the agent bridge. Unused by the other
+        profiles (which allow no DNS at all).
+      '';
+    };
+
     allowPublicInternet = mkOption {
       type = types.bool;
       default = false;
       description = ''
-        Allow agent guests to reach the public internet. INSECURE — must
-        remain false for the secure default. Enabling it requires
-        `acknowledgeInsecureNetwork = true`.
+        DEPRECATED (ticket 3 C) — use `networkProfile = "internet"`.
+
+        Still honoured for migration: when set to true and `networkProfile` is
+        not explicitly set, the effective profile becomes `internet` and a
+        warning is emitted. Setting it together with a DIFFERENT explicit
+        `networkProfile` is rejected as ambiguous rather than silently
+        resolved.
       '';
     };
 
@@ -148,9 +395,11 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Allow traffic between agent microVMs (guest-to-guest / TAP-to-TAP).
-        INSECURE — must remain false for the secure default. Enabling it
-        requires `acknowledgeInsecureNetwork = true`.
+        REMOVED (ticket 3 A/C) — guest-to-guest isolation is now
+        unconditional: every guest TAP is an `isolated` bridge port, which
+        blocks guest<->guest frames for every EtherType before netfilter even
+        runs. There is no supported way to relax it, so setting this to true
+        is REJECTED with an assertion instead of silently having no effect.
       '';
     };
 
@@ -158,10 +407,11 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Allow agent guests to reach private IPv4 ranges (host LAN, VPN
-        peers, RFC1918, link-local, cloud metadata, ...). INSECURE — must
-        remain false for the secure default. Enabling it requires
-        `acknowledgeInsecureNetwork = true`.
+        REMOVED (ticket 3 C) — no profile grants access to private IPv4 ranges
+        (host LAN, VPN peers, RFC1918, CGNAT, link-local, metadata). Setting
+        this to true is REJECTED with an assertion rather than silently
+        ignored; if a guest genuinely needs to fetch packages, use
+        `networkProfile = "package-access"` with an explicit host proxy.
       '';
     };
 
@@ -169,11 +419,12 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Explicit opt-in acknowledging that one of the insecure network
-        relaxations (allowPublicInternet / allowInterVmTraffic /
-        allowPrivateNetworks) has been deliberately enabled. Without this,
-        those flags must stay false (§37: "private-network / inter-VM /
-        public internet without override").
+        Explicit opt-in acknowledging that an INSECURE network profile
+        (`package-access` or `internet`) — or the deprecated
+        `allowPublicInternet` boolean — has been deliberately enabled. Without
+        it, the secure `proxy-only`/`offline` profiles are the only accepted
+        configuration (§37: "private-network / inter-VM / public internet
+        without override").
       '';
     };
 
@@ -202,6 +453,83 @@ in
       '';
     };
 
+    hypervisorMemoryOverheadMiB = mkOption {
+      type = types.ints.positive;
+      default = 1024;
+      description = ''
+        RAM (MiB) added to a slot's class memory to obtain the HOST-side
+        `MemoryMax` of its `microvm@<slot>.service`. The hypervisor process,
+        virtiofsd and the guest's page cache all live in that cgroup, so the
+        limit must never be below "guest memory + overhead" — otherwise a
+        perfectly well-behaved VM gets OOM-killed.
+      '';
+    };
+
+    hypervisorTasksMax = mkOption {
+      type = types.ints.positive;
+      default = 512;
+      description = ''
+        `TasksMax` of a slot's `microvm@<slot>.service` (host side): bounds the
+        hypervisor's own threads/processes.
+      '';
+    };
+
+    hypervisorCPUWeight = mkOption {
+      type = types.ints.positive;
+      default = 50;
+      description = ''
+        RELATIVE cgroup CPU weight of a slot's hypervisor unit (systemd default
+        is 100). Below 100 on purpose: agent sandboxes should yield to
+        interactive host work, while still being allowed to use idle capacity
+        (a hard `CPUQuota` would waste it). The per-class `CPUQuota` inside the
+        guest is what bounds the agent itself.
+      '';
+    };
+
+    hypervisorIOWeight = mkOption {
+      type = types.ints.positive;
+      default = 50;
+      description = ''
+        RELATIVE cgroup IO weight of a slot's hypervisor unit (systemd default
+        is 100), so agent disk traffic yields to interactive host work.
+      '';
+    };
+
+    taskLogMaxBytes = mkOption {
+      type = types.ints.positive;
+      default = 1048576;
+      description = ''
+        Size cap (bytes) of a per-task structured lifecycle log under
+        `<runtimeRoot>/logs/<task>.jsonl`. When exceeded, ONE generation is
+        rotated to `<task>.jsonl.1`, so batch logs are retained but bounded.
+      '';
+    };
+
+    guestAgentUid = mkOption {
+      type = types.ints.positive;
+      default = 1000;
+      description = ''
+        Numeric uid of the unprivileged guest `agent` user. virtiofsd passes
+        ownership through unchanged, so this is ALSO the host-side owner of
+        everything the guest must write: the workspace clone, the job output
+        directory and any task-scoped agent-state directory.
+
+        Must be unprivileged (never 0). The default 1000 is the primary
+        interactive user on a workstation, which is deliberate: the human
+        operator can inspect, diff and import the clone directly, and no guest
+        id maps to a privileged host id (plan §11).
+      '';
+    };
+
+    guestAgentGid = mkOption {
+      type = types.ints.positive;
+      default = 1000;
+      description = ''
+        Numeric gid used for the host-side ownership of guest-writable paths
+        (see `guestAgentUid`). Must be unprivileged (never 0).
+      '';
+    };
+
     enableSsh = mkOption {
       type = types.bool;
       default = true;
@@ -222,73 +550,208 @@ in
     };
   };
 
-  # Phase 0: the only config the module produces is its assertions, and even
-  # those apply only when the feature is enabled — so importing the module
-  # with the secure defaults (disabled) has no config side effects and never
-  # blocks evaluation. Later phases add the microvm.nix host module, bridge,
+  # Phase 0: the only config the module produces is its assertions plus the
+  # shared `agentRegistry` module argument, and the assertions apply only when
+  # the feature is enabled — so importing the module with the secure defaults
+  # (disabled) has no config side effects, forces no agent package (Nix is
+  # lazy) and never blocks evaluation. Later phases add the microvm.nix host module, bridge,
   # firewall, slot definitions and Workmux registrations under this same
   # `lib.mkIf cfg.enable`.
-  config = lib.mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = cfg.slotCount > 0;
-        message = "myconfig.ai.microvm.slotCount must be > 0.";
-      }
-      {
-        assertion = cfg.slotCount <= slotLib.maxSlotCount;
-        message = "myconfig.ai.microvm.slotCount must be <= ${toString slotLib.maxSlotCount} (deterministic MAC/IPv4 generator bound).";
-      }
-      {
-        assertion = cfg.defaultVcpu > 0;
-        message = "myconfig.ai.microvm.defaultVcpu must be positive.";
-      }
-      {
-        assertion = cfg.defaultMemoryMiB > 0;
-        message = "myconfig.ai.microvm.defaultMemoryMiB must be positive.";
-      }
-      {
-        assertion = isAbsolutePath cfg.workspaceRoot;
-        message = "myconfig.ai.microvm.workspaceRoot must be an absolute path.";
-      }
-      {
-        assertion = isAbsolutePath cfg.runtimeRoot;
-        message = "myconfig.ai.microvm.runtimeRoot must be an absolute path.";
-      }
-      {
-        assertion = isAbsolutePath cfg.stateRoot;
-        message = "myconfig.ai.microvm.stateRoot must be an absolute path.";
-      }
-      {
-        assertion = cfg.bridgeName != "";
-        message = "myconfig.ai.microvm.bridgeName must be non-empty.";
-      }
-      {
-        assertion = cfg.gatewayAddress != "";
-        message = "myconfig.ai.microvm.gatewayAddress must be non-empty.";
-      }
-      {
-        assertion = !cfg.enableSsh || cfg.sshPublicKeyFile != null;
-        message = "myconfig.ai.microvm.enableSsh requires an explicit sshPublicKeyFile.";
-      }
-      {
-        assertion =
-          !(cfg.allowPublicInternet || cfg.allowInterVmTraffic || cfg.allowPrivateNetworks)
-          || cfg.acknowledgeInsecureNetwork;
-        message = ''
-          myconfig.ai.microvm: allowPublicInternet / allowInterVmTraffic /
-          allowPrivateNetworks must remain false for the secure default.
-          To deliberately relax one of them, also set
-          `myconfig.ai.microvm.acknowledgeInsecureNetwork = true`.
+  config = lib.mkMerge [
+    {
+      # Hand the single registry instance to guest.nix / launcher.nix /
+      # workmux.nix. Set unconditionally (outside the `mkIf`) because those
+      # modules take it as a module argument; Nix laziness means a disabled
+      # feature never forces any agent package.
+      _module.args.agentRegistry = agentRegistry;
+      # Likewise the ONE resolved network decision (profile + capabilities +
+      # DNS policy), consumed by network.nix (firewall/NAT) and guest.nix
+      # (proxy/DNS/forwarder).
+      _module.args.agentNetwork = agentNetwork;
+      # The ONE effective resource-class table, so guest.nix / network.nix /
+      # launcher.nix / hostkeys.nix / job.nix all build the SAME slot pool
+      # (including the legacy-option migration above).
+      _module.args.agentResourceClasses = effectiveResourceClasses;
+    }
+
+    (lib.mkIf cfg.enable {
+      assertions = [
+        {
+          # §11: no guest id may map to a privileged host id.
+          assertion = cfg.guestAgentUid > 0 && cfg.guestAgentGid > 0;
+          message = "myconfig.ai.microvm.guestAgentUid/guestAgentGid must be unprivileged (> 0).";
+        }
+        {
+          assertion = slots != [ ];
+          message = "myconfig.ai.microvm: the resource-class pool is empty (no class with count > 0).";
+        }
+        {
+          assertion = lib.length slots <= slotLib.maxSlotCount;
+          message = "myconfig.ai.microvm: the total number of slots (${toString (lib.length slots)}) must be <= ${toString slotLib.maxSlotCount} (deterministic MAC/IPv4 generator bound).";
+        }
+        {
+          # Class names end up in slot names, hostnames, interface names and
+          # host directories, and cross the host->guest control channel.
+          assertion = lib.all (n: builtins.match "[a-z][a-z0-9-]*" n != null) (
+            lib.attrNames effectiveResourceClasses
+          );
+          message = "myconfig.ai.microvm.resourceClasses: class names must match [a-z][a-z0-9-]*.";
+        }
+        {
+          # Linux caps interface names at 15 chars, so a long class name would
+          # otherwise fail late, at TAP creation time.
+          assertion = lib.all (t: lib.stringLength t <= slotLib.maxInterfaceNameLength) slotTaps;
+          message = "myconfig.ai.microvm.resourceClasses: class names are too long — generated TAP names must be <= ${toString slotLib.maxInterfaceNameLength} chars (got ${
+            toString (lib.filter (t: lib.stringLength t > slotLib.maxInterfaceNameLength) slotTaps)
+          }).";
+        }
+        {
+          assertion = lib.length (lib.unique slotNames) == lib.length slotNames;
+          message = "myconfig.ai.microvm: generated slot names are not unique.";
+        }
+        {
+          assertion = lib.length (lib.unique slotTaps) == lib.length slotTaps;
+          message = "myconfig.ai.microvm: generated slot TAP names are not unique.";
+        }
+        {
+          assertion = !slotOptsAmbiguous;
+          message = ''
+            myconfig.ai.microvm: ambiguous slot configuration — `resourceClasses`
+            is set explicitly AND the deprecated ${lib.concatStringsSep " / " definedLegacySlotOpts} ${
+              if lib.length definedLegacySlotOpts == 1 then "is" else "are"
+            } also
+            set. Keep only `resourceClasses`.
+          '';
+        }
+        {
+          assertion = isAbsolutePath cfg.workspaceRoot;
+          message = "myconfig.ai.microvm.workspaceRoot must be an absolute path.";
+        }
+        {
+          assertion = isAbsolutePath cfg.runtimeRoot;
+          message = "myconfig.ai.microvm.runtimeRoot must be an absolute path.";
+        }
+        {
+          assertion = isAbsolutePath cfg.stateRoot;
+          message = "myconfig.ai.microvm.stateRoot must be an absolute path.";
+        }
+        {
+          assertion = cfg.bridgeName != "";
+          message = "myconfig.ai.microvm.bridgeName must be non-empty.";
+        }
+        {
+          assertion = cfg.gatewayAddress != "";
+          message = "myconfig.ai.microvm.gatewayAddress must be non-empty.";
+        }
+        {
+          assertion = !cfg.enableSsh || cfg.sshPublicKeyFile != null;
+          message = "myconfig.ai.microvm.enableSsh requires an explicit sshPublicKeyFile.";
+        }
+        {
+          # The secure default must stay the default: widening the guest's
+          # reach beyond the model API needs an explicit acknowledgement.
+          assertion =
+            !(builtins.elem effectiveProfile profileLib.insecureProfiles) || cfg.acknowledgeInsecureNetwork;
+          message = ''
+            myconfig.ai.microvm: networkProfile = "${effectiveProfile}" is an
+            INSECURE profile (it widens the guest's reach beyond the host
+            LiteLLM endpoint). To use it deliberately, also set
+            `myconfig.ai.microvm.acknowledgeInsecureNetwork = true`.
+          '';
+        }
+        {
+          # Migration: never resolve a contradiction silently.
+          assertion = !legacyAmbiguous;
+          message = ''
+            myconfig.ai.microvm: ambiguous network configuration — the
+            deprecated `allowPublicInternet = true` asks for the `internet`
+            profile, but `networkProfile` is explicitly set to
+            "${cfg.networkProfile}". Remove `allowPublicInternet` and keep only
+            `networkProfile`.
+          '';
+        }
+        {
+          assertion = !cfg.allowInterVmTraffic;
+          message = ''
+            myconfig.ai.microvm: `allowInterVmTraffic` has been REMOVED.
+            Guest-to-guest isolation is now unconditional (every guest TAP is
+            an `isolated` bridge port, which blocks guest<->guest frames for
+            every EtherType). Keeping the option true would be a lie, so it is
+            rejected — drop it from your configuration.
+          '';
+        }
+        {
+          assertion = !cfg.allowPrivateNetworks;
+          message = ''
+            myconfig.ai.microvm: `allowPrivateNetworks` has been REMOVED. No
+            network profile grants guests access to private IPv4 ranges (host
+            LAN, VPN peers, RFC1918, CGNAT, link-local, cloud metadata). If a
+            guest needs to fetch packages, use
+            `networkProfile = "package-access"` together with an explicit host
+            proxy (`packageProxyPort`).
+          '';
+        }
+        {
+          assertion = effectiveProfile != "package-access" || cfg.packageProxyPort != null;
+          message = ''
+            myconfig.ai.microvm: networkProfile = "package-access" requires
+            `packageProxyPort` (the host proxy port guests are allowed to
+            reach). Without it the profile would grant nothing beyond
+            proxy-only.
+          '';
+        }
+        {
+          assertion = cfg.packageProxyPort == null || cfg.packageProxyPort != cfg.litellmPort;
+          message = "myconfig.ai.microvm.packageProxyPort must differ from litellmPort.";
+        }
+        {
+          assertion = lib.length (lib.unique slotIPs) == lib.length slotIPs;
+          message = "myconfig.ai.microvm: generated slot IPv4 addresses are not unique.";
+        }
+        {
+          assertion = lib.length (lib.unique slotMACs) == lib.length slotMACs;
+          message = "myconfig.ai.microvm: generated slot MAC addresses are not unique.";
+        }
+        {
+          assertion = lib.length (lib.unique slotCIDs) == lib.length slotCIDs;
+          message = "myconfig.ai.microvm: generated slot VSOCK CIDs are not unique.";
+        }
+        {
+          # 0 (hypervisor), 1 (loopback) and 2 (host) are reserved VSOCK CIDs;
+          # 0xffffffff is VMADDR_CID_ANY.
+          assertion = lib.all (c: c > 2 && c < 4294967295) slotCIDs;
+          message = "myconfig.ai.microvm: generated slot VSOCK CIDs must avoid the reserved values 0/1/2 and VMADDR_CID_ANY.";
+        }
+        {
+          assertion = agentRegistry.names != [ ];
+          message = "myconfig.ai.microvm: the agent registry (agents.nix) must declare at least one agent.";
+        }
+      ]
+      # One assertion per malformed registry entry (empty when well-formed).
+      ++ map (msg: {
+        assertion = false;
+        message = msg;
+      }) agentRegistry.errors;
+
+      # --- deprecation warnings (ticket 3 C migration) -------------------
+      # Emitted for any legacy boolean a host still DEFINES, even when it is
+      # false, so the migration is visible before the options are dropped.
+      warnings =
+        lib.optional (definedLegacySlotOpts != [ ] && !classesExplicit) ''
+          myconfig.ai.microvm: ${lib.concatStringsSep ", " definedLegacySlotOpts} ${
+            if lib.length definedLegacySlotOpts == 1 then "is" else "are"
+          } deprecated; use `myconfig.ai.microvm.resourceClasses` instead. The
+          pool is currently a single `normal` class with ${toString cfg.slotCount} slot(s) (${toString cfg.defaultVcpu} vCPU, ${toString cfg.defaultMemoryMiB} MiB).
+        ''
+        ++ lib.optional (definedLegacyOpts != [ ]) ''
+          myconfig.ai.microvm: the network booleans ${lib.concatStringsSep ", " definedLegacyOpts} are deprecated; use `myconfig.ai.microvm.networkProfile` instead
+          (currently effective: "${effectiveProfile}").
+        ''
+        ++ lib.optional (legacyWantsInternet && !profileExplicit) ''
+          myconfig.ai.microvm: translated the deprecated
+          `allowPublicInternet = true` into `networkProfile = "internet"`.
+          Set `networkProfile` explicitly and drop the boolean.
         '';
-      }
-      {
-        assertion = lib.length (lib.unique slotIPs) == lib.length slotIPs;
-        message = "myconfig.ai.microvm: generated slot IPv4 addresses are not unique.";
-      }
-      {
-        assertion = lib.length (lib.unique slotMACs) == lib.length slotMACs;
-        message = "myconfig.ai.microvm: generated slot MAC addresses are not unique.";
-      }
-    ];
-  };
+    })
+  ];
 }

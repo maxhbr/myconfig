@@ -42,34 +42,22 @@
   config,
   lib,
   pkgs,
+  # The ONE authoritative supported-agent registry instance, built in
+  # default.nix (`_module.args.agentRegistry`). See ./agents.nix.
+  agentRegistry,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
   workmuxCfg = config.myconfig.ai.workmux;
 
-  # Fixed agent set (§29): the workmux `agents.<name>` key -> the guest agent
-  # binary passed to `agent-microvm run --agent <bin>` (also the workmux
-  # built-in `type` used for prompt injection / resume flags). The bin names
-  # match the launcher's `validate_agent_name` set and the guest exe names.
-  agentSpecs = {
-    microvm-claude = {
-      bin = "claude";
-      type = "claude";
-    };
-    microvm-pi = {
-      bin = "pi";
-      type = "pi";
-    };
-    microvm-codex = {
-      bin = "codex";
-      type = "codex";
-    };
-    microvm-opencode = {
-      bin = "opencode";
-      type = "opencode";
-    };
-  };
+  # Fixed agent set (§29), GENERATED from the AUTHORITATIVE registry in
+  # ./agents.nix: each entry's `workmuxName` becomes the `agents.<name>` key,
+  # its registry key is the `--agent <name>` token handed to the launcher, and
+  # its `workmuxType` is the workmux built-in `type` (prompt injection /
+  # resume flags). Never hand-maintain an agent list here — the same registry
+  # drives launcher validation and the guest `agent-run` dispatch, so the
+  # three can no longer drift.
 
   # The command workmux launches inside the worktree pane for a given agent.
   # It resolves the main repo from the worktree (the same git-common-dir ->
@@ -91,9 +79,9 @@ let
   # accepted; when false (secure default) sudo prompts interactively on first
   # launch, which is acceptable for an interactive tmux workflow.
   mkLauncher =
-    agentName: spec:
+    spec:
     pkgs.writeShellApplication {
-      name = "${agentName}-microvm-launch";
+      name = "${spec.workmuxName}-microvm-launch";
       runtimeInputs = with pkgs; [
         git
         coreutils
@@ -105,7 +93,7 @@ let
         # worktree's shared git dir; the launcher itself re-validates it.
         git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
         if [ -z "$git_common_dir" ]; then
-          echo "${agentName}-microvm-launch: not inside a git repository" >&2
+          echo "${spec.workmuxName}-microvm-launch: not inside a git repository" >&2
           exit 1
         fi
         main_repo="$(dirname "$git_common_dir")"
@@ -125,12 +113,12 @@ let
           | cut -c1-64 \
           | sed -e 's#[-.]*$##')"
         if [ -z "$task" ]; then
-          echo "${agentName}-microvm-launch: could not derive a task name from branch '$branch'" >&2
+          echo "${spec.workmuxName}-microvm-launch: could not derive a task name from branch '$branch'" >&2
           exit 1
         fi
 
         # Backend only: workmux stays the frontend (worktree/pane/status/
-        # cleanup). --attach runs 'agent-run ${spec.bin}' in the guest for
+        # cleanup). --attach runs 'agent-run ${spec.name}' in the guest for
         # this pane and tears the VM down on exit (the workspace clone is
         # kept). No network-relaxation flags -> secure proxy-only profile.
         # sudo's env_reset strips AGENT_MICROVM_SSH_KEY, which the launcher's
@@ -143,19 +131,21 @@ let
           agent-microvm run --attach \
           --name "$task" \
           --repository "$main_repo" \
-          --agent ${lib.escapeShellArg spec.bin}
+          --agent ${lib.escapeShellArg spec.name}
       '';
     };
 
-  mkAgent = agentName: spec: {
-    type = spec.type;
-    command = lib.getExe (mkLauncher agentName spec);
+  mkAgent = spec: {
+    type = spec.workmuxType;
+    command = lib.getExe (mkLauncher spec);
   };
 in
 {
   # Register only when the feature is enabled AND workmux is active on this
   # host (the existing agents guard their registration the same way).
   config = lib.mkIf (cfg.enable && workmuxCfg.enable) {
-    myconfig.ai.workmux.agents = lib.mapAttrs mkAgent agentSpecs;
+    myconfig.ai.workmux.agents = lib.mapAttrs' (
+      _: spec: lib.nameValuePair spec.workmuxName (mkAgent spec)
+    ) agentRegistry.agents;
   };
 }
