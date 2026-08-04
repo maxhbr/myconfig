@@ -1661,11 +1661,12 @@ printf '%s: starting real-KVM validation (host %s, bridge %s)\n' \
 # that dies in seconds fails every forgery subtest, and the two `net` endpoint
 # checks fail for the same root cause. Probe the SAME bridge endpoint a guest
 # would use (the host's `agent-litellm-proxy` socket forwarding to the loopback
-# LiteLLM) ONCE, before any VM boots, and ABORT the endpoint-dependent
-# sections with a precise reason instead of running them into the ground.
-# `boot`/`l2`/`creds`/`lifecycle`/`malrepo` may still be meaningful without the
-# endpoint, so they are not aborted here.
-# shellcheck disable=SC2317  # reached via the case below
+# LiteLLM) ONCE, before any VM boots. The endpoint-dependent sections are then
+# SKIPPED (under `--section all`) or HARD-ABORTED (when the operator asked for
+# just `net`/`forgery`) with a precise reason instead of running them into the
+# ground. `boot`/`l2`/`creds`/`lifecycle`/`malrepo` are still meaningful without
+# the endpoint, so `--section all` always RUNS them.
+# shellcheck disable=SC2317  # reached via the dispatch below
 preflight_endpoint() {
     local url="http://$GATEWAY:$LITELLM_PORT/v1/models"
     local attempt
@@ -1689,42 +1690,122 @@ preflight_endpoint() {
     info "  ip -br addr show $BRIDGE                          (bridge + gateway)"
     return 1
 }
-# Sections whose results are invalid (not merely uninteresting) without a
-# reachable model endpoint. `all` is included because it runs both.
-endpoint_sections() {
-    case "$1" in
-        net | forgery | all) return 0 ;;
-        *) return 1 ;;
+
+# --- section dispatch ------------------------------------------------------
+# The seven sections, in the fixed order they always run under `--section all`.
+# `net` and `forgery` depend on a reachable model endpoint; the rest do not.
+ALL_SECTIONS=(boot net l2 creds lifecycle malrepo forgery)
+ENDPOINT_SECTIONS=(net forgery)
+is_endpoint_section() {
+    local s
+    for s in "${ENDPOINT_SECTIONS[@]}"; do
+        [[ $s == "$1" ]] && return 0
+    done
+    return 1
+}
+# Resolve the requested $SECTION into the ordered list of sections to RUN.
+resolve_sections() {
+    case "$SECTION" in
+        all) printf '%s\n' "${ALL_SECTIONS[@]}" ;;
+        *) printf '%s\n' "$SECTION" ;;
     esac
 }
 
-if endpoint_sections "$SECTION" && ! preflight_endpoint; then
-    printf '%s: ABORTING section %q: the model endpoint is not reachable,\n' \
-        "$PROG" "$SECTION" >&2
-    printf '%s: fix the host backend first (run: sudo %s doctor), then re-run.\n' \
-        "$PROG" "$LAUNCHER" >&2
-    exit 1
-fi
-
+# Validate the section name ONCE, in the MAIN shell. A `die` inside the process
+# substitution below (`< <(resolve_sections)`) would only kill that subshell,
+# leaving PLAN empty and the run silently validating nothing (a typo'd
+# `--section bogus` would then report "0 passed, 0 failed" and exit 0). The
+# name is therefore checked HERE, so an unknown section aborts the whole run.
 case "$SECTION" in
-    all)
-        section_boot
-        section_net
-        section_l2
-        section_creds
-        section_lifecycle
-        section_malrepo
-        section_forgery
-        ;;
-    boot) section_boot ;;
-    net) section_net ;;
-    l2) section_l2 ;;
-    creds) section_creds ;;
-    lifecycle) section_lifecycle ;;
-    malrepo) section_malrepo ;;
-    forgery) section_forgery ;;
+    all) ;;
+    boot | net | l2 | creds | lifecycle | malrepo | forgery) ;;
     *) die "unknown --section '$SECTION'" ;;
 esac
 
+# Read the plan ONCE, before the preflight, so the resolved section list is
+# printed up front (Gap 3): the operator can see exactly what is about to run
+# instead of inferring it from the output. Greppable: one `info` line.
+mapfile -t PLAN < <(resolve_sections)
+info "sections: ${PLAN[*]}"
+
+# Endpoint preflight. Under `--section all` an unreachable endpoint SKIPS the
+# two endpoint-dependent sections (`net`, `forgery`) with a loud, counted reason
+# and still RUNS the other five; the operator asked for everything and a dead
+# endpoint must not silently validate nothing (Bug 2). When the operator asked
+# for JUST an endpoint-dependent section (`--section net`/`--section forgery`),
+# running it would be pointless, so the run HARD-ABORTS instead.
+ENDPOINT_DOWN=0
+SKIPPED_SECTIONS=()
+if is_endpoint_section "$SECTION" || [[ $SECTION == all ]]; then
+    if ! preflight_endpoint; then
+        ENDPOINT_DOWN=1
+        if [[ $SECTION == all ]]; then
+            for s in "${ENDPOINT_SECTIONS[@]}"; do
+                skip "section '$s' SKIPPED: the model endpoint is not reachable (run: sudo $LAUNCHER doctor); its checks would only produce misleading failures"
+                SKIPPED_SECTIONS+=("$s")
+            done
+        else
+            printf '%s: ABORTING section %q: the model endpoint is not reachable,\n' \
+                "$PROG" "$SECTION" >&2
+            printf '%s: running just this section would only produce misleading failures.\n' "$PROG" >&2
+            printf '%s: fix the host backend first (run: sudo %s doctor), then re-run.\n' \
+                "$PROG" "$LAUNCHER" >&2
+            exit 1
+        fi
+    fi
+fi
+
+# Run each planned section in order. Per-section tallies (Gap 3) make a partial
+# run diagnosable: the earlier real run that reported only forgery's checks was
+# not distinguishable from a run where the other sections produced no output.
+# Now each section announces its own pass/fail/skip delta as it completes, and
+# the final summary lists the sections that actually RAN.
+#
+# `section_$s || rc=...` (not a bare call) is deliberate: under `set -e` a
+# section function that returned non-zero would otherwise abort the WHOLE suite
+# and swallow every later section. A section is expected to return 0 (it uses
+# pass/fail/skip, and cleanup_task always succeeds), but a future bug that made
+# one return non-zero must surface as a single section-level failure, not a
+# silent truncation. This is the `set -e` class of defect the gap asked about.
+RAN_SECTIONS=()
+for s in "${PLAN[@]}"; do
+    # An endpoint-dependent section that was skipped is NOT run.
+    if [[ $ENDPOINT_DOWN == 1 ]] && is_endpoint_section "$s"; then
+        continue
+    fi
+    before_pass=$PASS before_fail=$FAIL before_skip=$SKIP
+    rc=0
+    "section_$s" || rc=$?
+    if ((rc != 0)); then
+        fail "section '$s' returned non-zero (rc $rc) — its checks may be incomplete; see the lines above"
+    fi
+    RAN_SECTIONS+=("$s")
+    info "section $s: $((PASS - before_pass)) passed, $((FAIL - before_fail)) failed, $((SKIP - before_skip)) skipped"
+done
+
+# --- final summary ---------------------------------------------------------
+# Make it obvious which sections actually RAN and which were SKIPPED, so a
+# partial run cannot be mistaken for a complete one (Gap 3).
 printf '\n%s: %d passed, %d failed, %d skipped\n' "$PROG" "$PASS" "$FAIL" "$SKIP"
-((FAIL == 0)) || exit 1
+info "sections ran: ${RAN_SECTIONS[*]:-<none>}"
+if ((${#SKIPPED_SECTIONS[@]})); then
+    info "sections skipped (endpoint down): ${SKIPPED_SECTIONS[*]}"
+fi
+# Exit status: non-zero if any check FAILED. ALSO non-zero if an endpoint-
+# dependent section was SKIPPED (not decided) because the endpoint was down:
+# the operator asked for `--section all` to validate everything, and a dead
+# endpoint must not let the security-critical `forgery` section pass by simply
+# not running (Bug 2). The skip is loud and counted above; this exit code makes
+# it impossible to miss in a script's `&&` chain. A normal sub-check SKIP
+# (e.g. "fewer than two slots") does NOT force non-zero — it is an honest
+# "this environment cannot decide this one check", already counted in $SKIP.
+# The endpoint-down preflight itself is a `fail` (so FAIL is already > 0 in
+# the common case), but the skipped-sections WARNING prints unconditionally so
+# it cannot be lost behind the preflight's own failure line.
+if ((${#SKIPPED_SECTIONS[@]})); then
+    printf '%s: WARNING: %d section(s) were SKIPPED, not decided (endpoint down; fix it and re-run): %s\n' \
+        "$PROG" "${#SKIPPED_SECTIONS[@]}" "${SKIPPED_SECTIONS[*]}" >&2
+fi
+if ((FAIL > 0)) || ((${#SKIPPED_SECTIONS[@]})); then
+    exit 1
+fi

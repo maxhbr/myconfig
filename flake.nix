@@ -625,7 +625,9 @@
                   "tests/microvm-batch-controller-smoke.sh"
                   "tests/microvm-batch-launcher-submit.sh"
                   "tests/microvm-launcher-recover.sh"
+                  "tests/microvm-doctor.sh"
                   "tests/microvm-rtv-transport.sh"
+                  "tests/microvm-rtv-dispatch.sh"
                   "modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh"
                 ];
               in

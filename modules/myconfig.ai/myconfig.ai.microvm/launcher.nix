@@ -133,6 +133,12 @@ let
       readonly BRIDGE=${lib.escapeShellArg cfg.bridgeName}
       readonly GATEWAY=${lib.escapeShellArg cfg.gatewayAddress}
       readonly LITELLM_PORT=${toString cfg.litellmPort}
+      # The private subnet the guest slots live in (network.nix). `doctor`
+      # builds the EXACT `iptables -C AGENT_MICROVM_INPUT -s $SUBNET -d
+      # $GATEWAY -p tcp --dport $LITELLM_PORT -j ACCEPT` spec from these SAME
+      # variables network.nix installs the rule with (its `inputAllowLines`),
+      # so the check and the rule it verifies can never drift apart.
+      readonly SUBNET=${lib.escapeShellArg cfg.subnet}
       # Whether the effective profile grants model-API access at all. Under
       # `offline` there is no endpoint to probe, so the preflight/doctor skip
       # the LiteLLM checks rather than reporting a spurious failure.
@@ -1271,12 +1277,14 @@ let
       Commands:
         run --name <task> --repository <path> [--agent <name>] [--branch <br>]
             [--resource-class <class>] [--wait <sec>] [--persist-agent-state]
-            [--attach]
+            [--attach] [--no-preflight]
                               Allocate a free slot, create a standalone clone,
                               bind-mount it at the slot's /workspace source and
                               start the microVM. With --attach, SSH in running
                               'agent-run <agent>' and tear the VM down on exit
-                              (the workspace clone is always kept).
+                              (the workspace clone is always kept). --no-preflight
+                              skips the model-endpoint preflight (an interactive
+                              escape hatch for debugging; 'submit' has none).
         stop <slot|task>      Stop the VM, unmount the bind, drop slot transient
                               state. Keeps workspace/git/patches.
         destroy <slot|task>   Like stop, plus clear ephemeral slot runtime.
@@ -1381,7 +1389,12 @@ let
           esac
           local stderr_file
           stderr_file="$(job_worker_logs_dir "$slot")/$JOB_WORKER_STDERR_NAME"
-          [[ -s "$stderr_file" ]] || return 0
+          # Require a NON-EMPTY REGULAR FILE: `[[ -s ]]` alone would also be
+          # true for a FIFO or a character/block device, on which the bounded
+          # `tail -c` below would BLOCK (a FIFO with no writer) or read device
+          # state — a path the UNTRUSTED guest cannot create here (the logs dir
+          # is root-owned), but one the launcher must never take regardless.
+          [[ -f "$stderr_file" && -s "$stderr_file" ]] || return 0
           local bound=$WORKER_STDERR_TAIL_BYTES
           (( LOG_MAX_BYTES < bound )) && bound=$LOG_MAX_BYTES
           printf '%s: task %q FAILED — tail of the UNTRUSTED worker stderr (last %d bytes, root-owned; NOT the authoritative result):\n' \
@@ -1457,10 +1470,11 @@ let
       cmd_run() {
           require_root run
           local task="" repo="" agent="" branch="" attach=0
-          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0
+          local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0 no_preflight=0
           while [[ $# -gt 0 ]]; do
               case "$1" in
                   --persist-agent-state) persist=1; shift ;;
+                  --no-preflight) no_preflight=1; shift ;;
                   --name)       task="''${2-}"; shift 2 ;;
                   --repository) repo="''${2-}"; shift 2 ;;
                   --agent)      agent="''${2-}"; shift 2 ;;
@@ -1474,6 +1488,10 @@ let
                   --branch=*)     branch="''${1#*=}"; shift ;;
                   --resource-class=*) rclass="''${1#*=}"; shift ;;
                   --wait=*)       wait_for="''${1#*=}"; shift ;;
+                  # --no-preflight is a bare boolean flag (like --attach and
+                  # --persist-agent-state): no `=value` form is accepted, so
+                  # `--no-preflight=anything` is rejected as an unknown argument
+                  # rather than silently coercing a non-numeric value to 0.
                   *) die "run: unknown argument '$1'" ;;
               esac
           done
@@ -1496,7 +1514,19 @@ let
           # sandbox whose agent cannot reach LiteLLM dies within seconds and
           # the 95-min real-KVM runs only surfaced that by accident. This is
           # the cheap, read-only host-side check; `doctor` is the deep one.
-          preflight_model_endpoint
+          #
+          # `--no-preflight` is the documented escape hatch for the INTERACTIVE
+          # `run` (a human is present, and a shell in the workspace is still
+          # useful for debugging even when the endpoint is down). `submit`
+          # (batch, no human watching) keeps the preflight FAIL-CLOSED and has
+          # NO such flag, so an unattended run can never boot a doomed VM
+          # silently. The test-only AGENT_MICROVM_SKIP_PREFLIGHT=1 remains the
+          # harness override for both.
+          if (( no_preflight )); then
+              log "WARNING: --no-preflight: skipping the model-endpoint preflight; if the endpoint is unreachable the guest agent will die within seconds (run 'sudo $PROG doctor' to diagnose)"
+          else
+              preflight_model_endpoint
+          fi
 
           mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT"
 
@@ -2521,8 +2551,12 @@ let
           else
               fail "agent-litellm-proxy.socket is NOT active (it needs $BRIDGE-netdev.service; try: systemctl restart agent-litellm-proxy.socket)"
           fi
+          # Match the unit name LITERALLY: `.` is a regex wildcard in grep,
+          # and a bare "$BRIDGE-netdev.service" would also match a (hypothetical)
+          # `agentbr0-netdevXservice`. Escape every `.` — the same hardening the
+          # gateway-address grep below uses — so the match is exact.
           if systemctl show -p After --value agent-litellm-proxy.socket 2>/dev/null \
-                  | grep -qw "$BRIDGE-netdev.service"; then
+                  | grep -qw -- "''${BRIDGE//./\\.}-netdev\\.service"; then
               ok "socket is ordered after $BRIDGE-netdev.service"
           else
               fail "socket is NOT ordered after $BRIDGE-netdev.service (a boot race leaves it with no listener)"
@@ -2541,7 +2575,8 @@ let
           else
               fail "bridge interface $BRIDGE does NOT exist"
           fi
-          if ip -br addr show "$BRIDGE" 2>/dev/null | grep -qw "$GATEWAY"; then
+          if ip -br addr show "$BRIDGE" 2>/dev/null \
+                  | grep -qw -- "''${GATEWAY//./\\.}"; then
               ok "bridge carries the gateway address $GATEWAY"
           else
               fail "bridge $BRIDGE does NOT carry the gateway address $GATEWAY"
@@ -2553,10 +2588,21 @@ let
           else
               fail "AGENT_MICROVM_INPUT chain is NOT installed (reload the firewall / switch-to-configuration)"
           fi
-          # Escape the dots in $GATEWAY so grep treats them literally (basic
-          # regex `.` matches any char); the `.*` wildcards stay regex.
-          if iptables -S AGENT_MICROVM_INPUT 2>/dev/null \
-                  | grep -q -- "-d ''${GATEWAY//./\\.} .* --dport $LITELLM_PORT .* ACCEPT"; then
+          # Test the rule instead of parsing `iptables -S`'s printed form.
+          # `iptables -S` CANONICALISES the destination address: a rule added
+          # as `-d 192.168.83.1` is printed back as `-d 192.168.83.1/32`, and a
+          # grep for "-d <addr> <space> ..." therefore never matched — so the
+          # check ALWAYS reported a problem and `doctor` exited non-zero on a
+          # healthy host (breaking `sudo agent-microvm doctor && ...`).
+          # `iptables -C <chain> <spec>` exits 0 iff a rule matching <spec>
+          # exists; it is exactly what network.nix itself uses to guard its own
+          # idempotent `-I` inserts. The spec is built from the SAME
+          # `$SUBNET`/`$GATEWAY`/`$LITELLM_PORT` variables network.nix's
+          # `inputAllowLines` installs the rule with, so the two cannot drift —
+          # and `-C` still returns non-zero when the rule is genuinely absent.
+          if iptables -C AGENT_MICROVM_INPUT \
+                  -s "$SUBNET" -d "$GATEWAY" -p tcp --dport "$LITELLM_PORT" -j ACCEPT \
+                  2>/dev/null; then
               ok "INPUT chain ACCEPTs tcp dport $LITELLM_PORT to $GATEWAY from the subnet"
           else
               fail "INPUT chain does NOT ACCEPT the LiteLLM endpoint (guest -> $GATEWAY:$LITELLM_PORT)"
