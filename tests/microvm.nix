@@ -2009,6 +2009,45 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # (l6) The GUEST COMMAND TRANSPORT of the real-KVM suite. That suite needs   #
+  #      /dev/kvm and root, so CI can never run it — but the mechanism that    #
+  #      decides whether ANY of its guest-side denials mean anything (does the  #
+  #      command reach the guest as written, through OpenSSH's argv flattening  #
+  #      and the agent's fish login shell?) can be executed here, against a     #
+  #      stub that reproduces exactly that path. Includes a NEGATIVE CONTROL:   #
+  #      the previous, unquoted transport must FAIL this check.                 #
+  # ---------------------------------------------------------------------- #
+  microvm-rtv-transport =
+    pkgs.runCommand "microvm-rtv-transport"
+      {
+        nativeBuildInputs = [
+          pkgs.coreutils
+          pkgs.fish
+        ];
+        harness = ./microvm-rtv-transport.sh;
+        # The suite under test, and the very shell guest.nix gives the agent
+        # user (`users.users.agent.shell = pkgs.fish`) — the re-parsing side of
+        # the transport, so the stub is not a guess about which shell runs.
+        SUITE = ../modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh;
+        FISH = lib.getExe pkgs.fish;
+      }
+      ''
+        mkdir -p work && cd work
+        export HOME=$PWD
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- runtime-validation transport harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "microvm-rtv-transport"
+          echo "  suite: $SUITE"
+          echo
+          cat report.txt
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (k) NETWORK PROFILES (ticket 3 C): render all four profiles and assert   #
   #     the rules each one must and must NOT contain, plus the guest-side    #
   #     configuration derived from the SAME decision (LiteLLM forwarder,     #
