@@ -760,11 +760,13 @@ in
         }', expected the PER-SLOT dir '${expectedJobSource}' (must match job.nix)";
       }
       {
-        # Read-WRITE on purpose (the guest writes out/result.json); the spec and
-        # prompt inside are root-owned 0444, so the guest still cannot rewrite
-        # its own job — that part is enforced by file modes, not the share flag.
+        # Read-WRITE on purpose (the guest controller writes
+        # controller/result.json and the worker its logs). WHO may write WHAT
+        # inside the share is enforced by ownership/modes, not by this flag:
+        # input/ and controller/ are root-owned (controller/ additionally 0700),
+        # only worker/ belongs to the unprivileged guest agent.
         assertion = jobShare != null && (jobShare.readOnly or false) == false;
-        message = "job share must be read-write so the guest can write result.json";
+        message = "job share must be read-write so the guest controller can write its result";
       }
       {
         assertion = hk != null && hk.proto == "virtiofs" && hk.tag == hostKeys.guestTag;
@@ -913,7 +915,10 @@ in
   microvm-observability =
     let
       hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
-      guestJob = findPkg guest0Cfg.environment.systemPackages "agent-job";
+      # The guest-side emitter is now the TRUSTED controller (the untrusted
+      # worker deliberately emits no lifecycle events — nothing it says could be
+      # trusted as a transition).
+      guestJob = findPkg guest0Cfg.environment.systemPackages "agent-job-controller";
       evalMarker = mkEvalCheck "microvm-observability-eval" [
         {
           assertion = microvmOpts.taskLogMaxBytes > 0;
@@ -925,7 +930,7 @@ in
       {
         inherit evalMarker;
         launcherBin = "${hostLauncher}/bin/agent-microvm";
-        guestJobBin = "${guestJob}/bin/agent-job";
+        guestJobBin = "${guestJob}/bin/agent-job-controller";
         # The transitions ticket 6 B requires from the HOST side.
         hostEvents = "task-submitted slot-allocated workspace-created vm-start-requested vm-ready agent-started agent-finished timeout cancellation vm-stopped cleanup-completed recovery-action";
         # ... and from the guest side.
@@ -978,7 +983,10 @@ in
           slot:
           let
             guest = enabledCfg.microvm.vms.${slot.name}.config.config;
-            job = guest.systemd.services.agent-job.serviceConfig;
+            # The per-class cgroup limits live on the WORKER unit (the untrusted
+            # half): the trusted controller must not be able to eat the class's
+            # whole budget, and the agent must be the one that gets OOM-killed.
+            job = guest.systemd.services."${jobs.workerUnitTemplate}".serviceConfig;
             host = enabledCfg.systemd.services."microvm@${slot.name}".serviceConfig;
             cls = resourceClasses.${slot.class};
             # "5120M" -> 5120
@@ -987,7 +995,7 @@ in
           [
             {
               assertion = job.CPUQuota == "${toString (cls.vcpu * 100)}%";
-              message = "${slot.name}: guest job CPUQuota must match its class (${toString cls.vcpu} vCPU)";
+              message = "${slot.name}: guest job worker CPUQuota must match its class (${toString cls.vcpu} vCPU)";
             }
             {
               assertion = mib job.MemoryMax < cls.memoryMiB && mib job.MemoryMax >= cls.memoryMiB / 2;
@@ -1100,8 +1108,8 @@ in
             message = "agent-state-link must be a oneshot";
           }
           {
-            assertion = builtins.elem "agent-job.service" (unit.before or [ ]);
-            message = "agent-state-link must run BEFORE agent-job (a batch job must see its state)";
+            assertion = builtins.elem jobs.controllerUnit (unit.before or [ ]);
+            message = "agent-state-link must run BEFORE the batch job controller (a batch job must see its state)";
           }
           {
             assertion = (unit.unitConfig.RequiresMountsFor or "") == agentStatePaths.guestMountPoint;
@@ -1255,21 +1263,25 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
-  # (l) BATCH JOBS (ticket 4 A): the guest-side batch runner + its unit.     #
-  #     Eval part: the unit is inert without a job, waits for BOTH mounts,   #
-  #     runs as the unprivileged agent in /workspace, carries the required   #
-  #     hardening and a STATIC RuntimeMaxSec ceiling; the registry's batch   #
-  #     metadata is consistent; every slot's job directory is pre-created    #
-  #     (virtiofsd needs the share source to exist). Build part: the runner  #
-  #     builds (shellcheck) and its generated dispatch has an arm for every  #
-  #     batch-capable agent.                                                #
+  # (l) BATCH JOBS (ticket 4 A, split into controller + worker in ticket 7): #
+  #     Eval part: the CONTROLLER unit is inert without a job, waits for     #
+  #     BOTH mounts and runs as guest root; the WORKER template runs as the   #
+  #     unprivileged agent in /workspace, carries the required hardening and  #
+  #     a STATIC timeout ceiling; the registry's batch metadata is            #
+  #     consistent; every slot's job directory tree is pre-created            #
+  #     (virtiofsd needs the share source to exist). Build part: controller,  #
+  #     worker and verifier build (shellcheck) and the worker's generated      #
+  #     dispatch has an arm for every batch-capable agent.                    #
   # ---------------------------------------------------------------------- #
   microvm-batch-jobs =
     let
       hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
-      unit = guest0Cfg.systemd.services.agent-job;
-      svc = unit.serviceConfig;
-      runner = findPkg guest0Cfg.environment.systemPackages "agent-job";
+      ctrlUnit = guest0Cfg.systemd.services.agent-job-controller;
+      ctrl = ctrlUnit.serviceConfig;
+      workerUnit = guest0Cfg.systemd.services."${jobs.workerUnitTemplate}";
+      worker = workerUnit.serviceConfig;
+      controllerBin = findPkg guest0Cfg.environment.systemPackages "agent-job-controller";
+      workerBin = findPkg guest0Cfg.environment.systemPackages "agent-job-worker";
       batchAgents = builtins.filter (a: a.batchArgs != null) (lib.attrValues agentRegistry.agents);
       tmpfiles = enabledCfg.systemd.tmpfiles.rules;
       evalMarker = mkEvalCheck "microvm-batch-jobs-eval" (
@@ -1277,35 +1289,49 @@ in
           {
             # Inert unless the host placed a spec in the share: an interactive
             # slot must never accidentally run a batch job.
-            assertion = (unit.unitConfig.ConditionPathExists or null) == jobs.guestSpec;
-            message = "agent-job must be conditional on ${jobs.guestSpec}";
+            assertion = (ctrlUnit.unitConfig.ConditionPathExists or null) == jobs.guestSpec;
+            message = "agent-job-controller must be conditional on ${jobs.guestSpec}";
           }
           {
             assertion =
               let
-                m = unit.unitConfig.RequiresMountsFor or "";
+                m = ctrlUnit.unitConfig.RequiresMountsFor or "";
               in
               lib.hasInfix "/workspace" m && lib.hasInfix jobs.guestMountPoint m;
-            message = "agent-job must wait for the workspace AND job mounts (RequiresMountsFor)";
+            message = "agent-job-controller must wait for the workspace AND job mounts (RequiresMountsFor)";
           }
           {
-            assertion = svc.User == "agent" && svc.Group == "users";
-            message = "agent-job must run as the unprivileged guest agent user";
+            # The controller is the TRUSTED half: it must NOT run as the
+            # untrusted agent user, because it owns the result channel and
+            # starts the worker under a different uid.
+            assertion = (ctrl.User or "root") == "root";
+            message = "agent-job-controller must run as guest root (it owns the authoritative result channel)";
           }
           {
-            assertion = svc.WorkingDirectory == "/workspace";
-            message = "agent-job must run with /workspace as its working directory";
+            assertion = worker.User == "agent" && worker.Group == "users";
+            message = "the batch WORKER must run as the unprivileged guest agent user";
           }
           {
-            assertion = svc.Type == "oneshot";
-            message = "agent-job must be a oneshot";
+            assertion = worker.WorkingDirectory == "/workspace";
+            message = "the batch worker must run with /workspace as its working directory";
           }
           {
-            # A static ceiling ON TOP of the per-job timeout(1), so even a spec
-            # that slipped through validation cannot run forever.
+            assertion = ctrl.Type == "oneshot" && worker.Type == "oneshot";
+            message = "controller and worker must be oneshots";
+          }
+          {
+            # RemainAfterExit is what keeps ExecMainStatus readable, i.e. it is
+            # how the controller learns the worker's real exit status.
+            assertion = (worker.RemainAfterExit or false) == true;
+            message = "the worker unit must RemainAfterExit so the controller can read its exit status";
+          }
+          {
+            # A static ceiling ON TOP of the controller's own deadline, so even
+            # a worker nobody supervises cannot run forever. Type=oneshot
+            # ignores RuntimeMaxSec, hence TimeoutStartSec.
             assertion =
-              svc.RuntimeMaxSec == microvmOpts.job.maxTimeoutSeconds + microvmOpts.job.gracePeriodSeconds;
-            message = "agent-job must carry a static RuntimeMaxSec ceiling derived from job.maxTimeoutSeconds";
+              worker.TimeoutStartSec == microvmOpts.job.maxTimeoutSeconds + microvmOpts.job.gracePeriodSeconds;
+            message = "the worker unit must carry a static TimeoutStartSec ceiling derived from job.maxTimeoutSeconds";
           }
           {
             assertion = microvmOpts.job.defaultTimeoutSeconds <= microvmOpts.job.maxTimeoutSeconds;
@@ -1333,11 +1359,23 @@ in
             message = "every batch agent must either take the prompt on stdin or contain the %PROMPT% placeholder";
           }
           {
-            # The runner needs the agent binaries on its unit PATH.
+            # The WORKER (not the controller) needs the agent binaries on its
+            # unit PATH: the controller must never be able to exec an agent.
             assertion = builtins.all (
-              a: builtins.elem a.package.outPath (map (p: p.outPath) unit.path)
+              a: builtins.elem a.package.outPath (map (p: p.outPath) workerUnit.path)
             ) batchAgents;
-            message = "agent-job's unit PATH must contain every batch agent package";
+            message = "the worker unit's PATH must contain every batch agent package";
+          }
+          {
+            # The controller must never be able to exec a coding agent itself:
+            # its unit PATH (NixOS adds a small default toolchain) carries none
+            # of the registry packages.
+            assertion =
+              let
+                ctrlPaths = map (p: p.outPath) (ctrlUnit.path or [ ]);
+              in
+              !builtins.any (a: builtins.elem a.package.outPath ctrlPaths) batchAgents;
+            message = "the controller unit must NOT carry the agent packages on its PATH";
           }
           {
             # No upstream provider credential may reach a batch job: the guest
@@ -1350,7 +1388,7 @@ in
             message = "the guest must carry only placeholder API keys, never an upstream credential";
           }
         ]
-        # Every slot's job dir (and its guest-writable out/) must be
+        # Every slot's job dir (and its input/controller/worker subdirs) must be
         # pre-created, otherwise virtiofsd refuses to start for that slot.
         ++ lib.concatMap (slot: [
           {
@@ -1358,8 +1396,16 @@ in
             message = "missing tmpfiles rule for the job dir of ${slot.name}";
           }
           {
-            assertion = builtins.elem "d ${jobs.hostOutDir slot.name} 0755 1000 1000 - -" tmpfiles;
-            message = "missing tmpfiles rule for the guest-writable out/ dir of ${slot.name}";
+            assertion = builtins.elem "d ${jobs.hostInputDir slot.name} ${jobs.inputDirMode} root root - -" tmpfiles;
+            message = "missing tmpfiles rule for the immutable input dir of ${slot.name}";
+          }
+          {
+            assertion = builtins.elem "d ${jobs.hostControllerDir slot.name} ${jobs.controllerDirMode} root root - -" tmpfiles;
+            message = "missing tmpfiles rule for the controller-only dir of ${slot.name}";
+          }
+          {
+            assertion = builtins.elem "d ${jobs.hostWorkerDir slot.name} ${jobs.workerDirMode} ${toString jobs.workerUid} ${toString jobs.workerGid} - -" tmpfiles;
+            message = "missing tmpfiles rule for the worker-writable dir of ${slot.name}";
           }
         ]) enabledSlots
       );
@@ -1367,7 +1413,8 @@ in
     pkgs.runCommand "microvm-batch-jobs"
       {
         inherit evalMarker;
-        runnerBin = "${runner}/bin/agent-job";
+        controllerBin = "${controllerBin}/bin/agent-job-controller";
+        workerBin = "${workerBin}/bin/agent-job-worker";
         launcherBin = "${hostLauncher}/bin/agent-microvm";
         batchNames = lib.concatStringsSep " " agentRegistry.batchNames;
         # Agents that exist but cannot run unattended — empty today, but the
@@ -1380,8 +1427,8 @@ in
       }
       ''
         for n in $batchNames; do
-          grep -q "$n) run_agent" "$runnerBin" \
-            || { echo "batch agent '$n' missing from the generated agent-job dispatch" >&2; exit 1; }
+          grep -q "$n) run_agent" "$workerBin" \
+            || { echo "batch agent '$n' missing from the generated worker dispatch" >&2; exit 1; }
         done
         # --- host lifecycle surface (ticket 4 B) --------------------------
         for c in cmd_submit cmd_cancel cmd_recover validate_batch_agent_name \
@@ -1402,18 +1449,266 @@ in
           || { echo "launcher has no recover --dry-run" >&2; exit 1; }
         grep -q "keeping the workspace clone" "$launcherBin" \
           || { echo "recover does not promise to keep workspace clones" >&2; exit 1; }
-        # The runner must reject a spec that names an executable, and must
+        # The controller must reject a spec that names an executable, and must
         # validate the schema version and the prompt path.
-        grep -q "spec must not contain an executable path" "$runnerBin" \
-          || { echo "agent-job does not reject executable paths in the spec" >&2; exit 1; }
-        grep -q "unsupported spec version" "$runnerBin" \
-          || { echo "agent-job does not validate the spec version" >&2; exit 1; }
+        grep -q "spec must not contain an executable path" "$controllerBin" \
+          || { echo "the controller does not reject executable paths in the spec" >&2; exit 1; }
+        grep -q "unsupported spec version" "$controllerBin" \
+          || { echo "the controller does not validate the spec version" >&2; exit 1; }
         {
-          echo "microvm-batch-jobs: guest batch runner $runnerBin"
+          echo "microvm-batch-jobs: guest controller $controllerBin"
+          echo "  guest worker: $workerBin"
           echo "  host launcher: $launcherBin"
           echo "  batch agents: $batchNames"
           echo "  non-batch agents: ''${nonBatchNames:-<none>}"
           echo "  job spec (guest): $jobSpecPath"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (l2) BATCH RESULT INTEGRITY (ticket 7): the authoritative result channel  #
+  #      must be writable ONLY by a trusted guest-side controller, and the    #
+  #      host must accept a result only for the ACTIVE allocation.            #
+  #                                                                          #
+  #      Eval part: controller and worker run under SEPARATE identities; the  #
+  #      controller directory is root-only and outside every worker-writable  #
+  #      path; the worker unit cannot even see it; the spec is root-only (it  #
+  #      carries the allocation token); the launcher reads the result only    #
+  #      through the ONE verifier.                                           #
+  #      EXECUTED part: tests/microvm-batch-result-integrity.sh really runs   #
+  #      the verifier and the guest-side permission assertions against        #
+  #      forged / stale / malformed / symlinked / world-writable fixtures     #
+  #      (see the honesty note in that script: fakeroot fakes metadata, so    #
+  #      the KERNEL-level write denial is a real-KVM property covered by      #
+  #      runtime-validation.sh --section forgery).                            #
+  # ---------------------------------------------------------------------- #
+  microvm-batch-result-integrity =
+    let
+      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      ctrlUnit = guest0Cfg.systemd.services.agent-job-controller;
+      ctrl = ctrlUnit.serviceConfig;
+      workerUnit = guest0Cfg.systemd.services."${jobs.workerUnitTemplate}";
+      worker = workerUnit.serviceConfig;
+      tmpfiles = enabledCfg.systemd.tmpfiles.rules;
+      # Every path the UNTRUSTED worker can write, per the layout.
+      workerWritable = [
+        (jobs.hostWorkerDir refSlot.name)
+        "${microvmOpts.stateRoot}/${refSlot.name}/workspace"
+      ];
+      evalMarker = mkEvalCheck "microvm-batch-result-integrity-eval" [
+        {
+          # THE trust split: the writer of the authoritative result is not the
+          # identity that runs the coding agent.
+          assertion = (ctrl.User or "root") != (worker.User or "root");
+          message = "the job controller and the job worker must run under DIFFERENT guest identities";
+        }
+        {
+          assertion = (worker.User or "") == "agent" && jobs.workerUid != 0;
+          message = "the batch worker must run as the unprivileged guest agent (uid != 0)";
+        }
+        {
+          # The result lives in the controller area, never in the worker area.
+          assertion =
+            lib.hasPrefix "${jobs.guestControllerDir}/" jobs.guestResult
+            && !lib.hasPrefix jobs.guestWorkerDir jobs.guestResult;
+          message = "the authoritative result must live inside the controller directory";
+        }
+        {
+          assertion = !builtins.any (d: lib.hasPrefix "${d}/" (jobs.hostResult refSlot.name)) workerWritable;
+          message = "the host-side result path must not sit inside a worker-writable directory";
+        }
+        {
+          # 0700 root:root is what makes the channel unwritable AND unreadable
+          # for the worker (the token in the spec must not leak either).
+          assertion =
+            jobs.controllerDirMode == "0700"
+            && builtins.elem "d ${jobs.hostControllerDir refSlot.name} 0700 root root - -" tmpfiles;
+          message = "the controller directory must be created root:root 0700";
+        }
+        {
+          assertion = jobs.specMode == "0400";
+          message = "the job spec must be root-only 0400 (it carries the allocation token)";
+        }
+        {
+          assertion = jobs.promptMode == "0444";
+          message = "the prompt must be world-readable 0444 (the worker reads it) and writable by nobody";
+        }
+        {
+          # Belt and braces on top of the mode bits: the worker's mount
+          # namespace does not even contain the controller directory.
+          assertion = builtins.elem "-${jobs.guestControllerDir}" (worker.InaccessiblePaths or [ ]);
+          message = "the worker unit must mask the controller directory (InaccessiblePaths)";
+        }
+        {
+          assertion = builtins.elem "-${jobs.guestInputDir}" (worker.ReadOnlyPaths or [ ]);
+          message = "the worker unit must see the immutable input read-only";
+        }
+        {
+          assertion = builtins.elem "-${jobs.guestControllerDir}" (ctrl.ReadWritePaths or [ ]);
+          message = "the controller unit must be able to write its own directory";
+        }
+        {
+          assertion = builtins.elem "-${jobs.guestInputDir}" (ctrl.ReadOnlyPaths or [ ]);
+          message = "the controller unit must see the immutable input read-only";
+        }
+        {
+          # The controller must not get broad write access to the workspace:
+          # that is the worker's job.
+          assertion = !builtins.elem "-/workspace" (ctrl.ReadWritePaths or [ ]);
+          message = "the controller must NOT have /workspace in its ReadWritePaths";
+        }
+        {
+          # Timeout/cancellation kill a CGROUP, not a pid, so a double-forked
+          # repository process cannot outlive the job.
+          assertion = (worker.KillMode or "control-group") == "control-group";
+          message = "the worker unit must be killed as a control group";
+        }
+        {
+          assertion = (worker.TimeoutStopSec or 0) == jobs.workerKillGraceSeconds;
+          message = "the worker unit must give the same SIGTERM grace the controller uses";
+        }
+        {
+          # The worker template must not be startable by anything but the
+          # controller (no wantedBy/requiredBy/upholds).
+          assertion =
+            (workerUnit.wantedBy or [ ]) == [ ]
+            && (workerUnit.requiredBy or [ ]) == [ ]
+            && (workerUnit.upheldBy or [ ]) == [ ];
+          message = "the worker template must never be pulled in by a target — only the controller starts it";
+        }
+        {
+          # The instance name is the AGENT name (registry-constrained), never a
+          # caller-supplied task id.
+          assertion = builtins.all (
+            n: jobs.workerUnit n == "agent-job-worker@${n}.service"
+          ) agentRegistry.batchNames;
+          message = "the worker unit instance must be the registry agent name";
+        }
+        {
+          # Untrusted worker output stays in the worker area.
+          assertion =
+            (worker.StandardOutput or "") == "append:${jobs.guestWorkerStdout}"
+            && (worker.StandardError or "") == "append:${jobs.guestWorkerStderr}"
+            && lib.hasPrefix "${jobs.guestWorkerDir}/" jobs.guestWorkerStdout;
+          message = "worker stdout/stderr must be written into the worker's own (untrusted) directory";
+        }
+        {
+          # The schema was bumped together with the layout change; there is no
+          # compatibility mode for the old, forgeable v1 result.
+          assertion = jobs.specVersion >= 2;
+          message = "the batch schema version must have been bumped for the controller/worker split";
+        }
+        {
+          assertion = builtins.elem "R ${jobs.slotDir refSlot.name}/out - - - - -" tmpfiles;
+          message = "the legacy guest-writable out/ directory must be removed by tmpfiles";
+        }
+        {
+          # The old single-identity unit must be gone: it was the forgery hole.
+          assertion = !(guest0Cfg.systemd.services ? agent-job);
+          message = "the old combined agent-job unit must no longer exist";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-batch-result-integrity"
+      {
+        inherit evalMarker;
+        nativeBuildInputs = [
+          pkgs.fakeroot
+          pkgs.jq
+          pkgs.coreutils
+        ];
+        harness = ./microvm-batch-result-integrity.sh;
+        launcherBin = "${hostLauncher}/bin/agent-microvm";
+        controllerBin = "${jobs.controller}/bin/agent-job-controller";
+        workerBin = "${jobs.worker}/bin/agent-job-worker";
+        # --- environment of the EXECUTED harness ---------------------------
+        VERIFIER = lib.getExe jobs.resultVerifier;
+        ASSERT_PATHS = lib.getExe jobs.assertPaths;
+        SPEC_VERSION = toString jobs.specVersion;
+        CONTROLLER_VERSION = toString jobs.controllerVersion;
+        INPUT_SUBDIR = jobs.inputSubdir;
+        CONTROLLER_SUBDIR = jobs.controllerSubdir;
+        WORKER_SUBDIR = jobs.workerSubdir;
+        SPEC_NAME = jobs.specName;
+        # Guest paths the worker must never mention (checked by grep below).
+        CONTROLLER_DIR = jobs.guestControllerDir;
+        RESULT_PATH = jobs.guestResult;
+        SPEC_PATH = jobs.guestSpec;
+        PROMPT_NAME = jobs.promptName;
+        CANCEL_NAME = jobs.cancelName;
+        RESULT_NAME = jobs.resultName;
+        STATE_NAME = jobs.controllerStateName;
+        WORKER_UID = toString jobs.workerUid;
+        SLOT = refSlot.name;
+        TASK = "integrity-task";
+        AGENT = lib.head agentRegistry.batchNames;
+        SPEC_MODE = jobs.specMode;
+        PROMPT_MODE = jobs.promptMode;
+        INPUT_DIR_MODE = jobs.inputDirMode;
+        CONTROLLER_DIR_MODE = jobs.controllerDirMode;
+        WORKER_DIR_MODE = jobs.workerDirMode;
+      }
+      ''
+        # --- (1) the host launcher must read results ONLY via the verifier ---
+        grep -q "$VERIFIER" "$launcherBin" \
+          || { echo "the launcher does not use the result verifier" >&2; exit 1; }
+        for h in verify_job_document verify_job_result job_phase host_result_json \
+                 archive_controller_result request_guest_cancel job_controller_dir \
+                 job_worker_dir; do
+          grep -q "$h()" "$launcherBin" \
+            || { echo "the launcher is missing the '$h' helper" >&2; exit 1; }
+        done
+        # It must never parse or copy the guest-written documents by hand (that
+        # was the old `jq -r .state out/result.json` + `cp result.json` path):
+        # the ONLY consumer of those paths is the verifier.
+        if grep -nE "(jq|cat|cp|read|source|eval)[^#]*job_(result|ctrl_state)" "$launcherBin" \
+             | grep -q .; then
+          echo "the launcher reads/copies a guest document outside the verifier:" >&2
+          grep -nE "(jq|cat|cp|read|source|eval)[^#]*job_(result|ctrl_state)" "$launcherBin" >&2
+          exit 1
+        fi
+        # The authoritative path must be the controller one, and the legacy
+        # guest-writable out/ path must be gone.
+        grep -q "JOB_CONTROLLER_SUBDIR" "$launcherBin" \
+          || { echo "the launcher does not know the controller subdir" >&2; exit 1; }
+        # 256-bit allocation tokens from the kernel CSPRNG.
+        grep -q "od -An -tx1 -N32 /dev/urandom" "$launcherBin" \
+          || { echo "the launcher does not mint 256-bit allocation tokens" >&2; exit 1; }
+
+        # --- (2) the controller is the only writer of the result -------------
+        grep -q "agent-job-assert-paths" "$controllerBin" \
+          || { echo "the controller does not assert its trust boundary" >&2; exit 1; }
+        grep -q "allocationToken" "$controllerBin" \
+          || { echo "the controller does not record the allocation token" >&2; exit 1; }
+        grep -q "kill-whom=all" "$controllerBin" \
+          || { echo "the controller does not force-kill the whole worker cgroup" >&2; exit 1; }
+        # The worker must not know anything about the result channel or the
+        # spec: it only ever reads the prompt and runs one registry agent.
+        for forbidden in "$CONTROLLER_DIR" "$RESULT_PATH" "$SPEC_PATH"; do
+          if grep -q -- "$forbidden" "$workerBin"; then
+            echo "the worker references $forbidden" >&2; exit 1
+          fi
+        done
+
+        # --- (3) EXECUTED regression harness --------------------------------
+        mkdir -p work && cd work
+        # fakeroot lets the fixtures carry the real ownership split
+        # (root-owned controller vs agent-owned worker) inside the build sandbox.
+        fakeroot -- bash "$harness" > report.txt || {
+          echo "--- batch result integrity harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "microvm-batch-result-integrity"
+          echo "  launcher:   $launcherBin"
+          echo "  controller: $controllerBin"
+          echo "  worker:     $workerBin"
+          echo "  verifier:   $VERIFIER"
+          echo
+          cat report.txt
+          echo
           cat "$evalMarker"
         } > "$out"
       '';
@@ -1745,7 +2040,14 @@ in
       # writeShellApplication; pull it in via the unit's ExecStart so its
       # shellcheck gate runs too.
       hostKeyProvisioner = toString enabledCfg.systemd.services.agent-microvm-hostkeys.serviceConfig.ExecStart;
-      guestAgentJob = findPkg guest0Cfg.environment.systemPackages "agent-job";
+      # The batch trust split (job.nix): the trusted controller, the untrusted
+      # worker, the guest-side permission assertions and the HOST-side result
+      # verifier are all writeShellApplications, so building them runs their
+      # shellcheck gate.
+      guestJobController = findPkg guest0Cfg.environment.systemPackages "agent-job-controller";
+      guestJobWorker = findPkg guest0Cfg.environment.systemPackages "agent-job-worker";
+      guestJobAssertPaths = findPkg guest0Cfg.environment.systemPackages "agent-job-assert-paths";
+      hostResultVerifier = jobs.resultVerifier;
       # The workmux agent `command`s are `lib.getExe <launcher>` strings whose
       # string context references the launcher derivation, so building against
       # them pulls the writeShellApplication (and its shellcheck) in.
@@ -1760,7 +2062,10 @@ in
         launchers = [
           hostLauncher
           guestAgentRun
-          guestAgentJob
+          guestJobController
+          guestJobWorker
+          guestJobAssertPaths
+          hostResultVerifier
         ];
         # Pull in the workmux launcher drvs via their exe-path string context.
         workmuxCmds = workmuxLauncherCmds;
@@ -1773,7 +2078,10 @@ in
           echo "  host launcher : ${hostLauncher}"
           echo "  guest agent-run: ${guestAgentRun}"
           echo "  hostkey provisioner: $hostKeyProvisioner"
-          echo "  guest agent-job: ${guestAgentJob}"
+          echo "  guest job controller: ${guestJobController}"
+          echo "  guest job worker: ${guestJobWorker}"
+          echo "  guest path assertions: ${guestJobAssertPaths}"
+          echo "  host result verifier: ${hostResultVerifier}"
           for c in $workmuxCmds; do echo "  workmux launcher: $c"; done
         } > "$out"
       '';
