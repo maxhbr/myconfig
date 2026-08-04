@@ -29,8 +29,11 @@
 #
 #   2. AirCO2NTROL Mini USB sensor via `air_co2_exporter`
 #      (see host.co2.nix).
-#        - `air_temp{host,tag}`   — ambient temperature next to the
-#          CO2 sensor in °C.
+#        - `air_temp{host,tag[,room]}` — ambient temperature next to
+#          the CO2 sensor in °C. `room` is only present for hosts
+#          that set `myconfig.observability.client.co2Exporter.room`;
+#          `co2TempWithRoom` below synthesises it from `host` for the
+#          others so legends stay uniform.
 #
 #   3. Open-Meteo weather scraper
 #      (see host.weather.nix and client.weather-exporter.nix).
@@ -137,6 +140,16 @@ let
   # self-contained.
   co2Filt = ''host=~"$co2_host", tag=~"$co2_tag"'';
 
+  # `air_temp` with a guaranteed non-empty `room` label: sensors
+  # without a configured room fall back to their hostname. Same
+  # two-disjoint-halves idiom as in host.co2.nix (`label_replace`
+  # always overwrites its destination label).
+  co2TempWithRoom =
+    let
+      sel = op: ''air_temp{${co2Filt}, room${op}""}'';
+    in
+    ''(label_replace(${sel "="}, "room", "$1", "host", "(.*)") or ${sel "!="})'';
+
   # Weather exporter filter.
   weatherFilt = ''host=~"$weather_host", location=~"$weather_location"'';
 
@@ -148,7 +161,7 @@ let
     or
     label_replace(hass_climate_current_temperature_celsius{${haFilt}}, "source", "climate (HA)", "", "")
     or
-    label_replace(air_temp{${co2Filt}}, "source", "AirCO2NTROL", "", "")
+    label_replace(${co2TempWithRoom}, "source", "AirCO2NTROL", "", "")
     or
     label_replace(weather_temperature_celsius{${weatherFilt}}, "source", "outdoor (Open-Meteo)", "", "")
     or
@@ -375,8 +388,8 @@ let
         };
         targets = [
           {
-            expr = "air_temp{${co2Filt}}";
-            legendFormat = "{{host}} / {{tag}}";
+            expr = co2TempWithRoom;
+            legendFormat = "{{room}} ({{host}} / {{tag}})";
             refId = "A";
           }
         ];
@@ -512,7 +525,7 @@ let
             # `source` is the synthetic label injected above;
             # `friendly_name` / `tag` / `location` differentiate
             # individual series within each source.
-            legendFormat = "{{source}}: {{friendly_name}}{{tag}}{{location}}";
+            legendFormat = "{{source}}: {{friendly_name}}{{room}}{{location}}";
             refId = "A";
           }
         ];

@@ -60,7 +60,10 @@
       networking.preferWired.enable = true;
       observability = {
         client.enable = true;
-        client.co2Exporter.enable = true;
+        client.co2Exporter = {
+          enable = true;
+          room = "Schlafzimmer";
+        };
       };
     };
 
