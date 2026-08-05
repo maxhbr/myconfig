@@ -79,6 +79,10 @@ environment:
                                 home-files)
   AGENT_SANDBOX_HOME_SEED_PATHS Space-separated relative paths copied from that
                                 directory; empty disables seeding
+  AGENT_SANDBOX_HOME_SEED_REWRITE
+                                Space-separated OLD=NEW rules applied literally
+                                to the seeded files, to point host-only
+                                endpoints at sandbox-reachable ones
 
 Run `agent-session doctor` to verify runtime, image and sandbox startup.
 
@@ -299,6 +303,35 @@ seed_home() {
   # Store files are read-only; the agent must be able to rewrite its config.
   chmod -R u+rwX "$home"
   log "seeded /home/agent with $copied path(s) from $seed"
+  rewrite_seeded_home "$home"
+}
+
+# Host-side endpoints baked into the copied configuration do not exist inside
+# the sandbox: the host LiteLLM proxy is loopback-only, and the sandbox's own
+# 127.0.0.1 is the container's loopback. Rewrite such references to the
+# addresses that ARE reachable from a sandbox.
+#
+# AGENT_SANDBOX_HOME_SEED_REWRITE is a space-separated list of OLD=NEW rules;
+# replacement is literal (no regex), and binary files are skipped.
+rewrite_seeded_home() {
+  local home=$1
+  local -a rules=()
+  read -r -a rules <<<"${AGENT_SANDBOX_HOME_SEED_REWRITE-}"
+  (( ${#rules[@]} )) || return 0
+  local rule from to file content changed=0
+  for rule in "${rules[@]}"; do
+    [[ -n "$rule" ]] || continue
+    from=${rule%%=*}
+    to=${rule#*=}
+    [[ -n "$from" && "$from" != "$rule" ]] ||
+      die "invalid home-seed rewrite rule (expected OLD=NEW): $rule"
+    while IFS= read -r -d '' file; do
+      content=$(<"$file")
+      printf '%s\n' "${content//"$from"/"$to"}" > "$file"
+      changed=$((changed + 1))
+    done < <(grep -rIlZF -- "$from" "$home" 2>/dev/null || true)
+  done
+  (( changed == 0 )) || log "applied $changed host-endpoint rewrite(s) to the seeded configuration"
 }
 
 # Interactive recovery from a leftover session of the same name: ask whether

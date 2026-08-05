@@ -131,10 +131,25 @@ Two consequences of the isolation boundary:
   Anything added here is readable by a possibly hostile agent — never add
   credentials.
 
+The seeded configuration points at the host's **loopback** LiteLLM proxy
+(`http://127.0.0.1:4000/v1`), which does not exist inside a sandbox — there,
+`127.0.0.1` is the container's own loopback, so agents fail with a connection
+error. After copying, `start` therefore applies the literal `OLD=NEW` rules
+from `home.rewriteEndpoints` (default: the loopback and `localhost` forms of
+the LiteLLM URL → the bridge endpoint `http://192.168.84.1:4000`) to the
+seeded files; binary files are skipped. Set the option to `[ ]` to copy the
+configuration verbatim.
+
+If you would rather keep `localhost:4000` working literally inside the
+sandbox, pass `--network 'pasta:-T,4000'` instead: podman starts pasta with
+`-T none`, and `-T 4000` re-enables namespace→host forwarding for that one
+port. That is an alternative to the rewrite, not a requirement for it.
+
 Per invocation: `--no-home-seed` for an empty home, `--home-seed PATH` for a
 different source tree, `AGENT_SANDBOX_HOME_SEED` /
-`AGENT_SANDBOX_HOME_SEED_PATHS` to override source and allowlist. Turn it off
-for the host with `myconfig.ai.gvisor-agent-sandbox.home.enable = false`.
+`AGENT_SANDBOX_HOME_SEED_PATHS` / `AGENT_SANDBOX_HOME_SEED_REWRITE` to
+override source, allowlist and rewrite rules. Turn it off for the host with
+`myconfig.ai.gvisor-agent-sandbox.home.enable = false`.
 
 ### Model access (host LiteLLM)
 
