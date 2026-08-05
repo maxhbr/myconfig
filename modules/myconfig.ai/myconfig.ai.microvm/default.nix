@@ -151,6 +151,7 @@ in
   imports = [
     ./guest.nix
     ./guest-home.nix
+    ./guest-model-config.nix
     ./hostkeys.nix
     ./job.nix
     ./state.nix
