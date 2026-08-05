@@ -133,7 +133,8 @@ guest agent talks to — optionally enriches context windows from
 | pi | `~/.pi/agent/extensions/zz-microvm-models.ts` | pi auto-discovers `~/.pi/agent/extensions/*.ts`; the `zz-` prefix loads after `myconfig-providers.ts` and re-registering the same provider key wins. |
 | opencode | `/run/agent-model-config/opencode.json` (`OPENCODE_CONFIG`) | opencode loads `$OPENCODE_CONFIG` *in addition to*, and after, the global config, deep-merging it. |
 
-The build-time copies are read-only store symlinks and are never modified. No
+The staged copies themselves are never modified — the unit only writes NEXT to
+them, inside the disposable, agent-owned guest home. No
 secrets are involved: only model IDs are discovered and the API key stays the
 `not-needed` placeholder (§17).
 

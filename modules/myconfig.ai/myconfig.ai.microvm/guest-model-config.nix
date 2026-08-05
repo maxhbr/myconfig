@@ -30,8 +30,10 @@
 #             pi auto-discovers `~/.pi/agent/extensions/*.ts` and later
 #             `registerProvider(<same key>)` calls replace earlier ones, and the
 #             `zz-` prefix sorts after `myconfig-providers.ts`, so the runtime
-#             list wins. Written INTO the home (the build-time copy is a
-#             read-only store symlink and must not be touched).
+#             list wins. Written INTO the home, NEXT TO the copy — which is a
+#             plain, agent-owned file the config seeder wrote with
+#             `cp -R --dereference` (../config-seed.nix), not a store symlink,
+#             but is left untouched all the same.
 #   opencode  an OVERLAY config at `$XDG_RUNTIME_DIR`-like
 #             `/run/agent-model-config/opencode.json`, pointed at by
 #             `OPENCODE_CONFIG`. opencode loads that file IN ADDITION to (and
@@ -172,14 +174,13 @@ let
       log "wrote $OPENCODE_OUT"
 
       # --- 4. pi extension ------------------------------------------------
+      # The extension directory is inside the DISPOSABLE guest home, which
+      # ../config-seed.nix creates as agent-owned `u+rwX` and fills with a
+      # symlink-dereferencing copy — so it is always a real, writable directory
+      # (or absent, on a host that stages no pi config at all). There is no
+      # guest home-manager any more, hence no read-only store symlink to work
+      # around here.
       pi_dir=$(dirname -- "$PI_OUT")
-      if [[ -L "$pi_dir" ]]; then
-          # A home-manager-managed *directory* symlink into the read-only
-          # store: nothing can be added next to the copied extension. Skip
-          # rather than fail — opencode was already configured above.
-          log "$pi_dir is a store symlink; skipping the pi extension"
-          exit 0
-      fi
       mkdir -p -- "$pi_dir"
       providers=$(
           jq -n \
