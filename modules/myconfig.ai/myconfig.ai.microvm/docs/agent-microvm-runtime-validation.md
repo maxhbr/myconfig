@@ -53,6 +53,7 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section creds
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section lifecycle
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section malrepo
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section forgery
+sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section seed
 ```
 
 ### Host-side model-endpoint preflight
@@ -66,8 +67,8 @@ seconds fails every forgery subtest, and the `net` endpoint checks fail for the
 same root cause), so the suite does not run them. What happens instead depends
 on what the operator asked for:
 
-- under `--section all`, the five endpoint-INDEPENDENT sections
-  (`boot`/`l2`/`creds`/`lifecycle`/`malrepo`) still RUN, while `net` and
+- under `--section all`, the six endpoint-INDEPENDENT sections
+  (`boot`/`l2`/`creds`/`lifecycle`/`malrepo`/`seed`) still RUN, while `net` and
   `forgery` are **skipped** with a loud, counted reason and the run exits
   non-zero — so the security-critical `forgery` section cannot pass simply by
   not being run (Bug 2);
@@ -83,6 +84,7 @@ the host and re-run the section.
 | Section | Last executed on real KVM |
 | --- | --- |
 | `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED in the present form.** They were run once on f13 (root + `/dev/kvm`) as originally written. That run produced 20 `FAIL`s, of which all but two turned out to be defects of the HARNESS — and the same defects made roughly 25 of the reported `PASS`es vacuous. The harness has since been repaired (see “Harness validity invariants” below); the repaired suite has **not** been run yet. |
+| `seed` | **NOT EXECUTED on a `lite` host** — added with the review follow-up of lightweight plan phase 3. Its six cases were executed by hand against the generated stager with a fixture home (allowlisted file staged; benignly named symlink onto a credential refused; credential-shaped name refused; host-home escape refused; FIFO/setuid refused; per-file, total and file-count budgets enforced; depth truncation noted; destination cleaned) — the section is that procedure made repeatable. It starts no VM, so it needs only root and a host with `configSeed.enable`. |
 | `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties are the three eval/build checks `microvm-batch-result-integrity`, `microvm-batch-controller-smoke` and `microvm-batch-launcher-submit` (see below). |
 
 This table is deliberately pessimistic: update it only with a pasted log. The
@@ -364,6 +366,38 @@ built and then not used, so the in-guest assertions ran against a workspace that
 never contained any of it). A positive control asserts that
 `/workspace/escape-shadow` really is a symlink in the guest before the escape
 check concludes anything.
+
+### `seed` — runtime configuration staging (`profile = "lite"`)
+
+HOST-only (no VM is started, but root is required): it runs the generated
+`agent-microvm-stage-config` for a **stopped** slot, plants fixtures in the real
+host home under an allowlisted directory (`~/.agents/skills/rtv-config-seed`,
+plus a credential-shaped tree `~/.rtv-cfgseed-fixture` used only as a symlink
+*target*) and re-runs the stager. It asserts, against the staging **manifest**
+and the staged tree, that:
+
+- an allowlisted regular file **is** staged (positive control — without it every
+  negative below could pass because nothing was staged at all);
+- a benignly **named** symlink onto a credential (`benign-config.md` →
+  `…/auth.json`) and onto a credential-shaped **directory** (`notes` → `…/tokens`)
+  are refused *because the RESOLVED name is denied*, not merely absent;
+- a credential-shaped file name inside an allowlisted directory is refused;
+- a symlink escaping the host home (`→ /etc/passwd`) is refused;
+- a setuid file is refused and a FIFO never reaches the staged tree;
+- an over-budget file is refused;
+- no fixture credential content appears anywhere in the staged tree;
+- the staged tree is root-owned and has **no** group/other bits, the manifest is
+  `root 0400` and lies **outside** the guest-visible payload directory;
+- removing the fixtures and re-staging leaves nothing of them behind (the
+  destination is cleaned before every launch).
+
+Every fixture is removed again on return, including on failure. The whole
+section SKIPs when `agent-microvm-stage-config` is not on `PATH` (i.e. the host
+does not use runtime config staging) or when every slot is currently running.
+
+Why it is here and not in `nix flake check`: the stager writes a root-owned tree
+(`install -o root -g root`) and the Nix build sandbox is not root, so CI can only
+prove the policy is *baked in* — whether it is *enforced* is decided here.
 
 ## Manual extras (not automated)
 

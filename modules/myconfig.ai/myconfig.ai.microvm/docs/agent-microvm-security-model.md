@@ -152,7 +152,7 @@ the read-only config seed:
 | `/var/lib/agent-hostkey` | **ro** | that slot's SSH host key, `root:root 0400` | unreadable by the guest agent user; the guest cannot change its own identity |
 | `/run/agent-job` | rw | `input/` (`spec.json` `root:root 0400`, `prompt.md` `0444`), `controller/` (`root:root 0700`, the authoritative result), `worker/` (agent-owned), `worker-logs/` (`root:root 0755`, the log files systemd opens as root) | the agent can write junk into `worker/`; it cannot read or write `controller/`, cannot read the token-bearing spec, cannot alter its own spec/prompt, and cannot replace or redirect its own log files |
 | `/var/lib/agent-state` | rw | only when `--persist-agent-state`: the task's declared agent-state dirs | the agent can poison ITS OWN task's future state; other tasks are unreachable |
-| `/run/agent-config-seed` (`configSeed.enable`, i.e. `profile = "lite"`) | **ro** | the launch-time staged copy of the **allowlisted** host agent configuration, `root:root` `0555`/`0444`, plus a `manifest.json` of what was staged/skipped | the agent can read (and copy into its own home) exactly what the host allowlisted; it cannot modify the staged tree, and cannot reach anything else in the host home |
+| `/run/agent-config-seed` (`configSeed.enable`, i.e. `profile = "lite"`) | **ro** | the launch-time staged copy of the **allowlisted** host agent configuration, `root:root` `0500`/`0400`. The share source is the *payload* directory only: the staging `manifest.json` is its host-side sibling and is **not** in the share (it names the host home and every skipped, credential-shaped host file name) | the guest *root* seeder copies the tree into the disposable home; the unprivileged agent can neither read the staged original nor modify it, and cannot reach anything else in the host home (subject to the host-home write assumption below) |
 
 virtiofsd is in the TCB for all of them. Ownership is passed through unchanged,
 so host-side modes are what the guest sees.
@@ -160,12 +160,31 @@ so host-side modes are what the guest sees.
 The config seed does **not** widen the trust boundary towards the host home: it
 is a per-slot *copy*, not a mount, produced from a positive allowlist of exact
 files/directories (the selected agents' `configPaths` + `configSeed.extraPaths`)
-with a credential denylist on top, with symlink escapes rejected, `/nix/store`
-symlinks dereferenced, sockets/devices/FIFOs/setuid files excluded, and the
+with a credential denylist on top — applied to the path's own name *and to its
+resolved target*, so a benignly named symlink (`.codex/config.toml` →
+`.codex/auth.json`, `.agents/skills/x` → `~/.ssh`) cannot smuggle a credential —
+with symlink escapes rejected, `/nix/store` symlinks dereferenced (any home
+symlink into the world-readable store is followed, not just home-manager's
+rendered dotfiles), sockets/devices/FIFOs/setuid files excluded, and the
 destination cleaned before every launch. It moves the *risk of over-sharing*
 from "whatever home-manager rendered into the guest image" to "whatever the
 allowlist names", and makes that decision auditable per session through the
 manifest. See [agent-microvm.md](./agent-microvm.md#runtime-configuration-staging).
+
+**Residual risk, explicitly not covered:** every control above is *name-based*
+and assumes the host home is **trusted**. An attacker who already has write
+access inside it can
+
+- **hardlink** a credential into an allowlisted path (a hardlink has no target
+  name, so the denylist cannot see it), or
+- swap a resolved path for a symlink **between** the stager's `realpath` check
+  and its `install` (TOCTOU), which root then follows.
+
+Neither is defended against, because an attacker with that access can simply
+edit an allowlisted configuration file instead — a strictly easier attack with
+the same reach. The staging boundary protects the guest→host direction and
+constrains what the *host operator's own* configuration exposes; it is not a
+boundary against a compromised host home.
 
 ## What LiteLLM protects
 
@@ -183,7 +202,7 @@ manifest. See [agent-microvm.md](./agent-microvm.md#runtime-configuration-stagin
 | --- | --- |
 | exfiltrating host API keys | keys exist only in the host proxy; guest has placeholders |
 | stealing host SSH/GPG/cloud credentials | no host home, no agent sockets, no credential files in the guest; runtime config staging is allowlist-only with a credential denylist, so `~/.ssh`, `auth.json`, `*.pem`, `.netrc`, … are rejected at evaluation time and again at copy time |
-| tampering with the configuration the host staged | the staged tree is root-owned `0555`/`0444` on a **read-only** share, and the guest seeding oneshot refuses a tree that is not root-owned or is group/other-writable |
+| tampering with the configuration the host staged | the staged tree is root-owned `0500`/`0400` on a **read-only** share, and the guest seeding oneshot refuses a tree that is not root-owned or is group/other-writable |
 | reaching the host LAN / VPN / router | private-range DROP in every profile |
 | cloud-metadata SSRF (`169.254.169.254`) | dropped first, unconditionally, in INPUT and FORWARD |
 | arbitrary internet egress / data smuggling | denied in `offline`/`proxy-only`; `package-access` allows one host proxy port; only `internet` routes, and then with NAT + a DNS allowlist + drop logging |

@@ -212,10 +212,11 @@ launch:
 host allowlisted config
         │  agent-microvm-stage-config, as root, at launch time
         ▼
-<runtimeRoot>/config-seed/<slot>/home        root:root 0555/0444
-        │  per-slot, READ-ONLY virtiofs share (tag `configseed`)
+<runtimeRoot>/config-seed/<slot>/home        root:root 0500/0400
+        │  per-slot, READ-ONLY virtiofs share (tag `configseed`) whose source
+        │  is exactly that `home` payload directory
         ▼
-/run/agent-config-seed/home
+/run/agent-config-seed
         │  agent-config-seed.service (guest root oneshot), ordered BEFORE
         │  sshd, the batch job controller and the agent-state linker
         ▼
@@ -241,26 +242,47 @@ The rules, enforced at evaluation time *and* again by the generated stager:
 - a **credential denylist** (`auth.json`, `credentials*`, `*.pem`, `*.key`,
   `id_rsa`, `id_ed25519`, `.env`, `.netrc`, `.ssh`, `*token*`, `*secret*`,
   `*session*`, `cookies*`, …) is matched against every path component — at eval
-  against the allowlist itself, and at runtime against every file found inside
-  an allowlisted directory;
+  against the allowlist itself, at runtime against every file found inside an
+  allowlisted directory, **and against the RESOLVED target** of every entry,
+  file and subdirectory, so a benignly *named* symlink
+  (`.codex/config.toml` → `.codex/auth.json`, `.agents/skills/x` → `~/.ssh`)
+  cannot smuggle credential material past a name-only check;
 - a symlink that resolves **outside** the host home is refused; a symlink into
-  `/nix/store` (how home-manager renders dotfiles) is **dereferenced** into a
-  plain copy;
+  `/nix/store` is **dereferenced** into a plain copy. That is how home-manager
+  renders dotfiles, but the exception is not limited to them: any home symlink
+  into the store is followed (store content is world-readable anyway, and the
+  budgets below bound how much of it can be copied);
 - only regular files and directories are copied — never sockets, FIFOs, device
   nodes or setuid/setgid files;
-- the staged tree is **root-owned and not writable by the guest `agent` user**
-  (0555/0444, and the share is mounted read-only), so the untrusted guest
-  cannot modify what the host staged;
+- the staged tree is **root-owned and root-only** (0500/0400, and the share is
+  mounted read-only), so neither the untrusted guest `agent` user nor another
+  unprivileged *host* user can read or modify what the host staged — the guest
+  agent only ever gets the copy the guest root seeder hands it;
 - the per-slot destination is **cleaned before every launch**, and again on
   teardown, so nothing from a previous task can leak into the next one;
-- per-file (1 MiB) and per-launch (32 MiB) budgets bound what one launch copies.
+- per-file (1 MiB), per-launch (32 MiB) and file-count (1024) budgets bound what
+  one launch copies — the last one also bounds how long staging can delay a
+  launch; content deeper than 12 directory levels is not considered and the
+  truncation is recorded in the manifest;
+- the guest seeding oneshot runs **before** sshd, the batch job controller, the
+  agent-state linker and the boot-time model discovery (which writes into the
+  same home), so nothing races the copy.
+
+What is **not** defended against (it is out of scope, and an attacker who can
+do it can simply edit an allowlisted file instead): an attacker with write
+access *inside the trusted host home* can defeat the name-based denylist with a
+**hardlink** to a credential, or by swapping a resolved path between the check
+and the copy (TOCTOU).
 
 Model-provider credentials are **never** staged: they stay in the host LiteLLM
 proxy, and the guest only learns the endpoint (see
 [Boot-time model discovery](#boot-time-model-discovery)).
 
 Inspect what a session actually got — the stager writes a manifest recording the
-policy, everything staged and everything skipped **with a reason**:
+policy, everything staged and everything skipped **with a reason**. It is the
+**sibling** of the payload directory, `root:root 0400`, and deliberately
+*outside* the share: it names the host home and every skipped, credential-shaped
+host file name, which the untrusted guest has no business learning.
 
 ```bash
 sudo jq . /var/lib/agent-microvms/config-seed/agent-lite-0/manifest.json
@@ -271,6 +293,13 @@ agent-microvm ssh agent-lite-0 -- systemctl status agent-config-seed
 The guest copy is the agent's own: it is writable, lives on the disposable
 tmpfs home and disappears with the session, and changing it cannot affect any
 host file.
+
+The stager itself (`agent-microvm-stage-config`, root-only, takes a slot name
+and nothing else — the whole policy is baked in) is on the host `PATH` whenever
+staging is enabled, so an operator can stage and audit a slot by hand. The
+`seed` section of `runtime-validation.sh` is the repeatable, root-run proof that
+the policy is actually *enforced* (CI can only prove it is baked in, because the
+Nix sandbox is not root).
 
 ### Resource classes
 
