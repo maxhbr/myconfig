@@ -364,7 +364,7 @@ sbom() (
             fi
         fi
         if [[ -n $dtrack_token ]]; then
-            local dtrack_api="https://dtrack-api.nuc.vserver.wg0.maxhbr.local"
+            local dtrack_api="https://dtrack-api.nuc.wg0.maxhbr.local"
             local project_name="host.$target"
             local version
             version="$(jq -r '.metadata.component.name' "$cdx")"
