@@ -58,6 +58,28 @@ let
   # Thread the effective image through both helpers, so overriding the image
   # also changes the default image reference baked into `agent-session`.
   withImage = pkg: if image == null then pkg else pkg.override { agent-sandbox-image = image; };
+
+  # Bake the home-seed allowlist into `agent-session`. The seed SOURCE is
+  # resolved by the script at runtime (the activated home-manager generation
+  # of the calling user), so a dotfile change needs no rebuild here; only
+  # *which* paths are copied is a build-time decision. `--set-default` keeps
+  # `AGENT_SANDBOX_HOME_SEED_PATHS` overridable per invocation.
+  withHomeSeed =
+    pkg:
+    if !cfg.home.enable || cfg.home.seedPaths == [ ] then
+      pkg
+    else
+      pkgs.runCommand "agent-session-home-seeded"
+        {
+          nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+          meta = (pkg.meta or { }) // {
+            mainProgram = "agent-session";
+          };
+        }
+        ''
+          makeWrapper ${pkg}/bin/agent-session $out/bin/agent-session \
+            --set-default AGENT_SANDBOX_HOME_SEED_PATHS ${lib.escapeShellArg (lib.concatStringsSep " " cfg.home.seedPaths)}
+        '';
 in
 {
   imports = [ ./litellm-bridge.nix ];
@@ -102,6 +124,50 @@ in
       '';
     };
 
+    home = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Seed every new session's `/home/agent` from the home-manager
+          generation that is currently activated for the calling user, so an
+          agent finds its own configuration (skills, prompts, settings) inside
+          the sandbox.
+
+          The generation is resolved by `agent-session` at RUNTIME (via
+          `~/.local/state/home-manager/gcroots/current-home/home-files` and
+          the legacy profile locations), not baked into the image: the session
+          home is bind-mounted over `/home/agent`, so anything the image
+          carried there would be masked anyway.
+
+          Files are copied dereferenced, because the sandbox has no `/nix`.
+          Configuration whose *content* references `/nix/store` paths still
+          dangles inside the sandbox.
+        '';
+      };
+
+      seedPaths = mkOption {
+        type = types.listOf types.str;
+        default = [
+          ".agents"
+          ".agignore"
+          ".claude"
+          ".codex"
+          ".pi"
+          ".config/git"
+          ".config/opencode"
+        ];
+        description = ''
+          Paths, relative to the home-manager `home-files` tree, copied into a
+          new session home. Deliberately an ALLOWLIST: that tree also contains
+          `.ssh`, mail and browser configuration, none of which an untrusted
+          agent should see. Only add paths that carry no credentials —
+          everything copied here is readable inside the sandbox and can be
+          exfiltrated by a hostile agent over the network.
+        '';
+      };
+    };
+
     runtime = mkOption {
       type = types.str;
       default = "runsc";
@@ -121,6 +187,17 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = lib.all (p: p != "" && !lib.hasPrefix "/" p && !lib.hasInfix ".." p) cfg.home.seedPaths;
+        message = ''
+          myconfig.ai.gvisor-agent-sandbox.home.seedPaths must contain only
+          non-empty, relative paths without "..":
+          ${lib.concatStringsSep ", " cfg.home.seedPaths}
+        '';
+      }
+    ];
+
     nixpkgs.overlays = [ (import ./nix/overlay.nix) ];
 
     virtualisation.podman.enable = true;
@@ -134,7 +211,7 @@ in
     home-manager.sharedModules = [
       {
         home.packages = [
-          (withImage cfg.package)
+          (withHomeSeed (withImage cfg.package))
           pkgs.gvisor
         ]
         ++ lib.optional (image != null) (withImage pkgs.agent-sandbox-load-image);
