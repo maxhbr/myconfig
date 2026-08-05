@@ -66,6 +66,29 @@ let
   # rejected (assertion below) instead of resolved.
   slotOptsAmbiguous = classesExplicit && definedLegacySlotOpts != [ ];
 
+  # --- lightweight plan phase 1: the profile table ------------------------
+  # `profile` is the compatibility boundary between the existing full-featured
+  # tier (`full`, the default, byte-for-byte unchanged) and the lightweight one
+  # (`lite`). ./profiles.nix is the authoritative table; the resolved entry is
+  # handed to guest.nix through `_module.args.agentProfile` so there is ONE
+  # decision site.
+  profilesLib = import ./profiles.nix { inherit lib; };
+  agentProfile = profilesLib.forProfile cfg.profile // {
+    name = cfg.profile;
+  };
+
+  # A profile that carries its own class table only applies when the host said
+  # nothing about sizing at all — an explicit `resourceClasses` always wins
+  # ("explicit user options higher priority than profile defaults"). Combining
+  # it with the DEPRECATED slot options is rejected rather than resolved (see
+  # the assertion below), so exactly one of the three branches can apply.
+  profileResourceClasses = agentProfile.resourceClasses;
+  # Only relevant when the profile table would actually be USED: with an
+  # explicit `resourceClasses` the profile's table is ignored anyway and
+  # `slotOptsAmbiguous` is the assertion that fires.
+  profileSlotOptsAmbiguous =
+    profileResourceClasses != null && !classesExplicit && definedLegacySlotOpts != [ ];
+
   # Without an explicit `resourceClasses`, synthesize the single `normal` class
   # the legacy options describe — so the pool (and every slot's identity) is
   # exactly what those options meant, just named `agent-normal-<i>`.
@@ -76,7 +99,13 @@ let
       memoryMiB = cfg.defaultMemoryMiB;
     };
   };
-  effectiveResourceClasses = if classesExplicit then cfg.resourceClasses else legacyResourceClasses;
+  effectiveResourceClasses =
+    if classesExplicit then
+      cfg.resourceClasses
+    else if profileResourceClasses != null then
+      profileResourceClasses
+    else
+      legacyResourceClasses;
 
   # "Explicitly defined" means a definition with a HIGHER priority than the
   # option default. `isDefined` cannot be used: nixpkgs implements
@@ -163,6 +192,28 @@ in
 
   options.myconfig.ai.microvm = with lib; {
     enable = mkEnableOption "myconfig.ai.microvm (Cloud Hypervisor agent sandboxes)";
+
+    profile = mkOption {
+      type = types.enum profilesLib.names;
+      default = "full";
+      description = ''
+        Named overall SHAPE of the sandbox tier (see ./profiles.nix for the
+        authoritative table and
+        ./docs/myconfig-ai-microvm-lightweight-plan.md for the rationale).
+
+        - `full` the existing, full-featured behaviour and the default: sizing
+                 comes from `resourceClasses` (or the deprecated slot options)
+                 and the guest store disk keeps microvm.nix's own defaults.
+        - `lite` the LIGHTWEIGHT shape: ONE prebuilt slot with 2 vCPU and
+                 4 GiB RAM, and an explicitly pinned, optimized EROFS guest
+                 store (`microvm.optimize.enable`, `microvm.storeDiskType`).
+
+        The profile only supplies DEFAULTS: an explicit `resourceClasses`
+        always outranks the profile's class table. Combining `lite` with the
+        deprecated `slotCount` / `defaultVcpu` / `defaultMemoryMiB` spelling is
+        rejected as ambiguous instead of silently resolved.
+      '';
+    };
 
     resourceClasses = mkOption {
       type = types.attrsOf (
@@ -569,6 +620,9 @@ in
       # DNS policy), consumed by network.nix (firewall/NAT) and guest.nix
       # (proxy/DNS/forwarder).
       _module.args.agentNetwork = agentNetwork;
+      # The ONE resolved profile entry (./profiles.nix), consumed by guest.nix
+      # for the pinned store-disk / optimization settings.
+      _module.args.agentProfile = agentProfile;
       # The ONE effective resource-class table, so guest.nix / network.nix /
       # launcher.nix / hostkeys.nix / job.nix all build the SAME slot pool
       # (including the legacy-option migration above).
@@ -613,6 +667,17 @@ in
         {
           assertion = lib.length (lib.unique slotTaps) == lib.length slotTaps;
           message = "myconfig.ai.microvm: generated slot TAP names are not unique.";
+        }
+        {
+          assertion = !profileSlotOptsAmbiguous;
+          message = ''
+            myconfig.ai.microvm: ambiguous slot configuration — `profile =
+            "${cfg.profile}"` carries its own resource-class table AND the
+            deprecated ${lib.concatStringsSep " / " definedLegacySlotOpts} ${
+              if lib.length definedLegacySlotOpts == 1 then "is" else "are"
+            } also set. Keep only `resourceClasses` (or switch to
+            `profile = "full"`).
+          '';
         }
         {
           assertion = !slotOptsAmbiguous;
