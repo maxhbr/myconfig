@@ -41,6 +41,11 @@ let
     qwen-code = pkgs.qwen-code;
   };
 
+  # Host part of the sandbox-reachable LiteLLM endpoint (`litellm.endpoint`
+  # without the `/v1` suffix), used to rewrite the loopback URLs baked into the
+  # seeded host configuration.
+  litellmBase = "http://${cfg.litellm.address}:${toString cfg.litellm.port}";
+
   enabledAgentPackages = lib.attrValues (
     lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentPackagesByFlag
   );
@@ -78,7 +83,8 @@ let
         }
         ''
           makeWrapper ${pkg}/bin/agent-session $out/bin/agent-session \
-            --set-default AGENT_SANDBOX_HOME_SEED_PATHS ${lib.escapeShellArg (lib.concatStringsSep " " cfg.home.seedPaths)}
+            --set-default AGENT_SANDBOX_HOME_SEED_PATHS ${lib.escapeShellArg (lib.concatStringsSep " " cfg.home.seedPaths)} \
+            --set-default AGENT_SANDBOX_HOME_SEED_REWRITE ${lib.escapeShellArg (lib.concatStringsSep " " cfg.home.rewriteEndpoints)}
         '';
 in
 {
@@ -164,6 +170,31 @@ in
           agent should see. Only add paths that carry no credentials —
           everything copied here is readable inside the sandbox and can be
           exfiltrated by a hostile agent over the network.
+        '';
+      };
+
+      rewriteEndpoints = mkOption {
+        type = types.listOf types.str;
+        default = lib.optionals cfg.litellm.enable [
+          "http://127.0.0.1:${toString cfg.litellm.port}=${litellmBase}"
+          "http://localhost:${toString cfg.litellm.port}=${litellmBase}"
+        ];
+        defaultText = literalExpression ''
+          rules pointing the host's loopback LiteLLM URLs at
+          `myconfig.ai.gvisor-agent-sandbox.litellm.address`
+        '';
+        example = [ "http://127.0.0.1:8080=http://192.168.84.1:8080" ];
+        description = ''
+          `OLD=NEW` rules applied literally to the seeded files after copying.
+
+          The host's configuration points at the loopback-only LiteLLM proxy
+          (`http://127.0.0.1:4000/v1`), which does not exist inside a sandbox:
+          there, `127.0.0.1` is the container's own loopback, so every seeded
+          agent config would fail with a connection error. These rules rewrite
+          such URLs to the bridge endpoint from `./litellm-bridge.nix`, which a
+          sandbox can reach.
+
+          Set to `[ ]` to copy the configuration verbatim.
         '';
       };
     };
