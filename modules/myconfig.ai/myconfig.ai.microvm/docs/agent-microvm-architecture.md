@@ -81,6 +81,17 @@ Guest side: `/run/agent-session` and `/run/agent-session-ro`, with
 every agent keep the path they expect. The owners and modes are unchanged from
 the four-share layout; `session.nix` is the ONE place they are declared, and the
 launcher enforces them with `agent-microvm-verify-session` before each launch.
+What *does* change is the **mount** boundary — the agent-writable and the
+root-owned directories now share one filesystem — which is analysed in
+[the security model](./agent-microvm-security-model.md#the-one-genuine-security-delta-of-consolidation).
+
+The guest units that depend on one of the two mounts say so with
+`RequiresMountsFor=` on the **subpath** they actually use
+(`/run/agent-session/state`, `/run/agent-session-ro/hostkeys`,
+`…/config-seed`). That is deliberate and correct: systemd turns
+`RequiresMountsFor=` into a dependency on the mount unit of *every* path prefix,
+so naming the subdirectory pulls in the share's mount unit and documents which
+part of the share the unit needs.
 
 ## Workspace indirection
 

@@ -130,9 +130,7 @@ reports an exit code. So the result must be attributable, not merely readable.
 - **Disposable state.** Guest root and `/home/agent` are tmpfs, rebuilt every
   boot. An agent cannot leave persistent implants in its own sandbox.
 - **No host filesystem.** The guest sees only the declared virtiofs shares (four
-  under `full`, two under `lite`)
-  (five under `profile = "lite"`, see below) — no host home, no `/nix/store`,
-  no sockets.
+  under `full`, two under `lite`) — no host home, no `/nix/store`, no sockets.
 - **No build/fetch capability.** No Nix daemon socket, no store write access; the
   guest can only run what was baked in.
 - **Bounded resources.** Per-class `CPUQuota`/`MemoryMax`/`TasksMax` inside the
@@ -170,7 +168,40 @@ runs `agent-microvm-verify-session` before every launch, which re-derives every
 expected owner/mode from the ONE layout table (`session.nix`), refuses a
 symlinked or non-root-owned component, and refuses to launch at all if host-key
 material is found in the writable tree. Teardown removes the COMPLETE per-session
-tree (after proving both bind mounts are gone) and recreates the empty skeleton.
+tree (after proving both bind mounts are gone, and that no *other* mount survives
+anywhere underneath it — `rm -rf` would otherwise descend through a bind and
+delete the user's clone) and recreates the empty skeleton.
+
+### The one genuine security delta of consolidation
+
+Owners and modes are unchanged, but the *mount* boundary is not: under `lite`,
+`workspace/`, `worker/` and `state/` sit in the **same filesystem** as the
+root-owned `input/`, `controller/` and `worker-logs/`, whereas under `full` each
+was its own virtiofs mount. Operations that a kernel refuses **across**
+filesystems — `link(2)` and `rename(2)` — are therefore newly possible *in
+principle* between the agent-writable and the root-owned parts of the tree.
+
+The practical impact is nil, and for a structural reason: both operations need
+write permission on the **destination directory**, and the guest `agent` user has
+write access to no root-owned directory in either tree. It cannot rename
+anything *into* `input/`, `controller/` or `worker-logs/`, and it cannot create a
+hardlink there either. In the other direction — hardlinking a root-owned *file*
+into its own `worker/` — the only root-owned files the agent can even open are
+its own prompt (`0444`) and its own worker logs (`0644`); a hardlink to them
+grants exactly the read access it already has, and Linux'
+`fs.protected_hardlinks` (default `1`) additionally refuses hardlinks to files
+the user neither owns nor can write. The token-bearing `spec.json` is `0400`
+root-owned and unreadable to it, and `controller/` is `0700` root-only, so
+neither can be reached, linked or renamed.
+
+Consolidation is also a *strengthening* in one respect that is easy to miss: in
+the four-share layout the `workspace`, `state` and job directories were the
+mount points themselves, so the directory *entries* lived in a tree the agent
+could not touch — but each share was created and torn down separately. Now the
+whole tree hangs below a root-owned `0755` session root, so the agent can
+neither create, rename nor shadow **anything** at the top level of its own
+session (it cannot, for example, replace `worker-logs/` with a symlink or move
+`controller/` aside), and a single teardown provably removes all of it.
 
 | Guest path | Mode | Content | Risk |
 | --- | --- | --- | --- |
