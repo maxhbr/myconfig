@@ -24,6 +24,27 @@
 let
   cfg = config.myconfig.ai.gvisor-agent-sandbox;
 
+  # The coding-agent CLIs this repo can install on the host, mapped from their
+  # `myconfig.ai.<name>.enable` flag to the very package attribute the matching
+  # host wrapper uses (see modules/myconfig.ai/programs.<name>). Whatever the
+  # host has enabled is baked into the sandbox image by default, so the
+  # sandbox offers the same agents as the host without any per-host list.
+  # Deliberately NOT included: `aichat` / `llm`, which are host-side chat
+  # front-ends rather than agents driving a checkout, and would only inflate
+  # the image.
+  agentPackagesByFlag = {
+    pi-coding-agent = pkgs.nixos-unstable.pi-coding-agent;
+    opencode = pkgs.opencode;
+    claude-code = pkgs.claude-code;
+    codex = pkgs.codex;
+    github-copilot-cli = pkgs.github-copilot-cli;
+    qwen-code = pkgs.qwen-code;
+  };
+
+  enabledAgentPackages = lib.attrValues (
+    lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentPackagesByFlag
+  );
+
   # The image actually used: either the configured one, or the default with
   # `extraImagePackages` folded in.
   image =
@@ -62,13 +83,20 @@ in
 
     extraImagePackages = mkOption {
       type = types.listOf types.package;
-      default = [ ];
+      default = enabledAgentPackages;
+      defaultText = literalExpression ''
+        the packages of the coding agents enabled on this host, i.e. one entry
+        per set `myconfig.ai.<pi-coding-agent|opencode|claude-code|codex|github-copilot-cli|qwen-code>.enable`
+      '';
       example = literalExpression "[ pkgs.claude-code ]";
       description = ''
-        Extra packages baked into `image` (typically the coding-agent CLI to
-        run inside the sandbox). The upstream image deliberately ships no
-        agent CLI; host binaries must not be bind-mounted, since that would
-        drag the host `/nix` store into the sandbox.
+        Extra packages baked into `image` — by default the coding-agent CLIs
+        that are enabled on this host, so the sandbox ships the same agents as
+        the host. Set explicitly to slim the image down or to add tooling.
+
+        The upstream image deliberately ships no agent CLI; host binaries must
+        not be bind-mounted, since that would drag the host `/nix` store into
+        the sandbox.
       '';
     };
 

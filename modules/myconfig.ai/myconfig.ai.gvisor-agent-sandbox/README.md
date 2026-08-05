@@ -58,12 +58,24 @@ Disabled by default. Enable per host:
 
 ```nix
 myconfig.ai.gvisor-agent-sandbox.enable = true;
-# optional: bake an agent CLI into the sandbox image
+```
+
+The sandbox image is *not* generic-empty: `extraImagePackages` defaults to the
+coding-agent CLIs the host itself has enabled, derived from the
+`myconfig.ai.<agent>.enable` flags (`pi-coding-agent`, `opencode`,
+`claude-code`, `codex`, `github-copilot-cli`, `qwen-code`), each mapped to the
+same package attribute the corresponding host wrapper uses. So enabling an
+agent on the host automatically makes it available inside the sandbox; the
+host-side chat front-ends `aichat` / `llm` are deliberately excluded. Override
+to slim down or extend:
+
+```nix
 myconfig.ai.gvisor-agent-sandbox.extraImagePackages = [ pkgs.claude-code ];
 ```
 
 When enabled the module
 
+- bakes the enabled agent CLIs into the image (see above),
 - adds `nix/overlay.nix` to `nixpkgs.overlays`, providing `agent-session`,
   `agent-sandbox-image` and `agent-sandbox-load-image`,
 - enables rootless Podman and registers `${pkgs.gvisor}/bin/runsc` as the
