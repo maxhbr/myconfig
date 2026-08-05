@@ -193,6 +193,7 @@ in
     ./guest-model-config.nix
     ./hostkeys.nix
     ./job.nix
+    ./session.nix
     ./state.nix
     ./network.nix
     ./launcher.nix

@@ -15,7 +15,8 @@ microVM** (via the `microvm.nix` flake input) with:
 - a **disposable** root and `/home/agent`; **only `/workspace` persists** (plus,
   opt-in and task-scoped, an agent's declared state directories),
 - a writable **virtiofs `/workspace`** that is a standalone git clone of your
-  repository,
+  repository (under `profile = "lite"` it is the `workspace/` subdirectory of the
+  ONE writable per-session share, bind-mounted to `/workspace` in the guest),
 - a dedicated **private bridge** (`agentbr0`, `192.168.83.0/24`) with **per-TAP
   layer-2 isolation**, and
 - model-API access restricted to the **host LiteLLM proxy** through a
@@ -102,6 +103,7 @@ myconfig.ai.microvm = {
 | `configSeed.enable` | the `profile`'s own value (`false` for `full`, `true` for `lite`) | **Runtime configuration staging**: provision the guest home at *launch* time from an allowlisted, root-owned staged copy of the host configuration instead of running home-manager inside the guest. See [Runtime configuration staging](#runtime-configuration-staging). |
 | `configSeed.hostHome` | the primary user's home (`config.users.users.<myconfig.user>.home`) | The host home the allowlisted paths are resolved against. Never mounted — only the allowlisted paths are read. |
 | `configSeed.extraPaths` | `.config/git/attributes`, `.config/git/config` | Agent-independent additions to the staging allowlist. Same validation as the registry's per-agent `configPaths`. |
+| `session.enable` | the `profile`'s own value (`false` for `full`, `true` for `lite`) | **Consolidated session share**: ONE writable per-session virtiofs share (`workspace/`, `input/`, `controller/`, `worker/`, `worker-logs/`, `state/`) plus ONE read-only share (SSH host identity + staged configuration) instead of the four separate writable shares. Same ownership/mode trust boundaries, verified before every launch. See [Consolidated session share](#consolidated-session-share). |
 | `guestModelConfig.enable` | `true` | Guest boot-time model discovery: query the loopback LiteLLM endpoint and render the **live** model list into pi + opencode config. See [Boot-time model discovery](#boot-time-model-discovery). |
 | `guestModelConfig.providerKey` / `providerName` | `litellm` / `LiteLLM (microVM)` | Provider key/name written into the generated configs. The key matches the host-side generators, so the runtime list *replaces* the build-time one. |
 | `guestModelConfig.defaultContextWindow` / `maxTokens` | `131072` / `4096` | Fallbacks for models whose real values the endpoint does not expose. |
@@ -171,6 +173,11 @@ The authoritative table lives in `../profiles.nix`.
 | `full` **(default)** | home-manager **inside the guest** (`guestDotfiles`), baked into the guest closure at build time |
 | `lite` | **runtime configuration staging** (`configSeed`): an allowlisted, root-owned copy staged per launch; no home-manager in the guest at all |
 
+| Profile | virtiofs shares per slot |
+| --- | --- |
+| `full` **(default)** | four: writable `/workspace`, writable `/run/agent-job`, writable `/var/lib/agent-state`, read-only `/var/lib/agent-hostkey` |
+| `lite` | two (`session.enable`): ONE writable per-session share at `/run/agent-session` and ONE read-only share at `/run/agent-session-ro` — see [Consolidated session share](#consolidated-session-share) |
+
 Every package in the minimal set has a documented consumer (see the comment
 above `guestMinimalPackages` in `../guest.nix`). Agent-specific runtimes belong
 in the registry's per-agent `extraPackages`, so they are added only while that
@@ -215,8 +222,12 @@ host allowlisted config
 <runtimeRoot>/config-seed/<slot>/home        root:root 0500/0400
         │  per-slot, READ-ONLY virtiofs share (tag `configseed`) whose source
         │  is exactly that `home` payload directory
+        │  (with `session.enable`, i.e. `profile = "lite"`, the payload is
+        │  `<runtimeRoot>/sessions-ro/<slot>/config-seed` and reaches the guest
+        │  through the ONE read-only session share — same modes, same
+        │  read-only mount, and the manifest still outside every share)
         ▼
-/run/agent-config-seed
+/run/agent-config-seed  (lite: /run/agent-session-ro/config-seed)
         │  agent-config-seed.service (guest root oneshot), ordered BEFORE
         │  sshd, the batch job controller and the agent-state linker
         ▼
@@ -300,6 +311,70 @@ staging is enabled, so an operator can stage and audit a slot by hand. The
 `seed` section of `runtime-validation.sh` is the repeatable, root-run proof that
 the policy is actually *enforced* (CI can only prove it is baked in, because the
 Nix sandbox is not root).
+
+### Consolidated session share
+
+Under `profile = "lite"` (or with `session.enable = true`) a slot has **one
+writable** virtiofs share and **at most one read-only** one instead of the four
+or five separate shares of the `full` profile — fewer virtiofsd processes, one
+guest mount set, and one host tree to create, verify and remove:
+
+```text
+<runtimeRoot>/sessions/<slot>/          root:root 0755   ONE WRITABLE SHARE  -> /run/agent-session
+  workspace/                            agent            bind target -> the task's clone
+  input/                                root:root 0755   spec.json 0400, prompt.md 0444
+  controller/                           root:root 0700   the AUTHORITATIVE result
+  worker/                               agent     0755   the untrusted worker's own area
+  worker-logs/                          root:root 0755   worker stdout/stderr (root-opened)
+  state/                                agent     0755   bind target -> task-scoped state
+
+<runtimeRoot>/sessions-ro/<slot>/       root:root 0700   ONE READ-ONLY SHARE -> /run/agent-session-ro
+  hostkeys/                             root:root 0700   the slot's ed25519 host key (0400)
+  config-seed/                          root:root 0500   the staged host agent configuration
+```
+
+Inside the guest, `/run/agent-session/workspace` is **bind-mounted to
+`/workspace`**, so `agent-run`'s mount/writability checks and every agent's
+expectation of `/workspace` are unchanged.
+
+The trust boundaries are **identical** to the four-share layout, because they
+were never expressed by the share split but by **ownership and modes**, which
+virtiofsd passes through unchanged: the session root, `input/`, `controller/`
+(root-**only** `0700`) and `worker-logs/` are root-owned, and only `workspace/`,
+`worker/` and `state/` belong to the unprivileged guest `agent` user.
+
+`../session.nix` is the single source of truth for that table; `../job.nix`,
+`../state.nix`, `../config-seed.nix`, `../hostkeys.nix`, the host tmpfiles rules,
+the generated pre-launch verifier and the launcher all derive from it.
+
+Two things are deliberately **not** in the writable tree (the plan's own
+invariants 7 and 8 outrank its layout sketch, which suggested folding the config
+seed into the writable share):
+
+- the slot's **SSH private host key** — the plan states this explicitly, and
+- the **staged host configuration** — host-decided input the guest must not be
+  able to modify. It stays in a share virtiofsd mounts `--readonly`, root-owned
+  `0500`/`0400`, with its `manifest.json` outside every share (it moves to the
+  host-only `<runtimeRoot>/config-seed/<slot>/`).
+
+Per launch the launcher
+
+1. **prepares** the tree (`install -d` with the table's exact owner/mode, which
+   also *resets* a directory the guest agent chmodded in an earlier session),
+2. stages the configuration and bind-mounts the clone and (optionally) the state,
+3. **verifies** it with `agent-microvm-verify-session` — every directory's owner
+   and mode, no symlinked component, every parent root-owned and not
+   group/other-writable, and no host-key material anywhere in the writable tree
+   — and **refuses to start the VM** on any mismatch, and
+4. on teardown **removes the complete tree** — but only after proving both bind
+   mounts are gone (deleting through a live bind would destroy the clone or the
+   task's persisted state), then recreates the empty skeleton virtiofsd needs.
+
+Inspect a slot's tree by hand with the same policy the launcher uses:
+
+```bash
+sudo agent-microvm-verify-session agent-lite-0
+```
 
 ### Resource classes
 
@@ -488,7 +563,11 @@ of the authoritative result. See the
                               worker-logs/{stdout,stderr}.log  root:root 0644  UNTRUSTED content
 ```
 
-Surfaced into the guest at `/run/agent-job`. The share is read-**write**, but
+Surfaced into the guest at `/run/agent-job` — or, under `profile = "lite"`, as
+`<runtimeRoot>/sessions/<slot>/` at `/run/agent-session` (the same
+subdirectories, owners and modes; see
+[Consolidated session share](#consolidated-session-share)). The share is
+read-**write**, but
 *who* may write *what* is decided by ownership and modes, which virtiofsd passes
 through unchanged:
 

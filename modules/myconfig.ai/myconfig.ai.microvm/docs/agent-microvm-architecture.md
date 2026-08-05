@@ -59,6 +59,29 @@ Every per-slot host-side directory is keyed by the slot **name**:
 /var/lib/agent-microvms/state/slots/<slot>      bind target -> task-scoped agent state
 ```
 
+Under `profile = "lite"` (lightweight plan phase 4) the same data lives in ONE
+writable per-session tree plus ONE read-only tree, so a slot has two virtiofsd
+instances instead of four or five:
+
+```text
+/var/lib/agent-microvms/sessions/<slot>/            root:root 0755  ONE writable share
+  workspace/                                        agent           bind target -> the clone
+  input/                                            root:root 0755  spec 0400, prompt 0444
+  controller/                                       root:root 0700  the AUTHORITATIVE result
+  worker/                                           agent     0755  untrusted artifacts
+  worker-logs/                                      root:root 0755  root-opened worker logs
+  state/                                            agent     0755  bind target -> agent state
+/var/lib/agent-microvms/sessions-ro/<slot>/         root:root 0700  ONE read-only share
+  hostkeys/                                         root:root 0700  the slot's SSH identity
+  config-seed/                                      root:root 0500  staged host configuration
+```
+
+Guest side: `/run/agent-session` and `/run/agent-session-ro`, with
+`/run/agent-session/workspace` bind-mounted to `/workspace` so `agent-run` and
+every agent keep the path they expect. The owners and modes are unchanged from
+the four-share layout; `session.nix` is the ONE place they are declared, and the
+launcher enforces them with `agent-microvm-verify-session` before each launch.
+
 ## Workspace indirection
 
 The guest's `/workspace` share source is a **fixed** per-slot path, because the
@@ -75,6 +98,11 @@ So the guest only ever sees one repository — a **standalone clone** (no
 hardlinks, no alternates, no shared git metadata with your checkout) — and the
 clone survives everything except an explicit `workspace-remove`. The same
 indirection is reused for the job directory and for task-scoped agent state.
+
+Under `profile = "lite"` the bind targets move INTO the per-session tree
+(`<runtimeRoot>/sessions/<slot>/workspace` and `.../state`), and the guest
+reaches the clone through the `/workspace` bind mount of the one writable
+share — the indirection itself is unchanged.
 
 virtiofsd passes ownership through unchanged, so the launcher `chown -R
 guestAgentUid:guestAgentGid`s the clone (default `1000:1000`). On a workstation

@@ -74,6 +74,12 @@
   # per-slot staging directory and the BAKED, allowlist-enforcing stager this
   # launcher calls once per launch.
   agentConfigSeed,
+  # The ONE definition of the CONSOLIDATED per-session tree (session.nix,
+  # lightweight plan phase 4): the layout table this launcher prepares, verifies
+  # (through the generated `agent-microvm-verify-session`) and removes as a
+  # WHOLE, plus the two paths it bind-mounts (the workspace clone and the
+  # task-scoped agent state).
+  agentSession,
   ...
 }:
 let
@@ -123,6 +129,11 @@ let
     readonly CONFIG_SEED_STAGER=${lib.getExe agentConfigSeed.stager}
     readonly CONFIG_SEED_ROOT=${lib.escapeShellArg agentConfigSeed.root}
     readonly CONFIG_SEED_PAYLOAD_SUBDIR=${lib.escapeShellArg agentConfigSeed.homeSubdir}
+    # The manifest lives OUTSIDE every guest share, which under the
+    # consolidated session layout (phase 4) means outside the read-only tree
+    # too — hence its own root, taken from config-seed.nix rather than derived
+    # from the payload path here.
+    readonly CONFIG_SEED_MANIFEST_ROOT=${lib.escapeShellArg agentConfigSeed.manifestRoot}
     readonly CONFIG_SEED_MANIFEST_NAME=${lib.escapeShellArg agentConfigSeed.manifestName}
     config_seed_dir() { printf '%s' "$CONFIG_SEED_ROOT/$1"; }
 
@@ -132,11 +143,13 @@ let
     clear_config_seed() {
         local dir
         dir="$(config_seed_dir "$1")"
-        [[ -d "$dir" ]] || return 0
-        # Both names come from config-seed.nix, which OWNS them: hardcoding
-        # either here would leave a stale file behind the day it is renamed.
-        rm -rf -- "''${dir:?}/$CONFIG_SEED_PAYLOAD_SUBDIR" \
-            "''${dir:?}/$CONFIG_SEED_MANIFEST_NAME"
+        # Every name and root comes from config-seed.nix, which OWNS them:
+        # hardcoding any of them here would leave a stale file behind the day it
+        # is renamed or moved.
+        if [[ -d "$dir" ]]; then
+            rm -rf -- "''${dir:?}/$CONFIG_SEED_PAYLOAD_SUBDIR"
+        fi
+        rm -f -- "$CONFIG_SEED_MANIFEST_ROOT/$1/$CONFIG_SEED_MANIFEST_NAME"
     }
 
     # Stage the CURRENT host configuration for this launch. Fails the launch
@@ -152,6 +165,131 @@ let
 
   # One call site each in `run` and `submit`, before the VM is started.
   configSeedStage = mkSeedFragment "          " ''stage_config_seed "$slot"'';
+
+  # --- consolidated per-session tree (lightweight plan phase 4) -----------
+  # Same conditional-rendering contract as the phase-3 staging fragments above:
+  # nothing of this reaches a `full`-profile launcher, which therefore stays
+  # BYTE-FOR-BYTE the script it was (verified with the AGENTS.md evaluated-slice
+  # diff, which covers `environment.systemPackages`).
+  sessionEnabled = agentSession.enable;
+  mkSessionFragment =
+    indent: text: lib.optionalString sessionEnabled (indentFragment indent (text + "\n"));
+
+  # `install -d` line for ONE layout entry, generated from the SINGLE source of
+  # truth (session.nix's table). `install -d` also RESETS the mode and ownership
+  # of an existing directory, which is exactly what is needed: the guest agent
+  # owns `worker/` and could have chmodded it during a previous session.
+  # The two BIND-MOUNT points are only created when missing — they may still
+  # carry a live bind at this point, and chmodding through it would change the
+  # workspace clone or the task's persisted state.
+  sessionInstallLine =
+    tree: e:
+    let
+      path = if e.rel == "" then "\"$dir\"" else "\"$dir/${e.rel}\"";
+      install = "install -d -m ${e.mode} -o ${toString e.uid} -g ${toString e.gid} -- ${path}";
+      guard = if e.strictMode then "" else "[[ -d ${path} ]] || ";
+    in
+    "${guard}${install} \\\n    || die \"could not prepare ${tree} ${
+      if e.rel == "" then "root" else e.rel
+    } of slot $slot\"";
+
+  # The per-slot paths of the two trees, spliced into the configuration section
+  # next to the other roots.
+  sessionConfig = mkSessionFragment "      " ''
+    # ---- consolidated session tree (lightweight plan phase 4) ----------
+    # ONE writable virtiofs share per slot (the session tree) plus ONE
+    # read-only share (the slot's SSH host identity + the staged host
+    # configuration). The trust boundaries are the SAME as with the four
+    # historical shares, and they are still expressed by OWNERSHIP and MODES,
+    # which virtiofsd passes through unchanged — see session.nix, which owns
+    # the layout table every generated line below comes from.
+    readonly SESSION_ROOT=${lib.escapeShellArg agentSession.root}
+    readonly SESSION_RO_ROOT=${lib.escapeShellArg agentSession.roRoot}
+    readonly SESSION_WORKSPACE_SUBDIR=${lib.escapeShellArg agentSession.subdirs.workspace}
+    readonly SESSION_STATE_SUBDIR=${lib.escapeShellArg agentSession.subdirs.state}
+    # The generated PRE-LAUNCH verifier: it re-derives every expected owner and
+    # mode from the same table and refuses the launch on any mismatch, symlink
+    # or replaceable parent directory. The launcher cannot weaken it (it takes
+    # no policy argument, only a slot name).
+    readonly SESSION_VERIFIER=${lib.getExe agentSession.verifier}'';
+
+  # WHERE a slot's two bind-mount targets live. With the consolidated layout
+  # both are INSIDE the session tree; there is exactly ONE definition of each in
+  # the generated script (not an override of a four-share one), so `status`,
+  # `list`, `recover`, `doctor`, `destroy` and every teardown path agree.
+  mountPointDef =
+    if sessionEnabled then
+      ''mount_point()  { printf '%s' "$SESSION_ROOT/$1/$SESSION_WORKSPACE_SUBDIR"; }''
+    else
+      ''mount_point()  { printf '%s' "$STATE_ROOT/$1/workspace"; }'';
+  stateSlotDirDef =
+    if sessionEnabled then
+      ''state_slot_dir() { printf '%s' "$SESSION_ROOT/$1/$SESSION_STATE_SUBDIR"; }''
+    else
+      ''state_slot_dir() { printf '%s' "$STATE_SLOTS_ROOT/$1"; }'';
+
+  sessionHelpers = mkSessionFragment "      " ''
+    # ---- consolidated session tree: preparation / verification / removal --
+    session_dir()    { printf '%s' "$SESSION_ROOT/$1"; }
+    session_ro_dir() { printf '%s' "$SESSION_RO_ROOT/$1"; }
+
+    # Create (or RESET) the per-session tree with the exact ownership and modes
+    # the trust split needs, before anything is staged into it.
+    prepare_session() {
+        local slot="$1" dir
+        dir="$(session_dir "$slot")"
+        ${lib.concatMapStringsSep "\n    " (sessionInstallLine "the session") agentSession.layout}
+        dir="$(session_ro_dir "$slot")"
+        ${lib.concatMapStringsSep "\n    " (sessionInstallLine "the read-only session")
+          agentSession.roLayout
+        }
+    }
+
+    # Fail CLOSED before the VM (and therefore virtiofsd) starts: a tree whose
+    # ownership/modes are not exactly what the trust split needs must never be
+    # handed to a guest.
+    verify_session() {
+        "$SESSION_VERIFIER" "$1" \
+            || die "the session tree of slot $1 failed its pre-launch ownership/mode verification"
+    }
+
+    # Remove the COMPLETE per-session tree and recreate the empty skeleton.
+    # Both binds must be VERIFIABLY gone first: deleting through a live bind
+    # would destroy the workspace clone or the task's persisted state (which
+    # both live outside the tree and must survive it). The skeleton is
+    # recreated because virtiofsd refuses to start without its share source.
+    clear_session() {
+        local slot="$1" dir
+        dir="$(session_dir "$slot")"
+        unmount_verified "$(mount_point "$slot")" "$slot" || {
+            log "ERROR: refusing to remove the session tree of $slot while its workspace bind mount survives"
+            return 1
+        }
+        unmount_verified "$(state_slot_dir "$slot")" "$slot" || {
+            log "ERROR: refusing to remove the session tree of $slot while its agent-state bind mount survives"
+            return 1
+        }
+        if [[ -d "$dir" ]]; then
+            rm -rf -- "''${dir:?}" || {
+                log "ERROR: could not remove the session tree $dir"
+                return 1
+            }
+        fi
+        if [[ -e "$dir" || -L "$dir" ]]; then
+            log "ERROR: the session tree $dir still exists after removing it"
+            return 1
+        fi
+        prepare_session "$slot"
+    }
+  '';
+
+  # One call site each in `run` and `submit`, BEFORE the workspace bind mount
+  # and before anything is staged into the tree.
+  sessionPrepare = mkSessionFragment "          " ''prepare_session "$slot"'';
+  # ... and one immediately before the VM is started.
+  sessionVerify = mkSessionFragment "          " ''verify_session "$slot"'';
+  # ... and one in the teardown, so no per-session data outlives the session.
+  sessionClear = mkSessionFragment "          " ''clear_session "$slot" || leaked=1'';
 
   # ... and one in the teardown, so nothing staged survives the session.
   configSeedClear = mkSeedFragment "          " ''clear_config_seed "$slot" || true'';
@@ -351,7 +489,7 @@ let
           )
         )
       })
-      # ---- structured lifecycle logs (ticket 6 B) ------------------------
+      ${sessionConfig}# ---- structured lifecycle logs (ticket 6 B) ------------------------
       readonly LOGS_DIR="$RUNTIME_ROOT/logs"
       readonly LOG_MAX_BYTES=${toString cfg.taskLogMaxBytes}
       readonly RUN_DIR="/run/agent-microvms"
@@ -476,7 +614,7 @@ let
       }
 
       session_file() { printf '%s' "$SLOTS_DIR/$1/session.json"; }
-      mount_point()  { printf '%s' "$STATE_ROOT/$1/workspace"; }
+      ${mountPointDef}
       job_dir()      { printf '%s' "$JOBS_ROOT/$1"; }
       job_input_dir()      { printf '%s' "$JOBS_ROOT/$1/$JOB_INPUT_SUBDIR"; }
       job_controller_dir() { printf '%s' "$JOBS_ROOT/$1/$JOB_CONTROLLER_SUBDIR"; }
@@ -1216,7 +1354,7 @@ let
       }
 
       # ---- task-scoped agent state (ticket 5 B) ---------------------------
-      state_slot_dir() { printf '%s' "$STATE_SLOTS_ROOT/$1"; }
+      ${stateSlotDirDef}
       state_task_dir() { printf '%s' "$STATE_TASKS_ROOT/$1/$2"; }
 
       agent_state_dirs() {
@@ -1284,7 +1422,7 @@ let
           find "$mp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
       }
 
-      ${configSeedHelpers}# ---- §21 slot cleanup / interrupt handling -------------------------
+      ${sessionHelpers}${configSeedHelpers}# ---- §21 slot cleanup / interrupt handling -------------------------
       # Tear a slot down WITHOUT deleting the workspace clone (§26/§35): stop
       # the VM, unmount the bind, remove the slot transient state. Locks are
       # released implicitly when this process exits and closes their fds.
@@ -1305,7 +1443,7 @@ let
           # Unmount the per-task agent state (the task's DIRECTORY is kept, like
           # the workspace clone) and leave the slot's share source empty.
           clear_agent_state_slot "$slot" || leaked=1
-          ${configSeedClear}rm -rf -- "''${SLOTS_DIR:?}/$slot"
+          ${configSeedClear}${sessionClear}rm -rf -- "''${SLOTS_DIR:?}/$slot"
           if (( leaked )); then
               log "WARNING: slot $slot was released with a LEAKED mount; re-run '$PROG recover' once the holder is gone"
               # The teardown CONTINUED (see above) but it did not succeed, and
@@ -1687,7 +1825,7 @@ let
           clone="$WORKSPACE_ROOT/$task"
           create_clone "$top" "$task" "$branch"
           emit_event workspace-created
-          setup_bind_mount "$slot" "$clone"
+          ${sessionPrepare}setup_bind_mount "$slot" "$clone"
           ${configSeedStage}# An interactive slot must not accidentally pick up a stale batch job.
           clear_job "$slot"
           # Agent state is DISPOSABLE unless explicitly requested (ticket 5 B).
@@ -1700,7 +1838,7 @@ let
               clear_agent_state_slot "$slot" \
                   || die "could not clear the agent-state share of slot $slot"
           fi
-          emit_event vm-start-requested
+          ${sessionVerify}emit_event vm-start-requested
           start_vm "$slot"
 
           # Persist the full session record for status/list (§34). No secrets.
@@ -1835,7 +1973,7 @@ let
           clone="$WORKSPACE_ROOT/$task"
           create_clone "$top" "$task" "$branch"
           emit_event workspace-created
-          setup_bind_mount "$slot" "$clone"
+          ${sessionPrepare}setup_bind_mount "$slot" "$clone"
           ${configSeedStage}prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s" \
               "$token" "$rclass" "$persist"
           if (( persist )); then
@@ -1847,7 +1985,7 @@ let
           fi
           write_session_marker "$slot" "$token" "batch" "$task" "$top" \
               "$clone" "$agent" "$branch" "$timeout_s" "$persist"
-          emit_event vm-start-requested
+          ${sessionVerify}emit_event vm-start-requested
           start_vm "$slot"
 
           # --- wait for the AUTHORITATIVE controller result ------------------

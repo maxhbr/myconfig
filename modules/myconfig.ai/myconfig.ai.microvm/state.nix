@@ -47,10 +47,17 @@
   pkgs,
   agentRegistry,
   agentResourceClasses,
+  # The ONE definition of the CONSOLIDATED per-session tree (./session.nix,
+  # lightweight plan phase 4). With it, the per-slot bind TARGET is the session
+  # tree's `state/` subdirectory (reached through the one writable share)
+  # instead of a share of its own; the per-TASK directories below
+  # `<runtimeRoot>/state/tasks/` are unchanged in both layouts.
+  agentSession,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
+  session = agentSession;
 
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
@@ -67,12 +74,14 @@ let
     # Per-task, per-agent state (kept across runs of that task).
     tasksRoot = "${root}/tasks";
     taskDir = task: agent: "${tasksRoot}/${task}/${agent}";
-    # Per-slot bind target = the virtiofs share source.
+    # Per-slot bind target = the virtiofs share source (four-share layout) or
+    # the `state/` subdirectory of the ONE writable session share (phase 4).
     slotsRoot = "${root}/slots";
-    slotDir = slotName: "${slotsRoot}/${slotName}";
+    slotDir =
+      slotName: if session.enable then session.hostStateDir slotName else "${slotsRoot}/${slotName}";
 
     guestTag = "agentstate";
-    guestMountPoint = "/var/lib/agent-state";
+    guestMountPoint = if session.enable then session.guestStateDir else "/var/lib/agent-state";
     guestHome = "/home/agent";
     inherit declaredDirs;
   };
@@ -189,15 +198,21 @@ in
       # virtiofsd needs its share source to exist before the VM starts, for
       # EVERY slot — including slots that never persist anything (they then see
       # an empty directory). Owned by the guest agent so it can write there.
+      # The per-TASK tree is host-only and exists in both layouts. The per-SLOT
+      # bind TARGET, on the other hand, is part of the session tree under the
+      # consolidated layout, where ./session.nix creates it from the ONE layout
+      # table — emitting it here as well would duplicate the same rule.
       systemd.tmpfiles.rules = [
         "d ${paths.root} 0755 root root - -"
         "d ${paths.tasksRoot} 0755 root root - -"
-        "d ${paths.slotsRoot} 0755 root root - -"
       ]
-      ++ map (
-        slot:
-        "d ${paths.slotDir slot.name} 0755 ${toString cfg.guestAgentUid} ${toString cfg.guestAgentGid} - -"
-      ) slots;
+      ++ lib.optional (!session.enable) "d ${paths.slotsRoot} 0755 root root - -"
+      ++ lib.optionals (!session.enable) (
+        map (
+          slot:
+          "d ${paths.slotDir slot.name} 0755 ${toString cfg.guestAgentUid} ${toString cfg.guestAgentGid} - -"
+        ) slots
+      );
     })
   ];
 }

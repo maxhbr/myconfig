@@ -88,6 +88,12 @@
   # its guest module is an EMPTY attrset, no share is declared, and the guest
   # keeps home-manager activation exactly as before.
   agentConfigSeed,
+  # The ONE definition of the CONSOLIDATED per-session tree (./session.nix,
+  # lightweight plan phase 4): the layout table, its guest mount points/tags and
+  # the guest fragment that bind-mounts the session tree's `workspace/` to
+  # `/workspace`. When it is disabled (the `full` profile) its guest module is an
+  # EMPTY attrset and the four historical shares below are declared unchanged.
+  agentSession,
   ...
 }:
 let
@@ -291,77 +297,46 @@ let
   guestCommonPackages =
     if agentProfile.minimalGuestPackages then guestMinimalPackages else guestFullPackages;
 
-  # --- minimal Cloud Hypervisor guest for a given slot --------------------
-  mkGuest =
+  # --- lightweight plan phase 4: the per-slot SHARE LIST -----------------
+  # With `session.enable` (the `lite` profile) everything the guest may
+  # WRITE lives in ONE per-session tree (./session.nix): `workspace/`,
+  # `input/`, `controller/`, `worker/`, `worker-logs/` and `state/`. The
+  # trust boundaries are UNCHANGED — they were never expressed by the share
+  # split but by OWNERSHIP and MODES, which virtiofsd passes through
+  # unchanged: the session root, `input/`, `controller/` (root-ONLY 0700)
+  # and `worker-logs/` stay root-owned, only `workspace/`, `worker/` and
+  # `state/` belong to the unprivileged guest `agent` user. The launcher
+  # verifies exactly that BEFORE it starts the VM.
+  #
+  # The SECOND share is READ-ONLY (virtiofsd `--readonly`) and root-owned:
+  # the slot's SSH host identity and the staged, allowlisted host
+  # configuration. Deliberately NOT folded into the writable tree — the
+  # plan itself forbids that for the host keys, and phase 3 established the
+  # same for the staged configuration (invariants 7 and 8 outrank the
+  # plan's layout sketch; see ./session.nix).
+  #
+  # `/workspace` itself is a BIND MOUNT of `<session>/workspace` inside the
+  # guest (agentSession.guestModule), so `agent-run` and every agent keep
+  # the path they already expect.
+  mkShares =
     slot:
-    lib.mkMerge (
-      # Guest dotfile provisioning: run home-manager inside the guest for the
-      # `agent` user, copying the host primary user's allowlisted shell +
-      # coding-agent dotfiles (see guest-home.nix). Empty attrset when the
-      # feature is disabled, so a bare guest keeps no home-manager overhead.
-      #
-      # DROPPED ENTIRELY when runtime configuration staging is active
-      # (lightweight plan phase 3, `configSeed.enable`, the `lite` default):
-      # the guest then gets its home from the host-staged, allowlisted copy at
-      # BOOT time (config-seed.nix) instead of from a build-time closure, so
-      # neither the home-manager NixOS module nor its activation service is part
-      # of the guest at all. The two are mutually exclusive by assertion.
-      lib.optionals (!agentConfigSeed.enable) [
-        { imports = [ inputs.home.nixosModules.home-manager ]; }
-        (mkGuestHome { inherit pkgs; })
-      ]
-      ++ [
-        # Unattended batch execution (ticket 4, trust-split in ticket 7): the
-        # TRUSTED `agent-job-controller` oneshot (inert unless the host placed a
-        # spec in the share) plus the UNTRUSTED `agent-job-worker@` template it
-        # starts. Slot-independent, because the job share always appears at the
-        # same guest path.
-        (agentJobs.mkGuestModule slot)
-        # Boot-time model discovery: query the loopback LiteLLM endpoint and
-        # render the LIVE model list into pi + opencode config, overriding the
-        # build-time lists copied from the host dotfiles. Empty attrset when
-        # disabled or when the profile has no model API at all.
-        agentModelConfig.guestModule
-        # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
-        # directories the host prepared for this run; a run without
-        # --persist-agent-state sees an empty share and keeps the disposable home.
-        agentState.guestModule
-        # Runtime configuration staging (lightweight plan phase 3): the root-owned
-        # oneshot that copies the host-staged, allowlisted configuration into the
-        # disposable home BEFORE sshd, the batch job controller and the
-        # agent-state linker. Empty attrset when staging is disabled.
-        agentConfigSeed.guestModule
-        (mkGuestBase slot)
-      ]
-    );
-
-  mkGuestBase = slot: {
-    # microvm.nix auto-imports its guest `microvm` module for VMs declared
-    # via `microvm.vms.<name>.config`, so no explicit import is needed here.
-    # Redundant with microvm.nix's `networking.hostName = mkDefault name`,
-    # kept as an explicit, non-default assertion of the slot's identity.
-    networking.hostName = slot.hostName;
-
-    microvm = {
-      hypervisor = "cloud-hypervisor";
-      # Sizing comes from the slot's RESOURCE CLASS (ticket 5 A), so all slots
-      # of a class are identical and prebuilt — no per-job Nix evaluation.
-      vcpu = slot.vcpu;
-      mem = slot.memoryMiB;
-
-      # Deterministic per-slot TAP + MAC (plan §4). Guest-side IP
-      # addressing / routing is intentionally deferred to network.nix.
-      interfaces = [
+    if agentSession.enable then
+      [
         {
-          type = "tap";
-          id = slot.tap;
-          mac = slot.mac;
+          proto = "virtiofs";
+          tag = agentSession.guestTag;
+          source = agentSession.slotDir slot.name;
+          mountPoint = agentSession.guestMountPoint;
         }
-      ];
-
-      # No graphics for a headless agent sandbox (also microvm's default).
-      graphics.enable = false;
-
+      ]
+      ++ lib.optional (cfg.enableSsh || agentConfigSeed.enable) {
+        proto = "virtiofs";
+        tag = agentSession.guestRoTag;
+        source = agentSession.roSlotDir slot.name;
+        mountPoint = agentSession.guestRoMountPoint;
+        readOnly = true;
+      }
+    else
       # --- §10 workspace share (the ONLY share) --------------------------
       # Exactly one virtiofs share surfaces the slot's host-side workspace
       # directory into the guest as the single writable `/workspace` mount.
@@ -398,7 +373,7 @@ let
       # Deliberate, documented amendment to plan §10's "EXACTLY ONE share":
       # read-only, root-only, single-purpose, per-slot. Do NOT add further
       # shares — no /nix, /home, host sockets or cross-slot paths.
-      shares = [
+      [
         {
           proto = "virtiofs";
           tag = "workspace";
@@ -454,9 +429,10 @@ let
       # virtiofsd passes ownership through unchanged), so the untrusted guest
       # `agent` user can neither read the staged tree directly nor modify what
       # the host staged — it only ever gets the COPY the guest root seeder
-      # hands it. Only exists when staging is enabled (the `lite` profile); the
-      # `full` profile keeps its four shares and its guest home-manager
-      # activation.
+      # hands it. Only exists when staging is enabled WITHOUT the consolidated
+      # session tree; with it (the `lite` profile since phase 4) the staged tree
+      # is a subdirectory of the ONE read-only share above, and the `full`
+      # profile keeps its four shares and its guest home-manager activation.
       #
       # The source is the slot's PAYLOAD directory, not the slot directory:
       # the staging manifest is the payload's SIBLING and must stay host-side
@@ -473,6 +449,87 @@ let
         mountPoint = agentConfigSeed.guestMountPoint;
         readOnly = true;
       };
+
+  # --- minimal Cloud Hypervisor guest for a given slot --------------------
+  mkGuest =
+    slot:
+    lib.mkMerge (
+      # Guest dotfile provisioning: run home-manager inside the guest for the
+      # `agent` user, copying the host primary user's allowlisted shell +
+      # coding-agent dotfiles (see guest-home.nix). Empty attrset when the
+      # feature is disabled, so a bare guest keeps no home-manager overhead.
+      #
+      # DROPPED ENTIRELY when runtime configuration staging is active
+      # (lightweight plan phase 3, `configSeed.enable`, the `lite` default):
+      # the guest then gets its home from the host-staged, allowlisted copy at
+      # BOOT time (config-seed.nix) instead of from a build-time closure, so
+      # neither the home-manager NixOS module nor its activation service is part
+      # of the guest at all. The two are mutually exclusive by assertion.
+      lib.optionals (!agentConfigSeed.enable) [
+        { imports = [ inputs.home.nixosModules.home-manager ]; }
+        (mkGuestHome { inherit pkgs; })
+      ]
+      ++ [
+        # Unattended batch execution (ticket 4, trust-split in ticket 7): the
+        # TRUSTED `agent-job-controller` oneshot (inert unless the host placed a
+        # spec in the share) plus the UNTRUSTED `agent-job-worker@` template it
+        # starts. Slot-independent, because the job share always appears at the
+        # same guest path.
+        (agentJobs.mkGuestModule slot)
+        # Boot-time model discovery: query the loopback LiteLLM endpoint and
+        # render the LIVE model list into pi + opencode config, overriding the
+        # build-time lists copied from the host dotfiles. Empty attrset when
+        # disabled or when the profile has no model API at all.
+        agentModelConfig.guestModule
+        # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
+        # directories the host prepared for this run; a run without
+        # --persist-agent-state sees an empty share and keeps the disposable home.
+        agentState.guestModule
+        # Runtime configuration staging (lightweight plan phase 3): the root-owned
+        # oneshot that copies the host-staged, allowlisted configuration into the
+        # disposable home BEFORE sshd, the batch job controller and the
+        # agent-state linker. Empty attrset when staging is disabled.
+        agentConfigSeed.guestModule
+        # Consolidated session share (lightweight plan phase 4): bind-mounts
+        # `<session>/workspace` to `/workspace`, so `agent-run`'s findmnt +
+        # writability checks and every agent's expectation of `/workspace` keep
+        # working, and orders sshd after the read-only host-key mount. Empty
+        # attrset under the four-share layout.
+        agentSession.guestModule
+        (mkGuestBase slot)
+      ]
+    );
+
+  mkGuestBase = slot: {
+    # microvm.nix auto-imports its guest `microvm` module for VMs declared
+    # via `microvm.vms.<name>.config`, so no explicit import is needed here.
+    # Redundant with microvm.nix's `networking.hostName = mkDefault name`,
+    # kept as an explicit, non-default assertion of the slot's identity.
+    networking.hostName = slot.hostName;
+
+    microvm = {
+      hypervisor = "cloud-hypervisor";
+      # Sizing comes from the slot's RESOURCE CLASS (ticket 5 A), so all slots
+      # of a class are identical and prebuilt — no per-job Nix evaluation.
+      vcpu = slot.vcpu;
+      mem = slot.memoryMiB;
+
+      # Deterministic per-slot TAP + MAC (plan §4). Guest-side IP
+      # addressing / routing is intentionally deferred to network.nix.
+      interfaces = [
+        {
+          type = "tap";
+          id = slot.tap;
+          mac = slot.mac;
+        }
+      ];
+
+      # No graphics for a headless agent sandbox (also microvm's default).
+      graphics.enable = false;
+
+      # The per-slot share list (see `mkShares` in the `let` above, which is
+      # also what the phase-4 assertions below inspect).
+      shares = mkShares slot;
     }
     # --- lightweight plan phase 1: pinned guest store disk ----------------
     # The `lite` profile PINS microvm.nix's closure/startup optimizations and
@@ -716,6 +773,57 @@ in
 
     (lib.mkIf cfg.enable {
       microvm.host.enable = true;
+
+      # --- lightweight plan phase 4: the share set is a trust boundary ------
+      # These are CROSS-MODULE guards: ./session.nix owns the layout, but
+      # ./hostkeys.nix and ./config-seed.nix derive their own paths from it, and
+      # a future edit there could silently move key material or host-decided
+      # input into the writable tree. Checked here, where every path definition
+      # is in scope at once.
+      assertions = lib.optionals agentSession.enable (
+        let
+          slot = lib.head slots;
+          shares = mkShares slot;
+          writableTree = agentSession.slotDir slot.name;
+          roTree = agentSession.roSlotDir slot.name;
+          inside = parent: p: p == parent || lib.hasPrefix "${parent}/" p;
+        in
+        [
+          {
+            assertion = inside roTree (agentHostKeys.slotDir slot.name);
+            message = ''
+              myconfig.ai.microvm: the per-slot SSH host-key directory
+              (${agentHostKeys.slotDir slot.name}) must live in the READ-ONLY
+              session tree (${roTree}), never in the writable one
+              (${writableTree}). The private host key is the slot's identity;
+              the untrusted guest must not be able to reach, replace or read it.
+            '';
+          }
+          {
+            assertion = !(inside writableTree (agentConfigSeed.hostPayloadDir slot.name));
+            message = ''
+              myconfig.ai.microvm: the staged host agent configuration
+              (${agentConfigSeed.hostPayloadDir slot.name}) must not live in the
+              WRITABLE session tree (${writableTree}) — it is host-decided input
+              and is exposed through the READ-ONLY share only (invariant 7).
+            '';
+          }
+          {
+            # The acceptance criterion of the phase, asserted on the ACTUAL
+            # share list rather than on the intent behind it.
+            assertion =
+              lib.length (lib.filter (s: !(s.readOnly or false)) shares) == 1
+              && lib.length (lib.filter (s: s.readOnly or false) shares) <= 1;
+            message = ''
+              myconfig.ai.microvm: a consolidated-session guest must declare
+              EXACTLY ONE writable virtiofs share and at most ONE read-only
+              share; slot ${slot.name} declares ${
+                toString (map (s: "${s.tag}${lib.optionalString (s.readOnly or false) " (ro)"}") shares)
+              }.
+            '';
+          }
+        ]
+      );
 
       # --- ticket 5 C: host-side limits on the HYPERVISOR units ------------
       # Drop-ins on microvm.nix's own `microvm@<slot>` units (it uses the same
