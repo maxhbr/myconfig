@@ -19,7 +19,8 @@ How the pieces fit together. Option-level reference lives in
 | `slots.nix` | the deterministic slot table derived from the resource classes |
 | `network-profiles.nix` | the network capability table (`offline`/`proxy-only`/`package-access`/`internet`) |
 | `guest.nix` | microvm.nix host integration, one prebuilt VM per slot, the guest NixOS config, `agent-run`, host-side hypervisor limits |
-| `guest-home.nix` | allowlisted copy of the host operator's dotfiles into the guest (home-manager inside the guest) |
+| `guest-home.nix` | allowlisted copy of the host operator's dotfiles into the guest (home-manager inside the guest); used by `profile = "full"` |
+| `config-seed.nix` | runtime, allowlisted configuration staging (`profile = "lite"`): the host-side stager, the per-slot read-only seed share and the guest-side seeding oneshot that replace guest home-manager activation |
 | `network.nix` | private bridge, TAP enslavement + L2 isolation, firewall chains, NAT, bridge-only LiteLLM forwarder |
 | `hostkeys.nix` | per-slot SSH host identities + the host `known_hosts` |
 | `job.nix` | versioned batch job format, per-slot job dirs, the TRUSTED guest job controller, the UNTRUSTED guest worker unit, the guest-side permission assertions and the HOST-side result verifier |
@@ -111,9 +112,12 @@ traffic is additionally impossible at layer 2 (`bridge link … isolated on`).
   placeholder values plus endpoint URLs.
 - The guest has no host home, no `~/.ssh`, no SSH/GPG agent socket, no cloud
   credentials, no container sockets, no Nix daemon socket, no host D-Bus.
-- Dotfiles are copied through an **allowlist** of already-rendered store paths
-  (`guestDotfiles.*`), never by re-evaluating host home modules, so
-  secret-bearing paths cannot be dragged in by accident.
+- Dotfiles are copied through an **allowlist** — under `profile = "full"` of
+  already-rendered store paths (`guestDotfiles.*`), never by re-evaluating host
+  home modules; under `profile = "lite"` of exact host paths staged at launch
+  time (`configSeed`, plus a credential denylist, escape rejection and a
+  per-session manifest). Either way secret-bearing paths cannot be dragged in
+  by accident.
 - The per-slot SSH **host** key is delivered read-only and root-only; the guest
   agent user cannot read it, so it cannot impersonate its own slot to the
   operator either.

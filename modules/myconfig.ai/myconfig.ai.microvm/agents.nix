@@ -44,6 +44,20 @@
 #   batchStdin       when true, the worker pipes the prompt FILE on stdin
 #                    instead of substituting `%PROMPT%` (for CLIs that read
 #                    instructions from stdin). Defaults to `false`.
+#   configPaths      the agent's ALLOWLIST of host configuration paths, relative
+#                    to `myconfig.ai.microvm.configSeed.hostHome`, staged into
+#                    the disposable guest home at LAUNCH time (lightweight plan
+#                    phase 3, see ./config-seed.nix). EXACT files and EXACT
+#                    directories only — never a whole agent configuration root,
+#                    because those mix configuration with CREDENTIALS
+#                    (`.codex/auth.json`, `.hermes/.env`, …). Model-provider
+#                    credentials stay in the host LiteLLM proxy and are never
+#                    staged; a credential-shaped entry is rejected at
+#                    evaluation time by the denylist in ./config-seed.nix.
+#                    Missing paths are simply absent in the guest, so an entry
+#                    may name something this host does not have. Defaults to
+#                    `[ ]` (the agent gets only the module-wide
+#                    `configSeed.extraPaths`).
 #   extraPackages    additional guest packages this agent NEEDS at runtime
 #                    (e.g. a language runtime it shells out to). Added to the
 #                    guest closure only while the agent is SELECTED
@@ -116,6 +130,13 @@ let
         "-p"
         "%PROMPT%"
       ];
+      # `~/.claude` also holds `.credentials.json`, so only the two paths the
+      # host home-manager config actually RENDERS are allowlisted.
+      configPaths = [
+        ".agents/skills"
+        ".claude/settings.json"
+        ".claude/skills"
+      ];
     };
     codex = {
       package = pkgs.codex;
@@ -127,6 +148,15 @@ let
         "-"
       ];
       batchStdin = true;
+      # Codex keeps its OAuth/API credential in `~/.codex/auth.json` (and its
+      # session transcripts in `~/.codex/sessions`), so the DIRECTORY is never
+      # staged — only the rendered configuration and the skills tree.
+      configPaths = [
+        ".agents/skills"
+        ".codex/config.toml"
+        ".codex/hooks.json"
+        ".codex/skills"
+      ];
     };
     opencode = {
       package = pkgs.opencode;
@@ -135,6 +165,18 @@ let
         "run"
         "%PROMPT%"
       ];
+      # `~/.config/opencode` also collects `auth.json` and host-coupled
+      # plugins, so only the rendered configuration, agents/commands and the
+      # skills tree are staged. The LIVE model list is provisioned separately,
+      # at guest boot, by ./guest-model-config.nix.
+      configPaths = [
+        ".agents/skills"
+        ".config/opencode/agents"
+        ".config/opencode/commands"
+        ".config/opencode/opencode.json"
+        ".config/opencode/skills"
+        ".config/opencode/tui.json"
+      ];
     };
     pi = {
       package = pkgs.nixos-unstable.pi-coding-agent;
@@ -142,6 +184,16 @@ let
       batchArgs = [
         "--print"
         "%PROMPT%"
+      ];
+      # `~/.pi` also holds session state and provider credentials, so only the
+      # rendered agent configuration is staged.
+      configPaths = [
+        ".agents/skills"
+        ".pi/agent/agents"
+        ".pi/agent/extensions"
+        ".pi/agent/keybindings.json"
+        ".pi/agent/prompts"
+        ".pi/agent/themes"
       ];
     };
     # Hermes Agent (NousResearch). The SAME flake input + package attr the
@@ -186,6 +238,13 @@ let
         enabledByDefault = false;
         directories = [ ".hermes" ];
       };
+      # DELIBERATELY EMPTY: hermes keeps config.yaml, `.env`, `auth.json`,
+      # state.db and sessions/ in ONE root (`~/.hermes`), i.e. configuration is
+      # inseparable from credentials there, and even `config.yaml` carries a
+      # provider key. Nothing of it may be staged; the guest gets its endpoint
+      # from `guestEnvironment` above instead. Only the module-wide
+      # `configSeed.extraPaths` reach a hermes guest.
+      configPaths = [ ];
     };
   };
 
@@ -198,6 +257,7 @@ let
       interactiveArgs = [ ];
       batchArgs = null;
       batchStdin = false;
+      configPaths = [ ];
       extraPackages = [ ];
       guestEnvironment = { };
       persistentState = {
@@ -259,6 +319,23 @@ let
       a.batchArgs != null && !a.batchStdin && !lib.elem "%PROMPT%" a.batchArgs
     ) "myconfig.ai.microvm: agent '${a.name}' batchArgs must contain %PROMPT% (or set batchStdin)."
     ++ lib.optional (
+      !lib.isList a.configPaths
+    ) "myconfig.ai.microvm: agent '${a.name}' configPaths must be a list."
+    ++
+      lib.optional
+        (
+          !lib.all (
+            p:
+            lib.isString p
+            && p != ""
+            && !lib.hasPrefix "/" p
+            && !lib.hasPrefix "-" p
+            && !lib.hasSuffix "/" p
+            && !lib.hasInfix ".." p
+          ) a.configPaths
+        )
+        "myconfig.ai.microvm: agent '${a.name}' configPaths must be non-empty, relative, '..'-free paths that neither start with '-'/'/' nor end with '/' (they are joined onto the host home and re-checked by ./config-seed.nix, which also applies the credential denylist)."
+    ++ lib.optional (
       !lib.isList a.extraPackages
     ) "myconfig.ai.microvm: agent '${a.name}' extraPackages must be a list."
     ++ lib.optional (
@@ -311,6 +388,14 @@ rec {
   # Per-agent extra runtime packages of the SELECTED agents, deduplicated
   # (two agents may need the same runtime).
   extraPackages = lib.unique (lib.concatMap (a: a.extraPackages) agentList);
+
+  # The union of the SELECTED agents' configuration ALLOWLISTS (lightweight plan
+  # phase 3), sorted + deduplicated so the generated stager is stable. Because
+  # it is derived from the FILTERED `agents` set, the staged configuration
+  # follows `enabledAgents`: a deselected agent's config never reaches a guest.
+  # ./config-seed.nix validates this union (shape + credential denylist) and
+  # renders it into the host-side stager.
+  configPaths = lib.unique (lib.sort (a: b: a < b) (lib.concatMap (a: a.configPaths) agentList));
 
   # `claude|codex|opencode|pi` — used verbatim in launcher help/error text and
   # in the guest dispatch's `case` fallback message.

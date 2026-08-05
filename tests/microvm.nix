@@ -863,6 +863,343 @@ in
     );
 
   # ---------------------------------------------------------------------- #
+  # (t) RUNTIME CONFIG STAGING (lightweight plan phase 3): the lite guest    #
+  #     is provisioned at LAUNCH time from an ALLOWLISTED, root-owned staged  #
+  #     copy of the host configuration instead of by guest home-manager       #
+  #     activation — while the full profile keeps home-manager, byte-for-     #
+  #     byte. Locks down all four halves: the mechanism is active + correctly  #
+  #     ordered in `lite`, ABSENT in `full`, the allowlist follows             #
+  #     `enabledAgents`, and escaping / credential-shaped entries are          #
+  #     REJECTED at eval. The build part proves the generated stager really    #
+  #     enforces the allowlist and cleans its destination.                     #
+  # ---------------------------------------------------------------------- #
+  microvm-config-seed =
+    let
+      liteSeed = liteHost._module.args.agentConfigSeed;
+      liteCfg = liteHost.config;
+      liteSlot = lib.head liteSlots;
+      liteGuest = liteCfg.microvm.vms.${liteSlot.name}.config.config;
+      liteReg = liteRegistryOf [ ];
+      liteLauncher = findPkg liteCfg.environment.systemPackages "agent-microvm";
+      fullLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+
+      seedShares = builtins.filter (s: s.tag == liteSeed.guestTag) liteGuest.microvm.shares;
+      seedUnit = liteGuest.systemd.services.agent-config-seed;
+      hmServices =
+        cfg: builtins.filter (n: lib.hasPrefix "home-manager" n) (builtins.attrNames cfg.systemd.services);
+      # The allowlist a host would get with a DIFFERENT selection, to prove the
+      # staged set follows `enabledAgents` rather than the whole registry.
+      piAllowlist =
+        (liteHostWith [
+          { myconfig.ai.microvm.enabledAgents = [ "pi" ]; }
+        ])._module.args.agentConfigSeed.allowedPaths;
+      # `configPaths` of the agents the lite profile does NOT select.
+      deselectedPaths = lib.unique (
+        lib.concatMap (a: a.configPaths) (
+          lib.filter (a: !(builtins.elem a.name liteReg.names)) (lib.attrValues agentRegistry.agents)
+        )
+      );
+      seedRejects =
+        infix: mods:
+        let
+          msgs = map (a: a.message) (builtins.filter (a: !a.assertion) (liteHostWith mods).config.assertions);
+        in
+        builtins.any (m: lib.hasInfix infix m) msgs;
+
+      evalMarker = mkEvalCheck "microvm-config-seed-eval" [
+        # --- the FULL profile is untouched -------------------------------
+        {
+          assertion = !microvmOpts.configSeed.enable && microvmOpts.guestDotfiles.enable;
+          message = "the full profile must keep guest home-manager provisioning and NOT enable config staging";
+        }
+        {
+          # Positive control for the negative assertion below: the full guest
+          # really does run home-manager activation today.
+          assertion = hmServices guest0Cfg == [ "home-manager-agent" ];
+          message = "positive control: the full guest must still run home-manager activation, got ${toString (hmServices guest0Cfg)}";
+        }
+        {
+          assertion = builtins.all (s: s.tag != liteSeed.guestTag) guest0Cfg.microvm.shares;
+          message = "the full guest must not declare a config-seed share";
+        }
+        # --- ... and the LITE profile replaces it -------------------------
+        {
+          assertion = liteCfg.myconfig.ai.microvm.configSeed.enable && liteSeed.enable;
+          message = "the lite profile must enable runtime config staging";
+        }
+        {
+          # THE acceptance criterion of phase 3.
+          assertion = hmServices liteGuest == [ ];
+          message = "the lite guest must NOT run home-manager activation, got ${toString (hmServices liteGuest)}";
+        }
+        {
+          assertion = !liteCfg.myconfig.ai.microvm.guestDotfiles.enable;
+          message = "guestDotfiles must default to off whenever config staging is on";
+        }
+        {
+          # ... and the two are mutually exclusive, never silently combined.
+          assertion = seedRejects "mutually exclusive" [
+            { myconfig.ai.microvm.guestDotfiles.enable = true; }
+          ];
+          message = "combining configSeed with guestDotfiles must be rejected at eval";
+        }
+        # --- the share: per-slot, READ-ONLY, root-owned source -------------
+        {
+          assertion = lib.length seedShares == 1;
+          message = "the lite guest must declare exactly one config-seed share, got ${toString (lib.length seedShares)}";
+        }
+        {
+          assertion =
+            let
+              s = lib.head seedShares;
+            in
+            s.source == liteSeed.slotDir liteSlot.name
+            && s.mountPoint == liteSeed.guestMountPoint
+            && s.proto == "virtiofs"
+            && (s.readOnly or false);
+          message = "the config-seed share must be the per-slot staging directory, mounted READ-ONLY at ${liteSeed.guestMountPoint}";
+        }
+        {
+          # No host home (or any other broad host directory) is ever mounted:
+          # every share source stays under the module's own roots.
+          assertion = builtins.all (
+            s: lib.hasPrefix microvmOpts.runtimeRoot s.source || lib.hasPrefix microvmOpts.stateRoot s.source
+          ) liteGuest.microvm.shares;
+          message = "a lite guest share escapes the module's runtime/state roots: ${
+            toString (map (s: s.source) liteGuest.microvm.shares)
+          }";
+        }
+        {
+          # The staging directory is root-owned and NOT writable by the guest
+          # agent (virtiofsd passes ownership through unchanged).
+          assertion =
+            builtins.elem "d ${liteSeed.slotDir liteSlot.name} 0555 root root - -" liteCfg.systemd.tmpfiles.rules
+            && builtins.elem "d ${liteSeed.hostPayloadDir liteSlot.name} 0555 root root - -" liteCfg.systemd.tmpfiles.rules;
+          message = "the per-slot staging directories must be pre-created root-owned 0555";
+        }
+        {
+          assertion = builtins.all (r: !(lib.hasInfix "config-seed" r)) enabledCfg.systemd.tmpfiles.rules;
+          message = "the full profile must not create any config-seed directory";
+        }
+        # --- the guest oneshot: root, before every agent entry point -------
+        {
+          assertion =
+            seedUnit.serviceConfig.Type == "oneshot" && seedUnit.wantedBy == [ "multi-user.target" ];
+          message = "the guest seeding unit must be a oneshot wanted by multi-user.target";
+        }
+        {
+          # Ordered before EVERY way an agent process can come into existence:
+          # the interactive control channel, the trusted batch controller (which
+          # starts the untrusted worker) and the agent-state linker (whose
+          # symlinks the copy must not write through).
+          assertion = builtins.all (u: builtins.elem u seedUnit.before) [
+            "sshd.service"
+            jobs.controllerUnit
+            "agent-state-link.service"
+          ];
+          message = "the guest seeding unit must be ordered before sshd, ${jobs.controllerUnit} and agent-state-link.service, got ${toString seedUnit.before}";
+        }
+        {
+          assertion = seedUnit.unitConfig.RequiresMountsFor == liteSeed.guestMountPoint;
+          message = "the guest seeding unit must require the config-seed mount";
+        }
+        {
+          # It may only ever READ the staged tree.
+          assertion = seedUnit.serviceConfig.ReadOnlyPaths == [ "-${liteSeed.guestMountPoint}" ];
+          message = "the guest seeding unit must treat the staged tree as read-only";
+        }
+        # --- the allowlist follows the agent selection ---------------------
+        {
+          assertion =
+            liteSeed.allowedPaths == lib.unique (
+              lib.sort (a: b: a < b) (
+                (lib.head (lib.attrValues liteReg.agents)).configPaths
+                ++ liteCfg.myconfig.ai.microvm.configSeed.extraPaths
+              )
+            );
+          message = "the staging allowlist must be the SELECTED agents' configPaths plus extraPaths, got ${toString liteSeed.allowedPaths}";
+        }
+        {
+          assertion =
+            deselectedPaths != [ ]
+            && builtins.any (p: !(builtins.elem p liteSeed.allowedPaths)) deselectedPaths;
+          message = "positive control: a deselected agent must contribute paths the lite allowlist does not carry";
+        }
+        {
+          assertion =
+            builtins.elem ".pi/agent/prompts" piAllowlist
+            && !(builtins.elem ".pi/agent/prompts" liteSeed.allowedPaths);
+          message = "the staged allowlist must follow enabledAgents (pi's paths must appear only when pi is selected)";
+        }
+        {
+          # Registry hygiene: no declared agent may allowlist a credential-
+          # shaped or escaping path (the module's own assertions would fail the
+          # build, but that would only be noticed once that agent is selected).
+          assertion = builtins.all (
+            p:
+            !(lib.hasPrefix "/" p)
+            && !(lib.hasInfix ".." p)
+            && !(lib.hasInfix "auth" p)
+            && !(lib.hasInfix "credential" p)
+            && !(lib.hasInfix "token" p)
+            && !(lib.hasSuffix ".pem" p)
+            && !(lib.hasSuffix ".key" p)
+          ) (lib.concatMap (a: a.configPaths) (lib.attrValues agentRegistry.agents));
+          message = "an agent in the registry allowlists an escaping or credential-shaped configuration path";
+        }
+        # --- NEGATIVE: invalid allowlist entries are rejected at EVAL -------
+        {
+          assertion = seedRejects "not plain, relative" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ "../../etc/shadow" ]; }
+          ];
+          message = "a `..` escape in the staging allowlist must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "not plain, relative" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ "/etc/passwd" ]; }
+          ];
+          message = "an absolute path in the staging allowlist must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "not plain, relative" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ ".config/../../root" ]; }
+          ];
+          message = "a nested `..` escape in the staging allowlist must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "CREDENTIAL material" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ ".codex/auth.json" ]; }
+          ];
+          message = "a credential-shaped allowlist entry must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "CREDENTIAL material" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ ".ssh/config" ]; }
+          ];
+          message = "an allowlist entry under ~/.ssh must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "CREDENTIAL material" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ ".config/agent/api-token.txt" ]; }
+          ];
+          message = "an allowlist entry whose name contains a credential word must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "absolute path" [
+            { myconfig.ai.microvm.configSeed.hostHome = "relative/home"; }
+          ];
+          message = "a relative configSeed.hostHome must be rejected at eval";
+        }
+        {
+          # Positive control: the unmodified lite host trips NO assertion, so
+          # the rejections above cannot pass vacuously.
+          assertion = builtins.filter (a: !a.assertion) liteCfg.assertions == [ ];
+          message = "positive control: a plain lite host must evaluate cleanly";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-config-seed"
+      {
+        inherit evalMarker;
+        # Building these runs their writeShellApplication shellcheck gate; the
+        # greps below then inspect the GENERATED code.
+        stagerBin = "${liteSeed.stager}/bin/agent-microvm-stage-config";
+        seederBin = "${liteSeed.seeder}/bin/agent-config-seed-apply";
+        liteLauncherBin = "${liteLauncher}/bin/agent-microvm";
+        fullLauncherBin = "${fullLauncher}/bin/agent-microvm";
+        allowlist = lib.concatStringsSep "\n" liteSeed.allowedPaths;
+      }
+      ''
+        # --- the stager ENFORCES the allowlist ---------------------------
+        # Exactly the evaluated allowlist is baked in — no other path can be
+        # staged, and the list is not assembled at runtime.
+        grep -q 'readonly ALLOWLIST=(' "$stagerBin" \
+          || { echo "the stager has no baked allowlist" >&2; exit 1; }
+        while IFS= read -r p; do
+          [ -n "$p" ] || continue
+          grep -qF -- "$p" "$stagerBin" \
+            || { echo "allowlisted path '$p' is missing from the stager" >&2; exit 1; }
+        done <<< "$allowlist"
+        # ... and the credential DENYLIST is applied as defence in depth, to
+        # every path component (not only to the allowlist entries).
+        grep -q 'path_is_denied' "$stagerBin" \
+          || { echo "the stager applies no credential denylist" >&2; exit 1; }
+        for pat in auth.json credentials.json id_ed25519 .pem .netrc; do
+          grep -qF -- "$pat" "$stagerBin" \
+            || { echo "the credential denylist lost '$pat'" >&2; exit 1; }
+        done
+        # Escapes are refused: a path that resolves outside the configured host
+        # home is never copied (only /nix/store dereferencing is allowed).
+        grep -q 'resolves outside the host home' "$stagerBin" \
+          || { echo "the stager does not reject paths escaping the host home" >&2; exit 1; }
+        grep -q 'resolved_is_allowed' "$stagerBin" \
+          || { echo "the stager has no resolved-path policy" >&2; exit 1; }
+        # Only regular files and directories, never setuid/setgid.
+        grep -q 'setuid/setgid file' "$stagerBin" \
+          || { echo "the stager does not skip setuid/setgid files" >&2; exit 1; }
+        grep -q -- '-type d -o -type f' "$stagerBin" \
+          || { echo "the stager does not restrict the walk to files/directories" >&2; exit 1; }
+        # The destination is CLEANED before every launch.
+        grep -q 'rm -rf -- "$PAYLOAD" "$MANIFEST"' "$stagerBin" \
+          || { echo "the stager does not clean its destination before staging" >&2; exit 1; }
+        # Everything it writes is root-owned and non-writable by the guest agent.
+        grep -q -- '-o root -g root' "$stagerBin" \
+          || { echo "the stager does not stage root-owned files" >&2; exit 1; }
+        grep -qE '^readonly FILE_MODE=.?0444' "$stagerBin" \
+          || { echo "staged files must be mode 0444" >&2; exit 1; }
+        grep -qE '^readonly DIR_MODE=.?0555' "$stagerBin" \
+          || { echo "staged directories must be mode 0555" >&2; exit 1; }
+        # A manifest records what was staged.
+        grep -q 'manifest' "$stagerBin" \
+          || { echo "the stager writes no manifest" >&2; exit 1; }
+        # NEGATIVE: it must never copy a whole host directory wholesale — the
+        # host home is only ever JOINED with an allowlisted relative path.
+        if grep -nE '(cp|rsync|install|tar)[^#]*\$HOST_HOME"' "$stagerBin"; then
+          echo "the stager must never copy the host home wholesale" >&2
+          exit 1
+        fi
+        if grep -nE '\$HOST_HOME/\$\{?[a-z]' "$stagerBin" | grep -qv 'rel'; then
+          echo "the host home may only be joined with an allowlisted relative path" >&2
+          exit 1
+        fi
+
+        # --- the guest seeder --------------------------------------------
+        # It refuses a staged tree that is not root-owned / is agent-writable,
+        # and hands the COPY (never the original) to the agent.
+        grep -q 'is not root-owned' "$seederBin" \
+          || { echo "the guest seeder does not verify the staged tree is root-owned" >&2; exit 1; }
+        grep -q 'group/other-writable' "$seederBin" \
+          || { echo "the guest seeder does not verify the staged tree is not agent-writable" >&2; exit 1; }
+        grep -q 'chown -R' "$seederBin" \
+          || { echo "the guest seeder does not hand the copy to the agent" >&2; exit 1; }
+
+        # --- the launcher stages once per launch, and cleans up ------------
+        grep -q 'stage_config_seed' "$liteLauncherBin" \
+          || { echo "the lite launcher does not stage the host configuration" >&2; exit 1; }
+        grep -q 'clear_config_seed' "$liteLauncherBin" \
+          || { echo "the lite launcher does not clear the staged configuration" >&2; exit 1; }
+        grep -qF -- "$stagerBin" "$liteLauncherBin" \
+          || { echo "the lite launcher does not call the generated stager" >&2; exit 1; }
+        # ... and the FULL profile's launcher is untouched by this phase (the
+        # staging code is rendered only when the feature is on, so an existing
+        # host's launcher stays byte-for-byte what it was).
+        if grep -q 'config_seed' "$fullLauncherBin"; then
+          echo "the full-profile launcher must not carry any config-staging code" >&2
+          exit 1
+        fi
+
+        {
+          echo "microvm-config-seed:"
+          echo "  stager        : $stagerBin"
+          echo "  guest seeder  : $seederBin"
+          echo "  lite launcher : $liteLauncherBin"
+          echo "  allowlist     :"
+          printf '    %s\n' $allowlist
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (c) PURE-EVAL slot pool: unique + well-formed IPs/MACs, contiguous      #
   #     names, across a range of slot counts. Encodes §37 duplicate         #
   #     detection as an executable test against the real slots.nix.         #

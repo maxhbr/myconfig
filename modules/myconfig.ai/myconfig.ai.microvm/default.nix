@@ -187,6 +187,7 @@ let
 in
 {
   imports = [
+    ./config-seed.nix
     ./guest.nix
     ./guest-home.nix
     ./guest-model-config.nix

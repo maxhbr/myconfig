@@ -96,9 +96,12 @@ myconfig.ai.microvm = {
 | `enableSsh` | `true` | Guest SSH server, private interface only. |
 | `sshPublicKeyFile` | `null` | **Required** when `enableSsh`. See [The dedicated SSH key](#the-dedicated-ssh-key). |
 | `passwordlessControl` | `false` | Scoped `NOPASSWD`+`SETENV` sudo rule for exactly `agent-microvm`, for members of the `agent-microvm` group. |
-| `guestDotfiles.enable` | `true` | Provision the guest `agent` user with the host primary user's fish + coding-agent dotfiles (home-manager in the guest). |
+| `guestDotfiles.enable` | `!configSeed.enable` (i.e. `true` under `profile = "full"`, `false` under `lite`) | Provision the guest `agent` user with the host primary user's fish + coding-agent dotfiles (home-manager in the guest). Mutually exclusive with `configSeed.enable`. |
 | `guestDotfiles.homeFilePrefixes` | `.pi/`, `.codex/`, `.agents/`, `.qwen/`, `.config/git/`, `.gitconfig` | Allowlist of `home.file` keys copied from the host primary user. |
 | `guestDotfiles.xdgConfigPrefixes` | `fish/`, `opencode/` | Allowlist of `xdg.configFile` keys copied from the host primary user. |
+| `configSeed.enable` | the `profile`'s own value (`false` for `full`, `true` for `lite`) | **Runtime configuration staging**: provision the guest home at *launch* time from an allowlisted, root-owned staged copy of the host configuration instead of running home-manager inside the guest. See [Runtime configuration staging](#runtime-configuration-staging). |
+| `configSeed.hostHome` | the primary user's home (`config.users.users.<myconfig.user>.home`) | The host home the allowlisted paths are resolved against. Never mounted — only the allowlisted paths are read. |
+| `configSeed.extraPaths` | `.config/git/attributes`, `.config/git/config` | Agent-independent additions to the staging allowlist. Same validation as the registry's per-agent `configPaths`. |
 | `guestModelConfig.enable` | `true` | Guest boot-time model discovery: query the loopback LiteLLM endpoint and render the **live** model list into pi + opencode config. See [Boot-time model discovery](#boot-time-model-discovery). |
 | `guestModelConfig.providerKey` / `providerName` | `litellm` / `LiteLLM (microVM)` | Provider key/name written into the generated configs. The key matches the host-side generators, so the runtime list *replaces* the build-time one. |
 | `guestModelConfig.defaultContextWindow` / `maxTokens` | `131072` / `4096` | Fallbacks for models whose real values the endpoint does not expose. |
@@ -163,6 +166,11 @@ The authoritative table lives in `../profiles.nix`.
 | `full` **(default)** | every agent `../agents.nix` declares | historical set (curl, fd, file, gnumake, rsync, tree, unzip, which, …) + fish login shell + NixOS `defaultPackages` |
 | `lite` | `[ "codex" ]` | minimal documented set (POSIX toolbox, git, diffutils/patch, ripgrep, jq, less, procps, util-linux, openssh when `enableSsh`) + bash login shell, no NixOS `defaultPackages` |
 
+| Profile | Guest home provisioning |
+| --- | --- |
+| `full` **(default)** | home-manager **inside the guest** (`guestDotfiles`), baked into the guest closure at build time |
+| `lite` | **runtime configuration staging** (`configSeed`): an allowlisted, root-owned copy staged per launch; no home-manager in the guest at all |
+
 Every package in the minimal set has a documented consumer (see the comment
 above `guestMinimalPackages` in `../guest.nix`). Agent-specific runtimes belong
 in the registry's per-agent `extraPackages`, so they are added only while that
@@ -192,6 +200,77 @@ not in the closure at all), and `--agent <name>` for it is rejected on the host
 before anything is started. Rejected at evaluation time: an unknown token, an
 empty selection, and a selection without any batch-capable agent (the batch
 machinery is still built into every guest — see plan phase 5).
+
+### Runtime configuration staging
+
+Under `profile = "lite"` (or with `configSeed.enable = true`) the guest home is
+no longer produced by home-manager activation *inside* the guest. Instead the
+host stages an **allowlisted** copy of its own agent configuration on every
+launch:
+
+```text
+host allowlisted config
+        │  agent-microvm-stage-config, as root, at launch time
+        ▼
+<runtimeRoot>/config-seed/<slot>/home        root:root 0555/0444
+        │  per-slot, READ-ONLY virtiofs share (tag `configseed`)
+        ▼
+/run/agent-config-seed/home
+        │  agent-config-seed.service (guest root oneshot), ordered BEFORE
+        │  sshd, the batch job controller and the agent-state linker
+        ▼
+/home/agent                                  agent-owned, disposable
+```
+
+Why: editing an allowlisted host instruction/skill/config file affects the
+**next launch** without rebuilding the guest, and the guest drops the whole
+home-manager activation machinery.
+
+**What may cross the boundary** is an explicit, positive allowlist: the
+`configPaths` of the *selected* agents (`../agents.nix`, so the staged set
+shrinks with `enabledAgents`) plus `configSeed.extraPaths`. Exact files and
+exact directories only — never a whole agent configuration root, because those
+mix configuration with credentials (`~/.codex/auth.json`, `~/.hermes/.env`, …).
+Hermes deliberately declares **no** `configPaths` for that reason.
+
+The rules, enforced at evaluation time *and* again by the generated stager:
+
+- paths are relative to `configSeed.hostHome`; `..`, absolute paths, a leading
+  `-`, a trailing `/` and anything outside `[A-Za-z0-9._-/]` are **rejected at
+  eval**;
+- a **credential denylist** (`auth.json`, `credentials*`, `*.pem`, `*.key`,
+  `id_rsa`, `id_ed25519`, `.env`, `.netrc`, `.ssh`, `*token*`, `*secret*`,
+  `*session*`, `cookies*`, …) is matched against every path component — at eval
+  against the allowlist itself, and at runtime against every file found inside
+  an allowlisted directory;
+- a symlink that resolves **outside** the host home is refused; a symlink into
+  `/nix/store` (how home-manager renders dotfiles) is **dereferenced** into a
+  plain copy;
+- only regular files and directories are copied — never sockets, FIFOs, device
+  nodes or setuid/setgid files;
+- the staged tree is **root-owned and not writable by the guest `agent` user**
+  (0555/0444, and the share is mounted read-only), so the untrusted guest
+  cannot modify what the host staged;
+- the per-slot destination is **cleaned before every launch**, and again on
+  teardown, so nothing from a previous task can leak into the next one;
+- per-file (1 MiB) and per-launch (32 MiB) budgets bound what one launch copies.
+
+Model-provider credentials are **never** staged: they stay in the host LiteLLM
+proxy, and the guest only learns the endpoint (see
+[Boot-time model discovery](#boot-time-model-discovery)).
+
+Inspect what a session actually got — the stager writes a manifest recording the
+policy, everything staged and everything skipped **with a reason**:
+
+```bash
+sudo jq . /var/lib/agent-microvms/config-seed/agent-lite-0/manifest.json
+sudo find /var/lib/agent-microvms/config-seed/agent-lite-0/home -ls
+agent-microvm ssh agent-lite-0 -- systemctl status agent-config-seed
+```
+
+The guest copy is the agent's own: it is writable, lives on the disposable
+tmpfs home and disappears with the session, and changing it cannot affect any
+host file.
 
 ### Resource classes
 

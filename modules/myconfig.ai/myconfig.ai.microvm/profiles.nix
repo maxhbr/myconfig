@@ -37,6 +37,12 @@
 #                    build the guest with the MINIMAL generic CLI toolset and a
 #                    plain bash login shell instead of the historical full set
 #                    plus fish (see guest.nix for the per-package rationale).
+#   configSeed       provision the guest home at LAUNCH time from an
+#                    ALLOWLISTED, root-owned staged copy of the host agent
+#                    configuration (./config-seed.nix) INSTEAD of running
+#                    home-manager activation inside the guest
+#                    (./guest-home.nix). `false` keeps the historical
+#                    guest-home-manager path.
 { lib }:
 rec {
   profiles = {
@@ -48,6 +54,7 @@ rec {
       storeDiskType = null;
       enabledAgents = null;
       minimalGuestPackages = false;
+      configSeed = false;
     };
 
     # The lightweight interactive shape: ONE prebuilt slot, 2 vCPU, 4 GiB RAM,
@@ -68,6 +75,11 @@ rec {
       # one just sets `enabledAgents`, which outranks this default.
       enabledAgents = [ "codex" ];
       minimalGuestPackages = true;
+      # Runtime, allowlisted configuration staging replaces guest home-manager
+      # activation here (lightweight plan phase 3): the guest picks up the
+      # CURRENT host instructions/settings without a rebuild, and drops the
+      # whole home-manager activation machinery from its closure.
+      configSeed = true;
     };
   };
 

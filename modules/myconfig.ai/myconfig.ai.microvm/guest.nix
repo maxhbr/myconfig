@@ -81,6 +81,13 @@
   # output), from guest-model-config.nix
   # (`_module.args.agentModelConfig`).
   agentModelConfig,
+  # The ONE definition of the RUNTIME configuration staging (lightweight plan
+  # phase 3): the per-slot host staging directory, the read-only share's guest
+  # side and the root-owned guest seeding oneshot, from config-seed.nix
+  # (`_module.args.agentConfigSeed`). When it is disabled (the `full` profile)
+  # its guest module is an EMPTY attrset, no share is declared, and the guest
+  # keeps home-manager activation exactly as before.
+  agentConfigSeed,
   ...
 }:
 let
@@ -287,30 +294,46 @@ let
   # --- minimal Cloud Hypervisor guest for a given slot --------------------
   mkGuest =
     slot:
-    lib.mkMerge [
+    lib.mkMerge (
       # Guest dotfile provisioning: run home-manager inside the guest for the
       # `agent` user, copying the host primary user's allowlisted shell +
       # coding-agent dotfiles (see guest-home.nix). Empty attrset when the
       # feature is disabled, so a bare guest keeps no home-manager overhead.
-      { imports = [ inputs.home.nixosModules.home-manager ]; }
-      (mkGuestHome { inherit pkgs; })
-      # Unattended batch execution (ticket 4, trust-split in ticket 7): the
-      # TRUSTED `agent-job-controller` oneshot (inert unless the host placed a
-      # spec in the share) plus the UNTRUSTED `agent-job-worker@` template it
-      # starts. Slot-independent, because the job share always appears at the
-      # same guest path.
-      (agentJobs.mkGuestModule slot)
-      # Boot-time model discovery: query the loopback LiteLLM endpoint and
-      # render the LIVE model list into pi + opencode config, overriding the
-      # build-time lists copied from the host dotfiles. Empty attrset when
-      # disabled or when the profile has no model API at all.
-      agentModelConfig.guestModule
-      # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
-      # directories the host prepared for this run; a run without
-      # --persist-agent-state sees an empty share and keeps the disposable home.
-      agentState.guestModule
-      (mkGuestBase slot)
-    ];
+      #
+      # DROPPED ENTIRELY when runtime configuration staging is active
+      # (lightweight plan phase 3, `configSeed.enable`, the `lite` default):
+      # the guest then gets its home from the host-staged, allowlisted copy at
+      # BOOT time (config-seed.nix) instead of from a build-time closure, so
+      # neither the home-manager NixOS module nor its activation service is part
+      # of the guest at all. The two are mutually exclusive by assertion.
+      lib.optionals (!agentConfigSeed.enable) [
+        { imports = [ inputs.home.nixosModules.home-manager ]; }
+        (mkGuestHome { inherit pkgs; })
+      ]
+      ++ [
+        # Unattended batch execution (ticket 4, trust-split in ticket 7): the
+        # TRUSTED `agent-job-controller` oneshot (inert unless the host placed a
+        # spec in the share) plus the UNTRUSTED `agent-job-worker@` template it
+        # starts. Slot-independent, because the job share always appears at the
+        # same guest path.
+        (agentJobs.mkGuestModule slot)
+        # Boot-time model discovery: query the loopback LiteLLM endpoint and
+        # render the LIVE model list into pi + opencode config, overriding the
+        # build-time lists copied from the host dotfiles. Empty attrset when
+        # disabled or when the profile has no model API at all.
+        agentModelConfig.guestModule
+        # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
+        # directories the host prepared for this run; a run without
+        # --persist-agent-state sees an empty share and keeps the disposable home.
+        agentState.guestModule
+        # Runtime configuration staging (lightweight plan phase 3): the root-owned
+        # oneshot that copies the host-staged, allowlisted configuration into the
+        # disposable home BEFORE sshd, the batch job controller and the
+        # agent-state linker. Empty attrset when staging is disabled.
+        agentConfigSeed.guestModule
+        (mkGuestBase slot)
+      ]
+    );
 
   mkGuestBase = slot: {
     # microvm.nix auto-imports its guest `microvm` module for VMs declared
@@ -424,7 +447,26 @@ let
           source = agentState.slotDir slot.name;
           mountPoint = agentState.guestMountPoint;
         }
-      ];
+      ]
+      # FIFTH share (lightweight plan phase 3) — the slot's CONFIG SEED, the
+      # host-staged copy of the ALLOWLISTED host agent configuration. READ-ONLY
+      # and root-owned (the stager writes it as root:root 0555/0444, and
+      # virtiofsd passes ownership through unchanged), so the untrusted guest
+      # `agent` user can neither modify what the host staged nor make the guest
+      # seeding read anything else. Only exists when staging is enabled (the
+      # `lite` profile); the `full` profile keeps its four shares and its guest
+      # home-manager activation.
+      #
+      # This is NOT a host-home mount: the source is a per-slot directory under
+      # `${cfg.runtimeRoot}/config-seed`, cleaned and repopulated from the
+      # explicit allowlist on every launch (see config-seed.nix).
+      ++ lib.optional agentConfigSeed.enable {
+        proto = "virtiofs";
+        tag = agentConfigSeed.guestTag;
+        source = agentConfigSeed.slotDir slot.name;
+        mountPoint = agentConfigSeed.guestMountPoint;
+        readOnly = true;
+      };
     }
     # --- lightweight plan phase 1: pinned guest store disk ----------------
     # The `lite` profile PINS microvm.nix's closure/startup optimizations and
