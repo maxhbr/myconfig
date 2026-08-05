@@ -157,22 +157,20 @@ one code path to read, test and audit.
 
 | Aspect | What every guest gets |
 | --- | --- |
-| Pool | from `resourceClasses` — or, for a host still on the deprecated spelling, from `slotCount` / `defaultVcpu` / `defaultMemoryMiB` |
+| Pool | from `resourceClasses` |
 | Guest store disk | pinned `microvm.optimize.enable = true`, `microvm.storeDiskType = "erofs"` |
 | Selected agents | `enabledAgents`; `null` (the default) means every agent `../agents.nix` declares |
 | Guest toolset | the minimal documented set (POSIX toolbox, git, diffutils/patch, ripgrep, jq, less, procps, util-linux, openssh when `enableSsh`) plus a **bash** login shell, with NixOS' `environment.defaultPackages` dropped |
 | Guest home | **runtime configuration staging** (`configSeed`): an allowlisted, root-owned copy staged per launch; **no** home-manager inside the guest |
 | virtiofs shares per slot | two: ONE writable per-session share at `/run/agent-session` and ONE read-only share at `/run/agent-session-ro` — see [The session share](#the-session-share) |
 
-Every package in the minimal set has a documented consumer (see the comment above
+Every package in this set has a documented consumer (see the comment above
 `guestCommonPackages` in `../guest.nix`). Agent-specific runtimes belong in the
 registry's per-agent `extraPackages`, so they are added only while that agent is
 selected.
 
 Sizing is entirely the host's decision: an explicit `resourceClasses` table is
-what the pool is built from, and combining it with the deprecated `slotCount` /
-`defaultVcpu` / `defaultMemoryMiB` spelling is **rejected** as ambiguous rather
-than silently resolved.
+what the pool is built from.
 
 ### Selected agents
 

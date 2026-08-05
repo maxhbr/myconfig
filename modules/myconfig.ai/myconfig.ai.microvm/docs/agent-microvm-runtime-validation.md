@@ -351,7 +351,8 @@ What the eval/build tier already executes for the same properties (run by
 - `microvm-batch-launcher-submit` runs the real **host** `agent-microvm submit`
   (39 assertions) with `systemctl`/`mount`/`umount`/`findmnt` stubbed, where the
   `systemctl start microvm@<slot>` stub plays the guest: it records the effective
-  ownership/modes of the job share the launcher created (input `0755`, spec
+  ownership/modes of the job subtree the launcher created inside the ONE
+  writable session share (input `0755`, spec
   `0400`, controller `0700`, worker agent-owned, worker-logs root-owned) and
   plants a genuine, a foreign-token, a foreign-slot, a v1, a malformed or a
   worker-only "result". Only the genuine one may yield exit 0; everything else

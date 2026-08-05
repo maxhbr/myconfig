@@ -446,9 +446,10 @@ rec {
   # Does ANY selected batch agent take the prompt TEXT as an argv token
   # (`%PROMPT%`), as opposed to reading the prompt FILE from stdin?
   #
-  # This is a property of the FILTERED registry, so it differs per host: a
-  # `profile = "lite"` host selects only the stdin-driven `codex`, and its
-  # generated dispatch therefore never reads the worker's `prompt` variable.
+  # This is a property of the FILTERED registry, so it differs per host: a host
+  # whose `enabledAgents` selects only stdin-driven agents (e.g.
+  # `[ "codex" ]`) generates a dispatch that never reads the worker's `prompt`
+  # variable.
   # ../myconfig.ai.microvm/job.nix needs to know, because `writeShellApplication`
   # runs shellcheck and an unread variable is an SC2034 BUILD failure there.
   batchUsesPromptText = lib.any (

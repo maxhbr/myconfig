@@ -298,7 +298,7 @@ was never used).
   absent from the guest `environment.systemPackages`) rather than as a byte
   count, for the same reason phase 0's benchmark is deferred.
 - **Phase 8, "every package has a documented consumer"**: documented as a
-  per-package rationale comment above `guestMinimalPackages` in `../guest.nix`,
+  per-package rationale comment above `guestCommonPackages` in `../guest.nix`,
   and locked down by an eval check listing the same set. NixOS' own
   `requiredPackages` (coreutils-full, curl, openssh, which, …) is load-bearing
   for a bootable system and is therefore neither removed nor asserted absent;
@@ -323,6 +323,32 @@ was never used).
 - **Phase 7, readiness definition**: the extended readiness criteria
   (config staging finished, proxy forwarding healthy, agent executable present)
   presuppose phases 3 and 6; only the polling *strategy* was changed here.
+- **Phase 5, `mode` is a CAPABILITY SELECTOR, not a second profile axis** (not
+  implemented yet; recorded here so it is not re-derived). The phase-5 section
+  below was written while `profile` still existed and proposes
+  `mode = "combined"` as "today's behaviour". With `profile` gone there is one
+  guest shape, so `mode` must be a *capability* selector over that one shape
+  (`interactive` / `batch` / `combined`, defaulting to `combined` so the
+  collapse's byte-identity result carries over) rather than a second axis
+  crossed with anything. Three concrete consequences the implementer will hit:
+  1. `../session.nix`'s layout table is the ONE source of truth every consumer
+     derives from (`job.nix`, `state.nix`, `hostkeys.nix`, `config-seed.nix`,
+     the launcher fragments, the tmpfiles rules, the pre-launch verifier and
+     `tests/microvm.nix`). Mode selection therefore belongs IN that table:
+     per-mode entries, so a batch-only tree simply has no `hostkeys/` entry and
+     an interactive-only tree drops `input/`, `controller/` and `worker*/`.
+     Adding `lib.mkIf`s at the consumers instead would reintroduce exactly the
+     dual-path drift the collapse removed.
+  2. The "selection must contain a batch-capable agent" assertion in
+     `../default.nix` exists ONLY because every guest currently carries the
+     batch machinery (its own comment says so). It must become
+     mode-conditional, or `mode = "interactive"` cannot be combined with an
+     interactive-only `enabledAgents` selection — which is the whole point of
+     the phase.
+  3. `enableSsh` and `mode = "batch"` overlap: batch mode excludes the SSH
+     server, the host-key share, known-hosts generation and SSH polling, all of
+     which `enableSsh` already gates. Decide ONE of them as authoritative
+     (assert the other away) rather than letting both switch the same units.
 - **Phase 1, store pinning**: `microvm.optimize.enable` and
   `microvm.storeDiskType` currently *default* to `true` / `erofs` upstream, so
   pinning them is behaviour-preserving today. It is done anyway (and, since the
@@ -894,15 +920,24 @@ Keep SSH private host keys in a separate read-only share. Do not place them in t
 
 ### Goal
 
-Avoid carrying both execution modes in every lite image.
+Avoid carrying both execution modes in every guest image.
 
 ### Proposed option
 
 ```nix
 myconfig.ai.microvm.mode = "interactive";
 myconfig.ai.microvm.mode = "batch";
-myconfig.ai.microvm.mode = "combined"; # today's behaviour (interactive + batch)
+myconfig.ai.microvm.mode = "combined"; # DEFAULT — today's behaviour
 ```
+
+`mode` is a **capability selector over the one guest shape**, not a second
+profile axis: `profile` no longer exists (see
+[Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path)),
+so there is nothing to cross it with. See the phase-5 entry under
+[Recorded deviations](#recorded-deviations) for the three things this
+implementation has to get right — per-mode entries in `../session.nix`'s layout
+table, a mode-conditional batch-capable-agent assertion, and the `enableSsh`
+overlap.
 
 ### Interactive mode includes
 
@@ -938,8 +973,8 @@ myconfig.ai.microvm.mode = "combined"; # today's behaviour (interactive + batch)
 
 ### Acceptance criteria
 
-- Interactive-lite has no batch services or job protocol files.
-- Batch-lite has no SSH daemon, SSH host keys, or SSH readiness polling.
+- An interactive-mode guest has no batch services or job protocol files.
+- A batch-mode guest has no SSH daemon, SSH host keys, or SSH readiness polling.
 - Combined mode preserves the current (interactive + batch) behaviour.
 - Nix assertions reject options that have no meaning in the selected mode.
 
@@ -1138,13 +1173,17 @@ Add Nix evaluation tests for:
 
 ### VM integration tests
 
-Test at least:
+Test at least (SUPERSEDED in part: there is no `full`/`lite` axis any more, so
+the matrix collapses to the ONE guest shape crossed with `mode` and
+`networkProfile`):
 
-1. interactive-lite, Codex only, VSOCK transport;
-2. batch-lite, Codex only, VSOCK transport;
-3. full compatibility profile;
+1. `mode = "interactive"`, Codex only, VSOCK transport;
+2. `mode = "batch"`, Codex only, VSOCK transport;
+3. ~~full compatibility profile~~ — removed with the `full` path; its
+   replacement is the evaluated-slice proof described in
+   [Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path);
 4. TAP internet/package profile if supported;
-5. two concurrent lite slots.
+5. two concurrent slots.
 
 Verify:
 
@@ -1208,7 +1247,8 @@ Document:
 - what it does not protect;
 - config-staging rules;
 - credential handling;
-- full versus lite profiles;
+- ~~full versus lite profiles~~ — there is ONE guest shape; document THAT
+  instead ([The guest shape](./agent-microvm.md#the-guest-shape));
 - interactive versus batch modes;
 - VSOCK versus TAP transport;
 - persistence semantics;
@@ -1221,16 +1261,21 @@ Explicitly state that any credential intentionally exposed to the guest may be e
 ### Rollout sequence
 
 1. Merge baseline measurement tooling.
-2. Merge the lite profile with existing implementation paths.
-3. Merge selected-agent filtering.
-4. Merge runtime config staging behind an option.
-5. Enable config staging by default only in the lite profile.
-6. Consolidate shares.
-7. Split interactive and batch modes.
-8. Add VSOCK transport behind an option.
-9. Make VSOCK the lite proxy-only default after tests pass.
+2. ~~Merge the lite profile with existing implementation paths.~~ DONE, then
+   collapsed — there is one path.
+3. Merge selected-agent filtering. DONE.
+4. ~~Merge runtime config staging behind an option.~~ DONE, then made
+   unconditional.
+5. ~~Enable config staging by default only in the lite profile.~~ SUPERSEDED:
+   it is unconditional.
+6. Consolidate shares. DONE (one writable + one read-only share).
+7. Split interactive and batch modes (phase 5 — NEXT).
+8. Add VSOCK transport behind an option (phase 6).
+9. Make VSOCK the proxy-only default after tests pass.
 10. Optimize cloning, readiness, and install-unit behavior.
-11. Review whether any lite changes should become full-profile defaults.
+11. ~~Review whether any lite changes should become full-profile defaults.~~
+    SUPERSEDED: every lightweight change IS the default; the `full` path is
+    gone.
 
 Keep each phase independently reviewable and revertible.
 
@@ -1240,7 +1285,7 @@ Keep each phase independently reviewable and revertible.
 
 The work is complete when all of the following are true:
 
-- A Codex-only interactive lite VM can be launched with one command.
+- A Codex-only interactive VM can be launched with one command.
 - It uses one slot, two vCPUs, and approximately 4 GiB RAM by default.
 - It uses a separate optimized guest store.
 - It does not run guest Home Manager activation.
@@ -1251,7 +1296,7 @@ The work is complete when all of the following are true:
 - It cannot access the host home, host store, host Nix daemon, control sockets, LAN, internet, VPN, DNS, or metadata services.
 - Disabled agents and their runtimes are absent from the guest closure.
 - Repository clones are independent and disposable.
-- Interactive and batch profiles do not include each other’s unnecessary services.
+- Interactive and batch modes do not include each other’s unnecessary services.
 - Launch latency, closure size, host process count, and virtiofsd count are all lower than the recorded baseline.
 - ~~The full profile remains available and compatible.~~ SUPERSEDED: the `full`
   profile was deliberately removed once the lightweight path was reviewed; the
@@ -1273,4 +1318,4 @@ While implementing this plan:
 - Stop and document the issue rather than weakening an invariant to make a test pass.
 - Do not add broad host mounts, generic host-port forwarding, privileged guest services, or shared credentials as shortcuts.
 - Prefer explicit Nix assertions over runtime failure for invalid configurations.
-- Keep the secure lite profile understandable from its generated units and mount declarations; avoid hidden imperative state.
+- Keep the secure guest shape understandable from its generated units and mount declarations; avoid hidden imperative state.

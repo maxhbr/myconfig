@@ -478,9 +478,9 @@ in
       # DNS policy), consumed by network.nix (firewall/NAT) and guest.nix
       # (proxy/DNS/forwarder).
       _module.args.agentNetwork = agentNetwork;
-      # The ONE effective resource-class table, so guest.nix / network.nix /
-      # launcher.nix / hostkeys.nix / job.nix all build the SAME slot pool
-      # (including the legacy-option migration above).
+      # The ONE effective resource-class table (`cfg.resourceClasses`, the only
+      # spelling there is), so guest.nix / network.nix / launcher.nix /
+      # hostkeys.nix / job.nix all build the SAME slot pool.
       _module.args.agentResourceClasses = effectiveResourceClasses;
     }
 
