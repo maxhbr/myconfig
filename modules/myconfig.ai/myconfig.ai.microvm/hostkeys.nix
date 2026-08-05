@@ -28,8 +28,8 @@
 # priv repo. Why not `microvm.credentialFiles`: cloud-hypervisor does not
 # support it (microvm.nix throws), and switching hypervisor is out of scope.
 #
-# Delivery to the guest is a SECOND virtiofs share, per slot, READ-ONLY, whose
-# host source directory holds only that slot's key (guest.nix declares it).
+# Delivery to the guest is the per-slot READ-ONLY virtiofs share (guest.nix
+# declares it), in which the key directory is the `hostkeys/` subdirectory.
 # virtiofsd passes ownership through unchanged, so inside the guest the private
 # key stays root:root 0400: the unprivileged, untrusted `agent` user cannot
 # read it, and no other slot's directory is exposed. This is a deliberate,
@@ -50,12 +50,11 @@
   pkgs,
   # The effective resource-class table (see default.nix).
   agentResourceClasses,
-  # The ONE definition of the CONSOLIDATED per-session tree (./session.nix,
-  # lightweight plan phase 4). With it, the per-slot host identity lives in the
-  # `hostkeys/` subdirectory of the ONE READ-ONLY share instead of having a
-  # read-only share of its own. It is deliberately NEVER placed in the writable
-  # session tree (the plan says so explicitly, and ./session.nix's verifier
-  # refuses to launch a slot whose writable tree contains key material).
+  # The ONE definition of the per-session tree (./session.nix): the per-slot
+  # host identity lives in the `hostkeys/` subdirectory of the ONE READ-ONLY
+  # share. It is deliberately NEVER placed in the writable session tree (the
+  # plan says so explicitly, and ./session.nix's verifier refuses to launch a
+  # slot whose writable tree contains key material).
   agentSession,
   ...
 }:
@@ -76,16 +75,15 @@ let
   # the generator below.
   hostKeys = rec {
     # Host-side root of the per-slot key directories: the read-only session
-    # tree under the consolidated layout, its own root otherwise.
-    root = if session.enable then session.roRoot else "${cfg.runtimeRoot}/hostkeys";
-    slotDir =
-      slotName: if session.enable then session.hostHostkeysDir slotName else "${root}/${slotName}";
+    # tree.
+    root = session.roRoot;
+    slotDir = slotName: session.hostHostkeysDir slotName;
     # Host-side aggregated known_hosts consumed by the launcher.
     knownHosts = "${cfg.runtimeRoot}/known_hosts";
     # Guest-side mount point of the per-slot read-only share, its virtiofs tag
     # and the key file name (identical on host and guest).
     keyName = "ssh_host_ed25519_key";
-    guestMountPoint = if session.enable then session.guestHostkeysDir else "/var/lib/agent-hostkey";
+    guestMountPoint = session.guestHostkeysDir;
     guestTag = "hostkey";
     guestKeyPath = "${guestMountPoint}/${keyName}";
   };
@@ -158,15 +156,13 @@ in
 
     (lib.mkIf cfg.enable {
       # The runtime root must be traversable so a non-root operator can read
-      # the world-readable known_hosts; the key directories stay 0700.
-      # Under the consolidated layout the key directories are part of the
-      # read-only session tree, which ./session.nix creates from the ONE layout
-      # table (root-only 0700, per slot) — so only the runtime root itself is
-      # emitted here.
+      # the world-readable known_hosts; the key directories stay 0700. Those
+      # are part of the read-only session tree, which ./session.nix creates from
+      # the ONE layout table (root-only 0700, per slot) — so only the runtime
+      # root itself is emitted here.
       systemd.tmpfiles.rules = [
         "d ${cfg.runtimeRoot} 0755 root root - -"
-      ]
-      ++ lib.optional (!session.enable) "d ${hostKeys.root} 0700 root root - -";
+      ];
 
       systemd.services.agent-microvm-hostkeys = {
         description = "Provision per-slot SSH host keys for agent microVMs";

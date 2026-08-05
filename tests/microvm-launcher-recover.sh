@@ -29,12 +29,41 @@
 set -euo pipefail
 
 for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET MOUNT_TARGET \
-    UMOUNT_TARGET FINDMNT_TARGET RUNTIME_ROOT STATE_ROOT SLOT FOREIGN_SLOT; do
+    UMOUNT_TARGET FINDMNT_TARGET RUNTIME_ROOT STATE_ROOT SESSION_ROOT \
+    SESSION_RO_ROOT STATE_SLOTS_ROOT WORKSPACE_SUBDIR STATE_SUBDIR HOSTKEYS_SUBDIR \
+    SLOT FOREIGN_SLOT; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
     }
 done
+
+# --- the paths the LAUNCHER uses, derived from the module ------------------
+# Everything below comes from tests/microvm.nix, which reads it from the module
+# itself (session.nix / state.nix / hostkeys.nix): the ONE writable session share
+# holds the workspace and agent-state BIND MOUNTS, the read-only one the slot's
+# SSH host identity. Hardcoding a second copy of that layout here is exactly how
+# this harness went silently vacuous once before.
+WORKSPACE_MOUNT="$SESSION_ROOT/$SLOT/$WORKSPACE_SUBDIR"
+STATE_MOUNT="$SESSION_ROOT/$SLOT/$STATE_SUBDIR"
+# The foreign-slot workspace residue lives under microvm.nix's own state root
+# (the pre-consolidation bind target), which `recover` still scans on purpose.
+FOREIGN_WORKSPACE_MOUNT="$STATE_ROOT/$FOREIGN_SLOT/workspace"
+# The fixtures are laid out OUTSIDE the sandbox under $WORK/runtime-<scenario>,
+# which is bind-mounted over $RUNTIME_ROOT — so the per-slot roots are needed
+# RELATIVE to it.
+rel_to_runtime() {
+    local rel="${1#"$RUNTIME_ROOT"}"
+    rel="${rel#/}"
+    [[ -n $rel ]] || {
+        printf 'harness: %s is not under RUNTIME_ROOT (%s)\n' "$1" "$RUNTIME_ROOT" >&2
+        exit 2
+    }
+    printf '%s' "$rel"
+}
+SESSION_REL="$(rel_to_runtime "$SESSION_ROOT")"
+SESSION_RO_REL="$(rel_to_runtime "$SESSION_RO_ROOT")"
+STATE_SLOTS_REL="$(rel_to_runtime "$STATE_SLOTS_ROOT")"
 
 FAILED=0
 PASSED=0
@@ -195,7 +224,7 @@ fixture() {
     rm -rf "$stub_dir" "$WORK/runtime-$name" "$WORK/state-$name"
     mkdir -p "$stub_dir/mounts" "$WORK/runtime-$name" "$WORK/state-$name"
     printf '%s' "$RUNTIME_ROOT/workspaces/some-task" \
-        >"$stub_dir/mounts/$(printf '%s' "$STATE_ROOT/$SLOT/workspace" | tr / _)"
+        >"$stub_dir/mounts/$(printf '%s' "$WORKSPACE_MOUNT" | tr / _)"
 }
 
 mounts_left() {
@@ -209,9 +238,9 @@ foreign_paths() {
     local name="$1"
     printf '%s\n' \
         "$WORK/runtime-$name/slots/$FOREIGN_SLOT" \
-        "$WORK/runtime-$name/jobs/$FOREIGN_SLOT" \
-        "$WORK/runtime-$name/hostkeys/$FOREIGN_SLOT" \
-        "$WORK/runtime-$name/state/slots/$FOREIGN_SLOT" \
+        "$WORK/runtime-$name/$SESSION_REL/$FOREIGN_SLOT" \
+        "$WORK/runtime-$name/$SESSION_RO_REL/$FOREIGN_SLOT" \
+        "$WORK/runtime-$name/$STATE_SLOTS_REL/$FOREIGN_SLOT" \
         "$WORK/state-$name/$FOREIGN_SLOT/workspace"
 }
 
@@ -230,11 +259,11 @@ fixture_foreign() {
     while read -r p; do mkdir -p "$p"; done < <(foreign_paths "$name")
     : >"$WORK/runtime-$name/slots/$FOREIGN_SLOT/session.json"
     # A CURRENT-pool per-slot directory that recover must never touch.
-    mkdir -p "$WORK/runtime-$name/hostkeys/$SLOT"
-    : >"$WORK/runtime-$name/hostkeys/$SLOT/ssh_host_ed25519_key"
+    mkdir -p "$WORK/runtime-$name/$SESSION_RO_REL/$SLOT/$HOSTKEYS_SUBDIR"
+    : >"$WORK/runtime-$name/$SESSION_RO_REL/$SLOT/$HOSTKEYS_SUBDIR/ssh_host_ed25519_key"
     if [[ -n $with_mount ]]; then
         printf '%s' "$RUNTIME_ROOT/workspaces/old-task" \
-            >"$stub_dir/mounts/$(printf '%s' "$STATE_ROOT/$FOREIGN_SLOT/workspace" | tr / _)"
+            >"$stub_dir/mounts/$(printf '%s' "$FOREIGN_WORKSPACE_MOUNT" | tr / _)"
     fi
 }
 
@@ -273,7 +302,7 @@ if grep -q "LAZY-UNMOUNT-ATTEMPTED" "$WORK/stub-holder/mount.log"; then
 else
     pass "recover never reached for a lazy unmount"
 fi
-if grep -q "unmounting $STATE_ROOT/$SLOT/workspace" "$WORK/recover-holder.log"; then
+if grep -q "unmounting $WORKSPACE_MOUNT" "$WORK/recover-holder.log"; then
     pass "recover reported the unmount it performed"
 else
     fail "recover did not report the unmount"
@@ -337,12 +366,12 @@ printf '\n=== 3b. a leaked AGENT-STATE bind is recovered too ===\n'
 fixture state-holder
 rm -f "$WORK/stub-state-holder/mounts"/*
 printf '%s' "$RUNTIME_ROOT/state/tasks/some-task/pi" \
-    >"$WORK/stub-state-holder/mounts/$(printf '%s' "$RUNTIME_ROOT/state/slots/$SLOT" | tr / _)"
+    >"$WORK/stub-state-holder/mounts/$(printf '%s' "$STATE_MOUNT" | tr / _)"
 rc="$(run_recover state-holder holder)"
 if [[ $rc != 0 ]]; then sed 's/^/      /' "$WORK/recover-state-holder.log"; fi
 expect "recover exits 0 after releasing a leaked agent-state bind" 0 "$rc"
 expect "the agent-state bind is really gone afterwards" 0 "$(mounts_left state-holder)"
-if grep -q "unmounting $RUNTIME_ROOT/state/slots/$SLOT" "$WORK/recover-state-holder.log"; then
+if grep -q "unmounting $STATE_MOUNT" "$WORK/recover-state-holder.log"; then
     pass "recover names the agent-state bind it released"
 else
     fail "recover never mentioned the agent-state bind: $(cat "$WORK/recover-state-holder.log")"
@@ -367,14 +396,14 @@ printf '\n=== 3c. a leaked agent-state bind that WEDGES fails the run ===\n'
 fixture state-wedged
 rm -f "$WORK/stub-state-wedged/mounts"/*
 printf '%s' "$RUNTIME_ROOT/state/tasks/some-task/pi" \
-    >"$WORK/stub-state-wedged/mounts/$(printf '%s' "$RUNTIME_ROOT/state/slots/$SLOT" | tr / _)"
+    >"$WORK/stub-state-wedged/mounts/$(printf '%s' "$STATE_MOUNT" | tr / _)"
 rc="$(run_recover state-wedged wedged)"
 if [[ $rc == 0 ]]; then
     fail "recover exited 0 although the agent-state bind survived"
 else
     pass "recover exited non-zero for an agent-state bind it could not release (rc $rc)"
 fi
-if grep -q "FAILED to unmount $RUNTIME_ROOT/state/slots/$SLOT" "$WORK/recover-state-wedged.log"; then
+if grep -q "FAILED to unmount $STATE_MOUNT" "$WORK/recover-state-wedged.log"; then
     pass "recover names the agent-state bind it could not release"
 else
     fail "no FAILED-to-unmount line for the agent-state bind: $(cat "$WORK/recover-state-wedged.log")"
@@ -429,13 +458,13 @@ for mode in dry live; do
         fail "recover ($mode) does not name the foreign slot"
     fi
     missing=0
-    for d in slots jobs hostkeys state/slots; do
+    for d in slots "$SESSION_REL" "$SESSION_RO_REL" "$STATE_SLOTS_REL"; do
         grep -q "$RUNTIME_ROOT/$d/$FOREIGN_SLOT" "$log" || {
             missing=1
             printf '      not reported: %s\n' "$RUNTIME_ROOT/$d/$FOREIGN_SLOT"
         }
     done
-    grep -q "$STATE_ROOT/$FOREIGN_SLOT/workspace" "$log" || missing=1
+    grep -q "$FOREIGN_WORKSPACE_MOUNT" "$log" || missing=1
     if ((missing)); then
         fail "recover ($mode) does not report every foreign per-slot path"
     else
@@ -479,7 +508,7 @@ fixture_foreign foreign-dryprune mounted
 rc="$(run_recover foreign-dryprune holder --dry-run --prune-foreign)"
 expect "recover --dry-run --prune-foreign exits 0" 0 "$rc"
 if grep -q "would remove $RUNTIME_ROOT/slots/$FOREIGN_SLOT" "$WORK/recover-foreign-dryprune.log" &&
-    grep -q "would unmount $STATE_ROOT/$FOREIGN_SLOT/workspace" "$WORK/recover-foreign-dryprune.log"; then
+    grep -q "would unmount $FOREIGN_WORKSPACE_MOUNT" "$WORK/recover-foreign-dryprune.log"; then
     pass "it says what it WOULD remove and unmount"
 else
     fail "no would-remove/would-unmount lines: $(cat "$WORK/recover-foreign-dryprune.log")"
@@ -504,7 +533,7 @@ if grep -q "LAZY-UNMOUNT-ATTEMPTED" "$WORK/stub-foreign-prune/mount.log"; then
 else
     pass "the foreign unmount never used a lazy unmount"
 fi
-if [[ -f "$WORK/runtime-foreign-prune/hostkeys/$SLOT/ssh_host_ed25519_key" ]]; then
+if [[ -f "$WORK/runtime-foreign-prune/$SESSION_RO_REL/$SLOT/$HOSTKEYS_SUBDIR/ssh_host_ed25519_key" ]]; then
     pass "per-slot state of the CURRENT pool was left untouched"
 else
     fail "--prune-foreign deleted state belonging to a current slot"
@@ -529,7 +558,7 @@ if [[ $rc == 0 ]]; then
 else
     pass "recover --prune-foreign exited non-zero for a wedged foreign mount (rc $rc)"
 fi
-if grep -q "FAILED to unmount $STATE_ROOT/$FOREIGN_SLOT/workspace" "$WORK/recover-foreign-wedged.log"; then
+if grep -q "FAILED to unmount $FOREIGN_WORKSPACE_MOUNT" "$WORK/recover-foreign-wedged.log"; then
     pass "it names the foreign mount it could not release"
 else
     fail "no FAILED-to-unmount line for the foreign mount"

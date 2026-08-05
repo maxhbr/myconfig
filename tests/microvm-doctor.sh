@@ -39,8 +39,8 @@
 set -euo pipefail
 
 for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET IP_TARGET \
-    IPTABLES_TARGET CURL_TARGET RUNTIME_ROOT GATEWAY SUBNET LITELLM_PORT \
-    BRIDGE SLOT_NAMES; do
+    IPTABLES_TARGET CURL_TARGET RUNTIME_ROOT HOSTKEYS_ROOT GATEWAY SUBNET \
+    LITELLM_PORT BRIDGE SLOT_NAMES; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
@@ -168,12 +168,21 @@ EOF
 chmod +x "$STUBS"/*
 
 # --- per-slot host-key directories ----------------------------------------
-# doctor checks "[[ -e "$HOSTKEYS_ROOT/<slot>" ]]" for every slot. The hostkeys
-# root lives under $RUNTIME_ROOT, which is bind-mounted below.
-mkdir -p "$WORK/runtime/hostkeys"
+# doctor checks "[[ -e "$HOSTKEYS_ROOT/<slot>" ]]" for every slot. $HOSTKEYS_ROOT
+# comes from the MODULE (hostkeys.nix: the read-only session tree), and it lives
+# under $RUNTIME_ROOT, which is bind-mounted below — so map it into the fixture
+# by stripping that prefix instead of hardcoding a second copy of the layout.
+hostkeys_rel="${HOSTKEYS_ROOT#"$RUNTIME_ROOT"}"
+hostkeys_rel="${hostkeys_rel#/}"
+[[ -n $hostkeys_rel ]] || {
+    printf 'harness: HOSTKEYS_ROOT (%s) is not under RUNTIME_ROOT (%s)\n' \
+        "$HOSTKEYS_ROOT" "$RUNTIME_ROOT" >&2
+    exit 2
+}
+mkdir -p "$WORK/runtime/$hostkeys_rel"
 # shellcheck disable=SC2086  # SLOT_NAMES is a deliberate word-split list
 for s in $SLOT_NAMES; do
-    mkdir -p "$WORK/runtime/hostkeys/$s"
+    mkdir -p "$WORK/runtime/$hostkeys_rel/$s"
 done
 
 # run_doctor <scenario> <rule_present 0|1>

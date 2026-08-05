@@ -45,7 +45,7 @@ the host/guest protocol — not the guest kernel's enforcement.
 - prompts and any data the agent fetches through LiteLLM;
 - **everything the batch worker produces** (`agent-job-worker@<agent>.service`,
   guest `agent`): the CONTENT of its stdout/stderr logs, its artifacts, any file
-  it writes into `/workspace` or `/run/agent-job/worker/`, and any JSON that
+  it writes into `/workspace` or `/run/agent-session/worker/`, and any JSON that
   *looks* like a result. None of it is evidence of anything;
 - other guests.
 
@@ -60,11 +60,11 @@ reports an exit code. So the result must be attributable, not merely readable.
   from the build-time registry (`agents.nix`), keyed by the worker unit's
   instance name.
 - **The result directory is not reachable by the worker.**
-  `/run/agent-job/controller/` is `root:root 0700` (virtiofsd passes ownership
-  through, so that is the *effective* permission inside the guest) and the worker
-  unit additionally masks it with `InaccessiblePaths`. The worker cannot write,
-  read, delete or list it, and cannot rename or shadow it either, because
-  `/run/agent-job` is root-owned `0755`.
+  `/run/agent-session/controller/` is `root:root 0700` (virtiofsd passes
+  ownership through, so that is the *effective* permission inside the guest) and
+  the worker unit additionally masks it with `InaccessiblePaths`. The worker
+  cannot write, read, delete or list it, and cannot rename or shadow it either,
+  because the session root `/run/agent-session` is root-owned `0755`.
 - **The spec is root-only (`0400`).** It carries the allocation token, so the
   worker cannot read the value it would need to mint a plausible result. The
   prompt is `0444`: readable by the worker, writable by nobody.
@@ -129,8 +129,8 @@ reports an exit code. So the result must be attributable, not merely readable.
   escaping requires a hypervisor/virtiofsd/KVM bug, not a container escape.
 - **Disposable state.** Guest root and `/home/agent` are tmpfs, rebuilt every
   boot. An agent cannot leave persistent implants in its own sandbox.
-- **No host filesystem.** The guest sees only the declared virtiofs shares (four
-  under `full`, two under `lite`) — no host home, no `/nix/store`, no sockets.
+- **No host filesystem.** The guest sees only the two declared virtiofs shares
+  — no host home, no `/nix/store`, no sockets.
 - **No build/fetch capability.** No Nix daemon socket, no store write access; the
   guest can only run what was baked in.
 - **Bounded resources.** Per-class `CPUQuota`/`MemoryMax`/`TasksMax` inside the
@@ -142,17 +142,13 @@ reports an exit code. So the result must be attributable, not merely readable.
 
 ## What is still shared through virtiofs
 
-Under `profile = "full"`: exactly **four** shares, all per-slot (five with
-`configSeed.enable`, which adds the read-only config seed).
+Exactly **two** shares, both per-slot: ONE writable per-session share and ONE
+read-only share (lightweight plan phase 4; the historical four/five separate
+shares are gone). The consolidation moved the paths into the two trees WITHOUT
+changing a single owner or mode — the trust boundary was never the share split,
+it is ownership and modes, which virtiofsd passes through unchanged:
 
-Under `profile = "lite"` (lightweight plan phase 4, `session.enable`): exactly
-**two** — ONE writable per-session share and ONE read-only share. The guest
-paths below are the `full` ones; the consolidated layout moves them into the two
-trees WITHOUT changing a single owner or mode (the trust boundary was never the
-share split — it is ownership and modes, which virtiofsd passes through
-unchanged):
-
-| `full` guest path | `lite` guest path |
+| Historical guest path | Guest path today |
 | --- | --- |
 | `/workspace` | `/workspace` (a bind mount of `/run/agent-session/workspace`) |
 | `/run/agent-job/...` | `/run/agent-session/...` (`input/`, `controller/`, `worker/`, `worker-logs/`) |
@@ -174,9 +170,9 @@ delete the user's clone) and recreates the empty skeleton.
 
 ### The one genuine security delta of consolidation
 
-Owners and modes are unchanged, but the *mount* boundary is not: under `lite`,
-`workspace/`, `worker/` and `state/` sit in the **same filesystem** as the
-root-owned `input/`, `controller/` and `worker-logs/`, whereas under `full` each
+Owners and modes are unchanged, but the *mount* boundary is not: `workspace/`,
+`worker/` and `state/` sit in the **same filesystem** as the root-owned
+`input/`, `controller/` and `worker-logs/`, whereas in the historical layout each
 was its own virtiofs mount. Operations that a kernel refuses **across**
 filesystems — `link(2)` and `rename(2)` — are therefore newly possible *in
 principle* between the agent-writable and the root-owned parts of the tree.
@@ -195,7 +191,7 @@ root-owned and unreadable to it, and `controller/` is `0700` root-only, so
 neither can be reached, linked or renamed.
 
 Consolidation is also a *strengthening* in one respect that is easy to miss: in
-the four-share layout the `workspace`, `state` and job directories were the
+the historical four-share layout the `workspace`, `state` and job directories were the
 mount points themselves, so the directory *entries* lived in a tree the agent
 could not touch — but each share was created and torn down separately. Now the
 whole tree hangs below a root-owned `0755` session root, so the agent can
@@ -206,10 +202,10 @@ session (it cannot, for example, replace `worker-logs/` with a symlink or move
 | Guest path | Mode | Content | Risk |
 | --- | --- | --- | --- |
 | `/workspace` | rw | the task's standalone clone | the agent can write anything into your task's clone; you review it before importing |
-| `/var/lib/agent-hostkey` | **ro** | that slot's SSH host key, `root:root 0400` | unreadable by the guest agent user; the guest cannot change its own identity |
-| `/run/agent-job` | rw | `input/` (`spec.json` `root:root 0400`, `prompt.md` `0444`), `controller/` (`root:root 0700`, the authoritative result), `worker/` (agent-owned), `worker-logs/` (`root:root 0755`, the log files systemd opens as root) | the agent can write junk into `worker/`; it cannot read or write `controller/`, cannot read the token-bearing spec, cannot alter its own spec/prompt, and cannot replace or redirect its own log files |
-| `/var/lib/agent-state` | rw | only when `--persist-agent-state`: the task's declared agent-state dirs | the agent can poison ITS OWN task's future state; other tasks are unreachable |
-| `/run/agent-config-seed` (`configSeed.enable`, i.e. `profile = "lite"`) | **ro** | the launch-time staged copy of the **allowlisted** host agent configuration, `root:root` `0500`/`0400`. The share source is the *payload* directory only: the staging `manifest.json` is its host-side sibling and is **not** in the share (it names the host home and every skipped, credential-shaped host file name) | the guest *root* seeder copies the tree into the disposable home; the unprivileged agent can neither read the staged original nor modify it, and cannot reach anything else in the host home (subject to the host-home write assumption below) |
+| `/run/agent-session-ro/hostkeys` | **ro** | that slot's SSH host key, `root:root 0400` | unreadable by the guest agent user; the guest cannot change its own identity |
+| `/run/agent-session` | rw | `input/` (`spec.json` `root:root 0400`, `prompt.md` `0444`), `controller/` (`root:root 0700`, the authoritative result), `worker/` (agent-owned), `worker-logs/` (`root:root 0755`, the log files systemd opens as root) | the agent can write junk into `worker/`; it cannot read or write `controller/`, cannot read the token-bearing spec, cannot alter its own spec/prompt, and cannot replace or redirect its own log files |
+| `/run/agent-session/state` | rw | only when `--persist-agent-state`: the task's declared agent-state dirs | the agent can poison ITS OWN task's future state; other tasks are unreachable |
+| `/run/agent-session-ro/config-seed` | **ro** | the launch-time staged copy of the **allowlisted** host agent configuration, `root:root` `0500`/`0400`. The read-only share source is the slot's read-only tree; the staging `manifest.json` lives in the host-only `<runtimeRoot>/config-seed/<slot>/` and is **not** in any share (it names the host home and every skipped, credential-shaped host file name) | the guest *root* seeder copies the tree into the disposable home; the unprivileged agent can neither read the staged original nor modify it, and cannot reach anything else in the host home (subject to the host-home write assumption below) |
 
 virtiofsd is in the TCB for all of them. Ownership is passed through unchanged,
 so host-side modes are what the guest sees.
@@ -221,12 +217,11 @@ with a credential denylist on top — applied to the path's own name *and to its
 resolved target*, so a benignly named symlink (`.codex/config.toml` →
 `.codex/auth.json`, `.agents/skills/x` → `~/.ssh`) cannot smuggle a credential —
 with symlink escapes rejected, `/nix/store` symlinks dereferenced (any home
-symlink into the world-readable store is followed, not just home-manager's
-rendered dotfiles), sockets/devices/FIFOs/setuid files excluded, and the
-destination cleaned before every launch. It moves the *risk of over-sharing*
-from "whatever home-manager rendered into the guest image" to "whatever the
-allowlist names", and makes that decision auditable per session through the
-manifest. See [agent-microvm.md](./agent-microvm.md#runtime-configuration-staging).
+symlink into the world-readable store is followed, including the host's rendered
+dotfiles), sockets/devices/FIFOs/setuid files excluded, and the destination
+cleaned before every launch. It moves the *risk of over-sharing* from "whatever
+the guest image baked in" to "whatever the allowlist names", and makes that
+decision auditable per session through the manifest. See [agent-microvm.md](./agent-microvm.md#runtime-configuration-staging).
 
 **Residual risk, explicitly not covered:** every control above is *name-based*
 and assumes the host home is **trusted**. An attacker who already has write

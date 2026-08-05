@@ -28,10 +28,13 @@
 #                                        assertions actually REJECT invalid
 #                                        config (slotCount bound, enableSsh key,
 #                                        insecure-network acknowledgement)
-#   microvm-eval-workspace-share §10/§11 — the reference guest declares EXACTLY
-#                                        one virtiofs share: the writable
-#                                        /workspace whose source matches the
-#                                        launcher bind-mount target (crit. 12)
+#   microvm-eval-guest-shape  phases 1+8 — the guest is the lightweight shape:
+#                                        pinned EROFS store, bash login shell,
+#                                        the documented minimal toolset
+#   microvm-eval-enabled-agents phase 2 — the agent SELECTION is applied once
+#   microvm-config-seed       phase 3 — launch-time, allowlisted config staging
+#   microvm-session-tree      phase 4 — ONE writable + ONE read-only share, the
+#                                        layout table and its trust policy
 #   microvm-guest-evaluates   §38     — the reference guest closure evaluates to a
 #                                        realisable derivation (drvPath marker)
 #   microvm-launcher-shellcheck §38   — host launcher + guest `agent-run` +
@@ -348,24 +351,31 @@ let
   # the rejectsWith checks below can't pass vacuously.
   baselineClean = failedAssertions [ ] == [ ];
 
-  # --- lightweight plan phase 1: the `lite` profile ----------------------
-  # A host whose sizing is NOT defined at all, so the profile's own class table
-  # is what the pool is built from. test-f13 cannot be used: it defines
-  # `resourceClasses` explicitly (a definition can only be outranked by
-  # extendModules, never removed), and an explicit table always wins over the
-  # profile default. test-workstation has the feature disabled and defines no
-  # sizing, so enabling it there yields a genuinely profile-sized pool.
-  liteHostWith =
+  # --- a single-slot VARIANT host ----------------------------------------
+  # Some checks need an option value the reference host defines itself (a
+  # definition can only be OUTRANKED by `extendModules`, never removed) — in
+  # particular a narrower `enabledAgents` and a guest without the SSH control
+  # channel. test-workstation has the feature disabled and defines nothing about
+  # it, so enabling it there yields a host whose only non-default microvm
+  # options are the ones the check sets. The pool is forced to ONE small slot so
+  # these variants stay cheap to evaluate.
+  variantHostWith =
     mods:
     self.nixosConfigurations.test-workstation.extendModules {
       modules = [
         {
           myconfig.ai.microvm = {
             enable = true;
-            profile = "lite";
-            # Keeps the variant key-free (the pool/store assertions below are
-            # independent of the SSH control channel).
+            # Keeps the variant key-free; the checks that need sshd use the
+            # reference host, which has the control channel.
             enableSsh = false;
+            resourceClasses = lib.mkForce {
+              lite = {
+                count = 1;
+                vcpu = 2;
+                memoryMiB = 4096;
+              };
+            };
           };
           # The secure `proxy-only` default requires the host LiteLLM backend.
           services.litellm.enable = true;
@@ -373,14 +383,28 @@ let
       ]
       ++ mods;
     };
-  liteHost = liteHostWith [ ];
-  # The FILTERED registry instance of a lite host (`nixosSystem` — and hence
+  # The FILTERED registry instance of a variant host (`nixosSystem` — and hence
   # `extendModules` — exposes module args on the top-level attrset).
-  liteRegistryOf = mods: (liteHostWith mods)._module.args.agentRegistry;
-  liteProfile =
-    (import ../modules/myconfig.ai/myconfig.ai.microvm/profiles.nix { inherit lib; }).forProfile
-      "lite";
-  liteSlots = slotLib.mkSlots liteProfile.resourceClasses;
+  variantRegistryOf = mods: (variantHostWith mods)._module.args.agentRegistry;
+  variantSlot = lib.head (
+    slotLib.mkSlots {
+      lite = {
+        count = 1;
+        vcpu = 2;
+        memoryMiB = 4096;
+      };
+    }
+  );
+  # THE reference variant of the SELECTION checks: one agent only (the plan's
+  # reference agent), which is what a host that wants the smallest guest closure
+  # would configure.
+  codexHost = variantHostWith [ { myconfig.ai.microvm.enabledAgents = [ "codex" ]; } ];
+
+  # The module's own path/layout definitions of the REFERENCE host, so no check
+  # carries a second copy of them.
+  session = self.nixosConfigurations.test-f13._module.args.agentSession;
+  seed = self.nixosConfigurations.test-f13._module.args.agentConfigSeed;
+  launcherPkg = findPkg enabledCfg.environment.systemPackages "agent-microvm";
 in
 {
   # ---------------------------------------------------------------------- #
@@ -592,88 +616,47 @@ in
     );
 
   # ---------------------------------------------------------------------- #
-  # (r) LIGHTWEIGHT PROFILE (lightweight plan phase 1): `profile = "lite"`   #
-  #     is a COMPATIBILITY BOUNDARY, not a behaviour change for existing     #
-  #     hosts. Assert both halves: the reference host stays on `full` with    #
-  #     its own sizing, and a host that opts into `lite` (and says nothing    #
-  #     about sizing) gets EXACTLY one 2 vCPU / 4 GiB slot with a pinned,     #
-  #     optimized EROFS guest store.                                         #
+  # (r) GUEST SHAPE (lightweight plan phases 1 + 8): the module has exactly  #
+  #     ONE shape, and it is the lightweight one — a pinned, optimized EROFS #
+  #     guest store, a plain bash login shell and the documented minimal CLI #
+  #     toolset with NixOS' `defaultPackages` convenience set dropped. Every  #
+  #     assertion is against the REFERENCE host, i.e. against what f13        #
+  #     actually deploys.                                                    #
   # ---------------------------------------------------------------------- #
-  microvm-eval-lite-profile =
+  microvm-eval-guest-shape =
     let
-      liteCfg = liteHost.config;
-      liteVmNames = lib.sort (a: b: a < b) (builtins.attrNames liteCfg.microvm.vms);
-      liteSlotNames = lib.sort (a: b: a < b) (map (sl: sl.name) liteSlots);
-      liteGuest = liteCfg.microvm.vms.${(lib.head liteSlots).name}.config.config;
-      liteGuestPkgPaths = map (p: p.outPath) liteGuest.environment.systemPackages;
-      fullGuestPkgPaths = map (p: p.outPath) guest0Cfg.environment.systemPackages;
-      liteFailed = map (a: a.message) (builtins.filter (a: !a.assertion) liteCfg.assertions);
+      guestPkgPaths = map (p: p.outPath) guest0Cfg.environment.systemPackages;
     in
-    mkEvalCheck "microvm-eval-lite-profile" [
+    mkEvalCheck "microvm-eval-guest-shape" [
       {
-        # Existing hosts keep the full-featured tier: the profile default must
-        # never flip under them.
-        assertion = microvmOpts.profile == "full";
-        message = "the profile default must stay 'full' (reference host reports '${microvmOpts.profile}')";
-      }
-      {
-        # ... and the full profile must NOT impose the lite class table: the
-        # reference host's own pool is untouched.
-        assertion = lib.attrNames resourceClasses != [ "lite" ];
-        message = "the full profile must not replace the host's resource classes";
-      }
-      {
-        assertion = liteFailed == [ ];
-        message = "a plain `profile = \"lite\"` host must evaluate cleanly, got: ${toString liteFailed}";
-      }
-      {
-        assertion = liteCfg.myconfig.ai.microvm.profile == "lite";
-        message = "the lite variant host does not report profile = lite";
-      }
-      {
-        # ONE prebuilt slot unless overridden (plan phase 1 acceptance).
-        assertion = lib.length liteSlots == 1;
-        message = "the lite profile must declare exactly ONE slot, got ${toString (lib.length liteSlots)}";
-      }
-      {
-        assertion = liteVmNames == liteSlotNames;
-        message = "lite host VMs ${toString liteVmNames} do not match the profile pool ${toString liteSlotNames}";
-      }
-      {
-        assertion = liteGuest.microvm.vcpu == 2 && liteGuest.microvm.mem == 4096;
-        message = "lite guest must be 2 vCPU / 4096 MiB, got ${toString liteGuest.microvm.vcpu} vCPU / ${toString liteGuest.microvm.mem} MiB";
+        assertion = baselineClean;
+        message = "positive control: the reference host must evaluate cleanly, got ${
+          toString (failedAssertions [ ])
+        }";
       }
       {
         # Pinned rather than inherited: a microvm.nix release cannot silently
-        # give the lightweight guest a bigger/slower store image.
-        assertion = liteGuest.microvm.storeDiskType == "erofs";
-        message = "lite guest storeDiskType must be pinned to erofs, got '${toString liteGuest.microvm.storeDiskType}'";
+        # give the guest a bigger/slower store image.
+        assertion = guest0Cfg.microvm.storeDiskType == "erofs";
+        message = "the guest storeDiskType must be pinned to erofs, got '${toString guest0Cfg.microvm.storeDiskType}'";
       }
       {
-        assertion = liteGuest.microvm.optimize.enable == true;
-        message = "lite guest must pin microvm.optimize.enable = true";
+        assertion = guest0Cfg.microvm.optimize.enable == true;
+        message = "the guest must pin microvm.optimize.enable = true";
       }
       # --- lightweight plan phase 8: minimized guest closure --------------
       {
-        # The full profile keeps its historical toolset and fish login shell.
+        # A plain bash login shell: no fish closure, no `programs.fish`
+        # machinery, and nothing in the guest configures fish any more.
         assertion =
-          builtins.elem pkgs.fish.outPath fullGuestPkgPaths
-          && builtins.elem pkgs.curl.outPath fullGuestPkgPaths
-          && guest0Cfg.users.users.agent.shell.outPath == pkgs.fish.outPath
-          && guest0Cfg.programs.fish.enable;
-        message = "the full profile must keep its historical guest toolset and fish login shell";
-      }
-      {
-        # ... while the lite guest logs in with plain bash and carries no fish.
-        assertion =
-          liteGuest.users.users.agent.shell.outPath == pkgs.bashInteractive.outPath
-          && !liteGuest.programs.fish.enable
-          && !(builtins.elem pkgs.fish.outPath liteGuestPkgPaths);
-        message = "the lite guest must use a plain bash login shell and contain no fish";
+          guest0Cfg.users.users.agent.shell.outPath == pkgs.bashInteractive.outPath
+          && !guest0Cfg.programs.fish.enable
+          && !(builtins.elem pkgs.fish.outPath guestPkgPaths);
+        message = "the guest must use a plain bash login shell and contain no fish";
       }
       {
         # Every tool the minimal set documents a consumer for is present.
-        assertion = builtins.all (p: builtins.elem p.outPath liteGuestPkgPaths) (
+        assertion = builtins.all (p: builtins.elem p.outPath guestPkgPaths) (
           with pkgs;
           [
             bash
@@ -692,15 +675,14 @@ in
             util-linux
           ]
         );
-        message = "the lite guest is missing a package from the documented minimal set";
+        message = "the guest is missing a package from the documented minimal set";
       }
       {
-        # ... and nothing else this module used to add, plus NixOS'
-        # `environment.defaultPackages` convenience set (perl/rsync/strace).
+        # ... and nothing else this module used to add.
         # NOTE: NixOS' own `requiredPackages` (coreutils-full, curl, openssh,
         # which, ...) is load-bearing for a bootable system and deliberately
         # NOT asserted absent — only the module's discretionary additions are.
-        assertion = builtins.all (p: !(builtins.elem p.outPath liteGuestPkgPaths)) (
+        assertion = builtins.all (p: !(builtins.elem p.outPath guestPkgPaths)) (
           with pkgs;
           [
             fd
@@ -710,117 +692,103 @@ in
             unzip
           ]
         );
-        message = "the lite guest still carries a discretionary package with no documented in-guest consumer";
+        message = "the guest still carries a discretionary package with no documented in-guest consumer";
       }
       {
-        assertion =
-          liteGuest.environment.defaultPackages == [ ] && guest0Cfg.environment.defaultPackages != [ ];
-        message = "the lite guest must drop NixOS' defaultPackages convenience set (and the full guest must keep it)";
+        # NixOS' `environment.defaultPackages` (perl, rsync, strace) has no
+        # in-guest consumer in a single-purpose sandbox image.
+        assertion = guest0Cfg.environment.defaultPackages == [ ];
+        message = "the guest must drop NixOS' defaultPackages convenience set";
       }
       {
-        # The profile default is a DEFAULT: an explicit table still wins.
+        # Sizing is the HOST's decision: an explicit `resourceClasses` table is
+        # what the pool is built from (the reference host defines two classes).
         assertion =
-          let
-            overridden =
-              (liteHostWith [
-                {
-                  myconfig.ai.microvm.resourceClasses = lib.mkForce {
-                    normal = {
-                      count = 2;
-                      vcpu = 1;
-                      memoryMiB = 1024;
-                    };
-                  };
-                }
-              ]).config;
-          in
-          lib.sort (a: b: a < b) (builtins.attrNames overridden.microvm.vms) == [
-            "agent-normal-0"
-            "agent-normal-1"
-          ];
-        message = "an explicit resourceClasses table must outrank the lite profile's default pool";
+          lib.sort (a: b: a < b) (builtins.attrNames enabledCfg.microvm.vms)
+          == lib.sort (a: b: a < b) (map (sl: sl.name) enabledSlots)
+          && lib.length (lib.attrNames resourceClasses) == 2;
+        message = "the reference host's VMs must be exactly the pool of its own two resource classes, got ${toString (builtins.attrNames enabledCfg.microvm.vms)}";
       }
       {
-        # ... but mixing the profile table with the DEPRECATED slot options is
-        # ambiguous and must be rejected, never silently resolved.
-        assertion =
-          let
-            msgs = map (a: a.message) (
-              builtins.filter (a: !a.assertion)
-                (liteHostWith [ { myconfig.ai.microvm.slotCount = 3; } ]).config.assertions
-            );
-          in
-          builtins.any (m: lib.hasInfix "carries its own resource-class table" m) msgs;
-        message = "profile = lite together with the deprecated slotCount must be rejected";
+        # ... and mixing that explicit table with the DEPRECATED slot options is
+        # ambiguous, so it must be rejected rather than silently resolved.
+        assertion = rejectsWith [ { myconfig.ai.microvm.slotCount = 3; } ] "ambiguous slot configuration";
+        message = "an explicit resourceClasses together with the deprecated slotCount must be rejected";
       }
     ];
 
   # ---------------------------------------------------------------------- #
   # (s) SELECTED AGENTS (lightweight plan phase 2): the registry selection is  #
   #     applied ONCE, in agents.nix, so a deselected agent is ABSENT from the  #
-  #     guest closure rather than merely hidden — and the reference host,      #
-  #     which selects nothing, still gets every declared agent.                #
+  #     guest closure rather than merely hidden — while the module-wide        #
+  #     DEFAULT (no `enabledAgents` at all) still keeps EVERY declared agent,  #
+  #     so no host silently loses a workmux pane or a `submit --agent <name>`. #
   # ---------------------------------------------------------------------- #
   microvm-eval-enabled-agents =
     let
-      liteReg = liteRegistryOf [ ];
-      liteGuest = (liteHost.config.microvm.vms.${(lib.head liteSlots).name}).config.config;
-      liteGuestPaths = map (p: p.outPath) liteGuest.environment.systemPackages;
-      # The packages of the agents the lite profile does NOT select, taken from
-      # the reference host's UNFILTERED registry rather than a second list.
-      deselected = lib.filter (a: !(builtins.elem a.name liteReg.names)) (
+      codexReg = codexHost._module.args.agentRegistry;
+      codexGuest = (codexHost.config.microvm.vms.${variantSlot.name}).config.config;
+      codexGuestPaths = map (p: p.outPath) codexGuest.environment.systemPackages;
+      # The packages of the agents the codex-only host does NOT select, taken
+      # from the reference host's registry rather than a second list.
+      deselected = lib.filter (a: !(builtins.elem a.name codexReg.names)) (
         lib.attrValues agentRegistry.agents
       );
-      liteWorkmux = builtins.filter (lib.hasPrefix "microvm-") (
-        builtins.attrNames liteHost.config.myconfig.ai.workmux.agents
+      codexWorkmux = builtins.filter (lib.hasPrefix "microvm-") (
+        builtins.attrNames codexHost.config.myconfig.ai.workmux.agents
       );
     in
     mkEvalCheck "microvm-eval-enabled-agents" (
       [
         {
-          # Behaviour preservation: a host that says nothing (and stays on the
-          # `full` profile) keeps EVERY declared agent.
-          assertion = microvmOpts.enabledAgents == null && agentRegistry.names == agentRegistry.declaredNames;
-          message = "the reference host must keep every declared agent (got ${toString agentRegistry.names} of ${toString agentRegistry.declaredNames})";
+          # The module-wide default: a host that says NOTHING keeps every
+          # declared agent.
+          assertion = (variantRegistryOf [ ]).names == agentRegistry.declaredNames;
+          message = "the module default must keep every declared agent, got ${
+            toString (variantRegistryOf [ ]).names
+          }";
         }
         {
-          # The lite profile's own default: exactly the plan's reference agent.
-          assertion = liteReg.names == [ "codex" ];
-          message = "the lite profile must select codex only, got ${toString liteReg.names}";
+          # The reference host states its selection EXPLICITLY (its workmux
+          # panes and `submit --agent` tokens depend on it) and currently keeps
+          # all of them.
+          assertion =
+            microvmOpts.enabledAgents != null
+            && lib.sort (a: b: a < b) microvmOpts.enabledAgents == agentRegistry.declaredNames
+            && agentRegistry.names == agentRegistry.declaredNames;
+          message = "the reference host must select its agents explicitly (got ${toString microvmOpts.enabledAgents} of ${toString agentRegistry.declaredNames})";
+        }
+        {
+          assertion = codexReg.names == [ "codex" ];
+          message = "an explicit `enabledAgents = [ \"codex\" ]` must select codex only, got ${toString codexReg.names}";
         }
         {
           # ... while still DECLARING all of them (the selection filters, it
           # does not delete registry entries).
-          assertion = liteReg.declaredNames == agentRegistry.declaredNames;
+          assertion = codexReg.declaredNames == agentRegistry.declaredNames;
           message = "the selection must not change the set of DECLARED agents";
         }
         {
-          assertion = liteReg.unknownEnabled == [ ];
-          message = "the lite profile's own selection must be valid";
-        }
-        {
-          # An explicit option outranks the profile default.
-          assertion =
-            (liteRegistryOf [ { myconfig.ai.microvm.enabledAgents = [ "pi" ]; } ]).names == [ "pi" ];
-          message = "an explicit enabledAgents must outrank the profile's default selection";
+          assertion = codexReg.unknownEnabled == [ ];
+          message = "the codex-only selection must be valid";
         }
         {
           # Every DERIVED list follows the selection — not just the packages.
-          assertion = liteWorkmux == [ "microvm-codex" ];
-          message = "workmux registrations must follow the selection, got ${toString liteWorkmux}";
+          assertion = codexWorkmux == [ "microvm-codex" ];
+          message = "workmux registrations must follow the selection, got ${toString codexWorkmux}";
         }
         {
-          assertion = liteReg.batchNames == [ "codex" ] && liteReg.namesAlternation == "codex";
+          assertion = codexReg.batchNames == [ "codex" ] && codexReg.namesAlternation == "codex";
           message = "the generated batch/help fragments must follow the selection";
         }
         {
           assertion = deselected != [ ];
-          message = "positive control: the lite selection must actually exclude some declared agent";
+          message = "positive control: the codex-only selection must actually exclude some declared agent";
         }
         {
           # The SELECTED agent is in the guest closure.
-          assertion = builtins.elem (lib.head (lib.attrValues liteReg.agents)).package.outPath liteGuestPaths;
-          message = "the selected agent's package is missing from the lite guest closure";
+          assertion = builtins.elem (lib.head (lib.attrValues codexReg.agents)).package.outPath codexGuestPaths;
+          message = "the selected agent's package is missing from the guest closure";
         }
         {
           # Unknown token: a typo must fail at EVAL, naming the valid tokens.
@@ -828,7 +796,7 @@ in
             let
               msgs = map (a: a.message) (
                 builtins.filter (a: !a.assertion)
-                  (liteHostWith [
+                  (variantHostWith [
                     {
                       myconfig.ai.microvm.enabledAgents = [
                         "codex"
@@ -847,7 +815,7 @@ in
             let
               msgs = map (a: a.message) (
                 builtins.filter (a: !a.assertion)
-                  (liteHostWith [ { myconfig.ai.microvm.enabledAgents = [ ]; } ]).config.assertions
+                  (variantHostWith [ { myconfig.ai.microvm.enabledAgents = [ ]; } ]).config.assertions
               );
             in
             builtins.any (m: lib.hasInfix "selects no agent" m) msgs;
@@ -857,67 +825,44 @@ in
       # ... and the DESELECTED agents' runtimes are ABSENT from the guest
       # closure (the point of the whole phase).
       ++ map (a: {
-        assertion = !(builtins.elem a.package.outPath liteGuestPaths);
-        message = "deselected agent '${a.name}' is still in the lite guest closure (${a.package.outPath})";
+        assertion = !(builtins.elem a.package.outPath codexGuestPaths);
+        message = "deselected agent '${a.name}' is still in the codex-only guest closure (${a.package.outPath})";
       }) deselected
     );
 
   # ---------------------------------------------------------------------- #
-  # (t) RUNTIME CONFIG STAGING (lightweight plan phase 3): the lite guest    #
-  #     is provisioned at LAUNCH time from an ALLOWLISTED, root-owned staged  #
-  #     copy of the host configuration instead of by guest home-manager       #
-  #     activation — while the full profile keeps home-manager, byte-for-     #
-  #     byte. Locks down all four halves: the mechanism is active + correctly  #
-  #     ordered in `lite`, ABSENT in `full`, the allowlist follows             #
-  #     `enabledAgents`, and escaping / credential-shaped entries are          #
-  #     REJECTED at eval. The build part proves the generated stager really    #
-  #     enforces the allowlist and cleans its destination.                     #
+  # (t) RUNTIME CONFIG STAGING (lightweight plan phase 3): the guest home is #
+  #     provisioned at LAUNCH time from an ALLOWLISTED, root-owned staged     #
+  #     copy of the host configuration, and NO guest home-manager activation  #
+  #     exists at all. Locks down: the mechanism is active + correctly         #
+  #     ordered, the share is per-slot/read-only/root-owned, the manifest is   #
+  #     outside every share, the allowlist follows `enabledAgents`, and        #
+  #     escaping / credential-shaped entries are REJECTED at eval. The build   #
+  #     part proves the generated stager really enforces the allowlist and     #
+  #     cleans its destination.                                               #
   # ---------------------------------------------------------------------- #
   microvm-config-seed =
     let
-      liteSeed = liteHost._module.args.agentConfigSeed;
-      liteCfg = liteHost.config;
-      liteSlot = lib.head liteSlots;
-      liteGuest = liteCfg.microvm.vms.${liteSlot.name}.config.config;
-      liteReg = liteRegistryOf [ ];
-      liteLauncher = findPkg liteCfg.environment.systemPackages "agent-microvm";
-      fullLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      codexSeed = codexHost._module.args.agentConfigSeed;
+      codexReg = codexHost._module.args.agentRegistry;
 
-      # A lite host WITH the SSH control channel, so `sshd.service` really
-      # exists in the guest and the seeding unit's `before = [ "sshd.service"
-      # ... ]` is an ordering against a REAL unit rather than a string in a
-      # list nothing resolves.
-      liteSshHost = liteHostWith [
-        {
-          myconfig.ai.microvm = {
-            enableSsh = lib.mkForce true;
-            sshPublicKeyFile = pkgs.writeText "agent-microvm-test.pub" "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA test\n";
-          };
-        }
-      ];
-      liteSshGuest = liteSshHost.config.microvm.vms.${liteSlot.name}.config.config;
-
-      # The share through which the guest sees the staged tree. Since phase 4
-      # consolidated the shares that is the ONE READ-ONLY share, whose source
-      # CONTAINS the staged payload; before that it was a share of its own
-      # whose source IS the payload. Both are found by asking which share
-      # covers the guest mount point, so this check follows the layout instead
-      # of pinning one of the two.
+      # The share through which the guest sees the staged tree: the ONE
+      # READ-ONLY share, whose source CONTAINS the staged payload. Found by
+      # asking which share covers the guest mount point, so this check follows
+      # the layout instead of pinning a path.
       seedShares = builtins.filter (
-        s:
-        s.mountPoint == liteSeed.guestMountPoint
-        || lib.hasPrefix "${s.mountPoint}/" liteSeed.guestMountPoint
-      ) liteGuest.microvm.shares;
+        s: s.mountPoint == seed.guestMountPoint || lib.hasPrefix "${s.mountPoint}/" seed.guestMountPoint
+      ) guest0Cfg.microvm.shares;
       # True when `path` is inside (or is) the source of share `s`.
       sourceCovers = s: path: path == s.source || lib.hasPrefix "${s.source}/" path;
       # A tmpfiles `d` rule for `path` with `mode`, owned by root. tmpfiles
       # accepts the owner both by name and numerically; ./session.nix renders
       # the numeric form (it derives the ids from its layout table), the
-      # standalone config-seed layout renders the name.
+      # host-only manifest directories render the name.
       hasRootDirRule =
         rules: path: mode:
         builtins.any (r: r == "d ${path} ${mode} root root - -" || r == "d ${path} ${mode} 0 0 - -") rules;
-      seedUnit = liteGuest.systemd.services.agent-config-seed;
+      seedUnit = guest0Cfg.systemd.services.agent-config-seed;
       # Every unit the seeding oneshot must precede, from the SAME sources the
       # module orders against.
       seedBeforeUnits = [
@@ -928,77 +873,49 @@ in
       ];
       hmServices =
         cfg: builtins.filter (n: lib.hasPrefix "home-manager" n) (builtins.attrNames cfg.systemd.services);
-      # The allowlist a host would get with a DIFFERENT selection, to prove the
-      # staged set follows `enabledAgents` rather than the whole registry.
-      piAllowlist =
-        (liteHostWith [
-          { myconfig.ai.microvm.enabledAgents = [ "pi" ]; }
-        ])._module.args.agentConfigSeed.allowedPaths;
-      # `configPaths` of the agents the lite profile does NOT select.
+      # `configPaths` of the agents a codex-only host does NOT select.
       deselectedPaths = lib.unique (
         lib.concatMap (a: a.configPaths) (
-          lib.filter (a: !(builtins.elem a.name liteReg.names)) (lib.attrValues agentRegistry.agents)
+          lib.filter (a: !(builtins.elem a.name codexReg.names)) (lib.attrValues agentRegistry.agents)
         )
       );
       seedRejects =
         infix: mods:
         let
-          msgs = map (a: a.message) (builtins.filter (a: !a.assertion) (liteHostWith mods).config.assertions);
+          msgs = map (a: a.message) (
+            builtins.filter (a: !a.assertion) (variantHostWith mods).config.assertions
+          );
         in
         builtins.any (m: lib.hasInfix infix m) msgs;
 
       evalMarker = mkEvalCheck "microvm-config-seed-eval" [
-        # --- the FULL profile is untouched -------------------------------
+        # --- THE acceptance criterion of phase 3 --------------------------
         {
-          assertion = !microvmOpts.configSeed.enable && microvmOpts.guestDotfiles.enable;
-          message = "the full profile must keep guest home-manager provisioning and NOT enable config staging";
+          # No guest home-manager activation exists any more — anywhere.
+          assertion = hmServices guest0Cfg == [ ];
+          message = "the guest must NOT run home-manager activation, got ${toString (hmServices guest0Cfg)}";
         }
         {
-          # Positive control for the negative assertion below: the full guest
-          # really does run home-manager activation today.
-          assertion = hmServices guest0Cfg == [ "home-manager-agent" ];
-          message = "positive control: the full guest must still run home-manager activation, got ${toString (hmServices guest0Cfg)}";
-        }
-        {
-          assertion = builtins.all (s: s.tag != liteSeed.guestTag) guest0Cfg.microvm.shares;
-          message = "the full guest must not declare a config-seed share";
-        }
-        # --- ... and the LITE profile replaces it -------------------------
-        {
-          assertion = liteCfg.myconfig.ai.microvm.configSeed.enable && liteSeed.enable;
-          message = "the lite profile must enable runtime config staging";
-        }
-        {
-          # THE acceptance criterion of phase 3.
-          assertion = hmServices liteGuest == [ ];
-          message = "the lite guest must NOT run home-manager activation, got ${toString (hmServices liteGuest)}";
-        }
-        {
-          assertion = !liteCfg.myconfig.ai.microvm.guestDotfiles.enable;
-          message = "guestDotfiles must default to off whenever config staging is on";
-        }
-        {
-          # ... and the two are mutually exclusive, never silently combined.
-          assertion = seedRejects "mutually exclusive" [
-            { myconfig.ai.microvm.guestDotfiles.enable = true; }
-          ];
-          message = "combining configSeed with guestDotfiles must be rejected at eval";
+          # Positive control for the assertion above: the guest DOES have a
+          # provisioning unit, it is just not home-manager's.
+          assertion = guest0Cfg.systemd.services ? agent-config-seed;
+          message = "positive control: the guest must carry the config-seed provisioning unit";
         }
         # --- the share: per-slot, READ-ONLY, root-owned source -------------
         {
           assertion = lib.length seedShares == 1;
-          message = "the lite guest must declare exactly one config-seed share, got ${toString (lib.length seedShares)}";
+          message = "the guest must reach the staged tree through exactly one share, got ${toString (lib.length seedShares)}";
         }
         {
           assertion =
             let
               s = lib.head seedShares;
             in
-            sourceCovers s (liteSeed.hostPayloadDir liteSlot.name)
-            && lib.hasPrefix s.mountPoint liteSeed.guestMountPoint
+            sourceCovers s (seed.hostPayloadDir refSlot.name)
+            && lib.hasPrefix s.mountPoint seed.guestMountPoint
             && s.proto == "virtiofs"
             && (s.readOnly or false);
-          message = "the staged configuration must reach the guest through a per-slot READ-ONLY share covering ${liteSeed.hostPayloadDir liteSlot.name} at ${liteSeed.guestMountPoint}";
+          message = "the staged configuration must reach the guest through a per-slot READ-ONLY share covering ${seed.hostPayloadDir refSlot.name} at ${seed.guestMountPoint}";
         }
         {
           # The manifest names the host home and every SKIPPED,
@@ -1007,61 +924,67 @@ in
           # not below it.
           assertion =
             let
-              manifest = liteSeed.hostManifest liteSlot.name;
+              manifest = seed.hostManifest refSlot.name;
             in
             builtins.all (
               s: manifest != s.source && !(lib.hasPrefix "${s.source}/" manifest)
-            ) liteGuest.microvm.shares;
-          message = "the staging manifest ${liteSeed.hostManifest liteSlot.name} must not be inside any guest share";
+            ) guest0Cfg.microvm.shares;
+          message = "the staging manifest ${seed.hostManifest refSlot.name} must not be inside any guest share";
         }
         {
-          assertion = liteSeed.manifestMode == "0400";
-          message = "the staging manifest must be root-only (0400), got ${liteSeed.manifestMode}";
+          assertion = seed.manifestMode == "0400";
+          message = "the staging manifest must be root-only (0400), got ${seed.manifestMode}";
         }
         {
           # No host home (or any other broad host directory) is ever mounted:
           # every share source stays under the module's own roots.
           assertion = builtins.all (
             s: lib.hasPrefix microvmOpts.runtimeRoot s.source || lib.hasPrefix microvmOpts.stateRoot s.source
-          ) liteGuest.microvm.shares;
-          message = "a lite guest share escapes the module's runtime/state roots: ${
-            toString (map (s: s.source) liteGuest.microvm.shares)
+          ) guest0Cfg.microvm.shares;
+          message = "a guest share escapes the module's runtime/state roots: ${
+            toString (map (s: s.source) guest0Cfg.microvm.shares)
           }";
         }
         {
           # The staging directory is root-owned and NOT writable by the guest
           # agent (virtiofsd passes ownership through unchanged).
           assertion =
-            hasRootDirRule liteCfg.systemd.tmpfiles.rules (liteSeed.slotDir liteSlot.name) liteSeed.slotDirMode
-            &&
-              hasRootDirRule liteCfg.systemd.tmpfiles.rules (liteSeed.hostPayloadDir liteSlot.name)
-                liteSeed.dirMode;
+            hasRootDirRule enabledCfg.systemd.tmpfiles.rules (seed.slotDir refSlot.name) seed.slotDirMode
+            && hasRootDirRule enabledCfg.systemd.tmpfiles.rules (seed.hostPayloadDir refSlot.name) seed.dirMode;
           message = "the per-slot staging directories must be pre-created root-owned";
+        }
+        {
+          # ... as are the host-only manifest directories, which no guest ever
+          # sees.
+          assertion =
+            hasRootDirRule enabledCfg.systemd.tmpfiles.rules seed.manifestRoot seed.manifestRootMode
+            &&
+              hasRootDirRule enabledCfg.systemd.tmpfiles.rules (seed.manifestDir refSlot.name)
+                seed.manifestDirMode;
+          message = "the host-only manifest directories must be pre-created root-owned";
         }
         {
           # ... and root-ONLY: no group/other bit anywhere in the staged tree,
           # so neither the guest agent nor another unprivileged HOST user can
           # read the operator's staged configuration.
           assertion = builtins.all (m: lib.hasSuffix "00" m) [
-            liteSeed.rootMode
-            liteSeed.slotDirMode
-            liteSeed.dirMode
-            liteSeed.fileMode
-            liteSeed.manifestMode
+            seed.rootMode
+            seed.slotDirMode
+            seed.dirMode
+            seed.fileMode
+            seed.manifestMode
+            seed.manifestRootMode
+            seed.manifestDirMode
           ];
           message = "the staged tree must be root-only, got ${
             toString [
-              liteSeed.rootMode
-              liteSeed.slotDirMode
-              liteSeed.dirMode
-              liteSeed.fileMode
-              liteSeed.manifestMode
+              seed.rootMode
+              seed.slotDirMode
+              seed.dirMode
+              seed.fileMode
+              seed.manifestMode
             ]
           }";
-        }
-        {
-          assertion = builtins.all (r: !(lib.hasInfix "config-seed" r)) enabledCfg.systemd.tmpfiles.rules;
-          message = "the full profile must not create any config-seed directory";
         }
         # --- the guest oneshot: root, before every agent entry point -------
         {
@@ -1072,76 +995,75 @@ in
         {
           # Ordered before EVERY way an agent process can come into existence:
           # the interactive control channel, the trusted batch controller (which
-          # starts the untrusted worker) and the agent-state linker (whose
-          # symlinks the copy must not write through).
+          # starts the untrusted worker), the agent-state linker (whose symlinks
+          # the copy must not write through) and the boot-time model discovery
+          # (which writes into the same home).
           assertion = builtins.all (u: builtins.elem u seedUnit.before) seedBeforeUnits;
           message = "the guest seeding unit must be ordered before ${toString seedBeforeUnits}, got ${toString seedUnit.before}";
         }
         {
-          # ... and those really are UNITS of the lite guest, not strings
-          # nothing resolves. `sshd` only exists when the control channel is
-          # enabled, so it is checked on a lite host that has it.
+          # ... and those really are UNITS of the guest, not strings nothing
+          # resolves. The reference host HAS the SSH control channel, so this is
+          # an ordering against a real sshd.
           assertion =
-            liteSshHost.config.myconfig.ai.microvm.enableSsh
-            && (liteSshGuest.systemd.services ? sshd || liteSshGuest.services.openssh.enable)
-            && builtins.all (
-              u: builtins.elem u liteSshGuest.systemd.services.agent-config-seed.before
-            ) seedBeforeUnits;
-          message = "a lite guest WITH the SSH control channel must have sshd and order the seeding unit before it";
+            microvmOpts.enableSsh
+            && (guest0Cfg.systemd.services ? sshd || guest0Cfg.services.openssh.enable)
+            && guest0Cfg.systemd.services ? agent-state-link
+            && guest0Cfg.systemd.services ? agent-model-config
+            && guest0Cfg.systemd.services ? "${lib.removeSuffix ".service" jobs.controllerUnit}";
+          message = "the units the seeding oneshot is ordered before must exist in the guest";
         }
         {
-          # The lite guest has no `home-manager-agent.service` to be ordered
-          # after, so the model-config unit — which writes INTO the same home
-          # the seeder populates with `cp -R`/`chown -R`/`chmod -R` — must be
-          # ordered after the SEEDER instead. Without this the two write
-          # /home/agent unordered.
-          assertion =
-            let
-              a = liteGuest.systemd.services.agent-model-config.after;
-            in
-            builtins.elem liteSeed.guestUnit a && !(builtins.elem "home-manager-agent.service" a);
-          message = "the lite guest's agent-model-config must be ordered after ${liteSeed.guestUnit}, got ${toString liteGuest.systemd.services.agent-model-config.after}";
-        }
-        {
-          # Positive control: under `full` the SAME unit still orders itself
-          # after guest home-manager activation (unchanged by this phase).
+          # The model-config unit writes INTO the same home the seeder populates
+          # with `cp -R`/`chown -R`/`chmod -R`, so it must be ordered after the
+          # SEEDER (there is no home-manager unit to order against any more).
           assertion =
             let
               a = guest0Cfg.systemd.services.agent-model-config.after;
             in
-            builtins.elem "home-manager-agent.service" a && !(builtins.elem liteSeed.guestUnit a);
-          message = "positive control: the full guest's agent-model-config must still order after home-manager-agent.service, got ${toString guest0Cfg.systemd.services.agent-model-config.after}";
+            builtins.elem seed.guestUnit a && !(builtins.elem "home-manager-agent.service" a);
+          message = "the guest's agent-model-config must be ordered after ${seed.guestUnit}, got ${toString guest0Cfg.systemd.services.agent-model-config.after}";
         }
         {
-          assertion = seedUnit.unitConfig.RequiresMountsFor == liteSeed.guestMountPoint;
+          assertion = seedUnit.unitConfig.RequiresMountsFor == seed.guestMountPoint;
           message = "the guest seeding unit must require the config-seed mount";
         }
         {
           # It may only ever READ the staged tree.
-          assertion = seedUnit.serviceConfig.ReadOnlyPaths == [ "-${liteSeed.guestMountPoint}" ];
+          assertion = seedUnit.serviceConfig.ReadOnlyPaths == [ "-${seed.guestMountPoint}" ];
           message = "the guest seeding unit must treat the staged tree as read-only";
         }
         # --- the allowlist follows the agent selection ---------------------
         {
           assertion =
-            liteSeed.allowedPaths == lib.unique (
+            seed.allowedPaths == lib.unique (
               lib.sort (a: b: a < b) (
-                (lib.head (lib.attrValues liteReg.agents)).configPaths
-                ++ liteCfg.myconfig.ai.microvm.configSeed.extraPaths
+                lib.concatMap (a: a.configPaths) (lib.attrValues agentRegistry.agents)
+                ++ microvmOpts.configSeed.extraPaths
               )
             );
-          message = "the staging allowlist must be the SELECTED agents' configPaths plus extraPaths, got ${toString liteSeed.allowedPaths}";
+          message = "the staging allowlist must be the SELECTED agents' configPaths plus extraPaths, got ${toString seed.allowedPaths}";
+        }
+        {
+          assertion =
+            codexSeed.allowedPaths == lib.unique (
+              lib.sort (a: b: a < b) (
+                (lib.head (lib.attrValues codexReg.agents)).configPaths
+                ++ codexHost.config.myconfig.ai.microvm.configSeed.extraPaths
+              )
+            );
+          message = "a codex-only host must stage only codex's configPaths plus extraPaths, got ${toString codexSeed.allowedPaths}";
         }
         {
           assertion =
             deselectedPaths != [ ]
-            && builtins.any (p: !(builtins.elem p liteSeed.allowedPaths)) deselectedPaths;
-          message = "positive control: a deselected agent must contribute paths the lite allowlist does not carry";
+            && builtins.any (p: !(builtins.elem p codexSeed.allowedPaths)) deselectedPaths;
+          message = "positive control: a deselected agent must contribute paths the codex-only allowlist does not carry";
         }
         {
           assertion =
-            builtins.elem ".pi/agent/prompts" piAllowlist
-            && !(builtins.elem ".pi/agent/prompts" liteSeed.allowedPaths);
+            builtins.elem ".pi/agent/prompts" seed.allowedPaths
+            && !(builtins.elem ".pi/agent/prompts" codexSeed.allowedPaths);
           message = "the staged allowlist must follow enabledAgents (pi's paths must appear only when pi is selected)";
         }
         {
@@ -1204,10 +1126,9 @@ in
           message = "a relative configSeed.hostHome must be rejected at eval";
         }
         {
-          # The MIRROR of state.nix's guestDotfiles collision guard (which is
-          # dead code under `lite`): staging a path that is also a PERSISTED
-          # agent-state directory would leave the state linker refusing to
-          # replace a non-empty directory, i.e. persistence silently off.
+          # Staging a path that is also a PERSISTED agent-state directory would
+          # leave the state linker refusing to replace a non-empty directory,
+          # i.e. persistence silently off.
           assertion = seedRejects "overlaps the" [
             {
               myconfig.ai.microvm = {
@@ -1225,7 +1146,7 @@ in
           # Positive control for the test above: `.hermes` really IS a declared
           # persistent-state directory of the selected registry there.
           assertion = builtins.elem ".hermes" (
-            (liteHostWith [
+            (variantHostWith [
               {
                 myconfig.ai.microvm.enabledAgents = [
                   "codex"
@@ -1237,16 +1158,16 @@ in
           message = "positive control: selecting hermes must declare the '.hermes' persistent-state directory";
         }
         {
-          # ... and the DEFAULT lite selection is free of such an overlap (the
-          # rejection above cannot be masking a permanently failing host).
-          assertion = liteSeed.allowedPaths != [ ] && liteCfg.assertions != [ ];
-          message = "positive control: the default lite host must have a non-empty allowlist and real assertions";
+          # ... and the reference host is free of such an overlap (the rejection
+          # above cannot be masking a permanently failing host).
+          assertion = seed.allowedPaths != [ ] && enabledCfg.assertions != [ ] && baselineClean;
+          message = "positive control: the reference host must have a non-empty allowlist, real assertions and trip none of them";
         }
         {
-          # Positive control: the unmodified lite host trips NO assertion, so
-          # the rejections above cannot pass vacuously.
-          assertion = builtins.filter (a: !a.assertion) liteCfg.assertions == [ ];
-          message = "positive control: a plain lite host must evaluate cleanly";
+          # Positive control: the unmodified VARIANT host trips no assertion
+          # either, so the rejections above cannot pass vacuously.
+          assertion = builtins.filter (a: !a.assertion) (variantHostWith [ ]).config.assertions == [ ];
+          message = "positive control: a plain variant host must evaluate cleanly";
         }
       ];
     in
@@ -1255,15 +1176,14 @@ in
         inherit evalMarker;
         # Building these runs their writeShellApplication shellcheck gate; the
         # greps below then inspect the GENERATED code.
-        stagerBin = "${liteSeed.stager}/bin/agent-microvm-stage-config";
-        seederBin = "${liteSeed.seeder}/bin/agent-config-seed-apply";
-        liteLauncherBin = "${liteLauncher}/bin/agent-microvm";
-        fullLauncherBin = "${fullLauncher}/bin/agent-microvm";
+        stagerBin = "${seed.stager}/bin/agent-microvm-stage-config";
+        seederBin = "${seed.seeder}/bin/agent-config-seed-apply";
+        launcherBin = "${launcherPkg}/bin/agent-microvm";
         # Modes come from the module, so this check follows a policy change
         # instead of pinning yesterday's numbers.
-        FILE_MODE = liteSeed.fileMode;
-        DIR_MODE = liteSeed.dirMode;
-        allowlist = lib.concatStringsSep "\n" liteSeed.allowedPaths;
+        FILE_MODE = seed.fileMode;
+        DIR_MODE = seed.dirMode;
+        allowlist = lib.concatStringsSep "\n" seed.allowedPaths;
       }
       ''
         # --- the stager ENFORCES the allowlist ---------------------------
@@ -1348,25 +1268,21 @@ in
           || { echo "the guest seeder does not hand the copy to the agent" >&2; exit 1; }
 
         # --- the launcher stages once per launch, and cleans up ------------
-        grep -q 'stage_config_seed' "$liteLauncherBin" \
-          || { echo "the lite launcher does not stage the host configuration" >&2; exit 1; }
-        grep -q 'clear_config_seed' "$liteLauncherBin" \
-          || { echo "the lite launcher does not clear the staged configuration" >&2; exit 1; }
-        grep -qF -- "$stagerBin" "$liteLauncherBin" \
-          || { echo "the lite launcher does not call the generated stager" >&2; exit 1; }
-        # ... and the FULL profile's launcher is untouched by this phase (the
-        # staging code is rendered only when the feature is on, so an existing
-        # host's launcher stays byte-for-byte what it was).
-        if grep -q 'config_seed' "$fullLauncherBin"; then
-          echo "the full-profile launcher must not carry any config-staging code" >&2
-          exit 1
-        fi
+        grep -q 'stage_config_seed' "$launcherBin" \
+          || { echo "the launcher does not stage the host configuration" >&2; exit 1; }
+        grep -q 'clear_config_seed' "$launcherBin" \
+          || { echo "the launcher does not clear the staged configuration" >&2; exit 1; }
+        grep -qF -- "$stagerBin" "$launcherBin" \
+          || { echo "the launcher does not call the generated stager" >&2; exit 1; }
+        # Both entry points stage BEFORE the VM is started.
+        test "$(grep -c 'stage_config_seed "\$slot"' "$launcherBin")" -ge 2 \
+          || { echo "both run and submit must stage the host configuration" >&2; exit 1; }
 
         {
           echo "microvm-config-seed:"
           echo "  stager        : $stagerBin"
           echo "  guest seeder  : $seederBin"
-          echo "  lite launcher : $liteLauncherBin"
+          echo "  launcher      : $launcherBin"
           echo "  allowlist     :"
           printf '    %s\n' $allowlist
           cat "$evalMarker"
@@ -1374,43 +1290,24 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
-  # (u) CONSOLIDATED SESSION TREE (lightweight plan phase 4): the lite guest #
-  #     gets ONE writable virtiofs share (the per-session tree) plus AT MOST  #
-  #     ONE read-only share (host identity + staged configuration), while the #
-  #     full profile keeps its four shares byte-for-byte. Locks down all      #
-  #     halves: the share sets of both profiles, the ownership/mode table as  #
-  #     the ONE source of truth every consumer derives from, the guest        #
-  #     mount/unit ordering, the layout POLICY (fed a deliberately broken     #
-  #     table it must complain) and the generated launcher code that          #
-  #     prepares, verifies and REMOVES the tree.                             #
+  # (u) THE SESSION TREE (lightweight plan phase 4): every guest gets ONE    #
+  #     writable virtiofs share (the per-session tree) plus ONE read-only     #
+  #     share (host identity + staged configuration). Locks down: the share   #
+  #     set, the ownership/mode table as the ONE source of truth every         #
+  #     consumer derives from, the guest mount/unit ordering, the layout       #
+  #     POLICY (fed a deliberately broken table it must complain about the     #
+  #     SPECIFIC rule) and the generated launcher code that prepares,          #
+  #     verifies and REMOVES the tree. It also FORCES the guest closure, so a  #
+  #     guest that does not build fails CI.                                    #
   # ---------------------------------------------------------------------- #
   microvm-session-tree =
     let
-      fullSession = self.nixosConfigurations.test-f13._module.args.agentSession;
-      liteSession = liteHost._module.args.agentSession;
-      liteCfg = liteHost.config;
-      liteSlot = lib.head liteSlots;
-      liteGuest = liteCfg.microvm.vms.${liteSlot.name}.config.config;
-      liteJobs = liteHost._module.args.agentJobs;
-      liteState = liteHost._module.args.agentState;
-      liteSeed = liteHost._module.args.agentConfigSeed;
-      liteHostKeys = liteHost._module.args.agentHostKeys;
-      liteLauncher = findPkg liteCfg.environment.systemPackages "agent-microvm";
-      fullLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      # A guest WITHOUT the SSH control channel: the read-only share carries the
+      # staged configuration too, so it must exist there as well (and the share
+      # count must not change).
+      noSshGuest = (variantHostWith [ ]).config.microvm.vms.${variantSlot.name}.config.config;
 
-      # A lite host WITH the SSH control channel, so `sshd.service` really
-      # exists and the read-only host-key mount can be ordered against it.
-      liteSshHost = liteHostWith [
-        {
-          myconfig.ai.microvm = {
-            enableSsh = lib.mkForce true;
-            sshPublicKeyFile = pkgs.writeText "agent-microvm-test.pub" "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA test\n";
-          };
-        }
-      ];
-      liteSshGuest = liteSshHost.config.microvm.vms.${liteSlot.name}.config.config;
-
-      shares = liteGuest.microvm.shares;
+      shares = guest0Cfg.microvm.shares;
       writableShares = builtins.filter (s: !(s.readOnly or false)) shares;
       roShares = builtins.filter (s: s.readOnly or false) shares;
       sessionShare = if writableShares == [ ] then null else lib.head writableShares;
@@ -1422,26 +1319,24 @@ in
       pathOf = base: e: if e.rel == "" then base else "${base}/${e.rel}";
       expectedRules =
         map (
-          e:
-          "d ${pathOf (liteSession.slotDir liteSlot.name) e} ${e.mode} ${toString e.uid} ${toString e.gid} - -"
-        ) liteSession.layout
+          e: "d ${pathOf (session.slotDir refSlot.name) e} ${e.mode} ${toString e.uid} ${toString e.gid} - -"
+        ) session.layout
         ++ map (
           e:
-          "d ${pathOf (liteSession.roSlotDir liteSlot.name) e} ${e.mode} ${toString e.uid} ${toString e.gid} - -"
-        ) liteSession.roLayout;
-      entry = rel: lib.findFirst (e: e.rel == rel) (throw "no layout entry '${rel}'") liteSession.layout;
+          "d ${pathOf (session.roSlotDir refSlot.name) e} ${e.mode} ${toString e.uid} ${toString e.gid} - -"
+        ) session.roLayout;
+      entry = rel: lib.findFirst (e: e.rel == rel) (throw "no layout entry '${rel}'") session.layout;
       roEntry =
-        rel:
-        lib.findFirst (e: e.rel == rel) (throw "no read-only layout entry '${rel}'") liteSession.roLayout;
+        rel: lib.findFirst (e: e.rel == rel) (throw "no read-only layout entry '${rel}'") session.roLayout;
 
       # The REAL tables, as the module asserts them.
       realPolicyInput = {
-        writableRoot = liteSession.root;
-        readOnlyRoot = liteSession.roRoot;
-        writable = liteSession.layout;
-        readOnly = liteSession.roLayout;
-        hostKeyDir = liteSession.hostHostkeysDir liteSlot.name;
-        configSeedDir = liteSession.hostConfigSeedDir liteSlot.name;
+        writableRoot = session.root;
+        readOnlyRoot = session.roRoot;
+        writable = session.layout;
+        readOnly = session.roLayout;
+        hostKeyDir = session.hostHostkeysDir refSlot.name;
+        configSeedDir = session.hostConfigSeedDir refSlot.name;
       };
       # ... and DOCTORED variants: the policy is only worth anything if it
       # complains about a table that breaks the trust boundary.
@@ -1451,71 +1346,24 @@ in
       # that drops rule (2) but keeps rule (1) would otherwise leave every
       # negative case below green. `violationsOf` returns the violations as
       # TEXT precisely so this is checkable.
-      violationsWith = f: liteSession.violationsOf (realPolicyInput // f realPolicyInput);
+      violationsWith = f: session.violationsOf (realPolicyInput // f realPolicyInput);
       doctored = want: f: lib.any (v: lib.hasInfix want v) (violationsWith f);
       # The path a violation message names for a writable-tree entry (the
       # policy is a pure function of the TABLE, so the paths carry no slot).
-      wrel = rel: "${liteSession.root}/${rel}";
+      wrel = rel: "${session.root}/${rel}";
       withRel = rel: patch: input: {
         writable = map (e: if e.rel == rel then e // patch else e) input.writable;
       };
 
-      # Every unit that must be ordered against the new mounts, and the mount
-      # each of them needs.
+      # Every unit that must be ordered against the mounts, and the mount each
+      # of them needs.
       requiresMountsFor = unit: (unit.unitConfig or { }).RequiresMountsFor or null;
 
       evalMarker = mkEvalCheck "microvm-session-tree-eval" [
-        # --- the FULL profile keeps its four separate shares ---------------
-        {
-          assertion = !microvmOpts.session.enable && !fullSession.enable;
-          message = "the full profile must NOT use the consolidated session tree";
-        }
-        {
-          # The regression guard of this phase: four shares, none of them the
-          # consolidated ones. (microvm-eval-workspace-share pins each of them
-          # individually.)
-          assertion =
-            builtins.length guest0Cfg.microvm.shares == 4
-            && builtins.all (
-              s:
-              !(builtins.elem s.tag [
-                fullSession.guestTag
-                fullSession.guestRoTag
-              ])
-            ) guest0Cfg.microvm.shares;
-          message = "the full guest must keep exactly its four historical shares, got ${
-            toString (map (s: s.tag) guest0Cfg.microvm.shares)
-          }";
-        }
-        {
-          # ... and its /workspace is the virtiofs share itself, not a bind
-          # mount of a session tree.
-          assertion = guest0Cfg.fileSystems."/workspace".fsType == "virtiofs";
-          message = "the full guest's /workspace must stay the virtiofs share itself, got fsType '${
-            guest0Cfg.fileSystems."/workspace".fsType
-          }'";
-        }
-        {
-          assertion = builtins.all (
-            r: !(lib.hasInfix "${microvmOpts.runtimeRoot}/sessions" r)
-          ) enabledCfg.systemd.tmpfiles.rules;
-          message = "the full profile must not create any session tree";
-        }
-        {
-          assertion = builtins.all (p: p.name != "agent-microvm-verify-session") (
-            builtins.filter (p: p ? name) enabledCfg.environment.systemPackages
-          );
-          message = "the full profile must not install the session verifier";
-        }
-        # --- ... and the LITE profile consolidates ------------------------
-        {
-          assertion = liteCfg.myconfig.ai.microvm.session.enable && liteSession.enable;
-          message = "the lite profile must enable the consolidated session tree";
-        }
         {
           # THE acceptance criterion of phase 4.
-          assertion = builtins.length writableShares == 1 && builtins.length roShares <= 1;
-          message = "the lite guest must declare ONE writable share plus at most ONE read-only share, got ${
+          assertion = builtins.length writableShares == 1 && builtins.length roShares == 1;
+          message = "the guest must declare ONE writable share plus ONE read-only share, got ${
             toString (map (s: "${s.tag}${lib.optionalString (s.readOnly or false) " (ro)"}") shares)
           }";
         }
@@ -1523,52 +1371,72 @@ in
           assertion =
             sessionShare != null
             && sessionShare.proto == "virtiofs"
-            && sessionShare.tag == liteSession.guestTag
-            && sessionShare.source == liteSession.slotDir liteSlot.name
-            && sessionShare.mountPoint == liteSession.guestMountPoint;
-          message = "the writable share must be the per-slot session tree ${liteSession.slotDir liteSlot.name} mounted at ${liteSession.guestMountPoint}, got ${toString sessionShare}";
+            && sessionShare.tag == session.guestTag
+            && sessionShare.source == session.slotDir refSlot.name
+            && sessionShare.mountPoint == session.guestMountPoint;
+          message = "the writable share must be the per-slot session tree ${session.slotDir refSlot.name} mounted at ${session.guestMountPoint}, got ${toString sessionShare}";
         }
         {
           assertion =
             roShare != null
             && roShare.proto == "virtiofs"
-            && roShare.tag == liteSession.guestRoTag
-            && roShare.source == liteSession.roSlotDir liteSlot.name
-            && roShare.mountPoint == liteSession.guestRoMountPoint
+            && roShare.tag == session.guestRoTag
+            && roShare.source == session.roSlotDir refSlot.name
+            && roShare.mountPoint == session.guestRoMountPoint
             && roShare.readOnly;
-          message = "the read-only share must be the per-slot read-only tree ${liteSession.roSlotDir liteSlot.name} mounted READ-ONLY at ${liteSession.guestRoMountPoint}";
+          message = "the read-only share must be the per-slot read-only tree ${session.roSlotDir refSlot.name} mounted READ-ONLY at ${session.guestRoMountPoint}";
+        }
+        {
+          # Defence in depth: NOTHING else is shared — no /nix, no /home, no
+          # host socket, no second writable tree.
+          assertion =
+            builtins.length shares == 2
+            && builtins.all (s: s.proto == "virtiofs") shares
+            &&
+              lib.sort (a: b: a < b) (map (s: s.mountPoint) shares) == lib.sort (a: b: a < b) [
+                session.guestMountPoint
+                session.guestRoMountPoint
+              ];
+          message = "unexpected share(s): ${toString (map (s: "${s.tag}@${s.mountPoint}") shares)}";
+        }
+        {
+          # A guest WITHOUT the SSH control channel still has exactly the same
+          # two shares: the read-only one also carries the staged configuration.
+          assertion =
+            builtins.length noSshGuest.microvm.shares == 2
+            && builtins.length (builtins.filter (s: s.readOnly or false) noSshGuest.microvm.shares) == 1;
+          message = "a guest without SSH must still declare one writable + one read-only share, got ${
+            toString (map (s: s.tag) noSshGuest.microvm.shares)
+          }";
         }
         {
           # No host home, and nothing outside the module's own roots.
           assertion = builtins.all (s: lib.hasPrefix "${microvmOpts.runtimeRoot}/" s.source) shares;
-          message = "a lite guest share escapes the module's runtime root: ${
-            toString (map (s: s.source) shares)
-          }";
+          message = "a guest share escapes the module's runtime root: ${toString (map (s: s.source) shares)}";
         }
         {
           # The two trees must not nest, or the read-only payloads would be
           # reachable through the writable share.
           assertion =
-            !(lib.hasPrefix "${liteSession.root}/" liteSession.roRoot)
-            && !(lib.hasPrefix "${liteSession.roRoot}/" liteSession.root);
-          message = "the writable and read-only session trees must be disjoint (${liteSession.root} / ${liteSession.roRoot})";
+            !(lib.hasPrefix "${session.root}/" session.roRoot)
+            && !(lib.hasPrefix "${session.roRoot}/" session.root);
+          message = "the writable and read-only session trees must be disjoint (${session.root} / ${session.roRoot})";
         }
         # --- the ownership/mode table is the ONE source of truth -----------
         {
           # Asserted FROM the table (not against a second hardcoded copy):
           # every entry has a matching host tmpfiles rule, so the tree really
           # is created with the owners and modes the trust split needs.
-          assertion = builtins.all (r: builtins.elem r liteCfg.systemd.tmpfiles.rules) expectedRules;
+          assertion = builtins.all (r: builtins.elem r enabledCfg.systemd.tmpfiles.rules) expectedRules;
           message = "the session tree is not pre-created exactly as its layout table says; missing: ${
-            toString (builtins.filter (r: !(builtins.elem r liteCfg.systemd.tmpfiles.rules)) expectedRules)
+            toString (builtins.filter (r: !(builtins.elem r enabledCfg.systemd.tmpfiles.rules)) expectedRules)
           }";
         }
         {
           assertion =
-            liteSession.tmpfilesRules
-            == builtins.filter (
+            session.tmpfilesRules == builtins.filter (
               r: lib.hasInfix "${microvmOpts.runtimeRoot}/sessions" r
-            ) liteCfg.systemd.tmpfiles.rules;
+            ) enabledCfg.systemd.tmpfiles.rules;
           message = "the host must create exactly the session directories the table declares";
         }
         {
@@ -1577,80 +1445,80 @@ in
           assertion =
             builtins.all (rel: (entry rel).uid == 0) [
               ""
-              liteSession.subdirs.input
-              liteSession.subdirs.controller
-              liteSession.subdirs.workerLogs
+              session.subdirs.input
+              session.subdirs.controller
+              session.subdirs.workerLogs
             ]
             && builtins.all (rel: (entry rel).uid == microvmOpts.guestAgentUid) [
-              liteSession.subdirs.workspace
-              liteSession.subdirs.worker
-              liteSession.subdirs.state
+              session.subdirs.workspace
+              session.subdirs.worker
+              session.subdirs.state
             ];
           message = "the session layout does not put the control directories under root and the agent's under uid ${toString microvmOpts.guestAgentUid}";
         }
         {
           # `controller/` carries the allocation token: root-ONLY.
-          assertion = (entry liteSession.subdirs.controller).mode == "0700";
-          message = "the controller directory must stay root-only 0700, got ${(entry liteSession.subdirs.controller).mode}";
+          assertion = (entry session.subdirs.controller).mode == "0700";
+          message = "the controller directory must stay root-only 0700, got ${(entry session.subdirs.controller).mode}";
         }
         {
           # The whole read-only tree is root-owned and denies group/other.
-          assertion = builtins.all (e: e.uid == 0 && lib.hasSuffix "00" e.mode) liteSession.roLayout;
+          assertion = builtins.all (e: e.uid == 0 && lib.hasSuffix "00" e.mode) session.roLayout;
           message = "the read-only tree must be root-owned and root-only, got ${
-            toString (map (e: "${e.rel}:${e.mode}:${toString e.uid}") liteSession.roLayout)
+            toString (map (e: "${e.rel}:${e.mode}:${toString e.uid}") session.roLayout)
           }";
         }
         # --- every consumer DERIVES from the table ------------------------
         {
           assertion =
-            liteJobs.slotDir liteSlot.name == liteSession.slotDir liteSlot.name
-            && liteJobs.guestMountPoint == liteSession.guestMountPoint
-            && liteJobs.inputSubdir == liteSession.subdirs.input
-            && liteJobs.controllerSubdir == liteSession.subdirs.controller
-            && liteJobs.workerSubdir == liteSession.subdirs.worker
-            && liteJobs.workerLogsSubdir == liteSession.subdirs.workerLogs
-            && liteJobs.controllerDirMode == (entry liteSession.subdirs.controller).mode
-            && liteJobs.inputDirMode == (entry liteSession.subdirs.input).mode;
+            jobs.slotDir refSlot.name == session.slotDir refSlot.name
+            && jobs.guestMountPoint == session.guestMountPoint
+            && jobs.inputSubdir == session.subdirs.input
+            && jobs.controllerSubdir == session.subdirs.controller
+            && jobs.workerSubdir == session.subdirs.worker
+            && jobs.workerLogsSubdir == session.subdirs.workerLogs
+            && jobs.controllerDirMode == (entry session.subdirs.controller).mode
+            && jobs.inputDirMode == (entry session.subdirs.input).mode;
           message = "job.nix does not derive its paths/modes from the session layout";
         }
         {
           assertion =
-            liteState.slotDir liteSlot.name == liteSession.hostStateDir liteSlot.name
-            && liteState.guestMountPoint == liteSession.guestStateDir;
+            agentStatePaths.slotDir refSlot.name == session.hostStateDir refSlot.name
+            && agentStatePaths.guestMountPoint == session.guestStateDir;
           message = "state.nix does not derive its per-slot paths from the session layout";
         }
         {
           assertion =
-            liteSeed.hostPayloadDir liteSlot.name == liteSession.hostConfigSeedDir liteSlot.name
-            && liteSeed.guestMountPoint == liteSession.guestConfigSeedDir
-            && liteSeed.dirMode == (roEntry liteSession.roSubdirs.configSeed).mode;
+            seed.hostPayloadDir refSlot.name == session.hostConfigSeedDir refSlot.name
+            && seed.guestMountPoint == session.guestConfigSeedDir
+            && seed.dirMode == (roEntry session.roSubdirs.configSeed).mode;
           message = "config-seed.nix does not derive its staged payload path/mode from the session layout";
         }
         {
           assertion =
-            liteHostKeys.slotDir liteSlot.name == liteSession.hostHostkeysDir liteSlot.name
-            && liteHostKeys.guestMountPoint == liteSession.guestHostkeysDir
-            && lib.hasPrefix "${liteSession.guestHostkeysDir}/" liteHostKeys.guestKeyPath;
+            hostKeys.slotDir refSlot.name == session.hostHostkeysDir refSlot.name
+            && hostKeys.guestMountPoint == session.guestHostkeysDir
+            && lib.hasPrefix "${session.guestHostkeysDir}/" hostKeys.guestKeyPath;
           message = "hostkeys.nix does not derive its per-slot paths from the session layout";
         }
         {
           # The SSH private host key must never be inside the WRITABLE tree.
           assertion =
-            !(lib.hasPrefix "${liteSession.slotDir liteSlot.name}/" (liteHostKeys.slotDir liteSlot.name))
-            && lib.hasPrefix "${liteSession.roSlotDir liteSlot.name}/" (liteHostKeys.slotDir liteSlot.name);
-          message = "the SSH host-key directory must live in the READ-ONLY tree, is ${liteHostKeys.slotDir liteSlot.name}";
+            !(lib.hasPrefix "${session.slotDir refSlot.name}/" (hostKeys.slotDir refSlot.name))
+            && lib.hasPrefix "${session.roSlotDir refSlot.name}/" (hostKeys.slotDir refSlot.name);
+          message = "the SSH host-key directory must live in the READ-ONLY tree, is ${hostKeys.slotDir refSlot.name}";
         }
         {
           # ... and neither the staged configuration nor its manifest may be
           # writable by (or, for the manifest, visible to) the guest.
           assertion =
-            !(lib.hasPrefix "${liteSession.slotDir liteSlot.name}/" (liteSeed.hostPayloadDir liteSlot.name))
+            !(lib.hasPrefix "${session.slotDir refSlot.name}/" (seed.hostPayloadDir refSlot.name))
             && builtins.all (
               s:
-              liteSeed.hostManifest liteSlot.name != s.source
-              && !(lib.hasPrefix "${s.source}/" (liteSeed.hostManifest liteSlot.name))
+              seed.hostManifest refSlot.name != s.source
+              && !(lib.hasPrefix "${s.source}/" (seed.hostManifest refSlot.name))
             ) shares;
-          message = "the staged configuration must stay read-only and its manifest outside every share (manifest: ${liteSeed.hostManifest liteSlot.name})";
+          message = "the staged configuration must stay read-only and its manifest outside every share (manifest: ${seed.hostManifest refSlot.name})";
         }
         # --- the guest surfaces /workspace and orders its units -----------
         {
@@ -1658,122 +1526,109 @@ in
           # expectation of /workspace, keep working through a bind mount.
           assertion =
             let
-              ws = liteGuest.fileSystems."/workspace";
+              ws = guest0Cfg.fileSystems."/workspace";
             in
-            ws.device == liteSession.guestWorkspaceSource
+            ws.device == session.guestWorkspaceSource
             && builtins.elem "bind" ws.options
-            && builtins.elem "x-systemd.requires-mounts-for=${liteSession.guestMountPoint}" ws.options;
-          message = "the lite guest must bind-mount ${liteSession.guestWorkspaceSource} to /workspace after the session mount, got ${
-            toString liteGuest.fileSystems."/workspace".options
+            && builtins.elem "x-systemd.requires-mounts-for=${session.guestMountPoint}" ws.options;
+          message = "the guest must bind-mount ${session.guestWorkspaceSource} to /workspace after the session mount, got ${
+            toString guest0Cfg.fileSystems."/workspace".options
           }";
         }
         {
-          assertion = liteSession.guestWorkspace == "/workspace";
+          assertion = session.guestWorkspace == "/workspace";
           message = "the session layout must surface the workspace at /workspace";
         }
         {
           # The batch controller and the (untrusted) worker template must not
-          # start before the consolidated mount and the /workspace bind exist.
+          # start before the session mount and the /workspace bind exist.
           assertion =
             let
-              want = "/workspace ${liteSession.guestMountPoint}";
+              want = "/workspace ${session.guestMountPoint}";
             in
-            requiresMountsFor liteGuest.systemd.services.agent-job-controller == want
-            && requiresMountsFor liteGuest.systemd.services."${liteJobs.workerUnitTemplate}" == want;
-          message = "the batch controller/worker must require /workspace and ${liteSession.guestMountPoint}, got ${toString (requiresMountsFor liteGuest.systemd.services.agent-job-controller)}";
+            requiresMountsFor guest0Cfg.systemd.services.agent-job-controller == want
+            && requiresMountsFor guest0Cfg.systemd.services."${jobs.workerUnitTemplate}" == want;
+          message = "the batch controller/worker must require /workspace and ${session.guestMountPoint}, got ${toString (requiresMountsFor guest0Cfg.systemd.services.agent-job-controller)}";
+        }
+        {
+          assertion = requiresMountsFor guest0Cfg.systemd.services.agent-state-link == session.guestStateDir;
+          message = "the agent-state linker must require ${session.guestStateDir}, got ${toString (requiresMountsFor guest0Cfg.systemd.services.agent-state-link)}";
         }
         {
           assertion =
-            requiresMountsFor liteGuest.systemd.services.agent-state-link == liteSession.guestStateDir;
-          message = "the agent-state linker must require ${liteSession.guestStateDir}, got ${toString (requiresMountsFor liteGuest.systemd.services.agent-state-link)}";
-        }
-        {
-          assertion =
-            requiresMountsFor liteGuest.systemd.services.agent-config-seed == liteSession.guestConfigSeedDir
+            requiresMountsFor guest0Cfg.systemd.services.agent-config-seed == session.guestConfigSeedDir
             &&
-              liteGuest.systemd.services.agent-config-seed.serviceConfig.ReadOnlyPaths == [
-                "-${liteSession.guestConfigSeedDir}"
+              guest0Cfg.systemd.services.agent-config-seed.serviceConfig.ReadOnlyPaths == [
+                "-${session.guestConfigSeedDir}"
               ];
-          message = "the config-seed seeder must require (and only read) ${liteSession.guestConfigSeedDir}";
+          message = "the config-seed seeder must require (and only read) ${session.guestConfigSeedDir}";
         }
         {
           # sshd reads its host key from the read-only mount, so it must be
-          # ordered against it — checked on a lite host that HAS sshd.
+          # ordered against it.
           assertion =
-            liteSshHost.config.myconfig.ai.microvm.enableSsh
-            && liteSshGuest.services.openssh.enable
-            && requiresMountsFor liteSshGuest.systemd.services.sshd == liteSession.guestHostkeysDir
-            && lib.hasPrefix "${liteSession.guestHostkeysDir}/" (lib.head liteSshGuest.services.openssh.hostKeys)
-            .path;
-          message = "a lite guest with the SSH control channel must order sshd after the read-only host-key mount";
-        }
-        {
-          # ... and such a host still has EXACTLY one writable + one read-only
-          # share (the host key does not add a third).
-          assertion =
-            builtins.length liteSshGuest.microvm.shares == 2
-            && builtins.length (builtins.filter (s: s.readOnly or false) liteSshGuest.microvm.shares) == 1;
-          message = "a lite guest with SSH must still declare exactly one writable + one read-only share, got ${
-            toString (map (s: s.tag) liteSshGuest.microvm.shares)
-          }";
+            microvmOpts.enableSsh
+            && guest0Cfg.services.openssh.enable
+            && requiresMountsFor guest0Cfg.systemd.services.sshd == session.guestHostkeysDir
+            && lib.hasPrefix "${session.guestHostkeysDir}/" (lib.head guest0Cfg.services.openssh.hostKeys).path;
+          message = "the guest must order sshd after the read-only host-key mount";
         }
         # --- the layout POLICY rejects a weakened table -------------------
         {
           # Positive control: the REAL table satisfies the policy the module
           # asserts (so the negative cases below cannot pass vacuously).
-          assertion = liteSession.violationsOf realPolicyInput == [ ];
-          message = "the real session layout must satisfy its own policy, got ${toString (liteSession.violationsOf realPolicyInput)}";
+          assertion = session.violationsOf realPolicyInput == [ ];
+          message = "the real session layout must satisfy its own policy, got ${toString (session.violationsOf realPolicyInput)}";
         }
         {
-          assertion = doctored "'${wrel liteSession.subdirs.input}' must be root-owned" (
-            withRel liteSession.subdirs.input { owner = "agent"; }
+          assertion = doctored "'${wrel session.subdirs.input}' must be root-owned" (
+            withRel session.subdirs.input { owner = "agent"; }
           );
           message = "an AGENT-owned input/ must be rejected (the guest could rewrite its own job)";
         }
         {
-          assertion = doctored "'${wrel liteSession.subdirs.input}' is group/other-writable" (
-            withRel liteSession.subdirs.input { mode = "0777"; }
+          assertion = doctored "'${wrel session.subdirs.input}' is group/other-writable" (
+            withRel session.subdirs.input { mode = "0777"; }
           );
           message = "a world-writable input/ must be rejected";
         }
         {
-          assertion = doctored "'${wrel liteSession.subdirs.controller}' grants group/other access" (
-            withRel liteSession.subdirs.controller { mode = "0755"; }
+          assertion = doctored "'${wrel session.subdirs.controller}' grants group/other access" (
+            withRel session.subdirs.controller { mode = "0755"; }
           );
           message = "a group/other-readable controller/ must be rejected (it carries the allocation token)";
         }
         {
-          assertion = doctored "'${wrel liteSession.subdirs.controller}' must be root-owned" (
-            withRel liteSession.subdirs.controller { owner = "agent"; }
+          assertion = doctored "'${wrel session.subdirs.controller}' must be root-owned" (
+            withRel session.subdirs.controller { owner = "agent"; }
           );
           message = "an AGENT-owned controller/ must be rejected (the guest could forge a result)";
         }
         {
-          assertion = doctored "'${wrel liteSession.subdirs.workerLogs}' must be root-owned" (
-            withRel liteSession.subdirs.workerLogs { owner = "agent"; }
+          assertion = doctored "'${wrel session.subdirs.workerLogs}' must be root-owned" (
+            withRel session.subdirs.workerLogs { owner = "agent"; }
           );
           message = "an AGENT-owned worker-logs/ must be rejected (guest systemd opens those files as root)";
         }
         {
           assertion =
-            doctored
-              "read-only '${liteSession.roRoot}/${liteSession.roSubdirs.configSeed}' is group/other-writable"
+            doctored "read-only '${session.roRoot}/${session.roSubdirs.configSeed}' is group/other-writable"
               (_: {
                 readOnly = map (
-                  e: if e.rel == liteSession.roSubdirs.configSeed then e // { mode = "0777"; } else e
-                ) liteSession.roLayout;
+                  e: if e.rel == session.roSubdirs.configSeed then e // { mode = "0777"; } else e
+                ) session.roLayout;
               });
           message = "a group/other-writable staged configuration must be rejected";
         }
         {
           assertion = doctored "host-key directory" (input: {
-            hostKeyDir = "${input.writableRoot}/${liteSlot.name}/${liteSession.roSubdirs.hostkeys}";
+            hostKeyDir = "${input.writableRoot}/${refSlot.name}/${session.roSubdirs.hostkeys}";
           });
           message = "SSH host keys inside the WRITABLE session tree must be rejected";
         }
         {
           assertion = doctored "is inside the WRITABLE session tree" (input: {
-            configSeedDir = "${input.writableRoot}/${liteSlot.name}/${liteSession.roSubdirs.configSeed}";
+            configSeedDir = "${input.writableRoot}/${refSlot.name}/${session.roSubdirs.configSeed}";
           });
           message = "a staged configuration inside the WRITABLE session tree must be rejected";
         }
@@ -1788,36 +1643,18 @@ in
           # nothing produces must NOT match, or every `doctored` line would be
           # satisfied by any message at all.
           assertion =
-            !(doctored "this infix never appears" (withRel liteSession.subdirs.input { owner = "agent"; }));
+            !(doctored "this infix never appears" (withRel session.subdirs.input { owner = "agent"; }));
           message = "positive control: `doctored` must not match an arbitrary infix";
         }
         # --- NEGATIVE config: the guest agent must stay unprivileged -------
         {
           # With uid 0 the `agent`-owned directories of the table would BE
-          # root-owned and the whole split would collapse. (The guard lives in
-          # default.nix; it is exercised here on a LITE host because the
-          # consolidated layout depends on it.)
+          # root-owned and the whole split would collapse.
           # `guestAgentUid = 0` is rejected by the option TYPE (positive
           # integer) before the assertion can even run, so `tryEval` counts as
           # a rejection here exactly as in `rejectsWith` above.
-          assertion =
-            let
-              r = builtins.tryEval (
-                map (a: a.message) (
-                  builtins.filter (a: !a.assertion)
-                    (liteHostWith [ { myconfig.ai.microvm.guestAgentUid = lib.mkForce 0; } ]).config.assertions
-                )
-              );
-            in
-            if !r.success then true else builtins.any (m: lib.hasInfix "unprivileged" m) r.value;
+          assertion = rejectsWith [ { myconfig.ai.microvm.guestAgentUid = lib.mkForce 0; } ] "unprivileged";
           message = "a privileged guest agent uid must be rejected at eval";
-        }
-        {
-          # Positive control: the unmodified lite host trips NO assertion.
-          assertion = builtins.filter (a: !a.assertion) liteCfg.assertions == [ ];
-          message = "positive control: a plain lite host must evaluate cleanly, got ${
-            toString (map (a: a.message) (builtins.filter (a: !a.assertion) liteCfg.assertions))
-          }";
         }
       ];
     in
@@ -1826,26 +1663,24 @@ in
         inherit evalMarker;
         # Building these runs their writeShellApplication shellcheck gate; the
         # greps below then inspect the GENERATED code.
-        verifierBin = "${liteSession.verifier}/bin/agent-microvm-verify-session";
-        # EVAL-DEPTH ONLY (a `.drvPath` string, nothing is built): this phase
-        # added a guest-side `fileSystems` entry, so the LITE guest's toplevel
-        # and its microvm runner must be forced by CI just like the full guest's
-        # (`microvm-guest-evaluates` covers only the full profile).
-        liteGuestToplevelDrv = liteGuest.system.build.toplevel.drvPath;
-        liteGuestRunnerDrv = liteGuest.microvm.declaredRunner.drvPath;
-        liteSshGuestToplevelDrv = liteSshGuest.system.build.toplevel.drvPath;
-        liteLauncherBin = "${liteLauncher}/bin/agent-microvm";
-        fullLauncherBin = "${fullLauncher}/bin/agent-microvm";
-        sessionRoot = liteSession.root;
-        sessionRoRoot = liteSession.roRoot;
+        verifierBin = "${session.verifier}/bin/agent-microvm-verify-session";
+        # EVAL-DEPTH ONLY (a `.drvPath` string, nothing is built): a guest that
+        # does not even evaluate to a realisable derivation must fail CI, and
+        # this check is the one that owns the guest SHAPE.
+        guestToplevelDrv = guest0Cfg.system.build.toplevel.drvPath;
+        guestRunnerDrv = guest0Cfg.microvm.declaredRunner.drvPath;
+        noSshGuestToplevelDrv = noSshGuest.system.build.toplevel.drvPath;
+        launcherBin = "${launcherPkg}/bin/agent-microvm";
+        sessionRoot = session.root;
+        sessionRoRoot = session.roRoot;
         # "<rel> <mode-without-leading-zero> <uid>" per entry, from the module's
         # table — so the greps below follow a layout change too.
         writableEntries = lib.concatMapStringsSep "\n" (
           e: "${if e.rel == "" then "." else e.rel} ${lib.removePrefix "0" e.mode} ${toString e.uid}"
-        ) (builtins.filter (e: e.strictMode) liteSession.layout);
+        ) (builtins.filter (e: e.strictMode) session.layout);
         roEntries = lib.concatMapStringsSep "\n" (
           e: "${if e.rel == "" then "." else e.rel} ${lib.removePrefix "0" e.mode} ${toString e.uid}"
-        ) liteSession.roLayout;
+        ) session.roLayout;
       }
       ''
         # --- the PRE-LAUNCH verifier -------------------------------------
@@ -1889,69 +1724,67 @@ in
 
         # --- the launcher prepares / verifies / REMOVES the whole tree ------
         for fn in prepare_session verify_session clear_session; do
-          grep -qF -- "$fn()" "$liteLauncherBin" \
-            || { echo "the lite launcher has no $fn" >&2; exit 1; }
+          grep -qF -- "$fn()" "$launcherBin" \
+            || { echo "the launcher has no $fn" >&2; exit 1; }
         done
-        grep -qF -- "$verifierBin" "$liteLauncherBin" \
-          || { echo "the lite launcher does not call the generated session verifier" >&2; exit 1; }
+        grep -qF -- "$verifierBin" "$launcherBin" \
+          || { echo "the launcher does not call the generated session verifier" >&2; exit 1; }
         # The verification runs BEFORE the VM is started.
-        grep -qF -- 'verify_session "$slot"' "$liteLauncherBin" \
-          || { echo "the lite launcher never verifies a session before launch" >&2; exit 1; }
-        test "$(grep -c 'verify_session "\$slot"' "$liteLauncherBin")" -ge 2 \
+        grep -qF -- 'verify_session "$slot"' "$launcherBin" \
+          || { echo "the launcher never verifies a session before launch" >&2; exit 1; }
+        test "$(grep -c 'verify_session "\$slot"' "$launcherBin")" -ge 2 \
           || { echo "both run and submit must verify the session tree" >&2; exit 1; }
-        test "$(grep -c 'prepare_session "\$slot"' "$liteLauncherBin")" -ge 2 \
+        test "$(grep -c 'prepare_session "\$slot"' "$launcherBin")" -ge 2 \
           || { echo "both run and submit must prepare the session tree" >&2; exit 1; }
         # Cleanup removes the COMPLETE tree, and refuses to do so through a
         # surviving bind mount (which would delete the clone / persisted state).
-        grep -qE 'rm -rf -- "\$\{dir:\?\}"' "$liteLauncherBin" \
-          || { echo "the lite launcher does not remove the complete session tree" >&2; exit 1; }
-        grep -qF -- 'refusing to remove the session tree' "$liteLauncherBin" \
-          || { echo "the lite launcher removes the session tree without proving the binds are gone" >&2; exit 1; }
-        grep -qF -- 'still exists after removing it' "$liteLauncherBin" \
-          || { echo "the lite launcher does not prove the session tree is gone" >&2; exit 1; }
-        grep -qF -- 'clear_session "$slot" || leaked=1' "$liteLauncherBin" \
+        grep -qE 'rm -rf -- "\$\{dir:\?\}"' "$launcherBin" \
+          || { echo "the launcher does not remove the complete session tree" >&2; exit 1; }
+        grep -qF -- 'refusing to remove the session tree' "$launcherBin" \
+          || { echo "the launcher removes the session tree without proving the binds are gone" >&2; exit 1; }
+        grep -qF -- 'still exists after removing it' "$launcherBin" \
+          || { echo "the launcher does not prove the session tree is gone" >&2; exit 1; }
+        grep -qF -- 'clear_session "$slot" || leaked=1' "$launcherBin" \
           || { echo "the teardown does not clear the session tree (or swallows its failure)" >&2; exit 1; }
         # Both bind-mount targets are inside the session tree, and there is
         # exactly ONE definition of each.
-        grep -qF -- 'mount_point()  { printf '"'"'%s'"'"' "$SESSION_ROOT/$1/$SESSION_WORKSPACE_SUBDIR"; }' "$liteLauncherBin" \
-          || { echo "the lite launcher does not put the workspace bind inside the session tree" >&2; exit 1; }
-        grep -qF -- 'state_slot_dir() { printf '"'"'%s'"'"' "$SESSION_ROOT/$1/$SESSION_STATE_SUBDIR"; }' "$liteLauncherBin" \
-          || { echo "the lite launcher does not put the agent-state bind inside the session tree" >&2; exit 1; }
-        test "$(grep -c 'mount_point()' "$liteLauncherBin")" -eq 1 \
+        grep -qF -- 'mount_point()  { printf '"'"'%s'"'"' "$SESSION_ROOT/$1/$SESSION_WORKSPACE_SUBDIR"; }' "$launcherBin" \
+          || { echo "the launcher does not put the workspace bind inside the session tree" >&2; exit 1; }
+        grep -qF -- 'state_slot_dir() { printf '"'"'%s'"'"' "$SESSION_ROOT/$1/$SESSION_STATE_SUBDIR"; }' "$launcherBin" \
+          || { echo "the launcher does not put the agent-state bind inside the session tree" >&2; exit 1; }
+        test "$(grep -c 'mount_point()' "$launcherBin")" -eq 1 \
           || { echo "mount_point must have exactly one definition" >&2; exit 1; }
-        test "$(grep -c 'state_slot_dir()' "$liteLauncherBin")" -eq 1 \
+        test "$(grep -c 'state_slot_dir()' "$launcherBin")" -eq 1 \
           || { echo "state_slot_dir must have exactly one definition" >&2; exit 1; }
-        # ... and the FULL profile's launcher is untouched by this phase.
-        for pat in SESSION_ROOT prepare_session verify_session clear_session; do
-          if grep -qF -- "$pat" "$fullLauncherBin"; then
-            echo "the full-profile launcher must not carry any session-tree code ($pat)" >&2
+        # There is only ONE share layout left: no code may still branch on the
+        # historical four-share paths.
+        for pat in '/run/agent-job' '/var/lib/agent-state' '/var/lib/agent-hostkey' \
+                   '$STATE_ROOT/$1/workspace'; do
+          if grep -qF -- "$pat" "$launcherBin"; then
+            echo "the launcher still references the historical four-share path $pat" >&2
             exit 1
           fi
         done
-        grep -qF -- 'mount_point()  { printf '"'"'%s'"'"' "$STATE_ROOT/$1/workspace"; }' "$fullLauncherBin" \
-          || { echo "the full launcher must keep its historical workspace mount point" >&2; exit 1; }
 
-        # The LITE guest (and its runner) must EVALUATE to a realisable
-        # derivation: this phase gave the guest a `fileSystems` entry, and
-        # `microvm-guest-evaluates` only covers the full profile. Referencing
-        # the drvPaths here is what forces that evaluation in CI.
-        for drv in "$liteGuestToplevelDrv" "$liteGuestRunnerDrv" "$liteSshGuestToplevelDrv"; do
+        # The guest (and its runner) must EVALUATE to a realisable derivation.
+        # Referencing the drvPaths here is what forces that evaluation in CI.
+        for drv in "$guestToplevelDrv" "$guestRunnerDrv" "$noSshGuestToplevelDrv"; do
           case "$drv" in
             /nix/store/*.drv) ;;
-            *) echo "the lite guest did not evaluate to a derivation: '$drv'" >&2; exit 1 ;;
+            *) echo "a guest did not evaluate to a derivation: '$drv'" >&2; exit 1 ;;
           esac
         done
 
         {
           echo "microvm-session-tree:"
           echo "  writable tree : $sessionRoot/<slot>"
-          echo "  lite guest    : $liteGuestToplevelDrv"
-          echo "  lite runner   : $liteGuestRunnerDrv"
+          echo "  guest         : $guestToplevelDrv"
+          echo "  runner        : $guestRunnerDrv"
           printf '    %s\n' "$writableEntries"
           echo "  read-only tree: $sessionRoRoot/<slot>"
           printf '    %s\n' "$roEntries"
           echo "  verifier      : $verifierBin"
-          echo "  lite launcher : $liteLauncherBin"
+          echo "  launcher      : $launcherBin"
           cat "$evalMarker"
         } > "$out"
       '';
@@ -2157,138 +1990,6 @@ in
       message = "translating allowPublicInternet -> networkProfile = internet must warn";
     }
   ];
-
-  # ---------------------------------------------------------------------- #
-  # (g) GUEST SHARES: prove the guest declares EXACTLY TWO virtiofs shares  #
-  #     — the WRITABLE `/workspace` (host `source` == the launcher's         #
-  #     bind-mount target `${stateRoot}/<slot>/workspace`) and the           #
-  #     READ-ONLY per-slot SSH host-key share (ticket 3 B). This locks down  #
-  #     plan §10/§11 crit. 12 (the workspace share can never silently       #
-  #     vanish, be renamed, be made read-only or be repointed) AND the       #
-  #     ticket-3 amendment: the hostkey share must stay read-only, per-slot  #
-  #     and nothing else may be shared (no /nix, /home, host sockets).       #
-  #                                                                          #
-  #     Since lightweight plan phase 4 this is ALSO the regression guard for  #
-  #     the FULL profile: the consolidated one-writable-share layout is       #
-  #     `lite`-only, so the four shares pinned here must stay exactly as they #
-  #     are (`microvm-session-tree` covers the consolidated side).            #
-  # ---------------------------------------------------------------------- #
-  microvm-eval-workspace-share =
-    let
-      shares = guest0Cfg.microvm.shares;
-      virtiofsShares = builtins.filter (s: s.proto == "virtiofs") shares;
-      wsShares = builtins.filter (s: s.mountPoint == "/workspace") shares;
-      ws = if wsShares == [ ] then null else builtins.head wsShares;
-      expectedSource = "${microvmOpts.stateRoot}/${refSlot.name}/workspace";
-      hkShares = builtins.filter (s: s.mountPoint == hostKeys.guestMountPoint) shares;
-      hk = if hkShares == [ ] then null else builtins.head hkShares;
-      expectedHkSource = hostKeys.slotDir refSlot.name;
-      jobShares = builtins.filter (s: s.mountPoint == jobs.guestMountPoint) shares;
-      jobShare = if jobShares == [ ] then null else builtins.head jobShares;
-      expectedJobSource = jobs.slotDir refSlot.name;
-      stShares = builtins.filter (s: s.mountPoint == agentStatePaths.guestMountPoint) shares;
-      stShare = if stShares == [ ] then null else builtins.head stShares;
-      expectedStSource = agentStatePaths.slotDir refSlot.name;
-    in
-    mkEvalCheck "microvm-eval-workspace-share" [
-      {
-        # Exactly four shares: writable workspace, read-only hostkey, the
-        # per-slot batch job directory and the per-slot agent-state directory.
-        assertion = builtins.length shares == 4;
-        message = "guest ${refSlot.name} must declare exactly FOUR shares (workspace + hostkey + job + agent-state); got ${toString (builtins.length shares)}: ${
-          toString (map (s: s.mountPoint or "?") shares)
-        }";
-      }
-      {
-        assertion =
-          stShare != null && stShare.proto == "virtiofs" && stShare.tag == agentStatePaths.guestTag;
-        message = "guest ${refSlot.name} must declare a virtiofs share tagged '${agentStatePaths.guestTag}' at ${agentStatePaths.guestMountPoint}";
-      }
-      {
-        assertion = stShare != null && stShare.source == expectedStSource;
-        message = "agent-state share source is '${
-          toString (stShare.source or "<none>")
-        }', expected the PER-SLOT dir '${expectedStSource}' (the launcher binds the per-TASK dir onto it)";
-      }
-      {
-        assertion = jobShare != null && jobShare.proto == "virtiofs" && jobShare.tag == jobs.guestTag;
-        message = "guest ${refSlot.name} must declare a virtiofs share tagged '${jobs.guestTag}' at ${jobs.guestMountPoint}";
-      }
-      {
-        assertion = jobShare != null && jobShare.source == expectedJobSource;
-        message = "job share source is '${
-          toString (jobShare.source or "<none>")
-        }', expected the PER-SLOT dir '${expectedJobSource}' (must match job.nix)";
-      }
-      {
-        # Read-WRITE on purpose (the guest controller writes
-        # controller/result.json and the worker its logs). WHO may write WHAT
-        # inside the share is enforced by ownership/modes, not by this flag:
-        # input/ and controller/ are root-owned (controller/ additionally 0700),
-        # only worker/ belongs to the unprivileged guest agent.
-        assertion = jobShare != null && (jobShare.readOnly or false) == false;
-        message = "job share must be read-write so the guest controller can write its result";
-      }
-      {
-        assertion = hk != null && hk.proto == "virtiofs" && hk.tag == hostKeys.guestTag;
-        message = "guest ${refSlot.name} must declare a virtiofs share tagged '${hostKeys.guestTag}' at ${hostKeys.guestMountPoint}";
-      }
-      {
-        assertion = hk != null && hk.source == expectedHkSource;
-        message = "hostkey share source is '${
-          toString (hk.source or "<none>")
-        }', expected the PER-SLOT dir '${expectedHkSource}' (must match hostkeys.nix)";
-      }
-      {
-        # Read-only is load-bearing: the guest must not be able to replace its
-        # own host identity, and only guest root may read the 0400 private key.
-        assertion = hk != null && (hk.readOnly or false) == true;
-        message = "hostkey share MUST be readOnly (the guest must not be able to rewrite its host identity)";
-      }
-      {
-        assertion = ws != null;
-        message = "guest ${refSlot.name} has no share mounted at /workspace (mountPoints: ${
-          toString (map (s: s.mountPoint or "?") shares)
-        })";
-      }
-      {
-        assertion = ws != null && ws.proto == "virtiofs";
-        message = "/workspace share must be proto=virtiofs, got '${toString (ws.proto or "<none>")}'";
-      }
-      {
-        assertion = ws != null && ws.tag == "workspace";
-        message = "/workspace share must have tag=workspace, got '${toString (ws.tag or "<none>")}'";
-      }
-      {
-        assertion = ws != null && ws.source == expectedSource;
-        message = "/workspace share source is '${
-          toString (ws.source or "<none>")
-        }', expected '${expectedSource}' (must match launcher.nix mount_point())";
-      }
-      {
-        # Must be read-write so agent-run's `test -w /workspace` can pass.
-        assertion = ws != null && (ws.readOnly or false) == false;
-        message = "/workspace share must be read-write (readOnly=false)";
-      }
-      {
-        # Defence in depth: the ONLY virtiofs shares are the workspace and the
-        # hostkey dir — no /nix, /home or host-socket share leaked in.
-        assertion = builtins.length virtiofsShares == 4;
-        message = "expected exactly four virtiofs shares (workspace + hostkey + job + agent-state); got ${toString (builtins.length virtiofsShares)}";
-      }
-      {
-        assertion = builtins.all (
-          s:
-          builtins.elem s.mountPoint [
-            "/workspace"
-            hostKeys.guestMountPoint
-            jobs.guestMountPoint
-            agentStatePaths.guestMountPoint
-          ]
-        ) shares;
-        message = "unexpected share mountPoint(s): ${toString (map (s: s.mountPoint or "?") shares)}";
-      }
-    ];
 
   # ---------------------------------------------------------------------- #
   # (h) AGENT REGISTRY (ticket 1): prove that agents.nix really is the ONE  #
@@ -2882,25 +2583,40 @@ in
           }
         ]
         # Every slot's job dir (and its input/controller/worker subdirs) must be
-        # pre-created, otherwise virtiofsd refuses to start for that slot.
-        ++ lib.concatMap (slot: [
-          {
-            assertion = builtins.elem "d ${jobs.slotDir slot.name} 0755 root root - -" tmpfiles;
-            message = "missing tmpfiles rule for the job dir of ${slot.name}";
-          }
-          {
-            assertion = builtins.elem "d ${jobs.hostInputDir slot.name} ${jobs.inputDirMode} root root - -" tmpfiles;
-            message = "missing tmpfiles rule for the immutable input dir of ${slot.name}";
-          }
-          {
-            assertion = builtins.elem "d ${jobs.hostControllerDir slot.name} ${jobs.controllerDirMode} root root - -" tmpfiles;
-            message = "missing tmpfiles rule for the controller-only dir of ${slot.name}";
-          }
-          {
-            assertion = builtins.elem "d ${jobs.hostWorkerDir slot.name} ${jobs.workerDirMode} ${toString jobs.workerUid} ${toString jobs.workerGid} - -" tmpfiles;
-            message = "missing tmpfiles rule for the worker-writable dir of ${slot.name}";
-          }
-        ]) enabledSlots
+        # pre-created, otherwise virtiofsd refuses to start for that slot. They
+        # are part of the ONE writable session share, so ./session.nix creates
+        # them from its layout table — which renders the owner NUMERICALLY (it
+        # derives the ids from `guestAgentUid`/`guestAgentGid`); tmpfiles accepts
+        # either spelling, so `hasDirRule` does too.
+        ++ lib.concatMap (
+          slot:
+          let
+            hasDirRule =
+              path: mode: user: group:
+              builtins.any (r: r == "d ${path} ${mode} ${user} ${group} - -") tmpfiles;
+            hasRootDirRule = path: mode: hasDirRule path mode "root" "root" || hasDirRule path mode "0" "0";
+          in
+          [
+            {
+              assertion = hasRootDirRule (jobs.slotDir slot.name) "0755";
+              message = "missing tmpfiles rule for the job dir of ${slot.name}";
+            }
+            {
+              assertion = hasRootDirRule (jobs.hostInputDir slot.name) jobs.inputDirMode;
+              message = "missing tmpfiles rule for the immutable input dir of ${slot.name}";
+            }
+            {
+              assertion = hasRootDirRule (jobs.hostControllerDir slot.name) jobs.controllerDirMode;
+              message = "missing tmpfiles rule for the controller-only dir of ${slot.name}";
+            }
+            {
+              assertion = hasDirRule (jobs.hostWorkerDir slot.name) jobs.workerDirMode (toString jobs.workerUid) (
+                toString jobs.workerGid
+              );
+              message = "missing tmpfiles rule for the worker-writable dir of ${slot.name}";
+            }
+          ]
+        ) enabledSlots
       );
     in
     pkgs.runCommand "microvm-batch-jobs"
@@ -3014,9 +2730,11 @@ in
         {
           # 0700 root:root is what makes the channel unwritable AND unreadable
           # for the worker (the token in the spec must not leak either).
+          # (The rule is rendered by ./session.nix from its layout table, which
+          # spells the owner numerically; tmpfiles accepts either form.)
           assertion =
             jobs.controllerDirMode == "0700"
-            && builtins.elem "d ${jobs.hostControllerDir refSlot.name} 0700 root root - -" tmpfiles;
+            && builtins.elem "d ${jobs.hostControllerDir refSlot.name} 0700 0 0 - -" tmpfiles;
           message = "the controller directory must be created root:root 0700";
         }
         {
@@ -3078,7 +2796,7 @@ in
           message = "the worker's log files must live in the ROOT-owned worker-logs directory, not inside the worker-writable one";
         }
         {
-          assertion = builtins.elem "d ${jobs.hostWorkerLogsDir refSlot.name} ${jobs.workerLogsDirMode} root root - -" tmpfiles;
+          assertion = builtins.elem "d ${jobs.hostWorkerLogsDir refSlot.name} ${jobs.workerLogsDirMode} 0 0 - -" tmpfiles;
           message = "the worker log directory must be pre-created root:root ${jobs.workerLogsDirMode}";
         }
         {
@@ -3139,8 +2857,15 @@ in
           message = "the batch schema version must have been bumped for the controller/worker split";
         }
         {
-          assertion = builtins.elem "R ${jobs.slotDir refSlot.name}/out - - - - -" tmpfiles;
-          message = "the legacy guest-writable out/ directory must be removed by tmpfiles";
+          # The v1 guest-writable `out/` result channel never existed inside the
+          # session tree (it predates it), and the tree is REMOVED and recreated
+          # around every launch, so there is nothing to clean up any more. What
+          # must stay true is that no guest-writable directory of the current
+          # layout is a result path.
+          assertion =
+            !(builtins.elem "out" (builtins.attrValues session.subdirs))
+            && !builtins.any (d: lib.hasPrefix "${d}/" (jobs.hostResult refSlot.name)) workerWritable;
+          message = "the authoritative result must not live in a guest-writable directory of the session tree";
         }
         {
           # The old single-identity unit must be gone: it was the forgery hole.
@@ -3323,6 +3048,10 @@ in
         # world-readable /proc/<pid>/cmdline.
         JQ_TARGET = "${pkgs.jq}/bin/jq";
         SPEC_VERSION = toString jobs.specVersion;
+        # The guest-side mount point of the job data (the ONE writable session
+        # share), from job.nix -> session.nix rather than a literal in the
+        # harness.
+        GUEST_JOB_DIR = jobs.guestMountPoint;
         INPUT_SUBDIR = jobs.inputSubdir;
         CONTROLLER_SUBDIR = jobs.controllerSubdir;
         WORKER_SUBDIR = jobs.workerSubdir;
@@ -3408,6 +3137,14 @@ in
         CURL_TARGET = "${pkgs.curl}/bin/curl";
         RUNTIME_ROOT = microvmOpts.runtimeRoot;
         STATE_ROOT = microvmOpts.stateRoot;
+        # The per-slot job data root and the workspace subdirectory of the ONE
+        # writable session share, from the module rather than a literal in the
+        # harness.
+        JOBS_ROOT = jobs.root;
+        WORKSPACE_SUBDIR = session.subdirs.workspace;
+        # The host home the config stager resolves: the harness creates it
+        # (empty) inside the sandbox so the launch-time staging step succeeds.
+        HOST_HOME = microvmOpts.configSeed.hostHome;
         INPUT_SUBDIR = jobs.inputSubdir;
         CONTROLLER_SUBDIR = jobs.controllerSubdir;
         WORKER_SUBDIR = jobs.workerSubdir;
@@ -3470,6 +3207,17 @@ in
         FINDMNT_TARGET = "${pkgs.util-linux.bin}/bin/findmnt";
         RUNTIME_ROOT = microvmOpts.runtimeRoot;
         STATE_ROOT = microvmOpts.stateRoot;
+        # The layout the launcher actually uses, from the module (session.nix /
+        # state.nix / hostkeys.nix) rather than from literals in the harness.
+        SESSION_ROOT = session.root;
+        SESSION_RO_ROOT = session.roRoot;
+        WORKSPACE_SUBDIR = session.subdirs.workspace;
+        STATE_SUBDIR = session.subdirs.state;
+        HOSTKEYS_SUBDIR = session.roSubdirs.hostkeys;
+        # The PRE-consolidation per-slot state root: nothing creates anything
+        # there any more, but `recover` still scans it so a host migrated from
+        # the four-share layout gets its residue reported.
+        STATE_SLOTS_ROOT = agentStatePaths.slotsRoot;
         SLOT = refSlot.name;
         # A slot name from the PREVIOUS naming scheme (`agent-<i>`, before the
         # per-class `agent-<class>-<i>` rename). Asserted by the harness not to
@@ -3497,7 +3245,7 @@ in
   #      /dev/kvm and root, so CI can never run it — but the mechanism that    #
   #      decides whether ANY of its guest-side denials mean anything (does the  #
   #      command reach the guest as written, through OpenSSH's argv flattening  #
-  #      and the agent's fish login shell?) can be executed here, against a     #
+  #      and the agent's login shell?) can be executed here, against a          #
   #      stub that reproduces exactly that path. Includes a NEGATIVE CONTROL:   #
   #      the previous, unquoted transport must FAIL this check.                 #
   # ---------------------------------------------------------------------- #
@@ -3506,14 +3254,15 @@ in
       {
         nativeBuildInputs = [
           pkgs.coreutils
-          pkgs.fish
+          pkgs.bashInteractive
         ];
         harness = ./microvm-rtv-transport.sh;
-        # The suite under test, and the very shell guest.nix gives the agent
-        # user (`users.users.agent.shell = pkgs.fish`) — the re-parsing side of
-        # the transport, so the stub is not a guess about which shell runs.
+        # The suite under test, and the very shell guest.nix gives the agent user
+        # — the re-parsing side of the transport, so the stub is not a guess
+        # about which shell runs. Read off the evaluated guest, so it follows a
+        # change of the guest login shell instead of pinning one.
         SUITE = ../modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh;
-        FISH = lib.getExe pkgs.fish;
+        GUEST_SHELL = "${guest0Cfg.users.users.agent.shell}/bin/bash";
       }
       ''
         mkdir -p work && cd work
@@ -3616,6 +3365,9 @@ in
         IPTABLES_TARGET = "${pkgs.iptables}/bin/iptables";
         CURL_TARGET = "${pkgs.curl}/bin/curl";
         RUNTIME_ROOT = microvmOpts.runtimeRoot;
+        # The per-slot host-key root, from hostkeys.nix (the read-only session
+        # tree), so the harness does not carry a second copy of the layout.
+        HOSTKEYS_ROOT = hostKeys.root;
         # The SAME variables the launcher bakes in (and network.nix installs
         # the rule with), so the harness can assert the doctor's `iptables -C`
         # spec matches the rule exactly.

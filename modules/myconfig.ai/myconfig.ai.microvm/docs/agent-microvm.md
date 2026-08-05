@@ -15,8 +15,8 @@ microVM** (via the `microvm.nix` flake input) with:
 - a **disposable** root and `/home/agent`; **only `/workspace` persists** (plus,
   opt-in and task-scoped, an agent's declared state directories),
 - a writable **virtiofs `/workspace`** that is a standalone git clone of your
-  repository (under `profile = "lite"` it is the `workspace/` subdirectory of the
-  ONE writable per-session share, bind-mounted to `/workspace` in the guest),
+  repository (the `workspace/` subdirectory of the ONE writable per-session
+  share, bind-mounted to `/workspace` in the guest),
 - a dedicated **private bridge** (`agentbr0`, `192.168.83.0/24`) with **per-TAP
   layer-2 isolation**, and
 - model-API access restricted to the **host LiteLLM proxy** through a
@@ -82,8 +82,7 @@ myconfig.ai.microvm = {
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `enable` | `false` | Turn the whole tier on for a host. |
-| `profile` | `"full"` | Overall **shape** of the tier: `full` (existing behaviour) or `lite` (one 2 vCPU / 4 GiB slot, pinned optimized EROFS guest store). See [Profiles](#profiles). |
-| `enabledAgents` | `null` | **Selected** agents (registry tokens). `null` = whatever `profile` selects (`full` → all declared agents). A deselected agent is *absent* from the guest closure. See [Selected agents](#selected-agents). |
+| `enabledAgents` | `null` | **Selected** agents (registry tokens). `null` = every declared agent (the module-wide default — and the biggest guest closure). A deselected agent is *absent* from the guest closure. See [Selected agents](#selected-agents). |
 | `resourceClasses` | `{ normal = { count = 4; vcpu = 4; memoryMiB = 8192; }; }` | Fixed, **prebuilt** resource classes. See [Resource classes](#resource-classes). |
 | `bridgeName` | `agentbr0` | Private bridge name. |
 | `subnet` | `192.168.83.0/24` | Private subnet. |
@@ -97,13 +96,8 @@ myconfig.ai.microvm = {
 | `enableSsh` | `true` | Guest SSH server, private interface only. |
 | `sshPublicKeyFile` | `null` | **Required** when `enableSsh`. See [The dedicated SSH key](#the-dedicated-ssh-key). |
 | `passwordlessControl` | `false` | Scoped `NOPASSWD`+`SETENV` sudo rule for exactly `agent-microvm`, for members of the `agent-microvm` group. |
-| `guestDotfiles.enable` | `!configSeed.enable` (i.e. `true` under `profile = "full"`, `false` under `lite`) | Provision the guest `agent` user with the host primary user's fish + coding-agent dotfiles (home-manager in the guest). Mutually exclusive with `configSeed.enable`. |
-| `guestDotfiles.homeFilePrefixes` | `.pi/`, `.codex/`, `.agents/`, `.qwen/`, `.config/git/`, `.gitconfig` | Allowlist of `home.file` keys copied from the host primary user. |
-| `guestDotfiles.xdgConfigPrefixes` | `fish/`, `opencode/` | Allowlist of `xdg.configFile` keys copied from the host primary user. |
-| `configSeed.enable` | the `profile`'s own value (`false` for `full`, `true` for `lite`) | **Runtime configuration staging**: provision the guest home at *launch* time from an allowlisted, root-owned staged copy of the host configuration instead of running home-manager inside the guest. See [Runtime configuration staging](#runtime-configuration-staging). |
-| `configSeed.hostHome` | the primary user's home (`config.users.users.<myconfig.user>.home`) | The host home the allowlisted paths are resolved against. Never mounted — only the allowlisted paths are read. |
+| `configSeed.hostHome` | the primary user's home (`config.users.users.<myconfig.user>.home`) | The host home the **runtime configuration staging** resolves its allowlist against. Never mounted — only the allowlisted paths are read. See [Runtime configuration staging](#runtime-configuration-staging). |
 | `configSeed.extraPaths` | `.config/git/attributes`, `.config/git/config` | Agent-independent additions to the staging allowlist. Same validation as the registry's per-agent `configPaths`. |
-| `session.enable` | the `profile`'s own value (`false` for `full`, `true` for `lite`) | **Consolidated session share**: ONE writable per-session virtiofs share (`workspace/`, `input/`, `controller/`, `worker/`, `worker-logs/`, `state/`) plus ONE read-only share (SSH host identity + staged configuration) instead of the four separate writable shares. Same ownership/mode trust boundaries, verified before every launch. See [Consolidated session share](#consolidated-session-share). |
 | `guestModelConfig.enable` | `true` | Guest boot-time model discovery: query the loopback LiteLLM endpoint and render the **live** model list into pi + opencode config. See [Boot-time model discovery](#boot-time-model-discovery). |
 | `guestModelConfig.providerKey` / `providerName` | `litellm` / `LiteLLM (microVM)` | Provider key/name written into the generated configs. The key matches the host-side generators, so the runtime list *replaces* the build-time one. |
 | `guestModelConfig.defaultContextWindow` / `maxTokens` | `131072` / `4096` | Fallbacks for models whose real values the endpoint does not expose. |
@@ -119,15 +113,16 @@ Deprecated / removed spellings (each warns or fails with a pointer; see
 
 ### Boot-time model discovery
 
-The agent configs a sandbox receives are **copies of build-time-rendered host
-dotfiles** (see `guest-home.nix`): pi's
+The agent configs a sandbox receives are **copies of host dotfiles**, staged at
+launch time (see [Runtime configuration staging](#runtime-configuration-staging)):
+pi's
 `~/.pi/agent/extensions/myconfig-providers.ts` and opencode's
 `~/.config/opencode/opencode.json` both freeze
-`services.litellm.settings.model_list` as of the guest image build. The host
+`services.litellm.settings.model_list` as of the last host rebuild. The host
 proxy decides its real model list at *runtime*, so those copies drift.
 
 `agent-model-config.service` (guest, oneshot, user `agent`, ordered after the
-guest home-manager activation and before the batch-job controller) queries
+config-seed provisioning oneshot and before the batch-job controller) queries
 `http://127.0.0.1:<litellmPort>/v1/models` — the same loopback forwarder every
 guest agent talks to — optionally enriches context windows from
 `/model/info`, and renders:
@@ -151,43 +146,32 @@ agent-microvm ssh agent-normal-0 -- systemctl status agent-model-config
 agent-microvm ssh agent-normal-0 -- agent-model-config   # re-render on demand
 ```
 
-### Profiles
+### The guest shape
 
-`myconfig.ai.microvm.profile` is the compatibility boundary between the
-existing, full-featured tier and the lightweight one described in
+The module has exactly ONE shape: the lightweight one described in
 [`myconfig-ai-microvm-lightweight-plan.md`](./myconfig-ai-microvm-lightweight-plan.md).
-The authoritative table lives in `../profiles.nix`.
+There is no `profile` option any more — the historical (`full`) spelling of every
+item below was deleted once the lightweight path had been reviewed, so there is
+one code path to read, test and audit.
 
-| Profile | Pool (when the host defines no sizing) | Guest store disk |
-| --- | --- | --- |
-| `full` **(default)** | derived from `resourceClasses` — or, for a host still on the deprecated spelling, from `slotCount` / `defaultVcpu` / `defaultMemoryMiB` | microvm.nix defaults |
-| `lite` | one slot `agent-lite-0`, 2 vCPU, 4096 MiB | pinned `microvm.optimize.enable = true`, `microvm.storeDiskType = "erofs"` |
-
-| Profile | Selected agents (when the host sets no `enabledAgents`) | Guest toolset |
-| --- | --- | --- |
-| `full` **(default)** | every agent `../agents.nix` declares | historical set (curl, fd, file, gnumake, rsync, tree, unzip, which, …) + fish login shell + NixOS `defaultPackages` |
-| `lite` | `[ "codex" ]` | minimal documented set (POSIX toolbox, git, diffutils/patch, ripgrep, jq, less, procps, util-linux, openssh when `enableSsh`) + bash login shell, no NixOS `defaultPackages` |
-
-| Profile | Guest home provisioning |
+| Aspect | What every guest gets |
 | --- | --- |
-| `full` **(default)** | home-manager **inside the guest** (`guestDotfiles`), baked into the guest closure at build time |
-| `lite` | **runtime configuration staging** (`configSeed`): an allowlisted, root-owned copy staged per launch; no home-manager in the guest at all |
+| Pool | from `resourceClasses` — or, for a host still on the deprecated spelling, from `slotCount` / `defaultVcpu` / `defaultMemoryMiB` |
+| Guest store disk | pinned `microvm.optimize.enable = true`, `microvm.storeDiskType = "erofs"` |
+| Selected agents | `enabledAgents`; `null` (the default) means every agent `../agents.nix` declares |
+| Guest toolset | the minimal documented set (POSIX toolbox, git, diffutils/patch, ripgrep, jq, less, procps, util-linux, openssh when `enableSsh`) plus a **bash** login shell, with NixOS' `environment.defaultPackages` dropped |
+| Guest home | **runtime configuration staging** (`configSeed`): an allowlisted, root-owned copy staged per launch; **no** home-manager inside the guest |
+| virtiofs shares per slot | two: ONE writable per-session share at `/run/agent-session` and ONE read-only share at `/run/agent-session-ro` — see [The session share](#the-session-share) |
 
-| Profile | virtiofs shares per slot |
-| --- | --- |
-| `full` **(default)** | four: writable `/workspace`, writable `/run/agent-job`, writable `/var/lib/agent-state`, read-only `/var/lib/agent-hostkey` |
-| `lite` | two (`session.enable`): ONE writable per-session share at `/run/agent-session` and ONE read-only share at `/run/agent-session-ro` — see [Consolidated session share](#consolidated-session-share) |
+Every package in the minimal set has a documented consumer (see the comment above
+`guestCommonPackages` in `../guest.nix`). Agent-specific runtimes belong in the
+registry's per-agent `extraPackages`, so they are added only while that agent is
+selected.
 
-Every package in the minimal set has a documented consumer (see the comment
-above `guestMinimalPackages` in `../guest.nix`). Agent-specific runtimes belong
-in the registry's per-agent `extraPackages`, so they are added only while that
-agent is selected.
-
-The profile only supplies **defaults**: an explicit `resourceClasses` always
-outranks the profile's class table. Combining a profile that carries its own
-table (`lite`) with the deprecated `slotCount` / `defaultVcpu` /
-`defaultMemoryMiB` spelling is **rejected** as ambiguous rather than silently
-resolved.
+Sizing is entirely the host's decision: an explicit `resourceClasses` table is
+what the pool is built from, and combining it with the deprecated `slotCount` /
+`defaultVcpu` / `defaultMemoryMiB` spelling is **rejected** as ambiguous rather
+than silently resolved.
 
 ### Selected agents
 
@@ -210,33 +194,30 @@ machinery is still built into every guest — see plan phase 5).
 
 ### Runtime configuration staging
 
-Under `profile = "lite"` (or with `configSeed.enable = true`) the guest home is
-no longer produced by home-manager activation *inside* the guest. Instead the
-host stages an **allowlisted** copy of its own agent configuration on every
-launch:
+The guest home is **not** produced by home-manager activation inside the guest
+(that path was removed). The host stages an **allowlisted** copy of its own agent
+configuration on every launch:
 
 ```text
 host allowlisted config
         │  agent-microvm-stage-config, as root, at launch time
         ▼
-<runtimeRoot>/config-seed/<slot>/home        root:root 0500/0400
-        │  per-slot, READ-ONLY virtiofs share (tag `configseed`) whose source
-        │  is exactly that `home` payload directory
-        │  (with `session.enable`, i.e. `profile = "lite"`, the payload is
-        │  `<runtimeRoot>/sessions-ro/<slot>/config-seed` and reaches the guest
-        │  through the ONE read-only session share — same modes, same
-        │  read-only mount, and the manifest still outside every share)
+<runtimeRoot>/sessions-ro/<slot>/config-seed  root:root 0500/0400
+        │  the per-slot READ-ONLY virtiofs share (the payload is a
+        │  subdirectory of the read-only session tree, and the staging
+        │  MANIFEST stays outside every share)
         ▼
-/run/agent-config-seed  (lite: /run/agent-session-ro/config-seed)
+/run/agent-session-ro/config-seed
         │  agent-config-seed.service (guest root oneshot), ordered BEFORE
-        │  sshd, the batch job controller and the agent-state linker
+        │  sshd, the batch job controller, the agent-state linker and the
+        │  boot-time model discovery
         ▼
 /home/agent                                  agent-owned, disposable
 ```
 
 Why: editing an allowlisted host instruction/skill/config file affects the
-**next launch** without rebuilding the guest, and the guest drops the whole
-home-manager activation machinery.
+**next launch** without rebuilding the guest, and the guest carries no
+home-manager activation machinery at all.
 
 **What may cross the boundary** is an explicit, positive allowlist: the
 `configPaths` of the *selected* agents (`../agents.nix`, so the staged set
@@ -290,15 +271,16 @@ proxy, and the guest only learns the endpoint (see
 [Boot-time model discovery](#boot-time-model-discovery)).
 
 Inspect what a session actually got — the stager writes a manifest recording the
-policy, everything staged and everything skipped **with a reason**. It is the
-**sibling** of the payload directory, `root:root 0400`, and deliberately
-*outside* the share: it names the host home and every skipped, credential-shaped
-host file name, which the untrusted guest has no business learning.
+policy, everything staged and everything skipped **with a reason**. It lives in
+the host-only `<runtimeRoot>/config-seed/<slot>/`, `root:root 0400`, deliberately
+*outside* every share: it names the host home and every skipped,
+credential-shaped host file name, which the untrusted guest has no business
+learning.
 
 ```bash
-sudo jq . /var/lib/agent-microvms/config-seed/agent-lite-0/manifest.json
-sudo find /var/lib/agent-microvms/config-seed/agent-lite-0/home -ls
-agent-microvm ssh agent-lite-0 -- systemctl status agent-config-seed
+sudo jq . /var/lib/agent-microvms/config-seed/agent-normal-0/manifest.json
+sudo find /var/lib/agent-microvms/sessions-ro/agent-normal-0/config-seed -ls
+agent-microvm ssh agent-normal-0 -- systemctl status agent-config-seed
 ```
 
 The guest copy is the agent's own: it is writable, lives on the disposable
@@ -312,11 +294,10 @@ staging is enabled, so an operator can stage and audit a slot by hand. The
 the policy is actually *enforced* (CI can only prove it is baked in, because the
 Nix sandbox is not root).
 
-### Consolidated session share
+### The session share
 
-Under `profile = "lite"` (or with `session.enable = true`) a slot has **one
-writable** virtiofs share and **at most one read-only** one instead of the four
-or five separate shares of the `full` profile — fewer virtiofsd processes, one
+A slot has **one writable** virtiofs share and **one read-only** one (the
+historical four/five separate shares are gone) — fewer virtiofsd processes, one
 guest mount set, and one host tree to create, verify and remove:
 
 ```text
@@ -337,8 +318,9 @@ Inside the guest, `/run/agent-session/workspace` is **bind-mounted to
 `/workspace`**, so `agent-run`'s mount/writability checks and every agent's
 expectation of `/workspace` are unchanged.
 
-The trust boundaries are **identical** to the four-share layout, because they
-were never expressed by the share split but by **ownership and modes**, which
+The trust boundaries are **identical** to the historical four-share layout,
+because they were never expressed by the share split but by **ownership and
+modes**, which
 virtiofsd passes through unchanged: the session root, `input/`, `controller/`
 (root-**only** `0700`) and `worker-logs/` are root-owned, and only `workspace/`,
 `worker/` and `state/` belong to the unprivileged guest `agent` user.
@@ -386,7 +368,7 @@ mounted tree's root mode and `git clone` (root's umask, the source repository's
 Inspect a slot's tree by hand with the same policy the launcher uses:
 
 ```bash
-sudo agent-microvm-verify-session agent-lite-0
+sudo agent-microvm-verify-session agent-normal-0
 ```
 
 ### Resource classes
@@ -415,8 +397,10 @@ myconfig.ai.microvm.resourceClasses = lib.mkForce {
   re-numbers the *addresses* of later classes. Every host-side directory is
   keyed by name, not address.
 - Old per-slot state left over from a resized or renamed pool
-  (`/var/lib/microvms/<slot>/workspace` and the matching `slots/`, `hostkeys/`,
-  `jobs/`, `state/slots/` entries) is unused, but no longer *silent*:
+  (`slots/`, `sessions/`, `sessions-ro/` entries — plus the pre-consolidation
+  `/var/lib/microvms/<slot>/workspace`, `jobs/`, `hostkeys/` and `state/slots/`
+  residue, which `recover` still scans on purpose) is unused, but no longer
+  *silent*:
   `agent-microvm recover` reports it as a `foreign:` finding, and
   `agent-microvm recover --prune-foreign` removes it (unmounting a stale foreign
   bind through the same verified path as any other unmount). It is never removed
@@ -562,7 +546,7 @@ of the authoritative result. See the
 ### Job directory (runtime only — never in the Nix store)
 
 ```text
-/var/lib/agent-microvms/jobs/<slot>/                   root:root 0755
+/var/lib/agent-microvms/sessions/<slot>/               root:root 0755
                               input/                   root:root 0755
                               input/spec.json          root:root 0400  the job spec (v2)
                               input/prompt.md          root:root 0444  the prompt TEXT
@@ -576,11 +560,9 @@ of the authoritative result. See the
                               worker-logs/{stdout,stderr}.log  root:root 0644  UNTRUSTED content
 ```
 
-Surfaced into the guest at `/run/agent-job` — or, under `profile = "lite"`, as
-`<runtimeRoot>/sessions/<slot>/` at `/run/agent-session` (the same
-subdirectories, owners and modes; see
-[Consolidated session share](#consolidated-session-share)). The share is
-read-**write**, but
+The per-slot job data IS `<runtimeRoot>/sessions/<slot>/`, surfaced into the
+guest at `/run/agent-session` through the ONE writable share (see
+[The session share](#the-session-share)). It is read-**write**, but
 *who* may write *what* is decided by ownership and modes, which virtiofsd passes
 through unchanged:
 
@@ -617,7 +599,7 @@ in its ENVIRONMENT. The verifier reads `AGENT_JOB_EXPECTED_TOKEN` and refuses a
   "slot": "agent-normal-0",
   "agent": "opencode",
   "workspace": "/workspace",
-  "promptFile": "/run/agent-job/input/prompt.md",
+  "promptFile": "/run/agent-session/input/prompt.md",
   "timeoutSeconds": 3600,
   "resourceClass": "normal",
   "persistAgentState": false
@@ -628,7 +610,7 @@ The guest controller rejects (as `infrastructure-error`) an unknown schema
 version, **any unknown field**, an invalid `taskId`, a malformed or missing
 `allocationToken`, a `slot` that is not this guest, an agent that is not
 batch-capable, a `workspace` other than `/workspace`, a `promptFile` that is not
-*exactly* `/run/agent-job/input/prompt.md`, an out-of-range `timeoutSeconds`, a
+*exactly* `/run/agent-session/input/prompt.md`, an out-of-range `timeoutSeconds`, a
 malformed `resourceClass`, a non-boolean `persistAgentState`, and **any** attempt
 to name an executable (`command` / `exec` / `executable`). If the share's
 ownership/permissions are not exactly as above it refuses to run at all.

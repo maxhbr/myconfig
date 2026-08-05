@@ -84,7 +84,7 @@ the host and re-run the section.
 | Section | Last executed on real KVM |
 | --- | --- |
 | `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED in the present form.** They were run once on f13 (root + `/dev/kvm`) as originally written. That run produced 20 `FAIL`s, of which all but two turned out to be defects of the HARNESS — and the same defects made roughly 25 of the reported `PASS`es vacuous. The harness has since been repaired (see “Harness validity invariants” below); the repaired suite has **not** been run yet. |
-| `seed` | **NOT EXECUTED on a real host yet** — added with the review follow-up of lightweight plan phase 3. Its six cases were executed by hand against the generated stager with a fixture home (allowlisted file staged; benignly named symlink onto a credential refused; credential-shaped name refused; host-home escape refused; FIFO/setuid refused; per-file, total and file-count budgets enforced; depth truncation noted; destination cleaned) — the section is that procedure made repeatable. It starts no VM, so it needs only root and a host with `configSeed.enable`. |
+| `seed` | **NOT EXECUTED on a real host yet** — added with the review follow-up of lightweight plan phase 3. Its six cases were executed by hand against the generated stager with a fixture home (allowlisted file staged; benignly named symlink onto a credential refused; credential-shaped name refused; host-home escape refused; FIFO/setuid refused; per-file, total and file-count budgets enforced; depth truncation noted; destination cleaned) — the section is that procedure made repeatable. It starts no VM, so it needs only root. |
 | `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties are the three eval/build checks `microvm-batch-result-integrity`, `microvm-batch-controller-smoke` and `microvm-batch-launcher-submit` (see below). |
 
 This table is deliberately pessimistic: update it only with a pasted log. The
@@ -93,8 +93,8 @@ command transport, invariant 2b) were made in an environment **without**
 `/dev/kvm` and without root; what *was* executed there is the CI tier, including
 the new `microvm-rtv-transport` check, which runs the suite's own transport
 block against a stub that reproduces OpenSSH's argv flattening plus the guest's
-fish login shell — with a negative control that fails for the previous,
-unquoted transport.
+login shell — with a negative control that fails for the previous, unquoted
+transport.
 
 Every check prints one line — `PASS`, `FAIL` or `SKIP` — and the script exits
 non-zero if anything failed. `SKIP` is honest (e.g. "fewer than two slots in the
@@ -123,12 +123,14 @@ lying:
 2b. **The command must reach the guest as written — and that is *measured*.**
    `agent-microvm ssh <slot> -- <argv…>` cannot preserve argument boundaries:
    OpenSSH joins the remaining argv with single spaces and the guest's **login
-   shell** re-parses the string — and that shell is `fish` (`guest.nix`:
-   `users.users.agent.shell = pkgs.fish`). A payload such as
+   shell** re-parses the string — bash today (`guest.nix`:
+   `users.users.agent.shell = pkgs.bashInteractive`; it was `fish` before the
+   lightweight guest dropped it). A payload such as
    `sh -c "timeout 5 sh -c '</dev/tcp/GW/22'"` therefore used to arrive as
    `sh -c timeout 5 sh -c '…'`, i.e. `sh -c` received only the word `timeout`:
    the command failed for a **quoting** reason and the denial passed
-   *vacuously*. `${VAR:-}` was worse — `${` is a fish syntax error, so the whole
+   *vacuously*. `${VAR:-}` was worse — the login shell expanded (or, under fish,
+   rejected) it before the inner shell saw it, so the whole
    credential-environment block could never be evaluated.
    The suite now sends every payload as ONE token escaped for the guest's login
    shell (`guest_sh`/`guest`), **detects** the quoting dialect per slot, and
@@ -180,30 +182,28 @@ lying:
    are of the form “nothing forbidden exists under `$X`”, so a `$X` that does
    not exist at all is reported as a `PASS`. See below.
 
-## Share layout detection
+## The share layout
 
-The module has **two** share layouts and the suite must assert against the one
-the host under test actually uses:
+There is exactly ONE share layout (lightweight plan phase 4), and the suite's
+path constants are derived from it:
 
-| | `profile = "full"` | `profile = "lite"` (lightweight plan phase 4) |
-| --- | --- | --- |
-| job data | `<runtimeRoot>/jobs/<slot>` | `<runtimeRoot>/sessions/<slot>` |
-| workspace bind | `<stateRoot>/<slot>/workspace` | `<runtimeRoot>/sessions/<slot>/workspace` |
-| agent-state bind | `<runtimeRoot>/state/slots/<slot>` | `<runtimeRoot>/sessions/<slot>/state` |
-| staged config | `<runtimeRoot>/config-seed/<slot>/home` | `<runtimeRoot>/sessions-ro/<slot>/config-seed` |
-| staging manifest | `<runtimeRoot>/config-seed/<slot>/manifest.json` | same (outside every share) |
-| guest job mount | `/run/agent-job` | `/run/agent-session` |
-| guest virtiofs set | four (see `boot`) | `/run/agent-session`, `/run/agent-session-ro` |
+| | Path |
+| --- | --- |
+| job data | `<runtimeRoot>/sessions/<slot>` |
+| workspace bind | `<runtimeRoot>/sessions/<slot>/workspace` |
+| agent-state bind | `<runtimeRoot>/sessions/<slot>/state` |
+| staged config | `<runtimeRoot>/sessions-ro/<slot>/config-seed` |
+| staging manifest | `<runtimeRoot>/config-seed/<slot>/manifest.json` (outside every share) |
+| guest job mount | `/run/agent-session` |
+| guest virtiofs set | `/run/agent-session`, `/run/agent-session-ro` |
 
-`runtime-validation.sh` picks the layout from the existence of
-`<runtimeRoot>/sessions`, which `session.nix` creates via tmpfiles for every
-slot at boot (virtiofsd refuses to start without its share source), and prints
-the result in its banner line. Pointing the constants at the wrong layout is
-not a cosmetic bug: the stale-bind detector of `lifecycle` and **every**
-enforcement assertion of `seed` would then pass vacuously. The `seed` section
-additionally hard-`FAIL`s if the staged payload directory does not exist after a
-successful staging run, so that failure mode is structurally impossible rather
-than merely unlikely.
+The suite prints the session root in its banner line. Pointing the constants at
+a tree that does not exist would not be a cosmetic bug: almost every assertion
+is of the form “nothing forbidden exists under `$X`”, so the stale-bind detector
+of `lifecycle` and **every** enforcement assertion of `seed` would pass
+vacuously. The `seed` section therefore hard-`FAIL`s if the staged payload
+directory does not exist after a successful staging run, so that failure mode is
+structurally impossible rather than merely unlikely.
 
 ## What each section asserts
 
@@ -214,7 +214,7 @@ than merely unlikely.
 | every resource class boots and becomes SSH-ready (polled, see invariant 1) |
 | `/workspace` is a mount point and is writable by the guest `agent` user |
 | the host `/nix/store` is **not** shared into the guest |
-| exactly the expected virtiofs shares for the host's share LAYOUT (an empty enumeration is a `FAIL`, not a pass): under `profile = "full"` the four `/workspace`, `/var/lib/agent-hostkey`, `/run/agent-job`, `/var/lib/agent-state`; under `profile = "lite"` (lightweight plan phase 4) exactly `/run/agent-session` and `/run/agent-session-ro` — `/workspace` is then a *bind* of the session share and therefore not of type `virtiofs`. See “Share layout detection” below |
+| exactly the expected virtiofs shares (an empty enumeration is a `FAIL`, not a pass): exactly `/run/agent-session` and `/run/agent-session-ro` — `/workspace` is a *bind* of the session share and therefore not of type `virtiofs`. See “The share layout” above |
 | workspace changes survive shutdown (they are in the standalone clone) |
 | guest home and guest `/tmp` changes do **not** survive a restart — asserted only after the markers were proved to have been CREATED in the first run (the suite used to write `/root-marker`, which the unprivileged agent cannot create at all, and then “prove” it had not persisted) |
 | `--persist-agent-state` persists **only** declared paths (`~/.hermes`), never undeclared ones |
@@ -303,7 +303,7 @@ State the launcher cannot see is state nobody will clean up, so its absence from
 
 ### `forgery` — the batch result channel (ticket 7)
 
-The authoritative batch result (`/run/agent-job/controller/result.json`) is
+The authoritative batch result (`/run/agent-session/controller/result.json`) is
 written by the TRUSTED guest controller (root) and consumed by the host. The
 coding agent and every repository process run as the unprivileged guest `agent`
 user. This section measures that separation on a *booted* guest, because it is
@@ -395,7 +395,7 @@ never contained any of it). A positive control asserts that
 `/workspace/escape-shadow` really is a symlink in the guest before the escape
 check concludes anything.
 
-### `seed` — runtime configuration staging (`profile = "lite"`)
+### `seed` — runtime configuration staging
 
 HOST-only (no VM is started, but root is required): it runs the generated
 `agent-microvm-stage-config` for a **stopped** slot, plants fixtures in the real
@@ -443,7 +443,7 @@ prove the policy is *baked in* — whether it is *enforced* is decided here.
   `systemctl show agent-job-worker@<agent> -p MemoryMax,CPUQuota,TasksMax` for
   the per-class guest limits (they live on the WORKER unit) plus
   `systemctl status agent-job-controller` for the trusted half.
-- inside the guest: `sudo -u agent ls -ld /run/agent-job/*` — `input/` and
+- inside the guest: `sudo -u agent ls -ld /run/agent-session/*` — `input/` and
   `controller/` must be root-owned (the latter `0700`), only `worker/` may be
   agent-owned.
 - `iptables-save | grep AGENT_MICROVM` to review the rendered ruleset for the

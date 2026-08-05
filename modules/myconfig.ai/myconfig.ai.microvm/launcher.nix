@@ -91,28 +91,18 @@ let
   # SAME pool.
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
-  # --- runtime config staging (lightweight plan phase 3) ------------------
-  # The staging code below is rendered ONLY when `configSeed.enable` is on (the
-  # `lite` profile). A `full`-profile launcher is therefore BYTE-FOR-BYTE the
-  # script it was before this phase — verified with the evaluated-slice diff
-  # from AGENTS.md, which covers `environment.systemPackages`.
-  #
-  # To make that possible, every fragment ENDS with the indentation of the line
-  # that follows its insertion point, so an EMPTY fragment leaves the
-  # surrounding text untouched. `indentFragment` re-indents the (Nix-dedented)
-  # fragment body to the column it is spliced into.
-  #
-  # WARNING: the byte-identity of the `full` launcher depends on the exact
-  # indentation of each splice SITE matching the `indent` argument passed here.
-  # Re-indenting a splice site (or dropping the trailing newline `mkSeedFragment`
-  # appends) silently changes the `full` derivation — rerun the AGENTS.md
-  # evaluated-slice diff after touching any of them.
-  seedEnabled = agentConfigSeed.enable;
+  # --- multi-line script FRAGMENTS ---------------------------------------
+  # Several blocks of the generated script are defined next to the module data
+  # they are rendered from (the config-seed policy, the session layout table)
+  # rather than inline in the 3000-line script below. `mkFragment` re-indents
+  # such a (Nix-dedented) block to the column it is spliced into and appends the
+  # newline the following line's indentation needs, so the splice site keeps its
+  # own indentation. It is PURE RENDERING — there is one launcher shape.
   indentFragment = indent: text: lib.replaceStrings [ "\n" ] [ "\n${indent}" ] text;
-  mkSeedFragment = indent: text: lib.optionalString seedEnabled (indentFragment indent (text + "\n"));
+  mkFragment = indent: text: indentFragment indent (text + "\n");
 
   # Declarations + helpers, spliced into the helper section of the script.
-  configSeedHelpers = mkSeedFragment "      " ''
+  configSeedHelpers = mkFragment "      " ''
     # ---- runtime config staging (lightweight plan phase 3) -------------
     # The host copies an ALLOWLIST of configuration paths (the SELECTED
     # agents' registry `configPaths` plus `configSeed.extraPaths`) into a
@@ -129,10 +119,9 @@ let
     readonly CONFIG_SEED_STAGER=${lib.getExe agentConfigSeed.stager}
     readonly CONFIG_SEED_ROOT=${lib.escapeShellArg agentConfigSeed.root}
     readonly CONFIG_SEED_PAYLOAD_SUBDIR=${lib.escapeShellArg agentConfigSeed.homeSubdir}
-    # The manifest lives OUTSIDE every guest share, which under the
-    # consolidated session layout (phase 4) means outside the read-only tree
-    # too — hence its own root, taken from config-seed.nix rather than derived
-    # from the payload path here.
+    # The manifest lives OUTSIDE every guest share, which means outside the
+    # read-only tree too — hence its own root, taken from config-seed.nix
+    # rather than derived from the payload path here.
     readonly CONFIG_SEED_MANIFEST_ROOT=${lib.escapeShellArg agentConfigSeed.manifestRoot}
     readonly CONFIG_SEED_MANIFEST_NAME=${lib.escapeShellArg agentConfigSeed.manifestName}
     config_seed_dir() { printf '%s' "$CONFIG_SEED_ROOT/$1"; }
@@ -164,17 +153,9 @@ let
   '';
 
   # One call site each in `run` and `submit`, before the VM is started.
-  configSeedStage = mkSeedFragment "          " ''stage_config_seed "$slot"'';
+  configSeedStage = mkFragment "          " ''stage_config_seed "$slot"'';
 
-  # --- consolidated per-session tree (lightweight plan phase 4) -----------
-  # Same conditional-rendering contract as the phase-3 staging fragments above:
-  # nothing of this reaches a `full`-profile launcher, which therefore stays
-  # BYTE-FOR-BYTE the script it was (verified with the AGENTS.md evaluated-slice
-  # diff, which covers `environment.systemPackages`).
-  sessionEnabled = agentSession.enable;
-  mkSessionFragment =
-    indent: text: lib.optionalString sessionEnabled (indentFragment indent (text + "\n"));
-
+  # --- the per-session tree (lightweight plan phase 4) --------------------
   # `install -d` line for ONE layout entry, generated from the SINGLE source of
   # truth (session.nix's table). `install -d` also RESETS the mode and ownership
   # of an existing directory, which is exactly what is needed: the guest agent
@@ -202,13 +183,12 @@ let
 
   # The per-slot paths of the two trees, spliced into the configuration section
   # next to the other roots.
-  sessionConfig = mkSessionFragment "      " ''
-    # ---- consolidated session tree (lightweight plan phase 4) ----------
+  sessionConfig = mkFragment "      " ''
+    # ---- the per-session tree (lightweight plan phase 4) ---------------
     # ONE writable virtiofs share per slot (the session tree) plus ONE
     # read-only share (the slot's SSH host identity + the staged host
-    # configuration). The trust boundaries are the SAME as with the four
-    # historical shares, and they are still expressed by OWNERSHIP and MODES,
-    # which virtiofsd passes through unchanged — see session.nix, which owns
+    # configuration). The trust boundaries are expressed by OWNERSHIP and
+    # MODES, which virtiofsd passes through unchanged — see session.nix, which owns
     # the layout table every generated line below comes from.
     readonly SESSION_ROOT=${lib.escapeShellArg agentSession.root}
     readonly SESSION_RO_ROOT=${lib.escapeShellArg agentSession.roRoot}
@@ -227,23 +207,15 @@ let
     # no policy argument, only a slot name).
     readonly SESSION_VERIFIER=${lib.getExe agentSession.verifier}'';
 
-  # WHERE a slot's two bind-mount targets live. With the consolidated layout
-  # both are INSIDE the session tree; there is exactly ONE definition of each in
-  # the generated script (not an override of a four-share one), so `status`,
-  # `list`, `recover`, `doctor`, `destroy` and every teardown path agree.
-  mountPointDef =
-    if sessionEnabled then
-      ''mount_point()  { printf '%s' "$SESSION_ROOT/$1/$SESSION_WORKSPACE_SUBDIR"; }''
-    else
-      ''mount_point()  { printf '%s' "$STATE_ROOT/$1/workspace"; }'';
-  stateSlotDirDef =
-    if sessionEnabled then
-      ''state_slot_dir() { printf '%s' "$SESSION_ROOT/$1/$SESSION_STATE_SUBDIR"; }''
-    else
-      ''state_slot_dir() { printf '%s' "$STATE_SLOTS_ROOT/$1"; }'';
+  # WHERE a slot's two bind-mount targets live: both are INSIDE the session
+  # tree, and there is exactly ONE definition of each in the generated script,
+  # so `status`, `list`, `recover`, `doctor`, `destroy` and every teardown path
+  # agree.
+  mountPointDef = ''mount_point()  { printf '%s' "$SESSION_ROOT/$1/$SESSION_WORKSPACE_SUBDIR"; }'';
+  stateSlotDirDef = ''state_slot_dir() { printf '%s' "$SESSION_ROOT/$1/$SESSION_STATE_SUBDIR"; }'';
 
-  sessionHelpers = mkSessionFragment "      " ''
-    # ---- consolidated session tree: preparation / verification / removal --
+  sessionHelpers = mkFragment "      " ''
+    # ---- the session tree: preparation / verification / removal ---------
     session_dir()    { printf '%s' "$SESSION_ROOT/$1"; }
     session_ro_dir() { printf '%s' "$SESSION_RO_ROOT/$1"; }
 
@@ -348,18 +320,18 @@ let
             -- "$SESSION_ROOT" 2>/dev/null | cut -f1
     }
 
-    # NOTE on the FOREIGN per-slot state scan further down: under this layout
-    # $JOBS_ROOT is the writable session root and $HOSTKEYS_ROOT the read-only
-    # one, so the scan covers both consolidated trees. $STATE_SLOTS_ROOT and the
-    # `$STATE_ROOT/agent-*/workspace` branch are DEAD here (this module creates
-    # nothing under either any more) and simply find nothing — they are kept
-    # because a host migrated FROM the four-share layout still carries that
-    # residue, and reporting it is exactly what those branches are for.
+    # NOTE on the FOREIGN per-slot state scan further down: $JOBS_ROOT is the
+    # writable session root and $HOSTKEYS_ROOT the read-only one, so the scan
+    # covers both trees. $STATE_SLOTS_ROOT and the
+    # `$STATE_ROOT/agent-*/workspace` branch find nothing on a host that has
+    # only ever run this layout — they are kept DELIBERATELY, because a host
+    # migrated from the historical four-share layout still carries residue
+    # there, and reporting it is exactly what those branches are for.
   '';
 
   # One call site each in `run` and `submit`, BEFORE the workspace bind mount
   # and before anything is staged into the tree.
-  sessionPrepare = mkSessionFragment "          " ''
+  sessionPrepare = mkFragment "          " ''
     prepare_session "$slot" \
         || die "could not prepare the session tree of slot $slot"
     # The clone is about to be bind-mounted ONTO a directory of the session
@@ -375,36 +347,30 @@ let
     chmod "$SESSION_WORKSPACE_MODE" -- "$clone" \
         || die "could not normalise the mode of the workspace clone root: $clone"'';
   # ... and one immediately before the VM is started.
-  sessionVerify = mkSessionFragment "          " ''verify_session "$slot"'';
+  sessionVerify = mkFragment "          " ''verify_session "$slot"'';
   # ... and one in the teardown, so no per-session data outlives the session.
-  sessionClear = mkSessionFragment "          " ''clear_session "$slot" || leaked=1'';
+  sessionClear = mkFragment "          " ''clear_session "$slot" || leaked=1'';
 
   # The MODE of the two directories the rest of this launcher also creates and
-  # which the consolidated layout table already declares. Under `full` these
-  # render to the historical literal `0755` (byte-identity); under the
-  # consolidated layout they resolve to the table's value at RUNTIME, so
-  # session.nix stays the only authority over them.
-  jobRootModeArg = if sessionEnabled then ''"$SESSION_ROOT_MODE"'' else "0755";
-  stateSlotModeArg = if sessionEnabled then ''"$SESSION_STATE_MODE"'' else "0755";
-  # ... and under the consolidated layout the state directory is a BIND-MOUNT
-  # POINT that `prepare_session` already created with the table's owner/mode.
-  # `install -d` would chmod/chown THROUGH a surviving stale bind (i.e. through
-  # the previous task's persisted state), so only create it when missing — the
-  # same treatment session.nix's table gives every non-`strictMode` entry, and
-  # the pre-launch verifier still fails the launch if the owner is wrong.
-  stateSlotInstallGuard = lib.optionalString sessionEnabled ''[[ -d "$mp" ]] || '';
+  # which the layout table already declares: they resolve to the table's value
+  # at RUNTIME, so session.nix stays the only authority over them.
+  jobRootModeArg = ''"$SESSION_ROOT_MODE"'';
+  stateSlotModeArg = ''"$SESSION_STATE_MODE"'';
+  # The state directory is a BIND-MOUNT POINT that `prepare_session` already
+  # created with the table's owner/mode. `install -d` would chmod/chown THROUGH
+  # a surviving stale bind (i.e. through the previous task's persisted state), so
+  # only create it when missing — the same treatment session.nix's table gives
+  # every non-`strictMode` entry, and the pre-launch verifier still fails the
+  # launch if the owner is wrong.
+  stateSlotInstallGuard = ''[[ -d "$mp" ]] || '';
 
-  # `usage`' "job data" line. Under the consolidated layout the per-slot job
-  # directory contains the workspace and agent-state BIND MOUNTS, which `du`
-  # descends into, so the figure is computed by a helper that excludes them.
-  jobDataUsageLine =
-    if sessionEnabled then
-      ''printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(session_job_data_bytes)")"''
-    else
-      ''printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(dir_bytes "$JOBS_ROOT")")"'';
+  # `usage`' "job data" line. The per-slot job directory contains the workspace
+  # and agent-state BIND MOUNTS, which `du` descends into, so the figure is
+  # computed by a helper that excludes them.
+  jobDataUsageLine = ''printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(session_job_data_bytes)")"'';
 
   # ... and one in the teardown, so nothing staged survives the session.
-  configSeedClear = mkSeedFragment "          " ''clear_config_seed "$slot" || true'';
+  configSeedClear = mkFragment "          " ''clear_config_seed "$slot" || true'';
 
   # Render the deterministic slot table as bash arrays. Using the shared slot
   # helper guarantees the launcher sees exactly the names/IPs/MACs/TAPs that
@@ -1178,8 +1144,7 @@ let
           # <stateRoot>/<slot>/current from `install-microvm-<slot>.service`,
           # which runs on host activation. A slot started after a host rebuild
           # whose install step has not re-run would otherwise boot the OLD
-          # guest config (e.g. missing the home-manager dotfile provisioning),
-          # which looks like "the sandbox is not provisioned". The unit is an
+          # guest config, which looks like "the sandbox is not provisioned". The unit is an
           # idempotent host oneshot that only re-links a symlink; ignore any
           # failure so a refresh problem never blocks launch. Safe here because
           # the freshly-allocated slot is not yet running.

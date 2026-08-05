@@ -9,7 +9,8 @@
 # It runs the REAL, unmodified controller script:
 #
 #   * inside `bwrap`, which supplies the paths it hard-codes
-#     (a fixture bound at /run/agent-job, another at /workspace) and the guest
+#     (a fixture bound at the guest job mount point, another at /workspace) and
+#     the guest
 #     hostname (= the slot name it validates the spec against);
 #   * with `systemctl` STUBBED by bind-mounting a small script over the exact
 #     store path the controller resolves, so the worker lifecycle can be driven
@@ -31,7 +32,7 @@
 set -euo pipefail
 
 for v in BWRAP FAKEROOT CONTROLLER VERIFIER SYSTEMCTL_TARGET BASH_BIN JQ_TARGET \
-    SPEC_VERSION INPUT_SUBDIR CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR \
+    SPEC_VERSION GUEST_JOB_DIR INPUT_SUBDIR CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR \
     SPEC_NAME PROMPT_NAME CANCEL_NAME RESULT_NAME STATE_NAME WORKER_STDOUT_NAME \
     WORKER_UID SLOT TASK AGENT; do
     [[ -n ${!v:-} ]] || {
@@ -171,7 +172,7 @@ build_fixture() {
         --argjson version "$SPEC_VERSION" \
         --arg taskId "$TASK" --arg allocationToken "$TOKEN" \
         --arg slot "$SLOT" --arg agent "$AGENT" \
-        --arg promptFile "/run/agent-job/$INPUT_SUBDIR/$PROMPT_NAME" \
+        --arg promptFile "$GUEST_JOB_DIR/$INPUT_SUBDIR/$PROMPT_NAME" \
         "{version:\$version, taskId:\$taskId, allocationToken:\$allocationToken,
           slot:\$slot, agent:\$agent, workspace:\"/workspace\",
           promptFile:\$promptFile, timeoutSeconds:120,
@@ -204,7 +205,7 @@ run_controller() {
     : >"$JQ_ARGV_LOG"
     rm -f "$STUB_STATE.n" "$STUB_STATE.stopped" "$WORK/logs.stat"
     # A fresh tmpfs root, so bwrap may create the mount points the controller
-    # hard-codes (`/run/agent-job`, `/workspace`) even where `/` is not
+    # hard-codes ($GUEST_JOB_DIR, `/workspace`) even where `/` is not
     # writable — which is the case inside the Nix build sandbox. Only the store,
     # /etc, a minimal /dev, /proc, /tmp and the work directory are brought in.
     local -a cmd=(
@@ -212,7 +213,7 @@ run_controller() {
         --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc
         --dev /dev --proc /proc --tmpfs /tmp
         --bind "$WORK" "$WORK"
-        --bind "$FIXTURE" /run/agent-job
+        --bind "$FIXTURE" "$GUEST_JOB_DIR"
         --bind "$WSFIXTURE" /workspace
         --setenv STUB_MODE "$mode"
         --setenv STUB_LOG "$STUB_LOG"
@@ -227,15 +228,15 @@ run_controller() {
         # controller directories, agent-owned worker dir and workspace.
         cmd+=(
             "$FAKEROOT" -- "$BASH_BIN" -c "
-                chown -R 0:0 /run/agent-job
-                chown $WORKER_UID:$WORKER_UID /run/agent-job/$WORKER_SUBDIR
+                chown -R 0:0 $GUEST_JOB_DIR
+                chown $WORKER_UID:$WORKER_UID $GUEST_JOB_DIR/$WORKER_SUBDIR
                 chown -R $WORKER_UID:$WORKER_UID /workspace
                 crc=0
                 $CONTROLLER || crc=\$?
                 # Ownership/mode of the worker LOG area as seen INSIDE the
                 # namespace (the only place fakeroot's ownership is visible).
-                stat -c '%n %u %a' /run/agent-job/$WORKER_LOGS_SUBDIR \
-                    /run/agent-job/$WORKER_LOGS_SUBDIR/* > $WORK/logs.stat 2>&1 || true
+                stat -c '%n %u %a' $GUEST_JOB_DIR/$WORKER_LOGS_SUBDIR \
+                    $GUEST_JOB_DIR/$WORKER_LOGS_SUBDIR/* > $WORK/logs.stat 2>&1 || true
                 exit \$crc"
         )
     else
