@@ -60,6 +60,10 @@ start options:
   --cpus NUMBER               CPU limit (default: 4)
   --pids-limit NUMBER         Process limit (default: 2048)
   --seccomp-unconfined        Disable the inner OCI seccomp profile
+  --force                     Destroy an existing session of the same name,
+                              including its branch, instead of failing. Without
+                              it an interactive terminal is asked to confirm,
+                              and a non-interactive run fails.
 
 environment:
   AGENT_SANDBOX_IMAGE           Override the default image
@@ -245,10 +249,23 @@ run_container() {
   exec "${cmd[@]}"
 }
 
+# Interactive recovery from a leftover session of the same name: ask whether
+# to destroy it (worktree AND branch) instead of just erroring out. Returns
+# non-zero when there is no terminal to ask on, so non-interactive callers
+# keep the previous fail-fast behaviour.
+confirm_destroy_existing() {
+  local session=$1 old_branch=$2 reply
+  [[ -t 0 && -t 2 ]] || return 1
+  printf 'agent-session: session %s already exists; destroy it and delete branch %s? [y/N] ' \
+    "$session" "$old_branch" >&2
+  read -r reply || return 1
+  [[ "$reply" == [Yy] || "$reply" == [Yy][Ee][Ss] ]]
+}
+
 cmd_start() {
   local name='' repo='' base=HEAD branch='' image=$DEFAULT_IMAGE
   local detach=false memory=8g cpus=4 pids_limit=2048 network=''
-  local seccomp_unconfined=false env_file=''
+  local seccomp_unconfined=false env_file='' force=false
   local -a mount_specs=() env_specs=()
 
   while (( $# )); do
@@ -268,6 +285,7 @@ cmd_start() {
       --cpus) cpus=${2:?}; shift 2 ;;
       --pids-limit) pids_limit=${2:?}; shift 2 ;;
       --seccomp-unconfined) seccomp_unconfined=true; shift ;;
+      --force) force=true; shift ;;
       --) shift; break ;;
       -h|--help) usage; exit 0 ;;
       *) die "unknown start option: $1" ;;
@@ -299,7 +317,22 @@ cmd_start() {
   container=$(sanitize_container_name "agent-$repo_id-$name")
   lockfile="$STATE_ROOT/pools/$repo_id.lock"
 
-  [[ ! -e "$meta_dir" ]] || die "session already exists: $name"
+  if [[ -e "$meta_dir" ]]; then
+    local old_branch
+    # Both calls run in a subshell: load_meta sources the OLD session's meta
+    # file, and cmd_destroy calls it, so without the subshell bash's dynamic
+    # scoping would overwrite the locals computed just above (pool, worktree,
+    # container, home, branch, image, ...) with the old session's values.
+    old_branch=$( (load_meta "$name" >/dev/null 2>&1 && printf '%s' "$branch") || printf '%s' "$branch")
+    if [[ "$force" = true ]]; then
+      log "--force: destroying existing session $name and deleting branch $old_branch"
+    else
+      confirm_destroy_existing "$name" "$old_branch" \
+        || die "session already exists: $name (pass --force, or remove it with 'agent-session destroy $name --force --delete-branch')"
+    fi
+    (cmd_destroy "$name" --force --delete-branch) \
+      || die "could not destroy the existing session: $name"
+  fi
   mkdir -p "$(dirname "$worktree")" "$meta_dir" "$home"
   # The session home is bind-mounted over /home/agent, which masks the XDG
   # directories created in the image, so create them on the host side.
