@@ -12,7 +12,7 @@
 | 5 — split interactive/batch | not started | |
 | 6 — VSOCK transport | not started | |
 | 7 — clone/startup optimisation | not started | |
-| 8 — minimize guest closure | not started | |
+| 8 — minimize guest closure | **done** | The `lite` profile builds the documented minimal CLI toolset, a plain bash login shell (no fish) and drops NixOS' `environment.defaultPackages`; per-agent `extraPackages` in the registry keeps agent-specific runtimes tied to the selection. Test: the phase-8 assertions of `checks.microvm-eval-lite-profile`. |
 | 9 — testing | incremental | Each landed phase adds eval checks to `tests/microvm.nix`; the VM/adversarial tiers of this phase remain out of CI (see `docs/agent-microvm-runtime-validation.md`). |
 | 10 — documentation and rollout | incremental | `docs/agent-microvm.md` documents every landed option. |
 
@@ -34,6 +34,16 @@
   (`microvm-eval-enabled-agents` asserts the deselected agents' store paths are
   absent from the guest `environment.systemPackages`) rather than as a byte
   count, for the same reason phase 0's benchmark is deferred.
+- **Phase 8, "every package has a documented consumer"**: documented as a
+  per-package rationale comment above `guestMinimalPackages` in `../guest.nix`,
+  and locked down by an eval check listing the same set. NixOS' own
+  `requiredPackages` (coreutils-full, curl, openssh, which, …) is load-bearing
+  for a bootable system and is therefore neither removed nor asserted absent;
+  only the module's discretionary additions and
+  `environment.defaultPackages` are minimized.
+- **Phase 8, closure-size regression check**: expressed structurally (asserted
+  package membership) rather than as a byte budget — a size assertion would
+  need a KVM/build tier and would churn with every nixpkgs bump.
 - **Phase 1, store pinning**: `microvm.optimize.enable` and
   `microvm.storeDiskType` currently *default* to `true` / `erofs` upstream, so
   pinning them is behaviour-preserving today. It is done anyway (for `lite`
@@ -667,7 +677,14 @@ Before restarting the slot install unit, compare the expected runner/store path 
 
 ---
 
-## Phase 8 — Minimize the guest package closure
+## Phase 8 — Minimize the guest package closure — **DONE** (for the lite profile)
+
+Implemented in `../guest.nix` (`guestMinimalPackages` with a per-package
+rationale, `guestShell`, `environment.defaultPackages = [ ]`) driven by the
+`minimalGuestPackages` field of `../profiles.nix`, plus the registry's new
+per-agent `extraPackages` so an agent's own runtime dependencies are added only
+while that agent is selected. The `full` profile keeps its historical toolset
+and fish login shell verbatim.
 
 ### Tasks
 

@@ -44,6 +44,12 @@
 #   batchStdin       when true, the worker pipes the prompt FILE on stdin
 #                    instead of substituting `%PROMPT%` (for CLIs that read
 #                    instructions from stdin). Defaults to `false`.
+#   extraPackages    additional guest packages this agent NEEDS at runtime
+#                    (e.g. a language runtime it shells out to). Added to the
+#                    guest closure only while the agent is SELECTED
+#                    (`enabledAgents`), so a deselected agent takes its
+#                    dependencies with it. Defaults to `[ ]` — most agents wrap
+#                    their own PATH.
 #   guestEnvironment attrs merged into the guest's `environment.variables`.
 #                    Model-endpoint plumbing ONLY — never a real credential
 #                    (§17: the upstream key lives only in the host LiteLLM
@@ -192,6 +198,7 @@ let
       interactiveArgs = [ ];
       batchArgs = null;
       batchStdin = false;
+      extraPackages = [ ];
       guestEnvironment = { };
       persistentState = {
         enabledByDefault = false;
@@ -252,6 +259,9 @@ let
       a.batchArgs != null && !a.batchStdin && !lib.elem "%PROMPT%" a.batchArgs
     ) "myconfig.ai.microvm: agent '${a.name}' batchArgs must contain %PROMPT% (or set batchStdin)."
     ++ lib.optional (
+      !lib.isList a.extraPackages
+    ) "myconfig.ai.microvm: agent '${a.name}' extraPackages must be a list."
+    ++ lib.optional (
       !lib.isAttrs a.guestEnvironment
     ) "myconfig.ai.microvm: agent '${a.name}' guestEnvironment must be an attrset."
     ++ lib.optional (
@@ -297,6 +307,10 @@ rec {
 
   # Guest closure packages, in registry order (§7).
   packages = map (a: a.package) agentList;
+
+  # Per-agent extra runtime packages of the SELECTED agents, deduplicated
+  # (two agents may need the same runtime).
+  extraPackages = lib.unique (lib.concatMap (a: a.extraPackages) agentList);
 
   # `claude|codex|opencode|pi` — used verbatim in launcher help/error text and
   # in the guest dispatch's `case` fallback message.
