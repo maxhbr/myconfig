@@ -41,11 +41,19 @@ in
   options.myconfig.ai.microvm.guestDotfiles = with lib; {
     enable = mkOption {
       type = types.bool;
-      default = true;
+      default = !cfg.configSeed.enable;
+      defaultText = literalExpression "!config.myconfig.ai.microvm.configSeed.enable";
       description = ''
         Provision the guest `agent` user with a copy of the host primary
         user's shell + coding-agent dotfiles (fish, opencode, pi, codex,
         skills). When false the guest keeps a bare home.
+
+        Mutually exclusive with `configSeed.enable`, the LAUNCH-TIME staging of
+        an allowlisted copy of the same configuration (./config-seed.nix,
+        lightweight plan phase 3): that mechanism replaces this one, so the
+        default here is "whenever staging is off" — which for
+        `profile = "full"` is the historical `true`, and for `profile = "lite"`
+        is `false`. Setting both is rejected by an assertion.
       '';
     };
 

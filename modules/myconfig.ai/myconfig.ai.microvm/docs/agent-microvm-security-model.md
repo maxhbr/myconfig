@@ -130,7 +130,8 @@ reports an exit code. So the result must be attributable, not merely readable.
 - **Disposable state.** Guest root and `/home/agent` are tmpfs, rebuilt every
   boot. An agent cannot leave persistent implants in its own sandbox.
 - **No host filesystem.** The guest sees only the four declared virtiofs shares
-  (see below) — no host home, no `/nix/store`, no sockets.
+  (five under `profile = "lite"`, see below) — no host home, no `/nix/store`,
+  no sockets.
 - **No build/fetch capability.** No Nix daemon socket, no store write access; the
   guest can only run what was baked in.
 - **Bounded resources.** Per-class `CPUQuota`/`MemoryMax`/`TasksMax` inside the
@@ -142,7 +143,8 @@ reports an exit code. So the result must be attributable, not merely readable.
 
 ## What is still shared through virtiofs
 
-Exactly four shares, all per-slot:
+Exactly four shares, all per-slot — five under `profile = "lite"`, which adds
+the read-only config seed:
 
 | Guest path | Mode | Content | Risk |
 | --- | --- | --- | --- |
@@ -150,9 +152,20 @@ Exactly four shares, all per-slot:
 | `/var/lib/agent-hostkey` | **ro** | that slot's SSH host key, `root:root 0400` | unreadable by the guest agent user; the guest cannot change its own identity |
 | `/run/agent-job` | rw | `input/` (`spec.json` `root:root 0400`, `prompt.md` `0444`), `controller/` (`root:root 0700`, the authoritative result), `worker/` (agent-owned), `worker-logs/` (`root:root 0755`, the log files systemd opens as root) | the agent can write junk into `worker/`; it cannot read or write `controller/`, cannot read the token-bearing spec, cannot alter its own spec/prompt, and cannot replace or redirect its own log files |
 | `/var/lib/agent-state` | rw | only when `--persist-agent-state`: the task's declared agent-state dirs | the agent can poison ITS OWN task's future state; other tasks are unreachable |
+| `/run/agent-config-seed` (`configSeed.enable`, i.e. `profile = "lite"`) | **ro** | the launch-time staged copy of the **allowlisted** host agent configuration, `root:root` `0555`/`0444`, plus a `manifest.json` of what was staged/skipped | the agent can read (and copy into its own home) exactly what the host allowlisted; it cannot modify the staged tree, and cannot reach anything else in the host home |
 
-virtiofsd is in the TCB for all four. Ownership is passed through unchanged, so
-host-side modes are what the guest sees.
+virtiofsd is in the TCB for all of them. Ownership is passed through unchanged,
+so host-side modes are what the guest sees.
+
+The config seed does **not** widen the trust boundary towards the host home: it
+is a per-slot *copy*, not a mount, produced from a positive allowlist of exact
+files/directories (the selected agents' `configPaths` + `configSeed.extraPaths`)
+with a credential denylist on top, with symlink escapes rejected, `/nix/store`
+symlinks dereferenced, sockets/devices/FIFOs/setuid files excluded, and the
+destination cleaned before every launch. It moves the *risk of over-sharing*
+from "whatever home-manager rendered into the guest image" to "whatever the
+allowlist names", and makes that decision auditable per session through the
+manifest. See [agent-microvm.md](./agent-microvm.md#runtime-configuration-staging).
 
 ## What LiteLLM protects
 
@@ -169,7 +182,8 @@ host-side modes are what the guest sees.
 | Attack | Mitigation |
 | --- | --- |
 | exfiltrating host API keys | keys exist only in the host proxy; guest has placeholders |
-| stealing host SSH/GPG/cloud credentials | no host home, no agent sockets, no credential files in the guest |
+| stealing host SSH/GPG/cloud credentials | no host home, no agent sockets, no credential files in the guest; runtime config staging is allowlist-only with a credential denylist, so `~/.ssh`, `auth.json`, `*.pem`, `.netrc`, … are rejected at evaluation time and again at copy time |
+| tampering with the configuration the host staged | the staged tree is root-owned `0555`/`0444` on a **read-only** share, and the guest seeding oneshot refuses a tree that is not root-owned or is group/other-writable |
 | reaching the host LAN / VPN / router | private-range DROP in every profile |
 | cloud-metadata SSRF (`169.254.169.254`) | dropped first, unconditionally, in INPUT and FORWARD |
 | arbitrary internet egress / data smuggling | denied in `offline`/`proxy-only`; `package-access` allows one host proxy port; only `internet` routes, and then with NAT + a DNS allowlist + drop logging |

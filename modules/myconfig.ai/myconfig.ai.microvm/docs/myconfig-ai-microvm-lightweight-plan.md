@@ -7,7 +7,7 @@
 | 0 — baseline and measurement | partially done | Behaviour-preserving refactors are verified with the repo's `nix eval` snapshot/diff workflow (`AGENTS.md`) instead of a bespoke benchmark harness; a machine-readable runtime benchmark (closure size, launch latency, process counts) is **not** implemented — it needs a KVM host and belongs with the out-of-CI runtime-validation tier. |
 | 1 — opt-in lightweight profile | **done** | `myconfig.ai.microvm.profile = "full" \| "lite"`, table in `../profiles.nix`, wired in `default.nix` (`_module.args.agentProfile`) + `guest.nix`. Test: `checks.microvm-eval-lite-profile`. |
 | 2 — build only selected agents | **done** | `myconfig.ai.microvm.enabledAgents` (plus the `lite` profile default `[ "codex" ]`). The selection is applied ONCE in `../agents.nix`, so guest closure, `agent-run`, batch dispatch, launcher validation/help, workmux registrations and agent-state paths all follow. Test: `checks.microvm-eval-enabled-agents`. |
-| 3 — runtime config staging | not started | |
+| 3 — runtime config staging | **done** (for the `lite` profile) | `myconfig.ai.microvm.configSeed` (`../config-seed.nix`) stages an ALLOWLISTED, root-owned copy of the host agent configuration per launch; the guest sees it through a per-slot READ-ONLY virtiofs share and a root oneshot copies it into the disposable `/home/agent` before sshd, the batch controller and the agent-state linker. The allowlist is the SELECTED agents' new registry field `configPaths` plus `configSeed.extraPaths`. Guest home-manager activation is dropped exactly when staging is on (`lite`); `full` keeps it byte-for-byte. Test: `checks.microvm-config-seed`. |
 | 4 — consolidate writable shares | not started | |
 | 5 — split interactive/batch | not started | |
 | 6 — VSOCK transport | not started | |
@@ -17,6 +17,50 @@
 | 10 — documentation and rollout | incremental | `docs/agent-microvm.md` documents every landed option. |
 
 ### Recorded deviations
+
+- **Phase 3, `rsync`**: the plan suggests `rsync --archive --copy-links` on both
+  sides. NOT used. The HOST stager walks the allowlist with `find -L` and copies
+  file-by-file with `install`, because every file needs INDIVIDUAL decisions
+  (denylist per path component, per-file symlink-escape check, setuid/type/size
+  checks) that an rsync invocation cannot express — and because a per-file loop
+  fails closed while an rsync filter ruleset fails open. The GUEST seeder uses
+  `cp -R --dereference` + `chown`/`chmod` rather than rsync so the phase-8
+  minimal guest closure does not have to regain rsync.
+- **Phase 3, share placement**: the plan's target tree puts `config-seed/` in
+  the ONE writable session share (that consolidation is phase 4). Until then it
+  is its OWN per-slot share, mounted READ-ONLY — strictly stronger than the
+  plan's `0555` directory inside a writable share, and modelled on the existing
+  read-only host-key share. Phase 4 must keep the read-only property when it
+  consolidates.
+- **Phase 3, staging is rendered CONDITIONALLY into the launcher**: the
+  host-side staging code exists in `agent-microvm` only when
+  `configSeed.enable` is on. Otherwise a `full`-profile host would get a
+  different launcher derivation, i.e. the phase would not be behaviour
+  preserving (the launcher is a host `environment.systemPackages` entry and is
+  covered by the evaluated-slice diff from `AGENTS.md`). The build-part greps
+  that prove the staging enforces the allowlist and cleans its destination
+  therefore inspect the LITE launcher (plus the generated stager, which is a
+  standalone `writeShellApplication`), and additionally assert that the FULL
+  launcher carries no staging code at all.
+- **Phase 3, `hermes` stages nothing**: the plan asks for per-agent
+  `configPaths`. Hermes keeps `config.yaml`, `.env`, `auth.json`, `state.db` and
+  `sessions/` in ONE root (`~/.hermes`) and even `config.yaml` carries a
+  provider key, so no path of it is safe to stage. Its `configPaths` is
+  deliberately empty and the guest gets its endpoint from `guestEnvironment`
+  instead. Same reasoning trimmed the other agents to exact files/directories
+  (never `.codex/`, `.pi/` or `.config/opencode/` as a whole).
+- **Phase 3, readiness/boot measurement**: the acceptance criterion "boot and
+  closure measurements show the effect of removing guest Home Manager" is
+  recorded STRUCTURALLY (the check asserts the lite guest has no
+  `home-manager-agent.service` and none of home-manager's guest tmpfiles rules)
+  for the same reason phase 0's benchmark is deferred: a byte/latency budget
+  needs a KVM host and belongs to the out-of-CI runtime-validation tier.
+- **Phase 3, "editing a host file affects the next launch"**: proven only
+  STRUCTURALLY in CI (the stager reads the live host home at launch time, and
+  its behaviour is exercised by hand — allowlisted file staged, `auth.json` not
+  staged, denylisted name inside an allowlisted directory skipped, symlink to a
+  path outside the host home rejected, FIFO ignored). An end-to-end proof needs
+  a booted guest, i.e. the runtime-validation tier.
 
 - **Phase 1, `persistentAgentState.enable = false`**: there is no such option.
   Agent-state persistence is already opt-in *per run*
@@ -53,6 +97,11 @@
   unconditional `systemctl restart install-microvm-<slot>.service` is an
   idempotent symlink relink costing milliseconds, so the guard is deferred
   until phase 3 removes the host→guest home-manager coupling.
+  UPDATE (phase 3 landed): the coupling is gone for the `lite` profile only
+  (`configSeed` replaces `guestDotfiles` there), so the guard becomes possible
+  for `lite` guests while it would still recurse for `full` ones. Still NOT
+  implemented — revisit with phase 5, the next phase that reshapes the
+  per-profile guest unit set.
 - **Phase 7, readiness definition**: the extended readiness criteria
   (config staging finished, proxy forwarding healthy, agent executable present)
   presuppose phases 3 and 6; only the polling *strategy* was changed here.
@@ -331,7 +380,32 @@ Prefer a registry structure in which each agent defines:
 
 ---
 
-## Phase 3 — Replace guest Home Manager activation with runtime configuration staging
+## Phase 3 — Replace guest Home Manager activation with runtime configuration staging — **DONE** (for the `lite` profile)
+
+Implemented as `../config-seed.nix` (the authoritative policy: allowlist,
+credential denylist, paths, modes, the host-side stager
+`agent-microvm-stage-config`, the guest-side seeder `agent-config-seed-apply`
+and the guest unit), the new per-agent `configPaths` field of `../agents.nix`,
+the `configSeed` field of `../profiles.nix`, the per-slot READ-ONLY share in
+`../guest.nix` (which also drops the guest home-manager import and
+`mkGuestHome` exactly when staging is on) and the conditionally rendered
+staging block of `../launcher.nix`. `guestDotfiles.enable` now defaults to
+`!configSeed.enable`, and enabling both is rejected by an assertion, so there
+is exactly ONE provisioning path per guest.
+
+Acceptance criteria are locked down by `checks.microvm-config-seed`
+(`tests/microvm.nix`): the lite guest runs no home-manager activation while the
+full guest still does, the config-seed share is per-slot/read-only/root-owned,
+the guest oneshot is ordered before sshd, the batch job controller and the
+agent-state linker, the allowlist follows `enabledAgents`, escaping and
+credential-shaped allowlist entries are rejected at eval, and the generated
+stager really enforces the allowlist, refuses escapes, skips setuid/non-regular
+files and cleans its destination. The `full` profile is unchanged — verified
+with the evaluated-slice diff from `AGENTS.md` (per-VM `toplevel`/
+`declaredRunner` drvPaths, firewall rules, systemd unit names, tmpfiles rules
+and `environment.systemPackages` drvPaths of `test-f13` are byte-identical;
+only the two `configurationRevision`-derived artefacts differ, as expected in a
+dirty tree).
 
 ### Goal
 

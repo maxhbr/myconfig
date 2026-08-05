@@ -69,6 +69,11 @@
   # endpoint preflight and `doctor` use `caps.litellm` so they only fire when
   # the effective profile actually grants model-API access.
   agentNetwork,
+  # The ONE definition of the RUNTIME configuration staging (lightweight plan
+  # phase 3), from config-seed.nix (`_module.args.agentConfigSeed`): the
+  # per-slot staging directory and the BAKED, allowlist-enforcing stager this
+  # launcher calls once per launch.
+  agentConfigSeed,
   ...
 }:
 let
@@ -79,6 +84,67 @@ let
   # also performs the legacy `slotCount` migration, so every module builds the
   # SAME pool.
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
+
+  # --- runtime config staging (lightweight plan phase 3) ------------------
+  # The staging code below is rendered ONLY when `configSeed.enable` is on (the
+  # `lite` profile). A `full`-profile launcher is therefore BYTE-FOR-BYTE the
+  # script it was before this phase — verified with the evaluated-slice diff
+  # from AGENTS.md, which covers `environment.systemPackages`.
+  #
+  # To make that possible, every fragment ENDS with the indentation of the line
+  # that follows its insertion point, so an EMPTY fragment leaves the
+  # surrounding text untouched. `indentFragment` re-indents the (Nix-dedented)
+  # fragment body to the column it is spliced into.
+  seedEnabled = agentConfigSeed.enable;
+  indentFragment = indent: text: lib.replaceStrings [ "\n" ] [ "\n${indent}" ] text;
+  mkSeedFragment = indent: text: lib.optionalString seedEnabled (indentFragment indent (text + "\n"));
+
+  # Declarations + helpers, spliced into the helper section of the script.
+  configSeedHelpers = mkSeedFragment "      " ''
+    # ---- runtime config staging (lightweight plan phase 3) -------------
+    # The host copies an ALLOWLIST of configuration paths (the SELECTED
+    # agents' registry `configPaths` plus `configSeed.extraPaths`) into a
+    # cleaned per-slot directory that the guest sees through a READ-ONLY
+    # virtiofs share; a root-owned guest oneshot copies it into the
+    # disposable /home/agent before sshd and the job controller start.
+    #
+    # The POLICY is not here: the allowlist, the credential denylist, the
+    # host home, the modes and the budgets are all BAKED into the stager by
+    # Nix (config-seed.nix), which also re-validates them and refuses any
+    # path that escapes the host home. This launcher can therefore only ask
+    # for "stage slot X" — it cannot widen what gets staged, and no
+    # caller-supplied path is ever expanded.
+    readonly CONFIG_SEED_STAGER=${lib.getExe agentConfigSeed.stager}
+    readonly CONFIG_SEED_ROOT=${lib.escapeShellArg agentConfigSeed.root}
+    readonly CONFIG_SEED_PAYLOAD_SUBDIR=${lib.escapeShellArg agentConfigSeed.homeSubdir}
+    config_seed_dir() { printf '%s' "$CONFIG_SEED_ROOT/$1"; }
+
+    # Remove everything a previous task staged for this slot. Called before
+    # every launch (the stager cleans again, so this is the second layer)
+    # and on teardown, so a staged configuration never outlives its session.
+    clear_config_seed() {
+        local dir
+        dir="$(config_seed_dir "$1")"
+        [[ -d "$dir" ]] || return 0
+        rm -rf -- "''${dir:?}/$CONFIG_SEED_PAYLOAD_SUBDIR" "''${dir:?}/manifest.json"
+    }
+
+    # Stage the CURRENT host configuration for this launch. Fails the launch
+    # if it cannot: a guest that silently starts without its instructions is
+    # worse than one that does not start.
+    stage_config_seed() {
+        local slot="$1"
+        clear_config_seed "$slot"
+        "$CONFIG_SEED_STAGER" "$slot" \
+            || die "could not stage the host agent configuration for slot $slot"
+    }
+  '';
+
+  # One call site each in `run` and `submit`, before the VM is started.
+  configSeedStage = mkSeedFragment "          " ''stage_config_seed "$slot"'';
+
+  # ... and one in the teardown, so nothing staged survives the session.
+  configSeedClear = mkSeedFragment "          " ''clear_config_seed "$slot" || true'';
 
   # Render the deterministic slot table as bash arrays. Using the shared slot
   # helper guarantees the launcher sees exactly the names/IPs/MACs/TAPs that
@@ -1208,7 +1274,7 @@ let
           find "$mp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
       }
 
-      # ---- §21 slot cleanup / interrupt handling -------------------------
+      ${configSeedHelpers}# ---- §21 slot cleanup / interrupt handling -------------------------
       # Tear a slot down WITHOUT deleting the workspace clone (§26/§35): stop
       # the VM, unmount the bind, remove the slot transient state. Locks are
       # released implicitly when this process exits and closes their fds.
@@ -1229,7 +1295,7 @@ let
           # Unmount the per-task agent state (the task's DIRECTORY is kept, like
           # the workspace clone) and leave the slot's share source empty.
           clear_agent_state_slot "$slot" || leaked=1
-          rm -rf -- "''${SLOTS_DIR:?}/$slot"
+          ${configSeedClear}rm -rf -- "''${SLOTS_DIR:?}/$slot"
           if (( leaked )); then
               log "WARNING: slot $slot was released with a LEAKED mount; re-run '$PROG recover' once the holder is gone"
               # The teardown CONTINUED (see above) but it did not succeed, and
@@ -1612,7 +1678,7 @@ let
           create_clone "$top" "$task" "$branch"
           emit_event workspace-created
           setup_bind_mount "$slot" "$clone"
-          # An interactive slot must not accidentally pick up a stale batch job.
+          ${configSeedStage}# An interactive slot must not accidentally pick up a stale batch job.
           clear_job "$slot"
           # Agent state is DISPOSABLE unless explicitly requested (ticket 5 B).
           if (( persist )); then
@@ -1760,7 +1826,7 @@ let
           create_clone "$top" "$task" "$branch"
           emit_event workspace-created
           setup_bind_mount "$slot" "$clone"
-          prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s" \
+          ${configSeedStage}prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s" \
               "$token" "$rclass" "$persist"
           if (( persist )); then
               setup_agent_state "$slot" "$task" "$agent"
