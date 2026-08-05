@@ -7,7 +7,7 @@
 | 0 — baseline and measurement | partially done | Behaviour-preserving refactors are verified with the repo's `nix eval` snapshot/diff workflow (`AGENTS.md`) instead of a bespoke benchmark harness; a machine-readable runtime benchmark (closure size, launch latency, process counts) is **not** implemented — it needs a KVM host and belongs with the out-of-CI runtime-validation tier. |
 | 1 — opt-in lightweight profile | **done** | `myconfig.ai.microvm.profile = "full" \| "lite"`, table in `../profiles.nix`, wired in `default.nix` (`_module.args.agentProfile`) + `guest.nix`. Test: `checks.microvm-eval-lite-profile`. |
 | 2 — build only selected agents | **done** | `myconfig.ai.microvm.enabledAgents` (plus the `lite` profile default `[ "codex" ]`). The selection is applied ONCE in `../agents.nix`, so guest closure, `agent-run`, batch dispatch, launcher validation/help, workmux registrations and agent-state paths all follow. Test: `checks.microvm-eval-enabled-agents`. |
-| 3 — runtime config staging | **done** (for the `lite` profile) | `myconfig.ai.microvm.configSeed` (`../config-seed.nix`) stages an ALLOWLISTED, root-owned copy of the host agent configuration per launch; the guest sees it through a per-slot READ-ONLY virtiofs share and a root oneshot copies it into the disposable `/home/agent` before sshd, the batch controller and the agent-state linker. The allowlist is the SELECTED agents' new registry field `configPaths` plus `configSeed.extraPaths`. Guest home-manager activation is dropped exactly when staging is on (`lite`); `full` keeps it byte-for-byte. Test: `checks.microvm-config-seed`. |
+| 3 — runtime config staging | **done** (for the `lite` profile) | `myconfig.ai.microvm.configSeed` (`../config-seed.nix`) stages an ALLOWLISTED, root-owned copy of the host agent configuration per launch; the guest sees it through a per-slot READ-ONLY virtiofs share and a root oneshot copies it into the disposable `/home/agent` before sshd, the batch controller and the agent-state linker. The allowlist is the SELECTED agents' new registry field `configPaths` plus `configSeed.extraPaths`. Guest home-manager activation is dropped exactly when staging is on (`lite`); `full` keeps it byte-for-byte. The credential denylist is applied to a path's own name AND to its RESOLVED target, the staged tree is root-only (0500/0400), the manifest stays outside the share, and the staged paths must be disjoint from the persisted agent-state directories. Tests: `checks.microvm-config-seed` (eval/build) plus `runtime-validation.sh --section seed` (root, enforcement). |
 | 4 — consolidate writable shares | not started | |
 | 5 — split interactive/batch | not started | |
 | 6 — VSOCK transport | not started | |
@@ -56,11 +56,32 @@
   for the same reason phase 0's benchmark is deferred: a byte/latency budget
   needs a KVM host and belongs to the out-of-CI runtime-validation tier.
 - **Phase 3, "editing a host file affects the next launch"**: proven only
-  STRUCTURALLY in CI (the stager reads the live host home at launch time, and
-  its behaviour is exercised by hand — allowlisted file staged, `auth.json` not
-  staged, denylisted name inside an allowlisted directory skipped, symlink to a
-  path outside the host home rejected, FIFO ignored). An end-to-end proof needs
-  a booted guest, i.e. the runtime-validation tier.
+  STRUCTURALLY in CI (the stager reads the live host home at launch time). Its
+  actual behaviour — allowlisted file staged, benignly NAMED symlink onto a
+  credential refused, denylisted name inside an allowlisted directory skipped,
+  symlink outside the host home rejected, FIFO/setuid skipped, budgets and
+  cleanup enforced — is now a repeatable, root-run section of the
+  runtime-validation tier (`--section seed`, `../runtime-validation.sh`), not a
+  hand-run experiment. A Nix-sandbox functional test remains impossible: the
+  stager writes a root-owned tree. An end-to-end proof (guest home actually
+  seeded) still needs a booted guest, i.e. the same tier.
+- **Phase 3, manifest placement and modes**: the plan does not say where the
+  manifest lives. It is the payload directory's host-side SIBLING and the share
+  source is the payload only, so the manifest — which names the host home and
+  every skipped, credential-shaped host file name — is never visible to the
+  untrusted guest. The staged tree is `0500`/`0400` rather than the plan's
+  `0555`: virtiofsd and the guest seeder both run as root, so nothing
+  unprivileged needs read access on either side, and other local host users
+  cannot read the operator's staged configuration.
+- **Phase 3, denylist on RESOLVED targets**: the plan only asks for a
+  credential denylist. Applying it to the path a file is reached UNDER is not
+  enough — one benignly named symlink in the host home
+  (`.codex/config.toml` -> `.codex/auth.json`, `.agents/skills/x` -> `~/.ssh`)
+  would otherwise stage exactly what invariant 8 forbids. The stager therefore
+  also denies a resolved target whose real name matches, for entries, files and
+  subdirectories alike. What is deliberately NOT covered (documented in
+  `agent-microvm-security-model.md`): hardlinks and TOCTOU, both of which need
+  pre-existing write access to the TRUSTED host home.
 
 - **Phase 1, `persistentAgentState.enable = false`**: there is no such option.
   Agent-state persistence is already opt-in *per run*
@@ -396,11 +417,17 @@ is exactly ONE provisioning path per guest.
 Acceptance criteria are locked down by `checks.microvm-config-seed`
 (`tests/microvm.nix`): the lite guest runs no home-manager activation while the
 full guest still does, the config-seed share is per-slot/read-only/root-owned,
-the guest oneshot is ordered before sshd, the batch job controller and the
-agent-state linker, the allowlist follows `enabledAgents`, escaping and
-credential-shaped allowlist entries are rejected at eval, and the generated
-stager really enforces the allowlist, refuses escapes, skips setuid/non-regular
-files and cleans its destination. The `full` profile is unchanged — verified
+the guest oneshot is ordered before sshd, the batch job controller, the
+agent-state linker and the boot-time model discovery (checked on a lite host
+that actually HAS sshd, so the ordering is against real units), the allowlist
+follows `enabledAgents`, escaping, credential-shaped and agent-state-colliding
+allowlist entries are rejected at eval, the staged tree is root-only and the
+manifest is outside every guest share, and the generated stager really enforces
+the allowlist, refuses escapes, applies the denylist to RESOLVED targets, skips
+setuid/non-regular files and cleans its destination. Whether the stager
+ENFORCES that policy at runtime is decided by the root-only
+`runtime-validation.sh --section seed` (the Nix sandbox is not root, so CI can
+only prove the policy is baked in). The `full` profile is unchanged — verified
 with the evaluated-slice diff from `AGENTS.md` (per-VM `toplevel`/
 `declaredRunner` drvPaths, firewall rules, systemd unit names, tmpfiles rules
 and `environment.systemPackages` drvPaths of `test-f13` are byte-identical;

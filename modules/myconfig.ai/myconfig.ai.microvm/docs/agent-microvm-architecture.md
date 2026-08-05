@@ -115,7 +115,8 @@ traffic is additionally impossible at layer 2 (`bridge link … isolated on`).
 - Dotfiles are copied through an **allowlist** — under `profile = "full"` of
   already-rendered store paths (`guestDotfiles.*`), never by re-evaluating host
   home modules; under `profile = "lite"` of exact host paths staged at launch
-  time (`configSeed`, plus a credential denylist, escape rejection and a
+  time (`configSeed`, plus a credential denylist — applied to both the path's
+  own name and its resolved target — escape rejection and a host-side,
   per-session manifest). Either way secret-bearing paths cannot be dragged in
   by accident.
 - The per-slot SSH **host** key is delivered read-only and root-only; the guest
