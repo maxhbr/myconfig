@@ -83,6 +83,8 @@ environment:
                                 Space-separated OLD=NEW rules applied literally
                                 to the seeded files, to point host-only
                                 endpoints at sandbox-reachable ones
+  AGENT_SANDBOX_MODEL_ENDPOINT  Model API base URL as seen from a sandbox;
+                                `doctor` probes it from inside one
 
 Run `agent-session doctor` to verify runtime, image and sandbox startup.
 
@@ -615,6 +617,7 @@ cmd_doctor() {
   fi
   printf 'image:           %s\n' "$DEFAULT_IMAGE"
   printf 'state:           %s\n' "$STATE_ROOT"
+  printf 'model endpoint:  %s\n' "${AGENT_SANDBOX_MODEL_ENDPOINT:-<unset>}"
   check_runtime
   check_image "$DEFAULT_IMAGE"
   log "running a throwaway sandbox container"
@@ -636,6 +639,42 @@ cmd_doctor() {
       printf '    /etc/subuid and /etc/subgid ranges for this user'
     )"
   log "sandbox works"
+
+  # Model access is the one thing a working sandbox still gets wrong silently:
+  # the host LiteLLM proxy is loopback-only, and a sandbox's own loopback is
+  # NOT the host's. Probe the endpoint from inside a throwaway sandbox, which
+  # is the only place where the answer is meaningful.
+  #
+  # Any HTTP response counts as reachable (401/404 included) — this checks
+  # connectivity, not the API contract, so no token is needed.
+  if [[ -n "${AGENT_SANDBOX_MODEL_ENDPOINT-}" ]]; then
+    log "checking model endpoint $AGENT_SANDBOX_MODEL_ENDPOINT from inside a sandbox"
+    if podman_c run --rm \
+      --read-only \
+      --read-only-tmpfs=true \
+      --cap-drop=ALL \
+      --security-opt=no-new-privileges \
+      --userns=keep-id \
+      "$DEFAULT_IMAGE" \
+      /bin/sh -c "curl -sS -o /dev/null --max-time 5 -w 'HTTP %{http_code}\n' \"\$0\"" \
+      "$AGENT_SANDBOX_MODEL_ENDPOINT"; then
+      log "model endpoint reachable from the sandbox"
+    else
+      log "$(
+        printf 'warning: model endpoint %s is NOT reachable from a sandbox.\n' \
+          "$AGENT_SANDBOX_MODEL_ENDPOINT"
+        printf 'The endpoint must be a HOST address the sandbox can route to;\n'
+        printf 'the host loopback is not one, and neither is the sandbox loopback:\n'
+        printf '  - runsc runs its own network stack, so a pasta "-T" listener in\n'
+        printf '    the container netns is invisible to the sandbox loopback;\n'
+        printf '  - host.containers.internal maps to the host GLOBAL address\n'
+        printf '    (pasta --map-guest-addr), not to the host loopback.\n'
+        printf 'On NixOS check the bridge endpoint:\n'
+        printf '  ip addr show agentsbr0\n'
+        printf '  systemctl status gvisor-agent-sandbox-litellm-proxy.socket'
+      )"
+    fi
+  fi
 }
 
 main() {
