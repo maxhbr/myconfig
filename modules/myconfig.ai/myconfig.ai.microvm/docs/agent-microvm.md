@@ -82,6 +82,7 @@ myconfig.ai.microvm = {
 | --- | --- | --- |
 | `enable` | `false` | Turn the whole tier on for a host. |
 | `profile` | `"full"` | Overall **shape** of the tier: `full` (existing behaviour) or `lite` (one 2 vCPU / 4 GiB slot, pinned optimized EROFS guest store). See [Profiles](#profiles). |
+| `enabledAgents` | `null` | **Selected** agents (registry tokens). `null` = whatever `profile` selects (`full` → all declared agents). A deselected agent is *absent* from the guest closure. See [Selected agents](#selected-agents). |
 | `resourceClasses` | `{ normal = { count = 4; vcpu = 4; memoryMiB = 8192; }; }` | Fixed, **prebuilt** resource classes. See [Resource classes](#resource-classes). |
 | `bridgeName` | `agentbr0` | Private bridge name. |
 | `subnet` | `192.168.83.0/24` | Private subnet. |
@@ -157,11 +158,35 @@ The authoritative table lives in `../profiles.nix`.
 | `full` **(default)** | derived from `resourceClasses` — or, for a host still on the deprecated spelling, from `slotCount` / `defaultVcpu` / `defaultMemoryMiB` | microvm.nix defaults |
 | `lite` | one slot `agent-lite-0`, 2 vCPU, 4096 MiB | pinned `microvm.optimize.enable = true`, `microvm.storeDiskType = "erofs"` |
 
+| Profile | Selected agents (when the host sets no `enabledAgents`) |
+| --- | --- |
+| `full` **(default)** | every agent `../agents.nix` declares |
+| `lite` | `[ "codex" ]` |
+
 The profile only supplies **defaults**: an explicit `resourceClasses` always
 outranks the profile's class table. Combining a profile that carries its own
 table (`lite`) with the deprecated `slotCount` / `defaultVcpu` /
 `defaultMemoryMiB` spelling is **rejected** as ambiguous rather than silently
 resolved.
+
+### Selected agents
+
+`myconfig.ai.microvm.enabledAgents` selects which of the registry's declared
+agents a host actually builds. The selection is applied **once**, inside the
+authoritative registry (`../agents.nix`), so every derived artefact follows it:
+
+- the guest closure's agent packages and per-agent guest environment;
+- the guest `agent-run` dispatch and its usage/error text;
+- the batch worker's and controller's dispatch, and `submit`'s validation;
+- the host launcher's `--agent` validation and `--help` listing;
+- the Workmux `microvm-*` registrations;
+- the agent-state directories the guest-side linker knows about.
+
+A deselected agent is therefore **absent from the guest image** (its runtime is
+not in the closure at all), and `--agent <name>` for it is rejected on the host
+before anything is started. Rejected at evaluation time: an unknown token, an
+empty selection, and a selection without any batch-capable agent (the batch
+machinery is still built into every guest — see plan phase 5).
 
 ### Resource classes
 

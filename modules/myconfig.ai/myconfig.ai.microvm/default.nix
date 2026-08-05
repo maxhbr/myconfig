@@ -127,8 +127,16 @@ let
   # Its well-formedness errors are surfaced as NixOS assertions below, so a
   # malformed entry fails loudly here instead of producing a broken guest
   # closure or a launcher that accepts an agent the guest cannot run.
+  # Which of the declared agents this host actually builds into its guests
+  # (lightweight plan phase 2). Resolved ONCE, here, from the explicit option
+  # and the profile's own default; `null` keeps every declared agent, which is
+  # the historical behaviour and the `full` profile's default.
+  effectiveEnabledAgents =
+    if cfg.enabledAgents != null then cfg.enabledAgents else agentProfile.enabledAgents;
+
   agentRegistry = import ./agents.nix {
     inherit lib pkgs inputs;
+    enabledNames = effectiveEnabledAgents;
     litellmPort = cfg.litellmPort;
     # Hermes cannot discover a model on its own; reuse the model name the host
     # `myconfig.ai.hermes` backends use (a LiteLLM route). Reading the option
@@ -212,6 +220,26 @@ in
         always outranks the profile's class table. Combining `lite` with the
         deprecated `slotCount` / `defaultVcpu` / `defaultMemoryMiB` spelling is
         rejected as ambiguous instead of silently resolved.
+      '';
+    };
+
+    enabledAgents = mkOption {
+      type = types.nullOr (types.listOf types.str);
+      default = null;
+      example = literalExpression ''[ "codex" ]'';
+      description = ''
+        SELECTED coding agents (tokens of the authoritative registry in
+        ./agents.nix). Everything agent-shaped is derived from this selection:
+        the guest closure's agent packages and per-agent guest environment, the
+        guest `agent-run` dispatch, the batch worker's dispatch, the host
+        launcher's `--agent` validation and help text, the Workmux
+        `microvm-*` registrations and the agent-state directories. A
+        deselected agent is therefore ABSENT from the guest image, not merely
+        hidden, and `--agent <name>` for it is rejected.
+
+        `null` (the default) means "whatever the `profile` selects", which for
+        `profile = "full"` is EVERY declared agent — i.e. the historical
+        behaviour. An unknown token is rejected at evaluation time.
       '';
     };
 
@@ -812,8 +840,43 @@ in
           message = "myconfig.ai.microvm: generated slot VSOCK CIDs must avoid the reserved values 0/1/2 and VMADDR_CID_ANY.";
         }
         {
-          assertion = agentRegistry.names != [ ];
+          assertion = agentRegistry.declaredNames != [ ];
           message = "myconfig.ai.microvm: the agent registry (agents.nix) must declare at least one agent.";
+        }
+        {
+          # A typo in `enabledAgents` must fail loudly at EVAL instead of
+          # silently producing a guest with fewer (or no) agents.
+          assertion = agentRegistry.unknownEnabled == [ ];
+          message = ''
+            myconfig.ai.microvm.enabledAgents: unknown agent(s) ${lib.concatStringsSep ", " agentRegistry.unknownEnabled}.
+            Declared agents are: ${lib.concatStringsSep ", " agentRegistry.declaredNames}.
+          '';
+        }
+        {
+          # An empty selection would build a guest that can run nothing at all.
+          assertion = agentRegistry.names != [ ];
+          message = ''
+            myconfig.ai.microvm.enabledAgents selects no agent, so the guest
+            would contain no agent runtime at all. Select at least one of:
+            ${lib.concatStringsSep ", " agentRegistry.declaredNames}.
+          '';
+        }
+        {
+          # The BATCH machinery (host `submit` validation, guest controller and
+          # worker dispatch) renders `case` PATTERNS from the batch-capable
+          # subset; an empty subset renders an empty pattern, i.e. a
+          # syntactically broken script. Every declared agent is batch-capable
+          # today, so this can only trip on a selection made specifically to
+          # exclude them — which the (still combined interactive+batch) guest
+          # cannot serve. Splitting the two modes (lightweight plan phase 5) is
+          # what will make an interactive-only selection meaningful.
+          assertion = agentRegistry.batchNames != [ ];
+          message = ''
+            myconfig.ai.microvm.enabledAgents selects no agent that can run
+            UNATTENDED (no `batchArgs` in ./agents.nix), but every guest also
+            carries the batch job machinery. Include at least one batch-capable
+            agent: ${lib.concatStringsSep ", " agentRegistry.declaredBatchNames}.
+          '';
         }
       ]
       # One assertion per malformed registry entry (empty when well-formed).

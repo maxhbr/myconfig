@@ -374,6 +374,9 @@ let
       ++ mods;
     };
   liteHost = liteHostWith [ ];
+  # The FILTERED registry instance of a lite host (`nixosSystem` — and hence
+  # `extendModules` — exposes module args on the top-level attrset).
+  liteRegistryOf = mods: (liteHostWith mods)._module.args.agentRegistry;
   liteProfile =
     (import ../modules/myconfig.ai/myconfig.ai.microvm/profiles.nix { inherit lib; }).forProfile
       "lite";
@@ -685,6 +688,113 @@ in
         message = "profile = lite together with the deprecated slotCount must be rejected";
       }
     ];
+
+  # ---------------------------------------------------------------------- #
+  # (s) SELECTED AGENTS (lightweight plan phase 2): the registry selection is  #
+  #     applied ONCE, in agents.nix, so a deselected agent is ABSENT from the  #
+  #     guest closure rather than merely hidden — and the reference host,      #
+  #     which selects nothing, still gets every declared agent.                #
+  # ---------------------------------------------------------------------- #
+  microvm-eval-enabled-agents =
+    let
+      liteReg = liteRegistryOf [ ];
+      liteGuest = (liteHost.config.microvm.vms.${(lib.head liteSlots).name}).config.config;
+      liteGuestPaths = map (p: p.outPath) liteGuest.environment.systemPackages;
+      # The packages of the agents the lite profile does NOT select, taken from
+      # the reference host's UNFILTERED registry rather than a second list.
+      deselected = lib.filter (a: !(builtins.elem a.name liteReg.names)) (
+        lib.attrValues agentRegistry.agents
+      );
+      liteWorkmux = builtins.filter (lib.hasPrefix "microvm-") (
+        builtins.attrNames liteHost.config.myconfig.ai.workmux.agents
+      );
+    in
+    mkEvalCheck "microvm-eval-enabled-agents" (
+      [
+        {
+          # Behaviour preservation: a host that says nothing (and stays on the
+          # `full` profile) keeps EVERY declared agent.
+          assertion = microvmOpts.enabledAgents == null && agentRegistry.names == agentRegistry.declaredNames;
+          message = "the reference host must keep every declared agent (got ${toString agentRegistry.names} of ${toString agentRegistry.declaredNames})";
+        }
+        {
+          # The lite profile's own default: exactly the plan's reference agent.
+          assertion = liteReg.names == [ "codex" ];
+          message = "the lite profile must select codex only, got ${toString liteReg.names}";
+        }
+        {
+          # ... while still DECLARING all of them (the selection filters, it
+          # does not delete registry entries).
+          assertion = liteReg.declaredNames == agentRegistry.declaredNames;
+          message = "the selection must not change the set of DECLARED agents";
+        }
+        {
+          assertion = liteReg.unknownEnabled == [ ];
+          message = "the lite profile's own selection must be valid";
+        }
+        {
+          # An explicit option outranks the profile default.
+          assertion =
+            (liteRegistryOf [ { myconfig.ai.microvm.enabledAgents = [ "pi" ]; } ]).names == [ "pi" ];
+          message = "an explicit enabledAgents must outrank the profile's default selection";
+        }
+        {
+          # Every DERIVED list follows the selection — not just the packages.
+          assertion = liteWorkmux == [ "microvm-codex" ];
+          message = "workmux registrations must follow the selection, got ${toString liteWorkmux}";
+        }
+        {
+          assertion = liteReg.batchNames == [ "codex" ] && liteReg.namesAlternation == "codex";
+          message = "the generated batch/help fragments must follow the selection";
+        }
+        {
+          assertion = deselected != [ ];
+          message = "positive control: the lite selection must actually exclude some declared agent";
+        }
+        {
+          # The SELECTED agent is in the guest closure.
+          assertion = builtins.elem (lib.head (lib.attrValues liteReg.agents)).package.outPath liteGuestPaths;
+          message = "the selected agent's package is missing from the lite guest closure";
+        }
+        {
+          # Unknown token: a typo must fail at EVAL, naming the valid tokens.
+          assertion =
+            let
+              msgs = map (a: a.message) (
+                builtins.filter (a: !a.assertion)
+                  (liteHostWith [
+                    {
+                      myconfig.ai.microvm.enabledAgents = [
+                        "codex"
+                        "nope"
+                      ];
+                    }
+                  ]).config.assertions
+              );
+            in
+            builtins.any (m: lib.hasInfix "unknown agent(s) nope" m) msgs;
+          message = "an unknown enabledAgents entry must be rejected at eval";
+        }
+        {
+          # An empty selection would build a guest that can run nothing.
+          assertion =
+            let
+              msgs = map (a: a.message) (
+                builtins.filter (a: !a.assertion)
+                  (liteHostWith [ { myconfig.ai.microvm.enabledAgents = [ ]; } ]).config.assertions
+              );
+            in
+            builtins.any (m: lib.hasInfix "selects no agent" m) msgs;
+          message = "an empty enabledAgents selection must be rejected at eval";
+        }
+      ]
+      # ... and the DESELECTED agents' runtimes are ABSENT from the guest
+      # closure (the point of the whole phase).
+      ++ map (a: {
+        assertion = !(builtins.elem a.package.outPath liteGuestPaths);
+        message = "deselected agent '${a.name}' is still in the lite guest closure (${a.package.outPath})";
+      }) deselected
+    );
 
   # ---------------------------------------------------------------------- #
   # (c) PURE-EVAL slot pool: unique + well-formed IPs/MACs, contiguous      #
