@@ -165,6 +165,11 @@ in
           # A persisted directory that also comes from the host primary user's
           # home-manager dotfiles would be fought over by HM activation and the
           # linker. Keep the two disjoint.
+          #
+          # This covers the `full` provisioning path ONLY (it is gated on
+          # `guestDotfiles.enable`). The mirror guard for the `lite` path —
+          # runtime config staging vs. these same directories — lives in
+          # ./config-seed.nix, which owns that allowlist.
           assertion =
             let
               hmPrefixes = cfg.guestDotfiles.homeFilePrefixes;

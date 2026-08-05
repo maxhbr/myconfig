@@ -95,6 +95,12 @@ let
   # that follows its insertion point, so an EMPTY fragment leaves the
   # surrounding text untouched. `indentFragment` re-indents the (Nix-dedented)
   # fragment body to the column it is spliced into.
+  #
+  # WARNING: the byte-identity of the `full` launcher depends on the exact
+  # indentation of each splice SITE matching the `indent` argument passed here.
+  # Re-indenting a splice site (or dropping the trailing newline `mkSeedFragment`
+  # appends) silently changes the `full` derivation — rerun the AGENTS.md
+  # evaluated-slice diff after touching any of them.
   seedEnabled = agentConfigSeed.enable;
   indentFragment = indent: text: lib.replaceStrings [ "\n" ] [ "\n${indent}" ] text;
   mkSeedFragment = indent: text: lib.optionalString seedEnabled (indentFragment indent (text + "\n"));
@@ -117,6 +123,7 @@ let
     readonly CONFIG_SEED_STAGER=${lib.getExe agentConfigSeed.stager}
     readonly CONFIG_SEED_ROOT=${lib.escapeShellArg agentConfigSeed.root}
     readonly CONFIG_SEED_PAYLOAD_SUBDIR=${lib.escapeShellArg agentConfigSeed.homeSubdir}
+    readonly CONFIG_SEED_MANIFEST_NAME=${lib.escapeShellArg agentConfigSeed.manifestName}
     config_seed_dir() { printf '%s' "$CONFIG_SEED_ROOT/$1"; }
 
     # Remove everything a previous task staged for this slot. Called before
@@ -126,7 +133,10 @@ let
         local dir
         dir="$(config_seed_dir "$1")"
         [[ -d "$dir" ]] || return 0
-        rm -rf -- "''${dir:?}/$CONFIG_SEED_PAYLOAD_SUBDIR" "''${dir:?}/manifest.json"
+        # Both names come from config-seed.nix, which OWNS them: hardcoding
+        # either here would leave a stale file behind the day it is renamed.
+        rm -rf -- "''${dir:?}/$CONFIG_SEED_PAYLOAD_SUBDIR" \
+            "''${dir:?}/$CONFIG_SEED_MANIFEST_NAME"
     }
 
     # Stage the CURRENT host configuration for this launch. Fails the launch
