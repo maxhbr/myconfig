@@ -201,19 +201,18 @@ agent-session logs tests --follow
 agent-session shell tests
 agent-session stop tests
 agent-session run tests --detach -- codex exec "Continue the task"
+agent-session merge tests
 agent-session destroy tests
 ```
 
 `destroy` refuses to remove a dirty worktree unless `--force` is supplied. It
 preserves the branch by default. Add `--delete-branch` to remove it too.
 
-To bring a result back to the host checkout, fetch from the pool printed by
-`agent-session status NAME`, for example:
-
-```bash
-git fetch "$HOME/.local/state/agent-sandbox/pools/<repo-id>.git" \
-  agent/parser-refactor:agent/parser-refactor
-```
+`merge NAME` fetches the session branch from its disposable pool into the
+original host repository and merges it into the currently checked-out branch
+(default `--no-ff`; `--ff` / `--squash` map to `git merge`). The host working
+tree must be clean and on a branch (not detached). The fetched ref is removed
+again after a successful merge.
 
 ## Isolation boundaries
 
