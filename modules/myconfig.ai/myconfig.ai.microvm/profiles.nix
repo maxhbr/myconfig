@@ -37,6 +37,12 @@
 #                    build the guest with the MINIMAL generic CLI toolset and a
 #                    plain bash login shell instead of the historical full set
 #                    plus fish (see guest.nix for the per-package rationale).
+#   consolidatedSession
+#                    give the guest ONE writable per-session virtiofs share (the
+#                    consolidated session tree of ./session.nix) plus at most
+#                    ONE read-only share, instead of the historical four
+#                    separate writable shares (workspace, job, agent state,
+#                    config seed). `false` keeps the four-share layout.
 #   configSeed       provision the guest home at LAUNCH time from an
 #                    ALLOWLISTED, root-owned staged copy of the host agent
 #                    configuration (./config-seed.nix) INSTEAD of running
@@ -55,6 +61,7 @@ rec {
       enabledAgents = null;
       minimalGuestPackages = false;
       configSeed = false;
+      consolidatedSession = false;
     };
 
     # The lightweight interactive shape: ONE prebuilt slot, 2 vCPU, 4 GiB RAM,
@@ -80,6 +87,10 @@ rec {
       # CURRENT host instructions/settings without a rebuild, and drops the
       # whole home-manager activation machinery from its closure.
       configSeed = true;
+      # ONE writable virtiofs share for the whole session plus ONE read-only
+      # share (lightweight plan phase 4): fewer virtiofsd processes, one tree
+      # to create/verify/clean, and the SAME ownership/mode trust boundaries.
+      consolidatedSession = true;
     };
   };
 

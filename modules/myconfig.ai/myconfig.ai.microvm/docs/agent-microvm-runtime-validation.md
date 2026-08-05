@@ -186,7 +186,7 @@ lying:
 | every resource class boots and becomes SSH-ready (polled, see invariant 1) |
 | `/workspace` is a mount point and is writable by the guest `agent` user |
 | the host `/nix/store` is **not** shared into the guest |
-| exactly four virtiofs shares: `/workspace`, `/var/lib/agent-hostkey`, `/run/agent-job`, `/var/lib/agent-state` (an empty enumeration is a `FAIL`, not a pass) |
+| exactly four virtiofs shares: `/workspace`, `/var/lib/agent-hostkey`, `/run/agent-job`, `/var/lib/agent-state` (an empty enumeration is a `FAIL`, not a pass). NOTE: this suite targets a `profile = "full"` host; a `lite` host consolidates the same data into `/run/agent-session` + `/run/agent-session-ro` (lightweight plan phase 4), so `EXPECTED_SHARES` in `../runtime-validation.sh` would have to be adjusted before running it against one |
 | workspace changes survive shutdown (they are in the standalone clone) |
 | guest home and guest `/tmp` changes do **not** survive a restart — asserted only after the markers were proved to have been CREATED in the first run (the suite used to write `/root-marker`, which the unprivileged agent cannot create at all, and then “prove” it had not persisted) |
 | `--persist-agent-state` persists **only** declared paths (`~/.hermes`), never undeclared ones |

@@ -129,7 +129,8 @@ reports an exit code. So the result must be attributable, not merely readable.
   escaping requires a hypervisor/virtiofsd/KVM bug, not a container escape.
 - **Disposable state.** Guest root and `/home/agent` are tmpfs, rebuilt every
   boot. An agent cannot leave persistent implants in its own sandbox.
-- **No host filesystem.** The guest sees only the four declared virtiofs shares
+- **No host filesystem.** The guest sees only the declared virtiofs shares (four
+  under `full`, two under `lite`)
   (five under `profile = "lite"`, see below) — no host home, no `/nix/store`,
   no sockets.
 - **No build/fetch capability.** No Nix daemon socket, no store write access; the
@@ -143,8 +144,33 @@ reports an exit code. So the result must be attributable, not merely readable.
 
 ## What is still shared through virtiofs
 
-Exactly four shares, all per-slot — five under `profile = "lite"`, which adds
-the read-only config seed:
+Under `profile = "full"`: exactly **four** shares, all per-slot (five with
+`configSeed.enable`, which adds the read-only config seed).
+
+Under `profile = "lite"` (lightweight plan phase 4, `session.enable`): exactly
+**two** — ONE writable per-session share and ONE read-only share. The guest
+paths below are the `full` ones; the consolidated layout moves them into the two
+trees WITHOUT changing a single owner or mode (the trust boundary was never the
+share split — it is ownership and modes, which virtiofsd passes through
+unchanged):
+
+| `full` guest path | `lite` guest path |
+| --- | --- |
+| `/workspace` | `/workspace` (a bind mount of `/run/agent-session/workspace`) |
+| `/run/agent-job/...` | `/run/agent-session/...` (`input/`, `controller/`, `worker/`, `worker-logs/`) |
+| `/var/lib/agent-state` | `/run/agent-session/state` |
+| `/var/lib/agent-hostkey` | `/run/agent-session-ro/hostkeys` |
+| `/run/agent-config-seed` | `/run/agent-session-ro/config-seed` |
+
+The writable session share is `<runtimeRoot>/sessions/<slot>/` (root-owned
+`0755`), the read-only one `<runtimeRoot>/sessions-ro/<slot>/` (root-owned
+`0700`, mounted with virtiofsd `--readonly`). The SSH private host key and the
+staged configuration are deliberately NOT in the writable tree; the launcher
+runs `agent-microvm-verify-session` before every launch, which re-derives every
+expected owner/mode from the ONE layout table (`session.nix`), refuses a
+symlinked or non-root-owned component, and refuses to launch at all if host-key
+material is found in the writable tree. Teardown removes the COMPLETE per-session
+tree (after proving both bind mounts are gone) and recreates the empty skeleton.
 
 | Guest path | Mode | Content | Risk |
 | --- | --- | --- | --- |

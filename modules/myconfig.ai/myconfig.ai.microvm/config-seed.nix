@@ -118,11 +118,19 @@
   # `declaredDirs` must stay DISJOINT from what is staged here, otherwise the
   # seeding copy and the state linker would fight over the same directory.
   agentState,
+  # The ONE definition of the CONSOLIDATED per-session tree (./session.nix,
+  # lightweight plan phase 4). With it, the staged payload is the `config-seed/`
+  # subdirectory of the ONE READ-ONLY share — still root-owned, still mounted
+  # read-only, and still with the MANIFEST outside every share (it moves to a
+  # host-only directory under `<runtimeRoot>/config-seed/<slot>/`, because the
+  # read-only share source is the slot directory itself there).
+  agentSession,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
   seedCfg = cfg.configSeed;
+  session = agentSession;
 
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
@@ -219,18 +227,28 @@ let
     enable = cfg.enable && seedCfg.enable;
 
     # ---- host side ----------------------------------------------------
-    root = "${cfg.runtimeRoot}/config-seed";
+    # The PAYLOAD root: the read-only session tree under the consolidated
+    # layout (phase 4), its own root otherwise.
+    root = if session.enable then session.roRoot else "${cfg.runtimeRoot}/config-seed";
     slotDir = slotName: "${root}/${slotName}";
-    # The PAYLOAD lives in its own subdirectory, and that subdirectory — NOT
-    # the slot directory — is the share source (see `shareSource`). So the
-    # manifest is neither copied into the guest home nor visible to the guest
-    # at all: it names the host home and every skipped credential-SHAPED host
-    # file name, which the untrusted side has no business learning.
-    homeSubdir = "home";
+    # The PAYLOAD lives in its own subdirectory. In the four-share layout that
+    # subdirectory — NOT the slot directory — is the share source (see
+    # `shareSource`); in the consolidated layout the read-only share source is
+    # the slot directory of the READ-ONLY tree, which the payload is one level
+    # below. Either way the MANIFEST lives outside every share: it names the
+    # host home and every skipped credential-SHAPED host file name, which the
+    # untrusted side has no business learning.
+    homeSubdir = if session.enable then session.roSubdirs.configSeed else "home";
     manifestName = "manifest.json";
     hostPayloadDir = slotName: "${slotDir slotName}/${homeSubdir}";
-    hostManifest = slotName: "${slotDir slotName}/${manifestName}";
-    # What ../guest.nix hands to virtiofsd.
+    # Host-ONLY location of the manifest. Under the consolidated layout the
+    # payload's sibling is inside the read-only SHARE, so the manifest moves to
+    # a directory that is not shared with any guest at all.
+    manifestRoot = if session.enable then "${cfg.runtimeRoot}/config-seed" else root;
+    manifestDir = slotName: "${manifestRoot}/${slotName}";
+    hostManifest = slotName: "${manifestDir slotName}/${manifestName}";
+    # What ../guest.nix hands to virtiofsd (only used in the four-share
+    # layout; the consolidated one exports the read-only slot directory).
     shareSource = hostPayloadDir;
 
     # ---- permission facts (host stager + guest seeder agree) -----------
@@ -242,11 +260,20 @@ let
     # unprivileged — on either side — needs to read the staged tree, and the
     # operator's configuration is not exposed to other local host users while
     # it sits under the persistent `runtimeRoot`.
-    rootMode = "0700";
-    slotDirMode = "0500";
-    dirMode = "0500";
+    # Under the consolidated layout the modes of the tree's own directories
+    # come from the ONE session layout table (./session.nix), so there is a
+    # single place that decides them; they are the same root-only values.
+    rootMode = if session.enable then session.roRootMode else "0700";
+    slotDirMode = if session.enable then session.roModeOf "" else "0500";
+    dirMode = if session.enable then session.roModeOf session.roSubdirs.configSeed else "0500";
     fileMode = "0400";
     manifestMode = "0400";
+    # Modes of the manifest's own (host-only) directories. In the four-share
+    # layout they ARE the payload root and the payload's slot directory, so
+    # they must keep exactly those modes; in the consolidated layout they are
+    # separate, root-only directories outside every share.
+    manifestRootMode = if session.enable then "0700" else rootMode;
+    manifestDirMode = if session.enable then "0700" else slotDirMode;
     # Bounds on what a single launch may copy, so a huge (or maliciously
     # grown) allowlisted directory cannot fill the host runtime root or stall
     # a launch. Over-budget entries are SKIPPED and recorded in the manifest.
@@ -263,7 +290,7 @@ let
 
     # ---- guest side (identical for every slot — the share hides the slot) --
     guestTag = "configseed";
-    guestMountPoint = "/run/agent-config-seed";
+    guestMountPoint = if session.enable then session.guestConfigSeedDir else "/run/agent-config-seed";
     # The share source IS the payload directory, so the guest sees the staged
     # home directly at the mount point (and the manifest not at all).
     guestPayloadDir = guestMountPoint;
@@ -306,7 +333,13 @@ let
       readonly HOST_HOME=${lib.escapeShellArg paths.hostHome}
       readonly SEED_ROOT=${lib.escapeShellArg paths.root}
       readonly PAYLOAD_SUBDIR=${lib.escapeShellArg paths.homeSubdir}
+      # The manifest lives OUTSIDE every guest share (see the header): its own
+      # host-only root under the consolidated layout, the payload's sibling in
+      # the four-share one.
+      readonly MANIFEST_ROOT=${lib.escapeShellArg paths.manifestRoot}
       readonly MANIFEST_NAME=${lib.escapeShellArg paths.manifestName}
+      readonly MANIFEST_ROOT_MODE=${lib.escapeShellArg paths.manifestRootMode}
+      readonly MANIFEST_DIR_MODE=${lib.escapeShellArg paths.manifestDirMode}
       readonly ROOT_MODE=${lib.escapeShellArg paths.rootMode}
       readonly SLOT_DIR_MODE=${lib.escapeShellArg paths.slotDirMode}
       readonly DIR_MODE=${lib.escapeShellArg paths.dirMode}
@@ -345,7 +378,8 @@ let
 
       readonly SLOT_DIR="$SEED_ROOT/$slot"
       readonly PAYLOAD="$SLOT_DIR/$PAYLOAD_SUBDIR"
-      readonly MANIFEST="$SLOT_DIR/$MANIFEST_NAME"
+      readonly MANIFEST_DIR="$MANIFEST_ROOT/$slot"
+      readonly MANIFEST="$MANIFEST_DIR/$MANIFEST_NAME"
 
       # ---- denylist ------------------------------------------------------
       path_is_denied() {
@@ -402,6 +436,8 @@ let
       # allowed) may survive into this launch.
       install -d -m "$ROOT_MODE" -o root -g root -- "$SEED_ROOT"
       install -d -m "$SLOT_DIR_MODE" -o root -g root -- "$SLOT_DIR"
+      install -d -m "$MANIFEST_ROOT_MODE" -o root -g root -- "$MANIFEST_ROOT"
+      install -d -m "$MANIFEST_DIR_MODE" -o root -g root -- "$MANIFEST_DIR"
       rm -rf -- "$PAYLOAD" "$MANIFEST"
       install -d -m "$DIR_MODE" -o root -g root -- "$PAYLOAD"
 
@@ -604,7 +640,7 @@ let
       # PAYLOAD), root-owned 0400, so it is readable by the host operator only
       # — never by the guest, which has no business learning the host home path
       # or which credential-shaped files exist next to the staged ones.
-      manifest_tmp="$(mktemp "$SLOT_DIR/.manifest.XXXXXX")"
+      manifest_tmp="$(mktemp "$MANIFEST_DIR/.manifest.XXXXXX")"
       allowlist_json="$(printf '%s\n' ''${ALLOWLIST[@]+"''${ALLOWLIST[@]}"} \
           | jq -R -s 'split("\n") | map(select(length > 0))')"
       jq -n \
@@ -897,12 +933,21 @@ in
       # any VM starts — including a slot that has never been launched. The
       # MODES are the trust boundary: root-owned, not writable by the guest
       # `agent` user (virtiofsd passes ownership through unchanged).
+      # Under the consolidated layout (phase 4) the payload directories are part
+      # of the READ-ONLY session tree, which ./session.nix creates from the ONE
+      # layout table; only the host-only MANIFEST directories are added here.
       systemd.tmpfiles.rules = lib.mkIf seedCfg.enable (
-        [ "d ${paths.root} ${paths.rootMode} root root - -" ]
-        ++ lib.concatMap (slot: [
-          "d ${paths.slotDir slot.name} ${paths.slotDirMode} root root - -"
-          "d ${paths.hostPayloadDir slot.name} ${paths.dirMode} root root - -"
-        ]) slots
+        lib.optionals (!session.enable) (
+          [ "d ${paths.root} ${paths.rootMode} root root - -" ]
+          ++ lib.concatMap (slot: [
+            "d ${paths.slotDir slot.name} ${paths.slotDirMode} root root - -"
+            "d ${paths.hostPayloadDir slot.name} ${paths.dirMode} root root - -"
+          ]) slots
+        )
+        ++ lib.optionals session.enable (
+          [ "d ${paths.manifestRoot} ${paths.manifestRootMode} root root - -" ]
+          ++ map (slot: "d ${paths.manifestDir slot.name} ${paths.manifestDirMode} root root - -") slots
+        )
       );
     })
   ];

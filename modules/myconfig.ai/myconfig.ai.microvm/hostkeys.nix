@@ -50,10 +50,18 @@
   pkgs,
   # The effective resource-class table (see default.nix).
   agentResourceClasses,
+  # The ONE definition of the CONSOLIDATED per-session tree (./session.nix,
+  # lightweight plan phase 4). With it, the per-slot host identity lives in the
+  # `hostkeys/` subdirectory of the ONE READ-ONLY share instead of having a
+  # read-only share of its own. It is deliberately NEVER placed in the writable
+  # session tree (the plan says so explicitly, and ./session.nix's verifier
+  # refuses to launch a slot whose writable tree contains key material).
+  agentSession,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
+  session = agentSession;
 
   # The slot pool of the effective resource classes (ticket 5 A). The class
   # table comes from default.nix (`_module.args.agentResourceClasses`), which
@@ -67,15 +75,17 @@ let
   # launcher.nix (which passes the known_hosts file to ssh) cannot drift from
   # the generator below.
   hostKeys = rec {
-    # Host-side root of the per-slot key directories.
-    root = "${cfg.runtimeRoot}/hostkeys";
-    slotDir = slotName: "${root}/${slotName}";
+    # Host-side root of the per-slot key directories: the read-only session
+    # tree under the consolidated layout, its own root otherwise.
+    root = if session.enable then session.roRoot else "${cfg.runtimeRoot}/hostkeys";
+    slotDir =
+      slotName: if session.enable then session.hostHostkeysDir slotName else "${root}/${slotName}";
     # Host-side aggregated known_hosts consumed by the launcher.
     knownHosts = "${cfg.runtimeRoot}/known_hosts";
     # Guest-side mount point of the per-slot read-only share, its virtiofs tag
     # and the key file name (identical on host and guest).
     keyName = "ssh_host_ed25519_key";
-    guestMountPoint = "/var/lib/agent-hostkey";
+    guestMountPoint = if session.enable then session.guestHostkeysDir else "/var/lib/agent-hostkey";
     guestTag = "hostkey";
     guestKeyPath = "${guestMountPoint}/${keyName}";
   };
@@ -149,10 +159,14 @@ in
     (lib.mkIf cfg.enable {
       # The runtime root must be traversable so a non-root operator can read
       # the world-readable known_hosts; the key directories stay 0700.
+      # Under the consolidated layout the key directories are part of the
+      # read-only session tree, which ./session.nix creates from the ONE layout
+      # table (root-only 0700, per slot) — so only the runtime root itself is
+      # emitted here.
       systemd.tmpfiles.rules = [
         "d ${cfg.runtimeRoot} 0755 root root - -"
-        "d ${hostKeys.root} 0700 root root - -"
-      ];
+      ]
+      ++ lib.optional (!session.enable) "d ${hostKeys.root} 0700 root root - -";
 
       systemd.services.agent-microvm-hostkeys = {
         description = "Provision per-slot SSH host keys for agent microVMs";

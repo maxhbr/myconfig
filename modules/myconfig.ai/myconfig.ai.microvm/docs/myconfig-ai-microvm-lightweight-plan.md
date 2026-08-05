@@ -8,7 +8,7 @@
 | 1 — opt-in lightweight profile | **done** | `myconfig.ai.microvm.profile = "full" \| "lite"`, table in `../profiles.nix`, wired in `default.nix` (`_module.args.agentProfile`) + `guest.nix`. Test: `checks.microvm-eval-lite-profile`. |
 | 2 — build only selected agents | **done** | `myconfig.ai.microvm.enabledAgents` (plus the `lite` profile default `[ "codex" ]`). The selection is applied ONCE in `../agents.nix`, so guest closure, `agent-run`, batch dispatch, launcher validation/help, workmux registrations and agent-state paths all follow. Test: `checks.microvm-eval-enabled-agents`. |
 | 3 — runtime config staging | **done** (for the `lite` profile) | `myconfig.ai.microvm.configSeed` (`../config-seed.nix`) stages an ALLOWLISTED, root-owned copy of the host agent configuration per launch; the guest sees it through a per-slot READ-ONLY virtiofs share and a root oneshot copies it into the disposable `/home/agent` before sshd, the batch controller and the agent-state linker. The allowlist is the SELECTED agents' new registry field `configPaths` plus `configSeed.extraPaths`. Guest home-manager activation is dropped exactly when staging is on (`lite`); `full` keeps it byte-for-byte. The credential denylist is applied to a path's own name AND to its RESOLVED target, the staged tree is root-only (0500/0400), the manifest stays outside the share, and the staged paths must be disjoint from the persisted agent-state directories. Tests: `checks.microvm-config-seed` (eval/build) plus `runtime-validation.sh --section seed` (root, enforcement). |
-| 4 — consolidate writable shares | not started | |
+| 4 — consolidate writable shares | **done** (for the `lite` profile) | `myconfig.ai.microvm.session` (`../session.nix`) is the ONE source of truth for the per-session tree: `<runtimeRoot>/sessions/<slot>/` is ONE writable virtiofs share (`workspace/`, `input/`, `controller/`, `worker/`, `worker-logs/`, `state/`) and `<runtimeRoot>/sessions-ro/<slot>/` ONE read-only share (`hostkeys/`, `config-seed/`). `../job.nix`, `../state.nix`, `../config-seed.nix`, `../hostkeys.nix`, the host tmpfiles rules, the generated pre-launch verifier `agent-microvm-verify-session` and `../launcher.nix` all DERIVE from its layout table — no parallel lite/full implementations, only per-profile path/mode resolution. Trust boundaries are unchanged (ownership + modes, passed through by virtiofsd); the guest gets `/workspace` as a bind mount of the session tree. `full` keeps its four shares byte-for-byte. Tests: `checks.microvm-session-tree` (plus `checks.microvm-eval-workspace-share` as the `full` regression guard). |
 | 5 — split interactive/batch | not started | |
 | 6 — VSOCK transport | not started | |
 | 7 — clone/startup optimisation | partially done | Clone: `git clone --local --no-hardlinks` with a `--no-local` fallback plus an explicit `objects/info/alternates` check (≈10× faster on this repo: 0.6 s vs 5 s, measured by hand — both variants produce a fully independent clone). Readiness: exponential-backoff SSH polling (250 ms → 2 s) under the unchanged 90 s ceiling, replacing the fixed 3 s interval. NOT done: readiness as a positive protocol signal (needs phases 3/6) and the install-unit generation guard (see deviations). |
@@ -17,6 +17,66 @@
 | 10 — documentation and rollout | incremental | `docs/agent-microvm.md` documents every landed option. |
 
 ### Recorded deviations
+
+- **Phase 4, the read-only share is NOT folded into the writable tree**: the
+  plan's target tree puts `config-seed/` inside the ONE writable session share
+  at mode `0555`. NOT done. The staged configuration is host-decided input the
+  guest must not be able to modify (invariant 7) and must not be able to read
+  beyond the copy the guest root seeder hands it (invariant 8, phase 3's
+  recorded deviation), so it stays in a share virtiofsd mounts `--readonly`,
+  root-owned `0500`/`0400` — strictly stronger than a mode inside a writable
+  share. The SSH private host keys stay out of the writable tree for the same
+  reason (the plan says so itself). Since BOTH read-only payloads are
+  root-owned, single-purpose and per-slot, they share ONE read-only share (two
+  subdirectories) rather than one share each, so the acceptance criterion "one
+  writable share plus AT MOST ONE read-only share" holds exactly. A pre-launch
+  check (`agent-microvm-verify-session`) additionally REFUSES to start a slot
+  whose writable tree contains SSH host-key material, so a future refactor
+  cannot regress this silently.
+- **Phase 4, the staging manifest moved**: the read-only share source is the
+  per-slot READ-ONLY directory (it has to cover both `hostkeys/` and
+  `config-seed/`), so the manifest can no longer be the payload's sibling
+  without becoming visible to the guest. It now lives in the host-only
+  `<runtimeRoot>/config-seed/<slot>/manifest.json`, outside every share — the
+  invariant from phase 3 ("the manifest names the host home and every skipped,
+  credential-shaped host file name") is preserved, its location is not.
+- **Phase 4, per-directory MODES are unchanged from the four-share layout**:
+  the plan's tree sketches `input/` and `config-seed/` as `0555` and
+  `worker/`/`state/` as `0700`. NOT adopted. The effective modes stay exactly
+  what `job.nix`/`state.nix`/`config-seed.nix` already used and what the guest's
+  own `agent-job-assert-paths` validates (`input/` `0755` root, `controller/`
+  `0700` root, `worker/`/`state/` `0755` agent, `worker-logs/` `0755` root,
+  staged tree `0500`/`0400` root), because this phase must not change WHO may
+  do WHAT — only how many shares carry it. Every mode is asserted
+  group/other-non-writable (and root-only where the data is confidential) by a
+  policy function the module applies to its own table at eval time, and the
+  same table is what the tests check.
+- **Phase 4, `/workspace` is a guest BIND MOUNT, not a symlink**: the plan
+  allows "bind mount or symlink". A symlink would make `agent-run`'s
+  `findmnt -n /workspace` check fail (it is a mount-point check, deliberately),
+  and a symlink into a virtiofs share is also weaker evidence that the share is
+  actually mounted. The guest therefore declares a `bind` mount with
+  `x-systemd.requires-mounts-for=/run/agent-session`.
+- **Phase 4, the batch/worker paths did NOT need updating**: the plan asks to
+  "update batch controller and worker paths". They are all derived from
+  `job.nix`'s single `paths` attrset, which now takes its root and its
+  subdirectory names from the session layout — so the guest controller, the
+  worker unit, the assertion helper and the host launcher followed without a
+  second implementation. The only genuinely dual-path code this phase added is
+  per-profile PATH/MODE resolution (`if session.enable then ... else ...`) plus
+  the conditionally rendered launcher fragments that keep the `full` launcher
+  byte-identical.
+- **Phase 4, virtiofsd process-count measurement**: recorded STRUCTURALLY (the
+  eval check asserts the lite guest declares exactly one writable and at most
+  one read-only share, i.e. two virtiofsd instances instead of four or five)
+  rather than as a measured process count, for the same reason phase 0's
+  benchmark is deferred: counting host processes needs a booted guest on a KVM
+  host.
+- **Phase 4, the `full` profile keeps four shares**: no compatibility decision
+  was taken to consolidate it. The consolidated layout is `lite`-only and gated
+  by `session.enable`, and the evaluated-slice diff from `AGENTS.md` proves the
+  `full` host is byte-identical (only the two `configurationRevision`-derived
+  artefacts differ, as expected in a dirty tree).
 
 - **Phase 3, `rsync`**: the plan suggests `rsync --archive --copy-links` on both
   sides. NOT used. The HOST stager walks the allowlist with `find -L` and copies
@@ -165,11 +225,14 @@ Cloud Hypervisor/KVM
 ├── tmpfs/disposable agent home
 ├── one writable per-session virtiofs share
 │   ├── workspace/
-│   ├── config-seed/
+│   ├── input/
 │   ├── worker/
+│   ├── worker-logs/
 │   ├── controller/
 │   └── state/            # optional
-├── optional read-only SSH-host-key share
+├── one read-only share: SSH host key + staged config seed
+│                          (see the phase-4 deviations: neither may live in
+│                           the writable tree)
 ├── runtime-staged, allowlisted host agent configuration
 └── VSOCK-only access to the host LiteLLM proxy
 ```
@@ -553,7 +616,44 @@ Model-provider credentials should remain in the host proxy. The guest should rec
 
 ---
 
-## Phase 4 — Consolidate writable virtiofs shares
+## Phase 4 — Consolidate writable virtiofs shares — **DONE** (for the `lite` profile)
+
+Implemented as `../session.nix`: the authoritative layout table (paths,
+subdirectory names, owners, modes, the trust-boundary policy function), the host
+tmpfiles rules generated from it, the generated pre-launch verifier
+`agent-microvm-verify-session` and the guest fragment that bind-mounts
+`/run/agent-session/workspace` to `/workspace`. `myconfig.ai.microvm.session.enable`
+defaults to the resolved profile's new `consolidatedSession` field
+(`../profiles.nix`): FALSE for `full`, TRUE for `lite`.
+
+Every other module DERIVES from that table instead of growing a second copy of
+the layout: `../job.nix` (its root, subdirectory names and directory modes),
+`../state.nix` (the per-slot bind target and the guest mount point),
+`../config-seed.nix` (the staged payload directory, its modes and the host-only
+manifest location), `../hostkeys.nix` (the per-slot key directory and the guest
+key path), `../guest.nix` (the share list, the `/workspace` bind mount, the
+sshd mount ordering and three cross-module assertions) and `../launcher.nix`
+(`prepare_session`, `verify_session`, `clear_session`, and the two bind-mount
+targets, rendered as conditional fragments so the `full` launcher stays
+byte-identical).
+
+Acceptance criteria are locked down by `checks.microvm-session-tree`
+(`tests/microvm.nix`): the lite guest declares EXACTLY ONE writable share and at
+most ONE read-only share with the expected tags/mountPoints/sources; the full
+guest keeps exactly its four historical shares and its virtiofs `/workspace`;
+the per-directory ownership/mode expectations are asserted FROM the layout table
+(against the host tmpfiles rules and against the generated verifier, never
+against a second hardcoded copy); every consumer's paths are asserted to be the
+table's; the seeder, the batch controller, the worker template, the agent-state
+linker and sshd are ordered against the right mounts; the layout POLICY is fed
+deliberately broken tables (agent-owned or world-writable `input/`, a
+group/other-readable or agent-owned `controller/`, an agent-owned
+`worker-logs/`, a group/other-writable staged tree, SSH host keys or the staged
+configuration inside the writable tree, nested trees) and must complain about
+each; and the build part greps the generated launcher and verifier for the
+pre-launch verification, the complete-tree removal and the refusal to remove a
+tree whose bind mounts are still live — while proving the `full` launcher
+carries none of it.
 
 ### Goal
 
