@@ -11,7 +11,7 @@
 | 4 — consolidate writable shares | not started | |
 | 5 — split interactive/batch | not started | |
 | 6 — VSOCK transport | not started | |
-| 7 — clone/startup optimisation | not started | |
+| 7 — clone/startup optimisation | partially done | Clone: `git clone --local --no-hardlinks` with a `--no-local` fallback plus an explicit `objects/info/alternates` check (≈10× faster on this repo: 0.6 s vs 5 s, measured by hand — both variants produce a fully independent clone). Readiness: exponential-backoff SSH polling (250 ms → 2 s) under the unchanged 90 s ceiling, replacing the fixed 3 s interval. NOT done: readiness as a positive protocol signal (needs phases 3/6) and the install-unit generation guard (see deviations). |
 | 8 — minimize guest closure | **done** | The `lite` profile builds the documented minimal CLI toolset, a plain bash login shell (no fish) and drops NixOS' `environment.defaultPackages`; per-agent `extraPackages` in the registry keeps agent-specific runtimes tied to the selection. Test: the phase-8 assertions of `checks.microvm-eval-lite-profile`. |
 | 9 — testing | incremental | Each landed phase adds eval checks to `tests/microvm.nix`; the VM/adversarial tiers of this phase remain out of CI (see `docs/agent-microvm-runtime-validation.md`). |
 | 10 — documentation and rollout | incremental | `docs/agent-microvm.md` documents every landed option. |
@@ -44,6 +44,18 @@
 - **Phase 8, closure-size regression check**: expressed structurally (asserted
   package membership) rather than as a byte budget — a size assertion would
   need a KVM/build tier and would churn with every nixpkgs bump.
+- **Phase 7, install-unit restart guard**: NOT implemented. Comparing
+  `<stateRoot>/<slot>/current` with the expected runner path would require the
+  launcher (a host `systemPackages` entry, reachable from the host home-manager
+  config) to reference every guest's `declaredRunner`, and the guest config in
+  turn copies already-evaluated host home-manager file entries
+  (`guest-home.nix`) — a plausible infinite-recursion loop. The current
+  unconditional `systemctl restart install-microvm-<slot>.service` is an
+  idempotent symlink relink costing milliseconds, so the guard is deferred
+  until phase 3 removes the host→guest home-manager coupling.
+- **Phase 7, readiness definition**: the extended readiness criteria
+  (config staging finished, proxy forwarding healthy, agent executable present)
+  presuppose phases 3 and 6; only the polling *strategy* was changed here.
 - **Phase 1, store pinning**: `microvm.optimize.enable` and
   `microvm.storeDiskType` currently *default* to `true` / `erofs` upstream, so
   pinning them is behaviour-preserving today. It is done anyway (for `lite`
@@ -625,7 +637,12 @@ The host listener must validate the expected guest CID or use one listener per s
 
 ## Phase 7 — Optimize repository cloning and startup
 
-### Repository clone
+### Repository clone — **DONE**
+
+Implemented in `../launcher.nix` (`create_clone` / `verify_clone`). Deviation:
+`--no-checkout` is *not* used — the guest agent needs a working tree, and the
+clone is checked out exactly once either way. `--shared` / `--reference` are
+additionally forbidden by a build-time check on the generated launcher.
 
 Replace local cloning through normal Git transport with an independent optimized local clone where safe:
 
@@ -648,7 +665,7 @@ Requirements:
 
 Measure this change independently.
 
-### Readiness
+### Readiness — **PARTIALLY DONE** (option 3, the interim step)
 
 Replace fixed three-second SSH polling with one of:
 

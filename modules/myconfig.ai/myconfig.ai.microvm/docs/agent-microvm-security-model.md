@@ -178,7 +178,7 @@ host-side modes are what the guest sees.
 | impersonating a slot to the operator | per-slot host keys, delivered read-only and root-only, pinned in `known_hosts` |
 | persistence across sessions | disposable tmpfs root/home; persistence is opt-in, declared-paths-only and task-scoped |
 | cross-task contamination | per-task clone + per-task state; the slot's share sources are cleared/rebound per run |
-| host code execution from a hostile repo | the launcher never evaluates repo-provided nix/direnv/hooks/npm/make/MCP (asserted by a check); clones use `--no-local`; git-dir/common-dir escapes rejected; all paths canonicalised |
+| host code execution from a hostile repo | the launcher never evaluates repo-provided nix/direnv/hooks/npm/make/MCP (asserted by a check); clones copy the object store (`--local --no-hardlinks`, never `--shared`/`--reference`) and are verified free of object alternates; git-dir/common-dir escapes rejected; all paths canonicalised |
 | runaway resource use | per-class cgroup limits on both sides; three timeout layers; `usage` makes retained disk visible |
 | stale/lost slots after crashes | allocation tokens + pid/pid-start ownership, `recover` (with `--dry-run`) |
 | **forging a batch result** (report success, hide a failure, fake an exit code, stop the VM early) | the result is written only by the trusted guest controller into a `root:root 0700` directory the worker cannot write, read, rename or shadow; the host verifies ownership, schema, task, slot, agent and allocation token |

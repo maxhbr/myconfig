@@ -65,7 +65,7 @@ guest config is prebuilt. The launcher makes that path *mean* the task's
 workspace:
 
 ```text
-git clone --no-local <repo> /var/lib/agent-microvms/workspaces/<task>
+git clone --local --no-hardlinks <repo> /var/lib/agent-microvms/workspaces/<task>
 mount --bind          …/workspaces/<task>  /var/lib/microvms/<slot>/workspace
 virtiofsd            (that path)  ->  guest /workspace
 ```
@@ -124,7 +124,7 @@ traffic is additionally impossible at layer 2 (`bridge link … isolated on`).
 agent-microvm run --attach --agent <a> --name <task> --repository <repo>
   validate (task name, repo, branch, agent, class)
   → allocate a free slot of the requested class   (flock, token, marker)
-  → git clone --no-local                          (standalone clone)
+  → git clone --local --no-hardlinks              (standalone clone)
   → mount --bind clone -> slot workspace
   → clear any stale job / agent-state
   → systemctl start microvm@<slot>
