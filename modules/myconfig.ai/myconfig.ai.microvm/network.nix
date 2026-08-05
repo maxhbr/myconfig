@@ -70,9 +70,8 @@ let
   # so the TAP interface names we hand to NetworkManager's unmanaged list
   # always match the TAPs guest.nix actually creates.
   # The slot pool of the effective resource classes (ticket 5 A). The class
-  # table comes from default.nix (`_module.args.agentResourceClasses`), which
-  # also performs the legacy `slotCount` migration, so every module builds the
-  # SAME pool.
+  # table comes from default.nix (`_module.args.agentResourceClasses`), so every
+  # module builds the SAME pool.
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   bridge = cfg.bridgeName;

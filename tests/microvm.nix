@@ -632,7 +632,7 @@ in
         message = "the guest must use a plain bash login shell and contain no fish";
       }
       {
-        # Every tool the minimal set documents a consumer for is present.
+        # Every tool `guestCommonPackages` documents a consumer for is present.
         assertion = builtins.all (p: builtins.elem p.outPath guestPkgPaths) (
           with pkgs;
           [
@@ -652,7 +652,7 @@ in
             util-linux
           ]
         );
-        message = "the guest is missing a package from the documented minimal set";
+        message = "the guest is missing a package from the documented guestCommonPackages set";
       }
       {
         # ... and nothing else this module used to add.
@@ -1262,14 +1262,16 @@ in
 
   # ---------------------------------------------------------------------- #
   # (u) THE SESSION TREE (lightweight plan phase 4): every guest gets ONE    #
-  #     writable virtiofs share (the per-session tree) plus ONE read-only     #
-  #     share (host identity + staged configuration). Locks down: the share   #
-  #     set, the ownership/mode table as the ONE source of truth every         #
-  #     consumer derives from, the guest mount/unit ordering, the layout       #
-  #     POLICY (fed a deliberately broken table it must complain about the     #
-  #     SPECIFIC rule) and the generated launcher code that prepares,          #
-  #     verifies and REMOVES the tree. It also FORCES the guest closure, so a  #
-  #     guest that does not build fails CI.                                    #
+  #     writable virtiofs share (the per-session tree) plus ONE read-only    #
+  #     share (host identity + staged configuration). Locks down: the share  #
+  #     set, the ownership/mode table as the ONE source of truth every       #
+  #     consumer derives from, the guest mount/unit ordering, the layout     #
+  #     POLICY (fed a deliberately broken table it must complain about the   #
+  #     SPECIFIC rule) and the generated launcher code that prepares,        #
+  #     verifies and REMOVES the tree. It also forces the guest closure to   #
+  #     EVALUATE to a realisable derivation — a `.drvPath` string only,      #
+  #     NOTHING is built here (see the file header and plan §38), so a guest #
+  #     that evaluates but does not BUILD still passes CI.                   #
   # ---------------------------------------------------------------------- #
   microvm-session-tree =
     let

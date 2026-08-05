@@ -432,9 +432,9 @@ let
   # `InaccessiblePaths`.
   # `prompt` is read by the GENERATED dispatch below only for the registry
   # entries that take the prompt TEXT as an argv token (`%PROMPT%`). A host
-  # whose SELECTED agents are all stdin-driven — `profile = "lite"` selects only
-  # `codex`, which reads the prompt file on stdin — therefore generates a script
-  # in which the variable is genuinely unread, and `writeShellApplication`'s
+  # whose `enabledAgents` selects only stdin-driven agents — e.g.
+  # `[ "codex" ]`, which reads the prompt file on stdin — therefore generates a
+  # script in which the variable is genuinely unread, and `writeShellApplication`'s
   # shellcheck gate fails the BUILD with SC2034. The read is kept (rather than
   # made conditional) so the two invocation shapes stay symmetrical and enabling
   # a `%PROMPT%` agent needs no change here; the suppression is emitted ONLY on

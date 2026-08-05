@@ -86,9 +86,8 @@ let
   cfg = config.myconfig.ai.microvm;
 
   # The slot pool of the effective resource classes (ticket 5 A). The class
-  # table comes from default.nix (`_module.args.agentResourceClasses`), which
-  # also performs the legacy `slotCount` migration, so every module builds the
-  # SAME pool.
+  # table comes from default.nix (`_module.args.agentResourceClasses`), so every
+  # module builds the SAME pool.
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   # --- multi-line script FRAGMENTS ---------------------------------------
@@ -1154,8 +1153,8 @@ let
           # provisioning unit is an idempotent RemainAfterExit oneshot, so this
           # is a no-op once it has run. It is also wantedBy multi-user.target,
           # so on a booted host this only covers the "key dir deleted by hand"
-          # / "slotCount just increased" cases. Failure is fatal: without the
-          # key sshd cannot start in the guest.
+          # / "a `resourceClasses` entry just grew a slot" cases. Failure is
+          # fatal: without the key sshd cannot start in the guest.
           if [[ "$SSH_ENABLED" == "1" ]]; then
               systemctl start agent-microvm-hostkeys.service \
                   || die "failed to provision per-slot SSH host keys (agent-microvm-hostkeys.service)"

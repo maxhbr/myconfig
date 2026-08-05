@@ -63,9 +63,8 @@ let
   session = agentSession;
 
   # The slot pool of the effective resource classes (ticket 5 A). The class
-  # table comes from default.nix (`_module.args.agentResourceClasses`), which
-  # also performs the legacy `slotCount` migration, so every module builds the
-  # SAME pool.
+  # table comes from default.nix (`_module.args.agentResourceClasses`), so every
+  # module builds the SAME pool.
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   # --- the ONE definition of every host-key path ------------------------
@@ -80,11 +79,12 @@ let
     slotDir = slotName: session.hostHostkeysDir slotName;
     # Host-side aggregated known_hosts consumed by the launcher.
     knownHosts = "${cfg.runtimeRoot}/known_hosts";
-    # Guest-side mount point of the per-slot read-only share, its virtiofs tag
-    # and the key file name (identical on host and guest).
+    # Guest-side location of the key inside the ONE read-only share and the key
+    # file name (identical on host and guest). The share itself (source, tag,
+    # mount point) is declared once in ../session.nix — the host keys are just
+    # one subdirectory of it, so there is deliberately no virtiofs tag here.
     keyName = "ssh_host_ed25519_key";
     guestMountPoint = session.guestHostkeysDir;
-    guestTag = "hostkey";
     guestKeyPath = "${guestMountPoint}/${keyName}";
   };
 

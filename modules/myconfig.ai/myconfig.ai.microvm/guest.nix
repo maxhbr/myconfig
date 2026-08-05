@@ -93,9 +93,8 @@ let
   # slots.nix and is shared with default.nix (which asserts uniqueness and
   # the slot-count bound over this exact table).
   # The slot pool of the effective resource classes (ticket 5 A). The class
-  # table comes from default.nix (`_module.args.agentResourceClasses`), which
-  # also performs the legacy `slotCount` migration, so every module builds the
-  # SAME pool.
+  # table comes from default.nix (`_module.args.agentResourceClasses`), so every
+  # module builds the SAME pool.
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   netCaps = agentNetwork.caps;
@@ -235,7 +234,7 @@ let
   #                                            troubleshooting set (ps, findmnt,
   #                                            mount, lsblk) needed to
   #                                            understand a broken session
-  # Deliberately ABSENT from the minimal set: curl, rsync, unzip, tree, fd,
+  # Deliberately ABSENT from `guestCommonPackages`: curl, rsync, unzip, tree, fd,
   # file, which, gnumake — duplicate or workload-specific tools with no
   # in-guest consumer under the secure proxy-only profile.
   guestCommonPackages =

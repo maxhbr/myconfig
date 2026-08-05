@@ -291,7 +291,8 @@ boundary against a compromised host home.
   prints no port flags at all, which is why the runtime-validation suite's first
   real run reported a false negative here).
 - **VSOCK is reserved, not used.** Batch control still rides SSH-less file
-  exchange through the job share; the CID exists but no vsock transport is wired.
+  exchange through the job subtree of the ONE writable session share; the CID
+  exists but no vsock transport is wired.
   The result channel's authenticity therefore rests on virtiofs passing ownership
   through unchanged — a property of virtiofsd, which is in the TCB.
 - **The guest batch controller runs as guest root.** It is a small, fixed script
