@@ -203,6 +203,87 @@ let
     };
   };
 
+  # --- guest toolchain (plan §7, lightweight plan phase 8) ----------------
+  # The interactive login shell of the guest `agent` user. `full` keeps fish
+  # (the host primary user's shell, whose dotfiles guest-home.nix copies);
+  # the minimal profile uses plain bash, which drops the fish closure and the
+  # `programs.fish` machinery from the guest.
+  guestShell = if agentProfile.minimalGuestPackages then pkgs.bashInteractive else pkgs.fish;
+
+  # Generic CLI toolset available to the agent inside the guest. Everything the
+  # module's OWN guest scripts need is already in their `writeShellApplication`
+  # `runtimeInputs`, so this set exists purely for the agent and for a human
+  # debugging a session over SSH.
+  #
+  # MINIMAL set (lightweight plan phase 8) — every entry has a named consumer:
+  #   coreutils/findutils/gnugrep/gnused/gawk  the POSIX toolbox every agent and
+  #                                            every repo script assumes
+  #   bash                                     non-login script interpreter
+  #                                            (`#!/usr/bin/env bash`)
+  #   git                                      the workspace IS a git clone
+  #   diffutils, patch                         agents produce/apply patches
+  #   ripgrep, jq                              code/JSON inspection the agents
+  #                                            invoke directly
+  #   less                                     git's default pager
+  #   openssh                                  interactive control channel
+  #                                            (`enableSsh`)
+  #   procps, util-linux                       the deliberately small
+  #                                            troubleshooting set (ps, findmnt,
+  #                                            mount, lsblk) needed to
+  #                                            understand a broken session
+  # Deliberately ABSENT from the minimal set: curl, rsync, unzip, tree, fd,
+  # file, which, gnumake — duplicate or workload-specific tools with no
+  # in-guest consumer under the secure proxy-only profile.
+  guestMinimalPackages =
+    with pkgs;
+    [
+      bash
+      coreutils
+      diffutils
+      findutils
+      gawk
+      git
+      gnugrep
+      gnused
+      jq
+      less
+      patch
+      procps
+      ripgrep
+      util-linux
+    ]
+    ++ lib.optional cfg.enableSsh openssh;
+
+  # The historical, full set — unchanged, so an existing host keeps exactly the
+  # tools it has today.
+  guestFullPackages = with pkgs; [
+    bash
+    coreutils
+    curl
+    diffutils
+    fd
+    file
+    findutils
+    git
+    gnugrep
+    gnumake
+    gnused
+    jq
+    less
+    openssh
+    patch
+    procps
+    ripgrep
+    rsync
+    tree
+    unzip
+    util-linux
+    which
+  ];
+
+  guestCommonPackages =
+    if agentProfile.minimalGuestPackages then guestMinimalPackages else guestFullPackages;
+
   # --- minimal Cloud Hypervisor guest for a given slot --------------------
   mkGuest =
     slot:
@@ -368,8 +449,9 @@ let
       createHome = true;
       extraGroups = [ ];
       hashedPassword = "!";
-      # Same interactive login shell as the host primary user.
-      shell = pkgs.fish;
+      # fish in the `full` profile (same interactive login shell as the host
+      # primary user), bash in the minimal one.
+      shell = guestShell;
     }
     // lib.optionalAttrs (cfg.enableSsh && cfg.sshPublicKeyFile != null) {
       openssh.authorizedKeys = {
@@ -403,38 +485,30 @@ let
     # programs.pi-coding-agent → pkgs.nixos-unstable.pi-coding-agent). They
     # are baked into the immutable guest closure (§8: no runtime CLI
     # download, no host Nix daemon).
-    programs.fish.enable = true;
+    # The interactive login shell of the guest `agent` user: fish (mirroring the
+    # host primary user) in the `full` profile, plain bash in the MINIMAL one.
+    programs.fish.enable = !agentProfile.minimalGuestPackages;
 
     environment.systemPackages = [
       agent-run
-      pkgs.fish
+      guestShell
     ]
-    # §7 agent binaries, GENERATED from the authoritative registry.
+    # §7 agent binaries, GENERATED from the authoritative registry — only for
+    # the SELECTED agents (`enabledAgents`, lightweight plan phase 2), together
+    # with whatever extra runtime each of them declares.
     ++ agentRegistry.packages
-    ++ (with pkgs; [
-      bash
-      coreutils
-      curl
-      diffutils
-      fd
-      file
-      findutils
-      git
-      gnugrep
-      gnumake
-      gnused
-      jq
-      less
-      openssh
-      patch
-      procps
-      ripgrep
-      rsync
-      tree
-      unzip
-      util-linux
-      which
-    ]);
+    ++ agentRegistry.extraPackages
+    ++ guestCommonPackages;
+
+    # NixOS' `environment.defaultPackages` (perl, rsync, strace) is a
+    # convenience set for interactive general-purpose machines. In the MINIMAL
+    # profile none of it has an in-guest consumer — the module's own guest
+    # scripts carry their runtime closures explicitly, and the agent gets the
+    # documented toolset above — so drop it rather than ship perl in a
+    # single-purpose sandbox image. NixOS' `requiredPackages` (coreutils-full,
+    # curl, openssh, ...) is NOT affected: it is load-bearing for a bootable
+    # system. Left untouched in the `full` profile.
+    environment.defaultPackages = lib.mkIf agentProfile.minimalGuestPackages [ ];
 
     # --- §17 guest model-API config (no secrets) -------------------------
     # The guest reaches the model API ONLY via the bridge-only LiteLLM

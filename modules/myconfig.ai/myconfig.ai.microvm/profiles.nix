@@ -33,6 +33,10 @@
 #   enabledAgents    the SELECTED agents (./agents.nix tokens) a host gets when
 #                    it does not set `enabledAgents` itself. `null` means every
 #                    declared agent, i.e. the historical behaviour.
+#   minimalGuestPackages
+#                    build the guest with the MINIMAL generic CLI toolset and a
+#                    plain bash login shell instead of the historical full set
+#                    plus fish (see guest.nix for the per-package rationale).
 { lib }:
 rec {
   profiles = {
@@ -43,10 +47,12 @@ rec {
       optimizeStore = null;
       storeDiskType = null;
       enabledAgents = null;
+      minimalGuestPackages = false;
     };
 
     # The lightweight interactive shape: ONE prebuilt slot, 2 vCPU, 4 GiB RAM,
-    # an explicitly optimized EROFS guest store, ONE agent.
+    # an explicitly optimized EROFS guest store, ONE agent, a minimal guest
+    # toolset.
     lite = {
       resourceClasses = {
         lite = {
@@ -61,6 +67,7 @@ rec {
       # agent ("a Codex-only interactive lite VM"); a host that wants another
       # one just sets `enabledAgents`, which outranks this default.
       enabledAgents = [ "codex" ];
+      minimalGuestPackages = true;
     };
   };
 

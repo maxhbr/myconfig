@@ -158,10 +158,15 @@ The authoritative table lives in `../profiles.nix`.
 | `full` **(default)** | derived from `resourceClasses` — or, for a host still on the deprecated spelling, from `slotCount` / `defaultVcpu` / `defaultMemoryMiB` | microvm.nix defaults |
 | `lite` | one slot `agent-lite-0`, 2 vCPU, 4096 MiB | pinned `microvm.optimize.enable = true`, `microvm.storeDiskType = "erofs"` |
 
-| Profile | Selected agents (when the host sets no `enabledAgents`) |
-| --- | --- |
-| `full` **(default)** | every agent `../agents.nix` declares |
-| `lite` | `[ "codex" ]` |
+| Profile | Selected agents (when the host sets no `enabledAgents`) | Guest toolset |
+| --- | --- | --- |
+| `full` **(default)** | every agent `../agents.nix` declares | historical set (curl, fd, file, gnumake, rsync, tree, unzip, which, …) + fish login shell + NixOS `defaultPackages` |
+| `lite` | `[ "codex" ]` | minimal documented set (POSIX toolbox, git, diffutils/patch, ripgrep, jq, less, procps, util-linux, openssh when `enableSsh`) + bash login shell, no NixOS `defaultPackages` |
+
+Every package in the minimal set has a documented consumer (see the comment
+above `guestMinimalPackages` in `../guest.nix`). Agent-specific runtimes belong
+in the registry's per-agent `extraPackages`, so they are added only while that
+agent is selected.
 
 The profile only supplies **defaults**: an explicit `resourceClasses` always
 outranks the profile's class table. Combining a profile that carries its own

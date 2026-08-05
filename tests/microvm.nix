@@ -605,6 +605,8 @@ in
       liteVmNames = lib.sort (a: b: a < b) (builtins.attrNames liteCfg.microvm.vms);
       liteSlotNames = lib.sort (a: b: a < b) (map (sl: sl.name) liteSlots);
       liteGuest = liteCfg.microvm.vms.${(lib.head liteSlots).name}.config.config;
+      liteGuestPkgPaths = map (p: p.outPath) liteGuest.environment.systemPackages;
+      fullGuestPkgPaths = map (p: p.outPath) guest0Cfg.environment.systemPackages;
       liteFailed = map (a: a.message) (builtins.filter (a: !a.assertion) liteCfg.assertions);
     in
     mkEvalCheck "microvm-eval-lite-profile" [
@@ -650,6 +652,70 @@ in
       {
         assertion = liteGuest.microvm.optimize.enable == true;
         message = "lite guest must pin microvm.optimize.enable = true";
+      }
+      # --- lightweight plan phase 8: minimized guest closure --------------
+      {
+        # The full profile keeps its historical toolset and fish login shell.
+        assertion =
+          builtins.elem pkgs.fish.outPath fullGuestPkgPaths
+          && builtins.elem pkgs.curl.outPath fullGuestPkgPaths
+          && guest0Cfg.users.users.agent.shell.outPath == pkgs.fish.outPath
+          && guest0Cfg.programs.fish.enable;
+        message = "the full profile must keep its historical guest toolset and fish login shell";
+      }
+      {
+        # ... while the lite guest logs in with plain bash and carries no fish.
+        assertion =
+          liteGuest.users.users.agent.shell.outPath == pkgs.bashInteractive.outPath
+          && !liteGuest.programs.fish.enable
+          && !(builtins.elem pkgs.fish.outPath liteGuestPkgPaths);
+        message = "the lite guest must use a plain bash login shell and contain no fish";
+      }
+      {
+        # Every tool the minimal set documents a consumer for is present.
+        assertion = builtins.all (p: builtins.elem p.outPath liteGuestPkgPaths) (
+          with pkgs;
+          [
+            bash
+            coreutils
+            diffutils
+            findutils
+            gawk
+            git
+            gnugrep
+            gnused
+            jq
+            less
+            patch
+            procps
+            ripgrep
+            util-linux
+          ]
+        );
+        message = "the lite guest is missing a package from the documented minimal set";
+      }
+      {
+        # ... and nothing else this module used to add, plus NixOS'
+        # `environment.defaultPackages` convenience set (perl/rsync/strace).
+        # NOTE: NixOS' own `requiredPackages` (coreutils-full, curl, openssh,
+        # which, ...) is load-bearing for a bootable system and deliberately
+        # NOT asserted absent — only the module's discretionary additions are.
+        assertion = builtins.all (p: !(builtins.elem p.outPath liteGuestPkgPaths)) (
+          with pkgs;
+          [
+            fd
+            file
+            gnumake
+            tree
+            unzip
+          ]
+        );
+        message = "the lite guest still carries a discretionary package with no documented in-guest consumer";
+      }
+      {
+        assertion =
+          liteGuest.environment.defaultPackages == [ ] && guest0Cfg.environment.defaultPackages != [ ];
+        message = "the lite guest must drop NixOS' defaultPackages convenience set (and the full guest must keep it)";
       }
       {
         # The profile default is a DEFAULT: an explicit table still wins.
