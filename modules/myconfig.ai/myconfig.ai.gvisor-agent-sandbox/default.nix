@@ -50,6 +50,14 @@ let
     lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentPackagesByFlag
   );
 
+  # `herdr` is the agent multiplexer that lives in the terminal. On the host it
+  # is installed whenever at least one agentic coding agent is enabled (see
+  # ../programs.herdr.nix, which uses exactly the flags of
+  # `agentPackagesByFlag`), so mirror that condition here: if the sandbox
+  # carries any agent, it also carries the multiplexer that drives them, and
+  # `herdr` becomes the default command of a session.
+  herdrEnabled = enabledAgentPackages != [ ];
+
   # The image actually used: either the configured one, or the default with
   # `extraImagePackages` folded in.
   image =
@@ -81,6 +89,9 @@ let
     }
     // lib.optionalAttrs cfg.litellm.enable {
       AGENT_SANDBOX_MODEL_ENDPOINT = cfg.litellm.endpoint;
+    }
+    // lib.optionalAttrs (cfg.defaultCommand != null) {
+      AGENT_SANDBOX_DEFAULT_COMMAND = cfg.defaultCommand;
     };
 
   withSessionEnv =
@@ -128,10 +139,11 @@ in
 
     extraImagePackages = mkOption {
       type = types.listOf types.package;
-      default = enabledAgentPackages;
+      default = enabledAgentPackages ++ lib.optional herdrEnabled pkgs.herdr;
       defaultText = literalExpression ''
         the packages of the coding agents enabled on this host, i.e. one entry
-        per set `myconfig.ai.<pi-coding-agent|opencode|claude-code|codex|github-copilot-cli|qwen-code>.enable`
+        per set `myconfig.ai.<pi-coding-agent|opencode|claude-code|codex|github-copilot-cli|qwen-code>.enable`,
+        plus `pkgs.herdr` when any of them is enabled
       '';
       example = literalExpression "[ pkgs.claude-code ]";
       description = ''
@@ -176,6 +188,7 @@ in
           ".codex"
           ".pi"
           ".config/git"
+          ".config/herdr"
           ".config/opencode"
         ];
         description = ''
@@ -212,6 +225,23 @@ in
           Set to `[ ]` to copy the configuration verbatim.
         '';
       };
+    };
+
+    defaultCommand = mkOption {
+      type = types.nullOr types.str;
+      default = if herdrEnabled then "herdr" else null;
+      defaultText = literalExpression ''"herdr" when any coding agent is enabled, else null'';
+      example = "/bin/bash";
+      description = ''
+        Command `agent-session start` / `run` execute when no `-- COMMAND` is
+        given, i.e. the session's entrypoint. Word-split, so `"herdr --flag"`
+        works. `null` keeps the upstream default (`/bin/bash`).
+
+        Defaults to `herdr`, the agent multiplexer, whenever the image carries
+        at least one coding agent — so a bare `agent-session start` drops you
+        into the multiplexer instead of a plain shell.
+        `agent-session shell` is unaffected and always gives a shell.
+      '';
     };
 
     runtime = mkOption {
