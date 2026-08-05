@@ -52,19 +52,83 @@ READY_INTERVAL="${AGENT_RTV_READY_INTERVAL:-3}"
 # Placeholder value guest.nix gives the model-API keys (no real credential ever
 # enters a guest; the real one lives only in the host LiteLLM proxy).
 KEY_PLACEHOLDER="${AGENT_RTV_KEY_PLACEHOLDER:-not-needed}"
-# Batch job share (job.nix). The guest sees the same paths under /run/agent-job.
-JOBS_ROOT="$RUNTIME_ROOT/jobs"
 RESULTS_DIR="$RUNTIME_ROOT/results"
-GUEST_JOB_DIR="/run/agent-job"
+
+# --- SHARE LAYOUT (lightweight plan phase 4) ---------------------------------
+# The module knows TWO layouts and this suite must never validate the paths of
+# the one the host under test does NOT use: every path constant below feeds a
+# `test -e`, a `find` or a `grep -E` whose *absence* of a match is reported as a
+# PASS, so pointing them at a non-existent tree turns the whole suite into
+# silent, vacuous green — exactly the failure mode `check_denied`/`check_reason`
+# exist to rule out everywhere else.
+#
+#   `full` (four writable shares):  <runtimeRoot>/jobs/<slot>            job data
+#                                   <stateRoot>/<slot>/workspace         clone bind
+#                                   <runtimeRoot>/state/slots/<slot>     state bind
+#                                   <runtimeRoot>/config-seed/<slot>/home staged cfg
+#     guest: /run/agent-job /var/lib/agent-hostkey /var/lib/agent-state /workspace
+#
+#   `lite` (ONE writable + ONE read-only share, session.nix):
+#                                   <runtimeRoot>/sessions/<slot>        job data
+#                                   <runtimeRoot>/sessions/<slot>/workspace clone bind
+#                                   <runtimeRoot>/sessions/<slot>/state  state bind
+#                                   <runtimeRoot>/sessions-ro/<slot>/config-seed
+#     guest: /run/agent-session /run/agent-session-ro (+ /workspace, a BIND of
+#            the session share, hence not of type virtiofs)
+#
+# Detection is the existence of the consolidated writable root, which
+# session.nix creates via tmpfiles for EVERY slot at boot (virtiofsd refuses to
+# start without its share source), so it exists on a `lite` host even before the
+# first launch and never on a `full` one.
+#
+# EXPECTED_SHARES is the COMPLETE set of virtiofs mount targets a guest may
+# have (sorted, space-separated). It is asserted for EQUALITY, never as a
+# substring.
+if [[ -d "$RUNTIME_ROOT/sessions" ]]; then
+    LAYOUT="session"
+    SESSION_ROOT="$RUNTIME_ROOT/sessions"
+    SESSION_RO_ROOT="$RUNTIME_ROOT/sessions-ro"
+    JOBS_ROOT="$SESSION_ROOT"
+    GUEST_JOB_DIR="/run/agent-session"
+    GUEST_RO_DIR="/run/agent-session-ro"
+    # /workspace is a BIND of "$GUEST_JOB_DIR/workspace", so `findmnt -t
+    # virtiofs` does not list it.
+    EXPECTED_SHARES="$GUEST_JOB_DIR $GUEST_RO_DIR"
+    WORKSPACE_MOUNT_RE="^${SESSION_ROOT}/[^/]+/workspace\$"
+    STATE_MOUNT_RE="^${SESSION_ROOT}/[^/]+/state\$"
+    # <runtimeRoot>/sessions-ro/<slot>/config-seed — a share virtiofsd mounts
+    # `--readonly`, hence NOT under the writable session tree.
+    config_seed_payload() { printf '%s' "$SESSION_RO_ROOT/$1/config-seed"; }
+else
+    LAYOUT="four-share"
+    SESSION_ROOT=""
+    SESSION_RO_ROOT=""
+    JOBS_ROOT="$RUNTIME_ROOT/jobs"
+    GUEST_JOB_DIR="/run/agent-job"
+    GUEST_RO_DIR="/var/lib/agent-hostkey"
+    EXPECTED_SHARES="/run/agent-job /var/lib/agent-hostkey /var/lib/agent-state /workspace"
+    WORKSPACE_MOUNT_RE="^${STATE_ROOT}/[^/]+/workspace\$"
+    STATE_MOUNT_RE="^${RUNTIME_ROOT}/state/slots/[^/]+\$"
+    config_seed_payload() { printf '%s' "$RUNTIME_ROOT/config-seed/$1/home"; }
+fi
+# The slot name of a bind-mount TARGET matched by the two regexes above. Both
+# layouts end in either `<slot>/workspace`, `<slot>/state` or `<slot>`, so
+# stripping the known trailing component and taking the basename is exact for
+# both (slot names are `agent-<class>-<i>`, never `workspace`/`state`).
+slot_of_mount() {
+    local mp="$1"
+    mp="${mp%/workspace}"
+    mp="${mp%/state}"
+    printf '%s' "${mp##*/}"
+}
+# Batch job share (job.nix). The guest sees the same subdirectory names under
+# $GUEST_JOB_DIR in BOTH layouts; only the mount point differs.
 GUEST_INPUT_DIR="$GUEST_JOB_DIR/input"
 GUEST_CTRL_DIR="$GUEST_JOB_DIR/controller"
 GUEST_WORKER_DIR="$GUEST_JOB_DIR/worker"
 # ROOT-owned: the guest's systemd opens the worker's stdout/stderr in here as
 # root, so the worker must not be able to write, replace or rename any of it.
 GUEST_WORKER_LOGS_DIR="$GUEST_JOB_DIR/worker-logs"
-# The COMPLETE set of virtiofs shares a guest may see (sorted, space-separated).
-# Asserted for equality, never as a substring.
-EXPECTED_SHARES="/run/agent-job /var/lib/agent-hostkey /var/lib/agent-state /workspace"
 
 REPO=""
 SECTION="all"
@@ -1196,15 +1260,14 @@ check_no_residue() {
     residue=0
     while read -r mp; do
         [[ -n $mp ]] || continue
-        slot="${mp#"$STATE_ROOT"/}"
-        slot="${slot%/workspace}"
+        slot="$(slot_of_mount "$mp")"
         if is_current_slot "$slot"; then
             residue=1
             info "workspace bind mount still present for current slot $slot ($mp)"
         else
             foreign_mounts+=("$mp")
         fi
-    done < <(findmnt -rn -o TARGET | grep -E "^${STATE_ROOT}/[^/]+/workspace$" || true)
+    done < <(findmnt -rn -o TARGET | grep -E "$WORKSPACE_MOUNT_RE" || true)
     if ((residue)); then
         fail "no stale workspace bind mount remains $when"
     else
@@ -1220,21 +1283,21 @@ check_no_residue() {
     residue=0
     while read -r mp; do
         [[ -n $mp ]] || continue
-        slot="${mp##*/}"
+        slot="$(slot_of_mount "$mp")"
         if is_current_slot "$slot"; then
             residue=1
             info "agent-state bind mount still present for current slot $slot ($mp)"
         else
             foreign_mounts+=("$mp")
         fi
-    done < <(findmnt -rn -o TARGET | grep -E "^${RUNTIME_ROOT}/state/slots/[^/]+$" || true)
+    done < <(findmnt -rn -o TARGET | grep -E "$STATE_MOUNT_RE" || true)
     if ((residue)); then
         fail "no stale agent-state bind mount remains $when"
     else
         pass "no stale agent-state bind mount remains $when"
     fi
 
-    if find "$RUNTIME_ROOT/jobs" -name spec.json 2>/dev/null | grep -q .; then
+    if find "$JOBS_ROOT" -name spec.json 2>/dev/null | grep -q .; then
         fail "no stale job spec remains $when"
     else
         pass "no stale job spec remains $when"
@@ -1758,8 +1821,8 @@ section_forgery() {
 }
 
 # --- main -----------------------------------------------------------------
-printf '%s: starting real-KVM validation (host %s, bridge %s)\n' \
-    "$PROG" "$(uname -n)" "$BRIDGE"
+printf '%s: starting real-KVM validation (host %s, bridge %s, share layout %s)\n' \
+    "$PROG" "$(uname -n)" "$BRIDGE" "$LAYOUT"
 "$LAUNCHER" list | sed 's/^/#     /'
 
 # --- runtime configuration staging (lightweight plan phase 3) ---------------
@@ -1791,12 +1854,29 @@ section_seed() {
         return
     fi
 
-    local seed_root="$RUNTIME_ROOT/config-seed"
-    local payload="$seed_root/$slot/home"
-    local manifest="$seed_root/$slot/manifest.json"
+    # WHERE the payload lands depends on the share layout (see the LAYOUT block
+    # at the top): `<runtimeRoot>/config-seed/<slot>/home` under `full`, but
+    # `<runtimeRoot>/sessions-ro/<slot>/config-seed` under the consolidated
+    # session layout. The MANIFEST root is `<runtimeRoot>/config-seed/<slot>` in
+    # both (it must stay outside every guest share).
+    local payload manifest
+    payload="$(config_seed_payload "$slot")"
+    manifest="$RUNTIME_ROOT/config-seed/$slot/manifest.json"
 
     if ! "$STAGER" "$slot" >/tmp/rtv-seed-baseline.log 2>&1; then
         fail "config-seed: the stager failed on a clean run (see /tmp/rtv-seed-baseline.log)"
+        return
+    fi
+    # HARD-FAIL, not a skip: every enforcement assertion below is of the form
+    # "nothing forbidden is under $payload", so a payload path that does not
+    # exist would make ALL of them pass vacuously. Deciding this ONCE, here,
+    # makes that structurally impossible.
+    if [[ ! -d $payload ]]; then
+        fail "config-seed: the staged payload $payload does not exist after staging (wrong layout assumption? see the LAYOUT block)"
+        return
+    fi
+    if [[ ! -f $manifest ]]; then
+        fail "config-seed: the staging manifest $manifest does not exist after staging"
         return
     fi
     pass "config-seed: the stager runs and writes $payload"

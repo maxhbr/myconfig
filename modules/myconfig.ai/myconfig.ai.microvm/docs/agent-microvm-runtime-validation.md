@@ -84,7 +84,7 @@ the host and re-run the section.
 | Section | Last executed on real KVM |
 | --- | --- |
 | `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED in the present form.** They were run once on f13 (root + `/dev/kvm`) as originally written. That run produced 20 `FAIL`s, of which all but two turned out to be defects of the HARNESS — and the same defects made roughly 25 of the reported `PASS`es vacuous. The harness has since been repaired (see “Harness validity invariants” below); the repaired suite has **not** been run yet. |
-| `seed` | **NOT EXECUTED on a `lite` host** — added with the review follow-up of lightweight plan phase 3. Its six cases were executed by hand against the generated stager with a fixture home (allowlisted file staged; benignly named symlink onto a credential refused; credential-shaped name refused; host-home escape refused; FIFO/setuid refused; per-file, total and file-count budgets enforced; depth truncation noted; destination cleaned) — the section is that procedure made repeatable. It starts no VM, so it needs only root and a host with `configSeed.enable`. |
+| `seed` | **NOT EXECUTED on a real host yet** — added with the review follow-up of lightweight plan phase 3. Its six cases were executed by hand against the generated stager with a fixture home (allowlisted file staged; benignly named symlink onto a credential refused; credential-shaped name refused; host-home escape refused; FIFO/setuid refused; per-file, total and file-count budgets enforced; depth truncation noted; destination cleaned) — the section is that procedure made repeatable. It starts no VM, so it needs only root and a host with `configSeed.enable`. |
 | `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties are the three eval/build checks `microvm-batch-result-integrity`, `microvm-batch-controller-smoke` and `microvm-batch-launcher-submit` (see below). |
 
 This table is deliberately pessimistic: update it only with a pasted log. The
@@ -176,6 +176,34 @@ lying:
    whatever the property under test does.
 7. **A subtest that could not set its fixture up must `SKIP`**, loudly, rather
    than assert against a situation it never created.
+8. **Never validate the paths of a layout the host does not use.** Most checks
+   are of the form “nothing forbidden exists under `$X`”, so a `$X` that does
+   not exist at all is reported as a `PASS`. See below.
+
+## Share layout detection
+
+The module has **two** share layouts and the suite must assert against the one
+the host under test actually uses:
+
+| | `profile = "full"` | `profile = "lite"` (lightweight plan phase 4) |
+| --- | --- | --- |
+| job data | `<runtimeRoot>/jobs/<slot>` | `<runtimeRoot>/sessions/<slot>` |
+| workspace bind | `<stateRoot>/<slot>/workspace` | `<runtimeRoot>/sessions/<slot>/workspace` |
+| agent-state bind | `<runtimeRoot>/state/slots/<slot>` | `<runtimeRoot>/sessions/<slot>/state` |
+| staged config | `<runtimeRoot>/config-seed/<slot>/home` | `<runtimeRoot>/sessions-ro/<slot>/config-seed` |
+| staging manifest | `<runtimeRoot>/config-seed/<slot>/manifest.json` | same (outside every share) |
+| guest job mount | `/run/agent-job` | `/run/agent-session` |
+| guest virtiofs set | four (see `boot`) | `/run/agent-session`, `/run/agent-session-ro` |
+
+`runtime-validation.sh` picks the layout from the existence of
+`<runtimeRoot>/sessions`, which `session.nix` creates via tmpfiles for every
+slot at boot (virtiofsd refuses to start without its share source), and prints
+the result in its banner line. Pointing the constants at the wrong layout is
+not a cosmetic bug: the stale-bind detector of `lifecycle` and **every**
+enforcement assertion of `seed` would then pass vacuously. The `seed` section
+additionally hard-`FAIL`s if the staged payload directory does not exist after a
+successful staging run, so that failure mode is structurally impossible rather
+than merely unlikely.
 
 ## What each section asserts
 
@@ -186,7 +214,7 @@ lying:
 | every resource class boots and becomes SSH-ready (polled, see invariant 1) |
 | `/workspace` is a mount point and is writable by the guest `agent` user |
 | the host `/nix/store` is **not** shared into the guest |
-| exactly four virtiofs shares: `/workspace`, `/var/lib/agent-hostkey`, `/run/agent-job`, `/var/lib/agent-state` (an empty enumeration is a `FAIL`, not a pass). NOTE: this suite targets a `profile = "full"` host; a `lite` host consolidates the same data into `/run/agent-session` + `/run/agent-session-ro` (lightweight plan phase 4), so `EXPECTED_SHARES` in `../runtime-validation.sh` would have to be adjusted before running it against one |
+| exactly the expected virtiofs shares for the host's share LAYOUT (an empty enumeration is a `FAIL`, not a pass): under `profile = "full"` the four `/workspace`, `/var/lib/agent-hostkey`, `/run/agent-job`, `/var/lib/agent-state`; under `profile = "lite"` (lightweight plan phase 4) exactly `/run/agent-session` and `/run/agent-session-ro` — `/workspace` is then a *bind* of the session share and therefore not of type `virtiofs`. See “Share layout detection” below |
 | workspace changes survive shutdown (they are in the standalone clone) |
 | guest home and guest `/tmp` changes do **not** survive a restart — asserted only after the markers were proved to have been CREATED in the first run (the suite used to write `/root-marker`, which the unprivileged agent cannot create at all, and then “prove” it had not persisted) |
 | `--persist-agent-state` persists **only** declared paths (`~/.hermes`), never undeclared ones |
@@ -388,6 +416,9 @@ and the staged tree, that:
 - no fixture credential content appears anywhere in the staged tree;
 - the staged tree is root-owned and has **no** group/other bits, the manifest is
   `root 0400` and lies **outside** the guest-visible payload directory;
+- … and, before any of the above, that the payload directory **exists** at all
+  (a hard `FAIL`): every assertion in this list is “nothing forbidden is under
+  `$payload`”, so a wrong payload path would satisfy all of them at once.
 - removing the fixtures and re-staging leaves nothing of them behind (the
   destination is cleaned before every launch).
 
