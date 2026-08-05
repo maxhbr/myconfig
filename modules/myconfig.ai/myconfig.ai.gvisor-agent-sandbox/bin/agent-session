@@ -64,6 +64,9 @@ start options:
                               including its branch, instead of failing. Without
                               it an interactive terminal is asked to confirm,
                               and a non-interactive run fails.
+  --home-seed PATH            Seed /home/agent from this directory instead of
+                              the activated home-manager generation
+  --no-home-seed              Start with an empty /home/agent
 
 environment:
   AGENT_SANDBOX_IMAGE           Override the default image
@@ -71,6 +74,11 @@ environment:
   AGENT_PODMAN_CGROUP_MANAGER   Podman cgroup manager (default: cgroupfs)
   AGENT_PODMAN_RUNTIME_FLAGS    Extra runsc flags, e.g. "ignore-cgroups"
   AGENT_SANDBOX_STATE           State directory
+  AGENT_SANDBOX_HOME_SEED       Directory to seed /home/agent from (default:
+                                the activated home-manager generation's
+                                home-files)
+  AGENT_SANDBOX_HOME_SEED_PATHS Space-separated relative paths copied from that
+                                directory; empty disables seeding
 
 Run `agent-session doctor` to verify runtime, image and sandbox startup.
 
@@ -249,6 +257,50 @@ run_container() {
   exec "${cmd[@]}"
 }
 
+# --- home seeding ------------------------------------------------------
+# Seed a fresh session home from the CURRENTLY ACTIVATED home-manager
+# generation of the calling user, so an agent finds its own configuration
+# (skills, prompts, agent settings) inside the sandbox. The generation is
+# resolved at runtime, so it always matches what is actually activated, and
+# the image never has to be rebuilt for a dotfile change.
+#
+# NOTE: `home-files` is a forest of symlinks INTO /nix/store and the sandbox
+# deliberately has no /nix, so files are copied DEREFERENCED. Configuration
+# whose *content* points at /nix/store paths therefore still dangles inside
+# the sandbox; that is a property of the isolation boundary, not something
+# seeding can fix.
+resolve_home_files() {
+  local user base
+  user=${USER:-$(id -un)}
+  for base in \
+    "${XDG_STATE_HOME:-$HOME/.local/state}/home-manager/gcroots/current-home" \
+    "/nix/var/nix/gcroots/per-user/$user/current-home" \
+    "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager" \
+    "/nix/var/nix/profiles/per-user/$user/home-manager"; do
+    [[ -e "$base/home-files" ]] || continue
+    readlink -f "$base/home-files"
+    return 0
+  done
+  return 1
+}
+
+seed_home() {
+  local home=$1 seed=$2
+  local -a paths=()
+  read -r -a paths <<<"${AGENT_SANDBOX_HOME_SEED_PATHS-}"
+  (( ${#paths[@]} )) || return 0
+  local rel copied=0
+  for rel in "${paths[@]}"; do
+    [[ -n "$rel" && -e "$seed/$rel" ]] || continue
+    mkdir -p "$home/$(dirname "$rel")"
+    cp -RL --no-preserve=mode -- "$seed/$rel" "$home/$rel"
+    copied=$((copied + 1))
+  done
+  # Store files are read-only; the agent must be able to rewrite its config.
+  chmod -R u+rwX "$home"
+  log "seeded /home/agent with $copied path(s) from $seed"
+}
+
 # Interactive recovery from a leftover session of the same name: ask whether
 # to destroy it (worktree AND branch) instead of just erroring out. Returns
 # non-zero when there is no terminal to ask on, so non-interactive callers
@@ -266,6 +318,7 @@ cmd_start() {
   local name='' repo='' base=HEAD branch='' image=$DEFAULT_IMAGE
   local detach=false memory=8g cpus=4 pids_limit=2048 network=''
   local seccomp_unconfined=false env_file='' force=false
+  local home_seed='' seed_home_enabled=true
   local -a mount_specs=() env_specs=()
 
   while (( $# )); do
@@ -286,6 +339,8 @@ cmd_start() {
       --pids-limit) pids_limit=${2:?}; shift 2 ;;
       --seccomp-unconfined) seccomp_unconfined=true; shift ;;
       --force) force=true; shift ;;
+      --home-seed) home_seed=$(realpath -e -- "${2:?}"); shift 2 ;;
+      --no-home-seed) seed_home_enabled=false; shift ;;
       --) shift; break ;;
       -h|--help) usage; exit 0 ;;
       *) die "unknown start option: $1" ;;
@@ -338,6 +393,15 @@ cmd_start() {
   # directories created in the image, so create them on the host side.
   mkdir -p "$home/.cache" "$home/.config" "$home/.local/state"
   chmod 700 "$meta_dir" "$home"
+
+  if [[ "$seed_home_enabled" = true ]]; then
+    local seed=${home_seed:-${AGENT_SANDBOX_HOME_SEED-}}
+    [[ -n "$seed" ]] || seed=$(resolve_home_files || true)
+    if [[ -n "$seed" ]]; then
+      [[ -d "$seed" ]] || die "home seed is not a directory: $seed"
+      seed_home "$home" "$seed"
+    fi
+  fi
 
   exec 9>"$lockfile"
   flock 9

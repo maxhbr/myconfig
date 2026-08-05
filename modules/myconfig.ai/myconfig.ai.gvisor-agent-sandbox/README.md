@@ -56,7 +56,9 @@ Patched:
   [y/N]` and, on `y`, runs `destroy NAME --force --delete-branch` before
   creating the new session. Without a terminal and without `--force` the
   previous fail-fast behaviour is kept, now with the exact recovery command
-  in the message. The destroy runs
+  in the message. `start` also seeds `/home/agent` from the activated
+  home-manager generation (`--home-seed`, `--no-home-seed`,
+  `AGENT_SANDBOX_HOME_SEED*`; see above). The destroy runs
   in a subshell because it sources the old session's `meta`, which would
   otherwise clobber `cmd_start`'s locals through bash's dynamic scoping.
 
@@ -97,6 +99,42 @@ When enabled the module
   user's `home.packages`,
 - grants subordinate UID/GID ranges (`autoSubUidGidRange`) to
   `myconfig.ai.gvisor-agent-sandbox.users` (default: `myconfig.user`).
+
+### Sandbox home seeding (home-manager dotfiles)
+
+`start` seeds the new session's `/home/agent` from the home-manager
+generation **currently activated for the calling user**, resolved at runtime
+from, in order:
+
+1. `$XDG_STATE_HOME/home-manager/gcroots/current-home/home-files`
+2. `/nix/var/nix/gcroots/per-user/$USER/current-home/home-files`
+3. `$XDG_STATE_HOME/nix/profiles/home-manager/home-files`
+4. `/nix/var/nix/profiles/per-user/$USER/home-manager/home-files`
+
+So the agent finds its own skills, prompts and settings inside the sandbox,
+and a dotfile change needs no image rebuild.
+
+Baking the dotfiles into the *image* would not work: `agent-session` bind
+mounts the per-session home over `/home/agent`, which masks whatever the
+image carried there (upstream creates the XDG dirs host-side for exactly that
+reason).
+
+Two consequences of the isolation boundary:
+
+- `home-files` is a forest of symlinks into `/nix/store` and the sandbox has
+  no `/nix`, so files are copied **dereferenced**. Configuration whose
+  *content* points at `/nix/store` paths still dangles inside.
+- The tree also contains `.ssh`, mail and browser configuration, so the copy
+  is an **allowlist**, `myconfig.ai.gvisor-agent-sandbox.home.seedPaths`,
+  baked into the wrapper as `AGENT_SANDBOX_HOME_SEED_PATHS`. Default:
+  `.agents .agignore .claude .codex .pi .config/git .config/opencode`.
+  Anything added here is readable by a possibly hostile agent — never add
+  credentials.
+
+Per invocation: `--no-home-seed` for an empty home, `--home-seed PATH` for a
+different source tree, `AGENT_SANDBOX_HOME_SEED` /
+`AGENT_SANDBOX_HOME_SEED_PATHS` to override source and allowlist. Turn it off
+for the host with `myconfig.ai.gvisor-agent-sandbox.home.enable = false`.
 
 ### Model access (host LiteLLM)
 
