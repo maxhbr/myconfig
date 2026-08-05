@@ -36,13 +36,22 @@
 # `trustedInterface` by default.
 #
 # An earlier version hand-rolled a GVISOR_AGENT_SANDBOX_INPUT chain via
-# `networking.firewall.extraCommands`. That was both redundant (the default
-# deny already provides the property) and actively harmful: `extraCommands`
-# runs BEFORE the `INPUT -j nixos-fw` jump is appended, so its terminal DROP
-# was evaluated FIRST for every packet addressed to <address>, and
-# `rejectPackets = false` makes such a drop silent — a wrong guess about the
-# input interface would turn into a mysteriously hanging connect() instead of
-# a refusal.
+# `networking.firewall.extraCommands`, hooked as `-A INPUT -d <address>` and
+# ending in DROP. It was redundant (the default deny already provides the
+# property) and BROKEN, in a way worth remembering:
+#
+#   A sandbox reaches the endpoint through pasta, which re-opens the
+#   connection in the host namespace. Routing to the host-local <address>
+#   picks <address> as the SOURCE too, so the connection is
+#   <address>:ephemeral -> <address>:<port>. The REPLY packets therefore also
+#   match `-d <address>`, but their destination port is the EPHEMERAL one, so
+#   they missed the `--dport <port>` ACCEPTs and hit the terminal DROP. The
+#   SYN got through, the SYN-ACK was dropped, and the client retransmitted
+#   until it timed out — observed as a hanging connect(), never a refusal,
+#   because `rejectPackets = false`.
+#
+# `extraCommands` also runs BEFORE the `INPUT -j nixos-fw` jump is appended,
+# so that chain was evaluated before the firewall proper.
 {
   config,
   lib,
@@ -174,6 +183,20 @@ in
     };
 
     networking.firewall.interfaces.${bridge}.allowedTCPPorts = [ lcfg.port ];
+
+    # MIGRATION (safe to delete once every host has rebuilt): the legacy chain
+    # described above survives in the running kernel, because removing it from
+    # this module also removed the `extraStopCommands` that used to tear it
+    # down. Until it is gone, it keeps dropping the endpoint's SYN-ACKs, so
+    # clean it up idempotently on every firewall start.
+    networking.firewall.extraCommands = ''
+      # ==== myconfig.ai.gvisor-agent-sandbox: drop the legacy endpoint chain
+      while iptables -C INPUT -d ${address} -j GVISOR_AGENT_SANDBOX_INPUT 2>/dev/null; do
+        iptables -D INPUT -d ${address} -j GVISOR_AGENT_SANDBOX_INPUT
+      done
+      iptables -F GVISOR_AGENT_SANDBOX_INPUT 2>/dev/null || true
+      iptables -X GVISOR_AGENT_SANDBOX_INPUT 2>/dev/null || true
+    '';
 
     # Socket-activated endpoint bound ONLY to the bridge address.
     # `BindToDevice` (SO_BINDTODEVICE) needs the DEVICE to exist at bind time
