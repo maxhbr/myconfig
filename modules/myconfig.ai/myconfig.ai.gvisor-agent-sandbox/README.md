@@ -140,10 +140,23 @@ the LiteLLM URL → the bridge endpoint `http://192.168.84.1:4000`) to the
 seeded files; binary files are skipped. Set the option to `[ ]` to copy the
 configuration verbatim.
 
-If you would rather keep `localhost:4000` working literally inside the
-sandbox, pass `--network 'pasta:-T,4000'` instead: podman starts pasta with
-`-T none`, and `-T 4000` re-enables namespace→host forwarding for that one
-port. That is an alternative to the rewrite, not a requirement for it.
+Making `localhost:4000` work literally inside the sandbox is **not** an
+available alternative, despite what the podman/pasta documentation suggests:
+
+- `--network 'pasta:-T,4000'` (namespace→host forwarding) does not help,
+  because `runsc` runs its **own network stack**. pasta's `-T` listener lives
+  in the container's Linux netns, while the container's processes see gVisor's
+  internal loopback — verified on f13, `curl 127.0.0.1:4000` inside the
+  sandbox gets `Connection refused`.
+- `host.containers.internal` does not help either: podman configures pasta
+  with `--map-guest-addr 169.254.1.2`, and that maps to the host's *global*
+  address, not to its loopback (`pasta(1)`), so a loopback-only service is not
+  behind it.
+
+Hence the bridge endpoint plus the rewrite. Verify the whole chain from inside
+a sandbox with `agent-session doctor`, which probes
+`AGENT_SANDBOX_MODEL_ENDPOINT` (baked from `litellm.endpoint`) in a throwaway
+container and accepts any HTTP status as "reachable".
 
 Per invocation: `--no-home-seed` for an empty home, `--home-seed PATH` for a
 different source tree, `AGENT_SANDBOX_HOME_SEED` /

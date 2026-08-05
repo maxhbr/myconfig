@@ -64,17 +64,31 @@ let
   # also changes the default image reference baked into `agent-session`.
   withImage = pkg: if image == null then pkg else pkg.override { agent-sandbox-image = image; };
 
-  # Bake the home-seed allowlist into `agent-session`. The seed SOURCE is
-  # resolved by the script at runtime (the activated home-manager generation
-  # of the calling user), so a dotfile change needs no rebuild here; only
-  # *which* paths are copied is a build-time decision. `--set-default` keeps
-  # `AGENT_SANDBOX_HOME_SEED_PATHS` overridable per invocation.
-  withHomeSeed =
+  # Host-configured defaults baked into `agent-session`:
+  #   * the home-seed allowlist and endpoint-rewrite rules. The seed SOURCE is
+  #     resolved by the script at runtime (the activated home-manager
+  #     generation of the calling user), so a dotfile change needs no rebuild
+  #     here; only *which* paths are copied, and how host-only URLs are
+  #     rewritten, is a build-time decision.
+  #   * the model endpoint, so `agent-session doctor` can probe it from INSIDE
+  #     a sandbox — the only place where the answer means anything (see
+  #     ./litellm-bridge.nix).
+  # `--set-default` keeps every variable overridable per invocation.
+  sessionEnv =
+    lib.optionalAttrs cfg.home.enable {
+      AGENT_SANDBOX_HOME_SEED_PATHS = lib.concatStringsSep " " cfg.home.seedPaths;
+      AGENT_SANDBOX_HOME_SEED_REWRITE = lib.concatStringsSep " " cfg.home.rewriteEndpoints;
+    }
+    // lib.optionalAttrs cfg.litellm.enable {
+      AGENT_SANDBOX_MODEL_ENDPOINT = cfg.litellm.endpoint;
+    };
+
+  withSessionEnv =
     pkg:
-    if !cfg.home.enable || cfg.home.seedPaths == [ ] then
+    if sessionEnv == { } then
       pkg
     else
-      pkgs.runCommand "agent-session-home-seeded"
+      pkgs.runCommand "agent-session-configured"
         {
           nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
           meta = (pkg.meta or { }) // {
@@ -83,8 +97,9 @@ let
         }
         ''
           makeWrapper ${pkg}/bin/agent-session $out/bin/agent-session \
-            --set-default AGENT_SANDBOX_HOME_SEED_PATHS ${lib.escapeShellArg (lib.concatStringsSep " " cfg.home.seedPaths)} \
-            --set-default AGENT_SANDBOX_HOME_SEED_REWRITE ${lib.escapeShellArg (lib.concatStringsSep " " cfg.home.rewriteEndpoints)}
+            ${lib.concatStringsSep " \\\n            " (
+              lib.mapAttrsToList (n: v: "--set-default ${n} ${lib.escapeShellArg v}") sessionEnv
+            )}
         '';
 in
 {
@@ -242,7 +257,7 @@ in
     home-manager.sharedModules = [
       {
         home.packages = [
-          (withHomeSeed (withImage cfg.package))
+          (withSessionEnv (withImage cfg.package))
           pkgs.gvisor
         ]
         ++ lib.optional (image != null) (withImage pkgs.agent-sandbox-load-image);
