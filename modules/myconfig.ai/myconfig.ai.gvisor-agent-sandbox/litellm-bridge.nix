@@ -28,11 +28,21 @@
 #   * Binding to it (`BindToDevice` + `FreeBind`) keeps the endpoint off
 #     0.0.0.0 and off the LAN, which is the property that matters.
 #
-# Firewall: a dedicated GVISOR_AGENT_SANDBOX_INPUT chain accepts packets to
-# <address>:<port> only from `lo` (where pasta-originated connections to a
-# host-local address arrive) and from the bridge itself, and drops everything
-# else addressed to it, so the endpoint cannot be reached from the LAN even if
-# something routes packets for that address to this host.
+# Firewall: the endpoint is protected by the NixOS firewall's default deny
+# (`nixos-fw` ends in `nixos-fw-log-refuse`, and port <port> is not in
+# `networking.firewall.allowedTCPPorts`), so the LAN cannot reach it. The only
+# thing added here is an explicit accept for the bridge interface;
+# host-local (`lo`) traffic is already covered because `lo` is a
+# `trustedInterface` by default.
+#
+# An earlier version hand-rolled a GVISOR_AGENT_SANDBOX_INPUT chain via
+# `networking.firewall.extraCommands`. That was both redundant (the default
+# deny already provides the property) and actively harmful: `extraCommands`
+# runs BEFORE the `INPUT -j nixos-fw` jump is appended, so its terminal DROP
+# was evaluated FIRST for every packet addressed to <address>, and
+# `rejectPackets = false` makes such a drop silent — a wrong guess about the
+# input interface would turn into a mysteriously hanging connect() instead of
+# a refusal.
 {
   config,
   lib,
@@ -48,27 +58,6 @@ let
   port = toString lcfg.port;
 
   enabled = cfg.enable && lcfg.enable;
-
-  firewallExtraCommands = ''
-    # ==== myconfig.ai.gvisor-agent-sandbox: LiteLLM endpoint =============
-    iptables -N GVISOR_AGENT_SANDBOX_INPUT 2>/dev/null || iptables -F GVISOR_AGENT_SANDBOX_INPUT
-    iptables -C INPUT -d ${address} -j GVISOR_AGENT_SANDBOX_INPUT 2>/dev/null \
-      || iptables -A INPUT -d ${address} -j GVISOR_AGENT_SANDBOX_INPUT
-    # Rootless sandboxes reach the endpoint via pasta, which re-opens the
-    # connection in the host namespace; routing to a host-local address sends
-    # it over `lo`.
-    iptables -A GVISOR_AGENT_SANDBOX_INPUT -i lo -p tcp --dport ${port} -j ACCEPT
-    iptables -A GVISOR_AGENT_SANDBOX_INPUT -i ${bridge} -p tcp --dport ${port} -j ACCEPT
-    # Never reachable from the LAN / any other interface (fail closed).
-    iptables -A GVISOR_AGENT_SANDBOX_INPUT -j DROP
-  '';
-
-  firewallExtraStopCommands = ''
-    # ==== myconfig.ai.gvisor-agent-sandbox: remove LiteLLM endpoint ======
-    iptables -D INPUT -d ${address} -j GVISOR_AGENT_SANDBOX_INPUT 2>/dev/null || true
-    iptables -F GVISOR_AGENT_SANDBOX_INPUT 2>/dev/null || true
-    iptables -X GVISOR_AGENT_SANDBOX_INPUT 2>/dev/null || true
-  '';
 in
 {
   options.myconfig.ai.gvisor-agent-sandbox.litellm = with lib; {
@@ -184,8 +173,7 @@ in
       };
     };
 
-    networking.firewall.extraCommands = firewallExtraCommands;
-    networking.firewall.extraStopCommands = firewallExtraStopCommands;
+    networking.firewall.interfaces.${bridge}.allowedTCPPorts = [ lcfg.port ];
 
     # Socket-activated endpoint bound ONLY to the bridge address.
     # `BindToDevice` (SO_BINDTODEVICE) needs the DEVICE to exist at bind time

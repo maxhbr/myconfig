@@ -190,9 +190,10 @@ microVM tier uses (`../myconfig.ai.microvm/network.nix` §16):
   `192.168.84.1:4000` (`BindToDevice` + `FreeBind`, ordered after
   `agentsbr0-netdev.service`), handing connections to
   `systemd-socket-proxyd 127.0.0.1:4000`,
-- an `GVISOR_AGENT_SANDBOX_INPUT` firewall chain that accepts that address
-  and port only on `lo` and on the bridge, and drops everything else
-  addressed to it, so the endpoint is never reachable from the LAN.
+- `networking.firewall.interfaces.agentsbr0.allowedTCPPorts = [ 4000 ]`. The
+  LAN cannot reach the endpoint because the NixOS firewall denies by default
+  and 4000 is not in `allowedTCPPorts`; `lo` is a trusted interface, so
+  host-local connections (which is how pasta re-opens sandbox traffic) pass.
 
 The host LiteLLM proxy itself is not touched and stays loopback-only. It is
 enabled automatically wherever `services.litellm.enable` is on; knobs live
