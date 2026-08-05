@@ -347,6 +347,37 @@ let
   # The unmodified host must have NO failed assertions — positive control so
   # the rejectsWith checks below can't pass vacuously.
   baselineClean = failedAssertions [ ] == [ ];
+
+  # --- lightweight plan phase 1: the `lite` profile ----------------------
+  # A host whose sizing is NOT defined at all, so the profile's own class table
+  # is what the pool is built from. test-f13 cannot be used: it defines
+  # `resourceClasses` explicitly (a definition can only be outranked by
+  # extendModules, never removed), and an explicit table always wins over the
+  # profile default. test-workstation has the feature disabled and defines no
+  # sizing, so enabling it there yields a genuinely profile-sized pool.
+  liteHostWith =
+    mods:
+    self.nixosConfigurations.test-workstation.extendModules {
+      modules = [
+        {
+          myconfig.ai.microvm = {
+            enable = true;
+            profile = "lite";
+            # Keeps the variant key-free (the pool/store assertions below are
+            # independent of the SSH control channel).
+            enableSsh = false;
+          };
+          # The secure `proxy-only` default requires the host LiteLLM backend.
+          services.litellm.enable = true;
+        }
+      ]
+      ++ mods;
+    };
+  liteHost = liteHostWith [ ];
+  liteProfile =
+    (import ../modules/myconfig.ai/myconfig.ai.microvm/profiles.nix { inherit lib; }).forProfile
+      "lite";
+  liteSlots = slotLib.mkSlots liteProfile.resourceClasses;
 in
 {
   # ---------------------------------------------------------------------- #
@@ -556,6 +587,104 @@ in
         ]
       ) enabledSlots
     );
+
+  # ---------------------------------------------------------------------- #
+  # (r) LIGHTWEIGHT PROFILE (lightweight plan phase 1): `profile = "lite"`   #
+  #     is a COMPATIBILITY BOUNDARY, not a behaviour change for existing     #
+  #     hosts. Assert both halves: the reference host stays on `full` with    #
+  #     its own sizing, and a host that opts into `lite` (and says nothing    #
+  #     about sizing) gets EXACTLY one 2 vCPU / 4 GiB slot with a pinned,     #
+  #     optimized EROFS guest store.                                         #
+  # ---------------------------------------------------------------------- #
+  microvm-eval-lite-profile =
+    let
+      liteCfg = liteHost.config;
+      liteVmNames = lib.sort (a: b: a < b) (builtins.attrNames liteCfg.microvm.vms);
+      liteSlotNames = lib.sort (a: b: a < b) (map (sl: sl.name) liteSlots);
+      liteGuest = liteCfg.microvm.vms.${(lib.head liteSlots).name}.config.config;
+      liteFailed = map (a: a.message) (builtins.filter (a: !a.assertion) liteCfg.assertions);
+    in
+    mkEvalCheck "microvm-eval-lite-profile" [
+      {
+        # Existing hosts keep the full-featured tier: the profile default must
+        # never flip under them.
+        assertion = microvmOpts.profile == "full";
+        message = "the profile default must stay 'full' (reference host reports '${microvmOpts.profile}')";
+      }
+      {
+        # ... and the full profile must NOT impose the lite class table: the
+        # reference host's own pool is untouched.
+        assertion = lib.attrNames resourceClasses != [ "lite" ];
+        message = "the full profile must not replace the host's resource classes";
+      }
+      {
+        assertion = liteFailed == [ ];
+        message = "a plain `profile = \"lite\"` host must evaluate cleanly, got: ${toString liteFailed}";
+      }
+      {
+        assertion = liteCfg.myconfig.ai.microvm.profile == "lite";
+        message = "the lite variant host does not report profile = lite";
+      }
+      {
+        # ONE prebuilt slot unless overridden (plan phase 1 acceptance).
+        assertion = lib.length liteSlots == 1;
+        message = "the lite profile must declare exactly ONE slot, got ${toString (lib.length liteSlots)}";
+      }
+      {
+        assertion = liteVmNames == liteSlotNames;
+        message = "lite host VMs ${toString liteVmNames} do not match the profile pool ${toString liteSlotNames}";
+      }
+      {
+        assertion = liteGuest.microvm.vcpu == 2 && liteGuest.microvm.mem == 4096;
+        message = "lite guest must be 2 vCPU / 4096 MiB, got ${toString liteGuest.microvm.vcpu} vCPU / ${toString liteGuest.microvm.mem} MiB";
+      }
+      {
+        # Pinned rather than inherited: a microvm.nix release cannot silently
+        # give the lightweight guest a bigger/slower store image.
+        assertion = liteGuest.microvm.storeDiskType == "erofs";
+        message = "lite guest storeDiskType must be pinned to erofs, got '${toString liteGuest.microvm.storeDiskType}'";
+      }
+      {
+        assertion = liteGuest.microvm.optimize.enable == true;
+        message = "lite guest must pin microvm.optimize.enable = true";
+      }
+      {
+        # The profile default is a DEFAULT: an explicit table still wins.
+        assertion =
+          let
+            overridden =
+              (liteHostWith [
+                {
+                  myconfig.ai.microvm.resourceClasses = lib.mkForce {
+                    normal = {
+                      count = 2;
+                      vcpu = 1;
+                      memoryMiB = 1024;
+                    };
+                  };
+                }
+              ]).config;
+          in
+          lib.sort (a: b: a < b) (builtins.attrNames overridden.microvm.vms) == [
+            "agent-normal-0"
+            "agent-normal-1"
+          ];
+        message = "an explicit resourceClasses table must outrank the lite profile's default pool";
+      }
+      {
+        # ... but mixing the profile table with the DEPRECATED slot options is
+        # ambiguous and must be rejected, never silently resolved.
+        assertion =
+          let
+            msgs = map (a: a.message) (
+              builtins.filter (a: !a.assertion)
+                (liteHostWith [ { myconfig.ai.microvm.slotCount = 3; } ]).config.assertions
+            );
+          in
+          builtins.any (m: lib.hasInfix "carries its own resource-class table" m) msgs;
+        message = "profile = lite together with the deprecated slotCount must be rejected";
+      }
+    ];
 
   # ---------------------------------------------------------------------- #
   # (c) PURE-EVAL slot pool: unique + well-formed IPs/MACs, contiguous      #

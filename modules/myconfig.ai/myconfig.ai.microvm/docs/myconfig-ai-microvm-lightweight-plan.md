@@ -1,5 +1,36 @@
 # Lightweight `myconfig.ai.microvm` Implementation Plan
 
+## Implementation status
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| 0 — baseline and measurement | partially done | Behaviour-preserving refactors are verified with the repo's `nix eval` snapshot/diff workflow (`AGENTS.md`) instead of a bespoke benchmark harness; a machine-readable runtime benchmark (closure size, launch latency, process counts) is **not** implemented — it needs a KVM host and belongs with the out-of-CI runtime-validation tier. |
+| 1 — opt-in lightweight profile | **done** | `myconfig.ai.microvm.profile = "full" \| "lite"`, table in `../profiles.nix`, wired in `default.nix` (`_module.args.agentProfile`) + `guest.nix`. Test: `checks.microvm-eval-lite-profile`. |
+| 2 — build only selected agents | not started | |
+| 3 — runtime config staging | not started | |
+| 4 — consolidate writable shares | not started | |
+| 5 — split interactive/batch | not started | |
+| 6 — VSOCK transport | not started | |
+| 7 — clone/startup optimisation | not started | |
+| 8 — minimize guest closure | not started | |
+| 9 — testing | incremental | Each landed phase adds eval checks to `tests/microvm.nix`; the VM/adversarial tiers of this phase remain out of CI (see `docs/agent-microvm-runtime-validation.md`). |
+| 10 — documentation and rollout | incremental | `docs/agent-microvm.md` documents every landed option. |
+
+### Recorded deviations
+
+- **Phase 1, `persistentAgentState.enable = false`**: there is no such option.
+  Agent-state persistence is already opt-in *per run*
+  (`agent-microvm run|submit --persist-agent-state`, see `../state.nix`), i.e.
+  the plan's intended lite default is the existing behaviour of every profile.
+  Nothing to configure.
+- **Phase 1, `networkProfile = "proxy-only"`**: already the module-wide secure
+  default, so the `lite` profile does not restate it.
+- **Phase 1, store pinning**: `microvm.optimize.enable` and
+  `microvm.storeDiskType` currently *default* to `true` / `erofs` upstream, so
+  pinning them is behaviour-preserving today. It is done anyway (for `lite`
+  only) so an upstream default change cannot silently deoptimise the
+  lightweight guest.
+
 ## Objective
 
 Refactor `modules/myconfig.ai/myconfig.ai.microvm` into a lighter-weight execution environment for untrusted coding agents while preserving the important security properties of the current design:
@@ -144,7 +175,17 @@ Treat these as non-negotiable acceptance criteria throughout the work.
 
 ---
 
-## Phase 1 — Add an opt-in lightweight profile
+## Phase 1 — Add an opt-in lightweight profile — **DONE**
+
+Implemented as `../profiles.nix` (the authoritative profile table) plus the
+`myconfig.ai.microvm.profile` option in `../default.nix`, which resolves the
+profile ONCE and hands it to `../guest.nix` via `_module.args.agentProfile`.
+Acceptance criteria are locked down by `checks.microvm-eval-lite-profile`
+(`tests/microvm.nix`), which also asserts the negative half: the profile
+default stays `full`, an explicit `resourceClasses` outranks the profile table,
+and `lite` + the deprecated slot options is rejected. Runtime boot of a lite
+guest requires KVM and is therefore part of the out-of-CI runtime-validation
+tier, not of `nix flake check`.
 
 ### Goal
 

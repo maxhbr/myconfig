@@ -52,6 +52,11 @@
   mkGuestHome,
   # The effective resource-class table (see default.nix).
   agentResourceClasses,
+  # The ONE resolved profile entry (./profiles.nix, via default.nix's
+  # `_module.args.agentProfile`): the overall SHAPE of the sandbox tier. Only
+  # the guest store-disk pinning is derived from it here; the profile's class
+  # table has already been folded into `agentResourceClasses`.
+  agentProfile,
   # The ONE authoritative supported-agent registry instance, built in
   # default.nix (`_module.args.agentRegistry`). See ./agents.nix.
   agentRegistry,
@@ -339,6 +344,19 @@ let
           mountPoint = agentState.guestMountPoint;
         }
       ];
+    }
+    # --- lightweight plan phase 1: pinned guest store disk ----------------
+    # The `lite` profile PINS microvm.nix's closure/startup optimizations and
+    # the store-disk filesystem instead of inheriting upstream defaults, so a
+    # future microvm.nix release cannot silently give the lightweight guest
+    # documentation, a non-systemd initrd, network-wait-online or a slower
+    # store image. `full` leaves both at `null`, i.e. microvm.nix's own
+    # defaults, so an existing host is byte-for-byte unaffected.
+    // lib.optionalAttrs (agentProfile.optimizeStore != null) {
+      optimize.enable = agentProfile.optimizeStore;
+    }
+    // lib.optionalAttrs (agentProfile.storeDiskType != null) {
+      storeDiskType = agentProfile.storeDiskType;
     };
 
     # Unprivileged guest user that runs the agent (plan §6). Not root; no

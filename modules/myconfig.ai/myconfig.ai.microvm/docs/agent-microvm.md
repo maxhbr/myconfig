@@ -81,6 +81,7 @@ myconfig.ai.microvm = {
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `enable` | `false` | Turn the whole tier on for a host. |
+| `profile` | `"full"` | Overall **shape** of the tier: `full` (existing behaviour) or `lite` (one 2 vCPU / 4 GiB slot, pinned optimized EROFS guest store). See [Profiles](#profiles). |
 | `resourceClasses` | `{ normal = { count = 4; vcpu = 4; memoryMiB = 8192; }; }` | Fixed, **prebuilt** resource classes. See [Resource classes](#resource-classes). |
 | `bridgeName` | `agentbr0` | Private bridge name. |
 | `subnet` | `192.168.83.0/24` | Private subnet. |
@@ -143,6 +144,24 @@ even created. Inspect a live sandbox with:
 agent-microvm ssh agent-normal-0 -- systemctl status agent-model-config
 agent-microvm ssh agent-normal-0 -- agent-model-config   # re-render on demand
 ```
+
+### Profiles
+
+`myconfig.ai.microvm.profile` is the compatibility boundary between the
+existing, full-featured tier and the lightweight one described in
+[`myconfig-ai-microvm-lightweight-plan.md`](./myconfig-ai-microvm-lightweight-plan.md).
+The authoritative table lives in `../profiles.nix`.
+
+| Profile | Pool (when the host defines no sizing) | Guest store disk |
+| --- | --- | --- |
+| `full` **(default)** | derived from `resourceClasses` — or, for a host still on the deprecated spelling, from `slotCount` / `defaultVcpu` / `defaultMemoryMiB` | microvm.nix defaults |
+| `lite` | one slot `agent-lite-0`, 2 vCPU, 4096 MiB | pinned `microvm.optimize.enable = true`, `microvm.storeDiskType = "erofs"` |
+
+The profile only supplies **defaults**: an explicit `resourceClasses` always
+outranks the profile's class table. Combining a profile that carries its own
+table (`lite`) with the deprecated `slotCount` / `defaultVcpu` /
+`defaultMemoryMiB` spelling is **rejected** as ambiguous rather than silently
+resolved.
 
 ### Resource classes
 
