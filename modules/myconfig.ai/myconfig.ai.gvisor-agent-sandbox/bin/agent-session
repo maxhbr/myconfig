@@ -60,6 +60,10 @@ start options:
   --cpus NUMBER               CPU limit (default: 4)
   --pids-limit NUMBER         Process limit (default: 2048)
   --seccomp-unconfined        Disable the inner OCI seccomp profile
+  --force                     Destroy an existing session of the same name,
+                              including its branch, instead of failing. Without
+                              it an interactive terminal is asked to confirm,
+                              and a non-interactive run fails.
 
 environment:
   AGENT_SANDBOX_IMAGE           Override the default image
@@ -261,7 +265,7 @@ confirm_destroy_existing() {
 cmd_start() {
   local name='' repo='' base=HEAD branch='' image=$DEFAULT_IMAGE
   local detach=false memory=8g cpus=4 pids_limit=2048 network=''
-  local seccomp_unconfined=false env_file=''
+  local seccomp_unconfined=false env_file='' force=false
   local -a mount_specs=() env_specs=()
 
   while (( $# )); do
@@ -281,6 +285,7 @@ cmd_start() {
       --cpus) cpus=${2:?}; shift 2 ;;
       --pids-limit) pids_limit=${2:?}; shift 2 ;;
       --seccomp-unconfined) seccomp_unconfined=true; shift ;;
+      --force) force=true; shift ;;
       --) shift; break ;;
       -h|--help) usage; exit 0 ;;
       *) die "unknown start option: $1" ;;
@@ -319,8 +324,12 @@ cmd_start() {
     # scoping would overwrite the locals computed just above (pool, worktree,
     # container, home, branch, image, ...) with the old session's values.
     old_branch=$( (load_meta "$name" >/dev/null 2>&1 && printf '%s' "$branch") || printf '%s' "$branch")
-    confirm_destroy_existing "$name" "$old_branch" \
-      || die "session already exists: $name (remove it with 'agent-session destroy $name --force --delete-branch')"
+    if [[ "$force" = true ]]; then
+      log "--force: destroying existing session $name and deleting branch $old_branch"
+    else
+      confirm_destroy_existing "$name" "$old_branch" \
+        || die "session already exists: $name (pass --force, or remove it with 'agent-session destroy $name --force --delete-branch')"
+    fi
     (cmd_destroy "$name" --force --delete-branch) \
       || die "could not destroy the existing session: $name"
   fi

@@ -50,11 +50,13 @@ Moved:
 Patched:
 
 - `bin/agent-session` — `start` no longer dies outright when a session of
-  the same name exists. On a terminal it asks
-  `session NAME already exists; destroy it and delete branch BRANCH? [y/N]`
-  and, on `y`, runs `destroy NAME --force --delete-branch` before creating
-  the new session. Without a terminal the previous fail-fast behaviour is
-  kept, now with the exact recovery command in the message. The destroy runs
+  the same name exists. With the new `start --force` it destroys the old
+  session (including its branch) unattended; otherwise, on a terminal, it
+  asks `session NAME already exists; destroy it and delete branch BRANCH?
+  [y/N]` and, on `y`, runs `destroy NAME --force --delete-branch` before
+  creating the new session. Without a terminal and without `--force` the
+  previous fail-fast behaviour is kept, now with the exact recovery command
+  in the message. The destroy runs
   in a subshell because it sources the old session's `meta`, which would
   otherwise clobber `cmd_start`'s locals through bash's dynamic scoping.
 
