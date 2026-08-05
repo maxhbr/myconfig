@@ -1445,7 +1445,17 @@ in
       };
       # ... and DOCTORED variants: the policy is only worth anything if it
       # complains about a table that breaks the trust boundary.
-      doctored = f: liteSession.violationsOf (realPolicyInput // f realPolicyInput) != [ ];
+      #
+      # `doctored <expected message infix> <patch>` asserts that the SPECIFIC
+      # rule fires, never merely that "some" violation was reported: a refactor
+      # that drops rule (2) but keeps rule (1) would otherwise leave every
+      # negative case below green. `violationsOf` returns the violations as
+      # TEXT precisely so this is checkable.
+      violationsWith = f: liteSession.violationsOf (realPolicyInput // f realPolicyInput);
+      doctored = want: f: lib.any (v: lib.hasInfix want v) (violationsWith f);
+      # The path a violation message names for a writable-tree entry (the
+      # policy is a pure function of the TABLE, so the paths carry no slot).
+      wrel = rel: "${liteSession.root}/${rel}";
       withRel = rel: patch: input: {
         writable = map (e: if e.rel == rel then e // patch else e) input.writable;
       };
@@ -1715,50 +1725,71 @@ in
           message = "the real session layout must satisfy its own policy, got ${toString (liteSession.violationsOf realPolicyInput)}";
         }
         {
-          assertion = doctored (withRel liteSession.subdirs.input { owner = "agent"; });
+          assertion = doctored "'${wrel liteSession.subdirs.input}' must be root-owned" (
+            withRel liteSession.subdirs.input { owner = "agent"; }
+          );
           message = "an AGENT-owned input/ must be rejected (the guest could rewrite its own job)";
         }
         {
-          assertion = doctored (withRel liteSession.subdirs.input { mode = "0777"; });
+          assertion = doctored "'${wrel liteSession.subdirs.input}' is group/other-writable" (
+            withRel liteSession.subdirs.input { mode = "0777"; }
+          );
           message = "a world-writable input/ must be rejected";
         }
         {
-          assertion = doctored (withRel liteSession.subdirs.controller { mode = "0755"; });
+          assertion = doctored "'${wrel liteSession.subdirs.controller}' grants group/other access" (
+            withRel liteSession.subdirs.controller { mode = "0755"; }
+          );
           message = "a group/other-readable controller/ must be rejected (it carries the allocation token)";
         }
         {
-          assertion = doctored (withRel liteSession.subdirs.controller { owner = "agent"; });
+          assertion = doctored "'${wrel liteSession.subdirs.controller}' must be root-owned" (
+            withRel liteSession.subdirs.controller { owner = "agent"; }
+          );
           message = "an AGENT-owned controller/ must be rejected (the guest could forge a result)";
         }
         {
-          assertion = doctored (withRel liteSession.subdirs.workerLogs { owner = "agent"; });
+          assertion = doctored "'${wrel liteSession.subdirs.workerLogs}' must be root-owned" (
+            withRel liteSession.subdirs.workerLogs { owner = "agent"; }
+          );
           message = "an AGENT-owned worker-logs/ must be rejected (guest systemd opens those files as root)";
         }
         {
-          assertion = doctored (_: {
-            readOnly = map (
-              e: if e.rel == liteSession.roSubdirs.configSeed then e // { mode = "0777"; } else e
-            ) liteSession.roLayout;
-          });
+          assertion =
+            doctored
+              "read-only '${liteSession.roRoot}/${liteSession.roSubdirs.configSeed}' is group/other-writable"
+              (_: {
+                readOnly = map (
+                  e: if e.rel == liteSession.roSubdirs.configSeed then e // { mode = "0777"; } else e
+                ) liteSession.roLayout;
+              });
           message = "a group/other-writable staged configuration must be rejected";
         }
         {
-          assertion = doctored (input: {
+          assertion = doctored "host-key directory" (input: {
             hostKeyDir = "${input.writableRoot}/${liteSlot.name}/${liteSession.roSubdirs.hostkeys}";
           });
           message = "SSH host keys inside the WRITABLE session tree must be rejected";
         }
         {
-          assertion = doctored (input: {
+          assertion = doctored "is inside the WRITABLE session tree" (input: {
             configSeedDir = "${input.writableRoot}/${liteSlot.name}/${liteSession.roSubdirs.configSeed}";
           });
           message = "a staged configuration inside the WRITABLE session tree must be rejected";
         }
         {
-          assertion = doctored (input: {
+          assertion = doctored "overlap" (input: {
             readOnlyRoot = "${input.writableRoot}/ro";
           });
           message = "a read-only tree nested inside the writable one must be rejected";
+        }
+        {
+          # ... and the POSITIVE control for the mechanism above: an infix that
+          # nothing produces must NOT match, or every `doctored` line would be
+          # satisfied by any message at all.
+          assertion =
+            !(doctored "this infix never appears" (withRel liteSession.subdirs.input { owner = "agent"; }));
+          message = "positive control: `doctored` must not match an arbitrary infix";
         }
         # --- NEGATIVE config: the guest agent must stay unprivileged -------
         {
@@ -1796,6 +1827,13 @@ in
         # Building these runs their writeShellApplication shellcheck gate; the
         # greps below then inspect the GENERATED code.
         verifierBin = "${liteSession.verifier}/bin/agent-microvm-verify-session";
+        # EVAL-DEPTH ONLY (a `.drvPath` string, nothing is built): this phase
+        # added a guest-side `fileSystems` entry, so the LITE guest's toplevel
+        # and its microvm runner must be forced by CI just like the full guest's
+        # (`microvm-guest-evaluates` covers only the full profile).
+        liteGuestToplevelDrv = liteGuest.system.build.toplevel.drvPath;
+        liteGuestRunnerDrv = liteGuest.microvm.declaredRunner.drvPath;
+        liteSshGuestToplevelDrv = liteSshGuest.system.build.toplevel.drvPath;
         liteLauncherBin = "${liteLauncher}/bin/agent-microvm";
         fullLauncherBin = "${fullLauncher}/bin/agent-microvm";
         sessionRoot = liteSession.root;
@@ -1893,9 +1931,22 @@ in
         grep -qF -- 'mount_point()  { printf '"'"'%s'"'"' "$STATE_ROOT/$1/workspace"; }' "$fullLauncherBin" \
           || { echo "the full launcher must keep its historical workspace mount point" >&2; exit 1; }
 
+        # The LITE guest (and its runner) must EVALUATE to a realisable
+        # derivation: this phase gave the guest a `fileSystems` entry, and
+        # `microvm-guest-evaluates` only covers the full profile. Referencing
+        # the drvPaths here is what forces that evaluation in CI.
+        for drv in "$liteGuestToplevelDrv" "$liteGuestRunnerDrv" "$liteSshGuestToplevelDrv"; do
+          case "$drv" in
+            /nix/store/*.drv) ;;
+            *) echo "the lite guest did not evaluate to a derivation: '$drv'" >&2; exit 1 ;;
+          esac
+        done
+
         {
           echo "microvm-session-tree:"
           echo "  writable tree : $sessionRoot/<slot>"
+          echo "  lite guest    : $liteGuestToplevelDrv"
+          echo "  lite runner   : $liteGuestRunnerDrv"
           printf '    %s\n' "$writableEntries"
           echo "  read-only tree: $sessionRoRoot/<slot>"
           printf '    %s\n' "$roEntries"
