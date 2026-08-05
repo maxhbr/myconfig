@@ -85,6 +85,45 @@ When enabled the module
 - grants subordinate UID/GID ranges (`autoSubUidGidRange`) to
   `myconfig.ai.gvisor-agent-sandbox.users` (default: `myconfig.user`).
 
+### Model access (host LiteLLM)
+
+`services.litellm` is loopback-only on purpose, which a rootless sandbox
+cannot reach (with pasta the sandbox's `127.0.0.1` is its own loopback, not
+the host's). `./litellm-bridge.nix` therefore adds the same construction the
+microVM tier uses (`../myconfig.ai.microvm/network.nix` §16):
+
+- a member-less bridge `agentsbr0` carrying the single host address
+  `192.168.84.1/24` — a stable, non-loopback, non-LAN address that pasta can
+  reach, because pasta re-opens the sandbox's outbound connections in the
+  host network namespace,
+- `systemd.sockets.gvisor-agent-sandbox-litellm-proxy`, bound *only* to
+  `192.168.84.1:4000` (`BindToDevice` + `FreeBind`, ordered after
+  `agentsbr0-netdev.service`), handing connections to
+  `systemd-socket-proxyd 127.0.0.1:4000`,
+- an `GVISOR_AGENT_SANDBOX_INPUT` firewall chain that accepts that address
+  and port only on `lo` and on the bridge, and drops everything else
+  addressed to it, so the endpoint is never reachable from the LAN.
+
+The host LiteLLM proxy itself is not touched and stays loopback-only. It is
+enabled automatically wherever `services.litellm.enable` is on; knobs live
+under `myconfig.ai.gvisor-agent-sandbox.litellm.{enable,port,bridgeName,address,prefixLength}`,
+and the resulting base URL is the read-only `…litellm.endpoint`.
+
+Use it from a session (the generated env file carries only the base URL — no
+secret ends up in the Nix store or in the session state):
+
+```bash
+agent-session start --name demo --repo ~/src/foo \
+  --env-file ~/.config/agent-sandbox/litellm.env \
+  --env OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -- pi
+
+agent-session shell demo -c 'curl -s "$OPENAI_BASE_URL/models"'
+```
+
+Networking is otherwise podman's rootless default (pasta, full outbound NAT);
+pass `--network none` for an offline session.
+
 First run on a host:
 
 ```bash

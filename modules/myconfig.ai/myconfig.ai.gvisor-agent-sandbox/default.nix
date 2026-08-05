@@ -60,6 +60,8 @@ let
   withImage = pkg: if image == null then pkg else pkg.override { agent-sandbox-image = image; };
 in
 {
+  imports = [ ./litellm-bridge.nix ];
+
   options.myconfig.ai.gvisor-agent-sandbox = with lib; {
     enable = mkEnableOption "myconfig.ai.gvisor-agent-sandbox";
 
