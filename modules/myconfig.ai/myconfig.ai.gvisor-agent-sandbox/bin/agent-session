@@ -85,6 +85,8 @@ environment:
                                 endpoints at sandbox-reachable ones
   AGENT_SANDBOX_MODEL_ENDPOINT  Model API base URL as seen from a sandbox;
                                 `doctor` probes it from inside one
+  AGENT_SANDBOX_DEFAULT_COMMAND Command run by `start`/`run` when no COMMAND is
+                                given (default: /bin/bash)
 
 Run `agent-session doctor` to verify runtime, image and sandbox startup.
 
@@ -253,7 +255,13 @@ run_container() {
 
   cmd+=("$image")
   if (( $# == 0 )); then
-    cmd+=(/bin/bash)
+    # No COMMAND given: run the configured default. Word-split so a default
+    # like "herdr --flag" works; `agent-session shell` is unaffected and
+    # always gives a plain shell.
+    local -a default_cmd=()
+    read -r -a default_cmd <<<"${AGENT_SANDBOX_DEFAULT_COMMAND:-/bin/bash}"
+    (( ${#default_cmd[@]} )) || default_cmd=(/bin/bash)
+    cmd+=("${default_cmd[@]}")
   else
     cmd+=("$@")
   fi

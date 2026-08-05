@@ -81,8 +81,19 @@ coding-agent CLIs the host itself has enabled, derived from the
 `claude-code`, `codex`, `github-copilot-cli`, `qwen-code`), each mapped to the
 same package attribute the corresponding host wrapper uses. So enabling an
 agent on the host automatically makes it available inside the sandbox; the
-host-side chat front-ends `aichat` / `llm` are deliberately excluded. Override
-to slim down or extend:
+host-side chat front-ends `aichat` / `llm` are deliberately excluded.
+
+Whenever at least one of those agents is enabled, `pkgs.herdr` (the terminal
+agent multiplexer) is added too — the same condition `../programs.herdr.nix`
+uses on the host — and becomes the session's default command via
+`defaultCommand`. A bare `agent-session start --name x --repo …` therefore
+drops you into `herdr` rather than a plain shell; `-- COMMAND` still wins, and
+`agent-session shell` always gives a shell. Its host configuration is seeded
+via `.config/herdr` in `home.seedPaths`. Set `defaultCommand = null` for the
+upstream `/bin/bash` behaviour, or to any command line (word-split, e.g.
+`"herdr --flag"`).
+
+Override the package list to slim down or extend:
 
 ```nix
 myconfig.ai.gvisor-agent-sandbox.extraImagePackages = [ pkgs.claude-code ];
