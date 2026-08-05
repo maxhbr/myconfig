@@ -107,8 +107,9 @@ myconfig.ai.microvm = {
 | `dnsServers` | `[ ]` | Explicit DNS policy for `networkProfile = "internet"` (empty = the host on the bridge). |
 | `acknowledgeInsecureNetwork` | `false` | **Required** by the insecure profiles (`package-access`, `internet`). |
 
-Deprecated / removed spellings (each warns or fails with a pointer; see
-[Migration](#migration)): `slotCount`, `defaultVcpu`, `defaultMemoryMiB`,
+Removed spellings (setting one is now an *unknown option* error; see
+[Migration](#migration)): `profile`, `session.enable`, `configSeed.enable`,
+`guestDotfiles.*`, `slotCount`, `defaultVcpu`, `defaultMemoryMiB`,
 `allowPublicInternet`, `allowPrivateNetworks`, `allowInterVmTraffic`.
 
 ### Boot-time model discovery
@@ -713,12 +714,18 @@ Then commit the private key inside the priv repo separately.
 
 ## Migration
 
-| Deprecated / removed | Replacement | Behaviour |
+| Removed | Replacement | Behaviour |
 | --- | --- | --- |
-| `slotCount`, `defaultVcpu`, `defaultMemoryMiB` | `resourceClasses` | still honoured as a synthesized single `normal` class (warns). Setting **both** spellings is **rejected** as ambiguous. |
-| `allowPublicInternet` | `networkProfile = "internet"` | translated **with a warning** when `networkProfile` is unset; **rejected** as ambiguous when combined with a different explicit profile. |
-| `allowPrivateNetworks` | *(none — no profile grants it)* | `true` is **rejected**; use `networkProfile = "package-access"` with an explicit host proxy if a guest needs packages. |
-| `allowInterVmTraffic` | *(none — isolation is unconditional)* | `true` is **rejected**: guest↔guest is blocked at layer 2 in every profile, so honouring the flag would misrepresent the policy. |
+| `profile` | *(none — there is one shape)* | the `lite` behaviour is unconditional; see [The guest shape](#the-guest-shape). |
+| `session.enable`, `configSeed.enable` | *(none — both are unconditional)* | ONE writable + ONE read-only share, and a guest home staged at launch time. |
+| `guestDotfiles.enable`, `.homeFilePrefixes`, `.xdgConfigPrefixes` | `configSeed.extraPaths` + the registry's per-agent `configPaths` | guest home-manager activation is gone; the guest home is staged per launch. |
+| `slotCount`, `defaultVcpu`, `defaultMemoryMiB` | `resourceClasses` | the migration shim (a synthesized single `normal` class plus an ambiguity assertion) was removed once no host used it. |
+| `allowPublicInternet` | `networkProfile = "internet"` | the translate/warn shim was removed. |
+| `allowPrivateNetworks` | *(none — no profile grants it)* | use `networkProfile = "package-access"` with an explicit host proxy if a guest needs packages. |
+| `allowInterVmTraffic` | *(none — isolation is unconditional)* | guest↔guest is blocked at layer 2 in every profile, so the flag could never do anything. |
+
+Every one of them is now an **unknown option**: an eval error naming the option,
+which is louder than the warning or assertion it replaces.
 
 The interactive commands themselves are unchanged; `submit`, `cancel`,
 `recover`, `usage` and the flags `--resource-class`, `--wait`,
