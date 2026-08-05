@@ -15,7 +15,7 @@
 # Bug 2: under `--section all`, an unreachable endpoint used to ABORT THE ENTIRE
 # RUN (because `all` was in endpoint_sections()), so the operator's next run
 # would validate NOTHING — including the security-critical forgery section. The
-# fix: under `--section all`, RUN the five endpoint-independent sections and
+# fix: under `--section all`, RUN the endpoint-independent sections and
 # SKIP only `net`+`forgery` with a loud, counted reason; hard-abort ONLY when the
 # operator asked for just `net`/`forgery`.
 #
@@ -122,6 +122,7 @@ section_creds() { section "credential boundary"; pass "creds-check"; }
 section_lifecycle() { section "lifecycle failure handling"; pass "lc-check"; }
 section_malrepo() { section "hostile repository fixture"; pass "mal-check"; }
 section_forgery() { section "batch result channel: forgery"; pass "forg-check"; }
+section_seed() { section "runtime configuration staging"; pass "seed-check"; }
 # Stub curl: RTV_ENDPOINT_UP=1 -> endpoint answers (return 0); 0 -> dead (return 1).
 # Uses `return`, not `exit`: a function `exit` would kill the whole shell,
 # whereas the real curl is an external binary whose process exit is just a status.
@@ -175,19 +176,20 @@ for h in \
     "credential boundary" \
     "lifecycle failure handling" \
     "hostile repository fixture" \
-    "batch result channel: forgery"; do
+    "batch result channel: forgery" \
+    "runtime configuration staging"; do
     if ran_header "$log" "$h"; then
         pass "section ran: $h"
     else
         fail "section did NOT run: $h"
     fi
 done
-if grep -q '^#     sections: boot net l2 creds lifecycle malrepo forgery$' "$log"; then
+if grep -q '^#     sections: boot net l2 creds lifecycle malrepo forgery seed$' "$log"; then
     pass "the plan is printed up front"
 else
     fail "no plan line: $(grep '^#     sections:' "$log" || echo missing)"
 fi
-if grep -q '^#     sections ran: boot net l2 creds lifecycle malrepo forgery$' "$log"; then
+if grep -q '^#     sections ran: boot net l2 creds lifecycle malrepo forgery seed$' "$log"; then
     pass "the final summary lists every section that ran"
 else
     fail "no/incorrect 'sections ran' summary: $(grep '^#     sections ran:' "$log" || echo missing)"
@@ -198,7 +200,7 @@ else
     fail "sections were skipped despite the endpoint being up"
 fi
 
-printf '\n=== 2. --section all with the endpoint DOWN: run 5, SKIP net+forgery, exit non-zero (Bug 2) ===\n'
+printf '\n=== 2. --section all with the endpoint DOWN: run 6, SKIP net+forgery, exit non-zero (Bug 2) ===\n'
 rc="$(run_dispatch all 0)"
 log="$WORK/run-all-0.log"
 if ((rc != 0)); then
@@ -206,13 +208,14 @@ if ((rc != 0)); then
 else
     fail "all+down exited 0 while two sections were skipped"
 fi
-# The five endpoint-INDEPENDENT sections MUST run.
+# The six endpoint-INDEPENDENT sections MUST run.
 for h in \
     "boot + filesystem" \
     "layer 2 isolation" \
     "credential boundary" \
     "lifecycle failure handling" \
-    "hostile repository fixture"; do
+    "hostile repository fixture" \
+    "runtime configuration staging"; do
     if ran_header "$log" "$h"; then
         pass "endpoint-independent section ran: $h"
     else
@@ -230,8 +233,8 @@ if ran_header "$log" "batch result channel: forgery"; then
 else
     pass "forgery did NOT run (skipped, endpoint down) — the security-critical section was not silently passed"
 fi
-if grep -q "^#     sections ran: boot l2 creds lifecycle malrepo$" "$log"; then
-    pass "the summary lists exactly the five sections that ran"
+if grep -q "^#     sections ran: boot l2 creds lifecycle malrepo seed$" "$log"; then
+    pass "the summary lists exactly the six sections that ran"
 else
     fail "summary 'sections ran' is wrong: $(grep '^#     sections ran:' "$log" || echo missing)"
 fi
@@ -255,10 +258,10 @@ if grep -q "sudo $LAUNCHER doctor" "$log"; then
 else
     fail "the skip reason does not point at doctor"
 fi
-# The plan is still the FULL seven (the plan shows what was resolved, not what
+# The plan is still the FULL eight (the plan shows what was resolved, not what
 # was skipped) — so the operator sees both "what I asked for" and "what ran".
-if grep -q '^#     sections: boot net l2 creds lifecycle malrepo forgery$' "$log"; then
-    pass "the plan still lists all seven (the skip is reported separately)"
+if grep -q '^#     sections: boot net l2 creds lifecycle malrepo forgery seed$' "$log"; then
+    pass "the plan still lists all eight (the skip is reported separately)"
 else
     fail "the plan line changed: $(grep '^#     sections:' "$log" || echo missing)"
 fi

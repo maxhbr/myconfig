@@ -37,6 +37,10 @@ LITELLM_PORT="${AGENT_LITELLM_PORT:-4000}"
 BRIDGE="${AGENT_BRIDGE:-agentbr0}"
 RUNTIME_ROOT="${AGENT_RUNTIME_ROOT:-/var/lib/agent-microvms}"
 STATE_ROOT="${AGENT_STATE_ROOT:-/var/lib/microvms}"
+# The generated, policy-BAKED host-side config stager (config-seed.nix). Only
+# present on a host with `configSeed.enable` (i.e. `profile = "lite"`); the
+# `seed` section SKIPs when it is missing.
+STAGER="${AGENT_STAGER:-agent-microvm-stage-config}"
 WORKSPACE_ROOT="$RUNTIME_ROOT/workspaces"
 LAUNCHER="${AGENT_LAUNCHER:-agent-microvm}"
 # How long a freshly started guest may take to accept SSH. A DETACHED `run`
@@ -150,7 +154,7 @@ check_denied() {
 
 usage() {
     cat >&2 <<EOF
-Usage: sudo $0 --repository <git-repo> [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery]
+Usage: sudo $0 --repository <git-repo> [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery|seed]
 
 Sections:
   boot       per-class boot, readiness, /workspace, persistence, shares
@@ -163,6 +167,12 @@ Sections:
              replace, delete or shadow the authoritative result, stale results
              must be rejected, timeouts must kill the whole worker cgroup, and
              cancellation must be bound to the allocation token
+  seed       runtime configuration staging (\`profile = "lite"\`): the stager is
+             run against real fixtures in the host home and must stage the
+             allowlisted file while refusing credential-shaped names, benignly
+             NAMED symlinks onto credentials, host-home escapes, FIFOs, setuid
+             and over-budget files, keep the tree root-only and clean it before
+             every launch. Starts no VM; SKIPs unless the host stages at all.
 EOF
     exit 2
 }
@@ -1752,6 +1762,177 @@ printf '%s: starting real-KVM validation (host %s, bridge %s)\n' \
     "$PROG" "$(uname -n)" "$BRIDGE"
 "$LAUNCHER" list | sed 's/^/#     /'
 
+# --- runtime configuration staging (lightweight plan phase 3) ---------------
+# HOST-ONLY section: it runs the generated stager `agent-microvm-stage-config`
+# against REAL fixtures planted in the host home and inspects the staged tree
+# plus the manifest. No VM is started.
+#
+# Why it lives HERE and not in `nix flake check`: the stager writes a root-owned
+# tree (`install -o root -g root`), and the Nix build sandbox is not root. The
+# eval/build checks can therefore only prove the policy is BAKED IN; whether it
+# is ENFORCED is decided here.
+#
+# It exists only on a host with `configSeed.enable` (i.e. `profile = "lite"`);
+# everywhere else the whole section SKIPs.
+# shellcheck disable=SC2317  # reached via the dispatch below
+section_seed() {
+    section "runtime configuration staging: allowlist + denylist enforcement"
+
+    if ! command -v "$STAGER" >/dev/null; then
+        skip "config-seed: $STAGER is not on PATH (this host does not use runtime config staging)"
+        return
+    fi
+    # Staging REPLACES the slot's staged tree, so never touch a slot that is
+    # currently serving a task.
+    local slot
+    slot="$("$LAUNCHER" list | awk '$3 != "running" { print $1; exit }')"
+    if [[ -z $slot ]]; then
+        skip "config-seed: every slot is running — refusing to restage a live slot"
+        return
+    fi
+
+    local seed_root="$RUNTIME_ROOT/config-seed"
+    local payload="$seed_root/$slot/home"
+    local manifest="$seed_root/$slot/manifest.json"
+
+    if ! "$STAGER" "$slot" >/tmp/rtv-seed-baseline.log 2>&1; then
+        fail "config-seed: the stager failed on a clean run (see /tmp/rtv-seed-baseline.log)"
+        return
+    fi
+    pass "config-seed: the stager runs and writes $payload"
+
+    # The stager BAKES the host home and the allowlist; read both back from the
+    # manifest instead of guessing them here.
+    local host_home fixture_root fixture secret_root
+    host_home="$(jq -r '.hostHome // ""' "$manifest")"
+    if [[ -z $host_home || ! -d $host_home ]]; then
+        fail "config-seed: the manifest names no usable host home ('$host_home')"
+        return
+    fi
+    if ! jq -e '.allowlist | index(".agents/skills")' "$manifest" >/dev/null; then
+        skip "config-seed: '.agents/skills' is not allowlisted on this host — no directory to plant fixtures in"
+        return
+    fi
+    fixture_root="$host_home/.agents/skills"
+    fixture="$fixture_root/rtv-config-seed"
+    # A credential-shaped tree OUTSIDE the allowlist, used as the TARGET of
+    # benignly named symlinks (the interesting case: the link name passes the
+    # denylist, the resolved name must not).
+    secret_root="$host_home/.rtv-cfgseed-fixture"
+
+    # Whatever happens below, the operator's home must be left as it was.
+    local cleanup="rm -rf -- '$fixture' '$secret_root'"
+    if [[ ! -d $fixture_root ]]; then
+        mkdir -p "$fixture_root"
+        # Only remove what this section created, and only if it stayed empty.
+        cleanup="$cleanup; rmdir --ignore-fail-on-non-empty '$fixture_root' 2>/dev/null || true"
+    fi
+    # shellcheck disable=SC2064  # the paths must be expanded NOW, not on RETURN
+    trap "$cleanup" RETURN
+
+    rm -rf -- "$fixture" "$secret_root"
+    mkdir -p "$fixture" "$secret_root/tokens"
+    # (0) a benign file that MUST be staged (positive control: without it every
+    #     negative check below could pass simply because nothing was staged).
+    printf 'a skill\n' >"$fixture/good.md"
+    # (1) a credential reached under a BENIGN name — the name-only denylist
+    #     would stage this.
+    printf 'TOKEN\n' >"$secret_root/auth.json"
+    ln -s "$secret_root/auth.json" "$fixture/benign-config.md"
+    # (2) ... and the same trick with a DIRECTORY.
+    printf 'TOKEN\n' >"$secret_root/tokens/t"
+    ln -s "$secret_root/tokens" "$fixture/notes"
+    # (3) a credential-shaped NAME inside an allowlisted directory.
+    printf 'sk-live\n' >"$fixture/prod-api-token.txt"
+    # (4) an escape out of the host home.
+    ln -s /etc/passwd "$fixture/escape.md"
+    # (5) non-regular + setuid files.
+    mkfifo "$fixture/pipe"
+    printf 'x\n' >"$fixture/setuid.md"
+    chmod u+s "$fixture/setuid.md"
+    # (6) over the per-file budget.
+    head -c 2000000 /dev/zero >"$fixture/big.md"
+
+    if ! "$STAGER" "$slot" >/tmp/rtv-seed-fixture.log 2>&1; then
+        fail "config-seed: the stager failed with the fixtures planted (see /tmp/rtv-seed-fixture.log)"
+        return
+    fi
+
+    # `seed_reason <relative path>` — the manifest's skip reason, or the empty
+    # string when the path was not skipped.
+    seed_reason() {
+        jq -r --arg p "$1" '[.skipped[] | select(.path == $p) | .reason] | first // ""' "$manifest"
+    }
+    # `check_reason <desc> <path> <expected reason infix>` — the path must have
+    # been SKIPPED, and for the STATED reason (never "some reason", which a
+    # generic failure would also satisfy).
+    check_reason() {
+        local desc="$1" path="$2" want="$3" got
+        got="$(seed_reason "$path")"
+        if [[ -e "$payload/$path" ]]; then
+            fail "$desc (it was STAGED to $payload/$path)"
+        elif [[ $got == *"$want"* ]]; then
+            pass "$desc"
+        else
+            fail "$desc (not staged, but the manifest reason was '$got', expected '*$want*')"
+        fi
+    }
+
+    local rel=".agents/skills/rtv-config-seed"
+    check "config-seed: an allowlisted regular file IS staged" \
+        test -f "$payload/$rel/good.md"
+    check_reason "config-seed: a benignly NAMED symlink to a credential is refused" \
+        "$rel/benign-config.md" "credential-shaped path"
+    check_reason "config-seed: a benignly NAMED symlink to a credential DIRECTORY is refused" \
+        "$rel/notes" "credential-shaped path"
+    check_reason "config-seed: a credential-shaped file name is refused" \
+        "$rel/prod-api-token.txt" "credential denylist"
+    check_reason "config-seed: a symlink escaping the host home is refused" \
+        "$rel/escape.md" "outside the host home"
+    check_reason "config-seed: a setuid file is refused" \
+        "$rel/setuid.md" "setuid/setgid"
+    check_reason "config-seed: an over-budget file is refused" \
+        "$rel/big.md" "larger than"
+    check_fails "config-seed: a FIFO never reaches the staged tree" \
+        test -e "$payload/$rel/pipe"
+    # The credential CONTENT must not appear anywhere in the staged tree, no
+    # matter which path it might have been copied under.
+    if grep -rqI -- 'TOKEN' "$payload" 2>/dev/null; then
+        fail "config-seed: credential content from the fixtures reached the staged tree"
+    else
+        pass "config-seed: no fixture credential content is anywhere in the staged tree"
+    fi
+
+    # The staged tree is root-owned and root-ONLY (the guest agent gets a COPY,
+    # and no other host user may read the operator's configuration).
+    if [[ -n "$(find "$payload" \! -user root -print -quit)" ]]; then
+        fail "config-seed: the staged tree contains non-root-owned entries"
+    else
+        pass "config-seed: the staged tree is root-owned"
+    fi
+    if [[ -n "$(find "$payload" -perm /077 -print -quit)" ]]; then
+        fail "config-seed: the staged tree is group/other-accessible"
+    else
+        pass "config-seed: the staged tree is not readable by group/other"
+    fi
+    # The manifest names the host home and every skipped, credential-SHAPED
+    # host file name: it must stay OUTSIDE the share source (the payload).
+    check_fails "config-seed: the manifest is not inside the guest-visible payload" \
+        test -e "$payload/manifest.json"
+    check "config-seed: the manifest is root-only" \
+        test "$(stat -c '%U %a' "$manifest")" = "root 400"
+
+    # CLEANED before every launch: removing the fixtures and restaging must
+    # leave nothing of them behind.
+    rm -rf -- "$fixture" "$secret_root"
+    if "$STAGER" "$slot" >/tmp/rtv-seed-clean.log 2>&1; then
+        check_fails "config-seed: a previous launch's staged files do not survive restaging" \
+            test -e "$payload/$rel"
+    else
+        fail "config-seed: the stager failed on the cleanup run (see /tmp/rtv-seed-clean.log)"
+    fi
+}
+
 # --- host-side model-endpoint preflight -------------------------------------
 # Sections `net` and `forgery` are MEANINGLESS (and produce dozens of
 # misleading FAILs) when the guest cannot reach the model API: a batch worker
@@ -1789,9 +1970,9 @@ preflight_endpoint() {
 }
 
 # --- section dispatch ------------------------------------------------------
-# The seven sections, in the fixed order they always run under `--section all`.
+# The eight sections, in the fixed order they always run under `--section all`.
 # `net` and `forgery` depend on a reachable model endpoint; the rest do not.
-ALL_SECTIONS=(boot net l2 creds lifecycle malrepo forgery)
+ALL_SECTIONS=(boot net l2 creds lifecycle malrepo forgery seed)
 ENDPOINT_SECTIONS=(net forgery)
 is_endpoint_section() {
     local s
@@ -1815,7 +1996,7 @@ resolve_sections() {
 # name is therefore checked HERE, so an unknown section aborts the whole run.
 case "$SECTION" in
     all) ;;
-    boot | net | l2 | creds | lifecycle | malrepo | forgery) ;;
+    boot | net | l2 | creds | lifecycle | malrepo | forgery | seed) ;;
     *) die "unknown --section '$SECTION'" ;;
 esac
 
