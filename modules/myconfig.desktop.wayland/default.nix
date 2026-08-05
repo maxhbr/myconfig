@@ -208,6 +208,7 @@ in
         ./home-manager.mako.nix
         ./home-manager.foot.nix
         ./home-manager.wayvnc.nix
+        ./home-manager.wprs.nix
         ./home-manager.wlogout.nix
         ./home-manager.services.voxtype.nix
         {
