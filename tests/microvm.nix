@@ -883,8 +883,30 @@ in
       liteLauncher = findPkg liteCfg.environment.systemPackages "agent-microvm";
       fullLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
 
+      # A lite host WITH the SSH control channel, so `sshd.service` really
+      # exists in the guest and the seeding unit's `before = [ "sshd.service"
+      # ... ]` is an ordering against a REAL unit rather than a string in a
+      # list nothing resolves.
+      liteSshHost = liteHostWith [
+        {
+          myconfig.ai.microvm = {
+            enableSsh = lib.mkForce true;
+            sshPublicKeyFile = pkgs.writeText "agent-microvm-test.pub" "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA test\n";
+          };
+        }
+      ];
+      liteSshGuest = liteSshHost.config.microvm.vms.${liteSlot.name}.config.config;
+
       seedShares = builtins.filter (s: s.tag == liteSeed.guestTag) liteGuest.microvm.shares;
       seedUnit = liteGuest.systemd.services.agent-config-seed;
+      # Every unit the seeding oneshot must precede, from the SAME sources the
+      # module orders against.
+      seedBeforeUnits = [
+        "sshd.service"
+        jobs.controllerUnit
+        "agent-state-link.service"
+        "agent-model-config.service"
+      ];
       hmServices =
         cfg: builtins.filter (n: lib.hasPrefix "home-manager" n) (builtins.attrNames cfg.systemd.services);
       # The allowlist a host would get with a DIFFERENT selection, to prove the
@@ -953,11 +975,29 @@ in
             let
               s = lib.head seedShares;
             in
-            s.source == liteSeed.slotDir liteSlot.name
+            s.source == liteSeed.hostPayloadDir liteSlot.name
             && s.mountPoint == liteSeed.guestMountPoint
             && s.proto == "virtiofs"
             && (s.readOnly or false);
-          message = "the config-seed share must be the per-slot staging directory, mounted READ-ONLY at ${liteSeed.guestMountPoint}";
+          message = "the config-seed share must be the per-slot staging PAYLOAD directory, mounted READ-ONLY at ${liteSeed.guestMountPoint}";
+        }
+        {
+          # The manifest names the host home and every SKIPPED,
+          # credential-shaped host file name. It must therefore stay OUTSIDE
+          # everything the untrusted guest can see: not the share source, and
+          # not below it.
+          assertion =
+            let
+              manifest = liteSeed.hostManifest liteSlot.name;
+            in
+            builtins.all (
+              s: manifest != s.source && !(lib.hasPrefix "${s.source}/" manifest)
+            ) liteGuest.microvm.shares;
+          message = "the staging manifest ${liteSeed.hostManifest liteSlot.name} must not be inside any guest share";
+        }
+        {
+          assertion = liteSeed.manifestMode == "0400";
+          message = "the staging manifest must be root-only (0400), got ${liteSeed.manifestMode}";
         }
         {
           # No host home (or any other broad host directory) is ever mounted:
@@ -973,9 +1013,30 @@ in
           # The staging directory is root-owned and NOT writable by the guest
           # agent (virtiofsd passes ownership through unchanged).
           assertion =
-            builtins.elem "d ${liteSeed.slotDir liteSlot.name} 0555 root root - -" liteCfg.systemd.tmpfiles.rules
-            && builtins.elem "d ${liteSeed.hostPayloadDir liteSlot.name} 0555 root root - -" liteCfg.systemd.tmpfiles.rules;
-          message = "the per-slot staging directories must be pre-created root-owned 0555";
+            builtins.elem "d ${liteSeed.slotDir liteSlot.name} ${liteSeed.slotDirMode} root root - -" liteCfg.systemd.tmpfiles.rules
+            && builtins.elem "d ${liteSeed.hostPayloadDir liteSlot.name} ${liteSeed.dirMode} root root - -" liteCfg.systemd.tmpfiles.rules;
+          message = "the per-slot staging directories must be pre-created root-owned";
+        }
+        {
+          # ... and root-ONLY: no group/other bit anywhere in the staged tree,
+          # so neither the guest agent nor another unprivileged HOST user can
+          # read the operator's staged configuration.
+          assertion = builtins.all (m: lib.hasSuffix "00" m) [
+            liteSeed.rootMode
+            liteSeed.slotDirMode
+            liteSeed.dirMode
+            liteSeed.fileMode
+            liteSeed.manifestMode
+          ];
+          message = "the staged tree must be root-only, got ${
+            toString [
+              liteSeed.rootMode
+              liteSeed.slotDirMode
+              liteSeed.dirMode
+              liteSeed.fileMode
+              liteSeed.manifestMode
+            ]
+          }";
         }
         {
           assertion = builtins.all (r: !(lib.hasInfix "config-seed" r)) enabledCfg.systemd.tmpfiles.rules;
@@ -992,12 +1053,43 @@ in
           # the interactive control channel, the trusted batch controller (which
           # starts the untrusted worker) and the agent-state linker (whose
           # symlinks the copy must not write through).
-          assertion = builtins.all (u: builtins.elem u seedUnit.before) [
-            "sshd.service"
-            jobs.controllerUnit
-            "agent-state-link.service"
-          ];
-          message = "the guest seeding unit must be ordered before sshd, ${jobs.controllerUnit} and agent-state-link.service, got ${toString seedUnit.before}";
+          assertion = builtins.all (u: builtins.elem u seedUnit.before) seedBeforeUnits;
+          message = "the guest seeding unit must be ordered before ${toString seedBeforeUnits}, got ${toString seedUnit.before}";
+        }
+        {
+          # ... and those really are UNITS of the lite guest, not strings
+          # nothing resolves. `sshd` only exists when the control channel is
+          # enabled, so it is checked on a lite host that has it.
+          assertion =
+            liteSshHost.config.myconfig.ai.microvm.enableSsh
+            && (liteSshGuest.systemd.services ? sshd || liteSshGuest.services.openssh.enable)
+            && builtins.all (
+              u: builtins.elem u liteSshGuest.systemd.services.agent-config-seed.before
+            ) seedBeforeUnits;
+          message = "a lite guest WITH the SSH control channel must have sshd and order the seeding unit before it";
+        }
+        {
+          # The lite guest has no `home-manager-agent.service` to be ordered
+          # after, so the model-config unit — which writes INTO the same home
+          # the seeder populates with `cp -R`/`chown -R`/`chmod -R` — must be
+          # ordered after the SEEDER instead. Without this the two write
+          # /home/agent unordered.
+          assertion =
+            let
+              a = liteGuest.systemd.services.agent-model-config.after;
+            in
+            builtins.elem liteSeed.guestUnit a && !(builtins.elem "home-manager-agent.service" a);
+          message = "the lite guest's agent-model-config must be ordered after ${liteSeed.guestUnit}, got ${toString liteGuest.systemd.services.agent-model-config.after}";
+        }
+        {
+          # Positive control: under `full` the SAME unit still orders itself
+          # after guest home-manager activation (unchanged by this phase).
+          assertion =
+            let
+              a = guest0Cfg.systemd.services.agent-model-config.after;
+            in
+            builtins.elem "home-manager-agent.service" a && !(builtins.elem liteSeed.guestUnit a);
+          message = "positive control: the full guest's agent-model-config must still order after home-manager-agent.service, got ${toString guest0Cfg.systemd.services.agent-model-config.after}";
         }
         {
           assertion = seedUnit.unitConfig.RequiresMountsFor == liteSeed.guestMountPoint;
@@ -1091,6 +1183,45 @@ in
           message = "a relative configSeed.hostHome must be rejected at eval";
         }
         {
+          # The MIRROR of state.nix's guestDotfiles collision guard (which is
+          # dead code under `lite`): staging a path that is also a PERSISTED
+          # agent-state directory would leave the state linker refusing to
+          # replace a non-empty directory, i.e. persistence silently off.
+          assertion = seedRejects "overlaps the" [
+            {
+              myconfig.ai.microvm = {
+                enabledAgents = [
+                  "codex"
+                  "hermes"
+                ];
+                configSeed.extraPaths = [ ".hermes/config.yaml" ];
+              };
+            }
+          ];
+          message = "an allowlist entry inside a persisted agent-state directory must be rejected at eval";
+        }
+        {
+          # Positive control for the test above: `.hermes` really IS a declared
+          # persistent-state directory of the selected registry there.
+          assertion = builtins.elem ".hermes" (
+            (liteHostWith [
+              {
+                myconfig.ai.microvm.enabledAgents = [
+                  "codex"
+                  "hermes"
+                ];
+              }
+            ])._module.args.agentState.declaredDirs
+          );
+          message = "positive control: selecting hermes must declare the '.hermes' persistent-state directory";
+        }
+        {
+          # ... and the DEFAULT lite selection is free of such an overlap (the
+          # rejection above cannot be masking a permanently failing host).
+          assertion = liteSeed.allowedPaths != [ ] && liteCfg.assertions != [ ];
+          message = "positive control: the default lite host must have a non-empty allowlist and real assertions";
+        }
+        {
           # Positive control: the unmodified lite host trips NO assertion, so
           # the rejections above cannot pass vacuously.
           assertion = builtins.filter (a: !a.assertion) liteCfg.assertions == [ ];
@@ -1107,6 +1238,10 @@ in
         seederBin = "${liteSeed.seeder}/bin/agent-config-seed-apply";
         liteLauncherBin = "${liteLauncher}/bin/agent-microvm";
         fullLauncherBin = "${fullLauncher}/bin/agent-microvm";
+        # Modes come from the module, so this check follows a policy change
+        # instead of pinning yesterday's numbers.
+        FILE_MODE = liteSeed.fileMode;
+        DIR_MODE = liteSeed.dirMode;
         allowlist = lib.concatStringsSep "\n" liteSeed.allowedPaths;
       }
       ''
@@ -1134,21 +1269,39 @@ in
           || { echo "the stager does not reject paths escaping the host home" >&2; exit 1; }
         grep -q 'resolved_is_allowed' "$stagerBin" \
           || { echo "the stager has no resolved-path policy" >&2; exit 1; }
+        # ... and the denylist is applied to the RESOLVED TARGET too, not only
+        # to the name a path is reached under: otherwise ONE benignly named
+        # symlink in the host home (`.codex/config.toml` -> `.codex/auth.json`,
+        # `.agents/skills/x` -> `~/.ssh`) stages a credential.
+        grep -q 'resolved_is_denied' "$stagerBin" \
+          || { echo "the stager does not apply the denylist to resolved targets" >&2; exit 1; }
+        test "$(grep -c 'resolved_is_denied "' "$stagerBin")" -ge 3 \
+          || { echo "the resolved-target denylist must guard entries, files AND subdirectories" >&2; exit 1; }
         # Only regular files and directories, never setuid/setgid.
         grep -q 'setuid/setgid file' "$stagerBin" \
           || { echo "the stager does not skip setuid/setgid files" >&2; exit 1; }
         grep -q -- '-type d -o -type f' "$stagerBin" \
           || { echo "the stager does not restrict the walk to files/directories" >&2; exit 1; }
-        # The destination is CLEANED before every launch.
-        grep -q 'rm -rf -- "$PAYLOAD" "$MANIFEST"' "$stagerBin" \
+        # The destination is CLEANED before every launch (the payload tree AND
+        # the previous manifest, whatever they are named).
+        grep -qE 'rm -rf --.*\$PAYLOAD' "$stagerBin" \
           || { echo "the stager does not clean its destination before staging" >&2; exit 1; }
-        # Everything it writes is root-owned and non-writable by the guest agent.
+        grep -qE 'rm -rf --.*(\$PAYLOAD.*\$MANIFEST|\$MANIFEST)' "$stagerBin" \
+          || { echo "the stager does not remove the previous manifest" >&2; exit 1; }
+        # Everything it writes is root-owned and NOT readable by the guest agent
+        # (or by any other unprivileged user on the host).
         grep -q -- '-o root -g root' "$stagerBin" \
           || { echo "the stager does not stage root-owned files" >&2; exit 1; }
-        grep -qE '^readonly FILE_MODE=.?0444' "$stagerBin" \
-          || { echo "staged files must be mode 0444" >&2; exit 1; }
-        grep -qE '^readonly DIR_MODE=.?0555' "$stagerBin" \
-          || { echo "staged directories must be mode 0555" >&2; exit 1; }
+        grep -qE "^readonly FILE_MODE=.?$FILE_MODE" "$stagerBin" \
+          || { echo "staged files must be mode $FILE_MODE" >&2; exit 1; }
+        grep -qE "^readonly DIR_MODE=.?$DIR_MODE" "$stagerBin" \
+          || { echo "staged directories must be mode $DIR_MODE" >&2; exit 1; }
+        for m in "$FILE_MODE" "$DIR_MODE"; do
+          case "$m" in
+            *00) ;;
+            *) echo "the staged tree must not be group/other-accessible ($m)" >&2; exit 1 ;;
+          esac
+        done
         # A manifest records what was staged.
         grep -q 'manifest' "$stagerBin" \
           || { echo "the stager writes no manifest" >&2; exit 1; }

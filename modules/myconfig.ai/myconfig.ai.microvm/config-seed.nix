@@ -1,4 +1,4 @@
-# Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
 # myconfig.ai.microvm — RUNTIME, ALLOWLISTED AGENT-CONFIGURATION STAGING
@@ -18,10 +18,12 @@
 #   host allowlisted config
 #           │ copy with symlink dereferencing, at LAUNCH time (../launcher.nix)
 #           ▼
-#   ${runtimeRoot}/config-seed/<slot>/home        root:root, agent-READONLY
-#           │ per-slot, READ-ONLY virtiofs share (../guest.nix)
+#   ${runtimeRoot}/config-seed/<slot>/home        root:root 0500/0400
+#           │ per-slot, READ-ONLY virtiofs share (../guest.nix), whose source
+#           │ is exactly that `home` PAYLOAD directory — the sibling manifest
+#           │ stays host-side, outside the share
 #           ▼
-#   /run/agent-config-seed/home
+#   /run/agent-config-seed
 #           │ root-owned guest oneshot, BEFORE sshd and the job controller
 #           ▼
 #   /home/agent                                   agent-owned, DISPOSABLE
@@ -41,7 +43,10 @@
 #     id_ed25519, .env, .netrc, cookies*, *session*, …) is applied as defence
 #     in depth to every path component — at EVALUATION time to the allowlist
 #     itself (so a bad registry/`extraPaths` entry fails the build) AND at
-#     runtime to every file inside an allowlisted DIRECTORY.
+#     runtime to every file inside an allowlisted DIRECTORY *and to the
+#     RESOLVED target of every entry/file*, so a benignly NAMED symlink
+#     (`.codex/config.toml` -> `.codex/auth.json`, `.agents/skills/x` -> `~/.ssh`)
+#     cannot smuggle credential material past a name-only check.
 #   * ESCAPES ARE REJECTED — an entry with `..`, an absolute path or a symlink
 #     resolving outside the configured host home is refused. The only exception
 #     is `/nix/store`, which is where home-manager renders every dotfile: such
@@ -49,19 +54,39 @@
 #     a store it does not have).
 #   * NO SOCKETS/DEVICES/FIFOS/SETUID — only regular files and directories are
 #     copied, and setuid/setgid files are skipped.
-#   * ROOT-OWNED, AGENT-READONLY — the staged tree is root:root 0555/0444, so
-#     the untrusted guest `agent` user cannot modify what the host staged
-#     (invariant 7). The share is additionally mounted READ-ONLY.
+#   * ROOT-OWNED, ROOT-ONLY — the staged tree is root:root 0500/0400, so the
+#     untrusted guest `agent` user can neither modify nor even read what the
+#     host staged directly (invariant 7); it only ever sees the COPY the guest
+#     root seeder hands it. The same modes keep other UNPRIVILEGED HOST users
+#     out of the operator's staged configuration while it sits under the
+#     persistent `runtimeRoot`. The share is additionally mounted READ-ONLY.
 #   * CLEANED BEFORE EVERY LAUNCH — the per-slot destination is removed and
 #     recreated by the stager, so nothing from a previous task can leak into
 #     the next one.
-#   * A MANIFEST (`manifest.json`, root:root 0444) records the policy plus what
+#   * A MANIFEST (`manifest.json`, root:root 0400) records the policy plus what
 #     was staged and what was skipped and why, so an operator can audit a
-#     session without guessing.
+#     session without guessing. It lives NEXT TO the payload directory, not
+#     inside it: the share source is the payload, so the manifest — which
+#     names the host home and every skipped credential-SHAPED host file name —
+#     is never visible to the untrusted guest.
 #   * MODEL CREDENTIALS ARE NEVER STAGED — the upstream key lives only in the
 #     host LiteLLM proxy; the guest gets the endpoint through
 #     `environment.variables` (../guest.nix) and the boot-time model discovery
 #     (../guest-model-config.nix).
+#
+# Residual risks (deliberately NOT claimed to be handled)
+# -------------------------------------------------------
+# Everything above assumes the host home is TRUSTED. An attacker who already
+# has write access INSIDE it can still defeat the name-based controls:
+#   * TOCTOU — `realpath -e` and the subsequent `install` are two syscall
+#     sequences; the resolved path can be swapped for a symlink in between and
+#     root `install` would follow it.
+#   * HARDLINKS — a hardlink has no target name, so `x/config.toml` hardlinked
+#     to `auth.json` is indistinguishable from a real config file.
+# Both are out of scope: an attacker with write access to the trusted home can
+# simply edit an allowlisted file instead. They are documented here and in
+# docs/agent-microvm-security-model.md so nobody mistakes the denylist for a
+# boundary against a compromised host home.
 #
 # Profile boundary
 # ----------------
@@ -89,6 +114,10 @@
   # oneshot can be ordered before the TRUSTED job controller by NAME from a
   # single source rather than a second hardcoded string.
   agentJobs,
+  # The ONE definition of the task-scoped agent-state paths (state.nix). Its
+  # `declaredDirs` must stay DISJOINT from what is staged here, otherwise the
+  # seeding copy and the state linker would fight over the same directory.
+  agentState,
   ...
 }:
 let
@@ -173,6 +202,15 @@ let
   malformedPaths = lib.filter (p: !pathWellFormed p) allowedPaths;
   deniedPaths = lib.filter (p: pathWellFormed p && pathDenied p) allowedPaths;
 
+  # Staged configuration and PERSISTED agent state must be disjoint: the
+  # seeding oneshot runs before the state linker, which refuses to replace a
+  # non-empty directory (../state.nix), so an overlap would silently disable
+  # persistence for that directory. Prefix-wise in both directions, because
+  # nesting is just as bad as equality.
+  stateCollisions = lib.filter (
+    p: lib.any (d: p == d || lib.hasPrefix "${d}/" p || lib.hasPrefix "${p}/" d) agentState.declaredDirs
+  ) allowedPaths;
+
   # --- the ONE definition of every config-seed path / mode ----------------
   paths = rec {
     # Whether this mechanism is active at all (consumed by guest.nix, which
@@ -183,26 +221,42 @@ let
     # ---- host side ----------------------------------------------------
     root = "${cfg.runtimeRoot}/config-seed";
     slotDir = slotName: "${root}/${slotName}";
-    # The PAYLOAD lives in its own subdirectory so the manifest (metadata, not
-    # configuration) is never copied into the guest home.
+    # The PAYLOAD lives in its own subdirectory, and that subdirectory — NOT
+    # the slot directory — is the share source (see `shareSource`). So the
+    # manifest is neither copied into the guest home nor visible to the guest
+    # at all: it names the host home and every skipped credential-SHAPED host
+    # file name, which the untrusted side has no business learning.
     homeSubdir = "home";
     manifestName = "manifest.json";
     hostPayloadDir = slotName: "${slotDir slotName}/${homeSubdir}";
     hostManifest = slotName: "${slotDir slotName}/${manifestName}";
+    # What ../guest.nix hands to virtiofsd.
+    shareSource = hostPayloadDir;
 
     # ---- permission facts (host stager + guest seeder agree) -----------
     # virtiofsd passes ownership through unchanged, so these ARE the effective
     # permissions inside the guest: root-owned and NOT writable by the
     # unprivileged `agent` user (invariant 7).
-    slotDirMode = "0555";
-    dirMode = "0555";
-    fileMode = "0444";
-    manifestMode = "0444";
+    # ROOT-ONLY (0500/0400) rather than world-readable: virtiofsd runs as root
+    # on the host and the guest seeder runs as root in the guest, so nothing
+    # unprivileged — on either side — needs to read the staged tree, and the
+    # operator's configuration is not exposed to other local host users while
+    # it sits under the persistent `runtimeRoot`.
+    rootMode = "0700";
+    slotDirMode = "0500";
+    dirMode = "0500";
+    fileMode = "0400";
+    manifestMode = "0400";
     # Bounds on what a single launch may copy, so a huge (or maliciously
     # grown) allowlisted directory cannot fill the host runtime root or stall
     # a launch. Over-budget entries are SKIPPED and recorded in the manifest.
     maxFileBytes = 1048576;
     maxTotalBytes = 33554432;
+    # Bound on the NUMBER of files one launch may stage. Two `jq` forks per
+    # staged file is the stager's dominant cost, so an accidentally huge
+    # allowlisted tree would otherwise add seconds to every launch. Files past
+    # the budget are SKIPPED and recorded in the manifest.
+    maxFiles = 1024;
     # Depth bound for walking an allowlisted directory (a symlink loop cannot
     # turn the copy into an unbounded walk).
     maxDepth = 12;
@@ -210,8 +264,9 @@ let
     # ---- guest side (identical for every slot — the share hides the slot) --
     guestTag = "configseed";
     guestMountPoint = "/run/agent-config-seed";
-    guestPayloadDir = "${guestMountPoint}/${homeSubdir}";
-    guestManifest = "${guestMountPoint}/${manifestName}";
+    # The share source IS the payload directory, so the guest sees the staged
+    # home directly at the mount point (and the manifest not at all).
+    guestPayloadDir = guestMountPoint;
     guestHome = "/home/agent";
     guestUser = "agent";
     # The guest `agent` user is an `isNormalUser`, so its primary group is
@@ -252,12 +307,14 @@ let
       readonly SEED_ROOT=${lib.escapeShellArg paths.root}
       readonly PAYLOAD_SUBDIR=${lib.escapeShellArg paths.homeSubdir}
       readonly MANIFEST_NAME=${lib.escapeShellArg paths.manifestName}
+      readonly ROOT_MODE=${lib.escapeShellArg paths.rootMode}
       readonly SLOT_DIR_MODE=${lib.escapeShellArg paths.slotDirMode}
       readonly DIR_MODE=${lib.escapeShellArg paths.dirMode}
       readonly FILE_MODE=${lib.escapeShellArg paths.fileMode}
       readonly MANIFEST_MODE=${lib.escapeShellArg paths.manifestMode}
       readonly MAX_FILE_BYTES=${toString paths.maxFileBytes}
       readonly MAX_TOTAL_BYTES=${toString paths.maxTotalBytes}
+      readonly MAX_FILES=${toString paths.maxFiles}
       readonly MAX_DEPTH=${toString paths.maxDepth}
       # The ONLY paths that may ever cross the boundary (allowlist, generated
       # from the SELECTED agents' registry `configPaths` + `extraPaths`).
@@ -325,6 +382,7 @@ let
       skipped_ndjson="$(mktemp)"
       trap 'rm -f -- "$staged_ndjson" "$skipped_ndjson"' EXIT
       total_bytes=0
+      total_files=0
       note_staged() {
           jq -nc --arg path "$1" --arg kind "$2" --argjson bytes "$3" \
               '{path:$path, kind:$kind, bytes:$bytes}' >> "$staged_ndjson"
@@ -342,7 +400,7 @@ let
       # ---- the destination is CLEANED before every launch ----------------
       # Nothing a previous task staged (or a previous generation's allowlist
       # allowed) may survive into this launch.
-      install -d -m 0755 -o root -g root -- "$SEED_ROOT"
+      install -d -m "$ROOT_MODE" -o root -g root -- "$SEED_ROOT"
       install -d -m "$SLOT_DIR_MODE" -o root -g root -- "$SLOT_DIR"
       rm -rf -- "$PAYLOAD" "$MANIFEST"
       install -d -m "$DIR_MODE" -o root -g root -- "$PAYLOAD"
@@ -362,41 +420,84 @@ let
           esac
       }
 
+      # The denylist must also be applied to the RESOLVED TARGET, not only to
+      # the name a path is reached under. Without this, one benignly NAMED
+      # symlink in the host home defeats the whole control:
+      #   .codex/config.toml    -> .codex/auth.json   (a credential staged as
+      #                                                 "config.toml")
+      #   .agents/skills/notes  -> ~/.ssh             (every file under it
+      #                                                 judged by its LINK-
+      #                                                 relative name)
+      # Both resolve INSIDE the host home, so `resolved_is_allowed` passes and
+      # only a check on the real name can stop them.
+      resolved_is_denied() {
+          local real="$1" probe
+          case "$real" in
+              "$home_real"/*) probe="''${real#"$home_real"/}" ;;
+              # A store path's own top-level name is a mangled, hash-prefixed
+              # derivation name (home-manager renders `~/.config/git/config`
+              # as `…-hm_.config-git-config`), so judging IT would produce
+              # false positives; the components BELOW it are real file names
+              # and are checked. Store content is world-readable anyway.
+              /nix/store/*/*) probe="''${real#/nix/store/*/}" ;;
+              /nix/store/*) probe="" ;;
+              # Anything else never gets here (resolved_is_allowed rejects it
+              # first); fail CLOSED regardless.
+              *) return 0 ;;
+          esac
+          [[ -n "$probe" ]] || return 1
+          path_is_denied "$probe"
+      }
+
       # ---- one regular file ---------------------------------------------
+      # Returns 0 only when the file was actually STAGED, so callers can count
+      # what landed rather than what was attempted.
       stage_file() {
           local rel="$1" src="$2" real size
           real="$(realpath -e -- "$src" 2>/dev/null)" || {
               note_skipped "$rel" "rejected: unresolvable path"
-              return 0
+              return 1
           }
           resolved_is_allowed "$real" || {
               note_skipped "$rel" "rejected: resolves outside the host home ($real)"
-              return 0
+              return 1
           }
+          # The denylist on the RESOLVED name, not just on `$rel` (see
+          # resolved_is_denied): a benignly named link must not stage a
+          # credential.
+          if resolved_is_denied "$real"; then
+              note_skipped "$rel" "rejected: resolves onto a credential-shaped path"
+              return 1
+          fi
           # `-f` after symlink resolution: sockets, FIFOs and device nodes can
           # never reach the guest.
           [[ -f "$real" ]] || {
               note_skipped "$rel" "rejected: not a regular file"
-              return 0
+              return 1
           }
           if [[ -u "$real" || -g "$real" ]]; then
               note_skipped "$rel" "rejected: setuid/setgid file"
-              return 0
+              return 1
           fi
           size="$(stat -Lc %s -- "$real")"
           if (( size > MAX_FILE_BYTES )); then
               note_skipped "$rel" "rejected: larger than $MAX_FILE_BYTES bytes ($size)"
-              return 0
+              return 1
           fi
           if (( total_bytes + size > MAX_TOTAL_BYTES )); then
               note_skipped "$rel" "rejected: the ''${MAX_TOTAL_BYTES}-byte staging budget is exhausted"
-              return 0
+              return 1
+          fi
+          if (( total_files >= MAX_FILES )); then
+              note_skipped "$rel" "rejected: the ''${MAX_FILES}-file staging budget is exhausted"
+              return 1
           fi
           install -d -m "$DIR_MODE" -o root -g root -- "$(dirname -- "$PAYLOAD/$rel")"
           # Root-owned and NOT writable by the guest agent (invariant 7); the
           # copy dereferences, so no store symlink reaches the guest.
           install -m "$FILE_MODE" -o root -g root -- "$real" "$PAYLOAD/$rel"
           total_bytes=$(( total_bytes + size ))
+          total_files=$(( total_files + 1 ))
           note_staged "$rel" file "$size"
       }
 
@@ -405,8 +506,9 @@ let
       # home-manager shape) is dereferenced and only real files/directories are
       # considered — a dangling link, socket, FIFO or device is not of type
       # f/d and is therefore never even offered. Every file found is still put
-      # through stage_file's own escape/type/denylist checks, because a symlink
-      # INSIDE the tree could point anywhere.
+      # through stage_file's own escape/type/denylist checks — on BOTH its
+      # link-relative name and its RESOLVED target — because a symlink INSIDE
+      # the tree could point anywhere (`skills/notes -> ~/.ssh`).
       stage_dir() {
           local rel="$1" real="$2" f sub real_sub count=0
           install -d -m "$DIR_MODE" -o root -g root -- "$PAYLOAD/$rel"
@@ -424,13 +526,28 @@ let
                       note_skipped "$rel/$sub" "rejected: directory resolves outside the host home"
                       continue
                   fi
+                  # Same reasoning as in stage_file: a subdirectory reached
+                  # under a benign NAME may still BE `~/.ssh`, `~/.gnupg`, …
+                  if resolved_is_denied "$real_sub"; then
+                      note_skipped "$rel/$sub" "rejected: resolves onto a credential-shaped path"
+                      continue
+                  fi
                   install -d -m "$DIR_MODE" -o root -g root -- "$PAYLOAD/$rel/$sub"
                   continue
               fi
-              stage_file "$rel/$sub" "$f"
-              count=$(( count + 1 ))
+              # Count what was STAGED, not what was attempted, so the manifest
+              # is not inflated by skipped files.
+              if stage_file "$rel/$sub" "$f"; then
+                  count=$(( count + 1 ))
+              fi
           done < <(find -L "$real" -mindepth 1 -maxdepth "$MAX_DEPTH" \
                        \( -type d -o -type f \) -print0 2>/dev/null | sort -z)
+          # `-maxdepth` truncation must never be SILENT: an operator reading
+          # the manifest has to see that part of the tree was not considered.
+          if [[ -n "$(find -L "$real" -mindepth "$(( MAX_DEPTH + 1 ))" \
+                          \( -type d -o -type f \) -print -quit 2>/dev/null)" ]]; then
+              note_skipped "$rel" "truncated: content deeper than $MAX_DEPTH levels was not considered"
+          fi
           note_staged_dir "$rel" "$count"
       }
 
@@ -460,10 +577,17 @@ let
               note_skipped "$rel" "rejected: resolves outside the host home ($real)"
               return 0
           }
+          # `$rel` passing the denylist says nothing about WHAT it resolves to:
+          # `.codex/config.toml -> .codex/auth.json` and
+          # `.agents/skills -> ~/.ssh` both look innocent by name.
+          if resolved_is_denied "$real"; then
+              note_skipped "$rel" "rejected: resolves onto a credential-shaped path"
+              return 0
+          fi
           if [[ -d "$real" ]]; then
               stage_dir "$rel" "$real"
           elif [[ -f "$real" ]]; then
-              stage_file "$rel" "$real"
+              stage_file "$rel" "$real" || true
           else
               note_skipped "$rel" "rejected: neither a regular file nor a directory"
           fi
@@ -476,7 +600,10 @@ let
       # ---- the manifest --------------------------------------------------
       # Records the POLICY plus exactly what was staged and what was skipped
       # (and why), so a session can be audited without re-deriving the rules.
-      # Root-owned 0444: the guest may read it, never change it.
+      # It is written NEXT TO the payload directory (the share source is the
+      # PAYLOAD), root-owned 0400, so it is readable by the host operator only
+      # — never by the guest, which has no business learning the host home path
+      # or which credential-shaped files exist next to the staged ones.
       manifest_tmp="$(mktemp "$SLOT_DIR/.manifest.XXXXXX")"
       allowlist_json="$(printf '%s\n' ''${ALLOWLIST[@]+"''${ALLOWLIST[@]}"} \
           | jq -R -s 'split("\n") | map(select(length > 0))')"
@@ -486,18 +613,19 @@ let
           --arg hostHome "$HOST_HOME" \
           --arg stagedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
           --argjson totalBytes "$total_bytes" \
+          --argjson totalFiles "$total_files" \
           --argjson allowlist "$allowlist_json" \
           --slurpfile staged "$staged_ndjson" \
           --slurpfile skipped "$skipped_ndjson" \
           '{version:$version, slot:$slot, hostHome:$hostHome,
-            stagedAt:$stagedAt, totalBytes:$totalBytes,
+            stagedAt:$stagedAt, totalBytes:$totalBytes, totalFiles:$totalFiles,
             allowlist:$allowlist, staged:$staged, skipped:$skipped}' \
           > "$manifest_tmp" \
           || die "could not render the staging manifest"
       chown root:root -- "$manifest_tmp"
       chmod "$MANIFEST_MODE" -- "$manifest_tmp"
       mv -f -- "$manifest_tmp" "$MANIFEST"
-      log "staged $(jq -s length "$staged_ndjson") allowlisted entr(y|ies) for slot $slot ($total_bytes bytes) -> $PAYLOAD"
+      log "staged $(jq -s length "$staged_ndjson") allowlisted entr(y|ies) for slot $slot ($total_files file(s), $total_bytes bytes) -> $PAYLOAD"
     '';
     meta = with lib; {
       description = "Stage allowlisted host agent configuration for a myconfig.ai.microvm slot";
@@ -575,10 +703,17 @@ let
       #   * the agent-state linker — it symlinks persisted directories into the
       #     home, and copying afterwards could write THROUGH such a symlink
       #     into the host-side task state.
+      #   * the boot-time model discovery — it writes
+      #     `$HOME/.pi/agent/extensions/zz-microvm-models.ts` INTO the same
+      #     home this unit populates with `cp -R` + `chown -R` + `chmod -R`.
+      #     Under `full` that ordering came from `home-manager-agent.service`;
+      #     under `lite` that unit does not exist, so it must be stated here
+      #     (../guest-model-config.nix orders itself after THIS unit instead).
       before = [
         "sshd.service"
         agentJobs.controllerUnit
         "agent-state-link.service"
+        "agent-model-config.service"
       ];
       serviceConfig = {
         Type = "oneshot";
@@ -670,6 +805,8 @@ in
     # Path/policy definitions + the generated scripts and guest fragment,
     # exported for guest.nix (share + unit) and launcher.nix (staging).
     {
+      # NOTE: consumed by ../guest.nix (share + guest unit), ../launcher.nix
+      # (per-launch staging) and ../guest-model-config.nix (ordering).
       _module.args.agentConfigSeed = paths // {
         inherit
           stager
@@ -727,7 +864,33 @@ in
             default whenever staging is enabled) or turn the staging off.
           '';
         }
+        {
+          # The MIRROR of ../state.nix's guestDotfiles collision guard, which is
+          # gated on `guestDotfiles.enable` and is therefore dead code exactly
+          # when this mechanism provisions the home. The seeding oneshot runs
+          # BEFORE `agent-state-link.service`, so an overlap would have the
+          # linker refuse to replace the (now non-empty) staged directory and
+          # persistence would silently not happen.
+          assertion = !seedCfg.enable || stateCollisions == [ ];
+          message = ''
+            myconfig.ai.microvm.configSeed: the staging allowlist overlaps the
+            persisted agent-state directories
+            (${lib.concatStringsSep ", " (map (p: "'${p}'") stateCollisions)}).
+            The seeding oneshot copies the staged tree into the guest home
+            BEFORE the agent-state linker runs, so the linker would find a
+            non-empty directory and refuse to link the persisted state —
+            persistence would silently stop working. Keep the staged
+            configuration paths disjoint from every agent's
+            `persistentState.directories`.
+          '';
+        }
       ];
+
+      # The generated stager, so an operator (and the real-KVM validation
+      # suite, ../runtime-validation.sh section `seed`) can run and audit the
+      # exact staging policy the launcher uses. It needs root to write the
+      # root-owned tree, and it takes NO policy argument — only a slot name.
+      environment.systemPackages = lib.mkIf seedCfg.enable [ stager ];
 
       # virtiofsd refuses to start when a share source is missing, so every
       # slot's seed directory (and its payload subdirectory) must exist before
@@ -735,7 +898,7 @@ in
       # MODES are the trust boundary: root-owned, not writable by the guest
       # `agent` user (virtiofsd passes ownership through unchanged).
       systemd.tmpfiles.rules = lib.mkIf seedCfg.enable (
-        [ "d ${paths.root} 0755 root root - -" ]
+        [ "d ${paths.root} ${paths.rootMode} root root - -" ]
         ++ lib.concatMap (slot: [
           "d ${paths.slotDir slot.name} ${paths.slotDirMode} root root - -"
           "d ${paths.hostPayloadDir slot.name} ${paths.dirMode} root root - -"

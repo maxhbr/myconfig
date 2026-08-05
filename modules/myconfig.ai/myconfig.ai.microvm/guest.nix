@@ -450,12 +450,18 @@ let
       ]
       # FIFTH share (lightweight plan phase 3) — the slot's CONFIG SEED, the
       # host-staged copy of the ALLOWLISTED host agent configuration. READ-ONLY
-      # and root-owned (the stager writes it as root:root 0555/0444, and
+      # and root-owned (the stager writes it as root:root 0500/0400, and
       # virtiofsd passes ownership through unchanged), so the untrusted guest
-      # `agent` user can neither modify what the host staged nor make the guest
-      # seeding read anything else. Only exists when staging is enabled (the
-      # `lite` profile); the `full` profile keeps its four shares and its guest
-      # home-manager activation.
+      # `agent` user can neither read the staged tree directly nor modify what
+      # the host staged — it only ever gets the COPY the guest root seeder
+      # hands it. Only exists when staging is enabled (the `lite` profile); the
+      # `full` profile keeps its four shares and its guest home-manager
+      # activation.
+      #
+      # The source is the slot's PAYLOAD directory, not the slot directory:
+      # the staging manifest is the payload's SIBLING and must stay host-side
+      # (it names the host home and every skipped credential-shaped host file
+      # name).
       #
       # This is NOT a host-home mount: the source is a per-slot directory under
       # `${cfg.runtimeRoot}/config-seed`, cleaned and repopulated from the
@@ -463,7 +469,7 @@ let
       ++ lib.optional agentConfigSeed.enable {
         proto = "virtiofs";
         tag = agentConfigSeed.guestTag;
-        source = agentConfigSeed.slotDir slot.name;
+        source = agentConfigSeed.shareSource slot.name;
         mountPoint = agentConfigSeed.guestMountPoint;
         readOnly = true;
       };
