@@ -367,8 +367,21 @@ Per launch the launcher
    group/other-writable, and no host-key material anywhere in the writable tree
    — and **refuses to start the VM** on any mismatch, and
 4. on teardown **removes the complete tree** — but only after proving both bind
-   mounts are gone (deleting through a live bind would destroy the clone or the
-   task's persisted state), then recreates the empty skeleton virtiofsd needs.
+   mounts are gone *and* that `findmnt` reports no other mount anywhere at or
+   below the session root (deleting through a live bind would destroy the clone
+   or the task's persisted state, and `rm --one-file-system` is no protection
+   because a same-filesystem bind shares its `st_dev`), then recreates the empty
+   skeleton virtiofsd needs.
+
+The host-key sweep in step 3 deliberately **prunes** `workspace/` and `state/`:
+those two are the user's own clone and the task's agent state, which the host
+never writes key material into and the agent may write to freely — without the
+prune an ordinary `…/ssh_host_ed25519_key.pub` in a NixOS/agenix repository
+would refuse the launch, and a hostile agent could deny every future launch of
+its slot by creating one. Step 2 also normalises the **mode of the clone root**
+to the table's value for the mount point, because a mount point shows the
+mounted tree's root mode and `git clone` (root's umask, the source repository's
+`core.sharedRepository`) is not something the launcher controls.
 
 Inspect a slot's tree by hand with the same policy the launcher uses:
 

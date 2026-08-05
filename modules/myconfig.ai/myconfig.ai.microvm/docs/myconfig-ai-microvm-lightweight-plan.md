@@ -76,7 +76,52 @@
   was taken to consolidate it. The consolidated layout is `lite`-only and gated
   by `session.enable`, and the evaluated-slice diff from `AGENTS.md` proves the
   `full` host is byte-identical (only the two `configurationRevision`-derived
-  artefacts differ, as expected in a dirty tree).
+  artefacts differ, as expected in a dirty tree). This is a *temporary* state:
+  carrying both layouts is what makes the module more complex today, so
+  “delete the four-share path” is an explicit task of phase 4 (see its Tasks
+  list) and must be done before the plan is considered complete.
+- **Phase 4 review follow-up, the pre-launch host-key sweep PRUNES the two
+  bind-mount points**: `agent-microvm-verify-session` refuses to launch a slot
+  whose WRITABLE tree contains `ssh_host_*`, but it no longer descends into
+  `workspace/` and `state/`. Those two are the user's own git clone and the
+  task's persisted agent state — content the host never writes key material
+  into and the guest agent may create freely. Without the prune an ordinary
+  repository file (`somedir/ssh_host_ed25519_key.pub` is entirely plausible in a
+  NixOS/agenix clone, and a `.pub` is not secret) would refuse the launch, and a
+  hostile agent could deny every future launch of its slot by creating one. All
+  root-owned directories — the only places host-written key material can land —
+  are still swept, and the eval-time policy independently forbids a host-key
+  directory inside the writable tree.
+- **Phase 4 review follow-up, teardown additionally proves the whole subtree is
+  mount-free**: `clear_session` unmounts and verifies the two binds it knows
+  about and then refuses the `rm -rf` if `findmnt` still reports ANY target at
+  or below the session root. `rm --one-file-system` is no protection here (a
+  bind of a same-filesystem directory shares `st_dev`), and a `rm -rf` that
+  descends through an unexpected mount would delete the user's clone. This is
+  stronger than the plan's “cleanup removes the complete per-session tree” and
+  is kept.
+- **Phase 4 review follow-up, `prepare_session` never `die`s**: it returns
+  non-zero and the call sites decide. It is reachable from `clear_session`,
+  which runs inside the launcher's EXIT trap; an `exit` there would abort the
+  trap before the allocation marker is removed and reserve the slot forever.
+- **Phase 4 review follow-up, the real-KVM suite detects the share layout**:
+  `../runtime-validation.sh` derived its job/bind/staging paths from the
+  four-share layout only. Since almost every check there asserts “nothing
+  forbidden exists under `$X`”, running it on a `lite` host made the `seed`
+  section's seven enforcement checks and the `lifecycle` stale-bind detector
+  pass VACUOUSLY. The suite now picks the layout from the existence of
+  `<runtimeRoot>/sessions`, prints it in its banner, and the `seed` section
+  hard-`FAIL`s if the staged payload does not exist after staging.
+- **Phase 4 review follow-up, `agent-job-worker` on a stdin-only agent set**:
+  the worker reads the prompt TEXT into `prompt` for the registry entries that
+  take `%PROMPT%` as an argv token. `lite` selects only the stdin-driven
+  `codex`, so the generated dispatch reads it nowhere and
+  `writeShellApplication`'s shellcheck gate failed the LITE guest build with
+  SC2034 — undetected because no check forced the lite guest's toplevel. The
+  suppression is now emitted only on hosts where the variable is genuinely
+  unused (`agentRegistry.batchUsesPromptText`), so the `full` script is
+  unchanged, and `microvm-session-tree` forces the lite guest's
+  `system.build.toplevel` and `microvm.declaredRunner`.
 
 - **Phase 3, `rsync`**: the plan suggests `rsync --archive --copy-links` on both
   sides. NOT used. The HOST stager walks the allowlist with `find -L` and copies
@@ -708,10 +753,32 @@ Keep SSH private host keys in a separate read-only share. Do not place them in t
 - Update batch controller and worker paths.
 - Add ownership and mode assertions before VM launch.
 - Ensure a malicious workspace symlink cannot redirect writes into `controller/`, `input/`, or `config-seed/`.
+- **NOT DONE — required follow-up: delete the four-share (`full`) path.**
+  The consolidated layout was introduced *alongside* the historical one so the
+  `full` profile could be proved byte-identical (see the recorded deviations).
+  Until the old path is removed, the module carries two layouts, two launcher
+  spellings and ~20 `if session.enable then … else …` sites, i.e. this phase
+  leaves the module *more* complex than the plan's objective, not less. The
+  removal means: make `session.enable` unconditional, drop the `else` branch in
+  `job.nix`, `state.nix`, `hostkeys.nix`, `config-seed.nix` and `guest.nix`,
+  drop the conditional launcher fragments in `launcher.nix`, drop the
+  `four-share` branch of `../runtime-validation.sh`, and drop the
+  `full`-profile share assertions in `../../../tests/microvm.nix`. It is a
+  separate commit on purpose: it *will* change the `full` host, so it needs its
+  own evaluated-slice review rather than hiding inside this phase.
 
 ### Acceptance criteria
 
 - Lite interactive mode uses one writable virtiofs share plus at most one read-only SSH-key share.
+- The guest units that need one of the new mounts declare it: the workspace bind
+  carries `x-systemd.requires-mounts-for=/run/agent-session`, and `sshd`,
+  `agent-config-seed` and the agent-state linker carry `RequiresMountsFor` on
+  the SUBPATH they use (`/run/agent-session/state`,
+  `/run/agent-session-ro/hostkeys`, `…/config-seed`). A subpath is correct and
+  deliberate: systemd resolves `RequiresMountsFor=` into a dependency on the
+  mount unit of *every* path prefix, so naming the subdirectory pulls in the
+  share's own mount unit and additionally documents which part of the share the
+  unit needs. The tests assert the string; this is the semantics behind it.
 - Batch trust boundaries remain intact.
 - The agent cannot modify root-owned input or controller data.
 - Cleanup removes the complete per-session tree reliably.
