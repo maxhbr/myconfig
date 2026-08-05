@@ -1407,9 +1407,27 @@ in
           || { echo "workspace removal is not scoped to the clone" >&2; exit 1; }
         grep -q "refusing a repository that is itself an agent workspace" "$launcherBin" \
           || { echo "missing workspace-root repository guard" >&2; exit 1; }
-        # 6: standalone clones only.
+        # 6: standalone clones only. The fast path copies the object store
+        # (`--local --no-hardlinks`) and the fallback uses the ordinary git
+        # transport (`--no-local`); NEITHER may borrow objects, so `--shared` /
+        # `--reference` must not appear at all and the absence of an
+        # `objects/info/alternates` file is verified at runtime.
+        grep -q "clone --local --no-hardlinks" "$launcherBin" \
+          || { echo "clones are not created with --local --no-hardlinks" >&2; exit 1; }
         grep -q "clone --no-local" "$launcherBin" \
-          || { echo "clones are not created with --no-local" >&2; exit 1; }
+          || { echo "missing the --no-local clone fallback" >&2; exit 1; }
+        grep -q "objects/info/alternates" "$launcherBin" \
+          || { echo "clones are not verified to be free of object alternates" >&2; exit 1; }
+        # Match only actual `git … clone …` COMMANDS (no '#' before the `git`),
+        # so the explanatory comments naming these flags do not trip the check.
+        if grep -nE '^[^#]*git[^#]*clone[^#]*(--shared|--reference)' "$launcherBin"; then
+          echo "clones must never borrow objects (--shared / --reference)" >&2
+          exit 1
+        fi
+        # Readiness must not burn a fixed multi-second sleep once the guest is
+        # already reachable (lightweight plan phase 7).
+        grep -q "READY_POLL_MIN_MS" "$launcherBin" \
+          || { echo "guest-readiness polling is not exponential-backoff bounded" >&2; exit 1; }
         # 7: the host launcher must never EVALUATE anything the repository
         # provides. Guard against the obvious ways that could creep in.
         for forbidden in "nix-build" "nix build" "nix-shell" "direnv" "npm " "yarn " \
