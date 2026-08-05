@@ -445,6 +445,25 @@ let
   # UNTRUSTED output. It has no way to influence the authoritative result:
   # `controller/` is root-owned 0700 and additionally masked by the unit's
   # `InaccessiblePaths`.
+  # `prompt` is read by the GENERATED dispatch below only for the registry
+  # entries that take the prompt TEXT as an argv token (`%PROMPT%`). A host
+  # whose SELECTED agents are all stdin-driven — `profile = "lite"` selects only
+  # `codex`, which reads the prompt file on stdin — therefore generates a script
+  # in which the variable is genuinely unread, and `writeShellApplication`'s
+  # shellcheck gate fails the BUILD with SC2034. The read is kept (rather than
+  # made conditional) so the two invocation shapes stay symmetrical and enabling
+  # a `%PROMPT%` agent needs no change here; the suppression is emitted ONLY on
+  # the hosts where it is true, so the generated script is unchanged everywhere
+  # else.
+  promptUnusedSuppression = lib.optionalString (!agentRegistry.batchUsesPromptText) (
+    lib.concatStringsSep "\n      " [
+      "# NOTE: on this host every selected batch agent is stdin-driven, so the"
+      "# generated dispatch below never reads `prompt`."
+      "# shellcheck disable=SC2034"
+      ""
+    ]
+  );
+
   agent-job-worker = pkgs.writeShellApplication {
     name = "agent-job-worker";
     runtimeInputs = with pkgs; [ coreutils ];
@@ -460,7 +479,7 @@ let
 
       [[ -r "$PROMPT_FILE" ]] || { log "prompt file $PROMPT_FILE is not readable"; exit 70; }
       # The prompt TEXT, for the registry entries that take it as an argument.
-      prompt="$(cat -- "$PROMPT_FILE")"
+      ${promptUnusedSuppression}prompt="$(cat -- "$PROMPT_FILE")"
 
       # The two invocation shapes the generated dispatch below calls. There is
       # deliberately NO timeout(1) here: the deadline belongs to the trusted

@@ -920,6 +920,28 @@ in
             `persistentState.directories`.
           '';
         }
+        {
+          # `clear_config_seed` (../launcher.nix) removes `<slotDir>/<homeSubdir>`
+          # before every launch and on teardown. Under the consolidated layout
+          # `<slotDir>` is the READ-ONLY session slot directory, which ALSO
+          # holds the slot's persistent SSH host identity — so an empty
+          # `homeSubdir` would delete the whole read-only tree and a
+          # `homeSubdir` that collided with the host-key subdirectory would
+          # delete the slot's identity on every launch. Both are one rename
+          # away; fail the build instead.
+          assertion =
+            !(seedCfg.enable && session.enable)
+            || (paths.homeSubdir != "" && paths.homeSubdir != session.roSubdirs.hostkeys);
+          message = ''
+            myconfig.ai.microvm.configSeed: the staged payload subdirectory
+            ('${paths.homeSubdir}') must be a non-empty name that differs from
+            the read-only tree's host-key subdirectory
+            ('${session.roSubdirs.hostkeys}'). The launcher clears the payload
+            with `rm -rf <read-only slot dir>/<payload subdir>`, so anything
+            else would delete the slot's persistent SSH host identity (or the
+            whole read-only tree) before every launch.
+          '';
+        }
       ];
 
       # The generated stager, so an operator (and the real-KVM validation

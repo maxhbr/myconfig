@@ -182,6 +182,13 @@ let
   # The two BIND-MOUNT points are only created when missing — they may still
   # carry a live bind at this point, and chmodding through it would change the
   # workspace clone or the task's persisted state.
+  #
+  # A failure RETURNS non-zero, it never `die`s: `prepare_session` is also
+  # reached from `clear_session`, which runs inside the EXIT trap
+  # (`cleanup_slot`). A `die` (i.e. `exit 1`) there would abort the trap before
+  # `rm -rf "$SLOTS_DIR/$slot"`, reserving the slot FOREVER — the "second fault
+  # on top of the leak" the teardown comments say must never happen. The call
+  # sites decide what a failure means.
   sessionInstallLine =
     tree: e:
     let
@@ -189,9 +196,9 @@ let
       install = "install -d -m ${e.mode} -o ${toString e.uid} -g ${toString e.gid} -- ${path}";
       guard = if e.strictMode then "" else "[[ -d ${path} ]] || ";
     in
-    "${guard}${install} \\\n    || die \"could not prepare ${tree} ${
+    "${guard}${install} \\\n    || { log \"ERROR: could not prepare ${tree} ${
       if e.rel == "" then "root" else e.rel
-    } of slot $slot\"";
+    } of slot $slot\"; return 1; }";
 
   # The per-slot paths of the two trees, spliced into the configuration section
   # next to the other roots.
@@ -207,6 +214,13 @@ let
     readonly SESSION_RO_ROOT=${lib.escapeShellArg agentSession.roRoot}
     readonly SESSION_WORKSPACE_SUBDIR=${lib.escapeShellArg agentSession.subdirs.workspace}
     readonly SESSION_STATE_SUBDIR=${lib.escapeShellArg agentSession.subdirs.state}
+    # The MODES of the two directories other parts of this launcher also touch
+    # (`prepare_job` on the session root, `setup_agent_state` on the state bind
+    # point). They are read from the layout table so no second authority over
+    # them exists in this script.
+    readonly SESSION_ROOT_MODE=${lib.escapeShellArg (agentSession.modeOf "")}
+    readonly SESSION_WORKSPACE_MODE=${lib.escapeShellArg (agentSession.modeOf agentSession.subdirs.workspace)}
+    readonly SESSION_STATE_MODE=${lib.escapeShellArg (agentSession.modeOf agentSession.subdirs.state)}
     # The generated PRE-LAUNCH verifier: it re-derives every expected owner and
     # mode from the same table and refuses the launch on any mismatch, symlink
     # or replaceable parent directory. The launcher cannot weaken it (it takes
@@ -253,11 +267,38 @@ let
             || die "the session tree of slot $1 failed its pre-launch ownership/mode verification"
     }
 
+    # NOTHING may still be mounted anywhere under a tree we are about to
+    # `rm -rf`: the removal would descend THROUGH the mount and destroy the
+    # user's clone or a task's persisted state, both of which live outside the
+    # tree and must survive it. `rm --one-file-system` is no help here — a bind
+    # mount of a same-filesystem directory shares its st_dev. The two binds this
+    # module creates are unmounted (and verified) by the caller; this catches
+    # every OTHER mount that could be under the tree (an operator's manual
+    # mount, a nested bind, a future third share).
+    session_subtree_unmounted() {
+        local dir="$1" target rc=0
+        while read -r target; do
+            [[ -n "$target" ]] || continue
+            if [[ "$target" == "$dir" || "$target" == "$dir"/* ]]; then
+                log "ERROR: a mount is still present under the session tree $dir: $target"
+                rc=1
+            fi
+        done < <(findmnt -rn -o TARGET 2>/dev/null || true)
+        return "$rc"
+    }
+
     # Remove the COMPLETE per-session tree and recreate the empty skeleton.
     # Both binds must be VERIFIABLY gone first: deleting through a live bind
     # would destroy the workspace clone or the task's persisted state (which
     # both live outside the tree and must survive it). The skeleton is
     # recreated because virtiofsd refuses to start without its share source.
+    #
+    # ORDER MATTERS in `cleanup_slot`: the config-seed clear runs BEFORE this,
+    # because it `rm -rf`s the payload subdirectory of the READ-ONLY slot
+    # directory and the `prepare_session` call at the end of this function is
+    # what puts that (empty) subdirectory back. Reversed, the next launch would
+    # be refused by `verify_session`, which requires every directory of both
+    # layout tables to exist.
     clear_session() {
         local slot="$1" dir
         dir="$(session_dir "$slot")"
@@ -267,6 +308,10 @@ let
         }
         unmount_verified "$(state_slot_dir "$slot")" "$slot" || {
             log "ERROR: refusing to remove the session tree of $slot while its agent-state bind mount survives"
+            return 1
+        }
+        session_subtree_unmounted "$dir" || {
+            log "ERROR: refusing to remove the session tree of $slot while a mount survives underneath it"
             return 1
         }
         if [[ -d "$dir" ]]; then
@@ -279,17 +324,84 @@ let
             log "ERROR: the session tree $dir still exists after removing it"
             return 1
         fi
-        prepare_session "$slot"
+        # virtiofsd refuses to start without its share source, so the empty
+        # skeleton must come back. A failure here is REPORTED, never fatal: this
+        # runs from the EXIT trap, which has to finish releasing the slot.
+        prepare_session "$slot" || {
+            log "ERROR: could not recreate the session skeleton of $slot after removing it"
+            return 1
+        }
     }
+
+    # Bytes of the per-slot job data for `usage`. `du` descends into a bind
+    # mount whose source is on the SAME filesystem (they share st_dev, so
+    # --one-file-system does not stop it), and under this layout the per-slot
+    # job directory CONTAINS the workspace clone and the task's agent state —
+    # both already reported on their own `usage` lines. Excluding them keeps
+    # the "job data" figure meaning what it says instead of double-counting
+    # every byte of the clone.
+    session_job_data_bytes() {
+        [[ -d "$SESSION_ROOT" ]] || { printf '0'; return 0; }
+        du -sb --one-file-system \
+            --exclude="*/$SESSION_WORKSPACE_SUBDIR" \
+            --exclude="*/$SESSION_STATE_SUBDIR" \
+            -- "$SESSION_ROOT" 2>/dev/null | cut -f1
+    }
+
+    # NOTE on the FOREIGN per-slot state scan further down: under this layout
+    # $JOBS_ROOT is the writable session root and $HOSTKEYS_ROOT the read-only
+    # one, so the scan covers both consolidated trees. $STATE_SLOTS_ROOT and the
+    # `$STATE_ROOT/agent-*/workspace` branch are DEAD here (this module creates
+    # nothing under either any more) and simply find nothing — they are kept
+    # because a host migrated FROM the four-share layout still carries that
+    # residue, and reporting it is exactly what those branches are for.
   '';
 
   # One call site each in `run` and `submit`, BEFORE the workspace bind mount
   # and before anything is staged into the tree.
-  sessionPrepare = mkSessionFragment "          " ''prepare_session "$slot"'';
+  sessionPrepare = mkSessionFragment "          " ''
+    prepare_session "$slot" \
+        || die "could not prepare the session tree of slot $slot"
+    # The clone is about to be bind-mounted ONTO a directory of the session
+    # tree, and a mount point shows the MOUNTED tree's root mode — which the
+    # pre-launch verifier rejects if it grants group/other WRITE. That mode
+    # comes from `git clone`, i.e. from root's umask and from what the SOURCE
+    # repository does (`core.sharedRepository` makes git create group-writable
+    # directories), neither of which this launcher controls. Normalise the clone
+    # ROOT to the mode the layout table declares for the mount point, so a
+    # legitimately shared source repository cannot produce a confusing
+    # pre-launch refusal. Only the ROOT: the modes inside the clone are the
+    # user's business.
+    chmod "$SESSION_WORKSPACE_MODE" -- "$clone" \
+        || die "could not normalise the mode of the workspace clone root: $clone"'';
   # ... and one immediately before the VM is started.
   sessionVerify = mkSessionFragment "          " ''verify_session "$slot"'';
   # ... and one in the teardown, so no per-session data outlives the session.
   sessionClear = mkSessionFragment "          " ''clear_session "$slot" || leaked=1'';
+
+  # The MODE of the two directories the rest of this launcher also creates and
+  # which the consolidated layout table already declares. Under `full` these
+  # render to the historical literal `0755` (byte-identity); under the
+  # consolidated layout they resolve to the table's value at RUNTIME, so
+  # session.nix stays the only authority over them.
+  jobRootModeArg = if sessionEnabled then ''"$SESSION_ROOT_MODE"'' else "0755";
+  stateSlotModeArg = if sessionEnabled then ''"$SESSION_STATE_MODE"'' else "0755";
+  # ... and under the consolidated layout the state directory is a BIND-MOUNT
+  # POINT that `prepare_session` already created with the table's owner/mode.
+  # `install -d` would chmod/chown THROUGH a surviving stale bind (i.e. through
+  # the previous task's persisted state), so only create it when missing — the
+  # same treatment session.nix's table gives every non-`strictMode` entry, and
+  # the pre-launch verifier still fails the launch if the owner is wrong.
+  stateSlotInstallGuard = lib.optionalString sessionEnabled ''[[ -d "$mp" ]] || '';
+
+  # `usage`' "job data" line. Under the consolidated layout the per-slot job
+  # directory contains the workspace and agent-state BIND MOUNTS, which `du`
+  # descends into, so the figure is computed by a helper that excludes them.
+  jobDataUsageLine =
+    if sessionEnabled then
+      ''printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(session_job_data_bytes)")"''
+    else
+      ''printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(dir_bytes "$JOBS_ROOT")")"'';
 
   # ... and one in the teardown, so nothing staged survives the session.
   configSeedClear = mkSeedFragment "          " ''clear_config_seed "$slot" || true'';
@@ -1130,7 +1242,7 @@ let
           worker="$(job_worker_dir "$slot")"
           logs="$(job_worker_logs_dir "$slot")"
           spec="$(job_spec "$slot")"
-          install -d -m 0755 -o root -g root -- "$dir"
+          install -d -m ${jobRootModeArg} -o root -g root -- "$dir"
           install -d -m "$JOB_INPUT_DIR_MODE" -o root -g root -- "$input"
           install -d -m "$JOB_CONTROLLER_DIR_MODE" -o root -g root -- "$ctrl"
           install -d -m "$JOB_WORKER_DIR_MODE" \
@@ -1379,7 +1491,7 @@ let
           (( ''${#dirs[@]} > 0 )) \
               || die "--persist-agent-state: agent '$agent' declares no persistent state directories"
           mp="$(state_slot_dir "$slot")"
-          install -d -m 0755 -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$mp"
+          ${stateSlotInstallGuard}install -d -m ${stateSlotModeArg} -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$mp"
           local task_dir
           task_dir="$(state_task_dir "$task" "$agent")"
           install -d -m 0755 -o root -g root -- "$STATE_TASKS_ROOT"
@@ -2554,7 +2666,7 @@ let
           printf '\nruntime:\n'
           printf '  workspaces:    %s (%s)\n' "$WORKSPACE_ROOT" "$(human "$(dir_bytes "$WORKSPACE_ROOT")")"
           printf '  agent state:   %s (%s)\n' "$STATE_TASKS_ROOT" "$(human "$(dir_bytes "$STATE_TASKS_ROOT")")"
-          printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(dir_bytes "$JOBS_ROOT")")"
+          ${jobDataUsageLine}
           printf '  job results:   %s (%s)\n' "$RESULTS_DIR" "$(human "$(dir_bytes "$RESULTS_DIR")")"
           printf '\nremove a retained workspace (and its task state) with:\n'
           printf '  %s workspace-remove <task>\n' "$PROG"

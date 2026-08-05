@@ -443,6 +443,18 @@ rec {
   batchNamesAlternation = lib.concatStringsSep "|" batchNames;
   batchNamesCasePattern = lib.concatStringsSep " | " batchNames;
 
+  # Does ANY selected batch agent take the prompt TEXT as an argv token
+  # (`%PROMPT%`), as opposed to reading the prompt FILE from stdin?
+  #
+  # This is a property of the FILTERED registry, so it differs per host: a
+  # `profile = "lite"` host selects only the stdin-driven `codex`, and its
+  # generated dispatch therefore never reads the worker's `prompt` variable.
+  # ../myconfig.ai.microvm/job.nix needs to know, because `writeShellApplication`
+  # runs shellcheck and an unread variable is an SC2034 BUILD failure there.
+  batchUsesPromptText = lib.any (
+    a: lib.elem "%PROMPT%" ([ a.executable ] ++ a.batchArgs)
+  ) batchAgents;
+
   # A bash `case` body for the UNTRUSTED guest batch worker
   # (`agent-job-worker`). Each arm calls one of its two helpers:
   #   run_agent        argv…   (prompt substituted for %PROMPT%)
