@@ -1,20 +1,21 @@
-{ lib
-, writeShellApplication
-, bashInteractive
-, coreutils
-, findutils
-, git
-, gnugrep
-, gnused
-, podman
-, util-linux
-, gvisor
-, agent-sandbox-image
+{
+  lib,
+  writeShellApplication,
+  bashInteractive,
+  coreutils,
+  findutils,
+  git,
+  gnugrep,
+  gnused,
+  podman,
+  util-linux,
+  gvisor,
+  agent-sandbox-image,
   # Default image reference used by `agent-session start --image`.
-, defaultImage ? "${agent-sandbox-image.imageName}:${agent-sandbox-image.imageTag}"
+  defaultImage ? "${agent-sandbox-image.imageName}:${agent-sandbox-image.imageTag}",
   # Default Podman `--runtime` value. An absolute path works without
   # registering a named runtime in containers.conf.
-, defaultRuntime ? "${gvisor}/bin/runsc"
+  defaultRuntime ? "${gvisor}/bin/runsc",
 }:
 
 writeShellApplication {

@@ -1,41 +1,42 @@
-{ lib
-, dockerTools
-, buildEnv
-, bashInteractive
-, cacert
-, coreutils-full
-, curl
-, diffutils
-, fd
-, findutils
-, gawk
-, gcc
-, git
-, gnugrep
-, gnumake
-, gnupatch
-, gnused
-, gnutar
-, gzip
-, jq
-, less
-, nodejs
-, openssh
-, pkg-config
-, procps
-, python3
-, ripgrep
-, shadow
-, util-linux
-, which
+{
+  lib,
+  dockerTools,
+  buildEnv,
+  bashInteractive,
+  cacert,
+  coreutils-full,
+  curl,
+  diffutils,
+  fd,
+  findutils,
+  gawk,
+  gcc,
+  git,
+  gnugrep,
+  gnumake,
+  gnupatch,
+  gnused,
+  gnutar,
+  gzip,
+  jq,
+  less,
+  nodejs,
+  openssh,
+  pkg-config,
+  procps,
+  python3,
+  ripgrep,
+  shadow,
+  util-linux,
+  which,
 
-, imageName ? "localhost/agent-dev"
-, imageTag ? "latest"
+  imageName ? "localhost/agent-dev",
+  imageTag ? "latest",
   # Toolchain visible inside the sandbox. Override to slim down or extend.
-, packages ? null
+  packages ? null,
   # Convenience: add packages (for example a coding-agent CLI) without
   # restating the whole default list.
-, extraPackages ? [ ]
+  extraPackages ? [ ],
 }:
 
 let
@@ -69,13 +70,19 @@ let
     which
   ];
 
-  rootPackages = (if packages == null then defaultPackages else packages)
-    ++ extraPackages;
+  rootPackages = (if packages == null then defaultPackages else packages) ++ extraPackages;
 
   imageRoot = buildEnv {
     name = "agent-sandbox-root";
     paths = rootPackages;
-    pathsToLink = [ "/bin" "/lib" "/libexec" "/share" "/etc" "/include" ];
+    pathsToLink = [
+      "/bin"
+      "/lib"
+      "/libexec"
+      "/share"
+      "/etc"
+      "/include"
+    ];
     ignoreCollisions = true;
   };
 in
@@ -117,8 +124,7 @@ dockerTools.buildLayeredImage {
     ];
     Labels = {
       "org.opencontainers.image.title" = "gvisor-agent-sandbox";
-      "org.opencontainers.image.description" =
-        "Generic coding-agent sandbox image, built with Nix";
+      "org.opencontainers.image.description" = "Generic coding-agent sandbox image, built with Nix";
     };
   };
 

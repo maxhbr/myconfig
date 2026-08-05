@@ -1,14 +1,18 @@
-{ lib
-, writeShellApplication
-, coreutils
-, podman
-, agent-sandbox-image
+{
+  lib,
+  writeShellApplication,
+  coreutils,
+  podman,
+  agent-sandbox-image,
 }:
 
 writeShellApplication {
   name = "agent-sandbox-load-image";
 
-  runtimeInputs = [ coreutils podman ];
+  runtimeInputs = [
+    coreutils
+    podman
+  ];
 
   text = ''
     image=${agent-sandbox-image}
