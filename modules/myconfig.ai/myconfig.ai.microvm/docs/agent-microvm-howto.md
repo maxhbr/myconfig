@@ -134,7 +134,7 @@ sudo agent-microvm status fix-parser-batch   # slot, job state, timeout, IP, …
 journalctl -t agent-microvm -f               # structured lifecycle events
 
 # untrusted worker output, no SSH needed:
-sudo tail -f /var/lib/agent-microvms/jobs/agent-normal-0/worker-logs/stdout.log
+sudo tail -f /var/lib/agent-microvms/sessions/agent-normal-0/worker-logs/stdout.log
 
 # or get a shell in the guest as the `agent` user:
 sudo agent-microvm ssh fix-parser-batch

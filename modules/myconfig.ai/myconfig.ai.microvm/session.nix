@@ -3,17 +3,17 @@
 #
 # myconfig.ai.microvm — THE CONSOLIDATED PER-SESSION TREE (lightweight plan
 # phase 4), i.e. the single source of truth for every path, owner and mode of
-# the ONE writable virtiofs share (plus the ONE read-only share) a `lite` guest
+# the ONE writable virtiofs share (plus the ONE read-only share) every guest
 # gets.
 #
 # Problem
 # -------
-# Before this phase every guest carried FOUR virtiofs shares — the workspace,
-# the batch job directory, the agent-state directory and (since phase 3) the
-# config seed — plus the read-only SSH host-key share. Each of them is a
-# separate host source directory, a separate guest mount unit and, most
-# importantly, a separate thing to create, verify, unmount and clean up. The
-# plan's phase 4 collapses that into:
+# Historically every guest carried FOUR virtiofs shares — the workspace, the
+# batch job directory, the agent-state directory and (since phase 3) the config
+# seed — plus the read-only SSH host-key share. Each of them was a separate host
+# source directory, a separate guest mount unit and, most importantly, a
+# separate thing to create, verify, unmount and clean up. Phase 4 collapsed that
+# into (and the `full`-profile removal made it the ONLY layout):
 #
 #   ${runtimeRoot}/sessions/<slot>/          root:root 0755   ONE WRITABLE SHARE
 #     workspace/                             agent            the standalone clone
@@ -31,8 +31,8 @@
 #     config-seed/                           root:root 0500   the staged, allowlisted
 #                                                             host agent configuration
 #
-# so a `lite` guest has EXACTLY ONE writable share and AT MOST ONE read-only
-# share, and the launcher has exactly one tree to create, verify and remove.
+# so a guest has EXACTLY ONE writable share and AT MOST ONE read-only share,
+# and the launcher has exactly one tree to create, verify and remove.
 #
 # WHY THE READ-ONLY TREE IS SEPARATE (deviation from the plan's sketch)
 # ---------------------------------------------------------------------
@@ -67,18 +67,11 @@
 # are generated from it, the pre-launch verifier is generated from it, and
 # tests/microvm.nix asserts against it.
 #
-# Profile boundary
-# ----------------
-# `session.enable` defaults to the resolved profile's `consolidatedSession`
-# field (./profiles.nix): FALSE for `full` (which keeps its four shares,
-# byte-for-byte) and TRUE for `lite`.
+# There is no opt-out: this is the ONLY share layout the module knows.
 {
   config,
   lib,
   pkgs,
-  # The ONE resolved profile entry (./profiles.nix), which decides whether the
-  # consolidated layout or the historical four-share layout is used.
-  agentProfile,
   # The effective resource-class table (see default.nix): the slot pool whose
   # per-slot share sources must exist before any VM starts.
   agentResourceClasses,
@@ -86,7 +79,6 @@
 }:
 let
   cfg = config.myconfig.ai.microvm;
-  sessionCfg = cfg.session;
 
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
@@ -318,12 +310,6 @@ let
 
   # ---- the ONE definition of every session path / mode ------------------
   paths = rec {
-    # Whether the consolidated layout is active at all. Consumed by
-    # ./guest.nix (shares + the /workspace bind mount), ./job.nix, ./state.nix,
-    # ./config-seed.nix, ./hostkeys.nix (their per-slot paths) and
-    # ./launcher.nix (mount lifecycle, verification, cleanup).
-    enable = cfg.enable && sessionCfg.enable;
-
     # ---- host side ----------------------------------------------------
     inherit
       root
@@ -560,63 +546,28 @@ let
   };
 
   # ---- guest-side NixOS module fragment --------------------------------
-  # EMPTY unless the consolidated layout is active, so a `full`-profile guest is
-  # unchanged.
-  guestModule = lib.optionalAttrs paths.enable (
-    {
-      # `/workspace` is where `agent-run` (findmnt + writability check) and
-      # every agent expect the clone. With the consolidated share it lives
-      # INSIDE the session mount, so bind it to the historical path rather than
-      # teaching every consumer a new one. `x-systemd.requires-mounts-for`
-      # orders it after the virtiofs session mount.
-      fileSystems.${paths.guestWorkspace} = {
-        device = paths.guestWorkspaceSource;
-        fsType = "none";
-        options = [
-          "bind"
-          "x-systemd.requires-mounts-for=${paths.guestMountPoint}"
-        ];
-      };
-    }
-    // lib.optionalAttrs cfg.enableSsh {
-      # sshd reads its host key from the read-only share; make that ordering
-      # explicit instead of relying on local-fs.target having completed.
-      systemd.services.sshd.unitConfig.RequiresMountsFor = paths.guestHostkeysDir;
-    }
-  );
+  guestModule = {
+    # `/workspace` is where `agent-run` (findmnt + writability check) and
+    # every agent expect the clone. With the consolidated share it lives
+    # INSIDE the session mount, so bind it to the historical path rather than
+    # teaching every consumer a new one. `x-systemd.requires-mounts-for`
+    # orders it after the virtiofs session mount.
+    fileSystems.${paths.guestWorkspace} = {
+      device = paths.guestWorkspaceSource;
+      fsType = "none";
+      options = [
+        "bind"
+        "x-systemd.requires-mounts-for=${paths.guestMountPoint}"
+      ];
+    };
+  }
+  // lib.optionalAttrs cfg.enableSsh {
+    # sshd reads its host key from the read-only share; make that ordering
+    # explicit instead of relying on local-fs.target having completed.
+    systemd.services.sshd.unitConfig.RequiresMountsFor = paths.guestHostkeysDir;
+  };
 in
 {
-  options.myconfig.ai.microvm.session = with lib; {
-    enable = mkOption {
-      type = types.bool;
-      default = agentProfile.consolidatedSession;
-      defaultText = literalExpression "the resolved profile's `consolidatedSession` field (false for `full`, true for `lite`)";
-      description = ''
-        Give each guest ONE consolidated writable virtiofs share — the
-        per-session tree under `<runtimeRoot>/sessions/<slot>/` holding
-        `workspace/`, `input/`, `controller/`, `worker/`, `worker-logs/` and
-        `state/` — plus at most ONE read-only share
-        (`<runtimeRoot>/sessions-ro/<slot>/`, holding the slot's SSH host
-        identity and the staged host agent configuration), instead of the
-        historical four separate writable shares.
-
-        The trust boundaries are unchanged and still enforced by OWNERSHIP and
-        MODES, which virtiofsd passes through unchanged: the session root,
-        `input/`, `controller/` and `worker-logs/` stay root-owned (and
-        `controller/` root-ONLY), while only `workspace/`, `worker/` and
-        `state/` belong to the unprivileged guest `agent` user. The launcher
-        verifies exactly that before it starts a VM, and removes the complete
-        per-session tree on teardown.
-
-        Inside the guest the workspace is bind-mounted to `/workspace`, so
-        `agent-run` and every agent keep the path they already expect.
-
-        The default follows the `profile`: `full` keeps the four-share layout
-        byte-for-byte, `lite` uses the consolidated one.
-      '';
-    };
-  };
-
   config = lib.mkMerge [
     # Path/layout definitions + the generated verifier and guest fragment,
     # exported for guest.nix, job.nix, state.nix, config-seed.nix, hostkeys.nix
@@ -662,9 +613,9 @@ in
       # The generated verifier, so an operator (and the real-KVM validation
       # suite) can check a slot's session tree by hand with exactly the policy
       # the launcher enforces.
-      environment.systemPackages = lib.mkIf sessionCfg.enable [ verifier ];
+      environment.systemPackages = [ verifier ];
 
-      systemd.tmpfiles.rules = lib.mkIf sessionCfg.enable tmpfilesRules;
+      systemd.tmpfiles.rules = tmpfilesRules;
     })
   ];
 }

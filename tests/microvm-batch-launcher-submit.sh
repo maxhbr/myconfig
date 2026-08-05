@@ -29,7 +29,8 @@
 set -euo pipefail
 
 for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET MOUNT_TARGET \
-    UMOUNT_TARGET FINDMNT_TARGET JQ_TARGET CURL_TARGET RUNTIME_ROOT STATE_ROOT INPUT_SUBDIR \
+    UMOUNT_TARGET FINDMNT_TARGET JQ_TARGET CURL_TARGET RUNTIME_ROOT STATE_ROOT \
+    JOBS_ROOT WORKSPACE_SUBDIR HOST_HOME INPUT_SUBDIR \
     CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR WORKER_STDERR_NAME SPEC_NAME PROMPT_NAME \
     RESULT_NAME SPEC_VERSION CONTROLLER_VERSION AGENT WORKER_UID; do
     [[ -n ${!v:-} ]] || {
@@ -90,7 +91,9 @@ log="\$STUB_DIR/systemctl.log"
 printf 'systemctl %s\n' "\$*" >> "\$log"
 active="\$STUB_DIR/active"
 calls="\$STUB_DIR/is-active-calls"
-jobs_root="$RUNTIME_ROOT/jobs"
+# The per-slot job data lives in the ONE writable session share; its root
+# comes from the module (job.nix -> session.nix), never from a literal here.
+jobs_root="$JOBS_ROOT"
 
 plant() {
     local slot="\$1" dir="\$jobs_root/\$slot" token
@@ -152,7 +155,7 @@ plant() {
                 > "\$dir/$WORKER_SUBDIR/$RESULT_NAME"
             chown $WORKER_UID:$WORKER_UID "\$dir/$WORKER_SUBDIR/$RESULT_NAME"
             result "$SPEC_VERSION" "\$task" "\$token" "\$slot" completed 0 \\
-                > "$STATE_ROOT/\$slot/workspace/$RESULT_NAME" 2>/dev/null || true
+                > "\$dir/$WORKSPACE_SUBDIR/$RESULT_NAME" 2>/dev/null || true
             ;;
         none) ;;
         # The VM stays "running" and NO result is planted by the stub: the test
@@ -294,6 +297,17 @@ EOF
 chmod +x "$STUBS/curl-fail"
 
 # --- running the launcher ---------------------------------------------------
+# Every scenario runs in its OWN `fakeroot` invocation, and fakeroot's faked
+# ownership lives only inside one invocation. The launcher's session tree is
+# created with an `agent`-owned `workspace/` and `state/` (session.nix's layout
+# table), and its PRE-LAUNCH verifier re-checks exactly that — so a tree left
+# behind by a previous scenario would appear root-owned to the next one and
+# refuse the launch. Reset the two trees before each scenario; everything the
+# assertions read afterwards (workspaces/, results/, slots/) is untouched.
+reset_session_trees() {
+    rm -rf "$WORK/runtime/${JOBS_ROOT##*/}" "$WORK/runtime/${JOBS_ROOT##*/}-ro"
+}
+
 # run_submit <mode> <task> [extra submit args...]
 run_submit() {
     local mode="$1" task="$2"
@@ -301,6 +315,7 @@ run_submit() {
     local stub_dir="$WORK/stub-$task"
     rm -rf "$stub_dir"
     mkdir -p "$stub_dir" "$WORK/runtime" "$WORK/state"
+    reset_session_trees
     local rc=0
     "$BWRAP" --unshare-user --uid 0 --gid 0 --unshare-uts --hostname launcher-host \
         --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc \
@@ -320,6 +335,11 @@ run_submit() {
         --setenv HOME "$WORK" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
             set -e
+            # The launcher stages an ALLOWLISTED copy of the host agent
+            # configuration on every launch (config-seed.nix). The baked host
+            # home must therefore exist inside this fresh tmpfs root; it stays
+            # EMPTY, so the stager stages nothing and writes an empty manifest.
+            mkdir -p '$HOST_HOME'
             printf 'prompt for %s\n' '$task' > '$WORK/prompt-$task.md'
             exec '$LAUNCHER' submit --name '$task' --repository '$REPO' \
                 --agent '$AGENT' --prompt-file '$WORK/prompt-$task.md' $*
@@ -337,6 +357,7 @@ run_preflight_fail() {
     local stub_dir="$WORK/stub-preflight"
     rm -rf "$stub_dir"
     mkdir -p "$stub_dir" "$WORK/runtime" "$WORK/state"
+    reset_session_trees
     local rc=0
     "$BWRAP" --unshare-user --uid 0 --gid 0 --unshare-uts --hostname launcher-host \
         --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc \
@@ -357,6 +378,11 @@ run_preflight_fail() {
         --setenv HOME "$WORK" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
             set -e
+            # The launcher stages an ALLOWLISTED copy of the host agent
+            # configuration on every launch (config-seed.nix). The baked host
+            # home must therefore exist inside this fresh tmpfs root; it stays
+            # EMPTY, so the stager stages nothing and writes an empty manifest.
+            mkdir -p '$HOST_HOME'
             printf 'prompt for preflight\n' > '$WORK/prompt-preflight.md'
             exec '$LAUNCHER' submit --name preflight --repository '$REPO' \
                 --agent '$AGENT' --prompt-file '$WORK/prompt-preflight.md' --timeout 30
@@ -378,6 +404,7 @@ run_cancel() {
     local stub_dir="$WORK/stub-$task"
     rm -rf "$stub_dir"
     mkdir -p "$stub_dir" "$WORK/runtime" "$WORK/state"
+    reset_session_trees
     local rc=0
     "$BWRAP" --unshare-user --uid 0 --gid 0 --unshare-uts --hostname launcher-host \
         --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc \
@@ -399,6 +426,11 @@ run_cancel() {
         --setenv PLANT_CODE "$code" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
             set -e
+            # The launcher stages an ALLOWLISTED copy of the host agent
+            # configuration on every launch (config-seed.nix). The baked host
+            # home must therefore exist inside this fresh tmpfs root; it stays
+            # EMPTY, so the stager stages nothing and writes an empty manifest.
+            mkdir -p '$HOST_HOME'
             '$LAUNCHER' run --name '$task' --repository '$REPO' \
                 --agent '$AGENT' >/dev/null 2>&1
             slot=\"\$('$LAUNCHER' list | awk '\$5 == \"$task\" { print \$1 }')\"
@@ -406,7 +438,7 @@ run_cancel() {
             marker='$RUNTIME_ROOT'/slots/\$slot/session.json
             tmp=\$(mktemp)
             jq '.mode = \"batch\"' \"\$marker\" > \"\$tmp\" && mv -f \"\$tmp\" \"\$marker\"
-            cdir='$RUNTIME_ROOT'/jobs/\$slot/'$CONTROLLER_SUBDIR'
+            cdir='$JOBS_ROOT'/\$slot/'$CONTROLLER_SUBDIR'
             mkdir -p \"\$cdir\"
             ALLOC_TOKEN=\"\$(jq -r .token \"\$marker\")\" \
             jq -nc --argjson version $SPEC_VERSION \

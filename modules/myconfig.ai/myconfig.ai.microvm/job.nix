@@ -102,14 +102,10 @@
   lib,
   pkgs,
   agentRegistry,
-  # The effective resource-class table (see default.nix).
-  agentResourceClasses,
-  # The ONE definition of the CONSOLIDATED per-session tree (./session.nix,
-  # lightweight plan phase 4): the layout table this file derives its per-slot
-  # root, its subdirectory NAMES and its directory MODES from, so the trust
-  # boundary is written down exactly once. With the consolidated layout the job
-  # data lives IN the session tree (one writable share); otherwise it keeps its
-  # own `<runtimeRoot>/jobs` root and its own share, byte-for-byte as before.
+  # The ONE definition of the per-session tree (./session.nix): the layout table
+  # this file derives its per-slot root, its subdirectory NAMES and its directory
+  # MODES from, so the trust boundary is written down exactly once. The job data
+  # lives IN the session tree, i.e. in the ONE writable share.
   agentSession,
   ...
 }:
@@ -118,24 +114,16 @@ let
   jobCfg = cfg.job;
   session = agentSession;
 
-  # The slot pool of the effective resource classes (ticket 5 A). The class
-  # table comes from default.nix (`_module.args.agentResourceClasses`), which
-  # also performs the legacy `slotCount` migration, so every module builds the
-  # SAME pool.
-  slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
-
   # --- the ONE definition of every job path / mode / schema fact ----------
   paths = rec {
     # ---- host side ----------------------------------------------------
-    # With the consolidated session tree (phase 4) the per-slot job data IS the
-    # session directory; otherwise it keeps its own root. Both spellings are
-    # `<root>/<slot>`, so every derived path below follows automatically.
-    root = if session.enable then session.root else "${cfg.runtimeRoot}/jobs";
+    # The per-slot job data IS the session directory (./session.nix), i.e. part
+    # of the ONE writable share.
+    root = session.root;
     slotDir = slotName: "${root}/${slotName}";
 
     # Subdirectory NAMES come from the session layout table (./session.nix),
-    # the single source of truth for the tree's shape — they are the same names
-    # the four-share layout always used.
+    # the single source of truth for the tree's shape.
     inputSubdir = session.subdirs.input;
     controllerSubdir = session.subdirs.controller;
     workerSubdir = session.subdirs.worker;
@@ -171,8 +159,7 @@ let
 
     # ---- permission facts (host tmpfiles + guest assertions agree) -----
     # From the session layout table (./session.nix): ONE place decides who owns
-    # what in this tree, whether it is exported as its own share or as part of
-    # the consolidated session share.
+    # what in this tree.
     inputDirMode = session.modeOf session.subdirs.input;
     controllerDirMode = session.modeOf session.subdirs.controller;
     workerDirMode = session.modeOf session.subdirs.worker;
@@ -202,12 +189,10 @@ let
     workerGroup = "users";
 
     # ---- guest side (identical for every slot — the share hides the slot) --
-    # Under the consolidated layout the job data is reached through the ONE
-    # writable session mount instead of its own `job` share; the subdirectory
-    # names — and therefore every path the guest controller/worker validate —
-    # are unchanged.
-    guestTag = "job";
-    guestMountPoint = if session.enable then session.guestMountPoint else "/run/agent-job";
+    # The job data is reached through the ONE writable session mount; the
+    # subdirectory names — and therefore every path the guest controller/worker
+    # validate — are the layout table's.
+    guestMountPoint = session.guestMountPoint;
     guestInputDir = "${guestMountPoint}/${inputSubdir}";
     guestControllerDir = "${guestMountPoint}/${controllerSubdir}";
     guestWorkerDir = "${guestMountPoint}/${workerSubdir}";
@@ -1478,44 +1463,18 @@ in
         }
       ];
 
-      # virtiofsd refuses to start when a share source is missing, so every
-      # slot's job directory must exist before any VM starts — including slots
-      # that never ran a job.
-      #
-      # The MODES here ARE the trust boundary (virtiofsd passes ownership
-      # through unchanged, so these are the effective permissions inside the
-      # guest): `controller/` is root-only 0700, `input/` is root-owned, and
-      # only `worker/` belongs to the unprivileged guest agent.
-      # With the consolidated session tree the shared directories are created
-      # from the ONE layout table in ./session.nix (which owns the whole tree,
-      # including the two bind-mount points), so emitting them here as well
-      # would only duplicate the same rules. The host-only RESULT ARCHIVE is
-      # never part of any share and stays here in both layouts.
-      systemd.tmpfiles.rules =
-        lib.optional (!session.enable) "d ${paths.root} 0755 root root - -"
-        ++ [
-          # 0700: an archived result carries the allocation token of the run it
-          # belongs to, so it is root-only — not world-readable.
-          "d ${paths.resultsDir} 0700 root root - -"
-          # Migration: archives written before the mode was tightened are 0644.
-          "z ${paths.resultsDir}/*.json 0600 root root - -"
-        ]
-        ++ lib.optionals (!session.enable) (
-          lib.concatMap (slot: [
-            "d ${paths.slotDir slot.name} 0755 root root - -"
-            "d ${paths.hostInputDir slot.name} ${paths.inputDirMode} root root - -"
-            "d ${paths.hostControllerDir slot.name} ${paths.controllerDirMode} root root - -"
-            "d ${paths.hostWorkerDir slot.name} ${paths.workerDirMode} ${toString paths.workerUid} ${toString paths.workerGid} - -"
-            # ROOT-owned on purpose: systemd opens the worker's stdout/stderr here
-            # as root and follows symlinks, so nothing running as the worker uid may
-            # be able to create, rename or replace anything in it.
-            "d ${paths.hostWorkerLogsDir slot.name} ${paths.workerLogsDirMode} root root - -"
-            # Migration (spec v1 -> v2): the old guest-writable `out/` directory
-            # was the forgeable result channel. Remove it, so no stale v1 result
-            # lingers in a shared, worker-writable place.
-            "R ${paths.slotDir slot.name}/out - - - - -"
-          ]) slots
-        );
+      # The per-slot job directories live in the session tree, which
+      # ./session.nix creates from the ONE layout table (including the two
+      # bind-mount points and the MODES that ARE the trust boundary), so
+      # emitting them here as well would only duplicate the same rules. The
+      # host-only RESULT ARCHIVE is never part of any share and stays here.
+      systemd.tmpfiles.rules = [
+        # 0700: an archived result carries the allocation token of the run it
+        # belongs to, so it is root-only — not world-readable.
+        "d ${paths.resultsDir} 0700 root root - -"
+        # Migration: archives written before the mode was tightened are 0644.
+        "z ${paths.resultsDir}/*.json 0600 root root - -"
+      ];
     })
   ];
 }

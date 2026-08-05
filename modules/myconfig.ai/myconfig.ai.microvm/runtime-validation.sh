@@ -36,10 +36,9 @@ GATEWAY="${AGENT_GATEWAY:-192.168.83.1}"
 LITELLM_PORT="${AGENT_LITELLM_PORT:-4000}"
 BRIDGE="${AGENT_BRIDGE:-agentbr0}"
 RUNTIME_ROOT="${AGENT_RUNTIME_ROOT:-/var/lib/agent-microvms}"
-STATE_ROOT="${AGENT_STATE_ROOT:-/var/lib/microvms}"
-# The generated, policy-BAKED host-side config stager (config-seed.nix). Only
-# present on a host with `configSeed.enable` (i.e. `profile = "lite"`); the
-# `seed` section SKIPs when it is missing.
+# The generated, policy-BAKED host-side config stager (config-seed.nix). It is
+# a host `systemPackages` entry of every host that enables the feature; the
+# `seed` section SKIPs when it is not on PATH.
 STAGER="${AGENT_STAGER:-agent-microvm-stage-config}"
 WORKSPACE_ROOT="$RUNTIME_ROOT/workspaces"
 LAUNCHER="${AGENT_LAUNCHER:-agent-microvm}"
@@ -55,74 +54,52 @@ KEY_PLACEHOLDER="${AGENT_RTV_KEY_PLACEHOLDER:-not-needed}"
 RESULTS_DIR="$RUNTIME_ROOT/results"
 
 # --- SHARE LAYOUT (lightweight plan phase 4) ---------------------------------
-# The module knows TWO layouts and this suite must never validate the paths of
-# the one the host under test does NOT use: every path constant below feeds a
-# `test -e`, a `find` or a `grep -E` whose *absence* of a match is reported as a
-# PASS, so pointing them at a non-existent tree turns the whole suite into
-# silent, vacuous green — exactly the failure mode `check_denied`/`check_reason`
-# exist to rule out everywhere else.
+# The module has exactly ONE share layout: ONE writable virtiofs share per slot
+# plus ONE read-only share (session.nix).
 #
-#   `full` (four writable shares):  <runtimeRoot>/jobs/<slot>            job data
-#                                   <stateRoot>/<slot>/workspace         clone bind
-#                                   <runtimeRoot>/state/slots/<slot>     state bind
-#                                   <runtimeRoot>/config-seed/<slot>/home staged cfg
-#     guest: /run/agent-job /var/lib/agent-hostkey /var/lib/agent-state /workspace
-#
-#   `lite` (ONE writable + ONE read-only share, session.nix):
-#                                   <runtimeRoot>/sessions/<slot>        job data
-#                                   <runtimeRoot>/sessions/<slot>/workspace clone bind
-#                                   <runtimeRoot>/sessions/<slot>/state  state bind
-#                                   <runtimeRoot>/sessions-ro/<slot>/config-seed
+#   <runtimeRoot>/sessions/<slot>              job data (the writable share)
+#   <runtimeRoot>/sessions/<slot>/workspace    clone bind
+#   <runtimeRoot>/sessions/<slot>/state        agent-state bind
+#   <runtimeRoot>/sessions-ro/<slot>/hostkeys  the slot's SSH host identity
+#   <runtimeRoot>/sessions-ro/<slot>/config-seed  staged host configuration
 #     guest: /run/agent-session /run/agent-session-ro (+ /workspace, a BIND of
 #            the session share, hence not of type virtiofs)
 #
-# Detection is the existence of the consolidated writable root, which
-# session.nix creates via tmpfiles for EVERY slot at boot (virtiofsd refuses to
-# start without its share source), so it exists on a `lite` host even before the
-# first launch and never on a `full` one.
+# Every path constant below feeds a `test -e`, a `find` or a `grep -E` whose
+# *absence* of a match is reported as a PASS, so pointing them at a
+# non-existent tree would turn the whole suite into silent, vacuous green —
+# exactly the failure mode `check_denied`/`check_reason` exist to rule out
+# everywhere else. The `seed` section therefore hard-FAILs when the staged
+# payload is missing after staging (see section_seed), and `shares` asserts
+# EXPECTED_SHARES for EQUALITY.
 #
 # EXPECTED_SHARES is the COMPLETE set of virtiofs mount targets a guest may
-# have (sorted, space-separated). It is asserted for EQUALITY, never as a
-# substring.
-if [[ -d "$RUNTIME_ROOT/sessions" ]]; then
-    LAYOUT="session"
-    SESSION_ROOT="$RUNTIME_ROOT/sessions"
-    SESSION_RO_ROOT="$RUNTIME_ROOT/sessions-ro"
-    JOBS_ROOT="$SESSION_ROOT"
-    GUEST_JOB_DIR="/run/agent-session"
-    GUEST_RO_DIR="/run/agent-session-ro"
-    # /workspace is a BIND of "$GUEST_JOB_DIR/workspace", so `findmnt -t
-    # virtiofs` does not list it.
-    EXPECTED_SHARES="$GUEST_JOB_DIR $GUEST_RO_DIR"
-    WORKSPACE_MOUNT_RE="^${SESSION_ROOT}/[^/]+/workspace\$"
-    STATE_MOUNT_RE="^${SESSION_ROOT}/[^/]+/state\$"
-    # <runtimeRoot>/sessions-ro/<slot>/config-seed — a share virtiofsd mounts
-    # `--readonly`, hence NOT under the writable session tree.
-    config_seed_payload() { printf '%s' "$SESSION_RO_ROOT/$1/config-seed"; }
-else
-    LAYOUT="four-share"
-    SESSION_ROOT=""
-    SESSION_RO_ROOT=""
-    JOBS_ROOT="$RUNTIME_ROOT/jobs"
-    GUEST_JOB_DIR="/run/agent-job"
-    GUEST_RO_DIR="/var/lib/agent-hostkey"
-    EXPECTED_SHARES="/run/agent-job /var/lib/agent-hostkey /var/lib/agent-state /workspace"
-    WORKSPACE_MOUNT_RE="^${STATE_ROOT}/[^/]+/workspace\$"
-    STATE_MOUNT_RE="^${RUNTIME_ROOT}/state/slots/[^/]+\$"
-    config_seed_payload() { printf '%s' "$RUNTIME_ROOT/config-seed/$1/home"; }
-fi
+# have (sorted, space-separated).
+SESSION_ROOT="$RUNTIME_ROOT/sessions"
+SESSION_RO_ROOT="$RUNTIME_ROOT/sessions-ro"
+JOBS_ROOT="$SESSION_ROOT"
+GUEST_JOB_DIR="/run/agent-session"
+GUEST_RO_DIR="/run/agent-session-ro"
+# /workspace is a BIND of "$GUEST_JOB_DIR/workspace", so `findmnt -t virtiofs`
+# does not list it.
+EXPECTED_SHARES="$GUEST_JOB_DIR $GUEST_RO_DIR"
+WORKSPACE_MOUNT_RE="^${SESSION_ROOT}/[^/]+/workspace\$"
+STATE_MOUNT_RE="^${SESSION_ROOT}/[^/]+/state\$"
+# <runtimeRoot>/sessions-ro/<slot>/config-seed — a share virtiofsd mounts
+# `--readonly`, hence NOT under the writable session tree.
+config_seed_payload() { printf '%s' "$SESSION_RO_ROOT/$1/config-seed"; }
 # The slot name of a bind-mount TARGET matched by the two regexes above. Both
-# layouts end in either `<slot>/workspace`, `<slot>/state` or `<slot>`, so
-# stripping the known trailing component and taking the basename is exact for
-# both (slot names are `agent-<class>-<i>`, never `workspace`/`state`).
+# end in `<slot>/workspace` or `<slot>/state`, so stripping the known trailing
+# component and taking the basename is exact (slot names are
+# `agent-<class>-<i>`, never `workspace`/`state`).
 slot_of_mount() {
     local mp="$1"
     mp="${mp%/workspace}"
     mp="${mp%/state}"
     printf '%s' "${mp##*/}"
 }
-# Batch job share (job.nix). The guest sees the same subdirectory names under
-# $GUEST_JOB_DIR in BOTH layouts; only the mount point differs.
+# Batch job share (job.nix): the subdirectory names the guest sees under
+# $GUEST_JOB_DIR.
 GUEST_INPUT_DIR="$GUEST_JOB_DIR/input"
 GUEST_CTRL_DIR="$GUEST_JOB_DIR/controller"
 GUEST_WORKER_DIR="$GUEST_JOB_DIR/worker"
@@ -231,7 +208,7 @@ Sections:
              replace, delete or shadow the authoritative result, stale results
              must be rejected, timeouts must kill the whole worker cgroup, and
              cancellation must be bound to the allocation token
-  seed       runtime configuration staging (\`profile = "lite"\`): the stager is
+  seed       runtime configuration staging: the stager is
              run against real fixtures in the host home and must stage the
              allowlisted file while refusing credential-shaped names, benignly
              NAMED symlinks onto credentials, host-home escapes, FIFOs, setuid
@@ -302,22 +279,26 @@ slot_tap() { printf 'vm-%s' "${1#agent-}"; }
 #
 # `agent-microvm ssh <slot> -- <argv...>` CANNOT preserve argument boundaries:
 # OpenSSH joins the remaining argv with single spaces into one string and the
-# guest's LOGIN SHELL re-parses it — and that shell is fish (guest.nix gives the
-# agent user `shell = pkgs.fish`). Sending
+# guest's LOGIN SHELL re-parses it — bash today (guest.nix gives the agent user
+# `shell = pkgs.bashInteractive`; it was fish before the lightweight guest
+# dropped it). Sending
 #
 #     ssh <slot> -- sh -c "timeout 5 sh -c '</dev/tcp/GW/22'"
 #
 # therefore made the guest run `sh -c timeout 5 sh -c '...'`, i.e. `sh -c` got
 # only the word `timeout` (`5` became $0) — "timeout: missing operand", non-zero,
 # and every `check_denied` built on such a payload passed VACUOUSLY. Payloads
-# containing `${VAR:-}` fared even worse: `${` is a fish SYNTAX ERROR, so the
-# environment assertions could never have run at all.
+# containing `${VAR:-}` fared even worse: the login shell expanded (or, under
+# fish, rejected) them before the inner shell saw them, so the environment
+# assertions could never have run at all.
 #
 # The fix has three parts and none of them may be dropped:
 #   * guest_sh_as sends the ENTIRE script as ONE token, escaped for the guest's
 #     login shell;
 #   * the escaping dialect is DETECTED per slot (fish and POSIX single-quoting
-#     are mutually incompatible) with a probe that only succeeds when word
+#     are mutually incompatible; today's guest answers `posix`, and the fish
+#     dialect is kept so an operator can point the suite at an older guest) with
+#     a probe that only succeeds when word
 #     boundaries, embedded single quotes, `${VAR:-}` expansion AND the exit code
 #     all survive the round trip;
 #   * every guest-side assertion consults that probe first, so a transport that
@@ -1821,8 +1802,8 @@ section_forgery() {
 }
 
 # --- main -----------------------------------------------------------------
-printf '%s: starting real-KVM validation (host %s, bridge %s, share layout %s)\n' \
-    "$PROG" "$(uname -n)" "$BRIDGE" "$LAYOUT"
+printf '%s: starting real-KVM validation (host %s, bridge %s, session root %s)\n' \
+    "$PROG" "$(uname -n)" "$BRIDGE" "$SESSION_ROOT"
 "$LAUNCHER" list | sed 's/^/#     /'
 
 # --- runtime configuration staging (lightweight plan phase 3) ---------------
@@ -1835,8 +1816,8 @@ printf '%s: starting real-KVM validation (host %s, bridge %s, share layout %s)\n
 # eval/build checks can therefore only prove the policy is BAKED IN; whether it
 # is ENFORCED is decided here.
 #
-# It exists only on a host with `configSeed.enable` (i.e. `profile = "lite"`);
-# everywhere else the whole section SKIPs.
+# The stager is installed by every host that enables the feature; if it is not
+# on PATH the whole section SKIPs.
 # shellcheck disable=SC2317  # reached via the dispatch below
 section_seed() {
     section "runtime configuration staging: allowlist + denylist enforcement"
@@ -1854,11 +1835,9 @@ section_seed() {
         return
     fi
 
-    # WHERE the payload lands depends on the share layout (see the LAYOUT block
-    # at the top): `<runtimeRoot>/config-seed/<slot>/home` under `full`, but
-    # `<runtimeRoot>/sessions-ro/<slot>/config-seed` under the consolidated
-    # session layout. The MANIFEST root is `<runtimeRoot>/config-seed/<slot>` in
-    # both (it must stay outside every guest share).
+    # The payload lands in `<runtimeRoot>/sessions-ro/<slot>/config-seed` (see
+    # the LAYOUT block at the top); the MANIFEST root is
+    # `<runtimeRoot>/config-seed/<slot>`, outside every guest share.
     local payload manifest
     payload="$(config_seed_payload "$slot")"
     manifest="$RUNTIME_ROOT/config-seed/$slot/manifest.json"
@@ -1872,7 +1851,7 @@ section_seed() {
     # exist would make ALL of them pass vacuously. Deciding this ONCE, here,
     # makes that structurally impossible.
     if [[ ! -d $payload ]]; then
-        fail "config-seed: the staged payload $payload does not exist after staging (wrong layout assumption? see the LAYOUT block)"
+        fail "config-seed: the staged payload $payload does not exist after staging (see the LAYOUT block)"
         return
     fi
     if [[ ! -f $manifest ]]; then

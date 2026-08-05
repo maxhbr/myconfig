@@ -14,20 +14,24 @@
 #
 # `agent-microvm ssh <slot> -- <argv...>` cannot preserve argument boundaries —
 # OpenSSH joins the remaining argv with single spaces and the guest's LOGIN
-# SHELL re-parses the result. That shell is fish (guest.nix: the agent user's
-# `shell = pkgs.fish`). So a payload like
+# SHELL re-parses the result. That shell is the one guest.nix gives the agent
+# user (`$GUEST_SHELL` here, plain bash since the lightweight guest dropped
+# fish). So a payload like
 #
 #     ssh <slot> -- sh -c "timeout 5 sh -c '</dev/tcp/GW/22'"
 #
 # used to reach the guest as `sh -c timeout 5 sh -c '...'` — `sh -c` got only
 # the word `timeout`, the command failed for a QUOTING reason, and the
 # corresponding "the guest must not be able to ..." check passed VACUOUSLY.
-# Payloads containing `${VAR:-}` were worse: `${` is a fish syntax error, so the
-# whole credential-environment block could only ever fail or skip.
+# Payloads containing `${VAR:-}` were worse still: they were expanded (or, under
+# the guest's previous fish login shell, a syntax error) before the inner shell
+# ever saw them, so the whole credential-environment block could only fail or
+# skip.
 #
 # This harness stubs `agent-microvm ssh` with something that behaves exactly
-# like OpenSSH + fish (join argv with single spaces, hand the string to
-# `fish -c`), sources the suite's transport block unmodified, and asserts:
+# like OpenSSH + the guest login shell (join argv with single spaces, hand the
+# string to `$GUEST_SHELL -c`), sources the suite's transport block unmodified,
+# and asserts:
 #
 #   1. every payload class from that bug arrives in the guest AS WRITTEN,
 #   2. exit codes propagate verbatim,
@@ -43,7 +47,7 @@
 # shellcheck disable=SC2016,SC2034
 set -euo pipefail
 
-for v in SUITE FISH; do
+for v in SUITE GUEST_SHELL; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
@@ -53,7 +57,7 @@ done
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# --- the stub launcher: OpenSSH argv flattening + a fish login shell ---------
+# --- the stub launcher: OpenSSH argv flattening + the guest login shell ------
 # An ABSOLUTE interpreter path: the nix build sandbox has no /usr/bin/env, and a
 # stub that cannot start would make BOTH the fixed and the reverted transport
 # "fail", i.e. the negative control would pass for the wrong reason.
@@ -69,7 +73,7 @@ cat >"$WORK/agent-microvm" <<EOF
 shift 2
 [[ \${1-} == -- ]] && shift
 joined="\$*"          # <- exactly what OpenSSH sends: argv joined with spaces
-exec "$FISH" -c "\$joined"
+exec "$GUEST_SHELL" -c "\$joined"
 EOF
 chmod +x "$WORK/agent-microvm"
 LAUNCHER="$WORK/agent-microvm"
@@ -165,7 +169,7 @@ fi
 if guest_flattened "$slot" sh -c 'test -n "${HOME:-}"' >/dev/null 2>&1; then
     fail 'the unquoted transport ALSO handled ${VAR:-}'
 else
-    pass 'the unquoted transport fails on ${VAR:-} (a fish syntax error) — the vacuity source'
+    pass 'the unquoted transport fails on ${VAR:-} (it is expanded/split before the inner shell) — the vacuity source'
 fi
 
 # ... and the suite's own probe must REJECT that transport, otherwise a

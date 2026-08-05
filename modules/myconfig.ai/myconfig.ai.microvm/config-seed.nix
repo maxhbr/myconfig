@@ -2,28 +2,26 @@
 # SPDX-License-Identifier: MIT
 #
 # myconfig.ai.microvm — RUNTIME, ALLOWLISTED AGENT-CONFIGURATION STAGING
-# (lightweight plan phase 3), the replacement for guest Home Manager activation
-# in the `lite` profile.
+# (lightweight plan phase 3), the ONLY way a guest home is provisioned.
 #
 # Problem
 # -------
-# `../guest-home.nix` runs home-manager INSIDE the guest for the `agent` user
-# and bakes the host primary user's rendered dotfiles into the guest closure.
-# That works, but it means (a) every instruction/skill/config edit needs a guest
-# REBUILD before a sandbox sees it, and (b) the guest carries the whole
-# home-manager activation machinery.
+# The removed `guest-home.nix` ran home-manager INSIDE the guest for the `agent`
+# user and baked the host primary user's rendered dotfiles into the guest
+# closure. That worked, but it meant (a) every instruction/skill/config edit
+# needed a guest REBUILD before a sandbox saw it, and (b) the guest carried the
+# whole home-manager activation machinery.
 #
 # Design (plan phase 3)
 # ---------------------
 #   host allowlisted config
 #           │ copy with symlink dereferencing, at LAUNCH time (../launcher.nix)
 #           ▼
-#   ${runtimeRoot}/config-seed/<slot>/home        root:root 0500/0400
-#           │ per-slot, READ-ONLY virtiofs share (../guest.nix), whose source
-#           │ is exactly that `home` PAYLOAD directory — the sibling manifest
-#           │ stays host-side, outside the share
+#   ${runtimeRoot}/sessions-ro/<slot>/config-seed  root:root 0500/0400
+#           │ the per-slot READ-ONLY virtiofs share (../guest.nix, ../session.nix)
+#           │ — the manifest stays host-side, outside every share
 #           ▼
-#   /run/agent-config-seed
+#   /run/agent-session-ro/config-seed
 #           │ root-owned guest oneshot, BEFORE sshd and the job controller
 #           ▼
 #   /home/agent                                   agent-owned, DISPOSABLE
@@ -88,13 +86,8 @@
 # docs/agent-microvm-security-model.md so nobody mistakes the denylist for a
 # boundary against a compromised host home.
 #
-# Profile boundary
-# ----------------
-# `configSeed.enable` defaults to the resolved profile's `configSeed` field
-# (../profiles.nix): FALSE for `full` (which keeps guest home-manager
-# activation, byte-for-byte) and TRUE for `lite`. The two mechanisms are
-# mutually exclusive and an assertion rejects enabling both, so there is
-# exactly one provisioning path per guest.
+# There is no opt-out and no second provisioning path: this mechanism is what
+# fills the disposable guest home.
 {
   config,
   lib,
@@ -104,9 +97,6 @@
   # default.nix). Its `configPaths` union already follows `enabledAgents`, so
   # the staged set shrinks with the agent selection.
   agentRegistry,
-  # The ONE resolved profile entry (../profiles.nix), which decides whether this
-  # mechanism or guest home-manager activation provisions the guest home.
-  agentProfile,
   # The effective resource-class table (see default.nix): the slot pool whose
   # per-slot share sources must exist before any VM starts.
   agentResourceClasses,
@@ -118,12 +108,11 @@
   # `declaredDirs` must stay DISJOINT from what is staged here, otherwise the
   # seeding copy and the state linker would fight over the same directory.
   agentState,
-  # The ONE definition of the CONSOLIDATED per-session tree (./session.nix,
-  # lightweight plan phase 4). With it, the staged payload is the `config-seed/`
-  # subdirectory of the ONE READ-ONLY share — still root-owned, still mounted
-  # read-only, and still with the MANIFEST outside every share (it moves to a
-  # host-only directory under `<runtimeRoot>/config-seed/<slot>/`, because the
-  # read-only share source is the slot directory itself there).
+  # The ONE definition of the per-session tree (./session.nix): the staged
+  # payload is the `config-seed/` subdirectory of the ONE READ-ONLY share —
+  # root-owned, mounted read-only, with the MANIFEST in a host-only directory
+  # under `<runtimeRoot>/config-seed/<slot>/` (the read-only share source is the
+  # slot directory itself, so the payload's sibling would be guest-visible).
   agentSession,
   ...
 }:
@@ -221,35 +210,23 @@ let
 
   # --- the ONE definition of every config-seed path / mode ----------------
   paths = rec {
-    # Whether this mechanism is active at all (consumed by guest.nix, which
-    # drops guest home-manager activation exactly then, and by launcher.nix,
-    # which only renders its staging code then).
-    enable = cfg.enable && seedCfg.enable;
-
     # ---- host side ----------------------------------------------------
-    # The PAYLOAD root: the read-only session tree under the consolidated
-    # layout (phase 4), its own root otherwise.
-    root = if session.enable then session.roRoot else "${cfg.runtimeRoot}/config-seed";
+    # The PAYLOAD root: the read-only session tree (./session.nix).
+    root = session.roRoot;
     slotDir = slotName: "${root}/${slotName}";
-    # The PAYLOAD lives in its own subdirectory. In the four-share layout that
-    # subdirectory — NOT the slot directory — is the share source (see
-    # `shareSource`); in the consolidated layout the read-only share source is
-    # the slot directory of the READ-ONLY tree, which the payload is one level
-    # below. Either way the MANIFEST lives outside every share: it names the
-    # host home and every skipped credential-SHAPED host file name, which the
-    # untrusted side has no business learning.
-    homeSubdir = if session.enable then session.roSubdirs.configSeed else "home";
+    # The PAYLOAD lives in its own subdirectory of the read-only slot directory,
+    # which is what virtiofsd exports. The MANIFEST therefore lives outside
+    # every share: it names the host home and every skipped credential-SHAPED
+    # host file name, which the untrusted side has no business learning.
+    homeSubdir = session.roSubdirs.configSeed;
     manifestName = "manifest.json";
     hostPayloadDir = slotName: "${slotDir slotName}/${homeSubdir}";
-    # Host-ONLY location of the manifest. Under the consolidated layout the
-    # payload's sibling is inside the read-only SHARE, so the manifest moves to
-    # a directory that is not shared with any guest at all.
-    manifestRoot = if session.enable then "${cfg.runtimeRoot}/config-seed" else root;
+    # Host-ONLY location of the manifest: the payload's sibling is inside the
+    # read-only SHARE, so the manifest lives in a directory that is not shared
+    # with any guest at all.
+    manifestRoot = "${cfg.runtimeRoot}/config-seed";
     manifestDir = slotName: "${manifestRoot}/${slotName}";
     hostManifest = slotName: "${manifestDir slotName}/${manifestName}";
-    # What ../guest.nix hands to virtiofsd (only used in the four-share
-    # layout; the consolidated one exports the read-only slot directory).
-    shareSource = hostPayloadDir;
 
     # ---- permission facts (host stager + guest seeder agree) -----------
     # virtiofsd passes ownership through unchanged, so these ARE the effective
@@ -260,20 +237,16 @@ let
     # unprivileged — on either side — needs to read the staged tree, and the
     # operator's configuration is not exposed to other local host users while
     # it sits under the persistent `runtimeRoot`.
-    # Under the consolidated layout the modes of the tree's own directories
-    # come from the ONE session layout table (./session.nix), so there is a
-    # single place that decides them; they are the same root-only values.
-    rootMode = if session.enable then session.roRootMode else "0700";
-    slotDirMode = if session.enable then session.roModeOf "" else "0500";
-    dirMode = if session.enable then session.roModeOf session.roSubdirs.configSeed else "0500";
+    # The modes of the tree's own directories come from the ONE session layout
+    # table (./session.nix), so there is a single place that decides them.
+    rootMode = session.roRootMode;
+    slotDirMode = session.roModeOf "";
+    dirMode = session.roModeOf session.roSubdirs.configSeed;
     fileMode = "0400";
     manifestMode = "0400";
-    # Modes of the manifest's own (host-only) directories. In the four-share
-    # layout they ARE the payload root and the payload's slot directory, so
-    # they must keep exactly those modes; in the consolidated layout they are
-    # separate, root-only directories outside every share.
-    manifestRootMode = if session.enable then "0700" else rootMode;
-    manifestDirMode = if session.enable then "0700" else slotDirMode;
+    # Modes of the manifest's own, host-only directories outside every share.
+    manifestRootMode = "0700";
+    manifestDirMode = "0700";
     # Bounds on what a single launch may copy, so a huge (or maliciously
     # grown) allowlisted directory cannot fill the host runtime root or stall
     # a launch. Over-budget entries are SKIPPED and recorded in the manifest.
@@ -289,8 +262,7 @@ let
     maxDepth = 12;
 
     # ---- guest side (identical for every slot — the share hides the slot) --
-    guestTag = "configseed";
-    guestMountPoint = if session.enable then session.guestConfigSeedDir else "/run/agent-config-seed";
+    guestMountPoint = session.guestConfigSeedDir;
     # The share source IS the payload directory, so the guest sees the staged
     # home directly at the mount point (and the manifest not at all).
     guestPayloadDir = guestMountPoint;
@@ -334,8 +306,7 @@ let
       readonly SEED_ROOT=${lib.escapeShellArg paths.root}
       readonly PAYLOAD_SUBDIR=${lib.escapeShellArg paths.homeSubdir}
       # The manifest lives OUTSIDE every guest share (see the header): its own
-      # host-only root under the consolidated layout, the payload's sibling in
-      # the four-share one.
+      # host-only root.
       readonly MANIFEST_ROOT=${lib.escapeShellArg paths.manifestRoot}
       readonly MANIFEST_NAME=${lib.escapeShellArg paths.manifestName}
       readonly MANIFEST_ROOT_MODE=${lib.escapeShellArg paths.manifestRootMode}
@@ -723,8 +694,7 @@ let
   };
 
   # --- guest-side NixOS module fragment ----------------------------------
-  # EMPTY unless staging is active, so a `full`-profile guest is unchanged.
-  guestModule = lib.optionalAttrs paths.enable {
+  guestModule = {
     systemd.services.agent-config-seed = {
       description = "Seed the disposable agent home from the staged host configuration";
       wantedBy = [ "multi-user.target" ];
@@ -741,10 +711,8 @@ let
       #     into the host-side task state.
       #   * the boot-time model discovery — it writes
       #     `$HOME/.pi/agent/extensions/zz-microvm-models.ts` INTO the same
-      #     home this unit populates with `cp -R` + `chown -R` + `chmod -R`.
-      #     Under `full` that ordering came from `home-manager-agent.service`;
-      #     under `lite` that unit does not exist, so it must be stated here
-      #     (../guest-model-config.nix orders itself after THIS unit instead).
+      #     home this unit populates with `cp -R` + `chown -R` + `chmod -R`
+      #     (../guest-model-config.nix orders itself after THIS unit).
       before = [
         "sshd.service"
         agentJobs.controllerUnit
@@ -776,36 +744,6 @@ let
 in
 {
   options.myconfig.ai.microvm.configSeed = with lib; {
-    enable = mkOption {
-      type = types.bool;
-      default = agentProfile.configSeed;
-      defaultText = literalExpression "the resolved profile's `configSeed` field (false for `full`, true for `lite`)";
-      description = ''
-        Provision the guest `agent` home at LAUNCH time from an explicit
-        ALLOWLIST of host configuration paths (see the per-agent `configPaths`
-        of the registry in ./agents.nix plus `configSeed.extraPaths`) instead of
-        running home-manager inside the guest (`guestDotfiles`).
-
-        The host launcher copies the allowlisted paths into a cleaned, per-slot
-        staging directory under
-        `<runtimeRoot>/config-seed/<slot>/`, the guest sees that directory
-        through a READ-ONLY virtiofs share, and a root-owned guest oneshot
-        copies it into the disposable `/home/agent` before sshd and before the
-        batch job controller start.
-
-        Consequences: editing an allowlisted host file affects the NEXT launch
-        without rebuilding the guest, the guest no longer runs home-manager
-        activation, and the guest home stays disposable. There is NO live
-        host-home mount: only the allowlisted paths cross the boundary, they
-        are staged root-owned and non-writable by the guest agent, symlinks
-        into `/nix/store` are dereferenced, paths that escape the host home are
-        rejected, and sockets/devices/FIFOs/setuid files are never copied.
-
-        Mutually exclusive with `guestDotfiles.enable` (there is exactly one
-        provisioning path per guest); the default follows the `profile`.
-      '';
-    };
-
     hostHome = mkOption {
       type = types.str;
       default = config.users.users.${myconfig.user}.home;
@@ -855,7 +793,7 @@ in
     (lib.mkIf cfg.enable {
       assertions = [
         {
-          assertion = !seedCfg.enable || lib.hasPrefix "/" seedCfg.hostHome;
+          assertion = lib.hasPrefix "/" seedCfg.hostHome;
           message = "myconfig.ai.microvm.configSeed.hostHome must be an absolute path.";
         }
         {
@@ -887,27 +825,10 @@ in
           '';
         }
         {
-          # Exactly ONE provisioning path per guest: either runtime staging or
-          # guest home-manager activation, never both (they would fight over
-          # the same files, and the whole point of the phase is to remove the
-          # activation from the lite guest).
-          assertion = !(seedCfg.enable && cfg.guestDotfiles.enable);
-          message = ''
-            myconfig.ai.microvm: `configSeed.enable` (runtime configuration
-            staging) and `guestDotfiles.enable` (home-manager activation INSIDE
-            the guest) are mutually exclusive — the lite profile replaces the
-            latter with the former. Set `guestDotfiles.enable = false` (the
-            default whenever staging is enabled) or turn the staging off.
-          '';
-        }
-        {
-          # The MIRROR of ../state.nix's guestDotfiles collision guard, which is
-          # gated on `guestDotfiles.enable` and is therefore dead code exactly
-          # when this mechanism provisions the home. The seeding oneshot runs
-          # BEFORE `agent-state-link.service`, so an overlap would have the
-          # linker refuse to replace the (now non-empty) staged directory and
-          # persistence would silently not happen.
-          assertion = !seedCfg.enable || stateCollisions == [ ];
+          # The seeding oneshot runs BEFORE `agent-state-link.service`, so an
+          # overlap would have the linker refuse to replace the (now non-empty)
+          # staged directory and persistence would silently not happen.
+          assertion = stateCollisions == [ ];
           message = ''
             myconfig.ai.microvm.configSeed: the staging allowlist overlaps the
             persisted agent-state directories
@@ -922,16 +843,13 @@ in
         }
         {
           # `clear_config_seed` (../launcher.nix) removes `<slotDir>/<homeSubdir>`
-          # before every launch and on teardown. Under the consolidated layout
-          # `<slotDir>` is the READ-ONLY session slot directory, which ALSO
-          # holds the slot's persistent SSH host identity — so an empty
-          # `homeSubdir` would delete the whole read-only tree and a
-          # `homeSubdir` that collided with the host-key subdirectory would
-          # delete the slot's identity on every launch. Both are one rename
-          # away; fail the build instead.
-          assertion =
-            !(seedCfg.enable && session.enable)
-            || (paths.homeSubdir != "" && paths.homeSubdir != session.roSubdirs.hostkeys);
+          # before every launch and on teardown, where `<slotDir>` is the
+          # READ-ONLY session slot directory, which ALSO holds the slot's
+          # persistent SSH host identity — so an empty `homeSubdir` would delete
+          # the whole read-only tree and a `homeSubdir` that collided with the
+          # host-key subdirectory would delete the slot's identity on every
+          # launch. Both are one rename away; fail the build instead.
+          assertion = paths.homeSubdir != "" && paths.homeSubdir != session.roSubdirs.hostkeys;
           message = ''
             myconfig.ai.microvm.configSeed: the staged payload subdirectory
             ('${paths.homeSubdir}') must be a non-empty name that differs from
@@ -948,29 +866,17 @@ in
       # suite, ../runtime-validation.sh section `seed`) can run and audit the
       # exact staging policy the launcher uses. It needs root to write the
       # root-owned tree, and it takes NO policy argument — only a slot name.
-      environment.systemPackages = lib.mkIf seedCfg.enable [ stager ];
+      environment.systemPackages = [ stager ];
 
-      # virtiofsd refuses to start when a share source is missing, so every
-      # slot's seed directory (and its payload subdirectory) must exist before
-      # any VM starts — including a slot that has never been launched. The
-      # MODES are the trust boundary: root-owned, not writable by the guest
-      # `agent` user (virtiofsd passes ownership through unchanged).
-      # Under the consolidated layout (phase 4) the payload directories are part
-      # of the READ-ONLY session tree, which ./session.nix creates from the ONE
-      # layout table; only the host-only MANIFEST directories are added here.
-      systemd.tmpfiles.rules = lib.mkIf seedCfg.enable (
-        lib.optionals (!session.enable) (
-          [ "d ${paths.root} ${paths.rootMode} root root - -" ]
-          ++ lib.concatMap (slot: [
-            "d ${paths.slotDir slot.name} ${paths.slotDirMode} root root - -"
-            "d ${paths.hostPayloadDir slot.name} ${paths.dirMode} root root - -"
-          ]) slots
-        )
-        ++ lib.optionals session.enable (
-          [ "d ${paths.manifestRoot} ${paths.manifestRootMode} root root - -" ]
-          ++ map (slot: "d ${paths.manifestDir slot.name} ${paths.manifestDirMode} root root - -") slots
-        )
-      );
+      # The staged PAYLOAD directories are part of the READ-ONLY session tree,
+      # which ./session.nix creates for every slot from the ONE layout table
+      # (virtiofsd refuses to start when a share source is missing, and the
+      # MODES are the trust boundary). Only the host-only MANIFEST directories
+      # are added here.
+      systemd.tmpfiles.rules = [
+        "d ${paths.manifestRoot} ${paths.manifestRootMode} root root - -"
+      ]
+      ++ map (slot: "d ${paths.manifestDir slot.name} ${paths.manifestDirMode} root root - -") slots;
     })
   ];
 }

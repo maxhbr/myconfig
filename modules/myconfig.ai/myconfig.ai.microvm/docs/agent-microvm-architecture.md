@@ -19,8 +19,8 @@ How the pieces fit together. Option-level reference lives in
 | `slots.nix` | the deterministic slot table derived from the resource classes |
 | `network-profiles.nix` | the network capability table (`offline`/`proxy-only`/`package-access`/`internet`) |
 | `guest.nix` | microvm.nix host integration, one prebuilt VM per slot, the guest NixOS config, `agent-run`, host-side hypervisor limits |
-| `guest-home.nix` | allowlisted copy of the host operator's dotfiles into the guest (home-manager inside the guest); used by `profile = "full"` |
-| `config-seed.nix` | runtime, allowlisted configuration staging (`profile = "lite"`): the host-side stager, the per-slot read-only seed share and the guest-side seeding oneshot that replace guest home-manager activation |
+| `config-seed.nix` | runtime, allowlisted configuration staging — the host-side stager, the per-slot read-only seed share and the guest-side seeding oneshot; the ONLY way a guest home is provisioned (guest home-manager activation was removed) |
+| `session.nix` | **the** per-session layout table (paths, owners, modes, the trust policy), the host tmpfiles rules, the pre-launch verifier and the `/workspace` bind mount |
 | `network.nix` | private bridge, TAP enslavement + L2 isolation, firewall chains, NAT, bridge-only LiteLLM forwarder |
 | `hostkeys.nix` | per-slot SSH host identities + the host `known_hosts` |
 | `job.nix` | versioned batch job format, per-slot job dirs, the TRUSTED guest job controller, the UNTRUSTED guest worker unit, the guest-side permission assertions and the HOST-side result verifier |
@@ -50,18 +50,9 @@ closure, only the *content* of the paths mounted into it.
 
 Every per-slot host-side directory is keyed by the slot **name**:
 
-```text
-/var/lib/microvms/<slot>/workspace              bind target -> the task's clone
-/var/lib/agent-microvms/hostkeys/<slot>/        the slot's SSH host identity
-/var/lib/agent-microvms/jobs/<slot>/input/      the job (spec 0400, prompt 0444)
-/var/lib/agent-microvms/jobs/<slot>/controller/ root:root 0700 — the AUTHORITATIVE result
-/var/lib/agent-microvms/jobs/<slot>/worker/     agent-owned — untrusted logs/artifacts
-/var/lib/agent-microvms/state/slots/<slot>      bind target -> task-scoped agent state
-```
-
-Under `profile = "lite"` (lightweight plan phase 4) the same data lives in ONE
-writable per-session tree plus ONE read-only tree, so a slot has two virtiofsd
-instances instead of four or five:
+Everything a slot needs lives in ONE writable per-session tree plus ONE
+read-only tree (lightweight plan phase 4 — the historical four/five separate
+shares are gone), so a slot has two virtiofsd instances:
 
 ```text
 /var/lib/agent-microvms/sessions/<slot>/            root:root 0755  ONE writable share
@@ -110,10 +101,10 @@ hardlinks, no alternates, no shared git metadata with your checkout) — and the
 clone survives everything except an explicit `workspace-remove`. The same
 indirection is reused for the job directory and for task-scoped agent state.
 
-Under `profile = "lite"` the bind targets move INTO the per-session tree
+The bind targets are INSIDE the per-session tree
 (`<runtimeRoot>/sessions/<slot>/workspace` and `.../state`), and the guest
 reaches the clone through the `/workspace` bind mount of the one writable
-share — the indirection itself is unchanged.
+share — the indirection itself is the historical one.
 
 virtiofsd passes ownership through unchanged, so the launcher `chown -R
 guestAgentUid:guestAgentGid`s the clone (default `1000:1000`). On a workstation
@@ -151,13 +142,12 @@ traffic is additionally impossible at layer 2 (`bridge link … isolated on`).
   placeholder values plus endpoint URLs.
 - The guest has no host home, no `~/.ssh`, no SSH/GPG agent socket, no cloud
   credentials, no container sockets, no Nix daemon socket, no host D-Bus.
-- Dotfiles are copied through an **allowlist** — under `profile = "full"` of
-  already-rendered store paths (`guestDotfiles.*`), never by re-evaluating host
-  home modules; under `profile = "lite"` of exact host paths staged at launch
-  time (`configSeed`, plus a credential denylist — applied to both the path's
-  own name and its resolved target — escape rejection and a host-side,
-  per-session manifest). Either way secret-bearing paths cannot be dragged in
-  by accident.
+- Dotfiles are copied through an **allowlist** of exact host paths staged at
+  launch time (`configSeed`, plus a credential denylist — applied to both the
+  path's own name and its resolved target — escape rejection and a host-side,
+  per-session manifest), so secret-bearing paths cannot be dragged in by
+  accident. Nothing is baked into the guest image and no host home module is
+  re-evaluated inside the guest.
 - The per-slot SSH **host** key is delivered read-only and root-only; the guest
   agent user cannot read it, so it cannot impersonate its own slot to the
   operator either.
@@ -190,11 +180,11 @@ repository asks for.
 ```text
 agent-microvm submit --agent <a> --prompt-file <f> --timeout <s> …
   … same allocation/clone/mount … (the allocation gets a 256-bit token)
-  → jobs/<slot>/input/spec.json     root:root 0400  (carries the token)
-    jobs/<slot>/input/prompt.md      root:root 0444
-    jobs/<slot>/controller/          root:root 0700  (empty; controller-only)
-    jobs/<slot>/worker/              agent-owned     (empty)
-    jobs/<slot>/worker-logs/         root:root 0755  (systemd opens the logs as root)
+  → sessions/<slot>/input/spec.json  root:root 0400  (carries the token)
+    sessions/<slot>/input/prompt.md   root:root 0444
+    sessions/<slot>/controller/       root:root 0700  (empty; controller-only)
+    sessions/<slot>/worker/           agent-owned     (empty)
+    sessions/<slot>/worker-logs/      root:root 0755  (systemd opens the logs as root)
   → systemctl start microvm@<slot>
   guest: agent-job-controller.service   (root; ConditionPathExists=input/spec.json)
      assert the share's ownership/permissions (incl. every parent of controller/)

@@ -5,16 +5,94 @@
 | Phase | Status | Notes |
 | --- | --- | --- |
 | 0 — baseline and measurement | partially done | Behaviour-preserving refactors are verified with the repo's `nix eval` snapshot/diff workflow (`AGENTS.md`) instead of a bespoke benchmark harness; a machine-readable runtime benchmark (closure size, launch latency, process counts) is **not** implemented — it needs a KVM host and belongs with the out-of-CI runtime-validation tier. |
-| 1 — opt-in lightweight profile | **done** | `myconfig.ai.microvm.profile = "full" \| "lite"`, table in `../profiles.nix`, wired in `default.nix` (`_module.args.agentProfile`) + `guest.nix`. Test: `checks.microvm-eval-lite-profile`. |
-| 2 — build only selected agents | **done** | `myconfig.ai.microvm.enabledAgents` (plus the `lite` profile default `[ "codex" ]`). The selection is applied ONCE in `../agents.nix`, so guest closure, `agent-run`, batch dispatch, launcher validation/help, workmux registrations and agent-state paths all follow. Test: `checks.microvm-eval-enabled-agents`. |
-| 3 — runtime config staging | **done** (for the `lite` profile) | `myconfig.ai.microvm.configSeed` (`../config-seed.nix`) stages an ALLOWLISTED, root-owned copy of the host agent configuration per launch; the guest sees it through a per-slot READ-ONLY virtiofs share and a root oneshot copies it into the disposable `/home/agent` before sshd, the batch controller and the agent-state linker. The allowlist is the SELECTED agents' new registry field `configPaths` plus `configSeed.extraPaths`. Guest home-manager activation is dropped exactly when staging is on (`lite`); `full` keeps it byte-for-byte. The credential denylist is applied to a path's own name AND to its RESOLVED target, the staged tree is root-only (0500/0400), the manifest stays outside the share, and the staged paths must be disjoint from the persisted agent-state directories. Tests: `checks.microvm-config-seed` (eval/build) plus `runtime-validation.sh --section seed` (root, enforcement). |
-| 4 — consolidate writable shares | **done** (for the `lite` profile) | `myconfig.ai.microvm.session` (`../session.nix`) is the ONE source of truth for the per-session tree: `<runtimeRoot>/sessions/<slot>/` is ONE writable virtiofs share (`workspace/`, `input/`, `controller/`, `worker/`, `worker-logs/`, `state/`) and `<runtimeRoot>/sessions-ro/<slot>/` ONE read-only share (`hostkeys/`, `config-seed/`). `../job.nix`, `../state.nix`, `../config-seed.nix`, `../hostkeys.nix`, the host tmpfiles rules, the generated pre-launch verifier `agent-microvm-verify-session` and `../launcher.nix` all DERIVE from its layout table — no parallel lite/full implementations, only per-profile path/mode resolution. Trust boundaries are unchanged (ownership + modes, passed through by virtiofsd); the guest gets `/workspace` as a bind mount of the session tree. `full` keeps its four shares byte-for-byte. Tests: `checks.microvm-session-tree` (plus `checks.microvm-eval-workspace-share` as the `full` regression guard). |
+| 1 — opt-in lightweight profile | **done, then COLLAPSED** | Landed as `myconfig.ai.microvm.profile = "full" \| "lite"` (table in the former `../profiles.nix`). The compatibility boundary has since been REMOVED together with the `full` path: the `lite` values (pinned `microvm.optimize.enable` + `storeDiskType = "erofs"`) are now the unconditional behaviour and there is no `profile` option. Test: `checks.microvm-eval-guest-shape`. See [Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path). |
+| 2 — build only selected agents | **done** | `myconfig.ai.microvm.enabledAgents`; the module-wide default is `null` = EVERY declared agent (the profile-supplied `[ "codex" ]` default died with the profile table — see the collapse section for the closure trade-off). The selection is applied ONCE in `../agents.nix`, so guest closure, `agent-run`, batch dispatch, launcher validation/help, workmux registrations and agent-state paths all follow. Test: `checks.microvm-eval-enabled-agents`. |
+| 3 — runtime config staging | **done**, unconditional | `myconfig.ai.microvm.configSeed` (`../config-seed.nix`) stages an ALLOWLISTED, root-owned copy of the host agent configuration per launch; the guest sees it through a per-slot READ-ONLY virtiofs share and a root oneshot copies it into the disposable `/home/agent` before sshd, the batch controller and the agent-state linker. The allowlist is the SELECTED agents' new registry field `configPaths` plus `configSeed.extraPaths`. Guest home-manager activation is gone (the module no longer contains it). The credential denylist is applied to a path's own name AND to its RESOLVED target, the staged tree is root-only (0500/0400), the manifest stays outside the share, and the staged paths must be disjoint from the persisted agent-state directories. Tests: `checks.microvm-config-seed` (eval/build) plus `runtime-validation.sh --section seed` (root, enforcement). |
+| 4 — consolidate writable shares | **done**, unconditional | `myconfig.ai.microvm.session` (`../session.nix`) is the ONE source of truth for the per-session tree: `<runtimeRoot>/sessions/<slot>/` is ONE writable virtiofs share (`workspace/`, `input/`, `controller/`, `worker/`, `worker-logs/`, `state/`) and `<runtimeRoot>/sessions-ro/<slot>/` ONE read-only share (`hostkeys/`, `config-seed/`). `../job.nix`, `../state.nix`, `../config-seed.nix`, `../hostkeys.nix`, the host tmpfiles rules, the generated pre-launch verifier `agent-microvm-verify-session` and `../launcher.nix` all DERIVE from its layout table — there is exactly one implementation. Trust boundaries are unchanged (ownership + modes, passed through by virtiofsd); the guest gets `/workspace` as a bind mount of the session tree. Test: `checks.microvm-session-tree`. |
 | 5 — split interactive/batch | not started | |
 | 6 — VSOCK transport | not started | |
 | 7 — clone/startup optimisation | partially done | Clone: `git clone --local --no-hardlinks` with a `--no-local` fallback plus an explicit `objects/info/alternates` check (≈10× faster on this repo: 0.6 s vs 5 s, measured by hand — both variants produce a fully independent clone). Readiness: exponential-backoff SSH polling (250 ms → 2 s) under the unchanged 90 s ceiling, replacing the fixed 3 s interval. NOT done: readiness as a positive protocol signal (needs phases 3/6) and the install-unit generation guard (see deviations). |
-| 8 — minimize guest closure | **done** | The `lite` profile builds the documented minimal CLI toolset, a plain bash login shell (no fish) and drops NixOS' `environment.defaultPackages`; per-agent `extraPackages` in the registry keeps agent-specific runtimes tied to the selection. Test: the phase-8 assertions of `checks.microvm-eval-lite-profile`. |
+| 8 — minimize guest closure | **done**, unconditional | Every guest builds the documented minimal CLI toolset, a plain bash login shell (no fish) and drops NixOS' `environment.defaultPackages`; per-agent `extraPackages` in the registry keeps agent-specific runtimes tied to the selection. Test: `checks.microvm-eval-guest-shape`. |
 | 9 — testing | incremental | Each landed phase adds eval checks to `tests/microvm.nix`; the VM/adversarial tiers of this phase remain out of CI (see `docs/agent-microvm-runtime-validation.md`). |
 | 10 — documentation and rollout | incremental | `docs/agent-microvm.md` documents every landed option. |
+
+### Collapsing the two profiles into one path
+
+Phases 1–4 and 8 were landed *alongside* the historical behaviour, gated behind
+`profile = "lite"`, so each phase could be reviewed against a byte-identical
+`full` host. That was the right way to land them and the wrong way to leave them:
+carrying both shapes meant two share layouts, two provisioning mechanisms, two
+guest toolsets, ~20 `if session.enable then … else …` sites, two launcher
+spellings and a test suite that asserted both. The compatibility layer has now
+been **deleted**, which is what phase 4's own task list demanded.
+
+What was removed:
+
+- `../profiles.nix`, the `myconfig.ai.microvm.profile` option, the `agentProfile`
+  module argument and every consumer branch on it. The `lite` values are the
+  unconditional behaviour: pinned `microvm.optimize.enable = true` +
+  `microvm.storeDiskType = "erofs"`, the minimal guest toolset with a bash login
+  shell and `environment.defaultPackages = [ ]`, config-seed staging, and the
+  consolidated session share.
+- `../guest-home.nix` in full (guest home-manager provisioning), the
+  `guestDotfiles.*` options, the `mkGuestHome` module argument, the
+  home-manager import in `../guest.nix` and its guest tmpfiles
+  profile-directory workaround. It is superseded by config-seed staging.
+- `guestFullPackages` and the fish login-shell path in `../guest.nix`.
+- The `session.enable` and `configSeed.enable` options: both mechanisms are
+  unconditional now, so the options could only ever have selected a shape that
+  no longer exists (with `guest-home.nix` gone, `configSeed.enable = false`
+  would mean "a guest with no configuration at all").
+- The four-share layout: every non-session share declaration plus the per-layout
+  branches in `../job.nix`, `../state.nix`, `../hostkeys.nix`,
+  `../config-seed.nix`, `../launcher.nix` (including the conditional-fragment
+  machinery that existed only to keep the `full` launcher byte-identical) and
+  the `LAYOUT` detection block of `../runtime-validation.sh`.
+- The tests that only described `full`: `checks.microvm-eval-workspace-share`
+  (the four-share regression guard), the "the profile default stays full"
+  assertions, and every `full`-side half of the phase 3/4/8 checks.
+  `checks.microvm-eval-lite-profile` became `checks.microvm-eval-guest-shape`
+  and now asserts the shape of the REFERENCE host's guest.
+
+What was deliberately KEPT:
+
+- the launcher's scan for per-slot residue under the PRE-consolidation roots
+  (`<stateRoot>/<slot>/workspace`, `<runtimeRoot>/jobs`, `.../hostkeys`,
+  `.../state/slots`): those branches find nothing on a fresh host, but f13 is
+  migrating FROM that layout and reporting its residue is exactly what
+  `recover --prune-foreign` is for;
+- the fish quoting dialect of `../runtime-validation.sh`' guest command
+  transport: the dialect is DETECTED per slot (today's guest answers `posix`),
+  and the detection is what keeps a mangled transport from turning guest-side
+  denials into vacuous passes;
+- every security invariant. Nothing in the collapse weakens one: the removed code
+  was the *weaker* of the two paths in every case where they differed (four
+  writable shares instead of one, a build-time guest home instead of a staged
+  one, a larger guest closure).
+
+The module-wide `enabledAgents` default was decided deliberately: `null` = EVERY
+declared agent, i.e. the historical behaviour, because the selection is
+operator-visible (`myconfig.ai.workmux` registers one `microvm-<agent>` pane per
+selected agent, and `agent-microvm run|submit --agent <name>` only accepts a
+selected one). The trade-off is the guest closure: every declared agent's runtime
+is baked into every slot image, so a host that wants the small closure the plan
+aims at must name its agents. `hosts/host.f13/ai.f13.nix` therefore states its
+five agents explicitly rather than inheriting the default, so trimming the list
+later is a visible, reviewable host change.
+
+**Verification.** The collapse is a deliberate behaviour change for f13, so
+byte-identity with the *default* f13 was not the goal. What was verified is:
+evaluated `test-f13` AFTER the collapse == evaluated `test-f13` BEFORE it with
+`profile = mkForce "lite"` plus the explicit `enabledAgents` the host now
+carries. The compared slice is every VM's `system.build.toplevel` and
+`microvm.declaredRunner` drvPath, every VM's full `microvm.shares` list, the
+guest `fileSystems` entries, `networking.firewall.extraCommands`,
+`builtins.attrNames systemd.services`, `systemd.tmpfiles.rules` and
+`environment.systemPackages` drvPaths. The diff is empty except the two
+git-revision artefacts (`nixos-version`, the `myconfig-commit` tmpfiles link)
+and the two host shell scripts (`agent-microvm`, `agent-microvm-stage-config`),
+whose only differences are COMMENT text — verified by diffing the generated
+script bodies. The guest closures are byte-identical.
 
 ### Recorded deviations
 
@@ -62,24 +140,25 @@
   `job.nix`'s single `paths` attrset, which now takes its root and its
   subdirectory names from the session layout — so the guest controller, the
   worker unit, the assertion helper and the host launcher followed without a
-  second implementation. The only genuinely dual-path code this phase added is
+  second implementation. The only genuinely dual-path code this phase added was
   per-profile PATH/MODE resolution (`if session.enable then ... else ...`) plus
-  the conditionally rendered launcher fragments that keep the `full` launcher
-  byte-identical.
+  the conditionally rendered launcher fragments that kept the `full` launcher
+  byte-identical. SUPERSEDED: all of it was deleted with the `full` path (see
+  [Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path)).
 - **Phase 4, virtiofsd process-count measurement**: recorded STRUCTURALLY (the
   eval check asserts the lite guest declares exactly one writable and at most
   one read-only share, i.e. two virtiofsd instances instead of four or five)
   rather than as a measured process count, for the same reason phase 0's
   benchmark is deferred: counting host processes needs a booted guest on a KVM
   host.
-- **Phase 4, the `full` profile keeps four shares**: no compatibility decision
-  was taken to consolidate it. The consolidated layout is `lite`-only and gated
-  by `session.enable`, and the evaluated-slice diff from `AGENTS.md` proves the
-  `full` host is byte-identical (only the two `configurationRevision`-derived
-  artefacts differ, as expected in a dirty tree). This is a *temporary* state:
-  carrying both layouts is what makes the module more complex today, so
-  “delete the four-share path” is an explicit task of phase 4 (see its Tasks
-  list) and must be done before the plan is considered complete.
+- **Phase 4, the `full` profile kept four shares — RESOLVED**: when the phase
+  landed, no compatibility decision had been taken to consolidate the existing
+  behaviour, so the consolidated layout was `lite`-only and gated by
+  `session.enable`, with the evaluated-slice diff from `AGENTS.md` proving the
+  `full` host byte-identical. That was explicitly a *temporary* state, and the
+  four-share path has since been deleted together with the rest of the
+  compatibility layer — see
+  [Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path).
 - **Phase 4 review follow-up, the pre-launch host-key sweep PRUNES the two
   bind-mount points**: `agent-microvm-verify-session` refuses to launch a slot
   whose WRITABLE tree contains `ssh_host_*`, but it no longer descends into
@@ -109,9 +188,11 @@
   four-share layout only. Since almost every check there asserts “nothing
   forbidden exists under `$X`”, running it on a `lite` host made the `seed`
   section's seven enforcement checks and the `lifecycle` stale-bind detector
-  pass VACUOUSLY. The suite now picks the layout from the existence of
-  `<runtimeRoot>/sessions`, prints it in its banner, and the `seed` section
-  hard-`FAIL`s if the staged payload does not exist after staging.
+  pass VACUOUSLY. The suite gained per-layout constants plus a detection block;
+  with the `full` path deleted the detection is gone again and the constants are
+  simply the session layout, but the `seed` section still hard-`FAIL`s if the
+  staged payload does not exist after staging — that guard is what makes the
+  vacuity structurally impossible.
 - **Phase 4 review follow-up, `agent-job-worker` on a stdin-only agent set**:
   the worker reads the prompt TEXT into `prompt` for the registry entries that
   take `%PROMPT%` as an argv token. `lite` selects only the stdin-driven
@@ -119,9 +200,9 @@
   `writeShellApplication`'s shellcheck gate failed the LITE guest build with
   SC2034 — undetected because no check forced the lite guest's toplevel. The
   suppression is now emitted only on hosts where the variable is genuinely
-  unused (`agentRegistry.batchUsesPromptText`), so the `full` script is
-  unchanged, and `microvm-session-tree` forces the lite guest's
-  `system.build.toplevel` and `microvm.declaredRunner`.
+  unused (`agentRegistry.batchUsesPromptText`) — which today means "on a host
+  whose selection happens to be stdin-only" — and `microvm-session-tree` forces
+  the guest's `system.build.toplevel` and `microvm.declaredRunner`.
 
 - **Phase 3, `rsync`**: the plan suggests `rsync --archive --copy-links` on both
   sides. NOT used. The HOST stager walks the allowlist with `find -L` and copies
@@ -137,16 +218,13 @@
   plan's `0555` directory inside a writable share, and modelled on the existing
   read-only host-key share. Phase 4 must keep the read-only property when it
   consolidates.
-- **Phase 3, staging is rendered CONDITIONALLY into the launcher**: the
-  host-side staging code exists in `agent-microvm` only when
-  `configSeed.enable` is on. Otherwise a `full`-profile host would get a
-  different launcher derivation, i.e. the phase would not be behaviour
-  preserving (the launcher is a host `environment.systemPackages` entry and is
-  covered by the evaluated-slice diff from `AGENTS.md`). The build-part greps
-  that prove the staging enforces the allowlist and cleans its destination
-  therefore inspect the LITE launcher (plus the generated stager, which is a
-  standalone `writeShellApplication`), and additionally assert that the FULL
-  launcher carries no staging code at all.
+- **Phase 3, staging was rendered CONDITIONALLY into the launcher —
+  RESOLVED**: the host-side staging code existed in `agent-microvm` only when
+  `configSeed.enable` was on, so that a `full`-profile host kept a byte-identical
+  launcher derivation (the launcher is a host `environment.systemPackages` entry
+  and is covered by the evaluated-slice diff from `AGENTS.md`). With the `full`
+  path deleted the staging code is unconditional; the fragment-rendering helper
+  remains only as a way to define long blocks next to the data they come from.
 - **Phase 3, `hermes` stages nothing**: the plan asks for per-agent
   `configPaths`. Hermes keeps `config.yaml`, `.env`, `auth.json`, `state.db` and
   `sessions/` in ONE root (`~/.hermes`) and even `config.yaml` carries a
@@ -219,23 +297,22 @@
   launcher (a host `systemPackages` entry, reachable from the host home-manager
   config) to reference every guest's `declaredRunner`, and the guest config in
   turn copies already-evaluated host home-manager file entries
-  (`guest-home.nix`) — a plausible infinite-recursion loop. The current
-  unconditional `systemctl restart install-microvm-<slot>.service` is an
-  idempotent symlink relink costing milliseconds, so the guard is deferred
-  until phase 3 removes the host→guest home-manager coupling.
-  UPDATE (phase 3 landed): the coupling is gone for the `lite` profile only
-  (`configSeed` replaces `guestDotfiles` there), so the guard becomes possible
-  for `lite` guests while it would still recurse for `full` ones. Still NOT
-  implemented — revisit with phase 5, the next phase that reshapes the
-  per-profile guest unit set.
+  (the removed `guest-home.nix`) — a plausible infinite-recursion loop. The
+  current unconditional `systemctl restart install-microvm-<slot>.service` is an
+  idempotent symlink relink costing milliseconds, so the guard was deferred until
+  phase 3 removed the host→guest home-manager coupling.
+  UPDATE (phase 3 landed, and the `full` path has since been deleted): the
+  coupling is gone for EVERY guest, so nothing can recurse any more and the guard
+  is now genuinely implementable. Still NOT implemented — revisit with phase 5,
+  the next phase that reshapes the guest unit set.
 - **Phase 7, readiness definition**: the extended readiness criteria
   (config staging finished, proxy forwarding healthy, agent executable present)
   presuppose phases 3 and 6; only the polling *strategy* was changed here.
 - **Phase 1, store pinning**: `microvm.optimize.enable` and
   `microvm.storeDiskType` currently *default* to `true` / `erofs` upstream, so
-  pinning them is behaviour-preserving today. It is done anyway (for `lite`
-  only) so an upstream default change cannot silently deoptimise the
-  lightweight guest.
+  pinning them is behaviour-preserving today. It is done anyway (and, since the
+  collapse, for every guest) so an upstream default change cannot silently
+  deoptimise the guest.
 
 ## Objective
 
@@ -283,6 +360,12 @@ Cloud Hypervisor/KVM
 ```
 
 Do not change the existing full-featured behavior without an explicit compatibility decision. Prefer introducing a new profile or opt-in options first, then changing defaults only after validation.
+
+**Status:** that compatibility decision HAS been taken (see
+[Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path)):
+phases 1–4 and 8 were first landed behind `profile = "lite"`, reviewed against a
+byte-identical `full` host, and the `full` path was then deleted. The tier has one
+shape, and it is the one sketched above.
 
 ---
 
@@ -387,14 +470,18 @@ Treat these as non-negotiable acceptance criteria throughout the work.
 ## Phase 1 — Add an opt-in lightweight profile — **DONE**
 
 Implemented as `../profiles.nix` (the authoritative profile table) plus the
-`myconfig.ai.microvm.profile` option in `../default.nix`, which resolves the
-profile ONCE and hands it to `../guest.nix` via `_module.args.agentProfile`.
-Acceptance criteria are locked down by `checks.microvm-eval-lite-profile`
-(`tests/microvm.nix`), which also asserts the negative half: the profile
-default stays `full`, an explicit `resourceClasses` outranks the profile table,
-and `lite` + the deprecated slot options is rejected. Runtime boot of a lite
-guest requires KVM and is therefore part of the out-of-CI runtime-validation
-tier, not of `nix flake check`.
+`myconfig.ai.microvm.profile` option in `../default.nix`, which resolved the
+profile ONCE and handed it to `../guest.nix` via `_module.args.agentProfile`.
+SUPERSEDED: once phases 1–4 and 8 had been reviewed, the compatibility boundary
+was deleted along with the `full` path, so the `lite` values are the module's
+only behaviour and there is no `profile` option (see
+[Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path)).
+What remains locked down by `checks.microvm-eval-guest-shape`
+(`tests/microvm.nix`) is the SHAPE: pinned optimized EROFS guest store, minimal
+toolset, bash login shell, no `defaultPackages`, an explicit `resourceClasses`
+outranking the module default, and the deprecated slot options being rejected
+alongside it. Runtime boot requires KVM and is therefore part of the out-of-CI
+runtime-validation tier, not of `nix flake check`.
 
 ### Goal
 
@@ -457,9 +544,11 @@ Implemented as the `enabledNames` argument of `../agents.nix` (the selection is
 applied at the single source of truth, so no consumer carries its own filter)
 plus the `myconfig.ai.microvm.enabledAgents` option resolved in
 `../default.nix`. Unknown tokens, an empty selection and a selection with no
-batch-capable agent are rejected by module assertions. The `lite` profile
-defaults to `[ "codex" ]`; `full` keeps every declared agent, so existing hosts
-are unaffected (verified with the evaluated-slice diff from `AGENTS.md`).
+batch-capable agent are rejected by module assertions. The module-wide default
+is `null` = every declared agent (the profile-supplied `[ "codex" ]` default died
+with the profile table), so a host that says nothing keeps the historical
+behaviour and a host that wants the small guest closure names its agents — f13
+does, explicitly.
 
 ### Goal
 
@@ -509,25 +598,24 @@ Prefer a registry structure in which each agent defines:
 
 ---
 
-## Phase 3 — Replace guest Home Manager activation with runtime configuration staging — **DONE** (for the `lite` profile)
+## Phase 3 — Replace guest Home Manager activation with runtime configuration staging — **DONE** (unconditional since the `full` path was deleted)
 
 Implemented as `../config-seed.nix` (the authoritative policy: allowlist,
 credential denylist, paths, modes, the host-side stager
 `agent-microvm-stage-config`, the guest-side seeder `agent-config-seed-apply`
 and the guest unit), the new per-agent `configPaths` field of `../agents.nix`,
-the `configSeed` field of `../profiles.nix`, the per-slot READ-ONLY share in
-`../guest.nix` (which also drops the guest home-manager import and
-`mkGuestHome` exactly when staging is on) and the conditionally rendered
-staging block of `../launcher.nix`. `guestDotfiles.enable` now defaults to
-`!configSeed.enable`, and enabling both is rejected by an assertion, so there
-is exactly ONE provisioning path per guest.
+the per-slot READ-ONLY share in `../guest.nix` and the staging block of
+`../launcher.nix`. There is exactly ONE provisioning path per guest: the
+alternative (guest home-manager activation, `guest-home.nix`) was first gated
+behind `configSeed.enable = false` and then deleted outright with the `full`
+path.
 
 Acceptance criteria are locked down by `checks.microvm-config-seed`
-(`tests/microvm.nix`): the lite guest runs no home-manager activation while the
-full guest still does, the config-seed share is per-slot/read-only/root-owned,
-the guest oneshot is ordered before sshd, the batch job controller, the
-agent-state linker and the boot-time model discovery (checked on a lite host
-that actually HAS sshd, so the ordering is against real units), the allowlist
+(`tests/microvm.nix`): the guest runs no home-manager activation at all, the
+config-seed share is per-slot/read-only/root-owned, the guest oneshot is ordered
+before sshd, the batch job controller, the agent-state linker and the boot-time
+model discovery (checked on the reference host, which HAS sshd, so the ordering
+is against real units), the allowlist
 follows `enabledAgents`, escaping, credential-shaped and agent-state-colliding
 allowlist entries are rejected at eval, the staged tree is root-only and the
 manifest is outside every guest share, and the generated stager really enforces
@@ -535,12 +623,10 @@ the allowlist, refuses escapes, applies the denylist to RESOLVED targets, skips
 setuid/non-regular files and cleans its destination. Whether the stager
 ENFORCES that policy at runtime is decided by the root-only
 `runtime-validation.sh --section seed` (the Nix sandbox is not root, so CI can
-only prove the policy is baked in). The `full` profile is unchanged — verified
-with the evaluated-slice diff from `AGENTS.md` (per-VM `toplevel`/
-`declaredRunner` drvPaths, firewall rules, systemd unit names, tmpfiles rules
-and `environment.systemPackages` drvPaths of `test-f13` are byte-identical;
-only the two `configurationRevision`-derived artefacts differ, as expected in a
-dirty tree).
+only prove the policy is baked in). When the phase landed, the `full` profile was
+verified unchanged with the evaluated-slice diff from `AGENTS.md`; that profile no
+longer exists (see
+[Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path)).
 
 ### Goal
 
@@ -661,15 +747,16 @@ Model-provider credentials should remain in the host proxy. The guest should rec
 
 ---
 
-## Phase 4 — Consolidate writable virtiofs shares — **DONE** (for the `lite` profile)
+## Phase 4 — Consolidate writable virtiofs shares — **DONE** (unconditional since the `full` path was deleted)
 
 Implemented as `../session.nix`: the authoritative layout table (paths,
 subdirectory names, owners, modes, the trust-boundary policy function), the host
 tmpfiles rules generated from it, the generated pre-launch verifier
 `agent-microvm-verify-session` and the guest fragment that bind-mounts
-`/run/agent-session/workspace` to `/workspace`. `myconfig.ai.microvm.session.enable`
-defaults to the resolved profile's new `consolidatedSession` field
-(`../profiles.nix`): FALSE for `full`, TRUE for `lite`.
+`/run/agent-session/workspace` to `/workspace`. It was gated behind
+`myconfig.ai.microvm.session.enable` (defaulting to the resolved profile's
+`consolidatedSession` field) until the `full` path was deleted; the layout is now
+unconditional and that option is gone.
 
 Every other module DERIVES from that table instead of growing a second copy of
 the layout: `../job.nix` (its root, subdirectory names and directory modes),
@@ -679,13 +766,12 @@ manifest location), `../hostkeys.nix` (the per-slot key directory and the guest
 key path), `../guest.nix` (the share list, the `/workspace` bind mount, the
 sshd mount ordering and three cross-module assertions) and `../launcher.nix`
 (`prepare_session`, `verify_session`, `clear_session`, and the two bind-mount
-targets, rendered as conditional fragments so the `full` launcher stays
-byte-identical).
+targets).
 
 Acceptance criteria are locked down by `checks.microvm-session-tree`
-(`tests/microvm.nix`): the lite guest declares EXACTLY ONE writable share and at
-most ONE read-only share with the expected tags/mountPoints/sources; the full
-guest keeps exactly its four historical shares and its virtiofs `/workspace`;
+(`tests/microvm.nix`): the guest declares EXACTLY ONE writable share and ONE
+read-only share with the expected tags/mountPoints/sources (and a guest WITHOUT
+the SSH control channel still declares exactly those two);
 the per-directory ownership/mode expectations are asserted FROM the layout table
 (against the host tmpfiles rules and against the generated verifier, never
 against a second hardcoded copy); every consumer's paths are asserted to be the
@@ -697,8 +783,10 @@ group/other-readable or agent-owned `controller/`, an agent-owned
 configuration inside the writable tree, nested trees) and must complain about
 each; and the build part greps the generated launcher and verifier for the
 pre-launch verification, the complete-tree removal and the refusal to remove a
-tree whose bind mounts are still live — while proving the `full` launcher
-carries none of it.
+tree whose bind mounts are still live, and proves the launcher no longer
+references any historical four-share path. It also FORCES the guest
+`system.build.toplevel` and `microvm.declaredRunner`, so a guest that does not
+build fails CI.
 
 ### Goal
 
@@ -753,23 +841,24 @@ Keep SSH private host keys in a separate read-only share. Do not place them in t
 - Update batch controller and worker paths.
 - Add ownership and mode assertions before VM launch.
 - Ensure a malicious workspace symlink cannot redirect writes into `controller/`, `input/`, or `config-seed/`.
-- **NOT DONE — required follow-up: delete the four-share (`full`) path.**
+- **DONE (separate commit): the four-share (`full`) path was deleted.**
   The consolidated layout was introduced *alongside* the historical one so the
   `full` profile could be proved byte-identical (see the recorded deviations).
-  Until the old path is removed, the module carries two layouts, two launcher
-  spellings and ~20 `if session.enable then … else …` sites, i.e. this phase
-  leaves the module *more* complex than the plan's objective, not less. The
-  removal means: make `session.enable` unconditional, drop the `else` branch in
-  `job.nix`, `state.nix`, `hostkeys.nix`, `config-seed.nix` and `guest.nix`,
-  drop the conditional launcher fragments in `launcher.nix`, drop the
-  `four-share` branch of `../runtime-validation.sh`, and drop the
-  `full`-profile share assertions in `../../../tests/microvm.nix`. It is a
-  separate commit on purpose: it *will* change the `full` host, so it needs its
-  own evaluated-slice review rather than hiding inside this phase.
+  That left the module carrying two layouts, two launcher spellings and ~20
+  `if session.enable then … else …` sites, i.e. *more* complex than the plan's
+  objective, not less. `session.enable` is now unconditional (the option is
+  gone), the `else` branches in `job.nix`, `state.nix`, `hostkeys.nix`,
+  `config-seed.nix` and `guest.nix` are gone, the conditional launcher fragments
+  in `launcher.nix` are gone, `../runtime-validation.sh` has one layout, and the
+  `full`-profile assertions (including the whole
+  `checks.microvm-eval-workspace-share`) are gone from
+  `../../../tests/microvm.nix`. It was a separate commit on purpose: it CHANGED
+  the f13 host, so it carries its own evaluated-slice review (see
+  [Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path)).
 
 ### Acceptance criteria
 
-- Lite interactive mode uses one writable virtiofs share plus at most one read-only SSH-key share.
+- Interactive mode uses one writable virtiofs share plus at most one read-only SSH-key share.
 - The guest units that need one of the new mounts declare it: the workspace bind
   carries `x-systemd.requires-mounts-for=/run/agent-session`, and `sshd`,
   `agent-config-seed` and the agent-state linker carry `RequiresMountsFor` on
@@ -797,7 +886,7 @@ Avoid carrying both execution modes in every lite image.
 ```nix
 myconfig.ai.microvm.mode = "interactive";
 myconfig.ai.microvm.mode = "batch";
-myconfig.ai.microvm.mode = "combined"; # compatibility/full profile
+myconfig.ai.microvm.mode = "combined"; # today's behaviour (interactive + batch)
 ```
 
 ### Interactive mode includes
@@ -836,7 +925,7 @@ myconfig.ai.microvm.mode = "combined"; # compatibility/full profile
 
 - Interactive-lite has no batch services or job protocol files.
 - Batch-lite has no SSH daemon, SSH host keys, or SSH readiness polling.
-- Combined mode preserves current behavior.
+- Combined mode preserves the current (interactive + batch) behaviour.
 - Nix assertions reject options that have no meaning in the selected mode.
 
 ---
@@ -962,14 +1051,15 @@ Before restarting the slot install unit, compare the expected runner/store path 
 
 ---
 
-## Phase 8 — Minimize the guest package closure — **DONE** (for the lite profile)
+## Phase 8 — Minimize the guest package closure — **DONE** (unconditional since the `full` path was deleted)
 
-Implemented in `../guest.nix` (`guestMinimalPackages` with a per-package
-rationale, `guestShell`, `environment.defaultPackages = [ ]`) driven by the
-`minimalGuestPackages` field of `../profiles.nix`, plus the registry's new
-per-agent `extraPackages` so an agent's own runtime dependencies are added only
-while that agent is selected. The `full` profile keeps its historical toolset
-and fish login shell verbatim.
+Implemented in `../guest.nix` (`guestCommonPackages` with a per-package
+rationale, `guestShell = pkgs.bashInteractive`,
+`environment.defaultPackages = [ ]`), plus the registry's per-agent
+`extraPackages` so an agent's own runtime dependencies are added only while that
+agent is selected. It was gated behind the profile's `minimalGuestPackages` field
+until the `full` path (the historical toolset plus the fish login shell) was
+deleted.
 
 ### Tasks
 
@@ -1087,7 +1177,8 @@ Verify host-side enforcement of:
 - Tests run in CI or through a documented local command.
 - Security failures are fatal.
 - Benchmarks report improvements or regressions for each major phase.
-- Full-profile compatibility tests remain green.
+- The removal of the `full` profile is proved by an evaluated-slice diff against
+  the pre-collapse `lite` shape, not by keeping `full` tests alive.
 
 ---
 
@@ -1147,7 +1238,10 @@ The work is complete when all of the following are true:
 - Repository clones are independent and disposable.
 - Interactive and batch profiles do not include each other’s unnecessary services.
 - Launch latency, closure size, host process count, and virtiofsd count are all lower than the recorded baseline.
-- The full profile remains available and compatible.
+- ~~The full profile remains available and compatible.~~ SUPERSEDED: the `full`
+  profile was deliberately removed once the lightweight path was reviewed; the
+  compatibility requirement was replaced by the evaluated-slice proof described in
+  [Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path).
 - Security and integration tests pass.
 
 ---

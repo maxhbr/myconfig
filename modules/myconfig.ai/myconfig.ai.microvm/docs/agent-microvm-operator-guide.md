@@ -115,7 +115,7 @@ is written **only** to stderr, never into the authoritative result JSON or the
 structured event stream.
 
 Where things live while a batch task runs (`<jobs> =
-/var/lib/agent-microvms/jobs/<slot>`):
+/var/lib/agent-microvms/sessions/<slot>`, the ONE writable virtiofs share):
 
 | Path | Owner | Meaning |
 | --- | --- | --- |
@@ -163,7 +163,7 @@ sudo agent-microvm ssh fix-parser -- systemctl status 'agent-job-worker@*'
 sudo agent-microvm console agent-normal-0      # serial console (journal)
 
 # untrusted worker output (host side, no SSH needed):
-sudo tail -f /var/lib/agent-microvms/jobs/<slot>/worker-logs/stdout.log
+sudo tail -f /var/lib/agent-microvms/sessions/<slot>/worker-logs/stdout.log
 ```
 
 The two guest units are deliberately separate: `agent-job-controller` is the
@@ -374,8 +374,8 @@ still present. Common reasons and what they mean:
 To look at the trusted state by hand (root only, and read-only — never edit it):
 
 ```bash
-sudo cat /var/lib/agent-microvms/jobs/<slot>/controller/state.json | jq .
-sudo ls -ld /var/lib/agent-microvms/jobs/<slot>/{input,controller,worker}
+sudo cat /var/lib/agent-microvms/sessions/<slot>/controller/state.json | jq .
+sudo ls -ld /var/lib/agent-microvms/sessions/<slot>/{input,controller,worker}
 #   input/       root root 0755   (spec.json 0400, prompt.md 0444)
 #   controller/  root root 0700
 #   worker/      1000 1000 0755

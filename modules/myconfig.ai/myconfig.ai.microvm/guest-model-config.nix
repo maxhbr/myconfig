@@ -6,7 +6,7 @@
 # Problem
 # -------
 # The coding-agent configs a sandbox gets are COPIES of the host primary
-# user's build-time-rendered dotfiles (see guest-home.nix):
+# user's rendered dotfiles, staged at launch time (see config-seed.nix):
 #
 #   * pi   → ~/.pi/agent/extensions/myconfig-providers.ts (generated from
 #            `services.litellm.settings.model_list` at BUILD time)
@@ -51,10 +51,9 @@
   lib,
   pkgs,
   agentNetwork,
-  # The ONE definition of the RUNTIME configuration staging (../config-seed.nix).
-  # WHICH unit provisions the guest home decides what this one must be ordered
-  # after: guest home-manager activation under `full`, the seeding oneshot
-  # under `lite` (where `home-manager-agent.service` does not exist at all).
+  # The ONE definition of the RUNTIME configuration staging (../config-seed.nix):
+  # the unit that provisions the guest home, which this one must be ordered
+  # after (it writes into that same home).
   agentConfigSeed,
   ...
 }:
@@ -253,16 +252,11 @@ let
         "litellm-forwarder.socket"
       ]
       # Whatever PROVISIONS the home must be finished first: this unit writes
-      # `$HOME/.pi/agent/extensions/zz-microvm-models.ts` into that same home.
-      #   * `full` — the build-time dotfile copies must be linked first: the pi
-      #     extension is written NEXT TO the copied `myconfig-providers.ts`, and
-      #     home-manager aborts (or backs up) on pre-existing files.
-      #   * `lite` — there is no `home-manager-agent.service`; the seeding
-      #     oneshot does `cp -R` + `chown -R` + `chmod -R` over the WHOLE home,
-      #     so writing into it concurrently would race (../config-seed.nix
-      #     states the matching `before=`).
-      ++ lib.optional (!agentConfigSeed.enable) "home-manager-agent.service"
-      ++ lib.optional agentConfigSeed.enable agentConfigSeed.guestUnit;
+      # `$HOME/.pi/agent/extensions/zz-microvm-models.ts` into that same home,
+      # and the launch-time seeding oneshot does `cp -R` + `chown -R` +
+      # `chmod -R` over the WHOLE home, so writing into it concurrently would
+      # race (../config-seed.nix states the matching `before=`).
+      ++ [ agentConfigSeed.guestUnit ];
       # Ordered before the batch job CONTROLLER (which starts the untrusted
       # worker), exactly like agent-state-link, so an unattended job never
       # starts against a stale model list. Interactive logins happen far later.
