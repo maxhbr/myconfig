@@ -19,6 +19,7 @@ in
     ./myconfig.ai.llama-cpp
     ./myconfig.ai.jail.nix
     ./myconfig.ai.microvm
+    ./myconfig.ai.gvisor-agent-sandbox
     ./comfyui.nix
     ./container.Kokoro-FastAPI.nix
     ./container.crawl4ai.nix
