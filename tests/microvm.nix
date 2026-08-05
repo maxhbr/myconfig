@@ -26,8 +26,9 @@
 #   microvm-slot-uniqueness   §37     — pure-eval unique/well-formed IP+MAC pool
 #   microvm-eval-rejects-invalid §37  — NEGATIVE tests: the module's own
 #                                        assertions actually REJECT invalid
-#                                        config (slotCount bound, enableSsh key,
-#                                        insecure-network acknowledgement)
+#                                        config (pool bounds, class names,
+#                                        enableSsh key, insecure-network
+#                                        acknowledgement, missing litellm)
 #   microvm-eval-guest-shape  phases 1+8 — the guest is the lightweight shape:
 #                                        pinned EROFS store, bash login shell,
 #                                        the documented minimal toolset
@@ -71,15 +72,13 @@ let
   enabledSlots =
     (import ../modules/myconfig.ai/myconfig.ai.microvm/slots.nix { inherit lib; }).mkSlots
       resourceClasses;
-  # The EFFECTIVE resource-class table of the reference host (ticket 5 A),
-  # including default.nix's legacy `slotCount` migration.
+  # The EFFECTIVE resource-class table of the reference host (ticket 5 A).
   resourceClasses = self.nixosConfigurations.test-f13._module.args.agentResourceClasses;
   # The reference slot every guest-level check inspects: the first slot of the
   # first class, taken from the generated pool rather than hardcoded.
   refSlot = lib.head enabledSlots;
   gateway = microvmOpts.gatewayAddress; # 192.168.83.1
   port = toString microvmOpts.litellmPort; # 4000
-  slotCount = lib.length enabledSlots;
 
   # Turn a list of { assertion; message; } into a marker derivation. If any
   # assertion is false the eval THROWS (so the check fails at eval time with a
@@ -240,19 +239,19 @@ let
     [
       {
         assertion = lib.length (lib.unique ips) == n;
-        message = "slotCount=${toString n}: IPv4 addresses not unique (${toString ips})";
+        message = "pool=${toString n}: IPv4 addresses not unique (${toString ips})";
       }
       {
         assertion = lib.length (lib.unique macs) == n;
-        message = "slotCount=${toString n}: MAC addresses not unique (${toString macs})";
+        message = "pool=${toString n}: MAC addresses not unique (${toString macs})";
       }
       {
         assertion = ipsWellFormed;
-        message = "slotCount=${toString n}: an IPv4 address is malformed (${toString ips})";
+        message = "pool=${toString n}: an IPv4 address is malformed (${toString ips})";
       }
       {
         assertion = macsWellFormed;
-        message = "slotCount=${toString n}: a MAC address is malformed (${toString macs})";
+        message = "pool=${toString n}: a MAC address is malformed (${toString macs})";
       }
       {
         assertion = names == expectedNames;
@@ -276,19 +275,19 @@ let
       }
       {
         assertion = indicesContiguous;
-        message = "slotCount=${toString n}: slot .index values not contiguous 0..${toString (n - 1)}";
+        message = "pool=${toString n}: slot .index values not contiguous 0..${toString (n - 1)}";
       }
       {
         # ticket 3 B: every concurrently runnable slot needs a UNIQUE VSOCK
         # control-channel identity ...
         assertion = lib.length (lib.unique cids) == n;
-        message = "slotCount=${toString n}: VSOCK CIDs not unique (${toString cids})";
+        message = "pool=${toString n}: VSOCK CIDs not unique (${toString cids})";
       }
       {
         # ... that avoids the reserved CIDs 0 (hypervisor), 1 (loopback),
         # 2 (host) and VMADDR_CID_ANY (0xffffffff).
         assertion = builtins.all (c: c > 2 && c < 4294967295) cids;
-        message = "slotCount=${toString n}: VSOCK CIDs must avoid reserved values (${toString cids})";
+        message = "pool=${toString n}: VSOCK CIDs must avoid reserved values (${toString cids})";
       }
     ];
 
@@ -314,7 +313,7 @@ let
     in
     map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
   # True iff `mods` is REJECTED: either it fails at the option-TYPE level
-  # (e.g. slotCount=0 violates the `positive integer` type, so forcing the
+  # (e.g. a class `count = 0` violates the `positive integer` type, so forcing the
   # config throws — caught here by tryEval), or it trips a module ASSERTION
   # whose message contains `needle`. Both are genuine "module rejects invalid
   # config" outcomes; the needle pins the assertion-level cases to the exact
@@ -325,28 +324,6 @@ let
       r = builtins.tryEval (failedAssertions mods);
     in
     if !r.success then true else builtins.any (m: lib.hasInfix needle m) r.value;
-  # Warnings of a variant host, for the ticket-3 C migration checks.
-  warningsOf =
-    mods: (self.nixosConfigurations.test-f13.extendModules { modules = mods; }).config.warnings;
-  # Migration variants that must NOT inherit test-f13's explicit
-  # `networkProfile` definition (a definition cannot be removed by
-  # extendModules, only outranked — and `profileExplicit` deliberately keys off
-  # the DEFINITION, not the value). test-workstation has the feature disabled
-  # and defines no profile, so enabling it there yields a host whose profile is
-  # genuinely unset. `enableSsh = false` keeps it key-free.
-  unsetProfileHost =
-    mods:
-    (self.nixosConfigurations.test-workstation.extendModules {
-      modules = [
-        {
-          myconfig.ai.microvm = {
-            enable = true;
-            enableSsh = false;
-          };
-        }
-      ]
-      ++ mods;
-    }).config;
   # The unmodified host must have NO failed assertions — positive control so
   # the rejectsWith checks below can't pass vacuously.
   baselineClean = failedAssertions [ ] == [ ];
@@ -447,7 +424,7 @@ in
   ];
 
   # ---------------------------------------------------------------------- #
-  # (b) ENABLED (test-f13) — exactly `slotCount` slots, bridge-only proxy   #
+  # (b) ENABLED (test-f13) — exactly the pool's slots, bridge-only proxy    #
   #     endpoint, terminal FORWARD DROP + 169.254.169.254 metadata drop.    #
   #     Plan §37 (assertions) & §38 (f13/test-f13 evaluate enabled).        #
   # ---------------------------------------------------------------------- #
@@ -708,12 +685,6 @@ in
           == lib.sort (a: b: a < b) (map (sl: sl.name) enabledSlots)
           && lib.length (lib.attrNames resourceClasses) == 2;
         message = "the reference host's VMs must be exactly the pool of its own two resource classes, got ${toString (builtins.attrNames enabledCfg.microvm.vms)}";
-      }
-      {
-        # ... and mixing that explicit table with the DEPRECATED slot options is
-        # ambiguous, so it must be rejected rather than silently resolved.
-        assertion = rejectsWith [ { myconfig.ai.microvm.slotCount = 3; } ] "ambiguous slot configuration";
-        message = "an explicit resourceClasses together with the deprecated slotCount must be rejected";
       }
     ];
 
@@ -1803,7 +1774,7 @@ in
   #     invalid config (inspected via config.assertions, see helper above).  #
   #     This locks down the OTHER half of §37 (rejecting                     #
   #     bad input) — including the module's own IP/MAC uniqueness guards     #
-  #     (default.nix:258/262) and the slotCount bound / enableSsh-key /      #
+  #     and the pool-bound / class-name / enableSsh-key /                   #
   #     insecure-network-acknowledgement assertions. Without these the       #
   #     guards would be dead code from the suite's perspective.              #
   # ---------------------------------------------------------------------- #
@@ -1880,20 +1851,6 @@ in
       message = "a litellm-capable profile with services.litellm.enable=false must be rejected at eval";
     }
     {
-      # Setting BOTH spellings would silently drop one of them.
-      assertion = rejectsWith [
-        {
-          myconfig.ai.microvm.resourceClasses = lib.mkForce {
-            normal.count = 1;
-            normal.vcpu = 2;
-            normal.memoryMiB = 1024;
-          };
-          myconfig.ai.microvm.slotCount = lib.mkForce 3;
-        }
-      ] "ambiguous slot configuration";
-      message = "resourceClasses together with the deprecated slotCount must be rejected";
-    }
-    {
       assertion = rejectsWith [
         {
           myconfig.ai.microvm.enableSsh = lib.mkForce true;
@@ -1902,19 +1859,6 @@ in
       ] "enableSsh requires an explicit sshPublicKeyFile";
       message = "enableSsh without sshPublicKeyFile must be rejected";
     }
-    {
-      # On a host whose profile is genuinely unset, the deprecated boolean
-      # translates to the `internet` profile — which is insecure and therefore
-      # still needs the explicit acknowledgement.
-      assertion =
-        let
-          cfg = unsetProfileHost [ { myconfig.ai.microvm.allowPublicInternet = true; } ];
-          msgs = map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
-        in
-        builtins.any (m: lib.hasInfix "INSECURE profile" m) msgs;
-      message = "allowPublicInternet (-> internet profile) without acknowledgeInsecureNetwork must be rejected";
-    }
-    # --- ticket 3 C: profile model + legacy-boolean migration -------------
     {
       assertion = rejectsWith [
         {
@@ -1942,52 +1886,6 @@ in
         }
       ] "requires\n`packageProxyPort`";
       message = "networkProfile = package-access without packageProxyPort must be rejected";
-    }
-    {
-      # Ambiguity must never be resolved silently in either direction.
-      assertion = rejectsWith [
-        {
-          myconfig.ai.microvm.allowPublicInternet = lib.mkForce true;
-          myconfig.ai.microvm.networkProfile = "proxy-only";
-          myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
-        }
-      ] "ambiguous network configuration";
-      message = "allowPublicInternet together with an explicit, different networkProfile must be rejected";
-    }
-    {
-      assertion = rejectsWith [
-        { myconfig.ai.microvm.allowInterVmTraffic = lib.mkForce true; }
-      ] "`allowInterVmTraffic` has been REMOVED";
-      message = "allowInterVmTraffic = true must be rejected (guest isolation is unconditional)";
-    }
-    {
-      assertion = rejectsWith [
-        { myconfig.ai.microvm.allowPrivateNetworks = lib.mkForce true; }
-      ] "`allowPrivateNetworks` has been REMOVED";
-      message = "allowPrivateNetworks = true must be rejected (no profile grants private-range access)";
-    }
-    {
-      # A host that still defines a deprecated boolean must be WARNED, not
-      # silently migrated.
-      assertion = builtins.any (
-        w: lib.hasInfix "network booleans" w && lib.hasInfix "deprecated" w
-      ) (warningsOf [ { myconfig.ai.microvm.allowPrivateNetworks = false; } ]);
-      message = "defining a deprecated network boolean must emit a deprecation warning";
-    }
-    {
-      # ... and a translated boolean must say so explicitly (again on a host
-      # whose profile is genuinely unset).
-      assertion =
-        let
-          cfg = unsetProfileHost [
-            {
-              myconfig.ai.microvm.allowPublicInternet = true;
-              myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
-            }
-          ];
-        in
-        builtins.any (w: lib.hasInfix "translated the deprecated" w) cfg.warnings;
-      message = "translating allowPublicInternet -> networkProfile = internet must warn";
     }
   ];
 

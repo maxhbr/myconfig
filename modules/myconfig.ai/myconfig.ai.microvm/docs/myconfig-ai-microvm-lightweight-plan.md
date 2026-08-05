@@ -94,6 +94,21 @@ and the two host shell scripts (`agent-microvm`, `agent-microvm-stage-config`),
 whose only differences are COMMENT text — verified by diffing the generated
 script bodies. The guest closures are byte-identical.
 
+### Follow-up: the deprecated migration shims are gone too
+
+A separate commit removed the option shims that the collapse left without a
+consumer: `slotCount` / `defaultVcpu` / `defaultMemoryMiB` (the pre-`resourceClasses`
+single-class spelling, its synthesized class table, its ambiguity assertion and
+its deprecation warning) and `allowPublicInternet` / `allowPrivateNetworks` /
+`allowInterVmTraffic` (the pre-`networkProfile` booleans, their translate /
+reject / warn migration and the `options`-based "was this explicitly defined?"
+machinery). No host in this repository sets any of them, so a host that still
+does now gets an **unknown option** error naming the option — strictly louder
+than the warning or assertion it replaces, and impossible to mistake for a
+capability that exists. The evaluated-slice diff for `test-f13` is byte-identical
+across that commit (its `resourceClasses` is explicit, so the synthesized table
+was never used).
+
 ### Recorded deviations
 
 - **Phase 4, the read-only share is NOT folded into the writable tree**: the
