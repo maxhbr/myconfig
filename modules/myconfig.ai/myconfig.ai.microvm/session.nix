@@ -520,7 +520,21 @@ let
       # keys in a separate read-only share. Do not place them in the writable
       # session tree."): a bug in a future refactor must fail the LAUNCH, not
       # quietly hand the slot's identity to the untrusted side.
+      #
+      # The two BIND-MOUNT points are PRUNED, and that is not a hole: by the
+      # time this runs they carry the user's own git clone and the task's
+      # persisted agent state, i.e. content the HOST never writes key material
+      # into and the guest agent can create at will. Without the prune an
+      # ordinary repository file (`somedir/ssh_host_ed25519_key.pub` is entirely
+      # plausible in a NixOS/agenix clone, and a `.pub` is not secret) would
+      # refuse the launch with a security error — and a hostile agent could
+      # deny every future launch of the slot by creating one. Host-written key
+      # material can only ever land in the root-owned subdirectories, which are
+      # all still walked. The names come from the layout table, never from
+      # literals.
       if [[ -n "$(find "$SESSION_DIR" -maxdepth 3 \
+                      \( -path "$SESSION_DIR/${subdirs.workspace}" \
+                         -o -path "$SESSION_DIR/${subdirs.state}" \) -prune -o \
                       -name 'ssh_host_*' -print -quit 2>/dev/null)" ]]; then
           die "SSH host-key material found in the WRITABLE session tree $SESSION_DIR"
       fi
