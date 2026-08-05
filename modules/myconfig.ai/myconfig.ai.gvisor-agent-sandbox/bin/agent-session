@@ -43,6 +43,7 @@ Usage:
   agent-session shell NAME [COMMAND...]
   agent-session logs NAME [PODMAN-LOGS-ARGS...]
   agent-session stop NAME
+  agent-session merge NAME [--no-ff] [--ff] [--squash] [--repo PATH] [GIT-MERGE-ARGS...]
   agent-session destroy NAME [--force] [--delete-branch]
   agent-session doctor
 
@@ -67,6 +68,17 @@ start options:
   --home-seed PATH            Seed /home/agent from this directory instead of
                               the activated home-manager generation
   --no-home-seed              Start with an empty /home/agent
+
+merge options:
+  --repo PATH                 Original host repo to merge into (default: the
+                              repository the session was started from)
+  --no-ff                     Create a merge commit even if a fast-forward is
+                              possible (the default)
+  --ff                        Allow a fast-forward, creating no merge commit
+  --squash                    Produce a single squashed commit on the target
+                              branch (no merge commit, no merge ancestry)
+  --                          Pass any further flags verbatim to git merge
+                              (e.g. -- -m "merge feature work")
 
 environment:
   AGENT_SANDBOX_IMAGE           Override the default image
@@ -574,6 +586,66 @@ cmd_stop() {
   fi
 }
 
+# Merge the session's feature branch from its disposable bare pool into the
+# currently checked-out branch of the ORIGINAL host repository. The host repo
+# is never mounted into the sandbox, so the only way back is through Git: fetch
+# the branch from the pool into a local ref (so git sees the shared ancestry
+# for a real 3-way merge) and merge it, then drop the temporary ref again.
+# Uncommitted work in the session worktree does not carry over — the agent
+# must have committed it.
+cmd_merge() {
+  local session=${1:?session name required}; shift
+  local repo_override=''
+  local -a merge_args=() ff_set=false
+  while (( $# )); do
+    case "$1" in
+      --repo) repo_override=${2:?}; shift 2 ;;
+      --no-ff|--ff|--squash) merge_args+=("$1"); ff_set=true; shift ;;
+      --) shift; merge_args+=("$@"); break ;;
+      *) merge_args+=("$1"); shift ;;
+    esac
+  done
+  load_meta "$session"
+
+  # The original repository the session was started from. Allow --repo to
+  # override for the unusual case of merging into a different clone.
+  local target_repo=$repo
+  [[ -z "$repo_override" ]] || target_repo=$(realpath -e -- "$repo_override") \
+    || die "--repo: not a path: $repo_override"
+  [[ -d "$target_repo/.git" || -f "$target_repo/.git" ]] \
+    || die "--repo: not a Git work tree: $target_repo"
+
+  # Refuse to merge into a detached HEAD or a dirty tree, so a conflict does
+  # not leave the host checkout half-merged without a branch to return to.
+  local current_branch
+  current_branch=$(git -C "$target_repo" symbolic-ref --short HEAD 2>/dev/null) \
+    || die "the repository at $target_repo is in detached HEAD state; \
+switch to the branch you want to merge into first"
+  [[ -z "$(git -C "$target_repo" status --porcelain)" ]] \
+    || die "working tree of $target_repo is dirty; commit or stash before merging"
+
+  # Default to a merge commit (--no-ff) so the feature work stays traceable,
+  # matching the documented manual flow, unless the caller picks otherwise.
+  [[ "$ff_set" = true ]] || merge_args=(--no-ff "${merge_args[@]}")
+
+  # Fetch the session branch into a local ref so git sees the shared ancestry
+  # and can do a real 3-way merge (FETCH_HEAD alone would merge unrelated
+  # histories when the pool and the target repo diverged). The ref is removed
+  # again afterwards so no trace of the disposable branch lingers on the host.
+  local fetched_ref=refs/heads/$branch
+  log "fetching branch $branch from pool $pool into $target_repo"
+  git -C "$target_repo" fetch --no-tags "$pool" "+$branch:$fetched_ref" \
+    || die "fetch from pool failed; is the session pool still present?"
+
+  log "merging $branch into $current_branch of $target_repo"
+  if git -C "$target_repo" merge "${merge_args[@]}" "$branch"; then
+    git -C "$target_repo" branch -D "$branch" >/dev/null 2>&1 || true
+  else
+    die "merge failed; resolve conflicts in $target_repo, then delete the \
+leftover ref with 'git -C \"$target_repo\" branch -D $branch'"
+  fi
+}
+
 cmd_destroy() {
   local session=${1:?session name required}; shift
   local force=false delete_branch=false
@@ -695,6 +767,7 @@ main() {
     logs) shift; cmd_logs "$@" ;;
     shell) shift; cmd_shell "$@" ;;
     stop) shift; cmd_stop "$@" ;;
+    merge) shift; cmd_merge "$@" ;;
     destroy) shift; cmd_destroy "$@" ;;
     doctor) shift; cmd_doctor "$@" ;;
     -h|--help|help|'') usage ;;
