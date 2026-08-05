@@ -23,7 +23,8 @@ git subtree pull --prefix=modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox \
 ```
 
 Expect conflicts in the files touched during integration (see below), notably
-`README.md` (upstream's version now lives at `docs/upstream-README.md`).
+`README.md` (upstream's version now lives at `docs/upstream-README.md`) and
+`bin/agent-session` (locally patched `start`).
 
 ## What changed during integration
 
@@ -46,9 +47,19 @@ Moved:
   troubleshooting). Its "install as a flake input" section does not apply
   here.
 
+Patched:
+
+- `bin/agent-session` — `start` no longer dies outright when a session of
+  the same name exists. On a terminal it asks
+  `session NAME already exists; destroy it and delete branch BRANCH? [y/N]`
+  and, on `y`, runs `destroy NAME --force --delete-branch` before creating
+  the new session. Without a terminal the previous fail-fast behaviour is
+  kept, now with the exact recovery command in the message. The destroy runs
+  in a subshell because it sources the old session's `meta`, which would
+  otherwise clobber `cmd_start`'s locals through bash's dynamic scoping.
+
 Kept unchanged in substance (only nixfmt-rfc-style reformatting):
 
-- `bin/agent-session` — the session manager shell script.
 - `nix/overlay.nix`, `nix/agent-session.nix`, `nix/agent-image.nix`,
   `nix/load-image.nix` — the package definitions.
 
