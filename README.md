@@ -20,11 +20,23 @@ A flake-based starting point for container-based coding-agent isolation. It
 | `devShells.<system>.default` | agent-session + podman + gvisor + shellcheck |
 | `checks.<system>` | package builds and `shellcheck` |
 
-Try it without installing anything:
+Try it without installing anything. The image must be in the local Podman
+store first, and the packaged CLI points `--runtime` at Nixpkgs' `runsc`
+binary by default, so no `containers.conf` entry is required:
 
 ```bash
 nix run github:you/gvisor-agent-sandbox#load-image
 nix run github:you/gvisor-agent-sandbox -- start --name demo --repo "$HOME/src/example"
+```
+
+Set `AGENT_PODMAN_RUNTIME=runsc` to use a runtime *name* registered in
+`containers.conf` (what the NixOS module configures) instead of the baked
+absolute path.
+
+Verify the whole chain (runtime, image, sandbox startup) with:
+
+```bash
+nix run .# -- doctor
 ```
 
 ## 1. Install on NixOS
@@ -72,17 +84,46 @@ agent-sandbox-load-image          # skips work if the tag is already present
 agent-sandbox-load-image --force  # reload after changing the image definition
 ```
 
-Add a coding-agent CLI by overriding the image; `agent-session`'s default
-image reference follows the override:
+`packages`, `extraPackages`, `imageName` and `imageTag` are overridable. Do
+not put API tokens into the image.
+
+### Adding your agent CLI
+
+The image intentionally ships no agent CLI, so `claude`, `codex` or `pi` are
+"command not found" until you add one. Do *not* try to bind-mount a host
+binary: its whole Nix store closure would have to come along, and mounting
+host `/nix` breaks the isolation boundary. Rebuild the image instead.
+
+Via the NixOS module (`agent-session`'s default image reference follows the
+override):
 
 ```nix
-programs.agentSandboxes.image = pkgs.agent-sandbox-image.override {
-  extraPackages = [ pkgs.claude-code pkgs.codex ];
-};
+{ inputs, pkgs, ... }: {
+  programs.agentSandboxes.image = pkgs.agent-sandbox-image.override {
+    extraPackages = [
+      pkgs.claude-code
+      inputs.pi.packages.${pkgs.stdenv.hostPlatform.system}.default
+    ];
+  };
+}
 ```
 
-`packages`, `imageName`, and `imageTag` are overridable in the same way. Do
-not put API tokens into the image.
+Ad hoc, without NixOS:
+
+```bash
+nix build --impure --expr '
+  let
+    self = builtins.getFlake (toString ./.);
+    pkgs = self.packages.${builtins.currentSystem};
+    pi = builtins.getFlake "github:badlogic/pi-mono";
+  in pkgs.agent-sandbox-image.override {
+    extraPackages = [ pi.packages.${builtins.currentSystem}.default ];
+  }'
+podman load --input ./result
+```
+
+The agent's own configuration stays outside the image; mount it per session
+with `--config "$HOME/.pi:/home/agent/.pi:ro"`.
 
 ## 3. Start parallel sessions
 
@@ -110,6 +151,46 @@ repository, and each session gets a worktree from that pool.
 
 Image selection order: `--image`, then `$AGENT_SANDBOX_IMAGE`, then the
 Nix-built default baked into the package (`$AGENT_SANDBOX_DEFAULT_IMAGE`).
+Runtime selection order: `$AGENT_PODMAN_RUNTIME`, then the baked
+`$AGENT_SANDBOX_DEFAULT_RUNTIME` (absolute `runsc` path).
+
+`start` verifies the OCI runtime and the image *before* creating any worktree
+or session state, so a misconfigured host leaves nothing behind.
+
+## Troubleshooting
+
+`agent-session doctor` reports the effective settings and starts a throwaway
+sandbox container. Relevant knobs:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AGENT_PODMAN_RUNTIME` | baked `runsc` path | Runtime name or absolute path |
+| `AGENT_PODMAN_CGROUP_MANAGER` | `cgroupfs` rootless, Podman default as root | Podman cgroup manager |
+| `AGENT_PODMAN_RUNTIME_FLAGS` | `ignore-cgroups` rootless, empty as root | Extra `runsc` flags, space separated |
+| `AGENT_SANDBOX_IMAGE` | baked image ref | Image override |
+| `AGENT_SANDBOX_STATE` | `$XDG_STATE_HOME/agent-sandbox` | State directory |
+
+### Rootless cgroups
+
+Two rootless defaults exist because of how `runsc` handles cgroups:
+
+- `systemd error: Access denied ... interactive authentication` — Podman's
+  default systemd cgroup manager makes `runsc` request a scope on the *system*
+  bus, which polkit denies for a normal user. Hence `cgroupfs`.
+- `cannot set up cgroup for root: open /sys/fs/cgroup/cgroup.subtree_control:
+  permission denied` — with `cgroupfs`, `runsc` still tries to configure the
+  root cgroup, which a rootless user cannot write. Hence `ignore-cgroups`.
+
+**Consequence:** rootless sessions run without cgroup limits. `--memory`,
+`--cpus` and `--pids-limit` are then *not* passed to Podman, and
+`agent-session` warns on every start. To get enforcement back, unset
+`AGENT_PODMAN_RUNTIME_FLAGS` and provide a cgroup hierarchy that `runsc` may
+write (for example run the session manager as root, or delegate the needed
+controllers).
+- `container image ... is not in the local Podman store`: run
+  `agent-sandbox-load-image` (or `nix run .#load-image`).
+- Podman flags are re-applied to every container command, so `logs`, `shell`,
+  `stop` and `destroy` also work with a path-based runtime.
 
 ## 4. Operate sessions
 
@@ -140,6 +221,9 @@ git fetch "$HOME/.local/state/agent-sandbox/pools/<repo-id>.git" \
   config mounts are visible to the sandbox.
 - The root filesystem is read-only; Linux capabilities are dropped and
   `no-new-privileges` is set.
+- Rootless sessions have **no cgroup limits** by default (see Troubleshooting),
+  so a runaway agent can exhaust host CPU, memory and PIDs. This is a
+  denial-of-service risk, not a confidentiality one.
 - The image contains no Nix daemon and no host `/nix` mount; it only carries
   the closure of the selected packages.
 - Agent configuration is read-only by default, but readable secrets can still

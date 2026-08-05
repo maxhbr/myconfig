@@ -2,7 +2,29 @@
 set -Eeuo pipefail
 
 STATE_ROOT="${AGENT_SANDBOX_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-sandbox}"
-PODMAN_RUNTIME="${AGENT_PODMAN_RUNTIME:-runsc}"
+# AGENT_SANDBOX_DEFAULT_RUNTIME is baked in by the Nix package and is the
+# absolute path of Nixpkgs' runsc, so gVisor works even when it is not
+# registered as a named runtime in containers.conf. Set AGENT_PODMAN_RUNTIME to
+# a name (for example "runsc") to use a runtime registered there instead.
+PODMAN_RUNTIME="${AGENT_PODMAN_RUNTIME:-${AGENT_SANDBOX_DEFAULT_RUNTIME:-runsc}}"
+# Rootless cgroup handling with runsc needs two adjustments, so both defaults
+# depend on whether we are root:
+#
+#   - Podman's default systemd cgroup manager makes runsc ask the *system* bus
+#     for a scope, which polkit denies for a normal user, so use cgroupfs.
+#   - With cgroupfs, runsc still tries to configure the root cgroup
+#     (/sys/fs/cgroup/cgroup.subtree_control), which a rootless user cannot
+#     write, so tell it to ignore cgroups entirely.
+#
+# Consequence: rootless sandboxes are NOT resource limited. See limits_note().
+# Both variables can be overridden, including to the empty string.
+if (( EUID == 0 )); then
+  CGROUP_MANAGER="${AGENT_PODMAN_CGROUP_MANAGER-}"
+  read -r -a PODMAN_RUNTIME_FLAGS <<<"${AGENT_PODMAN_RUNTIME_FLAGS-}"
+else
+  CGROUP_MANAGER="${AGENT_PODMAN_CGROUP_MANAGER-cgroupfs}"
+  read -r -a PODMAN_RUNTIME_FLAGS <<<"${AGENT_PODMAN_RUNTIME_FLAGS-ignore-cgroups}"
+fi
 # AGENT_SANDBOX_DEFAULT_IMAGE is baked in by the Nix package and points at the
 # image built from this flake. AGENT_SANDBOX_IMAGE overrides it at runtime.
 DEFAULT_IMAGE="${AGENT_SANDBOX_IMAGE:-${AGENT_SANDBOX_DEFAULT_IMAGE:-localhost/agent-dev:latest}}"
@@ -22,6 +44,7 @@ Usage:
   agent-session logs NAME [PODMAN-LOGS-ARGS...]
   agent-session stop NAME
   agent-session destroy NAME [--force] [--delete-branch]
+  agent-session doctor
 
 start options:
   --base REF                  Base commit/ref in the host repository (default: HEAD)
@@ -38,6 +61,15 @@ start options:
   --pids-limit NUMBER         Process limit (default: 2048)
   --seccomp-unconfined        Disable the inner OCI seccomp profile
 
+environment:
+  AGENT_SANDBOX_IMAGE           Override the default image
+  AGENT_PODMAN_RUNTIME          Runtime name or absolute path (default: runsc)
+  AGENT_PODMAN_CGROUP_MANAGER   Podman cgroup manager (default: cgroupfs)
+  AGENT_PODMAN_RUNTIME_FLAGS    Extra runsc flags, e.g. "ignore-cgroups"
+  AGENT_SANDBOX_STATE           State directory
+
+Run `agent-session doctor` to verify runtime, image and sandbox startup.
+
 The host checkout is never bind-mounted. It seeds a disposable bare Git pool.
 The worktree and its Git pool are mounted at identical absolute paths because
 Git worktree administrative files contain absolute paths.
@@ -51,6 +83,72 @@ sanitize_container_name() {
 validate_name() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] ||
     die "invalid session name '$1' (allowed: letters, digits, dot, underscore, hyphen)"
+}
+
+# Global Podman flags. They must be repeated for every command that touches a
+# container, because the runtime is not registered in containers.conf when it is
+# given as an absolute path.
+podman_global_args() {
+  local -a args=("--runtime=$PODMAN_RUNTIME")
+  [[ -z "$CGROUP_MANAGER" ]] || args+=("--cgroup-manager=$CGROUP_MANAGER")
+  local flag
+  for flag in ${PODMAN_RUNTIME_FLAGS[@]+"${PODMAN_RUNTIME_FLAGS[@]}"}; do
+    [[ -n "$flag" ]] || continue
+    args+=("--runtime-flag=$flag")
+  done
+  printf '%s\n' "${args[@]}"
+}
+
+# True when the runtime was told to ignore cgroups, in which case Podman's
+# resource limits cannot be enforced.
+cgroups_ignored() {
+  local flag
+  for flag in ${PODMAN_RUNTIME_FLAGS[@]+"${PODMAN_RUNTIME_FLAGS[@]}"}; do
+    [[ "$flag" != ignore-cgroups ]] || return 0
+  done
+  return 1
+}
+
+limits_note() {
+  printf '%s' 'not enforced, the runtime ignores cgroups'
+}
+
+podman_c() {
+  local -a global=()
+  mapfile -t global < <(podman_global_args)
+  podman "${global[@]}" "$@"
+}
+
+# `exec` cannot run a shell function, so replace the shell explicitly here.
+podman_exec_c() {
+  local -a global=()
+  mapfile -t global < <(podman_global_args)
+  exec podman "${global[@]}" "$@"
+}
+
+check_runtime() {
+  if [[ "$PODMAN_RUNTIME" = /* ]]; then
+    [[ -x "$PODMAN_RUNTIME" ]] ||
+      die "OCI runtime is not executable: $PODMAN_RUNTIME"
+    return
+  fi
+  # Named runtimes must be registered in containers.conf; Podman only reports
+  # its default one, so probe the requested name instead of parsing config.
+  podman_c info >/dev/null 2>&1 || die "$(
+    printf 'Podman OCI runtime %q is not registered.\n' "$PODMAN_RUNTIME"
+    printf 'Register it in containers.conf (see nixos/agent-sandboxes.nix), or\n'
+    printf 'set AGENT_PODMAN_RUNTIME to the absolute path of a runsc binary.'
+  )"
+}
+
+check_image() {
+  local image=$1
+  podman image exists "$image" && return
+  die "$(
+    printf 'container image %q is not in the local Podman store.\n' "$image"
+    printf 'Build and load it with: agent-sandbox-load-image\n'
+    printf '(or: nix run .#load-image), or pass --image with another reference.'
+  )"
 }
 
 parse_mount() {
@@ -79,8 +177,12 @@ run_container() {
   local name=$1 detach=$2
   shift 2
   load_meta "$name"
+  check_runtime
+  check_image "$image"
 
-  local -a cmd=(podman "--runtime=$PODMAN_RUNTIME" run --replace)
+  local -a global=()
+  mapfile -t global < <(podman_global_args)
+  local -a cmd=(podman "${global[@]}" run --replace)
   if [[ "$detach" = true ]]; then
     cmd+=(--detach)
   else
@@ -95,9 +197,6 @@ run_container() {
     --read-only-tmpfs=true
     --cap-drop=ALL
     --security-opt=no-new-privileges
-    --pids-limit "$pids_limit"
-    --memory "$memory"
-    --cpus "$cpus"
     --workdir "$worktree"
     --mount "type=bind,src=$worktree,dst=$worktree,rw"
     --mount "type=bind,src=$pool,dst=$pool,rw"
@@ -109,6 +208,12 @@ run_container() {
     --env AGENT_SESSION="$name"
     --env AGENT_WORKTREE="$worktree"
   )
+
+  if cgroups_ignored; then
+    log "warning: memory/cpu/pids limits $(limits_note)"
+  else
+    cmd+=(--pids-limit "$pids_limit" --memory "$memory" --cpus "$cpus")
+  fi
 
   [[ -z "$network" ]] || cmd+=(--network "$network")
   [[ "$seccomp_unconfined" = false ]] || cmd+=(--security-opt=seccomp=unconfined)
@@ -174,6 +279,10 @@ cmd_start() {
   validate_name "$name"
   need git; need podman; need flock; need sha256sum; need realpath
 
+  # Fail before any worktree or session state is created.
+  check_runtime
+  check_image "$image"
+
   repo=$(realpath -e -- "$repo")
   git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not a Git working tree: $repo"
   local base_commit
@@ -192,6 +301,9 @@ cmd_start() {
 
   [[ ! -e "$meta_dir" ]] || die "session already exists: $name"
   mkdir -p "$(dirname "$worktree")" "$meta_dir" "$home"
+  # The session home is bind-mounted over /home/agent, which masks the XDG
+  # directories created in the image, so create them on the host side.
+  mkdir -p "$home/.cache" "$home/.config" "$home/.local/state"
   chmod 700 "$meta_dir" "$home"
 
   exec 9>"$lockfile"
@@ -240,6 +352,9 @@ cmd_start() {
 
   flock -u 9
   log "created worktree $worktree on branch $branch"
+  log "if the container fails to start the session is kept; retry with" \
+      "'agent-session run $name', diagnose with 'agent-session doctor', or" \
+      "clean up with 'agent-session destroy $name --force'"
   run_container "$name" "$detach" "$@"
 }
 
@@ -252,8 +367,8 @@ cmd_list() {
     name=${dir##*/}
     # shellcheck disable=SC1090,SC1091
     source "$dir/meta"
-    if podman container exists "$container" 2>/dev/null; then
-      status=$(podman inspect --format '{{.State.Status}}' "$container" 2>/dev/null || printf unknown)
+    if podman_c container exists "$container" 2>/dev/null; then
+      status=$(podman_c inspect --format '{{.State.Status}}' "$container" 2>/dev/null || printf unknown)
     else
       status=stopped
     fi
@@ -265,8 +380,8 @@ cmd_status() {
   load_meta "${1:?session name required}"
   printf 'session:   %s\nrepo:      %s\nbranch:    %s\nworktree:  %s\npool:      %s\ncontainer: %s\nimage:     %s\n' \
     "$name" "$repo" "$branch" "$worktree" "$pool" "$container" "$image"
-  if podman container exists "$container" 2>/dev/null; then
-    podman inspect --format 'status:    {{.State.Status}}\npid:       {{.State.Pid}}\nstarted:   {{.State.StartedAt}}' "$container"
+  if podman_c container exists "$container" 2>/dev/null; then
+    podman_c inspect --format 'status:    {{.State.Status}}\npid:       {{.State.Pid}}\nstarted:   {{.State.StartedAt}}' "$container"
   else
     printf 'status:    stopped/absent\n'
   fi
@@ -284,9 +399,9 @@ cmd_run() {
     esac
   done
   load_meta "$session"
-  if podman container exists "$container" 2>/dev/null; then
+  if podman_c container exists "$container" 2>/dev/null; then
     local running
-    running=$(podman inspect --format '{{.State.Running}}' "$container" 2>/dev/null || printf false)
+    running=$(podman_c inspect --format '{{.State.Running}}' "$container" 2>/dev/null || printf false)
     [[ "$running" != true ]] || die "container is already running: $session"
   fi
   run_container "$session" "$detach" "$@"
@@ -295,25 +410,25 @@ cmd_run() {
 cmd_logs() {
   local session=${1:?session name required}; shift
   load_meta "$session"
-  podman container exists "$container" 2>/dev/null || die "container is absent: $session"
-  exec podman logs "$@" "$container"
+  podman_c container exists "$container" 2>/dev/null || die "container is absent: $session"
+  podman_exec_c logs "$@" "$container"
 }
 
 cmd_shell() {
   local session=${1:?session name required}; shift
   load_meta "$session"
-  podman container exists "$container" 2>/dev/null || die "container is not running: $session"
+  podman_c container exists "$container" 2>/dev/null || die "container is not running: $session"
   if (( $# == 0 )); then
-    exec podman exec --interactive --tty "$container" /bin/bash
+    podman_exec_c exec --interactive --tty "$container" /bin/bash
   else
-    exec podman exec --interactive --tty "$container" "$@"
+    podman_exec_c exec --interactive --tty "$container" "$@"
   fi
 }
 
 cmd_stop() {
   load_meta "${1:?session name required}"
-  if podman container exists "$container" 2>/dev/null; then
-    podman stop --time 10 "$container"
+  if podman_c container exists "$container" 2>/dev/null; then
+    podman_c stop --time 10 "$container"
   else
     log "container already absent: $container"
   fi
@@ -332,8 +447,8 @@ cmd_destroy() {
   done
   load_meta "$session"
 
-  if podman container exists "$container" 2>/dev/null; then
-    podman rm --force --time 5 "$container"
+  if podman_c container exists "$container" 2>/dev/null; then
+    podman_c rm --force --time 5 "$container"
   fi
 
   if [[ -d "$worktree" ]]; then
@@ -354,6 +469,45 @@ cmd_destroy() {
   log "destroyed session $session"
 }
 
+cmd_doctor() {
+  need podman
+  printf 'podman:          %s\n' "$(command -v podman)"
+  printf 'runtime:         %s\n' "$PODMAN_RUNTIME"
+  printf 'cgroup manager:  %s\n' "${CGROUP_MANAGER:-<podman default>}"
+  printf 'runtime flags:   %s\n' \
+    "${PODMAN_RUNTIME_FLAGS[*]+"${PODMAN_RUNTIME_FLAGS[*]}"}"
+  if cgroups_ignored; then
+    printf 'limits:          %s\n' "$(limits_note)"
+    printf '                 unset AGENT_PODMAN_RUNTIME_FLAGS and delegate\n'
+    printf '                 cgroup controllers to enforce them\n'
+  else
+    printf 'limits:          enforced via cgroups\n'
+  fi
+  printf 'image:           %s\n' "$DEFAULT_IMAGE"
+  printf 'state:           %s\n' "$STATE_ROOT"
+  check_runtime
+  check_image "$DEFAULT_IMAGE"
+  log "running a throwaway sandbox container"
+  podman_c run --rm \
+    --read-only \
+    --read-only-tmpfs=true \
+    --cap-drop=ALL \
+    --security-opt=no-new-privileges \
+    --userns=keep-id \
+    "$DEFAULT_IMAGE" /bin/sh -c 'uname -srmo; id' ||
+    die "$(
+      printf 'sandbox startup failed; see the Podman/runsc error above.\n'
+      printf 'Common causes:\n'
+      printf '  - "systemd error: Access denied": the systemd cgroup manager\n'
+      printf '    needs the system bus; set AGENT_PODMAN_CGROUP_MANAGER=cgroupfs\n'
+      printf '  - "cannot set up cgroup for root": runsc cannot write the root\n'
+      printf '    cgroup; set AGENT_PODMAN_RUNTIME_FLAGS=ignore-cgroups\n'
+      printf '  - unprivileged user namespaces disabled, or missing\n'
+      printf '    /etc/subuid and /etc/subgid ranges for this user'
+    )"
+  log "sandbox works"
+}
+
 main() {
   local sub=${1:-}
   case "$sub" in
@@ -365,6 +519,7 @@ main() {
     shell) shift; cmd_shell "$@" ;;
     stop) shift; cmd_stop "$@" ;;
     destroy) shift; cmd_destroy "$@" ;;
+    doctor) shift; cmd_doctor "$@" ;;
     -h|--help|help|'') usage ;;
     *) die "unknown subcommand: $sub" ;;
   esac
