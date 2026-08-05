@@ -30,6 +30,9 @@
 #   storeDiskType    pin the guest store disk filesystem
 #                    (`microvm.storeDiskType`); `null` keeps microvm.nix's own
 #                    default.
+#   enabledAgents    the SELECTED agents (./agents.nix tokens) a host gets when
+#                    it does not set `enabledAgents` itself. `null` means every
+#                    declared agent, i.e. the historical behaviour.
 { lib }:
 rec {
   profiles = {
@@ -39,10 +42,11 @@ rec {
       resourceClasses = null;
       optimizeStore = null;
       storeDiskType = null;
+      enabledAgents = null;
     };
 
     # The lightweight interactive shape: ONE prebuilt slot, 2 vCPU, 4 GiB RAM,
-    # an explicitly optimized EROFS guest store.
+    # an explicitly optimized EROFS guest store, ONE agent.
     lite = {
       resourceClasses = {
         lite = {
@@ -53,6 +57,10 @@ rec {
       };
       optimizeStore = true;
       storeDiskType = "erofs";
+      # ONE agent runtime in the guest closure. Codex is the plan's reference
+      # agent ("a Codex-only interactive lite VM"); a host that wants another
+      # one just sets `enabledAgents`, which outranks this default.
+      enabledAgents = [ "codex" ];
     };
   };
 

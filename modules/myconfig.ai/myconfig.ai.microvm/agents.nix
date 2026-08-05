@@ -70,6 +70,15 @@
   # Model name for agents that cannot discover one themselves
   # (`config.myconfig.ai.hermes.model.default`, a LiteLLM route).
   hermesModel,
+  # SELECTED agents (lightweight plan phase 2), resolved ONCE in default.nix
+  # from `myconfig.ai.microvm.enabledAgents` and the profile's own default.
+  # `null` means "every agent this registry declares" — the historical
+  # behaviour. Everything agent-shaped downstream (guest closure + guest env,
+  # `agent-run` dispatch, batch dispatch, launcher validation/help, workmux
+  # registrations, persistent-state directories) is derived from the FILTERED
+  # `agents` set below, so selecting a subset removes those runtimes from the
+  # guest instead of merely hiding them.
+  enabledNames ? null,
 }:
 let
   # The single OpenAI-compatible endpoint every guest agent must use (§17).
@@ -194,7 +203,16 @@ let
       workmuxName = "microvm-${name}";
     };
 
-  agents = lib.mapAttrs normalise specs;
+  allAgents = lib.mapAttrs normalise specs;
+
+  # The selection is applied HERE, at the single source of truth, rather than at
+  # each consumer — so a disabled agent cannot leak into one derived list while
+  # being absent from another.
+  agents =
+    if enabledNames == null then
+      allAgents
+    else
+      lib.filterAttrs (n: _: lib.elem n enabledNames) allAgents;
 
   agentList = lib.attrValues agents;
 
@@ -260,7 +278,21 @@ in
 rec {
   inherit agents;
 
-  # Alphabetically ordered `--agent` tokens.
+  # Every agent this registry DECLARES, whether selected or not. Used by
+  # default.nix to reject an unknown `enabledAgents` entry with a message that
+  # can name the valid tokens.
+  declaredNames = lib.attrNames allAgents;
+
+  # ... and the batch-capable subset of them, for the same reason.
+  declaredBatchNames = lib.attrNames (lib.filterAttrs (_: a: a.batchArgs != null) allAgents);
+
+  # `enabledAgents` entries that no spec declares (empty when the selection is
+  # valid). Surfaced as a NixOS assertion by default.nix — a typo must fail at
+  # EVAL, not silently produce a guest without any agent.
+  unknownEnabled =
+    if enabledNames == null then [ ] else lib.filter (n: !(allAgents ? ${n})) enabledNames;
+
+  # Alphabetically ordered `--agent` tokens of the SELECTED agents.
   names = lib.attrNames agents;
 
   # Guest closure packages, in registry order (§7).

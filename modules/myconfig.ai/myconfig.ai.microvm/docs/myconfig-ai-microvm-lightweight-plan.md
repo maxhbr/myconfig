@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 0 — baseline and measurement | partially done | Behaviour-preserving refactors are verified with the repo's `nix eval` snapshot/diff workflow (`AGENTS.md`) instead of a bespoke benchmark harness; a machine-readable runtime benchmark (closure size, launch latency, process counts) is **not** implemented — it needs a KVM host and belongs with the out-of-CI runtime-validation tier. |
 | 1 — opt-in lightweight profile | **done** | `myconfig.ai.microvm.profile = "full" \| "lite"`, table in `../profiles.nix`, wired in `default.nix` (`_module.args.agentProfile`) + `guest.nix`. Test: `checks.microvm-eval-lite-profile`. |
-| 2 — build only selected agents | not started | |
+| 2 — build only selected agents | **done** | `myconfig.ai.microvm.enabledAgents` (plus the `lite` profile default `[ "codex" ]`). The selection is applied ONCE in `../agents.nix`, so guest closure, `agent-run`, batch dispatch, launcher validation/help, workmux registrations and agent-state paths all follow. Test: `checks.microvm-eval-enabled-agents`. |
 | 3 — runtime config staging | not started | |
 | 4 — consolidate writable shares | not started | |
 | 5 — split interactive/batch | not started | |
@@ -25,6 +25,15 @@
   Nothing to configure.
 - **Phase 1, `networkProfile = "proxy-only"`**: already the module-wide secure
   default, so the `lite` profile does not restate it.
+- **Phase 2, per-agent registry restructuring**: the registry already has the
+  shape the plan asks for (`package`, `executable`, `interactiveArgs`,
+  `batchArgs`, `guestEnvironment`, `persistentState`), so only the *selection*
+  was added. `configPaths` / `statePaths` / `extraPackages` are deferred to the
+  phases that need them (3 and 8).
+- **Phase 2, closure measurement**: recorded as a *structural* check
+  (`microvm-eval-enabled-agents` asserts the deselected agents' store paths are
+  absent from the guest `environment.systemPackages`) rather than as a byte
+  count, for the same reason phase 0's benchmark is deferred.
 - **Phase 1, store pinning**: `microvm.optimize.enable` and
   `microvm.storeDiskType` currently *default* to `true` / `erofs` upstream, so
   pinning them is behaviour-preserving today. It is done anyway (for `lite`
@@ -242,7 +251,15 @@ microvm.storeDiskType = "erofs";
 
 ---
 
-## Phase 2 — Build only selected agents
+## Phase 2 — Build only selected agents — **DONE**
+
+Implemented as the `enabledNames` argument of `../agents.nix` (the selection is
+applied at the single source of truth, so no consumer carries its own filter)
+plus the `myconfig.ai.microvm.enabledAgents` option resolved in
+`../default.nix`. Unknown tokens, an empty selection and a selection with no
+batch-capable agent are rejected by module assertions. The `lite` profile
+defaults to `[ "codex" ]`; `full` keeps every declared agent, so existing hosts
+are unaffected (verified with the evaluated-slice diff from `AGENTS.md`).
 
 ### Goal
 
