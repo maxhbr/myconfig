@@ -19,6 +19,23 @@
         codex.enable = true;
         skills.enable = true;
 
+        # Rootless Podman + gVisor agent-sandbox tier (`agent-session`); see
+        # modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/README.md.
+        # Like `microvm` below, it is enabled explicitly per host and never
+        # implicitly through the broad `myconfig.ai.enable`.
+        gvisor-agent-sandbox = {
+          enable = true;
+          # The upstream image deliberately ships no agent CLI, and host
+          # binaries must not be bind-mounted (that would drag the host
+          # /nix store into the sandbox), so bake the agents in instead.
+          extraImagePackages = [
+            # same attributes the host wrappers use (see
+            # modules/myconfig.ai/programs.pi-coding-agent, programs.opencode)
+            pkgs.nixos-unstable.pi-coding-agent
+            pkgs.opencode
+          ];
+        };
+
         # Cloud Hypervisor agent-sandbox tier
         # (see modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md).
         # Explicitly enabled here — NOT via the broad `myconfig.ai.enable`
