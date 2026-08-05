@@ -127,6 +127,7 @@ let
   # Its well-formedness errors are surfaced as NixOS assertions below, so a
   # malformed entry fails loudly here instead of producing a broken guest
   # closure or a launcher that accepts an agent the guest cannot run.
+
   # Which of the declared agents this host actually builds into its guests
   # (lightweight plan phase 2). Resolved ONCE, here, from the explicit option
   # and the profile's own default; `null` keeps every declared agent, which is
