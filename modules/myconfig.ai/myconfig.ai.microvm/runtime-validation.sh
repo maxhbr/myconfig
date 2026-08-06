@@ -21,25 +21,28 @@
 #        [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery|seed]
 #
 # Sections are also gated on the CAPABILITIES of the host under test
-# (`myconfig.ai.microvm.capabilities`, lightweight plan phase 5): every section
-# that drives a guest over SSH needs `interactive`, `lifecycle` and `forgery`
-# additionally need `batch`, and `seed` needs neither. A section whose
-# capability the host does not select is SKIPPED (under `--section all`) or
-# HARD-ABORTS (when asked for explicitly) instead of reporting vacuous passes.
-# Within `creds`, the batch-worker environment subtest additionally needs
-# `batch` and reports the capability when it is absent (the unit it inspects
-# does not exist there).
+# (`myconfig.ai.microvm.capabilities`, lightweight plan phase 5 + phase 6):
+# every section that drives a guest over the control channel needs a TRANSPORT,
+# which the host provides by selecting `interactive` (the TCP sshd) OR `vsock`
+# (the VSOCK `sshd-vsock@`, phase 6); `lifecycle` and `forgery` additionally
+# need `batch`, and `seed` needs neither. A section whose requirement the host
+# does not meet is SKIPPED (under `--section all`) or HARD-ABORTS (when asked
+# for explicitly) instead of reporting vacuous passes. Within `creds`, the
+# batch-worker environment subtest is gated on its own `BATCH_CAPABLE` and skips
+# with the capability as the reason (the unit it inspects does not exist there).
 #
 # The set is READ from `agent-microvm capabilities` (machine-readable, needs no
 # root, starts nothing); an answer that cannot be parsed HARD-ABORTS the run
 # rather than defaulting to "this host has everything".
 #
-# CONSEQUENCE, recorded here because it is a real coverage hole: on a host that
-# selects ONLY `batch`, seven of the eight sections need `interactive` (the
-# control channel IS ssh) and only `seed` runs. Restoring coverage there needs a
-# guest transport that does not require sshd — which is exactly what phase 6
-# (VSOCK) is for. Until then a batch-only host is validated by the eval/build
-# tier (`checks.microvm-capabilities`) plus `--section seed` only.
+# CONSEQUENCE, recorded here because it was a real coverage hole: BEFORE phase 6
+# a host that selected ONLY `batch` had no control channel at all (no sshd), so
+# seven of the eight sections were SKIPPED and only `seed` ran. Phase 6 (VSOCK)
+# closed that: a `capabilities = [ "batch" "vsock" ]` host drives the guest
+# over the VSOCK sshd and runs every section, exactly like an interactive host.
+# A `capabilities = [ "batch" ]` host (vsock NOT selected) still runs only
+# `--section seed` — that is the honest, narrower validation for a batch guest
+# with no control channel.
 #
 # Every check prints exactly one line: `PASS`, `FAIL` or `SKIP` plus a reason.
 # The script exits non-zero if any check FAILED. SKIPs are honest: they mark
@@ -2094,6 +2097,15 @@ preflight_endpoint() {
 # from a green run.
 INTERACTIVE_CAPABLE=0
 BATCH_CAPABLE=0
+VSOCK_CAPABLE=0
+# The guest command TRANSPORT: a control channel exists iff the host selects
+# `interactive` (the TCP sshd) OR `vsock` (the VSOCK `sshd-vsock@`, lightweight
+# plan phase 6). Every section that drives the guest needs one; `transport` is
+# the SECTION_CAPABILITIES token that asks for it, so a batch-only host WITHOUT
+# `vsock` (no control channel at all) skips those sections while a batch+vsock
+# host (control channel over VSOCK) runs them — closing the phase-5 coverage
+# hole that named VSOCK as the enabler.
+TRANSPORT_CAPABLE=0
 SELECTED_CAPABILITIES=""
 DECLARED_CAPABILITIES=""
 detect_capabilities() {
@@ -2118,7 +2130,7 @@ detect_capabilities() {
     # A missing token means the suite and the module disagree about what exists
     # (a renamed capability, a suite older than the module), which the gating
     # below would silently read as "not selected".
-    for cap in interactive batch; do
+    for cap in interactive batch vsock; do
         case " $DECLARED_CAPABILITIES " in
             *" $cap "*) ;;
             *) die "the host under test does not DECLARE the '$cap' capability this suite gates on (declared: $DECLARED_CAPABILITIES) — the suite and the module disagree about what exists" ;;
@@ -2128,9 +2140,11 @@ detect_capabilities() {
         case "$cap" in
             interactive) INTERACTIVE_CAPABLE=1 ;;
             batch) BATCH_CAPABLE=1 ;;
+            vsock) VSOCK_CAPABLE=1 ;;
             *) die "the host under test selects the capability '$cap', which this suite does not know how to gate on — update the SECTION_CAPABILITIES table" ;;
         esac
     done
+    TRANSPORT_CAPABLE=$((INTERACTIVE_CAPABLE || VSOCK_CAPABLE))
 }
 
 # --- section dispatch ------------------------------------------------------
@@ -2146,31 +2160,37 @@ is_endpoint_section() {
     return 1
 }
 # Which CAPABILITIES each section needs. Every section that issues a guest
-# command needs `interactive` (the control channel IS ssh); `lifecycle` and
-# `forgery` additionally submit batch jobs. `seed` exercises the HOST-side
-# stager only, so it needs neither.
-# `creds` needs only `interactive` because that is what its SECTION needs; its
+# command needs a CONTROL CHANNEL — the `transport` token — which the host
+# provides by selecting `interactive` (the TCP sshd) OR `vsock` (the VSOCK
+# `sshd-vsock@`, lightweight plan phase 6). `lifecycle` and `forgery`
+# additionally submit batch jobs, so they also need `batch`. `seed` exercises
+# the HOST-side stager only, so it needs neither.
+# `creds` needs only `transport` because that is what its SECTION needs; its
 # batch-worker-environment subtest is gated on `BATCH_CAPABLE` at its own call
 # site (`creds_batch_worker_env`) and skips with the capability as the reason.
-# A section-level `interactive batch` would have been wrong: it would drop the
-# eleven credential-boundary assertions that DO hold on an interactive-only host.
+# A section-level `transport batch` would have been wrong: it would drop the
+# eleven credential-boundary assertions that DO hold on an interactive-only host
+# (and, now, on a batch+vsock host).
 declare -A SECTION_CAPABILITIES=(
-    [boot]="interactive"
-    [net]="interactive"
-    [l2]="interactive"
-    [creds]="interactive"
-    [lifecycle]="interactive batch"
-    [malrepo]="interactive"
-    [forgery]="interactive batch"
+    [boot]="transport"
+    [net]="transport"
+    [l2]="transport"
+    [creds]="transport"
+    [lifecycle]="transport batch"
+    [malrepo]="transport"
+    [forgery]="transport batch"
     [seed]=""
 )
 # The capabilities <section> needs but the host under test does not have.
+# Emits a HUMAN-readable reason (not a bare token): the skip/abort messages
+# print it verbatim, and `transport` is a pseudo-requirement (the host selects
+# `interactive` or `vsock`, not `transport` itself).
 missing_capabilities_of() {
     local cap
     for cap in ${SECTION_CAPABILITIES[$1]-}; do
         case "$cap" in
-            interactive) ((INTERACTIVE_CAPABLE)) || printf '%s\n' "$cap" ;;
-            batch) ((BATCH_CAPABLE)) || printf '%s\n' "$cap" ;;
+            transport) ((TRANSPORT_CAPABLE)) || printf '%s\n' "control channel (the 'interactive' or 'vsock' capability)" ;;
+            batch) ((BATCH_CAPABLE)) || printf '%s\n' "batch capability" ;;
         esac
     done
 }
@@ -2218,7 +2238,7 @@ UNSUPPORTED_SECTIONS=()
 if [[ $SECTION != all ]]; then
     mapfile -t missing < <(missing_capabilities_of "$SECTION")
     if ((${#missing[@]})); then
-        printf '%s: ABORTING section %q: this host does not select the %s capability;\n' \
+        printf '%s: ABORTING section %q: this host does not provide the %s;\n' \
             "$PROG" "$SECTION" "${missing[*]}" >&2
         printf '%s: the section cannot exercise anything and its "must NOT be able to"\n' "$PROG" >&2
         printf '%s: checks would pass VACUOUSLY. Run it on a host whose\n' "$PROG" >&2
@@ -2266,7 +2286,7 @@ for s in "${PLAN[@]}"; do
     # Neither is a section whose CAPABILITY this host does not have.
     mapfile -t missing < <(missing_capabilities_of "$s")
     if ((${#missing[@]})); then
-        skip "section '$s' SKIPPED: this host does not select the ${missing[*]} capability, so its checks would pass vacuously"
+        skip "section '$s' SKIPPED: this host does not provide the ${missing[*]}, so its checks would pass vacuously"
         UNSUPPORTED_SECTIONS+=("$s")
         continue
     fi

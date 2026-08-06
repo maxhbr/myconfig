@@ -175,11 +175,11 @@ let
   # everything") the moment such a message was reworded, which is exactly the
   # vacuous-pass class the capability dispatch exists to remove.
   #
-  # Only the REFUSAL is rendered conditionally: on a host with both capabilities
-  # there is nothing to refuse, so the guard would be unreachable code. This is
-  # the same "emit it only where it can fire" rule ../job.nix applies to its
-  # `promptUnusedSuppression`, not a second launcher shape.
-  missingCapabilities = lib.filter (c: !agentCapabilities.${c}) agentCapabilities.declared;
+  # Only the REFUSAL is rendered conditionally: on a host with both
+  # `interactive` and `batch` (the default) there is nothing to refuse, so the
+  # guard would be unreachable code. This is the same "emit it only where it
+  # can fire" rule ../job.nix applies to its `promptUnusedSuppression`, not a
+  # second launcher shape.
   # Spliced into the CONFIGURATION section, on every host.
   capabilityConfig = mkFragment "      " ''
     # ---- the capability set (lightweight plan phase 5) ------------------
@@ -190,13 +190,29 @@ let
     # error message.
     readonly SELECTED_CAPABILITIES=${lib.escapeShellArg (lib.concatStringsSep " " agentCapabilities.selected)}
     readonly DECLARED_CAPABILITIES=${lib.escapeShellArg (lib.concatStringsSep " " agentCapabilities.declared)}'';
-  capabilityHelpers = lib.optionalString (missingCapabilities != [ ]) (
+  # The capabilities whose subcommand machinery is REFUSED on this host (so
+  # the `require_capability` / `require_capability_any` helpers below must be
+  # defined). That is `interactive` (run/ssh) and/or `batch` (submit/cancel) —
+  # NOT `vsock`: `vsock` only backs the `ssh` control channel TOGETHER with
+  # `interactive`, so a host that selects `vsock` but not `interactive` still
+  # allows `ssh` (over VSOCK) and refuses nothing on vsock's behalf. Keeping
+  # this to the two refused-bearing capabilities is what leaves a DEFAULT host
+  # (which selects `interactive`+`batch` but not `vsock`) free of any
+  # `require_capability` string, so the phase-5 assertion "the default
+  # launcher contains no capability guard" still holds.
+  refusedCapabilities =
+    lib.optional (!agentCapabilities.interactive) "interactive"
+    ++ lib.optional (!agentCapabilities.batch) "batch";
+  capabilityHelpers = lib.optionalString (refusedCapabilities != [ ]) (
     mkFragment "      " ''
       # ---- capability gating (lightweight plan phase 5) -------------------
       # This host selects only: ${lib.concatStringsSep ", " agentCapabilities.selected}.
-      # The subcommands of the missing capability (${lib.concatStringsSep ", " missingCapabilities})
-      # are refused below, because their guest-side machinery is ABSENT from
-      # this host's guests, not merely disabled.
+      # The capabilities ${lib.concatStringsSep ", " refusedCapabilities} are
+      # absent, so the subcommands whose guest-side machinery they back are
+      # refused below, because that machinery is ABSENT from this host's
+      # guests, not merely disabled. (`vsock` is never refused on its own: it
+      # shares `ssh` with `interactive`, so a vsock-capable host still allows
+      # `ssh` over VSOCK.)
       #
       # A MEMBERSHIP test against the rendered set rather than an unconditional
       # `die`: the refusal is data-driven (so it cannot disagree with the set the
@@ -207,6 +223,19 @@ let
               *" $2 "*) return 0 ;;
           esac
           die "'$1' needs the '$2' capability, which this host does not select (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ]); add \"$2\" to that list and rebuild to enable it"
+      }
+      # The `ssh` control channel is usable over the TAP (`interactive`) OR
+      # over VSOCK (`vsock`, lightweight plan phase 6). `ssh` is refused only
+      # when a host selects NEITHER (e.g. a batch-only host without `vsock`).
+      require_capability_any() {
+          local cmd="$1" cap
+          shift
+          for cap in "$@"; do
+              case " $SELECTED_CAPABILITIES " in
+                  *" $cap "*) return 0 ;;
+              esac
+          done
+          die "'$cmd' needs one of these capabilities, which this host does not select (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ]); add one of: $*"
       }''
   );
   # One splice per subcommand, at the TOP of its function body.
@@ -215,19 +244,21 @@ let
     lib.optionalString (!agentCapabilities.${cap}) (
       mkFragment "          " "require_capability ${cmd} ${cap}"
     );
-  # `doctor`'s host-key section. On a host WITHOUT the `interactive` capability
-  # there is no key material to look for (hostkeys.nix provisions none and
-  # ../session.nix's table creates no `hostkeys/` subdirectory), so the check
-  # would be vacuous; it reports the capability instead. The interactive variant
-  # is byte-for-byte the block this fragment replaced, so the launcher of a host
-  # with both capabilities is unchanged.
+  # `doctor`'s host-key section. On a host WITHOUT the `interactive` AND
+  # without the `vsock` capability there is no key material to look for
+  # (hostkeys.nix provisions none and ../session.nix's table creates no
+  # `hostkeys/` subdirectory), so the check would be vacuous; it reports the
+  # capability instead. A host that selects EITHER (a TCP sshd or a VSOCK
+  # sshd) provisions keys and is checked. The interactive variant is
+  # byte-for-byte the block this fragment replaced, so the launcher of a host
+  # with both `interactive` and `batch` is unchanged.
   # NOTE: `indentFragment`, not `mkFragment` — the splice site supplies the
   # trailing newline, so no trailing whitespace is introduced. The indent is the
   # column the block has in the GENERATED script (Nix strips the `text = ''`
   # string's common indentation, interpolated values are inserted verbatim), so
   # that the interactive variant reproduces the replaced block byte for byte.
   doctorHostKeys = indentFragment "    " (
-    if agentCapabilities.interactive then
+    if (agentCapabilities.interactive || agentCapabilities.vsock) then
       ''
         local missing=0 s
         for s in "''${SLOT_NAMES[@]}"; do
@@ -239,10 +270,15 @@ let
             fail "$missing slot(s) lack a host-key directory (systemctl start agent-microvm-hostkeys.service)"
         fi''
     else
-      ''ok "no per-slot SSH host keys are expected: this host does not select the \"interactive\" capability (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ])"''
+      ''ok "no per-slot SSH host keys are expected: this host selects neither the \"interactive\" nor the \"vsock\" capability (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ])"''
   );
   runCapability = requireCapability "interactive" "run";
-  sshCapability = requireCapability "interactive" "ssh";
+  # `ssh` is the control channel: usable over the TAP (`interactive`) OR over
+  # VSOCK (`vsock`, lightweight plan phase 6). Refused only when NEITHER is
+  # selected (e.g. a batch-only host without `vsock`).
+  sshCapability = lib.optionalString (!agentCapabilities.interactive && !agentCapabilities.vsock) (
+    mkFragment "          " "require_capability_any ssh interactive vsock"
+  );
   submitCapability = requireCapability "batch" "submit";
   cancelCapability = requireCapability "batch" "cancel";
 
@@ -618,6 +654,13 @@ let
       # set this — a skipped preflight is strictly less safe than a real one.
       readonly SKIP_PREFLIGHT="''${AGENT_MICROVM_SKIP_PREFLIGHT:-0}"
       readonly SSH_ENABLED=${lib.escapeShellArg (if cfg.enableSsh then "1" else "0")}
+      # The VSOCK control channel (lightweight plan phase 6): 1 iff this host
+      # selects the `vsock` capability. `ssh` (and the readiness poll) connect
+      # over VSOCK when VSOCK is the ONLY control channel
+      # (`VSOCK_ENABLED=1 && SSH_ENABLED=0`, i.e. a batch+vsock host); a host
+      # with the TCP sshd (`SSH_ENABLED=1`, the `interactive` capability) keeps
+      # using the TAP, so a default host's `ssh` path is unchanged in behaviour.
+      readonly VSOCK_ENABLED=${lib.escapeShellArg (if agentCapabilities.vsock then "1" else "0")}
       readonly SSH_USER="agent"
       # ---- §18 / ticket 3 B: AUTHENTICATED control channel ---------------
       # Every slot has a STABLE ed25519 host identity, provisioned on the host
@@ -1715,12 +1758,26 @@ let
       }
 
       guest_ssh_ready() {
-          local ip="$1"
-          [[ "$SSH_ENABLED" == "1" ]] || return 1
+          local slot="$1" ip="$2" target
+          [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]] || return 1
           [[ -r "$KNOWN_HOSTS" ]] || return 1
-          ssh -o BatchMode=yes "''${SSH_VERIFY_OPTS[@]}" -o ConnectTimeout=3 \
-              ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
-              "$SSH_USER@$ip" true >/dev/null 2>&1
+          # The VSOCK control channel (lightweight plan phase 6): a batch+vsock
+          # host has no TCP sshd, so reach `sshd-vsock@` (vsock::22) through
+          # cloud-hypervisor's VSOCK mux socket `<stateRoot>/<slot>/notify.vsock`.
+          # The SAME per-slot host key is pinned under that address in
+          # $KNOWN_HOSTS, so StrictHostKeyChecking=yes applies to VSOCK too.
+          # A host with the TCP sshd (`SSH_ENABLED=1`) always uses the TAP, so
+          # its readiness path is unchanged in behaviour.
+          if [[ "$VSOCK_ENABLED" == "1" && "$SSH_ENABLED" != "1" ]]; then
+              target="vsock-mux/$STATE_ROOT/$slot/notify.vsock"
+              ssh -o BatchMode=yes "''${SSH_VERIFY_OPTS[@]}" -o ConnectTimeout=3 \
+                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                  -l "$SSH_USER" "$target" true >/dev/null 2>&1
+          else
+              ssh -o BatchMode=yes "''${SSH_VERIFY_OPTS[@]}" -o ConnectTimeout=3 \
+                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                  "$SSH_USER@$ip" true >/dev/null 2>&1
+          fi
       }
 
       # Poll with EXPONENTIAL BACKOFF instead of a fixed 3 s interval: a warm
@@ -1731,11 +1788,11 @@ let
       # SAME overall READY_TIMEOUT as before, so the worst case is unchanged.
       # `sleep` accepts fractional seconds (coreutils).
       wait_ready() {
-          local ip="$1" waited_ms=0 delay_ms="$READY_POLL_MIN_MS"
-          [[ "$SSH_ENABLED" == "1" ]] || { log "SSH disabled; not waiting for guest readiness"; return 0; }
-          while ! guest_ssh_ready "$ip"; do
+          local slot="$1" ip="$2" waited_ms=0 delay_ms="$READY_POLL_MIN_MS"
+          [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]] || { log "no SSH control channel (enableSsh is false and vsock is not selected); not waiting for guest readiness"; return 0; }
+          while ! guest_ssh_ready "$slot" "$ip"; do
               if (( waited_ms >= READY_TIMEOUT * 1000 )); then
-                  log "guest at $ip not reachable via SSH within ''${READY_TIMEOUT}s"
+                  log "guest at $ip not reachable via the SSH control channel within ''${READY_TIMEOUT}s"
                   return 1
               fi
               sleep "$(printf '%d.%03d' $(( delay_ms / 1000 )) $(( delay_ms % 1000 )))"
@@ -2095,7 +2152,7 @@ let
               # On readiness failure the EXIT trap runs cleanup_slot: the VM is
               # stopped and the bind unmounted, but the workspace clone is kept.
               require_known_hosts
-              wait_ready "$ip" || die "guest not ready; tearing down slot $slot (workspace kept at $clone)"
+              wait_ready "$slot" "$ip" || die "guest not ready; tearing down slot $slot (workspace kept at $clone)"
               emit_event vm-ready
               emit_event agent-started
               log "attaching to $slot; running 'agent-run $agent' in /workspace"
@@ -2904,8 +2961,8 @@ let
               mnt="unmounted"
               if findmnt -n -- "$(mount_point "$slot")" >/dev/null 2>&1; then mnt="mounted"; fi
               ssh_ready="n/a"
-              if [[ "$SSH_ENABLED" == "1" ]]; then
-                  if guest_ssh_ready "$ip"; then ssh_ready="ready"; else ssh_ready="not-ready"; fi
+              if [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]]; then
+                  if guest_ssh_ready "$slot" "$ip"; then ssh_ready="ready"; else ssh_ready="not-ready"; fi
               fi
               cat <<EOF
       slot:        $slot
@@ -2963,9 +3020,9 @@ let
       }
 
       cmd_ssh() {
-          ${sshCapability}[[ "$SSH_ENABLED" == "1" ]] || die "ssh: enableSsh is false"
+          ${sshCapability}[[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]] || die "ssh: no SSH control channel (enableSsh is false and the vsock capability is not selected)"
           [[ $# -ge 1 ]] || die "ssh: <slot|task> required"
-          local slot ip
+          local slot ip target
           slot="$(resolve_slot "$1")" || die "no such slot or task: $1"
           shift
           ip="$(slot_ip "$slot")"
@@ -2977,11 +3034,24 @@ let
           # independent layers now protect this session: strict host-key
           # verification here, and per-TAP L2 `isolated` on the bridge
           # (network.nix), which prevents a co-resident guest from ARP-spoofing
-          # the gateway or another slot in the first place.
+          # the gateway or another slot in the first place. The VSOCK channel
+          # (lightweight plan phase 6) reuses the SAME pinned key under the
+          # `vsock-mux/<stateRoot>/<slot>/notify.vsock` address, so a batch+vsock
+          # host's `ssh` is verified exactly like the TAP one.
           require_known_hosts
-          exec ssh "''${SSH_VERIFY_OPTS[@]}" \
-              ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
-              -t "$SSH_USER@$ip" "$@"
+          # The control channel: the TAP (`agent@<ip>`) when the TCP sshd is
+          # up, or the VSOCK mux socket (`vsock-mux/<path>`, login user via -l)
+          # when VSOCK is the ONLY channel (a batch+vsock host).
+          if [[ "$VSOCK_ENABLED" == "1" && "$SSH_ENABLED" != "1" ]]; then
+              target="vsock-mux/$STATE_ROOT/$slot/notify.vsock"
+              exec ssh "''${SSH_VERIFY_OPTS[@]}" \
+                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                  -t -l "$SSH_USER" "$target" "$@"
+          else
+              exec ssh "''${SSH_VERIFY_OPTS[@]}" \
+                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                  -t "$SSH_USER@$ip" "$@"
+          fi
       }
 
       # DELIBERATELY NOT capability-gated (unlike `run`/`ssh`, which need

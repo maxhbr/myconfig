@@ -350,6 +350,24 @@ let
       # worker unit exists at all, so this cannot define one behind its back.
       (agentJobs.mkWorkerEnvironmentModule modelEndpointEnv)
       (mkGuestBase slot)
+      # VSOCK-only control channel (lightweight plan phase 6): when VSOCK is the
+      # ONLY control channel (a batch+vsock host: `enableSsh = false`, no
+      # `interactive`), suppress the TCP sshd entirely — do NOT install the
+      # `sshd.service` NixOS' openssh module declares (it is enabled because
+      # `services.openssh.enable` is true for the VSOCK sshd), so no TCP
+      # listener ever starts, only the VSOCK `sshd-vsock@`. This is a `mkIf`
+      # MERGE ELEMENT (not an attr inside `mkGuestBase`): setting
+      # `systemd.services.sshd.enable` inside the always-present base attrset
+      # would create the `sshd` key even when the condition is false, regressing
+      # the batch-only "no sshd" invariant. Filtered out entirely when
+      # `vsock && !enableSsh` is false, so an interactive host (which runs the
+      # TCP sshd) and a batch-only host (no openssh at all) are byte-for-byte
+      # unchanged. Recorded deviation from phase 5's "a batch-mode guest has no
+      # SSH daemon": scoped to "no TCP/network SSH daemon"; a VSOCK-only inetd
+      # sshd (host-only, over AF_VSOCK) is the control channel.
+      (lib.mkIf (agentCapabilities.vsock && !cfg.enableSsh) {
+        systemd.services.sshd.enable = false;
+      })
     ];
 
   mkGuestBase = slot: {
@@ -383,6 +401,17 @@ let
       # also what the phase-4 assertions below inspect).
       shares = mkShares slot;
 
+      # --- VSOCK control channel (lightweight plan phase 6) ----------------
+      # The deterministic per-slot AF_VSOCK CID (slots.nix) wires the guest's
+      # VSOCK device. For cloud-hypervisor this also flips `microvm@<slot>` to
+      # `Type=notify` and starts the socat <-> vsock bridge that backs the
+      # device with `<stateRoot>/<slot>/notify.vsock` — which is exactly the
+      # socket the host's `ssh vsock-mux/<path>` reaches `sshd-vsock@`
+      # (vsock::22) through. REUSED from upstream microvm.nix, not reinvented.
+      # `mkIf` so a host that does not select `vsock` leaves `microvm.vsock.cid`
+      # at its default `null` and the guest closure is byte-for-byte unchanged.
+      vsock.cid = lib.mkIf agentCapabilities.vsock slot.cid;
+
       # --- pinned guest store disk (lightweight plan phase 1) -------------
       # PIN microvm.nix's closure/startup optimizations and the store-disk
       # filesystem instead of inheriting upstream defaults, so a future
@@ -405,10 +434,13 @@ let
       hashedPassword = "!";
       shell = guestShell;
     }
-    // lib.optionalAttrs (cfg.enableSsh && cfg.sshPublicKeyFile != null) {
+    // lib.optionalAttrs ((cfg.enableSsh || agentCapabilities.vsock) && cfg.sshPublicKeyFile != null) {
       openssh.authorizedKeys = {
         # §18: the dedicated public key authorises the guest `agent` user.
-        # NOT a host authorized_keys file.
+        # NOT a host authorized_keys file. Authorised for the TCP sshd
+        # (`enableSsh` / `interactive`) AND the VSOCK sshd (`vsock`), since
+        # the VSOCK control channel (phase 6) is the same operator-facing
+        # login, just over AF_VSOCK instead of the TAP.
         keyFiles = [ cfg.sshPublicKeyFile ];
         # When passwordlessControl is on, ALSO authorise the host operator's
         # own declared public keys, so `agent-microvm ssh <slot>` works
@@ -565,14 +597,32 @@ let
     };
 
     # --- §18 hardened SSH, private guest interface only ------------------
-    services.openssh = lib.mkIf cfg.enableSsh {
+    # The TCP sshd (`enableSsh` / `interactive`) AND the VSOCK sshd (`vsock`,
+    # lightweight plan phase 6) share this ONE hardened block. The VSOCK
+    # `sshd-vsock@` unit is auto-created by NixOS' systemd-ssh-generator
+    # whenever `services.openssh.enable` is true AND a VSOCK device is present
+    # (`microvm.vsock.cid` set above) — reused, not reinvented.
+    #
+    # When VSOCK is the ONLY control channel (a batch+vsock host:
+    # `enableSsh = false`, no `interactive`), the TCP sshd is SUPPRESSED
+    # entirely (see `systemd.services.sshd.enable` below): the `sshd.service`
+    # unit NixOS' openssh module creates is NOT installed, so no TCP listener
+    # is ever started — only the VSOCK-activated `sshd-vsock@`. That is a
+    # recorded deviation from phase 5's "a batch-mode guest has no SSH daemon":
+    # the invariant is now scoped to "no TCP/network SSH daemon"; a VSOCK-only
+    # inetd sshd (reachable solely from the host over AF_VSOCK, never from the
+    # TAP) is the control channel. An `interactive` host (with or without
+    # `vsock`) keeps the TCP sshd as before — the `mkIf (vsock && !enableSsh)`
+    # below contributes nothing there.
+    services.openssh = lib.mkIf (cfg.enableSsh || agentCapabilities.vsock) {
       enable = true;
       # Deterministic per-slot host identity (ticket 3 B): use ONLY the
       # ed25519 key from the read-only hostkey share, and do NOT let the guest
       # generate its own throwaway keys (`generateHostKeys = false` disables
       # `sshd-keygen.service`, which would anyway fail against the read-only
-      # mount). The host's known_hosts file pins exactly this key per slot IP,
-      # so `agent-microvm ssh` can verify the guest strictly.
+      # mount). The host's known_hosts file pins exactly this key per slot IP
+      # (and per VSOCK mux path), so `agent-microvm ssh` can verify the guest
+      # strictly over the TAP AND over VSOCK.
       generateHostKeys = false;
       hostKeys = [
         {
@@ -590,6 +640,15 @@ let
         AllowTcpForwarding = "no";
       };
     };
+    # When VSOCK is the ONLY control channel (a batch+vsock host:
+    # `enableSsh = false`, no `interactive`), the TCP sshd is SUPPRESSED via the
+    # separate `lib.mkIf` in `mkGuest` below (NOT here): setting
+    # `systemd.services.sshd.enable` inside this always-present attrset would
+    # create the `sshd` key even when the `mkIf` is false, regressing the
+    # batch-only "no sshd" invariant. The mkGuest merge element is filtered
+    # out entirely when `vsock && !enableSsh` is false, so a host that does not
+    # select `vsock` keeps `systemd.services.sshd` exactly as the openssh
+    # module leaves it (present for `interactive`, absent for batch-only).
 
     system.stateVersion = "25.11";
   };

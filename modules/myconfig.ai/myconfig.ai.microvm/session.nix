@@ -263,7 +263,16 @@ let
       mode = "0700";
       strictMode = true;
       private = true;
-      capabilities = [ "interactive" ];
+      # The per-slot SSH host identity backs the `interactive` control channel
+      # (the TCP sshd) AND the `vsock` control channel (the `sshd-vsock@`
+      # unit, lightweight plan phase 6): a batch-only host that selects `vsock`
+      # has no TCP sshd but still needs a pinned host key so the VSOCK channel
+      # is host-key-verified exactly like the TAP one. `hostkeys.nix` provisions
+      # the key pair + the known_hosts database for the same union.
+      capabilities = [
+        "interactive"
+        "vsock"
+      ];
       purpose = "the slot's ed25519 SSH host identity (private key 0400, root-only)";
     }
     {
@@ -693,9 +702,12 @@ let
       ];
     };
   }
-  // lib.optionalAttrs cfg.enableSsh {
+  // lib.optionalAttrs (cfg.enableSsh || agentCapabilities.vsock) {
     # sshd reads its host key from the read-only share; make that ordering
-    # explicit instead of relying on local-fs.target having completed.
+    # explicit instead of relying on local-fs.target having completed. Applies
+    # to the TCP sshd (`enableSsh`, the `interactive` capability) AND to the
+    # VSOCK sshd (`sshd-vsock@`, the `vsock` capability) — both read the SAME
+    # per-slot key, so both need the read-only host-key mount.
     systemd.services.sshd.unitConfig.RequiresMountsFor = paths.guestHostkeysDir;
   };
 in

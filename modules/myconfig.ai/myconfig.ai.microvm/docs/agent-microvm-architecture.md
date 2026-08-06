@@ -163,23 +163,28 @@ traffic is additionally impossible at layer 2 (`bridge link … isolated on`).
 
 `capabilities` (default `[ "interactive" "batch" ]`) selects which of the two
 execution paths below a host's guests carry — a SET over the ONE guest shape, not
-a second profile axis (lightweight plan phase 5). It is resolved once in
+a second profile axis (lightweight plan phase 5). `vsock` (lightweight plan
+phase 6) is a THIRD token, default OFF: it adds a VSOCK control channel (the
+`sshd-vsock@` unit) so a batch-only host can still be driven over VSOCK. It is
+resolved once in
 `default.nix` and handed to the sibling modules as `_module.args
 .agentCapabilities`; each module then makes the decision in the ONE place that
 already owns the concern:
 
 | Module | What the capability set decides there |
 | --- | --- |
-| `session.nix` | which layout-table entries exist — hence the host tmpfiles rules, the pre-launch verifier, the launcher's `prepare_session`, the guest mounts and the tests |
+| `session.nix` | which layout-table entries exist — hence the host tmpfiles rules, the pre-launch verifier, the launcher's `prepare_session`, the guest mounts and the tests. `hostkeys/` needs `interactive` OR `vsock` (the VSOCK sshd reuses the per-slot host identity) |
 | `job.nix` | whether the guest module (controller unit, worker template, the three job programs), the worker's endpoint environment and the host result archive exist at all |
-| `hostkeys.nix` | whether the per-slot key pair and the `known_hosts` database are provisioned |
-| `guest.nix` | whether the guest carries the interactive `agent-run` entry point |
+| `hostkeys.nix` | whether the per-slot key pair and the `known_hosts` database are provisioned (for `interactive` OR `vsock`) |
+| `guest.nix` | whether the guest carries the interactive `agent-run` entry point; whether `microvm.vsock.cid` is set and the TCP `sshd.service` is suppressed (a `vsock`-only host) |
 | `workmux.nix` | whether the `microvm-<agent>` panes are registered |
-| `launcher.nix` | which subcommands the ONE launcher accepts (`run`/`ssh` need `interactive`, `submit`/`cancel` need `batch`; `console` is never gated), and which lines `usage` reports |
-| `default.nix` | the batch-capable-agent assertion, and the `enableSsh` reconciliation |
+| `launcher.nix` | which subcommands the ONE launcher accepts (`run` needs `interactive`; `ssh` needs `interactive` OR `vsock`; `submit`/`cancel` need `batch`; `console` is never gated), and which lines `usage` reports |
+| `default.nix` | the batch-capable-agent assertion, the `enableSsh` reconciliation, and the `vsock` + network-profile / `sshPublicKeyFile` rejections |
 
 Nothing else branches on it: there is one launcher, one share pair, one session
-tree, one staging path and one guest shape in every case.
+tree, one staging path and one guest shape in every case. `vsock` is a control-
+channel axis, not a transport enum — the TAP/bridge/firewall and the loopback
+LiteLLM forwarder are unchanged whether or not `vsock` is selected.
 
 Two properties keep the selector from weakening anything:
 
@@ -332,7 +337,22 @@ worthless as evidence.
   (`services.openssh.generateHostKeys = false`), so the pinned identity is the
   only one it can present; `known_hosts` holds public keys only, so a non-root
   operator can verify strictly too.
-- **VSOCK**: a unique CID is *reserved* per slot (`8300+idx`) for a future
-  noninteractive control channel. It is deliberately **not** yet passed to
-  `microvm.vsock.cid`, because that flips `microvm@<slot>` to `Type=notify` — a
-  startup change that can only be validated by booting on real KVM.
+- **VSOCK** (lightweight plan phase 6): a unique CID is *reserved* per slot
+  (`8300+idx`) and, when the host selects the `vsock` capability, **passed to
+  `microvm.vsock.cid`** so the guest gets a VSOCK device. For cloud-hypervisor
+  that also flips `microvm@<slot>` to `Type=notify` and starts the socat <->
+  vsock bridge backing the device with `<stateRoot>/<slot>/notify.vsock` — the
+  socket the host's `ssh vsock-mux/<path>` reaches the guest's `sshd-vsock@`
+  (vsock::22) through. The `sshd-vsock@` unit itself is auto-created by NixOS'
+  systemd-ssh-generator (reused, not reinvented) whenever `services.openssh`
+  is enabled AND a VSOCK device is present. The per-slot host key is pinned under
+  the VSOCK mux path in `known_hosts` too, so the VSOCK channel is host-key-
+  verified exactly like the TAP one. A batch+vsock guest SUPPRESSES the TCP
+  `sshd.service` (`systemd.services.sshd.enable = false`): the VSOCK sshd is the
+  ONLY listener, reachable solely from the host (CID 2). `vsock` is a NEW AXIS
+  over the one guest shape (a capability token, not a `transport` enum),
+  additive to the unchanged TAP/bridge/firewall; the plan's literal VSOCK *proxy*
+  forwarder (carrying the model API over VSOCK, eliminating the TAP) is NOT
+  implemented — it would fork the one forwarder shape. A host that does not
+  select `vsock` leaves `microvm.vsock.cid` at its default `null`, so its guest
+  closure is byte-for-byte unchanged.

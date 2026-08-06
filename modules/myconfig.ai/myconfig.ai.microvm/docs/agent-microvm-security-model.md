@@ -152,7 +152,10 @@ gets the same two shares with FEWER subdirectories — an interactive-only guest
 has no `input/`, `controller/`, `worker/` or `worker-logs/` (there is no batch
 protocol to protect, because there is no controller and no worker), and a
 batch-only guest has no `hostkeys/` in the read-only tree (there is no sshd, so
-the slot has no SSH identity to keep from the agent). No owner or mode changes,
+the slot has no SSH identity to keep from the agent). A batch+vsock guest
+(lightweight plan phase 6) KEEPS `hostkeys/` — the VSOCK `sshd-vsock@` control
+channel reuses the per-slot host identity — while still having no `sshd.service`
+(TCP) listener. No owner or mode changes,
 and no invariant is relaxed: a narrowing only removes attack surface. The trust
 POLICY is asserted against the FULL layout table rather than the selected slice,
 so weakening an entry a host happens not to create still fails the build, and the
@@ -167,6 +170,18 @@ closure, because NixOS' `environment.requiredPackages` (which also brings
 coreutils-full, curl, …) provides `scp`/`ssh` and is load-bearing for a bootable
 system. The criterion "a batch-mode guest has no SSH daemon" is a unit/config
 claim, not a closure-size claim.
+
+**Phase 6 refines this for a `batch`+`vsock` host.** Such a guest DOES run an
+sshd — but ONLY the VSOCK `sshd-vsock@` (vsock::22), reachable solely from the
+host (CID 2) over AF_VSOCK, never from the TAP. The TCP `sshd.service` is
+suppressed (`systemd.services.sshd.enable = false`), so no network SSH listener
+exists. The invariant above is therefore scoped to **"no TCP/network SSH
+daemon"**: a VSOCK-only inetd sshd is the host↔guest *control channel* (the
+enabler that lets `runtime-validation.sh` reach a batch-only guest at all), not
+an interactive login service exposed to the guest's network. It reuses the
+per-slot host identity + a `known_hosts` entry keyed by the VSOCK mux path, so
+the channel is host-key-verified exactly like the TAP one. See the plan's
+phase-6 recorded deviations for the full rationale.
 
 The consolidation moved the paths into the two trees WITHOUT
 changing a single owner or mode — the trust boundary was never the share split,
@@ -314,11 +329,23 @@ boundary against a compromised host home.
   re-check the flag — `bridge -d link show` does (the plain `bridge link show`
   prints no port flags at all, which is why the runtime-validation suite's first
   real run reported a false negative here).
-- **VSOCK is reserved, not used.** Batch control still rides SSH-less file
-  exchange through the job subtree of the ONE writable session share; the CID
-  exists but no vsock transport is wired.
-  The result channel's authenticity therefore rests on virtiofs passing ownership
-  through unchanged — a property of virtiofsd, which is in the TCB.
+- **VSOCK is now wired (phase 6), as a CONTROL channel.** A host that
+  selects the `vsock` capability gives its guests a VSOCK `sshd-vsock@`
+  (vsock::22, reused from upstream) reachable ONLY from the host (CID 2) over
+  AF_VSOCK — never from the TAP. The TCP `sshd.service` is suppressed for a
+  batch+vsock guest, so the channel is host-only. What crosses it both ways is
+  the SAME as the existing SSH control channel — host→guest: the operator's
+  commands (`agent-microvm ssh` / the runtime-validation suite); guest→host:
+  command stdout/exit — just over a different L2. No host home, no credential,
+  no host socket, no batch result, and no second writable share cross it (the
+  VSOCK channel is not a virtiofs share); the invariants are unchanged. The
+  batch result channel itself still rides the SSH-less file exchange through the
+  job subtree of the ONE writable session share (VSOCK is the *control*
+  transport, not the *result* transport), so its authenticity still rests on
+  virtiofs passing ownership through unchanged — a property of virtiofsd, which
+  is in the TCB. The plan's literal phase-6 VSOCK *proxy* forwarder (carrying
+  the model API over VSOCK and eliminating the TAP) is NOT implemented — it
+  would fork the one forwarder shape; see the plan's phase-6 deviations.
 - **The guest batch controller runs as guest root.** It is a small, fixed script
   that never executes anything the repository or the spec supplied, and it is
   hardened (`NoNewPrivileges`, `PrivateDevices`, `ProtectHome`, `ProtectKernel*`,

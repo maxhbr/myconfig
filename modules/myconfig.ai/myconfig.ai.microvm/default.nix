@@ -119,9 +119,26 @@ let
   # path/mode/tmpfiles rule/verifier line is generated from), ./job.nix,
   # ./hostkeys.nix, ./guest.nix, ./launcher.nix and ./workmux.nix all follow ONE
   # decision instead of each carrying its own `if`.
+  #
+  # `vsock` (lightweight plan phase 6) is a THIRD token, NOT a second guest
+  # shape: it adds a VSOCK control channel (the `sshd-vsock@` unit, reused from
+  # upstream `microvm.vsock.cid` + NixOS' systemd-ssh-generator) so a host that
+  # narrows `interactive` away (a batch-only host, which has no TCP sshd) can
+  # still be driven by `agent-microvm ssh` and the runtime-validation suite.
+  # It is ADDITIVE — the TAP/bridge/firewall and the loopback LiteLLM forwarder
+  # are unchanged — so the plan's literal phase-6 sketch (a VSOCK proxy
+  # forwarder REPLACING the TAP) is NOT implemented here; that would fork the
+  # one forwarder shape. The decision lives in the SAME per-capability mechanism
+  # the plan's own phase-5 deviation hardened the layout table for (a `vsock`
+  # token was explicitly anticipated there), not in a `transport = "tap"|"vsock"`
+  # enum that would re-create the cross-product the `full`/`lite` collapse
+  # removed. Default OFF: the historical `[ "interactive" "batch" ]` is
+  # unchanged, so every guest artefact of a default host is byte-for-byte as it
+  # was.
   declaredCapabilities = [
     "interactive"
     "batch"
+    "vsock"
   ];
   # Resolved DEFENSIVELY (membership tests, never a lookup that could throw), so
   # an unknown token is reported by the assertion below instead of failing
@@ -242,14 +259,31 @@ in
           `controller/`, `worker/` and `worker-logs/` subdirectories of the
           session tree (and their host tmpfiles rules), the host-side result
           archive and the launcher's `submit` / `cancel` subcommands.
+        - `vsock` — a VSOCK control channel (lightweight plan phase 6): the
+          guest gets a VSOCK device (`microvm.vsock.cid` = the slot's
+          deterministic CID) and a VSOCK-only `sshd-vsock@` unit (SSH over
+          AF_VSOCK, reused from upstream), reachable ONLY from the host (CID
+          2) and NOT from any TCP/network interface. It is what lets a
+          batch-only host — which has no `interactive` sshd — still be driven
+          by `agent-microvm ssh` and the runtime-validation suite, closing
+          the phase-5 coverage hole. The per-slot SSH host identity
+          (`hostkeys/`) and its `known_hosts` entry are provisioned for
+          `vsock` too, so the VSOCK channel is host-key-verified exactly like
+          the TAP one. Additive: the TAP/bridge/firewall and the loopback
+          LiteLLM forwarder stay; `vsock` is a control-channel axis, not a
+          second transport shape.
 
-        Both (the default) is exactly the historical behaviour. The list is a
-        SET, not an ordered preference, and there is deliberately no third
-        "combined" value: that would be a compatibility profile crossed with
-        the one guest shape, which is what the `full`/`lite` collapse removed.
+        Both `interactive` and `batch` (the default) is exactly the
+        historical behaviour. `vsock` is OFF by default, so a default host's
+        guest closure is byte-for-byte unchanged. The list is a SET, not an
+        ordered preference, and there is deliberately no "combined" value:
+        that would be a compatibility profile crossed with the one guest
+        shape, which is what the `full`/`lite` collapse removed.
 
-        An empty selection, an unknown token, and `enableSsh` without the
-        `interactive` capability are rejected at evaluation time.
+        An empty selection, an unknown token, `enableSsh` without the
+        `interactive` capability, `vsock` without an `sshPublicKeyFile`, and
+        `vsock` paired with an insecure network profile
+        (`package-access`/`internet`) are rejected at evaluation time.
       '';
     };
 
@@ -656,8 +690,38 @@ in
           message = "myconfig.ai.microvm.gatewayAddress must be non-empty.";
         }
         {
-          assertion = !cfg.enableSsh || cfg.sshPublicKeyFile != null;
-          message = "myconfig.ai.microvm.enableSsh requires an explicit sshPublicKeyFile.";
+          # An SSH control channel — the `interactive` one (`enableSsh`) OR the
+          # `vsock` one (lightweight plan phase 6) — authorises exactly ONE
+          # dedicated key on the guest `agent` user, so either requires an
+          # explicit `sshPublicKeyFile`. A batch-only host that selects NEITHER
+          # needs no key (and has no sshd to authorise one).
+          assertion = (!cfg.enableSsh && !agentCapabilities.vsock) || cfg.sshPublicKeyFile != null;
+          message = ''
+            myconfig.ai.microvm: an SSH control channel (enableSsh = true or the
+            `vsock` capability) requires an explicit `sshPublicKeyFile` — the
+            guest `agent` user must authorise exactly one dedicated key, never a
+            host authorized_keys file.
+          '';
+        }
+        {
+          # The VSOCK control channel (lightweight plan phase 6) is the secure
+          # profile's control-transport enabler, so the plan restricts it to the
+          # closed profiles. Pairing it with `package-access`/`internet` (an
+          # INSECURE network profile) is a configuration the plan never
+          # intended and is rejected at eval. (`vsock` is ADDITIVE here — the
+          # TAP still carries the proxy — so this restriction is the plan's own
+          # boundary, not a technical conflict; it is kept because it is the
+          # safer, more restrictive choice and matches the plan's phase-9 eval
+          # test "VSOCK transport selected with internet access".)
+          assertion =
+            !agentCapabilities.vsock || effectiveProfile == "proxy-only" || effectiveProfile == "offline";
+          message = ''
+            myconfig.ai.microvm: the `vsock` capability is only allowed with the
+            closed network profiles `proxy-only` or `offline` (this host selects
+            `${effectiveProfile}`). VSOCK is the secure profile's control
+            transport; pair it with an insecure profile deliberately by NOT
+            selecting `vsock` and driving the guest over the TAP instead.
+          '';
         }
         {
           # A typo in `capabilities` must fail at EVAL, naming the token, rather

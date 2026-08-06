@@ -25,9 +25,11 @@ agent-microvm capabilities         # what this host's guests can do (no root nee
 ```
 
 > **Capabilities.** A host selects which execution paths its guests carry
-> (`myconfig.ai.microvm.capabilities`, default both). On a host that selects only
-> one of them the launcher refuses the other's subcommands with a message naming
-> the option — `run`/`ssh` need `interactive`, `submit`/`cancel` need `batch`:
+> (`myconfig.ai.microvm.capabilities`, default both `interactive` and `batch`;
+> `vsock` is OFF by default). On a host that selects only some of them the
+> launcher refuses the others' subcommands with a message naming the option —
+> `run` needs `interactive`, `ssh` needs `interactive` OR `vsock`,
+> `submit`/`cancel` need `batch`:
 >
 > ```console
 > agent-microvm: 'submit' needs the 'batch' capability, which this host does not
@@ -41,11 +43,13 @@ agent-microvm capabilities         # what this host's guests can do (no root nee
 > ```console
 > $ agent-microvm capabilities
 > capabilities: interactive
-> declared: interactive batch
+> declared: interactive batch vsock
 > ```
 >
 > `console` is never refused (it reads the host's `microvm@<slot>` journal, so it
-> works even for a guest without sshd). See
+> works even for a guest without sshd). A batch-only host that ALSO selects
+> `vsock` (plan phase 6) gets a VSOCK `sshd-vsock@` control channel — `ssh`
+> works over VSOCK, so the runtime-validation suite can reach it. See
 > [Capabilities](./agent-microvm.md#capabilities).
 
 ## 1. Start an interactive task

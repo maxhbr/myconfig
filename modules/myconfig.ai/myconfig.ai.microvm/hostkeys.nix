@@ -57,12 +57,14 @@
   # slot whose writable tree contains key material).
   agentSession,
   # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
-  # A per-slot SSH host identity only exists for the `interactive` capability:
-  # it is the identity of the SSH control channel, which a batch-only guest does
-  # not have. The `hostkeys/` subdirectory of the read-only tree is dropped by
-  # ../session.nix's own per-capability table, so nothing here has to repeat
-  # that decision — only the PROVISIONING (the key pair + the known_hosts
-  # database) is gated below.
+  # A per-slot SSH host identity exists for the `interactive` capability (the
+  # TCP sshd control channel) OR the `vsock` capability (the `sshd-vsock@`
+  # VSOCK control channel, phase 6): a batch-only host that selects `vsock`
+  # has no TCP sshd but still needs a pinned host key so the VSOCK channel is
+  # host-key-verified. The `hostkeys/` subdirectory of the read-only tree is
+  # created by ../session.nix's own per-capability table for the same union,
+  # so only the PROVISIONING (the key pair + the known_hosts database) is
+  # gated below.
   agentCapabilities,
   ...
 }:
@@ -141,6 +143,19 @@ let
         chmod 0444 -- "$slot_dir/$key_name.pub"
         printf '%s %s\n' ${lib.escapeShellArg slot.ip} \
             "$(cut -d" " -f1,2 -- "$slot_dir/$key_name.pub")" >> "$tmp"
+        ${lib.optionalString agentCapabilities.vsock ''
+          # The VSOCK control channel (lightweight plan phase 6): cloud-hypervisor
+          # backs the guest's VSOCK device with the Unix socket
+          # <stateRoot>/<slot>/notify.vsock, and the host reaches the guest's
+          # `sshd-vsock@` (vsock::22) through `ssh vsock-mux/<that socket>`. Pin
+          # the SAME per-slot host key under that address too, so the launcher's
+          # VSOCK ssh runs with StrictHostKeyChecking=yes exactly like the TAP
+          # one — the VSOCK channel is host-only (CID 2 -> guest) but the
+          # verification is still the safer, recorded choice.
+          printf '%s %s\n' \
+              ${lib.escapeShellArg "vsock-mux/${cfg.stateRoot}/${slot.name}/notify.vsock"} \
+              "$(cut -d" " -f1,2 -- "$slot_dir/$key_name.pub")" >> "$tmp"
+        ''}
       '') slots}
 
       # Public keys only → world-readable, so a non-root operator can run
@@ -173,7 +188,7 @@ in
       ];
     })
 
-    (lib.mkIf (cfg.enable && agentCapabilities.interactive) {
+    (lib.mkIf (cfg.enable && (agentCapabilities.interactive || agentCapabilities.vsock)) {
       systemd.services.agent-microvm-hostkeys = {
         description = "Provision per-slot SSH host keys for agent microVMs";
         wantedBy = [ "multi-user.target" ];
