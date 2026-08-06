@@ -102,6 +102,16 @@ let
   caps = agentNetwork.caps;
   profile = agentNetwork.profile;
 
+  # --- transport-derived capabilities (lightweight plan phase 6) -----------
+  # The ONE transport decision, resolved in default.nix from the table in
+  # ./network-profiles.nix. `transport.hostBridge` / `.hostFirewall` /
+  # `.bridgeLitellm` are what gate EVERYTHING in this file: under the `vsock`
+  # transport there is no TAP, no bridge, no firewall chain and no bridge-only
+  # LiteLLM socket — the model API is carried by the per-VM AF_VSOCK forwarder
+  # below instead.
+  transport = agentNetwork.transportCaps;
+  vsockPort = toString agentNetwork.vsockLitellmPort;
+
   # DNS servers the guests may use under the `internet` profile, split by
   # whether they are the host itself on the bridge (INPUT) or off-host and
   # therefore routed (FORWARD).
@@ -332,6 +342,121 @@ let
     ) slots
   );
 
+  # --- PER-VM AF_VSOCK model forwarder (lightweight plan phase 6) ----------
+  # The host half of the LITERAL phase-6 design:
+  #
+  #   guest agent -> 127.0.0.1:<litellmPort>            (unchanged endpoint)
+  #     -> guest TCP->VSOCK bridge                      (../guest.nix)
+  #     -> AF_VSOCK CID 2 (the host), port <litellmPort>
+  #     -> cloud-hypervisor's per-VM mux socket
+  #        <stateRoot>/<slot>/notify.vsock_<litellmPort>
+  #     -> THIS socket unit -> systemd-socket-proxyd
+  #     -> 127.0.0.1:<litellmPort>                      (the loopback LiteLLM proxy)
+  #
+  # WHY A UNIX SOCKET AND NOT AN AF_VSOCK LISTENER: with cloud-hypervisor the
+  # guest's VSOCK device is implemented in the VMM, not by the host kernel's
+  # vhost-vsock. The host never sees an AF_VSOCK address at all: a
+  # guest-initiated connection to host CID 2 port N is delivered by the VMM to
+  # the Unix socket `<vsock socket>_<N>` next to the mux socket it was started
+  # with (the same convention microvm.nix itself relies on for the guest's
+  # systemd notify socket, `notify.vsock_8888`). Listening on that path IS
+  # listening on the guest's VSOCK port — and it is strictly stronger than an
+  # AF_VSOCK listener would be, because a Unix socket in the VM's own state
+  # directory cannot be reached from anywhere except that one VM's VMM process.
+  #
+  # ONE LISTENER PER VM, which is the plan's own requirement ("The host listener
+  # must validate the expected guest CID or use one listener per slot"): each
+  # slot's forwarder is a separate unit bound to a separate path inside that
+  # slot's state directory, so slot A's guest cannot reach slot B's forwarder
+  # (it cannot address slot B's socket at all — there is no shared namespace and
+  # no CID to spoof).
+  #
+  # DESTINATION-FIXED, HOST-LOOPBACK-ONLY: the forwarder's ONLY argument is
+  # `127.0.0.1:<litellmPort>`. It is not a CONNECT proxy, it reads nothing from
+  # the connection, and the sandboxing below (`IPAddressAllow=localhost` +
+  # `IPAddressDeny=any`, `RestrictAddressFamilies=AF_UNIX AF_INET`, DynamicUser,
+  # ProtectSystem=strict) makes "some other host port" unreachable for the
+  # forwarder itself, not merely unrequestable by the guest.
+  # The two per-slot unit tables (sockets + services), generated from the SAME
+  # slot pool the VMs are generated from.
+  vsockForwarderSockets = builtins.listToAttrs (
+    map (
+      slot:
+      let
+        socketPath = "${cfg.stateRoot}/${slot.name}/notify.vsock_${vsockPort}";
+      in
+      lib.nameValuePair "agent-litellm-vsock-${slot.name}" {
+        description = "AF_VSOCK LiteLLM endpoint for microVM ${slot.name} (guest CID ${toString slot.cid})";
+        # Present whenever the host's VMs may run — the guest connects on demand,
+        # long after boot, and the listener costs one inode plus one systemd
+        # socket until then. Ordered after the VM's install unit because that is
+        # what creates `<stateRoot>/<slot>` (the directory the socket lives in);
+        # `ExecStartPre` additionally creates it, so an unlaunched slot cannot
+        # leave the listener dead.
+        wantedBy = [ "microvms.target" ];
+        wants = [ "install-microvm-${slot.name}.service" ];
+        after = [ "install-microvm-${slot.name}.service" ];
+        socketConfig = {
+          ExecStartPre = "${lib.getExe' pkgs.coreutils "mkdir"} -p ${lib.escapeShellArg "${cfg.stateRoot}/${slot.name}"}";
+          ListenStream = socketPath;
+          # cloud-hypervisor runs as microvm.nix's `microvm` user, whose primary
+          # group is `kvm`, so the VMM (and ONLY it, plus root) may connect. Not
+          # world-accessible: an unprivileged host user must not be able to reach
+          # the model endpoint through a guest's socket.
+          SocketUser = "root";
+          SocketGroup = "kvm";
+          SocketMode = "0660";
+          # A stale socket file would shadow the listener on the next start.
+          RemoveOnStop = true;
+          Accept = false;
+        };
+      }
+    ) slots
+  );
+
+  vsockForwarderServices = builtins.listToAttrs (
+    map (
+      slot:
+      lib.nameValuePair "agent-litellm-vsock-${slot.name}" {
+        description = "Forward microVM ${slot.name}'s AF_VSOCK model port to the loopback LiteLLM proxy";
+        requires = [ "agent-litellm-vsock-${slot.name}.socket" ];
+        after = [ "agent-litellm-vsock-${slot.name}.socket" ];
+        serviceConfig = {
+          # DESTINATION-FIXED: the loopback LiteLLM proxy, and nothing else.
+          ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd 127.0.0.1:${toString cfg.litellmPort}";
+          DynamicUser = true;
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          # HOST-TCP-ONLY, enforced on the FORWARDER (not merely on what the
+          # guest can ask for): the process may only talk to the host loopback,
+          # so even a compromised forwarder cannot reach the LAN, the VPN, the
+          # metadata service or another host service. AF_UNIX is the socket it is
+          # activated on; AF_INET is the loopback destination. AF_VSOCK is
+          # deliberately absent — the VSOCK side is the VMM's Unix socket, not a
+          # kernel vsock address.
+          IPAddressAllow = "localhost";
+          IPAddressDeny = "any";
+          RestrictAddressFamilies = [
+            "AF_UNIX"
+            "AF_INET"
+          ];
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          SystemCallArchitectures = "native";
+          SystemCallFilter = [
+            "@system-service"
+            "~@privileged"
+            "~@resources"
+          ];
+        };
+      }
+    ) slots
+  );
+
   # --- firewall teardown (must mirror the setup above) --------------------
   firewallExtraStopCommands = ''
         # ==== myconfig.ai.microvm: remove dedicated agent-sandbox chains =====
@@ -351,8 +476,21 @@ in
 {
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
-      { systemd.services = tapAttachServices; }
-      {
+      # --- lightweight plan phase 6: the PER-VM AF_VSOCK model forwarder ----
+      # The ONLY thing this file produces under the `vsock` transport: no bridge,
+      # no TAP, no firewall chain, no bridge-only socket. One listener per VM,
+      # destination-fixed to the loopback LiteLLM proxy.
+      (lib.mkIf transport.vsockLitellm {
+        systemd.sockets = vsockForwarderSockets;
+        systemd.services = vsockForwarderServices;
+      })
+
+      # Everything below is the `tap` transport (the historical shape, and the
+      # only one that can carry DNS / NAT / a package proxy). Gated on the
+      # transport's own capability flags rather than on a transport NAME, so
+      # adding a transport cannot silently re-enable half of it.
+      (lib.mkIf transport.hostBridge { systemd.services = tapAttachServices; })
+      (lib.mkIf transport.hostBridge {
         # --- §12 private bridge (NetworkManager-compatible) -------------------
         # Create the bridge with no static members; per-slot TAPs are attached
         # by microvm.nix / the launcher (later phase). This uses the standard
@@ -405,17 +543,29 @@ in
           };
         };
 
+      })
+
+      (lib.mkIf transport.hostFirewall {
         # --- §13/§14 firewall: proxy-only default policy ---------------------
         # Make same-bridge (guest<->guest) L2 frames traverse iptables FORWARD so
         # the inter-VM DROP rule is actually enforced once TAPs are attached in a
         # later phase. Without br_netfilter + bridge-nf-call-iptables, bridged
         # frames are L2-switched and never reach the FORWARD chain.
+        #
+        # Under the `vsock` transport (lightweight plan phase 6) NONE of this
+        # exists — and it does not have to: a guest with no network interface has
+        # nothing to filter, which is the whole point of the transport. The
+        # AGENT_MICROVM_* chains are the second line of defence for a guest that
+        # CAN address the bridge; a vsock guest cannot address anything but its
+        # own loopback.
         boot.kernelModules = [ "br_netfilter" ];
         boot.kernel.sysctl."net.bridge.bridge-nf-call-iptables" = 1;
 
         networking.firewall.extraCommands = firewallExtraCommands;
         networking.firewall.extraStopCommands = firewallExtraStopCommands;
+      })
 
+      (lib.mkIf transport.bridgeLitellm {
         # --- §16 bridge-only LiteLLM forwarder -------------------------------
         # Socket-activated endpoint bound ONLY to the bridge address, never to
         # 0.0.0.0 / the LAN. BindToDevice pins the listener to the bridge
@@ -465,7 +615,7 @@ in
             ProtectHome = true;
           };
         };
-      }
+      })
     ]
   );
 }

@@ -105,6 +105,19 @@ let
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   netCaps = agentNetwork.caps;
+  # The ONE transport decision (lightweight plan phase 6), resolved in
+  # default.nix from ./network-profiles.nix. `netTransport.guestInterface` is
+  # what decides whether this guest has a network interface AT ALL: under the
+  # `vsock` transport (the `vsock` capability + the closed `proxy-only` profile)
+  # it has none — no TAP, no static IPv4, no default route, no networkd — and
+  # the model API travels over AF_VSOCK to the per-VM host forwarder instead
+  # (../network.nix). Every guest-side network decision below reads THIS, never
+  # the transport name and never the capability set.
+  netTransport = agentNetwork.transportCaps;
+  # Whether the TCP sshd can be reached at all (false without an interface), so
+  # the VSOCK `sshd-vsock@` is the only live control channel of a vsock guest.
+  # Resolved once in default.nix.
+  tapSshUsable = agentNetwork.tapSshUsable;
 
   # Prefix length of the private subnet (e.g. "192.168.83.0/24" -> 24), used
   # for the guest-side static address. Derived from the SAME option the host
@@ -374,7 +387,28 @@ let
       # batch-mode guest has no SSH daemon": scoped to "no TCP/network SSH
       # daemon" (no `sshd.service` AND no TAP firewall opening for 22); a
       # VSOCK-only inetd sshd (host-only, over AF_VSOCK) is the control channel.
-      (lib.mkIf (agentCapabilities.vsock && !cfg.enableSsh) {
+      # --- NO GUEST NETWORK STACK AT ALL (the `vsock` transport, phase 6) ----
+      # microvm.nix's optimization module sets `networking.useNetworkd =
+      # mkDefault true`, so without these a guest with ZERO interfaces would
+      # still start systemd-networkd (and, with networkd off but `useDHCP` at its
+      # NixOS default, dhcpcd instead). Both would be pure overhead on a guest
+      # whose only link is loopback, and both are exactly the "ordinary IP
+      # networking" that invariant 6 forbids from creeping back in. A `mkIf`
+      # MERGE ELEMENT (not attrs inside `mkGuestBase`), so a TAP guest does not
+      # even acquire the keys and stays byte-for-byte unchanged.
+      #
+      # `networking.firewall` is deliberately LEFT ENABLED: it costs one unit and
+      # is the honest belt to the braces of "there is no interface", so a future
+      # regression that gives this guest a link cannot silently also give it an
+      # open port (`services.openssh.openFirewall = false` below keeps 22 out of
+      # it — the VSOCK sshd needs no TCP rule).
+      (lib.mkIf (!netTransport.guestInterface) {
+        networking.useNetworkd = false;
+        networking.useDHCP = false;
+        networking.dhcpcd.enable = false;
+        systemd.network.enable = false;
+      })
+      (lib.mkIf (agentCapabilities.vsock && !tapSshUsable) {
         systemd.services.sshd.enable = false;
         # The TCP sshd is masked above, so its TAP firewall opening must go too:
         # `openFirewall = false` keeps 22 out of `allowedTCPPorts` on a guest
@@ -397,9 +431,20 @@ let
       vcpu = slot.vcpu;
       mem = slot.memoryMiB;
 
-      # Deterministic per-slot TAP + MAC (plan §4). Guest-side IP
-      # addressing / routing is intentionally deferred to network.nix.
-      interfaces = [
+      # Deterministic per-slot TAP + MAC (plan §4), and the guest-side static
+      # address below.
+      #
+      # EMPTY under the `vsock` transport (lightweight plan phase 6): the guest
+      # then has NO network interface at all — no TAP device on the host, no
+      # link in the guest, only loopback — and reaches the host LiteLLM proxy
+      # over AF_VSOCK instead (the guest bridge below + the per-VM host
+      # forwarder in ../network.nix). That is the plan's literal acceptance
+      # criterion "in proxy-only VSOCK mode, the guest has no network interface
+      # other than loopback", and it is strictly stronger than the TAP shape:
+      # LAN, VPN, cloud metadata, DNS, other guests and every other host port
+      # are unreachable because there is nothing to address them WITH, not
+      # because a firewall rule says no.
+      interfaces = lib.optionals netTransport.guestInterface [
         {
           type = "tap";
           id = slot.tap;
@@ -558,15 +603,30 @@ let
     # rewrites. Pure byte-shuffler: no filesystem, home or privileges needed.
     # Only exists when the profile actually allows the model API: under
     # `offline` there is nothing to forward to, so no listener is created.
+    #
+    # TWO TRANSPORTS, ONE ENDPOINT (lightweight plan phase 6): the guest-visible
+    # address is `127.0.0.1:<litellmPort>` in BOTH cases — that is what keeps the
+    # host-provisioned agent configuration working verbatim and is why the guest
+    # agent needs no reconfiguration for VSOCK. Only the DESTINATION differs, and
+    # it is chosen by the ONE resolved transport:
+    #   * `tap`   -> <gatewayAddress>:<litellmPort> over the private bridge;
+    #   * `vsock` -> AF_VSOCK CID 2 (the host), port <litellmPort>, where the
+    #                per-VM host forwarder (../network.nix) hands it to
+    #                127.0.0.1:<litellmPort>.
     systemd.sockets.litellm-forwarder = lib.mkIf netCaps.litellm {
       description = "Loopback LiteLLM endpoint for host-provisioned agent configs";
       wantedBy = [ "sockets.target" ];
       socketConfig = {
         ListenStream = "127.0.0.1:${toString cfg.litellmPort}";
-        Accept = false;
+        # The TAP forwarder is a single long-running byte shuffler
+        # (systemd-socket-proxyd handles many connections on one fd); the VSOCK
+        # bridge is per-connection (`socat` dials the VMM's Unix socket for each
+        # accepted connection), so it needs `Accept = yes` and a templated
+        # service instance.
+        Accept = netTransport.vsockLitellm;
       };
     };
-    systemd.services.litellm-forwarder = lib.mkIf netCaps.litellm {
+    systemd.services.litellm-forwarder = lib.mkIf (netCaps.litellm && netTransport.bridgeLitellm) {
       description = "Forward 127.0.0.1:${toString cfg.litellmPort} to the host bridge LiteLLM proxy";
       requires = [ "litellm-forwarder.socket" ];
       wants = [ "network-online.target" ];
@@ -581,6 +641,39 @@ let
         PrivateTmp = true;
         ProtectSystem = "strict";
         ProtectHome = true;
+      };
+    };
+    # The VSOCK half: a per-connection `socat` that copies the accepted loopback
+    # connection to AF_VSOCK CID 2 (`VMADDR_CID_HOST`) port <litellmPort>. The
+    # DESTINATION IS FIXED in the unit's ExecStart — the guest cannot choose a
+    # CID, a port or a host address, and there is no CONNECT protocol to abuse:
+    # the untrusted agent only ever gets a TCP connection to its own loopback.
+    # `systemd-socket-proxyd` cannot be used here (it forwards to
+    # `HOST:PORT`/UNIX targets only, not to AF_VSOCK), so this is the one place
+    # the guest needs `socat`; it is added by the unit's own ExecStart, not to
+    # `environment.systemPackages`, so the untrusted agent does not gain a
+    # general-purpose socket tool in its PATH.
+    systemd.services."litellm-forwarder@" = lib.mkIf netTransport.vsockLitellm {
+      description = "Bridge 127.0.0.1:${toString cfg.litellmPort} to the host LiteLLM proxy over AF_VSOCK";
+      serviceConfig = {
+        # `Accept = yes` hands the accepted connection to this instance as
+        # stdin/stdout, so `-` IS the guest-side TCP connection.
+        ExecStart = "${lib.getExe pkgs.socat} -T30 - VSOCK-CONNECT:2:${toString agentNetwork.vsockLitellmPort}";
+        StandardInput = "socket";
+        StandardOutput = "socket";
+        DynamicUser = true;
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        RestrictAddressFamilies = [
+          "AF_UNIX"
+          "AF_INET"
+          "AF_VSOCK"
+        ];
+        RestrictNamespaces = true;
+        LockPersonality = true;
+        SystemCallArchitectures = "native";
       };
     };
 
@@ -598,7 +691,12 @@ let
     # resolver at all (and port 53 is dropped), which is intentional.
     networking.nameservers = lib.mkIf netCaps.dns agentNetwork.dnsServers;
 
-    systemd.network = {
+    # PRESENT ONLY UNDER THE `tap` TRANSPORT. Under `vsock` (lightweight plan
+    # phase 6) there is no interface to address, so there is no static IP, no
+    # default route and no reason to run systemd-networkd at all — the block
+    # below is absent and a `mkIf` merge element in `mkGuest` turns the guest's
+    # network stack off entirely.
+    systemd.network = lib.mkIf netTransport.guestInterface {
       enable = true;
       networks."10-agent" = {
         matchConfig.MACAddress = slot.mac;

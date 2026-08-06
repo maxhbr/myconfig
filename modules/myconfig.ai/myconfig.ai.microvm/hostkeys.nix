@@ -66,6 +66,12 @@
   # so only the PROVISIONING (the key pair + the known_hosts database) is
   # gated below.
   agentCapabilities,
+  # The ONE resolved network decision (see default.nix). The IPv4 `known_hosts`
+  # entry below only makes sense while the guest HAS a network interface: under
+  # the `vsock` transport (lightweight plan phase 6) there is no TAP and no
+  # guest address, so pinning the key to an address nothing listens on would be
+  # misleading dead data - the `vsock-mux/...` entry is the whole database there.
+  agentNetwork,
   ...
 }:
 let
@@ -141,8 +147,13 @@ let
         chown root:root -- "$slot_dir/$key_name" "$slot_dir/$key_name.pub"
         chmod 0400 -- "$slot_dir/$key_name"
         chmod 0444 -- "$slot_dir/$key_name.pub"
-        printf '%s %s\n' ${lib.escapeShellArg slot.ip} \
-            "$(cut -d" " -f1,2 -- "$slot_dir/$key_name.pub")" >> "$tmp"
+        ${lib.optionalString agentNetwork.transportCaps.guestInterface ''
+          # The TAP control channel: the slot's deterministic IPv4. ABSENT under
+          # the `vsock` transport (lightweight plan phase 6), where the guest has
+          # no network interface at all, so no sshd ever listens on that address.
+          printf '%s %s\n' ${lib.escapeShellArg slot.ip} \
+              "$(cut -d" " -f1,2 -- "$slot_dir/$key_name.pub")" >> "$tmp"
+        ''}
         ${lib.optionalString agentCapabilities.vsock ''
           # The VSOCK control channel (lightweight plan phase 6): cloud-hypervisor
           # backs the guest's VSOCK device with the Unix socket

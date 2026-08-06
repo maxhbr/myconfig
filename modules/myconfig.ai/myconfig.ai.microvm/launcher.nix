@@ -272,6 +272,188 @@ let
     else
       ''ok "no per-slot SSH host keys are expected: this host selects neither the \"interactive\" nor the \"vsock\" capability (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ])"''
   );
+  # --- the TAP-ONLY configuration constants (lightweight plan phase 6) -----
+  # The bridge, the gateway address and the guest subnet only EXIST under the
+  # `tap` transport; under `vsock` there is no bridge, no gateway and no guest
+  # subnet, so rendering them would be dead configuration (and
+  # `writeShellApplication`'s shellcheck gate rejects an unused `readonly`,
+  # which is exactly the "emit it only where it can fire" rule ../job.nix
+  # applies to its `promptUnusedSuppression`).
+  tapNetworkConfig = lib.optionalString agentNetwork.transportCaps.guestInterface (
+    mkFragment "      " ''
+      # The private bridge + the bridge-only LiteLLM endpoint a guest reaches
+      # (network.nix §16, guest.nix forwarder). The host launcher's endpoint
+      # preflight and `doctor` probe exactly this address, and the per-task
+      # stderr surfacing labels the endpoint in its hint.
+      readonly BRIDGE=${lib.escapeShellArg cfg.bridgeName}
+      readonly GATEWAY=${lib.escapeShellArg cfg.gatewayAddress}
+      # The private subnet the guest slots live in (network.nix). `doctor`
+      # builds the EXACT `iptables -C AGENT_MICROVM_INPUT -s $SUBNET -d
+      # $GATEWAY -p tcp --dport $LITELLM_PORT -j ACCEPT` spec from these SAME
+      # variables network.nix installs the rule with (its `inputAllowLines`),
+      # so the check and the rule it verifies can never drift apart.
+      readonly SUBNET=${lib.escapeShellArg cfg.subnet}''
+  );
+
+  # The endpoint the PREFLIGHT probes: the address a GUEST would reach the model
+  # API at, expressed in host terms. Under `tap` that is the bridge endpoint
+  # (which also proves the bridge and its socket are up); under `vsock` the guest
+  # path ends at the host loopback proxy (through the per-VM forwarder), so the
+  # loopback IS the endpoint to probe. There is no bridge address to try.
+  preflightUrl =
+    if agentNetwork.transportCaps.bridgeLitellm then
+      ''"http://$GATEWAY:$LITELLM_PORT/v1/models"''
+    else
+      ''"http://127.0.0.1:$LITELLM_PORT/v1/models"'';
+
+  # ... and the actionable hint names the components that EXIST on this host.
+  preflightHint = indentFragment "    " (
+    if agentNetwork.transportCaps.bridgeLitellm then
+      ''
+        - systemctl is-active agent-litellm-proxy.socket  (must be active;
+          it needs the bridge device, so it is ordered after
+          $BRIDGE-netdev.service)
+        - systemctl is-active litellm.service  (the loopback backend on
+          127.0.0.1:$LITELLM_PORT)
+        - ip -br addr show $BRIDGE  (the bridge + its $GATEWAY address)
+        - curl -fsS http://127.0.0.1:$LITELLM_PORT/v1/models  (the backend)''
+    else
+      ''
+        - systemctl is-active litellm.service  (the loopback backend on
+          127.0.0.1:$LITELLM_PORT)
+        - systemctl is-active agent-litellm-vsock-<slot>.socket  (the per-VM
+          AF_VSOCK forwarder; the guest has no network interface at all)
+        - curl -fsS http://127.0.0.1:$LITELLM_PORT/v1/models  (the backend)''
+  );
+
+  # `doctor`'s header line: it may only name components this host has.
+  doctorHeader = indentFragment "    " (
+    if agentNetwork.transportCaps.bridgeLitellm then
+      ''
+        printf '%s: host-side diagnosis (transport=%s bridge=%s gateway=%s litellmPort=%s profile=%s)\n' \
+            "$PROG" "$NETWORK_TRANSPORT" "$BRIDGE" "$GATEWAY" "$LITELLM_PORT" \
+            "''${NETWORK_PROFILE:-<unset>}"''
+    else
+      ''
+        printf '%s: host-side diagnosis (transport=%s litellmPort=%s profile=%s)\n' \
+            "$PROG" "$NETWORK_TRANSPORT" "$LITELLM_PORT" "''${NETWORK_PROFILE:-<unset>}"''
+  );
+
+  # `doctor`'s MODEL-TRANSPORT sections (lightweight plan phase 6). The
+  # host-side components of the model path are transport-specific, and a check
+  # for a component the host deliberately does not build would be a permanent,
+  # dishonest FAIL:
+  #
+  #   tap   — the bridge-only forwarder socket, the bridge + gateway address and
+  #           the AGENT_MICROVM_* chains (byte-for-byte the block this fragment
+  #           replaced, so a `tap` host's launcher is unchanged);
+  #   vsock — the per-VM `agent-litellm-vsock-<slot>.socket` listeners, plus an
+  #           explicit statement that no bridge/TAP/firewall is expected.
+  #
+  # NOTE: `indentFragment`, not `mkFragment` — the splice site supplies the
+  # trailing newline (same reason as `doctorHostKeys`).
+  doctorTransport = indentFragment "    " (
+    if agentNetwork.transportCaps.bridgeLitellm then
+      ''
+        section_hdr "bridge-only forwarder socket ($GATEWAY:$LITELLM_PORT)"
+        # The socket must be active AND ordered after the bridge netdev; a
+        # socket that failed at boot (BindToDevice before the bridge exists)
+        # stays failed and has no listener.
+        if systemctl is-active --quiet agent-litellm-proxy.socket 2>/dev/null; then
+            ok "agent-litellm-proxy.socket is active"
+        else
+            fail "agent-litellm-proxy.socket is NOT active (it needs $BRIDGE-netdev.service; try: systemctl restart agent-litellm-proxy.socket)"
+        fi
+        # Match the unit name LITERALLY: `.` is a regex wildcard in grep,
+        # and a bare "$BRIDGE-netdev.service" would also match a (hypothetical)
+        # `agentbr0-netdevXservice`. Escape every `.` — the same hardening the
+        # gateway-address grep below uses — so the match is exact.
+        if systemctl show -p After --value agent-litellm-proxy.socket 2>/dev/null \
+                | grep -qw -- "''${BRIDGE//./\\.}-netdev\\.service"; then
+            ok "socket is ordered after $BRIDGE-netdev.service"
+        else
+            fail "socket is NOT ordered after $BRIDGE-netdev.service (a boot race leaves it with no listener)"
+        fi
+        url="http://$GATEWAY:$LITELLM_PORT/v1/models"
+        if curl -fsS -m "$PREFLIGHT_TIMEOUT" --connect-timeout "$PREFLIGHT_TIMEOUT" \
+                -o /dev/null "$url" 2>/dev/null; then
+            ok "bridge endpoint answers GET $url"
+        else
+            fail "bridge endpoint does NOT answer $url (the guest-forwarded path is broken)"
+        fi
+
+        section_hdr "private bridge + gateway address"
+        if ip -br link show "$BRIDGE" >/dev/null 2>&1; then
+            ok "bridge interface $BRIDGE exists"
+        else
+            fail "bridge interface $BRIDGE does NOT exist"
+        fi
+        if ip -br addr show "$BRIDGE" 2>/dev/null \
+                | grep -qw -- "''${GATEWAY//./\\.}"; then
+            ok "bridge carries the gateway address $GATEWAY"
+        else
+            fail "bridge $BRIDGE does NOT carry the gateway address $GATEWAY"
+        fi
+
+        section_hdr "firewall (AGENT_MICROVM_* chains)"
+        if iptables -L AGENT_MICROVM_INPUT -n >/dev/null 2>&1; then
+            ok "AGENT_MICROVM_INPUT chain is installed"
+        else
+            fail "AGENT_MICROVM_INPUT chain is NOT installed (reload the firewall / switch-to-configuration)"
+        fi
+        # Test the rule instead of parsing `iptables -S`'s printed form.
+        # `iptables -S` CANONICALISES the destination address: a rule added
+        # as `-d 192.168.83.1` is printed back as `-d 192.168.83.1/32`, and a
+        # grep for "-d <addr> <space> ..." therefore never matched — so the
+        # check ALWAYS reported a problem and `doctor` exited non-zero on a
+        # healthy host (breaking `sudo agent-microvm doctor && ...`).
+        # `iptables -C <chain> <spec>` exits 0 iff a rule matching <spec>
+        # exists; it is exactly what network.nix itself uses to guard its own
+        # idempotent `-I` inserts. The spec is built from the SAME
+        # `$SUBNET`/`$GATEWAY`/`$LITELLM_PORT` variables network.nix's
+        # `inputAllowLines` installs the rule with, so the two cannot drift —
+        # and `-C` still returns non-zero when the rule is genuinely absent.
+        if iptables -C AGENT_MICROVM_INPUT \
+                -s "$SUBNET" -d "$GATEWAY" -p tcp --dport "$LITELLM_PORT" -j ACCEPT \
+                2>/dev/null; then
+            ok "INPUT chain ACCEPTs tcp dport $LITELLM_PORT to $GATEWAY from the subnet"
+        else
+            fail "INPUT chain does NOT ACCEPT the LiteLLM endpoint (guest -> $GATEWAY:$LITELLM_PORT)"
+        fi
+        if iptables -L AGENT_MICROVM_FORWARD -n >/dev/null 2>&1; then
+            ok "AGENT_MICROVM_FORWARD chain is installed"
+        else
+            fail "AGENT_MICROVM_FORWARD chain is NOT installed"
+        fi
+      ''
+    else
+      ''
+        section_hdr "per-VM AF_VSOCK model forwarder (the vsock transport)"
+        # THE LITERAL PHASE-6 TRANSPORT: no bridge, no TAP, no firewall chain and no
+        # bridge-only socket exist on this host — the guest has no network interface
+        # at all. What must exist instead is ONE forwarder per slot, listening on the
+        # cloud-hypervisor VSOCK socket in that slot's state directory and forwarding
+        # to the loopback LiteLLM proxy. Reporting the ABSENT bridge/firewall as a
+        # problem here would be the same dishonesty the batch-only host-key section
+        # removed, so those sections are not rendered on this host at all.
+        local vs vs_missing=0 vs_socket
+        for vs in "''${SLOT_NAMES[@]}"; do
+            vs_socket="$STATE_ROOT/$vs/notify.vsock_$LITELLM_PORT"
+            if systemctl is-active --quiet "agent-litellm-vsock-$vs.socket" 2>/dev/null; then
+                ok "agent-litellm-vsock-$vs.socket is active (listening on $vs_socket)"
+            else
+                fail "agent-litellm-vsock-$vs.socket is NOT active (systemctl start agent-litellm-vsock-$vs.socket); slot $vs would have no model endpoint"
+                vs_missing=$((vs_missing + 1))
+            fi
+        done
+        if (( vs_missing == 0 )); then
+            ok "every slot has an AF_VSOCK model forwarder"
+        fi
+        # The guest side is a loopback listener inside the VM, so the only host-side
+        # reachability the host can prove is the loopback LiteLLM check above.
+        ok "no private bridge, TAP device or AGENT_MICROVM_* firewall chain is expected under the \"vsock\" model transport (the guest has no network interface)"
+      ''
+  );
   runCapability = requireCapability "interactive" "run";
   # `ssh` is the control channel: usable over the TAP (`interactive`) OR over
   # VSOCK (`vsock`, lightweight plan phase 6). Refused only when NEITHER is
@@ -617,19 +799,8 @@ let
       readonly WORKSPACE_ROOT=${lib.escapeShellArg cfg.workspaceRoot}
       readonly RUNTIME_ROOT=${lib.escapeShellArg cfg.runtimeRoot}
       readonly STATE_ROOT=${lib.escapeShellArg cfg.stateRoot}
-      # The private bridge + the bridge-only LiteLLM endpoint a guest reaches
-      # (network.nix §16, guest.nix forwarder). The host launcher's endpoint
-      # preflight and `doctor` probe exactly this address, and the per-task
-      # stderr surfacing labels the endpoint in its hint.
-      readonly BRIDGE=${lib.escapeShellArg cfg.bridgeName}
-      readonly GATEWAY=${lib.escapeShellArg cfg.gatewayAddress}
       readonly LITELLM_PORT=${toString cfg.litellmPort}
-      # The private subnet the guest slots live in (network.nix). `doctor`
-      # builds the EXACT `iptables -C AGENT_MICROVM_INPUT -s $SUBNET -d
-      # $GATEWAY -p tcp --dport $LITELLM_PORT -j ACCEPT` spec from these SAME
-      # variables network.nix installs the rule with (its `inputAllowLines`),
-      # so the check and the rule it verifies can never drift apart.
-      readonly SUBNET=${lib.escapeShellArg cfg.subnet}
+      ${tapNetworkConfig}
       # Whether the effective profile grants model-API access at all. Under
       # `offline` there is no endpoint to probe, so the preflight/doctor skip
       # the LiteLLM checks rather than reporting a spurious failure.
@@ -653,7 +824,27 @@ let
       # result-channel scenario before it started. Production callers MUST NOT
       # set this — a skipped preflight is strictly less safe than a real one.
       readonly SKIP_PREFLIGHT="''${AGENT_MICROVM_SKIP_PREFLIGHT:-0}"
-      readonly SSH_ENABLED=${lib.escapeShellArg (if cfg.enableSsh then "1" else "0")}
+      # Whether the TCP sshd on a guest NETWORK interface is a usable control
+      # channel. This is `enableSsh` AND "the guest has an interface at all":
+      # under the `vsock` transport (lightweight plan phase 6) the guest has NO
+      # network interface, so a TCP sshd would listen where nothing can connect —
+      # ../guest.nix therefore masks it, and every path below takes the VSOCK
+      # channel instead. Resolved ONCE in ../default.nix
+      # (`agentNetwork.tapSshUsable`), never re-derived here.
+      readonly SSH_ENABLED=${lib.escapeShellArg (if agentNetwork.tapSshUsable then "1" else "0")}
+      # The ONE resolved MODEL transport (lightweight plan phase 6):
+      #   tap   — the guest has a TAP on the private bridge and reaches LiteLLM at
+      #           <gateway>:<litellmPort>; the host carries the bridge, the
+      #           AGENT_MICROVM_* chains and the bridge-only forwarder socket.
+      #   vsock — the guest has NO network interface; it reaches LiteLLM over
+      #           AF_VSOCK through the per-VM host forwarder
+      #           `agent-litellm-vsock-<slot>.socket`.
+      # Reported by `capabilities` so ../runtime-validation.sh can gate its
+      # network sections on it instead of assuming a TAP exists.
+      readonly NETWORK_TRANSPORT=${lib.escapeShellArg agentNetwork.transport}
+      readonly GUEST_INTERFACE=${
+        lib.escapeShellArg (if agentNetwork.transportCaps.guestInterface then "1" else "0")
+      }
       # The VSOCK control channel (lightweight plan phase 6): 1 iff this host
       # selects the `vsock` capability. `ssh` (and the readiness poll) connect
       # over VSOCK when VSOCK is the ONLY control channel
@@ -1757,6 +1948,15 @@ let
               "missing host-key database $KNOWN_HOSTS; run: systemctl start agent-microvm-hostkeys.service"
       }
 
+      # THE ONE decision of which control channel an ssh invocation uses: the
+      # VSOCK mux socket when there is no reachable TCP sshd (a batch+vsock host,
+      # or ANY host under the `vsock` model transport, where the guest has no
+      # network interface at all), the TAP otherwise. Every ssh call site below
+      # asks this predicate instead of re-deriving the condition.
+      vsock_control_channel() {
+          [[ "$VSOCK_ENABLED" == "1" && "$SSH_ENABLED" != "1" ]]
+      }
+
       guest_ssh_ready() {
           local slot="$1" ip="$2" target
           [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]] || return 1
@@ -1768,7 +1968,7 @@ let
           # $KNOWN_HOSTS, so StrictHostKeyChecking=yes applies to VSOCK too.
           # A host with the TCP sshd (`SSH_ENABLED=1`) always uses the TAP, so
           # its readiness path is unchanged in behaviour.
-          if [[ "$VSOCK_ENABLED" == "1" && "$SSH_ENABLED" != "1" ]]; then
+          if vsock_control_channel; then
               target="vsock-mux/$STATE_ROOT/$slot/notify.vsock"
               ssh -o BatchMode=yes "''${SSH_VERIFY_OPTS[@]}" -o ConnectTimeout=3 \
                   ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
@@ -1993,7 +2193,7 @@ let
       preflight_model_endpoint() {
           [[ "$LITELLM_CAPABLE" == "1" ]] || return 0
           [[ "$SKIP_PREFLIGHT" == "1" ]] && return 0
-          local url="http://$GATEWAY:$LITELLM_PORT/v1/models"
+          local url=${preflightUrl}
           local attempt
           # A COLD LiteLLM (DB init/migration on the first post-boot request)
           # can take a few seconds to answer even though it is healthy. Retry
@@ -2013,13 +2213,7 @@ let
         reachable at $url (bounded to ''${PREFLIGHT_TIMEOUT}s).
         The guest agent would die within seconds of starting. Before booting a
         sandbox, check on THIS host:
-          - systemctl is-active agent-litellm-proxy.socket  (must be active;
-            it needs the bridge device, so it is ordered after
-            $BRIDGE-netdev.service)
-          - systemctl is-active litellm.service  (the loopback backend on
-            127.0.0.1:$LITELLM_PORT)
-          - ip -br addr show $BRIDGE  (the bridge + its $GATEWAY address)
-          - curl -fsS http://127.0.0.1:$LITELLM_PORT/v1/models  (the backend)
+      ${preflightHint}
         or run: sudo $PROG doctor   (full diagnosis)
         (set AGENT_MICROVM_SKIP_PREFLIGHT=1 only in the stubbed test harness.)
       EOF
@@ -2147,7 +2341,12 @@ let
               "$clone" "$agent" "$branch" "" "$persist"
 
           if (( attach )); then
-              [[ "$SSH_ENABLED" == "1" ]] || die "--attach requires enableSsh = true"
+              # An SSH control channel is required — the TAP one (`enableSsh`
+              # plus a guest interface) or the VSOCK one (`vsock`, lightweight
+              # plan phase 6). An interactive guest under the `vsock` model
+              # transport has no network interface, so `--attach` goes over VSOCK.
+              [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]] \
+                  || die "--attach requires an SSH control channel (enableSsh = true, or the \"vsock\" capability)"
               [[ -n "$agent" ]] || die "--attach requires --agent <name>"
               # On readiness failure the EXIT trap runs cleanup_slot: the VM is
               # stopped and the bind unmounted, but the workspace clone is kept.
@@ -2156,9 +2355,16 @@ let
               emit_event vm-ready
               emit_event agent-started
               log "attaching to $slot; running 'agent-run $agent' in /workspace"
-              ssh "''${SSH_VERIFY_OPTS[@]}" \
-                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
-                  -t "$SSH_USER@$ip" -- agent-run "$agent" || true
+              if vsock_control_channel; then
+                  ssh "''${SSH_VERIFY_OPTS[@]}" \
+                      ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                      -t -l "$SSH_USER" "vsock-mux/$STATE_ROOT/$slot/notify.vsock" \
+                      -- agent-run "$agent" || true
+              else
+                  ssh "''${SSH_VERIFY_OPTS[@]}" \
+                      ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                      -t "$SSH_USER@$ip" -- agent-run "$agent" || true
+              fi
               # Foreground session finished: tear the VM down, keep the clone.
               emit_event agent-finished
               log "session ended; tearing down $slot (workspace kept at $clone)"
@@ -2968,7 +3174,8 @@ let
       slot:        $slot
         class:     $(slot_class "$slot") ($(slot_vcpu "$slot") vCPU, $(slot_mem "$slot") MiB)
         service:   $state
-        ip:        $ip
+        ip:        $( [[ "$GUEST_INTERFACE" == "1" ]] && printf '%s' "$ip" \
+                          || printf 'none (%s model transport, loopback-only guest)' "$NETWORK_TRANSPORT" )
         mac:       $mac
         vsock cid: $cid
         task:      ''${task:-<none>}
@@ -3017,6 +3224,11 @@ let
           [[ $# -eq 0 ]] || die "capabilities: takes no arguments"
           printf 'capabilities: %s\n' "$SELECTED_CAPABILITIES"
           printf 'declared: %s\n' "$DECLARED_CAPABILITIES"
+          # The resolved MODEL transport (lightweight plan phase 6). Machine-
+          # readable for the same reason the capability set is: a suite that
+          # asserts "the guest cannot reach the LAN" must know whether the guest
+          # has a network interface at all, or its denials pass VACUOUSLY.
+          printf 'network-transport: %s\n' "$NETWORK_TRANSPORT"
       }
 
       cmd_ssh() {
@@ -3042,7 +3254,7 @@ let
           # The control channel: the TAP (`agent@<ip>`) when the TCP sshd is
           # up, or the VSOCK mux socket (`vsock-mux/<path>`, login user via -l)
           # when VSOCK is the ONLY channel (a batch+vsock host).
-          if [[ "$VSOCK_ENABLED" == "1" && "$SSH_ENABLED" != "1" ]]; then
+          if vsock_control_channel; then
               target="vsock-mux/$STATE_ROOT/$slot/notify.vsock"
               exec ssh "''${SSH_VERIFY_OPTS[@]}" \
                   ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
@@ -3175,8 +3387,7 @@ let
           fail()   { report FAIL "$1"; problems=$((problems + 1)); }
           ok()     { report OK   "$1"; }
 
-          printf '%s: host-side diagnosis (bridge=%s gateway=%s litellmPort=%s profile=%s)\n' \
-              "$PROG" "$BRIDGE" "$GATEWAY" "$LITELLM_PORT" "''${NETWORK_PROFILE:-<unset>}"
+          ${doctorHeader}
           section_hdr() { printf '\n== %s ==\n' "$1"; }
 
           if [[ "$LITELLM_CAPABLE" != "1" ]]; then
@@ -3200,77 +3411,7 @@ let
               fail "loopback LiteLLM does NOT answer $loopback_url (is litellm.service running on port $LITELLM_PORT?)"
           fi
 
-          section_hdr "bridge-only forwarder socket ($GATEWAY:$LITELLM_PORT)"
-          # The socket must be active AND ordered after the bridge netdev; a
-          # socket that failed at boot (BindToDevice before the bridge exists)
-          # stays failed and has no listener.
-          if systemctl is-active --quiet agent-litellm-proxy.socket 2>/dev/null; then
-              ok "agent-litellm-proxy.socket is active"
-          else
-              fail "agent-litellm-proxy.socket is NOT active (it needs $BRIDGE-netdev.service; try: systemctl restart agent-litellm-proxy.socket)"
-          fi
-          # Match the unit name LITERALLY: `.` is a regex wildcard in grep,
-          # and a bare "$BRIDGE-netdev.service" would also match a (hypothetical)
-          # `agentbr0-netdevXservice`. Escape every `.` — the same hardening the
-          # gateway-address grep below uses — so the match is exact.
-          if systemctl show -p After --value agent-litellm-proxy.socket 2>/dev/null \
-                  | grep -qw -- "''${BRIDGE//./\\.}-netdev\\.service"; then
-              ok "socket is ordered after $BRIDGE-netdev.service"
-          else
-              fail "socket is NOT ordered after $BRIDGE-netdev.service (a boot race leaves it with no listener)"
-          fi
-          url="http://$GATEWAY:$LITELLM_PORT/v1/models"
-          if curl -fsS -m "$PREFLIGHT_TIMEOUT" --connect-timeout "$PREFLIGHT_TIMEOUT" \
-                  -o /dev/null "$url" 2>/dev/null; then
-              ok "bridge endpoint answers GET $url"
-          else
-              fail "bridge endpoint does NOT answer $url (the guest-forwarded path is broken)"
-          fi
-
-          section_hdr "private bridge + gateway address"
-          if ip -br link show "$BRIDGE" >/dev/null 2>&1; then
-              ok "bridge interface $BRIDGE exists"
-          else
-              fail "bridge interface $BRIDGE does NOT exist"
-          fi
-          if ip -br addr show "$BRIDGE" 2>/dev/null \
-                  | grep -qw -- "''${GATEWAY//./\\.}"; then
-              ok "bridge carries the gateway address $GATEWAY"
-          else
-              fail "bridge $BRIDGE does NOT carry the gateway address $GATEWAY"
-          fi
-
-          section_hdr "firewall (AGENT_MICROVM_* chains)"
-          if iptables -L AGENT_MICROVM_INPUT -n >/dev/null 2>&1; then
-              ok "AGENT_MICROVM_INPUT chain is installed"
-          else
-              fail "AGENT_MICROVM_INPUT chain is NOT installed (reload the firewall / switch-to-configuration)"
-          fi
-          # Test the rule instead of parsing `iptables -S`'s printed form.
-          # `iptables -S` CANONICALISES the destination address: a rule added
-          # as `-d 192.168.83.1` is printed back as `-d 192.168.83.1/32`, and a
-          # grep for "-d <addr> <space> ..." therefore never matched — so the
-          # check ALWAYS reported a problem and `doctor` exited non-zero on a
-          # healthy host (breaking `sudo agent-microvm doctor && ...`).
-          # `iptables -C <chain> <spec>` exits 0 iff a rule matching <spec>
-          # exists; it is exactly what network.nix itself uses to guard its own
-          # idempotent `-I` inserts. The spec is built from the SAME
-          # `$SUBNET`/`$GATEWAY`/`$LITELLM_PORT` variables network.nix's
-          # `inputAllowLines` installs the rule with, so the two cannot drift —
-          # and `-C` still returns non-zero when the rule is genuinely absent.
-          if iptables -C AGENT_MICROVM_INPUT \
-                  -s "$SUBNET" -d "$GATEWAY" -p tcp --dport "$LITELLM_PORT" -j ACCEPT \
-                  2>/dev/null; then
-              ok "INPUT chain ACCEPTs tcp dport $LITELLM_PORT to $GATEWAY from the subnet"
-          else
-              fail "INPUT chain does NOT ACCEPT the LiteLLM endpoint (guest -> $GATEWAY:$LITELLM_PORT)"
-          fi
-          if iptables -L AGENT_MICROVM_FORWARD -n >/dev/null 2>&1; then
-              ok "AGENT_MICROVM_FORWARD chain is installed"
-          else
-              fail "AGENT_MICROVM_FORWARD chain is NOT installed"
-          fi
-
+          ${doctorTransport}
           section_hdr "per-slot SSH host keys"
           ${doctorHostKeys}
 
