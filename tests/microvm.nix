@@ -434,6 +434,36 @@ let
     sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
   };
 
+  # --- lightweight plan phase 6 (the LITERAL objective): the VSOCK MODEL ----
+  # TRANSPORT variants. `vsock` + the closed `proxy-only` profile REPLACES the
+  # guest network: no TAP, no bridge, no static IP, no guest networkd, no host
+  # firewall chain. `batchVsockHost` above is already exactly that shape (its
+  # profile is the module default `proxy-only`), so these add the two shapes it
+  # does not cover:
+  #   * an INTERACTIVE guest without a network interface — the plan's own
+  #     "definition of done" shape (one command, one slot, no ordinary network
+  #     interface), whose TCP sshd is unreachable and therefore masked;
+  #   * a TWO-SLOT pool, which is what proves the host runs ONE forwarder
+  #     listener per VM rather than a shared one.
+  interactiveVsockHost = capabilityHostWith [ "interactive" "batch" "vsock" ] {
+    enableSsh = lib.mkForce true;
+    sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+  };
+  # `mkOverride 40` outranks `variantHostWith`'s own `mkForce` (50) — two
+  # `mkForce`s would conflict.
+  twoSlotVsockClasses = {
+    lite = {
+      count = 2;
+      vcpu = 2;
+      memoryMiB = 4096;
+    };
+  };
+  twoSlotVsockHost = capabilityHostWith [ "batch" "vsock" ] {
+    sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+    resourceClasses = lib.mkOverride 40 twoSlotVsockClasses;
+  };
+  twoSlotVsockSlots = slotLib.mkSlots twoSlotVsockClasses;
+
   capGuestOf = h: h.config.microvm.vms.${variantSlot.name}.config.config;
   capSessionOf = h: h._module.args.agentSession;
   pkgNamesOf = ps: map (p: p.pname or p.name or "") ps;
@@ -2579,6 +2609,430 @@ in
           echo "  batch-only       runner: $batchRunner"
           echo "  batch+vsock      guest : $batchVsockGuest"
           echo "  batch+vsock      runner: $batchVsockRunner"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # phase 6, the LITERAL objective: the VSOCK MODEL TRANSPORT.               #
+  #   `vsock` + `networkProfile = "proxy-only"` REPLACES the guest network:   #
+  #   the guest has NO interface (loopback only), the model API travels        #
+  #   guest 127.0.0.1:<litellmPort> -> AF_VSOCK -> a PER-VM host forwarder ->  #
+  #   127.0.0.1:<litellmPort>, and the host builds no bridge, no TAP, no       #
+  #   AGENT_MICROVM_* chain and no bridge-only socket. Everything below is     #
+  #   asserted from the EVALUATED config (or from the BUILT artefacts), and    #
+  #   every removal has a POSITIVE control on the `tap` reference host, so no  #
+  #   check can pass because the attribute it inspects does not exist.         #
+  # ---------------------------------------------------------------------- #
+  microvm-vsock-transport =
+    let
+      vsockPort = port; # the guest-visible AND the AF_VSOCK port (one number)
+
+      # The `vsock`-transport hosts under test.
+      bvHost = batchVsockHost;
+      bvGuest = capGuestOf bvHost;
+      bvNet = bvHost._module.args.agentNetwork;
+      ivHost = interactiveVsockHost;
+      ivGuest = capGuestOf ivHost;
+
+      # ... and the `tap` reference (the enabled f13 host), for the positive
+      # controls.
+      tapNet = self.nixosConfigurations.test-f13._module.args.agentNetwork;
+
+      forwarderUnit = slotName: "agent-litellm-vsock-${slotName}";
+      forwarderPath = slotName: "${microvmOpts.stateRoot}/${slotName}/notify.vsock_${vsockPort}";
+      vsockSocketsOf =
+        h:
+        lib.filter (n: lib.hasPrefix "agent-litellm-vsock-" n) (
+          builtins.attrNames h.config.systemd.sockets
+        );
+
+      bvSocket = bvHost.config.systemd.sockets.${forwarderUnit variantSlot.name};
+      bvService = bvHost.config.systemd.services.${forwarderUnit variantSlot.name};
+
+      # The guest-side bridge: ONE socket (the historical loopback endpoint) and
+      # a per-connection socat instance to AF_VSOCK CID 2.
+      bvGuestSocket = bvGuest.systemd.sockets.litellm-forwarder.socketConfig;
+      bvGuestBridgeExec = toString bvGuest.systemd.services."litellm-forwarder@".serviceConfig.ExecStart;
+
+      evalMarker = mkEvalCheck "microvm-vsock-transport-eval" [
+        # --- the transport is RESOLVED, once, from profile + capability -----
+        {
+          assertion = bvNet.transport == "vsock" && bvNet.transportCaps.vsockLitellm;
+          message = "a `vsock` + proxy-only host must resolve the `vsock` model transport, got ${bvNet.transport}";
+        }
+        {
+          assertion = tapNet.transport == "tap" && tapNet.transportCaps.guestInterface;
+          message = "positive control: the reference host (no `vsock` capability) must keep the `tap` transport, got ${tapNet.transport}";
+        }
+        {
+          # The narrow condition: `vsock` alone is NOT enough, the profile must
+          # be the closed `proxy-only` one. `offline` has no model API to carry.
+          assertion =
+            (capabilityHostWith [ "batch" "vsock" ] {
+              sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+              networkProfile = lib.mkForce "offline";
+            })._module.args.agentNetwork.transport == "tap";
+          message = "the `vsock` model transport must be scoped to `proxy-only` (an `offline` host has no model API to carry over it)";
+        }
+
+        # --- THE GUEST HAS NO NETWORK INTERFACE ----------------------------
+        {
+          assertion = bvGuest.microvm.interfaces == [ ];
+          message = "a vsock+proxy-only guest must declare NO microvm.interfaces, got ${
+            toString (map (i: i.id) bvGuest.microvm.interfaces)
+          }";
+        }
+        {
+          assertion = ivGuest.microvm.interfaces == [ ];
+          message = "an INTERACTIVE vsock+proxy-only guest must declare NO microvm.interfaces either (the plan's definition-of-done shape)";
+        }
+        {
+          assertion =
+            lib.length guest0Cfg.microvm.interfaces == 1
+            && (lib.head guest0Cfg.microvm.interfaces).type == "tap";
+          message = "positive control: the reference (tap) guest must still declare exactly one TAP interface";
+        }
+        {
+          assertion = !bvGuest.systemd.network.enable && !bvGuest.networking.useNetworkd;
+          message = "a vsock+proxy-only guest must run NO systemd-networkd (microvm.nix defaults it on, so it has to be turned off explicitly)";
+        }
+        {
+          assertion = bvGuest.systemd.network.networks == { };
+          message = "a vsock+proxy-only guest must declare no networkd .network unit (no static IP, no default route), got ${toString (builtins.attrNames bvGuest.systemd.network.networks)}";
+        }
+        {
+          assertion = !bvGuest.networking.dhcpcd.enable && !bvGuest.networking.useDHCP;
+          message = "a vsock+proxy-only guest must run no dhcpcd either (turning networkd off must not fall back to the scripted DHCP client)";
+        }
+        {
+          assertion =
+            bvGuest.networking.nameservers == [ ] && bvGuest.networking.firewall.allowedTCPPorts == [ ];
+          message = "a vsock+proxy-only guest must have no resolver and no open TCP port";
+        }
+        {
+          assertion =
+            guest0Cfg.systemd.network.enable
+            && guest0Cfg.systemd.network.networks ? "10-agent"
+            && (lib.head guest0Cfg.systemd.network.networks."10-agent".address) == "${refSlot.ip}/24";
+          message = "positive control: the reference (tap) guest must still get its static IPv4 through networkd";
+        }
+        {
+          # The VSOCK device IS there (it is the model path AND the control
+          # channel), keyed to the slot's deterministic CID.
+          assertion =
+            bvGuest.microvm.vsock.cid == variantSlot.cid && ivGuest.microvm.vsock.cid == variantSlot.cid;
+          message = "a vsock guest must keep its deterministic VSOCK CID (${toString variantSlot.cid})";
+        }
+
+        # --- THE GUEST ENDPOINT IS UNCHANGED (no agent reconfiguration) -----
+        {
+          assertion =
+            bvGuest.environment.variables.OPENAI_BASE_URL == "http://127.0.0.1:${vsockPort}/v1"
+            && bvGuest.environment.variables.ANTHROPIC_BASE_URL == "http://127.0.0.1:${vsockPort}"
+            && bvGuest.environment.variables.OPENAI_BASE_URL == guest0Cfg.environment.variables.OPENAI_BASE_URL;
+          message = "a vsock guest's model endpoint must stay the loopback address the host-provisioned agent configuration already uses, so nothing has to be reconfigured";
+        }
+        {
+          assertion = bvGuestSocket.ListenStream == "127.0.0.1:${vsockPort}" && bvGuestSocket.Accept;
+          message = "the guest bridge must listen on the historical loopback endpoint and accept per connection, got ${toString bvGuestSocket.ListenStream}";
+        }
+        {
+          # DESTINATION-FIXED in the unit: CID 2 (the host) and the model port,
+          # baked in by Nix. The guest cannot ask for another CID or port, and
+          # there is no CONNECT protocol to abuse.
+          assertion = lib.hasInfix "VSOCK-CONNECT:2:${vsockPort}" bvGuestBridgeExec;
+          message = "the guest bridge must dial AF_VSOCK CID 2 port ${vsockPort} with a FIXED destination, got ${bvGuestBridgeExec}";
+        }
+        {
+          # ... and the TAP forwarder is GONE (it would forward to a gateway
+          # address that no longer exists).
+          assertion = !(bvGuest.systemd.services ? "litellm-forwarder");
+          message = "a vsock guest must not carry the TAP loopback->bridge forwarder service";
+        }
+        {
+          assertion =
+            guest0Cfg.systemd.services ? "litellm-forwarder"
+            && !(guest0Cfg.systemd.services ? "litellm-forwarder@")
+            && !(guest0Cfg.systemd.sockets.litellm-forwarder.socketConfig.Accept);
+          message = "positive control: the reference (tap) guest must keep exactly the socket-proxyd forwarder to the bridge gateway";
+        }
+
+        # --- THE HOST HAS NO BRIDGE, NO TAP AND NO FIREWALL CHAIN ----------
+        {
+          assertion = bvHost.config.networking.bridges == { };
+          message = "a vsock+proxy-only host must create NO bridge, got ${toString (builtins.attrNames bvHost.config.networking.bridges)}";
+        }
+        {
+          assertion = !(bvHost.config.networking.interfaces ? ${microvmOpts.bridgeName});
+          message = "a vsock+proxy-only host must not address the agent bridge";
+        }
+        {
+          assertion = !(lib.hasInfix "AGENT_MICROVM_INPUT" bvHost.config.networking.firewall.extraCommands);
+          message = "a vsock+proxy-only host must install NO AGENT_MICROVM_* firewall chain (there is no interface to filter)";
+        }
+        {
+          assertion = !(lib.hasInfix "AGENT_MICROVM" bvHost.config.networking.firewall.extraStopCommands);
+          message = "a vsock+proxy-only host must have no AGENT_MICROVM_* teardown either";
+        }
+        {
+          assertion = lib.hasInfix "AGENT_MICROVM_INPUT -s ${microvmOpts.subnet} -d ${gateway} -p tcp --dport ${port} -j ACCEPT" enabledCfg.networking.firewall.extraCommands;
+          message = "positive control: the reference (tap) host must still ACCEPT the bridge LiteLLM endpoint in its own chain";
+        }
+        {
+          assertion =
+            !(bvHost.config.systemd.sockets ? "agent-litellm-proxy")
+            && !(bvHost.config.systemd.services ? "agent-litellm-proxy");
+          message = "a vsock+proxy-only host must not create the bridge-only LiteLLM socket/service";
+        }
+        {
+          assertion =
+            !(lib.any (n: lib.hasPrefix "agent-microvm-attach-" n) (
+              builtins.attrNames bvHost.config.systemd.services
+            ));
+          message = "a vsock+proxy-only host must not create a TAP attach/L2-isolate unit (there is no TAP)";
+        }
+        {
+          assertion =
+            !(lib.any (
+              u: lib.hasInfix microvmOpts.bridgeName u
+            ) bvHost.config.networking.networkmanager.unmanaged);
+          message = "a vsock+proxy-only host must not declare bridge/TAP interfaces unmanaged in NetworkManager (they do not exist)";
+        }
+        {
+          assertion =
+            enabledCfg.systemd.sockets ? "agent-litellm-proxy"
+            && lib.any (n: lib.hasPrefix "agent-microvm-attach-" n) (
+              builtins.attrNames enabledCfg.systemd.services
+            )
+            && lib.any (
+              u: lib.hasInfix microvmOpts.bridgeName u
+            ) enabledCfg.networking.networkmanager.unmanaged;
+          message = "positive control: the reference (tap) host must keep the bridge socket, the TAP attach units and the NetworkManager exclusions";
+        }
+
+        # --- ONE HOST FORWARDER PER VM, DESTINATION-FIXED ------------------
+        {
+          assertion = vsockSocketsOf bvHost == [ (forwarderUnit variantSlot.name) ];
+          message = "a vsock+proxy-only host must declare exactly one AF_VSOCK forwarder socket per slot, got ${toString (vsockSocketsOf bvHost)}";
+        }
+        {
+          assertion = bvSocket.socketConfig.ListenStream == forwarderPath variantSlot.name;
+          message = "the per-VM forwarder must listen on cloud-hypervisor's per-VM VSOCK socket ${forwarderPath variantSlot.name}, got ${toString bvSocket.socketConfig.ListenStream}";
+        }
+        {
+          # Reachable by the VMM (`microvm:kvm`) and root only \u2014 never by an
+          # unprivileged host user, and never over the network.
+          assertion =
+            bvSocket.socketConfig.SocketUser == "root"
+            && bvSocket.socketConfig.SocketGroup == "kvm"
+            && bvSocket.socketConfig.SocketMode == "0660";
+          message = "the per-VM forwarder socket must be root:kvm 0660 (the VMM's group), not world-accessible";
+        }
+        {
+          assertion =
+            toString bvService.serviceConfig.ExecStart
+            == "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd 127.0.0.1:${port}";
+          message = "the per-VM forwarder must be DESTINATION-FIXED to the loopback LiteLLM proxy, got ${toString bvService.serviceConfig.ExecStart}";
+        }
+        {
+          # HOST-TCP-ONLY, enforced on the forwarder process itself.
+          assertion =
+            bvService.serviceConfig.IPAddressAllow == "localhost"
+            && bvService.serviceConfig.IPAddressDeny == "any"
+            && bvService.serviceConfig.DynamicUser
+            && bvService.serviceConfig.ProtectSystem == "strict";
+          message = "the per-VM forwarder must be confined to the host loopback (IPAddressAllow=localhost + IPAddressDeny=any) and unprivileged";
+        }
+        {
+          # ONE LISTENER PER SLOT, on DISTINCT paths: slot A's guest cannot
+          # address slot B's forwarder at all.
+          assertion =
+            let
+              names = map (s: forwarderUnit s.name) twoSlotVsockSlots;
+              paths = map (
+                s: twoSlotVsockHost.config.systemd.sockets.${forwarderUnit s.name}.socketConfig.ListenStream
+              ) twoSlotVsockSlots;
+            in
+            lib.length twoSlotVsockSlots == 2
+            && lib.sort (a: b: a < b) (vsockSocketsOf twoSlotVsockHost) == lib.sort (a: b: a < b) names
+            && lib.length (lib.unique paths) == 2;
+          message = "a two-slot vsock host must declare one forwarder per slot, each on its OWN socket path";
+        }
+        {
+          assertion = vsockSocketsOf self.nixosConfigurations.test-f13 == [ ];
+          message = "positive control: the reference (tap) host must declare no AF_VSOCK forwarder at all";
+        }
+
+        # --- THE CONTROL CHANNEL FOLLOWS THE TRANSPORT ---------------------
+        {
+          # An interactive guest under the vsock transport has `enableSsh = true`
+          # but NO interface, so the TCP sshd could never be reached: it is
+          # masked and the VSOCK `sshd-vsock@` is the ONE control channel.
+          assertion =
+            ivHost.config.myconfig.ai.microvm.enableSsh
+            && !ivHost._module.args.agentNetwork.tapSshUsable
+            && !(ivGuest.systemd.services.sshd.enable or true)
+            && ivGuest.systemd.sockets ? "sshd-vsock"
+            && !(ivGuest.services.openssh.openFirewall or true);
+          message = "an interactive vsock+proxy-only guest must mask its unreachable TCP sshd, keep the VSOCK sshd and close the firewall for 22";
+        }
+        {
+          assertion =
+            ivGuest.services.openssh.hostKeys == [
+              {
+                type = "ed25519";
+                path = (capSessionOf ivHost).guestHostkeysDir + "/ssh_host_ed25519_key";
+              }
+            ]
+            &&
+              (ivGuest.systemd.sockets.sshd-vsock.unitConfig.RequiresMountsFor or null) == (capSessionOf ivHost)
+              .guestHostkeysDir;
+          message = "an interactive vsock guest's VSOCK sshd must use the per-slot host key and wait for its read-only mount";
+        }
+        {
+          # ... and the interactive half is otherwise intact.
+          assertion = lib.elem "agent-run" (capGuestPkgNames ivHost);
+          message = "an interactive vsock guest must still carry the `agent-run` entry point";
+        }
+        {
+          assertion =
+            enabledCfg.myconfig.ai.microvm.enableSsh
+            && tapNet.tapSshUsable
+            && (guest0Cfg.systemd.services.sshd.enable or true)
+            && guest0Cfg.services.openssh.openFirewall;
+          message = "positive control: the reference (tap) guest must keep its TCP sshd and its firewall opening";
+        }
+
+        # --- NEGATIVE eval tests, pinned to the SPECIFIC assertion ---------
+        {
+          assertion = baselineClean;
+          message = "positive control: the unmodified reference host must have no failed assertion";
+        }
+        {
+          # microvm.nix reserves AF_VSOCK port 8888 (`notify.vsock_8888`) for the
+          # guest's systemd notify socket, so the model forwarder must not claim
+          # it \u2014 the two would fight over the same Unix socket path.
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.litellmPort = lib.mkForce 8888;
+              services.litellm.port = lib.mkForce 8888;
+            }
+          ] "must not be 8888";
+          message = "the VSOCK model transport must reject litellmPort = 8888 (microvm.nix's reserved notify port)";
+        }
+        {
+          # The same litellm-backend guard as on a TAP host, pinned in the vsock
+          # SHAPE: the per-VM forwarder's only destination is the loopback proxy,
+          # so a host without it builds a model path that ends nowhere.
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              services.litellm.enable = lib.mkForce false;
+            }
+          ] "lets guests reach the model API";
+          message = "a vsock host without the loopback LiteLLM backend must be rejected (the per-VM forwarder would forward into nothing)";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-vsock-transport"
+      {
+        inherit evalMarker;
+        # BUILT: the INTERACTIVE vsock guest is a shape no other check builds
+        # (masked TCP sshd + zero interfaces + the socat bridge unit), and the
+        # runner is where "no TAP" becomes observable as a missing script.
+        interactiveVsockGuest = ivGuest.system.build.toplevel;
+        interactiveVsockRunner = ivGuest.microvm.declaredRunner;
+        batchVsockGuest = bvGuest.system.build.toplevel;
+        vsockLauncher = "${findPkg ivHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        tapLauncher = "${launcherPkg}/bin/agent-microvm";
+        # The GENERATED host-key provisioner, taken from the unit that runs it
+        # (it is not a systemPackages entry), so this greps exactly the script
+        # the host would execute.
+        vsockHostKeys = toString ivHost.config.systemd.services.agent-microvm-hostkeys.serviceConfig.ExecStart;
+        tapHostKeys = toString enabledCfg.systemd.services.agent-microvm-hostkeys.serviceConfig.ExecStart;
+        slotIp = variantSlot.ip;
+        refIp = refSlot.ip;
+      }
+      ''
+        # --- the RUNNER of a vsock guest has no TAP plumbing ---------------
+        # microvm.nix generates `bin/tap-up` / `bin/tap-down` only for a guest
+        # that declares a `type = "tap"` interface, so their ABSENCE is the
+        # runner-level proof that no TAP device is ever created for this slot.
+        for f in tap-up tap-down; do
+          if [ -e "$interactiveVsockRunner/bin/$f" ]; then
+            echo "the vsock guest's runner still ships bin/$f (a TAP device would be created)" >&2; exit 1
+          fi
+        done
+        grep -q -- '--vsock' "$interactiveVsockRunner/bin/microvm-run" \
+          || { echo "the vsock guest's runner does not pass --vsock to cloud-hypervisor" >&2; exit 1; }
+
+        # --- the LAUNCHER follows the transport ----------------------------
+        grep -qF -- "readonly NETWORK_TRANSPORT=vsock" "$vsockLauncher" \
+          || { echo "the vsock launcher does not render NETWORK_TRANSPORT=vsock" >&2; exit 1; }
+        grep -qF -- "readonly GUEST_INTERFACE=0" "$vsockLauncher" \
+          || { echo "the vsock launcher does not record that the guest has no interface" >&2; exit 1; }
+        # `enableSsh = true` on that host, but there is no interface to reach the
+        # TCP sshd on, so the launcher must take the VSOCK control channel.
+        grep -qF -- "readonly SSH_ENABLED=0" "$vsockLauncher" \
+          || { echo "the vsock launcher still claims a usable TCP ssh channel" >&2; exit 1; }
+        grep -qF -- "readonly VSOCK_ENABLED=1" "$vsockLauncher" \
+          || { echo "the vsock launcher does not render VSOCK_ENABLED=1" >&2; exit 1; }
+        grep -qF -- 'network-transport: %s' "$vsockLauncher" \
+          || { echo "the launcher does not report the transport machine-readably" >&2; exit 1; }
+        # `doctor` checks the components that EXIST and says so about the ones
+        # that deliberately do not.
+        grep -qF -- 'agent-litellm-vsock-$vs.socket is active' "$vsockLauncher" \
+          || { echo "the vsock launcher's doctor does not check the per-VM forwarders" >&2; exit 1; }
+        for needle in 'AGENT_MICROVM_INPUT chain is installed' 'bridge interface $BRIDGE exists' \
+                      'agent-litellm-proxy.socket is active'; do
+          if grep -qF -- "$needle" "$vsockLauncher"; then
+            echo "the vsock launcher's doctor still checks '$needle', which this host does not build" >&2; exit 1
+          fi
+        done
+        # POSITIVE control: the tap launcher keeps exactly those three checks and
+        # has no per-VM forwarder section.
+        grep -qF -- "readonly NETWORK_TRANSPORT=tap" "$tapLauncher" \
+          || { echo "the tap launcher does not render NETWORK_TRANSPORT=tap" >&2; exit 1; }
+        grep -qF -- "readonly SSH_ENABLED=1" "$tapLauncher" \
+          || { echo "the tap launcher lost its TCP ssh channel" >&2; exit 1; }
+        for needle in 'AGENT_MICROVM_INPUT chain is installed' 'bridge interface $BRIDGE exists' \
+                      'agent-litellm-proxy.socket is active'; do
+          grep -qF -- "$needle" "$tapLauncher" \
+            || { echo "the tap launcher's doctor lost '$needle'" >&2; exit 1; }
+        done
+        # (the `NETWORK_TRANSPORT` comment block MENTIONS the vsock unit name on
+        # every host, so this must pin the doctor CHECK, not the mere name.)
+        if grep -qF -- 'agent-litellm-vsock-$vs.socket is active' "$tapLauncher"; then
+          echo "the tap launcher's doctor checks a per-VM VSOCK forwarder it does not have" >&2; exit 1
+        fi
+
+        # --- known_hosts follows the transport ----------------------------
+        # A vsock guest has no IPv4 to pin a key under; the vsock-mux address is
+        # the WHOLE database there. Keying it to an address nothing listens on
+        # would be misleading dead data.
+        grep -qF -- 'vsock-mux/' "$vsockHostKeys" \
+          || { echo "the vsock host-key generator writes no vsock-mux known_hosts entry" >&2; exit 1; }
+        if grep -qF -- "$slotIp" "$vsockHostKeys"; then
+          echo "the vsock host-key generator still pins the key to a guest IPv4 that does not exist" >&2; exit 1
+        fi
+        grep -qF -- "$refIp" "$tapHostKeys" \
+          || { echo "positive control: the tap host-key generator must pin the key to the slot IPv4" >&2; exit 1; }
+
+        {
+          echo "microvm-vsock-transport:"
+          echo "  interactive vsock guest : $interactiveVsockGuest"
+          echo "  interactive vsock runner: $interactiveVsockRunner"
+          echo "  batch+vsock guest       : $batchVsockGuest"
           cat "$evalMarker"
         } > "$out"
       '';
