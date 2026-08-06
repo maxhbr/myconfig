@@ -186,11 +186,25 @@ crossed with that shape. The default is **both** `interactive` and `batch`, i.e.
 the historical behaviour; `vsock` is OFF by default, so a default host's guest
 closure is byte-for-byte unchanged.
 
-| Capability | What it adds |
-| --- | --- |
-| `interactive` | the SSH server (`enableSsh`) and the per-slot SSH host identity with its read-only `hostkeys/` subdirectory, the `known_hosts` database and its provisioning unit, the guest `agent-run` entry point, the Workmux `microvm-<agent>` panes, and the launcher's `run` / `ssh` subcommands |
-| `batch` | the TRUSTED guest job controller, the UNTRUSTED `agent-job-worker@` template, the guest job-protocol programs, the `input/`, `controller/`, `worker/` and `worker-logs/` subdirectories of the session tree (with their host tmpfiles rules), the host-side result archive `<runtimeRoot>/results`, and the launcher's `submit` / `cancel` subcommands |
-| `vsock` | **AF_VSOCK** as the guest's channel to the host (plan phase 6), in two layers. (1) A VSOCK CONTROL channel, always: the guest gets a VSOCK device (`microvm.vsock.cid` = the slot's deterministic CID) and a VSOCK-only `sshd-vsock@` unit (SSH over AF_VSOCK, reused from upstream), reachable ONLY from the host (CID 2) and NOT from any TCP interface, host-key-verified through the per-slot identity (`hostkeys/`) and a `known_hosts` entry keyed by the VSOCK mux path — which is what lets a batch-only host, with no TCP sshd, still be driven by `agent-microvm ssh` and the runtime-validation suite. (2) Together with `networkProfile = "proxy-only"` it ALSO becomes the MODEL transport, and then the guest has **no network interface at all**: no TAP, no address, no route, no networkd, and the host builds no bridge, no firewall chain and no bridge socket — only ONE destination-fixed AF_VSOCK forwarder per VM. See [VSOCK versus TAP transport](#vsock-versus-tap-transport). Only allowed with `networkProfile = "proxy-only"`/`"offline"`, and requires an `sshPublicKeyFile` (the VSOCK sshd authorises the same dedicated key). |
+The set mixes **two kinds** of token, and the difference is load-bearing:
+
+* `interactive` and `batch` are **workload** capabilities — they say WHAT the
+  guest can be asked to do (be entered by an operator / be given a job).
+  **At least one of them must be selected.**
+* `vsock` is a **transport** capability — it says HOW the host reaches the guest
+  (and, on a `proxy-only` host, how the model API reaches it). It carries no
+  workload of its own, so it can **never be selected alone**:
+  `capabilities = [ "vsock" ]` is rejected at evaluation time. Accepting it
+  would produce a guest that has a VSOCK SSH channel handing out shells while
+  declaring neither execution capability — an undocumented third execution
+  mode. The module fails CLOSED here rather than inferring `interactive` from
+  the transport.
+
+| Capability | Kind | What it adds |
+| --- | --- | --- |
+| `interactive` | workload | the SSH server (`enableSsh`) and the per-slot SSH host identity with its read-only `hostkeys/` subdirectory, the `known_hosts` database and its provisioning unit, the guest `agent-run` entry point, the Workmux `microvm-<agent>` panes, and the launcher's `run` / `ssh` subcommands |
+| `batch` | workload | the TRUSTED guest job controller, the UNTRUSTED `agent-job-worker@` template, the guest job-protocol programs, the `input/`, `controller/`, `worker/` and `worker-logs/` subdirectories of the session tree (with their host tmpfiles rules), the host-side result archive `<runtimeRoot>/results`, and the launcher's `submit` / `cancel` subcommands |
+| `vsock` | transport | **AF_VSOCK** as the guest's channel to the host (plan phase 6), in two layers. (1) A VSOCK CONTROL channel, always: the guest gets a VSOCK device (`microvm.vsock.cid` = the slot's deterministic CID) and a VSOCK-only `sshd-vsock@` unit (SSH over AF_VSOCK, reused from upstream), reachable ONLY from the host (CID 2) and NOT from any TCP interface, host-key-verified through the per-slot identity (`hostkeys/`) and a `known_hosts` entry keyed by the VSOCK mux path — which is what lets a batch-only host, with no TCP sshd, still be driven by `agent-microvm ssh` and the runtime-validation suite. (2) Together with `networkProfile = "proxy-only"` it ALSO becomes the MODEL transport, and then the guest has **no network interface at all**: no TAP, no address, no route, no networkd, and the host builds no bridge, no firewall chain and no bridge socket — only ONE destination-fixed AF_VSOCK forwarder per VM. See [VSOCK versus TAP transport](#vsock-versus-tap-transport). Only allowed with `networkProfile = "proxy-only"`/`"offline"`, and requires an `sshPublicKeyFile` (the VSOCK sshd authorises the same dedicated key). |
 
 A deselected capability is **absent**, not merely unused: the units are not in
 the guest, the programs are not in its closure, and the directories are never
@@ -235,9 +249,36 @@ host identity, the `known_hosts` database and the launcher's `ssh` /
 `run --attach` paths would then all disappear behind an option that still read
 `true`.
 
-Rejected at evaluation time: an empty capability set, an unknown token,
+Rejected at evaluation time: an empty capability set, a set with no WORKLOAD
+capability (the transport-only `[ "vsock" ]`), an unknown token,
 `enableSsh = true` without `interactive`, `vsock` without an `sshPublicKeyFile`,
 and `vsock` paired with an insecure network profile (`package-access`/`internet`).
+
+```console
+$ nixos-rebuild build   # with myconfig.ai.microvm.capabilities = [ "vsock" ]
+error: Failed assertions:
+- myconfig.ai.microvm.capabilities selects no WORKLOAD capability
+  (currently: vsock).
+  "interactive" and "batch" are the workload capabilities — what the
+  guest can be asked to do; "vsock" is only a TRANSPORT (how the host
+  reaches the guest) and cannot be selected alone. Add "interactive",
+  "batch", or both.
+```
+
+The accepted matrix is therefore exactly:
+
+| selection | accepted |
+| --- | --- |
+| `[ ]` | no — no capability at all |
+| `[ "vsock" ]` | **no — transport only** |
+| `[ "interactive" ]` | yes |
+| `[ "batch" ]` | yes |
+| `[ "interactive" "batch" ]` | yes (the default) |
+| `[ "interactive" "vsock" ]` | yes |
+| `[ "batch" "vsock" ]` | yes |
+| `[ "interactive" "batch" "vsock" ]` | yes |
+
+Every cell is exercised by `checks.microvm-capabilities`.
 
 The launcher of a narrowed host **refuses** the other capability's subcommands
 up front, naming the option to change:

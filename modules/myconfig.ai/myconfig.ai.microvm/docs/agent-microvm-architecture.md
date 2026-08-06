@@ -206,7 +206,15 @@ phase 6) is a THIRD token, default OFF: it adds a VSOCK control channel (the
 `sshd-vsock@` unit) so a batch-only host can still be driven over VSOCK, and —
 together with `networkProfile = "proxy-only"` — makes AF_VSOCK the MODEL
 transport as well, which removes the guest's network interface entirely (see
-[Network path](#network-path)). It is resolved once in
+[Network path](#network-path)).
+
+`interactive` and `batch` are WORKLOAD capabilities (what the guest can be asked
+to do); `vsock` is a TRANSPORT capability (how the host reaches it). At least one
+WORKLOAD capability must be selected — `capabilities = [ "vsock" ]` is rejected
+at evaluation time, because a guest with a VSOCK SSH channel but no declared
+execution capability would be an undocumented third execution mode.
+
+It is resolved once in
 `default.nix` and handed to the sibling modules as `_module.args
 .agentCapabilities`; each module then makes the decision in the ONE place that
 already owns the concern:
