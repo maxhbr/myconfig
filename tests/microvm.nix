@@ -4546,6 +4546,9 @@ in
           pkgs.jq
           pkgs.git
           pkgs.coreutils
+          # The TAMPER scenarios (a corrupt / swapped private key) both PRODUCE
+          # key material and JUDGE it with `ssh-keygen -y`, outside the sandbox.
+          pkgs.openssh
         ];
         harness = ./microvm-batch-launcher-submit.sh;
         LAUNCHER = "${hostLauncher}/bin/agent-microvm";
@@ -5107,6 +5110,18 @@ in
           || { echo "the validator does not look the slot up with ssh-keygen -F (ssh's own matcher)" >&2; exit 1; }
         grep -qF -- '[[ "$recorded" == "$expected" ]] || return 1' "$launcherBin" \
           || { echo "the validator does not compare the known_hosts entry against the public key" >&2; exit 1; }
+        # The chain must be ANCHORED: the .pub is verified against the PRIVATE
+        # key, not merely against known_hosts. Otherwise a swapped private key
+        # with a self-consistent .pub + known_hosts passes everything above.
+        grep -qF -- '[[ "$derived" == "$expected" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not check that the public key is derived from the private key" >&2; exit 1; }
+        # The private key must be LOADABLE, and judged only AFTER its mode was
+        # checked (an over-permissive key makes ssh-keygen refuse, which would
+        # otherwise be misreported as corruption).
+        keyModeLine="$(grep -n -- 'root:root 400' "$launcherBin" | head -n1 | cut -d: -f1)"
+        derivedLine="$(grep -nF -- 'derived="$(ssh-keygen -y' "$launcherBin" | head -n1 | cut -d: -f1)"
+        [ -n "$keyModeLine" ] && [ -n "$derivedLine" ] && [ "$keyModeLine" -lt "$derivedLine" ] \
+          || { echo "the validator loads the private key before validating its mode" >&2; exit 1; }
         # A CONFLICT (two entries for the same alias) must be rejected, not
         # silently accepted: ssh would refuse such a known_hosts anyway.
         grep -qF -- '| wc -l)" -eq 1 ]] || return 1' "$launcherBin" \
@@ -5116,10 +5131,19 @@ in
         # connection consults.
         grep -qF -- 'vsock-mux/$STATE_ROOT/$1/notify.vsock' "$launcherBin" \
           || { echo "the alias helper does not use the VSOCK mux path for the VSOCK transport" >&2; exit 1; }
-        # NO private-key material may ever be read into a variable or logged:
-        # the private key is only ever inspected through `[[ -s ]]` and `stat`.
-        if grep -nE 'cat .*\$key"|ssh-keygen -y|\$\(< *"\$key"' "$launcherBin" | grep -v '^[0-9]*: *#'; then
+        # NO private-key material may ever be read into a variable or logged.
+        # `ssh-keygen -y` is NOT such a read: its output is the PUBLIC half.
+        if grep -nE 'cat .*\$key"|\$\(< *"\$key"' "$launcherBin" | grep -v '^[0-9]*: *#'; then
           echo "the launcher reads private-key material" >&2; exit 1
+        fi
+        # ...but every `ssh-keygen -y` must be THE ONE SAFE FORM: non-interactive
+        # (-P "" cannot block on a passphrase prompt), stderr discarded (a load
+        # error cannot echo file content), normalised to `<type> <body>`, and
+        # captured in a variable rather than printed.
+        yUses="$(grep -n -- 'ssh-keygen -y' "$launcherBin" | grep -cv '^[0-9]*: *#' || true)"
+        ySafe="$(grep -cF -- 'derived="$(ssh-keygen -y -P "" -f "$key" 2>/dev/null | cut -d" " -f1,2)"' "$launcherBin" || true)"
+        if [ "$yUses" != "1" ] || [ "$ySafe" != "1" ]; then
+          echo "the launcher has $yUses ssh-keygen -y use(s), $ySafe of them in the safe pinned form" >&2; exit 1
         fi
         # A launch whose identity is incomplete must FAIL CLOSED.
         grep -qF -- 'refusing to launch an unverifiable guest' "$launcherBin" \
@@ -5337,7 +5361,7 @@ in
           || { echo "the default launcher does not render VSOCK_ENABLED=0 (its trigger must be the SSH_ENABLED half)" >&2; exit 1; }
         # A host with NEITHER SSH-based transport provisions no key material, so
         # the whole block is ABSENT rather than dead code.
-        for f in ensure_host_identity host_identity_complete HOSTKEY_NAME; do
+        for f in ensure_host_identity host_identity_complete HOSTKEY_NAME 'derived="$(ssh-keygen -y'; do
           if grep -qF -- "$f" "$bLauncher"; then
             echo "the batch-only (no vsock) launcher carries $f, which can never fire there" >&2; exit 1
           fi

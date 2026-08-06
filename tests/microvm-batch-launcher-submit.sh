@@ -87,6 +87,13 @@ git -C "$REPO" add -A
 git -C "$REPO" -c user.email=t@example.invalid -c user.name=t commit -qm init
 
 # --- the stubs --------------------------------------------------------------
+# The TAMPER scenarios below have to produce, and detect, real key material.
+SSH_KEYGEN_BIN="$(command -v ssh-keygen || true)"
+[[ -n $SSH_KEYGEN_BIN && -x $SSH_KEYGEN_BIN ]] || skip_all "ssh-keygen not found (needed to tamper with a provisioned identity)"
+# The read-only per-slot hostkey share the provisioner writes, as the launcher
+# lays it out (mirrors the `identity_key` path used by scenario 14).
+RO_HOSTKEYS_GLOB="$RUNTIME_ROOT/${JOBS_ROOT##*/}-ro/*/hostkeys/ssh_host_ed25519_key"
+
 # `systemctl` doubles as the fake guest: on `start microvm@<slot>` it records the
 # job share's effective ownership/modes and plants the scenario's "result".
 cat >"$STUBS/systemctl" <<EOF
@@ -273,6 +280,29 @@ case "\$1" in
                         exit 0
                     fi
                     "$PROVISION_HOSTKEYS" || exit 1
+                    # TAMPER MODES: the unit succeeds AND provisions a real,
+                    # self-consistent identity — then one thing is broken that
+                    # every PRE-EXISTING check would happily accept. They exist
+                    # to prove the two NEW checks (private key loadable; .pub
+                    # derived from it) actually run at launch time.
+                    if [[ \${STUB_HOSTKEYS_CORRUPT:-0} == 1 ]]; then
+                        for k in $RO_HOSTKEYS_GLOB; do
+                            [[ -f \$k ]] || continue
+                            printf '%s\n' '-----BEGIN OPENSSH PRIVATE KEY-----' \\
+                                'b3BlbnNzaC1rZXktdjEAAAAAtruncated' \\
+                                '-----END OPENSSH PRIVATE KEY-----' > "\$k"
+                            chmod 0400 "\$k"
+                        done
+                    fi
+                    if [[ \${STUB_HOSTKEYS_SWAP:-0} == 1 ]]; then
+                        for k in $RO_HOSTKEYS_GLOB; do
+                            [[ -f \$k ]] || continue
+                            rm -f /tmp/swap-key /tmp/swap-key.pub
+                            "$SSH_KEYGEN_BIN" -q -t ed25519 -N "" -C swapped -f /tmp/swap-key
+                            cp -- /tmp/swap-key "\$k"
+                            chmod 0400 "\$k"
+                        done
+                    fi
                     ;;
             esac
         done
@@ -358,6 +388,22 @@ reset_session_trees() {
     rm -rf "$WORK/runtime/${JOBS_ROOT##*/}" "$WORK/runtime/${JOBS_ROOT##*/}-ro"
 }
 
+# The private key a TAMPER scenario left behind. The slot the launcher picked
+# cannot be read from the stub there (no VM ever starts, so no spec.json is
+# recorded), but `reset_session_trees` empties the read-only tree before every
+# scenario, so the ONE key pair in it is the tampered one. Prints nothing and
+# returns 1 when the launcher never provisioned anything at all.
+tampered_key() {
+    local k
+    for k in "$WORK/runtime/${JOBS_ROOT##*/}-ro"/*/hostkeys/ssh_host_ed25519_key; do
+        if [[ -f $k ]]; then
+            printf '%s' "$k"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # run_submit <mode> <task> [extra submit args...]
 run_submit() {
     local mode="$1" task="$2"
@@ -383,6 +429,8 @@ run_submit() {
         --setenv STUB_MODE "$mode" \
         --setenv STUB_HOSTKEYS_BROKEN "${STUB_HOSTKEYS_BROKEN:-0}" \
         --setenv STUB_HOSTKEYS_NOOP "${STUB_HOSTKEYS_NOOP:-0}" \
+        --setenv STUB_HOSTKEYS_CORRUPT "${STUB_HOSTKEYS_CORRUPT:-0}" \
+        --setenv STUB_HOSTKEYS_SWAP "${STUB_HOSTKEYS_SWAP:-0}" \
         --setenv AGENT_MICROVM_SKIP_PREFLIGHT 1 \
         --setenv HOME "$WORK" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
@@ -901,6 +949,87 @@ if grep -q 'start microvm@' "$WORK/stub-noopidentity-task/systemctl.log" 2>/dev/
     fail "the launcher started a VM after a no-op repair"
 else
     pass "no VM was started after the no-op repair (fail closed)"
+fi
+
+# The THIRD fail-closed door: the unit succeeds AND writes a self-consistent
+# identity, but the PRIVATE key is unloadable. Every pre-existing check passes
+# (non-empty key, 0400/0444, known_hosts matches the .pub) — only the new
+# loadability check can catch it. The guest's sshd would refuse to start and the
+# operator would see an opaque readiness timeout instead.
+echo
+echo "=== 17. a CORRUPT private key ABORTS the launch ==="
+STUB_HOSTKEYS_CORRUPT=1
+export STUB_HOSTKEYS_CORRUPT
+rc="$(run_submit valid corruptkey-task --timeout 30)"
+unset STUB_HOSTKEYS_CORRUPT
+corrupt_key="$(tampered_key || printf '')"
+# NON-VACUITY: the planted state satisfies EVERY pre-existing check.
+if [[ -n $corrupt_key && -s $corrupt_key && -s $corrupt_key.pub ]] &&
+    grep -qF -- "$(cut -d' ' -f1,2 "$corrupt_key.pub")" "$WORK/runtime/known_hosts"; then
+    pass "the planted state passes the OLD checks (non-empty pair, known_hosts matches the .pub)"
+else
+    fail "the planted state does not reach the new check: ${corrupt_key:-<no key provisioned at all>}"
+fi
+if [[ -z $corrupt_key ]]; then
+    fail "no private key was provisioned — scenario 17 would be vacuous"
+elif "$SSH_KEYGEN_BIN" -y -P "" -f "$corrupt_key" >/dev/null 2>&1; then
+    fail "the planted private key is loadable — scenario is vacuous"
+else
+    pass "the planted private key is genuinely unloadable"
+fi
+if [[ $rc -ne 0 ]]; then
+    pass "submit failed on an unloadable private key (exit $rc)"
+else
+    fail "submit SUCCEEDED with an unloadable private key"
+fi
+if grep -q 'still has no complete SSH host identity' "$WORK/submit-corruptkey-task.log"; then
+    pass "the launcher reported the identity as incomplete"
+else
+    fail "no incomplete-identity refusal: $(tail -3 "$WORK/submit-corruptkey-task.log")"
+fi
+if grep -q 'start microvm@' "$WORK/stub-corruptkey-task/systemctl.log" 2>/dev/null; then
+    fail "the launcher started a VM on an unloadable private key"
+else
+    pass "no VM was started (fail closed)"
+fi
+
+# The FOURTH door: a VALID private key that is simply NOT THE ONE the .pub and
+# known_hosts describe. The whole chain is internally consistent and anchored to
+# nothing; only the derived-vs-.pub comparison catches it.
+echo
+echo "=== 18. a private key that does NOT match its public key ABORTS the launch ==="
+STUB_HOSTKEYS_SWAP=1
+export STUB_HOSTKEYS_SWAP
+rc="$(run_submit valid swappedkey-task --timeout 30)"
+unset STUB_HOSTKEYS_SWAP
+swap_key="$(tampered_key || printf '')"
+if [[ -z $swap_key ]]; then
+    fail "no private key was provisioned — scenario 18 would be vacuous"
+elif "$SSH_KEYGEN_BIN" -y -P "" -f "$swap_key" >/dev/null 2>&1; then
+    pass "the planted private key is itself VALID (only the PAIRING is broken)"
+else
+    fail "the planted private key is unloadable — this duplicates scenario 17"
+fi
+if [[ -n $swap_key ]] &&
+    [[ "$("$SSH_KEYGEN_BIN" -y -P "" -f "$swap_key" | cut -d' ' -f1,2)" != "$(cut -d' ' -f1,2 "$swap_key.pub")" ]]; then
+    pass "the public key does NOT belong to the private key (as planted)"
+else
+    fail "the pair matches — scenario is vacuous"
+fi
+if [[ $rc -ne 0 ]]; then
+    pass "submit failed on a mismatched key pair (exit $rc)"
+else
+    fail "submit SUCCEEDED with a public key that is not the private key's half"
+fi
+if grep -q 'still has no complete SSH host identity' "$WORK/submit-swappedkey-task.log"; then
+    pass "the launcher reported the mismatched identity as incomplete"
+else
+    fail "no incomplete-identity refusal: $(tail -3 "$WORK/submit-swappedkey-task.log")"
+fi
+if grep -q 'start microvm@' "$WORK/stub-swappedkey-task/systemctl.log" 2>/dev/null; then
+    fail "the launcher started a VM on a mismatched key pair"
+else
+    pass "no VM was started (fail closed)"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

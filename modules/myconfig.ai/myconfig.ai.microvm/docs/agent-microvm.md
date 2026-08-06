@@ -975,7 +975,15 @@ activation state:
 * EXACTLY ONE `known_hosts` entry for the alias of this host's transport, looked
   up with `ssh-keygen -F` (the matcher `ssh` itself uses). Two entries are a
   CONFLICT and are treated as broken, not accepted;
-* that entry's key type and body match the public key exactly.
+* that entry's key type and body match the public key exactly;
+* the private key is LOADABLE — `ssh-keygen` can parse it and print its public
+  half; a truncated or garbled key is caught here rather than by the guest's
+  sshd failing to start;
+* the public key file is that private key's PUBLIC HALF (compared as
+  `<type> <body>`, the same normalisation the provisioner uses). Without this the
+  chain is self-consistent but anchored to nothing: `known_hosts` is checked
+  against the `.pub`, and the `.pub` was never checked against the key the guest
+  actually serves.
 
 If anything is off it logs `repairing SSH host identity for slot <slot>`, runs
 `systemctl **restart** agent-microvm-hostkeys.service`, re-validates, and

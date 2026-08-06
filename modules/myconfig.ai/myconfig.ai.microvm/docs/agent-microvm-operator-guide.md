@@ -218,9 +218,14 @@ Use `restart`, **not** `start`: the unit is a `RemainAfterExit` oneshot and is
 normally already active, so `start` returns success without re-running it — a
 deleted key would never be recreated. The launcher does the same thing
 automatically before every launch of a slot whose control channel is SSH-based
-(TAP *or* VSOCK): it validates the slot's key files and its `known_hosts` entry,
-repairs them if needed, and **refuses to launch** if the identity is still
-incomplete. For the full lifecycle, the alias table and a rotation procedure see
+(TAP *or* VSOCK): it validates the slot's key files, the KEY PAIR itself (the
+private key parses, and the public key file really is its public half) and its
+`known_hosts` entry, repairs them if needed, and **refuses to launch** if the
+identity is still incomplete. The manual equivalent of the pair check is
+`sudo ssh-keygen -y -f <private-key>` compared against the `.pub` (see the
+recovery commands in
+[Per-slot SSH host identity](./agent-microvm.md#per-slot-ssh-host-identity-lifecycle-and-recovery)).
+For the full lifecycle, the alias table and a rotation procedure see
 [Per-slot SSH host identity](./agent-microvm.md#per-slot-ssh-host-identity-lifecycle-and-recovery).
 
 ## 5. Cancel a task
