@@ -295,21 +295,35 @@ in
       ];
       example = literalExpression ''[ "batch" ]'';
       description = ''
-        Which EXECUTION CAPABILITIES the guests of this host carry
-        (lightweight plan phase 5). A capability the host does not select is
-        ABSENT — not merely hidden:
+        Which CAPABILITIES the guests of this host carry (lightweight plan
+        phase 5). A capability the host does not select is ABSENT — not
+        merely hidden.
 
-        - `interactive` — the SSH control channel (`enableSsh`), the per-slot
+        The list mixes TWO KINDS of token, and the distinction is
+        load-bearing:
+
+        - the WORKLOAD capabilities `interactive` and `batch` decide WHAT the
+          guest can be asked to do (be entered by an operator / be given a
+          job). At least ONE of them must be selected — a guest with neither
+          would boot, seed a home and idle forever;
+        - the TRANSPORT capability `vsock` decides HOW the host reaches a
+          guest (and, on a `proxy-only` host, how the model API reaches it).
+          It carries no workload of its own, so it can NEVER be selected
+          alone: `capabilities = [ "vsock" ]` is rejected at evaluation time
+          rather than silently producing an undocumented interactive-ish
+          guest.
+
+        - `interactive` (WORKLOAD) — the SSH control channel (`enableSsh`), the per-slot
           SSH host identity and its read-only `hostkeys/` subdirectory, the
           known_hosts database, the guest `agent-run` entry point, the workmux
           `microvm-<agent>` panes and the launcher's `run` / `ssh`
           subcommands.
-        - `batch` — the TRUSTED guest job controller, the UNTRUSTED worker
+        - `batch` (WORKLOAD) — the TRUSTED guest job controller, the UNTRUSTED worker
           template, the guest job-protocol helpers, the `input/`,
           `controller/`, `worker/` and `worker-logs/` subdirectories of the
           session tree (and their host tmpfiles rules), the host-side result
           archive and the launcher's `submit` / `cancel` subcommands.
-        - `vsock` — a VSOCK control channel (lightweight plan phase 6): the
+        - `vsock` (TRANSPORT) — a VSOCK control channel (lightweight plan phase 6): the
           guest gets a VSOCK device (`microvm.vsock.cid` = the slot's
           deterministic CID) and a VSOCK-only `sshd-vsock@` unit (SSH over
           AF_VSOCK, reused from upstream), reachable ONLY from the host (CID
@@ -341,9 +355,10 @@ in
         that would be a compatibility profile crossed with the one guest
         shape, which is what the `full`/`lite` collapse removed.
 
-        An empty selection, an unknown token, `enableSsh` without the
-        `interactive` capability, `vsock` without an `sshPublicKeyFile`, and
-        `vsock` paired with an insecure network profile
+        An empty selection, a selection with NO workload capability (e.g. the
+        transport-only `[ "vsock" ]`), an unknown token, `enableSsh` without
+        the `interactive` capability, `vsock` without an `sshPublicKeyFile`,
+        and `vsock` paired with an insecure network profile
         (`package-access`/`internet`) are rejected at evaluation time.
       '';
     };
@@ -879,6 +894,30 @@ in
             myconfig.ai.microvm.capabilities selects no capability, so the guest
             could neither be entered interactively nor be given a batch job.
             Select at least one of: ${lib.concatStringsSep ", " declaredCapabilities}.
+          '';
+        }
+        {
+          # ... and a selection that carries ONLY the TRANSPORT capability is
+          # just as empty in practice. `interactive` and `batch` are the two
+          # WORKLOAD capabilities (what the guest can be asked to do); `vsock`
+          # is a TRANSPORT (how the host reaches it) and declares no workload
+          # of its own. `capabilities = [ "vsock" ]` therefore describes a
+          # guest that can be reached but has nothing to be reached FOR: it
+          # would carry neither the interactive entry point nor the batch job
+          # controller, yet the VSOCK sshd would happily hand out a shell — an
+          # UNDOCUMENTED third execution mode. Fail CLOSED here rather than
+          # inferring a workload from the transport (which would make `vsock`
+          # secretly mean `vsock` + `interactive`) or adding a second
+          # capability list (which would re-create the cross-product the
+          # `full`/`lite` collapse removed).
+          assertion = agentCapabilities.interactive || agentCapabilities.batch;
+          message = ''
+            myconfig.ai.microvm.capabilities selects no WORKLOAD capability
+            (currently: ${lib.concatStringsSep ", " agentCapabilities.selected}).
+            "interactive" and "batch" are the workload capabilities — what the
+            guest can be asked to do; "vsock" is only a TRANSPORT (how the host
+            reaches the guest) and cannot be selected alone. Add "interactive",
+            "batch", or both.
           '';
         }
         {

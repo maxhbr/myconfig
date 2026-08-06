@@ -1990,6 +1990,31 @@ in
 
       rels = l: map (e: e.rel) l;
       mentions = rules: infix: lib.any (r: lib.hasInfix infix r) rules;
+
+      # --- the WORKLOAD-vs-TRANSPORT capability matrix --------------------
+      # `interactive` and `batch` are WORKLOAD capabilities (what the guest can
+      # be asked to do); `vsock` is a TRANSPORT (how the host reaches it) and
+      # declares no workload, so it must never be selectable alone. Every cell
+      # of the matrix is exercised below against the REAL reference host, so a
+      # future token cannot quietly re-open the transport-only hole.
+      #
+      # `enableSsh` is forced per cell to satisfy the INDEPENDENT
+      # enableSsh/`interactive` reconciliation: a cell without `interactive`
+      # must turn the SSH server off, or that other assertion would fire and
+      # make an `acceptsWithout` cell fail for the wrong reason.
+      capabilityCell = caps: [
+        {
+          myconfig.ai.microvm.capabilities = lib.mkForce caps;
+          myconfig.ai.microvm.enableSsh = lib.mkForce (lib.elem "interactive" caps);
+        }
+      ];
+      noWorkloadNeedle = "no WORKLOAD capability";
+      # The messages of the transport-only rejection, so the test can assert the
+      # message actually NAMES the three tokens an operator has to reason about
+      # (an "invalid capabilities" message would be useless here).
+      transportOnlyMessages = lib.filter (m: lib.hasInfix noWorkloadNeedle m) (
+        failedAssertions (capabilityCell [ "vsock" ])
+      );
       # The generated allowlist fragments of a layout table: the launcher's
       # `session_sweep_extras` argument list and the verifier's
       # `SESSION_*_ENTRIES` array, rendered with the SAME quoting the module uses
@@ -2194,6 +2219,113 @@ in
           ] "selects no capability";
           message = "an EMPTY capability set must be rejected";
         }
+
+        # --- the FULL workload/transport capability matrix -----------------
+        # VALID cells: every selection that carries at least one WORKLOAD
+        # capability must evaluate with no failed assertion at all.
+        {
+          assertion = acceptsWithout (capabilityCell [ "interactive" ]) noWorkloadNeedle;
+          message = "capabilities = [ interactive ] must be accepted";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [ "batch" ]) noWorkloadNeedle;
+          message = "capabilities = [ batch ] must be accepted";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [
+            "interactive"
+            "batch"
+          ]) noWorkloadNeedle;
+          message = "capabilities = [ interactive batch ] (the default) must be accepted";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [
+            "interactive"
+            "vsock"
+          ]) noWorkloadNeedle;
+          message = "capabilities = [ interactive vsock ] must be accepted (a workload + the transport)";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [
+            "batch"
+            "vsock"
+          ]) noWorkloadNeedle;
+          message = "capabilities = [ batch vsock ] must be accepted (the phase-6 batch+vsock shape)";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [
+            "interactive"
+            "batch"
+            "vsock"
+          ]) noWorkloadNeedle;
+          message = "capabilities = [ interactive batch vsock ] must be accepted";
+        }
+        # INVALID cells: no workload capability at all.
+        {
+          # THE hole this assertion closes: `vsock` alone enabled a VSOCK SSH
+          # transport while declaring NEITHER execution capability, i.e. an
+          # undocumented interactive mode reachable over VSOCK.
+          assertion = rejectsWith (capabilityCell [ "vsock" ]) noWorkloadNeedle;
+          message = "a TRANSPORT-ONLY capability set ([ vsock ]) must be rejected";
+        }
+        {
+          # ... and it is rejected for the WORKLOAD reason even on a host that
+          # leaves `enableSsh` on (where the reconciliation assertion also
+          # fires): the two guards are independent.
+          assertion = rejectsWith [
+            { myconfig.ai.microvm.capabilities = lib.mkForce [ "vsock" ]; }
+          ] noWorkloadNeedle;
+          message = "[ vsock ] must be rejected for the missing WORKLOAD capability regardless of enableSsh";
+        }
+        {
+          # EXACTLY ONE guard fires for the transport-only set, and its message
+          # names all three tokens the operator must reason about.
+          assertion =
+            lib.length transportOnlyMessages == 1
+            && lib.all (w: lib.hasInfix w (lib.head transportOnlyMessages)) [
+              "interactive"
+              "batch"
+              "vsock"
+            ];
+          message = "the transport-only rejection must fire exactly once and name interactive, batch and vsock, got ${toString transportOnlyMessages}";
+        }
+        {
+          # The EMPTY set trips the pre-existing "selects no capability" guard,
+          # and the new workload guard as well — both are true statements about
+          # it, so this only pins that the new guard did not REPLACE the old one.
+          assertion =
+            rejectsWith (capabilityCell [ ]) "selects no capability"
+            && rejectsWith (capabilityCell [ ]) noWorkloadNeedle;
+          message = "the empty capability set must still trip the pre-existing empty-selection guard";
+        }
+        {
+          # NEGATIVE control: the workload guard must NOT fire on any valid
+          # cell (it would mask the accept cells above if it always fired).
+          assertion =
+            !(lib.any (caps: rejectsWith (capabilityCell caps) noWorkloadNeedle) [
+              [ "interactive" ]
+              [ "batch" ]
+              [
+                "interactive"
+                "batch"
+              ]
+              [
+                "interactive"
+                "vsock"
+              ]
+              [
+                "batch"
+                "vsock"
+              ]
+              [
+                "interactive"
+                "batch"
+                "vsock"
+              ]
+            ]);
+          message = "the WORKLOAD-capability guard must not fire on a selection that has one";
+        }
+
         {
           assertion = rejectsWith [
             { myconfig.ai.microvm.capabilities = lib.mkForce [ "interactve" ]; }
