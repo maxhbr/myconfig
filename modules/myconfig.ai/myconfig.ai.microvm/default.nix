@@ -393,7 +393,13 @@ in
       default = "/var/lib/microvms";
       description = ''
         Absolute host path used by microvm.nix for per-VM state
-        (/var/lib/microvms/<slot>).
+        (/var/lib/microvms/<slot>). This is the path the launcher's VSOCK ssh
+        target (`vsock-mux/<stateRoot>/<slot>/notify.vsock`), the per-slot
+        `known_hosts` entry and the per-VM bind-mount source key on. It MUST
+        equal `config.microvm.stateDir` (where microvm.nix actually puts
+        per-VM state and where cloud-hypervisor backs the VSOCK device); an
+        assertion below rejects a host that diverges them. Defaults to the same
+        `/var/lib/microvms` as `microvm.stateDir`.
       '';
     };
 
@@ -680,6 +686,31 @@ in
         {
           assertion = isAbsolutePath cfg.stateRoot;
           message = "myconfig.ai.microvm.stateRoot must be an absolute path.";
+        }
+        {
+          # `stateRoot` is the host path the launcher and hostkeys.nix use for the
+          # VSOCK mux address (`vsock-mux/<stateRoot>/<slot>/notify.vsock`) and
+          # for the per-VM bind-mount source. It MUST equal `microvm.stateDir`, the
+          # path microvm.nix actually puts per-VM state under (and where
+          # cloud-hypervisor backs the VSOCK device with `<stateDir>/<slot>/
+          # notify.vsock`). Phase 6 widened the blast radius of this pre-existing
+          # assumption — the vsock-mux `known_hosts` entry AND the launcher's ssh
+          # target both key on `stateRoot` — so a host that sets one without the
+          # other would get a runtime mismatch (the ssh target / known_hosts key
+          # would not resolve to the socket microvm created). Fail at EVAL
+          # instead. (`stateDir` defaults to `/var/lib/microvms`, the same as
+          # `stateRoot`, so every host today satisfies this.) `toString` accounts
+          # for `microvm.stateDir` being a `types.path` (a host may set it as a
+          # path literal) while `stateRoot` is a `types.str`.
+          assertion = cfg.stateRoot == toString config.microvm.stateDir;
+          message = ''
+            myconfig.ai.microvm.stateRoot ("${cfg.stateRoot}") must equal
+            `config.microvm.stateDir` ("${toString config.microvm.stateDir}"): the
+            launcher's VSOCK ssh target `vsock-mux/<stateRoot>/<slot>/notify.vsock`
+            and the per-slot `known_hosts` entry key on `stateRoot`, while
+            microvm.nix backs the VSOCK device under `<stateDir>/<slot>`. Set
+            both to the same path.
+          '';
         }
         {
           assertion = cfg.bridgeName != "";
