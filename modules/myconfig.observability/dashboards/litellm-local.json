@@ -66,7 +66,7 @@
       "type": "timeseries",
       "title": "Failure rate (failed / total requests)",
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-      "description": "Ratio of failed to total proxy requests. clamp_min avoids division by zero when there is no traffic.",
+      "description": "Ratio of failed to total proxy requests. clamp_min with a near-zero floor avoids division by zero when there is no traffic, without distorting the ratio at low request rates.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
       "fieldConfig": {
         "defaults": {
@@ -81,7 +81,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(litellm_proxy_failed_requests_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])) / clamp_min(sum(rate(litellm_proxy_total_requests_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])), 1)",
+          "expr": "sum(rate(litellm_proxy_failed_requests_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])) / clamp_min(sum(rate(litellm_proxy_total_requests_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])), 1e-9)",
           "legendFormat": "failure rate",
           "refId": "A",
           "range": true
@@ -172,11 +172,11 @@
     {
       "id": 106,
       "type": "timeseries",
-      "title": "LiteLLM overhead latency p50 / p95 (ms)",
+      "title": "LiteLLM overhead latency p50 / p95 (s)",
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-      "description": "Proxy processing overhead. The overhead metric exposes the model_group label (same values as requested_model), so $model filters on model_group here.",
+      "description": "Proxy processing overhead, in seconds (the upstream metric docstring claims milliseconds, but the histogram shares the same second-based latency buckets as the other latency metrics). The overhead metric exposes the model_group label (same values as requested_model), so $model filters on model_group here.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
-      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "options": {
         "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
         "tooltip": { "mode": "multi", "sort": "none" }
