@@ -2653,7 +2653,8 @@ in
       # The guest-side bridge: ONE socket (the historical loopback endpoint) and
       # a per-connection socat instance to AF_VSOCK CID 2.
       bvGuestSocket = bvGuest.systemd.sockets.litellm-forwarder.socketConfig;
-      bvGuestBridgeExec = toString bvGuest.systemd.services."litellm-forwarder@".serviceConfig.ExecStart;
+      bvGuestBridge = bvGuest.systemd.services.litellm-forwarder;
+      bvGuestBridgeExec = toString bvGuestBridge.serviceConfig.ExecStart;
 
       evalMarker = mkEvalCheck "microvm-vsock-transport-eval" [
         # --- the transport is RESOLVED, once, from profile + capability -----
@@ -2711,6 +2712,27 @@ in
           message = "a vsock+proxy-only guest must have no resolver and no open TCP port";
         }
         {
+          # Several guest units still `want` network-online.target
+          # unconditionally. That is only harmless because NOTHING in this guest
+          # PROVIDES it: with networkd and dhcpcd off there is no
+          # `*-wait-online` unit, so the target activates trivially instead of
+          # stalling the boot for the default 120 s. Pinned, because the day a
+          # unit starts providing it the guest would hang on every boot.
+          assertion =
+            !(lib.any (n: lib.hasSuffix "-wait-online" n) (builtins.attrNames bvGuest.systemd.services));
+          message = "a vsock+proxy-only guest must contain NO *-wait-online unit (the units that want network-online.target would otherwise stall its boot for 120 s), got ${
+            toString (
+              lib.filter (n: lib.hasSuffix "-wait-online" n) (builtins.attrNames bvGuest.systemd.services)
+            )
+          }";
+        }
+        {
+          assertion = lib.any (n: lib.hasSuffix "-wait-online" n) (
+            builtins.attrNames guest0Cfg.systemd.services
+          );
+          message = "positive control: the reference (tap) guest DOES have a *-wait-online unit, which is what makes the assertion above meaningful";
+        }
+        {
           assertion =
             guest0Cfg.systemd.network.enable
             && guest0Cfg.systemd.network.networks ? "10-agent"
@@ -2734,8 +2756,45 @@ in
           message = "a vsock guest's model endpoint must stay the loopback address the host-provisioned agent configuration already uses, so nothing has to be reconfigured";
         }
         {
-          assertion = bvGuestSocket.ListenStream == "127.0.0.1:${vsockPort}" && bvGuestSocket.Accept;
-          message = "the guest bridge must listen on the historical loopback endpoint and accept per connection, got ${toString bvGuestSocket.ListenStream}";
+          # ONE shape under both transports: `Accept = no`, so ONE long-running
+          # forwarder multiplexes every connection off the listening fd. A
+          # per-connection (`Accept = yes`) template would have capped concurrent
+          # model streams at systemd's default MaxConnections=64.
+          assertion = bvGuestSocket.ListenStream == "127.0.0.1:${vsockPort}" && !bvGuestSocket.Accept;
+          message = "the guest bridge must listen on the historical loopback endpoint with Accept=no (one long-running multiplexer, no per-connection cap), got ${toString bvGuestSocket.ListenStream}";
+        }
+        {
+          # ... which is only possible because socat takes the LISTENING fd
+          # systemd passes as fd 3 and forks per connection itself.
+          assertion = lib.hasInfix "ACCEPT-FD:3,fork" bvGuestBridgeExec;
+          message = "the guest bridge must accept off the socket-activated listening fd and fork per connection, got ${bvGuestBridgeExec}";
+        }
+        {
+          # NO INACTIVITY TIMEOUT. socat's `-T` is BIDIRECTIONAL: it tears a
+          # connection down mid-transfer after N idle seconds, which for a model
+          # API silently kills a long prefill, a cold LiteLLM or a slow tool-call
+          # turn. The tap path (systemd-socket-proxyd) has no such timeout, and
+          # the whole point of this unit is that the agent behaves identically on
+          # both transports. (`-t`, the half-close DRAIN timeout, is fine and is
+          # deliberately raised past socat's 0.5 s default.)
+          assertion = !(lib.hasInfix " -T" bvGuestBridgeExec) && lib.hasInfix " -t 120 " bvGuestBridgeExec;
+          message = "the guest bridge must carry NO socat -T inactivity timeout (it would kill in-flight model requests) and a generous -t half-close drain, got ${bvGuestBridgeExec}";
+        }
+        {
+          # No interface means no `*-wait-online` unit exists, so ordering
+          # against `network-online.target` would depend on a target that only
+          # ever activates trivially today and would BLOCK the guest's boot for
+          # 120 s the day anything provides it.
+          assertion =
+            !(lib.elem "network-online.target" bvGuestBridge.wants)
+            && !(lib.elem "network-online.target" bvGuestBridge.after);
+          message = "a vsock guest's forwarder must not want/order after network-online.target (there is no network stack to wait for)";
+        }
+        {
+          assertion =
+            lib.elem "network-online.target" guest0Cfg.systemd.services.litellm-forwarder.wants
+            && lib.elem "network-online.target" guest0Cfg.systemd.services.litellm-forwarder.after;
+          message = "positive control: the reference (tap) forwarder dials a bridge address and must still wait for network-online.target";
         }
         {
           # DESTINATION-FIXED in the unit: CID 2 (the host) and the model port,
@@ -2745,16 +2804,23 @@ in
           message = "the guest bridge must dial AF_VSOCK CID 2 port ${vsockPort} with a FIXED destination, got ${bvGuestBridgeExec}";
         }
         {
-          # ... and the TAP forwarder is GONE (it would forward to a gateway
-          # address that no longer exists).
-          assertion = !(bvGuest.systemd.services ? "litellm-forwarder");
-          message = "a vsock guest must not carry the TAP loopback->bridge forwarder service";
+          # ONE unit name, ONE forwarder: the socket-proxyd-to-the-gateway
+          # ExecStart is GONE (it would dial a gateway address that no longer
+          # exists) and there is no per-connection template either.
+          assertion =
+            !(lib.hasInfix "systemd-socket-proxyd" bvGuestBridgeExec)
+            && !(lib.hasInfix gateway bvGuestBridgeExec)
+            && !(bvGuest.systemd.services ? "litellm-forwarder@");
+          message = "a vsock guest's forwarder must not be the socket-proxyd-to-the-bridge one, and no per-connection template may exist, got ${bvGuestBridgeExec}";
         }
         {
           assertion =
             guest0Cfg.systemd.services ? "litellm-forwarder"
             && !(guest0Cfg.systemd.services ? "litellm-forwarder@")
-            && !(guest0Cfg.systemd.sockets.litellm-forwarder.socketConfig.Accept);
+            && !(guest0Cfg.systemd.sockets.litellm-forwarder.socketConfig.Accept)
+            &&
+              toString guest0Cfg.systemd.services.litellm-forwarder.serviceConfig.ExecStart
+              == "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd ${gateway}:${port}";
           message = "positive control: the reference (tap) guest must keep exactly the socket-proxyd forwarder to the bridge gateway";
         }
 
@@ -2827,7 +2893,7 @@ in
             bvSocket.socketConfig.SocketUser == "root"
             && bvSocket.socketConfig.SocketGroup == "kvm"
             && bvSocket.socketConfig.SocketMode == "0660";
-          message = "the per-VM forwarder socket must be root:kvm 0660 (the VMM's group), not world-accessible";
+          message = "the per-VM forwarder socket must be root:kvm 0660 — the VMM's group, so only root and the VMM (plus any host user already in `kvm`) can connect";
         }
         {
           assertion =
