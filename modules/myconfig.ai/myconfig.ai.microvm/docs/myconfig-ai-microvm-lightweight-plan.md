@@ -9,7 +9,7 @@
 | 2 — build only selected agents | **done** | `myconfig.ai.microvm.enabledAgents`; the module-wide default is `null` = EVERY declared agent (the profile-supplied `[ "codex" ]` default died with the profile table — see the collapse section for the closure trade-off). The selection is applied ONCE in `../agents.nix`, so guest closure, `agent-run`, batch dispatch, launcher validation/help, workmux registrations and agent-state paths all follow. Test: `checks.microvm-eval-enabled-agents`. |
 | 3 — runtime config staging | **done**, unconditional | `myconfig.ai.microvm.configSeed` (`../config-seed.nix`) stages an ALLOWLISTED, root-owned copy of the host agent configuration per launch; the guest sees it through a per-slot READ-ONLY virtiofs share and a root oneshot copies it into the disposable `/home/agent` before sshd, the batch controller and the agent-state linker. The allowlist is the SELECTED agents' new registry field `configPaths` plus `configSeed.extraPaths`. Guest home-manager activation is gone (the module no longer contains it). The credential denylist is applied to a path's own name AND to its RESOLVED target, the staged tree is root-only (0500/0400), the manifest stays outside the share, and the staged paths must be disjoint from the persisted agent-state directories. Tests: `checks.microvm-config-seed` (eval/build) plus `runtime-validation.sh --section seed` (root, enforcement). |
 | 4 — consolidate writable shares | **done**, unconditional | `myconfig.ai.microvm.session` (`../session.nix`) is the ONE source of truth for the per-session tree: `<runtimeRoot>/sessions/<slot>/` is ONE writable virtiofs share (`workspace/`, `input/`, `controller/`, `worker/`, `worker-logs/`, `state/`) and `<runtimeRoot>/sessions-ro/<slot>/` ONE read-only share (`hostkeys/`, `config-seed/`). `../job.nix`, `../state.nix`, `../config-seed.nix`, `../hostkeys.nix`, the host tmpfiles rules, the generated pre-launch verifier `agent-microvm-verify-session` and `../launcher.nix` all DERIVE from its layout table — there is exactly one implementation. Trust boundaries are unchanged (ownership + modes, passed through by virtiofsd); the guest gets `/workspace` as a bind mount of the session tree. Test: `checks.microvm-session-tree`. |
-| 5 — split interactive/batch | **done**, opt-in narrowing | `myconfig.ai.microvm.capabilities` (a SET, default `[ "interactive" "batch" ]` = today's behaviour) selects which halves a host's guests carry. The decision lives in `../session.nix`'s layout table (per-capability entries) plus one resolved module arg (`agentCapabilities`); `job.nix`, `hostkeys.nix`, `guest.nix`, `workmux.nix` and the launcher each apply it in the ONE place that already owns the concern. A narrowing REMOVES units, guest programs, session subdirectories, tmpfiles rules and launcher subcommands. `enableSsh` is rejected without `interactive`. Test: `checks.microvm-capabilities` (eval + BUILD of the default, interactive-only and batch-only guest closures and runners). NOT done: `mode`-specific closure MEASUREMENTS (same tier as phase 0) and rendering the launcher's batch CODE out of an interactive-only host (see the deviations). |
+| 5 — split interactive/batch | **done**, opt-in narrowing | `myconfig.ai.microvm.capabilities` (a SET, default `[ "interactive" "batch" ]` = today's behaviour) selects which halves a host's guests carry. The decision lives in `../session.nix`'s layout table (per-capability entries) plus one resolved module arg (`agentCapabilities`); `job.nix`, `hostkeys.nix`, `guest.nix`, `workmux.nix` and the launcher each apply it in the ONE place that already owns the concern. A narrowing REMOVES units, guest programs, session subdirectories, tmpfiles rules and launcher subcommands. `enableSsh` is rejected without `interactive`, and `agent-microvm capabilities` reports the set machine-readably on every host. Test: `checks.microvm-capabilities` (eval + BUILD of the default, interactive-only and batch-only guest closures and runners). NOT done: `mode`-specific closure MEASUREMENTS (same tier as phase 0), rendering the launcher's batch CODE out of an interactive-only host, and RUNTIME validation of a batch-only host beyond `--section seed` (its transport is ssh; phase 6 is the enabler) — see the deviations. |
 | 6 — VSOCK transport | not started | |
 | 7 — clone/startup optimisation | partially done | Clone: `git clone --local --no-hardlinks` with a `--no-local` fallback plus an explicit `objects/info/alternates` check (≈10× faster on this repo: 0.6 s vs 5 s, measured by hand — both variants produce a fully independent clone). Readiness: exponential-backoff SSH polling (250 ms → 2 s) under the unchanged 90 s ceiling, replacing the fixed 3 s interval. NOT done: readiness as a positive protocol signal (needs phases 3/6) and the install-unit generation guard (see deviations). |
 | 8 — minimize guest closure | **done**, unconditional | Every guest builds the documented minimal CLI toolset, a plain bash login shell (no fish) and drops NixOS' `environment.defaultPackages`; per-agent `extraPackages` in the registry keeps agent-specific runtimes tied to the selection. Test: `checks.microvm-eval-guest-shape`. |
@@ -363,12 +363,74 @@ was never used).
   store path in its launcher's closure, while all host STATE of the capability
   (the `<runtimeRoot>/results` archive, the batch subdirectories of every
   session tree) and every guest-side component are genuinely gone.
-- **Phase 5, the two guard fragments are rendered ONLY where they can fire**: a
-  host with both capabilities has nothing to refuse, so its launcher is
-  byte-identical to the pre-phase one (which is what makes the evaluated-slice
-  proof possible). This is the same rule `../job.nix` applies to its
-  `promptUnusedSuppression`, not a second launcher shape: both fragments are
-  generated from the same capability set every other consumer reads.
+- **Phase 5, the REFUSAL fragments are rendered only where they can fire, but the
+  capability SET is unconditional** (REVISED by the phase-5 review). The
+  `require_capability` guard and the batch-only `doctor`/`usage` variants are
+  still emitted only on a host that actually lacks a capability — on a host with
+  both they would be unreachable code, the same rule `../job.nix` applies to its
+  `promptUnusedSuppression`. What is now rendered on EVERY host is
+  `SELECTED_CAPABILITIES` / `DECLARED_CAPABILITIES` plus an
+  `agent-microvm capabilities` subcommand that prints them machine-readably.
+  CONSEQUENCE, accepted deliberately: the launcher derivation of a default host is
+  **no longer byte-identical** to the pre-phase-5 one, so the evaluated-slice diff
+  of `test-f13` now shows the launcher (and every host path that references it:
+  `environment.systemPackages`, the workmux commands, `security.sudo` rules)
+  changing, in addition to the two git-revision artefacts. That was the price of
+  the alternative: `../runtime-validation.sh` used to DETECT the set by grepping
+  the launcher's English refusal message and defaulted to "this host has
+  everything", i.e. it failed OPEN — rewording that `die`, a `require_root`
+  failure or a phase-6 transport change would silently restore the vacuous passes
+  the whole dispatch exists to prevent. A machine-readable, always-present answer
+  that the suite HARD-ABORTS on when it cannot parse it is worth more than the
+  byte-identity proof of one derivation, and the *guest* closures, shares,
+  fileSystems, units and tmpfiles rules of a default host are still unchanged.
+- **Phase 5, a batch-only host cannot be RUNTIME-validated beyond `seed`**: seven
+  of the eight sections of `../runtime-validation.sh` need the `interactive`
+  capability, because the suite's guest transport IS `agent-microvm ssh`. A
+  `capabilities = [ "batch" ]` host therefore runs exactly one section. This is
+  honest (the alternative is vacuous passes) but it is a real coverage hole in the
+  configuration with the largest untrusted-workload surface, and it is recorded
+  here rather than left implicit. Mitigation today: the eval/build tier
+  (`checks.microvm-capabilities` builds that guest's closure and runner and
+  asserts every removal against the evaluated config) plus `--section seed`.
+  ENABLER: phase 6 (VSOCK) — a console/vsock `guest` transport that does not
+  require sshd is what would let `boot`, `l2`, `creds`, `malrepo` and the
+  lifecycle sections run on such a host, and that is now one of phase 6's
+  motivations.
+- **Phase 5, `capabilities = null` in the layout table means "unconditional"**
+  (review follow-up). The first implementation spelled it
+  `bothCapabilities = agentCapabilities.declared`, i.e. "any declared
+  capability" — correct only while exactly two tokens exist. A third token (a
+  phase-6 `vsock`, say) would have silently turned every entry that meant
+  "interactive AND batch need this" into "a vsock-only host gets it too". The
+  table now uses `null` for unconditional entries and strictly ENUMERATIVE lists
+  otherwise (a list never refers to `declared`), and an assertion rejects an empty
+  list or an undeclared token in one.
+- **Phase 5, the per-capability booleans are GENERATED from the token list**
+  (review follow-up): `agentCapabilities = lib.genAttrs declaredCapabilities …`
+  instead of a second hand-written attrset. The two lists could previously
+  disagree, and `../launcher.nix`'s `missingCapabilities` filter would THROW on a
+  token that had no matching attribute — the exact failure a phase-6 capability
+  would have hit first.
+- **Phase 5, stale subdirectories of a PREVIOUS selection are swept and refused**
+  (review follow-up). Narrowing removes the tmpfiles rules and the verifier lines
+  for the other capability's subdirectories, but nothing removed the
+  DIRECTORIES: after an unclean shutdown followed by a narrowing rebuild, a
+  root-owned `input/` and `worker-logs/` survived inside the ONE writable share,
+  exported to the guest, with no rule covering them. The launcher's
+  `prepare_session` now sweeps every top-level entry the (filtered) table does not
+  declare — refusing to remove one with a live mount underneath instead of
+  `rm -rf`ing through it — and the generated verifier `die`s on any that survives.
+  Fail-closed and self-healing, and it also closes the pre-existing "operator left
+  something in the tree" case.
+- **Phase 5, a batch-only guest has no SSH DAEMON, but still ships the openssh
+  BINARIES**: `cfg.enableSsh` no longer adds `openssh` to
+  `environment.systemPackages` (`../guest.nix`), and the units, the host identity
+  and `services.openssh.enable` are all gone — but NixOS'
+  `environment.requiredPackages` still provides `ssh`/`scp`, and that set is
+  load-bearing for a bootable system (see the phase-8 deviation above). The
+  acceptance criterion "a batch-mode guest has no SSH daemon" is therefore a
+  unit/config claim, NOT a closure-size claim.
 - **Phase 5, `Before=` on absent units is left alone**: `../config-seed.nix`,
   `../state.nix` and `../guest-model-config.nix` order themselves before
   `sshd.service` / `agent-job-controller.service` unconditionally. On a narrowed
@@ -1002,7 +1064,7 @@ already lives:
   launcher's `prepare_session`, the guest mounts and `tests/microvm.nix` all
   follow one filtered table. `input/`, `controller/`, `worker/` and
   `worker-logs/` are `batch`-only; the read-only `hostkeys/` is
-  `interactive`-only. The FULL table remains the authority over a directory's
+  `interactive`-only; `capabilities = null` marks the entries every host has. The FULL table remains the authority over a directory's
   owner/mode (`modeOf`), so `../job.nix` can still bake the guest-side
   permission assertions without knowing whether this host creates the
   directory, and the trust POLICY is asserted against the full table so a
@@ -1019,24 +1081,33 @@ already lives:
 - `../launcher.nix` — ONE launcher, ONE shape; a narrowed host additionally
   gets a `require_capability` membership check at the top of `run`/`ssh` (needs
   `interactive`) and `submit`/`cancel` (needs `batch`), plus an honest
-  `doctor` host-key section. Those fragments are rendered ONLY on a host that
-  lacks a capability, so the launcher derivation of a default host is unchanged.
+  `doctor` host-key section and `usage` report. Those fragments are rendered ONLY
+  on a host that lacks a capability. `console` is deliberately never gated (it
+  reads the HOST's `microvm@<slot>` journal and is the only debugging channel a
+  batch-only guest has), the capability set itself is rendered unconditionally,
+  and `prepare_session` sweeps undeclared top-level entries of both trees.
 - `../default.nix` — the batch-capable-agent assertion became
   capability-conditional, and `enableSsh` is rejected without `interactive`.
-- `../runtime-validation.sh` — the section dispatch DETECTS the host's
-  capabilities from its launcher and skips (or hard-aborts on) a section whose
-  capability is missing, instead of letting its "the guest must NOT be able
-  to …" checks pass vacuously.
+- `../runtime-validation.sh` — the section dispatch READS the host's capabilities
+  from `agent-microvm capabilities` (hard-aborting if it cannot parse the answer)
+  and skips (or hard-aborts on) a section whose capability is missing, instead of
+  letting its "the guest must NOT be able to …" checks pass vacuously. Within
+  `creds`, the batch-worker-environment subtest is gated on its own, because the
+  unit it inspects does not exist without `batch`.
 
-**Verification.** The default (`[ "interactive" "batch" ]`) is byte-for-byte
-today's behaviour: the evaluated-slice diff from `AGENTS.md` for `test-f13`
-(every VM's `system.build.toplevel` + `microvm.declaredRunner` drvPath, every
-VM's full `microvm.shares`, the guest `fileSystems`, guest `systemd.services`
-names, guest `environment.systemPackages` drvPaths, the host
+**Verification.** The default (`[ "interactive" "batch" ]`) leaves every GUEST
+artefact byte-for-byte as it was: in the evaluated-slice diff from `AGENTS.md` for
+`test-f13` (every VM's `system.build.toplevel` + `microvm.declaredRunner` drvPath,
+every VM's full `microvm.shares`, the guest `fileSystems`, guest
+`systemd.services` names, guest `environment.systemPackages` drvPaths, the host
 `systemd.tmpfiles.rules`, `networking.firewall.extraCommands`, host
-`systemd.services` names and host `environment.systemPackages` drvPaths) is empty
-apart from the two git-revision artefacts (`nixos-version.drv`, the
-`myconfig-commit` tmpfiles link). `checks.microvm-capabilities` asserts the
+`systemd.services` names and host `environment.systemPackages` drvPaths) the guest
+half is empty apart from the two git-revision artefacts (`nixos-version.drv`, the
+`myconfig-commit` tmpfiles link). The HOST half now also shows the launcher
+derivation changing, deliberately: the review required the capability set to be
+machine-readable on every host (`agent-microvm capabilities`) instead of inferred
+from a refusal message, and the sweep of undeclared session entries landed in the
+same script — see the two revised deviations above. `checks.microvm-capabilities` asserts the
 default host still has both halves, asserts every removal of both narrowings
 against the EVALUATED config (units, tmpfiles rules, package names, layout
 table, workmux registrations, unit ExecStarts) and against the BUILT launchers

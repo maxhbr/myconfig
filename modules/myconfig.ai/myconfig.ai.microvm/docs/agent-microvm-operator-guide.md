@@ -21,6 +21,7 @@ sudo agent-microvm --help          # commands, supported agents, resource classe
 sudo agent-microvm list            # slot | class | state | ip | task
 sudo agent-microvm status          # detailed, all slots
 sudo agent-microvm usage           # retained disk usage per task
+agent-microvm capabilities         # what this host's guests can do (no root needed)
 ```
 
 > **Capabilities.** A host selects which execution paths its guests carry
@@ -34,7 +35,17 @@ sudo agent-microvm usage           # retained disk usage per task
 > that list and rebuild to enable it
 > ```
 >
-> That is a configuration answer, not a fault: see
+> That is a configuration answer, not a fault. Ask the host directly instead of
+> inferring it from an error:
+>
+> ```console
+> $ agent-microvm capabilities
+> capabilities: interactive
+> declared: interactive batch
+> ```
+>
+> `console` is never refused (it reads the host's `microvm@<slot>` journal, so it
+> works even for a guest without sshd). See
 > [Capabilities](./agent-microvm.md#capabilities).
 
 ## 1. Start an interactive task

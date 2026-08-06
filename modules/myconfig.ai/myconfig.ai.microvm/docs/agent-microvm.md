@@ -228,12 +228,37 @@ select (myconfig.ai.microvm.capabilities = [ interactive ]); add "batch" to
 that list and rebuild to enable it
 ```
 
-The real-KVM validation suite honours the same split: every section that drives
-a guest over SSH requires `interactive`, `lifecycle` and `forgery` additionally
-require `batch`, and a section whose capability the host does not select is
-SKIPPED (or hard-aborts when asked for explicitly) rather than reporting vacuous
-passes — see
+Every host — narrowed or not — can be ASKED what it selects. The answer is
+machine-readable, needs no root and starts nothing:
+
+```console
+$ agent-microvm capabilities
+capabilities: interactive
+declared: interactive batch
+```
+
+This is how tooling decides what can be exercised on a host; nothing has to infer
+the set from an error message. `agent-microvm usage` likewise reports no batch
+result archive on a host without `batch` (the directory is never created), and
+`agent-microvm console` is deliberately NOT gated — it is the journal of the
+host's `microvm@<slot>` unit, so it works for every guest and is the only way to
+debug a batch-only one.
+
+The real-KVM validation suite honours the same split: it reads
+`agent-microvm capabilities` (and hard-aborts if it cannot parse the answer),
+every section that drives a guest over SSH requires `interactive`, `lifecycle`
+and `forgery` additionally require `batch`, and a section whose capability the
+host does not select is SKIPPED (or hard-aborts when asked for explicitly) rather
+than reporting vacuous passes. A batch-only host can therefore only run the
+`seed` section today; see
 [runtime validation](./agent-microvm-runtime-validation.md).
+
+Stale directories from a PREVIOUS capability selection are handled, not ignored:
+the launcher sweeps every top-level entry of a slot's two trees that the current
+table does not declare (refusing to remove one with a live mount underneath),
+and the generated pre-launch verifier `die`s on any that survives. A leftover
+root-owned `input/` can therefore neither be exported to a guest unverified nor
+brick the slot.
 
 ### Selected agents
 

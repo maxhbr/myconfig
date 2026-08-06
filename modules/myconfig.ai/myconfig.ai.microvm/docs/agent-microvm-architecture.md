@@ -175,11 +175,24 @@ already owns the concern:
 | `hostkeys.nix` | whether the per-slot key pair and the `known_hosts` database are provisioned |
 | `guest.nix` | whether the guest carries the interactive `agent-run` entry point |
 | `workmux.nix` | whether the `microvm-<agent>` panes are registered |
-| `launcher.nix` | which subcommands the ONE launcher accepts (`run`/`ssh` need `interactive`, `submit`/`cancel` need `batch`) |
+| `launcher.nix` | which subcommands the ONE launcher accepts (`run`/`ssh` need `interactive`, `submit`/`cancel` need `batch`; `console` is never gated), and which lines `usage` reports |
 | `default.nix` | the batch-capable-agent assertion, and the `enableSsh` reconciliation |
 
 Nothing else branches on it: there is one launcher, one share pair, one session
 tree, one staging path and one guest shape in every case.
+
+Two properties keep the selector from weakening anything:
+
+- the trust POLICY and every `modeOf` lookup read the FULL layout table, not the
+  selected slice, so an owner/mode a host happens not to create is still asserted;
+- the launcher SWEEPS undeclared top-level entries of a slot's two trees before
+  every launch and the generated verifier `die`s on any that survives, so a stale
+  subdirectory of a previous selection is neither exported nor able to brick the
+  slot.
+
+The set itself is unconditional configuration: `agent-microvm capabilities`
+prints it (`capabilities:` / `declared:`) on every host, which is what
+`runtime-validation.sh` reads to decide what it may exercise.
 
 ## Interactive execution path
 

@@ -59,14 +59,29 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section seed
 ### Capability gating
 
 The host under test may select only one of the two execution capabilities
-(`myconfig.ai.microvm.capabilities`, lightweight plan phase 5). The suite
-DETECTS the set from the launcher of that host — a launcher without a capability
-refuses its subcommands with a message naming it — and gates the sections
-accordingly:
+(`myconfig.ai.microvm.capabilities`, lightweight plan phase 5). The suite ASKS
+the launcher of that host for the set:
+
+```console
+$ agent-microvm capabilities
+capabilities: interactive batch
+declared: interactive batch
+```
+
+That subcommand exists on every host, needs no root and starts nothing. An answer
+the suite cannot parse (or a launcher that does not know the subcommand, or one
+that declares a capability the suite has no gating rule for) **hard-aborts the
+run**: an earlier version inferred the set by grepping the launcher's English
+refusal messages and defaulted to "this host has everything", so it failed OPEN —
+rewording the refusal would have silently restored the vacuous passes the gating
+exists to prevent.
+
+The sections are gated accordingly:
 
 | Section | Needs |
 | --- | --- |
-| `boot`, `net`, `l2`, `creds`, `malrepo` | `interactive` (every guest command goes through `agent-microvm ssh`) |
+| `boot`, `net`, `l2`, `malrepo` | `interactive` (every guest command goes through `agent-microvm ssh`) |
+| `creds` | `interactive`; its batch-worker-environment subtest additionally needs `batch` and reports the capability instead of inspecting `agent-job-worker@`, which does not exist without it |
 | `lifecycle`, `forgery` | `interactive` **and** `batch` (they submit jobs and inspect the result channel) |
 | `seed` | neither (it exercises the HOST-side stager) |
 
@@ -76,6 +91,16 @@ for exactly such a section **hard-aborts**. Neither is treated as a failure — 
 capability the host deliberately does not select is a configuration fact — but
 running the section anyway would report vacuous passes for its "the guest must
 NOT be able to …" checks, which is the one thing this suite exists to prevent.
+
+**Coverage hole, stated plainly:** on a host that selects only `batch`, seven of
+the eight sections need `interactive` (the control channel *is* ssh), so only
+`seed` runs. That is honest but thin for the configuration with the largest
+untrusted-workload surface. Such a host is covered by the eval/build tier
+(`nix build .#checks.x86_64-linux.microvm-capabilities`, which builds its guest
+closure and runner and asserts every removal against the evaluated config) plus
+`--section seed`. Restoring runtime coverage needs a guest transport that does
+not require sshd — which is what plan phase 6 (VSOCK) is for; a console/vsock
+`guest` transport is the enabler for re-gating those sections.
 
 ### Host-side model-endpoint preflight
 
