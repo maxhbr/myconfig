@@ -70,7 +70,8 @@ awk '/^# --- host-side model-endpoint preflight ---/{f=1} f{print}' \
     "$SUITE" >"$WORK/dispatch.sh"
 for tok in preflight_endpoint ALL_SECTIONS is_endpoint_section \
     resolve_sections 'mapfile -t PLAN' RAN_SECTIONS SKIPPED_SECTIONS \
-    detect_capabilities SECTION_CAPABILITIES UNSUPPORTED_SECTIONS; do
+    detect_capabilities SECTION_CAPABILITIES UNSUPPORTED_SECTIONS \
+    'network-transport: ' GUEST_HAS_NETWORK; do
     grep -q -- "$tok" "$WORK/dispatch.sh" || {
         printf 'harness: could not extract "%s" from %s (has the suite been restructured?)\n' \
             "$tok" "$SUITE" >&2
@@ -128,7 +129,10 @@ section_seed() { section "runtime configuration staging"; pass "seed-check"; }
 # `capabilities`, and HARD-ABORTS if it cannot parse the answer — the property
 # scenarios 8-11 below exercise. RTV_CAPS / RTV_DECLARED pick the answer,
 # RTV_CAPS_MODE picks a MALFORMED one (`fail` = the launcher does not know the
-# subcommand, `nodeclared`/`nocaps` = a half-answer).
+# subcommand, `nodeclared`/`nocaps` = a half-answer, `notransport` = no
+# `network-transport:` line, `badtransport` = a transport this suite cannot gate
+# on). RTV_TRANSPORT picks the reported model transport (lightweight plan phase
+# 6): `tap` = the guest has a network interface, `vsock` = it has none.
 agent-microvm() {
     case "${1-}" in
         capabilities)
@@ -139,13 +143,25 @@ agent-microvm() {
                     ;;
                 nodeclared)
                     printf 'capabilities: %s\n' "${RTV_CAPS:-interactive batch}"
+                    printf 'network-transport: %s\n' "${RTV_TRANSPORT:-tap}"
                     ;;
                 nocaps)
                     printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch vsock}"
+                    printf 'network-transport: %s\n' "${RTV_TRANSPORT:-tap}"
+                    ;;
+                notransport)
+                    printf 'capabilities: %s\n' "${RTV_CAPS:-interactive batch}"
+                    printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch vsock}"
+                    ;;
+                badtransport)
+                    printf 'capabilities: %s\n' "${RTV_CAPS:-interactive batch}"
+                    printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch vsock}"
+                    printf 'network-transport: %s\n' "bogus"
                     ;;
                 *)
                     printf 'capabilities: %s\n' "${RTV_CAPS:-interactive batch}"
                     printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch vsock}"
+                    printf 'network-transport: %s\n' "${RTV_TRANSPORT:-tap}"
                     ;;
             esac
             ;;
@@ -181,6 +197,7 @@ run_dispatch() {
         export RTV_CAPS="${RTV_CAPS:-interactive batch}"
         export RTV_DECLARED="${RTV_DECLARED:-interactive batch vsock}"
         export RTV_CAPS_MODE="${RTV_CAPS_MODE:-ok}"
+        export RTV_TRANSPORT="${RTV_TRANSPORT:-tap}"
         # shellcheck source=/dev/null
         source "$WORK/dispatch.sh"
     ) >"$out" 2>&1 || rc=$?
@@ -471,7 +488,7 @@ printf '\n=== 11. the capability probe fails CLOSED (the fail-OPEN regression) =
 # launcher that does not know the subcommand at all — silently restored the
 # vacuous passes the dispatch exists to prevent. Every malformed answer must
 # abort the run instead.
-for mode in fail nodeclared nocaps; do
+for mode in fail nodeclared nocaps notransport badtransport; do
     RTV_CAPS_MODE="$mode"
     rc="$(run_dispatch all 1)"
     RTV_CAPS_MODE=ok
@@ -481,7 +498,7 @@ for mode in fail nodeclared nocaps; do
     else
         fail "an unusable capability answer ($mode) let the run continue"
     fi
-    if grep -qE 'could not be read|printed no' "$log"; then
+    if grep -qE 'could not be read|printed no|does not know how to gate on' "$log"; then
         pass "the abort explains WHY the capability set is unusable ($mode)"
     else
         fail "no explanation for the unusable capability answer ($mode): $(cat "$log")"
@@ -606,6 +623,35 @@ if grep -q '^#     sections ran: seed$' "$log"; then
 else
     fail "a batch-only host without vsock did not narrow to 'seed': $(grep '^#     sections ran:' "$log" || echo missing)"
 fi
+
+printf '\n=== 13. the MODEL TRANSPORT is read from the launcher and reported ===\n'
+# Lightweight plan phase 6 (the literal objective): a `vsock`-transport host has
+# NO guest network interface, so the suite must KNOW that — its network denials
+# would otherwise be unfalsifiable. The answer is read from the same
+# machine-readable `capabilities` output and reported in the run header; an
+# absent or unknown transport ABORTS (covered by the `notransport` /
+# `badtransport` modes of scenario 10). The transport does NOT gate which
+# sections run: `net` and `l2` adapt INSIDE their bodies (asserting the absence
+# of the interface) rather than being skipped, so coverage does not shrink.
+for t in tap vsock; do
+    RTV_TRANSPORT="$t"
+    RTV_CAPS="batch vsock"
+    rc="$(run_dispatch all 1)"
+    RTV_TRANSPORT=tap
+    RTV_CAPS="interactive batch"
+    log="$WORK/run-all-1.log"
+    expect "transport=$t all+up exits 0" 0 "$rc"
+    if grep -q "^#     model transport of the host under test: $t " "$log"; then
+        pass "the run reports the model transport it read ($t)"
+    else
+        fail "the model transport was not reported ($t): $(grep 'model transport' "$log" || echo missing)"
+    fi
+    if grep -q '^#     sections ran: boot net l2 creds lifecycle malrepo forgery seed$' "$log"; then
+        pass "transport=$t runs every section (the transport gates no section)"
+    else
+        fail "transport=$t changed which sections run: $(grep '^#     sections ran:' "$log" || echo missing)"
+    fi
+done
 
 printf '\n%s: %d passed, %d failed\n' "$0" "$PASSED" "$FAILED"
 ((FAILED == 0)) || exit 1
