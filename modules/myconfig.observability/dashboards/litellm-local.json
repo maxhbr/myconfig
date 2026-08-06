@@ -1,0 +1,338 @@
+{
+  "variables": [
+    {
+      "name": "host",
+      "label": "host",
+      "type": "query",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "query": "label_values(litellm_proxy_total_requests_metric_total, host)",
+      "refresh": 2,
+      "includeAll": true,
+      "multi": true,
+      "sort": 1,
+      "hide": 0,
+      "skipUrlSync": false,
+      "options": [],
+      "current": { "selected": true, "text": "All", "value": "$__all" }
+    },
+    {
+      "name": "model",
+      "label": "model",
+      "type": "query",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "query": "label_values(litellm_proxy_total_requests_metric_total{host=~\"$host\"}, requested_model)",
+      "refresh": 2,
+      "includeAll": true,
+      "multi": true,
+      "sort": 1,
+      "hide": 0,
+      "skipUrlSync": false,
+      "options": [],
+      "current": { "selected": true, "text": "All", "value": "$__all" }
+    }
+  ],
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "LiteLLM operational observability (local additions)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
+      "id": 101,
+      "type": "timeseries",
+      "title": "Requests / s by model",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Proxy request rate grouped by requested model.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max", "mean"] },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (requested_model) (rate(litellm_proxy_total_requests_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval]))",
+          "legendFormat": "{{requested_model}}",
+          "refId": "A",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "type": "timeseries",
+      "title": "Failure rate (failed / total requests)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Ratio of failed to total proxy requests. clamp_min with a near-zero floor avoids division by zero when there is no traffic, without distorting the ratio at low request rates.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.05 }, { "color": "red", "value": 0.2 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(litellm_proxy_failed_requests_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])) / clamp_min(sum(rate(litellm_proxy_total_requests_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])), 1e-9)",
+          "legendFormat": "failure rate",
+          "refId": "A",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "type": "timeseries",
+      "title": "Total request latency p50 / p95 (s)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "End-to-end proxy request latency percentiles from the litellm_request_total_latency_metric histogram buckets.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, requested_model) (rate(litellm_request_total_latency_metric_bucket{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{requested_model}}",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, requested_model) (rate(litellm_request_total_latency_metric_bucket{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{requested_model}}",
+          "refId": "B",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "type": "timeseries",
+      "title": "LLM API latency p50 / p95 (s)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Upstream LLM API call latency percentiles from the litellm_llm_api_latency_metric histogram buckets.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, requested_model) (rate(litellm_llm_api_latency_metric_bucket{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{requested_model}}",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, requested_model) (rate(litellm_llm_api_latency_metric_bucket{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{requested_model}}",
+          "refId": "B",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "type": "timeseries",
+      "title": "Time to first token p50 / p95 (s)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Time-to-first-token percentiles from the litellm_llm_api_time_to_first_token_metric histogram buckets.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, requested_model) (rate(litellm_llm_api_time_to_first_token_metric_bucket{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{requested_model}}",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, requested_model) (rate(litellm_llm_api_time_to_first_token_metric_bucket{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{requested_model}}",
+          "refId": "B",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 106,
+      "type": "timeseries",
+      "title": "LiteLLM overhead latency p50 / p95 (s)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Proxy processing overhead, in seconds (the upstream metric docstring claims milliseconds, but the histogram shares the same second-based latency buckets as the other latency metrics). The overhead metric exposes the model_group label (same values as requested_model), so $model filters on model_group here.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, model_group) (rate(litellm_overhead_latency_metric_bucket{host=~\"$host\",model_group=~\"$model\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{model_group}}",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, model_group) (rate(litellm_overhead_latency_metric_bucket{host=~\"$host\",model_group=~\"$model\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{model_group}}",
+          "refId": "B",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 107,
+      "type": "timeseries",
+      "title": "Input tokens / s by model",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Input (prompt) token rate grouped by requested model.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "mean"] },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (requested_model) (rate(litellm_input_tokens_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval]))",
+          "legendFormat": "{{requested_model}}",
+          "refId": "A",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 108,
+      "type": "timeseries",
+      "title": "Output tokens / s by model",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Output (completion) token rate grouped by requested model.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "mean"] },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (requested_model) (rate(litellm_output_tokens_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval]))",
+          "legendFormat": "{{requested_model}}",
+          "refId": "A",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 109,
+      "type": "timeseries",
+      "title": "Total tokens / s by model",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Total token rate (input + output) grouped by requested model.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "mean"] },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (requested_model) (rate(litellm_total_tokens_metric_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval]))",
+          "legendFormat": "{{requested_model}}",
+          "refId": "A",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 110,
+      "type": "timeseries",
+      "title": "Deployment state (0 healthy / 1 partial / 2 outage)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Per-deployment health gauge. litellm_deployment_state has no requested_model label, so it is filtered by host only; the legend shows the underlying model name and provider.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "max": 2 }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "litellm_deployment_state{host=~\"$host\"}",
+          "legendFormat": "{{litellm_model_name}} ({{api_provider}})",
+          "refId": "A",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 111,
+      "type": "timeseries",
+      "title": "Deployment success vs failure / s",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Successful and failed LLM API deployment responses per second, grouped by underlying model name and filtered by requested model.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 41 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (litellm_model_name) (rate(litellm_deployment_success_responses_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval]))",
+          "legendFormat": "ok {{litellm_model_name}}",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "sum by (litellm_model_name) (rate(litellm_deployment_failure_responses_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval]))",
+          "legendFormat": "fail {{litellm_model_name}}",
+          "refId": "B",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 112,
+      "type": "timeseries",
+      "title": "Fallbacks / s (successful vs failed)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Model fallback rate. Where no fallbacks are configured these counters are absent and the panel shows no data.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 49 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum by (requested_model, fallback_model) (rate(litellm_deployment_successful_fallbacks_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval]))",
+          "legendFormat": "ok {{requested_model}} -> {{fallback_model}}",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "sum by (requested_model, fallback_model) (rate(litellm_deployment_failed_fallbacks_total{host=~\"$host\",requested_model=~\"$model\"}[$__rate_interval]))",
+          "legendFormat": "fail {{requested_model}} -> {{fallback_model}}",
+          "refId": "B",
+          "range": true
+        }
+      ]
+    }
+  ]
+}

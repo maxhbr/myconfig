@@ -57,3 +57,96 @@ Each dashboard is passed through `jq` at NixOS build time to:
 3. Replace the top-level `uid` with a stable `myconfig-unifi-<slug>`
    so subsequent rebuilds update the same dashboard row in Grafana
    instead of cloning a new one.
+
+---
+
+## LiteLLM dashboard (fetched via nvfetcher, NOT vendored here)
+
+Unlike the UniFi JSON files above, the LiteLLM Grafana dashboard is
+**not** committed to this directory. It is fetched at build time from
+the upstream LiteLLM repository and rewritten on the fly. Two helper
+files *are* committed here and contain only repository-specific
+additions — never a copy of the upstream dashboard:
+
+- `litellm-rewrite.jq` — the build-time `jq` rewrite program.
+- `litellm-local.json` — a small fragment with the `$host` / `$model`
+  template variables and the locally maintained operational panels.
+
+### Pin
+
+`nvfetcher.toml` entry `litellm-grafana-dashboard` tracks LiteLLM's
+`main` branch (`src.git`), but `fetch.url` downloads only the dashboard
+JSON from the exact commit nvfetcher resolves (`$ver` -> immutable
+commit). The commit and hash are frozen in `_sources/generated.nix`
+(regenerate with `nix run nixpkgs#nvfetcher`); the generated URL
+contains a full 40-char Git commit, so the fetch is immutable. No
+upstream repository clone enters the Nix store — only the single JSON
+file, consumed via `pkgs.fetchurl` (not `fetchFromGitHub`).
+
+Upstream path (inside `BerriAI/litellm`):
+`cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json`.
+
+### Build-time rewrite (`litellm-rewrite.jq`, wired by `../host.litellm.nix`)
+
+The upstream JSON is piped through `litellm-rewrite.jq` inside a
+`runCommand`, with `litellm-local.json` slurped via `--slurpfile local`.
+The rewrite:
+
+1. Strips `__inputs` / `__requires`, clears the numeric Grafana `id`,
+   pins a stable `uid = "myconfig-litellm"` (so rebuilds update the same
+   dashboard row instead of cloning), and localises `title` / `tags`.
+2. Drops the upstream `DS_PROMETHEUS` datasource template variable.
+3. Removes panels that depend on LiteLLM virtual keys / teams /
+   database-backed spend (grouped by `api_key_alias` / `team_alias`, or
+   referencing `litellm_spend_metric_total`). This deployment runs no
+   LiteLLM database, so those panels would always be empty. Removal
+   matches on a stable-title substring **and** PromQL-label usage, not
+   panel position.
+4. Rewrites only *known Prometheus* datasource references (string or
+   object form — `${DS_PROMETHEUS}`, `$DS_PROMETHEUS`, `prometheus`, or
+   `{ type: "prometheus", uid: "..." }`) to
+   `{ type: "prometheus", uid: "victoriametrics" }`. The Grafana
+   built-in `"-- Grafana --"` annotation datasource (string or object)
+   and `null` datasources are preserved, as are any unrelated
+   datasource types — the rewrite will not silently turn a future
+   Loki/Tempo datasource into Prometheus.
+5. Rewrites upstream PromQL: fixes two legacy gauge names the pinned
+   upstream still references, inserts `host=~"$host"` into every
+   `litellm_*` metric (all scraped series carry the `host` external
+   label from vmagent), and switches the fixed `[2m]` window to
+   `$__rate_interval`. Model filtering is **not** blanket-applied (not
+   every metric exposes the `requested_model` label); the local panels
+   add it where the metric supports it.
+6. Appends the local additions from `litellm-local.json`: the `$host`
+   and `$model` template variables plus the locally maintained panels
+   (request-by-model, failure-rate ratio, latency p50/p95, TTFT,
+   overhead, token throughput, deployment health, fallbacks). Local
+   panels are offset below the last upstream panel so nothing overlaps
+   regardless of upstream drift.
+7. Asserts the final structure (panels array, title, `$host` / `$model`
+   variables, a `victoriametrics` datasource reference, at least one
+   LiteLLM PromQL target, and at least one request / failure / latency
+   panel) so an upstream change that breaks the assumptions fails the
+   build loudly. A trailing `jq -e .` fails it on invalid JSON.
+
+### Scrape & datasource
+
+- vmagent scrapes the **trailing-slash** endpoint `/metrics/` (the bare
+  `/metrics` endpoint redirects with HTTP 307). See
+  `modules/myconfig.observability/client.nix` (job `litellm`).
+- The dashboard uses the datasource UID `victoriametrics` (the existing
+  VictoriaMetrics Grafana datasource). No PostgreSQL, Prisma, virtual-key,
+  team, or spend-log configuration is involved — the operational metrics
+  come from LiteLLM's `prometheus` callback and need no database. Spend
+  logs remain disabled.
+
+### Result
+
+A single `litellm.json` placed in a `runCommand` output dir consumed by
+the Grafana file provider (folder `AI`, UID `myconfig-litellm`).
+
+To refresh the upstream dashboard, run `nix run nixpkgs#nvfetcher`
+(which re-checks every nvfetcher source, not only LiteLLM) and review
+the resulting `_sources/generated.nix` diff. If the rewrite assertions
+then fail, `litellm-rewrite.jq` / `litellm-local.json` need updating to
+match the new upstream layout.
