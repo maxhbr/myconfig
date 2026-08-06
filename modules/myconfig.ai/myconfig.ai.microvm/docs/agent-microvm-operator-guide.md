@@ -44,13 +44,19 @@ agent-microvm capabilities         # what this host's guests can do (no root nee
 > $ agent-microvm capabilities
 > capabilities: interactive
 > declared: interactive batch vsock
+> network-transport: tap
 > ```
 >
 > `console` is never refused (it reads the host's `microvm@<slot>` journal, so it
 > works even for a guest without sshd). A batch-only host that ALSO selects
 > `vsock` (plan phase 6) gets a VSOCK `sshd-vsock@` control channel — `ssh`
-> works over VSOCK, so the runtime-validation suite can reach it. See
-> [Capabilities](./agent-microvm.md#capabilities).
+> works over VSOCK, so the runtime-validation suite can reach it. And a host that
+> selects `vsock` WITH `networkProfile = "proxy-only"` reports
+> `network-transport: vsock`: its guests have NO network interface at all, the
+> model API travels over AF_VSOCK to a per-VM host forwarder, and there is no
+> bridge, no TAP and no firewall chain on the host. See
+> [Capabilities](./agent-microvm.md#capabilities) and
+> [VSOCK versus TAP transport](./agent-microvm.md#vsock-versus-tap-transport).
 
 ## 1. Start an interactive task
 
@@ -359,17 +365,24 @@ non-zero if any check fails, so it is scriptable:
 sudo agent-microvm doctor
 ```
 
-It reports, section by section:
+It reports, section by section (the header line names the resolved model
+transport, and the transport-specific sections are the ones this host actually
+has — `doctor` never reports a component the host deliberately does not build):
 
 - **host LiteLLM backend** — is `litellm.service` active, and does
   `127.0.0.1:<litellmPort>/v1/models` answer?
-- **bridge-only forwarder socket** — is `agent-litellm-proxy.socket` active,
-  and is it ordered after `<bridge>-netdev.service` (so `SO_BINDTODEVICE`
-  succeeds at boot)?
-- **private bridge + gateway address** — does the bridge interface exist and
-carry the gateway address?
-- **firewall** — are the `AGENT_MICROVM_INPUT` / `AGENT_MICROVM_FORWARD` chains
-installed, and does the INPUT chain ACCEPT the LiteLLM endpoint?
+- under the **`tap`** transport:
+  - **bridge-only forwarder socket** — is `agent-litellm-proxy.socket` active,
+    and is it ordered after `<bridge>-netdev.service` (so `SO_BINDTODEVICE`
+    succeeds at boot)?
+  - **private bridge + gateway address** — does the bridge interface exist and
+    carry the gateway address?
+  - **firewall** — are the `AGENT_MICROVM_INPUT` / `AGENT_MICROVM_FORWARD` chains
+    installed, and does the INPUT chain ACCEPT the LiteLLM endpoint?
+- under the **`vsock`** transport: **per-VM AF_VSOCK model forwarder** — is
+  `agent-litellm-vsock-<slot>.socket` active for every slot (its listener is
+  `<stateRoot>/<slot>/notify.vsock_<litellmPort>`)? It also states explicitly
+  that no bridge, TAP or firewall chain is expected.
 - **per-slot SSH host keys** — does every slot have a host-key directory?
 
 Each line is prefixed `OK` or `FAIL` with a concrete remediation hint. Run it

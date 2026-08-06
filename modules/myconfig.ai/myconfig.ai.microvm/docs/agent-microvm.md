@@ -190,7 +190,7 @@ closure is byte-for-byte unchanged.
 | --- | --- |
 | `interactive` | the SSH server (`enableSsh`) and the per-slot SSH host identity with its read-only `hostkeys/` subdirectory, the `known_hosts` database and its provisioning unit, the guest `agent-run` entry point, the Workmux `microvm-<agent>` panes, and the launcher's `run` / `ssh` subcommands |
 | `batch` | the TRUSTED guest job controller, the UNTRUSTED `agent-job-worker@` template, the guest job-protocol programs, the `input/`, `controller/`, `worker/` and `worker-logs/` subdirectories of the session tree (with their host tmpfiles rules), the host-side result archive `<runtimeRoot>/results`, and the launcher's `submit` / `cancel` subcommands |
-| `vsock` | a **VSOCK control channel** (plan phase 6): the guest gets a VSOCK device (`microvm.vsock.cid` = the slot's deterministic CID) and a VSOCK-only `sshd-vsock@` unit (SSH over AF_VSOCK, reused from upstream), reachable ONLY from the host (CID 2) and NOT from any TCP interface. The per-slot SSH host identity (`hostkeys/`) and a `known_hosts` entry keyed by the VSOCK mux path are provisioned, so the VSOCK channel is host-key-verified exactly like the TAP one. It is what lets a batch-only host — which has no TCP sshd — still be driven by `agent-microvm ssh` and the runtime-validation suite. **Additive**: the TAP/bridge/firewall and the loopback LiteLLM forwarder are unchanged; `vsock` is a control-channel axis, not a transport enum. Only allowed with `networkProfile = "proxy-only"`/`"offline"`, and requires an `sshPublicKeyFile` (the VSOCK sshd authorises the same dedicated key). |
+| `vsock` | **AF_VSOCK** as the guest's channel to the host (plan phase 6), in two layers. (1) A VSOCK CONTROL channel, always: the guest gets a VSOCK device (`microvm.vsock.cid` = the slot's deterministic CID) and a VSOCK-only `sshd-vsock@` unit (SSH over AF_VSOCK, reused from upstream), reachable ONLY from the host (CID 2) and NOT from any TCP interface, host-key-verified through the per-slot identity (`hostkeys/`) and a `known_hosts` entry keyed by the VSOCK mux path — which is what lets a batch-only host, with no TCP sshd, still be driven by `agent-microvm ssh` and the runtime-validation suite. (2) Together with `networkProfile = "proxy-only"` it ALSO becomes the MODEL transport, and then the guest has **no network interface at all**: no TAP, no address, no route, no networkd, and the host builds no bridge, no firewall chain and no bridge socket — only ONE destination-fixed AF_VSOCK forwarder per VM. See [VSOCK versus TAP transport](#vsock-versus-tap-transport). Only allowed with `networkProfile = "proxy-only"`/`"offline"`, and requires an `sshPublicKeyFile` (the VSOCK sshd authorises the same dedicated key). |
 
 A deselected capability is **absent**, not merely unused: the units are not in
 the guest, the programs are not in its closure, and the directories are never
@@ -213,6 +213,16 @@ myconfig.ai.microvm.enableSsh = false;   # REQUIRED (see below)
 # runtime-validation suite reach the guest — closing the batch-only coverage hole
 myconfig.ai.microvm.capabilities = [ "batch" "vsock" ];
 myconfig.ai.microvm.enableSsh = false;
+myconfig.ai.microvm.sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
+
+# THE LIGHTEST SECURE SHAPE (plan phase 6, the literal objective): an
+# interactive Codex-only host whose guest has NO network interface at all. The
+# model API goes guest 127.0.0.1:4000 -> AF_VSOCK -> a per-VM host forwarder ->
+# 127.0.0.1:4000, `agent-microvm ssh` / `run --attach` go over the VSOCK control
+# channel, and the host builds no bridge, no TAP and no firewall chain.
+myconfig.ai.microvm.capabilities = [ "interactive" "batch" "vsock" ];
+myconfig.ai.microvm.networkProfile = "proxy-only";   # the module default
+myconfig.ai.microvm.enabledAgents = [ "codex" ];
 myconfig.ai.microvm.sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
 ```
 
@@ -246,6 +256,7 @@ machine-readable, needs no root and starts nothing:
 $ agent-microvm capabilities
 capabilities: interactive
 declared: interactive batch vsock
+network-transport: tap
 ```
 
 This is how tooling decides what can be exercised on a host; nothing has to infer
@@ -268,26 +279,73 @@ batch+vsock host runs ALL eight. See
 
 ### VSOCK versus TAP transport
 
-The guest's **model-API** traffic (the LiteLLM proxy) always goes over the
-**TAP**/private-bridge path today: the guest's loopback `litellm-forwarder`
--> `<gatewayAddress>:<litellmPort>` -> the host's bridge-only
-`agent-litellm-proxy` socket -> `systemd-socket-proxyd` -> the loopback LiteLLM
-proxy. That forwarder is the ONE shape the module has; the plan's literal
-phase-6 sketch (a VSOCK *proxy* forwarder replacing the TAP) is **not**
-implemented — it would fork that one shape — and is recorded as a deviation.
+There are exactly TWO transports for the guest's **model-API** traffic, and the
+module resolves which one a host uses ONCE, from the network profile plus the
+capability set (`./network-profiles.nix` -> `agentNetwork.transport`):
 
-`vsock` is a **control** channel, not a proxy transport: it carries
-`agent-microvm ssh` / the runtime-validation suite (host -> guest commands and
-their output) over AF_VSOCK instead of the TAP, so a guest with no TCP sshd
-(batch+vsock) can still be driven. It reuses the per-slot SSH host identity, so
-the channel is host-key-verified exactly like the TAP one. The two coexist on a
-host that selects both `interactive` and `vsock` (TAP for the model API and for
-`ssh` when the TCP sshd is up; VSOCK as a second control channel). The launcher
-reaches the guest's VSOCK sshd as `ssh vsock-mux/<stateRoot>/<slot>/notify.vsock`,
-a hostname that resolves only through the `Host vsock-mux/*` ProxyCommand
-nixpkgs' `programs.ssh.systemd-ssh-proxy.enable` (default true) supplies; this
-module **asserts** that option is enabled whenever `vsock` is selected, so a
-host that disables it fails at evaluation rather than at runtime.
+| transport | when | what the guest has | what the host builds |
+| --- | --- | --- | --- |
+| `tap` | every host except the one below | a TAP on the private bridge, the slot's static IPv4, a default route, systemd-networkd | the bridge + gateway address, the per-TAP L2 isolation units, the `AGENT_MICROVM_*` firewall chains, the bridge-only `agent-litellm-proxy` socket |
+| `vsock` | the `vsock` capability **and** `networkProfile = "proxy-only"` | **NO network interface at all** (loopback only): no TAP, no address, no route, no networkd, no dhcpcd | ONE `agent-litellm-vsock-<slot>` socket + service PER VM, and nothing else — no bridge, no TAP, no firewall chain, no bridge socket |
+
+Under the `vsock` transport the model API travels:
+
+```text
+guest agent -> 127.0.0.1:<litellmPort>              (UNCHANGED endpoint)
+  -> guest per-connection socat bridge (litellm-forwarder@)
+  -> AF_VSOCK CID 2 (the host), port <litellmPort>
+  -> cloud-hypervisor's per-VM mux socket
+     <stateRoot>/<slot>/notify.vsock_<litellmPort>
+  -> the per-VM host forwarder (systemd-socket-proxyd)
+  -> 127.0.0.1:<litellmPort>                        (the loopback LiteLLM proxy)
+```
+
+The guest-visible endpoint is deliberately the SAME `127.0.0.1:<litellmPort>`
+the TAP transport presents, so the host-provisioned agent configuration
+(`OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, the staged dotfiles) works verbatim —
+switching transport reconfigures no agent.
+
+Why this is STRICTLY stronger than `tap` + `proxy-only`:
+
+- the guest cannot address the host LAN, the VPN, cloud metadata, DNS, another
+  guest or another host port, because it has no interface to address them WITH.
+  Invariant 6 becomes an ABSENT DEVICE instead of a firewall verdict;
+- the host forwarder is **one listener per VM**, bound to a Unix socket inside
+  that VM's own state directory (`root:kvm` `0660`, reachable only by the VMM
+  process and root) and **destination-fixed** to `127.0.0.1:<litellmPort>`. It is
+  not a CONNECT proxy: the guest cannot name a host, a port or a CID, and the
+  forwarder itself is confined with `IPAddressAllow=localhost` +
+  `IPAddressDeny=any`, `DynamicUser`, `ProtectSystem=strict`;
+- slot A cannot use slot B's model path: there is no shared namespace and no CID
+  to spoof, only per-VM socket paths.
+
+With **no** guest interface, the TCP sshd could never be reached either, so a
+`vsock`-transport host masks `sshd.service` (and keeps 22 out of the guest
+firewall) whatever `enableSsh` says, and every launcher path — `ssh`,
+`run --attach`, the readiness poll, `status` — uses the VSOCK control channel
+(`SSH_ENABLED=0`, `VSOCK_ENABLED=1`). The VSOCK `sshd-vsock@` is host-key
+verified exactly like the TAP one: the launcher reaches it as
+`ssh vsock-mux/<stateRoot>/<slot>/notify.vsock`, a hostname that resolves only
+through the `Host vsock-mux/*` ProxyCommand nixpkgs'
+`programs.ssh.systemd-ssh-proxy.enable` (default true) supplies; the module
+**asserts** that option is enabled whenever `vsock` is selected, so a host that
+disables it fails at evaluation rather than at runtime.
+
+`vsock` WITHOUT `proxy-only` (i.e. with `offline`, the only other profile it is
+allowed with) keeps the `tap` transport and adds the VSOCK **control** channel
+only: an `offline` guest has no model API to carry, so there is nothing to move
+off the TAP. `package-access`/`internet` need ordinary IP networking and are
+rejected together with `vsock` at evaluation.
+
+`agent-microvm capabilities` reports the resolved transport machine-readably
+(`network-transport: tap|vsock`) next to the capability set, and the real-KVM
+suite reads it: its `net` section then asserts the guest has NO non-loopback
+link, no default route and no global address instead of testing a firewall that
+does not exist, and its `l2` section asserts the same for both guests and states
+that the bridge-port/ARP/impersonation subtests do not apply. An absent or
+unknown transport HARD-ABORTS the run, exactly like an unparseable capability
+set — the suite must never turn "the guest has no interface" into a silent
+vacuous pass.
 
 Stale directories from a PREVIOUS capability selection are handled, not ignored:
 the launcher sweeps every top-level entry of a slot's two trees that the current

@@ -40,9 +40,11 @@ sudo agent-microvm doctor
 ```
 
 `doctor` is read-only and exits `0` when every component of the model-API path
-is fine (host LiteLLM, the bridge-only forwarder socket, the private bridge and
-its gateway address, the firewall chains, the per-slot SSH host keys). Each line
-is `OK` or `FAIL` with a remediation hint.
+is fine (host LiteLLM, plus — depending on the resolved model transport, which it
+prints — either the bridge-only forwarder socket, the private bridge and its
+gateway address and the firewall chains, or the per-VM AF_VSOCK forwarder
+sockets; and the per-slot SSH host keys). Each line is `OK` or `FAIL` with a
+remediation hint.
 
 Fix any `FAIL` before booting a VM. Skipping this step is the single most common
 way to waste an hour on "the agent died after two seconds": both `run` and
@@ -63,7 +65,12 @@ step is refused with `'submit' needs the 'batch' capability` (or
 `'run' needs the 'interactive' capability`), the host deliberately selects only
 one of them — see [Capabilities](./agent-microvm.md#capabilities). A host that
 also selects the `vsock` capability (plan phase 6) gets a VSOCK control channel
-that lets `agent-microvm ssh` reach a guest even without a TCP sshd.
+that lets `agent-microvm ssh` reach a guest even without a TCP sshd — and with
+`networkProfile = "proxy-only"` its guests have no network interface at all (the
+model API goes over AF_VSOCK; see
+[VSOCK versus TAP transport](./agent-microvm.md#vsock-versus-tap-transport)).
+Nothing in this journey changes: the guest endpoint, the commands and the outputs
+are identical under both transports.
 
 ## 1. Interactive: hand a task to an agent
 

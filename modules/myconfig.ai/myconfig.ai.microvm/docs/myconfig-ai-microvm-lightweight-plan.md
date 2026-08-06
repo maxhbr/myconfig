@@ -4,13 +4,13 @@
 
 | Phase | Status | Notes |
 | --- | --- | --- |
-| 0 — baseline and measurement | partially done | Behaviour-preserving refactors are verified with the repo's `nix eval` snapshot/diff workflow (`AGENTS.md`) instead of a bespoke benchmark harness; a machine-readable runtime benchmark (closure size, launch latency, process counts) is **not** implemented — it needs a KVM host and belongs with the out-of-CI runtime-validation tier. |
+| 0 — baseline and measurement | **done for everything that does not need KVM** | Behaviour-preserving refactors are verified with the repo's `nix eval` snapshot/diff workflow (`AGENTS.md`). The machine-readable benchmark the phase asks for now exists: `tests/measure-boot.sh` emits ONE JSON document with closure sizes (`nix path-info -S` of every slot's `system.build.toplevel` and `microvm.declaredRunner`), generated guest unit/socket counts, virtiofs share counts, guest network-interface counts and host helper units per VM; `--static-only` needs neither root nor `/dev/kvm`. Recorded before/after numbers (baseline `ca309d221b` vs HEAD, and the Codex-only `tap` vs `vsock` shapes) are in [runtime validation → Measurements](./agent-microvm-runtime-validation.md#measurements-plan-phase-0--the-phase-6-acceptance-numbers). STILL PENDING a real-KVM run (deliberately NOT estimated): launch-to-ready latency, idle RSS per slot, running host/guest process counts, warm build time. |
 | 1 — opt-in lightweight profile | **done, then COLLAPSED** | Landed as `myconfig.ai.microvm.profile = "full" \| "lite"` (table in the former `../profiles.nix`). The compatibility boundary has since been REMOVED together with the `full` path: the `lite` values (pinned `microvm.optimize.enable` + `storeDiskType = "erofs"`) are now the unconditional behaviour and there is no `profile` option. Test: `checks.microvm-eval-guest-shape`. See [Collapsing the two profiles into one path](#collapsing-the-two-profiles-into-one-path). |
 | 2 — build only selected agents | **done** | `myconfig.ai.microvm.enabledAgents`; the module-wide default is `null` = EVERY declared agent (the profile-supplied `[ "codex" ]` default died with the profile table — see the collapse section for the closure trade-off). The selection is applied ONCE in `../agents.nix`, so guest closure, `agent-run`, batch dispatch, launcher validation/help, workmux registrations and agent-state paths all follow. Test: `checks.microvm-eval-enabled-agents`. |
 | 3 — runtime config staging | **done**, unconditional | `myconfig.ai.microvm.configSeed` (`../config-seed.nix`) stages an ALLOWLISTED, root-owned copy of the host agent configuration per launch; the guest sees it through a per-slot READ-ONLY virtiofs share and a root oneshot copies it into the disposable `/home/agent` before sshd, the batch controller and the agent-state linker. The allowlist is the SELECTED agents' new registry field `configPaths` plus `configSeed.extraPaths`. Guest home-manager activation is gone (the module no longer contains it). The credential denylist is applied to a path's own name AND to its RESOLVED target, the staged tree is root-only (0500/0400), the manifest stays outside the share, and the staged paths must be disjoint from the persisted agent-state directories. Tests: `checks.microvm-config-seed` (eval/build) plus `runtime-validation.sh --section seed` (root, enforcement). |
 | 4 — consolidate writable shares | **done**, unconditional | `myconfig.ai.microvm.session` (`../session.nix`) is the ONE source of truth for the per-session tree: `<runtimeRoot>/sessions/<slot>/` is ONE writable virtiofs share (`workspace/`, `input/`, `controller/`, `worker/`, `worker-logs/`, `state/`) and `<runtimeRoot>/sessions-ro/<slot>/` ONE read-only share (`hostkeys/`, `config-seed/`). `../job.nix`, `../state.nix`, `../config-seed.nix`, `../hostkeys.nix`, the host tmpfiles rules, the generated pre-launch verifier `agent-microvm-verify-session` and `../launcher.nix` all DERIVE from its layout table — there is exactly one implementation. Trust boundaries are unchanged (ownership + modes, passed through by virtiofsd); the guest gets `/workspace` as a bind mount of the session tree. Test: `checks.microvm-session-tree`. |
 | 5 — split interactive/batch | **done**, opt-in narrowing | `myconfig.ai.microvm.capabilities` (a SET, default `[ "interactive" "batch" ]` = today's behaviour) selects which halves a host's guests carry. The decision lives in `../session.nix`'s layout table (per-capability entries) plus one resolved module arg (`agentCapabilities`); `job.nix`, `hostkeys.nix`, `guest.nix`, `workmux.nix` and the launcher each apply it in the ONE place that already owns the concern. A narrowing REMOVES units, guest programs, session subdirectories, tmpfiles rules and launcher subcommands. `enableSsh` is rejected without `interactive`, and `agent-microvm capabilities` reports the set machine-readably on every host. Test: `checks.microvm-capabilities` (eval + BUILD of the default, interactive-only and batch-only guest closures and runners). NOT done: `mode`-specific closure MEASUREMENTS (same tier as phase 0), rendering the launcher's batch CODE out of an interactive-only host, and RUNTIME validation of a batch-only host beyond `--section seed` (its transport is ssh; phase 6 is the enabler) — see the deviations. |
-| 6 — VSOCK transport | **done** (control channel, not the proxy forwarder) | `myconfig.ai.microvm.capabilities` gains a third token `vsock` (default OFF, so a default host's guest closure is byte-for-byte unchanged — verified with the AGENTS.md snapshot/diff). `vsock` is a NEW AXIS over the ONE guest shape, not a fork: it adds a VSOCK control channel (the `sshd-vsock@` unit, REUSED from upstream `microvm.vsock.cid` + NixOS' systemd-ssh-generator, NOT reinvented) so a batch-only host — which has no TCP sshd — can still be driven by `agent-microvm ssh` and the runtime-validation suite, closing the phase-5 coverage hole that named VSOCK as the enabler. The decision lives where the plan records: `declaredCapabilities` + `SECTION_CAPABILITIES` (a `transport` token = `interactive` OR `vsock`) + the `hostkeys/` entry of session.nix's layout table (`[ "interactive" "vsock" ]`). The TCP sshd is SUPPRESSED for a batch+vsock guest (`systemd.services.sshd.enable = false`) AND its TAP firewall opening for 22 is closed (`services.openssh.openFirewall = false`), so the phase-5 invariant is scoped to "no TCP/network SSH daemon" (no `sshd.service` AND no TAP firewall rule for 22); a VSOCK-only inetd sshd (host-only, over AF_VSOCK) is the control channel — a recorded deviation. The per-slot host key + a `known_hosts` entry keyed by the VSOCK mux path keep the channel host-key-verified exactly like the TAP one. NOT done: the plan's LITERAL phase-6 sketch — a VSOCK PROXY forwarder (guest `127.0.0.1:<port>` -> VSOCK -> host LiteLLM) REPLACING the TAP/bridge/firewall — would fork the one forwarder shape, so it is deferred; the proxy still goes over the TAP, unchanged. Tests: `checks.microvm-capabilities` (eval + BUILD of the default, interactive-only, batch-only AND batch+vsock guest closures/runners/launchers, the VSOCK plumbing asserted from evaluated config, three negative eval tests pinning the vsock+no-key / vsock+internet / vsock+package-access rejections) plus `microvm-rtv-dispatch` (a batch+vsock host now runs ALL eight sections over the VSOCK transport; a batch-only-without-vsock host still runs only `seed`). See [Phase 6 — Add a VSOCK transport](#phase-6--add-a-vsock-transport-for-proxy-only-mode) and the recorded deviations. |
+| 6 — VSOCK transport | **done, including the LITERAL proxy transport** | `myconfig.ai.microvm.capabilities` gains a third token `vsock` (default OFF, so a default host's guest closure is byte-for-byte unchanged — verified with the AGENTS.md snapshot/diff). It buys TWO things over the ONE guest shape, both resolved from ONE decision and neither a fork. (1) A VSOCK CONTROL channel (the `sshd-vsock@` unit, REUSED from upstream `microvm.vsock.cid` + NixOS' systemd-ssh-generator), which closes the phase-5 coverage hole: a batch-only host has no TCP sshd but can still be driven by `agent-microvm ssh` and the runtime-validation suite. (2) Together with `networkProfile = "proxy-only"`, the VSOCK MODEL TRANSPORT the plan literally sketched: the guest has **no network interface at all** (`microvm.interfaces = [ ]`, no static IP, no default route, no networkd, no dhcpcd), the model API travels `guest 127.0.0.1:<litellmPort>` → AF_VSOCK CID 2 → a PER-VM host forwarder → `127.0.0.1:<litellmPort>`, and the host builds no bridge, no TAP, no `AGENT_MICROVM_*` chain and no bridge-only socket. The transport decision lives in `../network-profiles.nix` (a transport table of positive capability flags + `resolveTransport`), is resolved ONCE in `../default.nix` (`agentNetwork.transport` / `.transportCaps` / `.tapSshUsable`) and is applied by each module in the ONE place that already owns the concern — `network.nix` (bridge/firewall/socket vs. per-VM forwarder), `guest.nix` (interfaces, networkd, the guest bridge, the unreachable TCP sshd), `session.nix` (which sshd the host-key mount ordering belongs to), `hostkeys.nix` (which `known_hosts` addresses exist) and `launcher.nix` (`SSH_ENABLED`, the doctor sections, the preflight endpoint). No consumer tests a transport NAME. SECURITY: strictly stronger than `tap` + `proxy-only` — invariant 6 becomes an ABSENT DEVICE instead of a firewall verdict, the host loses the bridge/TAP/NAT surface, the forwarder is one destination-fixed listener per VM (`root:kvm 0660` inside that VM's state dir, `IPAddressAllow=localhost` + `IPAddressDeny=any`, `DynamicUser`), and the layer-2 attack class (ARP spoofing, IP impersonation, co-resident scanning) ceases to exist. Tests: `checks.microvm-vsock-transport` (40 eval assertions with a positive control for every removal, plus a BUILT interactive-vsock guest closure/runner and greps of the built runner/launcher/host-key generator) and `checks.microvm-capabilities` (the batch+vsock shape); `microvm-rtv-dispatch` proves the suite READS the transport and hard-aborts on an absent/unknown one. NOT done: a real-KVM run of the AF_VSOCK model path (see phase 0's pending numbers and the recorded deviations). |
 | 7 — clone/startup optimisation | partially done | Clone: `git clone --local --no-hardlinks` with a `--no-local` fallback plus an explicit `objects/info/alternates` check (≈10× faster on this repo: 0.6 s vs 5 s, measured by hand — both variants produce a fully independent clone). Readiness: exponential-backoff SSH polling (250 ms → 2 s) under the unchanged 90 s ceiling, replacing the fixed 3 s interval. NOT done: readiness as a positive protocol signal (needs phases 3/6) and the install-unit generation guard (see deviations). |
 | 8 — minimize guest closure | **done**, unconditional | Every guest builds the documented minimal CLI toolset, a plain bash login shell (no fish) and drops NixOS' `environment.defaultPackages`; per-agent `extraPackages` in the registry keeps agent-specific runtimes tied to the selection. Test: `checks.microvm-eval-guest-shape`. |
 | 9 — testing | incremental | Each landed phase adds eval checks to `tests/microvm.nix`; the VM/adversarial tiers of this phase remain out of CI (see `docs/agent-microvm-runtime-validation.md`). |
@@ -400,8 +400,11 @@ was never used).
   UPDATE (phase 6 landed): CLOSED. A `capabilities = [ "batch" "vsock" ]` host
   drives the guest over the VSOCK `sshd-vsock@` control channel and runs ALL
   eight sections; only a batch-only-WITHOUT-`vsock` host still narrows to
-  `--section seed`. See the phase-6 section and its recorded deviations
-  (VSOCK is a control channel, not the literal proxy forwarder).
+  `--section seed`. See the phase-6 section and its recorded deviations. UPDATE 2
+  (the literal model transport landed): the suite additionally READS the resolved
+  model transport and, on a `vsock`-transport host, replaces the TAP-specific
+  parts of `net`/`l2` with positive assertions that the guest has no interface —
+  so closing the hole did not open a vacuity one.
 - **Phase 5, `capabilities = null` in the layout table means "unconditional"**
   (review follow-up). The first implementation spelled it
   `bothCapabilities = agentCapabilities.declared`, i.e. "any declared
@@ -481,22 +484,85 @@ was never used).
   collapse, for every guest) so an upstream default change cannot silently
   deoptimise the guest.
 
-- **Phase 6, the literal proxy-forwarder sketch is NOT implemented; VSOCK is a
-  CONTROL channel instead**. The plan's literal phase-6 design is a VSOCK PROXY
-  forwarder (`guest 127.0.0.1:<port>` -> VSOCK -> host LiteLLM) that ELIMINATES
-  the TAP/bridge/firewall/TCP-forwarder. NOT done. Two reasons: (1) it would
-  fork the ONE forwarder shape — a VSOCK proxy forwarder alongside the existing
-  TAP/bridge one is exactly the second transport shape the `full`/`lite` collapse
-  removed, and the design constraints outrank the plan's literal sketch on this
-  point; (2) the control-channel transport is the enabler the phase-5 deviation
-  actually named ("a console/vsock `guest` transport that does not require
-  sshd"), and closing the batch-only coverage gap is the phase's stated
-  motivation. This phase therefore implements VSOCK as a CONTROL channel
-  (reusing the upstream `sshd-vsock@` unit), ADDITIVE to the unchanged
-  TAP/bridge/firewall; the proxy still goes over the TAP. The literal
-  acceptance criteria ("no network interface other than loopback", "no TAP
-  device", "no bridge/firewall configuration") are therefore NOT met and stay
-  future work — recorded here rather than left implicit.
+- **Phase 6, the literal proxy-forwarder sketch — RESOLVED, it IS implemented**
+  (this entry previously recorded it as deferred). When `vsock` first landed it
+  was a CONTROL channel only, ADDITIVE to the unchanged TAP/bridge/firewall, on
+  the argument that a VSOCK proxy forwarder ALONGSIDE the TAP one would fork the
+  ONE forwarder shape. That argument was answered rather than overruled: the two
+  forwarders are not two shapes carried at once but ONE resolved TRANSPORT
+  (`../network-profiles.nix`'s `transports` table + `resolveTransport`, resolved
+  once in `../default.nix`), and every consumer reads the transport's CAPABILITY
+  FLAGS instead of testing a name — the same mechanism the network PROFILE
+  already used for "what may the guest reach". A host therefore has exactly one
+  forwarder, one launcher, one session layout and one guest shape; what the
+  transport decides is whether a network interface exists at all. The literal
+  acceptance criteria are now met and asserted with a positive control each ("no
+  network interface other than loopback", "no TAP device", "no bridge/firewall
+  configuration"). Scope kept narrow on purpose: the model transport switches
+  ONLY for `vsock` + `proxy-only`; `offline` (no model API to carry) and the
+  insecure profiles (which NEED IP networking) keep the TAP shape.
+- **Phase 6, `socat` in the guest, `systemd-socket-proxyd` on the host**. The
+  plan asks for "a small, auditable tool" on both sides and the module already
+  used `systemd-socket-proxyd` for the TAP forwarder — but socket-proxyd can only
+  forward to a `HOST:PORT` or UNIX target, never to AF_VSOCK, so the GUEST side
+  (the one that must dial CID 2) is a per-connection `socat -T30 -
+  VSOCK-CONNECT:2:<port>`. That is why the guest's `litellm-forwarder.socket`
+  switches to `Accept = yes` and a templated `litellm-forwarder@` instance under
+  the `vsock` transport. `socat` is referenced by the unit's ExecStart and is
+  deliberately NOT added to `environment.systemPackages`: the untrusted agent
+  must not gain a general-purpose socket tool in its PATH. Cost: ≈0.9 MB of guest
+  closure (measured), against three guest units, two guest sockets and the whole
+  host bridge/firewall surface removed.
+- **Phase 6, the host side is a UNIX socket, not an AF_VSOCK listener**. The
+  plan's security requirement is "the host listener must validate the expected
+  guest CID or use one listener per slot", and it reads as though the host binds
+  AF_VSOCK. With cloud-hypervisor it cannot: the guest's VSOCK device is
+  implemented in the VMM, so a guest-initiated connection to host CID 2 port N is
+  delivered to the Unix socket `<vm state>/notify.vsock_<N>` (the convention
+  microvm.nix itself uses for the guest's notify socket, `notify.vsock_8888`).
+  The module therefore listens there, ONE socket per VM, `root:kvm 0660` inside
+  that VM's own state directory. This satisfies the requirement's second branch
+  and is strictly stronger than CID validation would be: there is no shared
+  namespace and no CID for a guest to spoof. A consequence worth recording: this
+  binds the implementation to the cloud-hypervisor/firecracker mux convention —
+  which the module already depended on for the VSOCK control channel
+  (`ssh vsock-mux/...`) — and to `stateRoot == microvm.stateDir`, which is
+  asserted at eval.
+- **Phase 6, `litellmPort = 8888` is rejected under the VSOCK transport**. The
+  per-VM forwarder's socket path is `notify.vsock_<litellmPort>`, and microvm.nix
+  reserves AF_VSOCK port 8888 (`notify.vsock_8888`) for the guest's systemd
+  notify socket. A host that set `litellmPort = 8888` would have the model
+  forwarder and the notify bridge fight over one socket path, breaking either
+  readiness signalling or the model endpoint — both at runtime, both opaque. New
+  eval assertion, pinned by a test.
+- **Phase 6, the TCP sshd is suppressed for EVERY host whose interface is gone,
+  not just a batch-only one**. The first landing masked `sshd.service` when
+  `vsock && !enableSsh`. With the model transport, an INTERACTIVE host
+  (`enableSsh = true`) can also have no network interface, and then a TCP sshd
+  would listen where nothing can connect. The condition is therefore
+  `vsock && !tapSshUsable`, where `agentNetwork.tapSshUsable = enableSsh && the
+  transport has a guest interface` — resolved once in `../default.nix` and also
+  what `../launcher.nix` renders `SSH_ENABLED` from, so `ssh`, `run --attach`,
+  the readiness poll and `status` all take the VSOCK channel on such a host.
+  `enableSsh` is deliberately still NOT forced to `false` there: it remains the
+  switch for "this host has an SSH control channel", and the channel exists — it
+  is simply carried by AF_VSOCK.
+- **Phase 6, the guest KEEPS its firewall under the `vsock` transport**. Nothing
+  can reach a guest with no interface, so `networking.firewall` is pure overhead
+  by that argument — but it costs one unit, and keeping it means a future
+  regression that gives the guest a link cannot silently also give it an open
+  port. `services.openssh.openFirewall = false` keeps 22 out of it, and the tests
+  assert `allowedTCPPorts == [ ]`.
+- **Phase 6, the real-KVM suite ADAPTS its network sections instead of skipping
+  them**. `net` and `l2` are written as "the guest must NOT be able to reach X" —
+  which is trivially true for a guest with no interface, i.e. exactly the vacuous
+  pass the phase-5 capability dispatch was built to prevent. The suite therefore
+  reads the transport from `agent-microvm capabilities`
+  (`network-transport: tap|vsock`, HARD-ABORTING on an absent or unknown value)
+  and, under `vsock`, asserts the ABSENCE positively (no non-loopback link, no
+  IPv4/IPv6 default route, no global address, for both guests in `l2`) while
+  explicitly `SKIP`ping the TAP-specific subtests with the transport as the
+  reason. No section is gated away, so coverage does not shrink.
 - **Phase 6, the option spelling is a capability token, NOT a `transport` enum**.
   The plan sketches `myconfig.ai.microvm.transport = "tap" | "vsock"`. NOT
   adopted: a two-valued transport enum is a fork (two transport shapes), and
@@ -508,15 +574,14 @@ was never used).
   table's `capabilities = [ "interactive" "vsock" ]` on `hostkeys/`, and the
   runtime-validation `transport` token). No consumer gained an `if transport ==
   ...`; the module stays on ONE code path.
-- **Phase 6, `vsock` is restricted to `proxy-only`/`offline` even though it is
-  additive**. The plan says "Allow `vsock` only with `networkProfile =
-  "proxy-only"` or a fully offline profile". Kept verbatim even though the
-  additive control channel has no TECHNICAL conflict with `internet`/`package-
-  access` (the TAP still carries the proxy): it is the safer, more restrictive
-  choice, matches the plan's phase-9 eval test ("VSOCK transport selected with
-  internet access"), and `vsock` is the secure profile's control-transport
-  enabler. An operator wanting insecure egress uses the TAP transport
-  (`interactive`) and does not select `vsock`.
+- **Phase 6, `vsock` is restricted to `proxy-only`/`offline`**. The plan says
+  "Allow `vsock` only with `networkProfile = "proxy-only"` or a fully offline
+  profile", and that is enforced. It is no longer merely the safer choice: with
+  the model transport implemented, `package-access`/`internet` would be an
+  outright contradiction (they need routing, NAT and DNS, i.e. an interface).
+  `offline` + `vsock` is accepted and keeps the TAP shape plus the VSOCK CONTROL
+  channel — an `offline` guest has no model API to move off the TAP. An operator
+  wanting insecure egress does not select `vsock`.
 - **Phase 6, the phase-5 "a batch-mode guest has no SSH daemon" invariant is
   SCOPED, not abandoned**. A `capabilities = [ "batch" "vsock" ]` guest enables
   `services.openssh` (the `sshd-vsock@` unit + its NixOS dropins are gated on
@@ -629,6 +694,10 @@ Cloud Hypervisor/KVM
 │                           the writable tree)
 ├── runtime-staged, allowlisted host agent configuration
 └── VSOCK-only access to the host LiteLLM proxy
+    (phase 6: opt-in per host via `capabilities = [ … "vsock" ]` with
+     `networkProfile = "proxy-only"`; the guest then has NO network interface at
+     all and the host builds no bridge/TAP/firewall. Without `vsock` the same
+     shape uses the TAP + the `AGENT_MICROVM_*` chains.)
 ```
 
 Do not change the existing full-featured behavior without an explicit compatibility decision. Prefer introducing a new profile or opt-in options first, then changing defaults only after validation.
@@ -1281,133 +1350,179 @@ shellcheck failure (phase 4's SC2034).
 
 ---
 
-## Phase 6 — Add a VSOCK transport for proxy-only mode — **DONE** (control channel; the proxy forwarder is deferred)
+## Phase 6 — Add a VSOCK transport for proxy-only mode — **DONE** (control channel AND the literal model transport)
 
 Implemented as a THIRD capability token `vsock` on `myconfig.ai.microvm.capabilities`
 (default OFF, so the historical `[ "interactive" "batch" ]` is unchanged and a
 default host's guest closure is byte-for-byte identical — verified with the
 AGENTS.md evaluated-slice snapshot/diff). `vsock` is a NEW AXIS over the ONE
-guest shape, not a fork: it adds a VSOCK control channel and touches no second
-transport shape. The decision lives where the plan's own phase-5 deviation
-hardened the table for it: `declaredCapabilities` + `SECTION_CAPABILITIES` (a
-`transport` token = `interactive` OR `vsock`) + the `hostkeys/` entry of
-session.nix's layout table (now `[ "interactive" "vsock" ]`).
+guest shape, not a fork, and it buys two things:
 
-What `vsock` wires (REUSED, not reinvented):
+1. a VSOCK **control** channel — the `sshd-vsock@` unit, REUSED from upstream
+   `microvm.vsock.cid` + NixOS' systemd-ssh-generator — which is what closes the
+   phase-5 coverage hole (a batch-only host has no TCP sshd, so without it the
+   runtime-validation suite could only run `--section seed`);
+2. together with `networkProfile = "proxy-only"`, the **model transport** the
+   plan literally sketched: AF_VSOCK replaces the guest's network entirely.
 
-- `microvm.vsock.cid = <slot.cid>` in the guest (guest.nix) — the deterministic
-  per-slot VSOCK CID slots.nix already reserved. For cloud-hypervisor this also
-  flips `microvm@<slot>` to `Type=notify` and starts the socat <-> vsock bridge
-  that backs the device with `<stateRoot>/<slot>/notify.vsock` — exactly the
-  socket the host reaches `sshd-vsock@` (vsock::22) through.
-- The `sshd-vsock@` unit + `sshd-vsock.socket` NixOS' systemd-ssh-generator
-  creates whenever `services.openssh.enable` is true AND a VSOCK device is
-  present — reused, not a second sshd implementation.
-- The per-slot SSH host identity (hostkeys.nix) + a `known_hosts` entry keyed by
-  the VSOCK mux path (`vsock-mux/<stateRoot>/<slot>/notify.vsock`), so the VSOCK
-  channel is host-key-verified exactly like the TAP one.
-- The launcher's `ssh` / readiness poll / `status` connect over VSOCK
-  (`ssh vsock-mux/<path>`, login user via `-l`) when VSOCK is the ONLY control
-  channel (`VSOCK_ENABLED=1 && SSH_ENABLED=0`, i.e. a batch+vsock host); a host
-  with the TCP sshd keeps using the TAP, so its `ssh` path is unchanged in
-  behaviour.
+### The transport decision (where it lives)
 
-What closes the phase-5 coverage hole (the named motivation): a
-`capabilities = [ "batch" "vsock" ]` host has no TCP sshd but DOES have the VSOCK
-`sshd-vsock@`, so `runtime-validation.sh`'s `transport` requirement is met and
-ALL eight sections run, exactly as on an interactive host. A batch-only host
-WITHOUT `vsock` still runs only `--section seed` (no control channel at all) —
-the honest, narrower validation phase 6 did not change.
+ONE table, ONE resolution, no consumer that tests a transport name:
 
-### Goal (as literally sketched — NOT the implemented scope)
+- `../network-profiles.nix` — the authoritative `transports` table of POSITIVE
+  capability flags (`guestInterface`, `hostBridge`, `hostFirewall`,
+  `bridgeLitellm`, `vsockLitellm`, `tapSsh`) plus `resolveTransport { profile,
+  vsockCapability }`. This is the same file that already owned "what may a guest
+  reach"; "how does it get there" belongs next to it.
+- `../default.nix` — resolves it EXACTLY ONCE into
+  `agentNetwork.transport` / `.transportCaps` / `.tapSshUsable` /
+  `.vsockLitellmPort`, handed to the sibling modules through the SAME
+  `_module.args.agentNetwork` the profile already travels in.
+- `../network.nix` — `hostBridge`/`hostFirewall`/`bridgeLitellm` gate the bridge,
+  the TAP enslavement/L2-isolation units, the NetworkManager exclusions,
+  `br_netfilter`, the `AGENT_MICROVM_*` chains and the bridge-only socket;
+  `vsockLitellm` renders the PER-VM forwarder instead.
+- `../guest.nix` — `guestInterface` gates `microvm.interfaces`, the static
+  address/route/networkd block and (via the absence of it) `useNetworkd` /
+  `useDHCP` / `dhcpcd`; `bridgeLitellm` vs `vsockLitellm` picks which
+  `litellm-forwarder` the guest has; `tapSshUsable` decides whether the TCP
+  `sshd.service` is a live unit or is suppressed.
+- `../session.nix` / `../hostkeys.nix` / `../launcher.nix` — the host-key mount
+  ordering belongs to the sshd that is actually live, the IPv4 `known_hosts`
+  entry only exists while the guest has an address, and the launcher's
+  `SSH_ENABLED`, `doctor` sections, `preflight` endpoint and `status` line follow
+  the transport.
 
-The plan's literal goal was to ELIMINATE the TAP/bridge/firewall/TCP-forwarder
-from the secure proxy-only profile by carrying the model API over VSOCK
-instead. That scope is **deferred** (see the recorded deviation below): it would
-fork the ONE forwarder shape (a VSOCK proxy forwarder alongside the existing
-TAP/bridge one), and the control-channel transport is the enabler the phase-5
-deviation actually named. This phase therefore implements VSOCK as a CONTROL
-channel (reusing `sshd-vsock@`), ADDITIVE to the unchanged TAP/bridge/firewall.
-
-### Design (the plan's literal sketch — NOT implemented)
+### Design (as implemented — the plan's literal sketch)
 
 ```text
 guest agent
-  -> 127.0.0.1:<guest-proxy-port>
-  -> guest TCP-to-VSOCK forwarder
-  -> host CID 2
-  -> host VSOCK-to-TCP forwarder
-  -> host LiteLLM loopback listener
+  -> 127.0.0.1:<litellmPort>          (UNCHANGED endpoint: the host-provisioned
+                                       agent configuration works verbatim)
+  -> guest TCP-to-VSOCK bridge        (litellm-forwarder@, per connection)
+  -> host CID 2, port <litellmPort>
+  -> cloud-hypervisor's per-VM mux socket
+     <stateRoot>/<slot>/notify.vsock_<litellmPort>
+  -> host VSOCK-to-TCP forwarder      (agent-litellm-vsock-<slot>)
+  -> host LiteLLM loopback listener   (127.0.0.1:<litellmPort>)
 ```
 
-Use the deterministic per-slot VSOCK CID already present in slot metadata.
+The deterministic per-slot VSOCK CID from the slot metadata is used, as the plan
+asks. Two implementation notes worth recording:
 
-### Tasks (the plan's literal tasks — NOT implemented; see deviations)
+- **there is no AF_VSOCK listener on the host, by design.** With
+  cloud-hypervisor the guest's VSOCK device is implemented in the VMM, not by the
+  host kernel's vhost-vsock: a guest-initiated connection to host CID 2 port N is
+  delivered to the Unix socket `<vsock socket>_<N>` next to the VM's mux socket
+  (the same convention microvm.nix itself relies on for the guest's systemd
+  notify socket, `notify.vsock_8888`). Listening on that path IS listening on the
+  guest's VSOCK port — and it is STRONGER than an AF_VSOCK listener would be,
+  because the socket lives inside one VM's own state directory and cannot be
+  addressed by anything except that VM's VMM process (`root:kvm 0660`).
+- **`systemd-socket-proxyd` is used on the host, `socat` in the guest.**
+  socket-proxyd forwards to `HOST:PORT`/UNIX targets only, so the guest side (the
+  one that must DIAL AF_VSOCK) is a per-connection `socat -T30 -
+  VSOCK-CONNECT:2:<port>` with the destination baked into the unit. `socat` is
+  added by that unit's ExecStart, NOT to `environment.systemPackages`, so the
+  untrusted agent does not gain a general-purpose socket tool in its PATH.
 
-- Add a transport option:
+### Tasks — status
 
-```nix
-myconfig.ai.microvm.transport = "tap";
-myconfig.ai.microvm.transport = "vsock";
-```
+- a transport option: **adapted, not adopted verbatim.** The selector is the
+  capability token `vsock` plus the network profile, not
+  `myconfig.ai.microvm.transport = "tap" | "vsock"` (see the recorded deviation:
+  a two-valued transport enum is the cross-product the `full`/`lite` collapse
+  removed, and the plan's own phase-5 deviation hardened the layout table for a
+  `vsock` TOKEN specifically). The resolved value IS a two-valued transport
+  internally — it just is not an option a host sets directly.
+- `vsock` allowed only with `proxy-only`/`offline`: **done** (eval assertion,
+  pinned by a test). The model transport switches only under `proxy-only`;
+  `offline` has no model API to carry, so it keeps the TAP shape and gets the
+  control channel only.
+- host and guest forwarding with a small, auditable tool: **done**
+  (`systemd-socket-proxyd` + `socat`, both destination-fixed in their units).
+- bind the host TCP side only to the LiteLLM loopback endpoint: **done**, and
+  additionally enforced on the forwarder PROCESS (`IPAddressAllow=localhost` +
+  `IPAddressDeny=any`, `RestrictAddressFamilies=AF_UNIX AF_INET`, `DynamicUser`,
+  `ProtectSystem=strict`), so "some other host port" is unreachable for the
+  forwarder itself, not merely unrequestable by the guest.
+- the guest cannot select an arbitrary host TCP destination: **done** — there is
+  no protocol on the wire at all; the guest gets a plain TCP connection to its
+  own loopback and the CID/port are Nix-baked constants.
+- remove/skip for VSOCK slots — TAP creation, private bridge membership, IP
+  allocation, guest networkd, DNS, iptables/nftables chains, NetworkManager
+  unmanaged declarations, bridge listener services, NAT and forwarding rules:
+  **all done** (asserted individually, each with a positive control on the `tap`
+  reference host, in `checks.microvm-vsock-transport`). `microvm-tap-interfaces@<slot>`
+  is still DECLARED by upstream microvm.nix for every VM, but its
+  `ConditionPathExists=<state>/current/bin/tap-up` fails for a guest with no
+  interfaces (the runner ships no `tap-up`), so no TAP is ever created — the test
+  asserts the runner has no `tap-up`/`tap-down` at all.
+- keep the TAP backend for profiles that intentionally permit package or internet
+  access: **done** — `package-access`/`internet` cannot select `vsock` at all,
+  and `resolveTransport` returns `tap` for every profile but `proxy-only`.
+- a protocol-level health check: **partially done.** The launcher's preflight
+  probes the endpoint the GUEST path ends at (the loopback proxy under `vsock`),
+  and `doctor` checks every per-VM forwarder socket. What is NOT done is an
+  in-guest health probe of the AF_VSOCK hop itself before declaring readiness —
+  that is the same "readiness as a positive protocol signal" item phase 7 defers.
 
-- Allow `vsock` only with `networkProfile = "proxy-only"` or a fully offline profile.
-- Implement host and guest forwarding with a small, auditable tool.
-- Bind the host TCP side only to the LiteLLM loopback endpoint.
-- Ensure the guest cannot select an arbitrary host TCP destination.
-- Remove or skip, for VSOCK slots:
-  - TAP creation;
-  - private bridge membership;
-  - IP allocation;
-  - guest networkd configuration;
-  - DNS configuration;
-  - iptables/nftables chains;
-  - NetworkManager unmanaged-device declarations;
-  - bridge listener services;
-  - NAT and forwarding rules.
-- Keep the TAP backend for profiles that intentionally permit package or internet access.
-- Add a protocol-level health check.
+### Security requirements — met
 
-### Security requirements (the plan's literal requirements — NOT implemented)
+- **destination-fixed, not a CONNECT proxy**: the host forwarder's only argument
+  is `127.0.0.1:<litellmPort>`; the guest supplies no address, port or CID.
+- **one listener per slot** (the plan's alternative to CID validation): each VM
+  has its own socket path inside its own state directory, so slot A cannot reach
+  slot B's forwarder — there is no shared namespace and no CID to spoof.
 
-The VSOCK proxy must be destination-fixed. Do not implement a generic CONNECT proxy that lets the guest access arbitrary host ports.
+### Acceptance criteria — met
 
-The host listener must validate the expected guest CID or use one listener per slot.
+- In proxy-only VSOCK mode, the guest has no network interface other than
+  loopback — asserted from the evaluated guest config (`microvm.interfaces == [
+  ]`, no networkd, no networks, no dhcpcd, no nameservers, no open TCP port) and
+  from the BUILT runner (no `tap-up`/`tap-down`).
+- There is no TAP device or per-slot bridge/firewall configuration — asserted on
+  the host config (`networking.bridges == { }`, no bridge address, no
+  `AGENT_MICROVM_*` in `extraCommands`/`extraStopCommands`, no
+  `agent-microvm-attach-*` unit, no NetworkManager exclusions, no
+  `agent-litellm-proxy` socket/service), each with a positive control proving the
+  same assertion FAILS on the `tap` reference host.
+- The agent can call the LiteLLM endpoint — the endpoint is byte-identical
+  (`OPENAI_BASE_URL`/`ANTHROPIC_BASE_URL` equal the `tap` host's), the guest
+  bridge is wired to CID 2 + the model port, and the per-VM host forwarder ends
+  at the loopback proxy. RUNTIME proof needs KVM: `--section net` on a
+  `vsock`-transport host is the recorded proof event.
+- Attempts to access arbitrary host ports fail — structurally (the forwarder is
+  destination-fixed and confined to `localhost`) and, at runtime, through the
+  suite's loopback probes.
+- Attempts to resolve DNS or reach LAN/internet addresses fail — there is no
+  interface, no route and no resolver; the suite asserts each ABSENCE positively
+  instead of reporting a denial that would be true either way.
+- Multi-slot tests prove that one slot cannot use another slot's proxy path — at
+  eval, a two-slot `vsock` host is asserted to declare one forwarder per slot on
+  DISTINCT socket paths; the runtime multi-slot proof is part of the pending
+  real-KVM run.
 
-### Acceptance criteria (the plan's literal criteria — NOT met; see deviations)
+### Acceptance criteria of the CONTROL channel (unchanged from the first landing)
 
-- In proxy-only VSOCK mode, the guest has no network interface other than loopback.
-- There is no TAP device or per-slot bridge/firewall configuration.
-- The agent can call the LiteLLM endpoint.
-- Attempts to access arbitrary host ports fail.
-- Attempts to resolve DNS or reach LAN/internet addresses fail.
-- Multi-slot tests prove that one slot cannot use another slot’s proxy path.
-
-### Acceptance criteria that ARE met (the implemented scope)
-
-- With default capabilities and `vsock` unset, `test-f13`'s guest closure is
-  byte-for-byte unchanged (per-VM toplevel + runner drvPaths, shares,
-  fileSystems, guest unit names, guest systemPackages drvPaths,
-  `microvm.vsock.cid`/`microvm.interfaces`) except the host `agent-microvm`
-  launcher derivation and the two git-revision artefacts — proved by the
-  AGENTS.md evaluated-slice snapshot/diff.
 - A batch+vsock guest sets `microvm.vsock.cid = <slot.cid>`, enables
   `services.openssh`, declares the `sshd-vsock` socket, SUPPRESSES the TCP
-  `sshd.service` (`systemd.services.sshd.enable = false`) AND closes its TAP
-  firewall opening for 22 (`services.openssh.openFirewall = false`), provisions
-  the per-slot host key + the VSOCK `known_hosts` entry, and authorises the
-  dedicated key — all asserted from the EVALUATED config and the BUILT guest
-  closure/runner/launcher.
-- `vsock` is rejected without an `sshPublicKeyFile`, and with
-  `networkProfile = "package-access"`/`"internet"` — pinned to the specific
-  assertion messages.
+  `sshd.service` AND closes its TAP firewall opening for 22, provisions the
+  per-slot host key + the VSOCK `known_hosts` entry, and authorises the dedicated
+  key. Since the literal transport landed, the SAME suppression applies to an
+  INTERACTIVE host under the `vsock` transport: its TCP sshd could not be reached
+  either (there is no interface), so it is masked whatever `enableSsh` says and
+  `agent-microvm ssh` / `run --attach` go over VSOCK.
+- `vsock` is rejected without an `sshPublicKeyFile`, with
+  `networkProfile = "package-access"`/`"internet"`, without
+  `programs.ssh.systemd-ssh-proxy.enable`, with a `stateRoot` that differs from
+  `microvm.stateDir`, and (new) with `litellmPort = 8888`, the AF_VSOCK port
+  microvm.nix reserves for the guest's systemd notify socket — all pinned to the
+  specific assertion message by tests.
 - A batch+vsock host runs ALL eight `runtime-validation.sh` sections over the
-  VSOCK transport (the dispatch harness proves it); a batch-only-without-vsock
-  host still runs only `seed`.
-- The module stays on ONE code path: `vsock` is a capability axis, not a
-  transport enum; no consumer gained a second shape.
-
----
+  VSOCK transport; a batch-only-without-vsock host still runs only `seed`.
+- The module stays on ONE code path: `vsock` is a capability axis and the
+  transport is a resolved table of flags; no consumer gained a second shape.
 
 ## Phase 7 — Optimize repository cloning and startup
 
@@ -1539,7 +1654,11 @@ Add Nix evaluation tests for:
 - invalid config paths;
 - attempts to stage paths outside the host home;
 - persistence options used when persistence is disabled;
-- VSOCK transport selected with internet access.
+- VSOCK transport selected with internet access (DONE — `vsock` +
+  `package-access`/`internet` are rejected, pinned to the message, and so are
+  `vsock` without an `sshPublicKeyFile`, without
+  `programs.ssh.systemd-ssh-proxy.enable`, with a divergent `stateRoot` and with
+  `litellmPort = 8888`, the port microvm.nix reserves for the notify socket).
 
 ### VM integration tests
 
@@ -1641,7 +1760,12 @@ Explicitly state that any credential intentionally exposed to the guest may be e
 6. Consolidate shares. DONE (one writable + one read-only share).
 7. ~~Split interactive and batch modes.~~ DONE (`capabilities`, default both).
 8. Add VSOCK transport behind an option (phase 6).
-9. Make VSOCK the proxy-only default after tests pass.
+9. Make VSOCK the proxy-only default after tests pass. NOT done, deliberately:
+   the transport is opt-in per host (`capabilities = [ … "vsock" ]`). Flipping the
+   module-wide default would silently remove every guest's network interface —
+   including on hosts whose operators expect `agent-microvm ssh` over the TAP —
+   and the AF_VSOCK model path has not had its real-KVM run yet. That run is the
+   gate for this step.
 10. Optimize cloning, readiness, and install-unit behavior.
 11. ~~Review whether any lite changes should become full-profile defaults.~~
     SUPERSEDED: every lightweight change IS the default; the `full` path is
@@ -1661,13 +1785,30 @@ The work is complete when all of the following are true:
 - It does not run guest Home Manager activation.
 - It receives current, allowlisted host agent configuration through a disposable staged copy.
 - It has one writable session virtiofs share and, when needed, one read-only SSH-key share.
-- It has no ordinary network interface in proxy-only mode.
-- It can access only the fixed host LiteLLM endpoint through VSOCK.
+- It has no ordinary network interface in proxy-only mode. **DONE** for a host
+  that selects the `vsock` capability (phase 6's model transport): the guest then
+  declares no `microvm.interfaces`, runs no networkd/dhcpcd and has no address or
+  route. A host that does NOT select `vsock` still gets the TAP + the
+  `AGENT_MICROVM_*` chains, which is the unchanged default — the switch is
+  opt-in, per host, exactly like every other capability.
+- It can access only the fixed host LiteLLM endpoint through VSOCK. **DONE** for
+  a `vsock`-transport host: one destination-fixed forwarder per VM, confined to
+  the host loopback. RUNTIME confirmation of the AF_VSOCK hop is part of the
+  pending real-KVM run.
 - It cannot access the host home, host store, host Nix daemon, control sockets, LAN, internet, VPN, DNS, or metadata services.
 - Disabled agents and their runtimes are absent from the guest closure.
 - Repository clones are independent and disposable.
 - Interactive and batch modes do not include each other’s unnecessary services. DONE for hosts that narrow `capabilities`; the DEFAULT still selects both on purpose (so nothing a host relies on disappears silently).
-- Launch latency, closure size, host process count, and virtiofsd count are all lower than the recorded baseline.
+- Launch latency, closure size, host process count, and virtiofsd count are all
+  lower than the recorded baseline. **PARTIALLY DONE**, measured with
+  `tests/measure-boot.sh`: guest closure −17.4 % and runner closure −13.3 % for
+  the unchanged f13 shape (−71.4 % / −53.3 % for the Codex-only shape the plan
+  aims at), virtiofsd 4 → 2 per slot, generated guest units 66 → 65 (→ 62 under
+  the `vsock` transport), and the host's shared network units (bridge socket,
+  bridge IPv6 oneshot, per-TAP attach) gone entirely on a `vsock`-transport host.
+  LAUNCH LATENCY and idle RSS are NOT measured yet — they need `/dev/kvm` and are
+  deliberately not estimated; see
+  [runtime validation → Measurements](./agent-microvm-runtime-validation.md#measurements-plan-phase-0--the-phase-6-acceptance-numbers).
 - ~~The full profile remains available and compatible.~~ SUPERSEDED: the `full`
   profile was deliberately removed once the lightweight path was reviewed; the
   compatibility requirement was replaced by the evaluated-slice proof described in

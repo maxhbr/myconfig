@@ -129,6 +129,12 @@ come from the registry, so "which agents exist" is a build-time fact.
 
 ## Network path
 
+There are two, and the module resolves which one a host uses ONCE (in
+`default.nix`, from the table in `network-profiles.nix`), handing it to every
+consumer as `agentNetwork.transport` / `.transportCaps`.
+
+**`tap`** — the default shape:
+
 ```text
 guest agent
   → 127.0.0.1:4000                (guest-side systemd-socket-proxyd)
@@ -137,11 +143,36 @@ guest agent
   → upstream provider             (the only place a real API key exists)
 ```
 
-The guest presents the *same* loopback address the host does, so the operator's
-copied agent configs work verbatim. Everything else on the bridge is denied by
-the `AGENT_MICROVM_INPUT/_FORWARD/_OUTPUT` chains, whose content is rendered from
+Everything else on the bridge is denied by the
+`AGENT_MICROVM_INPUT/_FORWARD/_OUTPUT` chains, whose content is rendered from
 the selected [network profile](./agent-microvm.md#network-profiles); guest↔guest
 traffic is additionally impossible at layer 2 (`bridge link … isolated on`).
+
+**`vsock`** — the `vsock` capability together with `networkProfile =
+"proxy-only"` (lightweight plan phase 6, the literal objective). The guest then
+has **no network interface at all**:
+
+```text
+guest agent
+  → 127.0.0.1:4000                (guest-side socat, per connection)
+  → AF_VSOCK CID 2, port 4000     (the host; cloud-hypervisor's per-VM mux socket
+                                   <stateRoot>/<slot>/notify.vsock_4000)
+  → 127.0.0.1:4000                (per-VM host forwarder → the loopback LiteLLM proxy)
+  → upstream provider             (the only place a real API key exists)
+```
+
+No TAP device, no bridge, no static IP, no guest networkd/dhcpcd, no
+`AGENT_MICROVM_*` chain and no bridge-only socket exist on such a host; the
+host-side components are exactly one `agent-litellm-vsock-<slot>` socket +
+service PER VM, each bound to a `root:kvm 0660` Unix socket inside that VM's own
+state directory and destination-fixed to `127.0.0.1:<litellmPort>`. LAN, VPN,
+metadata, DNS, other guests and other host ports are unreachable by
+CONSTRUCTION rather than by firewall verdict, and one slot cannot use another
+slot's model path (there is no shared namespace and no CID to spoof).
+
+In BOTH cases the guest presents the *same* loopback address the host does, so
+the operator's copied agent configs work verbatim — switching transport
+reconfigures no agent.
 
 ## Credential boundary
 
@@ -165,8 +196,10 @@ traffic is additionally impossible at layer 2 (`bridge link … isolated on`).
 execution paths below a host's guests carry — a SET over the ONE guest shape, not
 a second profile axis (lightweight plan phase 5). `vsock` (lightweight plan
 phase 6) is a THIRD token, default OFF: it adds a VSOCK control channel (the
-`sshd-vsock@` unit) so a batch-only host can still be driven over VSOCK. It is
-resolved once in
+`sshd-vsock@` unit) so a batch-only host can still be driven over VSOCK, and —
+together with `networkProfile = "proxy-only"` — makes AF_VSOCK the MODEL
+transport as well, which removes the guest's network interface entirely (see
+[Network path](#network-path)). It is resolved once in
 `default.nix` and handed to the sibling modules as `_module.args
 .agentCapabilities`; each module then makes the decision in the ONE place that
 already owns the concern:
@@ -176,15 +209,18 @@ already owns the concern:
 | `session.nix` | which layout-table entries exist — hence the host tmpfiles rules, the pre-launch verifier, the launcher's `prepare_session`, the guest mounts and the tests. `hostkeys/` needs `interactive` OR `vsock` (the VSOCK sshd reuses the per-slot host identity) |
 | `job.nix` | whether the guest module (controller unit, worker template, the three job programs), the worker's endpoint environment and the host result archive exist at all |
 | `hostkeys.nix` | whether the per-slot key pair and the `known_hosts` database are provisioned (for `interactive` OR `vsock`) |
-| `guest.nix` | whether the guest carries the interactive `agent-run` entry point; whether `microvm.vsock.cid` is set and the TCP `sshd.service` is suppressed (a `vsock`-only host) |
+| `guest.nix` | whether the guest carries the interactive `agent-run` entry point; whether `microvm.vsock.cid` is set and the TCP `sshd.service` is suppressed (any host whose TCP sshd is unreachable — no `interactive`, or no network interface under the `vsock` transport) |
+| `network.nix` | whether the host builds the bridge + TAP attach units + firewall chains + bridge-only socket (`tap`) or ONE destination-fixed AF_VSOCK forwarder per VM (`vsock`) — decided by the transport, which is itself decided by `vsock` + the profile |
 | `workmux.nix` | whether the `microvm-<agent>` panes are registered |
 | `launcher.nix` | which subcommands the ONE launcher accepts (`run` needs `interactive`; `ssh` needs `interactive` OR `vsock`; `submit`/`cancel` need `batch`; `console` is never gated), and which lines `usage` reports |
 | `default.nix` | the batch-capable-agent assertion, the `enableSsh` reconciliation, and the `vsock` + network-profile / `sshPublicKeyFile` rejections |
 
 Nothing else branches on it: there is one launcher, one share pair, one session
-tree, one staging path and one guest shape in every case. `vsock` is a control-
-channel axis, not a transport enum — the TAP/bridge/firewall and the loopback
-LiteLLM forwarder are unchanged whether or not `vsock` is selected.
+tree, one staging path and one guest shape in every case. `vsock` is an AXIS, not
+a fork: the guest-visible model endpoint, the session layout, the staging path,
+the units that carry the agent and the launcher's interface are identical under
+both transports — what changes is whether a network interface exists at all, and
+that decision is expressed ONCE as transport capability flags.
 
 Two properties keep the selector from weakening anything:
 
@@ -353,8 +389,9 @@ worthless as evidence.
   sshd is the ONLY listener, reachable solely from the host (CID 2), and needs no
   TAP firewall rule. `vsock` is a NEW AXIS over the one guest shape (a
   capability token, not a `transport` enum), additive to the unchanged
-  TAP/bridge/firewall; the plan's literal VSOCK *proxy* forwarder (carrying the
-  model API over VSOCK, eliminating the TAP) is NOT implemented — it would fork
-  the one forwarder shape. A host that does not select `vsock` leaves
+  TAP/bridge/firewall on a host whose profile is not `proxy-only`. With
+  `proxy-only` the SAME CID additionally carries the MODEL API (port
+  `litellmPort`), and then the TAP/bridge/firewall are gone entirely — the
+  literal phase-6 design. A host that does not select `vsock` leaves
   `microvm.vsock.cid` at its default `null`, so its guest closure is
   byte-for-byte unchanged.
