@@ -56,6 +56,27 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section forgery
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section seed
 ```
 
+### Capability gating
+
+The host under test may select only one of the two execution capabilities
+(`myconfig.ai.microvm.capabilities`, lightweight plan phase 5). The suite
+DETECTS the set from the launcher of that host — a launcher without a capability
+refuses its subcommands with a message naming it — and gates the sections
+accordingly:
+
+| Section | Needs |
+| --- | --- |
+| `boot`, `net`, `l2`, `creds`, `malrepo` | `interactive` (every guest command goes through `agent-microvm ssh`) |
+| `lifecycle`, `forgery` | `interactive` **and** `batch` (they submit jobs and inspect the result channel) |
+| `seed` | neither (it exercises the HOST-side stager) |
+
+Under `--section all` a section whose capability is missing is **SKIPPED**, loudly
+and counted (`sections skipped (capability not selected by this host)`); asking
+for exactly such a section **hard-aborts**. Neither is treated as a failure — a
+capability the host deliberately does not select is a configuration fact — but
+running the section anyway would report vacuous passes for its "the guest must
+NOT be able to …" checks, which is the one thing this suite exists to prevent.
+
 ### Host-side model-endpoint preflight
 
 Before `net`, `forgery`, or `all` boot any VMs, the suite probes the SAME bridge
@@ -196,6 +217,13 @@ path constants are derived from it:
 | staging manifest | `<runtimeRoot>/config-seed/<slot>/manifest.json` (outside every share) |
 | guest job mount | `/run/agent-session` |
 | guest virtiofs set | `/run/agent-session`, `/run/agent-session-ro` |
+
+On a host that narrows `capabilities` the two shares are unchanged but some
+subdirectories do not exist (no `input/`, `controller/`, `worker/`,
+`worker-logs/` without `batch`; no `hostkeys/` without `interactive`). The
+sections that would inspect them are exactly the ones the capability gating
+above skips, so no path constant can silently point at a directory the host
+never creates.
 
 The suite prints the session root in its banner line. Pointing the constants at
 a tree that does not exist would not be a cosmetic bug: almost every assertion

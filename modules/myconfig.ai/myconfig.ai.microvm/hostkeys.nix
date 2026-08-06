@@ -56,6 +56,14 @@
   # plan says so explicitly, and ./session.nix's verifier refuses to launch a
   # slot whose writable tree contains key material).
   agentSession,
+  # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
+  # A per-slot SSH host identity only exists for the `interactive` capability:
+  # it is the identity of the SSH control channel, which a batch-only guest does
+  # not have. The `hostkeys/` subdirectory of the read-only tree is dropped by
+  # ../session.nix's own per-capability table, so nothing here has to repeat
+  # that decision — only the PROVISIONING (the key pair + the known_hosts
+  # database) is gated below.
+  agentCapabilities,
   ...
 }:
 let
@@ -163,7 +171,9 @@ in
       systemd.tmpfiles.rules = [
         "d ${cfg.runtimeRoot} 0755 root root - -"
       ];
+    })
 
+    (lib.mkIf (cfg.enable && agentCapabilities.interactive) {
       systemd.services.agent-microvm-hostkeys = {
         description = "Provision per-slot SSH host keys for agent microVMs";
         wantedBy = [ "multi-user.target" ];

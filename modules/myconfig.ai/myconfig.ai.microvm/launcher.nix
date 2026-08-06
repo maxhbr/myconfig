@@ -80,6 +80,13 @@
   # WHOLE, plus the two paths it bind-mounts (the workspace clone and the
   # task-scoped agent state).
   agentSession,
+  # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
+  # The launcher has ONE shape: the same script, the same helpers, the same
+  # session/job/state code paths on every host. What the capability set changes
+  # is which SUBCOMMANDS it accepts — a subcommand whose guest-side machinery is
+  # absent is refused up front, naming the option to change, instead of failing
+  # later against a directory or unit that does not exist.
+  agentCapabilities,
   ...
 }:
 let
@@ -153,6 +160,74 @@ let
 
   # One call site each in `run` and `submit`, before the VM is started.
   configSeedStage = mkFragment "          " ''stage_config_seed "$slot"'';
+
+  # --- capability gating (lightweight plan phase 5) -----------------------
+  # A capability this host does not select has NO guest units, NO guest
+  # programs and NO session subdirectories, so its subcommands cannot work.
+  # They are refused with an actionable message that names the option instead
+  # of failing somewhere inside `prepare_job` or against a missing sshd.
+  #
+  # Rendered ONLY on a host that actually lacks a capability: on a host with
+  # both there is nothing to refuse, so the guard would be unreachable code
+  # (and the launcher derivation of such a host is unchanged by this phase).
+  # This is the same "emit it only where it can fire" rule ../job.nix applies to
+  # its `promptUnusedSuppression`, not a second launcher shape.
+  missingCapabilities = lib.filter (c: !agentCapabilities.${c}) agentCapabilities.declared;
+  capabilityHelpers = lib.optionalString (missingCapabilities != [ ]) (
+    mkFragment "      " ''
+      # ---- capability gating (lightweight plan phase 5) -------------------
+      # This host selects only: ${lib.concatStringsSep ", " agentCapabilities.selected}.
+      # The subcommands of the missing capability (${lib.concatStringsSep ", " missingCapabilities})
+      # are refused below, because their guest-side machinery is ABSENT from
+      # this host's guests, not merely disabled.
+      readonly SELECTED_CAPABILITIES=${lib.escapeShellArg (lib.concatStringsSep " " agentCapabilities.selected)}
+      # A MEMBERSHIP test against the rendered set rather than an unconditional
+      # `die`: the refusal is data-driven (so it cannot disagree with the set the
+      # rest of the module was built from) and the subcommand body stays
+      # reachable, which is also what keeps shellcheck from flagging it.
+      require_capability() {
+          case " $SELECTED_CAPABILITIES " in
+              *" $2 "*) return 0 ;;
+          esac
+          die "'$1' needs the '$2' capability, which this host does not select (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ]); add \"$2\" to that list and rebuild to enable it"
+      }''
+  );
+  # One splice per subcommand, at the TOP of its function body.
+  requireCapability =
+    cap: cmd:
+    lib.optionalString (!agentCapabilities.${cap}) (
+      mkFragment "          " "require_capability ${cmd} ${cap}"
+    );
+  # `doctor`'s host-key section. On a host WITHOUT the `interactive` capability
+  # there is no key material to look for (hostkeys.nix provisions none and
+  # ../session.nix's table creates no `hostkeys/` subdirectory), so the check
+  # would be vacuous; it reports the capability instead. The interactive variant
+  # is byte-for-byte the block this fragment replaced, so the launcher of a host
+  # with both capabilities is unchanged.
+  # NOTE: `indentFragment`, not `mkFragment` — the splice site supplies the
+  # trailing newline, so no trailing whitespace is introduced. The indent is the
+  # column the block has in the GENERATED script (Nix strips the `text = ''`
+  # string's common indentation, interpolated values are inserted verbatim), so
+  # that the interactive variant reproduces the replaced block byte for byte.
+  doctorHostKeys = indentFragment "    " (
+    if agentCapabilities.interactive then
+      ''
+        local missing=0 s
+        for s in "''${SLOT_NAMES[@]}"; do
+            [[ -e "$HOSTKEYS_ROOT/$s" ]] || missing=$((missing + 1))
+        done
+        if (( missing == 0 )); then
+            ok "every slot has a host-key directory under $HOSTKEYS_ROOT"
+        else
+            fail "$missing slot(s) lack a host-key directory (systemctl start agent-microvm-hostkeys.service)"
+        fi''
+    else
+      ''ok "no per-slot SSH host keys are expected: this host does not select the \"interactive\" capability (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ])"''
+  );
+  runCapability = requireCapability "interactive" "run";
+  sshCapability = requireCapability "interactive" "ssh";
+  submitCapability = requireCapability "batch" "submit";
+  cancelCapability = requireCapability "batch" "cancel";
 
   # --- the per-session tree (lightweight plan phase 4) --------------------
   # `install -d` line for ONE layout entry, generated from the SINGLE source of
@@ -1498,7 +1573,7 @@ let
           find "$mp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
       }
 
-      ${sessionHelpers}${configSeedHelpers}# ---- §21 slot cleanup / interrupt handling -------------------------
+      ${sessionHelpers}${configSeedHelpers}${capabilityHelpers}# ---- §21 slot cleanup / interrupt handling -------------------------
       # Tear a slot down WITHOUT deleting the workspace clone (§26/§35): stop
       # the VM, unmount the bind, remove the slot transient state. Locks are
       # released implicitly when this process exits and closes their fds.
@@ -1802,7 +1877,7 @@ let
       }
 
       cmd_run() {
-          require_root run
+          ${runCapability}require_root run
           local task="" repo="" agent="" branch="" attach=0
           local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0 no_preflight=0
           while [[ $# -gt 0 ]]; do
@@ -1969,7 +2044,7 @@ let
       # Mirrors cmd_run's allocation/trap structure, then waits for the GUEST's
       # structured result instead of attaching a terminal.
       cmd_submit() {
-          require_root submit
+          ${submitCapability}require_root submit
           local task="" repo="" agent="" branch="" prompt="" timeout_s=""
           local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0
           while [[ $# -gt 0 ]]; do
@@ -2233,7 +2308,7 @@ let
 
       # ==== cancellation (ticket 4) ========================================
       cmd_cancel() {
-          require_root cancel
+          ${cancelCapability}require_root cancel
           [[ $# -ge 1 ]] || die "cancel: <task> required"
           local task="$1"
           validate_task_name "$task"
@@ -2778,7 +2853,7 @@ let
       }
 
       cmd_ssh() {
-          [[ "$SSH_ENABLED" == "1" ]] || die "ssh: enableSsh is false"
+          ${sshCapability}[[ "$SSH_ENABLED" == "1" ]] || die "ssh: enableSsh is false"
           [[ $# -ge 1 ]] || die "ssh: <slot|task> required"
           local slot ip
           slot="$(resolve_slot "$1")" || die "no such slot or task: $1"
@@ -3011,15 +3086,7 @@ let
           fi
 
           section_hdr "per-slot SSH host keys"
-          local missing=0 s
-          for s in "''${SLOT_NAMES[@]}"; do
-              [[ -e "$HOSTKEYS_ROOT/$s" ]] || missing=$((missing + 1))
-          done
-          if (( missing == 0 )); then
-              ok "every slot has a host-key directory under $HOSTKEYS_ROOT"
-          else
-              fail "$missing slot(s) lack a host-key directory (systemctl start agent-microvm-hostkeys.service)"
-          fi
+          ${doctorHostKeys}
 
           printf '\n%s: %d problem(s)\n' "$PROG" "$problems"
           (( problems == 0 ))

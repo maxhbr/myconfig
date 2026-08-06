@@ -18,7 +18,14 @@
 # Usage:
 #   sudo ./modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh \
 #        --repository /home/mhuber/some-git-repo \
-#        [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery]
+#        [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery|seed]
+#
+# Sections are also gated on the CAPABILITIES of the host under test
+# (`myconfig.ai.microvm.capabilities`, lightweight plan phase 5): every section
+# that drives a guest over SSH needs `interactive`, `lifecycle` and `forgery`
+# additionally need `batch`, and `seed` needs neither. A section whose
+# capability the host does not select is SKIPPED (under `--section all`) or
+# HARD-ABORTS (when asked for explicitly) instead of reporting vacuous passes.
 #
 # Every check prints exactly one line: `PASS`, `FAIL` or `SKIP` plus a reason.
 # The script exits non-zero if any check FAILED. SKIPs are honest: they mark
@@ -2028,6 +2035,34 @@ preflight_endpoint() {
     return 1
 }
 
+# --- CAPABILITY detection (lightweight plan phase 5) ------------------------
+# `myconfig.ai.microvm.capabilities` selects whether a host's guests carry the
+# INTERACTIVE half (sshd + the per-slot host identity, hence every guest command
+# this suite issues over `agent-microvm ssh`) and/or the BATCH half (the job
+# controller/worker, hence `agent-microvm submit`). A section that needs a
+# capability the host under test does not have would either fail on every
+# subtest (no SSH channel) or — much worse — report VACUOUS PASSES for its
+# "the guest must NOT be able to ..." checks.
+#
+# The capability set is DETECTED from the launcher of the host under test, not
+# configured here: a launcher without a capability refuses that capability's
+# subcommands with a message naming it (launcher.nix `require_capability`). Both
+# probes are argument-less and therefore side-effect-free — the subcommand dies
+# in its own argument validation long before it allocates anything.
+INTERACTIVE_CAPABLE=1
+BATCH_CAPABLE=1
+detect_capabilities() {
+    local out
+    out="$("$LAUNCHER" run 2>&1 || true)"
+    if [[ $out == *"needs the 'interactive' capability"* ]]; then
+        INTERACTIVE_CAPABLE=0
+    fi
+    out="$("$LAUNCHER" submit 2>&1 || true)"
+    if [[ $out == *"needs the 'batch' capability"* ]]; then
+        BATCH_CAPABLE=0
+    fi
+}
+
 # --- section dispatch ------------------------------------------------------
 # The eight sections, in the fixed order they always run under `--section all`.
 # `net` and `forgery` depend on a reachable model endpoint; the rest do not.
@@ -2039,6 +2074,30 @@ is_endpoint_section() {
         [[ $s == "$1" ]] && return 0
     done
     return 1
+}
+# Which CAPABILITIES each section needs. Every section that issues a guest
+# command needs `interactive` (the control channel IS ssh); `lifecycle` and
+# `forgery` additionally submit batch jobs. `seed` exercises the HOST-side
+# stager only, so it needs neither.
+declare -A SECTION_CAPABILITIES=(
+    [boot]="interactive"
+    [net]="interactive"
+    [l2]="interactive"
+    [creds]="interactive"
+    [lifecycle]="interactive batch"
+    [malrepo]="interactive"
+    [forgery]="interactive batch"
+    [seed]=""
+)
+# The capabilities <section> needs but the host under test does not have.
+missing_capabilities_of() {
+    local cap
+    for cap in ${SECTION_CAPABILITIES[$1]-}; do
+        case "$cap" in
+            interactive) ((INTERACTIVE_CAPABLE)) || printf '%s\n' "$cap" ;;
+            batch) ((BATCH_CAPABLE)) || printf '%s\n' "$cap" ;;
+        esac
+    done
 }
 # Resolve the requested $SECTION into the ordered list of sections to RUN.
 resolve_sections() {
@@ -2071,8 +2130,27 @@ info "sections: ${PLAN[*]}"
 # endpoint must not silently validate nothing (Bug 2). When the operator asked
 # for JUST an endpoint-dependent section (`--section net`/`--section forgery`),
 # running it would be pointless, so the run HARD-ABORTS instead.
+# Capability preflight (lightweight plan phase 5). Detected ONCE, before any VM
+# boots, and reported: a section whose capability is absent is SKIPPED under
+# `--section all` and HARD-ABORTS when the operator asked for exactly it, for
+# the same reason the endpoint preflight does — a run that cannot exercise a
+# property must say so, never pass it.
+detect_capabilities
+info "capabilities of the host under test: $( ((INTERACTIVE_CAPABLE)) && printf 'interactive ')$( ((BATCH_CAPABLE)) && printf 'batch ')"
 ENDPOINT_DOWN=0
 SKIPPED_SECTIONS=()
+UNSUPPORTED_SECTIONS=()
+if [[ $SECTION != all ]]; then
+    mapfile -t missing < <(missing_capabilities_of "$SECTION")
+    if ((${#missing[@]})); then
+        printf '%s: ABORTING section %q: this host does not select the %s capability;\n' \
+            "$PROG" "$SECTION" "${missing[*]}" >&2
+        printf '%s: the section cannot exercise anything and its "must NOT be able to"\n' "$PROG" >&2
+        printf '%s: checks would pass VACUOUSLY. Run it on a host whose\n' "$PROG" >&2
+        printf '%s: myconfig.ai.microvm.capabilities includes it.\n' "$PROG" >&2
+        exit 1
+    fi
+fi
 if is_endpoint_section "$SECTION" || [[ $SECTION == all ]]; then
     if ! preflight_endpoint; then
         ENDPOINT_DOWN=1
@@ -2110,6 +2188,13 @@ for s in "${PLAN[@]}"; do
     if [[ $ENDPOINT_DOWN == 1 ]] && is_endpoint_section "$s"; then
         continue
     fi
+    # Neither is a section whose CAPABILITY this host does not have.
+    mapfile -t missing < <(missing_capabilities_of "$s")
+    if ((${#missing[@]})); then
+        skip "section '$s' SKIPPED: this host does not select the ${missing[*]} capability, so its checks would pass vacuously"
+        UNSUPPORTED_SECTIONS+=("$s")
+        continue
+    fi
     before_pass=$PASS before_fail=$FAIL before_skip=$SKIP
     rc=0
     "section_$s" || rc=$?
@@ -2127,6 +2212,13 @@ printf '\n%s: %d passed, %d failed, %d skipped\n' "$PROG" "$PASS" "$FAIL" "$SKIP
 info "sections ran: ${RAN_SECTIONS[*]:-<none>}"
 if ((${#SKIPPED_SECTIONS[@]})); then
     info "sections skipped (endpoint down): ${SKIPPED_SECTIONS[*]}"
+fi
+# A capability the host deliberately does NOT select is a configuration fact,
+# not a defect: those sections are skipped, loudly and counted, but they do NOT
+# force a non-zero exit (unlike an endpoint that is merely down). Running them
+# would be the dishonest option, which is the whole point of the dispatch.
+if ((${#UNSUPPORTED_SECTIONS[@]})); then
+    info "sections skipped (capability not selected by this host): ${UNSUPPORTED_SECTIONS[*]}"
 fi
 # Exit status: non-zero if any check FAILED. ALSO non-zero if an endpoint-
 # dependent section was SKIPPED (not decided) because the endpoint was down:

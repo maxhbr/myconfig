@@ -84,6 +84,13 @@
   # phase 4): the layout table, its guest mount points/tags and the guest
   # fragment that bind-mounts the session tree's `workspace/` to `/workspace`.
   agentSession,
+  # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
+  # Only two things here consult it directly: the guest INTERACTIVE entry point
+  # `agent-run` (which only an interactive session ever invokes) and the
+  # cross-module share assertion below. The batch units/packages and the session
+  # subdirectories follow ../job.nix's and ../session.nix's own per-capability
+  # decisions.
+  agentCapabilities,
   ...
 }:
 let
@@ -329,6 +336,17 @@ let
       # writability checks and every agent's expectation of `/workspace` keep
       # working, and orders sshd after the read-only host-key mount.
       agentSession.guestModule
+      # The BATCH worker (`agent-job-worker@<agent>.service`) is a non-login
+      # systemd oneshot: it never sources /etc/set-environment, so the endpoint
+      # vars in `environment.variables` would not reach it (NixOS puts them ONLY
+      # in login profiles, not in systemd's `DefaultEnvironment`). Give it the
+      # SAME endpoint environment the interactive login shell gets, so pi/codex/
+      # hermes batch workers can actually reach the loopback forwarder. The
+      # `creds` section of runtime-validation.sh asserts BOTH halves carry these
+      # (and the negative controls stay absent). Placeholder keys only (§17).
+      # EMPTY without the `batch` capability — ../job.nix decides whether a
+      # worker unit exists at all, so this cannot define one behind its back.
+      (agentJobs.mkWorkerEnvironmentModule modelEndpointEnv)
       (mkGuestBase slot)
     ];
 
@@ -417,16 +435,21 @@ let
     # programs.pi-coding-agent → pkgs.nixos-unstable.pi-coding-agent). They
     # are baked into the immutable guest closure (§8: no runtime CLI
     # download, no host Nix daemon).
-    environment.systemPackages = [
-      agent-run
-      guestShell
-    ]
-    # §7 agent binaries, GENERATED from the authoritative registry — only for
-    # the SELECTED agents (`enabledAgents`, lightweight plan phase 2), together
-    # with whatever extra runtime each of them declares.
-    ++ agentRegistry.packages
-    ++ agentRegistry.extraPackages
-    ++ guestCommonPackages;
+    # The guest INTERACTIVE entry point `agent-run`: `agent-microvm run --attach`
+    # execs it over SSH, and a human debugging a session runs it by hand. A
+    # batch-only guest has neither path (the worker resolves the agent from the
+    # registry itself), so it does not carry it.
+    environment.systemPackages =
+      lib.optional agentCapabilities.interactive agent-run
+      ++ [
+        guestShell
+      ]
+      # §7 agent binaries, GENERATED from the authoritative registry — only for
+      # the SELECTED agents (`enabledAgents`, lightweight plan phase 2), together
+      # with whatever extra runtime each of them declares.
+      ++ agentRegistry.packages
+      ++ agentRegistry.extraPackages
+      ++ guestCommonPackages;
 
     # NixOS' `environment.defaultPackages` (perl, rsync, strace) is a
     # convenience set for interactive general-purpose machines. None of it has
@@ -475,16 +498,6 @@ let
     # batch worker unit (next block), so the two paths cannot drift. See its
     # header for why the worker needs an explicit `environment=`.
     environment.variables = modelEndpointEnv;
-
-    # The BATCH worker (`agent-job-worker@<agent>.service`) is a non-login
-    # systemd oneshot: it never sources /etc/set-environment, so the endpoint
-    # vars above would not reach it (NixOS puts `environment.variables` ONLY in
-    # login profiles, not in systemd's `DefaultEnvironment`). Give it the SAME
-    # endpoint environment the interactive login shell gets, so pi/codex/
-    # hermes batch workers can actually reach the loopback forwarder. The
-    # `creds` section of runtime-validation.sh asserts BOTH halves carry these
-    # (and the negative controls stay absent). Placeholder keys only (§17).
-    systemd.services."${agentJobs.workerUnitTemplate}".environment = modelEndpointEnv;
 
     # --- guest-side loopback → bridge LiteLLM forwarder ------------------
     # Reverse of the host's bridge-only forwarder (network.nix): a
