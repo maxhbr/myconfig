@@ -402,6 +402,17 @@ let
       # regression that gives this guest a link cannot silently also give it an
       # open port (`services.openssh.openFirewall = false` below keeps 22 out of
       # it — the VSOCK sshd needs no TCP rule).
+      #
+      # IMPLICIT INVARIANT worth naming: several guest units still `want`/`after`
+      # `network-online.target` unconditionally (../guest-model-config.nix's
+      # model discovery, ../job.nix's batch controller). That is benign HERE only
+      # because turning networkd and dhcpcd off leaves NO `*-wait-online` unit in
+      # the guest at all, so the target has nothing to pull in and activates
+      # trivially. The day any unit starts PROVIDING `network-online` in this
+      # guest, its boot would stall for the default 120 s — so
+      # `checks.microvm-vsock-transport` asserts that no `*-wait-online` unit
+      # exists here, and the ONE unit that genuinely needed the target (the
+      # loopback->bridge forwarder) drops it under this transport.
       (lib.mkIf (!netTransport.guestInterface) {
         networking.useNetworkd = false;
         networking.useDHCP = false;
@@ -618,54 +629,80 @@ let
       wantedBy = [ "sockets.target" ];
       socketConfig = {
         ListenStream = "127.0.0.1:${toString cfg.litellmPort}";
-        # The TAP forwarder is a single long-running byte shuffler
-        # (systemd-socket-proxyd handles many connections on one fd); the VSOCK
-        # bridge is per-connection (`socat` dials the VMM's Unix socket for each
-        # accepted connection), so it needs `Accept = yes` and a templated
-        # service instance.
-        Accept = netTransport.vsockLitellm;
+        # ONE SHAPE UNDER BOTH TRANSPORTS: `Accept = no`, so systemd hands the
+        # LISTENING socket to a SINGLE long-running forwarder process (fd 3) that
+        # multiplexes every connection itself. That is what
+        # `systemd-socket-proxyd` does under `tap`, and it is what
+        # `socat ACCEPT-FD:3,fork` does under `vsock`. The earlier
+        # `Accept = yes` + `litellm-forwarder@` template would have capped
+        # concurrent model connections at systemd's default `MaxConnections=64`
+        # (a parallel agent fanning tool calls out over more streams than that
+        # would get connections REFUSED with no diagnostic) and spawned one
+        # DynamicUser unit per request.
+        Accept = false;
       };
     };
-    systemd.services.litellm-forwarder = lib.mkIf (netCaps.litellm && netTransport.bridgeLitellm) {
-      description = "Forward 127.0.0.1:${toString cfg.litellmPort} to the host bridge LiteLLM proxy";
-      requires = [ "litellm-forwarder.socket" ];
-      wants = [ "network-online.target" ];
-      after = [
-        "litellm-forwarder.socket"
-        "network-online.target"
-      ];
-      serviceConfig = {
-        ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd ${cfg.gatewayAddress}:${toString cfg.litellmPort}";
-        DynamicUser = true;
-        NoNewPrivileges = true;
-        PrivateTmp = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-      };
-    };
-    # The VSOCK half: a per-connection `socat` that copies the accepted loopback
-    # connection to AF_VSOCK CID 2 (`VMADDR_CID_HOST`) port <litellmPort>. The
-    # DESTINATION IS FIXED in the unit's ExecStart — the guest cannot choose a
+    # ONE unit name for the ONE forwarder: the two transports are mutually
+    # exclusive (network-profiles.nix resolves exactly one), so they share
+    # `litellm-forwarder.service` and only the ExecStart differs.
+    #
+    #   tap   -> systemd-socket-proxyd <gatewayAddress>:<litellmPort>
+    #   vsock -> socat ACCEPT-FD:3,fork VSOCK-CONNECT:2:<litellmPort>
+    #
+    # `systemd-socket-proxyd` cannot serve the vsock case (it forwards to
+    # `HOST:PORT`/UNIX targets only, never to AF_VSOCK), so that one place is the
+    # only reason the guest needs `socat`; it comes in through the unit's own
+    # ExecStart, NOT through `environment.systemPackages`, so the untrusted agent
+    # does not gain a general-purpose socket tool in its PATH.
+    #
+    # The VSOCK DESTINATION IS FIXED in the ExecStart — the guest cannot choose a
     # CID, a port or a host address, and there is no CONNECT protocol to abuse:
     # the untrusted agent only ever gets a TCP connection to its own loopback.
-    # `systemd-socket-proxyd` cannot be used here (it forwards to
-    # `HOST:PORT`/UNIX targets only, not to AF_VSOCK), so this is the one place
-    # the guest needs `socat`; it is added by the unit's own ExecStart, not to
-    # `environment.systemPackages`, so the untrusted agent does not gain a
-    # general-purpose socket tool in its PATH.
-    systemd.services."litellm-forwarder@" = lib.mkIf netTransport.vsockLitellm {
-      description = "Bridge 127.0.0.1:${toString cfg.litellmPort} to the host LiteLLM proxy over AF_VSOCK";
+    #
+    # NO INACTIVITY TIMEOUT: socat's `-T` is a BIDIRECTIONAL inactivity timeout
+    # that terminates a connection mid-transfer, which for a model API means a
+    # long prefill, a cold LiteLLM or a slow tool-call turn is torn down while
+    # the agent is waiting for it. It is deliberately absent (the tap path's
+    # `systemd-socket-proxyd` has no such timeout either, and the whole point of
+    # this unit is that the guest agent behaves identically on both transports).
+    # `-t` is the HALF-CLOSE drain timeout, not an inactivity timeout: it only
+    # starts once one direction has seen EOF. socat's default is 0.5 s, which
+    # would truncate the response to any client that `shutdown(SHUT_WR)`s after
+    # sending its request, so it is raised well past any plausible model latency.
+    systemd.services.litellm-forwarder = lib.mkIf netCaps.litellm {
+      description =
+        if netTransport.vsockLitellm then
+          "Bridge 127.0.0.1:${toString cfg.litellmPort} to the host LiteLLM proxy over AF_VSOCK"
+        else
+          "Forward 127.0.0.1:${toString cfg.litellmPort} to the host bridge LiteLLM proxy";
+      requires = [ "litellm-forwarder.socket" ];
+      # The TAP forwarder dials a bridge address, so it must wait for the guest's
+      # interface to be configured. Under `vsock` there is no interface, no
+      # networkd and hence no `*-wait-online` unit at all, so ordering against
+      # `network-online.target` would be a dependency on a target that only ever
+      # activates trivially — and would BLOCK the guest's boot for the default
+      # 120 s the day some other unit starts providing it. It is therefore
+      # rendered only for the transport that needs it.
+      wants = lib.optional netTransport.guestInterface "network-online.target";
+      after = [
+        "litellm-forwarder.socket"
+      ]
+      ++ lib.optional netTransport.guestInterface "network-online.target";
       serviceConfig = {
-        # `Accept = yes` hands the accepted connection to this instance as
-        # stdin/stdout, so `-` IS the guest-side TCP connection.
-        ExecStart = "${lib.getExe pkgs.socat} -T30 - VSOCK-CONNECT:2:${toString agentNetwork.vsockLitellmPort}";
-        StandardInput = "socket";
-        StandardOutput = "socket";
+        ExecStart =
+          if netTransport.vsockLitellm then
+            "${lib.getExe pkgs.socat} -t 120 ACCEPT-FD:3,fork VSOCK-CONNECT:2:${toString agentNetwork.vsockLitellmPort}"
+          else
+            "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd ${cfg.gatewayAddress}:${toString cfg.litellmPort}";
         DynamicUser = true;
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectSystem = "strict";
         ProtectHome = true;
+      }
+      // lib.optionalAttrs netTransport.vsockLitellm {
+        # AF_UNIX: nothing else the process needs; AF_INET: the socket-activated
+        # loopback listener it inherits; AF_VSOCK: the one destination.
         RestrictAddressFamilies = [
           "AF_UNIX"
           "AF_INET"
