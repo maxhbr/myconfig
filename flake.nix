@@ -628,6 +628,10 @@
                   "tests/microvm-doctor.sh"
                   "tests/microvm-rtv-transport.sh"
                   "tests/microvm-rtv-dispatch.sh"
+                  # The out-of-CI measurement harness (lightweight plan phase 0
+                  # + the phase-6 acceptance measurements): also a plain script,
+                  # also executed by a human on a KVM host.
+                  "tests/measure-boot.sh"
                   "modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh"
                 ];
               in
