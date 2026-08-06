@@ -1,0 +1,86 @@
+Fix removing point-to-point addresses when setting up sandbox networking
+
+runsc --network=sandbox (the default) moves the addresses of every interface in
+the sandbox's netns into gVisor's netstack. It collects them with
+net.Interfaces().Addrs(), which reports only IFA_LOCAL, and then deletes them
+with netlink.ParseAddr(ip.String()) -> AddrDel.
+
+For a point-to-point address (`10.0.0.2 peer 10.0.0.1/32`, as created by
+OpenVPN/WireGuard tun devices -- and cloned by pasta, which by default names its
+tap after the host's default-route interface and copies that interface's
+addresses) the kernel matches RTM_DELADDR on the (IFA_LOCAL, IFA_ADDRESS) pair,
+where IFA_ADDRESS is the *peer*. The reconstructed address has Peer == nil, so
+netlink sends IFA_ADDRESS == IFA_LOCAL, nothing matches, and the kernel returns
+EADDRNOTAVAIL:
+
+    starting container: setting up network: creating interfaces from net
+    namespace "/proc/<pid>/ns/net": removing link addresses for interface
+    "tun0": removing address 10.0.0.2/32 from device "tun0": cannot assign
+    requested address
+
+which aborts `runsc start` before the container runs.
+
+Fix it by keeping the netlink view of the link's addresses (netlink.AddrList
+populates Addr.Peer from IFA_ADDRESS) and deleting the kernel's own entry
+verbatim, falling back to the previous behaviour for addresses that are not
+found.
+
+Not submitted upstream yet; drop this patch once gVisor carries an equivalent
+fix. See ../../docs/debug-runsc-tun0-netns.md.
+
+--- a/runsc/sandbox/network.go
++++ b/runsc/sandbox/network.go
+@@ -134,12 +134,22 @@
+ 	if err != nil {
+ 		return fmt.Errorf("getting link for interface %q: %w", linkName, err)
+ 	}
++	// Ask the kernel for the addresses actually configured on the link.
++	// collectLinksAndRoutes() obtains addresses via net.Interfaces().Addrs(),
++	// which reports only IFA_LOCAL and therefore silently drops the peer address
++	// of a point-to-point address. Deleting such an address requires replaying
++	// both IFA_LOCAL and IFA_ADDRESS, so keep the netlink view around and delete
++	// the kernel's own entry verbatim. See removeAddress() below.
++	existingAddrs, err := netlink.AddrList(ifaceLink, netlink.FAMILY_ALL)
++	if err != nil {
++		return fmt.Errorf("listing addresses for interface %q: %w", linkName, err)
++	}
+ 	for _, addr := range addresses {
+ 		ipNet := &net.IPNet{
+ 			IP:   addr.Address,
+ 			Mask: net.CIDRMask(addr.PrefixLen, addrBitLength(addr.Address)),
+ 		}
+-		if err := removeAddress(ifaceLink, ipNet.String()); err != nil {
++		if err := removeAddress(ifaceLink, ipNet, existingAddrs); err != nil {
+ 			// If we encounter an error while deleting the ip,
+ 			// verify the ip is still present on the interface.
+ 			if present, err := isAddressOnInterface(linkName, ipNet); err != nil {
+@@ -644,13 +654,23 @@
+ 
+ // removeAddress removes IP address from network device. It's equivalent to:
+ //
+-//	ip addr del <ipAndMask> dev <name>
+-func removeAddress(source netlink.Link, ipAndMask string) error {
+-	addr, err := netlink.ParseAddr(ipAndMask)
+-	if err != nil {
+-		return err
++//	ip addr del <ipNet> dev <name>
++//
++// existingAddrs is the netlink view of the link's addresses, as returned by
++// netlink.AddrList(). When it contains ipNet, that entry is deleted verbatim,
++// which is what makes point-to-point addresses removable: the kernel matches a
++// RTM_DELADDR on the (IFA_LOCAL, IFA_ADDRESS) pair, and for a p2p address
++// IFA_ADDRESS is the *peer*, not the local address. Deleting such an address as
++// a plain prefix sends IFA_ADDRESS == IFA_LOCAL and fails with EADDRNOTAVAIL,
++// which used to abort sandbox startup on any host whose netns carried a tun
++// device (OpenVPN, WireGuard, and pasta taps cloned from either).
++func removeAddress(source netlink.Link, ipNet *net.IPNet, existingAddrs []netlink.Addr) error {
++	for i := range existingAddrs {
++		if existingAddrs[i].IPNet != nil && existingAddrs[i].IPNet.IP.Equal(ipNet.IP) {
++			return netlink.AddrDel(source, &existingAddrs[i])
++		}
+ 	}
+-	return netlink.AddrDel(source, addr)
++	return netlink.AddrDel(source, &netlink.Addr{IPNet: ipNet})
+ }
+ 
+ func pcapAndNAT(args *boot.CreateLinksAndRoutesArgs, conf *config.Config) error {
