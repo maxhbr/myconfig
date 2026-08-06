@@ -1,13 +1,14 @@
 # nvfetcher source declarations.
 #
-# nvfetcher pins third-party GitHub sources (rev + hash) into the committed
-# `_sources/generated.nix`, which modules import via `pkgs.fetchFromGitHub`.
-# This keeps such pins *out* of `flake.lock` (so unrelated hosts are not
-# coupled to a shared lock entry) while still allowing automatic bumps: a
-# scheduled CI job runs `nvfetcher` and opens a PR when a rev/hash changes.
-#
-# Regenerate locally with:
-#   nix run nixpkgs#nvfetcher
+# nvfetcher generates fixed-output Nix sources in `_sources/generated.nix`
+# (regenerate locally with `nix run nixpkgs#nvfetcher`). Modules consume
+# those generated sources according to each source's fetch type: a
+# `fetch.github` entry is consumed via `pkgs.fetchFromGitHub`, while a
+# `fetch.url` entry (such as the LiteLLM dashboard JSON) is consumed via
+# `pkgs.fetchurl`. This keeps such pins *out* of `flake.lock` (so unrelated
+# hosts are not coupled to a shared lock entry) while still allowing automatic
+# bumps: a scheduled CI job runs `nvfetcher` and opens a PR when a rev/hash
+# changes.
 #
 # Each entry tracks the default branch of the given repo; the resolved rev and
 # hash are frozen in `_sources/generated.nix` until the next `nvfetcher` run.
