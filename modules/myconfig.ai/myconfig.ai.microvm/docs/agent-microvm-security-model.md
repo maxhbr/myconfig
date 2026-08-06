@@ -171,11 +171,14 @@ coreutils-full, curl, …) provides `scp`/`ssh` and is load-bearing for a bootab
 system. The criterion "a batch-mode guest has no SSH daemon" is a unit/config
 claim, not a closure-size claim.
 
-**Phase 6 refines this for a `batch`+`vsock` host.** Such a guest DOES run an
+**Phase 6 refines this for any host whose TCP sshd cannot be reached** — a
+`batch`+`vsock` host (no `interactive`), and ALSO an interactive host under the
+`vsock` MODEL transport, whose guest has no network interface for a TCP sshd to
+listen on. Such a guest DOES run an
 sshd — but ONLY the VSOCK `sshd-vsock@` (vsock::22), reachable solely from the
 host (CID 2) over AF_VSOCK, never from the TAP. The TCP `sshd.service` is
-suppressed (`systemd.services.sshd.enable = false`), so no network SSH listener
-exists, AND the TAP firewall opening for 22 is closed
+suppressed (`systemd.services.sshd.enable = false`) whatever `enableSsh` says, so
+no network SSH listener exists, AND the TAP firewall opening for 22 is closed
 (`services.openssh.openFirewall = false`) — without it the openssh module's
 default `openFirewall = true` would leave 22 in
 `networking.firewall.allowedTCPPorts` on a guest whose TCP sshd is masked, a
@@ -334,7 +337,8 @@ boundary against a compromised host home.
   re-check the flag — `bridge -d link show` does (the plain `bridge link show`
   prints no port flags at all, which is why the runtime-validation suite's first
   real run reported a false negative here).
-- **VSOCK is now wired (phase 6), as a CONTROL channel.** A host that
+- **VSOCK is now wired (phase 6) as a CONTROL channel AND — with
+  `networkProfile = "proxy-only"` — as the MODEL transport.** A host that
   selects the `vsock` capability gives its guests a VSOCK `sshd-vsock@`
   (vsock::22, reused from upstream) reachable ONLY from the host (CID 2) over
   AF_VSOCK — never from the TAP. The TCP `sshd.service` is suppressed for a
@@ -349,9 +353,43 @@ boundary against a compromised host home.
   job subtree of the ONE writable session share (VSOCK is the *control*
   transport, not the *result* transport), so its authenticity still rests on
   virtiofs passing ownership through unchanged — a property of virtiofsd, which
-  is in the TCB. The plan's literal phase-6 VSOCK *proxy* forwarder (carrying
-  the model API over VSOCK and eliminating the TAP) is NOT implemented — it
-  would fork the one forwarder shape; see the plan's phase-6 deviations.
+  is in the TCB.
+
+  With `networkProfile = "proxy-only"` the same VSOCK device ALSO carries the
+  model API, and the guest then has **no network interface at all**. That is a
+  strict strengthening of every network-related invariant, not a trade:
+
+  - invariant 6 ("proxy-only network remains closed") stops depending on
+    iptables. There is no TAP, no address, no route and no resolver in the guest,
+    so LAN, VPN, cloud metadata, DNS, the public internet, other guests and every
+    other host port are unreachable because nothing can address them — the
+    `AGENT_MICROVM_*` chains are not weakened, they become unnecessary and are
+    not created;
+  - the host attack surface shrinks: no bridge on the host, no TAP devices, no
+    `br_netfilter`, no NAT/forwarding, no listener on a bridge address. What
+    remains is ONE Unix-socket listener per VM (`root:kvm 0660`, inside that VM's
+    own state directory) whose only destination is `127.0.0.1:<litellmPort>`,
+    confined with `IPAddressAllow=localhost` + `IPAddressDeny=any`,
+    `DynamicUser`, `ProtectSystem=strict`. It is NOT a CONNECT proxy: the guest
+    supplies no host, port or CID, so "the guest picks a host port" is not
+    expressible;
+  - cross-slot isolation is structural rather than enforced: slot A's guest can
+    only reach the socket its own VMM was started with, and there is no CID or
+    ARP identity to spoof — the layer-2 attack class (ARP spoofing, IP
+    impersonation, co-resident scanning) does not exist without a shared L2
+    domain;
+  - what does NOT change: the model API is still reachable, still through the
+    host proxy, and still with placeholder credentials only. A hostile agent can
+    still abuse the model endpoint it is authorised to use (the same statement as
+    under the TAP transport), and it can still exfiltrate through model requests.
+    VSOCK removes network reachability, not the semantic capability of the proxy
+    the agent is meant to use.
+
+  The residual risks specific to this path: the guest's model traffic passes
+  through the VMM's userspace vsock implementation (cloud-hypervisor is in the
+  TCB either way, as it is for virtio-net), and the per-VM socket's protection is
+  filesystem permissions on `<stateRoot>/<slot>` — the same directory microvm.nix
+  already keeps the runner, the store image and the notify socket in.
 - **The guest batch controller runs as guest root.** It is a small, fixed script
   that never executes anything the repository or the spec supplied, and it is
   hardened (`NoNewPrivileges`, `PrivateDevices`, `ProtectHome`, `ProtectKernel*`,

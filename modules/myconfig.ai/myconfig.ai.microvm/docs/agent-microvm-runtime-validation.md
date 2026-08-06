@@ -66,6 +66,7 @@ suite ASKS the launcher of that host for the set:
 $ agent-microvm capabilities
 capabilities: interactive batch
 declared: interactive batch vsock
+network-transport: tap
 ```
 
 That subcommand exists on every host, needs no root and starts nothing. An answer
@@ -94,6 +95,24 @@ for exactly such a section **hard-aborts**. Neither is treated as a failure — 
 capability the host deliberately does not select is a configuration fact — but
 running the section anyway would report vacuous passes for its "the guest must
 NOT be able to …" checks, which is the one thing this suite exists to prevent.
+
+### Model-transport gating (phase 6)
+
+The same answer reports the resolved **model transport**
+(`network-transport: tap|vsock`), and it is read with the same fail-closed rule:
+a missing or unknown value **hard-aborts** the run. It has to be, because under
+the `vsock` transport the guest has **no network interface at all**, and every
+"the guest must NOT be able to reach X" check would then pass for a reason that
+has nothing to do with enforcement — the exact vacuity this suite exists to
+prevent.
+
+The transport gates no SECTION (coverage does not shrink); the two
+network-dependent sections ADAPT:
+
+| Section | `tap` | `vsock` |
+| --- | --- | --- |
+| `net` | the full allow/deny matrix: the loopback endpoint AND the bridge endpoint must answer, the gateway/RFC1918/public/DNS/metadata probes must be denied | the loopback endpoint must answer, and the guest is asserted to have NO non-loopback link, NO IPv4/IPv6 default route and NO global address; the arbitrary-host-port probes become loopback probes (only the model port may answer); metadata/RFC1918/public/DNS denials still run |
+| `l2` | bridge-port `isolated on` per TAP, ping/TCP/IPv6-ND/ARP denials, IP impersonation with a positive control | both guests are asserted loopback-only, and the TAP-specific subtests are explicitly `SKIP`ped with the transport as the reason (there is no shared layer 2 to isolate) |
 
 **Coverage hole, CLOSED by phase 6:** on a host that selects only `batch` (no
 `vsock`), seven of the eight sections need a control channel and only `seed`
@@ -279,9 +298,11 @@ structurally impossible rather than merely unlikely.
 
 ### `net` — proxy-only allow/deny matrix
 
-Allowed: `127.0.0.1:4000` (guest loopback forwarder) and
-`192.168.83.1:4000` (bridge endpoint) — i.e. model access **only** through
-LiteLLM.
+Allowed: `127.0.0.1:4000` (guest loopback forwarder) and — under the `tap`
+transport only — `192.168.83.1:4000` (bridge endpoint) — i.e. model access
+**only** through LiteLLM. Under the `vsock` transport there is no bridge address
+at all, and the section asserts the ABSENCE of the guest's network interface
+instead (see [Model-transport gating](#model-transport-gating-phase-6)).
 
 Denied (each success here is a security failure):
 `169.254.169.254`, host SSH on the gateway, an arbitrary host port,
@@ -301,6 +322,7 @@ overlay. See [Boot-time model discovery](agent-microvm.md#boot-time-model-discov
 
 | Expected outcome |
 | --- |
+| (`tap` transport only — under `vsock` the whole table is replaced by "each guest has nothing but loopback", see [Model-transport gating](#model-transport-gating-phase-6)) |
 | `bridge -d link show` reports `isolated on` for the TAP of **every running** slot, and every running slot has its TAP (the TAP name is `vm-<class>-<i>` for slot `agent-<class>-<i>`) |
 | guest A cannot ping or TCP-connect to guest B |
 | guest A cannot reach guest B over IPv6 link-local / multicast |
@@ -488,6 +510,77 @@ Why it is here and not in `nix flake check`: the stager writes a root-owned tree
 (`install -o root -g root`) and the Nix build sandbox is not root, so CI can only
 prove the policy is *baked in* — whether it is *enforced* is decided here.
 
+## Measurements (plan phase 0 + the phase-6 acceptance numbers)
+
+`tests/measure-boot.sh` is the repeatable benchmark the plan asks for. It emits
+ONE JSON document so two runs can be diffed and a later phase can be compared
+against a recorded baseline.
+
+```console
+# everything that needs neither root nor /dev/kvm (closure sizes, unit counts,
+# share counts, interface counts, host helper units per VM):
+$ tests/measure-boot.sh --static-only --json /tmp/measure-static.json
+
+# the full set, on a KVM host, as root (adds launch-to-ready latency, idle RSS,
+# the running host task counts and the guest process count):
+$ sudo tests/measure-boot.sh --repeat 3 --json /tmp/measure-full.json
+```
+
+The script **never estimates** the runtime numbers. Without `/dev/kvm` (or
+without root, or without the launcher on `PATH`) it emits
+`"runtime": null` plus a `runtime_status` string beginning with `PENDING:`, and
+the static half is still complete.
+
+### Recorded results
+
+Measured with this harness on the reference host `test-f13` (two slots:
+`small` 2 vCPU/4 GiB, `normal` 4 vCPU/8 GiB, five selected agents), comparing
+`ca309d221b` (the pre-lightweight, four-share, guest-home-manager shape) with the
+current tree. `agent-small-0`, bytes as reported by `nix path-info -S`:
+
+| Metric | before (`ca309d221b`) | after (HEAD, `tap`) | Δ |
+| --- | --- | --- | --- |
+| guest closure (`system.build.toplevel`) | 5,775,759,800 | 4,769,447,064 | −1,006,312,736 (−17.4 %) |
+| runner closure (`microvm.declaredRunner`) | 11,280,225,192 | 9,782,519,304 | −1,497,705,888 (−13.3 %) |
+| generated guest units (`systemd.services`) | 66 | 65 | −1 |
+| virtiofs shares per slot | 4 | 2 | −2 (⇒ 2 virtiofsd instead of 4) |
+| host helper units per VM | 6 | 6 | 0 |
+
+The same harness on the shape the plan actually aims at — ONE agent (`codex`),
+`capabilities = [ "interactive" "batch" ]`, one 2 vCPU/4 GiB slot:
+
+| Metric | before (`ca309d221b`, 2 slots × 5 agents) | Codex-only `tap` | Codex-only `vsock` |
+| --- | --- | --- | --- |
+| guest closure | 5,775,759,800 | 1,648,880,624 (−71.5 %) | 1,649,837,240 (−71.4 %) |
+| runner closure | 11,280,225,192 | 5,266,962,544 (−53.3 %) | 5,268,407,960 (−53.3 %) |
+| generated guest units | 66 | 65 | **62** |
+| guest sockets | 6 | 6 | **4** |
+| guest network interfaces | 1 | 1 | **0** |
+| host units per VM | 6 | 6 | 6 (composition differs: the TAP-attach unit is gone, the per-VM AF_VSOCK forwarder socket is new; `microvm-tap-interfaces@<slot>` still exists but its `ConditionPathExists` on `current/bin/tap-up` fails, so no TAP is ever created) |
+| host units SHARED by all VMs | bridge socket + bridge IPv6 oneshot + per-TAP attach + host keys | same | **host keys only** (no bridge, no bridge socket, no firewall chain) |
+
+So the VSOCK transport costs ≈0.9 MB of guest closure (the `socat` the guest-side
+bridge needs) and removes three guest units, two guest sockets, the guest's whole
+network stack, the host bridge, the host TAP plumbing and the
+`AGENT_MICROVM_*` firewall chains.
+
+### Still PENDING a real-KVM run
+
+These are **not** measured yet and are deliberately **not** estimated (the
+machine this work was done on has no `/dev/kvm`):
+
+- launch-to-agent-ready latency, `tap` vs `vsock`;
+- idle RSS per running slot (the hypervisor cgroup + its virtiofsd);
+- the RUNNING host process/task count per slot and the guest process count;
+- warm build time from a populated Nix cache.
+
+Run `sudo tests/measure-boot.sh --repeat 3 --json …` on the KVM host and paste
+the numbers into this section. The plan's phase-6 PROOF EVENT (a green
+`--section creds` + `--section boot` on a `batch`+`vsock` host, and — new with
+the literal transport — a green `--section net` on a `vsock`-transport host,
+which is what confirms the AF_VSOCK model path actually carries the model API)
+belongs to the same run.
+
 ## Manual extras (not automated)
 
 - `journalctl -t agent-microvm -f` during a run: the structured lifecycle
@@ -505,7 +598,13 @@ prove the policy is *baked in* — whether it is *enforced* is decided here.
   `controller/` must be root-owned (the latter `0700`), only `worker/` may be
   agent-owned.
 - `iptables-save | grep AGENT_MICROVM` to review the rendered ruleset for the
-  active network profile.
+  active network profile (`tap` transport only — a `vsock`-transport host has no
+  such chains, and `agent-microvm doctor` says so instead of failing).
+- on a `vsock`-transport host: `systemctl status agent-litellm-vsock-<slot>.socket`
+  and `ss -lx | grep notify.vsock_` to see the per-VM model listener, plus, inside
+  the guest, `ip -o link` (must show `lo` only) and
+  `curl -fsS http://127.0.0.1:4000/v1/models` (must answer through the AF_VSOCK
+  path).
 
 ## Interpreting failures
 
