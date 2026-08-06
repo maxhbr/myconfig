@@ -478,6 +478,21 @@ was never used).
   of that section is honest (it reports the missing capability instead of
   checking anything), and tightening the interactive one belongs in its own
   commit.
+- **Phase 5, `capabilities` carries TWO KINDS of token, and a TRANSPORT-ONLY
+  selection is REJECTED**. `interactive` and `batch` are WORKLOAD capabilities
+  (what a guest can be asked to do); `vsock` (phase 6) is a TRANSPORT capability
+  (how the host reaches it). The set therefore has a validity rule beyond "not
+  empty": `capabilities = [ "vsock" ]` used to evaluate happily and wire the
+  VSOCK `sshd-vsock@` control channel while declaring NEITHER execution
+  capability — a guest handing out shells over VSOCK with neither the
+  interactive entry point nor the batch controller, i.e. an undocumented third
+  execution mode. One assertion next to the empty-selection guard now requires at
+  least one WORKLOAD capability, so `vsock` cannot be selected ALONE. It fails
+  CLOSED: there is no second capability list and no inference of a workload from
+  the transport (which would make `vsock` secretly mean `vsock` + `interactive`).
+  `checks.microvm-capabilities` pins the full matrix — the six valid selections
+  accept, `[ ]` and `[ "vsock" ]` reject, and the transport-only rejection fires
+  exactly once naming `interactive`, `batch` and `vsock`.
 - **Phase 1, store pinning**: `microvm.optimize.enable` and
   `microvm.storeDiskType` currently *default* to `true` / `erofs` upstream, so
   pinning them is behaviour-preserving today. It is done anyway (and, since the
@@ -658,6 +673,28 @@ was never used).
   is ABSENT on a default host (no `vsock`), so it does not perturb byte-identity,
   unlike the config-seed `before` edit above. The remaining open race is solely
   the home-seeding one (benign post-boot).
+- **Phase 6, per-slot host-key provisioning is SELF-HEALING and TRANSPORT-AWARE
+  for BOTH control transports**. The provisioning unit
+  (`agent-microvm-hostkeys.service`) used to be boot-time-only and its launcher
+  trigger was TAP-only, so a `batch`+`vsock` host — the one shape whose ONLY
+  control channel is SSH over VSOCK — skipped provisioning entirely, and any host
+  that lost a key directory after boot stayed broken (the unit is a
+  `RemainAfterExit` oneshot, so `systemctl start` on it is a silent no-op). Now
+  the launcher VALIDATES the slot's identity before every launch (both key files
+  non-empty, `root:root` 0400/0444, `known_hosts` itself `root:root` 0444, and
+  EXACTLY ONE `known_hosts` entry for the alias that transport will actually
+  verify — the slot IPv4 under TAP, `vsock-mux/<stateRoot>/<slot>/notify.vsock`
+  under VSOCK), repairs it with `systemctl restart`, and RE-VALIDATES afterwards.
+  The provisioner is idempotent under one `flock`: a valid private key is never
+  touched (identities stay stable across reboots and across repairs of OTHER
+  slots), a missing/mismatched PUBLIC half is re-derived rather than triggering a
+  re-key, over-permissive modes are normalised with a warning, and non-`root:root`
+  or non-regular (symlinked) paths are never adopted or chmodded through. Both
+  failure doors are FAIL-CLOSED and behaviourally tested
+  (`tests/microvm-batch-launcher-submit.sh` scenarios 14 – 16): a repair that
+  FAILS and a repair that SUCCEEDS while provisioning NOTHING both abort the
+  launch. There is deliberately no relaxation path (no
+  `StrictHostKeyChecking=no`, no `UserKnownHostsFile=/dev/null`).
 
 ## Objective
 
