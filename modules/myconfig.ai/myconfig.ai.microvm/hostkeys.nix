@@ -111,16 +111,47 @@ let
     guestKeyPath = "${guestMountPoint}/${keyName}";
   };
 
+  # --- the concurrency LOCK ----------------------------------------------
+  # The provisioner mutates SHARED state (the aggregated known_hosts) and
+  # per-slot key pairs, and it now has TWO callers: the boot-time unit and the
+  # launcher's `systemctl restart` self-heal before a launch. Two concurrent
+  # runs could therefore interleave a half-rebuilt database with a reader, or
+  # race `ssh-keygen` on the same path.
+  #
+  # The lock lives in this feature's OWN runtime root rather than in
+  # /run/lock: that directory is created by this module's tmpfiles rule (so it
+  # always exists when the unit runs), it is root-owned 0755 (so no local user
+  # can interfere), and it is inside the tree the executed launcher harnesses
+  # already bind-mount — whereas touching /run/lock would mean either relying
+  # on a directory this module does not own or `install -d`-ing over a
+  # system directory whose modes are not ours to reset.
+  lockFile = "${cfg.runtimeRoot}/hostkeys.lock";
+
   # --- generator ---------------------------------------------------------
-  # Idempotent: an existing key is kept (so a slot's identity is STABLE across
-  # host reboots and rebuilds), a missing one is created. known_hosts is
-  # rebuilt from the public keys on every run and installed atomically, so a
-  # slot-count change or a manually deleted key heals on the next start.
+  # IDEMPOTENT AND SELF-HEALING, in that order of priority:
+  #
+  #   * a VALID existing private key is NEVER touched, so a slot's identity is
+  #     STABLE across host reboots, rebuilds, and repairs of OTHER slots (which
+  #     is what lets the launcher call this unconditionally before a launch);
+  #   * a MISSING or unusable private key is generated;
+  #   * a missing/truncated/MISMATCHED public key is RE-DERIVED from the
+  #     private key (`ssh-keygen -y`), never worked around by replacing the
+  #     private key: the private key is the authority, and throwing it away
+  #     would invalidate every known_hosts entry already distributed for that
+  #     slot;
+  #   * known_hosts is rebuilt DETERMINISTICALLY from the public keys, with at
+  #     most ONE entry per alias, and installed ATOMICALLY (temp file + `mv`),
+  #     so a reader never sees a partial database;
+  #   * ownership and modes are set EXPLICITLY at the end of every slot's
+  #     block, so a hand-edited mode heals too.
+  #
+  # Everything runs under ONE exclusive lock (see `lockFile`).
   provisionHostKeys = pkgs.writeShellApplication {
     name = "agent-microvm-provision-hostkeys";
     runtimeInputs = with pkgs; [
       coreutils
       openssh
+      util-linux # flock — serialise concurrent provisioning runs
     ];
     text = ''
       set -euo pipefail
@@ -128,8 +159,21 @@ let
       root=${lib.escapeShellArg hostKeys.root}
       known_hosts=${lib.escapeShellArg hostKeys.knownHosts}
       key_name=${lib.escapeShellArg hostKeys.keyName}
+      lock=${lib.escapeShellArg lockFile}
 
+      # The runtime root carries both the lock and the known_hosts database.
+      # tmpfiles creates it, but `install -d` keeps this script runnable on its
+      # own (the launcher's self-heal path calls it through systemd, the
+      # executed harnesses call it directly).
+      install -d -m 0755 -o root -g root -- "$(dirname -- "$lock")"
       install -d -m 0700 -o root -g root -- "$root"
+
+      # ---- CONCURRENCY: exactly one writer at a time --------------------
+      # Held for the WHOLE body, so the per-slot key generation and the
+      # known_hosts rebuild are one critical section. The descriptor is closed
+      # (and the lock released) when this script exits, including on failure.
+      exec 9>"$lock"
+      flock -x 9
 
       tmp="$(mktemp "$known_hosts.XXXXXX")"
       trap 'rm -f -- "$tmp"' EXIT
@@ -138,28 +182,80 @@ let
         echo "# One deterministic ed25519 host identity per microVM slot."
       } > "$tmp"
 
+      # ONE entry per alias, ever: `ssh` REFUSES a known_hosts file that offers
+      # two different keys for the same host, so a duplicate would break the
+      # very verification this database exists for. The order is the
+      # Nix-generated slot order, so the file is byte-stable across runs.
+      declare -A kh_seen=()
+      kh_add() {
+          local alias="$1" key_line="$2"
+          if [[ -n "''${kh_seen[$alias]:-}" ]]; then
+              return 0
+          fi
+          kh_seen["$alias"]=1
+          printf '%s %s\n' "$alias" "$key_line" >> "$tmp"
+      }
+
       ${lib.concatMapStringsSep "\n" (slot: ''
         slot_dir=${lib.escapeShellArg (hostKeys.slotDir slot.name)}
         install -d -m 0700 -o root -g root -- "$slot_dir"
-        if [[ ! -s "$slot_dir/$key_name" ]]; then
-            # Remove a half-written pair before regenerating, so ssh-keygen
-            # never prompts for overwrite confirmation.
-            rm -f -- "$slot_dir/$key_name" "$slot_dir/$key_name.pub"
-            ssh-keygen -q -t ed25519 -N "" \
-                -C ${lib.escapeShellArg "agent-microvm-${slot.name}"} \
-                -f "$slot_dir/$key_name"
+        key="$slot_dir/$key_name"
+        pub="$key.pub"
+        comment=${lib.escapeShellArg "agent-microvm-${slot.name}"}
+
+        # ---- (a) is the existing PRIVATE key usable AND trustworthy? ------
+        # `ssh-keygen -y` is both the derivation of the public half and the
+        # cheapest TOTAL validity test (a truncated or corrupted key fails).
+        # Its output is discarded here, so no private material reaches a log.
+        # Ownership is part of the test: a private key that is not root:root
+        # could have been planted by another user, so it is NOT authoritative.
+        # The mode is not (it is reset unconditionally below).
+        private_ok=0
+        if [[ -s "$key" ]] \
+            && [[ "$(stat -c '%U:%G' -- "$key")" == "root:root" ]] \
+            && ssh-keygen -y -f "$key" >/dev/null 2>&1; then
+            private_ok=1
         fi
+        if (( private_ok == 0 )); then
+            # Only NOW is a key pair (re)generated. Remove a half-written pair
+            # first, so ssh-keygen never prompts for overwrite confirmation.
+            rm -f -- "$key" "$pub"
+            ssh-keygen -q -t ed25519 -N "" -C "$comment" -f "$key"
+        fi
+
+        # ---- (b) the PUBLIC key is DERIVED from the private one ----------
+        # A private key whose public half is missing, truncated or MISMATCHED is
+        # a PARTIAL STATE, not a reason to discard the identity: re-derive the
+        # public key instead. That keeps the slot's identity — and every
+        # known_hosts entry already distributed for it — intact.
+        # NOTE the `cut`: `ssh-keygen -y` echoes the private key's COMMENT as a
+        # third field. Normalising to `<type> <body>` keeps (i) the known_hosts
+        # entries byte-identical to the historical `cut -f1,2 <pub>` form,
+        # (ii) the `.pub` file at ssh-keygen's own three-field shape (so the
+        # comment is not duplicated), and (iii) the comparison below stable
+        # across runs instead of rewriting the public key every time.
+        derived="$(ssh-keygen -y -f "$key" | cut -d" " -f1,2)"
+        if [[ ! -s "$pub" ]] || [[ "$(cut -d" " -f1,2 -- "$pub")" != "$derived" ]]; then
+            rm -f -- "$pub"
+            printf '%s %s\n' "$derived" "$comment" > "$pub"
+        fi
+
+        # ---- (c) EXPLICIT final ownership and modes ----------------------
         # virtiofsd passes ownership through unchanged, so these host modes are
         # exactly what the guest sees: only guest root may read the private key.
-        chown root:root -- "$slot_dir/$key_name" "$slot_dir/$key_name.pub"
-        chmod 0400 -- "$slot_dir/$key_name"
-        chmod 0444 -- "$slot_dir/$key_name.pub"
+        # Set unconditionally, so a hand-edited mode heals on the next run.
+        chown root:root -- "$key" "$pub"
+        chmod 0400 -- "$key"
+        chmod 0444 -- "$pub"
+
+        # ---- (d) the slot's known_hosts entries --------------------------
+        # Always taken from the DERIVED public key, so the database cannot
+        # disagree with the key the guest's sshd will present.
         ${lib.optionalString agentNetwork.transportCaps.guestInterface ''
           # The TAP control channel: the slot's deterministic IPv4. ABSENT under
           # the `vsock` transport (lightweight plan phase 6), where the guest has
           # no network interface at all, so no sshd ever listens on that address.
-          printf '%s %s\n' ${lib.escapeShellArg slot.ip} \
-              "$(cut -d" " -f1,2 -- "$slot_dir/$key_name.pub")" >> "$tmp"
+          kh_add ${lib.escapeShellArg slot.ip} "$derived"
         ''}
         ${lib.optionalString agentCapabilities.vsock ''
           # The VSOCK control channel (lightweight plan phase 6): cloud-hypervisor
@@ -170,14 +266,14 @@ let
           # VSOCK ssh runs with StrictHostKeyChecking=yes exactly like the TAP
           # one — the VSOCK channel is host-only (CID 2 -> guest) but the
           # verification is still the safer, recorded choice.
-          printf '%s %s\n' \
-              ${lib.escapeShellArg "vsock-mux/${cfg.stateRoot}/${slot.name}/notify.vsock"} \
-              "$(cut -d" " -f1,2 -- "$slot_dir/$key_name.pub")" >> "$tmp"
+          kh_add ${lib.escapeShellArg "vsock-mux/${cfg.stateRoot}/${slot.name}/notify.vsock"} "$derived"
         ''}
       '') slots}
 
       # Public keys only → world-readable, so a non-root operator can run
-      # `agent-microvm ssh` with StrictHostKeyChecking=yes.
+      # `agent-microvm ssh` with StrictHostKeyChecking=yes. Installed with a
+      # rename, so a concurrent reader sees either the old or the new file and
+      # never a partial one.
       chmod 0444 -- "$tmp"
       mv -f -- "$tmp" "$known_hosts"
       trap - EXIT

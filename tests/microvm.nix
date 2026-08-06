@@ -5207,6 +5207,12 @@ in
         # ... and of a host with NO SSH-based control transport at all, where
         # the whole block must be absent (it would be unreachable code).
         bLauncher = "${bLauncherPkg}/bin/agent-microvm";
+        # The BUILT provisioners (their own shellcheck gate has already run):
+        # the reference host's (TAP entries) and the batch+vsock host's (VSOCK
+        # mux entries).
+        provisioner = lib.getExe hostKeys.provisioner;
+        bvProvisioner = lib.getExe bvHostKeys.provisioner;
+        lockPath = "${microvmOpts.runtimeRoot}/hostkeys.lock";
       }
       ''
         # --- (1) the launcher SELF-HEALS instead of trusting the unit -------
@@ -5282,6 +5288,60 @@ in
             echo "the batch-only (no vsock) launcher carries $f, which can never fire there" >&2; exit 1
           fi
         done
+
+        # --- (5) the PROVISIONER is idempotent, locked and heals partials ---
+        for p in "$provisioner" "$bvProvisioner"; do
+          # CONCURRENCY: the provisioning unit and the launcher's self-heal can
+          # run at the same moment, both mutating the SHARED known_hosts and
+          # possibly the same slot's key pair.
+          grep -qF -- 'flock -x 9' "$p" \
+            || { echo "the provisioner does not take an exclusive flock" >&2; exit 1; }
+          grep -qF -- "exec 9>\"\$lock\"" "$p" \
+            || { echo "the provisioner does not open its lock file" >&2; exit 1; }
+          grep -qF -- "lock=$lockPath" "$p" \
+            || { echo "the provisioner does not use the module-owned lock path" >&2; exit 1; }
+          # IDEMPOTENCY: a VALID existing private key is kept, so a slot's
+          # identity is stable and repairing one slot cannot rewrite another's.
+          grep -qF -- 'private_ok=0' "$p" \
+            || { echo "the provisioner does not test the existing private key before replacing it" >&2; exit 1; }
+          grep -qF -- 'if (( private_ok == 0 )); then' "$p" \
+            || { echo "the provisioner does not gate key GENERATION on the private key being unusable" >&2; exit 1; }
+          # Ownership is part of trusting an existing private key.
+          grep -qF -- "stat -c '%U:%G' -- \"\$key\")\" == \"root:root\"" "$p" \
+            || { echo "the provisioner trusts a private key it has not checked the ownership of" >&2; exit 1; }
+          # PARTIAL STATE: a missing/mismatched public key is DERIVED from the
+          # private one, not worked around by discarding the private key.
+          grep -qF -- 'ssh-keygen -y -f "$key"' "$p" \
+            || { echo "the provisioner does not derive the public key from the private key" >&2; exit 1; }
+          grep -qF -- 'derived="$(ssh-keygen -y -f "$key" | cut -d" " -f1,2)"' "$p" \
+            || { echo "the provisioner does not normalise the derived public key" >&2; exit 1; }
+          grep -qF -- '!= "$derived"' "$p" \
+            || { echo "the provisioner does not repair a public key that MISMATCHES the private key" >&2; exit 1; }
+          # NO DUPLICATE known_hosts entry per alias (ssh refuses such a file).
+          grep -qF -- 'kh_add() {' "$p" \
+            || { echo "the provisioner does not funnel known_hosts entries through a de-duplicating helper" >&2; exit 1; }
+          grep -qF -- 'kh_seen["$alias"]=1' "$p" \
+            || { echo "the provisioner does not remember which aliases it already wrote" >&2; exit 1; }
+          # ATOMIC install: a reader never sees a partial database.
+          grep -qF -- 'mv -f -- "$tmp" "$known_hosts"' "$p" \
+            || { echo "the provisioner does not install known_hosts atomically" >&2; exit 1; }
+          # EXPLICIT final modes, so a hand-edited mode heals too.
+          grep -qF -- 'chmod 0400 -- "$key"' "$p" \
+            || { echo "the provisioner does not force the private key to 0400" >&2; exit 1; }
+          grep -qF -- 'chmod 0444 -- "$pub"' "$p" \
+            || { echo "the provisioner does not force the public key to 0444" >&2; exit 1; }
+          # It must never print private-key material.
+          if grep -nE 'cat .*\$key"|echo .*\$\(cat "\$key' "$p" | grep -v '^[0-9]*: *#'; then
+            echo "the provisioner prints private-key material" >&2; exit 1
+          fi
+        done
+        # The VSOCK host's provisioner pins the vsock-mux alias; the TAP one
+        # does not (its guest has no VSOCK control channel).
+        grep -qF -- 'kh_add vsock-mux/' "$bvProvisioner" \
+          || { echo "the batch+vsock provisioner does not pin the vsock-mux alias" >&2; exit 1; }
+        if grep -qF -- 'kh_add vsock-mux/' "$provisioner"; then
+          echo "the default (tap) provisioner writes a vsock-mux entry it has no channel for" >&2; exit 1
+        fi
 
         {
           echo "microvm-host-identity-self-healing:"
