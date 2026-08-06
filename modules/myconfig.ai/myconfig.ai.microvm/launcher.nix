@@ -255,6 +255,14 @@ let
       #     virtiofsd passes ownership and modes through unchanged, so a
       #     group-readable private key HERE is a group-readable private key
       #     inside the guest, where the untrusted `agent` user lives;
+      #   * $KNOWN_HOSTS itself is root:root 0444 — SYMMETRIC with the two key
+      #     checks above. It is the database StrictHostKeyChecking=yes is
+      #     verified against, so a drifted owner or a group/world-WRITABLE mode
+      #     means an unprivileged local user could have swapped a pinned key for
+      #     their own and made this launcher accept a guest it should refuse.
+      #     0444 is exactly what the provisioner installs (public keys only, so
+      #     world-READABLE on purpose); anything else is drift and is repaired
+      #     rather than trusted;
       #   * $KNOWN_HOSTS holds EXACTLY ONE entry for that alias. Two entries are
       #     a CONFLICT, which must be repaired rather than accepted: ssh would
       #     refuse the connection, and "repair" is the only outcome that leaves a
@@ -273,6 +281,8 @@ let
           meta="$(stat -c '%U:%G %a' -- "$pub" 2>/dev/null)" || return 1
           [[ "$meta" == "root:root 444" ]] || return 1
           [[ -s "$KNOWN_HOSTS" ]] || return 1
+          meta="$(stat -c '%U:%G %a' -- "$KNOWN_HOSTS" 2>/dev/null)" || return 1
+          [[ "$meta" == "root:root 444" ]] || return 1
           alias="$(host_identity_alias "$slot")" || return 1
           [[ -n "$alias" ]] || return 1
           # `ssh-keygen -F` is the SAME matcher ssh itself uses, so this cannot
