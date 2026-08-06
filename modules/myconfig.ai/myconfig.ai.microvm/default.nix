@@ -96,6 +96,14 @@ let
   # produce, since every declared agent has `batchArgs`) and requires the
   # batch-capable-agent assertion to fire for a `batch` host and to stay silent
   # for an interactive-only one.
+  #
+  # CONTRACT for anyone who ever overrides `_module.args.agentRegistry` (only
+  # tests/microvm.nix does today): the argument must NEVER be defined in terms of
+  # `config.assertions` (directly or through a module that reads them). This is a
+  # same-module read-back of an argument this module also DEFINES, so such a
+  # definition would close the loop `assertions -> agentRegistry -> assertions`
+  # into an infinite recursion. A plain value, or one derived from options other
+  # than `assertions`, cannot recurse.
   effectiveRegistry = config._module.args.agentRegistry;
 
   # --- lightweight plan phase 5: the CAPABILITY SELECTOR -------------------
@@ -120,12 +128,30 @@ let
   # somewhere deep in a consumer.
   selectedCapabilities = lib.unique cfg.capabilities;
   unknownCapabilities = lib.filter (c: !(lib.elem c declaredCapabilities)) selectedCapabilities;
-  agentCapabilities = {
-    declared = declaredCapabilities;
-    selected = lib.filter (c: lib.elem c selectedCapabilities) declaredCapabilities;
-    interactive = lib.elem "interactive" selectedCapabilities;
-    batch = lib.elem "batch" selectedCapabilities;
-  };
+  # ONE list of tokens, ONE derivation of the per-capability booleans: the
+  # booleans are GENERATED from `declaredCapabilities` (`lib.genAttrs`) rather
+  # than written out a second time, so adding a token to that list cannot leave a
+  # consumer's `agentCapabilities.<token>` undefined (which is a THROW, e.g. in
+  # ./launcher.nix's `missingCapabilities` filter) and cannot go out of sync with
+  # `declared`/`selected`.
+  #
+  # `declared` and `selected` are the two NON-token keys of the attrset. A
+  # capability token spelled like either of them would be silently overwritten by
+  # the `//` below (its boolean would become a list), so the `assert` makes that
+  # mistake a hard eval error rather than a subtle mis-selection.
+  agentCapabilities =
+    assert lib.all (
+      c:
+      !(lib.elem c [
+        "declared"
+        "selected"
+      ])
+    ) declaredCapabilities;
+    lib.genAttrs declaredCapabilities (c: lib.elem c selectedCapabilities)
+    // {
+      declared = declaredCapabilities;
+      selected = lib.filter (c: lib.elem c selectedCapabilities) declaredCapabilities;
+    };
 
   # --- ticket 3 C: network profiles ---------------------------------------
   # `network-profiles.nix` is the authoritative capability table; the effective
@@ -521,6 +547,13 @@ in
       description = ''
         Expose an SSH server inside the guest, reachable only on the private
         guest interface. Requires `sshPublicKeyFile` to be set.
+
+        Part of the `interactive` capability, and REJECTED without it: on a host
+        whose `capabilities` does not include `"interactive"` there is no SSH
+        server, no per-slot host identity and no `known_hosts` database to
+        enable, so `enableSsh = true` (the DEFAULT) is an evaluation error there
+        rather than a silently ignored value. A `capabilities = [ "batch" ]`
+        host must therefore also set `enableSsh = false`.
       '';
     };
 

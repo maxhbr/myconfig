@@ -26,6 +26,20 @@
 # additionally need `batch`, and `seed` needs neither. A section whose
 # capability the host does not select is SKIPPED (under `--section all`) or
 # HARD-ABORTS (when asked for explicitly) instead of reporting vacuous passes.
+# Within `creds`, the batch-worker environment subtest additionally needs
+# `batch` and reports the capability when it is absent (the unit it inspects
+# does not exist there).
+#
+# The set is READ from `agent-microvm capabilities` (machine-readable, needs no
+# root, starts nothing); an answer that cannot be parsed HARD-ABORTS the run
+# rather than defaulting to "this host has everything".
+#
+# CONSEQUENCE, recorded here because it is a real coverage hole: on a host that
+# selects ONLY `batch`, seven of the eight sections need `interactive` (the
+# control channel IS ssh) and only `seed` runs. Restoring coverage there needs a
+# guest transport that does not require sshd — which is exactly what phase 6
+# (VSOCK) is for. Until then a batch-only host is validated by the eval/build
+# tier (`checks.microvm-capabilities`) plus `--section seed` only.
 #
 # Every check prints exactly one line: `PASS`, `FAIL` or `SKIP` plus a reason.
 # The script exits non-zero if any check FAILED. SKIPs are honest: they mark
@@ -971,55 +985,13 @@ section_l2() {
     cleanup_task rtv-l2b
 }
 
-# --- (4) credential leakage ----------------------------------------------
-section_creds() {
-    section "credential boundary (ticket 6 A.4)"
-    local class slot rc=0
-    class="$(all_classes | head -1)"
-    cleanup_task rtv-creds
-    slot="$(start_task rtv-creds "$class")" || rc=$?
-    if ((rc != 0)) || [[ -z $slot ]]; then
-        report_start_failure "$rc" "credentials"
-        cleanup_task rtv-creds
-        return
-    fi
-    assert_transport "$slot" "credential boundary"
-    # NOTE: only names/paths are ever printed, never values.
-    #
-    # Every environment assertion runs in a LOGIN shell (guest_login): the guest's
-    # `environment.variables` are exported by /etc/profile only, so a plain
-    # `agent-microvm ssh <slot> -- sh -c ...` sees NO variable at all. That is why
-    # the placeholder check used to FAIL while the twelve "does not contain"
-    # checks below it used to pass VACUOUSLY — nothing was set either way.
-    local var
-    # POSITIVE CONTROL: a variable that MUST be set and MUST have this exact
-    # value. If it is not there the profile was not loaded, so the whole
-    # environment block is undecidable and is SKIPPED rather than passed.
-    local want_base="http://127.0.0.1:$LITELLM_PORT/v1" got_base
-    # shellcheck disable=SC2016  # the variable must expand in the GUEST
-    got_base="$(guest_login "$slot" 'printf %s "${OPENAI_BASE_URL-}"' 2>/dev/null || true)"
-    # The launcher's ssh allocates a pty (-t), so strip any CR the tty layer
-    # added before comparing.
-    got_base="${got_base//$'\r'/}"
-    if [[ $got_base == "$want_base" ]]; then
-        pass "guest environment is loaded (OPENAI_BASE_URL=$want_base)"
-        for var in OPENAI_API_KEY ANTHROPIC_API_KEY; do
-            if guest_login "$slot" "test \"\${$var-}\" = $KEY_PLACEHOLDER" >/dev/null 2>&1; then
-                pass "guest $var is the placeholder, not a real key"
-            else
-                fail "guest $var is not the expected placeholder"
-            fi
-        done
-        for var in OPENROUTER_API_KEY GITHUB_TOKEN GH_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID \
-            AWS_SECRET_ACCESS_KEY GOOGLE_APPLICATION_CREDENTIALS AZURE_CLIENT_SECRET \
-            KUBECONFIG SSH_AUTH_SOCK GPG_AGENT_INFO; do
-            check_denied "guest environment does not contain $var" "$slot" \
-                sh -lc "test -n \"\${$var:-}\""
-        done
-    else
-        skip "guest environment assertions: OPENAI_BASE_URL is '$got_base', expected '$want_base' — the login profile did not load, so nothing about the environment can be decided"
-    fi
-
+# The BATCH half of the `creds` section, in its own function so the section can
+# DECIDE whether to run it: it inspects `agent-job-worker@pi.service`, which
+# only EXISTS on a host that selects the `batch` capability (lightweight plan
+# phase 5). Takes the slot of an already-running session, because the unit is
+# read over the same SSH control channel the rest of the section uses.
+creds_batch_worker_env() {
+    local slot="$1"
     # The BATCH path gets its environment from the systemd WORKER UNIT, not from
     # a login profile, so the shell type above says nothing about it. Assert the
     # same facts against what `agent-job-worker@<agent>` would inherit: the
@@ -1088,6 +1060,69 @@ $unit_env"
                 fail "the batch worker's $var is set to something other than the placeholder"
             fi
         done
+    fi
+}
+
+# --- (4) credential leakage ----------------------------------------------
+section_creds() {
+    section "credential boundary (ticket 6 A.4)"
+    local class slot rc=0
+    class="$(all_classes | head -1)"
+    cleanup_task rtv-creds
+    slot="$(start_task rtv-creds "$class")" || rc=$?
+    if ((rc != 0)) || [[ -z $slot ]]; then
+        report_start_failure "$rc" "credentials"
+        cleanup_task rtv-creds
+        return
+    fi
+    assert_transport "$slot" "credential boundary"
+    # NOTE: only names/paths are ever printed, never values.
+    #
+    # Every environment assertion runs in a LOGIN shell (guest_login): the guest's
+    # `environment.variables` are exported by /etc/profile only, so a plain
+    # `agent-microvm ssh <slot> -- sh -c ...` sees NO variable at all. That is why
+    # the placeholder check used to FAIL while the twelve "does not contain"
+    # checks below it used to pass VACUOUSLY — nothing was set either way.
+    local var
+    # POSITIVE CONTROL: a variable that MUST be set and MUST have this exact
+    # value. If it is not there the profile was not loaded, so the whole
+    # environment block is undecidable and is SKIPPED rather than passed.
+    local want_base="http://127.0.0.1:$LITELLM_PORT/v1" got_base
+    # shellcheck disable=SC2016  # the variable must expand in the GUEST
+    got_base="$(guest_login "$slot" 'printf %s "${OPENAI_BASE_URL-}"' 2>/dev/null || true)"
+    # The launcher's ssh allocates a pty (-t), so strip any CR the tty layer
+    # added before comparing.
+    got_base="${got_base//$'\r'/}"
+    if [[ $got_base == "$want_base" ]]; then
+        pass "guest environment is loaded (OPENAI_BASE_URL=$want_base)"
+        for var in OPENAI_API_KEY ANTHROPIC_API_KEY; do
+            if guest_login "$slot" "test \"\${$var-}\" = $KEY_PLACEHOLDER" >/dev/null 2>&1; then
+                pass "guest $var is the placeholder, not a real key"
+            else
+                fail "guest $var is not the expected placeholder"
+            fi
+        done
+        for var in OPENROUTER_API_KEY GITHUB_TOKEN GH_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID \
+            AWS_SECRET_ACCESS_KEY GOOGLE_APPLICATION_CREDENTIALS AZURE_CLIENT_SECRET \
+            KUBECONFIG SSH_AUTH_SOCK GPG_AGENT_INFO; do
+            check_denied "guest environment does not contain $var" "$slot" \
+                sh -lc "test -n \"\${$var:-}\""
+        done
+    else
+        skip "guest environment assertions: OPENAI_BASE_URL is '$got_base', expected '$want_base' — the login profile did not load, so nothing about the environment can be decided"
+    fi
+
+    # The BATCH path gets its environment from the systemd WORKER UNIT, not from
+    # a login profile, so the shell type above says nothing about it. Asserted
+    # only where that unit exists: on an interactive-only host `systemctl show`
+    # answers with EMPTY properties for an unknown unit, so the subtest would
+    # report "the unit was not readable" — a wrong reason, and exactly the
+    # dishonesty the capability dispatch exists to remove. The reason given is
+    # therefore the capability itself, and no batch property is claimed.
+    if ((BATCH_CAPABLE)); then
+        creds_batch_worker_env "$slot"
+    else
+        skip "batch worker environment: this host does not select the 'batch' capability, so no agent-job-worker@ unit exists here; the worker's endpoint and credential-denylist assertions are a batch host's property"
     fi
 
     local path
@@ -2044,23 +2079,58 @@ preflight_endpoint() {
 # subtest (no SSH channel) or — much worse — report VACUOUS PASSES for its
 # "the guest must NOT be able to ..." checks.
 #
-# The capability set is DETECTED from the launcher of the host under test, not
-# configured here: a launcher without a capability refuses that capability's
-# subcommands with a message naming it (launcher.nix `require_capability`). Both
-# probes are argument-less and therefore side-effect-free — the subcommand dies
-# in its own argument validation long before it allocates anything.
-INTERACTIVE_CAPABLE=1
-BATCH_CAPABLE=1
+# The set is ASKED FOR, not inferred: `agent-microvm capabilities` prints it
+# machine-readably on EVERY host (`capabilities: <space-separated>` plus a
+# `declared:` line), needs no root and starts nothing. The earlier detection
+# grepped the launcher's REFUSAL messages for an English substring and defaulted
+# to "this host has everything" — it therefore failed OPEN: rewording
+# `require_capability`'s `die`, a `require_root` failure or a future transport
+# change would silently restore exactly the vacuous passes this dispatch exists
+# to prevent.
+#
+# So it fails CLOSED instead: an unparseable answer HARD-ABORTS the run. A
+# launcher that does not know the subcommand (a host built before this phase)
+# is aborted too, on purpose — an operator must not learn about a coverage hole
+# from a green run.
+INTERACTIVE_CAPABLE=0
+BATCH_CAPABLE=0
+SELECTED_CAPABILITIES=""
+DECLARED_CAPABILITIES=""
 detect_capabilities() {
-    local out
-    out="$("$LAUNCHER" run 2>&1 || true)"
-    if [[ $out == *"needs the 'interactive' capability"* ]]; then
-        INTERACTIVE_CAPABLE=0
+    local out line cap
+    if ! out="$("$LAUNCHER" capabilities 2>&1)"; then
+        # shellcheck disable=SC2016  # the backticks are PROSE (the command name), not a substitution
+        printf '%s: ABORTING: `%s capabilities` failed:\n' "$PROG" "$LAUNCHER" >&2
+        printf '%s\n' "$out" >&2
+        die "the capability set of the host under test could not be read, so no section can honestly be run or skipped"
     fi
-    out="$("$LAUNCHER" submit 2>&1 || true)"
-    if [[ $out == *"needs the 'batch' capability"* ]]; then
-        BATCH_CAPABLE=0
-    fi
+    while IFS= read -r line; do
+        case "$line" in
+            "capabilities: "*) SELECTED_CAPABILITIES="${line#capabilities: }" ;;
+            "declared: "*) DECLARED_CAPABILITIES="${line#declared: }" ;;
+        esac
+    done <<<"$out"
+    [[ -n $DECLARED_CAPABILITIES ]] ||
+        die "\`$LAUNCHER capabilities\` printed no 'declared:' line (got: $out) — refusing to guess what this host supports"
+    [[ -n $SELECTED_CAPABILITIES ]] ||
+        die "\`$LAUNCHER capabilities\` printed no non-empty 'capabilities:' line (got: $out) — the module rejects an empty selection, so this answer cannot be trusted"
+    # Every capability THIS SUITE knows about must be declared by the launcher.
+    # A missing token means the suite and the module disagree about what exists
+    # (a renamed capability, a suite older than the module), which the gating
+    # below would silently read as "not selected".
+    for cap in interactive batch; do
+        case " $DECLARED_CAPABILITIES " in
+            *" $cap "*) ;;
+            *) die "the host under test does not DECLARE the '$cap' capability this suite gates on (declared: $DECLARED_CAPABILITIES) — the suite and the module disagree about what exists" ;;
+        esac
+    done
+    for cap in $SELECTED_CAPABILITIES; do
+        case "$cap" in
+            interactive) INTERACTIVE_CAPABLE=1 ;;
+            batch) BATCH_CAPABLE=1 ;;
+            *) die "the host under test selects the capability '$cap', which this suite does not know how to gate on — update the SECTION_CAPABILITIES table" ;;
+        esac
+    done
 }
 
 # --- section dispatch ------------------------------------------------------
@@ -2079,6 +2149,11 @@ is_endpoint_section() {
 # command needs `interactive` (the control channel IS ssh); `lifecycle` and
 # `forgery` additionally submit batch jobs. `seed` exercises the HOST-side
 # stager only, so it needs neither.
+# `creds` needs only `interactive` because that is what its SECTION needs; its
+# batch-worker-environment subtest is gated on `BATCH_CAPABLE` at its own call
+# site (`creds_batch_worker_env`) and skips with the capability as the reason.
+# A section-level `interactive batch` would have been wrong: it would drop the
+# eleven credential-boundary assertions that DO hold on an interactive-only host.
 declare -A SECTION_CAPABILITIES=(
     [boot]="interactive"
     [net]="interactive"
@@ -2136,7 +2211,7 @@ info "sections: ${PLAN[*]}"
 # the same reason the endpoint preflight does — a run that cannot exercise a
 # property must say so, never pass it.
 detect_capabilities
-info "capabilities of the host under test: $( ((INTERACTIVE_CAPABLE)) && printf 'interactive ')$( ((BATCH_CAPABLE)) && printf 'batch ')"
+info "capabilities of the host under test: $SELECTED_CAPABILITIES (declared: $DECLARED_CAPABILITIES)"
 ENDPOINT_DOWN=0
 SKIPPED_SECTIONS=()
 UNSUPPORTED_SECTIONS=()

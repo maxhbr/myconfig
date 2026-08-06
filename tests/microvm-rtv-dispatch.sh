@@ -69,7 +69,8 @@ trap 'rm -rf "$WORK"' EXIT
 awk '/^# --- host-side model-endpoint preflight ---/{f=1} f{print}' \
     "$SUITE" >"$WORK/dispatch.sh"
 for tok in preflight_endpoint ALL_SECTIONS is_endpoint_section \
-    resolve_sections 'mapfile -t PLAN' RAN_SECTIONS SKIPPED_SECTIONS; do
+    resolve_sections 'mapfile -t PLAN' RAN_SECTIONS SKIPPED_SECTIONS \
+    detect_capabilities SECTION_CAPABILITIES UNSUPPORTED_SECTIONS; do
     grep -q -- "$tok" "$WORK/dispatch.sh" || {
         printf 'harness: could not extract "%s" from %s (has the suite been restructured?)\n' \
             "$tok" "$SUITE" >&2
@@ -123,6 +124,37 @@ section_lifecycle() { section "lifecycle failure handling"; pass "lc-check"; }
 section_malrepo() { section "hostile repository fixture"; pass "mal-check"; }
 section_forgery() { section "batch result channel: forgery"; pass "forg-check"; }
 section_seed() { section "runtime configuration staging"; pass "seed-check"; }
+# Stub LAUNCHER. The dispatch block invokes exactly one subcommand,
+# `capabilities`, and HARD-ABORTS if it cannot parse the answer — the property
+# scenarios 8-11 below exercise. RTV_CAPS / RTV_DECLARED pick the answer,
+# RTV_CAPS_MODE picks a MALFORMED one (`fail` = the launcher does not know the
+# subcommand, `nodeclared`/`nocaps` = a half-answer).
+agent-microvm() {
+    case "${1-}" in
+        capabilities)
+            case "${RTV_CAPS_MODE:-ok}" in
+                fail)
+                    printf "agent-microvm: unknown command 'capabilities'\n" >&2
+                    return 1
+                    ;;
+                nodeclared)
+                    printf 'capabilities: %s\n' "${RTV_CAPS:-interactive batch}"
+                    ;;
+                nocaps)
+                    printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch}"
+                    ;;
+                *)
+                    printf 'capabilities: %s\n' "${RTV_CAPS:-interactive batch}"
+                    printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch}"
+                    ;;
+            esac
+            ;;
+        *)
+            printf 'stub launcher: unexpected subcommand: %s\n' "$*" >&2
+            return 1
+            ;;
+    esac
+}
 # Stub curl: RTV_ENDPOINT_UP=1 -> endpoint answers (return 0); 0 -> dead (return 1).
 # Uses `return`, not `exit`: a function `exit` would kill the whole shell,
 # whereas the real curl is an external binary whose process exit is just a status.
@@ -146,6 +178,9 @@ run_dispatch() {
         source "$STUB_ENV"
         SECTION="$section"
         export RTV_ENDPOINT_UP="$up"
+        export RTV_CAPS="${RTV_CAPS:-interactive batch}"
+        export RTV_DECLARED="${RTV_DECLARED:-interactive batch}"
+        export RTV_CAPS_MODE="${RTV_CAPS_MODE:-ok}"
         # shellcheck source=/dev/null
         source "$WORK/dispatch.sh"
     ) >"$out" 2>&1 || rc=$?
@@ -345,6 +380,143 @@ for s in boot net l2 creds lifecycle malrepo forgery; do
         fail "section $s printed no tally: $(grep "^#     section $s:" "$log" || echo missing)"
     fi
 done
+
+printf '\n=== 8. a batch-only host: the interactive sections are SKIPPED, not passed ===\n'
+# `myconfig.ai.microvm.capabilities = [ "batch" ]` (lightweight plan phase 5):
+# seven of the eight sections drive the guest over ssh, which such a host has
+# not got. They must be SKIPPED with the capability as the reason — running them
+# would report vacuous passes for every "the guest must NOT be able to ..." check.
+# The knobs are plain shell variables (run_dispatch exports them into the
+# subshell it sources the dispatch block in), so they are set and reset around
+# each scenario rather than used as command prefixes.
+RTV_CAPS="batch"
+rc="$(run_dispatch all 1)"
+RTV_CAPS="interactive batch"
+log="$WORK/run-all-1.log"
+expect "batch-only all+up exits 0 (a deselected capability is not a defect)" 0 "$rc"
+if grep -q '^#     sections ran: seed$' "$log"; then
+    pass "only the host-side 'seed' section ran on a batch-only host"
+else
+    fail "wrong 'sections ran' on a batch-only host: $(grep '^#     sections ran:' "$log" || echo missing)"
+fi
+for s in boot net l2 creds malrepo; do
+    if grep -q "SKIP  section '$s' SKIPPED: this host does not select the interactive capability" "$log"; then
+        pass "section $s was skipped with the CAPABILITY as the reason"
+    else
+        fail "section $s was not skipped for the right reason: $(grep "section '$s'" "$log" || echo missing)"
+    fi
+done
+for h in "boot + filesystem" "credential boundary" "layer 2 isolation" \
+    "hostile repository fixture" "batch result channel: forgery"; do
+    if ran_header "$log" "$h"; then
+        fail "section RAN on a host that cannot exercise it: $h"
+    else
+        pass "section did NOT run on a batch-only host: $h"
+    fi
+done
+if grep -q '^#     sections skipped (capability not selected by this host): boot net l2 creds lifecycle malrepo forgery$' "$log"; then
+    pass "the summary lists every capability-skipped section"
+else
+    fail "wrong capability-skip summary: $(grep 'capability not selected' "$log" || echo missing)"
+fi
+if grep -q '^#     capabilities of the host under test: batch (declared: interactive batch)$' "$log"; then
+    pass "the run reports the capability set it read from the launcher"
+else
+    fail "the capability set was not reported: $(grep 'capabilities of the host' "$log" || echo missing)"
+fi
+
+printf '\n=== 9. an interactive-only host: the batch sections are SKIPPED ===\n'
+RTV_CAPS="interactive"
+rc="$(run_dispatch all 1)"
+RTV_CAPS="interactive batch"
+log="$WORK/run-all-1.log"
+expect "interactive-only all+up exits 0" 0 "$rc"
+if grep -q '^#     sections ran: boot net l2 creds malrepo seed$' "$log"; then
+    pass "the six sections that need no batch machinery ran"
+else
+    fail "wrong 'sections ran' on an interactive-only host: $(grep '^#     sections ran:' "$log" || echo missing)"
+fi
+for s in lifecycle forgery; do
+    if grep -q "SKIP  section '$s' SKIPPED: this host does not select the batch capability" "$log"; then
+        pass "section $s was skipped for the missing batch capability"
+    else
+        fail "section $s was not skipped for the right reason: $(grep "section '$s'" "$log" || echo missing)"
+    fi
+done
+
+printf '\n=== 10. asking for a section this host cannot run: hard-abort ===\n'
+RTV_CAPS="batch"
+rc="$(run_dispatch boot 1)"
+RTV_CAPS="interactive batch"
+log="$WORK/run-boot-1.log"
+if ((rc != 0)); then
+    pass "--section boot on a batch-only host hard-aborts (exit $rc)"
+else
+    fail "--section boot on a batch-only host exited 0"
+fi
+if grep -q 'ABORTING section' "$log" && grep -q 'pass VACUOUSLY' "$log"; then
+    pass "the abort names the vacuity it prevents"
+else
+    fail "the abort message is not explicit: $(cat "$log")"
+fi
+if ran_header "$log" "boot + filesystem"; then
+    fail "boot ran on a host without the interactive capability"
+else
+    pass "boot did not run after the abort"
+fi
+
+printf '\n=== 11. the capability probe fails CLOSED (the fail-OPEN regression) ===\n'
+# The earlier implementation inferred the set by grepping the launcher's English
+# refusal messages and DEFAULTED to "this host has everything". Any reword — or a
+# launcher that does not know the subcommand at all — silently restored the
+# vacuous passes the dispatch exists to prevent. Every malformed answer must
+# abort the run instead.
+for mode in fail nodeclared nocaps; do
+    RTV_CAPS_MODE="$mode"
+    rc="$(run_dispatch all 1)"
+    RTV_CAPS_MODE=ok
+    log="$WORK/run-all-1.log"
+    if ((rc != 0)); then
+        pass "an unusable capability answer ($mode) aborts the run (exit $rc)"
+    else
+        fail "an unusable capability answer ($mode) let the run continue"
+    fi
+    if grep -qE 'could not be read|printed no' "$log"; then
+        pass "the abort explains WHY the capability set is unusable ($mode)"
+    else
+        fail "no explanation for the unusable capability answer ($mode): $(cat "$log")"
+    fi
+    for h in "boot + filesystem" "runtime configuration staging"; do
+        if ran_header "$log" "$h"; then
+            fail "a section RAN after an unusable capability answer ($mode): $h"
+        else
+            pass "no section ran after an unusable capability answer ($mode): $h"
+        fi
+    done
+done
+# ... and a DECLARED set that lacks a capability this suite gates on is a
+# suite/module disagreement, not "the host does not select it".
+RTV_CAPS="interactive"
+RTV_DECLARED="interactive"
+rc="$(run_dispatch all 1)"
+RTV_CAPS="interactive batch"
+RTV_DECLARED="interactive batch"
+if ((rc != 0)); then
+    pass "a launcher that does not DECLARE 'batch' aborts the run (exit $rc)"
+else
+    fail "a launcher that does not declare 'batch' was accepted"
+fi
+# ... and so is a SELECTED capability the suite has no gating rule for.
+RTV_CAPS="interactive vsock"
+RTV_DECLARED="interactive batch vsock"
+rc="$(run_dispatch all 1)"
+RTV_CAPS="interactive batch"
+RTV_DECLARED="interactive batch"
+if ((rc != 0)); then
+    pass "an unknown SELECTED capability aborts the run (exit $rc)"
+else
+    fail "an unknown selected capability was silently ignored"
+fi
 
 printf '\n%s: %d passed, %d failed\n' "$0" "$PASSED" "$FAILED"
 ((FAILED == 0)) || exit 1

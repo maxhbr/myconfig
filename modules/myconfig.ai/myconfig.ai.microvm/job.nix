@@ -166,6 +166,14 @@ let
     # ---- permission facts (host tmpfiles + guest assertions agree) -----
     # From the session layout table (./session.nix): ONE place decides who owns
     # what in this tree.
+    # `modeOf` reads the FULL table, not the capability-filtered one, so these
+    # four modes exist even on a host that creates none of the directories. That
+    # is intentional (a directory's mode is a policy fact of the layout, not of
+    # this host's selection) and harmless: everything derived from them lives
+    # inside the `batch`-only fragments below, which are `lib.optionalAttrs`-ed
+    # away wholesale on a host without the capability. The coupling is therefore
+    # "these constants are inert without `batch`", NOT "this file is
+    # capability-independent".
     inputDirMode = session.modeOf session.subdirs.input;
     controllerDirMode = session.modeOf session.subdirs.controller;
     workerDirMode = session.modeOf session.subdirs.worker;

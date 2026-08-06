@@ -333,12 +333,17 @@ let
   # `needle`. Used where the point of a phase is that a guard must STOP firing
   # for a legitimate configuration (phase 5: the batch-capable-agent assertion
   # on a host that does not select the `batch` capability).
+  # It asserts NO failed assertion at all, not merely the absence of `needle`:
+  # the point of such a call site is that the whole configuration is legitimate,
+  # so an UNRELATED guard firing on it (a future assertion that does not cope with
+  # a narrowed capability set, say) must fail the check instead of being masked by
+  # a needle that happens not to match.
   acceptsWithout =
     mods: needle:
     let
       r = builtins.tryEval (failedAssertions mods);
     in
-    r.success && !(builtins.any (m: lib.hasInfix needle m) r.value);
+    r.success && r.value == [ ] && !(builtins.any (m: lib.hasInfix needle m) r.value);
   # The unmodified host must have NO failed assertions — positive control so
   # the rejectsWith checks below can't pass vacuously.
   baselineClean = failedAssertions [ ] == [ ];
@@ -1358,16 +1363,26 @@ in
           e:
           "d ${pathOf (session.roSlotDir refSlot.name) e} ${e.mode} ${toString e.uid} ${toString e.gid} - -"
         ) session.roLayout;
-      entry = rel: lib.findFirst (e: e.rel == rel) (throw "no layout entry '${rel}'") session.layout;
+      # The TRUST-POLICY half of this check binds to the FULL tables
+      # (`fullLayout`/`fullRoLayout`), never to the capability-FILTERED ones
+      # (lightweight plan phase 5). The filtered tables of `test-f13` happen to be
+      # the full ones only because the reference host selects both capabilities:
+      # every rule below would silently shrink — and the `input/` / `controller/` /
+      # `worker-logs/` negative cases would silently VANISH — the day that host
+      # narrows. The filtered tables are used only where the point IS the
+      # filtering (`expectedRules`, i.e. what the host actually creates, and the
+      # verifier greps at the bottom).
+      entry = rel: lib.findFirst (e: e.rel == rel) (throw "no layout entry '${rel}'") session.fullLayout;
       roEntry =
-        rel: lib.findFirst (e: e.rel == rel) (throw "no read-only layout entry '${rel}'") session.roLayout;
+        rel:
+        lib.findFirst (e: e.rel == rel) (throw "no read-only layout entry '${rel}'") session.fullRoLayout;
 
       # The REAL tables, as the module asserts them.
       realPolicyInput = {
         writableRoot = session.root;
         readOnlyRoot = session.roRoot;
-        writable = session.layout;
-        readOnly = session.roLayout;
+        writable = session.fullLayout;
+        readOnly = session.fullRoLayout;
         hostKeyDir = session.hostHostkeysDir refSlot.name;
         configSeedDir = session.hostConfigSeedDir refSlot.name;
       };
@@ -1496,9 +1511,9 @@ in
         }
         {
           # The whole read-only tree is root-owned and denies group/other.
-          assertion = builtins.all (e: e.uid == 0 && lib.hasSuffix "00" e.mode) session.roLayout;
+          assertion = builtins.all (e: e.uid == 0 && lib.hasSuffix "00" e.mode) session.fullRoLayout;
           message = "the read-only tree must be root-owned and root-only, got ${
-            toString (map (e: "${e.rel}:${e.mode}:${toString e.uid}") session.roLayout)
+            toString (map (e: "${e.rel}:${e.mode}:${toString e.uid}") session.fullRoLayout)
           }";
         }
         # --- every consumer DERIVES from the table ------------------------
@@ -1614,6 +1629,40 @@ in
           message = "the real session layout must satisfy its own policy, got ${toString (session.violationsOf realPolicyInput)}";
         }
         {
+          # NON-VACUITY of binding the policy to the FULL tables: they must
+          # really carry BOTH capabilities' entries, whatever this host selects.
+          # Without this, a future narrowing of the reference host would leave
+          # every `input/` / `controller/` / `worker-logs/` / `hostkeys/` rule
+          # below inspecting a table that no longer has the entry.
+          assertion =
+            lib.all (rel: lib.elem rel (map (e: e.rel) session.fullLayout)) [
+              ""
+              session.subdirs.workspace
+              session.subdirs.input
+              session.subdirs.controller
+              session.subdirs.worker
+              session.subdirs.workerLogs
+              session.subdirs.state
+            ]
+            && lib.all (rel: lib.elem rel (map (e: e.rel) session.fullRoLayout)) [
+              ""
+              session.roSubdirs.hostkeys
+              session.roSubdirs.configSeed
+            ];
+          message = "the FULL layout tables must contain every capability's entries, got ${
+            toString (map (e: e.rel) session.fullLayout)
+          } / ${toString (map (e: e.rel) session.fullRoLayout)}";
+        }
+        {
+          # ... and the FILTERED tables are exactly a subset of them (the
+          # capability selector may only REMOVE entries, never invent or alter
+          # one, which is what makes `modeOf` on the full table safe).
+          assertion =
+            lib.all (e: lib.elem e session.fullLayout) session.layout
+            && lib.all (e: lib.elem e session.fullRoLayout) session.roLayout;
+          message = "the capability-filtered layout must be a subset of the full one";
+        }
+        {
           assertion = doctored "'${wrel session.subdirs.input}' must be root-owned" (
             withRel session.subdirs.input { owner = "agent"; }
           );
@@ -1649,7 +1698,7 @@ in
               (_: {
                 readOnly = map (
                   e: if e.rel == session.roSubdirs.configSeed then e // { mode = "0777"; } else e
-                ) session.roLayout;
+                ) session.fullRoLayout;
               });
           message = "a group/other-writable staged configuration must be rejected";
         }
@@ -1754,6 +1803,24 @@ in
         # The slot name it is given must come from the prebuilt pool.
         grep -qF -- "unknown slot" "$verifierBin" \
           || { echo "the verifier accepts an arbitrary slot argument" >&2; exit 1; }
+        # ... and NOTHING the table does not declare may be in either tree: the
+        # per-directory checks alone say nothing about UNDECLARED entries, which
+        # is how a stale batch subdirectory of a previous capability selection
+        # would end up exported to the guest unverified.
+        for t in '"$SESSION_DIR"' '"$SESSION_RO_DIR"'; do
+          grep -qF -- "assert_no_extras $t" "$verifierBin" \
+            || { echo "the verifier does not reject undeclared entries of $t" >&2; exit 1; }
+        done
+        grep -qF -- 'the session layout table does not declare for this host' "$verifierBin" \
+          || { echo "the verifier's undeclared-entry refusal lost its message" >&2; exit 1; }
+        # The launcher SWEEPS them before every launch, so the fail-closed check
+        # above cannot brick a slot after a capability change.
+        grep -qF -- 'session_sweep_extras()' "$launcherBin" \
+          || { echo "the launcher has no session_sweep_extras" >&2; exit 1; }
+        test "$(grep -c 'session_sweep_extras "\$dir"' "$launcherBin")" -eq 2 \
+          || { echo "prepare_session must sweep BOTH trees" >&2; exit 1; }
+        grep -qF -- 'while a mount survives under it' "$launcherBin" \
+          || { echo "the sweep would rm -rf through a surviving mount" >&2; exit 1; }
 
         # --- the launcher prepares / verifies / REMOVES the whole tree ------
         for fn in prepare_session verify_session clear_session; do
@@ -1876,6 +1943,13 @@ in
 
       rels = l: map (e: e.rel) l;
       mentions = rules: infix: lib.any (r: lib.hasInfix infix r) rules;
+      # The generated allowlist fragments of a layout table: the launcher's
+      # `session_sweep_extras` argument list and the verifier's
+      # `SESSION_*_ENTRIES` array, rendered with the SAME quoting the module uses
+      # so the greps below compare against the exact generated text.
+      sweepListOf =
+        l: lib.concatMapStringsSep " " (e: lib.escapeShellArg e.rel) (lib.filter (e: e.rel != "") l);
+      entryArrayOf = sweepListOf;
 
       evalMarker = mkEvalCheck "microvm-capabilities-eval" ([
         # --- the DEFAULT selects BOTH, i.e. today's behaviour -------------
@@ -2140,6 +2214,18 @@ in
         # subdirectory name would also match the verifier's own prose).
         controllerVerifyArg = "\"$SESSION_DIR/${session.subdirs.controller}\"";
         hostkeysVerifyArg = "\"$SESSION_RO_DIR/${session.roSubdirs.hostkeys}\"";
+        # The allowlists the two generated artefacts render from the FILTERED
+        # table: the verifier's undeclared-entry check and the launcher's sweep
+        # must both follow the narrowing, or a stale batch subdirectory would
+        # either be exported unverified or refuse every launch. Rendered HERE
+        # with the same `escapeShellArg` the module uses, so these are the exact
+        # generated fragments.
+        controllerRel = lib.escapeShellArg session.subdirs.controller;
+        hostkeysRel = lib.escapeShellArg session.roSubdirs.hostkeys;
+        iSweepList = sweepListOf iSession.layout;
+        bSweepList = sweepListOf bSession.layout;
+        iRoEntryList = entryArrayOf iSession.roLayout;
+        bRoEntryList = entryArrayOf bSession.roLayout;
       }
       ''
         # --- the narrowed launchers refuse the missing capability ----------
@@ -2163,11 +2249,75 @@ in
           grep -qF -- 'myconfig.ai.microvm.capabilities' "$l" \
             || { echo "a narrowed launcher's refusal does not name the option" >&2; exit 1; }
         done
-        # POSITIVE control: the DEFAULT launcher carries no guard at all, so a
-        # host with both capabilities is untouched by this phase.
+        # POSITIVE control: the DEFAULT launcher carries no REFUSAL at all (a
+        # host with both capabilities has nothing to refuse, so the guard would
+        # be unreachable code).
         if grep -qF -- 'require_capability' "$defaultLauncher"; then
           echo "the default launcher must contain no capability guard" >&2; exit 1
         fi
+
+        # --- every launcher can be ASKED what it selects --------------------
+        # The capability SET is unconditional configuration and machine-readable
+        # on EVERY host: runtime-validation.sh must never have to infer it from an
+        # English refusal message (a detection that failed OPEN, i.e. defaulted to
+        # "this host has everything", the moment the message was reworded).
+        for l in "$defaultLauncher" "$interactiveLauncher" "$batchLauncher"; do
+          grep -qF -- 'cmd_capabilities()' "$l" \
+            || { echo "a launcher has no 'capabilities' subcommand" >&2; exit 1; }
+          grep -qF -- 'capabilities)     cmd_capabilities' "$l" \
+            || { echo "a launcher does not dispatch 'capabilities'" >&2; exit 1; }
+          grep -qE "^ *readonly DECLARED_CAPABILITIES=" "$l" \
+            || { echo "a launcher does not render the DECLARED capability set" >&2; exit 1; }
+        done
+        grep -qF -- "readonly SELECTED_CAPABILITIES=${lib.escapeShellArg "interactive batch"}" "$defaultLauncher" \
+          || { echo "the default launcher does not report BOTH capabilities" >&2; exit 1; }
+        grep -qF -- "readonly SELECTED_CAPABILITIES=${lib.escapeShellArg "interactive"}" "$interactiveLauncher" \
+          || { echo "the interactive-only launcher does not report its capability" >&2; exit 1; }
+        grep -qF -- "readonly SELECTED_CAPABILITIES=${lib.escapeShellArg "batch"}" "$batchLauncher" \
+          || { echo "the batch-only launcher does not report its capability" >&2; exit 1; }
+
+        # --- `usage` reports no directory the narrowing removed -------------
+        # `$RESULTS_DIR` is not created without the `batch` capability, so a
+        # '0B' line for it is the same "reports something absent" defect the
+        # honest `doctor` host-key section removed.
+        for l in "$defaultLauncher" "$batchLauncher"; do
+          grep -qF -- 'job results:' "$l" \
+            || { echo "a batch host's usage report lost the result archive" >&2; exit 1; }
+        done
+        if grep -qF -- 'job results:' "$interactiveLauncher"; then
+          echo "the interactive-only usage report still claims a result archive" >&2; exit 1
+        fi
+        grep -qF -- 'does not select the "batch" capability' "$interactiveLauncher" \
+          || { echo "the interactive-only usage report does not name the missing capability" >&2; exit 1; }
+
+        # --- the sweep + the undeclared-entry check follow the narrowing -----
+        # Both are rendered from the FILTERED table, so a narrowed host REMOVES
+        # the other capability's stale subdirectories before a launch and REFUSES
+        # the launch while one is still present. Without this pair, narrowing
+        # would silently drop the only coverage those directories ever had.
+        grep -qF -- "session tree\" $iSweepList" "$interactiveLauncher" \
+          || { echo "the interactive-only launcher does not sweep its session tree to the narrowed table" >&2; exit 1; }
+        grep -qF -- "session tree\" $bSweepList" "$batchLauncher" \
+          || { echo "the batch-only launcher does not sweep its session tree to the narrowed table" >&2; exit 1; }
+        if grep -F -- 'session_sweep_extras "$dir" "session tree"' "$interactiveLauncher" \
+             | grep -qF -- "$controllerRel"; then
+          echo "the interactive-only launcher still allows a batch subdirectory in its session tree" >&2; exit 1
+        fi
+        grep -qF -- "readonly SESSION_RO_ENTRIES=($iRoEntryList)" "$interactiveVerifier" \
+          || { echo "the interactive verifier's allowlist does not match its layout table" >&2; exit 1; }
+        grep -qF -- "readonly SESSION_RO_ENTRIES=($bRoEntryList)" "$batchVerifier" \
+          || { echo "the batch verifier's allowlist does not match its layout table" >&2; exit 1; }
+        if grep -F -- 'readonly SESSION_RO_ENTRIES=' "$batchVerifier" | grep -qF -- "$hostkeysRel"; then
+          echo "the batch-only verifier still allows a host-key directory" >&2; exit 1
+        fi
+        grep -F -- 'readonly SESSION_RO_ENTRIES=' "$interactiveVerifier" | grep -qF -- "$hostkeysRel" \
+          || { echo "the interactive verifier does not allow the host-key directory" >&2; exit 1; }
+        for v in "$interactiveVerifier" "$batchVerifier"; do
+          grep -qF -- 'assert_no_extras "$SESSION_DIR"' "$v" \
+            || { echo "a narrowed verifier does not reject undeclared session entries" >&2; exit 1; }
+          grep -qF -- 'assert_no_extras "$SESSION_RO_DIR"' "$v" \
+            || { echo "a narrowed verifier does not reject undeclared read-only entries" >&2; exit 1; }
+        done
 
         # --- `doctor` stays HONEST about the host-key section ---------------
         # A batch-only host provisions no key material, so a "every slot has a
