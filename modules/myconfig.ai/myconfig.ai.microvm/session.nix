@@ -702,13 +702,29 @@ let
       ];
     };
   }
-  // lib.optionalAttrs (cfg.enableSsh || agentCapabilities.vsock) {
-    # sshd reads its host key from the read-only share; make that ordering
-    # explicit instead of relying on local-fs.target having completed. Applies
-    # to the TCP sshd (`enableSsh`, the `interactive` capability) AND to the
-    # VSOCK sshd (`sshd-vsock@`, the `vsock` capability) — both read the SAME
-    # per-slot key, so both need the read-only host-key mount.
+  // lib.optionalAttrs cfg.enableSsh {
+    # The TCP sshd (`sshd.service`, the `interactive` capability) reads its host
+    # key from the read-only share; make that ordering explicit instead of
+    # relying on local-fs.target having completed. Scoped to `enableSsh` (the
+    # ONLY host shape whose TCP sshd is live): a batch+vsock host MASKS the
+    # `sshd.service` (guest.nix), so a `RequiresMountsFor` on that dead unit
+    # would be a no-op — the live control channel there is the VSOCK
+    # `sshd-vsock@`, whose ordering is handled by the socket directive below.
     systemd.services.sshd.unitConfig.RequiresMountsFor = paths.guestHostkeysDir;
+  }
+  // lib.optionalAttrs agentCapabilities.vsock {
+    # The VSOCK sshd (`sshd-vsock@`, the `vsock` capability) reads the SAME
+    # per-slot host key from the read-only share, so its activation socket must
+    # be ordered against that mount too. nixpkgs defines `systemd.sockets.sshd-
+    # vsock` with `overrideStrategy = "asDropin"` (a dropin on the generator-
+    # created socket), so this adds `RequiresMountsFor=` to that dropin: the
+    # socket (wantedBy `sockets.target`, started early) waits for the host-key
+    # mount before it listens, eliminating the boot race in which the VSOCK
+    # sshd accepts before the read-only share is up. Gated on `vsock` (absent on
+    # a default host), so a default host's guest closure is byte-for-byte
+    # unchanged; the `sshd-vsock` socket attrset itself is nixpkgs' dropin and
+    # is left as-is when `vsock` is not selected.
+    systemd.sockets.sshd-vsock.unitConfig.RequiresMountsFor = paths.guestHostkeysDir;
   };
 in
 {
