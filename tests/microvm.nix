@@ -2221,6 +2221,19 @@ in
           message = "a batch+vsock guest must NOT install the TCP sshd.service (systemd.services.sshd.enable must be false); only the VSOCK sshd-vsock@ should run";
         }
         {
+          # The TCP sshd is masked AND its TAP firewall opening is closed: the
+          # VSOCK sshd is host-only (CID 2 -> vsock::22) and never needs a TAP
+          # rule, so 22 must be absent from the guest's allowed TCP ports. This
+          # pins the "no TCP/network SSH daemon" invariant's FIREWALL half —
+          # without it the openssh module's default `openFirewall = true` would
+          # silently open 22 on a guest whose sshd is masked (a regression
+          # vector if the masking ever dropped).
+          assertion =
+            !(bvGuest.services.openssh.openFirewall or true)
+            && !(lib.elem 22 bvGuest.networking.firewall.allowedTCPPorts);
+          message = "a batch+vsock guest must close the TAP firewall for the TCP sshd (services.openssh.openFirewall = false and 22 absent from networking.firewall.allowedTCPPorts); the VSOCK sshd is host-only and needs no TAP rule";
+        }
+        {
           assertion = bvGuest.systemd.sockets ? "sshd-vsock" && !(bvGuest.systemd.sockets ? "sshd");
           message = "a batch+vsock guest must declare the sshd-vsock socket and NO TCP sshd socket";
         }
@@ -2249,9 +2262,25 @@ in
         {
           # POSITIVE control: the batch-only (no vsock) variant has NONE of the
           # VSOCK plumbing — vsock is OFF by default, so a default/batch host is
-          # byte-for-byte without it.
-          assertion = bGuest.microvm.vsock.cid == null && !(bGuest.systemd.sockets ? "sshd-vsock");
-          message = "a batch-only (no vsock) guest must have no VSOCK device and no sshd-vsock socket";
+          # byte-for-byte without it. It also has NO TCP sshd firewall opening
+          # (no openssh at all), the positive control for the S1 fix below.
+          assertion =
+            bGuest.microvm.vsock.cid == null
+            && !(bGuest.systemd.sockets ? "sshd-vsock")
+            && !(lib.elem 22 bGuest.networking.firewall.allowedTCPPorts);
+          message = "a batch-only (no vsock) guest must have no VSOCK device, no sshd-vsock socket and no TCP sshd firewall opening";
+        }
+        {
+          # POSITIVE control for the S1 fix: the DEFAULT guest (enableSsh =
+          # true, the `interactive` capability) DOES open 22 on its TAP firewall,
+          # because its TCP sshd actually runs. This proves the firewall
+          # suppression above is scoped to the batch+vsock shape and does not
+          # over-close the firewall on a host that legitimately runs the TCP
+          # sshd (`guest0Cfg` is the reference test-f13 guest).
+          assertion =
+            lib.elem 22 guest0Cfg.networking.firewall.allowedTCPPorts
+            && guest0Cfg.services.openssh.openFirewall;
+          message = "the default (interactive) guest must open TCP 22 on its firewall (its TCP sshd runs); the S1 firewall suppression is scoped to the batch+vsock shape";
         }
 
         # --- NEGATIVE: vsock requires a key + the closed network profiles ---

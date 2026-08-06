@@ -348,11 +348,13 @@ worthless as evidence.
   is enabled AND a VSOCK device is present. The per-slot host key is pinned under
   the VSOCK mux path in `known_hosts` too, so the VSOCK channel is host-key-
   verified exactly like the TAP one. A batch+vsock guest SUPPRESSES the TCP
-  `sshd.service` (`systemd.services.sshd.enable = false`): the VSOCK sshd is the
-  ONLY listener, reachable solely from the host (CID 2). `vsock` is a NEW AXIS
-  over the one guest shape (a capability token, not a `transport` enum),
-  additive to the unchanged TAP/bridge/firewall; the plan's literal VSOCK *proxy*
-  forwarder (carrying the model API over VSOCK, eliminating the TAP) is NOT
-  implemented — it would fork the one forwarder shape. A host that does not
-  select `vsock` leaves `microvm.vsock.cid` at its default `null`, so its guest
-  closure is byte-for-byte unchanged.
+  `sshd.service` (`systemd.services.sshd.enable = false`) AND closes its TAP
+  firewall opening for 22 (`services.openssh.openFirewall = false`): the VSOCK
+  sshd is the ONLY listener, reachable solely from the host (CID 2), and needs no
+  TAP firewall rule. `vsock` is a NEW AXIS over the one guest shape (a
+  capability token, not a `transport` enum), additive to the unchanged
+  TAP/bridge/firewall; the plan's literal VSOCK *proxy* forwarder (carrying the
+  model API over VSOCK, eliminating the TAP) is NOT implemented — it would fork
+  the one forwarder shape. A host that does not select `vsock` leaves
+  `microvm.vsock.cid` at its default `null`, so its guest closure is
+  byte-for-byte unchanged.
