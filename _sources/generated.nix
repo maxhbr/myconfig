@@ -8,14 +8,24 @@
 {
   grafana-skills = {
     pname = "grafana-skills";
-    version = "80bb2938892c71f27360c936e68a27fa018e086f";
+    version = "d9dfb9ec7a6b1ac6c8ec9741ec045ad6f412dec6";
     src = fetchFromGitHub {
       owner = "grafana";
       repo = "skills";
-      rev = "80bb2938892c71f27360c936e68a27fa018e086f";
+      rev = "d9dfb9ec7a6b1ac6c8ec9741ec045ad6f412dec6";
       fetchSubmodules = false;
-      sha256 = "sha256-dDmINDx9AmIUyDkNp8+dzjItErqAWkiq8zF03zgoZg0=";
+      sha256 = "sha256-blw2Xpo1IzS5EfYC4TBRQj6ozRJPWe+8vGtz+GaDpts=";
     };
-    date = "2026-07-31";
+    date = "2026-08-05";
+  };
+  litellm-grafana-dashboard = {
+    pname = "litellm-grafana-dashboard";
+    version = "ead62528e607b9d8e61273def638799c9c3a69ba";
+    src = fetchurl {
+      url = "https://raw.githubusercontent.com/BerriAI/litellm/ead62528e607b9d8e61273def638799c9c3a69ba/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
+      name = "litellm-grafana-dashboard.json";
+      sha256 = "sha256-EteGQo3xd5GvvkjKre7wqOZ6Hr/Yty78VZe6le55Zcw=";
+    };
+    date = "2026-08-04";
   };
 }

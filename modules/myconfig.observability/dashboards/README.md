@@ -57,3 +57,39 @@ Each dashboard is passed through `jq` at NixOS build time to:
 3. Replace the top-level `uid` with a stable `myconfig-unifi-<slug>`
    so subsequent rebuilds update the same dashboard row in Grafana
    instead of cloning a new one.
+
+---
+
+## LiteLLM dashboard (fetched via nvfetcher, NOT vendored here)
+
+Unlike the UniFi JSON files above, the LiteLLM Grafana dashboard is
+**not** committed to this directory. It is fetched at build time from
+the upstream LiteLLM repository and rewritten on the fly:
+
+- **Pin**: `nvfetcher.toml` entry `litellm-grafana-dashboard` tracks
+  LiteLLM's `main` branch (`src.git`), but `fetch.url` downloads only
+  the dashboard JSON from the exact commit nvfetcher resolves
+  (`$ver` → immutable commit). The commit and hash are frozen in
+  `_sources/generated.nix` (regenerate with `nix run nixpkgs#nvfetcher`).
+  No upstream repository clone enters the Nix store.
+- **Upstream path** (inside `BerriAI/litellm`):
+  `cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json`.
+- **Build-time rewrite** (see `../host.litellm.nix`, `dashboardRewriteJq`):
+  strips `__inputs`/`__requires`, clears the numeric Grafana `id`, pins
+  a stable `uid = "myconfig-litellm"`, localises title/tags, drops the
+  `DS_PROMETHEUS` datasource template variable, removes panels that
+  depend on LiteLLM virtual keys / teams / database-backed accounting
+  (this deployment runs no database — see the module header), and
+  rewrites every Prometheus datasource reference to
+  `{ type: "prometheus", uid: "victoriametrics" }` (the Grafana
+  built-in `"-- Grafana --"` annotation and `null` datasources are
+  preserved). The rewrite uses the recursive `(.. | objects | select(has("datasource")))`
+  `jq` update pattern — the same approach as the UniFi transform, no
+  `walk` dependency.
+- **Result**: a single `litellm.json` placed in a `runCommand` output
+  dir consumed by the Grafana file provider (folder `AI`).
+
+To refresh the upstream dashboard, run `nix run nixpkgs#nvfetcher`
+(which updates only the LiteLLM entry's pinned commit/hash — note it
+also re-checks every other nvfetcher source) and review the resulting
+`_sources/generated.nix` diff.

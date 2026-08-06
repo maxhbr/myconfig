@@ -17,3 +17,19 @@
 src.git = "https://github.com/grafana/skills"
 src.branch = "main"
 fetch.github = "grafana/skills"
+
+# Official LiteLLM Grafana dashboard.
+#
+# Track the tip of LiteLLM's main branch, but fetch only the dashboard JSON
+# from the exact commit resolved by nvfetcher. `src.git` (not `src.github`)
+# is used because the dashboard lives on `main`, not in a release. `$ver`
+# becomes the resolved Git commit, so the raw GitHub URL below is immutable.
+# `fetch.url` ensures the Nix store contains only the JSON file, not the
+# whole repository. Consumed by
+# modules/myconfig.observability/host.litellm.nix, which rewrites the
+# datasource references to the local VictoriaMetrics instance at build time.
+[litellm-grafana-dashboard]
+src.git = "https://github.com/BerriAI/litellm"
+src.branch = "main"
+fetch.url = "https://raw.githubusercontent.com/BerriAI/litellm/$ver/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
+url.name = "litellm-grafana-dashboard.json"
