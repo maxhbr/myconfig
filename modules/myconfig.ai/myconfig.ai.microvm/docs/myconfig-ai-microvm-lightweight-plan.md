@@ -562,7 +562,15 @@ was never used).
   sshd accepts before the home is seeded; in practice the operator (and the
   runtime-validation suite) connect well after boot, by which time the oneshot
   has finished. Kept the safer byte-identity and recorded the race rather than
-  adding a capability-conditional ordering site.
+  adding `sshd-vsock.socket` to the config-seed's `before` list. The DISTINCT
+  host-key MOUNT race (the `sshd-vsock@` reads its key from the read-only
+  host-key share) IS closed: session.nix adds `RequiresMountsFor=<hostkeysDir>`
+  to the `sshd-vsock` socket as a `vsock`-gated dropin (nixpkgs defines that
+  socket with `overrideStrategy = "asDropin"`), so the socket waits for the
+  host-key share before it listens — a capability-conditional ordering site that
+  is ABSENT on a default host (no `vsock`), so it does not perturb byte-identity,
+  unlike the config-seed `before` edit above. The remaining open race is solely
+  the home-seeding one (benign post-boot).
 
 ## Objective
 

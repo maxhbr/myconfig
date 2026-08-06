@@ -2238,6 +2238,20 @@ in
           message = "a batch+vsock guest must declare the sshd-vsock socket and NO TCP sshd socket";
         }
         {
+          # N1: the live VSOCK control channel is the `sshd-vsock@` socket, so
+          # the host-key mount ordering must live on THAT socket (not on the
+          # masked `sshd.service`). The socket is wantedBy `sockets.target`
+          # (early), so `RequiresMountsFor` makes it wait for the read-only
+          # host-key share before it listens — eliminating the boot race in
+          # which the VSOCK sshd accepts before the share is up. nixpkgs defines
+          # the socket with `overrideStrategy = "asDropin"`, so this is a dropin
+          # on the generator-created unit.
+          assertion =
+            (bvGuest.systemd.sockets.sshd-vsock.unitConfig.RequiresMountsFor or null)
+            == bvSession.guestHostkeysDir;
+          message = "a batch+vsock guest must order the sshd-vsock socket after the read-only host-key mount (RequiresMountsFor = the guest hostkeys dir); the VSOCK sshd reads its key from that share";
+        }
+        {
           assertion = lib.elem session.roSubdirs.hostkeys (rels bvSession.roLayout);
           message = "a batch+vsock read-only tree must contain the host-key subdirectory (the VSOCK sshd needs the per-slot host identity)";
         }
