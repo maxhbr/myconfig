@@ -92,7 +92,7 @@ myconfig.ai.microvm = {
 | `litellmPort` | `4000` | LiteLLM proxy port. |
 | `workspaceRoot` | `/var/lib/agent-microvms/workspaces` | Where per-task standalone clones are created. |
 | `runtimeRoot` | `/var/lib/agent-microvms` | Runtime state (locks, markers, jobs, results, logs). |
-| `stateRoot` | `/var/lib/microvms` | microvm.nix per-VM state / bind-mount source. |
+| `stateRoot` | `/var/lib/microvms` | microvm.nix per-VM state / bind-mount source. MUST equal `config.microvm.stateDir` (asserted) — the VSOCK ssh target and the per-slot `known_hosts` entry key on it. |
 | `guestAgentUid` / `guestAgentGid` | `1000` | Numeric ids of the guest `agent` user, and the host-side owner of every guest-writable path. Asserted unprivileged. |
 | `job.defaultTimeoutSeconds` / `job.maxTimeoutSeconds` / `job.gracePeriodSeconds` | `3600` / `86400` / `120` | Batch-job timeouts. |
 | `enableSsh` | `true` | Guest SSH server, private interface only. Rejected at eval unless `capabilities` includes `interactive` (see [Capabilities](#capabilities)). |

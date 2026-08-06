@@ -2360,6 +2360,20 @@ in
           ] "systemd-ssh-proxy";
           message = "vsock with programs.ssh.systemd-ssh-proxy.enable = false must be rejected (the VSOCK ssh hostname needs the ProxyCommand that option supplies)";
         }
+        {
+          # N2: `stateRoot` (the launcher's VSOCK ssh target + the per-slot
+          # `known_hosts` key) MUST equal `microvm.stateDir` (where microvm.nix
+          # backs the VSOCK device). A host that diverges them must fail at EVAL,
+          # not at runtime with an unresolvable VSOCK mux socket. Forced on the
+          # reference host (default `stateRoot` = `microvm.stateDir` =
+          # `/var/lib/microvms`) by overriding ONLY `stateRoot`.
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.stateRoot = lib.mkForce "/var/lib/microvms-other";
+            }
+          ] "must equal";
+          message = "a stateRoot that differs from microvm.stateDir must be rejected (the VSOCK ssh target / known_hosts key would not resolve to the socket microvm created)";
+        }
       ]);
     in
     pkgs.runCommand "microvm-capabilities"

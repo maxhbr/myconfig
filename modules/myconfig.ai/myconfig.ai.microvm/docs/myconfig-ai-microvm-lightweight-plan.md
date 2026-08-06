@@ -542,6 +542,16 @@ was never used).
   confusing runtime DNS-resolution failure of the control channel; this is now
   rejected at evaluation with a pinned message naming the missing dependency
   (satisfied by the nixpkgs default on every host today, including f13).
+- **Phase 6, the `stateRoot` == `microvm.stateDir` assumption is asserted at
+  eval**. The launcher's VSOCK ssh target (`vsock-mux/<stateRoot>/<slot>/
+  notify.vsock`) and the per-slot `known_hosts` entry both key on
+  `myconfig.ai.microvm.stateRoot`, while microvm.nix backs the VSOCK device under
+  `config.microvm.stateDir/<slot>`. This was a pre-existing assumption
+  (the TAP path also uses `stateRoot`); phase 6 widened its blast radius to the
+  VSOCK mux address and the `known_hosts` key. A host that sets one without the
+  other would get a runtime mismatch (an unresolvable VSOCK mux socket). It is
+  now rejected at evaluation (`stateRoot == toString microvm.stateDir`); both
+  default to `/var/lib/microvms`, so every host today satisfies it.
 - **Phase 6, the VSOCK `known_hosts` matching is asserted structurally, not
   runtime-verified**. The launcher's VSOCK `ssh` runs with
   `StrictHostKeyChecking=yes` against a `known_hosts` entry keyed by
