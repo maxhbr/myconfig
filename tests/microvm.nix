@@ -5134,6 +5134,165 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # (h2) SELF-HEALING host-identity provisioning.                          #
+  #                                                                        #
+  #   Two defects lived in the pre-launch provisioning path:                #
+  #     1. the trigger was TAP-ONLY (`SSH_ENABLED == 1`), so a batch+vsock  #
+  #        host — whose ONLY control channel is the VSOCK `sshd-vsock@`,    #
+  #        and which therefore has SSH_ENABLED=0 — never provisioned at    #
+  #        all before a launch;                                            #
+  #     2. `systemctl start` on a `RemainAfterExit = true` oneshot that has #
+  #        already run is a SILENT NO-OP, so a deleted key directory was   #
+  #        never recreated on a booted host.                               #
+  #                                                                        #
+  #   Everything below is asserted against the BUILT launcher / BUILT       #
+  #   provisioner of REAL hosts, with a NEGATIVE CONTROL for every removal, #
+  #   so no check can pass because the string it looks for moved.           #
+  # ---------------------------------------------------------------------- #
+  microvm-host-identity-self-healing =
+    let
+      defaultLauncherPkg = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      bvLauncherPkg = findPkg batchVsockHost.config.environment.systemPackages "agent-microvm";
+      bLauncherPkg = findPkg batchOnlyHost.config.environment.systemPackages "agent-microvm";
+      bvHostKeys = batchVsockHost._module.args.agentHostKeys;
+      evalMarker = mkEvalCheck "microvm-host-identity-self-healing-eval" [
+        {
+          # The batch+vsock host is the shape the TAP-only trigger skipped: no
+          # TCP sshd at all, so `SSH_ENABLED` is 0 while the VSOCK control
+          # channel is the ONLY way in. If this stopped holding, the launcher
+          # greps below would be vacuous.
+          assertion =
+            !batchVsockHost._module.args.agentNetwork.tapSshUsable
+            && batchVsockHost._module.args.agentCapabilities.vsock;
+          message = "the batch+vsock reference host must have NO usable TAP sshd and the vsock capability (otherwise the VSOCK trigger check is vacuous)";
+        }
+        {
+          # ... and it DOES provision per-slot keys, so there is an identity to
+          # validate in the first place.
+          assertion = batchVsockHost.config.systemd.services ? agent-microvm-hostkeys;
+          message = "the batch+vsock host must run agent-microvm-hostkeys.service";
+        }
+        {
+          # NEGATIVE control: the DEFAULT host is the TAP shape (SSH_ENABLED=1,
+          # vsock NOT selected), so its trigger must still be satisfied by the
+          # SSH_ENABLED half alone.
+          assertion =
+            enabledCfg.myconfig.ai.microvm.enableSsh
+            && !(lib.elem "vsock" enabledCfg.myconfig.ai.microvm.capabilities);
+          message = "the default reference host must be the TAP shape (enableSsh, no vsock) for the negative control below";
+        }
+        {
+          # The unit is still a `RemainAfterExit` oneshot — which is WHY the
+          # launcher must use `systemctl restart` rather than `start`. Pinning
+          # it here keeps the two facts from drifting apart silently.
+          assertion =
+            enabledCfg.systemd.services.agent-microvm-hostkeys.serviceConfig.RemainAfterExit == true;
+          message = "agent-microvm-hostkeys.service must stay a RemainAfterExit oneshot (the launcher's `systemctl restart` exists because of it)";
+        }
+        {
+          # The batch+vsock host's identity paths are its OWN (per-slot,
+          # per-host), not the reference host's: a repair on one host/slot can
+          # never touch another's.
+          assertion = bvHostKeys.slotDir variantSlot.name != hostKeys.slotDir refSlot.name;
+          message = "the batch+vsock host's key directory must not be the reference host's";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-host-identity-self-healing"
+      {
+        inherit evalMarker;
+        defaultLauncher = "${defaultLauncherPkg}/bin/agent-microvm";
+        # The launcher of the shape the old trigger skipped.
+        bvLauncher = "${bvLauncherPkg}/bin/agent-microvm";
+        # ... and of a host with NO SSH-based control transport at all, where
+        # the whole block must be absent (it would be unreachable code).
+        bLauncher = "${bLauncherPkg}/bin/agent-microvm";
+      }
+      ''
+        # --- (1) the launcher SELF-HEALS instead of trusting the unit -------
+        for l in "$defaultLauncher" "$bvLauncher"; do
+          grep -qF -- 'ensure_host_identity() {' "$l" \
+            || { echo "launcher has no ensure_host_identity() (self-healing entry point)" >&2; exit 1; }
+          grep -qF -- 'host_identity_complete() {' "$l" \
+            || { echo "launcher has no host_identity_complete() validator" >&2; exit 1; }
+          grep -qF -- 'log "repairing SSH host identity for slot $slot"' "$l" \
+            || { echo "launcher does not announce the repair" >&2; exit 1; }
+          # RESTART, not START: `systemctl start` on an already-active
+          # RemainAfterExit oneshot is a no-op, which is precisely the stale
+          # state a deleted key leaves behind.
+          grep -qF -- 'systemctl restart agent-microvm-hostkeys.service' "$l" \
+            || { echo "launcher does not RESTART the provisioning unit (start would be a no-op on the active oneshot)" >&2; exit 1; }
+          if grep -qF -- 'systemctl start agent-microvm-hostkeys.service' "$l"; then
+            echo "launcher still uses 'systemctl start' on the RemainAfterExit oneshot" >&2; exit 1
+          fi
+          # The repair is re-VALIDATED and the launch FAILS CLOSED.
+          grep -qF -- 'refusing to launch an unverifiable guest' "$l" \
+            || { echo "launcher does not fail closed when the repair did not help" >&2; exit 1; }
+          # ... and it never widens verification to get around the problem.
+          for bad in 'StrictHostKeyChecking=no' 'UserKnownHostsFile=/dev/null'; do
+            if grep -n -- "$bad" "$l" | grep -v '^[0-9]*: *#'; then
+              echo "launcher contains an unauthenticated ssh fallback ($bad)" >&2; exit 1
+            fi
+          done
+        done
+
+        # --- (2) the trigger is TRANSPORT-AWARE ----------------------------
+        # Both SSH-based control transports provision: the TAP sshd
+        # ($SSH_ENABLED) and the VSOCK sshd-vsock@ ($VSOCK_ENABLED).
+        trigger='if [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]]; then'
+        for l in "$defaultLauncher" "$bvLauncher"; do
+          grep -qF -- "$trigger" "$l" \
+            || { echo "launcher's host-identity trigger is not transport-aware" >&2; exit 1; }
+          # The TAP-ONLY trigger must be GONE.
+          if grep -qF -- 'if [[ "$SSH_ENABLED" == "1" ]]; then' "$l"; then
+            echo "launcher still has a TAP-ONLY host-identity trigger" >&2; exit 1
+          fi
+        done
+        # The trigger and the call are adjacent, i.e. the transport-aware
+        # condition really guards `ensure_host_identity` and not something else.
+        for l in "$defaultLauncher" "$bvLauncher"; do
+          grep -A 2 -F -- "$trigger" "$l" | grep -qF -- 'ensure_host_identity "$1"' \
+            || { echo "the transport-aware condition does not guard ensure_host_identity" >&2; exit 1; }
+        done
+
+        # --- (3) the batch+vsock host provisions DESPITE SSH_ENABLED=0 ------
+        grep -qF -- 'readonly SSH_ENABLED=0' "$bvLauncher" \
+          || { echo "the batch+vsock launcher does not render SSH_ENABLED=0 (the VSOCK-only check would be vacuous)" >&2; exit 1; }
+        grep -qF -- 'readonly VSOCK_ENABLED=1' "$bvLauncher" \
+          || { echo "the batch+vsock launcher does not render VSOCK_ENABLED=1" >&2; exit 1; }
+        grep -qF -- 'ensure_host_identity "$1"' "$bvLauncher" \
+          || { echo "the batch+vsock launcher never ensures the host identity" >&2; exit 1; }
+        # Its known_hosts alias is the VSOCK mux path, which is what the
+        # validation must look up for that transport.
+        grep -qF -- 'vsock-mux/$STATE_ROOT/$1/notify.vsock' "$bvLauncher" \
+          || { echo "the batch+vsock launcher does not verify against the vsock-mux alias" >&2; exit 1; }
+
+        # --- (4) NEGATIVE CONTROLS -----------------------------------------
+        # The DEFAULT host (no vsock) still gates on $SSH_ENABLED: it renders
+        # VSOCK_ENABLED=0, so the second disjunct can never fire there and the
+        # behaviour of a default host is unchanged.
+        grep -qF -- 'readonly SSH_ENABLED=1' "$defaultLauncher" \
+          || { echo "the default launcher does not render SSH_ENABLED=1" >&2; exit 1; }
+        grep -qF -- 'readonly VSOCK_ENABLED=0' "$defaultLauncher" \
+          || { echo "the default launcher does not render VSOCK_ENABLED=0 (its trigger must be the SSH_ENABLED half)" >&2; exit 1; }
+        # A host with NEITHER SSH-based transport provisions no key material, so
+        # the whole block is ABSENT rather than dead code.
+        for f in ensure_host_identity host_identity_complete HOSTKEY_NAME; do
+          if grep -qF -- "$f" "$bLauncher"; then
+            echo "the batch-only (no vsock) launcher carries $f, which can never fire there" >&2; exit 1
+          fi
+        done
+
+        {
+          echo "microvm-host-identity-self-healing:"
+          echo "  default     launcher: $defaultLauncher"
+          echo "  batch+vsock launcher: $bvLauncher"
+          echo "  batch-only  launcher: $bLauncher"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (i) AGENT EXECUTABLES (ticket 2): actually BUILD every registry agent   #
   #     package and prove it ships the declared `executable`. This is the   #
   #     `command -v <agent>` acceptance criterion turned into a build       #

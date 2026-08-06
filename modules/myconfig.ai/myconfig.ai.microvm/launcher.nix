@@ -284,6 +284,35 @@ let
           expected="$(cut -d" " -f1,2 -- "$pub")"
           [[ "$recorded" == "$expected" ]] || return 1
           return 0
+      }
+
+      # SELF-HEALING: bring the slot's host identity into a COMPLETE state, or
+      # fail the launch. Called before every launch of a slot whose control
+      # transport is SSH-based (TAP *or* VSOCK).
+      #
+      # The repair is `systemctl RESTART`, deliberately not `start`: the
+      # provisioning unit is a `RemainAfterExit = true` oneshot, so once it has
+      # run, `systemctl start` on it is a SILENT NO-OP — which is exactly the
+      # state a host is in when someone deletes a key directory on a booted
+      # host. `restart` re-runs ExecStart unconditionally, and the provisioner
+      # is idempotent (it keeps every valid key it finds and only rebuilds what
+      # is missing or inconsistent), so repairing one slot cannot rewrite an
+      # unrelated slot's identity.
+      #
+      # It is a REPAIR, not a FALLBACK: if the identity is still incomplete
+      # afterwards, the launch DIES. There is deliberately no path that relaxes
+      # verification (no StrictHostKeyChecking=no, no
+      # UserKnownHostsFile=/dev/null) — an unverifiable guest is not launched.
+      ensure_host_identity() {
+          local slot="$1"
+          if host_identity_complete "$slot"; then
+              return 0
+          fi
+          log "repairing SSH host identity for slot $slot"
+          systemctl restart agent-microvm-hostkeys.service \
+              || die "failed to provision per-slot SSH host keys (agent-microvm-hostkeys.service)"
+          host_identity_complete "$slot" \
+              || die "slot $slot still has no complete SSH host identity under $(hostkey_dir "$slot") after re-running agent-microvm-hostkeys.service (check its journal); refusing to launch an unverifiable guest"
       }''
   );
   # The pre-launch trigger, spliced into `start_vm`. Emitted only where an
@@ -295,18 +324,23 @@ let
   # and emits no whitespace-only line.
   hostIdentityEnsure = lib.optionalString hostIdentityCapable (
     mkFragment bodyIndent ''
-      # Make sure the slot's SSH host identity exists BEFORE the VM (and thus
-      # its virtiofsd for the read-only hostkey share) starts. The provisioning
-      # unit is an idempotent oneshot that is also wantedBy multi-user.target,
-      # so on a booted host this only covers the "key dir deleted by hand" /
-      # "a `resourceClasses` entry just grew a slot" cases. Failure is FATAL:
-      # without the key the guest's sshd cannot start, and with a mismatched
-      # one every ssh would be refused by StrictHostKeyChecking=yes.
-      if [[ "$SSH_ENABLED" == "1" ]]; then
-          systemctl start agent-microvm-hostkeys.service \
-              || die "failed to provision per-slot SSH host keys (agent-microvm-hostkeys.service)"
-          host_identity_complete "$1" \
-              || die "slot $1 has no complete SSH host identity under $(hostkey_dir "$1") (or its $KNOWN_HOSTS entry does not match); refusing to launch an unverifiable guest"
+      # Make sure the slot's SSH host identity is COMPLETE before the VM (and
+      # thus its virtiofsd for the read-only hostkey share) starts. Failure is
+      # FATAL: without the key the guest's sshd cannot start, and with a
+      # mismatched one every ssh would be refused by StrictHostKeyChecking=yes.
+      #
+      # The condition is TRANSPORT-AWARE, not TAP-only. BOTH SSH-based control
+      # transports need the identity:
+      #   * $SSH_ENABLED=1 — the TCP sshd on the guest's TAP;
+      #   * $VSOCK_ENABLED=1 — the VSOCK `sshd-vsock@` (lightweight plan phase
+      #     6), which reads the SAME per-slot key from the SAME read-only share
+      #     and is verified against the SAME known_hosts (under the vsock-mux
+      #     alias).
+      # A batch+vsock host has SSH_ENABLED=0 and VSOCK_ENABLED=1, so the old
+      # TAP-only condition skipped provisioning entirely for exactly the shape
+      # that has no other control channel to fall back on.
+      if [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]]; then
+          ensure_host_identity "$1"
       fi''
     + bodyIndent
   );
@@ -417,7 +451,7 @@ let
         if (( missing == 0 )); then
             ok "every slot has a host-key directory under $HOSTKEYS_ROOT"
         else
-            fail "$missing slot(s) lack a host-key directory (systemctl start agent-microvm-hostkeys.service)"
+            fail "$missing slot(s) lack a host-key directory (systemctl restart agent-microvm-hostkeys.service)"
         fi''
     else
       ''ok "no per-slot SSH host keys are expected: this host selects neither the \"interactive\" nor the \"vsock\" capability (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ])"''
@@ -2090,7 +2124,7 @@ let
       # verification, so say so once, clearly, instead of timing out.
       require_known_hosts() {
           [[ -r "$KNOWN_HOSTS" ]] || die \
-              "missing host-key database $KNOWN_HOSTS; run: systemctl start agent-microvm-hostkeys.service"
+              "missing host-key database $KNOWN_HOSTS; run: systemctl restart agent-microvm-hostkeys.service"
       }
 
       # THE ONE decision of which control channel an ssh invocation uses: the
