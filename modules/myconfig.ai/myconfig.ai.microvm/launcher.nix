@@ -268,10 +268,30 @@ let
       #     refuse the connection, and "repair" is the only outcome that leaves a
       #     verifiable channel;
       #   * that entry's key type and body match the slot's public key EXACTLY.
-      # NO private-key material is ever read into a variable, printed or logged:
-      # the private key is inspected through `[[ -s ]]` and `stat` only.
+      #   * the private key is a LOADABLE key: `ssh-keygen`'s public-half mode
+      #     parses it, so a truncated, garbled or wrong-format file is caught
+      #     HERE and not by the guest's sshd failing to start;
+      #   * the public key file is the PUBLIC HALF OF THAT PRIVATE KEY. Without
+      #     this, the whole chain is self-consistent but ANCHORED TO NOTHING:
+      #     known_hosts is verified against the .pub, and the .pub was never
+      #     verified against the key the guest actually serves. A stale or
+      #     swapped-in private key with a matching .pub + known_hosts triple
+      #     would pass every other check, boot, and then be refused by
+      #     StrictHostKeyChecking=yes as an opaque readiness timeout.
+      # NO private-key material is ever read into a variable, printed or logged.
+      # The private key is inspected through `[[ -s ]]`, `stat`, and
+      # `ssh-keygen -y` — whose OUTPUT IS THE PUBLIC HALF, never the secret. That
+      # one invocation is pinned to the safe form: `-P ""` so a passphrase-
+      # protected key can never block the launcher on a prompt, stderr
+      # discarded so a load error cannot echo file content into the log, and the
+      # result captured in a variable and normalised to `<type> <body>` — the
+      # SAME normalisation hostkeys.nix uses when it derives the .pub, so the two
+      # can never disagree about the comment field.
+      # ORDERING MATTERS: the 0400 mode check above must stay BEFORE this, or
+      # `ssh-keygen` would refuse an over-permissive key and mode drift would be
+      # misreported as key corruption (see hostkeys.nix block (a0)).
       host_identity_complete() {
-          local slot="$1" key pub alias entry recorded expected meta
+          local slot="$1" key pub alias entry recorded expected derived meta
           key="$(hostkey_private "$slot")"
           pub="$(hostkey_public "$slot")"
           [[ -s "$key" ]] || return 1
@@ -280,6 +300,11 @@ let
           [[ "$meta" == "root:root 400" ]] || return 1
           meta="$(stat -c '%U:%G %a' -- "$pub" 2>/dev/null)" || return 1
           [[ "$meta" == "root:root 444" ]] || return 1
+          expected="$(cut -d" " -f1,2 -- "$pub")" || return 1
+          [[ -n "$expected" ]] || return 1
+          derived="$(ssh-keygen -y -P "" -f "$key" 2>/dev/null | cut -d" " -f1,2)" || return 1
+          [[ -n "$derived" ]] || return 1
+          [[ "$derived" == "$expected" ]] || return 1
           [[ -s "$KNOWN_HOSTS" ]] || return 1
           meta="$(stat -c '%U:%G %a' -- "$KNOWN_HOSTS" 2>/dev/null)" || return 1
           [[ "$meta" == "root:root 444" ]] || return 1
@@ -291,7 +316,6 @@ let
           [[ -n "$entry" ]] || return 1
           [[ "$(printf '%s\n' "$entry" | wc -l)" -eq 1 ]] || return 1
           recorded="$(printf '%s\n' "$entry" | cut -d" " -f2,3)"
-          expected="$(cut -d" " -f1,2 -- "$pub")"
           [[ "$recorded" == "$expected" ]] || return 1
           return 0
       }

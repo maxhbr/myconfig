@@ -308,8 +308,10 @@ material). Invariants, all of them enforced rather than documented:
   whose control transport is SSH-based (TAP *or* VSOCK), the launcher validates
   the actual files: non-empty key pair, `root:root 0400`/`0444`, and EXACTLY ONE
   `known_hosts` entry for that transport's alias whose key type and body match
-  the public key. A conflict (two entries for one alias) is treated as broken,
-  not accepted. If a re-provision does not fix it, the launch aborts;
+  the public key, the private key is parseable, and the public key is that
+  private key's own public half. A conflict (two entries for one alias) is
+  treated as broken, not accepted. If a re-provision does not fix it, the launch
+  aborts;
 * **repair is scoped to host-managed files** — the provisioner only ever touches
   the per-slot key pair, the aggregated `known_hosts` and its own lock, and it
   keeps every valid private key untouched, so repairing one slot cannot silently
@@ -318,8 +320,11 @@ material). Invariants, all of them enforced rather than documented:
   is repaired and REPORTED on stderr rather than silently accepted or silently
   rotated;
 * **no private-key material in logs** — the launcher inspects the private key
-  only through `[[ -s ]]` and `stat`; the provisioner discards `ssh-keygen -y`
-  output except for the public half it derives.
+  through `[[ -s ]]`, `stat`, and a single pinned
+  `ssh-keygen -y -P "" … 2>/dev/null` whose output is the PUBLIC half (captured
+  in a variable, never echoed); `-P ""` guarantees it can never block on a
+  passphrase prompt. The provisioner likewise discards `ssh-keygen -y` output
+  except for the public half it derives.
 
 Known limitation: an over-permissive mode means the key MAY have been read by a
 local user before the repair. The provisioner cannot know, so it reports it and
@@ -348,7 +353,7 @@ leaves the rotation decision to the operator (see the recovery table in
 | arbitrary internet egress / data smuggling | denied in `offline`/`proxy-only`; `package-access` allows one host proxy port; only `internet` routes, and then with NAT + a DNS allowlist + drop logging |
 | DNS tunnelling | port 53 only to configured resolvers, everything else dropped |
 | guest → guest attacks, ARP spoofing, MITM of host↔guest | per-TAP `isolated` bridge ports (all EtherTypes) + IPv4 inter-VM DROP + strict SSH host-key verification |
-| impersonating a slot to the operator | per-slot host keys, delivered read-only and root-only, pinned in `known_hosts`, VALIDATED (files, ownership, modes, and the `known_hosts` entry) before every launch — a slot whose identity cannot be established is not launched at all |
+| impersonating a slot to the operator | per-slot host keys, delivered read-only and root-only, pinned in `known_hosts`, VALIDATED (files, ownership, modes, key pair coherence, and the `known_hosts` entry) before every launch — a slot whose identity cannot be established is not launched at all |
 | **launching a slot whose control channel cannot be authenticated** | the launcher validates the slot's actual identity files before booting the VM and re-validates after re-provisioning; it FAILS CLOSED and never falls back to `StrictHostKeyChecking=no` / `UserKnownHostsFile=/dev/null` |
 | persistence across sessions | disposable tmpfs root/home; persistence is opt-in, declared-paths-only and task-scoped |
 | cross-task contamination | per-task clone + per-task state; the slot's share sources are cleared/rebound per run |

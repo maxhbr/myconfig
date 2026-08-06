@@ -32,6 +32,11 @@
 #   8. THE VSOCK-ONLY SHAPE — a batch+vsock host (no TCP sshd at all) gets the
 #      same identity pinned under its `vsock-mux/...` alias, and a deleted key
 #      there heals exactly the same way.
+#   9. CORRUPTION — a NON-EMPTY but unloadable private key is re-keyed, so the
+#      launcher's new loadability refusal is repairable rather than terminal.
+#  10. A FOREIGN PUBLIC KEY — a valid `.pub` that belongs to a DIFFERENT key is
+#      rebuilt from the private key, which is what heals the launcher's new
+#      key-pair coherence refusal.
 #
 # What it does NOT establish: anything that needs a booted guest or /dev/kvm
 # (that the guest's sshd actually presents this key, and that the launcher's
@@ -256,6 +261,51 @@ expect "the public-key symlink target's content was NOT changed" "$victim_before
 expect "the private key survived the public-key symlink (no re-key)" "$c0" "$(digest "$k0")"
 expect "the rebuilt public key matches the private key" "$(pubof "$k0")" "$(cut -d' ' -f1,2 "$k0.pub")"
 rm -f "$victim"
+
+echo
+echo "=== 9. a CORRUPT (non-empty, unloadable) private key is re-keyed ==="
+# The launcher now REFUSES to launch on an unloadable private key, so the
+# provisioner MUST be able to heal one — otherwise the slot fails closed
+# forever. A zero-byte key was already covered by `-s`; this is the file that
+# LOOKS like a key and is not.
+printf '%s\n' '-----BEGIN OPENSSH PRIVATE KEY-----' \
+    'b3BlbnNzaC1rZXktdjEAAAAAtruncated' \
+    '-----END OPENSSH PRIVATE KEY-----' >"$k0"
+chmod 0400 "$k0"
+if ssh-keygen -y -P "" -f "$k0" >/dev/null 2>&1; then
+    fail "the planted key is loadable — the scenario would be vacuous"
+else
+    pass "the planted key is genuinely unloadable"
+fi
+"$PROVISIONER"
+if ssh-keygen -y -P "" -f "$k0" >/dev/null 2>&1; then
+    pass "the corrupt private key was replaced by a loadable one"
+else
+    fail "the corrupt private key was NOT repaired"
+fi
+if [[ "$(digest "$k0")" != "$c0" ]]; then
+    pass "the corrupt key was re-keyed (not resurrected)"
+else
+    fail "the 'repaired' key is the corrupt one"
+fi
+expect "the public key follows the new private key" "$(pubof "$k0")" "$(cut -d' ' -f1,2 "$k0.pub")"
+expect "known_hosts follows the new private key" "$(pubof "$k0")" "$(recorded "${ALIASES[0]}")"
+expect "the OTHER slot was not disturbed" "$a1" "$(digest "$k1")"
+d0k="$(digest "$k0")"
+
+echo
+echo "=== 10. an UNRELATED public key is rebuilt (the launcher's pair check) ==="
+# Exactly the state the launcher's new relationship check rejects: a valid but
+# FOREIGN public key next to a valid private key. The private key is
+# authoritative, so the .pub and known_hosts must be rebuilt from it.
+ssh-keygen -q -t ed25519 -N "" -C foreign -f /tmp/foreign-key
+cp -- /tmp/foreign-key.pub "$k0.pub"
+chmod 0444 "$k0.pub"
+"$PROVISIONER"
+expect "the private key survived the foreign public key" "$d0k" "$(digest "$k0")"
+expect "the public key was rebuilt from the private key" "$(pubof "$k0")" "$(cut -d' ' -f1,2 "$k0.pub")"
+expect "known_hosts records the private key's real public half" "$(pubof "$k0")" "$(recorded "${ALIASES[0]}")"
+rm -f /tmp/foreign-key /tmp/foreign-key.pub
 
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 [[ $FAILED -eq 0 ]]
