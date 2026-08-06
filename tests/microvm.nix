@@ -3104,6 +3104,55 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # The launcher is RENDERED from Nix fragments spliced into one indented    #
+  # string (../modules/myconfig.ai/myconfig.ai.microvm/launcher.nix          #
+  # `mkFragment`/`indentFragment`). The indent argument is the column in the  #
+  # GENERATED script, which is NOT the column the `${...}` has in the Nix     #
+  # file (Nix strips the string's common indentation first), so passing the   #
+  # wrong one silently over-indents every line after the first and leaves     #
+  # whitespace-only lines behind. That is invisible to shellcheck and to      #
+  # every functional check, so it is pinned HERE, on the BUILT script of      #
+  # BOTH transports: no line may end in whitespace, and the blocks that come  #
+  # from fragments must sit at the same column as their neighbours.           #
+  # ---------------------------------------------------------------------- #
+  microvm-launcher-rendering =
+    pkgs.runCommand "microvm-launcher-rendering"
+      {
+        tapLauncher = "${launcherPkg}/bin/agent-microvm";
+        vsockLauncher = "${findPkg interactiveVsockHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        batchLauncher = "${findPkg batchOnlyHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+      }
+      ''
+        for l in "$tapLauncher" "$vsockLauncher" "$batchLauncher"; do
+          if grep -nP '[ \t]+$' "$l"; then
+            echo "$l: the generated launcher has whitespace-only/trailing-whitespace lines" >&2
+            echo "(a fragment was spliced with the wrong indent: it must be the column in the" >&2
+            echo " GENERATED script, i.e. topIndent/bodyIndent, not the column in launcher.nix)" >&2
+            exit 1
+          fi
+        done
+
+        # A top-level `readonly` from a fragment must sit at column 0 exactly
+        # like the hand-written ones around it.
+        grep -qx -- 'readonly BRIDGE=agentbr0' "$tapLauncher" \
+          || { echo "the tap launcher's BRIDGE constant is not a column-0 statement" >&2; exit 1; }
+        grep -qx -- "readonly SELECTED_CAPABILITIES='interactive batch'" "$tapLauncher" \
+          || { echo "the tap launcher's capability set is not a column-0 statement" >&2; exit 1; }
+        # ... and a fragment inside a function body at column 4.
+        grep -qx -- '    section_hdr "private bridge + gateway address"' "$tapLauncher" \
+          || { echo "the tap launcher's doctor section is not a column-4 statement" >&2; exit 1; }
+        grep -qx -- '    section_hdr "per-VM AF_VSOCK model forwarder (the vsock transport)"' "$vsockLauncher" \
+          || { echo "the vsock launcher's doctor section is not a column-4 statement" >&2; exit 1; }
+        grep -qx -- '    require_capability run interactive' "$batchLauncher" \
+          || { echo "the batch-only launcher's capability guard is not a column-4 statement" >&2; exit 1; }
+
+        {
+          echo "microvm-launcher-rendering: no trailing whitespace, fragments at the right column"
+          for l in "$tapLauncher" "$vsockLauncher" "$batchLauncher"; do echo "  $l"; done
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (c) PURE-EVAL slot pool: unique + well-formed IPs/MACs, contiguous      #
   #     names, across a range of slot counts. Encodes §37 duplicate         #
   #     detection as an executable test against the real slots.nix.         #
