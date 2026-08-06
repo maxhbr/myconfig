@@ -338,7 +338,8 @@ boundary against a compromised host home.
   selects the `vsock` capability gives its guests a VSOCK `sshd-vsock@`
   (vsock::22, reused from upstream) reachable ONLY from the host (CID 2) over
   AF_VSOCK — never from the TAP. The TCP `sshd.service` is suppressed for a
-  batch+vsock guest, so the channel is host-only. What crosses it both ways is
+  batch+vsock guest AND its TAP firewall opening for 22 is closed, so the
+  channel is host-only. What crosses it both ways is
   the SAME as the existing SSH control channel — host→guest: the operator's
   commands (`agent-microvm ssh` / the runtime-validation suite); guest→host:
   command stdout/exit — just over a different L2. No host home, no credential,
