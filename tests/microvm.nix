@@ -5213,6 +5213,47 @@ in
         provisioner = lib.getExe hostKeys.provisioner;
         bvProvisioner = lib.getExe bvHostKeys.provisioner;
         lockPath = "${microvmOpts.runtimeRoot}/hostkeys.lock";
+
+        # --- the EXECUTED regression harness -----------------------------
+        # The greps above prove the SHAPE of the scripts; this runs the REAL
+        # provisioner in bwrap+fakeroot and proves the BEHAVIOUR (deletion,
+        # partial state, mismatch, mode drift, concurrency, and the VSOCK-only
+        # shape). It needs no /dev/kvm, so it belongs in CI.
+        nativeBuildInputs = [
+          pkgs.bubblewrap
+          pkgs.fakeroot
+          pkgs.coreutils
+        ];
+        harness = ./microvm-hostkeys-provisioning.sh;
+        BWRAP = lib.getExe pkgs.bubblewrap;
+        FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
+        BASH_BIN = "${pkgs.bash}/bin/bash";
+        PROVISIONER = lib.getExe hostKeys.provisioner;
+        BV_PROVISIONER = lib.getExe bvHostKeys.provisioner;
+        RUNTIME_ROOT = microvmOpts.runtimeRoot;
+        KNOWN_HOSTS = hostKeys.knownHosts;
+        LOCK_FILE = "${microvmOpts.runtimeRoot}/hostkeys.lock";
+        KEY_NAME = hostKeys.keyName;
+        # The reference host's per-slot key directories and their TAP aliases,
+        # index-aligned and taken from the module (never a literal).
+        SLOT_KEY_DIRS = lib.concatMapStringsSep " " (slot: hostKeys.slotDir slot.name) enabledSlots;
+        SLOT_ALIASES = lib.concatMapStringsSep " " (slot: slot.ip) enabledSlots;
+        # ... and the batch+vsock host's single slot, whose ONLY alias is the
+        # VSOCK mux socket path (no guest network interface exists there).
+        BV_SLOT_KEY_DIR = bvHostKeys.slotDir variantSlot.name;
+        BV_ALIAS = "vsock-mux/${microvmOpts.stateRoot}/${variantSlot.name}/notify.vsock";
+        # The PATH inside the sandbox: the tmpfs root has no /bin, so every tool
+        # the scenarios use is named here explicitly.
+        SANDBOX_PATH = lib.makeBinPath (
+          with pkgs;
+          [
+            coreutils
+            openssh
+            gnugrep
+            findutils
+            bash
+          ]
+        );
       }
       ''
         # --- (1) the launcher SELF-HEALS instead of trusting the unit -------
@@ -5343,11 +5384,24 @@ in
           echo "the default (tap) provisioner writes a vsock-mux entry it has no channel for" >&2; exit 1
         fi
 
+        # --- (6) the EXECUTED behavioural regressions ----------------------
+        mkdir -p run && cd run
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- host-identity provisioning harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        cd ..
+
         {
           echo "microvm-host-identity-self-healing:"
           echo "  default     launcher: $defaultLauncher"
           echo "  batch+vsock launcher: $bvLauncher"
           echo "  batch-only  launcher: $bLauncher"
+          echo "  provisioner         : $provisioner"
+          echo "  vsock provisioner   : $bvProvisioner"
+          echo
+          cat run/report.txt
           cat "$evalMarker"
         } > "$out"
       '';
