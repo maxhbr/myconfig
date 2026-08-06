@@ -968,6 +968,10 @@ activation state:
 * private key present and non-empty; public key present and non-empty;
 * private key `root:root 0400` (hence not group/world readable), public key
   `root:root 0444`;
+* the `known_hosts` database itself `root:root 0444` — symmetric with the two key
+  checks, since a drifted owner or a group/world-WRITABLE mode on the database
+  `StrictHostKeyChecking=yes` verifies against would let a local user swap a
+  pinned key;
 * EXACTLY ONE `known_hosts` entry for the alias of this host's transport, looked
   up with `ssh-keygen -F` (the matcher `ssh` itself uses). Two entries are a
   CONFLICT and are treated as broken, not accepted;
