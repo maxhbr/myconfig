@@ -262,6 +262,16 @@ case "\$1" in
                     if [[ \${STUB_HOSTKEYS_BROKEN:-0} == 1 ]]; then
                         exit 1
                     fi
+                    # STUB_HOSTKEYS_NOOP=1 is the OTHER, subtler failure: the
+                    # unit SUCCEEDS but provisions nothing (a full disk, a
+                    # tampered ExecStart, a unit whose ExecStart silently did
+                    # not reach this slot). That is what the launcher's SECOND
+                    # validation exists for — 'systemctl restart' returning 0 is
+                    # NOT evidence of an identity. Without this mode the second
+                    # die was only grep-visible in the rendered script.
+                    if [[ \${STUB_HOSTKEYS_NOOP:-0} == 1 ]]; then
+                        exit 0
+                    fi
                     "$PROVISION_HOSTKEYS" || exit 1
                     ;;
             esac
@@ -372,6 +382,7 @@ run_submit() {
         --setenv STUB_DIR "$stub_dir" \
         --setenv STUB_MODE "$mode" \
         --setenv STUB_HOSTKEYS_BROKEN "${STUB_HOSTKEYS_BROKEN:-0}" \
+        --setenv STUB_HOSTKEYS_NOOP "${STUB_HOSTKEYS_NOOP:-0}" \
         --setenv AGENT_MICROVM_SKIP_PREFLIGHT 1 \
         --setenv HOME "$WORK" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
@@ -851,6 +862,45 @@ if grep -q 'start microvm@' "$WORK/stub-noidentity-task/systemctl.log" 2>/dev/nu
     fail "the launcher started a VM despite an unverifiable host identity"
 else
     pass "no VM was started (fail closed)"
+fi
+
+# The SECOND fail-closed door: the provisioning unit SUCCEEDS but the identity
+# is still incomplete afterwards. A launcher that treated `systemctl restart`
+# exiting 0 as proof of an identity would sail past this and boot a guest whose
+# host key it never verified — so this scenario exercises the POST-REPAIR
+# re-validation behaviourally, not by grepping the rendered script.
+echo
+echo "=== 16. a SUCCESSFUL repair that provisions NOTHING still ABORTS the launch ==="
+STUB_HOSTKEYS_NOOP=1
+export STUB_HOSTKEYS_NOOP
+rc="$(run_submit valid noopidentity-task --timeout 30)"
+unset STUB_HOSTKEYS_NOOP
+if [[ $rc -ne 0 ]]; then
+    pass "submit failed although the provisioning unit exited 0 (exit $rc)"
+else
+    fail "submit SUCCEEDED on a no-op repair: the launcher trusted the unit's exit code"
+fi
+if grep -q 'still has no complete SSH host identity' "$WORK/submit-noopidentity-task.log"; then
+    pass "the launcher re-validated the identity AFTER the repair and refused"
+else
+    fail "the launcher did not report an incomplete identity after a successful repair: $(tail -3 "$WORK/submit-noopidentity-task.log")"
+fi
+if grep -q 'refusing to launch an unverifiable guest' "$WORK/submit-noopidentity-task.log"; then
+    pass "the refusal says no unverifiable guest is launched"
+else
+    fail "the refusal does not name the reason: $(tail -3 "$WORK/submit-noopidentity-task.log")"
+fi
+# The unit really was asked to repair (otherwise the assertions above could pass
+# for the trivial reason that the launcher never tried).
+if grep -q 'restart agent-microvm-hostkeys.service' "$WORK/stub-noopidentity-task/systemctl.log" 2>/dev/null; then
+    pass "the launcher did attempt the repair before refusing"
+else
+    fail "the launcher never attempted the repair: $(cat "$WORK/stub-noopidentity-task/systemctl.log" 2>/dev/null)"
+fi
+if grep -q 'start microvm@' "$WORK/stub-noopidentity-task/systemctl.log" 2>/dev/null; then
+    fail "the launcher started a VM after a no-op repair"
+else
+    pass "no VM was started after the no-op repair (fail closed)"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"
