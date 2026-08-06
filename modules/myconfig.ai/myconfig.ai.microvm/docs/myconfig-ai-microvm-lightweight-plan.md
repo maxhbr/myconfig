@@ -505,10 +505,18 @@ was never used).
   plan asks for "a small, auditable tool" on both sides and the module already
   used `systemd-socket-proxyd` for the TAP forwarder — but socket-proxyd can only
   forward to a `HOST:PORT` or UNIX target, never to AF_VSOCK, so the GUEST side
-  (the one that must dial CID 2) is a per-connection `socat -T30 -
-  VSOCK-CONNECT:2:<port>`. That is why the guest's `litellm-forwarder.socket`
-  switches to `Accept = yes` and a templated `litellm-forwarder@` instance under
-  the `vsock` transport. `socat` is referenced by the unit's ExecStart and is
+  (the one that must dial CID 2) is `socat -t 120 ACCEPT-FD:3,fork
+  VSOCK-CONNECT:2:<port>`. The guest's `litellm-forwarder.socket` keeps
+  `Accept = no` under BOTH transports and there is ONE `litellm-forwarder.service`
+  whose only transport-dependent field is the `ExecStart`: socat takes the
+  LISTENING fd systemd passes as fd 3 and forks per connection itself, exactly as
+  `systemd-socket-proxyd` multiplexes on one fd, so concurrent model streams are
+  not capped by systemd's default `MaxConnections=64` and no DynamicUser unit is
+  spawned per request. There is deliberately **no `-T` inactivity timeout**: `-T`
+  is bidirectional and would tear a connection down mid-transfer, silently killing
+  a long prefill, a cold LiteLLM or a slow tool-call turn; `-t` (the half-close
+  drain timeout, raised from socat's 0.5 s default) is the only timeout present.
+  `socat` is referenced by the unit's ExecStart and is
   deliberately NOT added to `environment.systemPackages`: the untrusted agent
   must not gain a general-purpose socket tool in its PATH. Cost: ≈0.9 MB of guest
   closure (measured), against three guest units, two guest sockets and the whole
@@ -1399,7 +1407,8 @@ ONE table, ONE resolution, no consumer that tests a transport name:
 guest agent
   -> 127.0.0.1:<litellmPort>          (UNCHANGED endpoint: the host-provisioned
                                        agent configuration works verbatim)
-  -> guest TCP-to-VSOCK bridge        (litellm-forwarder@, per connection)
+  -> guest TCP-to-VSOCK bridge        (litellm-forwarder, ONE unit,
+                                       socat ACCEPT-FD:3,fork)
   -> host CID 2, port <litellmPort>
   -> cloud-hypervisor's per-VM mux socket
      <stateRoot>/<slot>/notify.vsock_<litellmPort>
@@ -1421,10 +1430,13 @@ asks. Two implementation notes worth recording:
   addressed by anything except that VM's VMM process (`root:kvm 0660`).
 - **`systemd-socket-proxyd` is used on the host, `socat` in the guest.**
   socket-proxyd forwards to `HOST:PORT`/UNIX targets only, so the guest side (the
-  one that must DIAL AF_VSOCK) is a per-connection `socat -T30 -
+  one that must DIAL AF_VSOCK) is `socat -t 120 ACCEPT-FD:3,fork
   VSOCK-CONNECT:2:<port>` with the destination baked into the unit. `socat` is
   added by that unit's ExecStart, NOT to `environment.systemPackages`, so the
-  untrusted agent does not gain a general-purpose socket tool in its PATH.
+  untrusted agent does not gain a general-purpose socket tool in its PATH. The
+  socket stays `Accept = no` on both transports (ONE long-running multiplexer, no
+  `MaxConnections=64` ceiling on concurrent model streams) and carries **no `-T`
+  inactivity timeout**, which would otherwise abort in-flight model requests.
 
 ### Tasks — status
 

@@ -125,10 +125,21 @@ let
   # upstream `microvm.vsock.cid` + NixOS' systemd-ssh-generator) so a host that
   # narrows `interactive` away (a batch-only host, which has no TCP sshd) can
   # still be driven by `agent-microvm ssh` and the runtime-validation suite.
-  # It is ADDITIVE — the TAP/bridge/firewall and the loopback LiteLLM forwarder
-  # are unchanged — so the plan's literal phase-6 sketch (a VSOCK proxy
-  # forwarder REPLACING the TAP) is NOT implemented here; that would fork the
-  # one forwarder shape. The decision lives in the SAME per-capability mechanism
+  #
+  # IT IS NOT ADDITIVE. The token has TWO effects, and the second one REMOVES
+  # configuration:
+  #   1. always: the VSOCK control channel above;
+  #   2. WHENEVER `networkProfile` is the (DEFAULT) `proxy-only`: it also selects
+  #      the `vsock` MODEL TRANSPORT (../network-profiles.nix `resolveTransport`),
+  #      which REPLACES the guest's network stack — no `microvm.interfaces` TAP,
+  #      no static IP, no networkd, and on the HOST no private bridge, no TAP
+  #      attach units, no `AGENT_MICROVM_*` firewall chains and no bridge-only
+  #      LiteLLM socket. The model API instead travels the guest's unchanged
+  #      `127.0.0.1:<litellmPort>` over AF_VSOCK to a per-VM host forwarder.
+  # So adding `vsock` on a `proxy-only` host is exactly the plan's LITERAL
+  # phase-6 objective, not a second guest shape: there is still ONE forwarder
+  # unit (`litellm-forwarder`), ONE guest-visible endpoint and ONE resolved
+  # transport. The decision lives in the SAME per-capability mechanism
   # the plan's own phase-5 deviation hardened the layout table for (a `vsock`
   # token was explicitly anticipated there), not in a `transport = "tap"|"vsock"`
   # enum that would re-create the cross-product the `full`/`lite` collapse
@@ -308,9 +319,20 @@ in
           the phase-5 coverage hole. The per-slot SSH host identity
           (`hostkeys/`) and its `known_hosts` entry are provisioned for
           `vsock` too, so the VSOCK channel is host-key-verified exactly like
-          the TAP one. Additive: the TAP/bridge/firewall and the loopback
-          LiteLLM forwarder stay; `vsock` is a control-channel axis, not a
-          second transport shape.
+          the TAP one.
+
+          NOT ADDITIVE — on a `proxy-only` host (the DEFAULT profile) the
+          `vsock` token ALSO SELECTS THE `vsock` MODEL TRANSPORT and thereby
+          REMOVES the guest's network entirely: the guest gets no
+          `microvm.interfaces` TAP, no static IPv4, no default route and no
+          systemd-networkd, and the HOST builds no private bridge, no TAP
+          attach/L2-isolate units, no `AGENT_MICROVM_*` firewall chains and no
+          bridge-only LiteLLM socket. The model API still reaches the guest at
+          the unchanged `127.0.0.1:<litellmPort>`, but over
+          AF_VSOCK to a destination-fixed per-VM host forwarder instead of over
+          the bridge, so no agent configuration changes. Under any other
+          profile (`offline`, `package-access`, `internet`) the model transport
+          stays `tap` and `vsock` really is only the extra control channel.
 
         Both `interactive` and `batch` (the default) is exactly the
         historical behaviour. `vsock` is OFF by default, so a default host's

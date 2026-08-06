@@ -564,6 +564,18 @@ bridge needs) and removes three guest units, two guest sockets, the guest's whol
 network stack, the host bridge, the host TAP plumbing and the
 `AGENT_MICROVM_*` firewall chains.
 
+That ≈0.9 MB is specific to the MINIMAL (codex-only) shape, where `socat` is not
+otherwise in the closure. On the five-agent reference host the same comparison
+(`agent-normal-0`, `nix path-info -S` of the built paths) is:
+
+| Metric | `tap` | `vsock` | Δ |
+| --- | --- | --- | --- |
+| guest closure | 4,769,448,040 | 4,769,523,888 | +75,848 (+0.002 %) |
+| runner closure | 9,782,512,128 | 9,782,613,488 | +101,360 (+0.001 %) |
+
+— because `socat` is already reachable from that larger closure, so all that is
+added are the generated units.
+
 ### Still PENDING a real-KVM run
 
 These are **not** measured yet and are deliberately **not** estimated (the
