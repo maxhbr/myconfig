@@ -285,6 +285,47 @@ the same reach. The staging boundary protects the guest→host direction and
 constrains what the *host operator's own* configuration exposes; it is not a
 boundary against a compromised host home.
 
+## The per-slot SSH host identity
+
+Each slot has its OWN ed25519 host key, generated on the host at runtime, never
+in the Nix store (world-readable) and never in the writable session tree (the
+pre-launch verifier refuses to launch a slot whose writable tree contains key
+material). Invariants, all of them enforced rather than documented:
+
+* **one identity per slot** — the key directories are per-slot and asserted
+  pairwise distinct; no private key is shared between slots;
+* **not readable by any guest agent** — `root:root 0400` on a read-only virtiofs
+  share, and virtiofsd passes ownership through unchanged, so the untrusted
+  `agent` user cannot read it and the guest cannot change its own identity;
+* **not exposed to other guests** — only that slot's directory is in that slot's
+  share;
+* **strict verification, always** — every `ssh` invocation runs
+  `StrictHostKeyChecking=yes` with `UserKnownHostsFile` pinned to the
+  host-generated database. `StrictHostKeyChecking=no` and
+  `UserKnownHostsFile=/dev/null` do not appear in the launcher (asserted by a
+  check that ignores comments);
+* **missing or mismatched identity fails the launch** — before booting a slot
+  whose control transport is SSH-based (TAP *or* VSOCK), the launcher validates
+  the actual files: non-empty key pair, `root:root 0400`/`0444`, and EXACTLY ONE
+  `known_hosts` entry for that transport's alias whose key type and body match
+  the public key. A conflict (two entries for one alias) is treated as broken,
+  not accepted. If a re-provision does not fix it, the launch aborts;
+* **repair is scoped to host-managed files** — the provisioner only ever touches
+  the per-slot key pair, the aggregated `known_hosts` and its own lock, and it
+  keeps every valid private key untouched, so repairing one slot cannot silently
+  re-key another. A private key that is not `root:root` is REPLACED, never
+  chowned into trust (that would launder a planted key). An over-permissive mode
+  is repaired and REPORTED on stderr rather than silently accepted or silently
+  rotated;
+* **no private-key material in logs** — the launcher inspects the private key
+  only through `[[ -s ]]` and `stat`; the provisioner discards `ssh-keygen -y`
+  output except for the public half it derives.
+
+Known limitation: an over-permissive mode means the key MAY have been read by a
+local user before the repair. The provisioner cannot know, so it reports it and
+leaves the rotation decision to the operator (see the recovery table in
+[Per-slot SSH host identity](./agent-microvm.md#per-slot-ssh-host-identity-lifecycle-and-recovery)).
+
 ## What LiteLLM protects
 
 - The **upstream credential** never leaves the host: the guest holds placeholders
@@ -307,7 +348,8 @@ boundary against a compromised host home.
 | arbitrary internet egress / data smuggling | denied in `offline`/`proxy-only`; `package-access` allows one host proxy port; only `internet` routes, and then with NAT + a DNS allowlist + drop logging |
 | DNS tunnelling | port 53 only to configured resolvers, everything else dropped |
 | guest → guest attacks, ARP spoofing, MITM of host↔guest | per-TAP `isolated` bridge ports (all EtherTypes) + IPv4 inter-VM DROP + strict SSH host-key verification |
-| impersonating a slot to the operator | per-slot host keys, delivered read-only and root-only, pinned in `known_hosts` |
+| impersonating a slot to the operator | per-slot host keys, delivered read-only and root-only, pinned in `known_hosts`, VALIDATED (files, ownership, modes, and the `known_hosts` entry) before every launch — a slot whose identity cannot be established is not launched at all |
+| **launching a slot whose control channel cannot be authenticated** | the launcher validates the slot's actual identity files before booting the VM and re-validates after re-provisioning; it FAILS CLOSED and never falls back to `StrictHostKeyChecking=no` / `UserKnownHostsFile=/dev/null` |
 | persistence across sessions | disposable tmpfs root/home; persistence is opt-in, declared-paths-only and task-scoped |
 | cross-task contamination | per-task clone + per-task state; the slot's share sources are cleared/rebound per run |
 | host code execution from a hostile repo | the launcher never evaluates repo-provided nix/direnv/hooks/npm/make/MCP (asserted by a check); clones copy the object store (`--local --no-hardlinks`, never `--shared`/`--reference`) and are verified free of object alternates; git-dir/common-dir escapes rejected; all paths canonicalised |

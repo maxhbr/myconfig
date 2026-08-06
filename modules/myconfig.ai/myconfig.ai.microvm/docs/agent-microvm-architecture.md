@@ -195,7 +195,13 @@ reconfigures no agent.
   re-evaluated inside the guest.
 - The per-slot SSH **host** key is delivered read-only and root-only; the guest
   agent user cannot read it, so it cannot impersonate its own slot to the
-  operator either.
+  operator either. Before every launch of a slot whose control transport is
+  SSH-based (TAP *or* VSOCK) the launcher VALIDATES that identity — the key pair
+  itself, its ownership and modes, and the single matching `known_hosts` entry
+  for that transport's alias — repairs it with
+  `systemctl restart agent-microvm-hostkeys.service` if needed, and refuses to
+  launch if it is still incomplete. See
+  [Per-slot SSH host identity](./agent-microvm.md#per-slot-ssh-host-identity-lifecycle-and-recovery).
 
 ## Capabilities: which halves a host builds
 
@@ -223,7 +229,7 @@ already owns the concern:
 | --- | --- |
 | `session.nix` | which layout-table entries exist — hence the host tmpfiles rules, the pre-launch verifier, the launcher's `prepare_session`, the guest mounts and the tests. `hostkeys/` needs `interactive` OR `vsock` (the VSOCK sshd reuses the per-slot host identity) |
 | `job.nix` | whether the guest module (controller unit, worker template, the three job programs), the worker's endpoint environment and the host result archive exist at all |
-| `hostkeys.nix` | whether the per-slot key pair and the `known_hosts` database are provisioned (for `interactive` OR `vsock`) |
+| `hostkeys.nix` | whether the per-slot key pair and the `known_hosts` database are provisioned (for `interactive` OR `vsock`), and which aliases the database carries (the slot IPv4 under `tap`, the `vsock-mux/...` path under `vsock`) |
 | `guest.nix` | whether the guest carries the interactive `agent-run` entry point; whether `microvm.vsock.cid` is set and the TCP `sshd.service` is suppressed (any host whose TCP sshd is unreachable — no `interactive`, or no network interface under the `vsock` transport) |
 | `network.nix` | whether the host builds the bridge + TAP attach units + firewall chains + bridge-only socket (`tap`) or ONE destination-fixed AF_VSOCK forwarder per VM (`vsock`) — decided by the transport, which is itself decided by `vsock` + the profile |
 | `workmux.nix` | whether the `microvm-<agent>` panes are registered |

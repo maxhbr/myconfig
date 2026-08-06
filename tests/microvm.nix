@@ -40,7 +40,20 @@
 #                                        selectable: the default keeps both, and
 #                                        each narrowing REMOVES the other half's
 #                                        units/paths/packages/subcommands (the
-#                                        narrowed guest closures are BUILT)
+#                                        narrowed guest closures are BUILT).
+#                                        Also the WORKLOAD/TRANSPORT matrix: the
+#                                        transport-only `[ "vsock" ]` is rejected
+#   microvm-host-identity-self-healing  the per-slot SSH host identity is
+#                                        VALIDATED (files, ownership, modes,
+#                                        known_hosts entry) before every launch
+#                                        of an SSH-reachable slot, for BOTH the
+#                                        TAP and the VSOCK transport, and
+#                                        repaired with `systemctl restart` (not
+#                                        `start`, a no-op on the active
+#                                        RemainAfterExit oneshot). Includes an
+#                                        EXECUTED bwrap+fakeroot harness for the
+#                                        provisioner's idempotency, partial-state
+#                                        repair and concurrency
 #   microvm-guest-evaluates   §38     — the reference guest closure evaluates to a
 #                                        realisable derivation (drvPath marker)
 #   microvm-launcher-shellcheck §38   — host launcher + guest `agent-run` +

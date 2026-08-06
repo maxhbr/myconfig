@@ -148,6 +148,30 @@ The preflight retries up to 3 times (3 s each, 2 s apart) so a cold LiteLLM is
 not mistaken for a dead one; if it fails, run `sudo agent-microvm doctor` on
 the host and re-run the section.
 
+### What is already covered WITHOUT KVM
+
+Two areas that used to need a booted guest are now covered by CI-tier checks, so
+the real-KVM run does not have to establish them:
+
+* `checks.microvm-capabilities` exercises the FULL capability matrix, including
+  that the transport-only `capabilities = [ "vsock" ]` is REJECTED at evaluation
+  time (a workload capability — `interactive` or `batch` — is required);
+* `checks.microvm-host-identity-self-healing` asserts the per-slot SSH host
+  identity lifecycle both by inspecting the BUILT launcher/provisioner and by
+  EXECUTING the real provisioner in `bwrap` + `fakeroot`: idempotency, deletion
+  of a private key (regenerated; other slots untouched), loss of a public key
+  (re-derived from the private key), a MISMATCHED public key (rebuilt; private
+  key preserved), mode drift (repaired without re-keying), 8 concurrent runs
+  (one consistent, duplicate-free database), and the VSOCK-only shape (one
+  `vsock-mux/...` alias, healing identically). `microvm-batch-launcher-submit`
+  additionally proves, by running the REAL launcher against a `systemctl` stub
+  that models the `RemainAfterExit` oneshot faithfully, that a launch repairs a
+  missing identity with `systemctl restart` and ABORTS (booting nothing) when the
+  repair fails.
+
+What still needs real KVM: that the guest's sshd actually presents the
+provisioned key and that the launcher's `ssh` therefore verifies against it.
+
 ## Execution status
 
 | Section | Last executed on real KVM |

@@ -43,7 +43,7 @@ secure default prioritises **isolation over convenience**.
 | Document | Contents |
 | --- | --- |
 | [How-to](./agent-microvm-howto.md) | **start here**: one full, linear journey — `doctor`, interactive `run`/workmux, one batch `submit`, importing the branch, cleanup |
-| this file | activation, option reference, agent registry, network profiles, the dedicated SSH key, batch job format, limitations |
+| this file | activation, option reference, agent registry, network profiles, the per-slot SSH host identity, the dedicated SSH key, batch job format, limitations |
 | [Architecture](./agent-microvm-architecture.md) | module map, slot pool, workspace indirection, network path, credential boundary, execution paths, state lifetimes |
 | [Operator guide](./agent-microvm-operator-guide.md) | exact procedures: start, submit, status, attach, cancel, collect, remove, recover, logs |
 | [Security model](./agent-microvm-security-model.md) | trusted vs untrusted, what the boundary protects, mitigated attacks, residual risks |
@@ -889,6 +889,135 @@ shorter than the 60 s worker-startup grace.
 
 `submit` exit codes: **0** completed, **1** the agent failed, **124** timed out,
 **70** infrastructure error (no/invalid/unauthentic result).
+
+---
+
+## Per-slot SSH host identity: lifecycle and recovery
+
+Every slot has its OWN stable ed25519 **host** key. It authenticates the GUEST
+to the host, and is the reason `agent-microvm ssh` / `run --attach` /
+the readiness poll can run with `StrictHostKeyChecking=yes` instead of accepting
+any key. (The *dedicated* key of the next section is the opposite direction: it
+authenticates the operator to the guest.)
+
+### Where it lives
+
+| Path | Owner / mode | Notes |
+| --- | --- | --- |
+| `<runtimeRoot>/sessions-ro/<slot>/hostkeys/ssh_host_ed25519_key` | `root:root 0400` | the slot's PRIVATE host key |
+| `<runtimeRoot>/sessions-ro/<slot>/hostkeys/ssh_host_ed25519_key.pub` | `root:root 0444` | its public half |
+| `<runtimeRoot>/known_hosts` | `root:root 0444` | the aggregated database the launcher pins `ssh` to |
+| `<runtimeRoot>/hostkeys.lock` | `root:root` | the provisioner's `flock` |
+
+Never in the Nix store (a store path is world-readable, so every local user
+could impersonate a slot) and never in the WRITABLE session tree — the
+pre-launch verifier refuses to launch a slot whose writable tree contains key
+material. The guest sees the directory through the per-slot READ-ONLY virtiofs
+share, and virtiofsd passes ownership through unchanged, so inside the guest the
+private key is still `root:root 0400`: the unprivileged `agent` user cannot read
+it, and no other slot's directory is exposed.
+
+The `known_hosts` alias depends on the CONTROL TRANSPORT:
+
+| Transport | alias |
+| --- | --- |
+| TAP (`interactive`, guest has an interface) | the slot's deterministic IPv4 |
+| VSOCK (`vsock` is the only control channel) | `vsock-mux/<stateRoot>/<slot>/notify.vsock` |
+
+### Provisioning is idempotent and self-healing
+
+`agent-microvm-hostkeys.service` (a `RemainAfterExit` oneshot,
+`wantedBy = multi-user.target`) provisions the identities. It is safe to run at
+any time, and it is run **before every launch** of a slot whose control
+transport is SSH-based — i.e. whenever the host has `interactive` (TAP sshd) OR
+`vsock` (the VSOCK `sshd-vsock@`).
+
+What it does, in order, per slot:
+
+1. **repairs the MODE** of an existing, already-`root:root` private key back to
+   `0400`, and says so on stderr if it had to. This happens BEFORE the key is
+   judged, because `ssh-keygen` refuses to read an over-permissive private key —
+   judging first would mistake mode drift for corruption and silently re-key the
+   slot. A key that is *not* `root:root` is never chowned into trust; it is
+   replaced;
+2. **keeps a valid private key untouched.** Validity = non-empty +
+   `root:root` + loadable by `ssh-keygen`. A slot's identity is therefore stable
+   across reboots, rebuilds, and repairs of OTHER slots;
+3. **generates** a key pair only when the private key is missing or unusable;
+4. **derives the public key from the private key** (`ssh-keygen -y`) when it is
+   missing, truncated, or CONFLICTS with the private key. The private key is
+   authoritative: discarding it would invalidate every `known_hosts` entry
+   already distributed for that slot;
+5. **sets ownership and modes explicitly** (`0400` / `0444`);
+6. **rebuilds `known_hosts`** deterministically, at most one entry per alias
+   (`ssh` refuses a file offering two keys for one host), and installs it
+   ATOMICALLY (temp file + rename), so a reader never sees a partial database.
+
+The whole body runs under one exclusive `flock` on
+`<runtimeRoot>/hostkeys.lock`, so the boot-time unit and a concurrent
+pre-launch repair cannot interleave.
+
+### What the launcher does before a launch
+
+`ensure_host_identity <slot>` validates the ACTUAL FILES — not the unit's
+activation state:
+
+* private key present and non-empty; public key present and non-empty;
+* private key `root:root 0400` (hence not group/world readable), public key
+  `root:root 0444`;
+* EXACTLY ONE `known_hosts` entry for the alias of this host's transport, looked
+  up with `ssh-keygen -F` (the matcher `ssh` itself uses). Two entries are a
+  CONFLICT and are treated as broken, not accepted;
+* that entry's key type and body match the public key exactly.
+
+If anything is off it logs `repairing SSH host identity for slot <slot>`, runs
+`systemctl **restart** agent-microvm-hostkeys.service`, re-validates, and
+**aborts the launch** if the identity is still incomplete. It is a repair, not a
+fallback: there is no code path that relaxes verification.
+
+> **Why `restart` and not `start`.** The unit is a `RemainAfterExit = true`
+> oneshot and is normally already active on a booted host, so `systemctl start`
+> returns success WITHOUT re-running `ExecStart`. A key directory deleted by hand
+> would never be recreated. Use `restart` in manual recovery too.
+
+### Operator recovery
+
+```bash
+# re-provision every slot's identity and rebuild known_hosts (idempotent):
+sudo systemctl restart agent-microvm-hostkeys.service
+sudo journalctl -u agent-microvm-hostkeys.service -n 20
+
+# what the host expects for a slot, and what it recorded:
+sudo ssh-keygen -y -f /var/lib/agent-microvms/sessions-ro/<slot>/hostkeys/ssh_host_ed25519_key
+ssh-keygen -F <slot-ip> -f /var/lib/agent-microvms/known_hosts
+# ... or, under the vsock transport:
+ssh-keygen -F "vsock-mux//var/lib/microvms/<slot>/notify.vsock" \
+    -f /var/lib/agent-microvms/known_hosts
+
+# per-slot key directories present?
+sudo agent-microvm doctor
+```
+
+Symptoms and what they mean:
+
+| Symptom | Cause | Action |
+| --- | --- | --- |
+| `slot <s> still has no complete SSH host identity ... refusing to launch` | the provisioner ran and the identity is still broken | read its journal; a full-disk or a hand-created root-owned file in the way is the usual cause |
+| `failed to provision per-slot SSH host keys` | the unit itself failed | `journalctl -u agent-microvm-hostkeys.service` |
+| `missing host-key database <path>; run: systemctl restart agent-microvm-hostkeys.service` | `known_hosts` absent/unreadable | run exactly that |
+| `agent-microvm-hostkeys: normalised over-permissive mode NNN on <key>` | a slot's private key had been left group/world readable | the mode is fixed automatically; decide whether to ROTATE the key (`rm` that slot's key dir, then restart the unit) |
+| `ssh` fails host-key verification | the guest presents a key the host did not record | do **not** bypass it. Restart the unit; if it persists, the slot is not what the host expects — investigate |
+
+**To rotate a slot's identity deliberately**, delete only that slot's directory
+and re-provision; other slots are untouched:
+
+```bash
+sudo rm -rf /var/lib/agent-microvms/sessions-ro/<slot>/hostkeys
+sudo systemctl restart agent-microvm-hostkeys.service
+```
+
+Rotation invalidates any `known_hosts` copy an operator made by hand; the
+host-managed database is rebuilt automatically.
 
 ---
 

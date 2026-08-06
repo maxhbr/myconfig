@@ -206,11 +206,22 @@ trusted half (it validates the job and writes the result),
 `agent-job-worker@<agent>` is the untrusted half that runs the coding agent.
 
 Host-key verification is **strict**; if it fails, the slot's identity is not what
-the host expects — investigate rather than bypass. If `known_hosts` is missing:
+the host expects — investigate rather than bypass. Re-provisioning is idempotent
+and never touches a slot whose identity is already valid:
 
 ```bash
-sudo systemctl start agent-microvm-hostkeys.service
+sudo systemctl restart agent-microvm-hostkeys.service
+sudo journalctl -u agent-microvm-hostkeys.service -n 20
 ```
+
+Use `restart`, **not** `start`: the unit is a `RemainAfterExit` oneshot and is
+normally already active, so `start` returns success without re-running it — a
+deleted key would never be recreated. The launcher does the same thing
+automatically before every launch of a slot whose control channel is SSH-based
+(TAP *or* VSOCK): it validates the slot's key files and its `known_hosts` entry,
+repairs them if needed, and **refuses to launch** if the identity is still
+incomplete. For the full lifecycle, the alias table and a rotation procedure see
+[Per-slot SSH host identity](./agent-microvm.md#per-slot-ssh-host-identity-lifecycle-and-recovery).
 
 ## 5. Cancel a task
 
