@@ -367,8 +367,12 @@ boundary against a compromised host home.
     not created;
   - the host attack surface shrinks: no bridge on the host, no TAP devices, no
     `br_netfilter`, no NAT/forwarding, no listener on a bridge address. What
-    remains is ONE Unix-socket listener per VM (`root:kvm 0660`, inside that VM's
-    own state directory) whose only destination is `127.0.0.1:<litellmPort>`,
+    remains is ONE Unix-socket listener per VM (root-owned, mode `0660` to **the
+    VMM's group** `kvm`, inside that VM's own state directory — so root, the VMM
+    and any other host user already in `kvm` can connect, which is no escalation
+    because such a user can already `curl 127.0.0.1:<litellmPort>` itself; and
+    NOTHING on the network can, because this path has no TCP listener at all)
+    whose only destination is `127.0.0.1:<litellmPort>`,
     confined with `IPAddressAllow=localhost` + `IPAddressDeny=any`,
     `DynamicUser`, `ProtectSystem=strict`. It is NOT a CONNECT proxy: the guest
     supplies no host, port or CID, so "the guest picks a host port" is not

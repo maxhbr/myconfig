@@ -292,7 +292,7 @@ Under the `vsock` transport the model API travels:
 
 ```text
 guest agent -> 127.0.0.1:<litellmPort>              (UNCHANGED endpoint)
-  -> guest per-connection socat bridge (litellm-forwarder@)
+  -> guest socat bridge (litellm-forwarder, ONE unit: `ACCEPT-FD:3,fork`)
   -> AF_VSOCK CID 2 (the host), port <litellmPort>
   -> cloud-hypervisor's per-VM mux socket
      <stateRoot>/<slot>/notify.vsock_<litellmPort>
@@ -311,8 +311,11 @@ Why this is STRICTLY stronger than `tap` + `proxy-only`:
   guest or another host port, because it has no interface to address them WITH.
   Invariant 6 becomes an ABSENT DEVICE instead of a firewall verdict;
 - the host forwarder is **one listener per VM**, bound to a Unix socket inside
-  that VM's own state directory (`root:kvm` `0660`, reachable only by the VMM
-  process and root) and **destination-fixed** to `127.0.0.1:<litellmPort>`. It is
+  that VM's own state directory (root-owned, `0660` to **the VMM's group**
+  `kvm`, so root, the VMM and any other host user already in `kvm` may connect —
+  no escalation, since such a user can already `curl 127.0.0.1:<litellmPort>`;
+  and **no TCP listener exists anywhere on this path**) and
+  **destination-fixed** to `127.0.0.1:<litellmPort>`. It is
   not a CONNECT proxy: the guest cannot name a host, a port or a CID, and the
   forwarder itself is confined with `IPAddressAllow=localhost` +
   `IPAddressDeny=any`, `DynamicUser`, `ProtectSystem=strict`;

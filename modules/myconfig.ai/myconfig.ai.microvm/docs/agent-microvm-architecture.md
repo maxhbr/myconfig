@@ -154,7 +154,8 @@ has **no network interface at all**:
 
 ```text
 guest agent
-  → 127.0.0.1:4000                (guest-side socat, per connection)
+  → 127.0.0.1:4000                (guest-side socat, ONE long-running
+                                   multiplexer — `ACCEPT-FD:3,fork`)
   → AF_VSOCK CID 2, port 4000     (the host; cloud-hypervisor's per-VM mux socket
                                    <stateRoot>/<slot>/notify.vsock_4000)
   → 127.0.0.1:4000                (per-VM host forwarder → the loopback LiteLLM proxy)
@@ -164,8 +165,14 @@ guest agent
 No TAP device, no bridge, no static IP, no guest networkd/dhcpcd, no
 `AGENT_MICROVM_*` chain and no bridge-only socket exist on such a host; the
 host-side components are exactly one `agent-litellm-vsock-<slot>` socket +
-service PER VM, each bound to a `root:kvm 0660` Unix socket inside that VM's own
-state directory and destination-fixed to `127.0.0.1:<litellmPort>`. LAN, VPN,
+service PER VM, each bound to a Unix socket inside that VM's own state
+directory (owned by root, group-accessible to **the VMM's group** `kvm` at mode
+`0660`) and destination-fixed to `127.0.0.1:<litellmPort>`. Note that `kvm` may
+contain other host users (libvirt/QEMU on a desktop); such a user can connect to
+the socket and reach LiteLLM, but that is not an escalation — it can already
+`curl 127.0.0.1:<litellmPort>` directly, which is the forwarder's only
+destination. A host user outside `kvm` cannot, and **nothing on the network can
+at all: this path has no TCP listener anywhere**. LAN, VPN,
 metadata, DNS, other guests and other host ports are unreachable by
 CONSTRUCTION rather than by firewall verdict, and one slot cannot use another
 slot's model path (there is no shared namespace and no CID to spoof).
@@ -388,10 +395,12 @@ worthless as evidence.
   firewall opening for 22 (`services.openssh.openFirewall = false`): the VSOCK
   sshd is the ONLY listener, reachable solely from the host (CID 2), and needs no
   TAP firewall rule. `vsock` is a NEW AXIS over the one guest shape (a
-  capability token, not a `transport` enum), additive to the unchanged
-  TAP/bridge/firewall on a host whose profile is not `proxy-only`. With
-  `proxy-only` the SAME CID additionally carries the MODEL API (port
-  `litellmPort`), and then the TAP/bridge/firewall are gone entirely — the
-  literal phase-6 design. A host that does not select `vsock` leaves
+  capability token, not a `transport` enum), and it is **NOT additive on the
+  default profile**: with `proxy-only` (the DEFAULT) the SAME CID additionally
+  carries the MODEL API (port `litellmPort`) and the guest's whole network stack
+  plus the host's TAP/bridge/firewall are gone entirely — the literal phase-6
+  design. Only under a non-`proxy-only` profile (`offline`, `package-access`,
+  `internet`) does `vsock` leave the TAP/bridge/firewall untouched and act purely
+  as an extra control channel. A host that does not select `vsock` leaves
   `microvm.vsock.cid` at its default `null`, so its guest closure is
   byte-for-byte unchanged.
