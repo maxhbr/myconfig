@@ -104,11 +104,41 @@ let
   # such a (Nix-dedented) block to the column it is spliced into and appends the
   # newline the following line's indentation needs, so the splice site keeps its
   # own indentation. It is PURE RENDERING — there is one launcher shape.
-  indentFragment = indent: text: lib.replaceStrings [ "\n" ] [ "\n${indent}" ] text;
+  #
+  # THE INDENT IS THE COLUMN IN THE *GENERATED* SCRIPT, NOT IN THIS FILE. Nix
+  # strips the `text = ''` string's common indentation (6 spaces here) before the
+  # interpolations are inserted verbatim, so a `${...}` written at column 6 in
+  # this file lands at column 0 in the script and one written at column 10 (a
+  # function body) lands at column 4. Passing this file's column instead — which
+  # is what the fragments used to do — over-indents every line after the first
+  # and leaves a whitespace-only line where `mkFragment`'s trailing newline is.
+  # The two constants below are therefore the ONLY legal indents, and
+  # `checks.microvm-launcher-rendering` (../tests/microvm.nix) fails the build if
+  # any generated launcher line ends in whitespace, which is how that mistake
+  # shows up.
+  # An EMPTY line stays empty (indenting it would emit a whitespace-only line,
+  # which is what `shell-fmt-check`/`shfmt` and every diff tool complain about),
+  # and the FIRST line is left alone because the splice site itself supplies its
+  # indentation.
+  indentFragment =
+    indent: text:
+    lib.concatStringsSep "\n" (
+      lib.imap0 (i: l: if i == 0 || l == "" then l else indent + l) (lib.splitString "\n" text)
+    );
   mkFragment = indent: text: indentFragment indent (text + "\n");
+  # A GENERATED LIST inside the `usage` heredoc: the splice sites there sit at
+  # column 8 (column 2 of the generated script), so an EMPTY list would render as
+  # a whitespace-only line. `(none)` is both honest and whitespace-clean; a
+  # non-empty list renders exactly as before.
+  usageList = items: if items == [ ] then "(none)" else lib.concatStringsSep "\n  " items;
+
+  # A top-level statement of the generated script (splice site at column 6 here).
+  topIndent = "";
+  # A statement inside a generated function body (splice site at column 10 here).
+  bodyIndent = "    ";
 
   # Declarations + helpers, spliced into the helper section of the script.
-  configSeedHelpers = mkFragment "      " ''
+  configSeedHelpers = mkFragment topIndent ''
     # ---- runtime config staging (lightweight plan phase 3) -------------
     # The host copies an ALLOWLIST of configuration paths (the SELECTED
     # agents' registry `configPaths` plus `configSeed.extraPaths`) into a
@@ -159,7 +189,7 @@ let
   '';
 
   # One call site each in `run` and `submit`, before the VM is started.
-  configSeedStage = mkFragment "          " ''stage_config_seed "$slot"'';
+  configSeedStage = mkFragment bodyIndent ''stage_config_seed "$slot"'';
 
   # --- capability gating (lightweight plan phase 5) -----------------------
   # A capability this host does not select has NO guest units, NO guest
@@ -181,7 +211,7 @@ let
   # can fire" rule ../job.nix applies to its `promptUnusedSuppression`, not a
   # second launcher shape.
   # Spliced into the CONFIGURATION section, on every host.
-  capabilityConfig = mkFragment "      " ''
+  capabilityConfig = mkFragment topIndent ''
     # ---- the capability set (lightweight plan phase 5) ------------------
     # WHICH execution capabilities this host's guests carry
     # (`myconfig.ai.microvm.capabilities`). Rendered on EVERY host, including
@@ -204,7 +234,7 @@ let
     lib.optional (!agentCapabilities.interactive) "interactive"
     ++ lib.optional (!agentCapabilities.batch) "batch";
   capabilityHelpers = lib.optionalString (refusedCapabilities != [ ]) (
-    mkFragment "      " ''
+    mkFragment topIndent ''
       # ---- capability gating (lightweight plan phase 5) -------------------
       # This host selects only: ${lib.concatStringsSep ", " agentCapabilities.selected}.
       # The capabilities ${lib.concatStringsSep ", " refusedCapabilities} are
@@ -242,7 +272,7 @@ let
   requireCapability =
     cap: cmd:
     lib.optionalString (!agentCapabilities.${cap}) (
-      mkFragment "          " "require_capability ${cmd} ${cap}"
+      mkFragment bodyIndent "require_capability ${cmd} ${cap}"
     );
   # `doctor`'s host-key section. On a host WITHOUT the `interactive` AND
   # without the `vsock` capability there is no key material to look for
@@ -257,7 +287,7 @@ let
   # column the block has in the GENERATED script (Nix strips the `text = ''`
   # string's common indentation, interpolated values are inserted verbatim), so
   # that the interactive variant reproduces the replaced block byte for byte.
-  doctorHostKeys = indentFragment "    " (
+  doctorHostKeys = indentFragment bodyIndent (
     if (agentCapabilities.interactive || agentCapabilities.vsock) then
       ''
         local missing=0 s
@@ -279,8 +309,11 @@ let
   # `writeShellApplication`'s shellcheck gate rejects an unused `readonly`,
   # which is exactly the "emit it only where it can fire" rule ../job.nix
   # applies to its `promptUnusedSuppression`).
+  # `indentFragment`, not `mkFragment`: the splice site is on its own line and
+  # supplies the trailing newline, so appending one would insert a blank line
+  # (and, before this file's indents were corrected, a whitespace-only one).
   tapNetworkConfig = lib.optionalString agentNetwork.transportCaps.guestInterface (
-    mkFragment "      " ''
+    indentFragment topIndent ''
       # The private bridge + the bridge-only LiteLLM endpoint a guest reaches
       # (network.nix §16, guest.nix forwarder). The host launcher's endpoint
       # preflight and `doctor` probe exactly this address, and the per-task
@@ -307,7 +340,10 @@ let
       ''"http://127.0.0.1:$LITELLM_PORT/v1/models"'';
 
   # ... and the actionable hint names the components that EXIST on this host.
-  preflightHint = indentFragment "    " (
+  # Spliced INSIDE a heredoc in a function body, hence `bodyIndent` (the bullets
+  # sit at column 4 of the generated script, exactly where the block this
+  # fragment replaced had them).
+  preflightHint = indentFragment bodyIndent (
     if agentNetwork.transportCaps.bridgeLitellm then
       ''
         - systemctl is-active agent-litellm-proxy.socket  (must be active;
@@ -327,7 +363,7 @@ let
   );
 
   # `doctor`'s header line: it may only name components this host has.
-  doctorHeader = indentFragment "    " (
+  doctorHeader = indentFragment bodyIndent (
     if agentNetwork.transportCaps.bridgeLitellm then
       ''
         printf '%s: host-side diagnosis (transport=%s bridge=%s gateway=%s litellmPort=%s profile=%s)\n' \
@@ -352,7 +388,7 @@ let
   #
   # NOTE: `indentFragment`, not `mkFragment` — the splice site supplies the
   # trailing newline (same reason as `doctorHostKeys`).
-  doctorTransport = indentFragment "    " (
+  doctorTransport = indentFragment bodyIndent (
     if agentNetwork.transportCaps.bridgeLitellm then
       ''
         section_hdr "bridge-only forwarder socket ($GATEWAY:$LITELLM_PORT)"
@@ -459,7 +495,7 @@ let
   # VSOCK (`vsock`, lightweight plan phase 6). Refused only when NEITHER is
   # selected (e.g. a batch-only host without `vsock`).
   sshCapability = lib.optionalString (!agentCapabilities.interactive && !agentCapabilities.vsock) (
-    mkFragment "          " "require_capability_any ssh interactive vsock"
+    mkFragment bodyIndent "require_capability_any ssh interactive vsock"
   );
   submitCapability = requireCapability "batch" "submit";
   cancelCapability = requireCapability "batch" "cancel";
@@ -492,7 +528,7 @@ let
 
   # The per-slot paths of the two trees, spliced into the configuration section
   # next to the other roots.
-  sessionConfig = mkFragment "      " ''
+  sessionConfig = mkFragment topIndent ''
     # ---- the per-session tree (lightweight plan phase 4) ---------------
     # ONE writable virtiofs share per slot (the session tree) plus ONE
     # read-only share (the slot's SSH host identity + the staged host
@@ -523,7 +559,7 @@ let
   mountPointDef = ''mount_point()  { printf '%s' "$SESSION_ROOT/$1/$SESSION_WORKSPACE_SUBDIR"; }'';
   stateSlotDirDef = ''state_slot_dir() { printf '%s' "$SESSION_ROOT/$1/$SESSION_STATE_SUBDIR"; }'';
 
-  sessionHelpers = mkFragment "      " ''
+  sessionHelpers = mkFragment topIndent ''
     # ---- the session tree: preparation / verification / removal ---------
     session_dir()    { printf '%s' "$SESSION_ROOT/$1"; }
     session_ro_dir() { printf '%s' "$SESSION_RO_ROOT/$1"; }
@@ -694,7 +730,7 @@ let
 
   # One call site each in `run` and `submit`, BEFORE the workspace bind mount
   # and before anything is staged into the tree.
-  sessionPrepare = mkFragment "          " ''
+  sessionPrepare = mkFragment bodyIndent ''
     prepare_session "$slot" \
         || die "could not prepare the session tree of slot $slot"
     # The clone is about to be bind-mounted ONTO a directory of the session
@@ -710,9 +746,9 @@ let
     chmod "$SESSION_WORKSPACE_MODE" -- "$clone" \
         || die "could not normalise the mode of the workspace clone root: $clone"'';
   # ... and one immediately before the VM is started.
-  sessionVerify = mkFragment "          " ''verify_session "$slot"'';
+  sessionVerify = mkFragment bodyIndent ''verify_session "$slot"'';
   # ... and one in the teardown, so no per-session data outlives the session.
-  sessionClear = mkFragment "          " ''clear_session "$slot" || leaked=1'';
+  sessionClear = mkFragment bodyIndent ''clear_session "$slot" || leaked=1'';
 
   # The MODE of the two directories the rest of this launcher also creates and
   # which the layout table already declares: they resolve to the table's value
@@ -738,7 +774,7 @@ let
   # `$RESULTS_DIR` would claim a directory that cannot exist — the same
   # "reports something absent" pattern the honest `doctor` host-key section
   # removed. The capability is reported instead.
-  jobUsageLines = mkFragment "          " (
+  jobUsageLines = mkFragment bodyIndent (
     if agentCapabilities.batch then
       ''
         printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(session_job_data_bytes)")"
@@ -748,7 +784,7 @@ let
   );
 
   # ... and one in the teardown, so nothing staged survives the session.
-  configSeedClear = mkFragment "          " ''clear_config_seed "$slot" || true'';
+  configSeedClear = mkFragment bodyIndent ''clear_config_seed "$slot" || true'';
 
   # Render the deterministic slot table as bash arrays. Using the shared slot
   # helper guarantees the launcher sees exactly the names/IPs/MACs/TAPs that
@@ -2092,12 +2128,12 @@ let
                               slot still holding the clone before removing it.
 
       Supported agents (--agent), generated from the module's agent registry:
-        ${lib.concatStringsSep "\n  " agentRegistry.names}
+        ${usageList agentRegistry.names}
 
       --persist-agent-state keeps ONLY the agent's declared state directories,
       scoped to the task, under ${agentState.tasksRoot}/<task>/<agent>/.
       Without it the guest home stays disposable. Declared directories:
-        ${lib.concatStringsSep "\n  " (
+        ${usageList (
           lib.concatMap (a: map (d: "${a.name}: ~/${d}") a.persistentState.directories) (
             lib.attrValues agentRegistry.agents
           )
@@ -2106,7 +2142,7 @@ let
       Resource classes (--resource-class), generated from the module options
       (the allocator NEVER substitutes a different class; --wait <sec> bounds
       how long it waits for a free slot in the requested one):
-        ${lib.concatStringsSep "\n  " (
+        ${usageList (
           lib.mapAttrsToList (
             n: c: "${n}: ${toString c.count} slot(s), ${toString c.vcpu} vCPU, ${toString c.memoryMiB} MiB"
           ) agentResourceClasses
@@ -2213,7 +2249,7 @@ let
         reachable at $url (bounded to ''${PREFLIGHT_TIMEOUT}s).
         The guest agent would die within seconds of starting. Before booting a
         sandbox, check on THIS host:
-      ${preflightHint}
+          ${preflightHint}
         or run: sudo $PROG doctor   (full diagnosis)
         (set AGENT_MICROVM_SKIP_PREFLIGHT=1 only in the stubbed test harness.)
       EOF
