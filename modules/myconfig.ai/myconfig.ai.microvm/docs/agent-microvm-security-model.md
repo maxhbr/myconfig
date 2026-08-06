@@ -153,7 +153,22 @@ has no `input/`, `controller/`, `worker/` or `worker-logs/` (there is no batch
 protocol to protect, because there is no controller and no worker), and a
 batch-only guest has no `hostkeys/` in the read-only tree (there is no sshd, so
 the slot has no SSH identity to keep from the agent). No owner or mode changes,
-and no invariant is relaxed: a narrowing only removes attack surface. The consolidation moved the paths into the two trees WITHOUT
+and no invariant is relaxed: a narrowing only removes attack surface. The trust
+POLICY is asserted against the FULL layout table rather than the selected slice,
+so weakening an entry a host happens not to create still fails the build, and the
+pre-launch verifier additionally refuses any top-level entry the (narrowed) table
+does not declare — the case that matters is a stale `input/` or `worker-logs/`
+left behind by a generation that did select `batch`.
+
+Also worth being precise about: a batch-only guest has no SSH *daemon* — no
+`sshd`/`sshd@`/`sshd-vsock@` unit, `services.openssh.enable = false`, no host
+identity, no authorized key — but the openssh *binaries* are still in its
+closure, because NixOS' `environment.requiredPackages` (which also brings
+coreutils-full, curl, …) provides `scp`/`ssh` and is load-bearing for a bootable
+system. The criterion "a batch-mode guest has no SSH daemon" is a unit/config
+claim, not a closure-size claim.
+
+The consolidation moved the paths into the two trees WITHOUT
 changing a single owner or mode — the trust boundary was never the share split,
 it is ownership and modes, which virtiofsd passes through unchanged:
 
