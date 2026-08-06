@@ -724,6 +724,28 @@ in
           '';
         }
         {
+          # The launcher's VSOCK `ssh` / readiness poll / `status` connect with
+          # `ssh vsock-mux/$STATE_ROOT/$slot/notify.vsock`. That hostname only
+          # resolves because nixpkgs' `programs.ssh.systemd-ssh-proxy.enable`
+          # (default true) includes `20-systemd-ssh-proxy.conf`, which supplies
+          # the `Host vsock-mux/*` ProxyCommand (systemd-ssh-proxy -> the guest's
+          # vsock::22). A host that sets `programs.ssh.systemd-ssh-proxy.enable =
+          # false` AND selects `vsock` would get a confusing runtime
+          # DNS-resolution failure of the control channel. Fail at EVAL instead,
+          # naming the missing host-side dependency.
+          assertion = !agentCapabilities.vsock || config.programs.ssh.systemd-ssh-proxy.enable;
+          message = ''
+            myconfig.ai.microvm: the `vsock` capability requires
+            `programs.ssh.systemd-ssh-proxy.enable = true` (the nixpkgs default).
+            The launcher reaches the guest's VSOCK sshd as
+            `ssh vsock-mux/<stateRoot>/<slot>/notify.vsock`, a hostname that only
+            resolves through the `Host vsock-mux/*` ProxyCommand
+            `20-systemd-ssh-proxy.conf` supplies when
+            `programs.ssh.systemd-ssh-proxy.enable` is true. With it disabled the
+            control channel fails at runtime with an opaque DNS-resolution error.
+          '';
+        }
+        {
           # A typo in `capabilities` must fail at EVAL, naming the token, rather
           # than silently narrowing the guest (a mistyped "interactve" would
           # otherwise produce a batch-only host).

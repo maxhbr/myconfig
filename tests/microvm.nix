@@ -2326,6 +2326,26 @@ in
           ] "closed network profiles";
           message = "vsock with networkProfile = \"package-access\" must be rejected";
         }
+        {
+          # S2: the launcher's VSOCK `ssh` runs `ssh vsock-mux/<path>`, a hostname
+          # that only resolves through the `Host vsock-mux/*` ProxyCommand
+          # `20-systemd-ssh-proxy.conf` supplies when
+          # `programs.ssh.systemd-ssh-proxy.enable` is true. A host that selects
+          # `vsock` AND disables that nixpkgs option must fail at EVAL with the
+          # pinned message, not at runtime with an opaque DNS-resolution error.
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.sshPublicKeyFile = lib.mkForce ../hosts/host.f13/dedicated-agent-vm-key.pub;
+              programs.ssh.systemd-ssh-proxy.enable = lib.mkForce false;
+            }
+          ] "systemd-ssh-proxy";
+          message = "vsock with programs.ssh.systemd-ssh-proxy.enable = false must be rejected (the VSOCK ssh hostname needs the ProxyCommand that option supplies)";
+        }
       ]);
     in
     pkgs.runCommand "microvm-capabilities"
