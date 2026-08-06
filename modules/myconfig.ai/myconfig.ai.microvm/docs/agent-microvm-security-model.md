@@ -175,13 +175,18 @@ claim, not a closure-size claim.
 sshd — but ONLY the VSOCK `sshd-vsock@` (vsock::22), reachable solely from the
 host (CID 2) over AF_VSOCK, never from the TAP. The TCP `sshd.service` is
 suppressed (`systemd.services.sshd.enable = false`), so no network SSH listener
-exists. The invariant above is therefore scoped to **"no TCP/network SSH
-daemon"**: a VSOCK-only inetd sshd is the host↔guest *control channel* (the
-enabler that lets `runtime-validation.sh` reach a batch-only guest at all), not
-an interactive login service exposed to the guest's network. It reuses the
-per-slot host identity + a `known_hosts` entry keyed by the VSOCK mux path, so
-the channel is host-key-verified exactly like the TAP one. See the plan's
-phase-6 recorded deviations for the full rationale.
+exists, AND the TAP firewall opening for 22 is closed
+(`services.openssh.openFirewall = false`) — without it the openssh module's
+default `openFirewall = true` would leave 22 in
+`networking.firewall.allowedTCPPorts` on a guest whose TCP sshd is masked, a
+silent regression vector and a contradiction of the invariant. The invariant
+above is therefore scoped to **"no TCP/network SSH daemon"** (no `sshd.service`
+AND no TAP firewall rule for 22): a VSOCK-only inetd sshd is the host↔guest
+*control channel* (the enabler that lets `runtime-validation.sh` reach a
+batch-only guest at all), not an interactive login service exposed to the
+guest's network. It reuses the per-slot host identity + a `known_hosts` entry
+keyed by the VSOCK mux path, so the channel is host-key-verified exactly like
+the TAP one. See the plan's phase-6 recorded deviations for the full rationale.
 
 The consolidation moved the paths into the two trees WITHOUT
 changing a single owner or mode — the trust boundary was never the share split,

@@ -355,18 +355,31 @@ let
       # `interactive`), suppress the TCP sshd entirely — do NOT install the
       # `sshd.service` NixOS' openssh module declares (it is enabled because
       # `services.openssh.enable` is true for the VSOCK sshd), so no TCP
-      # listener ever starts, only the VSOCK `sshd-vsock@`. This is a `mkIf`
-      # MERGE ELEMENT (not an attr inside `mkGuestBase`): setting
-      # `systemd.services.sshd.enable` inside the always-present base attrset
-      # would create the `sshd` key even when the condition is false, regressing
-      # the batch-only "no sshd" invariant. Filtered out entirely when
+      # listener ever starts, only the VSOCK `sshd-vsock@`. The SAME `mkIf`
+      # ALSO closes the TAP firewall for the TCP sshd port: the openssh module
+      # leaves `services.openssh.openFirewall` at its nixpkgs default `true`,
+      # which would add 22 to `networking.firewall.allowedTCPPorts` on a guest
+      # whose TCP sshd is masked — a silent regression vector (if the
+      # `sshd.enable = false` masking were ever dropped, 22 would already be
+      # open) and a contradiction of the "no TCP/network SSH daemon" invariant.
+      # The VSOCK sshd is host-only (CID 2 -> vsock::22), never reachable from
+      # the TAP, so it needs no TAP firewall rule. This is a `mkIf` MERGE
+      # ELEMENT (not an attr inside `mkGuestBase`): setting either key inside
+      # the always-present base attrset would create the `sshd` key / flip
+      # `openFirewall` even when the condition is false, regressing the
+      # batch-only "no sshd" invariant. Filtered out entirely when
       # `vsock && !enableSsh` is false, so an interactive host (which runs the
-      # TCP sshd) and a batch-only host (no openssh at all) are byte-for-byte
-      # unchanged. Recorded deviation from phase 5's "a batch-mode guest has no
-      # SSH daemon": scoped to "no TCP/network SSH daemon"; a VSOCK-only inetd
-      # sshd (host-only, over AF_VSOCK) is the control channel.
+      # TCP sshd and legitimately opens 22) and a batch-only host (no openssh at
+      # all) are byte-for-byte unchanged. Recorded deviation from phase 5's "a
+      # batch-mode guest has no SSH daemon": scoped to "no TCP/network SSH
+      # daemon" (no `sshd.service` AND no TAP firewall opening for 22); a
+      # VSOCK-only inetd sshd (host-only, over AF_VSOCK) is the control channel.
       (lib.mkIf (agentCapabilities.vsock && !cfg.enableSsh) {
         systemd.services.sshd.enable = false;
+        # The TCP sshd is masked above, so its TAP firewall opening must go too:
+        # `openFirewall = false` keeps 22 out of `allowedTCPPorts` on a guest
+        # whose only SSH listener is the host-only VSOCK `sshd-vsock@`.
+        services.openssh.openFirewall = false;
       })
     ];
 
@@ -609,11 +622,13 @@ let
     # unit NixOS' openssh module creates is NOT installed, so no TCP listener
     # is ever started — only the VSOCK-activated `sshd-vsock@`. That is a
     # recorded deviation from phase 5's "a batch-mode guest has no SSH daemon":
-    # the invariant is now scoped to "no TCP/network SSH daemon"; a VSOCK-only
-    # inetd sshd (reachable solely from the host over AF_VSOCK, never from the
-    # TAP) is the control channel. An `interactive` host (with or without
+    # the invariant is now scoped to "no TCP/network SSH daemon" (no `sshd.service`
+    # AND no TAP firewall opening for 22 — both suppressed by the `mkIf` below);
+    # a VSOCK-only inetd sshd (reachable solely from the host over AF_VSOCK, never
+    # from the TAP) is the control channel. An `interactive` host (with or without
     # `vsock`) keeps the TCP sshd as before — the `mkIf (vsock && !enableSsh)`
-    # below contributes nothing there.
+    # below contributes nothing there, so `openFirewall` stays at its nixpkgs
+    # default `true` (the TCP sshd runs and legitimately opens 22).
     services.openssh = lib.mkIf (cfg.enableSsh || agentCapabilities.vsock) {
       enable = true;
       # Deterministic per-slot host identity (ticket 3 B): use ONLY the
