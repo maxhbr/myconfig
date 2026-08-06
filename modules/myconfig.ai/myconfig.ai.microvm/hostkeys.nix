@@ -203,6 +203,28 @@ let
         pub="$key.pub"
         comment=${lib.escapeShellArg "agent-microvm-${slot.name}"}
 
+        # ---- (a0) normalise the MODE before testing the key ---------------
+        # `ssh-keygen` REFUSES to read a private key whose mode is too open, so
+        # testing the key first would make a mere MODE DRIFT look like a corrupt
+        # key and trigger a silent RE-KEY: collateral damage to a stable, pinned
+        # identity (every distributed known_hosts entry for the slot would go
+        # stale). Repairing the mode is exactly what this unit is for, so do that
+        # first and then judge the key material.
+        #
+        # ONLY for a key that is ALREADY root:root — chowning a foreign-owned
+        # key to root would launder a key someone else may have planted. Such a
+        # key fails the ownership test below and is replaced instead.
+        if [[ -e "$key" ]] && [[ "$(stat -c '%U:%G' -- "$key")" == "root:root" ]]; then
+            mode="$(stat -c '%a' -- "$key")"
+            if [[ "$mode" != "400" ]]; then
+                # Recorded, not hidden: the key WAS readable more widely than it
+                # should have been, which only the operator can judge.
+                printf 'agent-microvm-hostkeys: normalised over-permissive mode %s on %s (consider rotating this slot key)\n' \
+                    "$mode" "$key" >&2
+            fi
+            chmod 0400 -- "$key"
+        fi
+
         # ---- (a) is the existing PRIVATE key usable AND trustworthy? ------
         # `ssh-keygen -y` is both the derivation of the public half and the
         # cheapest TOTAL validity test (a truncated or corrupted key fails).

@@ -220,7 +220,7 @@ case "\$1" in
         fi
         exit 3
         ;;
-    start | restart)
+    start)
         for a in "\$@"; do
             case "\$a" in
                 microvm@*.service)
@@ -230,12 +230,38 @@ case "\$1" in
                     plant "\$slot"
                     ;;
                 agent-microvm-hostkeys.service)
+                    # A NO-OP, MODELLED FAITHFULLY: the provisioning unit is a
+                    # 'RemainAfterExit = true' oneshot that is wantedBy
+                    # multi-user.target, so on a booted host it is already
+                    # active and 'systemctl start' returns success WITHOUT
+                    # re-running ExecStart. A launcher that regressed to
+                    # 'start' would therefore never repair a missing key — and
+                    # since this harness resets the read-only session tree
+                    # before every scenario, its identity validation would then
+                    # fail and every scenario below would fail with it.
+                    :
+                    ;;
+            esac
+        done
+        exit 0
+        ;;
+    restart)
+        for a in "\$@"; do
+            case "\$a" in
+                agent-microvm-hostkeys.service)
                     # PLAY the provisioning unit with the REAL provisioner
                     # (hostkeys.nix), not a stub: the launcher validates the
                     # slot's actual key files + known_hosts entry before it
                     # boots anything, so the only way this harness can reach
                     # 'systemctl start microvm@SLOT' is if the genuine
                     # provisioner produced a genuine, consistent identity.
+                    #
+                    # STUB_HOSTKEYS_BROKEN=1 makes the repair FAIL, which is how
+                    # the fail-closed scenario proves the launcher never boots a
+                    # guest whose identity it could not establish.
+                    if [[ \${STUB_HOSTKEYS_BROKEN:-0} == 1 ]]; then
+                        exit 1
+                    fi
                     "$PROVISION_HOSTKEYS" || exit 1
                     ;;
             esac
@@ -345,6 +371,7 @@ run_submit() {
         --setenv JQ_ARGV_LOG "$JQ_ARGV_LOG" \
         --setenv STUB_DIR "$stub_dir" \
         --setenv STUB_MODE "$mode" \
+        --setenv STUB_HOSTKEYS_BROKEN "${STUB_HOSTKEYS_BROKEN:-0}" \
         --setenv AGENT_MICROVM_SKIP_PREFLIGHT 1 \
         --setenv HOME "$WORK" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
@@ -749,6 +776,81 @@ if grep -q "already terminated as 'timed-out'" "$WORK/cancel-cancel-late.log"; t
     pass "cancel told the operator the task had already terminated"
 else
     fail "cancel did not report the pre-existing terminal state: $(tail -3 "$WORK/cancel-cancel-late.log")"
+fi
+
+# --- the SSH HOST IDENTITY is established before the VM boots --------------
+# `reset_session_trees` wipes the read-only session tree before EVERY scenario,
+# so the slot's host identity is always MISSING when the launcher starts. Every
+# passing scenario above therefore already went through the self-heal path; the
+# assertions here name what it must have done, so a regression is reported as
+# "the identity was not repaired" instead of as an unrelated result failure.
+echo
+echo "=== 14. the slot's SSH host identity is repaired before the VM boots ==="
+identity_log="$WORK/stub-ok-task/systemctl.log"
+if grep -q 'restart agent-microvm-hostkeys.service' "$identity_log"; then
+    pass "the launcher RESTARTED the provisioning unit (start would be a no-op on the active oneshot)"
+else
+    fail "the launcher never restarted the provisioning unit: $(cat "$identity_log")"
+fi
+if grep -qE '(^|[[:space:]])start agent-microvm-hostkeys\.service' "$identity_log"; then
+    fail "the launcher used 'systemctl start' on the RemainAfterExit oneshot (a no-op)"
+else
+    pass "the launcher did not rely on 'systemctl start' for the oneshot"
+fi
+if grep -q 'repairing SSH host identity for slot' "$WORK/submit-ok-task.log"; then
+    pass "the launcher announced the repair"
+else
+    fail "the launcher repaired the identity silently: $(tail -3 "$WORK/submit-ok-task.log")"
+fi
+# The repair produced a REAL, root-only key pair for the slot the launcher used,
+# and the aggregated known_hosts entry that matches it.
+identity_slot="$(jq -r '.slot // ""' "$WORK/stub-ok-task/spec.json")"
+identity_key="$WORK/runtime/${JOBS_ROOT##*/}-ro/$identity_slot/hostkeys/ssh_host_ed25519_key"
+if [[ -s $identity_key ]]; then
+    pass "the repaired private key exists for slot $identity_slot"
+else
+    fail "no private key for slot $identity_slot after the launch"
+fi
+# The EXACT mode (0400) is asserted inside the sandbox by
+# tests/microvm-hostkeys-provisioning.sh; `fakeroot` intercepts chmod, so from
+# OUT here the on-disk mode is ssh-keygen's own 0600. What is verifiable from
+# outside — and what matters — is that no group/world bit was ever set.
+identity_mode="$(stat -c '%a' "$identity_key" 2>/dev/null || printf 777)"
+if ((0$identity_mode & 0044)); then
+    fail "the repaired private key is group/world readable (mode $identity_mode)"
+else
+    pass "the repaired private key is not group/world readable (mode $identity_mode)"
+fi
+if [[ -s $identity_key.pub ]] &&
+    grep -qF -- "$(cut -d' ' -f1,2 "$identity_key.pub")" "$WORK/runtime/known_hosts"; then
+    pass "known_hosts records exactly the repaired public key"
+else
+    fail "known_hosts does not record the repaired public key"
+fi
+
+# FAIL CLOSED: if the repair itself fails, no VM may be started. This is the
+# NEGATIVE CONTROL for the whole self-heal path — without it, a launcher that
+# ignored the provisioning result would still "pass" everything above.
+echo
+echo "=== 15. an unrepairable host identity ABORTS the launch ==="
+STUB_HOSTKEYS_BROKEN=1
+export STUB_HOSTKEYS_BROKEN
+rc="$(run_submit valid noidentity-task --timeout 30)"
+unset STUB_HOSTKEYS_BROKEN
+if [[ $rc -ne 0 ]]; then
+    pass "submit failed when the host identity could not be provisioned (exit $rc)"
+else
+    fail "submit SUCCEEDED with no provisionable host identity"
+fi
+if grep -q 'failed to provision per-slot SSH host keys' "$WORK/submit-noidentity-task.log"; then
+    pass "the failure names the provisioning unit"
+else
+    fail "the failure does not name the provisioning unit: $(tail -3 "$WORK/submit-noidentity-task.log")"
+fi
+if grep -q 'start microvm@' "$WORK/stub-noidentity-task/systemctl.log" 2>/dev/null; then
+    fail "the launcher started a VM despite an unverifiable host identity"
+else
+    pass "no VM was started (fail closed)"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"
