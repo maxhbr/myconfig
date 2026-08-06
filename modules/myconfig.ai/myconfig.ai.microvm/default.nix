@@ -185,13 +185,52 @@ let
 
   effectiveProfile = cfg.networkProfile;
 
+  # --- lightweight plan phase 6: the TRANSPORT decision -------------------
+  # Resolved EXACTLY ONCE, here, from the table in ./network-profiles.nix and
+  # handed to network.nix / guest.nix / session.nix / hostkeys.nix /
+  # launcher.nix through the SAME `_module.args.agentNetwork` the profile
+  # already travels in. `vsock` + the closed `proxy-only` profile REPLACES the
+  # guest's network with an AF_VSOCK path to a per-VM host forwarder: no TAP, no
+  # bridge, no static IP, no guest networkd, no host firewall chains. Every
+  # consumer reads the transport's CAPABILITY FLAGS (`transportCaps`), never the
+  # name, so there is one decision and no second code path.
+  effectiveTransport = profileLib.resolveTransport {
+    profile = effectiveProfile;
+    vsockCapability = agentCapabilities.vsock;
+  };
+  effectiveTransportCaps = profileLib.forTransport effectiveTransport;
+
   agentNetwork = {
     profile = effectiveProfile;
     caps = profileLib.forProfile effectiveProfile;
+    transport = effectiveTransport;
+    transportCaps = effectiveTransportCaps;
+    # Whether an SSH daemon bound to a guest NETWORK interface can be reached at
+    # all. Derived HERE (once) rather than in each consumer, because it is a
+    # NETWORK fact — under the `vsock` transport the guest has no interface, so a
+    # TCP sshd would listen where nothing can connect. guest.nix suppresses the
+    # TCP `sshd.service` accordingly, session.nix skips its mount ordering and
+    # launcher.nix renders `SSH_ENABLED=0`, so the VSOCK `sshd-vsock@` is the ONE
+    # control channel there.
+    tapSshUsable = cfg.enableSsh && effectiveTransportCaps.tapSsh;
+    # The AF_VSOCK port of the model forwarder (see `vsockLitellmPort` below):
+    # part of the ONE resolved network decision, so the host forwarder
+    # (network.nix) and the guest bridge (guest.nix) cannot disagree.
+    inherit vsockLitellmPort;
     # Effective DNS policy for the `internet` profile: an empty `dnsServers`
     # means "the host itself on the bridge".
     dnsServers = if cfg.dnsServers == [ ] then [ cfg.gatewayAddress ] else cfg.dnsServers;
   };
+
+  # The AF_VSOCK port the per-VM host forwarder listens on and the guest bridge
+  # connects to (CID 2 = the host). Deliberately the SAME number as the TCP
+  # `litellmPort`, so an operator reads one port everywhere; cloud-hypervisor
+  # backs it with the Unix socket `<stateRoot>/<slot>/notify.vsock_<port>`.
+  vsockLitellmPort = cfg.litellmPort;
+  # microvm.nix reserves AF_VSOCK port 8888 for the systemd notify socket of a
+  # cloud-hypervisor guest (its `notify.vsock_8888` socat bridge), so the model
+  # forwarder must never claim it.
+  reservedNotifyVsockPort = 8888;
 
   isAbsolutePath = p: lib.hasPrefix "/" p;
 in
@@ -752,6 +791,29 @@ in
             `${effectiveProfile}`). VSOCK is the secure profile's control
             transport; pair it with an insecure profile deliberately by NOT
             selecting `vsock` and driving the guest over the TAP instead.
+          '';
+        }
+        {
+          # The LITERAL phase-6 transport (`vsock` + `proxy-only`) carries the
+          # model API over AF_VSOCK port `litellmPort`, which cloud-hypervisor
+          # backs with the Unix socket `<stateRoot>/<slot>/notify.vsock_<port>`.
+          # microvm.nix already uses `notify.vsock_8888` for the guest's systemd
+          # NOTIFY socket (its socat bridge), so a host that set `litellmPort =
+          # 8888` would have the model forwarder and the notify bridge fight over
+          # the same socket path — the VM would either fail to signal readiness
+          # or lose its model endpoint, both at runtime and both opaque. Reject
+          # it at EVAL. Only the vsock transport is affected: under `tap` the
+          # port is a plain TCP port on the bridge.
+          assertion = !agentNetwork.transportCaps.vsockLitellm || vsockLitellmPort != reservedNotifyVsockPort;
+          message = ''
+            myconfig.ai.microvm.litellmPort must not be ${toString reservedNotifyVsockPort} on a host
+            that uses the VSOCK model transport (the `vsock` capability with
+            `networkProfile = "proxy-only"`): the per-VM forwarder listens on the
+            cloud-hypervisor VSOCK socket
+            `${cfg.stateRoot}/<slot>/notify.vsock_${toString vsockLitellmPort}`, and microvm.nix
+            reserves AF_VSOCK port ${toString reservedNotifyVsockPort} (`notify.vsock_${toString reservedNotifyVsockPort}`)
+            for the guest's systemd notify socket. Pick a different
+            `litellmPort`.
           '';
         }
         {

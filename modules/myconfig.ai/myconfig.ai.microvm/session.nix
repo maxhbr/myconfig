@@ -116,6 +116,14 @@
   # verifier, the guest mounts, the launcher's `prepare_session` and the tests
   # all follow without a single `if` of their own.
   agentCapabilities,
+  # The ONE resolved network decision (see default.nix). Only `tapSshUsable` is
+  # consulted here: it says whether an SSH daemon on a guest NETWORK interface
+  # can be reached at all, which is what decides whether the TCP `sshd.service`
+  # is a LIVE unit worth ordering against the host-key mount. Under the `vsock`
+  # transport (lightweight plan phase 6) the guest has no interface, so that unit
+  # is masked by ../guest.nix and the live channel is the `sshd-vsock@` socket
+  # ordered below.
+  agentNetwork,
   ...
 }:
 let
@@ -702,11 +710,12 @@ let
       ];
     };
   }
-  // lib.optionalAttrs cfg.enableSsh {
+  // lib.optionalAttrs agentNetwork.tapSshUsable {
     # The TCP sshd (`sshd.service`, the `interactive` capability) reads its host
     # key from the read-only share; make that ordering explicit instead of
     # relying on local-fs.target having completed. Scoped to `enableSsh` (the
-    # ONLY host shape whose TCP sshd is live): a batch+vsock host MASKS the
+    # ONLY host shape whose TCP sshd is live — `enableSsh` AND a guest network
+    # interface to reach it on): a batch+vsock host MASKS the
     # `sshd.service` (guest.nix), so a `RequiresMountsFor` on that dead unit
     # would be a no-op — the live control channel there is the VSOCK
     # `sshd-vsock@`, whose ordering is handled by the socket directive below.
