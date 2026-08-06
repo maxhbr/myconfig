@@ -794,6 +794,36 @@ assert_model_config() {
     fi
 }
 
+# The vsock-transport counterpart of the whole allow/deny matrix (lightweight
+# plan phase 6): with NO network interface in the guest, every denial below is
+# true by CONSTRUCTION, and a suite that only reported those denials would be
+# reporting vacuous passes. So the absence of the interface is asserted
+# DIRECTLY, from inside the guest:
+#
+#   * no link other than loopback exists;
+#   * no IPv4 and no IPv6 default route exists;
+#   * the guest cannot even name a non-loopback address of its own.
+#
+# Each is a POSITIVE statement about the guest, so it FAILS if a future change
+# gives the guest a link back.
+assert_loopback_only() {
+    local slot="$1" desc="$2" links
+    links="$(guest "$slot" sh -c "ip -o link show | awk -F': ' '{ print \$2 }' | grep -v '^lo$' | tr '\n' ' '" 2>/dev/null || true)"
+    links="${links//$'\r'/}"
+    links="${links// /}"
+    if [[ -z $links ]]; then
+        pass "$desc: the guest has NO network interface other than loopback (the vsock model transport)"
+    else
+        fail "$desc: the guest has non-loopback interface(s) '$links' although the vsock model transport must give it none"
+    fi
+    check_denied "$desc: the guest has no IPv4 default route" "$slot" \
+        sh -c "ip -4 route show default | grep -q ."
+    check_denied "$desc: the guest has no IPv6 default route" "$slot" \
+        sh -c "ip -6 route show default | grep -q ."
+    check_denied "$desc: the guest has no routable IPv4 address of its own" "$slot" \
+        sh -c "ip -4 -o addr show scope global | grep -q ."
+}
+
 # --- (2) network (proxy-only) ---------------------------------------------
 section_net() {
     section "network: proxy-only allow/deny matrix (ticket 6 A.2)"
@@ -807,12 +837,22 @@ section_net() {
         return
     fi
     assert_transport "$slot" "network"
-    # ALLOWED: the bridge-only LiteLLM endpoint, reached via the guest's own
-    # loopback forwarder AND directly at the gateway.
+    # ALLOWED: the LiteLLM endpoint through the guest's own loopback forwarder.
+    # That address is the SAME under both model transports (it is what the
+    # host-provisioned agent configuration points at); only what is behind it
+    # differs (the private bridge, or AF_VSOCK to the per-VM host forwarder).
     check "guest reaches the LiteLLM endpoint via loopback" \
         guest "$slot" curl -fsS -m 10 -o /dev/null "http://127.0.0.1:$LITELLM_PORT/v1/models"
-    check "guest reaches the LiteLLM endpoint on the bridge gateway" \
-        guest "$slot" curl -fsS -m 10 -o /dev/null "http://$GATEWAY:$LITELLM_PORT/v1/models"
+    if ((GUEST_HAS_NETWORK)); then
+        check "guest reaches the LiteLLM endpoint on the bridge gateway" \
+            guest "$slot" curl -fsS -m 10 -o /dev/null "http://$GATEWAY:$LITELLM_PORT/v1/models"
+    else
+        # THE POINT of the vsock transport: there is no bridge address to reach,
+        # because there is no interface. Asserted POSITIVELY (the guest has
+        # nothing but loopback) so the denials further down cannot be mistaken
+        # for firewall enforcement they no longer come from.
+        assert_loopback_only "$slot" "network"
+    fi
 
     # Boot-time model discovery (guest-model-config.nix): the guest must have
     # turned the LIVE /v1/models answer into pi + opencode config, replacing the
@@ -827,10 +867,23 @@ section_net() {
     check_denied "guest cannot reach the cloud-metadata endpoint" "$slot" \
         curl -fsS -m 5 -o /dev/null http://169.254.169.254/
     if tcp_probe_works "$slot"; then
-        check_denied "guest cannot reach host SSH on the gateway" "$slot" \
-            bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/22'"
-        check_denied "guest cannot reach an arbitrary host port (8080)" "$slot" \
-            bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/8080'"
+        if ((GUEST_HAS_NETWORK)); then
+            check_denied "guest cannot reach host SSH on the gateway" "$slot" \
+                bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/22'"
+            check_denied "guest cannot reach an arbitrary host port (8080)" "$slot" \
+                bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/8080'"
+        else
+            # There is no gateway address under the vsock transport. The
+            # equivalent property — the guest cannot reach an arbitrary HOST
+            # port — is proved by the per-VM forwarder being destination-fixed
+            # (asserted at eval, checks.microvm-vsock-transport) plus the two
+            # loopback probes below: the ONLY loopback port that answers is the
+            # model port the forwarder is pinned to.
+            check_denied "guest cannot reach an arbitrary port on its own loopback (8080)" "$slot" \
+                bash -c "timeout 5 bash -c '</dev/tcp/127.0.0.1/8080'"
+            check_denied "guest cannot reach a host SSH port through the model transport" "$slot" \
+                bash -c "timeout 5 bash -c '</dev/tcp/127.0.0.1/22'"
+        fi
         check_denied "guest cannot reach RFC1918 10.0.0.0/8" "$slot" \
             bash -c "timeout 5 bash -c '</dev/tcp/10.0.0.1/80'"
         check_denied "guest cannot reach RFC1918 172.16.0.0/12" "$slot" \
@@ -894,6 +947,20 @@ section_l2() {
     fi
     assert_transport "$slot_a" "layer 2 (guest A)"
     assert_transport "$slot_b" "layer 2 (guest B)"
+    if ((!GUEST_HAS_NETWORK)); then
+        # Under the vsock model transport (lightweight plan phase 6) there is no
+        # shared layer 2 to isolate: neither guest has a TAP, so there is no
+        # bridge port, no ARP, no IPv6 ND and no address to impersonate. Running
+        # the matrix below would report eight VACUOUS passes, so assert the
+        # STRONGER property instead — each guest has nothing but loopback — and
+        # say plainly that the TAP-specific subtests do not apply.
+        assert_loopback_only "$slot_a" "layer 2 (guest A)"
+        assert_loopback_only "$slot_b" "layer 2 (guest B)"
+        skip "the bridge-port isolation, ping/ARP/IPv6-ND and IP-impersonation subtests (the vsock model transport gives the guests no network interface at all, so there is no layer 2 between them to test)"
+        cleanup_task rtv-l2a
+        cleanup_task rtv-l2b
+        return
+    fi
     ip_a="$("$LAUNCHER" status "$slot_a" | awk '/^  ip:/ { print $2 }')"
     ip_b="$("$LAUNCHER" status "$slot_b" | awk '/^  ip:/ { print $2 }')"
     info "guest A=$slot_a ($ip_a)  guest B=$slot_b ($ip_b)"
@@ -2108,6 +2175,20 @@ VSOCK_CAPABLE=0
 TRANSPORT_CAPABLE=0
 SELECTED_CAPABILITIES=""
 DECLARED_CAPABILITIES=""
+# The resolved MODEL TRANSPORT (lightweight plan phase 6, the literal
+# objective), read from the SAME machine-readable answer and for the same
+# fail-closed reason:
+#
+#   tap   - the guest has a network interface on the private bridge; the
+#           allow/deny matrix and the layer-2 section are meaningful as written.
+#   vsock - the guest has NO network interface at all; the model API travels over
+#           AF_VSOCK to a per-VM host forwarder. Every "the guest must NOT be
+#           able to reach X" check is then true because there is nothing to
+#           reach WITH - which is exactly the kind of vacuous pass this suite
+#           exists to prevent, so those sections must assert the ABSENCE of the
+#           interface instead of pretending to test a firewall that is not there.
+NETWORK_TRANSPORT=""
+GUEST_HAS_NETWORK=0
 detect_capabilities() {
     local out line cap
     if ! out="$("$LAUNCHER" capabilities 2>&1)"; then
@@ -2120,12 +2201,26 @@ detect_capabilities() {
         case "$line" in
             "capabilities: "*) SELECTED_CAPABILITIES="${line#capabilities: }" ;;
             "declared: "*) DECLARED_CAPABILITIES="${line#declared: }" ;;
+            "network-transport: "*) NETWORK_TRANSPORT="${line#network-transport: }" ;;
         esac
     done <<<"$out"
     [[ -n $DECLARED_CAPABILITIES ]] ||
         die "\`$LAUNCHER capabilities\` printed no 'declared:' line (got: $out) — refusing to guess what this host supports"
     [[ -n $SELECTED_CAPABILITIES ]] ||
         die "\`$LAUNCHER capabilities\` printed no non-empty 'capabilities:' line (got: $out) — the module rejects an empty selection, so this answer cannot be trusted"
+    # FAIL CLOSED on the transport too: without it the suite cannot know whether
+    # the guest has a network interface, and its network denials would be
+    # unfalsifiable.
+    case "$NETWORK_TRANSPORT" in
+        tap) GUEST_HAS_NETWORK=1 ;;
+        vsock) GUEST_HAS_NETWORK=0 ;;
+        "")
+            die "\`$LAUNCHER capabilities\` printed no 'network-transport:' line (got: $out) — without it the network sections cannot tell an enforced denial from a guest that has no interface at all"
+            ;;
+        *)
+            die "the host under test reports the model transport '$NETWORK_TRANSPORT', which this suite does not know how to gate on — update the transport handling in detect_capabilities"
+            ;;
+    esac
     # Every capability THIS SUITE knows about must be declared by the launcher.
     # A missing token means the suite and the module disagree about what exists
     # (a renamed capability, a suite older than the module), which the gating
@@ -2232,6 +2327,7 @@ info "sections: ${PLAN[*]}"
 # property must say so, never pass it.
 detect_capabilities
 info "capabilities of the host under test: $SELECTED_CAPABILITIES (declared: $DECLARED_CAPABILITIES)"
+info "model transport of the host under test: $NETWORK_TRANSPORT (guest network interface: $((GUEST_HAS_NETWORK)))"
 ENDPOINT_DOWN=0
 SKIPPED_SECTIONS=()
 UNSUPPORTED_SECTIONS=()
