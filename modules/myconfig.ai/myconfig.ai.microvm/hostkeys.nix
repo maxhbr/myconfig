@@ -100,6 +100,13 @@ let
     # mount point) is declared once in ../session.nix — the host keys are just
     # one subdirectory of it, so there is deliberately no virtiofs tag here.
     keyName = "ssh_host_ed25519_key";
+    # The provisioner itself, exported so the EXECUTED launcher harnesses
+    # (tests/microvm-batch-launcher-submit.sh) can PLAY the provisioning unit
+    # with the REAL script instead of stubbing key material into place — which
+    # is what makes the launcher's identity validation / self-healing path
+    # genuinely exercised rather than grep-only. Defined below; the recursive
+    # attrset makes the forward reference legal.
+    provisioner = provisionHostKeys;
     guestMountPoint = session.guestHostkeysDir;
     guestKeyPath = "${guestMountPoint}/${keyName}";
   };

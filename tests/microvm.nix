@@ -4539,6 +4539,12 @@ in
         BWRAP = lib.getExe pkgs.bubblewrap;
         FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
         BASH_BIN = "${pkgs.bash}/bin/bash";
+        # The REAL per-slot host-identity provisioner (hostkeys.nix). The
+        # harness's `systemctl` stub runs THIS on
+        # `start|restart agent-microvm-hostkeys.service`, so the launcher's
+        # pre-launch identity validation is satisfied by genuine key material
+        # produced by the genuine script, never by planted files.
+        PROVISION_HOSTKEYS = lib.getExe hostKeys.provisioner;
         # The EXACT binaries the launcher resolves from its own runtimeInputs;
         # the harness bind-mounts its stubs over these, so the launcher under
         # test stays byte-identical to the installed one.
@@ -5003,6 +5009,16 @@ in
       slotKeyDirs = map (slot: hostKeys.slotDir slot.name) enabledSlots;
       evalMarker = mkEvalCheck "microvm-host-identity-eval" [
         {
+          # The launcher composes a slot's key paths at RUNTIME from three
+          # rendered facts ($HOSTKEYS_ROOT / $HOSTKEYS_SUBDIR / $HOSTKEY_NAME).
+          # That composition must equal hostkeys.nix's own `slotDir` + `keyName`,
+          # or `host_identity_complete` would validate a path nothing writes.
+          assertion = lib.all (
+            slot: hostKeys.slotDir slot.name == "${hostKeys.root}/${slot.name}/${session.roSubdirs.hostkeys}"
+          ) enabledSlots;
+          message = "the launcher's runtime key-path composition must equal hostkeys.nix's slotDir, got ${toString slotKeyDirs}";
+        }
+        {
           assertion = guestSsh.generateHostKeys == false;
           message = "guest must NOT generate its own throwaway host keys (generateHostKeys must be false)";
         }
@@ -5037,8 +5053,65 @@ in
         inherit evalMarker;
         launcherBin = "${hostLauncher}/bin/agent-microvm";
         knownHosts = hostKeys.knownHosts;
+        hostkeysSubdir = session.roSubdirs.hostkeys;
+        hostkeyName = hostKeys.keyName;
       }
       ''
+        # --- the IDENTITY VALIDATION helper --------------------------------
+        # A launch over an SSH-based control transport must not merely TRIGGER
+        # the provisioning unit, it must VALIDATE the slot's actual identity
+        # files: `systemctl start` on an already-active RemainAfterExit oneshot
+        # is a silent no-op, so "the unit ran once" says nothing about whether
+        # the key still exists, is still root-only, or still matches known_hosts.
+        grep -qF -- 'host_identity_complete() {' "$launcherBin" \
+          || { echo "launcher has no host_identity_complete() validator" >&2; exit 1; }
+        grep -qF -- 'host_identity_alias() {' "$launcherBin" \
+          || { echo "launcher has no host_identity_alias() (the transport-dependent known_hosts alias)" >&2; exit 1; }
+        for h in hostkey_dir hostkey_private hostkey_public; do
+          grep -qF -- "$h()" "$launcherBin" \
+            || { echo "launcher has no $h() path helper" >&2; exit 1; }
+        done
+        # The path helpers are composed from the module's OWN facts, not from a
+        # second copy of the layout literals.
+        grep -qF -- "readonly HOSTKEYS_SUBDIR=$hostkeysSubdir" "$launcherBin" \
+          || { echo "launcher does not render the hostkeys subdirectory name from the layout table" >&2; exit 1; }
+        grep -qF -- "readonly HOSTKEY_NAME=$hostkeyName" "$launcherBin" \
+          || { echo "launcher does not render the host-key file name from hostkeys.nix" >&2; exit 1; }
+
+        # CONTENT, not existence: a zero-byte private key, a missing public
+        # key, a group-readable private key and a known_hosts entry that does
+        # not match are ALL rejected. These greps pin each of the five
+        # validation steps, so a future simplification to `[[ -e ]]` fails here.
+        grep -qF -- '[[ -s "$key" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not require a NON-EMPTY private key" >&2; exit 1; }
+        grep -qF -- '[[ -s "$pub" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not require a NON-EMPTY public key" >&2; exit 1; }
+        grep -qF -- '[[ "$meta" == "root:root 400" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not require the private key to be root:root 0400" >&2; exit 1; }
+        grep -qF -- '[[ "$meta" == "root:root 444" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not require the public key to be root:root 0444" >&2; exit 1; }
+        grep -qF -- 'ssh-keygen -F "$alias" -f "$KNOWN_HOSTS"' "$launcherBin" \
+          || { echo "the validator does not look the slot up with ssh-keygen -F (ssh's own matcher)" >&2; exit 1; }
+        grep -qF -- '[[ "$recorded" == "$expected" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not compare the known_hosts entry against the public key" >&2; exit 1; }
+        # A CONFLICT (two entries for the same alias) must be rejected, not
+        # silently accepted: ssh would refuse such a known_hosts anyway.
+        grep -qF -- '| wc -l)" -eq 1 ]] || return 1' "$launcherBin" \
+          || { echo "the validator accepts CONFLICTING known_hosts entries for one alias" >&2; exit 1; }
+        # The alias is TRANSPORT-DEPENDENT and decided by the SAME predicate
+        # every ssh call site uses, so the validation cannot pass on an entry no
+        # connection consults.
+        grep -qF -- 'vsock-mux/$STATE_ROOT/$1/notify.vsock' "$launcherBin" \
+          || { echo "the alias helper does not use the VSOCK mux path for the VSOCK transport" >&2; exit 1; }
+        # NO private-key material may ever be read into a variable or logged:
+        # the private key is only ever inspected through `[[ -s ]]` and `stat`.
+        if grep -nE 'cat .*\$key"|ssh-keygen -y|\$\(< *"\$key"' "$launcherBin" | grep -v '^[0-9]*: *#'; then
+          echo "the launcher reads private-key material" >&2; exit 1
+        fi
+        # A launch whose identity is incomplete must FAIL CLOSED.
+        grep -qF -- 'refusing to launch an unverifiable guest' "$launcherBin" \
+          || { echo "the launcher does not fail closed on an incomplete host identity" >&2; exit 1; }
+
         grep -q "StrictHostKeyChecking=yes" "$launcherBin" \
           || { echo "launcher does not use StrictHostKeyChecking=yes" >&2; exit 1; }
         grep -q "UserKnownHostsFile=\"\$KNOWN_HOSTS\"" "$launcherBin" \

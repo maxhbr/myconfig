@@ -14,6 +14,10 @@
 #   * with `systemctl`, `mount`, `umount` and `findmnt` STUBBED by bind-mounting
 #     scripts over the exact store paths the launcher resolves — so the script
 #     under test is byte-identical to the installed one;
+#   * where the `systemctl start|restart agent-microvm-hostkeys.service` stub
+#     PLAYS THE PROVISIONING UNIT with the REAL provisioner from hostkeys.nix,
+#     so the launcher's pre-launch host-identity validation (and its
+#     self-healing restart) is satisfied by genuine key material or not at all;
 #   * where the `systemctl start microvm@<slot>` stub PLAYS THE GUEST: it records
 #     the effective ownership/modes of the job share the launcher just laid out,
 #     and then plants whatever "result" the scenario asks for (a genuine
@@ -32,7 +36,8 @@ for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET MOUNT_TARGET \
     UMOUNT_TARGET FINDMNT_TARGET JQ_TARGET CURL_TARGET RUNTIME_ROOT STATE_ROOT \
     JOBS_ROOT WORKSPACE_SUBDIR HOST_HOME INPUT_SUBDIR \
     CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR WORKER_STDERR_NAME SPEC_NAME PROMPT_NAME \
-    RESULT_NAME SPEC_VERSION CONTROLLER_VERSION AGENT WORKER_UID; do
+    RESULT_NAME SPEC_VERSION CONTROLLER_VERSION AGENT WORKER_UID \
+    PROVISION_HOSTKEYS; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
@@ -215,7 +220,7 @@ case "\$1" in
         fi
         exit 3
         ;;
-    start)
+    start | restart)
         for a in "\$@"; do
             case "\$a" in
                 microvm@*.service)
@@ -223,6 +228,15 @@ case "\$1" in
                     : > "\$active"
                     rm -f "\$calls"
                     plant "\$slot"
+                    ;;
+                agent-microvm-hostkeys.service)
+                    # PLAY the provisioning unit with the REAL provisioner
+                    # (hostkeys.nix), not a stub: the launcher validates the
+                    # slot's actual key files + known_hosts entry before it
+                    # boots anything, so the only way this harness can reach
+                    # 'systemctl start microvm@SLOT' is if the genuine
+                    # provisioner produced a genuine, consistent identity.
+                    "$PROVISION_HOSTKEYS" || exit 1
                     ;;
             esac
         done
