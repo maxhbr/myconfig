@@ -561,7 +561,11 @@ was never used).
   it, so a mismatch fails CLOSED (a connection that cannot be verified aborts
   rather than accepting a key), and the out-of-CI real-KVM tier is what would
   prove the round trip. This is the same tier split phase 5's `seed` enforcement
-  and phase 0's benchmark use.
+  and phase 0's benchmark use. The PROOF EVENT is therefore the first real-KVM
+  run of `--section creds` and `--section boot` on a `batch`+`vsock` host: those
+  sections drive the VSOCK `ssh` round trip (host-key verification + command
+  exec), so a green run there is the runtime confirmation the structural
+  assertion cannot give from CI.
 - **Phase 6, the config-seed is NOT ordered before `sshd-vsock.socket`**. The
   guest's `agent-config-seed` oneshot is `before = [ "sshd.service"
   "agent-job-controller.service" ... ]`; adding `sshd-vsock.socket` to that list
@@ -1389,8 +1393,9 @@ The host listener must validate the expected guest CID or use one listener per s
   AGENTS.md evaluated-slice snapshot/diff.
 - A batch+vsock guest sets `microvm.vsock.cid = <slot.cid>`, enables
   `services.openssh`, declares the `sshd-vsock` socket, SUPPRESSES the TCP
-  `sshd.service` (`systemd.services.sshd.enable = false`), provisions the
-  per-slot host key + the VSOCK `known_hosts` entry, and authorises the
+  `sshd.service` (`systemd.services.sshd.enable = false`) AND closes its TAP
+  firewall opening for 22 (`services.openssh.openFirewall = false`), provisions
+  the per-slot host key + the VSOCK `known_hosts` entry, and authorises the
   dedicated key — all asserted from the EVALUATED config and the BUILT guest
   closure/runner/launcher.
 - `vsock` is rejected without an `sshPublicKeyFile`, and with
