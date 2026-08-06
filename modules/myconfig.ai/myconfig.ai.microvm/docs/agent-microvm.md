@@ -282,7 +282,12 @@ their output) over AF_VSOCK instead of the TAP, so a guest with no TCP sshd
 (batch+vsock) can still be driven. It reuses the per-slot SSH host identity, so
 the channel is host-key-verified exactly like the TAP one. The two coexist on a
 host that selects both `interactive` and `vsock` (TAP for the model API and for
-`ssh` when the TCP sshd is up; VSOCK as a second control channel).
+`ssh` when the TCP sshd is up; VSOCK as a second control channel). The launcher
+reaches the guest's VSOCK sshd as `ssh vsock-mux/<stateRoot>/<slot>/notify.vsock`,
+a hostname that resolves only through the `Host vsock-mux/*` ProxyCommand
+nixpkgs' `programs.ssh.systemd-ssh-proxy.enable` (default true) supplies; this
+module **asserts** that option is enabled whenever `vsock` is selected, so a
+host that disables it fails at evaluation rather than at runtime.
 
 Stale directories from a PREVIOUS capability selection are handled, not ignored:
 the launcher sweeps every top-level entry of a slot's two trees that the current

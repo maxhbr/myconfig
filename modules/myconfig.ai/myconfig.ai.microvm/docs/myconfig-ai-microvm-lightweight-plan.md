@@ -532,6 +532,16 @@ was never used).
   `environment.requiredPackages` still puts the openssh BINARIES in the closure
   (load-bearing for a bootable system), exactly as phase 5 recorded for the
   batch-only-without-vsock case.
+- **Phase 6, the host-side `programs.ssh.systemd-ssh-proxy` dependency is
+  asserted at eval**. The launcher's VSOCK `ssh` / readiness poll / `status`
+  connect as `ssh vsock-mux/<stateRoot>/<slot>/notify.vsock`, a hostname that
+  only resolves because nixpkgs' `programs.ssh.systemd-ssh-proxy.enable` (default
+  true) includes `20-systemd-ssh-proxy.conf`, which supplies the `Host vsock-mux/*`
+  ProxyCommand (systemd-ssh-proxy -> the guest's vsock::22). A host that selects
+  `vsock` AND sets `programs.ssh.systemd-ssh-proxy.enable = false` would get a
+  confusing runtime DNS-resolution failure of the control channel; this is now
+  rejected at evaluation with a pinned message naming the missing dependency
+  (satisfied by the nixpkgs default on every host today, including f13).
 - **Phase 6, the VSOCK `known_hosts` matching is asserted structurally, not
   runtime-verified**. The launcher's VSOCK `ssh` runs with
   `StrictHostKeyChecking=yes` against a `known_hosts` entry keyed by
