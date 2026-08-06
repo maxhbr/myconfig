@@ -343,7 +343,9 @@ let
       # SAME endpoint environment the interactive login shell gets, so pi/codex/
       # hermes batch workers can actually reach the loopback forwarder. The
       # `creds` section of runtime-validation.sh asserts BOTH halves carry these
-      # (and the negative controls stay absent). Placeholder keys only (§17).
+      # (and the negative controls stay absent) — on a host that selects `batch`;
+      # on one that does not, that subtest reports the missing capability instead
+      # of inspecting a unit that does not exist. Placeholder keys only (§17).
       # EMPTY without the `batch` capability — ../job.nix decides whether a
       # worker unit exists at all, so this cannot define one behind its back.
       (agentJobs.mkWorkerEnvironmentModule modelEndpointEnv)

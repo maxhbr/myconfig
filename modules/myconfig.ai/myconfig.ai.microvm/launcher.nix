@@ -167,12 +167,29 @@ let
   # They are refused with an actionable message that names the option instead
   # of failing somewhere inside `prepare_job` or against a missing sshd.
   #
-  # Rendered ONLY on a host that actually lacks a capability: on a host with
-  # both there is nothing to refuse, so the guard would be unreachable code
-  # (and the launcher derivation of such a host is unchanged by this phase).
-  # This is the same "emit it only where it can fire" rule ../job.nix applies to
-  # its `promptUnusedSuppression`, not a second launcher shape.
+  # The capability SET itself is rendered UNCONDITIONALLY (see
+  # `capabilityConfig` below and the `capabilities` subcommand): every host can
+  # be ASKED what it selects, in a machine-readable form. That is what lets
+  # ../runtime-validation.sh decide which sections can run without parsing an
+  # English refusal message — a detection that failed OPEN (defaulting to "has
+  # everything") the moment such a message was reworded, which is exactly the
+  # vacuous-pass class the capability dispatch exists to remove.
+  #
+  # Only the REFUSAL is rendered conditionally: on a host with both capabilities
+  # there is nothing to refuse, so the guard would be unreachable code. This is
+  # the same "emit it only where it can fire" rule ../job.nix applies to its
+  # `promptUnusedSuppression`, not a second launcher shape.
   missingCapabilities = lib.filter (c: !agentCapabilities.${c}) agentCapabilities.declared;
+  # Spliced into the CONFIGURATION section, on every host.
+  capabilityConfig = mkFragment "      " ''
+    # ---- the capability set (lightweight plan phase 5) ------------------
+    # WHICH execution capabilities this host's guests carry
+    # (`myconfig.ai.microvm.capabilities`). Rendered on EVERY host, including
+    # one that selects everything, so `agent-microvm capabilities` can always
+    # answer the question and no consumer has to infer the answer from an
+    # error message.
+    readonly SELECTED_CAPABILITIES=${lib.escapeShellArg (lib.concatStringsSep " " agentCapabilities.selected)}
+    readonly DECLARED_CAPABILITIES=${lib.escapeShellArg (lib.concatStringsSep " " agentCapabilities.declared)}'';
   capabilityHelpers = lib.optionalString (missingCapabilities != [ ]) (
     mkFragment "      " ''
       # ---- capability gating (lightweight plan phase 5) -------------------
@@ -180,7 +197,7 @@ let
       # The subcommands of the missing capability (${lib.concatStringsSep ", " missingCapabilities})
       # are refused below, because their guest-side machinery is ABSENT from
       # this host's guests, not merely disabled.
-      readonly SELECTED_CAPABILITIES=${lib.escapeShellArg (lib.concatStringsSep " " agentCapabilities.selected)}
+      #
       # A MEMBERSHIP test against the rendered set rather than an unconditional
       # `die`: the refusal is data-driven (so it cannot disagree with the set the
       # rest of the module was built from) and the subcommand body stays
@@ -293,13 +310,67 @@ let
     session_dir()    { printf '%s' "$SESSION_ROOT/$1"; }
     session_ro_dir() { printf '%s' "$SESSION_RO_ROOT/$1"; }
 
+    # Remove every top-level entry of a tree the layout table does NOT declare
+    # for this host. Two things produce such entries: a generation that selected
+    # a capability this one does not (`myconfig.ai.microvm.capabilities`,
+    # lightweight plan phase 5 — nothing sweeps the batch subdirectories at boot,
+    # so an unclean shutdown followed by a narrowing rebuild leaves them behind),
+    # and an operator who put something into the tree by hand. Either way they
+    # would sit inside the ONE writable share, exported to the untrusted guest,
+    # with no rule of the table covering their owner or mode.
+    #
+    # A mount anywhere underneath is a hard STOP, never a removal: the two binds
+    # this module creates are table entries (so they are never candidates here),
+    # and `rm -rf` through some other mount would destroy data outside the tree.
+    # The generated pre-launch verifier refuses the launch on any entry that
+    # survives this, so a failed sweep cannot silently export one.
+    session_sweep_extras() {
+        local dir="$1" label="$2"
+        shift 2
+        local name known allowed rc=0
+        [[ -d "$dir" ]] || return 0
+        while IFS= read -r name; do
+            known=0
+            for allowed in "$@"; do
+                [[ "$name" == "$allowed" ]] && known=1
+            done
+            (( known )) && continue
+            if ! session_subtree_unmounted "$dir/$name"; then
+                log "ERROR: refusing to remove the undeclared $label entry $dir/$name while a mount survives under it"
+                rc=1
+                continue
+            fi
+            log "removing the undeclared $label entry $dir/$name (not part of this host's capability set: $SELECTED_CAPABILITIES)"
+            # `:?` on BOTH components (shellcheck SC2115, and the property it is
+            # about): an empty `$dir` or `$name` must abort instead of expanding
+            # to `/` or to the tree root itself.
+            rm -rf -- "''${dir:?}/''${name:?}" || {
+                log "ERROR: could not remove the undeclared $label entry $dir/$name"
+                rc=1
+            }
+        done < <(find "$dir" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null || true)
+        return "$rc"
+    }
+
     # Create (or RESET) the per-session tree with the exact ownership and modes
     # the trust split needs, before anything is staged into it.
     prepare_session() {
         local slot="$1" dir
         dir="$(session_dir "$slot")"
+        session_sweep_extras "$dir" "session tree" ${
+          lib.concatMapStringsSep " " (e: lib.escapeShellArg e.rel) (
+            lib.filter (e: e.rel != "") agentSession.layout
+          )
+        } \
+            || { log "ERROR: could not sweep the session tree of slot $slot"; return 1; }
         ${lib.concatMapStringsSep "\n    " (sessionInstallLine "the session") agentSession.layout}
         dir="$(session_ro_dir "$slot")"
+        session_sweep_extras "$dir" "read-only session tree" ${
+          lib.concatMapStringsSep " " (e: lib.escapeShellArg e.rel) (
+            lib.filter (e: e.rel != "") agentSession.roLayout
+          )
+        } \
+            || { log "ERROR: could not sweep the read-only session tree of slot $slot"; return 1; }
         ${lib.concatMapStringsSep "\n    " (sessionInstallLine "the read-only session")
           agentSession.roLayout
         }
@@ -438,10 +509,25 @@ let
   # launch if the owner is wrong.
   stateSlotInstallGuard = ''[[ -d "$mp" ]] || '';
 
-  # `usage`' "job data" line. The per-slot job directory contains the workspace
-  # and agent-state BIND MOUNTS, which `du` descends into, so the figure is
-  # computed by a helper that excludes them.
-  jobDataUsageLine = ''printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(session_job_data_bytes)")"'';
+  # The BATCH lines of the retained-usage report. The "job data" figure is
+  # computed by a helper (`session_job_data_bytes`) rather than a plain `du`,
+  # because the per-slot session directory contains the workspace and
+  # agent-state BIND MOUNTS, which `du` would descend into and double-count.
+  #
+  # On a host without the `batch`
+  # capability there is no result archive and no batch subdirectory in any session
+  # tree (../session.nix's table creates none), so reporting `0B` for
+  # `$RESULTS_DIR` would claim a directory that cannot exist — the same
+  # "reports something absent" pattern the honest `doctor` host-key section
+  # removed. The capability is reported instead.
+  jobUsageLines = mkFragment "          " (
+    if agentCapabilities.batch then
+      ''
+        printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(session_job_data_bytes)")"
+        printf '  job results:   %s (%s)\n' "$RESULTS_DIR" "$(human "$(dir_bytes "$RESULTS_DIR")")"''
+    else
+      ''printf '  job data:      none: this host does not select the "batch" capability (myconfig.ai.microvm.capabilities = [ %s ])\n' "$SELECTED_CAPABILITIES"''
+  );
 
   # ... and one in the teardown, so nothing staged survives the session.
   configSeedClear = mkFragment "          " ''clear_config_seed "$slot" || true'';
@@ -456,6 +542,7 @@ let
     runtimeInputs = with pkgs; [
       coreutils
       util-linux # flock, mount, umount, findmnt
+      findutils # find — the session-tree sweep (`session_sweep_extras`)
       git
       jq
       openssh
@@ -641,7 +728,7 @@ let
           )
         )
       })
-      ${sessionConfig}# ---- structured lifecycle logs (ticket 6 B) ------------------------
+      ${sessionConfig}${capabilityConfig}# ---- structured lifecycle logs (ticket 6 B) ------------------------
       readonly LOGS_DIR="$RUNTIME_ROOT/logs"
       readonly LOG_MAX_BYTES=${toString cfg.taskLogMaxBytes}
       readonly RUN_DIR="/run/agent-microvms"
@@ -1706,6 +1793,12 @@ let
                               and per-slot host keys). Exits non-zero if any
                               component is broken; run it when run/submit
                               fails the endpoint preflight.
+        capabilities          Print the execution capabilities of this host's
+                              guests, machine-readably
+                              ('capabilities: <selected>' plus a 'declared:'
+                              line). Needs no root and starts nothing; it is how
+                              tooling (runtime-validation.sh) decides what can be
+                              exercised here.
         list                  One-line status for every slot.
         ssh <slot|task> [--] [cmd...]   SSH into the guest 'agent' user.
         console <slot|task>   Attach to the VM serial console (journal).
@@ -2705,9 +2798,7 @@ let
           printf '\nruntime:\n'
           printf '  workspaces:    %s (%s)\n' "$WORKSPACE_ROOT" "$(human "$(dir_bytes "$WORKSPACE_ROOT")")"
           printf '  agent state:   %s (%s)\n' "$STATE_TASKS_ROOT" "$(human "$(dir_bytes "$STATE_TASKS_ROOT")")"
-          ${jobDataUsageLine}
-          printf '  job results:   %s (%s)\n' "$RESULTS_DIR" "$(human "$(dir_bytes "$RESULTS_DIR")")"
-          printf '\nremove a retained workspace (and its task state) with:\n'
+          ${jobUsageLines}printf '\nremove a retained workspace (and its task state) with:\n'
           printf '  %s workspace-remove <task>\n' "$PROG"
       }
 
@@ -2852,6 +2943,25 @@ let
           done
       }
 
+      # ==== the capability set, machine-readably (plan phase 5) =============
+      # The ONE way to ASK a host what its guests can do. Rendered on every host
+      # (the capability set is unconditional configuration, see
+      # SELECTED_CAPABILITIES) and deliberately:
+      #   * unprivileged — no `require_root`; it reads no runtime state at all,
+      #     so tooling can query it before deciding whether to become root;
+      #   * side-effect free — it starts, stops and allocates nothing;
+      #   * STABLE and machine-readable — `capabilities: <space-separated>` on
+      #     stdout. ../runtime-validation.sh parses exactly this line and
+      #     HARD-ABORTS if it cannot, instead of inferring the set from a refusal
+      #     message (which would fail OPEN when the message is reworded).
+      # `declared:` is printed too, so a tool can tell "this capability is not
+      # selected" from "this launcher predates that capability".
+      cmd_capabilities() {
+          [[ $# -eq 0 ]] || die "capabilities: takes no arguments"
+          printf 'capabilities: %s\n' "$SELECTED_CAPABILITIES"
+          printf 'declared: %s\n' "$DECLARED_CAPABILITIES"
+      }
+
       cmd_ssh() {
           ${sshCapability}[[ "$SSH_ENABLED" == "1" ]] || die "ssh: enableSsh is false"
           [[ $# -ge 1 ]] || die "ssh: <slot|task> required"
@@ -2874,6 +2984,12 @@ let
               -t "$SSH_USER@$ip" "$@"
       }
 
+      # DELIBERATELY NOT capability-gated (unlike `run`/`ssh`, which need
+      # `interactive`, and `submit`/`cancel`, which need `batch`): the serial
+      # console is the journal of the HOST's `microvm@<slot>` unit, so it exists
+      # for every guest and needs nothing inside it. It is the only way to debug a
+      # batch-only guest — which has no sshd at all — so gating it would remove
+      # the last observation channel from the narrowing that needs it most.
       cmd_console() {
           [[ $# -ge 1 ]] || die "console: <slot|task> required"
           local slot
@@ -3105,6 +3221,7 @@ let
               destroy)          cmd_destroy "$@" ;;
               status)           cmd_status "$@" ;;
               doctor)           cmd_doctor "$@" ;;
+              capabilities)     cmd_capabilities "$@" ;;
               list)             cmd_list "$@" ;;
               ssh)              cmd_ssh "$@" ;;
               console)          cmd_console "$@" ;;

@@ -52,6 +52,20 @@
 # `prepare_session`, the guest mounts and tests/microvm.nix are all rendered
 # from the same filtered table.
 #
+# Two rules keep the narrowing from WEAKENING anything:
+#
+#   * the trust POLICY (`violationsOf`) and `modeOf`/`roModeOf` read the FULL
+#     tables, so a weakening edit to an entry this host does not create still
+#     fails evaluation, and a consumer may ask "what mode does `controller/`
+#     have" without knowing this host's selection;
+#   * the generated verifier additionally refuses any top-level entry the
+#     FILTERED table does not declare. Narrowing stops creating (and verifying)
+#     the other capability's subdirectories, but nothing removes the ones a
+#     previous generation created — a leftover root-owned `input/` would
+#     otherwise sit in the ONE writable share, exported to the guest, with no
+#     rule covering it. The launcher's `prepare_session` sweeps them before every
+#     launch; the verifier is the fail-closed half of that pair.
+#
 # WHY THE READ-ONLY TREE IS SEPARATE (deviation from the plan's sketch)
 # ---------------------------------------------------------------------
 # The plan's target tree puts `config-seed/` INSIDE the writable session share
@@ -149,10 +163,24 @@ let
   # mapping exists exactly once and every consumer (the host tmpfiles rules, the
   # pre-launch verifier and the launcher's tree preparation) uses the same
   # numbers.
-  # `capabilities` is the PER-MODE part of the table (lightweight plan phase 5):
-  # the entry exists iff the host selected at least one of the capabilities that
-  # need it. `bothCapabilities` therefore means "always" — no host can select
-  # neither (default.nix asserts a non-empty set).
+  # `capabilities` is the PER-CAPABILITY part of the table (lightweight plan
+  # phase 5):
+  #
+  #   * `null`      — UNCONDITIONAL: the entry is part of every guest, whatever
+  #                   the host selects. Spelled as its own value rather than as
+  #                   "the list of all declared capabilities", because those two
+  #                   are only the same thing while exactly two tokens exist: a
+  #                   third token (a phase-6 `vsock`, say) added to a list that
+  #                   was meant to say "interactive AND batch need this" would
+  #                   silently start giving the entry to a vsock-only host too.
+  #   * a LIST      — the entry exists iff the host selected at least ONE of the
+  #                   listed capabilities. Strictly ENUMERATIVE: it never refers
+  #                   to `agentCapabilities.declared`, so adding a capability
+  #                   cannot change the meaning of an existing entry.
+  #
+  # An empty list would mean "no host ever creates this", i.e. dead table data;
+  # the assertion at the bottom of this file rejects it, together with an unknown
+  # token in a list.
   rawLayout = [
     {
       rel = "";
@@ -160,7 +188,7 @@ let
       mode = "0755";
       strictMode = true;
       private = false;
-      capabilities = bothCapabilities;
+      capabilities = null;
       purpose = "the session root (root-owned, so the guest agent cannot rename or shadow anything below it)";
     }
     {
@@ -169,7 +197,7 @@ let
       mode = "0755";
       strictMode = false;
       private = false;
-      capabilities = bothCapabilities;
+      capabilities = null;
       purpose = "the standalone clone, bind-mounted by the launcher and surfaced as /workspace in the guest";
     }
     {
@@ -214,7 +242,7 @@ let
       mode = "0755";
       strictMode = false;
       private = false;
-      capabilities = bothCapabilities;
+      capabilities = null;
       purpose = "the opt-in, task-scoped agent state, bind-mounted by the launcher";
     }
   ];
@@ -226,7 +254,7 @@ let
       mode = roRootMode;
       strictMode = true;
       private = true;
-      capabilities = bothCapabilities;
+      capabilities = null;
       purpose = "the read-only tree of the slot (host identity + staged configuration)";
     }
     {
@@ -244,16 +272,24 @@ let
       mode = "0500";
       strictMode = true;
       private = true;
-      capabilities = bothCapabilities;
+      capabilities = null;
       purpose = "the staged, allowlisted host agent configuration (payload of ./config-seed.nix)";
     }
   ];
 
-  bothCapabilities = agentCapabilities.declared;
-  # THE per-mode filter, applied exactly once per tree.
+  # THE per-capability filter, applied exactly once per tree.
   selectedByCapability = lib.filter (
-    e: lib.any (c: lib.elem c agentCapabilities.selected) e.capabilities
+    e: e.capabilities == null || lib.any (c: lib.elem c agentCapabilities.selected) e.capabilities
   );
+  # Table HYGIENE, checked by an assertion below rather than trusted: an entry
+  # with an empty capability list is dead data (no host would ever create it) and
+  # one naming an undeclared token is a typo that would silently drop a
+  # directory — including its trust-relevant owner/mode — from every host.
+  malformedCapabilityEntries = lib.filter (
+    e:
+    e.capabilities != null
+    && (e.capabilities == [ ] || lib.any (c: !(lib.elem c agentCapabilities.declared)) e.capabilities)
+  ) (rawLayout ++ rawRoLayout);
 
   withIds = map (
     e:
@@ -463,6 +499,15 @@ let
       readonly SESSION_ROOT=${lib.escapeShellArg root}
       readonly SESSION_RO_ROOT=${lib.escapeShellArg roRoot}
       readonly SLOTS=(${lib.concatMapStringsSep " " (s: lib.escapeShellArg s.name) slots})
+      # The top-level entries the FILTERED table declares for this host, i.e.
+      # everything that may legitimately exist directly inside a slot's two
+      # trees. Anything else is refused below.
+      readonly SESSION_ENTRIES=(${
+        lib.concatMapStringsSep " " (e: lib.escapeShellArg e.rel) (lib.filter (e: e.rel != "") layout)
+      })
+      readonly SESSION_RO_ENTRIES=(${
+        lib.concatMapStringsSep " " (e: lib.escapeShellArg e.rel) (lib.filter (e: e.rel != "") roLayout)
+      })
 
       PROG="agent-microvm-verify-session"
       die() { printf '%s: REFUSING TO LAUNCH: %s\n' "$PROG" "$*" >&2; exit 1; }
@@ -559,6 +604,34 @@ let
           lib.escapeShellArg (if e.strictMode then lib.removePrefix "0" e.mode else "")
         } ${if e.private then "1" else "0"}"
       ) roLayout}
+
+      # --- NOTHING the table does not declare may be in either tree ---------
+      # The per-directory checks above verify every declared entry, which alone
+      # says nothing about UNDECLARED ones. That gap is not theoretical: a host
+      # that narrows `myconfig.ai.microvm.capabilities` (lightweight plan phase 5)
+      # stops creating — and stops verifying — the other capability's
+      # subdirectories, while the ones a previous generation created are still
+      # there after an unclean shutdown (nothing sweeps them at boot). A leftover
+      # root-owned `input/` or `worker-logs/` would then sit inside the ONE
+      # writable share, exported to the guest, with no rule covering it at all.
+      # The launcher's `prepare_session` sweeps such entries before every launch;
+      # this is the FAIL-CLOSED half of that, so a sweep that did not happen
+      # refuses the launch instead of exporting an unverified directory.
+      assert_no_extras() {
+          local dir="$1" label="$2"
+          shift 2
+          local name known allowed
+          while IFS= read -r name; do
+              known=0
+              for allowed in "$@"; do
+                  [[ "$name" == "$allowed" ]] && known=1
+              done
+              (( known )) || die "$label contains '$name', which the session layout table does not declare for this host (a stale entry from a previous myconfig.ai.microvm.capabilities selection, or an operator leftover): $dir/$name"
+          done < <(find "$dir" -mindepth 1 -maxdepth 1 -printf '%f\n')
+      }
+
+      assert_no_extras "$SESSION_DIR" "the session tree" "''${SESSION_ENTRIES[@]}"
+      assert_no_extras "$SESSION_RO_DIR" "the read-only session tree" "''${SESSION_RO_ENTRIES[@]}"
 
       # --- the SSH private host key never enters the writable tree ----------
       # Structural enforcement of the plan's own rule ("Keep SSH private host
@@ -666,6 +739,22 @@ in
                 hostKeyDir = paths.hostHostkeysDir (lib.head slots).name;
                 configSeedDir = paths.hostConfigSeedDir (lib.head slots).name;
               })
+            )}
+          '';
+        }
+        {
+          # Table hygiene (see `malformedCapabilityEntries`): an empty capability
+          # list or an undeclared token would silently remove a directory (and
+          # its trust-relevant owner/mode) from EVERY host.
+          assertion = malformedCapabilityEntries == [ ];
+          message = ''
+            myconfig.ai.microvm.session: malformed `capabilities` in the layout
+            table (use `null` for "every host", or a non-empty list of declared
+            capabilities — ${lib.concatStringsSep ", " agentCapabilities.declared}):
+            ${lib.concatStringsSep "\n" (
+              map (
+                e: "  - entry '${e.rel}': [ ${lib.concatStringsSep " " e.capabilities} ]"
+              ) malformedCapabilityEntries
             )}
           '';
         }
