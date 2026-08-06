@@ -17,26 +17,13 @@ PODMAN_RUNTIME="${AGENT_PODMAN_RUNTIME:-${AGENT_SANDBOX_DEFAULT_RUNTIME:-runsc}}
 #     write, so tell it to ignore cgroups entirely.
 #
 # Consequence: rootless sandboxes are NOT resource limited. See limits_note().
-#
-# runsc --network defaults to "sandbox", which scrapes every interface in
-# the sandbox netns, removes its addresses (to move them into gVisor's own
-# netstack), and opens AF_PACKET sockets on them.  That fails on hosts with a
-# point-to-point interface such as an OpenVPN/WireGuard `tun0`: the address
-# `10.x.x.x peer 10.x.x.x/32` cannot be deleted as a plain `/32`, so `runsc
-# start` aborts with EADDRNOTAVAIL before the container is even started.  The
-# isRootNetNS() guard that should catch the host netns is unreliable inside a
-# user namespace, so runsc happily tries to process `tun0`.
-#
-# "host" sidesteps all of that: runsc forwards network syscalls to the kernel
-# (which uses the netns Podman+pasta already set up), and skips the
-# scrape/remove/socket step entirely.  Override with AGENT_PODMAN_RUNTIME_FLAGS.
 # Both variables can be overridden, including to the empty string.
 if (( EUID == 0 )); then
   CGROUP_MANAGER="${AGENT_PODMAN_CGROUP_MANAGER-}"
   read -r -a PODMAN_RUNTIME_FLAGS <<<"${AGENT_PODMAN_RUNTIME_FLAGS-}"
 else
   CGROUP_MANAGER="${AGENT_PODMAN_CGROUP_MANAGER-cgroupfs}"
-  read -r -a PODMAN_RUNTIME_FLAGS <<<"${AGENT_PODMAN_RUNTIME_FLAGS-ignore-cgroups network=host}"
+  read -r -a PODMAN_RUNTIME_FLAGS <<<"${AGENT_PODMAN_RUNTIME_FLAGS-ignore-cgroups}"
 fi
 # AGENT_SANDBOX_DEFAULT_IMAGE is baked in by the Nix package and points at the
 # image built from this flake. AGENT_SANDBOX_IMAGE overrides it at runtime.
@@ -97,12 +84,7 @@ environment:
   AGENT_SANDBOX_IMAGE           Override the default image
   AGENT_PODMAN_RUNTIME          Runtime name or absolute path (default: runsc)
   AGENT_PODMAN_CGROUP_MANAGER   Podman cgroup manager (default: cgroupfs)
-  AGENT_PODMAN_RUNTIME_FLAGS    Extra runsc flags (default for rootless:
-                                "ignore-cgroups network=host"); the
-                                network=host flag tells runsc to let the
-                                kernel handle networking instead of scraping
-                                interfaces for its own netstack — see
-                                docs/debug-runsc-tun0-netns.md for why.
+  AGENT_PODMAN_RUNTIME_FLAGS    Extra runsc flags, e.g. "ignore-cgroups"
   AGENT_SANDBOX_STATE           State directory
   AGENT_SANDBOX_HOME_SEED       Directory to seed /home/agent from (default:
                                 the activated home-manager generation's
@@ -733,10 +715,6 @@ cmd_doctor() {
       printf '    needs the system bus; set AGENT_PODMAN_CGROUP_MANAGER=cgroupfs\n'
       printf '  - "cannot set up cgroup for root": runsc cannot write the root\n'
       printf '    cgroup; set AGENT_PODMAN_RUNTIME_FLAGS=ignore-cgroups\n'
-      printf '  - "removing address ... from device tun0: cannot assign requested\n'
-      printf '    address": runsc --network=sandbox cannot scrape a point-to-point\n'
-      printf '    VPN interface; network=host is the default, check that\n'
-      printf '    AGENT_PODMAN_RUNTIME_FLAGS still contains it\n'
       printf '  - unprivileged user namespaces disabled, or missing\n'
       printf '    /etc/subuid and /etc/subgid ranges for this user'
     )"
