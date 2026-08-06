@@ -92,6 +92,14 @@ let
     }
     // lib.optionalAttrs (cfg.defaultCommand != null) {
       AGENT_SANDBOX_DEFAULT_COMMAND = cfg.defaultCommand;
+    }
+    // lib.optionalAttrs (cfg.runscNetwork != "sandbox") {
+      # `--set-default` only applies when the user has NOT exported the
+      # variable, so a user who needs a different value can still override it.
+      # The script's own default for rootless is "ignore-cgroups network=host",
+      # so this is belt-and-braces; it also keeps the runsc network mode
+      # visible in the evaluated NixOS config.
+      AGENT_PODMAN_RUNTIME_FLAGS = "ignore-cgroups network=${cfg.runscNetwork}";
     };
 
   withSessionEnv =
@@ -258,6 +266,32 @@ in
       description = ''
         Users that launch sessions. They get subordinate UID/GID ranges,
         which rootless Podman requires.
+      '';
+    };
+
+    runscNetwork = mkOption {
+      type = types.enum [
+        "sandbox"
+        "host"
+        "none"
+      ];
+      default = "host";
+      description = ''
+        runsc `--network` mode forwarded to gVisor via the
+        `AGENT_PODMAN_RUNTIME_FLAGS` environment variable.
+
+        The default `host` makes runsc forward network syscalls to the kernel
+        (which uses the netns Podman + pasta already set up) instead of
+        scraping interfaces for its own netstack.  `sandbox` (the runsc
+        upstream default) fails on hosts with a point-to-point VPN interface
+        such as an OpenVPN/WireGuard `tun0`: runsc tries to remove the
+        interface's address and aborts with EADDRNOTAVAIL because the /32
+        peer address cannot be deleted as written.  See
+        `docs/debug-runsc-tun0-netns.md` for the full diagnosis.
+
+        Set to `sandbox` only on hosts without such interfaces AND with a
+        kernel that grants the capabilities runsc's netstack needs in the
+        rootless user namespace.
       '';
     };
   };
