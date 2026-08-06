@@ -58,6 +58,11 @@ sudo agent-microvm --help   # commands, supported agents, resource classes
 
 Supported agents: `claude`, `codex`, `pi`, `opencode`, `hermes`.
 
+This journey assumes a host with BOTH execution capabilities (the default). If a
+step is refused with `'submit' needs the 'batch' capability` (or
+`'run' needs the 'interactive' capability`), the host deliberately selects only
+one of them — see [Capabilities](./agent-microvm.md#capabilities).
+
 ## 1. Interactive: hand a task to an agent
 
 The normal route is **workmux**, which owns the worktree, the tmux pane and its

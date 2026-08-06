@@ -36,6 +36,11 @@
 #   microvm-config-seed       phase 3 — launch-time, allowlisted config staging
 #   microvm-session-tree      phase 4 — ONE writable + ONE read-only share, the
 #                                        layout table and its trust policy
+#   microvm-capabilities      phase 5 — interactive and batch are independently
+#                                        selectable: the default keeps both, and
+#                                        each narrowing REMOVES the other half's
+#                                        units/paths/packages/subcommands (the
+#                                        narrowed guest closures are BUILT)
 #   microvm-guest-evaluates   §38     — the reference guest closure evaluates to a
 #                                        realisable derivation (drvPath marker)
 #   microvm-launcher-shellcheck §38   — host launcher + guest `agent-run` +
@@ -324,6 +329,16 @@ let
       r = builtins.tryEval (failedAssertions mods);
     in
     if !r.success then true else builtins.any (m: lib.hasInfix needle m) r.value;
+  # The POSITIVE counterpart: `mods` evaluates AND no failed assertion mentions
+  # `needle`. Used where the point of a phase is that a guard must STOP firing
+  # for a legitimate configuration (phase 5: the batch-capable-agent assertion
+  # on a host that does not select the `batch` capability).
+  acceptsWithout =
+    mods: needle:
+    let
+      r = builtins.tryEval (failedAssertions mods);
+    in
+    r.success && !(builtins.any (m: lib.hasInfix needle m) r.value);
   # The unmodified host must have NO failed assertions — positive control so
   # the rejectsWith checks below can't pass vacuously.
   baselineClean = failedAssertions [ ] == [ ];
@@ -376,6 +391,51 @@ let
   # reference agent), which is what a host that wants the smallest guest closure
   # would configure.
   codexHost = variantHostWith [ { myconfig.ai.microvm.enabledAgents = [ "codex" ]; } ];
+
+  # --- lightweight plan phase 5: the NARROWED capability variants ----------
+  # ONE agent keeps these cheap to BUILD (the capability check builds their
+  # closures, not only their drvPaths), and `codex` is stdin-driven, so the
+  # batch variant also exercises ../modules/myconfig.ai/myconfig.ai.microvm/
+  # job.nix's `promptUnusedSuppression` — the exact shape whose SC2034 broke the
+  # lite guest BUILD in phase 4 while every eval-depth check stayed green.
+  capabilityHostWith =
+    caps: extra:
+    variantHostWith [
+      {
+        myconfig.ai.microvm = {
+          capabilities = caps;
+          enabledAgents = [ "codex" ];
+        }
+        // extra;
+      }
+    ];
+  # Interactive-only, WITH the SSH control channel (`variantHostWith` turns it
+  # off, so this outranks it and supplies the required public key): the point of
+  # the variant is that sshd and the host-key tree are PRESENT while the batch
+  # half is gone.
+  interactiveOnlyHost = capabilityHostWith [ "interactive" ] {
+    enableSsh = lib.mkForce true;
+    sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+  };
+  # Batch-only: `enableSsh` is already false on the variant host, which is what
+  # the enableSsh/capability reconciliation REQUIRES (see default.nix).
+  batchOnlyHost = capabilityHostWith [ "batch" ] { };
+
+  capGuestOf = h: h.config.microvm.vms.${variantSlot.name}.config.config;
+  capSessionOf = h: h._module.args.agentSession;
+  pkgNamesOf = ps: map (p: p.pname or p.name or "") ps;
+  capGuestPkgNames = h: pkgNamesOf (capGuestOf h).environment.systemPackages;
+  # Every ExecStart of a HOST unit, flattened — used to prove that no unit of a
+  # batch-only host still generates SSH host keys / known_hosts.
+  hostExecStartsOf =
+    h:
+    lib.concatMap (
+      s:
+      let
+        e = s.serviceConfig.ExecStart or "";
+      in
+      if builtins.isList e then map toString e else [ (toString e) ]
+    ) (lib.attrValues h.config.systemd.services);
 
   # The module's own path/layout definitions of the REFERENCE host, so no check
   # carries a second copy of them.
@@ -1758,6 +1818,391 @@ in
           printf '    %s\n' "$roEntries"
           echo "  verifier      : $verifierBin"
           echo "  launcher      : $launcherBin"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (b2) phase 5 — INTERACTIVE and BATCH are independently selectable.      #
+  #      The DEFAULT host must still carry BOTH halves (regression guard    #
+  #      bound to the real evaluated config of test-f13), an               #
+  #      interactive-only host must have NO batch unit / path / package and #
+  #      no `submit`, and a batch-only host must have NO sshd, NO host-key  #
+  #      tree and no `run`/`ssh`. Every absence is read off the EVALUATED    #
+  #      config (units, tmpfiles rules, package names, layout table) or off  #
+  #      the BUILT launcher, never off intent.                              #
+  # ---------------------------------------------------------------------- #
+  microvm-capabilities =
+    let
+      # ---- the DEFAULT (both capabilities) --------------------------------
+      defaultCaps = microvmOpts.capabilities;
+      defaultGuestServices = builtins.attrNames guest0Cfg.systemd.services;
+      defaultGuestPkgNames = pkgNamesOf guest0Cfg.environment.systemPackages;
+      hostRules = enabledCfg.systemd.tmpfiles.rules;
+      hostServiceNames = builtins.attrNames enabledCfg.systemd.services;
+      workmuxNames = builtins.attrNames enabledCfg.myconfig.ai.workmux.agents;
+
+      controllerService = lib.removeSuffix ".service" jobs.controllerUnit;
+      workerService = jobs.workerUnitTemplate;
+      # The three job-protocol programs, by NAME (the derivations themselves are
+      # per-host, so a name is what compares across variants).
+      jobProgramNames = [
+        "agent-job-controller"
+        "agent-job-worker"
+        "agent-job-assert-paths"
+      ];
+      batchSubdirs = [
+        session.subdirs.input
+        session.subdirs.controller
+        session.subdirs.worker
+        session.subdirs.workerLogs
+      ];
+
+      # ---- the two narrowed hosts -----------------------------------------
+      iGuest = capGuestOf interactiveOnlyHost;
+      iSession = capSessionOf interactiveOnlyHost;
+      iRules = interactiveOnlyHost.config.systemd.tmpfiles.rules;
+      iHostKeys = interactiveOnlyHost._module.args.agentHostKeys;
+      iSlotDir = iSession.slotDir variantSlot.name;
+      iRoSlotDir = iSession.roSlotDir variantSlot.name;
+
+      bGuest = capGuestOf batchOnlyHost;
+      bSession = capSessionOf batchOnlyHost;
+      bJobs = batchOnlyHost._module.args.agentJobs;
+      bRules = batchOnlyHost.config.systemd.tmpfiles.rules;
+      bRoSlotDir = bSession.roSlotDir variantSlot.name;
+      bController = bGuest.systemd.services.${controllerService};
+      bWorker = bGuest.systemd.services.${workerService};
+
+      rels = l: map (e: e.rel) l;
+      mentions = rules: infix: lib.any (r: lib.hasInfix infix r) rules;
+
+      evalMarker = mkEvalCheck "microvm-capabilities-eval" ([
+        # --- the DEFAULT selects BOTH, i.e. today's behaviour -------------
+        {
+          assertion =
+            lib.sort (a: b: a < b) defaultCaps == [
+              "batch"
+              "interactive"
+            ];
+          message = "the module default must select BOTH capabilities, got ${toString defaultCaps}";
+        }
+        {
+          # The batch half of the reference host, from its real units.
+          assertion =
+            lib.elem controllerService defaultGuestServices && lib.elem workerService defaultGuestServices;
+          message = "the default guest must carry the batch controller + worker template";
+        }
+        {
+          assertion = lib.all (n: lib.elem n defaultGuestPkgNames) jobProgramNames;
+          message = "the default guest must carry the job-protocol programs (${toString jobProgramNames})";
+        }
+        {
+          # The interactive half of the reference host.
+          assertion =
+            lib.elem "sshd" defaultGuestServices
+            && guest0Cfg.services.openssh.enable
+            && lib.elem "agent-run" defaultGuestPkgNames;
+          message = "the default guest must carry sshd and the interactive `agent-run` entry point";
+        }
+        {
+          assertion = lib.elem "agent-microvm-hostkeys" hostServiceNames;
+          message = "the default host must provision per-slot SSH host keys";
+        }
+        {
+          assertion = lib.all (sub: mentions hostRules "${session.slotDir refSlot.name}/${sub}") batchSubdirs;
+          message = "the default host must create every batch subdirectory of the session tree";
+        }
+        {
+          assertion =
+            mentions hostRules "${session.hostHostkeysDir refSlot.name}" && mentions hostRules jobs.resultsDir;
+          message = "the default host must create the host-key tree and the batch result archive";
+        }
+        {
+          assertion = lib.any (n: lib.hasPrefix "microvm-" n) workmuxNames;
+          message = "the default host must register the interactive workmux panes";
+        }
+
+        # --- INTERACTIVE-ONLY: the batch half is GONE ---------------------
+        {
+          assertion =
+            !(iGuest.systemd.services ? ${controllerService}) && !(iGuest.systemd.services ? ${workerService});
+          message = "an interactive-only guest must have NO batch controller and NO worker template, got ${
+            toString (lib.filter (n: lib.hasPrefix "agent-job" n) (builtins.attrNames iGuest.systemd.services))
+          }";
+        }
+        {
+          assertion = !(lib.any (n: lib.elem n (capGuestPkgNames interactiveOnlyHost)) jobProgramNames);
+          message = "an interactive-only guest must not carry any job-protocol program";
+        }
+        {
+          assertion =
+            rels iSession.layout == [
+              ""
+              session.subdirs.workspace
+              session.subdirs.state
+            ];
+          message = "an interactive-only session tree must contain only the root, the workspace and the state bind point, got ${toString (rels iSession.layout)}";
+        }
+        {
+          assertion = !(lib.any (sub: mentions iRules "${iSlotDir}/${sub}") batchSubdirs);
+          message = "an interactive-only host must emit NO tmpfiles rule for a batch subdirectory";
+        }
+        {
+          assertion = !(mentions iRules bJobs.resultsDir);
+          message = "an interactive-only host must not create the batch result archive (${bJobs.resultsDir})";
+        }
+        {
+          # ... and the interactive half is intact, including the read-only
+          # host-key subdirectory and its tmpfiles rule.
+          assertion =
+            iGuest.services.openssh.enable
+            && iGuest.systemd.services ? sshd
+            && lib.elem "agent-run" (capGuestPkgNames interactiveOnlyHost);
+          message = "an interactive-only guest must still run sshd and carry `agent-run`";
+        }
+        {
+          assertion =
+            iGuest.services.openssh.hostKeys == [
+              {
+                type = "ed25519";
+                path = iHostKeys.guestKeyPath;
+              }
+            ];
+          message = "an interactive-only guest must use exactly the per-slot host key from the read-only share";
+        }
+        {
+          assertion =
+            lib.elem session.roSubdirs.hostkeys (rels iSession.roLayout)
+            && mentions iRules "${iRoSlotDir}/${session.roSubdirs.hostkeys}";
+          message = "an interactive-only host must keep the read-only host-key subdirectory";
+        }
+        {
+          assertion = lib.elem "agent-microvm-hostkeys" (
+            builtins.attrNames interactiveOnlyHost.config.systemd.services
+          );
+          message = "an interactive-only host must still provision its per-slot SSH host keys";
+        }
+
+        # --- BATCH-ONLY: the interactive half is GONE ---------------------
+        {
+          assertion = !(bGuest.systemd.services ? sshd) && !bGuest.services.openssh.enable;
+          message = "a batch-only guest must have NO sshd";
+        }
+        {
+          assertion = !(lib.elem "agent-run" (capGuestPkgNames batchOnlyHost));
+          message = "a batch-only guest must not carry the interactive `agent-run` entry point";
+        }
+        {
+          assertion = !(lib.elem session.roSubdirs.hostkeys (rels bSession.roLayout));
+          message = "a batch-only read-only tree must have NO host-key subdirectory, got ${toString (rels bSession.roLayout)}";
+        }
+        {
+          assertion = !(mentions bRules "${bRoSlotDir}/${session.roSubdirs.hostkeys}");
+          message = "a batch-only host must emit no tmpfiles rule for a host-key directory";
+        }
+        {
+          assertion =
+            !(lib.elem "agent-microvm-hostkeys" (builtins.attrNames batchOnlyHost.config.systemd.services));
+          message = "a batch-only host must not provision SSH host keys";
+        }
+        {
+          # No known_hosts generation either: the provisioning program is the
+          # ONLY thing that writes it, so no host unit may reference it.
+          assertion =
+            !(lib.any (e: lib.hasInfix "agent-microvm-provision-hostkeys" e) (hostExecStartsOf batchOnlyHost));
+          message = "a batch-only host must not run the host-key / known_hosts generator";
+        }
+        {
+          # POSITIVE control for the check above: the reference host DOES.
+          assertion = lib.any (e: lib.hasInfix "agent-microvm-provision-hostkeys" e) (
+            hostExecStartsOf self.nixosConfigurations.test-f13
+          );
+          message = "positive control: the default host must run the host-key generator";
+        }
+        {
+          assertion =
+            !(lib.any (n: lib.hasPrefix "microvm-" n) (
+              builtins.attrNames batchOnlyHost.config.myconfig.ai.workmux.agents
+            ));
+          message = "a batch-only host must register no interactive workmux pane";
+        }
+        {
+          # ... and the batch half is intact, with its trust split.
+          assertion =
+            bGuest.systemd.services ? ${controllerService} && bGuest.systemd.services ? ${workerService};
+          message = "a batch-only guest must carry the controller and the worker template";
+        }
+        {
+          assertion = lib.all (n: lib.elem n (capGuestPkgNames batchOnlyHost)) jobProgramNames;
+          message = "a batch-only guest must carry the job-protocol programs";
+        }
+        {
+          # The TRUSTED controller runs as guest root (no User=), the
+          # UNTRUSTED worker as the unprivileged agent, and the worker cannot
+          # even see the controller's channel.
+          assertion = !(bController.serviceConfig ? User);
+          message = "the batch controller must run as guest root";
+        }
+        {
+          assertion =
+            bWorker.serviceConfig.User == bJobs.workerUser
+            && bWorker.serviceConfig.ProtectProc == "invisible"
+            && bWorker.serviceConfig.InaccessiblePaths == [ "-${bJobs.guestControllerDir}" ];
+          message = "the batch worker must stay unprivileged and be denied the controller channel";
+        }
+        {
+          assertion = bController.unitConfig.ConditionPathExists == bJobs.guestSpec;
+          message = "the batch controller must stay inert without a job spec";
+        }
+        {
+          assertion = lib.all (
+            sub: mentions bRules "${bSession.slotDir variantSlot.name}/${sub}"
+          ) batchSubdirs;
+          message = "a batch-only host must create every batch subdirectory of the session tree";
+        }
+
+        # --- NEGATIVE eval tests, pinned to the SPECIFIC assertion --------
+        {
+          assertion = baselineClean;
+          message = "positive control: the unmodified reference host must have no failed assertion";
+        }
+        {
+          assertion = rejectsWith [
+            { myconfig.ai.microvm.capabilities = lib.mkForce [ ]; }
+          ] "selects no capability";
+          message = "an EMPTY capability set must be rejected";
+        }
+        {
+          assertion = rejectsWith [
+            { myconfig.ai.microvm.capabilities = lib.mkForce [ "interactve" ]; }
+          ] "unknown capability";
+          message = "an UNKNOWN capability token must be rejected";
+        }
+        {
+          # The reconciliation: `enableSsh` (true on the reference host) is
+          # MEANINGLESS without the interactive capability and is rejected
+          # rather than silently ignored.
+          assertion = rejectsWith [
+            { myconfig.ai.microvm.capabilities = lib.mkForce [ "batch" ]; }
+          ] "has no meaning without the";
+          message = "enableSsh without the `interactive` capability must be rejected";
+        }
+        {
+          # The batch-capable-agent assertion must still fire for a host that
+          # selects `batch` with a selection that has no batch-capable agent.
+          # Every DECLARED agent is batch-capable today, so the conflict is
+          # produced by substituting a registry whose batch subset is empty —
+          # the same shape a future non-batch agent would create.
+          assertion = rejectsWith [
+            { _module.args.agentRegistry = lib.mkForce (agentRegistry // { batchNames = [ ]; }); }
+          ] "selects no agent that can run";
+          message = "a batch host with no batch-capable agent must be rejected";
+        }
+        {
+          # ... and it must NOT fire once `batch` is deselected — that is the
+          # recorded phase-5 requirement.
+          assertion = acceptsWithout [
+            {
+              _module.args.agentRegistry = lib.mkForce (agentRegistry // { batchNames = [ ]; });
+              myconfig.ai.microvm.capabilities = lib.mkForce [ "interactive" ];
+            }
+          ] "selects no agent that can run";
+          message = "the batch-capable-agent assertion must NOT fire on an interactive-only host";
+        }
+      ]);
+    in
+    pkgs.runCommand "microvm-capabilities"
+      {
+        inherit evalMarker;
+        # BUILT, not merely instantiated: the narrowed guests are exactly where a
+        # `writeShellApplication` shellcheck failure hides (phase 4's SC2034 in
+        # the batch worker survived every drvPath-only check).
+        defaultGuest = guest0Cfg.system.build.toplevel;
+        defaultRunner = guest0Cfg.microvm.declaredRunner;
+        interactiveGuest = iGuest.system.build.toplevel;
+        interactiveRunner = iGuest.microvm.declaredRunner;
+        batchGuest = bGuest.system.build.toplevel;
+        batchRunner = bGuest.microvm.declaredRunner;
+        # The three launchers, BUILT (their own shellcheck gate) and then
+        # inspected: the narrowed ones must refuse the subcommands whose
+        # machinery they do not have, the default one must contain no guard at
+        # all (so this phase left it untouched).
+        defaultLauncher = "${launcherPkg}/bin/agent-microvm";
+        interactiveLauncher = "${findPkg interactiveOnlyHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        batchLauncher = "${findPkg batchOnlyHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        # The generated pre-launch verifiers: they are rendered FROM the layout
+        # table, so a narrowed tree must not even mention the other half's
+        # directories.
+        interactiveVerifier = "${iSession.verifier}/bin/agent-microvm-verify-session";
+        batchVerifier = "${bSession.verifier}/bin/agent-microvm-verify-session";
+        # The EXACT generated `verify_dir` argument of each directory (a bare
+        # subdirectory name would also match the verifier's own prose).
+        controllerVerifyArg = "\"$SESSION_DIR/${session.subdirs.controller}\"";
+        hostkeysVerifyArg = "\"$SESSION_RO_DIR/${session.roSubdirs.hostkeys}\"";
+      }
+      ''
+        # --- the narrowed launchers refuse the missing capability ----------
+        for pair in "submit batch" "cancel batch"; do
+          grep -qF -- "require_capability $pair" "$interactiveLauncher" \
+            || { echo "the interactive-only launcher does not refuse '$pair'" >&2; exit 1; }
+        done
+        for pair in "run interactive" "ssh interactive"; do
+          grep -qF -- "require_capability $pair" "$batchLauncher" \
+            || { echo "the batch-only launcher does not refuse '$pair'" >&2; exit 1; }
+        done
+        # ... and neither refuses what it CAN do.
+        if grep -qF -- 'require_capability run interactive' "$interactiveLauncher"; then
+          echo "the interactive-only launcher refuses its own 'run'" >&2; exit 1
+        fi
+        if grep -qF -- 'require_capability submit batch' "$batchLauncher"; then
+          echo "the batch-only launcher refuses its own 'submit'" >&2; exit 1
+        fi
+        # The refusal names the OPTION to change, not just "unsupported".
+        for l in "$interactiveLauncher" "$batchLauncher"; do
+          grep -qF -- 'myconfig.ai.microvm.capabilities' "$l" \
+            || { echo "a narrowed launcher's refusal does not name the option" >&2; exit 1; }
+        done
+        # POSITIVE control: the DEFAULT launcher carries no guard at all, so a
+        # host with both capabilities is untouched by this phase.
+        if grep -qF -- 'require_capability' "$defaultLauncher"; then
+          echo "the default launcher must contain no capability guard" >&2; exit 1
+        fi
+
+        # --- `doctor` stays HONEST about the host-key section ---------------
+        # A batch-only host provisions no key material, so a "every slot has a
+        # host-key directory" check would be vacuous; it must report the
+        # capability instead.
+        for l in "$defaultLauncher" "$interactiveLauncher"; do
+          grep -qF -- 'lack a host-key directory' "$l" \
+            || { echo "doctor lost its host-key check on an interactive host" >&2; exit 1; }
+        done
+        if grep -qF -- 'lack a host-key directory' "$batchLauncher"; then
+          echo "the batch-only doctor still checks for host-key directories" >&2; exit 1
+        fi
+        grep -qF -- 'no per-slot SSH host keys are expected' "$batchLauncher" \
+          || { echo "the batch-only doctor does not report the missing capability" >&2; exit 1; }
+
+        # --- the generated verifiers follow the narrowed layout table -------
+        grep -qF -- "$controllerVerifyArg" "$batchVerifier" \
+          || { echo "the batch verifier does not verify the controller directory" >&2; exit 1; }
+        if grep -qF -- "$controllerVerifyArg" "$interactiveVerifier"; then
+          echo "the interactive-only verifier still verifies a batch directory" >&2; exit 1
+        fi
+        grep -qF -- "$hostkeysVerifyArg" "$interactiveVerifier" \
+          || { echo "the interactive verifier does not verify the host-key directory" >&2; exit 1; }
+        if grep -qF -- "$hostkeysVerifyArg" "$batchVerifier"; then
+          echo "the batch-only verifier still verifies a host-key directory" >&2; exit 1
+        fi
+
+        {
+          echo "microvm-capabilities:"
+          echo "  default  guest : $defaultGuest"
+          echo "  default  runner: $defaultRunner"
+          echo "  interactive-only guest : $interactiveGuest"
+          echo "  interactive-only runner: $interactiveRunner"
+          echo "  batch-only       guest : $batchGuest"
+          echo "  batch-only       runner: $batchRunner"
           cat "$evalMarker"
         } > "$out"
       '';

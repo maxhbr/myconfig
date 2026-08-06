@@ -24,7 +24,8 @@ microVM** (via the `microvm.nix` flake input) with:
 
 Both an **interactive** (`run --attach`) and an **unattended batch** (`submit`)
 execution path exist, with structured results, hard timeouts, cancellation and
-recovery.
+recovery. They are **independently selectable** per host
+(`capabilities`, see [Capabilities](#capabilities)); the default selects both.
 
 Every agent process and guest workload is treated as potentially hostile; the
 secure default prioritises **isolation over convenience**.
@@ -82,6 +83,7 @@ myconfig.ai.microvm = {
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `enable` | `false` | Turn the whole tier on for a host. |
+| `capabilities` | `[ "interactive" "batch" ]` | Which execution capabilities the guests carry. A deselected capability is *absent*, not disabled. See [Capabilities](#capabilities). |
 | `enabledAgents` | `null` | **Selected** agents (registry tokens). `null` = every declared agent (the module-wide default — and the biggest guest closure). A deselected agent is *absent* from the guest closure. See [Selected agents](#selected-agents). |
 | `resourceClasses` | `{ normal = { count = 4; vcpu = 4; memoryMiB = 8192; }; }` | Fixed, **prebuilt** resource classes. See [Resource classes](#resource-classes). |
 | `bridgeName` | `agentbr0` | Private bridge name. |
@@ -93,7 +95,7 @@ myconfig.ai.microvm = {
 | `stateRoot` | `/var/lib/microvms` | microvm.nix per-VM state / bind-mount source. |
 | `guestAgentUid` / `guestAgentGid` | `1000` | Numeric ids of the guest `agent` user, and the host-side owner of every guest-writable path. Asserted unprivileged. |
 | `job.defaultTimeoutSeconds` / `job.maxTimeoutSeconds` / `job.gracePeriodSeconds` | `3600` / `86400` / `120` | Batch-job timeouts. |
-| `enableSsh` | `true` | Guest SSH server, private interface only. |
+| `enableSsh` | `true` | Guest SSH server, private interface only. Rejected at eval unless `capabilities` includes `interactive` (see [Capabilities](#capabilities)). |
 | `sshPublicKeyFile` | `null` | **Required** when `enableSsh`. See [The dedicated SSH key](#the-dedicated-ssh-key). |
 | `passwordlessControl` | `false` | Scoped `NOPASSWD`+`SETENV` sudo rule for exactly `agent-microvm`, for members of the `agent-microvm` group. |
 | `configSeed.hostHome` | the primary user's home (`config.users.users.<myconfig.user>.home`) | The host home the **runtime configuration staging** resolves its allowlist against. Never mounted — only the allowlisted paths are read. See [Runtime configuration staging](#runtime-configuration-staging). |
@@ -164,6 +166,7 @@ one code path to read, test and audit.
 | Guest toolset | the minimal documented set (POSIX toolbox, git, diffutils/patch, ripgrep, jq, less, procps, util-linux, openssh when `enableSsh`) plus a **bash** login shell, with NixOS' `environment.defaultPackages` dropped |
 | Guest home | **runtime configuration staging** (`configSeed`): an allowlisted, root-owned copy staged per launch; **no** home-manager inside the guest |
 | virtiofs shares per slot | two: ONE writable per-session share at `/run/agent-session` and ONE read-only share at `/run/agent-session-ro` — see [The session share](#the-session-share) |
+| Capabilities | `capabilities`; both by default. Narrowing it removes units, guest programs and session subdirectories — see [Capabilities](#capabilities) |
 
 Every package in this set has a documented consumer (see the comment above
 `guestCommonPackages` in `../guest.nix`). Agent-specific runtimes belong in the
@@ -172,6 +175,65 @@ selected.
 
 Sizing is entirely the host's decision: an explicit `resourceClasses` table is
 what the pool is built from.
+
+### Capabilities
+
+`myconfig.ai.microvm.capabilities` selects which of the two **execution
+capabilities** a host's guests carry (lightweight plan phase 5). It is a SET
+over the ONE guest shape — deliberately not a three-valued
+`interactive | batch | combined` mode, which would be a compatibility profile
+crossed with that shape. The default is **both**, i.e. the historical behaviour.
+
+| Capability | What it adds |
+| --- | --- |
+| `interactive` | the SSH server (`enableSsh`) and the per-slot SSH host identity with its read-only `hostkeys/` subdirectory, the `known_hosts` database and its provisioning unit, the guest `agent-run` entry point, the Workmux `microvm-<agent>` panes, and the launcher's `run` / `ssh` subcommands |
+| `batch` | the TRUSTED guest job controller, the UNTRUSTED `agent-job-worker@` template, the guest job-protocol programs, the `input/`, `controller/`, `worker/` and `worker-logs/` subdirectories of the session tree (with their host tmpfiles rules), the host-side result archive `<runtimeRoot>/results`, and the launcher's `submit` / `cancel` subcommands |
+
+A deselected capability is **absent**, not merely unused: the units are not in
+the guest, the programs are not in its closure, and the directories are never
+created. What stays identical in every case is the SHAPE — one writable share,
+one read-only share, one launcher, the disposable home, the staged
+configuration, the standalone clone and the proxy-only network:
+
+```nix
+# an interactive sandbox host: no batch controller/worker, no job protocol,
+# no input/controller/worker/worker-logs, no result archive, `submit` refused
+myconfig.ai.microvm.capabilities = [ "interactive" ];
+
+# a batch-only worker host: no sshd, no host key, no known_hosts, no readiness
+# polling, no workmux panes, `run`/`ssh` refused
+myconfig.ai.microvm.capabilities = [ "batch" ];
+myconfig.ai.microvm.enableSsh = false;   # REQUIRED (see below)
+```
+
+`enableSsh` and `capabilities` are reconciled explicitly: `enableSsh` remains
+the authoritative switch for the SSH server *within* the `interactive`
+capability (an interactive host may legitimately run without it and use
+`agent-microvm console`), and it is **meaningless-and-rejected** without that
+capability. It is deliberately not silently forced to `false`: the server, the
+host identity, the `known_hosts` database and the launcher's `ssh` /
+`run --attach` paths would then all disappear behind an option that still read
+`true`.
+
+Rejected at evaluation time: an empty capability set, an unknown token, and
+`enableSsh = true` without `interactive`.
+
+The launcher of a narrowed host **refuses** the other capability's subcommands
+up front, naming the option to change:
+
+```console
+$ sudo agent-microvm submit --name t --repository /r --agent codex --prompt-file p
+agent-microvm: 'submit' needs the 'batch' capability, which this host does not
+select (myconfig.ai.microvm.capabilities = [ interactive ]); add "batch" to
+that list and rebuild to enable it
+```
+
+The real-KVM validation suite honours the same split: every section that drives
+a guest over SSH requires `interactive`, `lifecycle` and `forgery` additionally
+require `batch`, and a section whose capability the host does not select is
+SKIPPED (or hard-aborts when asked for explicitly) rather than reporting vacuous
+passes — see
+[runtime validation](./agent-microvm-runtime-validation.md).
 
 ### Selected agents
 
@@ -189,8 +251,10 @@ authoritative registry (`../agents.nix`), so every derived artefact follows it:
 A deselected agent is therefore **absent from the guest image** (its runtime is
 not in the closure at all), and `--agent <name>` for it is rejected on the host
 before anything is started. Rejected at evaluation time: an unknown token, an
-empty selection, and a selection without any batch-capable agent (the batch
-machinery is still built into every guest — see plan phase 5).
+empty selection, and — **only on a host that selects the `batch` capability** —
+a selection without any batch-capable agent. On an interactive-only host that
+last guard does not apply, because such a guest carries no batch machinery at
+all (see [Capabilities](#capabilities)).
 
 ### Runtime configuration staging
 
@@ -303,16 +367,23 @@ guest mount set, and one host tree to create, verify and remove:
 ```text
 <runtimeRoot>/sessions/<slot>/          root:root 0755   ONE WRITABLE SHARE  -> /run/agent-session
   workspace/                            agent            bind target -> the task's clone
-  input/                                root:root 0755   spec.json 0400, prompt.md 0444
-  controller/                           root:root 0700   the AUTHORITATIVE result
-  worker/                               agent     0755   the untrusted worker's own area
-  worker-logs/                          root:root 0755   worker stdout/stderr (root-opened)
+  input/                                root:root 0755   spec.json 0400, prompt.md 0444        [batch]
+  controller/                           root:root 0700   the AUTHORITATIVE result              [batch]
+  worker/                               agent     0755   the untrusted worker's own area       [batch]
+  worker-logs/                          root:root 0755   worker stdout/stderr (root-opened)    [batch]
   state/                                agent     0755   bind target -> task-scoped state
 
 <runtimeRoot>/sessions-ro/<slot>/       root:root 0700   ONE READ-ONLY SHARE -> /run/agent-session-ro
-  hostkeys/                             root:root 0700   the slot's ed25519 host key (0400)
+  hostkeys/                             root:root 0700   the slot's ed25519 host key (0400)    [interactive]
   config-seed/                          root:root 0500   the staged host agent configuration
 ```
+
+The `[batch]` / `[interactive]` entries exist only when the host selects that
+capability (see [Capabilities](#capabilities)); the two SHARES, their tags,
+their mount points and every mode are the same either way. `../session.nix`'s
+layout table carries that per-capability marking, so the host tmpfiles rules,
+the pre-launch verifier, the launcher's tree preparation and the tests all
+follow it without a second decision.
 
 Inside the guest, `/run/agent-session/workspace` is **bind-mounted to
 `/workspace`**, so `agent-run`'s mount/writability checks and every agent's
@@ -728,7 +799,9 @@ which is louder than the warning or assertion it replaces.
 
 The interactive commands themselves are unchanged; `submit`, `cancel`,
 `recover`, `usage` and the flags `--resource-class`, `--wait`,
-`--persist-agent-state` are additions that default to previous behaviour.
+`--persist-agent-state` are additions that default to previous behaviour. So is
+`capabilities`: its default selects BOTH capabilities, so a host that says
+nothing keeps every unit, path and subcommand it had.
 
 ---
 

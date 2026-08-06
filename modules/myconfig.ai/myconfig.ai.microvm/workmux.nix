@@ -45,6 +45,11 @@
   # The ONE authoritative supported-agent registry instance, built in
   # default.nix (`_module.args.agentRegistry`). See ./agents.nix.
   agentRegistry,
+  # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
+  # Every pane registered here runs `agent-microvm run --attach`, i.e. it is
+  # INTERACTIVE by construction, so a host without that capability registers
+  # none (the launcher would refuse the subcommand anyway).
+  agentCapabilities,
   ...
 }:
 let
@@ -143,7 +148,7 @@ in
 {
   # Register only when the feature is enabled AND workmux is active on this
   # host (the existing agents guard their registration the same way).
-  config = lib.mkIf (cfg.enable && workmuxCfg.enable) {
+  config = lib.mkIf (cfg.enable && workmuxCfg.enable && agentCapabilities.interactive) {
     myconfig.ai.workmux.agents = lib.mapAttrs' (
       _: spec: lib.nameValuePair spec.workmuxName (mkAgent spec)
     ) agentRegistry.agents;

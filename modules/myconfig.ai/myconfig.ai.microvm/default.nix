@@ -85,6 +85,48 @@ let
     hermesModel = config.myconfig.ai.hermes.model.default;
   };
 
+  # The registry the SIBLING MODULES actually receive. Identical to
+  # `agentRegistry` above for every real host — it IS that value, read back
+  # through the option — but the assertions below are deliberately written
+  # against THIS one: an assertion that checked a different instance than the
+  # guest closure, the launcher and the workmux panes are built from could pass
+  # while those disagree with it. It is also what makes the registry-dependent
+  # guards exercisable: tests/microvm.nix substitutes a registry whose
+  # batch-capable subset is empty (a shape ./agents.nix cannot currently
+  # produce, since every declared agent has `batchArgs`) and requires the
+  # batch-capable-agent assertion to fire for a `batch` host and to stay silent
+  # for an interactive-only one.
+  effectiveRegistry = config._module.args.agentRegistry;
+
+  # --- lightweight plan phase 5: the CAPABILITY SELECTOR -------------------
+  # `capabilities` selects WHICH of the two execution capabilities a guest
+  # carries. It is deliberately a SET over the ONE guest shape, not a
+  # three-valued `interactive | batch | combined` mode: a `combined` value would
+  # be a compatibility profile in disguise and would re-create exactly the
+  # cross-product the `full`/`lite` collapse removed. The default is BOTH, i.e.
+  # today's behaviour byte-for-byte.
+  #
+  # Resolved EXACTLY ONCE here and handed to the sibling modules through
+  # `_module.args.agentCapabilities`, so ./session.nix (the layout table every
+  # path/mode/tmpfiles rule/verifier line is generated from), ./job.nix,
+  # ./hostkeys.nix, ./guest.nix, ./launcher.nix and ./workmux.nix all follow ONE
+  # decision instead of each carrying its own `if`.
+  declaredCapabilities = [
+    "interactive"
+    "batch"
+  ];
+  # Resolved DEFENSIVELY (membership tests, never a lookup that could throw), so
+  # an unknown token is reported by the assertion below instead of failing
+  # somewhere deep in a consumer.
+  selectedCapabilities = lib.unique cfg.capabilities;
+  unknownCapabilities = lib.filter (c: !(lib.elem c declaredCapabilities)) selectedCapabilities;
+  agentCapabilities = {
+    declared = declaredCapabilities;
+    selected = lib.filter (c: lib.elem c selectedCapabilities) declaredCapabilities;
+    interactive = lib.elem "interactive" selectedCapabilities;
+    batch = lib.elem "batch" selectedCapabilities;
+  };
+
   # --- ticket 3 C: network profiles ---------------------------------------
   # `network-profiles.nix` is the authoritative capability table; the effective
   # profile is resolved HERE and handed to network.nix / guest.nix through
@@ -149,6 +191,39 @@ in
         every guest image, so a host that wants the lightweight guest closure
         should name the agents it actually uses. An unknown token is rejected at
         evaluation time.
+      '';
+    };
+
+    capabilities = mkOption {
+      type = types.listOf types.str;
+      default = [
+        "interactive"
+        "batch"
+      ];
+      example = literalExpression ''[ "batch" ]'';
+      description = ''
+        Which EXECUTION CAPABILITIES the guests of this host carry
+        (lightweight plan phase 5). A capability the host does not select is
+        ABSENT — not merely hidden:
+
+        - `interactive` — the SSH control channel (`enableSsh`), the per-slot
+          SSH host identity and its read-only `hostkeys/` subdirectory, the
+          known_hosts database, the guest `agent-run` entry point, the workmux
+          `microvm-<agent>` panes and the launcher's `run` / `ssh`
+          subcommands.
+        - `batch` — the TRUSTED guest job controller, the UNTRUSTED worker
+          template, the guest job-protocol helpers, the `input/`,
+          `controller/`, `worker/` and `worker-logs/` subdirectories of the
+          session tree (and their host tmpfiles rules), the host-side result
+          archive and the launcher's `submit` / `cancel` subcommands.
+
+        Both (the default) is exactly the historical behaviour. The list is a
+        SET, not an ordered preference, and there is deliberately no third
+        "combined" value: that would be a compatibility profile crossed with
+        the one guest shape, which is what the `full`/`lite` collapse removed.
+
+        An empty selection, an unknown token, and `enableSsh` without the
+        `interactive` capability are rejected at evaluation time.
       '';
     };
 
@@ -482,6 +557,10 @@ in
       # spelling there is), so guest.nix / network.nix / launcher.nix /
       # hostkeys.nix / job.nix all build the SAME slot pool.
       _module.args.agentResourceClasses = effectiveResourceClasses;
+      # The ONE resolved capability set (lightweight plan phase 5), consumed by
+      # session.nix (the layout table), job.nix, hostkeys.nix, guest.nix,
+      # launcher.nix and workmux.nix.
+      _module.args.agentCapabilities = agentCapabilities;
     }
 
     (lib.mkIf cfg.enable {
@@ -546,6 +625,47 @@ in
         {
           assertion = !cfg.enableSsh || cfg.sshPublicKeyFile != null;
           message = "myconfig.ai.microvm.enableSsh requires an explicit sshPublicKeyFile.";
+        }
+        {
+          # A typo in `capabilities` must fail at EVAL, naming the token, rather
+          # than silently narrowing the guest (a mistyped "interactve" would
+          # otherwise produce a batch-only host).
+          assertion = unknownCapabilities == [ ];
+          message = ''
+            myconfig.ai.microvm.capabilities: unknown capability ${
+              lib.concatMapStringsSep ", " (c: "'${c}'") unknownCapabilities
+            }. Known capabilities are: ${lib.concatStringsSep ", " declaredCapabilities}.
+          '';
+        }
+        {
+          # A guest with NEITHER capability can neither be logged into nor be
+          # given a job: it would boot, seed a home and idle forever.
+          assertion = agentCapabilities.selected != [ ];
+          message = ''
+            myconfig.ai.microvm.capabilities selects no capability, so the guest
+            could neither be entered interactively nor be given a batch job.
+            Select at least one of: ${lib.concatStringsSep ", " declaredCapabilities}.
+          '';
+        }
+        {
+          # RECONCILIATION of `enableSsh` vs the capability set (the plan's
+          # phase-5 deviation asked for ONE authority): `enableSsh` stays the
+          # authoritative switch for the SSH server WITHIN the interactive
+          # capability, and it is MEANINGLESS-AND-REJECTED without it. It is
+          # deliberately not silently forced to false: the SSH server, the
+          # per-slot host identity, the known_hosts database and the launcher's
+          # `ssh`/`--attach` paths would all disappear behind an option that
+          # still read `true`.
+          assertion = !cfg.enableSsh || agentCapabilities.interactive;
+          message = ''
+            myconfig.ai.microvm.enableSsh = true has no meaning without the
+            `interactive` capability: the SSH server, the per-slot SSH host
+            identity, the known_hosts database and the launcher's `ssh` /
+            `run --attach` paths are all part of that capability. Either add
+            "interactive" to `myconfig.ai.microvm.capabilities`
+            (currently: ${lib.concatStringsSep ", " agentCapabilities.selected}) or set
+            `myconfig.ai.microvm.enableSsh = false`.
+          '';
         }
         {
           # The secure default must stay the default: widening the guest's
@@ -614,42 +734,44 @@ in
           message = "myconfig.ai.microvm: generated slot VSOCK CIDs must avoid the reserved values 0/1/2 and VMADDR_CID_ANY.";
         }
         {
-          assertion = agentRegistry.declaredNames != [ ];
+          assertion = effectiveRegistry.declaredNames != [ ];
           message = "myconfig.ai.microvm: the agent registry (agents.nix) must declare at least one agent.";
         }
         {
           # A typo in `enabledAgents` must fail loudly at EVAL instead of
           # silently producing a guest with fewer (or no) agents.
-          assertion = agentRegistry.unknownEnabled == [ ];
+          assertion = effectiveRegistry.unknownEnabled == [ ];
           message = ''
-            myconfig.ai.microvm.enabledAgents: unknown agent(s) ${lib.concatStringsSep ", " agentRegistry.unknownEnabled}.
-            Declared agents are: ${lib.concatStringsSep ", " agentRegistry.declaredNames}.
+            myconfig.ai.microvm.enabledAgents: unknown agent(s) ${lib.concatStringsSep ", " effectiveRegistry.unknownEnabled}.
+            Declared agents are: ${lib.concatStringsSep ", " effectiveRegistry.declaredNames}.
           '';
         }
         {
           # An empty selection would build a guest that can run nothing at all.
-          assertion = agentRegistry.names != [ ];
+          assertion = effectiveRegistry.names != [ ];
           message = ''
             myconfig.ai.microvm.enabledAgents selects no agent, so the guest
             would contain no agent runtime at all. Select at least one of:
-            ${lib.concatStringsSep ", " agentRegistry.declaredNames}.
+            ${lib.concatStringsSep ", " effectiveRegistry.declaredNames}.
           '';
         }
         {
           # The BATCH machinery (host `submit` validation, guest controller and
           # worker dispatch) renders `case` PATTERNS from the batch-capable
           # subset; an empty subset renders an empty pattern, i.e. a
-          # syntactically broken script. Every declared agent is batch-capable
-          # today, so this can only trip on a selection made specifically to
-          # exclude them — which the (still combined interactive+batch) guest
-          # cannot serve. Splitting the two modes (lightweight plan phase 5) is
-          # what will make an interactive-only selection meaningful.
-          assertion = agentRegistry.batchNames != [ ];
+          # syntactically broken script. CONDITIONAL on the `batch` capability
+          # (lightweight plan phase 5): a host that does not select `batch`
+          # builds none of that machinery, so an interactive-only
+          # `enabledAgents` selection is legitimate there — which is the whole
+          # point of the phase.
+          assertion = !agentCapabilities.batch || effectiveRegistry.batchNames != [ ];
           message = ''
             myconfig.ai.microvm.enabledAgents selects no agent that can run
-            UNATTENDED (no `batchArgs` in ./agents.nix), but every guest also
-            carries the batch job machinery. Include at least one batch-capable
-            agent: ${lib.concatStringsSep ", " agentRegistry.declaredBatchNames}.
+            UNATTENDED (no `batchArgs` in ./agents.nix), but this host selects
+            the `batch` capability, so its guests carry the batch job
+            machinery. Either include at least one batch-capable agent
+            (${lib.concatStringsSep ", " effectiveRegistry.declaredBatchNames}) or drop
+            "batch" from `myconfig.ai.microvm.capabilities`.
           '';
         }
       ]
@@ -657,7 +779,7 @@ in
       ++ map (msg: {
         assertion = false;
         message = msg;
-      }) agentRegistry.errors;
+      }) effectiveRegistry.errors;
 
     })
   ];

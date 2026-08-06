@@ -23,6 +23,20 @@ sudo agent-microvm status          # detailed, all slots
 sudo agent-microvm usage           # retained disk usage per task
 ```
 
+> **Capabilities.** A host selects which execution paths its guests carry
+> (`myconfig.ai.microvm.capabilities`, default both). On a host that selects only
+> one of them the launcher refuses the other's subcommands with a message naming
+> the option — `run`/`ssh` need `interactive`, `submit`/`cancel` need `batch`:
+>
+> ```console
+> agent-microvm: 'submit' needs the 'batch' capability, which this host does not
+> select (myconfig.ai.microvm.capabilities = [ interactive ]); add "batch" to
+> that list and rebuild to enable it
+> ```
+>
+> That is a configuration answer, not a fault: see
+> [Capabilities](./agent-microvm.md#capabilities).
+
 ## 1. Start an interactive task
 
 ```bash

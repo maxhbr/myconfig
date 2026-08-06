@@ -14,13 +14,13 @@ How the pieces fit together. Option-level reference lives in
 
 | File | Responsibility |
 | --- | --- |
-| `default.nix` | option namespace, assertions, deprecation/migration decisions; instantiates the shared module args (`agentRegistry`, `agentNetwork`, `agentResourceClasses`) |
+| `default.nix` | option namespace, assertions, deprecation/migration decisions; instantiates the shared module args (`agentRegistry`, `agentNetwork`, `agentResourceClasses`, `agentCapabilities`) |
 | `agents.nix` | **the** supported-agent registry (packages, guest env, interactive + batch invocation, declared state) |
 | `slots.nix` | the deterministic slot table derived from the resource classes |
 | `network-profiles.nix` | the network capability table (`offline`/`proxy-only`/`package-access`/`internet`) |
 | `guest.nix` | microvm.nix host integration, one prebuilt VM per slot, the guest NixOS config, `agent-run`, host-side hypervisor limits |
 | `config-seed.nix` | runtime, allowlisted configuration staging — the host-side stager, the per-slot read-only seed share and the guest-side seeding oneshot; the ONLY way a guest home is provisioned (guest home-manager activation was removed) |
-| `session.nix` | **the** per-session layout table (paths, owners, modes, the trust policy), the host tmpfiles rules, the pre-launch verifier and the `/workspace` bind mount |
+| `session.nix` | **the** per-session layout table (paths, owners, modes, per-capability presence, the trust policy), the host tmpfiles rules, the pre-launch verifier and the `/workspace` bind mount |
 | `network.nix` | private bridge, TAP enslavement + L2 isolation, firewall chains, NAT, bridge-only LiteLLM forwarder |
 | `hostkeys.nix` | per-slot SSH host identities + the host `known_hosts` |
 | `job.nix` | versioned batch job format, per-slot job dirs, the TRUSTED guest job controller, the UNTRUSTED guest worker unit, the guest-side permission assertions and the HOST-side result verifier |
@@ -57,15 +57,22 @@ shares are gone), so a slot has two virtiofsd instances:
 ```text
 /var/lib/agent-microvms/sessions/<slot>/            root:root 0755  ONE writable share
   workspace/                                        agent           bind target -> the clone
-  input/                                            root:root 0755  spec 0400, prompt 0444
-  controller/                                       root:root 0700  the AUTHORITATIVE result
-  worker/                                           agent     0755  untrusted artifacts
-  worker-logs/                                      root:root 0755  root-opened worker logs
+  input/                                            root:root 0755  spec 0400, prompt 0444   [batch]
+  controller/                                       root:root 0700  the AUTHORITATIVE result [batch]
+  worker/                                           agent     0755  untrusted artifacts      [batch]
+  worker-logs/                                      root:root 0755  root-opened worker logs  [batch]
   state/                                            agent     0755  bind target -> agent state
 /var/lib/agent-microvms/sessions-ro/<slot>/         root:root 0700  ONE read-only share
-  hostkeys/                                         root:root 0700  the slot's SSH identity
+  hostkeys/                                         root:root 0700  the slot's SSH identity  [interactive]
   config-seed/                                      root:root 0500  staged host configuration
 ```
+
+The `[batch]` / `[interactive]` subdirectories exist only when the host selects
+that capability (`capabilities`, lightweight plan phase 5). The two shares, their
+tags, mount points and every owner/mode are the same either way: `session.nix`'s
+table carries the per-capability marking, so the host tmpfiles rules, the
+pre-launch verifier, the launcher's tree preparation and the tests follow it
+without a second decision.
 
 Guest side: `/run/agent-session` and `/run/agent-session-ro`, with
 `/run/agent-session/workspace` bind-mounted to `/workspace` so `agent-run` and
@@ -152,7 +159,31 @@ traffic is additionally impossible at layer 2 (`bridge link … isolated on`).
   agent user cannot read it, so it cannot impersonate its own slot to the
   operator either.
 
+## Capabilities: which halves a host builds
+
+`capabilities` (default `[ "interactive" "batch" ]`) selects which of the two
+execution paths below a host's guests carry — a SET over the ONE guest shape, not
+a second profile axis (lightweight plan phase 5). It is resolved once in
+`default.nix` and handed to the sibling modules as `_module.args
+.agentCapabilities`; each module then makes the decision in the ONE place that
+already owns the concern:
+
+| Module | What the capability set decides there |
+| --- | --- |
+| `session.nix` | which layout-table entries exist — hence the host tmpfiles rules, the pre-launch verifier, the launcher's `prepare_session`, the guest mounts and the tests |
+| `job.nix` | whether the guest module (controller unit, worker template, the three job programs), the worker's endpoint environment and the host result archive exist at all |
+| `hostkeys.nix` | whether the per-slot key pair and the `known_hosts` database are provisioned |
+| `guest.nix` | whether the guest carries the interactive `agent-run` entry point |
+| `workmux.nix` | whether the `microvm-<agent>` panes are registered |
+| `launcher.nix` | which subcommands the ONE launcher accepts (`run`/`ssh` need `interactive`, `submit`/`cancel` need `batch`) |
+| `default.nix` | the batch-capable-agent assertion, and the `enableSsh` reconciliation |
+
+Nothing else branches on it: there is one launcher, one share pair, one session
+tree, one staging path and one guest shape in every case.
+
 ## Interactive execution path
+
+Requires the `interactive` capability.
 
 ```text
 agent-microvm run --attach --agent <a> --name <task> --repository <repo>
@@ -171,6 +202,8 @@ Detached mode (`run` without `--attach`) stops after starting the VM and leaves
 the slot allocated for `ssh`/`console`/`stop`.
 
 ## Batch execution path
+
+Requires the `batch` capability.
 
 The batch path has **two guest identities**, because the host acts on the result:
 a TRUSTED controller (guest root) owns the result channel, and an UNTRUSTED
@@ -265,17 +298,22 @@ worthless as evidence.
 
 ## Control-channel identities
 
-- **Interactive/SSH**: one stable ed25519 host key per slot, delivered read-only,
-  pinned in a host `known_hosts`; the launcher verifies strictly
-  (`StrictHostKeyChecking=yes`). `agent-microvm-hostkeys.service` generates and
-  keeps them on the host — not in the world-readable Nix store, and not as
-  agenix secrets (they are host-local, per-slot, regenerable identities):
+- **Interactive/SSH** (the `interactive` capability only): one stable ed25519
+  host key per slot, delivered read-only, pinned in a host `known_hosts`; the
+  launcher verifies strictly (`StrictHostKeyChecking=yes`).
+  `agent-microvm-hostkeys.service` generates and keeps them on the host — not in
+  the world-readable Nix store, and not as agenix secrets (they are host-local,
+  per-slot, regenerable identities):
 
   ```text
-  /var/lib/agent-microvms/hostkeys/<slot>/ssh_host_ed25519_key      root:root 0400
-  /var/lib/agent-microvms/hostkeys/<slot>/ssh_host_ed25519_key.pub  root:root 0444
-  /var/lib/agent-microvms/known_hosts                               root:root 0444
+  /var/lib/agent-microvms/sessions-ro/<slot>/hostkeys/ssh_host_ed25519_key      root:root 0400
+  /var/lib/agent-microvms/sessions-ro/<slot>/hostkeys/ssh_host_ed25519_key.pub  root:root 0444
+  /var/lib/agent-microvms/known_hosts                                          root:root 0444
   ```
+
+  A host that does not select `interactive` has none of this: no key pair, no
+  `known_hosts`, no provisioning unit, no `hostkeys/` subdirectory in the
+  read-only tree and no sshd in the guest.
 
   The guest generates no host keys of its own
   (`services.openssh.generateHostKeys = false`), so the pinned identity is the

@@ -107,6 +107,12 @@
   # MODES from, so the trust boundary is written down exactly once. The job data
   # lives IN the session tree, i.e. in the ONE writable share.
   agentSession,
+  # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
+  # A host that does not select `batch` gets NONE of the guest units, guest
+  # packages, host result archive or unit-ordering statements below — the
+  # decision lives here (and in ../session.nix's per-capability layout table),
+  # never in the consumers.
+  agentCapabilities,
   ...
 }:
 let
@@ -1212,7 +1218,24 @@ let
   # Merged into every slot's guest config by guest.nix, next to the workspace /
   # hostkey shares. Takes the SLOT because the resource limits below are derived
   # from the slot's resource class (ticket 5 C).
-  mkGuestModule = slot: {
+  #
+  # EMPTY without the `batch` capability (lightweight plan phase 5): an
+  # interactive-only guest then contains no controller unit, no worker template
+  # and none of the three job-protocol programs — they are removed from the
+  # closure, not merely left unstarted.
+  mkGuestModule = slot: lib.optionalAttrs agentCapabilities.batch (mkBatchGuestModule slot);
+
+  # The non-login batch WORKER never sources /etc/profile, so guest.nix has to
+  # give it the SAME model-endpoint environment the interactive login shell gets
+  # (see its `modelEndpointEnv`). Rendered HERE so "is there a worker unit at
+  # all?" is decided in exactly one place.
+  mkWorkerEnvironmentModule =
+    env:
+    lib.optionalAttrs agentCapabilities.batch {
+      systemd.services."${paths.workerUnitTemplate}".environment = env;
+    };
+
+  mkBatchGuestModule = slot: {
     environment.systemPackages = [
       agent-job-controller
       agent-job-worker
@@ -1441,7 +1464,7 @@ in
     # guest.nix (shares + services) and launcher.nix (submit/status/recover).
     {
       _module.args.agentJobs = paths // {
-        inherit mkGuestModule;
+        inherit mkGuestModule mkWorkerEnvironmentModule;
         controller = agent-job-controller;
         worker = agent-job-worker;
         assertPaths = agent-job-assert-paths;
@@ -1463,6 +1486,12 @@ in
         }
       ];
 
+    })
+
+    # The host-side RESULT ARCHIVE exists only for the `batch` capability: it is
+    # where `submit` keeps a finished job's verdict after the slot is released,
+    # and an interactive-only host never produces one.
+    (lib.mkIf (cfg.enable && agentCapabilities.batch) {
       # The per-slot job directories live in the session tree, which
       # ./session.nix creates from the ONE layout table (including the two
       # bind-mount points and the MODES that ARE the trust boundary), so

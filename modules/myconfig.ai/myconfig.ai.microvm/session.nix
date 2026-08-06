@@ -34,6 +34,24 @@
 # so a guest has EXACTLY ONE writable share and AT MOST ONE read-only share,
 # and the launcher has exactly one tree to create, verify and remove.
 #
+# PER-CAPABILITY ENTRIES (lightweight plan phase 5)
+# ------------------------------------------------
+# Each entry of the tables below declares WHICH capabilities
+# (`myconfig.ai.microvm.capabilities`) need it, and only the selected entries
+# are created, verified and swept. The SHAPE is unchanged — still one writable
+# and one read-only share, still the same paths and modes — a narrowed host
+# simply has fewer subdirectories in them:
+#
+#   capabilities = [ "interactive" ]  no `input/`, `controller/`, `worker/`,
+#                                     `worker-logs/` (no batch protocol at all)
+#   capabilities = [ "batch" ]        no `hostkeys/` in the read-only tree (no
+#                                     SSH host identity at all)
+#
+# Putting the decision HERE is what keeps it out of the consumers: the host
+# tmpfiles rules, the generated pre-launch verifier, the launcher's
+# `prepare_session`, the guest mounts and tests/microvm.nix are all rendered
+# from the same filtered table.
+#
 # WHY THE READ-ONLY TREE IS SEPARATE (deviation from the plan's sketch)
 # ---------------------------------------------------------------------
 # The plan's target tree puts `config-seed/` INSIDE the writable session share
@@ -67,7 +85,9 @@
 # are generated from it, the pre-launch verifier is generated from it, and
 # tests/microvm.nix asserts against it.
 #
-# There is no opt-out: this is the ONLY share layout the module knows.
+# There is no opt-out: this is the ONLY share layout the module knows. The
+# capability set selects which of its SUBDIRECTORIES exist, never a second
+# layout.
 {
   config,
   lib,
@@ -75,6 +95,13 @@
   # The effective resource-class table (see default.nix): the slot pool whose
   # per-slot share sources must exist before any VM starts.
   agentResourceClasses,
+  # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
+  # THIS is where the interactive/batch decision belongs: every entry of the
+  # layout table below declares WHICH capabilities need it, so a narrowed host
+  # simply has fewer directories — and the tmpfiles rules, the pre-launch
+  # verifier, the guest mounts, the launcher's `prepare_session` and the tests
+  # all follow without a single `if` of their own.
+  agentCapabilities,
   ...
 }:
 let
@@ -122,6 +149,10 @@ let
   # mapping exists exactly once and every consumer (the host tmpfiles rules, the
   # pre-launch verifier and the launcher's tree preparation) uses the same
   # numbers.
+  # `capabilities` is the PER-MODE part of the table (lightweight plan phase 5):
+  # the entry exists iff the host selected at least one of the capabilities that
+  # need it. `bothCapabilities` therefore means "always" — no host can select
+  # neither (default.nix asserts a non-empty set).
   rawLayout = [
     {
       rel = "";
@@ -129,6 +160,7 @@ let
       mode = "0755";
       strictMode = true;
       private = false;
+      capabilities = bothCapabilities;
       purpose = "the session root (root-owned, so the guest agent cannot rename or shadow anything below it)";
     }
     {
@@ -137,6 +169,7 @@ let
       mode = "0755";
       strictMode = false;
       private = false;
+      capabilities = bothCapabilities;
       purpose = "the standalone clone, bind-mounted by the launcher and surfaced as /workspace in the guest";
     }
     {
@@ -145,6 +178,7 @@ let
       mode = "0755";
       strictMode = true;
       private = false;
+      capabilities = [ "batch" ];
       purpose = "the IMMUTABLE batch job input (spec 0400, prompt 0444)";
     }
     {
@@ -153,6 +187,7 @@ let
       mode = "0700";
       strictMode = true;
       private = true;
+      capabilities = [ "batch" ];
       purpose = "the TRUSTED guest controller's channel, where the authoritative result is written";
     }
     {
@@ -161,6 +196,7 @@ let
       mode = "0755";
       strictMode = true;
       private = false;
+      capabilities = [ "batch" ];
       purpose = "the UNTRUSTED worker's own area (the only writable part of the job data)";
     }
     {
@@ -169,6 +205,7 @@ let
       mode = "0755";
       strictMode = true;
       private = false;
+      capabilities = [ "batch" ];
       purpose = "the worker's stdout/stderr, opened as root by the guest's systemd (so no component may be replaceable by the agent)";
     }
     {
@@ -177,6 +214,7 @@ let
       mode = "0755";
       strictMode = false;
       private = false;
+      capabilities = bothCapabilities;
       purpose = "the opt-in, task-scoped agent state, bind-mounted by the launcher";
     }
   ];
@@ -188,6 +226,7 @@ let
       mode = roRootMode;
       strictMode = true;
       private = true;
+      capabilities = bothCapabilities;
       purpose = "the read-only tree of the slot (host identity + staged configuration)";
     }
     {
@@ -196,6 +235,7 @@ let
       mode = "0700";
       strictMode = true;
       private = true;
+      capabilities = [ "interactive" ];
       purpose = "the slot's ed25519 SSH host identity (private key 0400, root-only)";
     }
     {
@@ -204,9 +244,16 @@ let
       mode = "0500";
       strictMode = true;
       private = true;
+      capabilities = bothCapabilities;
       purpose = "the staged, allowlisted host agent configuration (payload of ./config-seed.nix)";
     }
   ];
+
+  bothCapabilities = agentCapabilities.declared;
+  # THE per-mode filter, applied exactly once per tree.
+  selectedByCapability = lib.filter (
+    e: lib.any (c: lib.elem c agentCapabilities.selected) e.capabilities
+  );
 
   withIds = map (
     e:
@@ -216,8 +263,15 @@ let
       gid = gidOf e.owner;
     }
   );
-  layout = withIds rawLayout;
-  roLayout = withIds rawRoLayout;
+  # The FULL tables (every capability's entries) and the SELECTED ones. Only the
+  # selected entries are created, verified and mounted; the full tables stay the
+  # authority over a directory's owner/mode, so a consumer may ask "what mode
+  # does `controller/` have" (./job.nix does, for the guest-side assertions it
+  # bakes in) without having to know whether this host creates it.
+  fullLayout = withIds rawLayout;
+  fullRoLayout = withIds rawRoLayout;
+  layout = selectedByCapability fullLayout;
+  roLayout = selectedByCapability fullRoLayout;
 
   # ---- the POLICY the layout must satisfy ------------------------------
   # Exposed as a FUNCTION (via `_module.args.agentSession.violationsOf`) so the
@@ -320,6 +374,8 @@ let
       roSubdirs
       layout
       roLayout
+      fullLayout
+      fullRoLayout
       violationsOf
       ;
     slotDir = slotName: "${root}/${slotName}";
@@ -332,16 +388,19 @@ let
     # Mode of a layout entry, by its relative name — so a consumer (./job.nix,
     # ./config-seed.nix) does not carry a second copy of the number. `rel = ""`
     # is the per-slot directory of the respective tree.
+    # Looked up in the FULL table on purpose: a directory's owner/mode is a
+    # policy fact of the layout, independent of whether THIS host's capability
+    # set creates the directory.
     modeOf =
       rel:
       (lib.findFirst (
         e: e.rel == rel
-      ) (throw "myconfig.ai.microvm.session: no layout entry '${rel}'") layout).mode;
+      ) (throw "myconfig.ai.microvm.session: no layout entry '${rel}'") fullLayout).mode;
     roModeOf =
       rel:
       (lib.findFirst (
         e: e.rel == rel
-      ) (throw "myconfig.ai.microvm.session: no read-only layout entry '${rel}'") roLayout).mode;
+      ) (throw "myconfig.ai.microvm.session: no read-only layout entry '${rel}'") fullRoLayout).mode;
 
     # ---- guest side (identical for every slot — the share hides the slot) --
     guestTag = "session";
@@ -584,12 +643,14 @@ in
           # The layout table IS the trust boundary; a weakening edit must fail
           # the build rather than produce a guest that can forge its own job
           # result or read the operator's staged configuration.
+          # Applied to the FULL tables, so a weakening edit to an entry this
+          # host happens not to select still fails the build.
           assertion =
             violationsOf {
               writableRoot = root;
               readOnlyRoot = roRoot;
-              writable = layout;
-              readOnly = roLayout;
+              writable = fullLayout;
+              readOnly = fullRoLayout;
               hostKeyDir = paths.hostHostkeysDir (lib.head slots).name;
               configSeedDir = paths.hostConfigSeedDir (lib.head slots).name;
             } == [ ];
@@ -600,8 +661,8 @@ in
               map (v: "  - ${v}") (violationsOf {
                 writableRoot = root;
                 readOnlyRoot = roRoot;
-                writable = layout;
-                readOnly = roLayout;
+                writable = fullLayout;
+                readOnly = fullRoLayout;
                 hostKeyDir = paths.hostHostkeysDir (lib.head slots).name;
                 configSeedDir = paths.hostConfigSeedDir (lib.head slots).name;
               })
