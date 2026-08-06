@@ -59,13 +59,13 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section seed
 ### Capability gating
 
 The host under test may select only one of the two execution capabilities
-(`myconfig.ai.microvm.capabilities`, lightweight plan phase 5). The suite ASKS
-the launcher of that host for the set:
+(`myconfig.ai.microvm.capabilities`, lightweight plan phase 5 + phase 6). The
+suite ASKS the launcher of that host for the set:
 
 ```console
 $ agent-microvm capabilities
 capabilities: interactive batch
-declared: interactive batch
+declared: interactive batch vsock
 ```
 
 That subcommand exists on every host, needs no root and starts nothing. An answer
@@ -76,31 +76,35 @@ refusal messages and defaulted to "this host has everything", so it failed OPEN 
 rewording the refusal would have silently restored the vacuous passes the gating
 exists to prevent.
 
-The sections are gated accordingly:
+The sections are gated accordingly. Every section that drives the guest needs a
+**control channel** — the `transport` requirement — which the host provides by
+selecting `interactive` (the TCP sshd) OR `vsock` (the VSOCK `sshd-vsock@`, plan
+phase 6):
 
 | Section | Needs |
 | --- | --- |
-| `boot`, `net`, `l2`, `malrepo` | `interactive` (every guest command goes through `agent-microvm ssh`) |
-| `creds` | `interactive`; its batch-worker-environment subtest additionally needs `batch` and reports the capability instead of inspecting `agent-job-worker@`, which does not exist without it |
-| `lifecycle`, `forgery` | `interactive` **and** `batch` (they submit jobs and inspect the result channel) |
+| `boot`, `net`, `l2`, `malrepo` | `transport` (a control channel: `interactive` or `vsock`; every guest command goes through `agent-microvm ssh`) |
+| `creds` | `transport`; its batch-worker-environment subtest additionally needs `batch` and reports the capability instead of inspecting `agent-job-worker@`, which does not exist without it |
+| `lifecycle`, `forgery` | `transport` **and** `batch` (they submit jobs and inspect the result channel) |
 | `seed` | neither (it exercises the HOST-side stager) |
 
-Under `--section all` a section whose capability is missing is **SKIPPED**, loudly
+Under `--section all` a section whose requirement is missing is **SKIPPED**, loudly
 and counted (`sections skipped (capability not selected by this host)`); asking
 for exactly such a section **hard-aborts**. Neither is treated as a failure — a
 capability the host deliberately does not select is a configuration fact — but
 running the section anyway would report vacuous passes for its "the guest must
 NOT be able to …" checks, which is the one thing this suite exists to prevent.
 
-**Coverage hole, stated plainly:** on a host that selects only `batch`, seven of
-the eight sections need `interactive` (the control channel *is* ssh), so only
-`seed` runs. That is honest but thin for the configuration with the largest
-untrusted-workload surface. Such a host is covered by the eval/build tier
-(`nix build .#checks.x86_64-linux.microvm-capabilities`, which builds its guest
-closure and runner and asserts every removal against the evaluated config) plus
-`--section seed`. Restoring runtime coverage needs a guest transport that does
-not require sshd — which is what plan phase 6 (VSOCK) is for; a console/vsock
-`guest` transport is the enabler for re-gating those sections.
+**Coverage hole, CLOSED by phase 6:** on a host that selects only `batch` (no
+`vsock`), seven of the eight sections need a control channel and only `seed`
+runs — honest but thin for the configuration with the largest untrusted-workload
+surface. Such a host is covered by the eval/build tier (`nix build
+.#checks.x86_64-linux.microvm-capabilities`, which builds its guest closure and
+runner and asserts every removal against the evaluated config) plus `--section
+seed`. Plan phase 6 (VSOCK) closed the hole: a `capabilities = [ "batch"
+"vsock" ]` host drives the guest over the VSOCK `sshd-vsock@` control channel and
+runs ALL eight sections, exactly like an interactive host. Only a batch-only
+host that also omits `vsock` still narrows to `seed`.
 
 ### Host-side model-endpoint preflight
 

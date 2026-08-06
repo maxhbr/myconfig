@@ -425,6 +425,14 @@ let
   # Batch-only: `enableSsh` is already false on the variant host, which is what
   # the enableSsh/capability reconciliation REQUIRES (see default.nix).
   batchOnlyHost = capabilityHostWith [ "batch" ] { };
+  # Batch + VSOCK (lightweight plan phase 6): a batch-only host that ALSO
+  # selects `vsock`, so it has no TCP sshd but DOES have the VSOCK
+  # `sshd-vsock@` control channel. Needs the dedicated public key (the VSOCK
+  # sshd authorises the same key the interactive one does). `enableSsh` stays
+  # false (from `variantHostWith`), which is exactly the batch+vsock shape.
+  batchVsockHost = capabilityHostWith [ "batch" "vsock" ] {
+    sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+  };
 
   capGuestOf = h: h.config.microvm.vms.${variantSlot.name}.config.config;
   capSessionOf = h: h._module.args.agentSession;
@@ -1941,6 +1949,15 @@ in
       bController = bGuest.systemd.services.${controllerService};
       bWorker = bGuest.systemd.services.${workerService};
 
+      # The batch + VSOCK variant (lightweight plan phase 6): a batch-only host
+      # that ALSO selects `vsock`, so it has the VSOCK `sshd-vsock@` control
+      # channel instead of a TCP sshd. The transport it provides is what lets
+      # the runtime-validation suite reach a batch-only guest at all.
+      bvGuest = capGuestOf batchVsockHost;
+      bvSession = capSessionOf batchVsockHost;
+      bvRules = batchVsockHost.config.systemd.tmpfiles.rules;
+      bvRoSlotDir = bvSession.roSlotDir variantSlot.name;
+
       rels = l: map (e: e.rel) l;
       mentions = rules: infix: lib.any (r: lib.hasInfix infix r) rules;
       # The generated allowlist fragments of a layout table: the launcher's
@@ -2184,6 +2201,102 @@ in
           ] "selects no agent that can run";
           message = "the batch-capable-agent assertion must NOT fire on an interactive-only host";
         }
+
+        # --- BATCH + VSOCK (lightweight plan phase 6): the VSOCK control ----
+        # channel is wired, the TCP sshd is suppressed, and the host-key tree
+        # is provisioned for the VSOCK sshd exactly as for the interactive one.
+        {
+          assertion = bvGuest.microvm.vsock.cid == variantSlot.cid;
+          message = "a batch+vsock guest must set microvm.vsock.cid to the slot's deterministic CID (${toString variantSlot.cid}), got ${toString bvGuest.microvm.vsock.cid}";
+        }
+        {
+          assertion = bvGuest.services.openssh.enable;
+          message = "a batch+vsock guest must enable services.openssh (the sshd-vsock@ unit + its NixOS dropins are gated on it)";
+        }
+        {
+          # The TCP sshd is SUPPRESSED (the recorded deviation from phase 5):
+          # `sshd.service` is not installed, so no TCP listener ever starts —
+          # only the VSOCK `sshd-vsock@`.
+          assertion = !(bvGuest.systemd.services.sshd.enable or true);
+          message = "a batch+vsock guest must NOT install the TCP sshd.service (systemd.services.sshd.enable must be false); only the VSOCK sshd-vsock@ should run";
+        }
+        {
+          assertion = bvGuest.systemd.sockets ? "sshd-vsock" && !(bvGuest.systemd.sockets ? "sshd");
+          message = "a batch+vsock guest must declare the sshd-vsock socket and NO TCP sshd socket";
+        }
+        {
+          assertion = lib.elem session.roSubdirs.hostkeys (rels bvSession.roLayout);
+          message = "a batch+vsock read-only tree must contain the host-key subdirectory (the VSOCK sshd needs the per-slot host identity)";
+        }
+        {
+          assertion = mentions bvRules "${bvRoSlotDir}/${session.roSubdirs.hostkeys}";
+          message = "a batch+vsock host must emit the tmpfiles rule for the host-key directory";
+        }
+        {
+          assertion = lib.elem "agent-microvm-hostkeys" (
+            builtins.attrNames batchVsockHost.config.systemd.services
+          );
+          message = "a batch+vsock host must provision per-slot SSH host keys (the VSOCK channel is host-key-verified, like the TAP one)";
+        }
+        {
+          assertion = bvGuest.users.users.agent.openssh.authorizedKeys.keyFiles or [ ] != [ ];
+          message = "a batch+vsock guest must authorise the dedicated SSH key for the VSOCK sshd";
+        }
+        {
+          assertion = !(lib.elem "agent-run" (capGuestPkgNames batchVsockHost));
+          message = "a batch+vsock guest must not carry the interactive `agent-run` entry point (vsock adds a control channel, not the interactive capability)";
+        }
+        {
+          # POSITIVE control: the batch-only (no vsock) variant has NONE of the
+          # VSOCK plumbing — vsock is OFF by default, so a default/batch host is
+          # byte-for-byte without it.
+          assertion = bGuest.microvm.vsock.cid == null && !(bGuest.systemd.sockets ? "sshd-vsock");
+          message = "a batch-only (no vsock) guest must have no VSOCK device and no sshd-vsock socket";
+        }
+
+        # --- NEGATIVE: vsock requires a key + the closed network profiles ---
+        {
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.sshPublicKeyFile = lib.mkForce null;
+            }
+          ] "an SSH control channel";
+          message = "vsock without an sshPublicKeyFile must be rejected (the VSOCK sshd needs an authorising key)";
+        }
+        {
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.networkProfile = lib.mkForce "internet";
+              myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
+            }
+          ] "closed network profiles";
+          message = "vsock with networkProfile = \"internet\" must be rejected";
+        }
+        {
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.networkProfile = lib.mkForce "package-access";
+              myconfig.ai.microvm.packageProxyPort = 3128;
+              myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
+            }
+          ] "closed network profiles";
+          message = "vsock with networkProfile = \"package-access\" must be rejected";
+        }
       ]);
     in
     pkgs.runCommand "microvm-capabilities"
@@ -2198,6 +2311,12 @@ in
         interactiveRunner = iGuest.microvm.declaredRunner;
         batchGuest = bGuest.system.build.toplevel;
         batchRunner = bGuest.microvm.declaredRunner;
+        # The batch+vsock guest, BUILT (lightweight plan phase 6): the narrowed
+        # closure where the VSOCK sshd + the suppressed TCP sshd live is exactly
+        # where a `writeShellApplication` shellcheck failure or a VSOCK-wiring
+        # eval error would hide, so it is forced like the other two.
+        batchVsockGuest = bvGuest.system.build.toplevel;
+        batchVsockRunner = bvGuest.microvm.declaredRunner;
         # The three launchers, BUILT (their own shellcheck gate) and then
         # inspected: the narrowed ones must refuse the subcommands whose
         # machinery they do not have, the default one must contain no guard at
@@ -2205,6 +2324,9 @@ in
         defaultLauncher = "${launcherPkg}/bin/agent-microvm";
         interactiveLauncher = "${findPkg interactiveOnlyHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
         batchLauncher = "${findPkg batchOnlyHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        # The batch+vsock launcher: it must ALLOW `ssh` (over VSOCK) and report
+        # the vsock capability, while still refusing `run` (interactive-only).
+        batchVsockLauncher = "${findPkg batchVsockHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
         # The generated pre-launch verifiers: they are rendered FROM the layout
         # table, so a narrowed tree must not even mention the other half's
         # directories.
@@ -2233,7 +2355,11 @@ in
           grep -qF -- "require_capability $pair" "$interactiveLauncher" \
             || { echo "the interactive-only launcher does not refuse '$pair'" >&2; exit 1; }
         done
-        for pair in "run interactive" "ssh interactive"; do
+        # `run` needs `interactive` (single capability). (`ssh` needs `interactive`
+        # OR `vsock` — phase 6 — so its refusal is `require_capability_any ssh
+        # interactive vsock`, asserted explicitly below, not the single-capability
+        # `require_capability ssh interactive` form this loop checks.)
+        for pair in "run interactive"; do
           grep -qF -- "require_capability $pair" "$batchLauncher" \
             || { echo "the batch-only launcher does not refuse '$pair'" >&2; exit 1; }
         done
@@ -2261,7 +2387,7 @@ in
         # on EVERY host: runtime-validation.sh must never have to infer it from an
         # English refusal message (a detection that failed OPEN, i.e. defaulted to
         # "this host has everything", the moment the message was reworded).
-        for l in "$defaultLauncher" "$interactiveLauncher" "$batchLauncher"; do
+        for l in "$defaultLauncher" "$interactiveLauncher" "$batchLauncher" "$batchVsockLauncher"; do
           grep -qF -- 'cmd_capabilities()' "$l" \
             || { echo "a launcher has no 'capabilities' subcommand" >&2; exit 1; }
           grep -qF -- 'capabilities)     cmd_capabilities' "$l" \
@@ -2275,6 +2401,27 @@ in
           || { echo "the interactive-only launcher does not report its capability" >&2; exit 1; }
         grep -qF -- "readonly SELECTED_CAPABILITIES=${lib.escapeShellArg "batch"}" "$batchLauncher" \
           || { echo "the batch-only launcher does not report its capability" >&2; exit 1; }
+        grep -qF -- "readonly SELECTED_CAPABILITIES=${lib.escapeShellArg "batch vsock"}" "$batchVsockLauncher" \
+          || { echo "the batch+vsock launcher does not report its capability set (batch vsock)" >&2; exit 1; }
+
+        # --- the batch+vsock launcher: `ssh` is ALLOWED over VSOCK, `run` refused ---
+        # `ssh` needs `interactive` OR `vsock` (phase 6): a batch+vsock host has
+        # vsock, so `ssh` is NOT refused — the VSOCK control channel replaces the
+        # TCP sshd. `run` still needs `interactive`, so it IS refused. The launcher
+        # also renders `VSOCK_ENABLED=1`, the flag its `ssh`/readiness path branches on.
+        if grep -qF -- 'require_capability_any ssh' "$batchVsockLauncher"; then
+          echo "the batch+vsock launcher refuses 'ssh' despite selecting vsock" >&2; exit 1
+        fi
+        grep -qF -- "require_capability run interactive" "$batchVsockLauncher" \
+          || { echo "the batch+vsock launcher does not refuse 'run' (it has no interactive capability)" >&2; exit 1; }
+        grep -qF -- 'readonly VSOCK_ENABLED=1' "$batchVsockLauncher" \
+          || { echo "the batch+vsock launcher does not render VSOCK_ENABLED=1" >&2; exit 1; }
+        # The batch-only (no vsock) launcher, by contrast, refuses `ssh` (no control
+        # channel at all) and renders VSOCK_ENABLED=0.
+        grep -qF -- 'require_capability_any ssh interactive vsock' "$batchLauncher" \
+          || { echo "the batch-only (no vsock) launcher does not refuse 'ssh' (it has no control channel)" >&2; exit 1; }
+        grep -qF -- 'readonly VSOCK_ENABLED=0' "$batchLauncher" \
+          || { echo "the batch-only (no vsock) launcher does not render VSOCK_ENABLED=0" >&2; exit 1; }
 
         # --- `usage` reports no directory the narrowing removed -------------
         # `$RESULTS_DIR` is not created without the `batch` capability, so a
@@ -2353,6 +2500,8 @@ in
           echo "  interactive-only runner: $interactiveRunner"
           echo "  batch-only       guest : $batchGuest"
           echo "  batch-only       runner: $batchRunner"
+          echo "  batch+vsock      guest : $batchVsockGuest"
+          echo "  batch+vsock      runner: $batchVsockRunner"
           cat "$evalMarker"
         } > "$out"
       '';
@@ -2453,7 +2602,7 @@ in
           myconfig.ai.microvm.enableSsh = lib.mkForce true;
           myconfig.ai.microvm.sshPublicKeyFile = lib.mkForce null;
         }
-      ] "enableSsh requires an explicit sshPublicKeyFile";
+      ] "an SSH control channel";
       message = "enableSsh without sshPublicKeyFile must be rejected";
     }
     {

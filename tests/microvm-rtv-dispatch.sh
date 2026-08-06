@@ -141,11 +141,11 @@ agent-microvm() {
                     printf 'capabilities: %s\n' "${RTV_CAPS:-interactive batch}"
                     ;;
                 nocaps)
-                    printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch}"
+                    printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch vsock}"
                     ;;
                 *)
                     printf 'capabilities: %s\n' "${RTV_CAPS:-interactive batch}"
-                    printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch}"
+                    printf 'declared: %s\n' "${RTV_DECLARED:-interactive batch vsock}"
                     ;;
             esac
             ;;
@@ -179,7 +179,7 @@ run_dispatch() {
         SECTION="$section"
         export RTV_ENDPOINT_UP="$up"
         export RTV_CAPS="${RTV_CAPS:-interactive batch}"
-        export RTV_DECLARED="${RTV_DECLARED:-interactive batch}"
+        export RTV_DECLARED="${RTV_DECLARED:-interactive batch vsock}"
         export RTV_CAPS_MODE="${RTV_CAPS_MODE:-ok}"
         # shellcheck source=/dev/null
         source "$WORK/dispatch.sh"
@@ -400,8 +400,8 @@ else
     fail "wrong 'sections ran' on a batch-only host: $(grep '^#     sections ran:' "$log" || echo missing)"
 fi
 for s in boot net l2 creds malrepo; do
-    if grep -q "SKIP  section '$s' SKIPPED: this host does not select the interactive capability" "$log"; then
-        pass "section $s was skipped with the CAPABILITY as the reason"
+    if grep -q "SKIP  section '$s' SKIPPED: this host does not provide the control channel (the 'interactive' or 'vsock' capability)" "$log"; then
+        pass "section $s was skipped with the CONTROL CHANNEL as the reason"
     else
         fail "section $s was not skipped for the right reason: $(grep "section '$s'" "$log" || echo missing)"
     fi
@@ -419,7 +419,7 @@ if grep -q '^#     sections skipped (capability not selected by this host): boot
 else
     fail "wrong capability-skip summary: $(grep 'capability not selected' "$log" || echo missing)"
 fi
-if grep -q '^#     capabilities of the host under test: batch (declared: interactive batch)$' "$log"; then
+if grep -q '^#     capabilities of the host under test: batch (declared: interactive batch vsock)$' "$log"; then
     pass "the run reports the capability set it read from the launcher"
 else
     fail "the capability set was not reported: $(grep 'capabilities of the host' "$log" || echo missing)"
@@ -437,7 +437,7 @@ else
     fail "wrong 'sections ran' on an interactive-only host: $(grep '^#     sections ran:' "$log" || echo missing)"
 fi
 for s in lifecycle forgery; do
-    if grep -q "SKIP  section '$s' SKIPPED: this host does not select the batch capability" "$log"; then
+    if grep -q "SKIP  section '$s' SKIPPED: this host does not provide the batch capability" "$log"; then
         pass "section $s was skipped for the missing batch capability"
     else
         fail "section $s was not skipped for the right reason: $(grep "section '$s'" "$log" || echo missing)"
@@ -507,15 +507,104 @@ else
     fail "a launcher that does not declare 'batch' was accepted"
 fi
 # ... and so is a SELECTED capability the suite has no gating rule for.
+# (`vsock` is NOT unknown anymore — phase 6 made it a recognised transport —
+# so a truly-unknown token 'bogus' is used here, and the next block proves
+# 'vsock' is now accepted.)
+RTV_CAPS="interactive bogus"
+RTV_DECLARED="interactive batch vsock"
+rc="$(run_dispatch all 1)"
+RTV_CAPS="interactive batch"
+RTV_DECLARED="interactive batch vsock"
+if ((rc != 0)); then
+    pass "an unknown SELECTED capability ('bogus') aborts the run (exit $rc)"
+else
+    fail "an unknown selected capability was silently ignored"
+fi
+# `vsock` is now a RECOGNISED capability (lightweight plan phase 6): selecting
+# it must NOT abort, and it provides the control-channel TRANSPORT, so the
+# previously-SSH-only sections run exactly as on an interactive host.
 RTV_CAPS="interactive vsock"
 RTV_DECLARED="interactive batch vsock"
 rc="$(run_dispatch all 1)"
 RTV_CAPS="interactive batch"
-RTV_DECLARED="interactive batch"
-if ((rc != 0)); then
-    pass "an unknown SELECTED capability aborts the run (exit $rc)"
+RTV_DECLARED="interactive batch vsock"
+log="$WORK/run-all-1.log"
+if ((rc == 0)); then
+    pass "selecting 'vsock' does not abort the run (it is a known capability)"
 else
-    fail "an unknown selected capability was silently ignored"
+    fail "selecting 'vsock' aborted the run (exit $rc) — phase 6 did not teach the suite about it"
+fi
+# `vsock` adds a TRANSPORT, never a batch capability, so an interactive+vsock
+# host runs exactly what an interactive-only host runs (the six non-batch
+# sections + seed) and skips lifecycle/forgery for the missing `batch` — vsock
+# removed nothing and added a (redundant, here) second control channel.
+if grep -q '^#     sections ran: boot net l2 creds malrepo seed$' "$log"; then
+    pass "an interactive+vsock host runs the same six+seed as interactive-only (vsock adds a transport, not batch)"
+else
+    fail "an interactive+vsock host did not run the expected sections: $(grep '^#     sections ran:' "$log" || echo missing)"
+fi
+for s in lifecycle forgery; do
+    if grep -q "SKIP  section '$s' SKIPPED: this host does not provide the batch capability" "$log"; then
+        pass "interactive+vsock skips $s for the missing batch (vsock is not batch)"
+    else
+        fail "interactive+vsock did not skip $s for batch: $(grep "section '$s'" "$log" || echo missing)"
+    fi
+done
+
+printf '\n=== 12. a batch+vsock host: the VSOCK transport runs the previously-SSH-only sections ===\n'
+# THE point of phase 6 (lightweight plan): a `capabilities = [ "batch" "vsock" ]`
+# host has NO interactive sshd, but the VSOCK `sshd-vsock@` IS a control channel,
+# so the `transport` requirement is met and every section runs — closing the
+# phase-5 coverage hole (a batch-only host without vsock ran only `seed`).
+RTV_CAPS="batch vsock"
+RTV_DECLARED="interactive batch vsock"
+rc="$(run_dispatch all 1)"
+RTV_CAPS="interactive batch"
+RTV_DECLARED="interactive batch vsock"
+log="$WORK/run-all-1.log"
+expect "batch+vsock all+up exits 0" 0 "$rc"
+if grep -q '^#     sections ran: boot net l2 creds lifecycle malrepo forgery seed$' "$log"; then
+    pass "a batch+vsock host runs ALL eight sections over the VSOCK transport"
+else
+    fail "a batch+vsock host did not run every section: $(grep '^#     sections ran:' "$log" || echo missing)"
+fi
+for h in \
+    "boot + filesystem" \
+    "network: proxy-only allow/deny matrix" \
+    "layer 2 isolation" \
+    "credential boundary" \
+    "lifecycle failure handling" \
+    "hostile repository fixture" \
+    "batch result channel: forgery" \
+    "runtime configuration staging"; do
+    if ran_header "$log" "$h"; then
+        pass "batch+vsock ran: $h"
+    else
+        fail "batch+vsock did NOT run: $h"
+    fi
+done
+if grep -q 'sections skipped' "$log"; then
+    fail "a batch+vsock host skipped a section (the VSOCK transport should reach every section): $(grep 'sections skipped' "$log")"
+else
+    pass "a batch+vsock host skips nothing — the coverage hole is closed"
+fi
+if grep -q '^#     capabilities of the host under test: batch vsock (declared: interactive batch vsock)$' "$log"; then
+    pass "the batch+vsock run reports the capability set it read"
+else
+    fail "the capability set was not reported: $(grep 'capabilities of the host' "$log" || echo missing)"
+fi
+# And the NEGATIVE control: a batch-only host WITHOUT vsock still runs only
+# `seed` (no control channel at all) — phase 6 did not change that honest,
+# narrower validation.
+RTV_CAPS="batch"
+rc="$(run_dispatch all 1)"
+RTV_CAPS="interactive batch"
+log="$WORK/run-all-1.log"
+expect "batch-only (no vsock) still exits 0" 0 "$rc"
+if grep -q '^#     sections ran: seed$' "$log"; then
+    pass "a batch-only host without vsock still runs only 'seed' (no control channel)"
+else
+    fail "a batch-only host without vsock did not narrow to 'seed': $(grep '^#     sections ran:' "$log" || echo missing)"
 fi
 
 printf '\n%s: %d passed, %d failed\n' "$0" "$PASSED" "$FAILED"

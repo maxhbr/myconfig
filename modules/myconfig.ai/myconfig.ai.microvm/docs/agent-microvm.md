@@ -96,7 +96,7 @@ myconfig.ai.microvm = {
 | `guestAgentUid` / `guestAgentGid` | `1000` | Numeric ids of the guest `agent` user, and the host-side owner of every guest-writable path. Asserted unprivileged. |
 | `job.defaultTimeoutSeconds` / `job.maxTimeoutSeconds` / `job.gracePeriodSeconds` | `3600` / `86400` / `120` | Batch-job timeouts. |
 | `enableSsh` | `true` | Guest SSH server, private interface only. Rejected at eval unless `capabilities` includes `interactive` (see [Capabilities](#capabilities)). |
-| `sshPublicKeyFile` | `null` | **Required** when `enableSsh`. See [The dedicated SSH key](#the-dedicated-ssh-key). |
+| `sshPublicKeyFile` | `null` | **Required** when `enableSsh` OR the `vsock` capability is set (the VSOCK `sshd-vsock@` authorises the same dedicated key). See [The dedicated SSH key](#the-dedicated-ssh-key). |
 | `passwordlessControl` | `false` | Scoped `NOPASSWD`+`SETENV` sudo rule for exactly `agent-microvm`, for members of the `agent-microvm` group. |
 | `configSeed.hostHome` | the primary user's home (`config.users.users.<myconfig.user>.home`) | The host home the **runtime configuration staging** resolves its allowlist against. Never mounted — only the allowlisted paths are read. See [Runtime configuration staging](#runtime-configuration-staging). |
 | `configSeed.extraPaths` | `.config/git/attributes`, `.config/git/config` | Agent-independent additions to the staging allowlist. Same validation as the registry's per-agent `configPaths`. |
@@ -178,16 +178,19 @@ what the pool is built from.
 
 ### Capabilities
 
-`myconfig.ai.microvm.capabilities` selects which of the two **execution
-capabilities** a host's guests carry (lightweight plan phase 5). It is a SET
+`myconfig.ai.microvm.capabilities` selects which **capabilities** a host's
+guests carry (lightweight plan phase 5; `vsock` added in phase 6). It is a SET
 over the ONE guest shape — deliberately not a three-valued
 `interactive | batch | combined` mode, which would be a compatibility profile
-crossed with that shape. The default is **both**, i.e. the historical behaviour.
+crossed with that shape. The default is **both** `interactive` and `batch`, i.e.
+the historical behaviour; `vsock` is OFF by default, so a default host's guest
+closure is byte-for-byte unchanged.
 
 | Capability | What it adds |
 | --- | --- |
 | `interactive` | the SSH server (`enableSsh`) and the per-slot SSH host identity with its read-only `hostkeys/` subdirectory, the `known_hosts` database and its provisioning unit, the guest `agent-run` entry point, the Workmux `microvm-<agent>` panes, and the launcher's `run` / `ssh` subcommands |
 | `batch` | the TRUSTED guest job controller, the UNTRUSTED `agent-job-worker@` template, the guest job-protocol programs, the `input/`, `controller/`, `worker/` and `worker-logs/` subdirectories of the session tree (with their host tmpfiles rules), the host-side result archive `<runtimeRoot>/results`, and the launcher's `submit` / `cancel` subcommands |
+| `vsock` | a **VSOCK control channel** (plan phase 6): the guest gets a VSOCK device (`microvm.vsock.cid` = the slot's deterministic CID) and a VSOCK-only `sshd-vsock@` unit (SSH over AF_VSOCK, reused from upstream), reachable ONLY from the host (CID 2) and NOT from any TCP interface. The per-slot SSH host identity (`hostkeys/`) and a `known_hosts` entry keyed by the VSOCK mux path are provisioned, so the VSOCK channel is host-key-verified exactly like the TAP one. It is what lets a batch-only host — which has no TCP sshd — still be driven by `agent-microvm ssh` and the runtime-validation suite. **Additive**: the TAP/bridge/firewall and the loopback LiteLLM forwarder are unchanged; `vsock` is a control-channel axis, not a transport enum. Only allowed with `networkProfile = "proxy-only"`/`"offline"`, and requires an `sshPublicKeyFile` (the VSOCK sshd authorises the same dedicated key). |
 
 A deselected capability is **absent**, not merely unused: the units are not in
 the guest, the programs are not in its closure, and the directories are never
@@ -201,9 +204,16 @@ configuration, the standalone clone and the proxy-only network:
 myconfig.ai.microvm.capabilities = [ "interactive" ];
 
 # a batch-only worker host: no sshd, no host key, no known_hosts, no readiness
-# polling, no workmux panes, `run`/`ssh` refused
+# polling, no workmux panes, `run`/`ssh` refused (no control channel)
 myconfig.ai.microvm.capabilities = [ "batch" ];
 myconfig.ai.microvm.enableSsh = false;   # REQUIRED (see below)
+
+# a batch-only worker host WITH a VSOCK control channel (plan phase 6): no TCP
+# sshd, but the VSOCK `sshd-vsock@` lets `agent-microvm ssh` and the
+# runtime-validation suite reach the guest — closing the batch-only coverage hole
+myconfig.ai.microvm.capabilities = [ "batch" "vsock" ];
+myconfig.ai.microvm.enableSsh = false;
+myconfig.ai.microvm.sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
 ```
 
 `enableSsh` and `capabilities` are reconciled explicitly: `enableSsh` remains
@@ -215,8 +225,9 @@ host identity, the `known_hosts` database and the launcher's `ssh` /
 `run --attach` paths would then all disappear behind an option that still read
 `true`.
 
-Rejected at evaluation time: an empty capability set, an unknown token, and
-`enableSsh = true` without `interactive`.
+Rejected at evaluation time: an empty capability set, an unknown token,
+`enableSsh = true` without `interactive`, `vsock` without an `sshPublicKeyFile`,
+and `vsock` paired with an insecure network profile (`package-access`/`internet`).
 
 The launcher of a narrowed host **refuses** the other capability's subcommands
 up front, naming the option to change:
@@ -234,7 +245,7 @@ machine-readable, needs no root and starts nothing:
 ```console
 $ agent-microvm capabilities
 capabilities: interactive
-declared: interactive batch
+declared: interactive batch vsock
 ```
 
 This is how tooling decides what can be exercised on a host; nothing has to infer
@@ -246,12 +257,32 @@ debug a batch-only one.
 
 The real-KVM validation suite honours the same split: it reads
 `agent-microvm capabilities` (and hard-aborts if it cannot parse the answer),
-every section that drives a guest over SSH requires `interactive`, `lifecycle`
-and `forgery` additionally require `batch`, and a section whose capability the
-host does not select is SKIPPED (or hard-aborts when asked for explicitly) rather
-than reporting vacuous passes. A batch-only host can therefore only run the
-`seed` section today; see
+every section that drives a guest needs a **control channel** — the `transport`
+requirement, met by `interactive` (the TCP sshd) OR `vsock` (the VSOCK
+`sshd-vsock@`, plan phase 6) — `lifecycle` and `forgery` additionally require
+`batch`, and a section whose requirement the host does not meet is SKIPPED (or
+hard-aborts when asked for explicitly) rather than reporting vacuous passes. A
+batch-only host without `vsock` can therefore only run the `seed` section; a
+batch+vsock host runs ALL eight. See
 [runtime validation](./agent-microvm-runtime-validation.md).
+
+### VSOCK versus TAP transport
+
+The guest's **model-API** traffic (the LiteLLM proxy) always goes over the
+**TAP**/private-bridge path today: the guest's loopback `litellm-forwarder`
+-> `<gatewayAddress>:<litellmPort>` -> the host's bridge-only
+`agent-litellm-proxy` socket -> `systemd-socket-proxyd` -> the loopback LiteLLM
+proxy. That forwarder is the ONE shape the module has; the plan's literal
+phase-6 sketch (a VSOCK *proxy* forwarder replacing the TAP) is **not**
+implemented — it would fork that one shape — and is recorded as a deviation.
+
+`vsock` is a **control** channel, not a proxy transport: it carries
+`agent-microvm ssh` / the runtime-validation suite (host -> guest commands and
+their output) over AF_VSOCK instead of the TAP, so a guest with no TCP sshd
+(batch+vsock) can still be driven. It reuses the per-slot SSH host identity, so
+the channel is host-key-verified exactly like the TAP one. The two coexist on a
+host that selects both `interactive` and `vsock` (TAP for the model API and for
+`ssh` when the TCP sshd is up; VSOCK as a second control channel).
 
 Stale directories from a PREVIOUS capability selection are handled, not ignored:
 the launcher sweeps every top-level entry of a slot's two trees that the current

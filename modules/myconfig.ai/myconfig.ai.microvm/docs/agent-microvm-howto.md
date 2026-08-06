@@ -61,7 +61,9 @@ Supported agents: `claude`, `codex`, `pi`, `opencode`, `hermes`.
 This journey assumes a host with BOTH execution capabilities (the default). If a
 step is refused with `'submit' needs the 'batch' capability` (or
 `'run' needs the 'interactive' capability`), the host deliberately selects only
-one of them — see [Capabilities](./agent-microvm.md#capabilities).
+one of them — see [Capabilities](./agent-microvm.md#capabilities). A host that
+also selects the `vsock` capability (plan phase 6) gets a VSOCK control channel
+that lets `agent-microvm ssh` reach a guest even without a TCP sshd.
 
 ## 1. Interactive: hand a task to an agent
 
