@@ -79,8 +79,9 @@ let
   #     here; only *which* paths are copied, and how host-only URLs are
   #     rewritten, is a build-time decision.
   #   * the model endpoint, so `agent-session doctor` can probe it from INSIDE
-  #     a sandbox — the only place where the answer means anything (see
-  #     ./litellm-bridge.nix).
+  #     a sandbox — the only place where the answer means anything — and the
+  #     pasta network spec that makes that endpoint reachable (see
+  #     ./litellm-endpoint.nix).
   # `--set-default` keeps every variable overridable per invocation.
   sessionEnv =
     lib.optionalAttrs cfg.home.enable {
@@ -89,6 +90,14 @@ let
     }
     // lib.optionalAttrs cfg.litellm.enable {
       AGENT_SANDBOX_MODEL_ENDPOINT = cfg.litellm.endpoint;
+      # pasta(1) network spec: --map-gw suppresses podman's --no-map-gw (which
+      # would otherwise disable loopback mapping), and --map-host-loopback
+      # translates the endpoint host (cfg.litellm.address) to the host's
+      # 127.0.0.1, where the loopback-only LiteLLM proxy listens. runsc's own
+      # netstack then just routes the endpoint address to the tap; pasta does
+      # the translation. See ./litellm-endpoint.nix for why the old member-less
+      # bridge could not work.
+      AGENT_SANDBOX_NETWORK = "pasta:--map-gw,--map-host-loopback,${cfg.litellm.address}";
     }
     // lib.optionalAttrs (cfg.defaultCommand != null) {
       AGENT_SANDBOX_DEFAULT_COMMAND = cfg.defaultCommand;
@@ -114,7 +123,7 @@ let
         '';
 in
 {
-  imports = [ ./litellm-bridge.nix ];
+  imports = [ ./litellm-endpoint.nix ];
 
   options.myconfig.ai.gvisor-agent-sandbox = with lib; {
     enable = mkEnableOption "myconfig.ai.gvisor-agent-sandbox";
@@ -219,8 +228,8 @@ in
           (`http://127.0.0.1:4000/v1`), which does not exist inside a sandbox:
           there, `127.0.0.1` is the container's own loopback, so every seeded
           agent config would fail with a connection error. These rules rewrite
-          such URLs to the bridge endpoint from `./litellm-bridge.nix`, which a
-          sandbox can reach.
+          such URLs to the endpoint address from `./litellm-endpoint.nix`,
+          which pasta maps to the host loopback so a sandbox can reach it.
 
           Set to `[ ]` to copy the configuration verbatim.
         '';
