@@ -191,6 +191,126 @@ let
   # One call site each in `run` and `submit`, before the VM is started.
   configSeedStage = mkFragment bodyIndent ''stage_config_seed "$slot"'';
 
+  # --- the slot's SSH HOST IDENTITY (ticket 3 B, hardened here) -----------
+  # `agent-microvm-hostkeys.service` provisions ONE stable ed25519 host key per
+  # slot plus that slot's entry in the aggregated `known_hosts`. Every SSH-based
+  # control transport of this launcher — the TAP sshd AND the VSOCK
+  # `sshd-vsock@` (lightweight plan phase 6) — verifies the guest against that
+  # entry with `StrictHostKeyChecking=yes`, so an identity that is MISSING,
+  # TRUNCATED, mis-owned or INCONSISTENT with `known_hosts` does not degrade the
+  # channel, it breaks it: the guest's sshd fails to start, or it presents a key
+  # ssh refuses — which surfaces as an opaque readiness timeout rather than as
+  # "your host identity is broken".
+  #
+  # The validation below therefore inspects the ACTUAL FILES rather than a unit's
+  # activation state, and it is emitted ONLY on a host that has an SSH-based
+  # control transport at all (`interactive` for the TAP sshd, `vsock` for the
+  # VSOCK one); a host with neither provisions no key material, so the helpers
+  # would be unreachable code and their `readonly`s unused.
+  #
+  # THE PATH IS NOT DUPLICATED: the runtime composition
+  # `$HOSTKEYS_ROOT/<slot>/$HOSTKEYS_SUBDIR/$HOSTKEY_NAME` is checked at EVAL
+  # time against hostkeys.nix's own `slotDir`/`keyName`, so a rename in
+  # session.nix's layout table cannot leave this launcher validating a stale
+  # path.
+  hostkeysSubdir =
+    assert lib.all (
+      s:
+      agentHostKeys.slotDir s.name == "${agentHostKeys.root}/${s.name}/${agentSession.roSubdirs.hostkeys}"
+    ) slots;
+    agentSession.roSubdirs.hostkeys;
+  hostIdentityCapable = agentCapabilities.interactive || agentCapabilities.vsock;
+  hostIdentityHelpers = lib.optionalString hostIdentityCapable (
+    mkFragment topIndent ''
+      # ---- the per-slot SSH HOST IDENTITY --------------------------------
+      # The two facts session.nix/hostkeys.nix own about the on-disk layout of
+      # a slot's identity; $HOSTKEYS_ROOT (above) is the third.
+      readonly HOSTKEYS_SUBDIR=${lib.escapeShellArg hostkeysSubdir}
+      readonly HOSTKEY_NAME=${lib.escapeShellArg agentHostKeys.keyName}
+      hostkey_dir()     { printf '%s' "$HOSTKEYS_ROOT/$1/$HOSTKEYS_SUBDIR"; }
+      hostkey_private() { printf '%s' "$(hostkey_dir "$1")/$HOSTKEY_NAME"; }
+      hostkey_public()  { printf '%s' "$(hostkey_dir "$1")/$HOSTKEY_NAME.pub"; }
+
+      # The $KNOWN_HOSTS ALIAS this host's ssh invocations will actually verify
+      # the slot against — decided by the SAME `vsock_control_channel`
+      # predicate every ssh call site uses, so the validation can never pass on
+      # an entry no connection consults: the VSOCK mux socket path when VSOCK is
+      # the only control channel, the slot's deterministic IPv4 otherwise.
+      host_identity_alias() {
+          if vsock_control_channel; then
+              printf '%s' "vsock-mux/$STATE_ROOT/$1/notify.vsock"
+          else
+              slot_ip "$1"
+          fi
+      }
+
+      # Is the slot's host identity COMPLETE and CONSISTENT? This validates the
+      # actual file CONTENT and metadata, never mere existence:
+      #   * the private key exists and is NON-EMPTY (a zero-byte file is the
+      #     classic half-written-pair state, and `ssh-keygen` would have to be
+      #     asked to overwrite it);
+      #   * the public key exists and is NON-EMPTY;
+      #   * both are root:root, with the private key 0400 (hence NOT group- or
+      #     world-readable) and the public key 0444 (world-readable on purpose).
+      #     virtiofsd passes ownership and modes through unchanged, so a
+      #     group-readable private key HERE is a group-readable private key
+      #     inside the guest, where the untrusted `agent` user lives;
+      #   * $KNOWN_HOSTS holds EXACTLY ONE entry for that alias. Two entries are
+      #     a CONFLICT, which must be repaired rather than accepted: ssh would
+      #     refuse the connection, and "repair" is the only outcome that leaves a
+      #     verifiable channel;
+      #   * that entry's key type and body match the slot's public key EXACTLY.
+      # NO private-key material is ever read into a variable, printed or logged:
+      # the private key is inspected through `[[ -s ]]` and `stat` only.
+      host_identity_complete() {
+          local slot="$1" key pub alias entry recorded expected meta
+          key="$(hostkey_private "$slot")"
+          pub="$(hostkey_public "$slot")"
+          [[ -s "$key" ]] || return 1
+          [[ -s "$pub" ]] || return 1
+          meta="$(stat -c '%U:%G %a' -- "$key" 2>/dev/null)" || return 1
+          [[ "$meta" == "root:root 400" ]] || return 1
+          meta="$(stat -c '%U:%G %a' -- "$pub" 2>/dev/null)" || return 1
+          [[ "$meta" == "root:root 444" ]] || return 1
+          [[ -s "$KNOWN_HOSTS" ]] || return 1
+          alias="$(host_identity_alias "$slot")" || return 1
+          [[ -n "$alias" ]] || return 1
+          # `ssh-keygen -F` is the SAME matcher ssh itself uses, so this cannot
+          # disagree with what StrictHostKeyChecking=yes does at connect time.
+          entry="$(ssh-keygen -F "$alias" -f "$KNOWN_HOSTS" 2>/dev/null | grep -v '^#' || true)"
+          [[ -n "$entry" ]] || return 1
+          [[ "$(printf '%s\n' "$entry" | wc -l)" -eq 1 ]] || return 1
+          recorded="$(printf '%s\n' "$entry" | cut -d" " -f2,3)"
+          expected="$(cut -d" " -f1,2 -- "$pub")"
+          [[ "$recorded" == "$expected" ]] || return 1
+          return 0
+      }''
+  );
+  # The pre-launch trigger, spliced into `start_vm`. Emitted only where an
+  # SSH-based control transport exists (see `hostIdentityHelpers`).
+  # NOTE the trailing `+ bodyIndent`: the splice site is
+  # `${hostIdentityEnsure}systemctl start "microvm@$1.service"`, so the fragment
+  # must re-establish the FOLLOWING statement's indentation in the generated
+  # script. An EMPTY fragment leaves the splice site's own indentation untouched
+  # and emits no whitespace-only line.
+  hostIdentityEnsure = lib.optionalString hostIdentityCapable (
+    mkFragment bodyIndent ''
+      # Make sure the slot's SSH host identity exists BEFORE the VM (and thus
+      # its virtiofsd for the read-only hostkey share) starts. The provisioning
+      # unit is an idempotent oneshot that is also wantedBy multi-user.target,
+      # so on a booted host this only covers the "key dir deleted by hand" /
+      # "a `resourceClasses` entry just grew a slot" cases. Failure is FATAL:
+      # without the key the guest's sshd cannot start, and with a mismatched
+      # one every ssh would be refused by StrictHostKeyChecking=yes.
+      if [[ "$SSH_ENABLED" == "1" ]]; then
+          systemctl start agent-microvm-hostkeys.service \
+              || die "failed to provision per-slot SSH host keys (agent-microvm-hostkeys.service)"
+          host_identity_complete "$1" \
+              || die "slot $1 has no complete SSH host identity under $(hostkey_dir "$1") (or its $KNOWN_HOSTS entry does not match); refusing to launch an unverifiable guest"
+      fi''
+    + bodyIndent
+  );
+
   # --- capability gating (lightweight plan phase 5) -----------------------
   # A capability this host does not select has NO guest units, NO guest
   # programs and NO session subdirectories, so its subcommands cannot work.
@@ -1580,18 +1700,7 @@ let
           # failure so a refresh problem never blocks launch. Safe here because
           # the freshly-allocated slot is not yet running.
           systemctl restart "install-microvm-$1.service" 2>/dev/null || true
-          # Make sure the slot's SSH host identity exists BEFORE the VM (and
-          # thus its virtiofsd for the read-only hostkey share) starts: the
-          # provisioning unit is an idempotent RemainAfterExit oneshot, so this
-          # is a no-op once it has run. It is also wantedBy multi-user.target,
-          # so on a booted host this only covers the "key dir deleted by hand"
-          # / "a `resourceClasses` entry just grew a slot" cases. Failure is
-          # fatal: without the key sshd cannot start in the guest.
-          if [[ "$SSH_ENABLED" == "1" ]]; then
-              systemctl start agent-microvm-hostkeys.service \
-                  || die "failed to provision per-slot SSH host keys (agent-microvm-hostkeys.service)"
-          fi
-          systemctl start "microvm@$1.service" \
+          ${hostIdentityEnsure}systemctl start "microvm@$1.service" \
               || die "failed to start microvm@$1.service"
       }
 
@@ -1930,7 +2039,7 @@ let
           find "$mp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
       }
 
-      ${sessionHelpers}${configSeedHelpers}${capabilityHelpers}# ---- §21 slot cleanup / interrupt handling -------------------------
+      ${sessionHelpers}${configSeedHelpers}${capabilityHelpers}${hostIdentityHelpers}# ---- §21 slot cleanup / interrupt handling -------------------------
       # Tear a slot down WITHOUT deleting the workspace clone (§26/§35): stop
       # the VM, unmount the bind, remove the slot transient state. Locks are
       # released implicitly when this process exits and closes their fds.
