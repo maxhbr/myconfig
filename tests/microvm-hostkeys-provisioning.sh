@@ -213,6 +213,50 @@ expect "slot 1's key is unchanged after 8 concurrent runs" "$a1" "$(digest "$k1"
 leftovers="$(find "$(dirname "$KNOWN_HOSTS")" -maxdepth 1 -name "$(basename "$KNOWN_HOSTS").*" -printf '%f\n' | sort | tr '\n' ' ')"
 expect "no known_hosts temp file survived" "" "$leftovers"
 
+echo
+echo "=== 8. a SYMLINK at the key path is REPLACED, and its target untouched ==="
+# `chmod`, `chown` and `stat` all FOLLOW symlinks. A symlink planted at a key
+# path (root-only 0700 dir, so root-planted — but repairing a tampered directory
+# is exactly this unit's job) must therefore NEVER be adopted as "the key" and
+# never be chmodded THROUGH: that would lock down an arbitrary root-owned file
+# elsewhere on the host. The link is unlinked and a real key written in its
+# place; the victim keeps its own mode and content.
+victim=/tmp/symlink-victim
+printf 'do not touch me\n' >"$victim"
+chmod 0644 "$victim"
+victim_before="$(digest "$victim")"
+rm -f "$k0" "$k0.pub"
+ln -s "$victim" "$k0"
+"$PROVISIONER" 2>"$WARN_LOG"
+if [[ -f $k0 && ! -L $k0 ]]; then
+    pass "the symlink was replaced by a REAL private key file"
+else
+    fail "the key path is still a symlink (or not a regular file) after provisioning"
+fi
+expect "the symlink target's mode was NOT changed" "0644" "0$(stat -c '%a' "$victim")"
+expect "the symlink target's content was NOT changed" "$victim_before" "$(digest "$victim")"
+expect "the new key is root:root 0400" "root:root 400" "$(stat -c '%U:%G %a' "$k0")"
+expect "known_hosts followed the replacement key" "$(pubof "$k0")" "$(recorded "${ALIASES[0]}")"
+expect "the OTHER slot was not disturbed" "$a1" "$(digest "$k1")"
+c0="$(digest "$k0")"
+
+# The same refusal for the PUBLIC key path: it is re-derivable, so a symlink
+# there is simply overwritten with a real file — and, again, its target is left
+# exactly as it was rather than being chmodded to 0444.
+rm -f "$k0.pub"
+ln -s "$victim" "$k0.pub"
+"$PROVISIONER" 2>>"$WARN_LOG"
+if [[ -f $k0.pub && ! -L $k0.pub ]]; then
+    pass "the public-key symlink was replaced by a REAL file"
+else
+    fail "the public-key path is still a symlink after provisioning"
+fi
+expect "the public-key symlink target's mode was NOT changed" "0644" "0$(stat -c '%a' "$victim")"
+expect "the public-key symlink target's content was NOT changed" "$victim_before" "$(digest "$victim")"
+expect "the private key survived the public-key symlink (no re-key)" "$c0" "$(digest "$k0")"
+expect "the rebuilt public key matches the private key" "$(pubof "$k0")" "$(cut -d' ' -f1,2 "$k0.pub")"
+rm -f "$victim"
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 [[ $FAILED -eq 0 ]]
 INNER

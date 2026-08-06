@@ -214,7 +214,20 @@ let
         # ONLY for a key that is ALREADY root:root — chowning a foreign-owned
         # key to root would launder a key someone else may have planted. Such a
         # key fails the ownership test below and is replaced instead.
-        if [[ -e "$key" ]] && [[ "$(stat -c '%U:%G' -- "$key")" == "root:root" ]]; then
+        #
+        # And ONLY for a REGULAR, NON-SYMLINK file. `chmod`/`chown`/`stat`
+        # FOLLOW symlinks, so a symlink planted at the key path (the slot
+        # directory is root-only 0700, so this needs root — but this unit runs
+        # as root and is the very thing that repairs a tampered directory)
+        # would otherwise make this block chmod 0400 the symlink's TARGET: an
+        # arbitrary root-owned file elsewhere on the host, locked down by our
+        # own repair pass before `rm -f` (which unlinks the LINK, not the
+        # target) ever replaces it. `-f` plus `! -L` refuses to judge or touch
+        # anything that is not a plain file; such a path falls through to the
+        # regeneration branch below, which removes the link and writes a real
+        # key.
+        if [[ -f "$key" && ! -L "$key" ]] \
+            && [[ "$(stat -c '%U:%G' -- "$key")" == "root:root" ]]; then
             mode="$(stat -c '%a' -- "$key")"
             if [[ "$mode" != "400" ]]; then
                 # Recorded, not hidden: the key WAS readable more widely than it
@@ -232,8 +245,12 @@ let
         # Ownership is part of the test: a private key that is not root:root
         # could have been planted by another user, so it is NOT authoritative.
         # The mode is not (it is reset unconditionally below).
+        # The `-f`/`! -L` pair is the SAME refusal as in (a0): a symlink is never
+        # an authoritative private key, no matter what it points at, because the
+        # ownership and mode this unit guarantees are properties of the file at
+        # THIS path — not of whatever the link resolves to today.
         private_ok=0
-        if [[ -s "$key" ]] \
+        if [[ -f "$key" && ! -L "$key" && -s "$key" ]] \
             && [[ "$(stat -c '%U:%G' -- "$key")" == "root:root" ]] \
             && ssh-keygen -y -f "$key" >/dev/null 2>&1; then
             private_ok=1
@@ -256,8 +273,13 @@ let
         # (ii) the `.pub` file at ssh-keygen's own three-field shape (so the
         # comment is not duplicated), and (iii) the comparison below stable
         # across runs instead of rewriting the public key every time.
+        # A SYMLINK at the public-key path is likewise never accepted, for the
+        # same reason as (a0)/(a): the final `chown`/`chmod` below would follow
+        # it. Rewriting it as a real file is free here (the public key is
+        # re-derivable), so it is unconditionally replaced.
         derived="$(ssh-keygen -y -f "$key" | cut -d" " -f1,2)"
-        if [[ ! -s "$pub" ]] || [[ "$(cut -d" " -f1,2 -- "$pub")" != "$derived" ]]; then
+        if [[ ! -f "$pub" ]] || [[ -L "$pub" ]] || [[ ! -s "$pub" ]] \
+            || [[ "$(cut -d" " -f1,2 -- "$pub")" != "$derived" ]]; then
             rm -f -- "$pub"
             printf '%s %s\n' "$derived" "$comment" > "$pub"
         fi
@@ -266,7 +288,19 @@ let
         # virtiofsd passes ownership through unchanged, so these host modes are
         # exactly what the guest sees: only guest root may read the private key.
         # Set unconditionally, so a hand-edited mode heals on the next run.
-        chown root:root -- "$key" "$pub"
+        #
+        # Reached only once BOTH paths are known-regular files: (a) either kept a
+        # `-f && ! -L` key or regenerated one after `rm -f`, and (b) either kept a
+        # `-f && ! -L` public key or rewrote it after `rm -f`. The `-h` on `chown`
+        # is belt-and-braces for that invariant (it would relabel a link itself
+        # rather than its target); `chmod` has no such flag, so the guard above is
+        # what keeps it off a symlink target.
+        if [[ -L "$key" ]] || [[ -L "$pub" ]]; then
+            printf 'agent-microvm-hostkeys: %s is a symlink after regeneration - refusing to chmod its target\n' \
+                "$slot_dir" >&2
+            exit 1
+        fi
+        chown -h root:root -- "$key" "$pub"
         chmod 0400 -- "$key"
         chmod 0444 -- "$pub"
 

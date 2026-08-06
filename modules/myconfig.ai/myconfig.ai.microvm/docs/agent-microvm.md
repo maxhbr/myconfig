@@ -948,7 +948,10 @@ What it does, in order, per slot:
    missing, truncated, or CONFLICTS with the private key. The private key is
    authoritative: discarding it would invalidate every `known_hosts` entry
    already distributed for that slot;
-5. **sets ownership and modes explicitly** (`0400` / `0444`);
+5. **sets ownership and modes explicitly** (`0400` / `0444`), and **never through
+   a symlink**: `chmod`/`chown`/`stat` follow links, so a symlink planted at
+   either key path is refused as key material (`-f` and `! -L`), unlinked, and
+   replaced by a real file — its target keeps its own mode and content;
 6. **rebuilds `known_hosts`** deterministically, at most one entry per alias
    (`ssh` refuses a file offering two keys for one host), and installs it
    ATOMICALLY (temp file + rename), so a reader never sees a partial database.
