@@ -60,6 +60,11 @@ GATEWAY="${AGENT_GATEWAY:-192.168.83.1}"
 LITELLM_PORT="${AGENT_LITELLM_PORT:-4000}"
 BRIDGE="${AGENT_BRIDGE:-agentbr0}"
 RUNTIME_ROOT="${AGENT_RUNTIME_ROOT:-/var/lib/agent-microvms}"
+# The microVM STATE root (`myconfig.ai.microvm.stateRoot`, which the module
+# asserts equals `microvm.stateDir`): `<stateRoot>/<slot>` is where
+# cloud-hypervisor puts a guest's VSOCK sockets, so it is where the per-VM
+# AF_VSOCK model forwarder listens under the `vsock` transport.
+STATE_ROOT="${AGENT_STATE_ROOT:-/var/lib/microvms}"
 # The generated, policy-BAKED host-side config stager (config-seed.nix). It is
 # a host `systemPackages` entry of every host that enables the feature; the
 # `seed` section SKIPs when it is not on PATH.
@@ -873,16 +878,30 @@ section_net() {
             check_denied "guest cannot reach an arbitrary host port (8080)" "$slot" \
                 bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/8080'"
         else
-            # There is no gateway address under the vsock transport. The
-            # equivalent property — the guest cannot reach an arbitrary HOST
-            # port — is proved by the per-VM forwarder being destination-fixed
-            # (asserted at eval, checks.microvm-vsock-transport) plus the two
-            # loopback probes below: the ONLY loopback port that answers is the
-            # model port the forwarder is pinned to.
-            check_denied "guest cannot reach an arbitrary port on its own loopback (8080)" "$slot" \
-                bash -c "timeout 5 bash -c '</dev/tcp/127.0.0.1/8080'"
-            check_denied "guest cannot reach a host SSH port through the model transport" "$slot" \
-                bash -c "timeout 5 bash -c '</dev/tcp/127.0.0.1/22'"
+            # There is no gateway address under the vsock transport, so the two
+            # gateway denials above have no analogue here. Probing the guest's
+            # OWN loopback instead (127.0.0.1:8080, :22) would be VACUOUS: the
+            # guest has exactly one loopback listener (the model forwarder), so
+            # such a probe can only ever fail, whatever the transport does. A
+            # check that cannot fail is not evidence, so it is not made.
+            skip "the two host-port denials (no gateway address exists under the vsock transport; 'the guest cannot reach an arbitrary HOST port' is decided at EVAL by the destination-fixed per-VM forwarder — checks.microvm-vsock-transport — and by the host-side listener check below, not by a loopback probe that could never succeed)"
+            # NON-vacuous replacement, on the HOST: the per-VM forwarder must
+            # expose its listener as the VMM's UNIX socket and NOTHING as a TCP
+            # listener. This CAN fail (a regression that made the forwarder
+            # `ListenStream = <addr>:<port>` would be caught here), and it is the
+            # property the removed probes were pretending to test.
+            local vsock_sock listeners
+            vsock_sock="$STATE_ROOT/$slot/notify.vsock_$LITELLM_PORT"
+            check "the per-VM AF_VSOCK forwarder listens on the VMM's unix socket $vsock_sock" \
+                test -S "$vsock_sock"
+            listeners="$(systemctl show -p Listen --value "agent-litellm-vsock-$slot.socket" 2>/dev/null || true)"
+            if [[ -z $listeners ]]; then
+                skip "the per-VM forwarder exposes no TCP listener (its Listen= could not be read on this host)"
+            elif [[ $listeners == *Stream=/* && $listeners != *Stream=*:* ]]; then
+                pass "the per-VM forwarder exposes NO TCP listener at all (Listen=$listeners)"
+            else
+                fail "the per-VM forwarder exposes a non-unix listener (Listen=$listeners); the model transport must have no TCP listener anywhere"
+            fi
         fi
         check_denied "guest cannot reach RFC1918 10.0.0.0/8" "$slot" \
             bash -c "timeout 5 bash -c '</dev/tcp/10.0.0.1/80'"
@@ -895,7 +914,7 @@ section_net() {
         check_denied "guest cannot reach a public DNS server" "$slot" \
             bash -c "timeout 5 bash -c '</dev/tcp/8.8.8.8/53'"
     else
-        skip "the seven /dev/tcp reachability denials (the probe cannot even reach the ALLOWED endpoint, so a refusal would prove nothing)"
+        skip "the /dev/tcp reachability denials (the probe cannot even reach the ALLOWED endpoint, so a refusal would prove nothing)"
     fi
     check_denied "guest cannot resolve public DNS names" "$slot" \
         sh -c "timeout 5 getent hosts example.com"

@@ -400,9 +400,15 @@ let
           ExecStartPre = "${lib.getExe' pkgs.coreutils "mkdir"} -p ${lib.escapeShellArg "${cfg.stateRoot}/${slot.name}"}";
           ListenStream = socketPath;
           # cloud-hypervisor runs as microvm.nix's `microvm` user, whose primary
-          # group is `kvm`, so the VMM (and ONLY it, plus root) may connect. Not
-          # world-accessible: an unprivileged host user must not be able to reach
-          # the model endpoint through a guest's socket.
+          # group is `kvm`, so the socket is owned by root and readable/writable
+          # by THE VMM'S GROUP. Not world-accessible — but note that `kvm` is a
+          # group other host components (libvirt/QEMU users on a desktop) may
+          # also be in, and any such user can then connect here and reach
+          # LiteLLM. That is not an escalation: the same user can already
+          # `curl 127.0.0.1:<litellmPort>` directly, which is exactly what this
+          # forwarder's only destination is. What the mode buys is that a
+          # host user OUTSIDE `kvm` cannot, and that nothing on the network can
+          # at all (there is no TCP listener anywhere in this path).
           SocketUser = "root";
           SocketGroup = "kvm";
           SocketMode = "0660";
