@@ -733,7 +733,7 @@ cmd_doctor() {
   # connectivity, not the API contract, so no token is needed.
   if [[ -n "${AGENT_SANDBOX_MODEL_ENDPOINT-}" ]]; then
     # Probe the endpoint from a sandbox using the SAME network sessions use, so
-    # the check exercises the real path (e.g. pasta --map-host-loopback) rather
+    # the check exercises the real path (e.g. pasta --map-guest-addr) rather
     # than podman's rootless default, which cannot reach a host-only endpoint.
     local -a net_args=()
     [[ -z "${AGENT_SANDBOX_NETWORK-}" ]] || net_args=(--network "$AGENT_SANDBOX_NETWORK")
@@ -754,13 +754,14 @@ cmd_doctor() {
         printf 'warning: model endpoint %s is NOT reachable from a sandbox.\n' \
           "$AGENT_SANDBOX_MODEL_ENDPOINT"
         printf 'runsc runs its own network stack: neither the host loopback nor\n'
-        printf 'a pasta "-T" listener in the container netns is visible to it, and\n'
-        printf 'host.containers.internal maps to the host global address, not the\n'
-        printf 'loopback. The supported path is pasta --map-host-loopback, which\n'
-        printf 'translates a chosen address to the host loopback; set it via the\n'
-        printf 'AGENT_SANDBOX_NETWORK env (a "pasta:..." podman network spec, e.g.\n'
-        printf 'pasta:--map-gw,--map-host-loopback,<endpoint-host>). Also confirm\n'
-        printf 'the host litellm proxy is up on 127.0.0.1:<port>.'
+        printf 'a pasta "-T" listener in the container netns is visible to it.\n'
+        printf 'The supported path is pasta --map-guest-addr, which maps a chosen\n'
+        printf 'address to the host global address, where a port-scoped forwarder\n'
+        printf '(systemd-socket-proxyd) proxies to the loopback-only LiteLLM proxy.\n'
+        printf 'Set it via the AGENT_SANDBOX_NETWORK env (a "pasta:..." podman network\n'
+        printf 'spec, e.g. pasta:--map-guest-addr,<endpoint-host>). Also confirm the\n'
+        printf 'host litellm proxy is up on 127.0.0.1:<port> and the forwarder socket\n'
+        printf '(agent-litellm-forward) is active on 0.0.0.0:<forward-port>.'
       )"
     fi
   fi
