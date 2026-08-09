@@ -61,6 +61,11 @@ Patched:
   `AGENT_SANDBOX_HOME_SEED*`; see above). The destroy runs
   in a subshell because it sources the old session's `meta`, which would
   otherwise clobber `cmd_start`'s locals through bash's dynamic scoping.
+  Additionally `start` honours `AGENT_SANDBOX_NETWORK` as the default
+  `--network` (overridable per session), and `doctor` probes the model
+  endpoint through that same network so the check exercises the real path —
+  both needed to make a host-loopback model endpoint reachable from a runsc
+  sandbox (see *Model access (host LiteLLM)*).
 
 Kept unchanged in substance (only nixfmt-rfc-style reformatting):
 
@@ -146,13 +151,17 @@ The seeded configuration points at the host's **loopback** LiteLLM proxy
 (`http://127.0.0.1:4000/v1`), which does not exist inside a sandbox — there,
 `127.0.0.1` is the container's own loopback, so agents fail with a connection
 error. After copying, `start` therefore applies the literal `OLD=NEW` rules
-from `home.rewriteEndpoints` (default: the loopback and `localhost` forms of
-the LiteLLM URL → the bridge endpoint `http://192.168.84.1:4000`) to the
-seeded files; binary files are skipped. Set the option to `[ ]` to copy the
-configuration verbatim.
+from `home.rewriteEndpoints` (default: the loopback, `localhost` and
+forwarder-port forms of the LiteLLM URL → the sandbox-reachable endpoint
+`http://192.168.84.1:14000`) to the seeded files; binary files are skipped.
+Set the option to `[ ]` to copy the configuration verbatim.
 
-Making `localhost:4000` work literally inside the sandbox is **not** an
-available alternative, despite what the podman/pasta documentation suggests:
+`192.168.84.1` is not a host interface address; it is the `--map-guest-addr`
+target pasta translates to the host's global address (see *Model access (host
+LiteLLM)* below), where a port-scoped forwarder listens on `14000` and
+proxies to the loopback-only LiteLLM proxy on `127.0.0.1:4000`. Making
+`localhost:4000` work literally inside the sandbox is **not** an available
+alternative, despite what the podman/pasta documentation suggests:
 
 - `--network 'pasta:-T,4000'` (namespace→host forwarding) does not help,
   because `runsc` runs its **own network stack**. pasta's `-T` listener lives
@@ -164,9 +173,9 @@ available alternative, despite what the podman/pasta documentation suggests:
   address, not to its loopback (`pasta(1)`), so a loopback-only service is not
   behind it.
 
-Hence the bridge endpoint plus the rewrite. Verify the whole chain from inside
-a sandbox with `agent-session doctor`, which probes
-`AGENT_SANDBOX_MODEL_ENDPOINT` (baked from `litellm.endpoint`) in a throwaway
+Verify the whole chain from inside a sandbox with `agent-session doctor`,
+which probes `AGENT_SANDBOX_MODEL_ENDPOINT` (baked from `litellm.endpoint`)
+through the same pasta network a session uses (see below) in a throwaway
 container and accepts any HTTP status as "reachable".
 
 Per invocation: `--no-home-seed` for an empty home, `--home-seed PATH` for a
@@ -178,27 +187,77 @@ override source, allowlist and rewrite rules. Turn it off for the host with
 ### Model access (host LiteLLM)
 
 `services.litellm` is loopback-only on purpose, which a rootless sandbox
-cannot reach (with pasta the sandbox's `127.0.0.1` is its own loopback, not
-the host's). `./litellm-bridge.nix` therefore adds the same construction the
-microVM tier uses (`../myconfig.ai.microvm/network.nix` §16):
+cannot reach directly: with pasta (podman's rootless default) the sandbox's
+own `127.0.0.1` is the container's loopback, not the host's, and runsc runs
+its own netstack on top of the pasta netns.
 
-- a member-less bridge `agentsbr0` carrying the single host address
-  `192.168.84.1/24` — a stable, non-loopback, non-LAN address that pasta can
-  reach, because pasta re-opens the sandbox's outbound connections in the
-  host network namespace,
-- `systemd.sockets.gvisor-agent-sandbox-litellm-proxy`, bound *only* to
-  `192.168.84.1:4000` (`BindToDevice` + `FreeBind`, ordered after
-  `agentsbr0-netdev.service`), handing connections to
-  `systemd-socket-proxyd 127.0.0.1:4000`,
-- `networking.firewall.interfaces.agentsbr0.allowedTCPPorts = [ 4000 ]`. The
-  LAN cannot reach the endpoint because the NixOS firewall denies by default
-  and 4000 is not in `allowedTCPPorts`; `lo` is a trusted interface, so
-  host-local connections (which is how pasta re-opens sandbox traffic) pass.
+The endpoint is reached with a **port-scoped forwarder** + pasta's
+`--map-guest-addr` (`pasta(1)`):
+
+1.  A socket-activated `systemd-socket-proxyd` listens on
+    `0.0.0.0:${forwardPort}` (default `14000`) and forwards to
+    `127.0.0.1:${port}` (the loopback-only LiteLLM proxy). The forward port
+    differs from the LiteLLM port so the `0.0.0.0` wildcard bind does not
+    collide with LiteLLM's own `127.0.0.1` listener. The NixOS firewall trusts
+    `lo` and drops `${forwardPort}` on every other interface (it is not in
+    `allowedTCPPorts`), so the forwarder is reachable only from the host and
+    from sandboxes, never from external hosts.
+
+2.  The `agent-session` wrapper bakes `AGENT_SANDBOX_NETWORK` as a
+    `pasta:--map-guest-addr,<address>` podman network spec (see
+    `./default.nix`). `--map-guest-addr` translates `<address>` to the *guest's
+    assigned address on the host* — by default the host's global address (the
+    address on the default-route interface). That address IS on the
+    `SO_BINDTODEVICE` interface, so the connection IS locally delivered
+    (unlike the old bridge, which was on a different interface). The port is
+    kept unchanged.
+
+3.  The sandbox therefore connects to `<address>:${forwardPort}`, which pasta
+    translates to `<host-global-addr>:${forwardPort}`, where the forwarder
+    accepts and proxies to `127.0.0.1:${port}` (LiteLLM).
+
+**Why this is port-scoped (the key isolation property).** The sandbox can
+reach `<address>:${forwardPort}` (the forwarder → LiteLLM) and other ports
+on the host's global address — but only services that already bind to
+`0.0.0.0` (i.e., are already network-accessible). Loopback-ONLY services
+(bound to `127.0.0.1`) are **not** reachable, because `--map-guest-addr`
+maps to the host's global address, not to `127.0.0.1`. This closes the
+loophole of the previous `--map-host-loopback` mechanism, which translated
+*every* port on the mapped address to `127.0.0.1` and so exposed the entire
+host loopback to a possibly hostile agent.
+
+This works where the alternatives do not (see above): `-T` is invisible to
+runsc's netstack, and `host.containers.internal` maps to the host global
+address, not the loopback. An earlier version used `--map-host-loopback`,
+which worked for reachability but was address-scoped (all loopback ports).
+
+The pasta options are baked into the `agent-session` wrapper as
+`AGENT_SANDBOX_NETWORK` (see `./default.nix`): a
+`pasta:--map-guest-addr,<address>` podman network spec. Podman's default
+`--no-map-gw` applies (no gateway→loopback mapping). The old `--map-gw` flag
+(a podman-only flag, NOT a real pasta option) was dropped: the pasta source
+shows `--map-host-loopback`/`--map-guest-addr` set their config fields
+directly, and `--no-map-gw` only fills in the *default* (gateway) mapping
+when those fields are still unspecified — an explicit mapping is never
+overridden. `agent-session start` uses `AGENT_SANDBOX_NETWORK` as the default
+`--network`, and `agent-session doctor` probes the endpoint through the same
+network, so the check exercises the real path. Override per session with
+`--network`, or `--network none` for an offline session.
+
+An earlier version exposed the proxy through a member-less bridge
+(`agentsbr0`, `192.168.84.1`) plus a socket-activated `systemd-socket-proxyd`
+bound to it. That did **not** work: pasta binds its outbound sockets to the
+host's default-route interface, so a sandbox connection to the host-local
+bridge address egresses that interface toward its gateway instead of being
+locally delivered, and the socket's `BindToDevice` rejected anything not
+arriving on the bridge. The old bridge approach and the intermediate
+`--map-host-loopback` fix (address-scoped, exposing every loopback port) are
+documented in the header comment of `./litellm-endpoint.nix`.
 
 The host LiteLLM proxy itself is not touched and stays loopback-only. It is
 enabled automatically wherever `services.litellm.enable` is on; knobs live
-under `myconfig.ai.gvisor-agent-sandbox.litellm.{enable,port,bridgeName,address,prefixLength}`,
-and the resulting base URL is the read-only `…litellm.endpoint`.
+under `myconfig.ai.gvisor-agent-sandbox.litellm.{enable,port,forwardPort,address}`, and
+the resulting base URL is the read-only `…litellm.endpoint`.
 
 Use it from a session (the generated env file carries only the base URL — no
 secret ends up in the Nix store or in the session state):

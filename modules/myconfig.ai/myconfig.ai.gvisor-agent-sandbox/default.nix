@@ -44,7 +44,10 @@ let
   # Host part of the sandbox-reachable LiteLLM endpoint (`litellm.endpoint`
   # without the `/v1` suffix), used to rewrite the loopback URLs baked into the
   # seeded host configuration.
-  litellmBase = "http://${cfg.litellm.address}:${toString cfg.litellm.port}";
+  # Sandbox-facing base URL: the address the sandbox connects to, on the
+  # forwarder port (NOT the LiteLLM port — the forwarder proxies to that).
+  # See ./litellm-endpoint.nix for the mechanism.
+  litellmBase = "http://${cfg.litellm.address}:${toString cfg.litellm.forwardPort}";
 
   enabledAgentPackages = lib.attrValues (
     lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentPackagesByFlag
@@ -79,8 +82,9 @@ let
   #     here; only *which* paths are copied, and how host-only URLs are
   #     rewritten, is a build-time decision.
   #   * the model endpoint, so `agent-session doctor` can probe it from INSIDE
-  #     a sandbox — the only place where the answer means anything (see
-  #     ./litellm-bridge.nix).
+  #     a sandbox — the only place where the answer means anything — and the
+  #     pasta network spec that makes that endpoint reachable (see
+  #     ./litellm-endpoint.nix).
   # `--set-default` keeps every variable overridable per invocation.
   sessionEnv =
     lib.optionalAttrs cfg.home.enable {
@@ -89,6 +93,16 @@ let
     }
     // lib.optionalAttrs cfg.litellm.enable {
       AGENT_SANDBOX_MODEL_ENDPOINT = cfg.litellm.endpoint;
+      # pasta(1) network spec: --map-guest-addr translates the endpoint host
+      # (cfg.litellm.address) to the host's global address (the address on the
+      # default-route interface), where the port-scoped forwarder listens on
+      # cfg.litellm.forwardPort. Unlike the old --map-host-loopback (which
+      # translated to 127.0.0.1, exposing every loopback port), --map-guest-addr
+      # maps to the host's global address, so loopback-ONLY services stay
+      # unreachable. Podman's default --no-map-gw applies (no gateway→loopback
+      # mapping). See ./litellm-endpoint.nix for the full mechanism and why
+      # --map-gw was dropped.
+      AGENT_SANDBOX_NETWORK = "pasta:--map-guest-addr,${cfg.litellm.address}";
     }
     // lib.optionalAttrs (cfg.defaultCommand != null) {
       AGENT_SANDBOX_DEFAULT_COMMAND = cfg.defaultCommand;
@@ -114,7 +128,7 @@ let
         '';
 in
 {
-  imports = [ ./litellm-bridge.nix ];
+  imports = [ ./litellm-endpoint.nix ];
 
   options.myconfig.ai.gvisor-agent-sandbox = with lib; {
     enable = mkEnableOption "myconfig.ai.gvisor-agent-sandbox";
@@ -206,6 +220,8 @@ in
         default = lib.optionals cfg.litellm.enable [
           "http://127.0.0.1:${toString cfg.litellm.port}=${litellmBase}"
           "http://localhost:${toString cfg.litellm.port}=${litellmBase}"
+          "http://127.0.0.1:${toString cfg.litellm.forwardPort}=${litellmBase}"
+          "http://localhost:${toString cfg.litellm.forwardPort}=${litellmBase}"
         ];
         defaultText = literalExpression ''
           rules pointing the host's loopback LiteLLM URLs at
@@ -219,8 +235,9 @@ in
           (`http://127.0.0.1:4000/v1`), which does not exist inside a sandbox:
           there, `127.0.0.1` is the container's own loopback, so every seeded
           agent config would fail with a connection error. These rules rewrite
-          such URLs to the bridge endpoint from `./litellm-bridge.nix`, which a
-          sandbox can reach.
+          such URLs (and the forwarder port) to the endpoint address + forward
+          port from `./litellm-endpoint.nix`, which pasta maps to the host's
+          global address so a sandbox can reach the port-scoped forwarder.
 
           Set to `[ ]` to copy the configuration verbatim.
         '';
