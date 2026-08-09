@@ -25,7 +25,6 @@
 #   socket's `BindToDevice = <bridge>` was a second, independent barrier: it
 #   rejected any connection not arriving on the bridge. Either way the endpoint
 #   was unreachable from a sandbox — observed as `curl: (7) ... after 0 ms`.
-#   See ./docs/debug-model-endpoint-routing.md.
 #
 # A follow-up attempt used pasta's `--map-host-loopback`: it translates a chosen
 # address to the host's 127.0.0.1 *before* egress, using pasta's local-traffic

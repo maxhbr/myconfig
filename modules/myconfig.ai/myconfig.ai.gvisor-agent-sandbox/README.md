@@ -65,8 +65,7 @@ Patched:
   `--network` (overridable per session), and `doctor` probes the model
   endpoint through that same network so the check exercises the real path —
   both needed to make a host-loopback model endpoint reachable from a runsc
-  sandbox (see *Model access (host LiteLLM)* and
-  `docs/debug-model-endpoint-routing.md`).
+  sandbox (see *Model access (host LiteLLM)*).
 
 Kept unchanged in substance (only nixfmt-rfc-style reformatting):
 
@@ -251,7 +250,9 @@ bound to it. That did **not** work: pasta binds its outbound sockets to the
 host's default-route interface, so a sandbox connection to the host-local
 bridge address egresses that interface toward its gateway instead of being
 locally delivered, and the socket's `BindToDevice` rejected anything not
-arriving on the bridge. See `./docs/debug-model-endpoint-routing.md`.
+arriving on the bridge. The old bridge approach and the intermediate
+`--map-host-loopback` fix (address-scoped, exposing every loopback port) are
+documented in the header comment of `./litellm-endpoint.nix`.
 
 The host LiteLLM proxy itself is not touched and stays loopback-only. It is
 enabled automatically wherever `services.litellm.enable` is on; knobs live
