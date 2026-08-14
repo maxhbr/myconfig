@@ -284,8 +284,8 @@ in
               qt5.qtwayland
             ]
             ++ [
-              wayvnc
-              waypipe
+              # wayvnc
+              # waypipe
             ];
           xdg.configFile = {
             "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;

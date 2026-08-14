@@ -112,6 +112,11 @@ let
   # tmux socket that is not present inside the jail, so they fail. This matches
   # the pre-change behaviour (the inner jail previously carried the real binary,
   # equally unable to reach tmux from inside the sandbox).
+  #
+  # The real-binary forward uses `lib.getExe'` (not `lib.getExe`) because the
+  # upstream workmux flake package sets no `meta.mainProgram`; `getExe'` with
+  # the explicit `"workmux"` binary name silences the getExe deprecation
+  # warning while producing the identical `${pkg}/bin/workmux` path.
   workmuxStatusShim = pkgs.writeShellApplication {
     name = "workmux";
     text = ''
@@ -119,7 +124,7 @@ let
         shift
         exec workmux_status_channel "''${1-}"
       fi
-      exec ${lib.getExe osconfig.myconfig.ai.workmux.package} "$@"
+      exec ${lib.getExe' osconfig.myconfig.ai.workmux.package "workmux"} "$@"
     '';
   };
 
