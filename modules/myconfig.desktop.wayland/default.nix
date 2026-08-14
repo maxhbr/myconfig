@@ -110,7 +110,7 @@ in
     ./swaylock.nix
     ./services.greetd.nix
     ./programs.uwsm.nix
-    ./sharescreen.nix
+    # ./sharescreen.nix # wf-recorder does not build
     ./programs.waybar
     ./services.clipboard-sync.nix
     {
@@ -224,7 +224,7 @@ in
               wofi
               bemenu
               wayshot
-              wf-recorder
+              # wf-recorder
               slurp
               grim
               (writeShellScriptBin "grim-region" ''
