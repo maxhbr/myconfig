@@ -70,6 +70,15 @@
   "gfx1151:Qwen3.6-35B-A3B-UD-Q8_K_XL-MTP-instruct-reasoning"
   "gfx1151:Qwen3.6-35B-A3B-UD-Q8_K_XL-MTP-thinking-coding"
   "gfx1151:Qwen3.6-35B-A3B-UD-Q8_K_XL-MTP-thinking-general"
+  "gfx1151:Qwen3.8-27B-ABL-Q5_K_M"
+  "gfx1151:Qwen3.8-27B-UD-Q4_K_XL"
+  "gfx1151:Qwen3.8-27B-UD-Q5_K_XL"
+  "gfx1151:Qwen3.8-27B-UD-Q6_K_XL"
+  "gfx1151:Qwen3.8-27B-UD-Q8_K_XL"
+  "gfx1151:Qwen3.8-27B-UD-Q8_K_XL-general-tasks"
+  "gfx1151:Qwen3.8-27B-UD-Q8_K_XL-instruct-general-tasks"
+  "gfx1151:Qwen3.8-27B-UD-Q8_K_XL-instruct-reasoning-tasks"
+  "gfx1151:Qwen3.8-27B-UD-Q8_K_XL-precise-coding-tasks"
   "gfx1151:ROCm0:Hy3-Q2_K_L"
   "gfx1151:ROCm0:InternScience-Agents-A1-Q4_K_M"
   "gfx1151:ROCm0:InternScience-Agents-A1-Q8_0"
@@ -125,6 +134,15 @@
   "gfx1151:ROCm0:Qwen3.6-35B-A3B-UD-Q8_K_XL-MTP-instruct-reasoning"
   "gfx1151:ROCm0:Qwen3.6-35B-A3B-UD-Q8_K_XL-MTP-thinking-coding"
   "gfx1151:ROCm0:Qwen3.6-35B-A3B-UD-Q8_K_XL-MTP-thinking-general"
+  "gfx1151:ROCm0:Qwen3.8-27B-ABL-Q5_K_M"
+  "gfx1151:ROCm0:Qwen3.8-27B-UD-Q4_K_XL"
+  "gfx1151:ROCm0:Qwen3.8-27B-UD-Q5_K_XL"
+  "gfx1151:ROCm0:Qwen3.8-27B-UD-Q6_K_XL"
+  "gfx1151:ROCm0:Qwen3.8-27B-UD-Q8_K_XL"
+  "gfx1151:ROCm0:Qwen3.8-27B-UD-Q8_K_XL-general-tasks"
+  "gfx1151:ROCm0:Qwen3.8-27B-UD-Q8_K_XL-instruct-general-tasks"
+  "gfx1151:ROCm0:Qwen3.8-27B-UD-Q8_K_XL-instruct-reasoning-tasks"
+  "gfx1151:ROCm0:Qwen3.8-27B-UD-Q8_K_XL-precise-coding-tasks"
   "gfx1151:ROCm0:TheDrummer_Skyfall-31B-v4.2-Q6_K"
   "gfx1151:ROCm0:gemma-4-26B-A4B-it-UD-Q6_K_XL"
   "gfx1151:ROCm0:gemma-4-26B-A4B-it-UD-Q8_K_XL"
@@ -250,6 +268,86 @@
   "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-reasoning"
   "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-coding"
   "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-general"
+  {
+    name = "rtx5090:Qwen3.8-27B-ABL-Q5_K_M";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-ABL-Q5_K_M-general-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-ABL-Q5_K_M-instruct-general-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-ABL-Q5_K_M-instruct-reasoning-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-ABL-Q5_K_M-precise-coding-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q4_K_XL";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q4_K_XL-general-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q4_K_XL-instruct-general-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q4_K_XL-instruct-reasoning-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q4_K_XL-precise-coding-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q5_K_XL";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q5_K_XL-general-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q5_K_XL-instruct-general-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q5_K_XL-instruct-reasoning-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q5_K_XL-precise-coding-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q6_K_XL";
+    contextWindow = 196608;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q6_K_XL-general-tasks";
+    contextWindow = 196608;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q6_K_XL-instruct-general-tasks";
+    contextWindow = 196608;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q6_K_XL-instruct-reasoning-tasks";
+    contextWindow = 196608;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-UD-Q6_K_XL-precise-coding-tasks";
+    contextWindow = 196608;
+  }
   "rtx5090:TheDrummer_Skyfall-31B-v4.2-Q6_K"
   {
     name = "rtx5090:gemma-4-26B-A4B-it-UD-Q6_K_XL";
@@ -312,4 +410,12 @@
     contextWindow = 262144;
   }
   "sidekick"
+  "trustedtokens/Qwen/Qwen3.5-397B-A17B-FP8"
+  "trustedtokens/Qwen/Qwen3.6-35B-A3B-FP8"
+  "trustedtokens/deepseek-ai/DeepSeek-V4-Flash"
+  "trustedtokens/deepseek-ai/DeepSeek-V4-Flash-0731"
+  "trustedtokens/google/gemma-4-31B-it"
+  "trustedtokens/openai/gpt-oss-120b"
+  "trustedtokens/tngtech/DeepSeek-TNG-R1T2-Chimera"
+  "trustedtokens/zai-org/GLM-5.2"
 ]
