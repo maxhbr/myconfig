@@ -1,0 +1,278 @@
+<!--
+Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
+SPDX-License-Identifier: MIT
+-->
+
+# Agent sandboxing tiers
+
+Coding agents in this repo are treated as **untrusted code that runs with your
+credentials in your checkout**. Four sandboxing techniques are implemented,
+forming a ladder from cheap-and-convenient to strong-and-heavy:
+
+| Tier | Technique | Isolation boundary | Entry point | Cost |
+| --- | --- | --- | --- | --- |
+| 1 | [`agent-tmux`](#1-agent-tmux--dedicated-unix-user) | Unix user + file permissions | `agent-tmux` | ~none |
+| 2 | [`jailed-pi`](#2-jailed-pi--bubblewrap-process-jail) | Linux namespaces (bubblewrap) | `jailed-pi` | ~none |
+| 3 | [`sandboxed-pi`](#3-sandboxed-pi--qemuslirp-microvm) | own kernel (QEMU microVM, SLiRP NAT) | `sandboxed-pi` | seconds to boot |
+| 4 | [`agent-microvm`](#4-agent-microvm--cloud-hypervisor-microvm-fleet) | own kernel + own store + private bridge | `agent-microvm run\|submit` | host config + prebuilt slots |
+
+Tiers 2–4 share one design rule: **the working directory is the only thing the
+agent can write**, and secrets are forwarded at launch rather than baked into
+the Nix store. Tier 1 works differently — it moves the agent to a *different
+identity* instead of restricting what one identity may see.
+
+The tiers are largely orthogonal and compose: an agent user (tier 1) can run
+`jailed-pi` (tier 2) in its own session.
+
+All tiers are agent-agnostic in principle; `pi` is the reference agent. Tier 2
+also exists as `jailed-opencode` / `jailed-claude`, and tier 4 carries a whole
+registry of agents inside its guests.
+
+---
+
+## 1. `agent-tmux` — dedicated Unix user
+
+The classic, kernel-free technique: run the agent **as somebody else**.
+Isolation is plain Unix uid/gid separation and file permissions, so it costs
+nothing and survives any tooling change — but it only protects what the
+filesystem permissions protect.
+
+**Implementation**: [`modules/myconfig.agentUsers.nix`](../../myconfig.agentUsers.nix)
+(`myconfig.agentUsers.names`, default `[ "agent" ]`).
+
+**Entry points**, generated per declared agent and installed for the primary
+user:
+
+- `<name>-tmux` — `sudo -u <name> -i -- tmux new-session -A -s <name>` in the
+  current terminal (so `agent-tmux` for the default agent);
+- `<name>-alacritty-tmux` — the same session in a fresh Alacritty window
+  (Alacritty itself stays as the primary user so it can reach the display);
+  these are also registered as Wayland `launcherCommands`.
+
+**The user model**
+
+- Each agent gets its **own primary group** and a **static uid/gid from a
+  dedicated block at 31000+** — deliberately above the nixbld range and below
+  `nobody`, so it can never collide with a dynamically allocated user. (A
+  previous base of 1001 collided with the remote-build user and broke the nix
+  daemon's `authPeer()` trust check.)
+- Home is **ephemeral**: state is lost on reboot (no impermanence persistence),
+  except a single persistent `workdir/` under the work impermanence tree.
+- Home mode `0750` plus "the primary user is a member of every agent group"
+  means: **you can read agent data; agents cannot read you or each other.**
+- `hashedPassword = "!"` (no password login), `linger = true` (user services
+  run without a login session), and **deliberately no `extraGroups`** — no
+  `wheel`, no `keys`, no `docker`.
+- Agents inherit the primary user's home-manager `sharedModules` (tmux, shell,
+  dev tools, coding agents), plus an explicitly opt-in list of
+  `sessionVariables`, `home.file` entries and config subtrees via
+  `myconfig.agentUsers.inheritFromMainUser`. **Secrets are not inherited.**
+- `nix.settings.allowed-users` includes the agents, but **not**
+  `trusted-users` — a compromised agent cannot redirect builds to a malicious
+  substituter or import unsigned store paths.
+
+**The `offline` agent**: an agent literally named `offline` is automatically
+network-isolated — an `iptables`/`ip6tables` `OUTPUT` rule matching its uid
+rejects all egress except loopback. This is fail-closed, with no per-host
+opt-in, by design. Caveat: iptables does not filter unix sockets, so the
+root-owned nix daemon can still fetch store paths on its behalf; it is not a
+true air gap.
+
+**Limits**: same kernel, same machine, and the agent user can still read
+world-readable files across the system. It defends *your* home, keys and the
+other agents — not the host.
+
+---
+
+## 2. `jailed-pi` — bubblewrap process jail
+
+The cheapest tier. `pi` runs as **your user on your kernel**, confined by
+bubblewrap namespaces via the vendored
+[`jail.nix`](../fns/jail-app.nix) library (`vendor/alexdavid-jail.nix`).
+
+**Implementation**
+
+- `modules/myconfig.ai/fns/jail-app.nix` — the reusable wrapper factory
+  (`jail-app { name; pkg; userDataDirs; ... }`). Every jailed agent wrapper in
+  the repo is one call to it.
+- `modules/myconfig.ai/programs.pi-coding-agent/default.nix` — the `jailed-pi`,
+  `jailed-pi-tmp` and `jailed-pi-worktree` instantiations.
+- `modules/myconfig.ai/myconfig.ai.jail.nix` — the shared
+  `myconfig.ai.jail.fwdEnvs` option (host env vars forwarded into *every*
+  wrapper, on top of the always-forwarded `OPENAI_API_KEY`).
+
+**What the agent sees**
+
+- `$PWD` bound read-write (`mount-cwd`) — and, if the CWD is a git repo with a
+  sibling `../<basename>__worktrees`, that directory too.
+- `~/.pi` read-write, so session/credential/extension state persists.
+- A curated read-only set of config dirs (`~/.config/git`, `~/.config/bat`,
+  `~/.agents`, …), each bound only if it exists (`try-ro-bind`).
+- A fixed dev-tool closure on `PATH` (git, ripgrep, fd, jq, nix, python3, …).
+- Network access (the `network` combinator: resolv.conf + CA bundle).
+
+**What it does not see**: the rest of `$HOME`, `~/.ssh`, `~/.gnupg`, agent
+sockets, `$TMUX`. The environment is cleared (`--clearenv`) and repopulated
+only from the explicit forward lists.
+
+**Guardrails**
+
+- `rejectHomeCwd` — refuses to start in `$HOME`, because `mount-cwd` would
+  otherwise bind your entire home read-write.
+- The worktree variant is a *separate* wrapper
+  (`jailed-pi-worktree-inner`), so a normal invocation cannot obtain a
+  writable bind into another repository merely by setting an env var.
+- `PI_JAIL_MARKER=1` is set inside the jail; the `myconfig-jail-marker.ts`
+  extension paints an obvious red border when pi runs **un**jailed.
+- workmux status updates escape via a `jail-to-host-channel` FIFO shim rather
+  than exposing the tmux socket to the jail.
+
+**Limits**: same kernel, same user, no VM boundary. A kernel or bubblewrap
+escape, or a `nix`-mediated write, is not defended against. It is a strong
+*accident* barrier and a moderate *malice* barrier.
+
+Session-wide variant: `alacritty-workmux-here`
+(`myconfig.ai.workmux.jail`) jails an entire tmux/workmux session — main
+checkout plus its `__worktrees` sibling — in one bubblewrap.
+
+---
+
+## 3. `sandboxed-pi` — QEMU/SLiRP microVM
+
+Same ergonomics as `jailed-pi` (`cd` into a project, run it, arguments are
+forwarded to `pi`), but the agent runs **in its own kernel** as an
+unprivileged `agent` user with an ephemeral root filesystem.
+
+**Implementation**
+
+- `flake.sandboxed-pi.nix` — `mkSandboxedPiRunner` builds a one-shot
+  [microvm.nix](https://github.com/microvm-nix/microvm.nix) QEMU runner (guest
+  NixOS system + kernel + virtiofsd + run script).
+- `packages.<system>.sandboxed-pi-runner` evaluates that builder **impurely**
+  from `SANDBOXED_PI_*` env vars, so the workspace path never lands in a
+  tracked file or flake output. Under pure eval it is a placeholder.
+- The host wrapper `sandboxed-pi` lives in
+  `modules/myconfig.ai/programs.pi-coding-agent/default.nix`.
+- Full write-up: [`../programs.pi-coding-agent/sandboxed-pi.README.md`](../programs.pi-coding-agent/sandboxed-pi.README.md).
+
+**Launch sequence**: validate CWD (refuses `$HOME`) → generate a throwaway
+ed25519 keypair → pick a random `127.0.0.1` port → `nix build --impure` the
+runner → boot the VM → wait for guest SSH → forward credentials **over the SSH
+session environment** → exec `pi` in `/workspace`. On exit the VM is killed and
+the runtime dir removed.
+
+**Sharing**: CWD read-write at `/workspace` (virtiofs) and the host
+`/nix/store` **read-only** (hence no disk image and a fast boot). Not shared:
+home, `~/.ssh`, `~/.gnupg`, D-Bus/systemd/nix-daemon/container sockets, `/run`,
+`/dev`.
+
+**Networking**: QEMU SLiRP user-mode NAT — outbound only, plus one forwarded
+SSH port on loopback. No bridge, TAP, NAT or firewall changes on the host,
+which is what keeps it a self-contained user-space command. (This is also why
+it is QEMU and not Cloud Hypervisor: CH has no user-mode networking.)
+
+**Credentials**: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENROUTER_BASE_URL`,
+`ANTHROPIC_API_KEY` are pushed over SSH env at launch, only when set — never
+into the store, never on a command line.
+
+**Requires**: `/dev/kvm` (otherwise slow TCG), flakes.
+
+Session-wide variant: `alacritty-sandboxed-workmux-here`
+(`myconfig.ai.workmux.sandbox`, off by default) puts a whole workmux session
+in one VM.
+
+**Limits**: the host store is visible read-only; the guest still shares the
+host store closure and reaches the network via the host. See the status note
+in its README regarding live-boot validation.
+
+---
+
+## 4. `agent-microvm` — Cloud Hypervisor microVM fleet
+
+The strongest tier, and the only one designed for **unattended, autonomous**
+agent runs. Each session gets a **Cloud Hypervisor** microVM from a pool of
+prebuilt slots.
+
+**Implementation**: `modules/myconfig.ai/myconfig.ai.microvm/` (module split
+across `guest.nix`, `network.nix`, `session.nix`, `job.nix`, `launcher.nix`,
+`state.nix`, `agents.nix`, `hostkeys.nix`, `workmux.nix`, …).
+Documentation set:
+
+| Document | Contents |
+| --- | --- |
+| [How-to](../myconfig.ai.microvm/docs/agent-microvm-howto.md) | **start here** — one linear journey: `doctor`, `run`, `submit`, import, cleanup |
+| [Reference](../myconfig.ai.microvm/docs/agent-microvm.md) | activation, options, agent registry, network profiles, batch job format, limitations |
+| [Architecture](../myconfig.ai.microvm/docs/agent-microvm-architecture.md) | module map, slot pool, workspace indirection, credential boundary |
+| [Operator guide](../myconfig.ai.microvm/docs/agent-microvm-operator-guide.md) | exact start/submit/status/attach/cancel/collect/recover procedures |
+| [Security model](../myconfig.ai.microvm/docs/agent-microvm-security-model.md) | trusted vs untrusted, mitigated attacks, residual risks |
+| [Runtime validation](../myconfig.ai.microvm/docs/agent-microvm-runtime-validation.md) | the real-KVM measurement procedure |
+
+**Boundary**
+
+- Own kernel **and a self-contained guest store disk** — the host
+  `/nix/store` is *not* shared (unlike tier 2).
+- Root and `/home/agent` are disposable; **only `/workspace` persists**, plus
+  opt-in task-scoped agent state dirs.
+- `/workspace` is a **standalone git clone** of your repository on the single
+  writable per-session share — the agent never touches your checkout, you
+  import the resulting branch afterwards.
+- A dedicated private bridge (`agentbr0`, `192.168.83.0/24`) with **per-TAP
+  layer-2 isolation** between slots.
+- Model access is restricted to the **host LiteLLM proxy** via a bridge-only
+  forwarding endpoint: **no upstream API key ever reaches the guest.**
+
+**Two execution paths**, independently selectable per host via `capabilities`:
+
+- `agent-microvm run --attach` — interactive, also surfaced as workmux
+  `microvm-<agent>` panes;
+- `agent-microvm submit` — unattended batch with structured results, hard
+  timeouts, cancellation (`cancel`, exit `130`) and recovery.
+
+Operational commands: `doctor`, `status`, `ssh`, `collect`, `remove`,
+`recover --dry-run`.
+
+**Activation** is explicit per host and never implied by `myconfig.ai.enable`;
+while disabled the module produces **zero** config side effects. On `f13`:
+
+```nix
+myconfig.ai.microvm = {
+  enable = true;
+  resourceClasses = lib.mkForce {
+    small  = { count = 1; vcpu = 2; memoryMiB = 4096; };
+    normal = { count = 1; vcpu = 4; memoryMiB = 8192; };
+  };
+  networkProfile = "proxy-only";
+  passwordlessControl = true;
+  sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
+};
+```
+
+**Verification boundary**: eval/build coverage comes from `nix flake check` and
+`tests/microvm.nix`; runtime properties (firewall enforcement, L2 isolation,
+credential absence, cgroup limits) are eval-asserted but must be *measured* on
+real KVM with `runtime-validation.sh`. Read the reference doc's *Limitations*
+section before trusting the tier.
+
+---
+
+## Choosing a tier
+
+- **Keep the agent out of your home directory, keys and shell history, at zero
+  runtime cost and with a normal interactive session** → `agent-tmux` (or a
+  network-isolated `offline` agent user).
+- **Interactive work in a repo you trust, fastest loop** → `jailed-pi`.
+- **Same loop, but you want a kernel boundary** (untrusted repo, sketchy
+  dependency, `npm install` in the agent's path) → `sandboxed-pi`.
+- **Autonomous / batch runs, several agents in parallel, no upstream API key
+  exposure, results you collect later** → `agent-microvm`.
+
+When in doubt, compose: run `jailed-pi` *inside* an `agent-tmux` session.
+
+## Related
+
+A fifth, container-based tier — rootless Podman with the **gVisor** runtime
+(`agent-session`) — is vendored under
+[`../myconfig.ai.gvisor-agent-sandbox/`](../myconfig.ai.gvisor-agent-sandbox/)
+and enabled per host (`myconfig.ai.gvisor-agent-sandbox.enable`). It sits
+between tiers 1 and 2: a user-space kernel (`runsc`) rather than namespaces,
+but no full VM.
