@@ -89,7 +89,7 @@ let
       readonly OPENCODE_OUT=${lib.escapeShellArg opencodeConfig}
       readonly PI_OUT="$HOME/"${lib.escapeShellArg piExtension}
       readonly DEFAULT_CONTEXT_WINDOW=${toString mc.defaultContextWindow}
-      readonly MAX_TOKENS=${toString mc.maxTokens}
+      readonly MAX_TOKENS_CAP=${toString mc.maxTokensCap}
       readonly ATTEMPTS=${toString mc.attempts}
       readonly RETRY_DELAY=${toString mc.retryDelaySeconds}
       readonly TIMEOUT=${toString mc.timeoutSeconds}
@@ -187,7 +187,7 @@ let
               --argjson ids "$ids" \
               --argjson cw "$context_windows" \
               --argjson dcw "$DEFAULT_CONTEXT_WINDOW" \
-              --argjson maxTokens "$MAX_TOKENS" \
+              --argjson maxTokensCap "$MAX_TOKENS_CAP" \
               --arg key "$PROVIDER_KEY" \
               --arg name "$PROVIDER_NAME" \
               --arg base "$ENDPOINT/v1" \
@@ -204,7 +204,12 @@ let
                      reasoning: false,
                      input: [ "text" ],
                      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-                     maxTokens: $maxTokens,
+                     # Output budget pi sends as the request `max_tokens`.
+                     # A quarter of the context window, capped — the same
+                     # formula the host-side generators use. A fixed small
+                     # value (this used to be 4096) makes reasoning models
+                     # stop mid-answer with finish_reason "length".
+                     maxTokens: ([ ((($cw[.] // $dcw) / 4) | floor), $maxTokensCap ] | min),
                      contextWindow: ($cw[.] // $dcw)
                    }) )
                  }
@@ -319,10 +324,17 @@ in
       '';
     };
 
-    maxTokens = mkOption {
+    maxTokensCap = mkOption {
       type = types.ints.positive;
-      default = 4096;
-      description = "`maxTokens` reported per model in the generated pi extension.";
+      default = 65536;
+      description = ''
+        Upper bound for the `maxTokens` reported per model in the generated
+        pi extension. The reported value is
+        `min(contextWindow / 4, maxTokensCap)` — the same formula the
+        host-side generators use. pi sends this as the request's
+        `max_tokens`, so a small value truncates long (especially
+        reasoning) answers with `finish_reason: "length"`.
+      '';
     };
 
     attempts = mkOption {
