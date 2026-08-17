@@ -403,6 +403,20 @@
               ]
               ++ moreModules
             ) metadataOverride);
+          host-optiplex =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "optiplex" (
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "optiplex") ];
+                  }
+                )
+              ]
+              ++ moreModules
+            ) metadataOverride);
         };
 
         # ISO builder that already includes the myconfig base modules
@@ -472,6 +486,9 @@
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
           test-futro = self.nixosConfigurationsGen.host-futro [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-optiplex = self.nixosConfigurationsGen.host-optiplex [
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
 

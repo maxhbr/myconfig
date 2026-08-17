@@ -195,6 +195,20 @@
           "pubkey": "qBHvJH6exW2DyDYQySbeUBmdJj6xpkLAIFcz951fuw0="
         }
       }
+    },
+    "optiplex": {
+      "network": "home",
+      "hardware": {
+        "vendor": "Dell",
+        "model": "OptiPlex 3000 TC",
+        "formFactor": "micro (tiny case)",
+        "cpu": "Intel Pentium Silver N6005 (confirmed via product page spec table; not N100)",
+        "ram": "16 GB DDR4",
+        "storage": "256 GB NVMe SSD",
+        "wifi": "built-in, present per product listing; exact chip model not specified there - TODO: confirm WiFi chip",
+        "psu": "included",
+        "productUrl": "https://www.ram-koenig.de/dell-optiplex-3000-tc-d15u-intel-n6005-16ddr4-256nvme-wifi-psu/10191"
+      }
     }
   },
   "networks": {
