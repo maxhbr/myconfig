@@ -18,7 +18,31 @@
 # Usage:
 #   sudo ./modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh \
 #        --repository /home/mhuber/some-git-repo \
-#        [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery]
+#        [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery|seed]
+#
+# Sections are also gated on the CAPABILITIES of the host under test
+# (`myconfig.ai.microvm.capabilities`, lightweight plan phase 5 + phase 6):
+# every section that drives a guest over the control channel needs a TRANSPORT,
+# which the host provides by selecting `interactive` (the TCP sshd) OR `vsock`
+# (the VSOCK `sshd-vsock@`, phase 6); `lifecycle` and `forgery` additionally
+# need `batch`, and `seed` needs neither. A section whose requirement the host
+# does not meet is SKIPPED (under `--section all`) or HARD-ABORTS (when asked
+# for explicitly) instead of reporting vacuous passes. Within `creds`, the
+# batch-worker environment subtest is gated on its own `BATCH_CAPABLE` and skips
+# with the capability as the reason (the unit it inspects does not exist there).
+#
+# The set is READ from `agent-microvm capabilities` (machine-readable, needs no
+# root, starts nothing); an answer that cannot be parsed HARD-ABORTS the run
+# rather than defaulting to "this host has everything".
+#
+# CONSEQUENCE, recorded here because it was a real coverage hole: BEFORE phase 6
+# a host that selected ONLY `batch` had no control channel at all (no sshd), so
+# seven of the eight sections were SKIPPED and only `seed` ran. Phase 6 (VSOCK)
+# closed that: a `capabilities = [ "batch" "vsock" ]` host drives the guest
+# over the VSOCK sshd and runs every section, exactly like an interactive host.
+# A `capabilities = [ "batch" ]` host (vsock NOT selected) still runs only
+# `--section seed` — that is the honest, narrower validation for a batch guest
+# with no control channel.
 #
 # Every check prints exactly one line: `PASS`, `FAIL` or `SKIP` plus a reason.
 # The script exits non-zero if any check FAILED. SKIPs are honest: they mark
@@ -36,7 +60,15 @@ GATEWAY="${AGENT_GATEWAY:-192.168.83.1}"
 LITELLM_PORT="${AGENT_LITELLM_PORT:-4000}"
 BRIDGE="${AGENT_BRIDGE:-agentbr0}"
 RUNTIME_ROOT="${AGENT_RUNTIME_ROOT:-/var/lib/agent-microvms}"
+# The microVM STATE root (`myconfig.ai.microvm.stateRoot`, which the module
+# asserts equals `microvm.stateDir`): `<stateRoot>/<slot>` is where
+# cloud-hypervisor puts a guest's VSOCK sockets, so it is where the per-VM
+# AF_VSOCK model forwarder listens under the `vsock` transport.
 STATE_ROOT="${AGENT_STATE_ROOT:-/var/lib/microvms}"
+# The generated, policy-BAKED host-side config stager (config-seed.nix). It is
+# a host `systemPackages` entry of every host that enables the feature; the
+# `seed` section SKIPs when it is not on PATH.
+STAGER="${AGENT_STAGER:-agent-microvm-stage-config}"
 WORKSPACE_ROOT="$RUNTIME_ROOT/workspaces"
 LAUNCHER="${AGENT_LAUNCHER:-agent-microvm}"
 # How long a freshly started guest may take to accept SSH. A DETACHED `run`
@@ -48,19 +80,61 @@ READY_INTERVAL="${AGENT_RTV_READY_INTERVAL:-3}"
 # Placeholder value guest.nix gives the model-API keys (no real credential ever
 # enters a guest; the real one lives only in the host LiteLLM proxy).
 KEY_PLACEHOLDER="${AGENT_RTV_KEY_PLACEHOLDER:-not-needed}"
-# Batch job share (job.nix). The guest sees the same paths under /run/agent-job.
-JOBS_ROOT="$RUNTIME_ROOT/jobs"
 RESULTS_DIR="$RUNTIME_ROOT/results"
-GUEST_JOB_DIR="/run/agent-job"
+
+# --- SHARE LAYOUT (lightweight plan phase 4) ---------------------------------
+# The module has exactly ONE share layout: ONE writable virtiofs share per slot
+# plus ONE read-only share (session.nix).
+#
+#   <runtimeRoot>/sessions/<slot>              job data (the writable share)
+#   <runtimeRoot>/sessions/<slot>/workspace    clone bind
+#   <runtimeRoot>/sessions/<slot>/state        agent-state bind
+#   <runtimeRoot>/sessions-ro/<slot>/hostkeys  the slot's SSH host identity
+#   <runtimeRoot>/sessions-ro/<slot>/config-seed  staged host configuration
+#     guest: /run/agent-session /run/agent-session-ro (+ /workspace, a BIND of
+#            the session share, hence not of type virtiofs)
+#
+# Every path constant below feeds a `test -e`, a `find` or a `grep -E` whose
+# *absence* of a match is reported as a PASS, so pointing them at a
+# non-existent tree would turn the whole suite into silent, vacuous green —
+# exactly the failure mode `check_denied`/`check_reason` exist to rule out
+# everywhere else. The `seed` section therefore hard-FAILs when the staged
+# payload is missing after staging (see section_seed), and `shares` asserts
+# EXPECTED_SHARES for EQUALITY.
+#
+# EXPECTED_SHARES is the COMPLETE set of virtiofs mount targets a guest may
+# have (sorted, space-separated).
+SESSION_ROOT="$RUNTIME_ROOT/sessions"
+SESSION_RO_ROOT="$RUNTIME_ROOT/sessions-ro"
+JOBS_ROOT="$SESSION_ROOT"
+GUEST_JOB_DIR="/run/agent-session"
+GUEST_RO_DIR="/run/agent-session-ro"
+# /workspace is a BIND of "$GUEST_JOB_DIR/workspace", so `findmnt -t virtiofs`
+# does not list it.
+EXPECTED_SHARES="$GUEST_JOB_DIR $GUEST_RO_DIR"
+WORKSPACE_MOUNT_RE="^${SESSION_ROOT}/[^/]+/workspace\$"
+STATE_MOUNT_RE="^${SESSION_ROOT}/[^/]+/state\$"
+# <runtimeRoot>/sessions-ro/<slot>/config-seed — a share virtiofsd mounts
+# `--readonly`, hence NOT under the writable session tree.
+config_seed_payload() { printf '%s' "$SESSION_RO_ROOT/$1/config-seed"; }
+# The slot name of a bind-mount TARGET matched by the two regexes above. Both
+# end in `<slot>/workspace` or `<slot>/state`, so stripping the known trailing
+# component and taking the basename is exact (slot names are
+# `agent-<class>-<i>`, never `workspace`/`state`).
+slot_of_mount() {
+    local mp="$1"
+    mp="${mp%/workspace}"
+    mp="${mp%/state}"
+    printf '%s' "${mp##*/}"
+}
+# Batch job share (job.nix): the subdirectory names the guest sees under
+# $GUEST_JOB_DIR.
 GUEST_INPUT_DIR="$GUEST_JOB_DIR/input"
 GUEST_CTRL_DIR="$GUEST_JOB_DIR/controller"
 GUEST_WORKER_DIR="$GUEST_JOB_DIR/worker"
 # ROOT-owned: the guest's systemd opens the worker's stdout/stderr in here as
 # root, so the worker must not be able to write, replace or rename any of it.
 GUEST_WORKER_LOGS_DIR="$GUEST_JOB_DIR/worker-logs"
-# The COMPLETE set of virtiofs shares a guest may see (sorted, space-separated).
-# Asserted for equality, never as a substring.
-EXPECTED_SHARES="/run/agent-job /var/lib/agent-hostkey /var/lib/agent-state /workspace"
 
 REPO=""
 SECTION="all"
@@ -150,7 +224,7 @@ check_denied() {
 
 usage() {
     cat >&2 <<EOF
-Usage: sudo $0 --repository <git-repo> [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery]
+Usage: sudo $0 --repository <git-repo> [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery|seed]
 
 Sections:
   boot       per-class boot, readiness, /workspace, persistence, shares
@@ -163,6 +237,12 @@ Sections:
              replace, delete or shadow the authoritative result, stale results
              must be rejected, timeouts must kill the whole worker cgroup, and
              cancellation must be bound to the allocation token
+  seed       runtime configuration staging: the stager is
+             run against real fixtures in the host home and must stage the
+             allowlisted file while refusing credential-shaped names, benignly
+             NAMED symlinks onto credentials, host-home escapes, FIFOs, setuid
+             and over-budget files, keep the tree root-only and clean it before
+             every launch. Starts no VM; SKIPs unless the host stages at all.
 EOF
     exit 2
 }
@@ -228,22 +308,26 @@ slot_tap() { printf 'vm-%s' "${1#agent-}"; }
 #
 # `agent-microvm ssh <slot> -- <argv...>` CANNOT preserve argument boundaries:
 # OpenSSH joins the remaining argv with single spaces into one string and the
-# guest's LOGIN SHELL re-parses it — and that shell is fish (guest.nix gives the
-# agent user `shell = pkgs.fish`). Sending
+# guest's LOGIN SHELL re-parses it — bash today (guest.nix gives the agent user
+# `shell = pkgs.bashInteractive`; it was fish before the lightweight guest
+# dropped it). Sending
 #
 #     ssh <slot> -- sh -c "timeout 5 sh -c '</dev/tcp/GW/22'"
 #
 # therefore made the guest run `sh -c timeout 5 sh -c '...'`, i.e. `sh -c` got
 # only the word `timeout` (`5` became $0) — "timeout: missing operand", non-zero,
 # and every `check_denied` built on such a payload passed VACUOUSLY. Payloads
-# containing `${VAR:-}` fared even worse: `${` is a fish SYNTAX ERROR, so the
-# environment assertions could never have run at all.
+# containing `${VAR:-}` fared even worse: the login shell expanded (or, under
+# fish, rejected) them before the inner shell saw them, so the environment
+# assertions could never have run at all.
 #
 # The fix has three parts and none of them may be dropped:
 #   * guest_sh_as sends the ENTIRE script as ONE token, escaped for the guest's
 #     login shell;
 #   * the escaping dialect is DETECTED per slot (fish and POSIX single-quoting
-#     are mutually incompatible) with a probe that only succeeds when word
+#     are mutually incompatible; today's guest answers `posix`, and the fish
+#     dialect is kept so an operator can point the suite at an older guest) with
+#     a probe that only succeeds when word
 #     boundaries, embedded single quotes, `${VAR:-}` expansion AND the exit code
 #     all survive the round trip;
 #   * every guest-side assertion consults that probe first, so a transport that
@@ -715,6 +799,36 @@ assert_model_config() {
     fi
 }
 
+# The vsock-transport counterpart of the whole allow/deny matrix (lightweight
+# plan phase 6): with NO network interface in the guest, every denial below is
+# true by CONSTRUCTION, and a suite that only reported those denials would be
+# reporting vacuous passes. So the absence of the interface is asserted
+# DIRECTLY, from inside the guest:
+#
+#   * no link other than loopback exists;
+#   * no IPv4 and no IPv6 default route exists;
+#   * the guest cannot even name a non-loopback address of its own.
+#
+# Each is a POSITIVE statement about the guest, so it FAILS if a future change
+# gives the guest a link back.
+assert_loopback_only() {
+    local slot="$1" desc="$2" links
+    links="$(guest "$slot" sh -c "ip -o link show | awk -F': ' '{ print \$2 }' | grep -v '^lo$' | tr '\n' ' '" 2>/dev/null || true)"
+    links="${links//$'\r'/}"
+    links="${links// /}"
+    if [[ -z $links ]]; then
+        pass "$desc: the guest has NO network interface other than loopback (the vsock model transport)"
+    else
+        fail "$desc: the guest has non-loopback interface(s) '$links' although the vsock model transport must give it none"
+    fi
+    check_denied "$desc: the guest has no IPv4 default route" "$slot" \
+        sh -c "ip -4 route show default | grep -q ."
+    check_denied "$desc: the guest has no IPv6 default route" "$slot" \
+        sh -c "ip -6 route show default | grep -q ."
+    check_denied "$desc: the guest has no routable IPv4 address of its own" "$slot" \
+        sh -c "ip -4 -o addr show scope global | grep -q ."
+}
+
 # --- (2) network (proxy-only) ---------------------------------------------
 section_net() {
     section "network: proxy-only allow/deny matrix (ticket 6 A.2)"
@@ -728,12 +842,22 @@ section_net() {
         return
     fi
     assert_transport "$slot" "network"
-    # ALLOWED: the bridge-only LiteLLM endpoint, reached via the guest's own
-    # loopback forwarder AND directly at the gateway.
+    # ALLOWED: the LiteLLM endpoint through the guest's own loopback forwarder.
+    # That address is the SAME under both model transports (it is what the
+    # host-provisioned agent configuration points at); only what is behind it
+    # differs (the private bridge, or AF_VSOCK to the per-VM host forwarder).
     check "guest reaches the LiteLLM endpoint via loopback" \
         guest "$slot" curl -fsS -m 10 -o /dev/null "http://127.0.0.1:$LITELLM_PORT/v1/models"
-    check "guest reaches the LiteLLM endpoint on the bridge gateway" \
-        guest "$slot" curl -fsS -m 10 -o /dev/null "http://$GATEWAY:$LITELLM_PORT/v1/models"
+    if ((GUEST_HAS_NETWORK)); then
+        check "guest reaches the LiteLLM endpoint on the bridge gateway" \
+            guest "$slot" curl -fsS -m 10 -o /dev/null "http://$GATEWAY:$LITELLM_PORT/v1/models"
+    else
+        # THE POINT of the vsock transport: there is no bridge address to reach,
+        # because there is no interface. Asserted POSITIVELY (the guest has
+        # nothing but loopback) so the denials further down cannot be mistaken
+        # for firewall enforcement they no longer come from.
+        assert_loopback_only "$slot" "network"
+    fi
 
     # Boot-time model discovery (guest-model-config.nix): the guest must have
     # turned the LIVE /v1/models answer into pi + opencode config, replacing the
@@ -748,10 +872,37 @@ section_net() {
     check_denied "guest cannot reach the cloud-metadata endpoint" "$slot" \
         curl -fsS -m 5 -o /dev/null http://169.254.169.254/
     if tcp_probe_works "$slot"; then
-        check_denied "guest cannot reach host SSH on the gateway" "$slot" \
-            bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/22'"
-        check_denied "guest cannot reach an arbitrary host port (8080)" "$slot" \
-            bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/8080'"
+        if ((GUEST_HAS_NETWORK)); then
+            check_denied "guest cannot reach host SSH on the gateway" "$slot" \
+                bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/22'"
+            check_denied "guest cannot reach an arbitrary host port (8080)" "$slot" \
+                bash -c "timeout 5 bash -c '</dev/tcp/$GATEWAY/8080'"
+        else
+            # There is no gateway address under the vsock transport, so the two
+            # gateway denials above have no analogue here. Probing the guest's
+            # OWN loopback instead (127.0.0.1:8080, :22) would be VACUOUS: the
+            # guest has exactly one loopback listener (the model forwarder), so
+            # such a probe can only ever fail, whatever the transport does. A
+            # check that cannot fail is not evidence, so it is not made.
+            skip "the two host-port denials (no gateway address exists under the vsock transport; 'the guest cannot reach an arbitrary HOST port' is decided at EVAL by the destination-fixed per-VM forwarder — checks.microvm-vsock-transport — and by the host-side listener check below, not by a loopback probe that could never succeed)"
+            # NON-vacuous replacement, on the HOST: the per-VM forwarder must
+            # expose its listener as the VMM's UNIX socket and NOTHING as a TCP
+            # listener. This CAN fail (a regression that made the forwarder
+            # `ListenStream = <addr>:<port>` would be caught here), and it is the
+            # property the removed probes were pretending to test.
+            local vsock_sock listeners
+            vsock_sock="$STATE_ROOT/$slot/notify.vsock_$LITELLM_PORT"
+            check "the per-VM AF_VSOCK forwarder listens on the VMM's unix socket $vsock_sock" \
+                test -S "$vsock_sock"
+            listeners="$(systemctl show -p Listen --value "agent-litellm-vsock-$slot.socket" 2>/dev/null || true)"
+            if [[ -z $listeners ]]; then
+                skip "the per-VM forwarder exposes no TCP listener (its Listen= could not be read on this host)"
+            elif [[ $listeners == *Stream=/* && $listeners != *Stream=*:* ]]; then
+                pass "the per-VM forwarder exposes NO TCP listener at all (Listen=$listeners)"
+            else
+                fail "the per-VM forwarder exposes a non-unix listener (Listen=$listeners); the model transport must have no TCP listener anywhere"
+            fi
+        fi
         check_denied "guest cannot reach RFC1918 10.0.0.0/8" "$slot" \
             bash -c "timeout 5 bash -c '</dev/tcp/10.0.0.1/80'"
         check_denied "guest cannot reach RFC1918 172.16.0.0/12" "$slot" \
@@ -763,7 +914,7 @@ section_net() {
         check_denied "guest cannot reach a public DNS server" "$slot" \
             bash -c "timeout 5 bash -c '</dev/tcp/8.8.8.8/53'"
     else
-        skip "the seven /dev/tcp reachability denials (the probe cannot even reach the ALLOWED endpoint, so a refusal would prove nothing)"
+        skip "the /dev/tcp reachability denials (the probe cannot even reach the ALLOWED endpoint, so a refusal would prove nothing)"
     fi
     check_denied "guest cannot resolve public DNS names" "$slot" \
         sh -c "timeout 5 getent hosts example.com"
@@ -815,6 +966,20 @@ section_l2() {
     fi
     assert_transport "$slot_a" "layer 2 (guest A)"
     assert_transport "$slot_b" "layer 2 (guest B)"
+    if ((!GUEST_HAS_NETWORK)); then
+        # Under the vsock model transport (lightweight plan phase 6) there is no
+        # shared layer 2 to isolate: neither guest has a TAP, so there is no
+        # bridge port, no ARP, no IPv6 ND and no address to impersonate. Running
+        # the matrix below would report eight VACUOUS passes, so assert the
+        # STRONGER property instead — each guest has nothing but loopback — and
+        # say plainly that the TAP-specific subtests do not apply.
+        assert_loopback_only "$slot_a" "layer 2 (guest A)"
+        assert_loopback_only "$slot_b" "layer 2 (guest B)"
+        skip "the bridge-port isolation, ping/ARP/IPv6-ND and IP-impersonation subtests (the vsock model transport gives the guests no network interface at all, so there is no layer 2 between them to test)"
+        cleanup_task rtv-l2a
+        cleanup_task rtv-l2b
+        return
+    fi
     ip_a="$("$LAUNCHER" status "$slot_a" | awk '/^  ip:/ { print $2 }')"
     ip_b="$("$LAUNCHER" status "$slot_b" | awk '/^  ip:/ { print $2 }')"
     info "guest A=$slot_a ($ip_a)  guest B=$slot_b ($ip_b)"
@@ -909,55 +1074,13 @@ section_l2() {
     cleanup_task rtv-l2b
 }
 
-# --- (4) credential leakage ----------------------------------------------
-section_creds() {
-    section "credential boundary (ticket 6 A.4)"
-    local class slot rc=0
-    class="$(all_classes | head -1)"
-    cleanup_task rtv-creds
-    slot="$(start_task rtv-creds "$class")" || rc=$?
-    if ((rc != 0)) || [[ -z $slot ]]; then
-        report_start_failure "$rc" "credentials"
-        cleanup_task rtv-creds
-        return
-    fi
-    assert_transport "$slot" "credential boundary"
-    # NOTE: only names/paths are ever printed, never values.
-    #
-    # Every environment assertion runs in a LOGIN shell (guest_login): the guest's
-    # `environment.variables` are exported by /etc/profile only, so a plain
-    # `agent-microvm ssh <slot> -- sh -c ...` sees NO variable at all. That is why
-    # the placeholder check used to FAIL while the twelve "does not contain"
-    # checks below it used to pass VACUOUSLY — nothing was set either way.
-    local var
-    # POSITIVE CONTROL: a variable that MUST be set and MUST have this exact
-    # value. If it is not there the profile was not loaded, so the whole
-    # environment block is undecidable and is SKIPPED rather than passed.
-    local want_base="http://127.0.0.1:$LITELLM_PORT/v1" got_base
-    # shellcheck disable=SC2016  # the variable must expand in the GUEST
-    got_base="$(guest_login "$slot" 'printf %s "${OPENAI_BASE_URL-}"' 2>/dev/null || true)"
-    # The launcher's ssh allocates a pty (-t), so strip any CR the tty layer
-    # added before comparing.
-    got_base="${got_base//$'\r'/}"
-    if [[ $got_base == "$want_base" ]]; then
-        pass "guest environment is loaded (OPENAI_BASE_URL=$want_base)"
-        for var in OPENAI_API_KEY ANTHROPIC_API_KEY; do
-            if guest_login "$slot" "test \"\${$var-}\" = $KEY_PLACEHOLDER" >/dev/null 2>&1; then
-                pass "guest $var is the placeholder, not a real key"
-            else
-                fail "guest $var is not the expected placeholder"
-            fi
-        done
-        for var in OPENROUTER_API_KEY GITHUB_TOKEN GH_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID \
-            AWS_SECRET_ACCESS_KEY GOOGLE_APPLICATION_CREDENTIALS AZURE_CLIENT_SECRET \
-            KUBECONFIG SSH_AUTH_SOCK GPG_AGENT_INFO; do
-            check_denied "guest environment does not contain $var" "$slot" \
-                sh -lc "test -n \"\${$var:-}\""
-        done
-    else
-        skip "guest environment assertions: OPENAI_BASE_URL is '$got_base', expected '$want_base' — the login profile did not load, so nothing about the environment can be decided"
-    fi
-
+# The BATCH half of the `creds` section, in its own function so the section can
+# DECIDE whether to run it: it inspects `agent-job-worker@pi.service`, which
+# only EXISTS on a host that selects the `batch` capability (lightweight plan
+# phase 5). Takes the slot of an already-running session, because the unit is
+# read over the same SSH control channel the rest of the section uses.
+creds_batch_worker_env() {
+    local slot="$1"
     # The BATCH path gets its environment from the systemd WORKER UNIT, not from
     # a login profile, so the shell type above says nothing about it. Assert the
     # same facts against what `agent-job-worker@<agent>` would inherit: the
@@ -1026,6 +1149,69 @@ $unit_env"
                 fail "the batch worker's $var is set to something other than the placeholder"
             fi
         done
+    fi
+}
+
+# --- (4) credential leakage ----------------------------------------------
+section_creds() {
+    section "credential boundary (ticket 6 A.4)"
+    local class slot rc=0
+    class="$(all_classes | head -1)"
+    cleanup_task rtv-creds
+    slot="$(start_task rtv-creds "$class")" || rc=$?
+    if ((rc != 0)) || [[ -z $slot ]]; then
+        report_start_failure "$rc" "credentials"
+        cleanup_task rtv-creds
+        return
+    fi
+    assert_transport "$slot" "credential boundary"
+    # NOTE: only names/paths are ever printed, never values.
+    #
+    # Every environment assertion runs in a LOGIN shell (guest_login): the guest's
+    # `environment.variables` are exported by /etc/profile only, so a plain
+    # `agent-microvm ssh <slot> -- sh -c ...` sees NO variable at all. That is why
+    # the placeholder check used to FAIL while the twelve "does not contain"
+    # checks below it used to pass VACUOUSLY — nothing was set either way.
+    local var
+    # POSITIVE CONTROL: a variable that MUST be set and MUST have this exact
+    # value. If it is not there the profile was not loaded, so the whole
+    # environment block is undecidable and is SKIPPED rather than passed.
+    local want_base="http://127.0.0.1:$LITELLM_PORT/v1" got_base
+    # shellcheck disable=SC2016  # the variable must expand in the GUEST
+    got_base="$(guest_login "$slot" 'printf %s "${OPENAI_BASE_URL-}"' 2>/dev/null || true)"
+    # The launcher's ssh allocates a pty (-t), so strip any CR the tty layer
+    # added before comparing.
+    got_base="${got_base//$'\r'/}"
+    if [[ $got_base == "$want_base" ]]; then
+        pass "guest environment is loaded (OPENAI_BASE_URL=$want_base)"
+        for var in OPENAI_API_KEY ANTHROPIC_API_KEY; do
+            if guest_login "$slot" "test \"\${$var-}\" = $KEY_PLACEHOLDER" >/dev/null 2>&1; then
+                pass "guest $var is the placeholder, not a real key"
+            else
+                fail "guest $var is not the expected placeholder"
+            fi
+        done
+        for var in OPENROUTER_API_KEY GITHUB_TOKEN GH_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID \
+            AWS_SECRET_ACCESS_KEY GOOGLE_APPLICATION_CREDENTIALS AZURE_CLIENT_SECRET \
+            KUBECONFIG SSH_AUTH_SOCK GPG_AGENT_INFO; do
+            check_denied "guest environment does not contain $var" "$slot" \
+                sh -lc "test -n \"\${$var:-}\""
+        done
+    else
+        skip "guest environment assertions: OPENAI_BASE_URL is '$got_base', expected '$want_base' — the login profile did not load, so nothing about the environment can be decided"
+    fi
+
+    # The BATCH path gets its environment from the systemd WORKER UNIT, not from
+    # a login profile, so the shell type above says nothing about it. Asserted
+    # only where that unit exists: on an interactive-only host `systemctl show`
+    # answers with EMPTY properties for an unknown unit, so the subtest would
+    # report "the unit was not readable" — a wrong reason, and exactly the
+    # dishonesty the capability dispatch exists to remove. The reason given is
+    # therefore the capability itself, and no batch property is claimed.
+    if ((BATCH_CAPABLE)); then
+        creds_batch_worker_env "$slot"
+    else
+        skip "batch worker environment: this host does not select the 'batch' capability, so no agent-job-worker@ unit exists here; the worker's endpoint and credential-denylist assertions are a batch host's property"
     fi
 
     local path
@@ -1186,15 +1372,14 @@ check_no_residue() {
     residue=0
     while read -r mp; do
         [[ -n $mp ]] || continue
-        slot="${mp#"$STATE_ROOT"/}"
-        slot="${slot%/workspace}"
+        slot="$(slot_of_mount "$mp")"
         if is_current_slot "$slot"; then
             residue=1
             info "workspace bind mount still present for current slot $slot ($mp)"
         else
             foreign_mounts+=("$mp")
         fi
-    done < <(findmnt -rn -o TARGET | grep -E "^${STATE_ROOT}/[^/]+/workspace$" || true)
+    done < <(findmnt -rn -o TARGET | grep -E "$WORKSPACE_MOUNT_RE" || true)
     if ((residue)); then
         fail "no stale workspace bind mount remains $when"
     else
@@ -1210,21 +1395,21 @@ check_no_residue() {
     residue=0
     while read -r mp; do
         [[ -n $mp ]] || continue
-        slot="${mp##*/}"
+        slot="$(slot_of_mount "$mp")"
         if is_current_slot "$slot"; then
             residue=1
             info "agent-state bind mount still present for current slot $slot ($mp)"
         else
             foreign_mounts+=("$mp")
         fi
-    done < <(findmnt -rn -o TARGET | grep -E "^${RUNTIME_ROOT}/state/slots/[^/]+$" || true)
+    done < <(findmnt -rn -o TARGET | grep -E "$STATE_MOUNT_RE" || true)
     if ((residue)); then
         fail "no stale agent-state bind mount remains $when"
     else
         pass "no stale agent-state bind mount remains $when"
     fi
 
-    if find "$RUNTIME_ROOT/jobs" -name spec.json 2>/dev/null | grep -q .; then
+    if find "$JOBS_ROOT" -name spec.json 2>/dev/null | grep -q .; then
         fail "no stale job spec remains $when"
     else
         pass "no stale job spec remains $when"
@@ -1748,9 +1933,195 @@ section_forgery() {
 }
 
 # --- main -----------------------------------------------------------------
-printf '%s: starting real-KVM validation (host %s, bridge %s)\n' \
-    "$PROG" "$(uname -n)" "$BRIDGE"
+printf '%s: starting real-KVM validation (host %s, bridge %s, session root %s)\n' \
+    "$PROG" "$(uname -n)" "$BRIDGE" "$SESSION_ROOT"
 "$LAUNCHER" list | sed 's/^/#     /'
+
+# --- runtime configuration staging (lightweight plan phase 3) ---------------
+# HOST-ONLY section: it runs the generated stager `agent-microvm-stage-config`
+# against REAL fixtures planted in the host home and inspects the staged tree
+# plus the manifest. No VM is started.
+#
+# Why it lives HERE and not in `nix flake check`: the stager writes a root-owned
+# tree (`install -o root -g root`), and the Nix build sandbox is not root. The
+# eval/build checks can therefore only prove the policy is BAKED IN; whether it
+# is ENFORCED is decided here.
+#
+# The stager is installed by every host that enables the feature; if it is not
+# on PATH the whole section SKIPs.
+# shellcheck disable=SC2317  # reached via the dispatch below
+section_seed() {
+    section "runtime configuration staging: allowlist + denylist enforcement"
+
+    if ! command -v "$STAGER" >/dev/null; then
+        skip "config-seed: $STAGER is not on PATH (this host does not use runtime config staging)"
+        return
+    fi
+    # Staging REPLACES the slot's staged tree, so never touch a slot that is
+    # currently serving a task.
+    local slot
+    slot="$("$LAUNCHER" list | awk '$3 != "running" { print $1; exit }')"
+    if [[ -z $slot ]]; then
+        skip "config-seed: every slot is running — refusing to restage a live slot"
+        return
+    fi
+
+    # The payload lands in `<runtimeRoot>/sessions-ro/<slot>/config-seed` (see
+    # the LAYOUT block at the top); the MANIFEST root is
+    # `<runtimeRoot>/config-seed/<slot>`, outside every guest share.
+    local payload manifest
+    payload="$(config_seed_payload "$slot")"
+    manifest="$RUNTIME_ROOT/config-seed/$slot/manifest.json"
+
+    if ! "$STAGER" "$slot" >/tmp/rtv-seed-baseline.log 2>&1; then
+        fail "config-seed: the stager failed on a clean run (see /tmp/rtv-seed-baseline.log)"
+        return
+    fi
+    # HARD-FAIL, not a skip: every enforcement assertion below is of the form
+    # "nothing forbidden is under $payload", so a payload path that does not
+    # exist would make ALL of them pass vacuously. Deciding this ONCE, here,
+    # makes that structurally impossible.
+    if [[ ! -d $payload ]]; then
+        fail "config-seed: the staged payload $payload does not exist after staging (see the LAYOUT block)"
+        return
+    fi
+    if [[ ! -f $manifest ]]; then
+        fail "config-seed: the staging manifest $manifest does not exist after staging"
+        return
+    fi
+    pass "config-seed: the stager runs and writes $payload"
+
+    # The stager BAKES the host home and the allowlist; read both back from the
+    # manifest instead of guessing them here.
+    local host_home fixture_root fixture secret_root
+    host_home="$(jq -r '.hostHome // ""' "$manifest")"
+    if [[ -z $host_home || ! -d $host_home ]]; then
+        fail "config-seed: the manifest names no usable host home ('$host_home')"
+        return
+    fi
+    if ! jq -e '.allowlist | index(".agents/skills")' "$manifest" >/dev/null; then
+        skip "config-seed: '.agents/skills' is not allowlisted on this host — no directory to plant fixtures in"
+        return
+    fi
+    fixture_root="$host_home/.agents/skills"
+    fixture="$fixture_root/rtv-config-seed"
+    # A credential-shaped tree OUTSIDE the allowlist, used as the TARGET of
+    # benignly named symlinks (the interesting case: the link name passes the
+    # denylist, the resolved name must not).
+    secret_root="$host_home/.rtv-cfgseed-fixture"
+
+    # Whatever happens below, the operator's home must be left as it was.
+    local cleanup="rm -rf -- '$fixture' '$secret_root'"
+    if [[ ! -d $fixture_root ]]; then
+        mkdir -p "$fixture_root"
+        # Only remove what this section created, and only if it stayed empty.
+        cleanup="$cleanup; rmdir --ignore-fail-on-non-empty '$fixture_root' 2>/dev/null || true"
+    fi
+    # shellcheck disable=SC2064  # the paths must be expanded NOW, not on RETURN
+    trap "$cleanup" RETURN
+
+    rm -rf -- "$fixture" "$secret_root"
+    mkdir -p "$fixture" "$secret_root/tokens"
+    # (0) a benign file that MUST be staged (positive control: without it every
+    #     negative check below could pass simply because nothing was staged).
+    printf 'a skill\n' >"$fixture/good.md"
+    # (1) a credential reached under a BENIGN name — the name-only denylist
+    #     would stage this.
+    printf 'TOKEN\n' >"$secret_root/auth.json"
+    ln -s "$secret_root/auth.json" "$fixture/benign-config.md"
+    # (2) ... and the same trick with a DIRECTORY.
+    printf 'TOKEN\n' >"$secret_root/tokens/t"
+    ln -s "$secret_root/tokens" "$fixture/notes"
+    # (3) a credential-shaped NAME inside an allowlisted directory.
+    printf 'sk-live\n' >"$fixture/prod-api-token.txt"
+    # (4) an escape out of the host home.
+    ln -s /etc/passwd "$fixture/escape.md"
+    # (5) non-regular + setuid files.
+    mkfifo "$fixture/pipe"
+    printf 'x\n' >"$fixture/setuid.md"
+    chmod u+s "$fixture/setuid.md"
+    # (6) over the per-file budget.
+    head -c 2000000 /dev/zero >"$fixture/big.md"
+
+    if ! "$STAGER" "$slot" >/tmp/rtv-seed-fixture.log 2>&1; then
+        fail "config-seed: the stager failed with the fixtures planted (see /tmp/rtv-seed-fixture.log)"
+        return
+    fi
+
+    # `seed_reason <relative path>` — the manifest's skip reason, or the empty
+    # string when the path was not skipped.
+    seed_reason() {
+        jq -r --arg p "$1" '[.skipped[] | select(.path == $p) | .reason] | first // ""' "$manifest"
+    }
+    # `check_reason <desc> <path> <expected reason infix>` — the path must have
+    # been SKIPPED, and for the STATED reason (never "some reason", which a
+    # generic failure would also satisfy).
+    check_reason() {
+        local desc="$1" path="$2" want="$3" got
+        got="$(seed_reason "$path")"
+        if [[ -e "$payload/$path" ]]; then
+            fail "$desc (it was STAGED to $payload/$path)"
+        elif [[ $got == *"$want"* ]]; then
+            pass "$desc"
+        else
+            fail "$desc (not staged, but the manifest reason was '$got', expected '*$want*')"
+        fi
+    }
+
+    local rel=".agents/skills/rtv-config-seed"
+    check "config-seed: an allowlisted regular file IS staged" \
+        test -f "$payload/$rel/good.md"
+    check_reason "config-seed: a benignly NAMED symlink to a credential is refused" \
+        "$rel/benign-config.md" "credential-shaped path"
+    check_reason "config-seed: a benignly NAMED symlink to a credential DIRECTORY is refused" \
+        "$rel/notes" "credential-shaped path"
+    check_reason "config-seed: a credential-shaped file name is refused" \
+        "$rel/prod-api-token.txt" "credential denylist"
+    check_reason "config-seed: a symlink escaping the host home is refused" \
+        "$rel/escape.md" "outside the host home"
+    check_reason "config-seed: a setuid file is refused" \
+        "$rel/setuid.md" "setuid/setgid"
+    check_reason "config-seed: an over-budget file is refused" \
+        "$rel/big.md" "larger than"
+    check_fails "config-seed: a FIFO never reaches the staged tree" \
+        test -e "$payload/$rel/pipe"
+    # The credential CONTENT must not appear anywhere in the staged tree, no
+    # matter which path it might have been copied under.
+    if grep -rqI -- 'TOKEN' "$payload" 2>/dev/null; then
+        fail "config-seed: credential content from the fixtures reached the staged tree"
+    else
+        pass "config-seed: no fixture credential content is anywhere in the staged tree"
+    fi
+
+    # The staged tree is root-owned and root-ONLY (the guest agent gets a COPY,
+    # and no other host user may read the operator's configuration).
+    if [[ -n "$(find "$payload" \! -user root -print -quit)" ]]; then
+        fail "config-seed: the staged tree contains non-root-owned entries"
+    else
+        pass "config-seed: the staged tree is root-owned"
+    fi
+    if [[ -n "$(find "$payload" -perm /077 -print -quit)" ]]; then
+        fail "config-seed: the staged tree is group/other-accessible"
+    else
+        pass "config-seed: the staged tree is not readable by group/other"
+    fi
+    # The manifest names the host home and every skipped, credential-SHAPED
+    # host file name: it must stay OUTSIDE the share source (the payload).
+    check_fails "config-seed: the manifest is not inside the guest-visible payload" \
+        test -e "$payload/manifest.json"
+    check "config-seed: the manifest is root-only" \
+        test "$(stat -c '%U %a' "$manifest")" = "root 400"
+
+    # CLEANED before every launch: removing the fixtures and restaging must
+    # leave nothing of them behind.
+    rm -rf -- "$fixture" "$secret_root"
+    if "$STAGER" "$slot" >/tmp/rtv-seed-clean.log 2>&1; then
+        check_fails "config-seed: a previous launch's staged files do not survive restaging" \
+            test -e "$payload/$rel"
+    else
+        fail "config-seed: the stager failed on the cleanup run (see /tmp/rtv-seed-clean.log)"
+    fi
+}
 
 # --- host-side model-endpoint preflight -------------------------------------
 # Sections `net` and `forgery` are MEANINGLESS (and produce dozens of
@@ -1788,10 +2159,112 @@ preflight_endpoint() {
     return 1
 }
 
+# --- CAPABILITY detection (lightweight plan phase 5) ------------------------
+# `myconfig.ai.microvm.capabilities` selects whether a host's guests carry the
+# INTERACTIVE half (sshd + the per-slot host identity, hence every guest command
+# this suite issues over `agent-microvm ssh`) and/or the BATCH half (the job
+# controller/worker, hence `agent-microvm submit`). A section that needs a
+# capability the host under test does not have would either fail on every
+# subtest (no SSH channel) or — much worse — report VACUOUS PASSES for its
+# "the guest must NOT be able to ..." checks.
+#
+# The set is ASKED FOR, not inferred: `agent-microvm capabilities` prints it
+# machine-readably on EVERY host (`capabilities: <space-separated>` plus a
+# `declared:` line), needs no root and starts nothing. The earlier detection
+# grepped the launcher's REFUSAL messages for an English substring and defaulted
+# to "this host has everything" — it therefore failed OPEN: rewording
+# `require_capability`'s `die`, a `require_root` failure or a future transport
+# change would silently restore exactly the vacuous passes this dispatch exists
+# to prevent.
+#
+# So it fails CLOSED instead: an unparseable answer HARD-ABORTS the run. A
+# launcher that does not know the subcommand (a host built before this phase)
+# is aborted too, on purpose — an operator must not learn about a coverage hole
+# from a green run.
+INTERACTIVE_CAPABLE=0
+BATCH_CAPABLE=0
+VSOCK_CAPABLE=0
+# The guest command TRANSPORT: a control channel exists iff the host selects
+# `interactive` (the TCP sshd) OR `vsock` (the VSOCK `sshd-vsock@`, lightweight
+# plan phase 6). Every section that drives the guest needs one; `transport` is
+# the SECTION_CAPABILITIES token that asks for it, so a batch-only host WITHOUT
+# `vsock` (no control channel at all) skips those sections while a batch+vsock
+# host (control channel over VSOCK) runs them — closing the phase-5 coverage
+# hole that named VSOCK as the enabler.
+TRANSPORT_CAPABLE=0
+SELECTED_CAPABILITIES=""
+DECLARED_CAPABILITIES=""
+# The resolved MODEL TRANSPORT (lightweight plan phase 6, the literal
+# objective), read from the SAME machine-readable answer and for the same
+# fail-closed reason:
+#
+#   tap   - the guest has a network interface on the private bridge; the
+#           allow/deny matrix and the layer-2 section are meaningful as written.
+#   vsock - the guest has NO network interface at all; the model API travels over
+#           AF_VSOCK to a per-VM host forwarder. Every "the guest must NOT be
+#           able to reach X" check is then true because there is nothing to
+#           reach WITH - which is exactly the kind of vacuous pass this suite
+#           exists to prevent, so those sections must assert the ABSENCE of the
+#           interface instead of pretending to test a firewall that is not there.
+NETWORK_TRANSPORT=""
+GUEST_HAS_NETWORK=0
+detect_capabilities() {
+    local out line cap
+    if ! out="$("$LAUNCHER" capabilities 2>&1)"; then
+        # shellcheck disable=SC2016  # the backticks are PROSE (the command name), not a substitution
+        printf '%s: ABORTING: `%s capabilities` failed:\n' "$PROG" "$LAUNCHER" >&2
+        printf '%s\n' "$out" >&2
+        die "the capability set of the host under test could not be read, so no section can honestly be run or skipped"
+    fi
+    while IFS= read -r line; do
+        case "$line" in
+            "capabilities: "*) SELECTED_CAPABILITIES="${line#capabilities: }" ;;
+            "declared: "*) DECLARED_CAPABILITIES="${line#declared: }" ;;
+            "network-transport: "*) NETWORK_TRANSPORT="${line#network-transport: }" ;;
+        esac
+    done <<<"$out"
+    [[ -n $DECLARED_CAPABILITIES ]] ||
+        die "\`$LAUNCHER capabilities\` printed no 'declared:' line (got: $out) — refusing to guess what this host supports"
+    [[ -n $SELECTED_CAPABILITIES ]] ||
+        die "\`$LAUNCHER capabilities\` printed no non-empty 'capabilities:' line (got: $out) — the module rejects an empty selection, so this answer cannot be trusted"
+    # FAIL CLOSED on the transport too: without it the suite cannot know whether
+    # the guest has a network interface, and its network denials would be
+    # unfalsifiable.
+    case "$NETWORK_TRANSPORT" in
+        tap) GUEST_HAS_NETWORK=1 ;;
+        vsock) GUEST_HAS_NETWORK=0 ;;
+        "")
+            die "\`$LAUNCHER capabilities\` printed no 'network-transport:' line (got: $out) — without it the network sections cannot tell an enforced denial from a guest that has no interface at all"
+            ;;
+        *)
+            die "the host under test reports the model transport '$NETWORK_TRANSPORT', which this suite does not know how to gate on — update the transport handling in detect_capabilities"
+            ;;
+    esac
+    # Every capability THIS SUITE knows about must be declared by the launcher.
+    # A missing token means the suite and the module disagree about what exists
+    # (a renamed capability, a suite older than the module), which the gating
+    # below would silently read as "not selected".
+    for cap in interactive batch vsock; do
+        case " $DECLARED_CAPABILITIES " in
+            *" $cap "*) ;;
+            *) die "the host under test does not DECLARE the '$cap' capability this suite gates on (declared: $DECLARED_CAPABILITIES) — the suite and the module disagree about what exists" ;;
+        esac
+    done
+    for cap in $SELECTED_CAPABILITIES; do
+        case "$cap" in
+            interactive) INTERACTIVE_CAPABLE=1 ;;
+            batch) BATCH_CAPABLE=1 ;;
+            vsock) VSOCK_CAPABLE=1 ;;
+            *) die "the host under test selects the capability '$cap', which this suite does not know how to gate on — update the SECTION_CAPABILITIES table" ;;
+        esac
+    done
+    TRANSPORT_CAPABLE=$((INTERACTIVE_CAPABLE || VSOCK_CAPABLE))
+}
+
 # --- section dispatch ------------------------------------------------------
-# The seven sections, in the fixed order they always run under `--section all`.
+# The eight sections, in the fixed order they always run under `--section all`.
 # `net` and `forgery` depend on a reachable model endpoint; the rest do not.
-ALL_SECTIONS=(boot net l2 creds lifecycle malrepo forgery)
+ALL_SECTIONS=(boot net l2 creds lifecycle malrepo forgery seed)
 ENDPOINT_SECTIONS=(net forgery)
 is_endpoint_section() {
     local s
@@ -1799,6 +2272,41 @@ is_endpoint_section() {
         [[ $s == "$1" ]] && return 0
     done
     return 1
+}
+# Which CAPABILITIES each section needs. Every section that issues a guest
+# command needs a CONTROL CHANNEL — the `transport` token — which the host
+# provides by selecting `interactive` (the TCP sshd) OR `vsock` (the VSOCK
+# `sshd-vsock@`, lightweight plan phase 6). `lifecycle` and `forgery`
+# additionally submit batch jobs, so they also need `batch`. `seed` exercises
+# the HOST-side stager only, so it needs neither.
+# `creds` needs only `transport` because that is what its SECTION needs; its
+# batch-worker-environment subtest is gated on `BATCH_CAPABLE` at its own call
+# site (`creds_batch_worker_env`) and skips with the capability as the reason.
+# A section-level `transport batch` would have been wrong: it would drop the
+# eleven credential-boundary assertions that DO hold on an interactive-only host
+# (and, now, on a batch+vsock host).
+declare -A SECTION_CAPABILITIES=(
+    [boot]="transport"
+    [net]="transport"
+    [l2]="transport"
+    [creds]="transport"
+    [lifecycle]="transport batch"
+    [malrepo]="transport"
+    [forgery]="transport batch"
+    [seed]=""
+)
+# The capabilities <section> needs but the host under test does not have.
+# Emits a HUMAN-readable reason (not a bare token): the skip/abort messages
+# print it verbatim, and `transport` is a pseudo-requirement (the host selects
+# `interactive` or `vsock`, not `transport` itself).
+missing_capabilities_of() {
+    local cap
+    for cap in ${SECTION_CAPABILITIES[$1]-}; do
+        case "$cap" in
+            transport) ((TRANSPORT_CAPABLE)) || printf '%s\n' "control channel (the 'interactive' or 'vsock' capability)" ;;
+            batch) ((BATCH_CAPABLE)) || printf '%s\n' "batch capability" ;;
+        esac
+    done
 }
 # Resolve the requested $SECTION into the ordered list of sections to RUN.
 resolve_sections() {
@@ -1815,7 +2323,7 @@ resolve_sections() {
 # name is therefore checked HERE, so an unknown section aborts the whole run.
 case "$SECTION" in
     all) ;;
-    boot | net | l2 | creds | lifecycle | malrepo | forgery) ;;
+    boot | net | l2 | creds | lifecycle | malrepo | forgery | seed) ;;
     *) die "unknown --section '$SECTION'" ;;
 esac
 
@@ -1831,8 +2339,28 @@ info "sections: ${PLAN[*]}"
 # endpoint must not silently validate nothing (Bug 2). When the operator asked
 # for JUST an endpoint-dependent section (`--section net`/`--section forgery`),
 # running it would be pointless, so the run HARD-ABORTS instead.
+# Capability preflight (lightweight plan phase 5). Detected ONCE, before any VM
+# boots, and reported: a section whose capability is absent is SKIPPED under
+# `--section all` and HARD-ABORTS when the operator asked for exactly it, for
+# the same reason the endpoint preflight does — a run that cannot exercise a
+# property must say so, never pass it.
+detect_capabilities
+info "capabilities of the host under test: $SELECTED_CAPABILITIES (declared: $DECLARED_CAPABILITIES)"
+info "model transport of the host under test: $NETWORK_TRANSPORT (guest network interface: $((GUEST_HAS_NETWORK)))"
 ENDPOINT_DOWN=0
 SKIPPED_SECTIONS=()
+UNSUPPORTED_SECTIONS=()
+if [[ $SECTION != all ]]; then
+    mapfile -t missing < <(missing_capabilities_of "$SECTION")
+    if ((${#missing[@]})); then
+        printf '%s: ABORTING section %q: this host does not provide the %s;\n' \
+            "$PROG" "$SECTION" "${missing[*]}" >&2
+        printf '%s: the section cannot exercise anything and its "must NOT be able to"\n' "$PROG" >&2
+        printf '%s: checks would pass VACUOUSLY. Run it on a host whose\n' "$PROG" >&2
+        printf '%s: myconfig.ai.microvm.capabilities includes it.\n' "$PROG" >&2
+        exit 1
+    fi
+fi
 if is_endpoint_section "$SECTION" || [[ $SECTION == all ]]; then
     if ! preflight_endpoint; then
         ENDPOINT_DOWN=1
@@ -1870,6 +2398,13 @@ for s in "${PLAN[@]}"; do
     if [[ $ENDPOINT_DOWN == 1 ]] && is_endpoint_section "$s"; then
         continue
     fi
+    # Neither is a section whose CAPABILITY this host does not have.
+    mapfile -t missing < <(missing_capabilities_of "$s")
+    if ((${#missing[@]})); then
+        skip "section '$s' SKIPPED: this host does not provide the ${missing[*]}, so its checks would pass vacuously"
+        UNSUPPORTED_SECTIONS+=("$s")
+        continue
+    fi
     before_pass=$PASS before_fail=$FAIL before_skip=$SKIP
     rc=0
     "section_$s" || rc=$?
@@ -1887,6 +2422,13 @@ printf '\n%s: %d passed, %d failed, %d skipped\n' "$PROG" "$PASS" "$FAIL" "$SKIP
 info "sections ran: ${RAN_SECTIONS[*]:-<none>}"
 if ((${#SKIPPED_SECTIONS[@]})); then
     info "sections skipped (endpoint down): ${SKIPPED_SECTIONS[*]}"
+fi
+# A capability the host deliberately does NOT select is a configuration fact,
+# not a defect: those sections are skipped, loudly and counted, but they do NOT
+# force a non-zero exit (unlike an endpoint that is merely down). Running them
+# would be the dishonest option, which is the whole point of the dispatch.
+if ((${#UNSUPPORTED_SECTIONS[@]})); then
+    info "sections skipped (capability not selected by this host): ${UNSUPPORTED_SECTIONS[*]}"
 fi
 # Exit status: non-zero if any check FAILED. ALSO non-zero if an endpoint-
 # dependent section was SKIPPED (not decided) because the endpoint was down:

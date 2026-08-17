@@ -14,6 +14,10 @@
 #   * with `systemctl`, `mount`, `umount` and `findmnt` STUBBED by bind-mounting
 #     scripts over the exact store paths the launcher resolves — so the script
 #     under test is byte-identical to the installed one;
+#   * where the `systemctl start|restart agent-microvm-hostkeys.service` stub
+#     PLAYS THE PROVISIONING UNIT with the REAL provisioner from hostkeys.nix,
+#     so the launcher's pre-launch host-identity validation (and its
+#     self-healing restart) is satisfied by genuine key material or not at all;
 #   * where the `systemctl start microvm@<slot>` stub PLAYS THE GUEST: it records
 #     the effective ownership/modes of the job share the launcher just laid out,
 #     and then plants whatever "result" the scenario asks for (a genuine
@@ -29,9 +33,11 @@
 set -euo pipefail
 
 for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET MOUNT_TARGET \
-    UMOUNT_TARGET FINDMNT_TARGET JQ_TARGET CURL_TARGET RUNTIME_ROOT STATE_ROOT INPUT_SUBDIR \
+    UMOUNT_TARGET FINDMNT_TARGET JQ_TARGET CURL_TARGET RUNTIME_ROOT STATE_ROOT \
+    JOBS_ROOT WORKSPACE_SUBDIR HOST_HOME INPUT_SUBDIR \
     CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR WORKER_STDERR_NAME SPEC_NAME PROMPT_NAME \
-    RESULT_NAME SPEC_VERSION CONTROLLER_VERSION AGENT WORKER_UID; do
+    RESULT_NAME SPEC_VERSION CONTROLLER_VERSION AGENT WORKER_UID \
+    PROVISION_HOSTKEYS; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
@@ -81,6 +87,13 @@ git -C "$REPO" add -A
 git -C "$REPO" -c user.email=t@example.invalid -c user.name=t commit -qm init
 
 # --- the stubs --------------------------------------------------------------
+# The TAMPER scenarios below have to produce, and detect, real key material.
+SSH_KEYGEN_BIN="$(command -v ssh-keygen || true)"
+[[ -n $SSH_KEYGEN_BIN && -x $SSH_KEYGEN_BIN ]] || skip_all "ssh-keygen not found (needed to tamper with a provisioned identity)"
+# The read-only per-slot hostkey share the provisioner writes, as the launcher
+# lays it out (mirrors the `identity_key` path used by scenario 14).
+RO_HOSTKEYS_GLOB="$RUNTIME_ROOT/${JOBS_ROOT##*/}-ro/*/hostkeys/ssh_host_ed25519_key"
+
 # `systemctl` doubles as the fake guest: on `start microvm@<slot>` it records the
 # job share's effective ownership/modes and plants the scenario's "result".
 cat >"$STUBS/systemctl" <<EOF
@@ -90,7 +103,9 @@ log="\$STUB_DIR/systemctl.log"
 printf 'systemctl %s\n' "\$*" >> "\$log"
 active="\$STUB_DIR/active"
 calls="\$STUB_DIR/is-active-calls"
-jobs_root="$RUNTIME_ROOT/jobs"
+# The per-slot job data lives in the ONE writable session share; its root
+# comes from the module (job.nix -> session.nix), never from a literal here.
+jobs_root="$JOBS_ROOT"
 
 plant() {
     local slot="\$1" dir="\$jobs_root/\$slot" token
@@ -152,7 +167,7 @@ plant() {
                 > "\$dir/$WORKER_SUBDIR/$RESULT_NAME"
             chown $WORKER_UID:$WORKER_UID "\$dir/$WORKER_SUBDIR/$RESULT_NAME"
             result "$SPEC_VERSION" "\$task" "\$token" "\$slot" completed 0 \\
-                > "$STATE_ROOT/\$slot/workspace/$RESULT_NAME" 2>/dev/null || true
+                > "\$dir/$WORKSPACE_SUBDIR/$RESULT_NAME" 2>/dev/null || true
             ;;
         none) ;;
         # The VM stays "running" and NO result is planted by the stub: the test
@@ -220,6 +235,74 @@ case "\$1" in
                     : > "\$active"
                     rm -f "\$calls"
                     plant "\$slot"
+                    ;;
+                agent-microvm-hostkeys.service)
+                    # A NO-OP, MODELLED FAITHFULLY: the provisioning unit is a
+                    # 'RemainAfterExit = true' oneshot that is wantedBy
+                    # multi-user.target, so on a booted host it is already
+                    # active and 'systemctl start' returns success WITHOUT
+                    # re-running ExecStart. A launcher that regressed to
+                    # 'start' would therefore never repair a missing key — and
+                    # since this harness resets the read-only session tree
+                    # before every scenario, its identity validation would then
+                    # fail and every scenario below would fail with it.
+                    :
+                    ;;
+            esac
+        done
+        exit 0
+        ;;
+    restart)
+        for a in "\$@"; do
+            case "\$a" in
+                agent-microvm-hostkeys.service)
+                    # PLAY the provisioning unit with the REAL provisioner
+                    # (hostkeys.nix), not a stub: the launcher validates the
+                    # slot's actual key files + known_hosts entry before it
+                    # boots anything, so the only way this harness can reach
+                    # 'systemctl start microvm@SLOT' is if the genuine
+                    # provisioner produced a genuine, consistent identity.
+                    #
+                    # STUB_HOSTKEYS_BROKEN=1 makes the repair FAIL, which is how
+                    # the fail-closed scenario proves the launcher never boots a
+                    # guest whose identity it could not establish.
+                    if [[ \${STUB_HOSTKEYS_BROKEN:-0} == 1 ]]; then
+                        exit 1
+                    fi
+                    # STUB_HOSTKEYS_NOOP=1 is the OTHER, subtler failure: the
+                    # unit SUCCEEDS but provisions nothing (a full disk, a
+                    # tampered ExecStart, a unit whose ExecStart silently did
+                    # not reach this slot). That is what the launcher's SECOND
+                    # validation exists for — 'systemctl restart' returning 0 is
+                    # NOT evidence of an identity. Without this mode the second
+                    # die was only grep-visible in the rendered script.
+                    if [[ \${STUB_HOSTKEYS_NOOP:-0} == 1 ]]; then
+                        exit 0
+                    fi
+                    "$PROVISION_HOSTKEYS" || exit 1
+                    # TAMPER MODES: the unit succeeds AND provisions a real,
+                    # self-consistent identity — then one thing is broken that
+                    # every PRE-EXISTING check would happily accept. They exist
+                    # to prove the two NEW checks (private key loadable; .pub
+                    # derived from it) actually run at launch time.
+                    if [[ \${STUB_HOSTKEYS_CORRUPT:-0} == 1 ]]; then
+                        for k in $RO_HOSTKEYS_GLOB; do
+                            [[ -f \$k ]] || continue
+                            printf '%s\n' '-----BEGIN OPENSSH PRIVATE KEY-----' \\
+                                'b3BlbnNzaC1rZXktdjEAAAAAtruncated' \\
+                                '-----END OPENSSH PRIVATE KEY-----' > "\$k"
+                            chmod 0400 "\$k"
+                        done
+                    fi
+                    if [[ \${STUB_HOSTKEYS_SWAP:-0} == 1 ]]; then
+                        for k in $RO_HOSTKEYS_GLOB; do
+                            [[ -f \$k ]] || continue
+                            rm -f /tmp/swap-key /tmp/swap-key.pub
+                            "$SSH_KEYGEN_BIN" -q -t ed25519 -N "" -C swapped -f /tmp/swap-key
+                            cp -- /tmp/swap-key "\$k"
+                            chmod 0400 "\$k"
+                        done
+                    fi
                     ;;
             esac
         done
@@ -294,6 +377,33 @@ EOF
 chmod +x "$STUBS/curl-fail"
 
 # --- running the launcher ---------------------------------------------------
+# Every scenario runs in its OWN `fakeroot` invocation, and fakeroot's faked
+# ownership lives only inside one invocation. The launcher's session tree is
+# created with an `agent`-owned `workspace/` and `state/` (session.nix's layout
+# table), and its PRE-LAUNCH verifier re-checks exactly that — so a tree left
+# behind by a previous scenario would appear root-owned to the next one and
+# refuse the launch. Reset the two trees before each scenario; everything the
+# assertions read afterwards (workspaces/, results/, slots/) is untouched.
+reset_session_trees() {
+    rm -rf "$WORK/runtime/${JOBS_ROOT##*/}" "$WORK/runtime/${JOBS_ROOT##*/}-ro"
+}
+
+# The private key a TAMPER scenario left behind. The slot the launcher picked
+# cannot be read from the stub there (no VM ever starts, so no spec.json is
+# recorded), but `reset_session_trees` empties the read-only tree before every
+# scenario, so the ONE key pair in it is the tampered one. Prints nothing and
+# returns 1 when the launcher never provisioned anything at all.
+tampered_key() {
+    local k
+    for k in "$WORK/runtime/${JOBS_ROOT##*/}-ro"/*/hostkeys/ssh_host_ed25519_key; do
+        if [[ -f $k ]]; then
+            printf '%s' "$k"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # run_submit <mode> <task> [extra submit args...]
 run_submit() {
     local mode="$1" task="$2"
@@ -301,6 +411,7 @@ run_submit() {
     local stub_dir="$WORK/stub-$task"
     rm -rf "$stub_dir"
     mkdir -p "$stub_dir" "$WORK/runtime" "$WORK/state"
+    reset_session_trees
     local rc=0
     "$BWRAP" --unshare-user --uid 0 --gid 0 --unshare-uts --hostname launcher-host \
         --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc \
@@ -316,10 +427,19 @@ run_submit() {
         --setenv JQ_ARGV_LOG "$JQ_ARGV_LOG" \
         --setenv STUB_DIR "$stub_dir" \
         --setenv STUB_MODE "$mode" \
+        --setenv STUB_HOSTKEYS_BROKEN "${STUB_HOSTKEYS_BROKEN:-0}" \
+        --setenv STUB_HOSTKEYS_NOOP "${STUB_HOSTKEYS_NOOP:-0}" \
+        --setenv STUB_HOSTKEYS_CORRUPT "${STUB_HOSTKEYS_CORRUPT:-0}" \
+        --setenv STUB_HOSTKEYS_SWAP "${STUB_HOSTKEYS_SWAP:-0}" \
         --setenv AGENT_MICROVM_SKIP_PREFLIGHT 1 \
         --setenv HOME "$WORK" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
             set -e
+            # The launcher stages an ALLOWLISTED copy of the host agent
+            # configuration on every launch (config-seed.nix). The baked host
+            # home must therefore exist inside this fresh tmpfs root; it stays
+            # EMPTY, so the stager stages nothing and writes an empty manifest.
+            mkdir -p '$HOST_HOME'
             printf 'prompt for %s\n' '$task' > '$WORK/prompt-$task.md'
             exec '$LAUNCHER' submit --name '$task' --repository '$REPO' \
                 --agent '$AGENT' --prompt-file '$WORK/prompt-$task.md' $*
@@ -337,6 +457,7 @@ run_preflight_fail() {
     local stub_dir="$WORK/stub-preflight"
     rm -rf "$stub_dir"
     mkdir -p "$stub_dir" "$WORK/runtime" "$WORK/state"
+    reset_session_trees
     local rc=0
     "$BWRAP" --unshare-user --uid 0 --gid 0 --unshare-uts --hostname launcher-host \
         --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc \
@@ -357,6 +478,11 @@ run_preflight_fail() {
         --setenv HOME "$WORK" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
             set -e
+            # The launcher stages an ALLOWLISTED copy of the host agent
+            # configuration on every launch (config-seed.nix). The baked host
+            # home must therefore exist inside this fresh tmpfs root; it stays
+            # EMPTY, so the stager stages nothing and writes an empty manifest.
+            mkdir -p '$HOST_HOME'
             printf 'prompt for preflight\n' > '$WORK/prompt-preflight.md'
             exec '$LAUNCHER' submit --name preflight --repository '$REPO' \
                 --agent '$AGENT' --prompt-file '$WORK/prompt-preflight.md' --timeout 30
@@ -378,6 +504,7 @@ run_cancel() {
     local stub_dir="$WORK/stub-$task"
     rm -rf "$stub_dir"
     mkdir -p "$stub_dir" "$WORK/runtime" "$WORK/state"
+    reset_session_trees
     local rc=0
     "$BWRAP" --unshare-user --uid 0 --gid 0 --unshare-uts --hostname launcher-host \
         --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc \
@@ -399,6 +526,11 @@ run_cancel() {
         --setenv PLANT_CODE "$code" \
         -- "$FAKEROOT" -- "$BASH_BIN" -c "
             set -e
+            # The launcher stages an ALLOWLISTED copy of the host agent
+            # configuration on every launch (config-seed.nix). The baked host
+            # home must therefore exist inside this fresh tmpfs root; it stays
+            # EMPTY, so the stager stages nothing and writes an empty manifest.
+            mkdir -p '$HOST_HOME'
             '$LAUNCHER' run --name '$task' --repository '$REPO' \
                 --agent '$AGENT' >/dev/null 2>&1
             slot=\"\$('$LAUNCHER' list | awk '\$5 == \"$task\" { print \$1 }')\"
@@ -406,7 +538,7 @@ run_cancel() {
             marker='$RUNTIME_ROOT'/slots/\$slot/session.json
             tmp=\$(mktemp)
             jq '.mode = \"batch\"' \"\$marker\" > \"\$tmp\" && mv -f \"\$tmp\" \"\$marker\"
-            cdir='$RUNTIME_ROOT'/jobs/\$slot/'$CONTROLLER_SUBDIR'
+            cdir='$JOBS_ROOT'/\$slot/'$CONTROLLER_SUBDIR'
             mkdir -p \"\$cdir\"
             ALLOC_TOKEN=\"\$(jq -r .token \"\$marker\")\" \
             jq -nc --argjson version $SPEC_VERSION \
@@ -703,6 +835,201 @@ if grep -q "already terminated as 'timed-out'" "$WORK/cancel-cancel-late.log"; t
     pass "cancel told the operator the task had already terminated"
 else
     fail "cancel did not report the pre-existing terminal state: $(tail -3 "$WORK/cancel-cancel-late.log")"
+fi
+
+# --- the SSH HOST IDENTITY is established before the VM boots --------------
+# `reset_session_trees` wipes the read-only session tree before EVERY scenario,
+# so the slot's host identity is always MISSING when the launcher starts. Every
+# passing scenario above therefore already went through the self-heal path; the
+# assertions here name what it must have done, so a regression is reported as
+# "the identity was not repaired" instead of as an unrelated result failure.
+echo
+echo "=== 14. the slot's SSH host identity is repaired before the VM boots ==="
+identity_log="$WORK/stub-ok-task/systemctl.log"
+if grep -q 'restart agent-microvm-hostkeys.service' "$identity_log"; then
+    pass "the launcher RESTARTED the provisioning unit (start would be a no-op on the active oneshot)"
+else
+    fail "the launcher never restarted the provisioning unit: $(cat "$identity_log")"
+fi
+if grep -qE '(^|[[:space:]])start agent-microvm-hostkeys\.service' "$identity_log"; then
+    fail "the launcher used 'systemctl start' on the RemainAfterExit oneshot (a no-op)"
+else
+    pass "the launcher did not rely on 'systemctl start' for the oneshot"
+fi
+if grep -q 'repairing SSH host identity for slot' "$WORK/submit-ok-task.log"; then
+    pass "the launcher announced the repair"
+else
+    fail "the launcher repaired the identity silently: $(tail -3 "$WORK/submit-ok-task.log")"
+fi
+# The repair produced a REAL, root-only key pair for the slot the launcher used,
+# and the aggregated known_hosts entry that matches it.
+identity_slot="$(jq -r '.slot // ""' "$WORK/stub-ok-task/spec.json")"
+identity_key="$WORK/runtime/${JOBS_ROOT##*/}-ro/$identity_slot/hostkeys/ssh_host_ed25519_key"
+if [[ -s $identity_key ]]; then
+    pass "the repaired private key exists for slot $identity_slot"
+else
+    fail "no private key for slot $identity_slot after the launch"
+fi
+# The EXACT mode (0400) is asserted inside the sandbox by
+# tests/microvm-hostkeys-provisioning.sh; `fakeroot` intercepts chmod, so from
+# OUT here the on-disk mode is ssh-keygen's own 0600. What is verifiable from
+# outside — and what matters — is that no group/world bit was ever set.
+identity_mode="$(stat -c '%a' "$identity_key" 2>/dev/null || printf 777)"
+if ((0$identity_mode & 0044)); then
+    fail "the repaired private key is group/world readable (mode $identity_mode)"
+else
+    pass "the repaired private key is not group/world readable (mode $identity_mode)"
+fi
+if [[ -s $identity_key.pub ]] &&
+    grep -qF -- "$(cut -d' ' -f1,2 "$identity_key.pub")" "$WORK/runtime/known_hosts"; then
+    pass "known_hosts records exactly the repaired public key"
+else
+    fail "known_hosts does not record the repaired public key"
+fi
+
+# FAIL CLOSED: if the repair itself fails, no VM may be started. This is the
+# NEGATIVE CONTROL for the whole self-heal path — without it, a launcher that
+# ignored the provisioning result would still "pass" everything above.
+echo
+echo "=== 15. an unrepairable host identity ABORTS the launch ==="
+STUB_HOSTKEYS_BROKEN=1
+export STUB_HOSTKEYS_BROKEN
+rc="$(run_submit valid noidentity-task --timeout 30)"
+unset STUB_HOSTKEYS_BROKEN
+if [[ $rc -ne 0 ]]; then
+    pass "submit failed when the host identity could not be provisioned (exit $rc)"
+else
+    fail "submit SUCCEEDED with no provisionable host identity"
+fi
+if grep -q 'failed to provision per-slot SSH host keys' "$WORK/submit-noidentity-task.log"; then
+    pass "the failure names the provisioning unit"
+else
+    fail "the failure does not name the provisioning unit: $(tail -3 "$WORK/submit-noidentity-task.log")"
+fi
+if grep -q 'start microvm@' "$WORK/stub-noidentity-task/systemctl.log" 2>/dev/null; then
+    fail "the launcher started a VM despite an unverifiable host identity"
+else
+    pass "no VM was started (fail closed)"
+fi
+
+# The SECOND fail-closed door: the provisioning unit SUCCEEDS but the identity
+# is still incomplete afterwards. A launcher that treated `systemctl restart`
+# exiting 0 as proof of an identity would sail past this and boot a guest whose
+# host key it never verified — so this scenario exercises the POST-REPAIR
+# re-validation behaviourally, not by grepping the rendered script.
+echo
+echo "=== 16. a SUCCESSFUL repair that provisions NOTHING still ABORTS the launch ==="
+STUB_HOSTKEYS_NOOP=1
+export STUB_HOSTKEYS_NOOP
+rc="$(run_submit valid noopidentity-task --timeout 30)"
+unset STUB_HOSTKEYS_NOOP
+if [[ $rc -ne 0 ]]; then
+    pass "submit failed although the provisioning unit exited 0 (exit $rc)"
+else
+    fail "submit SUCCEEDED on a no-op repair: the launcher trusted the unit's exit code"
+fi
+if grep -q 'still has no complete SSH host identity' "$WORK/submit-noopidentity-task.log"; then
+    pass "the launcher re-validated the identity AFTER the repair and refused"
+else
+    fail "the launcher did not report an incomplete identity after a successful repair: $(tail -3 "$WORK/submit-noopidentity-task.log")"
+fi
+if grep -q 'refusing to launch an unverifiable guest' "$WORK/submit-noopidentity-task.log"; then
+    pass "the refusal says no unverifiable guest is launched"
+else
+    fail "the refusal does not name the reason: $(tail -3 "$WORK/submit-noopidentity-task.log")"
+fi
+# The unit really was asked to repair (otherwise the assertions above could pass
+# for the trivial reason that the launcher never tried).
+if grep -q 'restart agent-microvm-hostkeys.service' "$WORK/stub-noopidentity-task/systemctl.log" 2>/dev/null; then
+    pass "the launcher did attempt the repair before refusing"
+else
+    fail "the launcher never attempted the repair: $(cat "$WORK/stub-noopidentity-task/systemctl.log" 2>/dev/null)"
+fi
+if grep -q 'start microvm@' "$WORK/stub-noopidentity-task/systemctl.log" 2>/dev/null; then
+    fail "the launcher started a VM after a no-op repair"
+else
+    pass "no VM was started after the no-op repair (fail closed)"
+fi
+
+# The THIRD fail-closed door: the unit succeeds AND writes a self-consistent
+# identity, but the PRIVATE key is unloadable. Every pre-existing check passes
+# (non-empty key, 0400/0444, known_hosts matches the .pub) — only the new
+# loadability check can catch it. The guest's sshd would refuse to start and the
+# operator would see an opaque readiness timeout instead.
+echo
+echo "=== 17. a CORRUPT private key ABORTS the launch ==="
+STUB_HOSTKEYS_CORRUPT=1
+export STUB_HOSTKEYS_CORRUPT
+rc="$(run_submit valid corruptkey-task --timeout 30)"
+unset STUB_HOSTKEYS_CORRUPT
+corrupt_key="$(tampered_key || printf '')"
+# NON-VACUITY: the planted state satisfies EVERY pre-existing check.
+if [[ -n $corrupt_key && -s $corrupt_key && -s $corrupt_key.pub ]] &&
+    grep -qF -- "$(cut -d' ' -f1,2 "$corrupt_key.pub")" "$WORK/runtime/known_hosts"; then
+    pass "the planted state passes the OLD checks (non-empty pair, known_hosts matches the .pub)"
+else
+    fail "the planted state does not reach the new check: ${corrupt_key:-<no key provisioned at all>}"
+fi
+if [[ -z $corrupt_key ]]; then
+    fail "no private key was provisioned — scenario 17 would be vacuous"
+elif "$SSH_KEYGEN_BIN" -y -P "" -f "$corrupt_key" >/dev/null 2>&1; then
+    fail "the planted private key is loadable — scenario is vacuous"
+else
+    pass "the planted private key is genuinely unloadable"
+fi
+if [[ $rc -ne 0 ]]; then
+    pass "submit failed on an unloadable private key (exit $rc)"
+else
+    fail "submit SUCCEEDED with an unloadable private key"
+fi
+if grep -q 'still has no complete SSH host identity' "$WORK/submit-corruptkey-task.log"; then
+    pass "the launcher reported the identity as incomplete"
+else
+    fail "no incomplete-identity refusal: $(tail -3 "$WORK/submit-corruptkey-task.log")"
+fi
+if grep -q 'start microvm@' "$WORK/stub-corruptkey-task/systemctl.log" 2>/dev/null; then
+    fail "the launcher started a VM on an unloadable private key"
+else
+    pass "no VM was started (fail closed)"
+fi
+
+# The FOURTH door: a VALID private key that is simply NOT THE ONE the .pub and
+# known_hosts describe. The whole chain is internally consistent and anchored to
+# nothing; only the derived-vs-.pub comparison catches it.
+echo
+echo "=== 18. a private key that does NOT match its public key ABORTS the launch ==="
+STUB_HOSTKEYS_SWAP=1
+export STUB_HOSTKEYS_SWAP
+rc="$(run_submit valid swappedkey-task --timeout 30)"
+unset STUB_HOSTKEYS_SWAP
+swap_key="$(tampered_key || printf '')"
+if [[ -z $swap_key ]]; then
+    fail "no private key was provisioned — scenario 18 would be vacuous"
+elif "$SSH_KEYGEN_BIN" -y -P "" -f "$swap_key" >/dev/null 2>&1; then
+    pass "the planted private key is itself VALID (only the PAIRING is broken)"
+else
+    fail "the planted private key is unloadable — this duplicates scenario 17"
+fi
+if [[ -n $swap_key ]] &&
+    [[ "$("$SSH_KEYGEN_BIN" -y -P "" -f "$swap_key" | cut -d' ' -f1,2)" != "$(cut -d' ' -f1,2 "$swap_key.pub")" ]]; then
+    pass "the public key does NOT belong to the private key (as planted)"
+else
+    fail "the pair matches — scenario is vacuous"
+fi
+if [[ $rc -ne 0 ]]; then
+    pass "submit failed on a mismatched key pair (exit $rc)"
+else
+    fail "submit SUCCEEDED with a public key that is not the private key's half"
+fi
+if grep -q 'still has no complete SSH host identity' "$WORK/submit-swappedkey-task.log"; then
+    pass "the launcher reported the mismatched identity as incomplete"
+else
+    fail "no incomplete-identity refusal: $(tail -3 "$WORK/submit-swappedkey-task.log")"
+fi
+if grep -q 'start microvm@' "$WORK/stub-swappedkey-task/systemctl.log" 2>/dev/null; then
+    fail "the launcher started a VM on a mismatched key pair"
+else
+    pass "no VM was started (fail closed)"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

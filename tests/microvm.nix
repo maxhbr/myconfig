@@ -26,12 +26,34 @@
 #   microvm-slot-uniqueness   §37     — pure-eval unique/well-formed IP+MAC pool
 #   microvm-eval-rejects-invalid §37  — NEGATIVE tests: the module's own
 #                                        assertions actually REJECT invalid
-#                                        config (slotCount bound, enableSsh key,
-#                                        insecure-network acknowledgement)
-#   microvm-eval-workspace-share §10/§11 — the reference guest declares EXACTLY
-#                                        one virtiofs share: the writable
-#                                        /workspace whose source matches the
-#                                        launcher bind-mount target (crit. 12)
+#                                        config (pool bounds, class names,
+#                                        enableSsh key, insecure-network
+#                                        acknowledgement, missing litellm)
+#   microvm-eval-guest-shape  phases 1+8 — the guest is the lightweight shape:
+#                                        pinned EROFS store, bash login shell,
+#                                        the documented minimal toolset
+#   microvm-eval-enabled-agents phase 2 — the agent SELECTION is applied once
+#   microvm-config-seed       phase 3 — launch-time, allowlisted config staging
+#   microvm-session-tree      phase 4 — ONE writable + ONE read-only share, the
+#                                        layout table and its trust policy
+#   microvm-capabilities      phase 5 — interactive and batch are independently
+#                                        selectable: the default keeps both, and
+#                                        each narrowing REMOVES the other half's
+#                                        units/paths/packages/subcommands (the
+#                                        narrowed guest closures are BUILT).
+#                                        Also the WORKLOAD/TRANSPORT matrix: the
+#                                        transport-only `[ "vsock" ]` is rejected
+#   microvm-host-identity-self-healing  the per-slot SSH host identity is
+#                                        VALIDATED (files, ownership, modes,
+#                                        known_hosts entry) before every launch
+#                                        of an SSH-reachable slot, for BOTH the
+#                                        TAP and the VSOCK transport, and
+#                                        repaired with `systemctl restart` (not
+#                                        `start`, a no-op on the active
+#                                        RemainAfterExit oneshot). Includes an
+#                                        EXECUTED bwrap+fakeroot harness for the
+#                                        provisioner's idempotency, partial-state
+#                                        repair and concurrency
 #   microvm-guest-evaluates   §38     — the reference guest closure evaluates to a
 #                                        realisable derivation (drvPath marker)
 #   microvm-launcher-shellcheck §38   — host launcher + guest `agent-run` +
@@ -68,15 +90,13 @@ let
   enabledSlots =
     (import ../modules/myconfig.ai/myconfig.ai.microvm/slots.nix { inherit lib; }).mkSlots
       resourceClasses;
-  # The EFFECTIVE resource-class table of the reference host (ticket 5 A),
-  # including default.nix's legacy `slotCount` migration.
+  # The EFFECTIVE resource-class table of the reference host (ticket 5 A).
   resourceClasses = self.nixosConfigurations.test-f13._module.args.agentResourceClasses;
   # The reference slot every guest-level check inspects: the first slot of the
   # first class, taken from the generated pool rather than hardcoded.
   refSlot = lib.head enabledSlots;
   gateway = microvmOpts.gatewayAddress; # 192.168.83.1
   port = toString microvmOpts.litellmPort; # 4000
-  slotCount = lib.length enabledSlots;
 
   # Turn a list of { assertion; message; } into a marker derivation. If any
   # assertion is false the eval THROWS (so the check fails at eval time with a
@@ -237,19 +257,19 @@ let
     [
       {
         assertion = lib.length (lib.unique ips) == n;
-        message = "slotCount=${toString n}: IPv4 addresses not unique (${toString ips})";
+        message = "pool=${toString n}: IPv4 addresses not unique (${toString ips})";
       }
       {
         assertion = lib.length (lib.unique macs) == n;
-        message = "slotCount=${toString n}: MAC addresses not unique (${toString macs})";
+        message = "pool=${toString n}: MAC addresses not unique (${toString macs})";
       }
       {
         assertion = ipsWellFormed;
-        message = "slotCount=${toString n}: an IPv4 address is malformed (${toString ips})";
+        message = "pool=${toString n}: an IPv4 address is malformed (${toString ips})";
       }
       {
         assertion = macsWellFormed;
-        message = "slotCount=${toString n}: a MAC address is malformed (${toString macs})";
+        message = "pool=${toString n}: a MAC address is malformed (${toString macs})";
       }
       {
         assertion = names == expectedNames;
@@ -273,19 +293,19 @@ let
       }
       {
         assertion = indicesContiguous;
-        message = "slotCount=${toString n}: slot .index values not contiguous 0..${toString (n - 1)}";
+        message = "pool=${toString n}: slot .index values not contiguous 0..${toString (n - 1)}";
       }
       {
         # ticket 3 B: every concurrently runnable slot needs a UNIQUE VSOCK
         # control-channel identity ...
         assertion = lib.length (lib.unique cids) == n;
-        message = "slotCount=${toString n}: VSOCK CIDs not unique (${toString cids})";
+        message = "pool=${toString n}: VSOCK CIDs not unique (${toString cids})";
       }
       {
         # ... that avoids the reserved CIDs 0 (hypervisor), 1 (loopback),
         # 2 (host) and VMADDR_CID_ANY (0xffffffff).
         assertion = builtins.all (c: c > 2 && c < 4294967295) cids;
-        message = "slotCount=${toString n}: VSOCK CIDs must avoid reserved values (${toString cids})";
+        message = "pool=${toString n}: VSOCK CIDs must avoid reserved values (${toString cids})";
       }
     ];
 
@@ -311,7 +331,7 @@ let
     in
     map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
   # True iff `mods` is REJECTED: either it fails at the option-TYPE level
-  # (e.g. slotCount=0 violates the `positive integer` type, so forcing the
+  # (e.g. a class `count = 0` violates the `positive integer` type, so forcing the
   # config throws — caught here by tryEval), or it trips a module ASSERTION
   # whose message contains `needle`. Both are genuine "module rejects invalid
   # config" outcomes; the needle pins the assertion-level cases to the exact
@@ -322,31 +342,162 @@ let
       r = builtins.tryEval (failedAssertions mods);
     in
     if !r.success then true else builtins.any (m: lib.hasInfix needle m) r.value;
-  # Warnings of a variant host, for the ticket-3 C migration checks.
-  warningsOf =
-    mods: (self.nixosConfigurations.test-f13.extendModules { modules = mods; }).config.warnings;
-  # Migration variants that must NOT inherit test-f13's explicit
-  # `networkProfile` definition (a definition cannot be removed by
-  # extendModules, only outranked — and `profileExplicit` deliberately keys off
-  # the DEFINITION, not the value). test-workstation has the feature disabled
-  # and defines no profile, so enabling it there yields a host whose profile is
-  # genuinely unset. `enableSsh = false` keeps it key-free.
-  unsetProfileHost =
+  # The POSITIVE counterpart: `mods` evaluates AND no failed assertion mentions
+  # `needle`. Used where the point of a phase is that a guard must STOP firing
+  # for a legitimate configuration (phase 5: the batch-capable-agent assertion
+  # on a host that does not select the `batch` capability).
+  # It asserts NO failed assertion at all, not merely the absence of `needle`:
+  # the point of such a call site is that the whole configuration is legitimate,
+  # so an UNRELATED guard firing on it (a future assertion that does not cope with
+  # a narrowed capability set, say) must fail the check instead of being masked by
+  # a needle that happens not to match.
+  acceptsWithout =
+    mods: needle:
+    let
+      r = builtins.tryEval (failedAssertions mods);
+    in
+    r.success && r.value == [ ] && !(builtins.any (m: lib.hasInfix needle m) r.value);
+  # The unmodified host must have NO failed assertions — positive control so
+  # the rejectsWith checks below can't pass vacuously.
+  baselineClean = failedAssertions [ ] == [ ];
+
+  # --- a single-slot VARIANT host ----------------------------------------
+  # Some checks need an option value the reference host defines itself (a
+  # definition can only be OUTRANKED by `extendModules`, never removed) — in
+  # particular a narrower `enabledAgents` and a guest without the SSH control
+  # channel. test-workstation has the feature disabled and defines nothing about
+  # it, so enabling it there yields a host whose only non-default microvm
+  # options are the ones the check sets. The pool is forced to ONE small slot so
+  # these variants stay cheap to evaluate.
+  variantHostWith =
     mods:
-    (self.nixosConfigurations.test-workstation.extendModules {
+    self.nixosConfigurations.test-workstation.extendModules {
       modules = [
         {
           myconfig.ai.microvm = {
             enable = true;
+            # Keeps the variant key-free; the checks that need sshd use the
+            # reference host, which has the control channel.
             enableSsh = false;
+            resourceClasses = lib.mkForce {
+              lite = {
+                count = 1;
+                vcpu = 2;
+                memoryMiB = 4096;
+              };
+            };
           };
+          # The secure `proxy-only` default requires the host LiteLLM backend.
+          services.litellm.enable = true;
         }
       ]
       ++ mods;
-    }).config;
-  # The unmodified host must have NO failed assertions — positive control so
-  # the rejectsWith checks below can't pass vacuously.
-  baselineClean = failedAssertions [ ] == [ ];
+    };
+  # The FILTERED registry instance of a variant host (`nixosSystem` — and hence
+  # `extendModules` — exposes module args on the top-level attrset).
+  variantRegistryOf = mods: (variantHostWith mods)._module.args.agentRegistry;
+  variantSlot = lib.head (
+    slotLib.mkSlots {
+      lite = {
+        count = 1;
+        vcpu = 2;
+        memoryMiB = 4096;
+      };
+    }
+  );
+  # THE reference variant of the SELECTION checks: one agent only (the plan's
+  # reference agent), which is what a host that wants the smallest guest closure
+  # would configure.
+  codexHost = variantHostWith [ { myconfig.ai.microvm.enabledAgents = [ "codex" ]; } ];
+
+  # --- lightweight plan phase 5: the NARROWED capability variants ----------
+  # ONE agent keeps these cheap to BUILD (the capability check builds their
+  # closures, not only their drvPaths), and `codex` is stdin-driven, so the
+  # batch variant also exercises ../modules/myconfig.ai/myconfig.ai.microvm/
+  # job.nix's `promptUnusedSuppression` — the exact shape whose SC2034 broke the
+  # lite guest BUILD in phase 4 while every eval-depth check stayed green.
+  capabilityHostWith =
+    caps: extra:
+    variantHostWith [
+      {
+        myconfig.ai.microvm = {
+          capabilities = caps;
+          enabledAgents = [ "codex" ];
+        }
+        // extra;
+      }
+    ];
+  # Interactive-only, WITH the SSH control channel (`variantHostWith` turns it
+  # off, so this outranks it and supplies the required public key): the point of
+  # the variant is that sshd and the host-key tree are PRESENT while the batch
+  # half is gone.
+  interactiveOnlyHost = capabilityHostWith [ "interactive" ] {
+    enableSsh = lib.mkForce true;
+    sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+  };
+  # Batch-only: `enableSsh` is already false on the variant host, which is what
+  # the enableSsh/capability reconciliation REQUIRES (see default.nix).
+  batchOnlyHost = capabilityHostWith [ "batch" ] { };
+  # Batch + VSOCK (lightweight plan phase 6): a batch-only host that ALSO
+  # selects `vsock`, so it has no TCP sshd but DOES have the VSOCK
+  # `sshd-vsock@` control channel. Needs the dedicated public key (the VSOCK
+  # sshd authorises the same key the interactive one does). `enableSsh` stays
+  # false (from `variantHostWith`), which is exactly the batch+vsock shape.
+  batchVsockHost = capabilityHostWith [ "batch" "vsock" ] {
+    sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+  };
+
+  # --- lightweight plan phase 6 (the LITERAL objective): the VSOCK MODEL ----
+  # TRANSPORT variants. `vsock` + the closed `proxy-only` profile REPLACES the
+  # guest network: no TAP, no bridge, no static IP, no guest networkd, no host
+  # firewall chain. `batchVsockHost` above is already exactly that shape (its
+  # profile is the module default `proxy-only`), so these add the two shapes it
+  # does not cover:
+  #   * an INTERACTIVE guest without a network interface — the plan's own
+  #     "definition of done" shape (one command, one slot, no ordinary network
+  #     interface), whose TCP sshd is unreachable and therefore masked;
+  #   * a TWO-SLOT pool, which is what proves the host runs ONE forwarder
+  #     listener per VM rather than a shared one.
+  interactiveVsockHost = capabilityHostWith [ "interactive" "batch" "vsock" ] {
+    enableSsh = lib.mkForce true;
+    sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+  };
+  # `mkOverride 40` outranks `variantHostWith`'s own `mkForce` (50) — two
+  # `mkForce`s would conflict.
+  twoSlotVsockClasses = {
+    lite = {
+      count = 2;
+      vcpu = 2;
+      memoryMiB = 4096;
+    };
+  };
+  twoSlotVsockHost = capabilityHostWith [ "batch" "vsock" ] {
+    sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+    resourceClasses = lib.mkOverride 40 twoSlotVsockClasses;
+  };
+  twoSlotVsockSlots = slotLib.mkSlots twoSlotVsockClasses;
+
+  capGuestOf = h: h.config.microvm.vms.${variantSlot.name}.config.config;
+  capSessionOf = h: h._module.args.agentSession;
+  pkgNamesOf = ps: map (p: p.pname or p.name or "") ps;
+  capGuestPkgNames = h: pkgNamesOf (capGuestOf h).environment.systemPackages;
+  # Every ExecStart of a HOST unit, flattened — used to prove that no unit of a
+  # batch-only host still generates SSH host keys / known_hosts.
+  hostExecStartsOf =
+    h:
+    lib.concatMap (
+      s:
+      let
+        e = s.serviceConfig.ExecStart or "";
+      in
+      if builtins.isList e then map toString e else [ (toString e) ]
+    ) (lib.attrValues h.config.systemd.services);
+
+  # The module's own path/layout definitions of the REFERENCE host, so no check
+  # carries a second copy of them.
+  session = self.nixosConfigurations.test-f13._module.args.agentSession;
+  seed = self.nixosConfigurations.test-f13._module.args.agentConfigSeed;
+  launcherPkg = findPkg enabledCfg.environment.systemPackages "agent-microvm";
 in
 {
   # ---------------------------------------------------------------------- #
@@ -389,7 +540,7 @@ in
   ];
 
   # ---------------------------------------------------------------------- #
-  # (b) ENABLED (test-f13) — exactly `slotCount` slots, bridge-only proxy   #
+  # (b) ENABLED (test-f13) — exactly the pool's slots, bridge-only proxy    #
   #     endpoint, terminal FORWARD DROP + 169.254.169.254 metadata drop.    #
   #     Plan §37 (assertions) & §38 (f13/test-f13 evaluate enabled).        #
   # ---------------------------------------------------------------------- #
@@ -558,6 +709,2595 @@ in
     );
 
   # ---------------------------------------------------------------------- #
+  # (r) GUEST SHAPE (lightweight plan phases 1 + 8): the module has exactly  #
+  #     ONE shape, and it is the lightweight one — a pinned, optimized EROFS #
+  #     guest store, a plain bash login shell and the documented minimal CLI #
+  #     toolset with NixOS' `defaultPackages` convenience set dropped. Every  #
+  #     assertion is against the REFERENCE host, i.e. against what f13        #
+  #     actually deploys.                                                    #
+  # ---------------------------------------------------------------------- #
+  microvm-eval-guest-shape =
+    let
+      guestPkgPaths = map (p: p.outPath) guest0Cfg.environment.systemPackages;
+    in
+    mkEvalCheck "microvm-eval-guest-shape" [
+      {
+        assertion = baselineClean;
+        message = "positive control: the reference host must evaluate cleanly, got ${
+          toString (failedAssertions [ ])
+        }";
+      }
+      {
+        # Pinned rather than inherited: a microvm.nix release cannot silently
+        # give the guest a bigger/slower store image.
+        assertion = guest0Cfg.microvm.storeDiskType == "erofs";
+        message = "the guest storeDiskType must be pinned to erofs, got '${toString guest0Cfg.microvm.storeDiskType}'";
+      }
+      {
+        assertion = guest0Cfg.microvm.optimize.enable == true;
+        message = "the guest must pin microvm.optimize.enable = true";
+      }
+      # --- lightweight plan phase 8: minimized guest closure --------------
+      {
+        # A plain bash login shell: no fish closure, no `programs.fish`
+        # machinery, and nothing in the guest configures fish any more.
+        assertion =
+          guest0Cfg.users.users.agent.shell.outPath == pkgs.bashInteractive.outPath
+          && !guest0Cfg.programs.fish.enable
+          && !(builtins.elem pkgs.fish.outPath guestPkgPaths);
+        message = "the guest must use a plain bash login shell and contain no fish";
+      }
+      {
+        # Every tool `guestCommonPackages` documents a consumer for is present.
+        assertion = builtins.all (p: builtins.elem p.outPath guestPkgPaths) (
+          with pkgs;
+          [
+            bash
+            coreutils
+            diffutils
+            findutils
+            gawk
+            git
+            gnugrep
+            gnused
+            jq
+            less
+            patch
+            procps
+            ripgrep
+            util-linux
+          ]
+        );
+        message = "the guest is missing a package from the documented guestCommonPackages set";
+      }
+      {
+        # ... and nothing else this module used to add.
+        # NOTE: NixOS' own `requiredPackages` (coreutils-full, curl, openssh,
+        # which, ...) is load-bearing for a bootable system and deliberately
+        # NOT asserted absent — only the module's discretionary additions are.
+        assertion = builtins.all (p: !(builtins.elem p.outPath guestPkgPaths)) (
+          with pkgs;
+          [
+            fd
+            file
+            gnumake
+            tree
+            unzip
+          ]
+        );
+        message = "the guest still carries a discretionary package with no documented in-guest consumer";
+      }
+      {
+        # NixOS' `environment.defaultPackages` (perl, rsync, strace) has no
+        # in-guest consumer in a single-purpose sandbox image.
+        assertion = guest0Cfg.environment.defaultPackages == [ ];
+        message = "the guest must drop NixOS' defaultPackages convenience set";
+      }
+      {
+        # Sizing is the HOST's decision: an explicit `resourceClasses` table is
+        # what the pool is built from (the reference host defines two classes).
+        assertion =
+          lib.sort (a: b: a < b) (builtins.attrNames enabledCfg.microvm.vms)
+          == lib.sort (a: b: a < b) (map (sl: sl.name) enabledSlots)
+          && lib.length (lib.attrNames resourceClasses) == 2;
+        message = "the reference host's VMs must be exactly the pool of its own two resource classes, got ${toString (builtins.attrNames enabledCfg.microvm.vms)}";
+      }
+    ];
+
+  # ---------------------------------------------------------------------- #
+  # (s) SELECTED AGENTS (lightweight plan phase 2): the registry selection is  #
+  #     applied ONCE, in agents.nix, so a deselected agent is ABSENT from the  #
+  #     guest closure rather than merely hidden — while the module-wide        #
+  #     DEFAULT (no `enabledAgents` at all) still keeps EVERY declared agent,  #
+  #     so no host silently loses a workmux pane or a `submit --agent <name>`. #
+  # ---------------------------------------------------------------------- #
+  microvm-eval-enabled-agents =
+    let
+      codexReg = codexHost._module.args.agentRegistry;
+      codexGuest = (codexHost.config.microvm.vms.${variantSlot.name}).config.config;
+      codexGuestPaths = map (p: p.outPath) codexGuest.environment.systemPackages;
+      # The packages of the agents the codex-only host does NOT select, taken
+      # from the reference host's registry rather than a second list.
+      deselected = lib.filter (a: !(builtins.elem a.name codexReg.names)) (
+        lib.attrValues agentRegistry.agents
+      );
+      codexWorkmux = builtins.filter (lib.hasPrefix "microvm-") (
+        builtins.attrNames codexHost.config.myconfig.ai.workmux.agents
+      );
+    in
+    mkEvalCheck "microvm-eval-enabled-agents" (
+      [
+        {
+          # The module-wide default: a host that says NOTHING keeps every
+          # declared agent.
+          assertion = (variantRegistryOf [ ]).names == agentRegistry.declaredNames;
+          message = "the module default must keep every declared agent, got ${
+            toString (variantRegistryOf [ ]).names
+          }";
+        }
+        {
+          # The reference host states its selection EXPLICITLY (its workmux
+          # panes and `submit --agent` tokens depend on it) and currently keeps
+          # all of them.
+          assertion =
+            microvmOpts.enabledAgents != null
+            && lib.sort (a: b: a < b) microvmOpts.enabledAgents == agentRegistry.declaredNames
+            && agentRegistry.names == agentRegistry.declaredNames;
+          message = "the reference host must select its agents explicitly (got ${toString microvmOpts.enabledAgents} of ${toString agentRegistry.declaredNames})";
+        }
+        {
+          assertion = codexReg.names == [ "codex" ];
+          message = "an explicit `enabledAgents = [ \"codex\" ]` must select codex only, got ${toString codexReg.names}";
+        }
+        {
+          # ... while still DECLARING all of them (the selection filters, it
+          # does not delete registry entries).
+          assertion = codexReg.declaredNames == agentRegistry.declaredNames;
+          message = "the selection must not change the set of DECLARED agents";
+        }
+        {
+          assertion = codexReg.unknownEnabled == [ ];
+          message = "the codex-only selection must be valid";
+        }
+        {
+          # Every DERIVED list follows the selection — not just the packages.
+          assertion = codexWorkmux == [ "microvm-codex" ];
+          message = "workmux registrations must follow the selection, got ${toString codexWorkmux}";
+        }
+        {
+          assertion = codexReg.batchNames == [ "codex" ] && codexReg.namesAlternation == "codex";
+          message = "the generated batch/help fragments must follow the selection";
+        }
+        {
+          assertion = deselected != [ ];
+          message = "positive control: the codex-only selection must actually exclude some declared agent";
+        }
+        {
+          # The SELECTED agent is in the guest closure.
+          assertion = builtins.elem (lib.head (lib.attrValues codexReg.agents)).package.outPath codexGuestPaths;
+          message = "the selected agent's package is missing from the guest closure";
+        }
+        {
+          # Unknown token: a typo must fail at EVAL, naming the valid tokens.
+          assertion =
+            let
+              msgs = map (a: a.message) (
+                builtins.filter (a: !a.assertion)
+                  (variantHostWith [
+                    {
+                      myconfig.ai.microvm.enabledAgents = [
+                        "codex"
+                        "nope"
+                      ];
+                    }
+                  ]).config.assertions
+              );
+            in
+            builtins.any (m: lib.hasInfix "unknown agent(s) nope" m) msgs;
+          message = "an unknown enabledAgents entry must be rejected at eval";
+        }
+        {
+          # An empty selection would build a guest that can run nothing.
+          assertion =
+            let
+              msgs = map (a: a.message) (
+                builtins.filter (a: !a.assertion)
+                  (variantHostWith [ { myconfig.ai.microvm.enabledAgents = [ ]; } ]).config.assertions
+              );
+            in
+            builtins.any (m: lib.hasInfix "selects no agent" m) msgs;
+          message = "an empty enabledAgents selection must be rejected at eval";
+        }
+      ]
+      # ... and the DESELECTED agents' runtimes are ABSENT from the guest
+      # closure (the point of the whole phase).
+      ++ map (a: {
+        assertion = !(builtins.elem a.package.outPath codexGuestPaths);
+        message = "deselected agent '${a.name}' is still in the codex-only guest closure (${a.package.outPath})";
+      }) deselected
+    );
+
+  # ---------------------------------------------------------------------- #
+  # (t) RUNTIME CONFIG STAGING (lightweight plan phase 3): the guest home is #
+  #     provisioned at LAUNCH time from an ALLOWLISTED, root-owned staged     #
+  #     copy of the host configuration, and NO guest home-manager activation  #
+  #     exists at all. Locks down: the mechanism is active + correctly         #
+  #     ordered, the share is per-slot/read-only/root-owned, the manifest is   #
+  #     outside every share, the allowlist follows `enabledAgents`, and        #
+  #     escaping / credential-shaped entries are REJECTED at eval. The build   #
+  #     part proves the generated stager really enforces the allowlist and     #
+  #     cleans its destination.                                               #
+  # ---------------------------------------------------------------------- #
+  microvm-config-seed =
+    let
+      codexSeed = codexHost._module.args.agentConfigSeed;
+      codexReg = codexHost._module.args.agentRegistry;
+
+      # The share through which the guest sees the staged tree: the ONE
+      # READ-ONLY share, whose source CONTAINS the staged payload. Found by
+      # asking which share covers the guest mount point, so this check follows
+      # the layout instead of pinning a path.
+      seedShares = builtins.filter (
+        s: s.mountPoint == seed.guestMountPoint || lib.hasPrefix "${s.mountPoint}/" seed.guestMountPoint
+      ) guest0Cfg.microvm.shares;
+      # True when `path` is inside (or is) the source of share `s`.
+      sourceCovers = s: path: path == s.source || lib.hasPrefix "${s.source}/" path;
+      # A tmpfiles `d` rule for `path` with `mode`, owned by root. tmpfiles
+      # accepts the owner both by name and numerically; ./session.nix renders
+      # the numeric form (it derives the ids from its layout table), the
+      # host-only manifest directories render the name.
+      hasRootDirRule =
+        rules: path: mode:
+        builtins.any (r: r == "d ${path} ${mode} root root - -" || r == "d ${path} ${mode} 0 0 - -") rules;
+      seedUnit = guest0Cfg.systemd.services.agent-config-seed;
+      # Every unit the seeding oneshot must precede, from the SAME sources the
+      # module orders against.
+      seedBeforeUnits = [
+        "sshd.service"
+        jobs.controllerUnit
+        "agent-state-link.service"
+        "agent-model-config.service"
+      ];
+      hmServices =
+        cfg: builtins.filter (n: lib.hasPrefix "home-manager" n) (builtins.attrNames cfg.systemd.services);
+      # `configPaths` of the agents a codex-only host does NOT select.
+      deselectedPaths = lib.unique (
+        lib.concatMap (a: a.configPaths) (
+          lib.filter (a: !(builtins.elem a.name codexReg.names)) (lib.attrValues agentRegistry.agents)
+        )
+      );
+      seedRejects =
+        infix: mods:
+        let
+          msgs = map (a: a.message) (
+            builtins.filter (a: !a.assertion) (variantHostWith mods).config.assertions
+          );
+        in
+        builtins.any (m: lib.hasInfix infix m) msgs;
+
+      evalMarker = mkEvalCheck "microvm-config-seed-eval" [
+        # --- THE acceptance criterion of phase 3 --------------------------
+        {
+          # No guest home-manager activation exists any more — anywhere.
+          assertion = hmServices guest0Cfg == [ ];
+          message = "the guest must NOT run home-manager activation, got ${toString (hmServices guest0Cfg)}";
+        }
+        {
+          # Positive control for the assertion above: the guest DOES have a
+          # provisioning unit, it is just not home-manager's.
+          assertion = guest0Cfg.systemd.services ? agent-config-seed;
+          message = "positive control: the guest must carry the config-seed provisioning unit";
+        }
+        # --- the share: per-slot, READ-ONLY, root-owned source -------------
+        {
+          assertion = lib.length seedShares == 1;
+          message = "the guest must reach the staged tree through exactly one share, got ${toString (lib.length seedShares)}";
+        }
+        {
+          assertion =
+            let
+              s = lib.head seedShares;
+            in
+            sourceCovers s (seed.hostPayloadDir refSlot.name)
+            && lib.hasPrefix s.mountPoint seed.guestMountPoint
+            && s.proto == "virtiofs"
+            && (s.readOnly or false);
+          message = "the staged configuration must reach the guest through a per-slot READ-ONLY share covering ${seed.hostPayloadDir refSlot.name} at ${seed.guestMountPoint}";
+        }
+        {
+          # The manifest names the host home and every SKIPPED,
+          # credential-shaped host file name. It must therefore stay OUTSIDE
+          # everything the untrusted guest can see: not the share source, and
+          # not below it.
+          assertion =
+            let
+              manifest = seed.hostManifest refSlot.name;
+            in
+            builtins.all (
+              s: manifest != s.source && !(lib.hasPrefix "${s.source}/" manifest)
+            ) guest0Cfg.microvm.shares;
+          message = "the staging manifest ${seed.hostManifest refSlot.name} must not be inside any guest share";
+        }
+        {
+          assertion = seed.manifestMode == "0400";
+          message = "the staging manifest must be root-only (0400), got ${seed.manifestMode}";
+        }
+        {
+          # No host home (or any other broad host directory) is ever mounted:
+          # every share source stays under the module's own roots.
+          assertion = builtins.all (
+            s: lib.hasPrefix microvmOpts.runtimeRoot s.source || lib.hasPrefix microvmOpts.stateRoot s.source
+          ) guest0Cfg.microvm.shares;
+          message = "a guest share escapes the module's runtime/state roots: ${
+            toString (map (s: s.source) guest0Cfg.microvm.shares)
+          }";
+        }
+        {
+          # The staging directory is root-owned and NOT writable by the guest
+          # agent (virtiofsd passes ownership through unchanged).
+          assertion =
+            hasRootDirRule enabledCfg.systemd.tmpfiles.rules (seed.slotDir refSlot.name) seed.slotDirMode
+            && hasRootDirRule enabledCfg.systemd.tmpfiles.rules (seed.hostPayloadDir refSlot.name) seed.dirMode;
+          message = "the per-slot staging directories must be pre-created root-owned";
+        }
+        {
+          # ... as are the host-only manifest directories, which no guest ever
+          # sees.
+          assertion =
+            hasRootDirRule enabledCfg.systemd.tmpfiles.rules seed.manifestRoot seed.manifestRootMode
+            &&
+              hasRootDirRule enabledCfg.systemd.tmpfiles.rules (seed.manifestDir refSlot.name)
+                seed.manifestDirMode;
+          message = "the host-only manifest directories must be pre-created root-owned";
+        }
+        {
+          # ... and root-ONLY: no group/other bit anywhere in the staged tree,
+          # so neither the guest agent nor another unprivileged HOST user can
+          # read the operator's staged configuration.
+          assertion = builtins.all (m: lib.hasSuffix "00" m) [
+            seed.rootMode
+            seed.slotDirMode
+            seed.dirMode
+            seed.fileMode
+            seed.manifestMode
+            seed.manifestRootMode
+            seed.manifestDirMode
+          ];
+          message = "the staged tree must be root-only, got ${
+            toString [
+              seed.rootMode
+              seed.slotDirMode
+              seed.dirMode
+              seed.fileMode
+              seed.manifestMode
+            ]
+          }";
+        }
+        # --- the guest oneshot: root, before every agent entry point -------
+        {
+          assertion =
+            seedUnit.serviceConfig.Type == "oneshot" && seedUnit.wantedBy == [ "multi-user.target" ];
+          message = "the guest seeding unit must be a oneshot wanted by multi-user.target";
+        }
+        {
+          # Ordered before EVERY way an agent process can come into existence:
+          # the interactive control channel, the trusted batch controller (which
+          # starts the untrusted worker), the agent-state linker (whose symlinks
+          # the copy must not write through) and the boot-time model discovery
+          # (which writes into the same home).
+          assertion = builtins.all (u: builtins.elem u seedUnit.before) seedBeforeUnits;
+          message = "the guest seeding unit must be ordered before ${toString seedBeforeUnits}, got ${toString seedUnit.before}";
+        }
+        {
+          # ... and those really are UNITS of the guest, not strings nothing
+          # resolves. The reference host HAS the SSH control channel, so this is
+          # an ordering against a real sshd.
+          assertion =
+            microvmOpts.enableSsh
+            && (guest0Cfg.systemd.services ? sshd || guest0Cfg.services.openssh.enable)
+            && guest0Cfg.systemd.services ? agent-state-link
+            && guest0Cfg.systemd.services ? agent-model-config
+            && guest0Cfg.systemd.services ? "${lib.removeSuffix ".service" jobs.controllerUnit}";
+          message = "the units the seeding oneshot is ordered before must exist in the guest";
+        }
+        {
+          # The model-config unit writes INTO the same home the seeder populates
+          # with `cp -R`/`chown -R`/`chmod -R`, so it must be ordered after the
+          # SEEDER (there is no home-manager unit to order against any more).
+          assertion =
+            let
+              a = guest0Cfg.systemd.services.agent-model-config.after;
+            in
+            builtins.elem seed.guestUnit a && !(builtins.elem "home-manager-agent.service" a);
+          message = "the guest's agent-model-config must be ordered after ${seed.guestUnit}, got ${toString guest0Cfg.systemd.services.agent-model-config.after}";
+        }
+        {
+          assertion = seedUnit.unitConfig.RequiresMountsFor == seed.guestMountPoint;
+          message = "the guest seeding unit must require the config-seed mount";
+        }
+        {
+          # It may only ever READ the staged tree.
+          assertion = seedUnit.serviceConfig.ReadOnlyPaths == [ "-${seed.guestMountPoint}" ];
+          message = "the guest seeding unit must treat the staged tree as read-only";
+        }
+        # --- the allowlist follows the agent selection ---------------------
+        {
+          assertion =
+            seed.allowedPaths == lib.unique (
+              lib.sort (a: b: a < b) (
+                lib.concatMap (a: a.configPaths) (lib.attrValues agentRegistry.agents)
+                ++ microvmOpts.configSeed.extraPaths
+              )
+            );
+          message = "the staging allowlist must be the SELECTED agents' configPaths plus extraPaths, got ${toString seed.allowedPaths}";
+        }
+        {
+          assertion =
+            codexSeed.allowedPaths == lib.unique (
+              lib.sort (a: b: a < b) (
+                (lib.head (lib.attrValues codexReg.agents)).configPaths
+                ++ codexHost.config.myconfig.ai.microvm.configSeed.extraPaths
+              )
+            );
+          message = "a codex-only host must stage only codex's configPaths plus extraPaths, got ${toString codexSeed.allowedPaths}";
+        }
+        {
+          assertion =
+            deselectedPaths != [ ]
+            && builtins.any (p: !(builtins.elem p codexSeed.allowedPaths)) deselectedPaths;
+          message = "positive control: a deselected agent must contribute paths the codex-only allowlist does not carry";
+        }
+        {
+          assertion =
+            builtins.elem ".pi/agent/prompts" seed.allowedPaths
+            && !(builtins.elem ".pi/agent/prompts" codexSeed.allowedPaths);
+          message = "the staged allowlist must follow enabledAgents (pi's paths must appear only when pi is selected)";
+        }
+        {
+          # Registry hygiene: no declared agent may allowlist a credential-
+          # shaped or escaping path (the module's own assertions would fail the
+          # build, but that would only be noticed once that agent is selected).
+          assertion = builtins.all (
+            p:
+            !(lib.hasPrefix "/" p)
+            && !(lib.hasInfix ".." p)
+            && !(lib.hasInfix "auth" p)
+            && !(lib.hasInfix "credential" p)
+            && !(lib.hasInfix "token" p)
+            && !(lib.hasSuffix ".pem" p)
+            && !(lib.hasSuffix ".key" p)
+          ) (lib.concatMap (a: a.configPaths) (lib.attrValues agentRegistry.agents));
+          message = "an agent in the registry allowlists an escaping or credential-shaped configuration path";
+        }
+        # --- NEGATIVE: invalid allowlist entries are rejected at EVAL -------
+        {
+          assertion = seedRejects "not plain, relative" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ "../../etc/shadow" ]; }
+          ];
+          message = "a `..` escape in the staging allowlist must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "not plain, relative" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ "/etc/passwd" ]; }
+          ];
+          message = "an absolute path in the staging allowlist must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "not plain, relative" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ ".config/../../root" ]; }
+          ];
+          message = "a nested `..` escape in the staging allowlist must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "CREDENTIAL material" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ ".codex/auth.json" ]; }
+          ];
+          message = "a credential-shaped allowlist entry must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "CREDENTIAL material" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ ".ssh/config" ]; }
+          ];
+          message = "an allowlist entry under ~/.ssh must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "CREDENTIAL material" [
+            { myconfig.ai.microvm.configSeed.extraPaths = [ ".config/agent/api-token.txt" ]; }
+          ];
+          message = "an allowlist entry whose name contains a credential word must be rejected at eval";
+        }
+        {
+          assertion = seedRejects "absolute path" [
+            { myconfig.ai.microvm.configSeed.hostHome = "relative/home"; }
+          ];
+          message = "a relative configSeed.hostHome must be rejected at eval";
+        }
+        {
+          # Staging a path that is also a PERSISTED agent-state directory would
+          # leave the state linker refusing to replace a non-empty directory,
+          # i.e. persistence silently off.
+          assertion = seedRejects "overlaps the" [
+            {
+              myconfig.ai.microvm = {
+                enabledAgents = [
+                  "codex"
+                  "hermes"
+                ];
+                configSeed.extraPaths = [ ".hermes/config.yaml" ];
+              };
+            }
+          ];
+          message = "an allowlist entry inside a persisted agent-state directory must be rejected at eval";
+        }
+        {
+          # Positive control for the test above: `.hermes` really IS a declared
+          # persistent-state directory of the selected registry there.
+          assertion = builtins.elem ".hermes" (
+            (variantHostWith [
+              {
+                myconfig.ai.microvm.enabledAgents = [
+                  "codex"
+                  "hermes"
+                ];
+              }
+            ])._module.args.agentState.declaredDirs
+          );
+          message = "positive control: selecting hermes must declare the '.hermes' persistent-state directory";
+        }
+        {
+          # ... and the reference host is free of such an overlap (the rejection
+          # above cannot be masking a permanently failing host).
+          assertion = seed.allowedPaths != [ ] && enabledCfg.assertions != [ ] && baselineClean;
+          message = "positive control: the reference host must have a non-empty allowlist, real assertions and trip none of them";
+        }
+        {
+          # Positive control: the unmodified VARIANT host trips no assertion
+          # either, so the rejections above cannot pass vacuously.
+          assertion = builtins.filter (a: !a.assertion) (variantHostWith [ ]).config.assertions == [ ];
+          message = "positive control: a plain variant host must evaluate cleanly";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-config-seed"
+      {
+        inherit evalMarker;
+        # Building these runs their writeShellApplication shellcheck gate; the
+        # greps below then inspect the GENERATED code.
+        stagerBin = "${seed.stager}/bin/agent-microvm-stage-config";
+        seederBin = "${seed.seeder}/bin/agent-config-seed-apply";
+        launcherBin = "${launcherPkg}/bin/agent-microvm";
+        # Modes come from the module, so this check follows a policy change
+        # instead of pinning yesterday's numbers.
+        FILE_MODE = seed.fileMode;
+        DIR_MODE = seed.dirMode;
+        allowlist = lib.concatStringsSep "\n" seed.allowedPaths;
+      }
+      ''
+        # --- the stager ENFORCES the allowlist ---------------------------
+        # Exactly the evaluated allowlist is baked in — no other path can be
+        # staged, and the list is not assembled at runtime.
+        grep -q 'readonly ALLOWLIST=(' "$stagerBin" \
+          || { echo "the stager has no baked allowlist" >&2; exit 1; }
+        while IFS= read -r p; do
+          [ -n "$p" ] || continue
+          grep -qF -- "$p" "$stagerBin" \
+            || { echo "allowlisted path '$p' is missing from the stager" >&2; exit 1; }
+        done <<< "$allowlist"
+        # ... and the credential DENYLIST is applied as defence in depth, to
+        # every path component (not only to the allowlist entries).
+        grep -q 'path_is_denied' "$stagerBin" \
+          || { echo "the stager applies no credential denylist" >&2; exit 1; }
+        for pat in auth.json credentials.json id_ed25519 .pem .netrc; do
+          grep -qF -- "$pat" "$stagerBin" \
+            || { echo "the credential denylist lost '$pat'" >&2; exit 1; }
+        done
+        # Escapes are refused: a path that resolves outside the configured host
+        # home is never copied (only /nix/store dereferencing is allowed).
+        grep -q 'resolves outside the host home' "$stagerBin" \
+          || { echo "the stager does not reject paths escaping the host home" >&2; exit 1; }
+        grep -q 'resolved_is_allowed' "$stagerBin" \
+          || { echo "the stager has no resolved-path policy" >&2; exit 1; }
+        # ... and the denylist is applied to the RESOLVED TARGET too, not only
+        # to the name a path is reached under: otherwise ONE benignly named
+        # symlink in the host home (`.codex/config.toml` -> `.codex/auth.json`,
+        # `.agents/skills/x` -> `~/.ssh`) stages a credential.
+        grep -q 'resolved_is_denied' "$stagerBin" \
+          || { echo "the stager does not apply the denylist to resolved targets" >&2; exit 1; }
+        test "$(grep -c 'resolved_is_denied "' "$stagerBin")" -ge 3 \
+          || { echo "the resolved-target denylist must guard entries, files AND subdirectories" >&2; exit 1; }
+        # Only regular files and directories, never setuid/setgid.
+        grep -q 'setuid/setgid file' "$stagerBin" \
+          || { echo "the stager does not skip setuid/setgid files" >&2; exit 1; }
+        grep -q -- '-type d -o -type f' "$stagerBin" \
+          || { echo "the stager does not restrict the walk to files/directories" >&2; exit 1; }
+        # The destination is CLEANED before every launch (the payload tree AND
+        # the previous manifest, whatever they are named).
+        grep -qE 'rm -rf --.*\$PAYLOAD' "$stagerBin" \
+          || { echo "the stager does not clean its destination before staging" >&2; exit 1; }
+        grep -qE 'rm -rf --.*(\$PAYLOAD.*\$MANIFEST|\$MANIFEST)' "$stagerBin" \
+          || { echo "the stager does not remove the previous manifest" >&2; exit 1; }
+        # Everything it writes is root-owned and NOT readable by the guest agent
+        # (or by any other unprivileged user on the host).
+        grep -q -- '-o root -g root' "$stagerBin" \
+          || { echo "the stager does not stage root-owned files" >&2; exit 1; }
+        grep -qE "^readonly FILE_MODE=.?$FILE_MODE" "$stagerBin" \
+          || { echo "staged files must be mode $FILE_MODE" >&2; exit 1; }
+        grep -qE "^readonly DIR_MODE=.?$DIR_MODE" "$stagerBin" \
+          || { echo "staged directories must be mode $DIR_MODE" >&2; exit 1; }
+        for m in "$FILE_MODE" "$DIR_MODE"; do
+          case "$m" in
+            *00) ;;
+            *) echo "the staged tree must not be group/other-accessible ($m)" >&2; exit 1 ;;
+          esac
+        done
+        # A manifest records what was staged.
+        grep -q 'manifest' "$stagerBin" \
+          || { echo "the stager writes no manifest" >&2; exit 1; }
+        # NEGATIVE: it must never copy a whole host directory wholesale — the
+        # host home is only ever JOINED with an allowlisted relative path.
+        if grep -nE '(cp|rsync|install|tar)[^#]*\$HOST_HOME"' "$stagerBin"; then
+          echo "the stager must never copy the host home wholesale" >&2
+          exit 1
+        fi
+        if grep -nE '\$HOST_HOME/\$\{?[a-z]' "$stagerBin" | grep -qv 'rel'; then
+          echo "the host home may only be joined with an allowlisted relative path" >&2
+          exit 1
+        fi
+
+        # --- the guest seeder --------------------------------------------
+        # It refuses a staged tree that is not root-owned / is agent-writable,
+        # and hands the COPY (never the original) to the agent.
+        grep -q 'is not root-owned' "$seederBin" \
+          || { echo "the guest seeder does not verify the staged tree is root-owned" >&2; exit 1; }
+        grep -q 'group/other-writable' "$seederBin" \
+          || { echo "the guest seeder does not verify the staged tree is not agent-writable" >&2; exit 1; }
+        grep -q 'chown -R' "$seederBin" \
+          || { echo "the guest seeder does not hand the copy to the agent" >&2; exit 1; }
+
+        # --- the launcher stages once per launch, and cleans up ------------
+        grep -q 'stage_config_seed' "$launcherBin" \
+          || { echo "the launcher does not stage the host configuration" >&2; exit 1; }
+        grep -q 'clear_config_seed' "$launcherBin" \
+          || { echo "the launcher does not clear the staged configuration" >&2; exit 1; }
+        grep -qF -- "$stagerBin" "$launcherBin" \
+          || { echo "the launcher does not call the generated stager" >&2; exit 1; }
+        # Both entry points stage BEFORE the VM is started.
+        test "$(grep -c 'stage_config_seed "\$slot"' "$launcherBin")" -ge 2 \
+          || { echo "both run and submit must stage the host configuration" >&2; exit 1; }
+
+        {
+          echo "microvm-config-seed:"
+          echo "  stager        : $stagerBin"
+          echo "  guest seeder  : $seederBin"
+          echo "  launcher      : $launcherBin"
+          echo "  allowlist     :"
+          printf '    %s\n' $allowlist
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (u) THE SESSION TREE (lightweight plan phase 4): every guest gets ONE    #
+  #     writable virtiofs share (the per-session tree) plus ONE read-only    #
+  #     share (host identity + staged configuration). Locks down: the share  #
+  #     set, the ownership/mode table as the ONE source of truth every       #
+  #     consumer derives from, the guest mount/unit ordering, the layout     #
+  #     POLICY (fed a deliberately broken table it must complain about the   #
+  #     SPECIFIC rule) and the generated launcher code that prepares,        #
+  #     verifies and REMOVES the tree. It also forces the guest closure to   #
+  #     EVALUATE to a realisable derivation — a `.drvPath` string only,      #
+  #     NOTHING is built here (see the file header and plan §38), so a guest #
+  #     that evaluates but does not BUILD still passes CI.                   #
+  # ---------------------------------------------------------------------- #
+  microvm-session-tree =
+    let
+      # A guest WITHOUT the SSH control channel: the read-only share carries the
+      # staged configuration too, so it must exist there as well (and the share
+      # count must not change).
+      noSshGuest = (variantHostWith [ ]).config.microvm.vms.${variantSlot.name}.config.config;
+
+      shares = guest0Cfg.microvm.shares;
+      writableShares = builtins.filter (s: !(s.readOnly or false)) shares;
+      roShares = builtins.filter (s: s.readOnly or false) shares;
+      sessionShare = if writableShares == [ ] then null else lib.head writableShares;
+      roShare = if roShares == [ ] then null else lib.head roShares;
+
+      # The expectations of EVERY session directory come from the module's own
+      # table, so this check follows a layout change instead of pinning
+      # yesterday's paths and numbers.
+      pathOf = base: e: if e.rel == "" then base else "${base}/${e.rel}";
+      expectedRules =
+        map (
+          e: "d ${pathOf (session.slotDir refSlot.name) e} ${e.mode} ${toString e.uid} ${toString e.gid} - -"
+        ) session.layout
+        ++ map (
+          e:
+          "d ${pathOf (session.roSlotDir refSlot.name) e} ${e.mode} ${toString e.uid} ${toString e.gid} - -"
+        ) session.roLayout;
+      # The TRUST-POLICY half of this check binds to the FULL tables
+      # (`fullLayout`/`fullRoLayout`), never to the capability-FILTERED ones
+      # (lightweight plan phase 5). The filtered tables of `test-f13` happen to be
+      # the full ones only because the reference host selects both capabilities:
+      # every rule below would silently shrink — and the `input/` / `controller/` /
+      # `worker-logs/` negative cases would silently VANISH — the day that host
+      # narrows. The filtered tables are used only where the point IS the
+      # filtering (`expectedRules`, i.e. what the host actually creates, and the
+      # verifier greps at the bottom).
+      entry = rel: lib.findFirst (e: e.rel == rel) (throw "no layout entry '${rel}'") session.fullLayout;
+      roEntry =
+        rel:
+        lib.findFirst (e: e.rel == rel) (throw "no read-only layout entry '${rel}'") session.fullRoLayout;
+
+      # The REAL tables, as the module asserts them.
+      realPolicyInput = {
+        writableRoot = session.root;
+        readOnlyRoot = session.roRoot;
+        writable = session.fullLayout;
+        readOnly = session.fullRoLayout;
+        hostKeyDir = session.hostHostkeysDir refSlot.name;
+        configSeedDir = session.hostConfigSeedDir refSlot.name;
+      };
+      # ... and DOCTORED variants: the policy is only worth anything if it
+      # complains about a table that breaks the trust boundary.
+      #
+      # `doctored <expected message infix> <patch>` asserts that the SPECIFIC
+      # rule fires, never merely that "some" violation was reported: a refactor
+      # that drops rule (2) but keeps rule (1) would otherwise leave every
+      # negative case below green. `violationsOf` returns the violations as
+      # TEXT precisely so this is checkable.
+      violationsWith = f: session.violationsOf (realPolicyInput // f realPolicyInput);
+      doctored = want: f: lib.any (v: lib.hasInfix want v) (violationsWith f);
+      # The path a violation message names for a writable-tree entry (the
+      # policy is a pure function of the TABLE, so the paths carry no slot).
+      wrel = rel: "${session.root}/${rel}";
+      withRel = rel: patch: input: {
+        writable = map (e: if e.rel == rel then e // patch else e) input.writable;
+      };
+
+      # Every unit that must be ordered against the mounts, and the mount each
+      # of them needs.
+      requiresMountsFor = unit: (unit.unitConfig or { }).RequiresMountsFor or null;
+
+      evalMarker = mkEvalCheck "microvm-session-tree-eval" [
+        {
+          # THE acceptance criterion of phase 4.
+          assertion = builtins.length writableShares == 1 && builtins.length roShares == 1;
+          message = "the guest must declare ONE writable share plus ONE read-only share, got ${
+            toString (map (s: "${s.tag}${lib.optionalString (s.readOnly or false) " (ro)"}") shares)
+          }";
+        }
+        {
+          assertion =
+            sessionShare != null
+            && sessionShare.proto == "virtiofs"
+            && sessionShare.tag == session.guestTag
+            && sessionShare.source == session.slotDir refSlot.name
+            && sessionShare.mountPoint == session.guestMountPoint;
+          message = "the writable share must be the per-slot session tree ${session.slotDir refSlot.name} mounted at ${session.guestMountPoint}, got ${toString sessionShare}";
+        }
+        {
+          assertion =
+            roShare != null
+            && roShare.proto == "virtiofs"
+            && roShare.tag == session.guestRoTag
+            && roShare.source == session.roSlotDir refSlot.name
+            && roShare.mountPoint == session.guestRoMountPoint
+            && roShare.readOnly;
+          message = "the read-only share must be the per-slot read-only tree ${session.roSlotDir refSlot.name} mounted READ-ONLY at ${session.guestRoMountPoint}";
+        }
+        {
+          # Defence in depth: NOTHING else is shared — no /nix, no /home, no
+          # host socket, no second writable tree.
+          assertion =
+            builtins.length shares == 2
+            && builtins.all (s: s.proto == "virtiofs") shares
+            &&
+              lib.sort (a: b: a < b) (map (s: s.mountPoint) shares) == lib.sort (a: b: a < b) [
+                session.guestMountPoint
+                session.guestRoMountPoint
+              ];
+          message = "unexpected share(s): ${toString (map (s: "${s.tag}@${s.mountPoint}") shares)}";
+        }
+        {
+          # A guest WITHOUT the SSH control channel still has exactly the same
+          # two shares: the read-only one also carries the staged configuration.
+          assertion =
+            builtins.length noSshGuest.microvm.shares == 2
+            && builtins.length (builtins.filter (s: s.readOnly or false) noSshGuest.microvm.shares) == 1;
+          message = "a guest without SSH must still declare one writable + one read-only share, got ${
+            toString (map (s: s.tag) noSshGuest.microvm.shares)
+          }";
+        }
+        {
+          # No host home, and nothing outside the module's own roots.
+          assertion = builtins.all (s: lib.hasPrefix "${microvmOpts.runtimeRoot}/" s.source) shares;
+          message = "a guest share escapes the module's runtime root: ${toString (map (s: s.source) shares)}";
+        }
+        {
+          # The two trees must not nest, or the read-only payloads would be
+          # reachable through the writable share.
+          assertion =
+            !(lib.hasPrefix "${session.root}/" session.roRoot)
+            && !(lib.hasPrefix "${session.roRoot}/" session.root);
+          message = "the writable and read-only session trees must be disjoint (${session.root} / ${session.roRoot})";
+        }
+        # --- the ownership/mode table is the ONE source of truth -----------
+        {
+          # Asserted FROM the table (not against a second hardcoded copy):
+          # every entry has a matching host tmpfiles rule, so the tree really
+          # is created with the owners and modes the trust split needs.
+          assertion = builtins.all (r: builtins.elem r enabledCfg.systemd.tmpfiles.rules) expectedRules;
+          message = "the session tree is not pre-created exactly as its layout table says; missing: ${
+            toString (builtins.filter (r: !(builtins.elem r enabledCfg.systemd.tmpfiles.rules)) expectedRules)
+          }";
+        }
+        {
+          assertion =
+            session.tmpfilesRules == builtins.filter (
+              r: lib.hasInfix "${microvmOpts.runtimeRoot}/sessions" r
+            ) enabledCfg.systemd.tmpfiles.rules;
+          message = "the host must create exactly the session directories the table declares";
+        }
+        {
+          # The trust boundary itself, read off the table: the control
+          # directories are root-owned, the agent's are not.
+          assertion =
+            builtins.all (rel: (entry rel).uid == 0) [
+              ""
+              session.subdirs.input
+              session.subdirs.controller
+              session.subdirs.workerLogs
+            ]
+            && builtins.all (rel: (entry rel).uid == microvmOpts.guestAgentUid) [
+              session.subdirs.workspace
+              session.subdirs.worker
+              session.subdirs.state
+            ];
+          message = "the session layout does not put the control directories under root and the agent's under uid ${toString microvmOpts.guestAgentUid}";
+        }
+        {
+          # `controller/` carries the allocation token: root-ONLY.
+          assertion = (entry session.subdirs.controller).mode == "0700";
+          message = "the controller directory must stay root-only 0700, got ${(entry session.subdirs.controller).mode}";
+        }
+        {
+          # The whole read-only tree is root-owned and denies group/other.
+          assertion = builtins.all (e: e.uid == 0 && lib.hasSuffix "00" e.mode) session.fullRoLayout;
+          message = "the read-only tree must be root-owned and root-only, got ${
+            toString (map (e: "${e.rel}:${e.mode}:${toString e.uid}") session.fullRoLayout)
+          }";
+        }
+        # --- every consumer DERIVES from the table ------------------------
+        {
+          assertion =
+            jobs.slotDir refSlot.name == session.slotDir refSlot.name
+            && jobs.guestMountPoint == session.guestMountPoint
+            && jobs.inputSubdir == session.subdirs.input
+            && jobs.controllerSubdir == session.subdirs.controller
+            && jobs.workerSubdir == session.subdirs.worker
+            && jobs.workerLogsSubdir == session.subdirs.workerLogs
+            && jobs.controllerDirMode == (entry session.subdirs.controller).mode
+            && jobs.inputDirMode == (entry session.subdirs.input).mode;
+          message = "job.nix does not derive its paths/modes from the session layout";
+        }
+        {
+          assertion =
+            agentStatePaths.slotDir refSlot.name == session.hostStateDir refSlot.name
+            && agentStatePaths.guestMountPoint == session.guestStateDir;
+          message = "state.nix does not derive its per-slot paths from the session layout";
+        }
+        {
+          assertion =
+            seed.hostPayloadDir refSlot.name == session.hostConfigSeedDir refSlot.name
+            && seed.guestMountPoint == session.guestConfigSeedDir
+            && seed.dirMode == (roEntry session.roSubdirs.configSeed).mode;
+          message = "config-seed.nix does not derive its staged payload path/mode from the session layout";
+        }
+        {
+          assertion =
+            hostKeys.slotDir refSlot.name == session.hostHostkeysDir refSlot.name
+            && hostKeys.guestMountPoint == session.guestHostkeysDir
+            && lib.hasPrefix "${session.guestHostkeysDir}/" hostKeys.guestKeyPath;
+          message = "hostkeys.nix does not derive its per-slot paths from the session layout";
+        }
+        {
+          # The SSH private host key must never be inside the WRITABLE tree.
+          assertion =
+            !(lib.hasPrefix "${session.slotDir refSlot.name}/" (hostKeys.slotDir refSlot.name))
+            && lib.hasPrefix "${session.roSlotDir refSlot.name}/" (hostKeys.slotDir refSlot.name);
+          message = "the SSH host-key directory must live in the READ-ONLY tree, is ${hostKeys.slotDir refSlot.name}";
+        }
+        {
+          # ... and neither the staged configuration nor its manifest may be
+          # writable by (or, for the manifest, visible to) the guest.
+          assertion =
+            !(lib.hasPrefix "${session.slotDir refSlot.name}/" (seed.hostPayloadDir refSlot.name))
+            && builtins.all (
+              s:
+              seed.hostManifest refSlot.name != s.source
+              && !(lib.hasPrefix "${s.source}/" (seed.hostManifest refSlot.name))
+            ) shares;
+          message = "the staged configuration must stay read-only and its manifest outside every share (manifest: ${seed.hostManifest refSlot.name})";
+        }
+        # --- the guest surfaces /workspace and orders its units -----------
+        {
+          # `agent-run`'s findmnt + writability checks, and every agent's
+          # expectation of /workspace, keep working through a bind mount.
+          assertion =
+            let
+              ws = guest0Cfg.fileSystems."/workspace";
+            in
+            ws.device == session.guestWorkspaceSource
+            && builtins.elem "bind" ws.options
+            && builtins.elem "x-systemd.requires-mounts-for=${session.guestMountPoint}" ws.options;
+          message = "the guest must bind-mount ${session.guestWorkspaceSource} to /workspace after the session mount, got ${
+            toString guest0Cfg.fileSystems."/workspace".options
+          }";
+        }
+        {
+          assertion = session.guestWorkspace == "/workspace";
+          message = "the session layout must surface the workspace at /workspace";
+        }
+        {
+          # The batch controller and the (untrusted) worker template must not
+          # start before the session mount and the /workspace bind exist.
+          assertion =
+            let
+              want = "/workspace ${session.guestMountPoint}";
+            in
+            requiresMountsFor guest0Cfg.systemd.services.agent-job-controller == want
+            && requiresMountsFor guest0Cfg.systemd.services."${jobs.workerUnitTemplate}" == want;
+          message = "the batch controller/worker must require /workspace and ${session.guestMountPoint}, got ${toString (requiresMountsFor guest0Cfg.systemd.services.agent-job-controller)}";
+        }
+        {
+          assertion = requiresMountsFor guest0Cfg.systemd.services.agent-state-link == session.guestStateDir;
+          message = "the agent-state linker must require ${session.guestStateDir}, got ${toString (requiresMountsFor guest0Cfg.systemd.services.agent-state-link)}";
+        }
+        {
+          assertion =
+            requiresMountsFor guest0Cfg.systemd.services.agent-config-seed == session.guestConfigSeedDir
+            &&
+              guest0Cfg.systemd.services.agent-config-seed.serviceConfig.ReadOnlyPaths == [
+                "-${session.guestConfigSeedDir}"
+              ];
+          message = "the config-seed seeder must require (and only read) ${session.guestConfigSeedDir}";
+        }
+        {
+          # sshd reads its host key from the read-only mount, so it must be
+          # ordered against it.
+          assertion =
+            microvmOpts.enableSsh
+            && guest0Cfg.services.openssh.enable
+            && requiresMountsFor guest0Cfg.systemd.services.sshd == session.guestHostkeysDir
+            && lib.hasPrefix "${session.guestHostkeysDir}/" (lib.head guest0Cfg.services.openssh.hostKeys).path;
+          message = "the guest must order sshd after the read-only host-key mount";
+        }
+        # --- the layout POLICY rejects a weakened table -------------------
+        {
+          # Positive control: the REAL table satisfies the policy the module
+          # asserts (so the negative cases below cannot pass vacuously).
+          assertion = session.violationsOf realPolicyInput == [ ];
+          message = "the real session layout must satisfy its own policy, got ${toString (session.violationsOf realPolicyInput)}";
+        }
+        {
+          # NON-VACUITY of binding the policy to the FULL tables: they must
+          # really carry BOTH capabilities' entries, whatever this host selects.
+          # Without this, a future narrowing of the reference host would leave
+          # every `input/` / `controller/` / `worker-logs/` / `hostkeys/` rule
+          # below inspecting a table that no longer has the entry.
+          assertion =
+            lib.all (rel: lib.elem rel (map (e: e.rel) session.fullLayout)) [
+              ""
+              session.subdirs.workspace
+              session.subdirs.input
+              session.subdirs.controller
+              session.subdirs.worker
+              session.subdirs.workerLogs
+              session.subdirs.state
+            ]
+            && lib.all (rel: lib.elem rel (map (e: e.rel) session.fullRoLayout)) [
+              ""
+              session.roSubdirs.hostkeys
+              session.roSubdirs.configSeed
+            ];
+          message = "the FULL layout tables must contain every capability's entries, got ${
+            toString (map (e: e.rel) session.fullLayout)
+          } / ${toString (map (e: e.rel) session.fullRoLayout)}";
+        }
+        {
+          # ... and the FILTERED tables are exactly a subset of them (the
+          # capability selector may only REMOVE entries, never invent or alter
+          # one, which is what makes `modeOf` on the full table safe).
+          assertion =
+            lib.all (e: lib.elem e session.fullLayout) session.layout
+            && lib.all (e: lib.elem e session.fullRoLayout) session.roLayout;
+          message = "the capability-filtered layout must be a subset of the full one";
+        }
+        {
+          assertion = doctored "'${wrel session.subdirs.input}' must be root-owned" (
+            withRel session.subdirs.input { owner = "agent"; }
+          );
+          message = "an AGENT-owned input/ must be rejected (the guest could rewrite its own job)";
+        }
+        {
+          assertion = doctored "'${wrel session.subdirs.input}' is group/other-writable" (
+            withRel session.subdirs.input { mode = "0777"; }
+          );
+          message = "a world-writable input/ must be rejected";
+        }
+        {
+          assertion = doctored "'${wrel session.subdirs.controller}' grants group/other access" (
+            withRel session.subdirs.controller { mode = "0755"; }
+          );
+          message = "a group/other-readable controller/ must be rejected (it carries the allocation token)";
+        }
+        {
+          assertion = doctored "'${wrel session.subdirs.controller}' must be root-owned" (
+            withRel session.subdirs.controller { owner = "agent"; }
+          );
+          message = "an AGENT-owned controller/ must be rejected (the guest could forge a result)";
+        }
+        {
+          assertion = doctored "'${wrel session.subdirs.workerLogs}' must be root-owned" (
+            withRel session.subdirs.workerLogs { owner = "agent"; }
+          );
+          message = "an AGENT-owned worker-logs/ must be rejected (guest systemd opens those files as root)";
+        }
+        {
+          assertion =
+            doctored "read-only '${session.roRoot}/${session.roSubdirs.configSeed}' is group/other-writable"
+              (_: {
+                readOnly = map (
+                  e: if e.rel == session.roSubdirs.configSeed then e // { mode = "0777"; } else e
+                ) session.fullRoLayout;
+              });
+          message = "a group/other-writable staged configuration must be rejected";
+        }
+        {
+          assertion = doctored "host-key directory" (input: {
+            hostKeyDir = "${input.writableRoot}/${refSlot.name}/${session.roSubdirs.hostkeys}";
+          });
+          message = "SSH host keys inside the WRITABLE session tree must be rejected";
+        }
+        {
+          assertion = doctored "is inside the WRITABLE session tree" (input: {
+            configSeedDir = "${input.writableRoot}/${refSlot.name}/${session.roSubdirs.configSeed}";
+          });
+          message = "a staged configuration inside the WRITABLE session tree must be rejected";
+        }
+        {
+          assertion = doctored "overlap" (input: {
+            readOnlyRoot = "${input.writableRoot}/ro";
+          });
+          message = "a read-only tree nested inside the writable one must be rejected";
+        }
+        {
+          # ... and the POSITIVE control for the mechanism above: an infix that
+          # nothing produces must NOT match, or every `doctored` line would be
+          # satisfied by any message at all.
+          assertion =
+            !(doctored "this infix never appears" (withRel session.subdirs.input { owner = "agent"; }));
+          message = "positive control: `doctored` must not match an arbitrary infix";
+        }
+        # --- NEGATIVE config: the guest agent must stay unprivileged -------
+        {
+          # With uid 0 the `agent`-owned directories of the table would BE
+          # root-owned and the whole split would collapse.
+          # `guestAgentUid = 0` is rejected by the option TYPE (positive
+          # integer) before the assertion can even run, so `tryEval` counts as
+          # a rejection here exactly as in `rejectsWith` above.
+          assertion = rejectsWith [ { myconfig.ai.microvm.guestAgentUid = lib.mkForce 0; } ] "unprivileged";
+          message = "a privileged guest agent uid must be rejected at eval";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-session-tree"
+      {
+        inherit evalMarker;
+        # Building these runs their writeShellApplication shellcheck gate; the
+        # greps below then inspect the GENERATED code.
+        verifierBin = "${session.verifier}/bin/agent-microvm-verify-session";
+        # EVAL-DEPTH ONLY (a `.drvPath` string, nothing is built): a guest that
+        # does not even evaluate to a realisable derivation must fail CI, and
+        # this check is the one that owns the guest SHAPE.
+        guestToplevelDrv = guest0Cfg.system.build.toplevel.drvPath;
+        guestRunnerDrv = guest0Cfg.microvm.declaredRunner.drvPath;
+        noSshGuestToplevelDrv = noSshGuest.system.build.toplevel.drvPath;
+        launcherBin = "${launcherPkg}/bin/agent-microvm";
+        sessionRoot = session.root;
+        sessionRoRoot = session.roRoot;
+        # "<rel> <mode-without-leading-zero> <uid>" per entry, from the module's
+        # table — so the greps below follow a layout change too.
+        writableEntries = lib.concatMapStringsSep "\n" (
+          e: "${if e.rel == "" then "." else e.rel} ${lib.removePrefix "0" e.mode} ${toString e.uid}"
+        ) (builtins.filter (e: e.strictMode) session.layout);
+        roEntries = lib.concatMapStringsSep "\n" (
+          e: "${if e.rel == "" then "." else e.rel} ${lib.removePrefix "0" e.mode} ${toString e.uid}"
+        ) session.roLayout;
+      }
+      ''
+        # --- the PRE-LAUNCH verifier -------------------------------------
+        # Every directory of the table is verified, with its exact expected
+        # owner and (where the host controls it) mode.
+        # The generated call for one entry is
+        #   verify_dir "<path>" '<label>' <uid> <mode> <private>
+        # so the last three fields carry the expectations this table declares.
+        check_entry() {
+          local var="$1" rel="$2" mode="$3" uid="$4" path line got
+          if [ "$rel" = "." ]; then path="\"\$$var\""; else path="\"\$$var/$rel\""; fi
+          line="$(grep -F -- "verify_dir $path " "$verifierBin" | head -n 1)"
+          [ -n "$line" ] \
+            || { echo "the verifier does not check '$rel' of \$$var" >&2; exit 1; }
+          got="$(printf '%s' "$line" | awk '{print $(NF-2), $(NF-1)}')"
+          [ "$got" = "$uid $mode" ] \
+            || { echo "the verifier demands '$got' for '$rel', expected '$uid $mode'" >&2; exit 1; }
+        }
+        while IFS=' ' read -r rel mode uid; do
+          [ -n "$rel" ] || continue
+          check_entry SESSION_DIR "$rel" "$mode" "$uid"
+        done <<< "$writableEntries"
+        while IFS=' ' read -r rel mode uid; do
+          [ -n "$rel" ] || continue
+          check_entry SESSION_RO_DIR "$rel" "$mode" "$uid"
+        done <<< "$roEntries"
+        # It refuses a symlinked component (path traversal / escape), a
+        # non-root parent directory and any group/other-writable directory.
+        for pat in 'is a SYMLINK' 'group/other-writable' 'must be owned by uid' \
+                   'a parent directory of the session tree is missing'; do
+          grep -qF -- "$pat" "$verifierBin" \
+            || { echo "the verifier lost its '$pat' check" >&2; exit 1; }
+        done
+        # ... and it enforces that no SSH host-key material is in the writable
+        # tree (the plan's own rule).
+        grep -qF -- 'SSH host-key material found in the WRITABLE session tree' "$verifierBin" \
+          || { echo "the verifier does not keep SSH host keys out of the writable tree" >&2; exit 1; }
+        # The slot name it is given must come from the prebuilt pool.
+        grep -qF -- "unknown slot" "$verifierBin" \
+          || { echo "the verifier accepts an arbitrary slot argument" >&2; exit 1; }
+        # ... and NOTHING the table does not declare may be in either tree: the
+        # per-directory checks alone say nothing about UNDECLARED entries, which
+        # is how a stale batch subdirectory of a previous capability selection
+        # would end up exported to the guest unverified.
+        for t in '"$SESSION_DIR"' '"$SESSION_RO_DIR"'; do
+          grep -qF -- "assert_no_extras $t" "$verifierBin" \
+            || { echo "the verifier does not reject undeclared entries of $t" >&2; exit 1; }
+        done
+        grep -qF -- 'the session layout table does not declare for this host' "$verifierBin" \
+          || { echo "the verifier's undeclared-entry refusal lost its message" >&2; exit 1; }
+        # The launcher SWEEPS them before every launch, so the fail-closed check
+        # above cannot brick a slot after a capability change.
+        grep -qF -- 'session_sweep_extras()' "$launcherBin" \
+          || { echo "the launcher has no session_sweep_extras" >&2; exit 1; }
+        test "$(grep -c 'session_sweep_extras "\$dir"' "$launcherBin")" -eq 2 \
+          || { echo "prepare_session must sweep BOTH trees" >&2; exit 1; }
+        grep -qF -- 'while a mount survives under it' "$launcherBin" \
+          || { echo "the sweep would rm -rf through a surviving mount" >&2; exit 1; }
+
+        # --- the launcher prepares / verifies / REMOVES the whole tree ------
+        for fn in prepare_session verify_session clear_session; do
+          grep -qF -- "$fn()" "$launcherBin" \
+            || { echo "the launcher has no $fn" >&2; exit 1; }
+        done
+        grep -qF -- "$verifierBin" "$launcherBin" \
+          || { echo "the launcher does not call the generated session verifier" >&2; exit 1; }
+        # The verification runs BEFORE the VM is started.
+        grep -qF -- 'verify_session "$slot"' "$launcherBin" \
+          || { echo "the launcher never verifies a session before launch" >&2; exit 1; }
+        test "$(grep -c 'verify_session "\$slot"' "$launcherBin")" -ge 2 \
+          || { echo "both run and submit must verify the session tree" >&2; exit 1; }
+        test "$(grep -c 'prepare_session "\$slot"' "$launcherBin")" -ge 2 \
+          || { echo "both run and submit must prepare the session tree" >&2; exit 1; }
+        # Cleanup removes the COMPLETE tree, and refuses to do so through a
+        # surviving bind mount (which would delete the clone / persisted state).
+        grep -qE 'rm -rf -- "\$\{dir:\?\}"' "$launcherBin" \
+          || { echo "the launcher does not remove the complete session tree" >&2; exit 1; }
+        grep -qF -- 'refusing to remove the session tree' "$launcherBin" \
+          || { echo "the launcher removes the session tree without proving the binds are gone" >&2; exit 1; }
+        grep -qF -- 'still exists after removing it' "$launcherBin" \
+          || { echo "the launcher does not prove the session tree is gone" >&2; exit 1; }
+        grep -qF -- 'clear_session "$slot" || leaked=1' "$launcherBin" \
+          || { echo "the teardown does not clear the session tree (or swallows its failure)" >&2; exit 1; }
+        # Both bind-mount targets are inside the session tree, and there is
+        # exactly ONE definition of each.
+        grep -qF -- 'mount_point()  { printf '"'"'%s'"'"' "$SESSION_ROOT/$1/$SESSION_WORKSPACE_SUBDIR"; }' "$launcherBin" \
+          || { echo "the launcher does not put the workspace bind inside the session tree" >&2; exit 1; }
+        grep -qF -- 'state_slot_dir() { printf '"'"'%s'"'"' "$SESSION_ROOT/$1/$SESSION_STATE_SUBDIR"; }' "$launcherBin" \
+          || { echo "the launcher does not put the agent-state bind inside the session tree" >&2; exit 1; }
+        test "$(grep -c 'mount_point()' "$launcherBin")" -eq 1 \
+          || { echo "mount_point must have exactly one definition" >&2; exit 1; }
+        test "$(grep -c 'state_slot_dir()' "$launcherBin")" -eq 1 \
+          || { echo "state_slot_dir must have exactly one definition" >&2; exit 1; }
+        # There is only ONE share layout left: no code may still branch on the
+        # historical four-share paths.
+        for pat in '/run/agent-job' '/var/lib/agent-state' '/var/lib/agent-hostkey' \
+                   '$STATE_ROOT/$1/workspace'; do
+          if grep -qF -- "$pat" "$launcherBin"; then
+            echo "the launcher still references the historical four-share path $pat" >&2
+            exit 1
+          fi
+        done
+
+        # The guest (and its runner) must EVALUATE to a realisable derivation.
+        # Referencing the drvPaths here is what forces that evaluation in CI.
+        for drv in "$guestToplevelDrv" "$guestRunnerDrv" "$noSshGuestToplevelDrv"; do
+          case "$drv" in
+            /nix/store/*.drv) ;;
+            *) echo "a guest did not evaluate to a derivation: '$drv'" >&2; exit 1 ;;
+          esac
+        done
+
+        {
+          echo "microvm-session-tree:"
+          echo "  writable tree : $sessionRoot/<slot>"
+          echo "  guest         : $guestToplevelDrv"
+          echo "  runner        : $guestRunnerDrv"
+          printf '    %s\n' "$writableEntries"
+          echo "  read-only tree: $sessionRoRoot/<slot>"
+          printf '    %s\n' "$roEntries"
+          echo "  verifier      : $verifierBin"
+          echo "  launcher      : $launcherBin"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (b2) phase 5 — INTERACTIVE and BATCH are independently selectable.      #
+  #      The DEFAULT host must still carry BOTH halves (regression guard    #
+  #      bound to the real evaluated config of test-f13), an               #
+  #      interactive-only host must have NO batch unit / path / package and #
+  #      no `submit`, and a batch-only host must have NO sshd, NO host-key  #
+  #      tree and no `run`/`ssh`. Every absence is read off the EVALUATED    #
+  #      config (units, tmpfiles rules, package names, layout table) or off  #
+  #      the BUILT launcher, never off intent.                              #
+  # ---------------------------------------------------------------------- #
+  microvm-capabilities =
+    let
+      # ---- the DEFAULT (both capabilities) --------------------------------
+      defaultCaps = microvmOpts.capabilities;
+      defaultGuestServices = builtins.attrNames guest0Cfg.systemd.services;
+      defaultGuestPkgNames = pkgNamesOf guest0Cfg.environment.systemPackages;
+      hostRules = enabledCfg.systemd.tmpfiles.rules;
+      hostServiceNames = builtins.attrNames enabledCfg.systemd.services;
+      workmuxNames = builtins.attrNames enabledCfg.myconfig.ai.workmux.agents;
+
+      controllerService = lib.removeSuffix ".service" jobs.controllerUnit;
+      workerService = jobs.workerUnitTemplate;
+      # The three job-protocol programs, by NAME (the derivations themselves are
+      # per-host, so a name is what compares across variants).
+      jobProgramNames = [
+        "agent-job-controller"
+        "agent-job-worker"
+        "agent-job-assert-paths"
+      ];
+      batchSubdirs = [
+        session.subdirs.input
+        session.subdirs.controller
+        session.subdirs.worker
+        session.subdirs.workerLogs
+      ];
+
+      # ---- the two narrowed hosts -----------------------------------------
+      iGuest = capGuestOf interactiveOnlyHost;
+      iSession = capSessionOf interactiveOnlyHost;
+      iRules = interactiveOnlyHost.config.systemd.tmpfiles.rules;
+      iHostKeys = interactiveOnlyHost._module.args.agentHostKeys;
+      iSlotDir = iSession.slotDir variantSlot.name;
+      iRoSlotDir = iSession.roSlotDir variantSlot.name;
+
+      bGuest = capGuestOf batchOnlyHost;
+      bSession = capSessionOf batchOnlyHost;
+      bJobs = batchOnlyHost._module.args.agentJobs;
+      bRules = batchOnlyHost.config.systemd.tmpfiles.rules;
+      bRoSlotDir = bSession.roSlotDir variantSlot.name;
+      bController = bGuest.systemd.services.${controllerService};
+      bWorker = bGuest.systemd.services.${workerService};
+
+      # The batch + VSOCK variant (lightweight plan phase 6): a batch-only host
+      # that ALSO selects `vsock`, so it has the VSOCK `sshd-vsock@` control
+      # channel instead of a TCP sshd. The transport it provides is what lets
+      # the runtime-validation suite reach a batch-only guest at all.
+      bvGuest = capGuestOf batchVsockHost;
+      bvSession = capSessionOf batchVsockHost;
+      bvRules = batchVsockHost.config.systemd.tmpfiles.rules;
+      bvRoSlotDir = bvSession.roSlotDir variantSlot.name;
+
+      rels = l: map (e: e.rel) l;
+      mentions = rules: infix: lib.any (r: lib.hasInfix infix r) rules;
+
+      # --- the WORKLOAD-vs-TRANSPORT capability matrix --------------------
+      # `interactive` and `batch` are WORKLOAD capabilities (what the guest can
+      # be asked to do); `vsock` is a TRANSPORT (how the host reaches it) and
+      # declares no workload, so it must never be selectable alone. Every cell
+      # of the matrix is exercised below against the REAL reference host, so a
+      # future token cannot quietly re-open the transport-only hole.
+      #
+      # `enableSsh` is forced per cell to satisfy the INDEPENDENT
+      # enableSsh/`interactive` reconciliation: a cell without `interactive`
+      # must turn the SSH server off, or that other assertion would fire and
+      # make an `acceptsWithout` cell fail for the wrong reason.
+      capabilityCell = caps: [
+        {
+          myconfig.ai.microvm.capabilities = lib.mkForce caps;
+          myconfig.ai.microvm.enableSsh = lib.mkForce (lib.elem "interactive" caps);
+        }
+      ];
+      noWorkloadNeedle = "no WORKLOAD capability";
+      # The messages of the transport-only rejection, so the test can assert the
+      # message actually NAMES the three tokens an operator has to reason about
+      # (an "invalid capabilities" message would be useless here).
+      transportOnlyMessages = lib.filter (m: lib.hasInfix noWorkloadNeedle m) (
+        failedAssertions (capabilityCell [ "vsock" ])
+      );
+      # The generated allowlist fragments of a layout table: the launcher's
+      # `session_sweep_extras` argument list and the verifier's
+      # `SESSION_*_ENTRIES` array, rendered with the SAME quoting the module uses
+      # so the greps below compare against the exact generated text.
+      sweepListOf =
+        l: lib.concatMapStringsSep " " (e: lib.escapeShellArg e.rel) (lib.filter (e: e.rel != "") l);
+      entryArrayOf = sweepListOf;
+
+      evalMarker = mkEvalCheck "microvm-capabilities-eval" ([
+        # --- the DEFAULT selects BOTH, i.e. today's behaviour -------------
+        {
+          assertion =
+            lib.sort (a: b: a < b) defaultCaps == [
+              "batch"
+              "interactive"
+            ];
+          message = "the module default must select BOTH capabilities, got ${toString defaultCaps}";
+        }
+        {
+          # The batch half of the reference host, from its real units.
+          assertion =
+            lib.elem controllerService defaultGuestServices && lib.elem workerService defaultGuestServices;
+          message = "the default guest must carry the batch controller + worker template";
+        }
+        {
+          assertion = lib.all (n: lib.elem n defaultGuestPkgNames) jobProgramNames;
+          message = "the default guest must carry the job-protocol programs (${toString jobProgramNames})";
+        }
+        {
+          # The interactive half of the reference host.
+          assertion =
+            lib.elem "sshd" defaultGuestServices
+            && guest0Cfg.services.openssh.enable
+            && lib.elem "agent-run" defaultGuestPkgNames;
+          message = "the default guest must carry sshd and the interactive `agent-run` entry point";
+        }
+        {
+          assertion = lib.elem "agent-microvm-hostkeys" hostServiceNames;
+          message = "the default host must provision per-slot SSH host keys";
+        }
+        {
+          assertion = lib.all (sub: mentions hostRules "${session.slotDir refSlot.name}/${sub}") batchSubdirs;
+          message = "the default host must create every batch subdirectory of the session tree";
+        }
+        {
+          assertion =
+            mentions hostRules "${session.hostHostkeysDir refSlot.name}" && mentions hostRules jobs.resultsDir;
+          message = "the default host must create the host-key tree and the batch result archive";
+        }
+        {
+          assertion = lib.any (n: lib.hasPrefix "microvm-" n) workmuxNames;
+          message = "the default host must register the interactive workmux panes";
+        }
+
+        # --- INTERACTIVE-ONLY: the batch half is GONE ---------------------
+        {
+          assertion =
+            !(iGuest.systemd.services ? ${controllerService}) && !(iGuest.systemd.services ? ${workerService});
+          message = "an interactive-only guest must have NO batch controller and NO worker template, got ${
+            toString (lib.filter (n: lib.hasPrefix "agent-job" n) (builtins.attrNames iGuest.systemd.services))
+          }";
+        }
+        {
+          assertion = !(lib.any (n: lib.elem n (capGuestPkgNames interactiveOnlyHost)) jobProgramNames);
+          message = "an interactive-only guest must not carry any job-protocol program";
+        }
+        {
+          assertion =
+            rels iSession.layout == [
+              ""
+              session.subdirs.workspace
+              session.subdirs.state
+            ];
+          message = "an interactive-only session tree must contain only the root, the workspace and the state bind point, got ${toString (rels iSession.layout)}";
+        }
+        {
+          assertion = !(lib.any (sub: mentions iRules "${iSlotDir}/${sub}") batchSubdirs);
+          message = "an interactive-only host must emit NO tmpfiles rule for a batch subdirectory";
+        }
+        {
+          assertion = !(mentions iRules bJobs.resultsDir);
+          message = "an interactive-only host must not create the batch result archive (${bJobs.resultsDir})";
+        }
+        {
+          # ... and the interactive half is intact, including the read-only
+          # host-key subdirectory and its tmpfiles rule.
+          assertion =
+            iGuest.services.openssh.enable
+            && iGuest.systemd.services ? sshd
+            && lib.elem "agent-run" (capGuestPkgNames interactiveOnlyHost);
+          message = "an interactive-only guest must still run sshd and carry `agent-run`";
+        }
+        {
+          assertion =
+            iGuest.services.openssh.hostKeys == [
+              {
+                type = "ed25519";
+                path = iHostKeys.guestKeyPath;
+              }
+            ];
+          message = "an interactive-only guest must use exactly the per-slot host key from the read-only share";
+        }
+        {
+          assertion =
+            lib.elem session.roSubdirs.hostkeys (rels iSession.roLayout)
+            && mentions iRules "${iRoSlotDir}/${session.roSubdirs.hostkeys}";
+          message = "an interactive-only host must keep the read-only host-key subdirectory";
+        }
+        {
+          assertion = lib.elem "agent-microvm-hostkeys" (
+            builtins.attrNames interactiveOnlyHost.config.systemd.services
+          );
+          message = "an interactive-only host must still provision its per-slot SSH host keys";
+        }
+
+        # --- BATCH-ONLY: the interactive half is GONE ---------------------
+        {
+          assertion = !(bGuest.systemd.services ? sshd) && !bGuest.services.openssh.enable;
+          message = "a batch-only guest must have NO sshd";
+        }
+        {
+          assertion = !(lib.elem "agent-run" (capGuestPkgNames batchOnlyHost));
+          message = "a batch-only guest must not carry the interactive `agent-run` entry point";
+        }
+        {
+          assertion = !(lib.elem session.roSubdirs.hostkeys (rels bSession.roLayout));
+          message = "a batch-only read-only tree must have NO host-key subdirectory, got ${toString (rels bSession.roLayout)}";
+        }
+        {
+          assertion = !(mentions bRules "${bRoSlotDir}/${session.roSubdirs.hostkeys}");
+          message = "a batch-only host must emit no tmpfiles rule for a host-key directory";
+        }
+        {
+          assertion =
+            !(lib.elem "agent-microvm-hostkeys" (builtins.attrNames batchOnlyHost.config.systemd.services));
+          message = "a batch-only host must not provision SSH host keys";
+        }
+        {
+          # No known_hosts generation either: the provisioning program is the
+          # ONLY thing that writes it, so no host unit may reference it.
+          assertion =
+            !(lib.any (e: lib.hasInfix "agent-microvm-provision-hostkeys" e) (hostExecStartsOf batchOnlyHost));
+          message = "a batch-only host must not run the host-key / known_hosts generator";
+        }
+        {
+          # POSITIVE control for the check above: the reference host DOES.
+          assertion = lib.any (e: lib.hasInfix "agent-microvm-provision-hostkeys" e) (
+            hostExecStartsOf self.nixosConfigurations.test-f13
+          );
+          message = "positive control: the default host must run the host-key generator";
+        }
+        {
+          assertion =
+            !(lib.any (n: lib.hasPrefix "microvm-" n) (
+              builtins.attrNames batchOnlyHost.config.myconfig.ai.workmux.agents
+            ));
+          message = "a batch-only host must register no interactive workmux pane";
+        }
+        {
+          # ... and the batch half is intact, with its trust split.
+          assertion =
+            bGuest.systemd.services ? ${controllerService} && bGuest.systemd.services ? ${workerService};
+          message = "a batch-only guest must carry the controller and the worker template";
+        }
+        {
+          assertion = lib.all (n: lib.elem n (capGuestPkgNames batchOnlyHost)) jobProgramNames;
+          message = "a batch-only guest must carry the job-protocol programs";
+        }
+        {
+          # The TRUSTED controller runs as guest root (no User=), the
+          # UNTRUSTED worker as the unprivileged agent, and the worker cannot
+          # even see the controller's channel.
+          assertion = !(bController.serviceConfig ? User);
+          message = "the batch controller must run as guest root";
+        }
+        {
+          assertion =
+            bWorker.serviceConfig.User == bJobs.workerUser
+            && bWorker.serviceConfig.ProtectProc == "invisible"
+            && bWorker.serviceConfig.InaccessiblePaths == [ "-${bJobs.guestControllerDir}" ];
+          message = "the batch worker must stay unprivileged and be denied the controller channel";
+        }
+        {
+          assertion = bController.unitConfig.ConditionPathExists == bJobs.guestSpec;
+          message = "the batch controller must stay inert without a job spec";
+        }
+        {
+          assertion = lib.all (
+            sub: mentions bRules "${bSession.slotDir variantSlot.name}/${sub}"
+          ) batchSubdirs;
+          message = "a batch-only host must create every batch subdirectory of the session tree";
+        }
+
+        # --- NEGATIVE eval tests, pinned to the SPECIFIC assertion --------
+        {
+          assertion = baselineClean;
+          message = "positive control: the unmodified reference host must have no failed assertion";
+        }
+        {
+          assertion = rejectsWith [
+            { myconfig.ai.microvm.capabilities = lib.mkForce [ ]; }
+          ] "selects no capability";
+          message = "an EMPTY capability set must be rejected";
+        }
+
+        # --- the FULL workload/transport capability matrix -----------------
+        # VALID cells: every selection that carries at least one WORKLOAD
+        # capability must evaluate with no failed assertion at all.
+        {
+          assertion = acceptsWithout (capabilityCell [ "interactive" ]) noWorkloadNeedle;
+          message = "capabilities = [ interactive ] must be accepted";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [ "batch" ]) noWorkloadNeedle;
+          message = "capabilities = [ batch ] must be accepted";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [
+            "interactive"
+            "batch"
+          ]) noWorkloadNeedle;
+          message = "capabilities = [ interactive batch ] (the default) must be accepted";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [
+            "interactive"
+            "vsock"
+          ]) noWorkloadNeedle;
+          message = "capabilities = [ interactive vsock ] must be accepted (a workload + the transport)";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [
+            "batch"
+            "vsock"
+          ]) noWorkloadNeedle;
+          message = "capabilities = [ batch vsock ] must be accepted (the phase-6 batch+vsock shape)";
+        }
+        {
+          assertion = acceptsWithout (capabilityCell [
+            "interactive"
+            "batch"
+            "vsock"
+          ]) noWorkloadNeedle;
+          message = "capabilities = [ interactive batch vsock ] must be accepted";
+        }
+        # INVALID cells: no workload capability at all.
+        {
+          # THE hole this assertion closes: `vsock` alone enabled a VSOCK SSH
+          # transport while declaring NEITHER execution capability, i.e. an
+          # undocumented interactive mode reachable over VSOCK.
+          assertion = rejectsWith (capabilityCell [ "vsock" ]) noWorkloadNeedle;
+          message = "a TRANSPORT-ONLY capability set ([ vsock ]) must be rejected";
+        }
+        {
+          # ... and it is rejected for the WORKLOAD reason even on a host that
+          # leaves `enableSsh` on (where the reconciliation assertion also
+          # fires): the two guards are independent.
+          assertion = rejectsWith [
+            { myconfig.ai.microvm.capabilities = lib.mkForce [ "vsock" ]; }
+          ] noWorkloadNeedle;
+          message = "[ vsock ] must be rejected for the missing WORKLOAD capability regardless of enableSsh";
+        }
+        {
+          # EXACTLY ONE guard fires for the transport-only set, and its message
+          # names all three tokens the operator must reason about.
+          assertion =
+            lib.length transportOnlyMessages == 1
+            && lib.all (w: lib.hasInfix w (lib.head transportOnlyMessages)) [
+              "interactive"
+              "batch"
+              "vsock"
+            ];
+          message = "the transport-only rejection must fire exactly once and name interactive, batch and vsock, got ${toString transportOnlyMessages}";
+        }
+        {
+          # The EMPTY set trips the pre-existing "selects no capability" guard,
+          # and the new workload guard as well — both are true statements about
+          # it, so this only pins that the new guard did not REPLACE the old one.
+          assertion =
+            rejectsWith (capabilityCell [ ]) "selects no capability"
+            && rejectsWith (capabilityCell [ ]) noWorkloadNeedle;
+          message = "the empty capability set must still trip the pre-existing empty-selection guard";
+        }
+        {
+          # NEGATIVE control: the workload guard must NOT fire on any valid
+          # cell (it would mask the accept cells above if it always fired).
+          assertion =
+            !(lib.any (caps: rejectsWith (capabilityCell caps) noWorkloadNeedle) [
+              [ "interactive" ]
+              [ "batch" ]
+              [
+                "interactive"
+                "batch"
+              ]
+              [
+                "interactive"
+                "vsock"
+              ]
+              [
+                "batch"
+                "vsock"
+              ]
+              [
+                "interactive"
+                "batch"
+                "vsock"
+              ]
+            ]);
+          message = "the WORKLOAD-capability guard must not fire on a selection that has one";
+        }
+
+        {
+          assertion = rejectsWith [
+            { myconfig.ai.microvm.capabilities = lib.mkForce [ "interactve" ]; }
+          ] "unknown capability";
+          message = "an UNKNOWN capability token must be rejected";
+        }
+        {
+          # The reconciliation: `enableSsh` (true on the reference host) is
+          # MEANINGLESS without the interactive capability and is rejected
+          # rather than silently ignored.
+          assertion = rejectsWith [
+            { myconfig.ai.microvm.capabilities = lib.mkForce [ "batch" ]; }
+          ] "has no meaning without the";
+          message = "enableSsh without the `interactive` capability must be rejected";
+        }
+        {
+          # The batch-capable-agent assertion must still fire for a host that
+          # selects `batch` with a selection that has no batch-capable agent.
+          # Every DECLARED agent is batch-capable today, so the conflict is
+          # produced by substituting a registry whose batch subset is empty —
+          # the same shape a future non-batch agent would create.
+          assertion = rejectsWith [
+            { _module.args.agentRegistry = lib.mkForce (agentRegistry // { batchNames = [ ]; }); }
+          ] "selects no agent that can run";
+          message = "a batch host with no batch-capable agent must be rejected";
+        }
+        {
+          # ... and it must NOT fire once `batch` is deselected — that is the
+          # recorded phase-5 requirement.
+          assertion = acceptsWithout [
+            {
+              _module.args.agentRegistry = lib.mkForce (agentRegistry // { batchNames = [ ]; });
+              myconfig.ai.microvm.capabilities = lib.mkForce [ "interactive" ];
+            }
+          ] "selects no agent that can run";
+          message = "the batch-capable-agent assertion must NOT fire on an interactive-only host";
+        }
+
+        # --- BATCH + VSOCK (lightweight plan phase 6): the VSOCK control ----
+        # channel is wired, the TCP sshd is suppressed, and the host-key tree
+        # is provisioned for the VSOCK sshd exactly as for the interactive one.
+        {
+          assertion = bvGuest.microvm.vsock.cid == variantSlot.cid;
+          message = "a batch+vsock guest must set microvm.vsock.cid to the slot's deterministic CID (${toString variantSlot.cid}), got ${toString bvGuest.microvm.vsock.cid}";
+        }
+        {
+          assertion = bvGuest.services.openssh.enable;
+          message = "a batch+vsock guest must enable services.openssh (the sshd-vsock@ unit + its NixOS dropins are gated on it)";
+        }
+        {
+          # The TCP sshd is SUPPRESSED (the recorded deviation from phase 5):
+          # `sshd.service` is not installed, so no TCP listener ever starts —
+          # only the VSOCK `sshd-vsock@`.
+          assertion = !(bvGuest.systemd.services.sshd.enable or true);
+          message = "a batch+vsock guest must NOT install the TCP sshd.service (systemd.services.sshd.enable must be false); only the VSOCK sshd-vsock@ should run";
+        }
+        {
+          # The TCP sshd is masked AND its TAP firewall opening is closed: the
+          # VSOCK sshd is host-only (CID 2 -> vsock::22) and never needs a TAP
+          # rule, so 22 must be absent from the guest's allowed TCP ports. This
+          # pins the "no TCP/network SSH daemon" invariant's FIREWALL half —
+          # without it the openssh module's default `openFirewall = true` would
+          # silently open 22 on a guest whose sshd is masked (a regression
+          # vector if the masking ever dropped).
+          assertion =
+            !(bvGuest.services.openssh.openFirewall or true)
+            && !(lib.elem 22 bvGuest.networking.firewall.allowedTCPPorts);
+          message = "a batch+vsock guest must close the TAP firewall for the TCP sshd (services.openssh.openFirewall = false and 22 absent from networking.firewall.allowedTCPPorts); the VSOCK sshd is host-only and needs no TAP rule";
+        }
+        {
+          assertion = bvGuest.systemd.sockets ? "sshd-vsock" && !(bvGuest.systemd.sockets ? "sshd");
+          message = "a batch+vsock guest must declare the sshd-vsock socket and NO TCP sshd socket";
+        }
+        {
+          # N1: the live VSOCK control channel is the `sshd-vsock@` socket, so
+          # the host-key mount ordering must live on THAT socket (not on the
+          # masked `sshd.service`). The socket is wantedBy `sockets.target`
+          # (early), so `RequiresMountsFor` makes it wait for the read-only
+          # host-key share before it listens — eliminating the boot race in
+          # which the VSOCK sshd accepts before the share is up. nixpkgs defines
+          # the socket with `overrideStrategy = "asDropin"`, so this is a dropin
+          # on the generator-created unit.
+          assertion =
+            (bvGuest.systemd.sockets.sshd-vsock.unitConfig.RequiresMountsFor or null)
+            == bvSession.guestHostkeysDir;
+          message = "a batch+vsock guest must order the sshd-vsock socket after the read-only host-key mount (RequiresMountsFor = the guest hostkeys dir); the VSOCK sshd reads its key from that share";
+        }
+        {
+          assertion = lib.elem session.roSubdirs.hostkeys (rels bvSession.roLayout);
+          message = "a batch+vsock read-only tree must contain the host-key subdirectory (the VSOCK sshd needs the per-slot host identity)";
+        }
+        {
+          assertion = mentions bvRules "${bvRoSlotDir}/${session.roSubdirs.hostkeys}";
+          message = "a batch+vsock host must emit the tmpfiles rule for the host-key directory";
+        }
+        {
+          assertion = lib.elem "agent-microvm-hostkeys" (
+            builtins.attrNames batchVsockHost.config.systemd.services
+          );
+          message = "a batch+vsock host must provision per-slot SSH host keys (the VSOCK channel is host-key-verified, like the TAP one)";
+        }
+        {
+          assertion = bvGuest.users.users.agent.openssh.authorizedKeys.keyFiles or [ ] != [ ];
+          message = "a batch+vsock guest must authorise the dedicated SSH key for the VSOCK sshd";
+        }
+        {
+          assertion = !(lib.elem "agent-run" (capGuestPkgNames batchVsockHost));
+          message = "a batch+vsock guest must not carry the interactive `agent-run` entry point (vsock adds a control channel, not the interactive capability)";
+        }
+        {
+          # POSITIVE control: the batch-only (no vsock) variant has NONE of the
+          # VSOCK plumbing — vsock is OFF by default, so a default/batch host is
+          # byte-for-byte without it. It also has NO TCP sshd firewall opening
+          # (no openssh at all), the positive control for the S1 fix below.
+          assertion =
+            bGuest.microvm.vsock.cid == null
+            && !(bGuest.systemd.sockets ? "sshd-vsock")
+            && !(lib.elem 22 bGuest.networking.firewall.allowedTCPPorts);
+          message = "a batch-only (no vsock) guest must have no VSOCK device, no sshd-vsock socket and no TCP sshd firewall opening";
+        }
+        {
+          # POSITIVE control for the S1 fix: the DEFAULT guest (enableSsh =
+          # true, the `interactive` capability) DOES open 22 on its TAP firewall,
+          # because its TCP sshd actually runs. This proves the firewall
+          # suppression above is scoped to the batch+vsock shape and does not
+          # over-close the firewall on a host that legitimately runs the TCP
+          # sshd (`guest0Cfg` is the reference test-f13 guest).
+          assertion =
+            lib.elem 22 guest0Cfg.networking.firewall.allowedTCPPorts
+            && guest0Cfg.services.openssh.openFirewall;
+          message = "the default (interactive) guest must open TCP 22 on its firewall (its TCP sshd runs); the S1 firewall suppression is scoped to the batch+vsock shape";
+        }
+
+        # --- NEGATIVE: vsock requires a key + the closed network profiles ---
+        {
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.sshPublicKeyFile = lib.mkForce null;
+            }
+          ] "an SSH control channel";
+          message = "vsock without an sshPublicKeyFile must be rejected (the VSOCK sshd needs an authorising key)";
+        }
+        {
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.networkProfile = lib.mkForce "internet";
+              myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
+            }
+          ] "closed network profiles";
+          message = "vsock with networkProfile = \"internet\" must be rejected";
+        }
+        {
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.networkProfile = lib.mkForce "package-access";
+              myconfig.ai.microvm.packageProxyPort = 3128;
+              myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
+            }
+          ] "closed network profiles";
+          message = "vsock with networkProfile = \"package-access\" must be rejected";
+        }
+        {
+          # S2: the launcher's VSOCK `ssh` runs `ssh vsock-mux/<path>`, a hostname
+          # that only resolves through the `Host vsock-mux/*` ProxyCommand
+          # `20-systemd-ssh-proxy.conf` supplies when
+          # `programs.ssh.systemd-ssh-proxy.enable` is true. A host that selects
+          # `vsock` AND disables that nixpkgs option must fail at EVAL with the
+          # pinned message, not at runtime with an opaque DNS-resolution error.
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.sshPublicKeyFile = lib.mkForce ../hosts/host.f13/dedicated-agent-vm-key.pub;
+              programs.ssh.systemd-ssh-proxy.enable = lib.mkForce false;
+            }
+          ] "systemd-ssh-proxy";
+          message = "vsock with programs.ssh.systemd-ssh-proxy.enable = false must be rejected (the VSOCK ssh hostname needs the ProxyCommand that option supplies)";
+        }
+        {
+          # N2: `stateRoot` (the launcher's VSOCK ssh target + the per-slot
+          # `known_hosts` key) MUST equal `microvm.stateDir` (where microvm.nix
+          # backs the VSOCK device). A host that diverges them must fail at EVAL,
+          # not at runtime with an unresolvable VSOCK mux socket. Forced on the
+          # reference host (default `stateRoot` = `microvm.stateDir` =
+          # `/var/lib/microvms`) by overriding ONLY `stateRoot`.
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.stateRoot = lib.mkForce "/var/lib/microvms-other";
+            }
+          ] "must equal";
+          message = "a stateRoot that differs from microvm.stateDir must be rejected (the VSOCK ssh target / known_hosts key would not resolve to the socket microvm created)";
+        }
+      ]);
+    in
+    pkgs.runCommand "microvm-capabilities"
+      {
+        inherit evalMarker;
+        # BUILT, not merely instantiated: the narrowed guests are exactly where a
+        # `writeShellApplication` shellcheck failure hides (phase 4's SC2034 in
+        # the batch worker survived every drvPath-only check).
+        defaultGuest = guest0Cfg.system.build.toplevel;
+        defaultRunner = guest0Cfg.microvm.declaredRunner;
+        interactiveGuest = iGuest.system.build.toplevel;
+        interactiveRunner = iGuest.microvm.declaredRunner;
+        batchGuest = bGuest.system.build.toplevel;
+        batchRunner = bGuest.microvm.declaredRunner;
+        # The batch+vsock guest, BUILT (lightweight plan phase 6): the narrowed
+        # closure where the VSOCK sshd + the suppressed TCP sshd live is exactly
+        # where a `writeShellApplication` shellcheck failure or a VSOCK-wiring
+        # eval error would hide, so it is forced like the other two.
+        batchVsockGuest = bvGuest.system.build.toplevel;
+        batchVsockRunner = bvGuest.microvm.declaredRunner;
+        # The three launchers, BUILT (their own shellcheck gate) and then
+        # inspected: the narrowed ones must refuse the subcommands whose
+        # machinery they do not have, the default one must contain no guard at
+        # all (so this phase left it untouched).
+        defaultLauncher = "${launcherPkg}/bin/agent-microvm";
+        interactiveLauncher = "${findPkg interactiveOnlyHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        batchLauncher = "${findPkg batchOnlyHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        # The batch+vsock launcher: it must ALLOW `ssh` (over VSOCK) and report
+        # the vsock capability, while still refusing `run` (interactive-only).
+        batchVsockLauncher = "${findPkg batchVsockHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        # The generated pre-launch verifiers: they are rendered FROM the layout
+        # table, so a narrowed tree must not even mention the other half's
+        # directories.
+        interactiveVerifier = "${iSession.verifier}/bin/agent-microvm-verify-session";
+        batchVerifier = "${bSession.verifier}/bin/agent-microvm-verify-session";
+        # The EXACT generated `verify_dir` argument of each directory (a bare
+        # subdirectory name would also match the verifier's own prose).
+        controllerVerifyArg = "\"$SESSION_DIR/${session.subdirs.controller}\"";
+        hostkeysVerifyArg = "\"$SESSION_RO_DIR/${session.roSubdirs.hostkeys}\"";
+        # The allowlists the two generated artefacts render from the FILTERED
+        # table: the verifier's undeclared-entry check and the launcher's sweep
+        # must both follow the narrowing, or a stale batch subdirectory would
+        # either be exported unverified or refuse every launch. Rendered HERE
+        # with the same `escapeShellArg` the module uses, so these are the exact
+        # generated fragments.
+        controllerRel = lib.escapeShellArg session.subdirs.controller;
+        hostkeysRel = lib.escapeShellArg session.roSubdirs.hostkeys;
+        iSweepList = sweepListOf iSession.layout;
+        bSweepList = sweepListOf bSession.layout;
+        iRoEntryList = entryArrayOf iSession.roLayout;
+        bRoEntryList = entryArrayOf bSession.roLayout;
+      }
+      ''
+        # --- the narrowed launchers refuse the missing capability ----------
+        for pair in "submit batch" "cancel batch"; do
+          grep -qF -- "require_capability $pair" "$interactiveLauncher" \
+            || { echo "the interactive-only launcher does not refuse '$pair'" >&2; exit 1; }
+        done
+        # `run` needs `interactive` (single capability). (`ssh` needs `interactive`
+        # OR `vsock` — phase 6 — so its refusal is `require_capability_any ssh
+        # interactive vsock`, asserted explicitly below, not the single-capability
+        # `require_capability ssh interactive` form this loop checks.)
+        for pair in "run interactive"; do
+          grep -qF -- "require_capability $pair" "$batchLauncher" \
+            || { echo "the batch-only launcher does not refuse '$pair'" >&2; exit 1; }
+        done
+        # ... and neither refuses what it CAN do.
+        if grep -qF -- 'require_capability run interactive' "$interactiveLauncher"; then
+          echo "the interactive-only launcher refuses its own 'run'" >&2; exit 1
+        fi
+        if grep -qF -- 'require_capability submit batch' "$batchLauncher"; then
+          echo "the batch-only launcher refuses its own 'submit'" >&2; exit 1
+        fi
+        # The refusal names the OPTION to change, not just "unsupported".
+        for l in "$interactiveLauncher" "$batchLauncher"; do
+          grep -qF -- 'myconfig.ai.microvm.capabilities' "$l" \
+            || { echo "a narrowed launcher's refusal does not name the option" >&2; exit 1; }
+        done
+        # POSITIVE control: the DEFAULT launcher carries no REFUSAL at all (a
+        # host with both capabilities has nothing to refuse, so the guard would
+        # be unreachable code).
+        if grep -qF -- 'require_capability' "$defaultLauncher"; then
+          echo "the default launcher must contain no capability guard" >&2; exit 1
+        fi
+
+        # --- every launcher can be ASKED what it selects --------------------
+        # The capability SET is unconditional configuration and machine-readable
+        # on EVERY host: runtime-validation.sh must never have to infer it from an
+        # English refusal message (a detection that failed OPEN, i.e. defaulted to
+        # "this host has everything", the moment the message was reworded).
+        for l in "$defaultLauncher" "$interactiveLauncher" "$batchLauncher" "$batchVsockLauncher"; do
+          grep -qF -- 'cmd_capabilities()' "$l" \
+            || { echo "a launcher has no 'capabilities' subcommand" >&2; exit 1; }
+          grep -qF -- 'capabilities)     cmd_capabilities' "$l" \
+            || { echo "a launcher does not dispatch 'capabilities'" >&2; exit 1; }
+          grep -qE "^ *readonly DECLARED_CAPABILITIES=" "$l" \
+            || { echo "a launcher does not render the DECLARED capability set" >&2; exit 1; }
+        done
+        grep -qF -- "readonly SELECTED_CAPABILITIES=${lib.escapeShellArg "interactive batch"}" "$defaultLauncher" \
+          || { echo "the default launcher does not report BOTH capabilities" >&2; exit 1; }
+        grep -qF -- "readonly SELECTED_CAPABILITIES=${lib.escapeShellArg "interactive"}" "$interactiveLauncher" \
+          || { echo "the interactive-only launcher does not report its capability" >&2; exit 1; }
+        grep -qF -- "readonly SELECTED_CAPABILITIES=${lib.escapeShellArg "batch"}" "$batchLauncher" \
+          || { echo "the batch-only launcher does not report its capability" >&2; exit 1; }
+        grep -qF -- "readonly SELECTED_CAPABILITIES=${lib.escapeShellArg "batch vsock"}" "$batchVsockLauncher" \
+          || { echo "the batch+vsock launcher does not report its capability set (batch vsock)" >&2; exit 1; }
+
+        # --- the batch+vsock launcher: `ssh` is ALLOWED over VSOCK, `run` refused ---
+        # `ssh` needs `interactive` OR `vsock` (phase 6): a batch+vsock host has
+        # vsock, so `ssh` is NOT refused — the VSOCK control channel replaces the
+        # TCP sshd. `run` still needs `interactive`, so it IS refused. The launcher
+        # also renders `VSOCK_ENABLED=1`, the flag its `ssh`/readiness path branches on.
+        if grep -qF -- 'require_capability_any ssh' "$batchVsockLauncher"; then
+          echo "the batch+vsock launcher refuses 'ssh' despite selecting vsock" >&2; exit 1
+        fi
+        grep -qF -- "require_capability run interactive" "$batchVsockLauncher" \
+          || { echo "the batch+vsock launcher does not refuse 'run' (it has no interactive capability)" >&2; exit 1; }
+        grep -qF -- 'readonly VSOCK_ENABLED=1' "$batchVsockLauncher" \
+          || { echo "the batch+vsock launcher does not render VSOCK_ENABLED=1" >&2; exit 1; }
+        # The batch-only (no vsock) launcher, by contrast, refuses `ssh` (no control
+        # channel at all) and renders VSOCK_ENABLED=0.
+        grep -qF -- 'require_capability_any ssh interactive vsock' "$batchLauncher" \
+          || { echo "the batch-only (no vsock) launcher does not refuse 'ssh' (it has no control channel)" >&2; exit 1; }
+        grep -qF -- 'readonly VSOCK_ENABLED=0' "$batchLauncher" \
+          || { echo "the batch-only (no vsock) launcher does not render VSOCK_ENABLED=0" >&2; exit 1; }
+
+        # --- `usage` reports no directory the narrowing removed -------------
+        # `$RESULTS_DIR` is not created without the `batch` capability, so a
+        # '0B' line for it is the same "reports something absent" defect the
+        # honest `doctor` host-key section removed.
+        for l in "$defaultLauncher" "$batchLauncher"; do
+          grep -qF -- 'job results:' "$l" \
+            || { echo "a batch host's usage report lost the result archive" >&2; exit 1; }
+        done
+        if grep -qF -- 'job results:' "$interactiveLauncher"; then
+          echo "the interactive-only usage report still claims a result archive" >&2; exit 1
+        fi
+        grep -qF -- 'does not select the "batch" capability' "$interactiveLauncher" \
+          || { echo "the interactive-only usage report does not name the missing capability" >&2; exit 1; }
+
+        # --- the sweep + the undeclared-entry check follow the narrowing -----
+        # Both are rendered from the FILTERED table, so a narrowed host REMOVES
+        # the other capability's stale subdirectories before a launch and REFUSES
+        # the launch while one is still present. Without this pair, narrowing
+        # would silently drop the only coverage those directories ever had.
+        grep -qF -- "session tree\" $iSweepList" "$interactiveLauncher" \
+          || { echo "the interactive-only launcher does not sweep its session tree to the narrowed table" >&2; exit 1; }
+        grep -qF -- "session tree\" $bSweepList" "$batchLauncher" \
+          || { echo "the batch-only launcher does not sweep its session tree to the narrowed table" >&2; exit 1; }
+        if grep -F -- 'session_sweep_extras "$dir" "session tree"' "$interactiveLauncher" \
+             | grep -qF -- "$controllerRel"; then
+          echo "the interactive-only launcher still allows a batch subdirectory in its session tree" >&2; exit 1
+        fi
+        grep -qF -- "readonly SESSION_RO_ENTRIES=($iRoEntryList)" "$interactiveVerifier" \
+          || { echo "the interactive verifier's allowlist does not match its layout table" >&2; exit 1; }
+        grep -qF -- "readonly SESSION_RO_ENTRIES=($bRoEntryList)" "$batchVerifier" \
+          || { echo "the batch verifier's allowlist does not match its layout table" >&2; exit 1; }
+        if grep -F -- 'readonly SESSION_RO_ENTRIES=' "$batchVerifier" | grep -qF -- "$hostkeysRel"; then
+          echo "the batch-only verifier still allows a host-key directory" >&2; exit 1
+        fi
+        grep -F -- 'readonly SESSION_RO_ENTRIES=' "$interactiveVerifier" | grep -qF -- "$hostkeysRel" \
+          || { echo "the interactive verifier does not allow the host-key directory" >&2; exit 1; }
+        for v in "$interactiveVerifier" "$batchVerifier"; do
+          grep -qF -- 'assert_no_extras "$SESSION_DIR"' "$v" \
+            || { echo "a narrowed verifier does not reject undeclared session entries" >&2; exit 1; }
+          grep -qF -- 'assert_no_extras "$SESSION_RO_DIR"' "$v" \
+            || { echo "a narrowed verifier does not reject undeclared read-only entries" >&2; exit 1; }
+        done
+
+        # --- `doctor` stays HONEST about the host-key section ---------------
+        # A batch-only host provisions no key material, so a "every slot has a
+        # host-key directory" check would be vacuous; it must report the
+        # capability instead.
+        for l in "$defaultLauncher" "$interactiveLauncher"; do
+          grep -qF -- 'lack a host-key directory' "$l" \
+            || { echo "doctor lost its host-key check on an interactive host" >&2; exit 1; }
+        done
+        if grep -qF -- 'lack a host-key directory' "$batchLauncher"; then
+          echo "the batch-only doctor still checks for host-key directories" >&2; exit 1
+        fi
+        grep -qF -- 'no per-slot SSH host keys are expected' "$batchLauncher" \
+          || { echo "the batch-only doctor does not report the missing capability" >&2; exit 1; }
+
+        # --- the generated verifiers follow the narrowed layout table -------
+        grep -qF -- "$controllerVerifyArg" "$batchVerifier" \
+          || { echo "the batch verifier does not verify the controller directory" >&2; exit 1; }
+        if grep -qF -- "$controllerVerifyArg" "$interactiveVerifier"; then
+          echo "the interactive-only verifier still verifies a batch directory" >&2; exit 1
+        fi
+        grep -qF -- "$hostkeysVerifyArg" "$interactiveVerifier" \
+          || { echo "the interactive verifier does not verify the host-key directory" >&2; exit 1; }
+        if grep -qF -- "$hostkeysVerifyArg" "$batchVerifier"; then
+          echo "the batch-only verifier still verifies a host-key directory" >&2; exit 1
+        fi
+
+        {
+          echo "microvm-capabilities:"
+          echo "  default  guest : $defaultGuest"
+          echo "  default  runner: $defaultRunner"
+          echo "  interactive-only guest : $interactiveGuest"
+          echo "  interactive-only runner: $interactiveRunner"
+          echo "  batch-only       guest : $batchGuest"
+          echo "  batch-only       runner: $batchRunner"
+          echo "  batch+vsock      guest : $batchVsockGuest"
+          echo "  batch+vsock      runner: $batchVsockRunner"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # phase 6, the LITERAL objective: the VSOCK MODEL TRANSPORT.               #
+  #   `vsock` + `networkProfile = "proxy-only"` REPLACES the guest network:   #
+  #   the guest has NO interface (loopback only), the model API travels        #
+  #   guest 127.0.0.1:<litellmPort> -> AF_VSOCK -> a PER-VM host forwarder ->  #
+  #   127.0.0.1:<litellmPort>, and the host builds no bridge, no TAP, no       #
+  #   AGENT_MICROVM_* chain and no bridge-only socket. Everything below is     #
+  #   asserted from the EVALUATED config (or from the BUILT artefacts), and    #
+  #   every removal has a POSITIVE control on the `tap` reference host, so no  #
+  #   check can pass because the attribute it inspects does not exist.         #
+  # ---------------------------------------------------------------------- #
+  microvm-vsock-transport =
+    let
+      vsockPort = port; # the guest-visible AND the AF_VSOCK port (one number)
+
+      # The `vsock`-transport hosts under test.
+      bvHost = batchVsockHost;
+      bvGuest = capGuestOf bvHost;
+      bvNet = bvHost._module.args.agentNetwork;
+      ivHost = interactiveVsockHost;
+      ivGuest = capGuestOf ivHost;
+
+      # ... and the `tap` reference (the enabled f13 host), for the positive
+      # controls.
+      tapNet = self.nixosConfigurations.test-f13._module.args.agentNetwork;
+
+      forwarderUnit = slotName: "agent-litellm-vsock-${slotName}";
+      forwarderPath = slotName: "${microvmOpts.stateRoot}/${slotName}/notify.vsock_${vsockPort}";
+      vsockSocketsOf =
+        h:
+        lib.filter (n: lib.hasPrefix "agent-litellm-vsock-" n) (
+          builtins.attrNames h.config.systemd.sockets
+        );
+
+      bvSocket = bvHost.config.systemd.sockets.${forwarderUnit variantSlot.name};
+      bvService = bvHost.config.systemd.services.${forwarderUnit variantSlot.name};
+
+      # The guest-side bridge: ONE socket (the historical loopback endpoint) and
+      # a per-connection socat instance to AF_VSOCK CID 2.
+      bvGuestSocket = bvGuest.systemd.sockets.litellm-forwarder.socketConfig;
+      bvGuestBridge = bvGuest.systemd.services.litellm-forwarder;
+      bvGuestBridgeExec = toString bvGuestBridge.serviceConfig.ExecStart;
+
+      evalMarker = mkEvalCheck "microvm-vsock-transport-eval" [
+        # --- the transport is RESOLVED, once, from profile + capability -----
+        {
+          assertion = bvNet.transport == "vsock" && bvNet.transportCaps.vsockLitellm;
+          message = "a `vsock` + proxy-only host must resolve the `vsock` model transport, got ${bvNet.transport}";
+        }
+        {
+          assertion = tapNet.transport == "tap" && tapNet.transportCaps.guestInterface;
+          message = "positive control: the reference host (no `vsock` capability) must keep the `tap` transport, got ${tapNet.transport}";
+        }
+        {
+          # The narrow condition: `vsock` alone is NOT enough, the profile must
+          # be the closed `proxy-only` one. `offline` has no model API to carry.
+          assertion =
+            (capabilityHostWith [ "batch" "vsock" ] {
+              sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+              networkProfile = lib.mkForce "offline";
+            })._module.args.agentNetwork.transport == "tap";
+          message = "the `vsock` model transport must be scoped to `proxy-only` (an `offline` host has no model API to carry over it)";
+        }
+
+        # --- THE GUEST HAS NO NETWORK INTERFACE ----------------------------
+        {
+          assertion = bvGuest.microvm.interfaces == [ ];
+          message = "a vsock+proxy-only guest must declare NO microvm.interfaces, got ${
+            toString (map (i: i.id) bvGuest.microvm.interfaces)
+          }";
+        }
+        {
+          assertion = ivGuest.microvm.interfaces == [ ];
+          message = "an INTERACTIVE vsock+proxy-only guest must declare NO microvm.interfaces either (the plan's definition-of-done shape)";
+        }
+        {
+          assertion =
+            lib.length guest0Cfg.microvm.interfaces == 1
+            && (lib.head guest0Cfg.microvm.interfaces).type == "tap";
+          message = "positive control: the reference (tap) guest must still declare exactly one TAP interface";
+        }
+        {
+          assertion = !bvGuest.systemd.network.enable && !bvGuest.networking.useNetworkd;
+          message = "a vsock+proxy-only guest must run NO systemd-networkd (microvm.nix defaults it on, so it has to be turned off explicitly)";
+        }
+        {
+          assertion = bvGuest.systemd.network.networks == { };
+          message = "a vsock+proxy-only guest must declare no networkd .network unit (no static IP, no default route), got ${toString (builtins.attrNames bvGuest.systemd.network.networks)}";
+        }
+        {
+          assertion = !bvGuest.networking.dhcpcd.enable && !bvGuest.networking.useDHCP;
+          message = "a vsock+proxy-only guest must run no dhcpcd either (turning networkd off must not fall back to the scripted DHCP client)";
+        }
+        {
+          assertion =
+            bvGuest.networking.nameservers == [ ] && bvGuest.networking.firewall.allowedTCPPorts == [ ];
+          message = "a vsock+proxy-only guest must have no resolver and no open TCP port";
+        }
+        {
+          # Several guest units still `want` network-online.target
+          # unconditionally. That is only harmless because NOTHING in this guest
+          # PROVIDES it: with networkd and dhcpcd off there is no
+          # `*-wait-online` unit, so the target activates trivially instead of
+          # stalling the boot for the default 120 s. Pinned, because the day a
+          # unit starts providing it the guest would hang on every boot.
+          assertion =
+            !(lib.any (n: lib.hasSuffix "-wait-online" n) (builtins.attrNames bvGuest.systemd.services));
+          message = "a vsock+proxy-only guest must contain NO *-wait-online unit (the units that want network-online.target would otherwise stall its boot for 120 s), got ${
+            toString (
+              lib.filter (n: lib.hasSuffix "-wait-online" n) (builtins.attrNames bvGuest.systemd.services)
+            )
+          }";
+        }
+        {
+          assertion = lib.any (n: lib.hasSuffix "-wait-online" n) (
+            builtins.attrNames guest0Cfg.systemd.services
+          );
+          message = "positive control: the reference (tap) guest DOES have a *-wait-online unit, which is what makes the assertion above meaningful";
+        }
+        {
+          assertion =
+            guest0Cfg.systemd.network.enable
+            && guest0Cfg.systemd.network.networks ? "10-agent"
+            && (lib.head guest0Cfg.systemd.network.networks."10-agent".address) == "${refSlot.ip}/24";
+          message = "positive control: the reference (tap) guest must still get its static IPv4 through networkd";
+        }
+        {
+          # The VSOCK device IS there (it is the model path AND the control
+          # channel), keyed to the slot's deterministic CID.
+          assertion =
+            bvGuest.microvm.vsock.cid == variantSlot.cid && ivGuest.microvm.vsock.cid == variantSlot.cid;
+          message = "a vsock guest must keep its deterministic VSOCK CID (${toString variantSlot.cid})";
+        }
+
+        # --- THE GUEST ENDPOINT IS UNCHANGED (no agent reconfiguration) -----
+        {
+          assertion =
+            bvGuest.environment.variables.OPENAI_BASE_URL == "http://127.0.0.1:${vsockPort}/v1"
+            && bvGuest.environment.variables.ANTHROPIC_BASE_URL == "http://127.0.0.1:${vsockPort}"
+            && bvGuest.environment.variables.OPENAI_BASE_URL == guest0Cfg.environment.variables.OPENAI_BASE_URL;
+          message = "a vsock guest's model endpoint must stay the loopback address the host-provisioned agent configuration already uses, so nothing has to be reconfigured";
+        }
+        {
+          # ONE shape under both transports: `Accept = no`, so ONE long-running
+          # forwarder multiplexes every connection off the listening fd. A
+          # per-connection (`Accept = yes`) template would have capped concurrent
+          # model streams at systemd's default MaxConnections=64.
+          assertion = bvGuestSocket.ListenStream == "127.0.0.1:${vsockPort}" && !bvGuestSocket.Accept;
+          message = "the guest bridge must listen on the historical loopback endpoint with Accept=no (one long-running multiplexer, no per-connection cap), got ${toString bvGuestSocket.ListenStream}";
+        }
+        {
+          # ... which is only possible because socat takes the LISTENING fd
+          # systemd passes as fd 3 and forks per connection itself.
+          assertion = lib.hasInfix "ACCEPT-FD:3,fork" bvGuestBridgeExec;
+          message = "the guest bridge must accept off the socket-activated listening fd and fork per connection, got ${bvGuestBridgeExec}";
+        }
+        {
+          # NO INACTIVITY TIMEOUT. socat's `-T` is BIDIRECTIONAL: it tears a
+          # connection down mid-transfer after N idle seconds, which for a model
+          # API silently kills a long prefill, a cold LiteLLM or a slow tool-call
+          # turn. The tap path (systemd-socket-proxyd) has no such timeout, and
+          # the whole point of this unit is that the agent behaves identically on
+          # both transports. (`-t`, the half-close DRAIN timeout, is fine and is
+          # deliberately raised past socat's 0.5 s default.)
+          assertion = !(lib.hasInfix " -T" bvGuestBridgeExec) && lib.hasInfix " -t 120 " bvGuestBridgeExec;
+          message = "the guest bridge must carry NO socat -T inactivity timeout (it would kill in-flight model requests) and a generous -t half-close drain, got ${bvGuestBridgeExec}";
+        }
+        {
+          # No interface means no `*-wait-online` unit exists, so ordering
+          # against `network-online.target` would depend on a target that only
+          # ever activates trivially today and would BLOCK the guest's boot for
+          # 120 s the day anything provides it.
+          assertion =
+            !(lib.elem "network-online.target" bvGuestBridge.wants)
+            && !(lib.elem "network-online.target" bvGuestBridge.after);
+          message = "a vsock guest's forwarder must not want/order after network-online.target (there is no network stack to wait for)";
+        }
+        {
+          assertion =
+            lib.elem "network-online.target" guest0Cfg.systemd.services.litellm-forwarder.wants
+            && lib.elem "network-online.target" guest0Cfg.systemd.services.litellm-forwarder.after;
+          message = "positive control: the reference (tap) forwarder dials a bridge address and must still wait for network-online.target";
+        }
+        {
+          # DESTINATION-FIXED in the unit: CID 2 (the host) and the model port,
+          # baked in by Nix. The guest cannot ask for another CID or port, and
+          # there is no CONNECT protocol to abuse.
+          assertion = lib.hasInfix "VSOCK-CONNECT:2:${vsockPort}" bvGuestBridgeExec;
+          message = "the guest bridge must dial AF_VSOCK CID 2 port ${vsockPort} with a FIXED destination, got ${bvGuestBridgeExec}";
+        }
+        {
+          # ONE unit name, ONE forwarder: the socket-proxyd-to-the-gateway
+          # ExecStart is GONE (it would dial a gateway address that no longer
+          # exists) and there is no per-connection template either.
+          assertion =
+            !(lib.hasInfix "systemd-socket-proxyd" bvGuestBridgeExec)
+            && !(lib.hasInfix gateway bvGuestBridgeExec)
+            && !(bvGuest.systemd.services ? "litellm-forwarder@");
+          message = "a vsock guest's forwarder must not be the socket-proxyd-to-the-bridge one, and no per-connection template may exist, got ${bvGuestBridgeExec}";
+        }
+        {
+          assertion =
+            guest0Cfg.systemd.services ? "litellm-forwarder"
+            && !(guest0Cfg.systemd.services ? "litellm-forwarder@")
+            && !(guest0Cfg.systemd.sockets.litellm-forwarder.socketConfig.Accept)
+            &&
+              toString guest0Cfg.systemd.services.litellm-forwarder.serviceConfig.ExecStart
+              == "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd ${gateway}:${port}";
+          message = "positive control: the reference (tap) guest must keep exactly the socket-proxyd forwarder to the bridge gateway";
+        }
+
+        # --- THE HOST HAS NO BRIDGE, NO TAP AND NO FIREWALL CHAIN ----------
+        {
+          assertion = bvHost.config.networking.bridges == { };
+          message = "a vsock+proxy-only host must create NO bridge, got ${toString (builtins.attrNames bvHost.config.networking.bridges)}";
+        }
+        {
+          assertion = !(bvHost.config.networking.interfaces ? ${microvmOpts.bridgeName});
+          message = "a vsock+proxy-only host must not address the agent bridge";
+        }
+        {
+          assertion = !(lib.hasInfix "AGENT_MICROVM_INPUT" bvHost.config.networking.firewall.extraCommands);
+          message = "a vsock+proxy-only host must install NO AGENT_MICROVM_* firewall chain (there is no interface to filter)";
+        }
+        {
+          assertion = !(lib.hasInfix "AGENT_MICROVM" bvHost.config.networking.firewall.extraStopCommands);
+          message = "a vsock+proxy-only host must have no AGENT_MICROVM_* teardown either";
+        }
+        {
+          assertion = lib.hasInfix "AGENT_MICROVM_INPUT -s ${microvmOpts.subnet} -d ${gateway} -p tcp --dport ${port} -j ACCEPT" enabledCfg.networking.firewall.extraCommands;
+          message = "positive control: the reference (tap) host must still ACCEPT the bridge LiteLLM endpoint in its own chain";
+        }
+        {
+          assertion =
+            !(bvHost.config.systemd.sockets ? "agent-litellm-proxy")
+            && !(bvHost.config.systemd.services ? "agent-litellm-proxy");
+          message = "a vsock+proxy-only host must not create the bridge-only LiteLLM socket/service";
+        }
+        {
+          assertion =
+            !(lib.any (n: lib.hasPrefix "agent-microvm-attach-" n) (
+              builtins.attrNames bvHost.config.systemd.services
+            ));
+          message = "a vsock+proxy-only host must not create a TAP attach/L2-isolate unit (there is no TAP)";
+        }
+        {
+          assertion =
+            !(lib.any (
+              u: lib.hasInfix microvmOpts.bridgeName u
+            ) bvHost.config.networking.networkmanager.unmanaged);
+          message = "a vsock+proxy-only host must not declare bridge/TAP interfaces unmanaged in NetworkManager (they do not exist)";
+        }
+        {
+          assertion =
+            enabledCfg.systemd.sockets ? "agent-litellm-proxy"
+            && lib.any (n: lib.hasPrefix "agent-microvm-attach-" n) (
+              builtins.attrNames enabledCfg.systemd.services
+            )
+            && lib.any (
+              u: lib.hasInfix microvmOpts.bridgeName u
+            ) enabledCfg.networking.networkmanager.unmanaged;
+          message = "positive control: the reference (tap) host must keep the bridge socket, the TAP attach units and the NetworkManager exclusions";
+        }
+
+        # --- ONE HOST FORWARDER PER VM, DESTINATION-FIXED ------------------
+        {
+          assertion = vsockSocketsOf bvHost == [ (forwarderUnit variantSlot.name) ];
+          message = "a vsock+proxy-only host must declare exactly one AF_VSOCK forwarder socket per slot, got ${toString (vsockSocketsOf bvHost)}";
+        }
+        {
+          assertion = bvSocket.socketConfig.ListenStream == forwarderPath variantSlot.name;
+          message = "the per-VM forwarder must listen on cloud-hypervisor's per-VM VSOCK socket ${forwarderPath variantSlot.name}, got ${toString bvSocket.socketConfig.ListenStream}";
+        }
+        {
+          # Reachable by the VMM (`microvm:kvm`) and root only \u2014 never by an
+          # unprivileged host user, and never over the network.
+          assertion =
+            bvSocket.socketConfig.SocketUser == "root"
+            && bvSocket.socketConfig.SocketGroup == "kvm"
+            && bvSocket.socketConfig.SocketMode == "0660";
+          message = "the per-VM forwarder socket must be root:kvm 0660 — the VMM's group, so only root and the VMM (plus any host user already in `kvm`) can connect";
+        }
+        {
+          assertion =
+            toString bvService.serviceConfig.ExecStart
+            == "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd 127.0.0.1:${port}";
+          message = "the per-VM forwarder must be DESTINATION-FIXED to the loopback LiteLLM proxy, got ${toString bvService.serviceConfig.ExecStart}";
+        }
+        {
+          # HOST-TCP-ONLY, enforced on the forwarder process itself.
+          assertion =
+            bvService.serviceConfig.IPAddressAllow == "localhost"
+            && bvService.serviceConfig.IPAddressDeny == "any"
+            && bvService.serviceConfig.DynamicUser
+            && bvService.serviceConfig.ProtectSystem == "strict";
+          message = "the per-VM forwarder must be confined to the host loopback (IPAddressAllow=localhost + IPAddressDeny=any) and unprivileged";
+        }
+        {
+          # ONE LISTENER PER SLOT, on DISTINCT paths: slot A's guest cannot
+          # address slot B's forwarder at all.
+          assertion =
+            let
+              names = map (s: forwarderUnit s.name) twoSlotVsockSlots;
+              paths = map (
+                s: twoSlotVsockHost.config.systemd.sockets.${forwarderUnit s.name}.socketConfig.ListenStream
+              ) twoSlotVsockSlots;
+            in
+            lib.length twoSlotVsockSlots == 2
+            && lib.sort (a: b: a < b) (vsockSocketsOf twoSlotVsockHost) == lib.sort (a: b: a < b) names
+            && lib.length (lib.unique paths) == 2;
+          message = "a two-slot vsock host must declare one forwarder per slot, each on its OWN socket path";
+        }
+        {
+          assertion = vsockSocketsOf self.nixosConfigurations.test-f13 == [ ];
+          message = "positive control: the reference (tap) host must declare no AF_VSOCK forwarder at all";
+        }
+
+        # --- THE CONTROL CHANNEL FOLLOWS THE TRANSPORT ---------------------
+        {
+          # An interactive guest under the vsock transport has `enableSsh = true`
+          # but NO interface, so the TCP sshd could never be reached: it is
+          # masked and the VSOCK `sshd-vsock@` is the ONE control channel.
+          assertion =
+            ivHost.config.myconfig.ai.microvm.enableSsh
+            && !ivHost._module.args.agentNetwork.tapSshUsable
+            && !(ivGuest.systemd.services.sshd.enable or true)
+            && ivGuest.systemd.sockets ? "sshd-vsock"
+            && !(ivGuest.services.openssh.openFirewall or true);
+          message = "an interactive vsock+proxy-only guest must mask its unreachable TCP sshd, keep the VSOCK sshd and close the firewall for 22";
+        }
+        {
+          assertion =
+            ivGuest.services.openssh.hostKeys == [
+              {
+                type = "ed25519";
+                path = (capSessionOf ivHost).guestHostkeysDir + "/ssh_host_ed25519_key";
+              }
+            ]
+            &&
+              (ivGuest.systemd.sockets.sshd-vsock.unitConfig.RequiresMountsFor or null) == (capSessionOf ivHost)
+              .guestHostkeysDir;
+          message = "an interactive vsock guest's VSOCK sshd must use the per-slot host key and wait for its read-only mount";
+        }
+        {
+          # ... and the interactive half is otherwise intact.
+          assertion = lib.elem "agent-run" (capGuestPkgNames ivHost);
+          message = "an interactive vsock guest must still carry the `agent-run` entry point";
+        }
+        {
+          assertion =
+            enabledCfg.myconfig.ai.microvm.enableSsh
+            && tapNet.tapSshUsable
+            && (guest0Cfg.systemd.services.sshd.enable or true)
+            && guest0Cfg.services.openssh.openFirewall;
+          message = "positive control: the reference (tap) guest must keep its TCP sshd and its firewall opening";
+        }
+
+        # --- NEGATIVE eval tests, pinned to the SPECIFIC assertion ---------
+        {
+          assertion = baselineClean;
+          message = "positive control: the unmodified reference host must have no failed assertion";
+        }
+        {
+          # microvm.nix reserves AF_VSOCK port 8888 (`notify.vsock_8888`) for the
+          # guest's systemd notify socket, so the model forwarder must not claim
+          # it \u2014 the two would fight over the same Unix socket path.
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.microvm.litellmPort = lib.mkForce 8888;
+              services.litellm.port = lib.mkForce 8888;
+            }
+          ] "must not be 8888";
+          message = "the VSOCK model transport must reject litellmPort = 8888 (microvm.nix's reserved notify port)";
+        }
+        {
+          # The same litellm-backend guard as on a TAP host, pinned in the vsock
+          # SHAPE: the per-VM forwarder's only destination is the loopback proxy,
+          # so a host without it builds a model path that ends nowhere.
+          assertion = rejectsWith [
+            {
+              myconfig.ai.microvm.capabilities = lib.mkForce [
+                "batch"
+                "vsock"
+              ];
+              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              services.litellm.enable = lib.mkForce false;
+            }
+          ] "lets guests reach the model API";
+          message = "a vsock host without the loopback LiteLLM backend must be rejected (the per-VM forwarder would forward into nothing)";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-vsock-transport"
+      {
+        inherit evalMarker;
+        # BUILT: the INTERACTIVE vsock guest is a shape no other check builds
+        # (masked TCP sshd + zero interfaces + the socat bridge unit), and the
+        # runner is where "no TAP" becomes observable as a missing script.
+        interactiveVsockGuest = ivGuest.system.build.toplevel;
+        interactiveVsockRunner = ivGuest.microvm.declaredRunner;
+        batchVsockGuest = bvGuest.system.build.toplevel;
+        vsockLauncher = "${findPkg ivHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        tapLauncher = "${launcherPkg}/bin/agent-microvm";
+        # The GENERATED host-key provisioner, taken from the unit that runs it
+        # (it is not a systemPackages entry), so this greps exactly the script
+        # the host would execute.
+        vsockHostKeys = toString ivHost.config.systemd.services.agent-microvm-hostkeys.serviceConfig.ExecStart;
+        tapHostKeys = toString enabledCfg.systemd.services.agent-microvm-hostkeys.serviceConfig.ExecStart;
+        slotIp = variantSlot.ip;
+        refIp = refSlot.ip;
+      }
+      ''
+        # --- the RUNNER of a vsock guest has no TAP plumbing ---------------
+        # microvm.nix generates `bin/tap-up` / `bin/tap-down` only for a guest
+        # that declares a `type = "tap"` interface, so their ABSENCE is the
+        # runner-level proof that no TAP device is ever created for this slot.
+        for f in tap-up tap-down; do
+          if [ -e "$interactiveVsockRunner/bin/$f" ]; then
+            echo "the vsock guest's runner still ships bin/$f (a TAP device would be created)" >&2; exit 1
+          fi
+        done
+        grep -q -- '--vsock' "$interactiveVsockRunner/bin/microvm-run" \
+          || { echo "the vsock guest's runner does not pass --vsock to cloud-hypervisor" >&2; exit 1; }
+
+        # --- the LAUNCHER follows the transport ----------------------------
+        grep -qF -- "readonly NETWORK_TRANSPORT=vsock" "$vsockLauncher" \
+          || { echo "the vsock launcher does not render NETWORK_TRANSPORT=vsock" >&2; exit 1; }
+        grep -qF -- "readonly GUEST_INTERFACE=0" "$vsockLauncher" \
+          || { echo "the vsock launcher does not record that the guest has no interface" >&2; exit 1; }
+        # `enableSsh = true` on that host, but there is no interface to reach the
+        # TCP sshd on, so the launcher must take the VSOCK control channel.
+        grep -qF -- "readonly SSH_ENABLED=0" "$vsockLauncher" \
+          || { echo "the vsock launcher still claims a usable TCP ssh channel" >&2; exit 1; }
+        grep -qF -- "readonly VSOCK_ENABLED=1" "$vsockLauncher" \
+          || { echo "the vsock launcher does not render VSOCK_ENABLED=1" >&2; exit 1; }
+        grep -qF -- 'network-transport: %s' "$vsockLauncher" \
+          || { echo "the launcher does not report the transport machine-readably" >&2; exit 1; }
+        # `doctor` checks the components that EXIST and says so about the ones
+        # that deliberately do not.
+        grep -qF -- 'agent-litellm-vsock-$vs.socket is active' "$vsockLauncher" \
+          || { echo "the vsock launcher's doctor does not check the per-VM forwarders" >&2; exit 1; }
+        for needle in 'AGENT_MICROVM_INPUT chain is installed' 'bridge interface $BRIDGE exists' \
+                      'agent-litellm-proxy.socket is active'; do
+          if grep -qF -- "$needle" "$vsockLauncher"; then
+            echo "the vsock launcher's doctor still checks '$needle', which this host does not build" >&2; exit 1
+          fi
+        done
+        # POSITIVE control: the tap launcher keeps exactly those three checks and
+        # has no per-VM forwarder section.
+        grep -qF -- "readonly NETWORK_TRANSPORT=tap" "$tapLauncher" \
+          || { echo "the tap launcher does not render NETWORK_TRANSPORT=tap" >&2; exit 1; }
+        grep -qF -- "readonly SSH_ENABLED=1" "$tapLauncher" \
+          || { echo "the tap launcher lost its TCP ssh channel" >&2; exit 1; }
+        for needle in 'AGENT_MICROVM_INPUT chain is installed' 'bridge interface $BRIDGE exists' \
+                      'agent-litellm-proxy.socket is active'; do
+          grep -qF -- "$needle" "$tapLauncher" \
+            || { echo "the tap launcher's doctor lost '$needle'" >&2; exit 1; }
+        done
+        # (the `NETWORK_TRANSPORT` comment block MENTIONS the vsock unit name on
+        # every host, so this must pin the doctor CHECK, not the mere name.)
+        if grep -qF -- 'agent-litellm-vsock-$vs.socket is active' "$tapLauncher"; then
+          echo "the tap launcher's doctor checks a per-VM VSOCK forwarder it does not have" >&2; exit 1
+        fi
+
+        # --- known_hosts follows the transport ----------------------------
+        # A vsock guest has no IPv4 to pin a key under; the vsock-mux address is
+        # the WHOLE database there. Keying it to an address nothing listens on
+        # would be misleading dead data.
+        grep -qF -- 'vsock-mux/' "$vsockHostKeys" \
+          || { echo "the vsock host-key generator writes no vsock-mux known_hosts entry" >&2; exit 1; }
+        if grep -qF -- "$slotIp" "$vsockHostKeys"; then
+          echo "the vsock host-key generator still pins the key to a guest IPv4 that does not exist" >&2; exit 1
+        fi
+        grep -qF -- "$refIp" "$tapHostKeys" \
+          || { echo "positive control: the tap host-key generator must pin the key to the slot IPv4" >&2; exit 1; }
+
+        {
+          echo "microvm-vsock-transport:"
+          echo "  interactive vsock guest : $interactiveVsockGuest"
+          echo "  interactive vsock runner: $interactiveVsockRunner"
+          echo "  batch+vsock guest       : $batchVsockGuest"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # The launcher is RENDERED from Nix fragments spliced into one indented    #
+  # string (../modules/myconfig.ai/myconfig.ai.microvm/launcher.nix          #
+  # `mkFragment`/`indentFragment`). The indent argument is the column in the  #
+  # GENERATED script, which is NOT the column the `${...}` has in the Nix     #
+  # file (Nix strips the string's common indentation first), so passing the   #
+  # wrong one silently over-indents every line after the first and leaves     #
+  # whitespace-only lines behind. That is invisible to shellcheck and to      #
+  # every functional check, so it is pinned HERE, on the BUILT script of      #
+  # BOTH transports: no line may end in whitespace, and the blocks that come  #
+  # from fragments must sit at the same column as their neighbours.           #
+  # ---------------------------------------------------------------------- #
+  microvm-launcher-rendering =
+    pkgs.runCommand "microvm-launcher-rendering"
+      {
+        tapLauncher = "${launcherPkg}/bin/agent-microvm";
+        vsockLauncher = "${findPkg interactiveVsockHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+        batchLauncher = "${findPkg batchOnlyHost.config.environment.systemPackages "agent-microvm"}/bin/agent-microvm";
+      }
+      ''
+        for l in "$tapLauncher" "$vsockLauncher" "$batchLauncher"; do
+          if grep -nP '[ \t]+$' "$l"; then
+            echo "$l: the generated launcher has whitespace-only/trailing-whitespace lines" >&2
+            echo "(a fragment was spliced with the wrong indent: it must be the column in the" >&2
+            echo " GENERATED script, i.e. topIndent/bodyIndent, not the column in launcher.nix)" >&2
+            exit 1
+          fi
+        done
+
+        # A top-level `readonly` from a fragment must sit at column 0 exactly
+        # like the hand-written ones around it.
+        grep -qx -- 'readonly BRIDGE=agentbr0' "$tapLauncher" \
+          || { echo "the tap launcher's BRIDGE constant is not a column-0 statement" >&2; exit 1; }
+        grep -qx -- "readonly SELECTED_CAPABILITIES='interactive batch'" "$tapLauncher" \
+          || { echo "the tap launcher's capability set is not a column-0 statement" >&2; exit 1; }
+        # ... and a fragment inside a function body at column 4.
+        grep -qx -- '    section_hdr "private bridge + gateway address"' "$tapLauncher" \
+          || { echo "the tap launcher's doctor section is not a column-4 statement" >&2; exit 1; }
+        grep -qx -- '    section_hdr "per-VM AF_VSOCK model forwarder (the vsock transport)"' "$vsockLauncher" \
+          || { echo "the vsock launcher's doctor section is not a column-4 statement" >&2; exit 1; }
+        grep -qx -- '    require_capability run interactive' "$batchLauncher" \
+          || { echo "the batch-only launcher's capability guard is not a column-4 statement" >&2; exit 1; }
+
+        {
+          echo "microvm-launcher-rendering: no trailing whitespace, fragments at the right column"
+          for l in "$tapLauncher" "$vsockLauncher" "$batchLauncher"; do echo "  $l"; done
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
   # (c) PURE-EVAL slot pool: unique + well-formed IPs/MACs, contiguous      #
   #     names, across a range of slot counts. Encodes §37 duplicate         #
   #     detection as an executable test against the real slots.nix.         #
@@ -571,7 +3311,7 @@ in
   #     invalid config (inspected via config.assertions, see helper above).  #
   #     This locks down the OTHER half of §37 (rejecting                     #
   #     bad input) — including the module's own IP/MAC uniqueness guards     #
-  #     (default.nix:258/262) and the slotCount bound / enableSsh-key /      #
+  #     and the pool-bound / class-name / enableSsh-key /                   #
   #     insecure-network-acknowledgement assertions. Without these the       #
   #     guards would be dead code from the suite's perspective.              #
   # ---------------------------------------------------------------------- #
@@ -648,41 +3388,14 @@ in
       message = "a litellm-capable profile with services.litellm.enable=false must be rejected at eval";
     }
     {
-      # Setting BOTH spellings would silently drop one of them.
-      assertion = rejectsWith [
-        {
-          myconfig.ai.microvm.resourceClasses = lib.mkForce {
-            normal.count = 1;
-            normal.vcpu = 2;
-            normal.memoryMiB = 1024;
-          };
-          myconfig.ai.microvm.slotCount = lib.mkForce 3;
-        }
-      ] "ambiguous slot configuration";
-      message = "resourceClasses together with the deprecated slotCount must be rejected";
-    }
-    {
       assertion = rejectsWith [
         {
           myconfig.ai.microvm.enableSsh = lib.mkForce true;
           myconfig.ai.microvm.sshPublicKeyFile = lib.mkForce null;
         }
-      ] "enableSsh requires an explicit sshPublicKeyFile";
+      ] "an SSH control channel";
       message = "enableSsh without sshPublicKeyFile must be rejected";
     }
-    {
-      # On a host whose profile is genuinely unset, the deprecated boolean
-      # translates to the `internet` profile — which is insecure and therefore
-      # still needs the explicit acknowledgement.
-      assertion =
-        let
-          cfg = unsetProfileHost [ { myconfig.ai.microvm.allowPublicInternet = true; } ];
-          msgs = map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
-        in
-        builtins.any (m: lib.hasInfix "INSECURE profile" m) msgs;
-      message = "allowPublicInternet (-> internet profile) without acknowledgeInsecureNetwork must be rejected";
-    }
-    # --- ticket 3 C: profile model + legacy-boolean migration -------------
     {
       assertion = rejectsWith [
         {
@@ -711,180 +3424,7 @@ in
       ] "requires\n`packageProxyPort`";
       message = "networkProfile = package-access without packageProxyPort must be rejected";
     }
-    {
-      # Ambiguity must never be resolved silently in either direction.
-      assertion = rejectsWith [
-        {
-          myconfig.ai.microvm.allowPublicInternet = lib.mkForce true;
-          myconfig.ai.microvm.networkProfile = "proxy-only";
-          myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
-        }
-      ] "ambiguous network configuration";
-      message = "allowPublicInternet together with an explicit, different networkProfile must be rejected";
-    }
-    {
-      assertion = rejectsWith [
-        { myconfig.ai.microvm.allowInterVmTraffic = lib.mkForce true; }
-      ] "`allowInterVmTraffic` has been REMOVED";
-      message = "allowInterVmTraffic = true must be rejected (guest isolation is unconditional)";
-    }
-    {
-      assertion = rejectsWith [
-        { myconfig.ai.microvm.allowPrivateNetworks = lib.mkForce true; }
-      ] "`allowPrivateNetworks` has been REMOVED";
-      message = "allowPrivateNetworks = true must be rejected (no profile grants private-range access)";
-    }
-    {
-      # A host that still defines a deprecated boolean must be WARNED, not
-      # silently migrated.
-      assertion = builtins.any (
-        w: lib.hasInfix "network booleans" w && lib.hasInfix "deprecated" w
-      ) (warningsOf [ { myconfig.ai.microvm.allowPrivateNetworks = false; } ]);
-      message = "defining a deprecated network boolean must emit a deprecation warning";
-    }
-    {
-      # ... and a translated boolean must say so explicitly (again on a host
-      # whose profile is genuinely unset).
-      assertion =
-        let
-          cfg = unsetProfileHost [
-            {
-              myconfig.ai.microvm.allowPublicInternet = true;
-              myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
-            }
-          ];
-        in
-        builtins.any (w: lib.hasInfix "translated the deprecated" w) cfg.warnings;
-      message = "translating allowPublicInternet -> networkProfile = internet must warn";
-    }
   ];
-
-  # ---------------------------------------------------------------------- #
-  # (g) GUEST SHARES: prove the guest declares EXACTLY TWO virtiofs shares  #
-  #     — the WRITABLE `/workspace` (host `source` == the launcher's         #
-  #     bind-mount target `${stateRoot}/<slot>/workspace`) and the           #
-  #     READ-ONLY per-slot SSH host-key share (ticket 3 B). This locks down  #
-  #     plan §10/§11 crit. 12 (the workspace share can never silently       #
-  #     vanish, be renamed, be made read-only or be repointed) AND the       #
-  #     ticket-3 amendment: the hostkey share must stay read-only, per-slot  #
-  #     and nothing else may be shared (no /nix, /home, host sockets).       #
-  # ---------------------------------------------------------------------- #
-  microvm-eval-workspace-share =
-    let
-      shares = guest0Cfg.microvm.shares;
-      virtiofsShares = builtins.filter (s: s.proto == "virtiofs") shares;
-      wsShares = builtins.filter (s: s.mountPoint == "/workspace") shares;
-      ws = if wsShares == [ ] then null else builtins.head wsShares;
-      expectedSource = "${microvmOpts.stateRoot}/${refSlot.name}/workspace";
-      hkShares = builtins.filter (s: s.mountPoint == hostKeys.guestMountPoint) shares;
-      hk = if hkShares == [ ] then null else builtins.head hkShares;
-      expectedHkSource = hostKeys.slotDir refSlot.name;
-      jobShares = builtins.filter (s: s.mountPoint == jobs.guestMountPoint) shares;
-      jobShare = if jobShares == [ ] then null else builtins.head jobShares;
-      expectedJobSource = jobs.slotDir refSlot.name;
-      stShares = builtins.filter (s: s.mountPoint == agentStatePaths.guestMountPoint) shares;
-      stShare = if stShares == [ ] then null else builtins.head stShares;
-      expectedStSource = agentStatePaths.slotDir refSlot.name;
-    in
-    mkEvalCheck "microvm-eval-workspace-share" [
-      {
-        # Exactly four shares: writable workspace, read-only hostkey, the
-        # per-slot batch job directory and the per-slot agent-state directory.
-        assertion = builtins.length shares == 4;
-        message = "guest ${refSlot.name} must declare exactly FOUR shares (workspace + hostkey + job + agent-state); got ${toString (builtins.length shares)}: ${
-          toString (map (s: s.mountPoint or "?") shares)
-        }";
-      }
-      {
-        assertion =
-          stShare != null && stShare.proto == "virtiofs" && stShare.tag == agentStatePaths.guestTag;
-        message = "guest ${refSlot.name} must declare a virtiofs share tagged '${agentStatePaths.guestTag}' at ${agentStatePaths.guestMountPoint}";
-      }
-      {
-        assertion = stShare != null && stShare.source == expectedStSource;
-        message = "agent-state share source is '${
-          toString (stShare.source or "<none>")
-        }', expected the PER-SLOT dir '${expectedStSource}' (the launcher binds the per-TASK dir onto it)";
-      }
-      {
-        assertion = jobShare != null && jobShare.proto == "virtiofs" && jobShare.tag == jobs.guestTag;
-        message = "guest ${refSlot.name} must declare a virtiofs share tagged '${jobs.guestTag}' at ${jobs.guestMountPoint}";
-      }
-      {
-        assertion = jobShare != null && jobShare.source == expectedJobSource;
-        message = "job share source is '${
-          toString (jobShare.source or "<none>")
-        }', expected the PER-SLOT dir '${expectedJobSource}' (must match job.nix)";
-      }
-      {
-        # Read-WRITE on purpose (the guest controller writes
-        # controller/result.json and the worker its logs). WHO may write WHAT
-        # inside the share is enforced by ownership/modes, not by this flag:
-        # input/ and controller/ are root-owned (controller/ additionally 0700),
-        # only worker/ belongs to the unprivileged guest agent.
-        assertion = jobShare != null && (jobShare.readOnly or false) == false;
-        message = "job share must be read-write so the guest controller can write its result";
-      }
-      {
-        assertion = hk != null && hk.proto == "virtiofs" && hk.tag == hostKeys.guestTag;
-        message = "guest ${refSlot.name} must declare a virtiofs share tagged '${hostKeys.guestTag}' at ${hostKeys.guestMountPoint}";
-      }
-      {
-        assertion = hk != null && hk.source == expectedHkSource;
-        message = "hostkey share source is '${
-          toString (hk.source or "<none>")
-        }', expected the PER-SLOT dir '${expectedHkSource}' (must match hostkeys.nix)";
-      }
-      {
-        # Read-only is load-bearing: the guest must not be able to replace its
-        # own host identity, and only guest root may read the 0400 private key.
-        assertion = hk != null && (hk.readOnly or false) == true;
-        message = "hostkey share MUST be readOnly (the guest must not be able to rewrite its host identity)";
-      }
-      {
-        assertion = ws != null;
-        message = "guest ${refSlot.name} has no share mounted at /workspace (mountPoints: ${
-          toString (map (s: s.mountPoint or "?") shares)
-        })";
-      }
-      {
-        assertion = ws != null && ws.proto == "virtiofs";
-        message = "/workspace share must be proto=virtiofs, got '${toString (ws.proto or "<none>")}'";
-      }
-      {
-        assertion = ws != null && ws.tag == "workspace";
-        message = "/workspace share must have tag=workspace, got '${toString (ws.tag or "<none>")}'";
-      }
-      {
-        assertion = ws != null && ws.source == expectedSource;
-        message = "/workspace share source is '${
-          toString (ws.source or "<none>")
-        }', expected '${expectedSource}' (must match launcher.nix mount_point())";
-      }
-      {
-        # Must be read-write so agent-run's `test -w /workspace` can pass.
-        assertion = ws != null && (ws.readOnly or false) == false;
-        message = "/workspace share must be read-write (readOnly=false)";
-      }
-      {
-        # Defence in depth: the ONLY virtiofs shares are the workspace and the
-        # hostkey dir — no /nix, /home or host-socket share leaked in.
-        assertion = builtins.length virtiofsShares == 4;
-        message = "expected exactly four virtiofs shares (workspace + hostkey + job + agent-state); got ${toString (builtins.length virtiofsShares)}";
-      }
-      {
-        assertion = builtins.all (
-          s:
-          builtins.elem s.mountPoint [
-            "/workspace"
-            hostKeys.guestMountPoint
-            jobs.guestMountPoint
-            agentStatePaths.guestMountPoint
-          ]
-        ) shares;
-        message = "unexpected share mountPoint(s): ${toString (map (s: s.mountPoint or "?") shares)}";
-      }
-    ];
 
   # ---------------------------------------------------------------------- #
   # (h) AGENT REGISTRY (ticket 1): prove that agents.nix really is the ONE  #
@@ -1102,9 +3642,27 @@ in
           || { echo "workspace removal is not scoped to the clone" >&2; exit 1; }
         grep -q "refusing a repository that is itself an agent workspace" "$launcherBin" \
           || { echo "missing workspace-root repository guard" >&2; exit 1; }
-        # 6: standalone clones only.
+        # 6: standalone clones only. The fast path copies the object store
+        # (`--local --no-hardlinks`) and the fallback uses the ordinary git
+        # transport (`--no-local`); NEITHER may borrow objects, so `--shared` /
+        # `--reference` must not appear at all and the absence of an
+        # `objects/info/alternates` file is verified at runtime.
+        grep -q "clone --local --no-hardlinks" "$launcherBin" \
+          || { echo "clones are not created with --local --no-hardlinks" >&2; exit 1; }
         grep -q "clone --no-local" "$launcherBin" \
-          || { echo "clones are not created with --no-local" >&2; exit 1; }
+          || { echo "missing the --no-local clone fallback" >&2; exit 1; }
+        grep -q "objects/info/alternates" "$launcherBin" \
+          || { echo "clones are not verified to be free of object alternates" >&2; exit 1; }
+        # Match only actual `git … clone …` COMMANDS (no '#' before the `git`),
+        # so the explanatory comments naming these flags do not trip the check.
+        if grep -nE '^[^#]*git[^#]*clone[^#]*(--shared|--reference)' "$launcherBin"; then
+          echo "clones must never borrow objects (--shared / --reference)" >&2
+          exit 1
+        fi
+        # Readiness must not burn a fixed multi-second sleep once the guest is
+        # already reachable (lightweight plan phase 7).
+        grep -q "READY_POLL_MIN_MS" "$launcherBin" \
+          || { echo "guest-readiness polling is not exponential-backoff bounded" >&2; exit 1; }
         # 7: the host launcher must never EVALUATE anything the repository
         # provides. Guard against the obvious ways that could creep in.
         for forbidden in "nix-build" "nix build" "nix-shell" "direnv" "npm " "yarn " \
@@ -1460,25 +4018,40 @@ in
           }
         ]
         # Every slot's job dir (and its input/controller/worker subdirs) must be
-        # pre-created, otherwise virtiofsd refuses to start for that slot.
-        ++ lib.concatMap (slot: [
-          {
-            assertion = builtins.elem "d ${jobs.slotDir slot.name} 0755 root root - -" tmpfiles;
-            message = "missing tmpfiles rule for the job dir of ${slot.name}";
-          }
-          {
-            assertion = builtins.elem "d ${jobs.hostInputDir slot.name} ${jobs.inputDirMode} root root - -" tmpfiles;
-            message = "missing tmpfiles rule for the immutable input dir of ${slot.name}";
-          }
-          {
-            assertion = builtins.elem "d ${jobs.hostControllerDir slot.name} ${jobs.controllerDirMode} root root - -" tmpfiles;
-            message = "missing tmpfiles rule for the controller-only dir of ${slot.name}";
-          }
-          {
-            assertion = builtins.elem "d ${jobs.hostWorkerDir slot.name} ${jobs.workerDirMode} ${toString jobs.workerUid} ${toString jobs.workerGid} - -" tmpfiles;
-            message = "missing tmpfiles rule for the worker-writable dir of ${slot.name}";
-          }
-        ]) enabledSlots
+        # pre-created, otherwise virtiofsd refuses to start for that slot. They
+        # are part of the ONE writable session share, so ./session.nix creates
+        # them from its layout table — which renders the owner NUMERICALLY (it
+        # derives the ids from `guestAgentUid`/`guestAgentGid`); tmpfiles accepts
+        # either spelling, so `hasDirRule` does too.
+        ++ lib.concatMap (
+          slot:
+          let
+            hasDirRule =
+              path: mode: user: group:
+              builtins.any (r: r == "d ${path} ${mode} ${user} ${group} - -") tmpfiles;
+            hasRootDirRule = path: mode: hasDirRule path mode "root" "root" || hasDirRule path mode "0" "0";
+          in
+          [
+            {
+              assertion = hasRootDirRule (jobs.slotDir slot.name) "0755";
+              message = "missing tmpfiles rule for the job dir of ${slot.name}";
+            }
+            {
+              assertion = hasRootDirRule (jobs.hostInputDir slot.name) jobs.inputDirMode;
+              message = "missing tmpfiles rule for the immutable input dir of ${slot.name}";
+            }
+            {
+              assertion = hasRootDirRule (jobs.hostControllerDir slot.name) jobs.controllerDirMode;
+              message = "missing tmpfiles rule for the controller-only dir of ${slot.name}";
+            }
+            {
+              assertion = hasDirRule (jobs.hostWorkerDir slot.name) jobs.workerDirMode (toString jobs.workerUid) (
+                toString jobs.workerGid
+              );
+              message = "missing tmpfiles rule for the worker-writable dir of ${slot.name}";
+            }
+          ]
+        ) enabledSlots
       );
     in
     pkgs.runCommand "microvm-batch-jobs"
@@ -1592,9 +4165,11 @@ in
         {
           # 0700 root:root is what makes the channel unwritable AND unreadable
           # for the worker (the token in the spec must not leak either).
+          # (The rule is rendered by ./session.nix from its layout table, which
+          # spells the owner numerically; tmpfiles accepts either form.)
           assertion =
             jobs.controllerDirMode == "0700"
-            && builtins.elem "d ${jobs.hostControllerDir refSlot.name} 0700 root root - -" tmpfiles;
+            && builtins.elem "d ${jobs.hostControllerDir refSlot.name} 0700 0 0 - -" tmpfiles;
           message = "the controller directory must be created root:root 0700";
         }
         {
@@ -1656,7 +4231,7 @@ in
           message = "the worker's log files must live in the ROOT-owned worker-logs directory, not inside the worker-writable one";
         }
         {
-          assertion = builtins.elem "d ${jobs.hostWorkerLogsDir refSlot.name} ${jobs.workerLogsDirMode} root root - -" tmpfiles;
+          assertion = builtins.elem "d ${jobs.hostWorkerLogsDir refSlot.name} ${jobs.workerLogsDirMode} 0 0 - -" tmpfiles;
           message = "the worker log directory must be pre-created root:root ${jobs.workerLogsDirMode}";
         }
         {
@@ -1717,8 +4292,15 @@ in
           message = "the batch schema version must have been bumped for the controller/worker split";
         }
         {
-          assertion = builtins.elem "R ${jobs.slotDir refSlot.name}/out - - - - -" tmpfiles;
-          message = "the legacy guest-writable out/ directory must be removed by tmpfiles";
+          # The v1 guest-writable `out/` result channel never existed inside the
+          # session tree (it predates it), and the tree is REMOVED and recreated
+          # around every launch, so there is nothing to clean up any more. What
+          # must stay true is that no guest-writable directory of the current
+          # layout is a result path.
+          assertion =
+            !(builtins.elem "out" (builtins.attrValues session.subdirs))
+            && !builtins.any (d: lib.hasPrefix "${d}/" (jobs.hostResult refSlot.name)) workerWritable;
+          message = "the authoritative result must not live in a guest-writable directory of the session tree";
         }
         {
           # The old single-identity unit must be gone: it was the forgery hole.
@@ -1901,6 +4483,10 @@ in
         # world-readable /proc/<pid>/cmdline.
         JQ_TARGET = "${pkgs.jq}/bin/jq";
         SPEC_VERSION = toString jobs.specVersion;
+        # The guest-side mount point of the job data (the ONE writable session
+        # share), from job.nix -> session.nix rather than a literal in the
+        # harness.
+        GUEST_JOB_DIR = jobs.guestMountPoint;
         INPUT_SUBDIR = jobs.inputSubdir;
         CONTROLLER_SUBDIR = jobs.controllerSubdir;
         WORKER_SUBDIR = jobs.workerSubdir;
@@ -1960,12 +4546,21 @@ in
           pkgs.jq
           pkgs.git
           pkgs.coreutils
+          # The TAMPER scenarios (a corrupt / swapped private key) both PRODUCE
+          # key material and JUDGE it with `ssh-keygen -y`, outside the sandbox.
+          pkgs.openssh
         ];
         harness = ./microvm-batch-launcher-submit.sh;
         LAUNCHER = "${hostLauncher}/bin/agent-microvm";
         BWRAP = lib.getExe pkgs.bubblewrap;
         FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
         BASH_BIN = "${pkgs.bash}/bin/bash";
+        # The REAL per-slot host-identity provisioner (hostkeys.nix). The
+        # harness's `systemctl` stub runs THIS on
+        # `start|restart agent-microvm-hostkeys.service`, so the launcher's
+        # pre-launch identity validation is satisfied by genuine key material
+        # produced by the genuine script, never by planted files.
+        PROVISION_HOSTKEYS = lib.getExe hostKeys.provisioner;
         # The EXACT binaries the launcher resolves from its own runtimeInputs;
         # the harness bind-mounts its stubs over these, so the launcher under
         # test stays byte-identical to the installed one.
@@ -1986,6 +4581,14 @@ in
         CURL_TARGET = "${pkgs.curl}/bin/curl";
         RUNTIME_ROOT = microvmOpts.runtimeRoot;
         STATE_ROOT = microvmOpts.stateRoot;
+        # The per-slot job data root and the workspace subdirectory of the ONE
+        # writable session share, from the module rather than a literal in the
+        # harness.
+        JOBS_ROOT = jobs.root;
+        WORKSPACE_SUBDIR = session.subdirs.workspace;
+        # The host home the config stager resolves: the harness creates it
+        # (empty) inside the sandbox so the launch-time staging step succeeds.
+        HOST_HOME = microvmOpts.configSeed.hostHome;
         INPUT_SUBDIR = jobs.inputSubdir;
         CONTROLLER_SUBDIR = jobs.controllerSubdir;
         WORKER_SUBDIR = jobs.workerSubdir;
@@ -2048,6 +4651,17 @@ in
         FINDMNT_TARGET = "${pkgs.util-linux.bin}/bin/findmnt";
         RUNTIME_ROOT = microvmOpts.runtimeRoot;
         STATE_ROOT = microvmOpts.stateRoot;
+        # The layout the launcher actually uses, from the module (session.nix /
+        # state.nix / hostkeys.nix) rather than from literals in the harness.
+        SESSION_ROOT = session.root;
+        SESSION_RO_ROOT = session.roRoot;
+        WORKSPACE_SUBDIR = session.subdirs.workspace;
+        STATE_SUBDIR = session.subdirs.state;
+        HOSTKEYS_SUBDIR = session.roSubdirs.hostkeys;
+        # The PRE-consolidation per-slot state root: nothing creates anything
+        # there any more, but `recover` still scans it so a host migrated from
+        # the four-share layout gets its residue reported.
+        STATE_SLOTS_ROOT = agentStatePaths.slotsRoot;
         SLOT = refSlot.name;
         # A slot name from the PREVIOUS naming scheme (`agent-<i>`, before the
         # per-class `agent-<class>-<i>` rename). Asserted by the harness not to
@@ -2075,7 +4689,7 @@ in
   #      /dev/kvm and root, so CI can never run it — but the mechanism that    #
   #      decides whether ANY of its guest-side denials mean anything (does the  #
   #      command reach the guest as written, through OpenSSH's argv flattening  #
-  #      and the agent's fish login shell?) can be executed here, against a     #
+  #      and the agent's login shell?) can be executed here, against a          #
   #      stub that reproduces exactly that path. Includes a NEGATIVE CONTROL:   #
   #      the previous, unquoted transport must FAIL this check.                 #
   # ---------------------------------------------------------------------- #
@@ -2084,14 +4698,15 @@ in
       {
         nativeBuildInputs = [
           pkgs.coreutils
-          pkgs.fish
+          pkgs.bashInteractive
         ];
         harness = ./microvm-rtv-transport.sh;
-        # The suite under test, and the very shell guest.nix gives the agent
-        # user (`users.users.agent.shell = pkgs.fish`) — the re-parsing side of
-        # the transport, so the stub is not a guess about which shell runs.
+        # The suite under test, and the very shell guest.nix gives the agent user
+        # — the re-parsing side of the transport, so the stub is not a guess
+        # about which shell runs. Read off the evaluated guest, so it follows a
+        # change of the guest login shell instead of pinning one.
         SUITE = ../modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh;
-        FISH = lib.getExe pkgs.fish;
+        GUEST_SHELL = "${guest0Cfg.users.users.agent.shell}/bin/bash";
       }
       ''
         mkdir -p work && cd work
@@ -2194,6 +4809,9 @@ in
         IPTABLES_TARGET = "${pkgs.iptables}/bin/iptables";
         CURL_TARGET = "${pkgs.curl}/bin/curl";
         RUNTIME_ROOT = microvmOpts.runtimeRoot;
+        # The per-slot host-key root, from hostkeys.nix (the read-only session
+        # tree), so the harness does not carry a second copy of the layout.
+        HOSTKEYS_ROOT = hostKeys.root;
         # The SAME variables the launcher bakes in (and network.nix installs
         # the rule with), so the harness can assert the doctor's `iptables -C`
         # spec matches the rule exactly.
@@ -2407,6 +5025,16 @@ in
       slotKeyDirs = map (slot: hostKeys.slotDir slot.name) enabledSlots;
       evalMarker = mkEvalCheck "microvm-host-identity-eval" [
         {
+          # The launcher composes a slot's key paths at RUNTIME from three
+          # rendered facts ($HOSTKEYS_ROOT / $HOSTKEYS_SUBDIR / $HOSTKEY_NAME).
+          # That composition must equal hostkeys.nix's own `slotDir` + `keyName`,
+          # or `host_identity_complete` would validate a path nothing writes.
+          assertion = lib.all (
+            slot: hostKeys.slotDir slot.name == "${hostKeys.root}/${slot.name}/${session.roSubdirs.hostkeys}"
+          ) enabledSlots;
+          message = "the launcher's runtime key-path composition must equal hostkeys.nix's slotDir, got ${toString slotKeyDirs}";
+        }
+        {
           assertion = guestSsh.generateHostKeys == false;
           message = "guest must NOT generate its own throwaway host keys (generateHostKeys must be false)";
         }
@@ -2441,8 +5069,86 @@ in
         inherit evalMarker;
         launcherBin = "${hostLauncher}/bin/agent-microvm";
         knownHosts = hostKeys.knownHosts;
+        hostkeysSubdir = session.roSubdirs.hostkeys;
+        hostkeyName = hostKeys.keyName;
       }
       ''
+        # --- the IDENTITY VALIDATION helper --------------------------------
+        # A launch over an SSH-based control transport must not merely TRIGGER
+        # the provisioning unit, it must VALIDATE the slot's actual identity
+        # files: `systemctl start` on an already-active RemainAfterExit oneshot
+        # is a silent no-op, so "the unit ran once" says nothing about whether
+        # the key still exists, is still root-only, or still matches known_hosts.
+        grep -qF -- 'host_identity_complete() {' "$launcherBin" \
+          || { echo "launcher has no host_identity_complete() validator" >&2; exit 1; }
+        grep -qF -- 'host_identity_alias() {' "$launcherBin" \
+          || { echo "launcher has no host_identity_alias() (the transport-dependent known_hosts alias)" >&2; exit 1; }
+        for h in hostkey_dir hostkey_private hostkey_public; do
+          grep -qF -- "$h()" "$launcherBin" \
+            || { echo "launcher has no $h() path helper" >&2; exit 1; }
+        done
+        # The path helpers are composed from the module's OWN facts, not from a
+        # second copy of the layout literals.
+        grep -qF -- "readonly HOSTKEYS_SUBDIR=$hostkeysSubdir" "$launcherBin" \
+          || { echo "launcher does not render the hostkeys subdirectory name from the layout table" >&2; exit 1; }
+        grep -qF -- "readonly HOSTKEY_NAME=$hostkeyName" "$launcherBin" \
+          || { echo "launcher does not render the host-key file name from hostkeys.nix" >&2; exit 1; }
+
+        # CONTENT, not existence: a zero-byte private key, a missing public
+        # key, a group-readable private key and a known_hosts entry that does
+        # not match are ALL rejected. These greps pin each of the five
+        # validation steps, so a future simplification to `[[ -e ]]` fails here.
+        grep -qF -- '[[ -s "$key" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not require a NON-EMPTY private key" >&2; exit 1; }
+        grep -qF -- '[[ -s "$pub" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not require a NON-EMPTY public key" >&2; exit 1; }
+        grep -qF -- '[[ "$meta" == "root:root 400" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not require the private key to be root:root 0400" >&2; exit 1; }
+        grep -qF -- '[[ "$meta" == "root:root 444" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not require the public key to be root:root 0444" >&2; exit 1; }
+        grep -qF -- 'ssh-keygen -F "$alias" -f "$KNOWN_HOSTS"' "$launcherBin" \
+          || { echo "the validator does not look the slot up with ssh-keygen -F (ssh's own matcher)" >&2; exit 1; }
+        grep -qF -- '[[ "$recorded" == "$expected" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not compare the known_hosts entry against the public key" >&2; exit 1; }
+        # The chain must be ANCHORED: the .pub is verified against the PRIVATE
+        # key, not merely against known_hosts. Otherwise a swapped private key
+        # with a self-consistent .pub + known_hosts passes everything above.
+        grep -qF -- '[[ "$derived" == "$expected" ]] || return 1' "$launcherBin" \
+          || { echo "the validator does not check that the public key is derived from the private key" >&2; exit 1; }
+        # The private key must be LOADABLE, and judged only AFTER its mode was
+        # checked (an over-permissive key makes ssh-keygen refuse, which would
+        # otherwise be misreported as corruption).
+        keyModeLine="$(grep -n -- 'root:root 400' "$launcherBin" | head -n1 | cut -d: -f1)"
+        derivedLine="$(grep -nF -- 'derived="$(ssh-keygen -y' "$launcherBin" | head -n1 | cut -d: -f1)"
+        [ -n "$keyModeLine" ] && [ -n "$derivedLine" ] && [ "$keyModeLine" -lt "$derivedLine" ] \
+          || { echo "the validator loads the private key before validating its mode" >&2; exit 1; }
+        # A CONFLICT (two entries for the same alias) must be rejected, not
+        # silently accepted: ssh would refuse such a known_hosts anyway.
+        grep -qF -- '| wc -l)" -eq 1 ]] || return 1' "$launcherBin" \
+          || { echo "the validator accepts CONFLICTING known_hosts entries for one alias" >&2; exit 1; }
+        # The alias is TRANSPORT-DEPENDENT and decided by the SAME predicate
+        # every ssh call site uses, so the validation cannot pass on an entry no
+        # connection consults.
+        grep -qF -- 'vsock-mux/$STATE_ROOT/$1/notify.vsock' "$launcherBin" \
+          || { echo "the alias helper does not use the VSOCK mux path for the VSOCK transport" >&2; exit 1; }
+        # NO private-key material may ever be read into a variable or logged.
+        # `ssh-keygen -y` is NOT such a read: its output is the PUBLIC half.
+        if grep -nE 'cat .*\$key"|\$\(< *"\$key"' "$launcherBin" | grep -v '^[0-9]*: *#'; then
+          echo "the launcher reads private-key material" >&2; exit 1
+        fi
+        # ...but every `ssh-keygen -y` must be THE ONE SAFE FORM: non-interactive
+        # (-P "" cannot block on a passphrase prompt), stderr discarded (a load
+        # error cannot echo file content), normalised to `<type> <body>`, and
+        # captured in a variable rather than printed.
+        yUses="$(grep -n -- 'ssh-keygen -y' "$launcherBin" | grep -cv '^[0-9]*: *#' || true)"
+        ySafe="$(grep -cF -- 'derived="$(ssh-keygen -y -P "" -f "$key" 2>/dev/null | cut -d" " -f1,2)"' "$launcherBin" || true)"
+        if [ "$yUses" != "1" ] || [ "$ySafe" != "1" ]; then
+          echo "the launcher has $yUses ssh-keygen -y use(s), $ySafe of them in the safe pinned form" >&2; exit 1
+        fi
+        # A launch whose identity is incomplete must FAIL CLOSED.
+        grep -qF -- 'refusing to launch an unverifiable guest' "$launcherBin" \
+          || { echo "the launcher does not fail closed on an incomplete host identity" >&2; exit 1; }
+
         grep -q "StrictHostKeyChecking=yes" "$launcherBin" \
           || { echo "launcher does not use StrictHostKeyChecking=yes" >&2; exit 1; }
         grep -q "UserKnownHostsFile=\"\$KNOWN_HOSTS\"" "$launcherBin" \
@@ -2460,6 +5166,279 @@ in
           echo "microvm-host-identity: authenticated control channel"
           echo "  launcher    : $launcherBin"
           echo "  known_hosts : $knownHosts"
+          cat "$evalMarker"
+        } > "$out"
+      '';
+
+  # ---------------------------------------------------------------------- #
+  # (h2) SELF-HEALING host-identity provisioning.                          #
+  #                                                                        #
+  #   Two defects lived in the pre-launch provisioning path:                #
+  #     1. the trigger was TAP-ONLY (`SSH_ENABLED == 1`), so a batch+vsock  #
+  #        host — whose ONLY control channel is the VSOCK `sshd-vsock@`,    #
+  #        and which therefore has SSH_ENABLED=0 — never provisioned at    #
+  #        all before a launch;                                            #
+  #     2. `systemctl start` on a `RemainAfterExit = true` oneshot that has #
+  #        already run is a SILENT NO-OP, so a deleted key directory was   #
+  #        never recreated on a booted host.                               #
+  #                                                                        #
+  #   Everything below is asserted against the BUILT launcher / BUILT       #
+  #   provisioner of REAL hosts, with a NEGATIVE CONTROL for every removal, #
+  #   so no check can pass because the string it looks for moved.           #
+  # ---------------------------------------------------------------------- #
+  microvm-host-identity-self-healing =
+    let
+      defaultLauncherPkg = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+      bvLauncherPkg = findPkg batchVsockHost.config.environment.systemPackages "agent-microvm";
+      bLauncherPkg = findPkg batchOnlyHost.config.environment.systemPackages "agent-microvm";
+      bvHostKeys = batchVsockHost._module.args.agentHostKeys;
+      evalMarker = mkEvalCheck "microvm-host-identity-self-healing-eval" [
+        {
+          # The batch+vsock host is the shape the TAP-only trigger skipped: no
+          # TCP sshd at all, so `SSH_ENABLED` is 0 while the VSOCK control
+          # channel is the ONLY way in. If this stopped holding, the launcher
+          # greps below would be vacuous.
+          assertion =
+            !batchVsockHost._module.args.agentNetwork.tapSshUsable
+            && batchVsockHost._module.args.agentCapabilities.vsock;
+          message = "the batch+vsock reference host must have NO usable TAP sshd and the vsock capability (otherwise the VSOCK trigger check is vacuous)";
+        }
+        {
+          # ... and it DOES provision per-slot keys, so there is an identity to
+          # validate in the first place.
+          assertion = batchVsockHost.config.systemd.services ? agent-microvm-hostkeys;
+          message = "the batch+vsock host must run agent-microvm-hostkeys.service";
+        }
+        {
+          # NEGATIVE control: the DEFAULT host is the TAP shape (SSH_ENABLED=1,
+          # vsock NOT selected), so its trigger must still be satisfied by the
+          # SSH_ENABLED half alone.
+          assertion =
+            enabledCfg.myconfig.ai.microvm.enableSsh
+            && !(lib.elem "vsock" enabledCfg.myconfig.ai.microvm.capabilities);
+          message = "the default reference host must be the TAP shape (enableSsh, no vsock) for the negative control below";
+        }
+        {
+          # The unit is still a `RemainAfterExit` oneshot — which is WHY the
+          # launcher must use `systemctl restart` rather than `start`. Pinning
+          # it here keeps the two facts from drifting apart silently.
+          assertion =
+            enabledCfg.systemd.services.agent-microvm-hostkeys.serviceConfig.RemainAfterExit == true;
+          message = "agent-microvm-hostkeys.service must stay a RemainAfterExit oneshot (the launcher's `systemctl restart` exists because of it)";
+        }
+        {
+          # The batch+vsock host's identity paths are its OWN (per-slot,
+          # per-host), not the reference host's: a repair on one host/slot can
+          # never touch another's.
+          assertion = bvHostKeys.slotDir variantSlot.name != hostKeys.slotDir refSlot.name;
+          message = "the batch+vsock host's key directory must not be the reference host's";
+        }
+      ];
+    in
+    pkgs.runCommand "microvm-host-identity-self-healing"
+      {
+        inherit evalMarker;
+        defaultLauncher = "${defaultLauncherPkg}/bin/agent-microvm";
+        # The launcher of the shape the old trigger skipped.
+        bvLauncher = "${bvLauncherPkg}/bin/agent-microvm";
+        # ... and of a host with NO SSH-based control transport at all, where
+        # the whole block must be absent (it would be unreachable code).
+        bLauncher = "${bLauncherPkg}/bin/agent-microvm";
+        # The BUILT provisioners (their own shellcheck gate has already run):
+        # the reference host's (TAP entries) and the batch+vsock host's (VSOCK
+        # mux entries).
+        provisioner = lib.getExe hostKeys.provisioner;
+        bvProvisioner = lib.getExe bvHostKeys.provisioner;
+        lockPath = "${microvmOpts.runtimeRoot}/hostkeys.lock";
+
+        # --- the EXECUTED regression harness -----------------------------
+        # The greps above prove the SHAPE of the scripts; this runs the REAL
+        # provisioner in bwrap+fakeroot and proves the BEHAVIOUR (deletion,
+        # partial state, mismatch, mode drift, concurrency, and the VSOCK-only
+        # shape). It needs no /dev/kvm, so it belongs in CI.
+        nativeBuildInputs = [
+          pkgs.bubblewrap
+          pkgs.fakeroot
+          pkgs.coreutils
+        ];
+        harness = ./microvm-hostkeys-provisioning.sh;
+        BWRAP = lib.getExe pkgs.bubblewrap;
+        FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
+        BASH_BIN = "${pkgs.bash}/bin/bash";
+        PROVISIONER = lib.getExe hostKeys.provisioner;
+        BV_PROVISIONER = lib.getExe bvHostKeys.provisioner;
+        RUNTIME_ROOT = microvmOpts.runtimeRoot;
+        KNOWN_HOSTS = hostKeys.knownHosts;
+        LOCK_FILE = "${microvmOpts.runtimeRoot}/hostkeys.lock";
+        KEY_NAME = hostKeys.keyName;
+        # The reference host's per-slot key directories and their TAP aliases,
+        # index-aligned and taken from the module (never a literal).
+        SLOT_KEY_DIRS = lib.concatMapStringsSep " " (slot: hostKeys.slotDir slot.name) enabledSlots;
+        SLOT_ALIASES = lib.concatMapStringsSep " " (slot: slot.ip) enabledSlots;
+        # ... and the batch+vsock host's single slot, whose ONLY alias is the
+        # VSOCK mux socket path (no guest network interface exists there).
+        BV_SLOT_KEY_DIR = bvHostKeys.slotDir variantSlot.name;
+        BV_ALIAS = "vsock-mux/${microvmOpts.stateRoot}/${variantSlot.name}/notify.vsock";
+        # The PATH inside the sandbox: the tmpfs root has no /bin, so every tool
+        # the scenarios use is named here explicitly.
+        SANDBOX_PATH = lib.makeBinPath (
+          with pkgs;
+          [
+            coreutils
+            openssh
+            gnugrep
+            findutils
+            bash
+          ]
+        );
+      }
+      ''
+        # --- (1) the launcher SELF-HEALS instead of trusting the unit -------
+        for l in "$defaultLauncher" "$bvLauncher"; do
+          grep -qF -- 'ensure_host_identity() {' "$l" \
+            || { echo "launcher has no ensure_host_identity() (self-healing entry point)" >&2; exit 1; }
+          grep -qF -- 'host_identity_complete() {' "$l" \
+            || { echo "launcher has no host_identity_complete() validator" >&2; exit 1; }
+          grep -qF -- 'log "repairing SSH host identity for slot $slot"' "$l" \
+            || { echo "launcher does not announce the repair" >&2; exit 1; }
+          # RESTART, not START: `systemctl start` on an already-active
+          # RemainAfterExit oneshot is a no-op, which is precisely the stale
+          # state a deleted key leaves behind.
+          grep -qF -- 'systemctl restart agent-microvm-hostkeys.service' "$l" \
+            || { echo "launcher does not RESTART the provisioning unit (start would be a no-op on the active oneshot)" >&2; exit 1; }
+          if grep -qF -- 'systemctl start agent-microvm-hostkeys.service' "$l"; then
+            echo "launcher still uses 'systemctl start' on the RemainAfterExit oneshot" >&2; exit 1
+          fi
+          # The repair is re-VALIDATED and the launch FAILS CLOSED.
+          grep -qF -- 'refusing to launch an unverifiable guest' "$l" \
+            || { echo "launcher does not fail closed when the repair did not help" >&2; exit 1; }
+          # ... and it never widens verification to get around the problem.
+          for bad in 'StrictHostKeyChecking=no' 'UserKnownHostsFile=/dev/null'; do
+            if grep -n -- "$bad" "$l" | grep -v '^[0-9]*: *#'; then
+              echo "launcher contains an unauthenticated ssh fallback ($bad)" >&2; exit 1
+            fi
+          done
+        done
+
+        # --- (2) the trigger is TRANSPORT-AWARE ----------------------------
+        # Both SSH-based control transports provision: the TAP sshd
+        # ($SSH_ENABLED) and the VSOCK sshd-vsock@ ($VSOCK_ENABLED).
+        trigger='if [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]]; then'
+        for l in "$defaultLauncher" "$bvLauncher"; do
+          grep -qF -- "$trigger" "$l" \
+            || { echo "launcher's host-identity trigger is not transport-aware" >&2; exit 1; }
+          # The TAP-ONLY trigger must be GONE.
+          if grep -qF -- 'if [[ "$SSH_ENABLED" == "1" ]]; then' "$l"; then
+            echo "launcher still has a TAP-ONLY host-identity trigger" >&2; exit 1
+          fi
+        done
+        # The trigger and the call are adjacent, i.e. the transport-aware
+        # condition really guards `ensure_host_identity` and not something else.
+        for l in "$defaultLauncher" "$bvLauncher"; do
+          grep -A 2 -F -- "$trigger" "$l" | grep -qF -- 'ensure_host_identity "$1"' \
+            || { echo "the transport-aware condition does not guard ensure_host_identity" >&2; exit 1; }
+        done
+
+        # --- (3) the batch+vsock host provisions DESPITE SSH_ENABLED=0 ------
+        grep -qF -- 'readonly SSH_ENABLED=0' "$bvLauncher" \
+          || { echo "the batch+vsock launcher does not render SSH_ENABLED=0 (the VSOCK-only check would be vacuous)" >&2; exit 1; }
+        grep -qF -- 'readonly VSOCK_ENABLED=1' "$bvLauncher" \
+          || { echo "the batch+vsock launcher does not render VSOCK_ENABLED=1" >&2; exit 1; }
+        grep -qF -- 'ensure_host_identity "$1"' "$bvLauncher" \
+          || { echo "the batch+vsock launcher never ensures the host identity" >&2; exit 1; }
+        # Its known_hosts alias is the VSOCK mux path, which is what the
+        # validation must look up for that transport.
+        grep -qF -- 'vsock-mux/$STATE_ROOT/$1/notify.vsock' "$bvLauncher" \
+          || { echo "the batch+vsock launcher does not verify against the vsock-mux alias" >&2; exit 1; }
+
+        # --- (4) NEGATIVE CONTROLS -----------------------------------------
+        # The DEFAULT host (no vsock) still gates on $SSH_ENABLED: it renders
+        # VSOCK_ENABLED=0, so the second disjunct can never fire there and the
+        # behaviour of a default host is unchanged.
+        grep -qF -- 'readonly SSH_ENABLED=1' "$defaultLauncher" \
+          || { echo "the default launcher does not render SSH_ENABLED=1" >&2; exit 1; }
+        grep -qF -- 'readonly VSOCK_ENABLED=0' "$defaultLauncher" \
+          || { echo "the default launcher does not render VSOCK_ENABLED=0 (its trigger must be the SSH_ENABLED half)" >&2; exit 1; }
+        # A host with NEITHER SSH-based transport provisions no key material, so
+        # the whole block is ABSENT rather than dead code.
+        for f in ensure_host_identity host_identity_complete HOSTKEY_NAME 'derived="$(ssh-keygen -y'; do
+          if grep -qF -- "$f" "$bLauncher"; then
+            echo "the batch-only (no vsock) launcher carries $f, which can never fire there" >&2; exit 1
+          fi
+        done
+
+        # --- (5) the PROVISIONER is idempotent, locked and heals partials ---
+        for p in "$provisioner" "$bvProvisioner"; do
+          # CONCURRENCY: the provisioning unit and the launcher's self-heal can
+          # run at the same moment, both mutating the SHARED known_hosts and
+          # possibly the same slot's key pair.
+          grep -qF -- 'flock -x 9' "$p" \
+            || { echo "the provisioner does not take an exclusive flock" >&2; exit 1; }
+          grep -qF -- "exec 9>\"\$lock\"" "$p" \
+            || { echo "the provisioner does not open its lock file" >&2; exit 1; }
+          grep -qF -- "lock=$lockPath" "$p" \
+            || { echo "the provisioner does not use the module-owned lock path" >&2; exit 1; }
+          # IDEMPOTENCY: a VALID existing private key is kept, so a slot's
+          # identity is stable and repairing one slot cannot rewrite another's.
+          grep -qF -- 'private_ok=0' "$p" \
+            || { echo "the provisioner does not test the existing private key before replacing it" >&2; exit 1; }
+          grep -qF -- 'if (( private_ok == 0 )); then' "$p" \
+            || { echo "the provisioner does not gate key GENERATION on the private key being unusable" >&2; exit 1; }
+          # Ownership is part of trusting an existing private key.
+          grep -qF -- "stat -c '%U:%G' -- \"\$key\")\" == \"root:root\"" "$p" \
+            || { echo "the provisioner trusts a private key it has not checked the ownership of" >&2; exit 1; }
+          # PARTIAL STATE: a missing/mismatched public key is DERIVED from the
+          # private one, not worked around by discarding the private key.
+          grep -qF -- 'ssh-keygen -y -f "$key"' "$p" \
+            || { echo "the provisioner does not derive the public key from the private key" >&2; exit 1; }
+          grep -qF -- 'derived="$(ssh-keygen -y -f "$key" | cut -d" " -f1,2)"' "$p" \
+            || { echo "the provisioner does not normalise the derived public key" >&2; exit 1; }
+          grep -qF -- '!= "$derived"' "$p" \
+            || { echo "the provisioner does not repair a public key that MISMATCHES the private key" >&2; exit 1; }
+          # NO DUPLICATE known_hosts entry per alias (ssh refuses such a file).
+          grep -qF -- 'kh_add() {' "$p" \
+            || { echo "the provisioner does not funnel known_hosts entries through a de-duplicating helper" >&2; exit 1; }
+          grep -qF -- 'kh_seen["$alias"]=1' "$p" \
+            || { echo "the provisioner does not remember which aliases it already wrote" >&2; exit 1; }
+          # ATOMIC install: a reader never sees a partial database.
+          grep -qF -- 'mv -f -- "$tmp" "$known_hosts"' "$p" \
+            || { echo "the provisioner does not install known_hosts atomically" >&2; exit 1; }
+          # EXPLICIT final modes, so a hand-edited mode heals too.
+          grep -qF -- 'chmod 0400 -- "$key"' "$p" \
+            || { echo "the provisioner does not force the private key to 0400" >&2; exit 1; }
+          grep -qF -- 'chmod 0444 -- "$pub"' "$p" \
+            || { echo "the provisioner does not force the public key to 0444" >&2; exit 1; }
+          # It must never print private-key material.
+          if grep -nE 'cat .*\$key"|echo .*\$\(cat "\$key' "$p" | grep -v '^[0-9]*: *#'; then
+            echo "the provisioner prints private-key material" >&2; exit 1
+          fi
+        done
+        # The VSOCK host's provisioner pins the vsock-mux alias; the TAP one
+        # does not (its guest has no VSOCK control channel).
+        grep -qF -- 'kh_add vsock-mux/' "$bvProvisioner" \
+          || { echo "the batch+vsock provisioner does not pin the vsock-mux alias" >&2; exit 1; }
+        if grep -qF -- 'kh_add vsock-mux/' "$provisioner"; then
+          echo "the default (tap) provisioner writes a vsock-mux entry it has no channel for" >&2; exit 1
+        fi
+
+        # --- (6) the EXECUTED behavioural regressions ----------------------
+        mkdir -p run && cd run
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- host-identity provisioning harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        cd ..
+
+        {
+          echo "microvm-host-identity-self-healing:"
+          echo "  default     launcher: $defaultLauncher"
+          echo "  batch+vsock launcher: $bvLauncher"
+          echo "  batch-only  launcher: $bLauncher"
+          echo "  provisioner         : $provisioner"
+          echo "  vsock provisioner   : $bvProvisioner"
+          echo
+          cat run/report.txt
           cat "$evalMarker"
         } > "$out"
       '';

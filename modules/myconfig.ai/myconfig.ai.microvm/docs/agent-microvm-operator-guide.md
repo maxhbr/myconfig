@@ -21,7 +21,42 @@ sudo agent-microvm --help          # commands, supported agents, resource classe
 sudo agent-microvm list            # slot | class | state | ip | task
 sudo agent-microvm status          # detailed, all slots
 sudo agent-microvm usage           # retained disk usage per task
+agent-microvm capabilities         # what this host's guests can do (no root needed)
 ```
+
+> **Capabilities.** A host selects which execution paths its guests carry
+> (`myconfig.ai.microvm.capabilities`, default both `interactive` and `batch`;
+> `vsock` is OFF by default). On a host that selects only some of them the
+> launcher refuses the others' subcommands with a message naming the option —
+> `run` needs `interactive`, `ssh` needs `interactive` OR `vsock`,
+> `submit`/`cancel` need `batch`:
+>
+> ```console
+> agent-microvm: 'submit' needs the 'batch' capability, which this host does not
+> select (myconfig.ai.microvm.capabilities = [ interactive ]); add "batch" to
+> that list and rebuild to enable it
+> ```
+>
+> That is a configuration answer, not a fault. Ask the host directly instead of
+> inferring it from an error:
+>
+> ```console
+> $ agent-microvm capabilities
+> capabilities: interactive
+> declared: interactive batch vsock
+> network-transport: tap
+> ```
+>
+> `console` is never refused (it reads the host's `microvm@<slot>` journal, so it
+> works even for a guest without sshd). A batch-only host that ALSO selects
+> `vsock` (plan phase 6) gets a VSOCK `sshd-vsock@` control channel — `ssh`
+> works over VSOCK, so the runtime-validation suite can reach it. And a host that
+> selects `vsock` WITH `networkProfile = "proxy-only"` reports
+> `network-transport: vsock`: its guests have NO network interface at all, the
+> model API travels over AF_VSOCK to a per-VM host forwarder, and there is no
+> bridge, no TAP and no firewall chain on the host. See
+> [Capabilities](./agent-microvm.md#capabilities) and
+> [VSOCK versus TAP transport](./agent-microvm.md#vsock-versus-tap-transport).
 
 ## 1. Start an interactive task
 
@@ -115,7 +150,7 @@ is written **only** to stderr, never into the authoritative result JSON or the
 structured event stream.
 
 Where things live while a batch task runs (`<jobs> =
-/var/lib/agent-microvms/jobs/<slot>`):
+/var/lib/agent-microvms/sessions/<slot>`, the ONE writable virtiofs share):
 
 | Path | Owner | Meaning |
 | --- | --- | --- |
@@ -163,7 +198,7 @@ sudo agent-microvm ssh fix-parser -- systemctl status 'agent-job-worker@*'
 sudo agent-microvm console agent-normal-0      # serial console (journal)
 
 # untrusted worker output (host side, no SSH needed):
-sudo tail -f /var/lib/agent-microvms/jobs/<slot>/worker-logs/stdout.log
+sudo tail -f /var/lib/agent-microvms/sessions/<slot>/worker-logs/stdout.log
 ```
 
 The two guest units are deliberately separate: `agent-job-controller` is the
@@ -171,11 +206,27 @@ trusted half (it validates the job and writes the result),
 `agent-job-worker@<agent>` is the untrusted half that runs the coding agent.
 
 Host-key verification is **strict**; if it fails, the slot's identity is not what
-the host expects — investigate rather than bypass. If `known_hosts` is missing:
+the host expects — investigate rather than bypass. Re-provisioning is idempotent
+and never touches a slot whose identity is already valid:
 
 ```bash
-sudo systemctl start agent-microvm-hostkeys.service
+sudo systemctl restart agent-microvm-hostkeys.service
+sudo journalctl -u agent-microvm-hostkeys.service -n 20
 ```
+
+Use `restart`, **not** `start`: the unit is a `RemainAfterExit` oneshot and is
+normally already active, so `start` returns success without re-running it — a
+deleted key would never be recreated. The launcher does the same thing
+automatically before every launch of a slot whose control channel is SSH-based
+(TAP *or* VSOCK): it validates the slot's key files, the KEY PAIR itself (the
+private key parses, and the public key file really is its public half) and its
+`known_hosts` entry, repairs them if needed, and **refuses to launch** if the
+identity is still incomplete. The manual equivalent of the pair check is
+`sudo ssh-keygen -y -f <private-key>` compared against the `.pub` (see the
+recovery commands in
+[Per-slot SSH host identity](./agent-microvm.md#per-slot-ssh-host-identity-lifecycle-and-recovery)).
+For the full lifecycle, the alias table and a rotation procedure see
+[Per-slot SSH host identity](./agent-microvm.md#per-slot-ssh-host-identity-lifecycle-and-recovery).
 
 ## 5. Cancel a task
 
@@ -330,17 +381,24 @@ non-zero if any check fails, so it is scriptable:
 sudo agent-microvm doctor
 ```
 
-It reports, section by section:
+It reports, section by section (the header line names the resolved model
+transport, and the transport-specific sections are the ones this host actually
+has — `doctor` never reports a component the host deliberately does not build):
 
 - **host LiteLLM backend** — is `litellm.service` active, and does
   `127.0.0.1:<litellmPort>/v1/models` answer?
-- **bridge-only forwarder socket** — is `agent-litellm-proxy.socket` active,
-  and is it ordered after `<bridge>-netdev.service` (so `SO_BINDTODEVICE`
-  succeeds at boot)?
-- **private bridge + gateway address** — does the bridge interface exist and
-carry the gateway address?
-- **firewall** — are the `AGENT_MICROVM_INPUT` / `AGENT_MICROVM_FORWARD` chains
-installed, and does the INPUT chain ACCEPT the LiteLLM endpoint?
+- under the **`tap`** transport:
+  - **bridge-only forwarder socket** — is `agent-litellm-proxy.socket` active,
+    and is it ordered after `<bridge>-netdev.service` (so `SO_BINDTODEVICE`
+    succeeds at boot)?
+  - **private bridge + gateway address** — does the bridge interface exist and
+    carry the gateway address?
+  - **firewall** — are the `AGENT_MICROVM_INPUT` / `AGENT_MICROVM_FORWARD` chains
+    installed, and does the INPUT chain ACCEPT the LiteLLM endpoint?
+- under the **`vsock`** transport: **per-VM AF_VSOCK model forwarder** — is
+  `agent-litellm-vsock-<slot>.socket` active for every slot (its listener is
+  `<stateRoot>/<slot>/notify.vsock_<litellmPort>`)? It also states explicitly
+  that no bridge, TAP or firewall chain is expected.
 - **per-slot SSH host keys** — does every slot have a host-key directory?
 
 Each line is prefixed `OK` or `FAIL` with a concrete remediation hint. Run it
@@ -374,8 +432,8 @@ still present. Common reasons and what they mean:
 To look at the trusted state by hand (root only, and read-only — never edit it):
 
 ```bash
-sudo cat /var/lib/agent-microvms/jobs/<slot>/controller/state.json | jq .
-sudo ls -ld /var/lib/agent-microvms/jobs/<slot>/{input,controller,worker}
+sudo cat /var/lib/agent-microvms/sessions/<slot>/controller/state.json | jq .
+sudo ls -ld /var/lib/agent-microvms/sessions/<slot>/{input,controller,worker}
 #   input/       root root 0755   (spec.json 0400, prompt.md 0444)
 #   controller/  root root 0700
 #   worker/      1000 1000 0755

@@ -102,33 +102,41 @@
   lib,
   pkgs,
   agentRegistry,
-  # The effective resource-class table (see default.nix).
-  agentResourceClasses,
+  # The ONE definition of the per-session tree (./session.nix): the layout table
+  # this file derives its per-slot root, its subdirectory NAMES and its directory
+  # MODES from, so the trust boundary is written down exactly once. The job data
+  # lives IN the session tree, i.e. in the ONE writable share.
+  agentSession,
+  # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
+  # A host that does not select `batch` gets NONE of the guest units, guest
+  # packages, host result archive or unit-ordering statements below — the
+  # decision lives here (and in ../session.nix's per-capability layout table),
+  # never in the consumers.
+  agentCapabilities,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
   jobCfg = cfg.job;
-
-  # The slot pool of the effective resource classes (ticket 5 A). The class
-  # table comes from default.nix (`_module.args.agentResourceClasses`), which
-  # also performs the legacy `slotCount` migration, so every module builds the
-  # SAME pool.
-  slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
+  session = agentSession;
 
   # --- the ONE definition of every job path / mode / schema fact ----------
   paths = rec {
     # ---- host side ----------------------------------------------------
-    root = "${cfg.runtimeRoot}/jobs";
+    # The per-slot job data IS the session directory (./session.nix), i.e. part
+    # of the ONE writable share.
+    root = session.root;
     slotDir = slotName: "${root}/${slotName}";
 
-    inputSubdir = "input";
-    controllerSubdir = "controller";
-    workerSubdir = "worker";
+    # Subdirectory NAMES come from the session layout table (./session.nix),
+    # the single source of truth for the tree's shape.
+    inputSubdir = session.subdirs.input;
+    controllerSubdir = session.subdirs.controller;
+    workerSubdir = session.subdirs.worker;
     # The worker's log files live NEXT TO its writable directory, not inside it:
     # systemd opens them as root and follows symlinks, so the whole path must be
     # root-controlled (see (6) in the header).
-    workerLogsSubdir = "worker-logs";
+    workerLogsSubdir = session.subdirs.workerLogs;
     artifactsSubdir = "artifacts";
 
     specName = "spec.json";
@@ -156,12 +164,22 @@ let
     hostArchivedResult = taskId: "${resultsDir}/${taskId}.json";
 
     # ---- permission facts (host tmpfiles + guest assertions agree) -----
-    inputDirMode = "0755";
-    controllerDirMode = "0700";
-    workerDirMode = "0755";
+    # From the session layout table (./session.nix): ONE place decides who owns
+    # what in this tree.
+    # `modeOf` reads the FULL table, not the capability-filtered one, so these
+    # four modes exist even on a host that creates none of the directories. That
+    # is intentional (a directory's mode is a policy fact of the layout, not of
+    # this host's selection) and harmless: everything derived from them lives
+    # inside the `batch`-only fragments below, which are `lib.optionalAttrs`-ed
+    # away wholesale on a host without the capability. The coupling is therefore
+    # "these constants are inert without `batch`", NOT "this file is
+    # capability-independent".
+    inputDirMode = session.modeOf session.subdirs.input;
+    controllerDirMode = session.modeOf session.subdirs.controller;
+    workerDirMode = session.modeOf session.subdirs.worker;
     # root-owned: the worker must not be able to rename or replace the directory
     # whose files systemd opens as root.
-    workerLogsDirMode = "0755";
+    workerLogsDirMode = session.modeOf session.subdirs.workerLogs;
     workerLogMode = "0644";
     specMode = "0400";
     promptMode = "0444";
@@ -185,8 +203,10 @@ let
     workerGroup = "users";
 
     # ---- guest side (identical for every slot — the share hides the slot) --
-    guestTag = "job";
-    guestMountPoint = "/run/agent-job";
+    # The job data is reached through the ONE writable session mount; the
+    # subdirectory names — and therefore every path the guest controller/worker
+    # validate — are the layout table's.
+    guestMountPoint = session.guestMountPoint;
     guestInputDir = "${guestMountPoint}/${inputSubdir}";
     guestControllerDir = "${guestMountPoint}/${controllerSubdir}";
     guestWorkerDir = "${guestMountPoint}/${workerSubdir}";
@@ -424,6 +444,25 @@ let
   # UNTRUSTED output. It has no way to influence the authoritative result:
   # `controller/` is root-owned 0700 and additionally masked by the unit's
   # `InaccessiblePaths`.
+  # `prompt` is read by the GENERATED dispatch below only for the registry
+  # entries that take the prompt TEXT as an argv token (`%PROMPT%`). A host
+  # whose `enabledAgents` selects only stdin-driven agents — e.g.
+  # `[ "codex" ]`, which reads the prompt file on stdin — therefore generates a
+  # script in which the variable is genuinely unread, and `writeShellApplication`'s
+  # shellcheck gate fails the BUILD with SC2034. The read is kept (rather than
+  # made conditional) so the two invocation shapes stay symmetrical and enabling
+  # a `%PROMPT%` agent needs no change here; the suppression is emitted ONLY on
+  # the hosts where it is true, so the generated script is unchanged everywhere
+  # else.
+  promptUnusedSuppression = lib.optionalString (!agentRegistry.batchUsesPromptText) (
+    lib.concatStringsSep "\n      " [
+      "# NOTE: on this host every selected batch agent is stdin-driven, so the"
+      "# generated dispatch below never reads `prompt`."
+      "# shellcheck disable=SC2034"
+      ""
+    ]
+  );
+
   agent-job-worker = pkgs.writeShellApplication {
     name = "agent-job-worker";
     runtimeInputs = with pkgs; [ coreutils ];
@@ -439,7 +478,7 @@ let
 
       [[ -r "$PROMPT_FILE" ]] || { log "prompt file $PROMPT_FILE is not readable"; exit 70; }
       # The prompt TEXT, for the registry entries that take it as an argument.
-      prompt="$(cat -- "$PROMPT_FILE")"
+      ${promptUnusedSuppression}prompt="$(cat -- "$PROMPT_FILE")"
 
       # The two invocation shapes the generated dispatch below calls. There is
       # deliberately NO timeout(1) here: the deadline belongs to the trusted
@@ -1187,7 +1226,24 @@ let
   # Merged into every slot's guest config by guest.nix, next to the workspace /
   # hostkey shares. Takes the SLOT because the resource limits below are derived
   # from the slot's resource class (ticket 5 C).
-  mkGuestModule = slot: {
+  #
+  # EMPTY without the `batch` capability (lightweight plan phase 5): an
+  # interactive-only guest then contains no controller unit, no worker template
+  # and none of the three job-protocol programs — they are removed from the
+  # closure, not merely left unstarted.
+  mkGuestModule = slot: lib.optionalAttrs agentCapabilities.batch (mkBatchGuestModule slot);
+
+  # The non-login batch WORKER never sources /etc/profile, so guest.nix has to
+  # give it the SAME model-endpoint environment the interactive login shell gets
+  # (see its `modelEndpointEnv`). Rendered HERE so "is there a worker unit at
+  # all?" is decided in exactly one place.
+  mkWorkerEnvironmentModule =
+    env:
+    lib.optionalAttrs agentCapabilities.batch {
+      systemd.services."${paths.workerUnitTemplate}".environment = env;
+    };
+
+  mkBatchGuestModule = slot: {
     environment.systemPackages = [
       agent-job-controller
       agent-job-worker
@@ -1416,7 +1472,7 @@ in
     # guest.nix (shares + services) and launcher.nix (submit/status/recover).
     {
       _module.args.agentJobs = paths // {
-        inherit mkGuestModule;
+        inherit mkGuestModule mkWorkerEnvironmentModule;
         controller = agent-job-controller;
         worker = agent-job-worker;
         assertPaths = agent-job-assert-paths;
@@ -1438,36 +1494,24 @@ in
         }
       ];
 
-      # virtiofsd refuses to start when a share source is missing, so every
-      # slot's job directory must exist before any VM starts — including slots
-      # that never ran a job.
-      #
-      # The MODES here ARE the trust boundary (virtiofsd passes ownership
-      # through unchanged, so these are the effective permissions inside the
-      # guest): `controller/` is root-only 0700, `input/` is root-owned, and
-      # only `worker/` belongs to the unprivileged guest agent.
+    })
+
+    # The host-side RESULT ARCHIVE exists only for the `batch` capability: it is
+    # where `submit` keeps a finished job's verdict after the slot is released,
+    # and an interactive-only host never produces one.
+    (lib.mkIf (cfg.enable && agentCapabilities.batch) {
+      # The per-slot job directories live in the session tree, which
+      # ./session.nix creates from the ONE layout table (including the two
+      # bind-mount points and the MODES that ARE the trust boundary), so
+      # emitting them here as well would only duplicate the same rules. The
+      # host-only RESULT ARCHIVE is never part of any share and stays here.
       systemd.tmpfiles.rules = [
-        "d ${paths.root} 0755 root root - -"
         # 0700: an archived result carries the allocation token of the run it
         # belongs to, so it is root-only — not world-readable.
         "d ${paths.resultsDir} 0700 root root - -"
         # Migration: archives written before the mode was tightened are 0644.
         "z ${paths.resultsDir}/*.json 0600 root root - -"
-      ]
-      ++ lib.concatMap (slot: [
-        "d ${paths.slotDir slot.name} 0755 root root - -"
-        "d ${paths.hostInputDir slot.name} ${paths.inputDirMode} root root - -"
-        "d ${paths.hostControllerDir slot.name} ${paths.controllerDirMode} root root - -"
-        "d ${paths.hostWorkerDir slot.name} ${paths.workerDirMode} ${toString paths.workerUid} ${toString paths.workerGid} - -"
-        # ROOT-owned on purpose: systemd opens the worker's stdout/stderr here
-        # as root and follows symlinks, so nothing running as the worker uid may
-        # be able to create, rename or replace anything in it.
-        "d ${paths.hostWorkerLogsDir slot.name} ${paths.workerLogsDirMode} root root - -"
-        # Migration (spec v1 -> v2): the old guest-writable `out/` directory
-        # was the forgeable result channel. Remove it, so no stale v1 result
-        # lingers in a shared, worker-writable place.
-        "R ${paths.slotDir slot.name}/out - - - - -"
-      ]) slots;
+      ];
     })
   ];
 }

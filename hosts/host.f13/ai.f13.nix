@@ -35,12 +35,38 @@
         # tier that must never switch on implicitly with the other AI tools.
         # The secure `proxy-only` network profile applies, so no
         # `acknowledgeInsecureNetwork` opt-in is needed.
+        #
+        # The module has exactly ONE shape (the lightweight one of
+        # docs/myconfig-ai-microvm-lightweight-plan.md): a minimal guest
+        # toolset with a bash login shell, an EROFS/optimized guest store, ONE
+        # writable per-session virtiofs share plus ONE read-only share, and a
+        # guest home provisioned at LAUNCH time from an allowlisted, root-owned
+        # staged copy of this host's agent configuration (no guest
+        # home-manager). Only the two options below deviate from its defaults.
         microvm = {
           enable = true;
+          # SELECTED agents (lightweight plan phase 2). Stated EXPLICITLY even
+          # though it currently equals the module default (every declared
+          # agent), because the selection is operator-visible: `myconfig.ai
+          # .workmux` registers one `microvm-<agent>` pane per selected agent
+          # and `agent-microvm submit|run --agent <name>` only accepts a
+          # selected one — so silently inheriting a narrower default would
+          # remove panes and reject invocations that work today. The cost is the
+          # guest closure: EVERY listed agent's runtime is baked into BOTH slot
+          # images. Trimming this list is the cheapest way to shrink the guest,
+          # and it is deliberately an operator decision, not a default.
+          enabledAgents = [
+            "claude"
+            "codex"
+            "hermes"
+            "opencode"
+            "pi"
+          ];
           # Fixed, prebuilt resource classes (ticket 5). `mkForce` defines the
           # pool EXHAUSTIVELY — a plain definition would merge with the module's
           # default `normal` class. Reduced to a single slot per class for
-          # testing on this laptop.
+          # testing on this laptop. An explicit table always outranks whatever
+          # the module defaults to.
           resourceClasses = lib.mkForce {
             small = {
               count = 1;

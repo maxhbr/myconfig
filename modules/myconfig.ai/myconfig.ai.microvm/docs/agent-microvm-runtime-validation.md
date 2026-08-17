@@ -53,7 +53,77 @@ sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section creds
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section lifecycle
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section malrepo
 sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section forgery
+sudo ./…/runtime-validation.sh --repository /tmp/rtv-src --section seed
 ```
+
+### Capability gating
+
+The host under test may select only one of the two execution capabilities
+(`myconfig.ai.microvm.capabilities`, lightweight plan phase 5 + phase 6). The
+suite ASKS the launcher of that host for the set:
+
+```console
+$ agent-microvm capabilities
+capabilities: interactive batch
+declared: interactive batch vsock
+network-transport: tap
+```
+
+That subcommand exists on every host, needs no root and starts nothing. An answer
+the suite cannot parse (or a launcher that does not know the subcommand, or one
+that declares a capability the suite has no gating rule for) **hard-aborts the
+run**: an earlier version inferred the set by grepping the launcher's English
+refusal messages and defaulted to "this host has everything", so it failed OPEN —
+rewording the refusal would have silently restored the vacuous passes the gating
+exists to prevent.
+
+The sections are gated accordingly. Every section that drives the guest needs a
+**control channel** — the `transport` requirement — which the host provides by
+selecting `interactive` (the TCP sshd) OR `vsock` (the VSOCK `sshd-vsock@`, plan
+phase 6):
+
+| Section | Needs |
+| --- | --- |
+| `boot`, `net`, `l2`, `malrepo` | `transport` (a control channel: `interactive` or `vsock`; every guest command goes through `agent-microvm ssh`) |
+| `creds` | `transport`; its batch-worker-environment subtest additionally needs `batch` and reports the capability instead of inspecting `agent-job-worker@`, which does not exist without it |
+| `lifecycle`, `forgery` | `transport` **and** `batch` (they submit jobs and inspect the result channel) |
+| `seed` | neither (it exercises the HOST-side stager) |
+
+Under `--section all` a section whose requirement is missing is **SKIPPED**, loudly
+and counted (`sections skipped (capability not selected by this host)`); asking
+for exactly such a section **hard-aborts**. Neither is treated as a failure — a
+capability the host deliberately does not select is a configuration fact — but
+running the section anyway would report vacuous passes for its "the guest must
+NOT be able to …" checks, which is the one thing this suite exists to prevent.
+
+### Model-transport gating (phase 6)
+
+The same answer reports the resolved **model transport**
+(`network-transport: tap|vsock`), and it is read with the same fail-closed rule:
+a missing or unknown value **hard-aborts** the run. It has to be, because under
+the `vsock` transport the guest has **no network interface at all**, and every
+"the guest must NOT be able to reach X" check would then pass for a reason that
+has nothing to do with enforcement — the exact vacuity this suite exists to
+prevent.
+
+The transport gates no SECTION (coverage does not shrink); the two
+network-dependent sections ADAPT:
+
+| Section | `tap` | `vsock` |
+| --- | --- | --- |
+| `net` | the full allow/deny matrix: the loopback endpoint AND the bridge endpoint must answer, the gateway/RFC1918/public/DNS/metadata probes must be denied | the loopback endpoint must answer, and the guest is asserted to have NO non-loopback link, NO IPv4/IPv6 default route and NO global address; the arbitrary-host-port probes become loopback probes (only the model port may answer); metadata/RFC1918/public/DNS denials still run |
+| `l2` | bridge-port `isolated on` per TAP, ping/TCP/IPv6-ND/ARP denials, IP impersonation with a positive control | both guests are asserted loopback-only, and the TAP-specific subtests are explicitly `SKIP`ped with the transport as the reason (there is no shared layer 2 to isolate) |
+
+**Coverage hole, CLOSED by phase 6:** on a host that selects only `batch` (no
+`vsock`), seven of the eight sections need a control channel and only `seed`
+runs — honest but thin for the configuration with the largest untrusted-workload
+surface. Such a host is covered by the eval/build tier (`nix build
+.#checks.x86_64-linux.microvm-capabilities`, which builds its guest closure and
+runner and asserts every removal against the evaluated config) plus `--section
+seed`. Plan phase 6 (VSOCK) closed the hole: a `capabilities = [ "batch"
+"vsock" ]` host drives the guest over the VSOCK `sshd-vsock@` control channel and
+runs ALL eight sections, exactly like an interactive host. Only a batch-only
+host that also omits `vsock` still narrows to `seed`.
 
 ### Host-side model-endpoint preflight
 
@@ -66,8 +136,8 @@ seconds fails every forgery subtest, and the `net` endpoint checks fail for the
 same root cause), so the suite does not run them. What happens instead depends
 on what the operator asked for:
 
-- under `--section all`, the five endpoint-INDEPENDENT sections
-  (`boot`/`l2`/`creds`/`lifecycle`/`malrepo`) still RUN, while `net` and
+- under `--section all`, the six endpoint-INDEPENDENT sections
+  (`boot`/`l2`/`creds`/`lifecycle`/`malrepo`/`seed`) still RUN, while `net` and
   `forgery` are **skipped** with a loud, counted reason and the run exits
   non-zero — so the security-critical `forgery` section cannot pass simply by
   not being run (Bug 2);
@@ -78,11 +148,36 @@ The preflight retries up to 3 times (3 s each, 2 s apart) so a cold LiteLLM is
 not mistaken for a dead one; if it fails, run `sudo agent-microvm doctor` on
 the host and re-run the section.
 
+### What is already covered WITHOUT KVM
+
+Two areas that used to need a booted guest are now covered by CI-tier checks, so
+the real-KVM run does not have to establish them:
+
+* `checks.microvm-capabilities` exercises the FULL capability matrix, including
+  that the transport-only `capabilities = [ "vsock" ]` is REJECTED at evaluation
+  time (a workload capability — `interactive` or `batch` — is required);
+* `checks.microvm-host-identity-self-healing` asserts the per-slot SSH host
+  identity lifecycle both by inspecting the BUILT launcher/provisioner and by
+  EXECUTING the real provisioner in `bwrap` + `fakeroot`: idempotency, deletion
+  of a private key (regenerated; other slots untouched), loss of a public key
+  (re-derived from the private key), a MISMATCHED public key (rebuilt; private
+  key preserved), mode drift (repaired without re-keying), 8 concurrent runs
+  (one consistent, duplicate-free database), and the VSOCK-only shape (one
+  `vsock-mux/...` alias, healing identically). `microvm-batch-launcher-submit`
+  additionally proves, by running the REAL launcher against a `systemctl` stub
+  that models the `RemainAfterExit` oneshot faithfully, that a launch repairs a
+  missing identity with `systemctl restart` and ABORTS (booting nothing) when the
+  repair fails.
+
+What still needs real KVM: that the guest's sshd actually presents the
+provisioned key and that the launcher's `ssh` therefore verifies against it.
+
 ## Execution status
 
 | Section | Last executed on real KVM |
 | --- | --- |
 | `boot`, `net`, `l2`, `creds`, `lifecycle`, `malrepo` | **NOT EXECUTED in the present form.** They were run once on f13 (root + `/dev/kvm`) as originally written. That run produced 20 `FAIL`s, of which all but two turned out to be defects of the HARNESS — and the same defects made roughly 25 of the reported `PASS`es vacuous. The harness has since been repaired (see “Harness validity invariants” below); the repaired suite has **not** been run yet. |
+| `seed` | **NOT EXECUTED on a real host yet** — added with the review follow-up of lightweight plan phase 3. Its six cases were executed by hand against the generated stager with a fixture home (allowlisted file staged; benignly named symlink onto a credential refused; credential-shaped name refused; host-home escape refused; FIFO/setuid refused; per-file, total and file-count budgets enforced; depth truncation noted; destination cleaned) — the section is that procedure made repeatable. It starts no VM, so it needs only root. |
 | `forgery` | **NOT EXECUTED** — written together with the controller/worker split; the environment it was written in had no `/dev/kvm` and no root. What *has* been executed for that section's properties are the three eval/build checks `microvm-batch-result-integrity`, `microvm-batch-controller-smoke` and `microvm-batch-launcher-submit` (see below). |
 
 This table is deliberately pessimistic: update it only with a pasted log. The
@@ -91,8 +186,8 @@ command transport, invariant 2b) were made in an environment **without**
 `/dev/kvm` and without root; what *was* executed there is the CI tier, including
 the new `microvm-rtv-transport` check, which runs the suite's own transport
 block against a stub that reproduces OpenSSH's argv flattening plus the guest's
-fish login shell — with a negative control that fails for the previous,
-unquoted transport.
+login shell — with a negative control that fails for the previous, unquoted
+transport.
 
 Every check prints one line — `PASS`, `FAIL` or `SKIP` — and the script exits
 non-zero if anything failed. `SKIP` is honest (e.g. "fewer than two slots in the
@@ -121,12 +216,14 @@ lying:
 2b. **The command must reach the guest as written — and that is *measured*.**
    `agent-microvm ssh <slot> -- <argv…>` cannot preserve argument boundaries:
    OpenSSH joins the remaining argv with single spaces and the guest's **login
-   shell** re-parses the string — and that shell is `fish` (`guest.nix`:
-   `users.users.agent.shell = pkgs.fish`). A payload such as
+   shell** re-parses the string — bash today (`guest.nix`:
+   `users.users.agent.shell = pkgs.bashInteractive`; it was `fish` before the
+   lightweight guest dropped it). A payload such as
    `sh -c "timeout 5 sh -c '</dev/tcp/GW/22'"` therefore used to arrive as
    `sh -c timeout 5 sh -c '…'`, i.e. `sh -c` received only the word `timeout`:
    the command failed for a **quoting** reason and the denial passed
-   *vacuously*. `${VAR:-}` was worse — `${` is a fish syntax error, so the whole
+   *vacuously*. `${VAR:-}` was worse — the login shell expanded (or, under fish,
+   rejected) it before the inner shell saw it, so the whole
    credential-environment block could never be evaluated.
    The suite now sends every payload as ONE token escaped for the guest's login
    shell (`guest_sh`/`guest`), **detects** the quoting dialect per slot, and
@@ -174,6 +271,39 @@ lying:
    whatever the property under test does.
 7. **A subtest that could not set its fixture up must `SKIP`**, loudly, rather
    than assert against a situation it never created.
+8. **Never validate the paths of a layout the host does not use.** Most checks
+   are of the form “nothing forbidden exists under `$X`”, so a `$X` that does
+   not exist at all is reported as a `PASS`. See below.
+
+## The share layout
+
+There is exactly ONE share layout (lightweight plan phase 4), and the suite's
+path constants are derived from it:
+
+| | Path |
+| --- | --- |
+| job data | `<runtimeRoot>/sessions/<slot>` |
+| workspace bind | `<runtimeRoot>/sessions/<slot>/workspace` |
+| agent-state bind | `<runtimeRoot>/sessions/<slot>/state` |
+| staged config | `<runtimeRoot>/sessions-ro/<slot>/config-seed` |
+| staging manifest | `<runtimeRoot>/config-seed/<slot>/manifest.json` (outside every share) |
+| guest job mount | `/run/agent-session` |
+| guest virtiofs set | `/run/agent-session`, `/run/agent-session-ro` |
+
+On a host that narrows `capabilities` the two shares are unchanged but some
+subdirectories do not exist (no `input/`, `controller/`, `worker/`,
+`worker-logs/` without `batch`; no `hostkeys/` without `interactive`). The
+sections that would inspect them are exactly the ones the capability gating
+above skips, so no path constant can silently point at a directory the host
+never creates.
+
+The suite prints the session root in its banner line. Pointing the constants at
+a tree that does not exist would not be a cosmetic bug: almost every assertion
+is of the form “nothing forbidden exists under `$X`”, so the stale-bind detector
+of `lifecycle` and **every** enforcement assertion of `seed` would pass
+vacuously. The `seed` section therefore hard-`FAIL`s if the staged payload
+directory does not exist after a successful staging run, so that failure mode is
+structurally impossible rather than merely unlikely.
 
 ## What each section asserts
 
@@ -184,7 +314,7 @@ lying:
 | every resource class boots and becomes SSH-ready (polled, see invariant 1) |
 | `/workspace` is a mount point and is writable by the guest `agent` user |
 | the host `/nix/store` is **not** shared into the guest |
-| exactly four virtiofs shares: `/workspace`, `/var/lib/agent-hostkey`, `/run/agent-job`, `/var/lib/agent-state` (an empty enumeration is a `FAIL`, not a pass) |
+| exactly the expected virtiofs shares (an empty enumeration is a `FAIL`, not a pass): exactly `/run/agent-session` and `/run/agent-session-ro` — `/workspace` is a *bind* of the session share and therefore not of type `virtiofs`. See “The share layout” above |
 | workspace changes survive shutdown (they are in the standalone clone) |
 | guest home and guest `/tmp` changes do **not** survive a restart — asserted only after the markers were proved to have been CREATED in the first run (the suite used to write `/root-marker`, which the unprivileged agent cannot create at all, and then “prove” it had not persisted) |
 | `--persist-agent-state` persists **only** declared paths (`~/.hermes`), never undeclared ones |
@@ -192,9 +322,11 @@ lying:
 
 ### `net` — proxy-only allow/deny matrix
 
-Allowed: `127.0.0.1:4000` (guest loopback forwarder) and
-`192.168.83.1:4000` (bridge endpoint) — i.e. model access **only** through
-LiteLLM.
+Allowed: `127.0.0.1:4000` (guest loopback forwarder) and — under the `tap`
+transport only — `192.168.83.1:4000` (bridge endpoint) — i.e. model access
+**only** through LiteLLM. Under the `vsock` transport there is no bridge address
+at all, and the section asserts the ABSENCE of the guest's network interface
+instead (see [Model-transport gating](#model-transport-gating-phase-6)).
 
 Denied (each success here is a security failure):
 `169.254.169.254`, host SSH on the gateway, an arbitrary host port,
@@ -214,6 +346,7 @@ overlay. See [Boot-time model discovery](agent-microvm.md#boot-time-model-discov
 
 | Expected outcome |
 | --- |
+| (`tap` transport only — under `vsock` the whole table is replaced by "each guest has nothing but loopback", see [Model-transport gating](#model-transport-gating-phase-6)) |
 | `bridge -d link show` reports `isolated on` for the TAP of **every running** slot, and every running slot has its TAP (the TAP name is `vm-<class>-<i>` for slot `agent-<class>-<i>`) |
 | guest A cannot ping or TCP-connect to guest B |
 | guest A cannot reach guest B over IPv6 link-local / multicast |
@@ -273,7 +406,7 @@ State the launcher cannot see is state nobody will clean up, so its absence from
 
 ### `forgery` — the batch result channel (ticket 7)
 
-The authoritative batch result (`/run/agent-job/controller/result.json`) is
+The authoritative batch result (`/run/agent-session/controller/result.json`) is
 written by the TRUSTED guest controller (root) and consumed by the host. The
 coding agent and every repository process run as the unprivileged guest `agent`
 user. This section measures that separation on a *booted* guest, because it is
@@ -321,7 +454,8 @@ What the eval/build tier already executes for the same properties (run by
 - `microvm-batch-launcher-submit` runs the real **host** `agent-microvm submit`
   (39 assertions) with `systemctl`/`mount`/`umount`/`findmnt` stubbed, where the
   `systemctl start microvm@<slot>` stub plays the guest: it records the effective
-  ownership/modes of the job share the launcher created (input `0755`, spec
+  ownership/modes of the job subtree the launcher created inside the ONE
+  writable session share (input `0755`, spec
   `0400`, controller `0700`, worker agent-owned, worker-logs root-owned) and
   plants a genuine, a foreign-token, a foreign-slot, a v1, a malformed or a
   worker-only "result". Only the genuine one may yield exit 0; everything else
@@ -365,6 +499,124 @@ never contained any of it). A positive control asserts that
 `/workspace/escape-shadow` really is a symlink in the guest before the escape
 check concludes anything.
 
+### `seed` — runtime configuration staging
+
+HOST-only (no VM is started, but root is required): it runs the generated
+`agent-microvm-stage-config` for a **stopped** slot, plants fixtures in the real
+host home under an allowlisted directory (`~/.agents/skills/rtv-config-seed`,
+plus a credential-shaped tree `~/.rtv-cfgseed-fixture` used only as a symlink
+*target*) and re-runs the stager. It asserts, against the staging **manifest**
+and the staged tree, that:
+
+- an allowlisted regular file **is** staged (positive control — without it every
+  negative below could pass because nothing was staged at all);
+- a benignly **named** symlink onto a credential (`benign-config.md` →
+  `…/auth.json`) and onto a credential-shaped **directory** (`notes` → `…/tokens`)
+  are refused *because the RESOLVED name is denied*, not merely absent;
+- a credential-shaped file name inside an allowlisted directory is refused;
+- a symlink escaping the host home (`→ /etc/passwd`) is refused;
+- a setuid file is refused and a FIFO never reaches the staged tree;
+- an over-budget file is refused;
+- no fixture credential content appears anywhere in the staged tree;
+- the staged tree is root-owned and has **no** group/other bits, the manifest is
+  `root 0400` and lies **outside** the guest-visible payload directory;
+- … and, before any of the above, that the payload directory **exists** at all
+  (a hard `FAIL`): every assertion in this list is “nothing forbidden is under
+  `$payload`”, so a wrong payload path would satisfy all of them at once.
+- removing the fixtures and re-staging leaves nothing of them behind (the
+  destination is cleaned before every launch).
+
+Every fixture is removed again on return, including on failure. The whole
+section SKIPs when `agent-microvm-stage-config` is not on `PATH` (i.e. the host
+does not use runtime config staging) or when every slot is currently running.
+
+Why it is here and not in `nix flake check`: the stager writes a root-owned tree
+(`install -o root -g root`) and the Nix build sandbox is not root, so CI can only
+prove the policy is *baked in* — whether it is *enforced* is decided here.
+
+## Measurements (plan phase 0 + the phase-6 acceptance numbers)
+
+`tests/measure-boot.sh` is the repeatable benchmark the plan asks for. It emits
+ONE JSON document so two runs can be diffed and a later phase can be compared
+against a recorded baseline.
+
+```console
+# everything that needs neither root nor /dev/kvm (closure sizes, unit counts,
+# share counts, interface counts, host helper units per VM):
+$ tests/measure-boot.sh --static-only --json /tmp/measure-static.json
+
+# the full set, on a KVM host, as root (adds launch-to-ready latency, idle RSS,
+# the running host task counts and the guest process count):
+$ sudo tests/measure-boot.sh --repeat 3 --json /tmp/measure-full.json
+```
+
+The script **never estimates** the runtime numbers. Without `/dev/kvm` (or
+without root, or without the launcher on `PATH`) it emits
+`"runtime": null` plus a `runtime_status` string beginning with `PENDING:`, and
+the static half is still complete.
+
+### Recorded results
+
+Measured with this harness on the reference host `test-f13` (two slots:
+`small` 2 vCPU/4 GiB, `normal` 4 vCPU/8 GiB, five selected agents), comparing
+`ca309d221b` (the pre-lightweight, four-share, guest-home-manager shape) with the
+current tree. `agent-small-0`, bytes as reported by `nix path-info -S`:
+
+| Metric | before (`ca309d221b`) | after (HEAD, `tap`) | Δ |
+| --- | --- | --- | --- |
+| guest closure (`system.build.toplevel`) | 5,775,759,800 | 4,769,447,064 | −1,006,312,736 (−17.4 %) |
+| runner closure (`microvm.declaredRunner`) | 11,280,225,192 | 9,782,519,304 | −1,497,705,888 (−13.3 %) |
+| generated guest units (`systemd.services`) | 66 | 65 | −1 |
+| virtiofs shares per slot | 4 | 2 | −2 (⇒ 2 virtiofsd instead of 4) |
+| host helper units per VM | 6 | 6 | 0 |
+
+The same harness on the shape the plan actually aims at — ONE agent (`codex`),
+`capabilities = [ "interactive" "batch" ]`, one 2 vCPU/4 GiB slot:
+
+| Metric | before (`ca309d221b`, 2 slots × 5 agents) | Codex-only `tap` | Codex-only `vsock` |
+| --- | --- | --- | --- |
+| guest closure | 5,775,759,800 | 1,648,880,624 (−71.5 %) | 1,649,837,240 (−71.4 %) |
+| runner closure | 11,280,225,192 | 5,266,962,544 (−53.3 %) | 5,268,407,960 (−53.3 %) |
+| generated guest units | 66 | 65 | **62** |
+| guest sockets | 6 | 6 | **4** |
+| guest network interfaces | 1 | 1 | **0** |
+| host units per VM | 6 | 6 | 6 (composition differs: the TAP-attach unit is gone, the per-VM AF_VSOCK forwarder socket is new; `microvm-tap-interfaces@<slot>` still exists but its `ConditionPathExists` on `current/bin/tap-up` fails, so no TAP is ever created) |
+| host units SHARED by all VMs | bridge socket + bridge IPv6 oneshot + per-TAP attach + host keys | same | **host keys only** (no bridge, no bridge socket, no firewall chain) |
+
+So the VSOCK transport costs ≈0.9 MB of guest closure (the `socat` the guest-side
+bridge needs) and removes three guest units, two guest sockets, the guest's whole
+network stack, the host bridge, the host TAP plumbing and the
+`AGENT_MICROVM_*` firewall chains.
+
+That ≈0.9 MB is specific to the MINIMAL (codex-only) shape, where `socat` is not
+otherwise in the closure. On the five-agent reference host the same comparison
+(`agent-normal-0`, `nix path-info -S` of the built paths) is:
+
+| Metric | `tap` | `vsock` | Δ |
+| --- | --- | --- | --- |
+| guest closure | 4,769,448,040 | 4,769,523,888 | +75,848 (+0.002 %) |
+| runner closure | 9,782,512,128 | 9,782,613,488 | +101,360 (+0.001 %) |
+
+— because `socat` is already reachable from that larger closure, so all that is
+added are the generated units.
+
+### Still PENDING a real-KVM run
+
+These are **not** measured yet and are deliberately **not** estimated (the
+machine this work was done on has no `/dev/kvm`):
+
+- launch-to-agent-ready latency, `tap` vs `vsock`;
+- idle RSS per running slot (the hypervisor cgroup + its virtiofsd);
+- the RUNNING host process/task count per slot and the guest process count;
+- warm build time from a populated Nix cache.
+
+Run `sudo tests/measure-boot.sh --repeat 3 --json …` on the KVM host and paste
+the numbers into this section. The plan's phase-6 PROOF EVENT (a green
+`--section creds` + `--section boot` on a `batch`+`vsock` host, and — new with
+the literal transport — a green `--section net` on a `vsock`-transport host,
+which is what confirms the AF_VSOCK model path actually carries the model API)
+belongs to the same run.
+
 ## Manual extras (not automated)
 
 - `journalctl -t agent-microvm -f` during a run: the structured lifecycle
@@ -378,11 +630,17 @@ check concludes anything.
   `systemctl show agent-job-worker@<agent> -p MemoryMax,CPUQuota,TasksMax` for
   the per-class guest limits (they live on the WORKER unit) plus
   `systemctl status agent-job-controller` for the trusted half.
-- inside the guest: `sudo -u agent ls -ld /run/agent-job/*` — `input/` and
+- inside the guest: `sudo -u agent ls -ld /run/agent-session/*` — `input/` and
   `controller/` must be root-owned (the latter `0700`), only `worker/` may be
   agent-owned.
 - `iptables-save | grep AGENT_MICROVM` to review the rendered ruleset for the
-  active network profile.
+  active network profile (`tap` transport only — a `vsock`-transport host has no
+  such chains, and `agent-microvm doctor` says so instead of failing).
+- on a `vsock`-transport host: `systemctl status agent-litellm-vsock-<slot>.socket`
+  and `ss -lx | grep notify.vsock_` to see the per-VM model listener, plus, inside
+  the guest, `ip -o link` (must show `lo` only) and
+  `curl -fsS http://127.0.0.1:4000/v1/models` (must answer through the AF_VSOCK
+  path).
 
 ## Interpreting failures
 

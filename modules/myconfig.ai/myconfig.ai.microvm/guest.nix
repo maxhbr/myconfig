@@ -49,7 +49,6 @@
   pkgs,
   inputs,
   myconfig,
-  mkGuestHome,
   # The effective resource-class table (see default.nix).
   agentResourceClasses,
   # The ONE authoritative supported-agent registry instance, built in
@@ -76,6 +75,22 @@
   # output), from guest-model-config.nix
   # (`_module.args.agentModelConfig`).
   agentModelConfig,
+  # The ONE definition of the RUNTIME configuration staging (lightweight plan
+  # phase 3): the per-slot host staging directory, the read-only share's guest
+  # side and the root-owned guest seeding oneshot, from config-seed.nix
+  # (`_module.args.agentConfigSeed`).
+  agentConfigSeed,
+  # The ONE definition of the per-session tree (./session.nix, lightweight plan
+  # phase 4): the layout table, its guest mount points/tags and the guest
+  # fragment that bind-mounts the session tree's `workspace/` to `/workspace`.
+  agentSession,
+  # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
+  # Only two things here consult it directly: the guest INTERACTIVE entry point
+  # `agent-run` (which only an interactive session ever invokes) and the
+  # cross-module share assertion below. The batch units/packages and the session
+  # subdirectories follow ../job.nix's and ../session.nix's own per-capability
+  # decisions.
+  agentCapabilities,
   ...
 }:
 let
@@ -85,12 +100,24 @@ let
   # slots.nix and is shared with default.nix (which asserts uniqueness and
   # the slot-count bound over this exact table).
   # The slot pool of the effective resource classes (ticket 5 A). The class
-  # table comes from default.nix (`_module.args.agentResourceClasses`), which
-  # also performs the legacy `slotCount` migration, so every module builds the
-  # SAME pool.
+  # table comes from default.nix (`_module.args.agentResourceClasses`), so every
+  # module builds the SAME pool.
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   netCaps = agentNetwork.caps;
+  # The ONE transport decision (lightweight plan phase 6), resolved in
+  # default.nix from ./network-profiles.nix. `netTransport.guestInterface` is
+  # what decides whether this guest has a network interface AT ALL: under the
+  # `vsock` transport (the `vsock` capability + the closed `proxy-only` profile)
+  # it has none — no TAP, no static IPv4, no default route, no networkd — and
+  # the model API travels over AF_VSOCK to the per-VM host forwarder instead
+  # (../network.nix). Every guest-side network decision below reads THIS, never
+  # the transport name and never the capability set.
+  netTransport = agentNetwork.transportCaps;
+  # Whether the TCP sshd can be reached at all (false without an interface), so
+  # the VSOCK `sshd-vsock@` is the only live control channel of a vsock guest.
+  # Resolved once in default.nix.
+  tapSshUsable = agentNetwork.tapSshUsable;
 
   # Prefix length of the private subnet (e.g. "192.168.83.0/24" -> 24), used
   # for the guest-side static address. Derived from the SAME option the host
@@ -198,16 +225,106 @@ let
     };
   };
 
+  # --- guest toolchain (plan §7, lightweight plan phase 8) ----------------
+  # The interactive login shell of the guest `agent` user: plain bash. The guest
+  # deliberately does NOT ship fish (the host primary user's shell) any more —
+  # that dropped the fish closure and the `programs.fish` machinery from every
+  # guest, and nothing in the guest configures fish since guest home-manager
+  # provisioning was replaced by launch-time config staging.
+  guestShell = pkgs.bashInteractive;
+
+  # Generic CLI toolset available to the agent inside the guest. Everything the
+  # module's OWN guest scripts need is already in their `writeShellApplication`
+  # `runtimeInputs`, so this set exists purely for the agent and for a human
+  # debugging a session over SSH.
+  #
+  # THE set (lightweight plan phase 8) — every entry has a named consumer:
+  #   coreutils/findutils/gnugrep/gnused/gawk  the POSIX toolbox every agent and
+  #                                            every repo script assumes
+  #   bash                                     non-login script interpreter
+  #                                            (`#!/usr/bin/env bash`)
+  #   git                                      the workspace IS a git clone
+  #   diffutils, patch                         agents produce/apply patches
+  #   ripgrep, jq                              code/JSON inspection the agents
+  #                                            invoke directly
+  #   less                                     git's default pager
+  #   openssh                                  interactive control channel
+  #                                            (`enableSsh`)
+  #   procps, util-linux                       the deliberately small
+  #                                            troubleshooting set (ps, findmnt,
+  #                                            mount, lsblk) needed to
+  #                                            understand a broken session
+  # Deliberately ABSENT from `guestCommonPackages`: curl, rsync, unzip, tree, fd,
+  # file, which, gnumake — duplicate or workload-specific tools with no
+  # in-guest consumer under the secure proxy-only profile.
+  guestCommonPackages =
+    with pkgs;
+    [
+      bash
+      coreutils
+      diffutils
+      findutils
+      gawk
+      git
+      gnugrep
+      gnused
+      jq
+      less
+      patch
+      procps
+      ripgrep
+      util-linux
+    ]
+    ++ lib.optional cfg.enableSsh openssh;
+
+  # --- the per-slot SHARE LIST (lightweight plan phase 4) ----------------
+  # Everything the guest may WRITE lives in ONE per-session tree
+  # (./session.nix): `workspace/`, `input/`, `controller/`, `worker/`,
+  # `worker-logs/` and `state/`. The trust boundaries are expressed by
+  # OWNERSHIP and MODES, which virtiofsd passes through unchanged: the session
+  # root, `input/`, `controller/` (root-ONLY 0700) and `worker-logs/` stay
+  # root-owned, only `workspace/`, `worker/` and `state/` belong to the
+  # unprivileged guest `agent` user. The launcher verifies exactly that BEFORE
+  # it starts the VM.
+  #
+  # The SECOND share is READ-ONLY (virtiofsd `--readonly`) and root-owned: the
+  # slot's SSH host identity (hostkeys.nix) and the staged, allowlisted host
+  # configuration (config-seed.nix). Deliberately NOT folded into the writable
+  # tree — the plan itself forbids that for the host keys, and phase 3
+  # established the same for the staged configuration (invariants 7 and 8
+  # outrank the plan's layout sketch; see ./session.nix).
+  #
+  # `/workspace` itself is a BIND MOUNT of `<session>/workspace` inside the
+  # guest (agentSession.guestModule), so `agent-run` and every agent keep
+  # the path they already expect.
+  #
+  # Do NOT add further shares — no /nix, /home, host sockets or cross-slot
+  # paths (plan §10). The guest keeps its own /nix/store on microvm.nix's store
+  # disk, because no share source is "/nix/store".
+  mkShares = slot: [
+    {
+      proto = "virtiofs";
+      tag = agentSession.guestTag;
+      source = agentSession.slotDir slot.name;
+      mountPoint = agentSession.guestMountPoint;
+    }
+    {
+      proto = "virtiofs";
+      tag = agentSession.guestRoTag;
+      source = agentSession.roSlotDir slot.name;
+      mountPoint = agentSession.guestRoMountPoint;
+      readOnly = true;
+    }
+  ];
+
   # --- minimal Cloud Hypervisor guest for a given slot --------------------
   mkGuest =
     slot:
+    # NOTE: the guest runs NO home-manager activation at all. Its home is
+    # provisioned at LAUNCH time from the host-staged, allowlisted copy
+    # (config-seed.nix), so neither the home-manager NixOS module nor its
+    # activation service is part of the guest closure.
     lib.mkMerge [
-      # Guest dotfile provisioning: run home-manager inside the guest for the
-      # `agent` user, copying the host primary user's allowlisted shell +
-      # coding-agent dotfiles (see guest-home.nix). Empty attrset when the
-      # feature is disabled, so a bare guest keeps no home-manager overhead.
-      { imports = [ inputs.home.nixosModules.home-manager ]; }
-      (mkGuestHome { inherit pkgs; })
       # Unattended batch execution (ticket 4, trust-split in ticket 7): the
       # TRUSTED `agent-job-controller` oneshot (inert unless the host placed a
       # spec in the share) plus the UNTRUSTED `agent-job-worker@` template it
@@ -215,15 +332,100 @@ let
       # same guest path.
       (agentJobs.mkGuestModule slot)
       # Boot-time model discovery: query the loopback LiteLLM endpoint and
-      # render the LIVE model list into pi + opencode config, overriding the
-      # build-time lists copied from the host dotfiles. Empty attrset when
+      # render the LIVE model list into pi + opencode config. Empty attrset when
       # disabled or when the profile has no model API at all.
       agentModelConfig.guestModule
       # Opt-in, task-scoped agent state (ticket 5 B): links only the DECLARED
       # directories the host prepared for this run; a run without
       # --persist-agent-state sees an empty share and keeps the disposable home.
       agentState.guestModule
+      # Runtime configuration staging (lightweight plan phase 3): the root-owned
+      # oneshot that copies the host-staged, allowlisted configuration into the
+      # disposable home BEFORE sshd, the batch job controller and the
+      # agent-state linker.
+      agentConfigSeed.guestModule
+      # The consolidated session share (lightweight plan phase 4): bind-mounts
+      # `<session>/workspace` to `/workspace`, so `agent-run`'s findmnt +
+      # writability checks and every agent's expectation of `/workspace` keep
+      # working, and orders sshd after the read-only host-key mount.
+      agentSession.guestModule
+      # The BATCH worker (`agent-job-worker@<agent>.service`) is a non-login
+      # systemd oneshot: it never sources /etc/set-environment, so the endpoint
+      # vars in `environment.variables` would not reach it (NixOS puts them ONLY
+      # in login profiles, not in systemd's `DefaultEnvironment`). Give it the
+      # SAME endpoint environment the interactive login shell gets, so pi/codex/
+      # hermes batch workers can actually reach the loopback forwarder. The
+      # `creds` section of runtime-validation.sh asserts BOTH halves carry these
+      # (and the negative controls stay absent) — on a host that selects `batch`;
+      # on one that does not, that subtest reports the missing capability instead
+      # of inspecting a unit that does not exist. Placeholder keys only (§17).
+      # EMPTY without the `batch` capability — ../job.nix decides whether a
+      # worker unit exists at all, so this cannot define one behind its back.
+      (agentJobs.mkWorkerEnvironmentModule modelEndpointEnv)
       (mkGuestBase slot)
+      # VSOCK-only control channel (lightweight plan phase 6): when VSOCK is the
+      # ONLY control channel (a batch+vsock host: `enableSsh = false`, no
+      # `interactive`), suppress the TCP sshd entirely — do NOT install the
+      # `sshd.service` NixOS' openssh module declares (it is enabled because
+      # `services.openssh.enable` is true for the VSOCK sshd), so no TCP
+      # listener ever starts, only the VSOCK `sshd-vsock@`. The SAME `mkIf`
+      # ALSO closes the TAP firewall for the TCP sshd port: the openssh module
+      # leaves `services.openssh.openFirewall` at its nixpkgs default `true`,
+      # which would add 22 to `networking.firewall.allowedTCPPorts` on a guest
+      # whose TCP sshd is masked — a silent regression vector (if the
+      # `sshd.enable = false` masking were ever dropped, 22 would already be
+      # open) and a contradiction of the "no TCP/network SSH daemon" invariant.
+      # The VSOCK sshd is host-only (CID 2 -> vsock::22), never reachable from
+      # the TAP, so it needs no TAP firewall rule. This is a `mkIf` MERGE
+      # ELEMENT (not an attr inside `mkGuestBase`): setting either key inside
+      # the always-present base attrset would create the `sshd` key / flip
+      # `openFirewall` even when the condition is false, regressing the
+      # batch-only "no sshd" invariant. Filtered out entirely when
+      # `vsock && !enableSsh` is false, so an interactive host (which runs the
+      # TCP sshd and legitimately opens 22) and a batch-only host (no openssh at
+      # all) are byte-for-byte unchanged. Recorded deviation from phase 5's "a
+      # batch-mode guest has no SSH daemon": scoped to "no TCP/network SSH
+      # daemon" (no `sshd.service` AND no TAP firewall opening for 22); a
+      # VSOCK-only inetd sshd (host-only, over AF_VSOCK) is the control channel.
+      # --- NO GUEST NETWORK STACK AT ALL (the `vsock` transport, phase 6) ----
+      # microvm.nix's optimization module sets `networking.useNetworkd =
+      # mkDefault true`, so without these a guest with ZERO interfaces would
+      # still start systemd-networkd (and, with networkd off but `useDHCP` at its
+      # NixOS default, dhcpcd instead). Both would be pure overhead on a guest
+      # whose only link is loopback, and both are exactly the "ordinary IP
+      # networking" that invariant 6 forbids from creeping back in. A `mkIf`
+      # MERGE ELEMENT (not attrs inside `mkGuestBase`), so a TAP guest does not
+      # even acquire the keys and stays byte-for-byte unchanged.
+      #
+      # `networking.firewall` is deliberately LEFT ENABLED: it costs one unit and
+      # is the honest belt to the braces of "there is no interface", so a future
+      # regression that gives this guest a link cannot silently also give it an
+      # open port (`services.openssh.openFirewall = false` below keeps 22 out of
+      # it — the VSOCK sshd needs no TCP rule).
+      #
+      # IMPLICIT INVARIANT worth naming: several guest units still `want`/`after`
+      # `network-online.target` unconditionally (../guest-model-config.nix's
+      # model discovery, ../job.nix's batch controller). That is benign HERE only
+      # because turning networkd and dhcpcd off leaves NO `*-wait-online` unit in
+      # the guest at all, so the target has nothing to pull in and activates
+      # trivially. The day any unit starts PROVIDING `network-online` in this
+      # guest, its boot would stall for the default 120 s — so
+      # `checks.microvm-vsock-transport` asserts that no `*-wait-online` unit
+      # exists here, and the ONE unit that genuinely needed the target (the
+      # loopback->bridge forwarder) drops it under this transport.
+      (lib.mkIf (!netTransport.guestInterface) {
+        networking.useNetworkd = false;
+        networking.useDHCP = false;
+        networking.dhcpcd.enable = false;
+        systemd.network.enable = false;
+      })
+      (lib.mkIf (agentCapabilities.vsock && !tapSshUsable) {
+        systemd.services.sshd.enable = false;
+        # The TCP sshd is masked above, so its TAP firewall opening must go too:
+        # `openFirewall = false` keeps 22 out of `allowedTCPPorts` on a guest
+        # whose only SSH listener is the host-only VSOCK `sshd-vsock@`.
+        services.openssh.openFirewall = false;
+      })
     ];
 
   mkGuestBase = slot: {
@@ -240,9 +442,20 @@ let
       vcpu = slot.vcpu;
       mem = slot.memoryMiB;
 
-      # Deterministic per-slot TAP + MAC (plan §4). Guest-side IP
-      # addressing / routing is intentionally deferred to network.nix.
-      interfaces = [
+      # Deterministic per-slot TAP + MAC (plan §4), and the guest-side static
+      # address below.
+      #
+      # EMPTY under the `vsock` transport (lightweight plan phase 6): the guest
+      # then has NO network interface at all — no TAP device on the host, no
+      # link in the guest, only loopback — and reaches the host LiteLLM proxy
+      # over AF_VSOCK instead (the guest bridge below + the per-VM host
+      # forwarder in ../network.nix). That is the plan's literal acceptance
+      # criterion "in proxy-only VSOCK mode, the guest has no network interface
+      # other than loopback", and it is strictly stronger than the TAP shape:
+      # LAN, VPN, cloud metadata, DNS, other guests and every other host port
+      # are unreachable because there is nothing to address them WITH, not
+      # because a firewall rule says no.
+      interfaces = lib.optionals netTransport.guestInterface [
         {
           type = "tap";
           id = slot.tap;
@@ -253,92 +466,30 @@ let
       # No graphics for a headless agent sandbox (also microvm's default).
       graphics.enable = false;
 
-      # --- §10 workspace share (the ONLY share) --------------------------
-      # Exactly one virtiofs share surfaces the slot's host-side workspace
-      # directory into the guest as the single writable `/workspace` mount.
-      # Its `source` is the SAME host path the launcher uses as its
-      # bind-mount target — `mount_point()` in launcher.nix renders
-      # "${cfg.stateRoot}/<slot>/workspace" — so host and guest agree on the
-      # one writable path (plan §10: "Slot references stable relative
-      # workspace path in microVM state dir"). Read-write on purpose
-      # (readOnly is left at its `false` default); the guest agent edits the
-      # clone in place.
-      #
-      # Ownership (§11): virtiofsd passes file ownership through unchanged
-      # (no --translate-uid/gid), and the launcher chowns the clone tree to
-      # uid/gid 1000 on the host, so `/workspace` appears owned by the guest
-      # `agent` user (uid 1000) and is writable — satisfying `agent-run`'s
-      # `test -w /workspace` check. posixAcl stays at its `true` default
-      # (no conflict, since no UID/GID translation is used).
-      #
-      # This is the ONLY share: microvm.nix keeps the guest /nix/store on its
-      # own storeDisk (microvm.storeOnDisk defaults to true unless a share's
-      # source is "/nix/store", which this is not), so it does NOT add a
-      # store share. The guest therefore has EXACTLY this one share. Do NOT
-      # add /nix, /home, host sockets or any other share here (plan §10).
-      # SECOND share (ticket 3 B) — the per-slot SSH host identity, READ-ONLY:
-      # `${runtimeRoot}/hostkeys/<slot>` holds exactly that slot's ed25519 host
-      # key, provisioned on the host by `agent-microvm-hostkeys.service` (see
-      # hostkeys.nix). virtiofsd passes ownership through unchanged, so the
-      # private key stays root:root 0400 inside the guest — the unprivileged,
-      # untrusted `agent` user cannot read it, and no other slot's directory is
-      # visible. This gives the launcher a STABLE host identity per slot so it
-      # can use `StrictHostKeyChecking=yes`, instead of the previous throwaway
-      # key + unauthenticated `StrictHostKeyChecking=no` control channel.
-      #
-      # Deliberate, documented amendment to plan §10's "EXACTLY ONE share":
-      # read-only, root-only, single-purpose, per-slot. Do NOT add further
-      # shares — no /nix, /home, host sockets or cross-slot paths.
-      shares = [
-        {
-          proto = "virtiofs";
-          tag = "workspace";
-          source = "${cfg.stateRoot}/${slot.name}/workspace";
-          mountPoint = "/workspace";
-        }
-      ]
-      ++ lib.optional cfg.enableSsh {
-        proto = "virtiofs";
-        tag = agentHostKeys.guestTag;
-        source = agentHostKeys.slotDir slot.name;
-        mountPoint = agentHostKeys.guestMountPoint;
-        readOnly = true;
-      }
-      # THIRD share (ticket 4, trust-split in ticket 7) — the per-slot batch JOB
-      # directory. Read-write, because the guest must write its result; but WHO
-      # may write WHAT inside it is decided by ownership and modes, which
-      # virtiofsd passes through unchanged (see job.nix):
-      #   input/       root:root      the spec (0400 — it carries the allocation
-      #                               token) and the prompt (0444)
-      #   controller/  root:root 0700 the TRUSTED guest controller's channel,
-      #                               where the AUTHORITATIVE result is written.
-      #                               The unprivileged guest agent can neither
-      #                               write nor read it, and cannot rename or
-      #                               shadow it (this share root is root-owned
-      #                               0755).
-      #   worker/      agent-owned    the UNTRUSTED worker's logs/artifacts
-      # The prompt therefore never travels as a process argument, the guest
-      # cannot rewrite its own job, and repository code cannot forge a result.
-      ++ [
-        {
-          proto = "virtiofs";
-          tag = agentJobs.guestTag;
-          source = agentJobs.slotDir slot.name;
-          mountPoint = agentJobs.guestMountPoint;
-        }
-        # FOURTH share (ticket 5 B) — the slot's agent-state directory. The
-        # launcher bind-mounts the per-TASK, per-AGENT state onto this per-slot
-        # path while the slot runs, and leaves it EMPTY unless the run asked for
-        # `--persist-agent-state`. Read-write and owned by the guest agent, so
-        # only the declared directories (never the host home, ~/.ssh, sockets or
-        # another task's state) are exposed.
-        {
-          proto = "virtiofs";
-          tag = agentState.guestTag;
-          source = agentState.slotDir slot.name;
-          mountPoint = agentState.guestMountPoint;
-        }
-      ];
+      # The per-slot share list (see `mkShares` in the `let` above, which is
+      # also what the phase-4 assertions below inspect).
+      shares = mkShares slot;
+
+      # --- VSOCK control channel (lightweight plan phase 6) ----------------
+      # The deterministic per-slot AF_VSOCK CID (slots.nix) wires the guest's
+      # VSOCK device. For cloud-hypervisor this also flips `microvm@<slot>` to
+      # `Type=notify` and starts the socat <-> vsock bridge that backs the
+      # device with `<stateRoot>/<slot>/notify.vsock` — which is exactly the
+      # socket the host's `ssh vsock-mux/<path>` reaches `sshd-vsock@`
+      # (vsock::22) through. REUSED from upstream microvm.nix, not reinvented.
+      # `mkIf` so a host that does not select `vsock` leaves `microvm.vsock.cid`
+      # at its default `null` and the guest closure is byte-for-byte unchanged.
+      vsock.cid = lib.mkIf agentCapabilities.vsock slot.cid;
+
+      # --- pinned guest store disk (lightweight plan phase 1) -------------
+      # PIN microvm.nix's closure/startup optimizations and the store-disk
+      # filesystem instead of inheriting upstream defaults, so a future
+      # microvm.nix release cannot silently give the guest documentation, a
+      # non-systemd initrd, network-wait-online or a slower store image. Both
+      # values happen to be microvm.nix's current defaults; pinning them is
+      # about keeping them that way.
+      optimize.enable = true;
+      storeDiskType = "erofs";
     };
 
     # Unprivileged guest user that runs the agent (plan §6). Not root; no
@@ -350,13 +501,15 @@ let
       createHome = true;
       extraGroups = [ ];
       hashedPassword = "!";
-      # Same interactive login shell as the host primary user.
-      shell = pkgs.fish;
+      shell = guestShell;
     }
-    // lib.optionalAttrs (cfg.enableSsh && cfg.sshPublicKeyFile != null) {
+    // lib.optionalAttrs ((cfg.enableSsh || agentCapabilities.vsock) && cfg.sshPublicKeyFile != null) {
       openssh.authorizedKeys = {
         # §18: the dedicated public key authorises the guest `agent` user.
-        # NOT a host authorized_keys file.
+        # NOT a host authorized_keys file. Authorised for the TCP sshd
+        # (`enableSsh` / `interactive`) AND the VSOCK sshd (`vsock`), since
+        # the VSOCK control channel (phase 6) is the same operator-facing
+        # login, just over AF_VSOCK instead of the TAP.
         keyFiles = [ cfg.sshPublicKeyFile ];
         # When passwordlessControl is on, ALSO authorise the host operator's
         # own declared public keys, so `agent-microvm ssh <slot>` works
@@ -385,38 +538,30 @@ let
     # programs.pi-coding-agent → pkgs.nixos-unstable.pi-coding-agent). They
     # are baked into the immutable guest closure (§8: no runtime CLI
     # download, no host Nix daemon).
-    programs.fish.enable = true;
+    # The guest INTERACTIVE entry point `agent-run`: `agent-microvm run --attach`
+    # execs it over SSH, and a human debugging a session runs it by hand. A
+    # batch-only guest has neither path (the worker resolves the agent from the
+    # registry itself), so it does not carry it.
+    environment.systemPackages =
+      lib.optional agentCapabilities.interactive agent-run
+      ++ [
+        guestShell
+      ]
+      # §7 agent binaries, GENERATED from the authoritative registry — only for
+      # the SELECTED agents (`enabledAgents`, lightweight plan phase 2), together
+      # with whatever extra runtime each of them declares.
+      ++ agentRegistry.packages
+      ++ agentRegistry.extraPackages
+      ++ guestCommonPackages;
 
-    environment.systemPackages = [
-      agent-run
-      pkgs.fish
-    ]
-    # §7 agent binaries, GENERATED from the authoritative registry.
-    ++ agentRegistry.packages
-    ++ (with pkgs; [
-      bash
-      coreutils
-      curl
-      diffutils
-      fd
-      file
-      findutils
-      git
-      gnugrep
-      gnumake
-      gnused
-      jq
-      less
-      openssh
-      patch
-      procps
-      ripgrep
-      rsync
-      tree
-      unzip
-      util-linux
-      which
-    ]);
+    # NixOS' `environment.defaultPackages` (perl, rsync, strace) is a
+    # convenience set for interactive general-purpose machines. None of it has
+    # an in-guest consumer — the module's own guest scripts carry their runtime
+    # closures explicitly, and the agent gets the documented toolset above — so
+    # drop it rather than ship perl in a single-purpose sandbox image. NixOS'
+    # `requiredPackages` (coreutils-full, curl, openssh, ...) is NOT affected:
+    # it is load-bearing for a bootable system.
+    environment.defaultPackages = [ ];
 
     # --- §17 guest model-API config (no secrets) -------------------------
     # The guest reaches the model API ONLY via the bridge-only LiteLLM
@@ -457,16 +602,6 @@ let
     # header for why the worker needs an explicit `environment=`.
     environment.variables = modelEndpointEnv;
 
-    # The BATCH worker (`agent-job-worker@<agent>.service`) is a non-login
-    # systemd oneshot: it never sources /etc/set-environment, so the endpoint
-    # vars above would not reach it (NixOS puts `environment.variables` ONLY in
-    # login profiles, not in systemd's `DefaultEnvironment`). Give it the SAME
-    # endpoint environment the interactive login shell gets, so pi/codex/
-    # hermes batch workers can actually reach the loopback forwarder. The
-    # `creds` section of runtime-validation.sh asserts BOTH halves carry these
-    # (and the negative controls stay absent). Placeholder keys only (§17).
-    systemd.services."${agentJobs.workerUnitTemplate}".environment = modelEndpointEnv;
-
     # --- guest-side loopback → bridge LiteLLM forwarder ------------------
     # Reverse of the host's bridge-only forwarder (network.nix): a
     # socket-activated systemd-socket-proxyd inside the guest listens on
@@ -479,29 +614,103 @@ let
     # rewrites. Pure byte-shuffler: no filesystem, home or privileges needed.
     # Only exists when the profile actually allows the model API: under
     # `offline` there is nothing to forward to, so no listener is created.
+    #
+    # TWO TRANSPORTS, ONE ENDPOINT (lightweight plan phase 6): the guest-visible
+    # address is `127.0.0.1:<litellmPort>` in BOTH cases — that is what keeps the
+    # host-provisioned agent configuration working verbatim and is why the guest
+    # agent needs no reconfiguration for VSOCK. Only the DESTINATION differs, and
+    # it is chosen by the ONE resolved transport:
+    #   * `tap`   -> <gatewayAddress>:<litellmPort> over the private bridge;
+    #   * `vsock` -> AF_VSOCK CID 2 (the host), port <litellmPort>, where the
+    #                per-VM host forwarder (../network.nix) hands it to
+    #                127.0.0.1:<litellmPort>.
     systemd.sockets.litellm-forwarder = lib.mkIf netCaps.litellm {
       description = "Loopback LiteLLM endpoint for host-provisioned agent configs";
       wantedBy = [ "sockets.target" ];
       socketConfig = {
         ListenStream = "127.0.0.1:${toString cfg.litellmPort}";
+        # ONE SHAPE UNDER BOTH TRANSPORTS: `Accept = no`, so systemd hands the
+        # LISTENING socket to a SINGLE long-running forwarder process (fd 3) that
+        # multiplexes every connection itself. That is what
+        # `systemd-socket-proxyd` does under `tap`, and it is what
+        # `socat ACCEPT-FD:3,fork` does under `vsock`. The earlier
+        # `Accept = yes` + `litellm-forwarder@` template would have capped
+        # concurrent model connections at systemd's default `MaxConnections=64`
+        # (a parallel agent fanning tool calls out over more streams than that
+        # would get connections REFUSED with no diagnostic) and spawned one
+        # DynamicUser unit per request.
         Accept = false;
       };
     };
+    # ONE unit name for the ONE forwarder: the two transports are mutually
+    # exclusive (network-profiles.nix resolves exactly one), so they share
+    # `litellm-forwarder.service` and only the ExecStart differs.
+    #
+    #   tap   -> systemd-socket-proxyd <gatewayAddress>:<litellmPort>
+    #   vsock -> socat ACCEPT-FD:3,fork VSOCK-CONNECT:2:<litellmPort>
+    #
+    # `systemd-socket-proxyd` cannot serve the vsock case (it forwards to
+    # `HOST:PORT`/UNIX targets only, never to AF_VSOCK), so that one place is the
+    # only reason the guest needs `socat`; it comes in through the unit's own
+    # ExecStart, NOT through `environment.systemPackages`, so the untrusted agent
+    # does not gain a general-purpose socket tool in its PATH.
+    #
+    # The VSOCK DESTINATION IS FIXED in the ExecStart — the guest cannot choose a
+    # CID, a port or a host address, and there is no CONNECT protocol to abuse:
+    # the untrusted agent only ever gets a TCP connection to its own loopback.
+    #
+    # NO INACTIVITY TIMEOUT: socat's `-T` is a BIDIRECTIONAL inactivity timeout
+    # that terminates a connection mid-transfer, which for a model API means a
+    # long prefill, a cold LiteLLM or a slow tool-call turn is torn down while
+    # the agent is waiting for it. It is deliberately absent (the tap path's
+    # `systemd-socket-proxyd` has no such timeout either, and the whole point of
+    # this unit is that the guest agent behaves identically on both transports).
+    # `-t` is the HALF-CLOSE drain timeout, not an inactivity timeout: it only
+    # starts once one direction has seen EOF. socat's default is 0.5 s, which
+    # would truncate the response to any client that `shutdown(SHUT_WR)`s after
+    # sending its request, so it is raised well past any plausible model latency.
     systemd.services.litellm-forwarder = lib.mkIf netCaps.litellm {
-      description = "Forward 127.0.0.1:${toString cfg.litellmPort} to the host bridge LiteLLM proxy";
+      description =
+        if netTransport.vsockLitellm then
+          "Bridge 127.0.0.1:${toString cfg.litellmPort} to the host LiteLLM proxy over AF_VSOCK"
+        else
+          "Forward 127.0.0.1:${toString cfg.litellmPort} to the host bridge LiteLLM proxy";
       requires = [ "litellm-forwarder.socket" ];
-      wants = [ "network-online.target" ];
+      # The TAP forwarder dials a bridge address, so it must wait for the guest's
+      # interface to be configured. Under `vsock` there is no interface, no
+      # networkd and hence no `*-wait-online` unit at all, so ordering against
+      # `network-online.target` would be a dependency on a target that only ever
+      # activates trivially — and would BLOCK the guest's boot for the default
+      # 120 s the day some other unit starts providing it. It is therefore
+      # rendered only for the transport that needs it.
+      wants = lib.optional netTransport.guestInterface "network-online.target";
       after = [
         "litellm-forwarder.socket"
-        "network-online.target"
-      ];
+      ]
+      ++ lib.optional netTransport.guestInterface "network-online.target";
       serviceConfig = {
-        ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd ${cfg.gatewayAddress}:${toString cfg.litellmPort}";
+        ExecStart =
+          if netTransport.vsockLitellm then
+            "${lib.getExe pkgs.socat} -t 120 ACCEPT-FD:3,fork VSOCK-CONNECT:2:${toString agentNetwork.vsockLitellmPort}"
+          else
+            "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd ${cfg.gatewayAddress}:${toString cfg.litellmPort}";
         DynamicUser = true;
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectSystem = "strict";
         ProtectHome = true;
+      }
+      // lib.optionalAttrs netTransport.vsockLitellm {
+        # AF_UNIX: nothing else the process needs; AF_INET: the socket-activated
+        # loopback listener it inherits; AF_VSOCK: the one destination.
+        RestrictAddressFamilies = [
+          "AF_UNIX"
+          "AF_INET"
+          "AF_VSOCK"
+        ];
+        RestrictNamespaces = true;
+        LockPersonality = true;
+        SystemCallArchitectures = "native";
       };
     };
 
@@ -519,7 +728,12 @@ let
     # resolver at all (and port 53 is dropped), which is intentional.
     networking.nameservers = lib.mkIf netCaps.dns agentNetwork.dnsServers;
 
-    systemd.network = {
+    # PRESENT ONLY UNDER THE `tap` TRANSPORT. Under `vsock` (lightweight plan
+    # phase 6) there is no interface to address, so there is no static IP, no
+    # default route and no reason to run systemd-networkd at all — the block
+    # below is absent and a `mkIf` merge element in `mkGuest` turns the guest's
+    # network stack off entirely.
+    systemd.network = lib.mkIf netTransport.guestInterface {
       enable = true;
       networks."10-agent" = {
         matchConfig.MACAddress = slot.mac;
@@ -531,14 +745,34 @@ let
     };
 
     # --- §18 hardened SSH, private guest interface only ------------------
-    services.openssh = lib.mkIf cfg.enableSsh {
+    # The TCP sshd (`enableSsh` / `interactive`) AND the VSOCK sshd (`vsock`,
+    # lightweight plan phase 6) share this ONE hardened block. The VSOCK
+    # `sshd-vsock@` unit is auto-created by NixOS' systemd-ssh-generator
+    # whenever `services.openssh.enable` is true AND a VSOCK device is present
+    # (`microvm.vsock.cid` set above) — reused, not reinvented.
+    #
+    # When VSOCK is the ONLY control channel (a batch+vsock host:
+    # `enableSsh = false`, no `interactive`), the TCP sshd is SUPPRESSED
+    # entirely (see `systemd.services.sshd.enable` below): the `sshd.service`
+    # unit NixOS' openssh module creates is NOT installed, so no TCP listener
+    # is ever started — only the VSOCK-activated `sshd-vsock@`. That is a
+    # recorded deviation from phase 5's "a batch-mode guest has no SSH daemon":
+    # the invariant is now scoped to "no TCP/network SSH daemon" (no `sshd.service`
+    # AND no TAP firewall opening for 22 — both suppressed by the `mkIf` below);
+    # a VSOCK-only inetd sshd (reachable solely from the host over AF_VSOCK, never
+    # from the TAP) is the control channel. An `interactive` host (with or without
+    # `vsock`) keeps the TCP sshd as before — the `mkIf (vsock && !enableSsh)`
+    # below contributes nothing there, so `openFirewall` stays at its nixpkgs
+    # default `true` (the TCP sshd runs and legitimately opens 22).
+    services.openssh = lib.mkIf (cfg.enableSsh || agentCapabilities.vsock) {
       enable = true;
       # Deterministic per-slot host identity (ticket 3 B): use ONLY the
       # ed25519 key from the read-only hostkey share, and do NOT let the guest
       # generate its own throwaway keys (`generateHostKeys = false` disables
       # `sshd-keygen.service`, which would anyway fail against the read-only
-      # mount). The host's known_hosts file pins exactly this key per slot IP,
-      # so `agent-microvm ssh` can verify the guest strictly.
+      # mount). The host's known_hosts file pins exactly this key per slot IP
+      # (and per VSOCK mux path), so `agent-microvm ssh` can verify the guest
+      # strictly over the TAP AND over VSOCK.
       generateHostKeys = false;
       hostKeys = [
         {
@@ -556,6 +790,15 @@ let
         AllowTcpForwarding = "no";
       };
     };
+    # When VSOCK is the ONLY control channel (a batch+vsock host:
+    # `enableSsh = false`, no `interactive`), the TCP sshd is SUPPRESSED via the
+    # separate `lib.mkIf` in `mkGuest` below (NOT here): setting
+    # `systemd.services.sshd.enable` inside this always-present attrset would
+    # create the `sshd` key even when the `mkIf` is false, regressing the
+    # batch-only "no sshd" invariant. The mkGuest merge element is filtered
+    # out entirely when `vsock && !enableSsh` is false, so a host that does not
+    # select `vsock` keeps `systemd.services.sshd` exactly as the openssh
+    # module leaves it (present for `interactive`, absent for batch-only).
 
     system.stateVersion = "25.11";
   };
@@ -576,6 +819,56 @@ in
 
     (lib.mkIf cfg.enable {
       microvm.host.enable = true;
+
+      # --- lightweight plan phase 4: the share set is a trust boundary ------
+      # These are CROSS-MODULE guards: ./session.nix owns the layout, but
+      # ./hostkeys.nix and ./config-seed.nix derive their own paths from it, and
+      # a future edit there could silently move key material or host-decided
+      # input into the writable tree. Checked here, where every path definition
+      # is in scope at once.
+      assertions =
+        let
+          slot = lib.head slots;
+          shares = mkShares slot;
+          writableTree = agentSession.slotDir slot.name;
+          roTree = agentSession.roSlotDir slot.name;
+          inside = parent: p: p == parent || lib.hasPrefix "${parent}/" p;
+        in
+        [
+          {
+            assertion = inside roTree (agentHostKeys.slotDir slot.name);
+            message = ''
+              myconfig.ai.microvm: the per-slot SSH host-key directory
+              (${agentHostKeys.slotDir slot.name}) must live in the READ-ONLY
+              session tree (${roTree}), never in the writable one
+              (${writableTree}). The private host key is the slot's identity;
+              the untrusted guest must not be able to reach, replace or read it.
+            '';
+          }
+          {
+            assertion = !(inside writableTree (agentConfigSeed.hostPayloadDir slot.name));
+            message = ''
+              myconfig.ai.microvm: the staged host agent configuration
+              (${agentConfigSeed.hostPayloadDir slot.name}) must not live in the
+              WRITABLE session tree (${writableTree}) — it is host-decided input
+              and is exposed through the READ-ONLY share only (invariant 7).
+            '';
+          }
+          {
+            # The acceptance criterion of the phase, asserted on the ACTUAL
+            # share list rather than on the intent behind it.
+            assertion =
+              lib.length (lib.filter (s: !(s.readOnly or false)) shares) == 1
+              && lib.length (lib.filter (s: s.readOnly or false) shares) <= 1;
+            message = ''
+              myconfig.ai.microvm: a guest must declare
+              EXACTLY ONE writable virtiofs share and at most ONE read-only
+              share; slot ${slot.name} declares ${
+                toString (map (s: "${s.tag}${lib.optionalString (s.readOnly or false) " (ro)"}") shares)
+              }.
+            '';
+          }
+        ];
 
       # --- ticket 5 C: host-side limits on the HYPERVISOR units ------------
       # Drop-ins on microvm.nix's own `microvm@<slot>` units (it uses the same
