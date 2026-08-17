@@ -214,6 +214,53 @@ let
     in
     lib.listToAttrs (fromLocalModels ++ fromLitellm);
 
+  # Build a lookup: model name -> max OUTPUT tokens, i.e. the value pi
+  # puts into `maxTokens` and therefore sends as the request's
+  # `max_tokens`. See `mkOpenAiCompatibleProvider` below for why a
+  # hard-coded value is harmful.
+  #
+  # Only LiteLLM `model_list` entries carry this information:
+  #   - `litellm_params.max_tokens`  — written by
+  #     modules/myconfig.ai/services.litellm.nix for every auto-generated
+  #     local-model entry (`min (contextWindow / 4) 65536`);
+  #   - `model_info.max_output_tokens` — written by
+  #     modules/myconfig.ai/litellm.proxy.nix when a forwarded model
+  #     declares `maxOutputTokens`.
+  # `myconfig.ai.localModels` has no equivalent field, so it contributes
+  # nothing here; those models fall back to the derived default below.
+  maxOutputTokensLookup =
+    let
+      fromEntry =
+        e:
+        let
+          lp = e.litellm_params or { };
+          mi = e.model_info or { };
+          fromLp = lp.max_tokens or null;
+          fromMi = mi.max_output_tokens or null;
+        in
+        if fromLp != null then fromLp else fromMi;
+    in
+    lib.listToAttrs (
+      lib.concatMap (
+        e:
+        let
+          mt = fromEntry e;
+          name = e.model_name or null;
+        in
+        lib.optional (name != null && mt != null) {
+          inherit name;
+          value = mt;
+        }
+      ) (osconfig.services.litellm.settings.model_list or [ ])
+    );
+
+  # Fallback output budget for models that declare none: a quarter of the
+  # context window, capped at 64k. This is the SAME formula
+  # modules/myconfig.ai/services.litellm.nix uses for its generated
+  # `litellm_params.max_tokens`, so a model resolved through either path
+  # ends up with a consistent budget.
+  deriveMaxOutputTokens = contextWindow: lib.min (contextWindow / 4) 65536;
+
   # Build a provider entry for an OpenAI-compatible base URL.
   mkOpenAiCompatibleProvider =
     {
@@ -258,11 +305,25 @@ let
               cacheRead = 0;
               cacheWrite = 0;
             };
-            maxTokens = 4096;
           }
-          // {
-            contextWindow = if cw != null then cw else defaultContextWindow;
-          }
+          // (
+            let
+              contextWindow = if cw != null then cw else defaultContextWindow;
+            in
+            {
+              inherit contextWindow;
+              # pi sends `maxTokens` as the request's `max_tokens`
+              # (see `buildBaseOptions` in @earendil-works/pi-ai), so a
+              # too-small value makes the model stop mid-answer with
+              # `finish_reason: "length"`, which pi renders as
+              #   "Error: Model stopped because it reached the maximum
+              #    output token limit. The response may be incomplete."
+              # This used to be hard-coded to 4096, which reasoning
+              # models blow through with their thinking block alone.
+              # See ../docs/debug-litellm-max-output-tokens.md.
+              maxTokens = maxOutputTokensLookup.${modelId} or (deriveMaxOutputTokens contextWindow);
+            }
+          )
         ) models;
       };
     };
