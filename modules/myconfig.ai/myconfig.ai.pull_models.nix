@@ -79,6 +79,15 @@ let
               err "hf download failed for $repo (include=$include)"
           fi
           set +x
+
+          # The huggingface-hub CLI creates downloaded files with mode
+          # 0640 and directories with 0750 under the default umask. The
+          # system llama-cpp service runs as a DynamicUser (not in the
+          # owner's group), so it cannot read 0640 files or even
+          # traverse 0750 directories — model loading fails with
+          # "Permission denied". Normalize to world-readable so the
+          # read-only /models bind mount is accessible to every consumer.
+          chmod -R u=rwX,go=rX "$target_dir"
       }
 
       TOTAL_MODELS=$(jq '[..|arrays|length]|add // 0' "$MODELS_JSON")
