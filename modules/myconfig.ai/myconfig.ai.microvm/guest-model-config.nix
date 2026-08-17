@@ -6,7 +6,7 @@
 # Problem
 # -------
 # The coding-agent configs a sandbox gets are COPIES of the host primary
-# user's build-time-rendered dotfiles (see guest-home.nix):
+# user's rendered dotfiles, staged at launch time (see config-seed.nix):
 #
 #   * pi   → ~/.pi/agent/extensions/myconfig-providers.ts (generated from
 #            `services.litellm.settings.model_list` at BUILD time)
@@ -30,8 +30,10 @@
 #             pi auto-discovers `~/.pi/agent/extensions/*.ts` and later
 #             `registerProvider(<same key>)` calls replace earlier ones, and the
 #             `zz-` prefix sorts after `myconfig-providers.ts`, so the runtime
-#             list wins. Written INTO the home (the build-time copy is a
-#             read-only store symlink and must not be touched).
+#             list wins. Written INTO the home, NEXT TO the copy — which is a
+#             plain, agent-owned file the config seeder wrote with
+#             `cp -R --dereference` (../config-seed.nix), not a store symlink,
+#             but is left untouched all the same.
 #   opencode  an OVERLAY config at `$XDG_RUNTIME_DIR`-like
 #             `/run/agent-model-config/opencode.json`, pointed at by
 #             `OPENCODE_CONFIG`. opencode loads that file IN ADDITION to (and
@@ -51,6 +53,10 @@
   lib,
   pkgs,
   agentNetwork,
+  # The ONE definition of the RUNTIME configuration staging (../config-seed.nix):
+  # the unit that provisions the guest home, which this one must be ordered
+  # after (it writes into that same home).
+  agentConfigSeed,
   ...
 }:
 let
@@ -168,14 +174,13 @@ let
       log "wrote $OPENCODE_OUT"
 
       # --- 4. pi extension ------------------------------------------------
+      # The extension directory is inside the DISPOSABLE guest home, which
+      # ../config-seed.nix creates as agent-owned `u+rwX` and fills with a
+      # symlink-dereferencing copy — so it is always a real, writable directory
+      # (or absent, on a host that stages no pi config at all). There is no
+      # guest home-manager any more, hence no read-only store symlink to work
+      # around here.
       pi_dir=$(dirname -- "$PI_OUT")
-      if [[ -L "$pi_dir" ]]; then
-          # A home-manager-managed *directory* symlink into the read-only
-          # store: nothing can be added next to the copied extension. Skip
-          # rather than fail — opencode was already configured above.
-          log "$pi_dir is a store symlink; skipping the pi extension"
-          exit 0
-      fi
       mkdir -p -- "$pi_dir"
       providers=$(
           jq -n \
@@ -246,11 +251,13 @@ let
       after = [
         "network-online.target"
         "litellm-forwarder.socket"
-        # The build-time dotfile copies must be linked first: the pi extension
-        # is written NEXT TO the copied `myconfig-providers.ts`, and
-        # home-manager aborts (or backs up) on pre-existing files.
-        "home-manager-agent.service"
-      ];
+      ]
+      # Whatever PROVISIONS the home must be finished first: this unit writes
+      # `$HOME/.pi/agent/extensions/zz-microvm-models.ts` into that same home,
+      # and the launch-time seeding oneshot does `cp -R` + `chown -R` +
+      # `chmod -R` over the WHOLE home, so writing into it concurrently would
+      # race (../config-seed.nix states the matching `before=`).
+      ++ [ agentConfigSeed.guestUnit ];
       # Ordered before the batch job CONTROLLER (which starts the untrusted
       # worker), exactly like agent-state-link, so an unattended job never
       # starts against a stale model list. Interactive logins happen far later.

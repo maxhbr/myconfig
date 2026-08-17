@@ -16,10 +16,11 @@
 # Layout
 # ------
 #   ${runtimeRoot}/state/tasks/<task>/<agent>/<dir>   per TASK + AGENT, kept
-#   ${runtimeRoot}/state/slots/<slot>                 the share source
+#   ${runtimeRoot}/sessions/<slot>/state              the bind target inside the
+#                                                     ONE writable share
 #
-# The per-slot directory is the share source baked into the guest config (a
-# share source cannot be per-task, since the pool is prebuilt). The launcher
+# The per-slot directory is part of the session tree baked into the guest config
+# (a share source cannot be per-task, since the pool is prebuilt). The launcher
 # `mount --bind`s the per-task directory onto it while the slot runs — exactly
 # the mechanism the workspace clone already uses — and leaves it EMPTY when
 # persistence was not requested. So:
@@ -46,13 +47,16 @@
   lib,
   pkgs,
   agentRegistry,
-  agentResourceClasses,
+  # The ONE definition of the per-session tree (./session.nix): the per-slot
+  # bind TARGET is the session tree's `state/` subdirectory, reached through the
+  # one writable share. The per-TASK directories below
+  # `<runtimeRoot>/state/tasks/` are host-only and independent of it.
+  agentSession,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
-
-  slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
+  session = agentSession;
 
   # Union of every agent's declared state directories (relative to the guest
   # home). Sorted + deduplicated so the generated guest script is stable.
@@ -67,12 +71,15 @@ let
     # Per-task, per-agent state (kept across runs of that task).
     tasksRoot = "${root}/tasks";
     taskDir = task: agent: "${tasksRoot}/${task}/${agent}";
-    # Per-slot bind target = the virtiofs share source.
+    # Per-slot bind target = the `state/` subdirectory of the ONE writable
+    # session share (./session.nix). `slotsRoot` is the historical (four-share)
+    # location; nothing creates anything under it any more, but the launcher's
+    # foreign-state scan still reports RESIDUE a host carries from before the
+    # consolidation.
     slotsRoot = "${root}/slots";
-    slotDir = slotName: "${slotsRoot}/${slotName}";
+    slotDir = slotName: session.hostStateDir slotName;
 
-    guestTag = "agentstate";
-    guestMountPoint = "/var/lib/agent-state";
+    guestMountPoint = session.guestStateDir;
     guestHome = "/home/agent";
     inherit declaredDirs;
   };
@@ -160,39 +167,13 @@ in
     }
 
     (lib.mkIf cfg.enable {
-      assertions = [
-        {
-          # A persisted directory that also comes from the host primary user's
-          # home-manager dotfiles would be fought over by HM activation and the
-          # linker. Keep the two disjoint.
-          assertion =
-            let
-              hmPrefixes = cfg.guestDotfiles.homeFilePrefixes;
-              collides = d: lib.any (p: lib.hasPrefix p "${d}/" || lib.hasPrefix "${d}/" p) hmPrefixes;
-            in
-            !cfg.guestDotfiles.enable || !(lib.any collides declaredDirs);
-          message = ''
-            myconfig.ai.microvm: an agent's persistentState.directories collides
-            with guestDotfiles.homeFilePrefixes. The guest home-manager
-            activation and the agent-state linker would fight over the same
-            path — keep the persisted state directories disjoint from the
-            provisioned dotfiles.
-          '';
-        }
-      ];
-
-      # virtiofsd needs its share source to exist before the VM starts, for
-      # EVERY slot — including slots that never persist anything (they then see
-      # an empty directory). Owned by the guest agent so it can write there.
+      # The per-TASK tree is host-only. The per-SLOT bind TARGET is part of the
+      # session tree, which ./session.nix creates from the ONE layout table —
+      # emitting it here as well would duplicate the same rule.
       systemd.tmpfiles.rules = [
         "d ${paths.root} 0755 root root - -"
         "d ${paths.tasksRoot} 0755 root root - -"
-        "d ${paths.slotsRoot} 0755 root root - -"
-      ]
-      ++ map (
-        slot:
-        "d ${paths.slotDir slot.name} 0755 ${toString cfg.guestAgentUid} ${toString cfg.guestAgentGid} - -"
-      ) slots;
+      ];
     })
   ];
 }

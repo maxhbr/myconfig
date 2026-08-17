@@ -35,6 +35,9 @@ the host/guest protocol — not the guest kernel's enforcement.
 - the guest-side **batch job controller** (`agent-job-controller.service`, guest
   root): it validates the job, starts the worker under another uid, enforces the
   deadline and writes the authoritative result. A bug here is a bug in the TCB.
+  It exists only on a host that selects the `batch` capability; an
+  interactive-only guest has no batch trust split to get wrong, because it has
+  neither identity.
 
 **Untrusted (assumed hostile):**
 
@@ -45,7 +48,7 @@ the host/guest protocol — not the guest kernel's enforcement.
 - prompts and any data the agent fetches through LiteLLM;
 - **everything the batch worker produces** (`agent-job-worker@<agent>.service`,
   guest `agent`): the CONTENT of its stdout/stderr logs, its artifacts, any file
-  it writes into `/workspace` or `/run/agent-job/worker/`, and any JSON that
+  it writes into `/workspace` or `/run/agent-session/worker/`, and any JSON that
   *looks* like a result. None of it is evidence of anything;
 - other guests.
 
@@ -60,11 +63,11 @@ reports an exit code. So the result must be attributable, not merely readable.
   from the build-time registry (`agents.nix`), keyed by the worker unit's
   instance name.
 - **The result directory is not reachable by the worker.**
-  `/run/agent-job/controller/` is `root:root 0700` (virtiofsd passes ownership
-  through, so that is the *effective* permission inside the guest) and the worker
-  unit additionally masks it with `InaccessiblePaths`. The worker cannot write,
-  read, delete or list it, and cannot rename or shadow it either, because
-  `/run/agent-job` is root-owned `0755`.
+  `/run/agent-session/controller/` is `root:root 0700` (virtiofsd passes
+  ownership through, so that is the *effective* permission inside the guest) and
+  the worker unit additionally masks it with `InaccessiblePaths`. The worker
+  cannot write, read, delete or list it, and cannot rename or shadow it either,
+  because the session root `/run/agent-session` is root-owned `0755`.
 - **The spec is root-only (`0400`).** It carries the allocation token, so the
   worker cannot read the value it would need to mint a plausible result. The
   prompt is `0444`: readable by the worker, writable by nobody.
@@ -129,8 +132,8 @@ reports an exit code. So the result must be attributable, not merely readable.
   escaping requires a hypervisor/virtiofsd/KVM bug, not a container escape.
 - **Disposable state.** Guest root and `/home/agent` are tmpfs, rebuilt every
   boot. An agent cannot leave persistent implants in its own sandbox.
-- **No host filesystem.** The guest sees only the four declared virtiofs shares
-  (see below) — no host home, no `/nix/store`, no sockets.
+- **No host filesystem.** The guest sees only the two declared virtiofs shares
+  — no host home, no `/nix/store`, no sockets.
 - **No build/fetch capability.** No Nix daemon socket, no store write access; the
   guest can only run what was baked in.
 - **Bounded resources.** Per-class `CPUQuota`/`MemoryMax`/`TasksMax` inside the
@@ -142,17 +145,191 @@ reports an exit code. So the result must be attributable, not merely readable.
 
 ## What is still shared through virtiofs
 
-Exactly four shares, all per-slot:
+Exactly **two** shares, both per-slot: ONE writable per-session share and ONE
+read-only share (lightweight plan phase 4; the historical four/five separate
+shares are gone). A host that narrows `capabilities` (lightweight plan phase 5)
+gets the same two shares with FEWER subdirectories — an interactive-only guest
+has no `input/`, `controller/`, `worker/` or `worker-logs/` (there is no batch
+protocol to protect, because there is no controller and no worker), and a
+batch-only guest has no `hostkeys/` in the read-only tree (there is no sshd, so
+the slot has no SSH identity to keep from the agent). A batch+vsock guest
+(lightweight plan phase 6) KEEPS `hostkeys/` — the VSOCK `sshd-vsock@` control
+channel reuses the per-slot host identity — while still having no `sshd.service`
+(TCP) listener. No owner or mode changes,
+and no invariant is relaxed: a narrowing only removes attack surface. The trust
+POLICY is asserted against the FULL layout table rather than the selected slice,
+so weakening an entry a host happens not to create still fails the build, and the
+pre-launch verifier additionally refuses any top-level entry the (narrowed) table
+does not declare — the case that matters is a stale `input/` or `worker-logs/`
+left behind by a generation that did select `batch`.
+
+Also worth being precise about: a batch-only guest has no SSH *daemon* — no
+`sshd`/`sshd@`/`sshd-vsock@` unit, `services.openssh.enable = false`, no host
+identity, no authorized key — but the openssh *binaries* are still in its
+closure, because NixOS' `environment.requiredPackages` (which also brings
+coreutils-full, curl, …) provides `scp`/`ssh` and is load-bearing for a bootable
+system. The criterion "a batch-mode guest has no SSH daemon" is a unit/config
+claim, not a closure-size claim.
+
+**Phase 6 refines this for any host whose TCP sshd cannot be reached** — a
+`batch`+`vsock` host (no `interactive`), and ALSO an interactive host under the
+`vsock` MODEL transport, whose guest has no network interface for a TCP sshd to
+listen on. Such a guest DOES run an
+sshd — but ONLY the VSOCK `sshd-vsock@` (vsock::22), reachable solely from the
+host (CID 2) over AF_VSOCK, never from the TAP. The TCP `sshd.service` is
+suppressed (`systemd.services.sshd.enable = false`) whatever `enableSsh` says, so
+no network SSH listener exists, AND the TAP firewall opening for 22 is closed
+(`services.openssh.openFirewall = false`) — without it the openssh module's
+default `openFirewall = true` would leave 22 in
+`networking.firewall.allowedTCPPorts` on a guest whose TCP sshd is masked, a
+silent regression vector and a contradiction of the invariant. The invariant
+above is therefore scoped to **"no TCP/network SSH daemon"** (no `sshd.service`
+AND no TAP firewall rule for 22): a VSOCK-only inetd sshd is the host↔guest
+*control channel* (the enabler that lets `runtime-validation.sh` reach a
+batch-only guest at all), not an interactive login service exposed to the
+guest's network. It reuses the per-slot host identity + a `known_hosts` entry
+keyed by the VSOCK mux path, so the channel is host-key-verified exactly like
+the TAP one. See the plan's phase-6 recorded deviations for the full rationale.
+
+The consolidation moved the paths into the two trees WITHOUT
+changing a single owner or mode — the trust boundary was never the share split,
+it is ownership and modes, which virtiofsd passes through unchanged:
+
+| Historical guest path | Guest path today |
+| --- | --- |
+| `/workspace` | `/workspace` (a bind mount of `/run/agent-session/workspace`) |
+| `/run/agent-job/...` | `/run/agent-session/...` (`input/`, `controller/`, `worker/`, `worker-logs/`) |
+| `/var/lib/agent-state` | `/run/agent-session/state` |
+| `/var/lib/agent-hostkey` | `/run/agent-session-ro/hostkeys` |
+| `/run/agent-config-seed` | `/run/agent-session-ro/config-seed` |
+
+The writable session share is `<runtimeRoot>/sessions/<slot>/` (root-owned
+`0755`), the read-only one `<runtimeRoot>/sessions-ro/<slot>/` (root-owned
+`0700`, mounted with virtiofsd `--readonly`). The SSH private host key and the
+staged configuration are deliberately NOT in the writable tree; the launcher
+runs `agent-microvm-verify-session` before every launch, which re-derives every
+expected owner/mode from the ONE layout table (`session.nix`), refuses a
+symlinked or non-root-owned component, and refuses to launch at all if host-key
+material is found in the writable tree. Teardown removes the COMPLETE per-session
+tree (after proving both bind mounts are gone, and that no *other* mount survives
+anywhere underneath it — `rm -rf` would otherwise descend through a bind and
+delete the user's clone) and recreates the empty skeleton.
+
+### The one genuine security delta of consolidation
+
+Owners and modes are unchanged, but the *mount* boundary is not: `workspace/`,
+`worker/` and `state/` sit in the **same filesystem** as the root-owned
+`input/`, `controller/` and `worker-logs/`, whereas in the historical layout each
+was its own virtiofs mount. Operations that a kernel refuses **across**
+filesystems — `link(2)` and `rename(2)` — are therefore newly possible *in
+principle* between the agent-writable and the root-owned parts of the tree.
+
+The practical impact is nil, and for a structural reason: both operations need
+write permission on the **destination directory**, and the guest `agent` user has
+write access to no root-owned directory in either tree. It cannot rename
+anything *into* `input/`, `controller/` or `worker-logs/`, and it cannot create a
+hardlink there either. In the other direction — hardlinking a root-owned *file*
+into its own `worker/` — the only root-owned files the agent can even open are
+its own prompt (`0444`) and its own worker logs (`0644`); a hardlink to them
+grants exactly the read access it already has, and Linux'
+`fs.protected_hardlinks` (default `1`) additionally refuses hardlinks to files
+the user neither owns nor can write. The token-bearing `spec.json` is `0400`
+root-owned and unreadable to it, and `controller/` is `0700` root-only, so
+neither can be reached, linked or renamed.
+
+Consolidation is also a *strengthening* in one respect that is easy to miss: in
+the historical four-share layout the `workspace`, `state` and job directories were the
+mount points themselves, so the directory *entries* lived in a tree the agent
+could not touch — but each share was created and torn down separately. Now the
+whole tree hangs below a root-owned `0755` session root, so the agent can
+neither create, rename nor shadow **anything** at the top level of its own
+session (it cannot, for example, replace `worker-logs/` with a symlink or move
+`controller/` aside), and a single teardown provably removes all of it.
 
 | Guest path | Mode | Content | Risk |
 | --- | --- | --- | --- |
 | `/workspace` | rw | the task's standalone clone | the agent can write anything into your task's clone; you review it before importing |
-| `/var/lib/agent-hostkey` | **ro** | that slot's SSH host key, `root:root 0400` | unreadable by the guest agent user; the guest cannot change its own identity |
-| `/run/agent-job` | rw | `input/` (`spec.json` `root:root 0400`, `prompt.md` `0444`), `controller/` (`root:root 0700`, the authoritative result), `worker/` (agent-owned), `worker-logs/` (`root:root 0755`, the log files systemd opens as root) | the agent can write junk into `worker/`; it cannot read or write `controller/`, cannot read the token-bearing spec, cannot alter its own spec/prompt, and cannot replace or redirect its own log files |
-| `/var/lib/agent-state` | rw | only when `--persist-agent-state`: the task's declared agent-state dirs | the agent can poison ITS OWN task's future state; other tasks are unreachable |
+| `/run/agent-session-ro/hostkeys` | **ro** | that slot's SSH host key, `root:root 0400` | unreadable by the guest agent user; the guest cannot change its own identity |
+| `/run/agent-session` | rw | `input/` (`spec.json` `root:root 0400`, `prompt.md` `0444`), `controller/` (`root:root 0700`, the authoritative result), `worker/` (agent-owned), `worker-logs/` (`root:root 0755`, the log files systemd opens as root) | the agent can write junk into `worker/`; it cannot read or write `controller/`, cannot read the token-bearing spec, cannot alter its own spec/prompt, and cannot replace or redirect its own log files |
+| `/run/agent-session/state` | rw | only when `--persist-agent-state`: the task's declared agent-state dirs | the agent can poison ITS OWN task's future state; other tasks are unreachable |
+| `/run/agent-session-ro/config-seed` | **ro** | the launch-time staged copy of the **allowlisted** host agent configuration, `root:root` `0500`/`0400`. The read-only share source is the slot's read-only tree; the staging `manifest.json` lives in the host-only `<runtimeRoot>/config-seed/<slot>/` and is **not** in any share (it names the host home and every skipped, credential-shaped host file name) | the guest *root* seeder copies the tree into the disposable home; the unprivileged agent can neither read the staged original nor modify it, and cannot reach anything else in the host home (subject to the host-home write assumption below) |
 
-virtiofsd is in the TCB for all four. Ownership is passed through unchanged, so
-host-side modes are what the guest sees.
+virtiofsd is in the TCB for all of them. Ownership is passed through unchanged,
+so host-side modes are what the guest sees.
+
+The config seed does **not** widen the trust boundary towards the host home: it
+is a per-slot *copy*, not a mount, produced from a positive allowlist of exact
+files/directories (the selected agents' `configPaths` + `configSeed.extraPaths`)
+with a credential denylist on top — applied to the path's own name *and to its
+resolved target*, so a benignly named symlink (`.codex/config.toml` →
+`.codex/auth.json`, `.agents/skills/x` → `~/.ssh`) cannot smuggle a credential —
+with symlink escapes rejected, `/nix/store` symlinks dereferenced (any home
+symlink into the world-readable store is followed, including the host's rendered
+dotfiles), sockets/devices/FIFOs/setuid files excluded, and the destination
+cleaned before every launch. It moves the *risk of over-sharing* from "whatever
+the guest image baked in" to "whatever the allowlist names", and makes that
+decision auditable per session through the manifest. See [agent-microvm.md](./agent-microvm.md#runtime-configuration-staging).
+
+**Residual risk, explicitly not covered:** every control above is *name-based*
+and assumes the host home is **trusted**. An attacker who already has write
+access inside it can
+
+- **hardlink** a credential into an allowlisted path (a hardlink has no target
+  name, so the denylist cannot see it), or
+- swap a resolved path for a symlink **between** the stager's `realpath` check
+  and its `install` (TOCTOU), which root then follows.
+
+Neither is defended against, because an attacker with that access can simply
+edit an allowlisted configuration file instead — a strictly easier attack with
+the same reach. The staging boundary protects the guest→host direction and
+constrains what the *host operator's own* configuration exposes; it is not a
+boundary against a compromised host home.
+
+## The per-slot SSH host identity
+
+Each slot has its OWN ed25519 host key, generated on the host at runtime, never
+in the Nix store (world-readable) and never in the writable session tree (the
+pre-launch verifier refuses to launch a slot whose writable tree contains key
+material). Invariants, all of them enforced rather than documented:
+
+* **one identity per slot** — the key directories are per-slot and asserted
+  pairwise distinct; no private key is shared between slots;
+* **not readable by any guest agent** — `root:root 0400` on a read-only virtiofs
+  share, and virtiofsd passes ownership through unchanged, so the untrusted
+  `agent` user cannot read it and the guest cannot change its own identity;
+* **not exposed to other guests** — only that slot's directory is in that slot's
+  share;
+* **strict verification, always** — every `ssh` invocation runs
+  `StrictHostKeyChecking=yes` with `UserKnownHostsFile` pinned to the
+  host-generated database. `StrictHostKeyChecking=no` and
+  `UserKnownHostsFile=/dev/null` do not appear in the launcher (asserted by a
+  check that ignores comments);
+* **missing or mismatched identity fails the launch** — before booting a slot
+  whose control transport is SSH-based (TAP *or* VSOCK), the launcher validates
+  the actual files: non-empty key pair, `root:root 0400`/`0444`, and EXACTLY ONE
+  `known_hosts` entry for that transport's alias whose key type and body match
+  the public key, the private key is parseable, and the public key is that
+  private key's own public half. A conflict (two entries for one alias) is
+  treated as broken, not accepted. If a re-provision does not fix it, the launch
+  aborts;
+* **repair is scoped to host-managed files** — the provisioner only ever touches
+  the per-slot key pair, the aggregated `known_hosts` and its own lock, and it
+  keeps every valid private key untouched, so repairing one slot cannot silently
+  re-key another. A private key that is not `root:root` is REPLACED, never
+  chowned into trust (that would launder a planted key). An over-permissive mode
+  is repaired and REPORTED on stderr rather than silently accepted or silently
+  rotated;
+* **no private-key material in logs** — the launcher inspects the private key
+  through `[[ -s ]]`, `stat`, and a single pinned
+  `ssh-keygen -y -P "" … 2>/dev/null` whose output is the PUBLIC half (captured
+  in a variable, never echoed); `-P ""` guarantees it can never block on a
+  passphrase prompt. The provisioner likewise discards `ssh-keygen -y` output
+  except for the public half it derives.
+
+Known limitation: an over-permissive mode means the key MAY have been read by a
+local user before the repair. The provisioner cannot know, so it reports it and
+leaves the rotation decision to the operator (see the recovery table in
+[Per-slot SSH host identity](./agent-microvm.md#per-slot-ssh-host-identity-lifecycle-and-recovery)).
 
 ## What LiteLLM protects
 
@@ -169,16 +346,18 @@ host-side modes are what the guest sees.
 | Attack | Mitigation |
 | --- | --- |
 | exfiltrating host API keys | keys exist only in the host proxy; guest has placeholders |
-| stealing host SSH/GPG/cloud credentials | no host home, no agent sockets, no credential files in the guest |
+| stealing host SSH/GPG/cloud credentials | no host home, no agent sockets, no credential files in the guest; runtime config staging is allowlist-only with a credential denylist, so `~/.ssh`, `auth.json`, `*.pem`, `.netrc`, … are rejected at evaluation time and again at copy time |
+| tampering with the configuration the host staged | the staged tree is root-owned `0500`/`0400` on a **read-only** share, and the guest seeding oneshot refuses a tree that is not root-owned or is group/other-writable |
 | reaching the host LAN / VPN / router | private-range DROP in every profile |
 | cloud-metadata SSRF (`169.254.169.254`) | dropped first, unconditionally, in INPUT and FORWARD |
 | arbitrary internet egress / data smuggling | denied in `offline`/`proxy-only`; `package-access` allows one host proxy port; only `internet` routes, and then with NAT + a DNS allowlist + drop logging |
 | DNS tunnelling | port 53 only to configured resolvers, everything else dropped |
 | guest → guest attacks, ARP spoofing, MITM of host↔guest | per-TAP `isolated` bridge ports (all EtherTypes) + IPv4 inter-VM DROP + strict SSH host-key verification |
-| impersonating a slot to the operator | per-slot host keys, delivered read-only and root-only, pinned in `known_hosts` |
+| impersonating a slot to the operator | per-slot host keys, delivered read-only and root-only, pinned in `known_hosts`, VALIDATED (files, ownership, modes, key pair coherence, and the `known_hosts` entry) before every launch — a slot whose identity cannot be established is not launched at all |
+| **launching a slot whose control channel cannot be authenticated** | the launcher validates the slot's actual identity files before booting the VM and re-validates after re-provisioning; it FAILS CLOSED and never falls back to `StrictHostKeyChecking=no` / `UserKnownHostsFile=/dev/null` |
 | persistence across sessions | disposable tmpfs root/home; persistence is opt-in, declared-paths-only and task-scoped |
 | cross-task contamination | per-task clone + per-task state; the slot's share sources are cleared/rebound per run |
-| host code execution from a hostile repo | the launcher never evaluates repo-provided nix/direnv/hooks/npm/make/MCP (asserted by a check); clones use `--no-local`; git-dir/common-dir escapes rejected; all paths canonicalised |
+| host code execution from a hostile repo | the launcher never evaluates repo-provided nix/direnv/hooks/npm/make/MCP (asserted by a check); clones copy the object store (`--local --no-hardlinks`, never `--shared`/`--reference`) and are verified free of object alternates; git-dir/common-dir escapes rejected; all paths canonicalised |
 | runaway resource use | per-class cgroup limits on both sides; three timeout layers; `usage` makes retained disk visible |
 | stale/lost slots after crashes | allocation tokens + pid/pid-start ownership, `recover` (with `--dry-run`) |
 | **forging a batch result** (report success, hide a failure, fake an exit code, stop the VM early) | the result is written only by the trusted guest controller into a `root:root 0700` directory the worker cannot write, read, rename or shadow; the host verifies ownership, schema, task, slot, agent and allocation token |
@@ -205,10 +384,63 @@ host-side modes are what the guest sees.
   re-check the flag — `bridge -d link show` does (the plain `bridge link show`
   prints no port flags at all, which is why the runtime-validation suite's first
   real run reported a false negative here).
-- **VSOCK is reserved, not used.** Batch control still rides SSH-less file
-  exchange through the job share; the CID exists but no vsock transport is wired.
-  The result channel's authenticity therefore rests on virtiofs passing ownership
-  through unchanged — a property of virtiofsd, which is in the TCB.
+- **VSOCK is now wired (phase 6) as a CONTROL channel AND — with
+  `networkProfile = "proxy-only"` — as the MODEL transport.** A host that
+  selects the `vsock` capability gives its guests a VSOCK `sshd-vsock@`
+  (vsock::22, reused from upstream) reachable ONLY from the host (CID 2) over
+  AF_VSOCK — never from the TAP. The TCP `sshd.service` is suppressed for a
+  batch+vsock guest AND its TAP firewall opening for 22 is closed, so the
+  channel is host-only. What crosses it both ways is
+  the SAME as the existing SSH control channel — host→guest: the operator's
+  commands (`agent-microvm ssh` / the runtime-validation suite); guest→host:
+  command stdout/exit — just over a different L2. No host home, no credential,
+  no host socket, no batch result, and no second writable share cross it (the
+  VSOCK channel is not a virtiofs share); the invariants are unchanged. The
+  batch result channel itself still rides the SSH-less file exchange through the
+  job subtree of the ONE writable session share (VSOCK is the *control*
+  transport, not the *result* transport), so its authenticity still rests on
+  virtiofs passing ownership through unchanged — a property of virtiofsd, which
+  is in the TCB.
+
+  With `networkProfile = "proxy-only"` the same VSOCK device ALSO carries the
+  model API, and the guest then has **no network interface at all**. That is a
+  strict strengthening of every network-related invariant, not a trade:
+
+  - invariant 6 ("proxy-only network remains closed") stops depending on
+    iptables. There is no TAP, no address, no route and no resolver in the guest,
+    so LAN, VPN, cloud metadata, DNS, the public internet, other guests and every
+    other host port are unreachable because nothing can address them — the
+    `AGENT_MICROVM_*` chains are not weakened, they become unnecessary and are
+    not created;
+  - the host attack surface shrinks: no bridge on the host, no TAP devices, no
+    `br_netfilter`, no NAT/forwarding, no listener on a bridge address. What
+    remains is ONE Unix-socket listener per VM (root-owned, mode `0660` to **the
+    VMM's group** `kvm`, inside that VM's own state directory — so root, the VMM
+    and any other host user already in `kvm` can connect, which is no escalation
+    because such a user can already `curl 127.0.0.1:<litellmPort>` itself; and
+    NOTHING on the network can, because this path has no TCP listener at all)
+    whose only destination is `127.0.0.1:<litellmPort>`,
+    confined with `IPAddressAllow=localhost` + `IPAddressDeny=any`,
+    `DynamicUser`, `ProtectSystem=strict`. It is NOT a CONNECT proxy: the guest
+    supplies no host, port or CID, so "the guest picks a host port" is not
+    expressible;
+  - cross-slot isolation is structural rather than enforced: slot A's guest can
+    only reach the socket its own VMM was started with, and there is no CID or
+    ARP identity to spoof — the layer-2 attack class (ARP spoofing, IP
+    impersonation, co-resident scanning) does not exist without a shared L2
+    domain;
+  - what does NOT change: the model API is still reachable, still through the
+    host proxy, and still with placeholder credentials only. A hostile agent can
+    still abuse the model endpoint it is authorised to use (the same statement as
+    under the TAP transport), and it can still exfiltrate through model requests.
+    VSOCK removes network reachability, not the semantic capability of the proxy
+    the agent is meant to use.
+
+  The residual risks specific to this path: the guest's model traffic passes
+  through the VMM's userspace vsock implementation (cloud-hypervisor is in the
+  TCB either way, as it is for virtio-net), and the per-VM socket's protection is
+  filesystem permissions on `<stateRoot>/<slot>` — the same directory microvm.nix
+  already keeps the runner, the store image and the notify socket in.
 - **The guest batch controller runs as guest root.** It is a small, fixed script
   that never executes anything the repository or the spec supplied, and it is
   hardened (`NoNewPrivileges`, `PrivateDevices`, `ProtectHome`, `ProtectKernel*`,

@@ -24,8 +24,10 @@
 #        roots, symlink escapes and existing microVM workspaces. $PWD is not
 #        trusted (the given --repository is canonicalised).
 #   §24  Standalone clone under `workspaceRoot/<task>` via
-#        `git clone --no-local`; verifies git-dir + git-common-dir resolve
-#        INSIDE the workspace.
+#        `git clone --local --no-hardlinks` (never `--shared`/`--reference`,
+#        with a `--no-local` fallback when the source is being mutated);
+#        verifies git-dir + git-common-dir resolve INSIDE the workspace and
+#        that the clone borrows no objects (no `objects/info/alternates`).
 #   §26  Bind-mount lifecycle: mkdir `stateRoot/<slot>/workspace`,
 #        `mount --bind`, `findmnt` verify; cleanup unmounts, removes slot
 #        transient files, releases the lock, but never deletes the clone.
@@ -67,16 +69,910 @@
   # endpoint preflight and `doctor` use `caps.litellm` so they only fire when
   # the effective profile actually grants model-API access.
   agentNetwork,
+  # The ONE definition of the RUNTIME configuration staging (lightweight plan
+  # phase 3), from config-seed.nix (`_module.args.agentConfigSeed`): the
+  # per-slot staging directory and the BAKED, allowlist-enforcing stager this
+  # launcher calls once per launch.
+  agentConfigSeed,
+  # The ONE definition of the CONSOLIDATED per-session tree (session.nix,
+  # lightweight plan phase 4): the layout table this launcher prepares, verifies
+  # (through the generated `agent-microvm-verify-session`) and removes as a
+  # WHOLE, plus the two paths it bind-mounts (the workspace clone and the
+  # task-scoped agent state).
+  agentSession,
+  # The ONE resolved capability set (see default.nix, lightweight plan phase 5).
+  # The launcher has ONE shape: the same script, the same helpers, the same
+  # session/job/state code paths on every host. What the capability set changes
+  # is which SUBCOMMANDS it accepts — a subcommand whose guest-side machinery is
+  # absent is refused up front, naming the option to change, instead of failing
+  # later against a directory or unit that does not exist.
+  agentCapabilities,
   ...
 }:
 let
   cfg = config.myconfig.ai.microvm;
 
   # The slot pool of the effective resource classes (ticket 5 A). The class
-  # table comes from default.nix (`_module.args.agentResourceClasses`), which
-  # also performs the legacy `slotCount` migration, so every module builds the
-  # SAME pool.
+  # table comes from default.nix (`_module.args.agentResourceClasses`), so every
+  # module builds the SAME pool.
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
+
+  # --- multi-line script FRAGMENTS ---------------------------------------
+  # Several blocks of the generated script are defined next to the module data
+  # they are rendered from (the config-seed policy, the session layout table)
+  # rather than inline in the 3000-line script below. `mkFragment` re-indents
+  # such a (Nix-dedented) block to the column it is spliced into and appends the
+  # newline the following line's indentation needs, so the splice site keeps its
+  # own indentation. It is PURE RENDERING — there is one launcher shape.
+  #
+  # THE INDENT IS THE COLUMN IN THE *GENERATED* SCRIPT, NOT IN THIS FILE. Nix
+  # strips the `text = ''` string's common indentation (6 spaces here) before the
+  # interpolations are inserted verbatim, so a `${...}` written at column 6 in
+  # this file lands at column 0 in the script and one written at column 10 (a
+  # function body) lands at column 4. Passing this file's column instead — which
+  # is what the fragments used to do — over-indents every line after the first
+  # and leaves a whitespace-only line where `mkFragment`'s trailing newline is.
+  # The two constants below are therefore the ONLY legal indents, and
+  # `checks.microvm-launcher-rendering` (../tests/microvm.nix) fails the build if
+  # any generated launcher line ends in whitespace, which is how that mistake
+  # shows up.
+  # An EMPTY line stays empty (indenting it would emit a whitespace-only line,
+  # which is what `shell-fmt-check`/`shfmt` and every diff tool complain about),
+  # and the FIRST line is left alone because the splice site itself supplies its
+  # indentation.
+  indentFragment =
+    indent: text:
+    lib.concatStringsSep "\n" (
+      lib.imap0 (i: l: if i == 0 || l == "" then l else indent + l) (lib.splitString "\n" text)
+    );
+  mkFragment = indent: text: indentFragment indent (text + "\n");
+  # A GENERATED LIST inside the `usage` heredoc: the splice sites there sit at
+  # column 8 (column 2 of the generated script), so an EMPTY list would render as
+  # a whitespace-only line. `(none)` is both honest and whitespace-clean; a
+  # non-empty list renders exactly as before.
+  usageList = items: if items == [ ] then "(none)" else lib.concatStringsSep "\n  " items;
+
+  # A top-level statement of the generated script (splice site at column 6 here).
+  topIndent = "";
+  # A statement inside a generated function body (splice site at column 10 here).
+  bodyIndent = "    ";
+
+  # Declarations + helpers, spliced into the helper section of the script.
+  configSeedHelpers = mkFragment topIndent ''
+    # ---- runtime config staging (lightweight plan phase 3) -------------
+    # The host copies an ALLOWLIST of configuration paths (the SELECTED
+    # agents' registry `configPaths` plus `configSeed.extraPaths`) into a
+    # cleaned per-slot directory that the guest sees through a READ-ONLY
+    # virtiofs share; a root-owned guest oneshot copies it into the
+    # disposable /home/agent before sshd and the job controller start.
+    #
+    # The POLICY is not here: the allowlist, the credential denylist, the
+    # host home, the modes and the budgets are all BAKED into the stager by
+    # Nix (config-seed.nix), which also re-validates them and refuses any
+    # path that escapes the host home. This launcher can therefore only ask
+    # for "stage slot X" — it cannot widen what gets staged, and no
+    # caller-supplied path is ever expanded.
+    readonly CONFIG_SEED_STAGER=${lib.getExe agentConfigSeed.stager}
+    readonly CONFIG_SEED_ROOT=${lib.escapeShellArg agentConfigSeed.root}
+    readonly CONFIG_SEED_PAYLOAD_SUBDIR=${lib.escapeShellArg agentConfigSeed.homeSubdir}
+    # The manifest lives OUTSIDE every guest share, which means outside the
+    # read-only tree too — hence its own root, taken from config-seed.nix
+    # rather than derived from the payload path here.
+    readonly CONFIG_SEED_MANIFEST_ROOT=${lib.escapeShellArg agentConfigSeed.manifestRoot}
+    readonly CONFIG_SEED_MANIFEST_NAME=${lib.escapeShellArg agentConfigSeed.manifestName}
+    config_seed_dir() { printf '%s' "$CONFIG_SEED_ROOT/$1"; }
+
+    # Remove everything a previous task staged for this slot. Called before
+    # every launch (the stager cleans again, so this is the second layer)
+    # and on teardown, so a staged configuration never outlives its session.
+    clear_config_seed() {
+        local dir
+        dir="$(config_seed_dir "$1")"
+        # Every name and root comes from config-seed.nix, which OWNS them:
+        # hardcoding any of them here would leave a stale file behind the day it
+        # is renamed or moved.
+        if [[ -d "$dir" ]]; then
+            rm -rf -- "''${dir:?}/$CONFIG_SEED_PAYLOAD_SUBDIR"
+        fi
+        rm -f -- "$CONFIG_SEED_MANIFEST_ROOT/$1/$CONFIG_SEED_MANIFEST_NAME"
+    }
+
+    # Stage the CURRENT host configuration for this launch. Fails the launch
+    # if it cannot: a guest that silently starts without its instructions is
+    # worse than one that does not start.
+    stage_config_seed() {
+        local slot="$1"
+        clear_config_seed "$slot"
+        "$CONFIG_SEED_STAGER" "$slot" \
+            || die "could not stage the host agent configuration for slot $slot"
+    }
+  '';
+
+  # One call site each in `run` and `submit`, before the VM is started.
+  configSeedStage = mkFragment bodyIndent ''stage_config_seed "$slot"'';
+
+  # --- the slot's SSH HOST IDENTITY (ticket 3 B, hardened here) -----------
+  # `agent-microvm-hostkeys.service` provisions ONE stable ed25519 host key per
+  # slot plus that slot's entry in the aggregated `known_hosts`. Every SSH-based
+  # control transport of this launcher — the TAP sshd AND the VSOCK
+  # `sshd-vsock@` (lightweight plan phase 6) — verifies the guest against that
+  # entry with `StrictHostKeyChecking=yes`, so an identity that is MISSING,
+  # TRUNCATED, mis-owned or INCONSISTENT with `known_hosts` does not degrade the
+  # channel, it breaks it: the guest's sshd fails to start, or it presents a key
+  # ssh refuses — which surfaces as an opaque readiness timeout rather than as
+  # "your host identity is broken".
+  #
+  # The validation below therefore inspects the ACTUAL FILES rather than a unit's
+  # activation state, and it is emitted ONLY on a host that has an SSH-based
+  # control transport at all (`interactive` for the TAP sshd, `vsock` for the
+  # VSOCK one); a host with neither provisions no key material, so the helpers
+  # would be unreachable code and their `readonly`s unused.
+  #
+  # THE PATH IS NOT DUPLICATED: the runtime composition
+  # `$HOSTKEYS_ROOT/<slot>/$HOSTKEYS_SUBDIR/$HOSTKEY_NAME` is checked at EVAL
+  # time against hostkeys.nix's own `slotDir`/`keyName`, so a rename in
+  # session.nix's layout table cannot leave this launcher validating a stale
+  # path.
+  hostkeysSubdir =
+    assert lib.all (
+      s:
+      agentHostKeys.slotDir s.name == "${agentHostKeys.root}/${s.name}/${agentSession.roSubdirs.hostkeys}"
+    ) slots;
+    agentSession.roSubdirs.hostkeys;
+  hostIdentityCapable = agentCapabilities.interactive || agentCapabilities.vsock;
+  hostIdentityHelpers = lib.optionalString hostIdentityCapable (
+    mkFragment topIndent ''
+      # ---- the per-slot SSH HOST IDENTITY --------------------------------
+      # The two facts session.nix/hostkeys.nix own about the on-disk layout of
+      # a slot's identity; $HOSTKEYS_ROOT (above) is the third.
+      readonly HOSTKEYS_SUBDIR=${lib.escapeShellArg hostkeysSubdir}
+      readonly HOSTKEY_NAME=${lib.escapeShellArg agentHostKeys.keyName}
+      hostkey_dir()     { printf '%s' "$HOSTKEYS_ROOT/$1/$HOSTKEYS_SUBDIR"; }
+      hostkey_private() { printf '%s' "$(hostkey_dir "$1")/$HOSTKEY_NAME"; }
+      hostkey_public()  { printf '%s' "$(hostkey_dir "$1")/$HOSTKEY_NAME.pub"; }
+
+      # The $KNOWN_HOSTS ALIAS this host's ssh invocations will actually verify
+      # the slot against — decided by the SAME `vsock_control_channel`
+      # predicate every ssh call site uses, so the validation can never pass on
+      # an entry no connection consults: the VSOCK mux socket path when VSOCK is
+      # the only control channel, the slot's deterministic IPv4 otherwise.
+      host_identity_alias() {
+          if vsock_control_channel; then
+              printf '%s' "vsock-mux/$STATE_ROOT/$1/notify.vsock"
+          else
+              slot_ip "$1"
+          fi
+      }
+
+      # Is the slot's host identity COMPLETE and CONSISTENT? This validates the
+      # actual file CONTENT and metadata, never mere existence:
+      #   * the private key exists and is NON-EMPTY (a zero-byte file is the
+      #     classic half-written-pair state, and `ssh-keygen` would have to be
+      #     asked to overwrite it);
+      #   * the public key exists and is NON-EMPTY;
+      #   * both are root:root, with the private key 0400 (hence NOT group- or
+      #     world-readable) and the public key 0444 (world-readable on purpose).
+      #     virtiofsd passes ownership and modes through unchanged, so a
+      #     group-readable private key HERE is a group-readable private key
+      #     inside the guest, where the untrusted `agent` user lives;
+      #   * $KNOWN_HOSTS itself is root:root 0444 — SYMMETRIC with the two key
+      #     checks above. It is the database StrictHostKeyChecking=yes is
+      #     verified against, so a drifted owner or a group/world-WRITABLE mode
+      #     means an unprivileged local user could have swapped a pinned key for
+      #     their own and made this launcher accept a guest it should refuse.
+      #     0444 is exactly what the provisioner installs (public keys only, so
+      #     world-READABLE on purpose); anything else is drift and is repaired
+      #     rather than trusted;
+      #   * $KNOWN_HOSTS holds EXACTLY ONE entry for that alias. Two entries are
+      #     a CONFLICT, which must be repaired rather than accepted: ssh would
+      #     refuse the connection, and "repair" is the only outcome that leaves a
+      #     verifiable channel;
+      #   * that entry's key type and body match the slot's public key EXACTLY.
+      #   * the private key is a LOADABLE key: `ssh-keygen`'s public-half mode
+      #     parses it, so a truncated, garbled or wrong-format file is caught
+      #     HERE and not by the guest's sshd failing to start;
+      #   * the public key file is the PUBLIC HALF OF THAT PRIVATE KEY. Without
+      #     this, the whole chain is self-consistent but ANCHORED TO NOTHING:
+      #     known_hosts is verified against the .pub, and the .pub was never
+      #     verified against the key the guest actually serves. A stale or
+      #     swapped-in private key with a matching .pub + known_hosts triple
+      #     would pass every other check, boot, and then be refused by
+      #     StrictHostKeyChecking=yes as an opaque readiness timeout.
+      # NO private-key material is ever read into a variable, printed or logged.
+      # The private key is inspected through `[[ -s ]]`, `stat`, and
+      # `ssh-keygen -y` — whose OUTPUT IS THE PUBLIC HALF, never the secret. That
+      # one invocation is pinned to the safe form: `-P ""` so a passphrase-
+      # protected key can never block the launcher on a prompt, stderr
+      # discarded so a load error cannot echo file content into the log, and the
+      # result captured in a variable and normalised to `<type> <body>` — the
+      # SAME normalisation hostkeys.nix uses when it derives the .pub, so the two
+      # can never disagree about the comment field.
+      # ORDERING MATTERS: the 0400 mode check above must stay BEFORE this, or
+      # `ssh-keygen` would refuse an over-permissive key and mode drift would be
+      # misreported as key corruption (see hostkeys.nix block (a0)).
+      host_identity_complete() {
+          local slot="$1" key pub alias entry recorded expected derived meta
+          key="$(hostkey_private "$slot")"
+          pub="$(hostkey_public "$slot")"
+          [[ -s "$key" ]] || return 1
+          [[ -s "$pub" ]] || return 1
+          meta="$(stat -c '%U:%G %a' -- "$key" 2>/dev/null)" || return 1
+          [[ "$meta" == "root:root 400" ]] || return 1
+          meta="$(stat -c '%U:%G %a' -- "$pub" 2>/dev/null)" || return 1
+          [[ "$meta" == "root:root 444" ]] || return 1
+          expected="$(cut -d" " -f1,2 -- "$pub")" || return 1
+          [[ -n "$expected" ]] || return 1
+          derived="$(ssh-keygen -y -P "" -f "$key" 2>/dev/null | cut -d" " -f1,2)" || return 1
+          [[ -n "$derived" ]] || return 1
+          [[ "$derived" == "$expected" ]] || return 1
+          [[ -s "$KNOWN_HOSTS" ]] || return 1
+          meta="$(stat -c '%U:%G %a' -- "$KNOWN_HOSTS" 2>/dev/null)" || return 1
+          [[ "$meta" == "root:root 444" ]] || return 1
+          alias="$(host_identity_alias "$slot")" || return 1
+          [[ -n "$alias" ]] || return 1
+          # `ssh-keygen -F` is the SAME matcher ssh itself uses, so this cannot
+          # disagree with what StrictHostKeyChecking=yes does at connect time.
+          entry="$(ssh-keygen -F "$alias" -f "$KNOWN_HOSTS" 2>/dev/null | grep -v '^#' || true)"
+          [[ -n "$entry" ]] || return 1
+          [[ "$(printf '%s\n' "$entry" | wc -l)" -eq 1 ]] || return 1
+          recorded="$(printf '%s\n' "$entry" | cut -d" " -f2,3)"
+          [[ "$recorded" == "$expected" ]] || return 1
+          return 0
+      }
+
+      # SELF-HEALING: bring the slot's host identity into a COMPLETE state, or
+      # fail the launch. Called before every launch of a slot whose control
+      # transport is SSH-based (TAP *or* VSOCK).
+      #
+      # The repair is `systemctl RESTART`, deliberately not `start`: the
+      # provisioning unit is a `RemainAfterExit = true` oneshot, so once it has
+      # run, `systemctl start` on it is a SILENT NO-OP — which is exactly the
+      # state a host is in when someone deletes a key directory on a booted
+      # host. `restart` re-runs ExecStart unconditionally, and the provisioner
+      # is idempotent (it keeps every valid key it finds and only rebuilds what
+      # is missing or inconsistent), so repairing one slot cannot rewrite an
+      # unrelated slot's identity.
+      #
+      # It is a REPAIR, not a FALLBACK: if the identity is still incomplete
+      # afterwards, the launch DIES. There is deliberately no path that relaxes
+      # verification (no StrictHostKeyChecking=no, no
+      # UserKnownHostsFile=/dev/null) — an unverifiable guest is not launched.
+      ensure_host_identity() {
+          local slot="$1"
+          if host_identity_complete "$slot"; then
+              return 0
+          fi
+          log "repairing SSH host identity for slot $slot"
+          systemctl restart agent-microvm-hostkeys.service \
+              || die "failed to provision per-slot SSH host keys (agent-microvm-hostkeys.service)"
+          host_identity_complete "$slot" \
+              || die "slot $slot still has no complete SSH host identity under $(hostkey_dir "$slot") after re-running agent-microvm-hostkeys.service (check its journal); refusing to launch an unverifiable guest"
+      }''
+  );
+  # The pre-launch trigger, spliced into `start_vm`. Emitted only where an
+  # SSH-based control transport exists (see `hostIdentityHelpers`).
+  # NOTE the trailing `+ bodyIndent`: the splice site is
+  # `${hostIdentityEnsure}systemctl start "microvm@$1.service"`, so the fragment
+  # must re-establish the FOLLOWING statement's indentation in the generated
+  # script. An EMPTY fragment leaves the splice site's own indentation untouched
+  # and emits no whitespace-only line.
+  hostIdentityEnsure = lib.optionalString hostIdentityCapable (
+    mkFragment bodyIndent ''
+      # Make sure the slot's SSH host identity is COMPLETE before the VM (and
+      # thus its virtiofsd for the read-only hostkey share) starts. Failure is
+      # FATAL: without the key the guest's sshd cannot start, and with a
+      # mismatched one every ssh would be refused by StrictHostKeyChecking=yes.
+      #
+      # The condition is TRANSPORT-AWARE, not TAP-only. BOTH SSH-based control
+      # transports need the identity:
+      #   * $SSH_ENABLED=1 — the TCP sshd on the guest's TAP;
+      #   * $VSOCK_ENABLED=1 — the VSOCK `sshd-vsock@` (lightweight plan phase
+      #     6), which reads the SAME per-slot key from the SAME read-only share
+      #     and is verified against the SAME known_hosts (under the vsock-mux
+      #     alias).
+      # A batch+vsock host has SSH_ENABLED=0 and VSOCK_ENABLED=1, so the old
+      # TAP-only condition skipped provisioning entirely for exactly the shape
+      # that has no other control channel to fall back on.
+      if [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]]; then
+          ensure_host_identity "$1"
+      fi''
+    + bodyIndent
+  );
+
+  # --- capability gating (lightweight plan phase 5) -----------------------
+  # A capability this host does not select has NO guest units, NO guest
+  # programs and NO session subdirectories, so its subcommands cannot work.
+  # They are refused with an actionable message that names the option instead
+  # of failing somewhere inside `prepare_job` or against a missing sshd.
+  #
+  # The capability SET itself is rendered UNCONDITIONALLY (see
+  # `capabilityConfig` below and the `capabilities` subcommand): every host can
+  # be ASKED what it selects, in a machine-readable form. That is what lets
+  # ../runtime-validation.sh decide which sections can run without parsing an
+  # English refusal message — a detection that failed OPEN (defaulting to "has
+  # everything") the moment such a message was reworded, which is exactly the
+  # vacuous-pass class the capability dispatch exists to remove.
+  #
+  # Only the REFUSAL is rendered conditionally: on a host with both
+  # `interactive` and `batch` (the default) there is nothing to refuse, so the
+  # guard would be unreachable code. This is the same "emit it only where it
+  # can fire" rule ../job.nix applies to its `promptUnusedSuppression`, not a
+  # second launcher shape.
+  # Spliced into the CONFIGURATION section, on every host.
+  capabilityConfig = mkFragment topIndent ''
+    # ---- the capability set (lightweight plan phase 5) ------------------
+    # WHICH execution capabilities this host's guests carry
+    # (`myconfig.ai.microvm.capabilities`). Rendered on EVERY host, including
+    # one that selects everything, so `agent-microvm capabilities` can always
+    # answer the question and no consumer has to infer the answer from an
+    # error message.
+    readonly SELECTED_CAPABILITIES=${lib.escapeShellArg (lib.concatStringsSep " " agentCapabilities.selected)}
+    readonly DECLARED_CAPABILITIES=${lib.escapeShellArg (lib.concatStringsSep " " agentCapabilities.declared)}'';
+  # The capabilities whose subcommand machinery is REFUSED on this host (so
+  # the `require_capability` / `require_capability_any` helpers below must be
+  # defined). That is `interactive` (run/ssh) and/or `batch` (submit/cancel) —
+  # NOT `vsock`: `vsock` only backs the `ssh` control channel TOGETHER with
+  # `interactive`, so a host that selects `vsock` but not `interactive` still
+  # allows `ssh` (over VSOCK) and refuses nothing on vsock's behalf. Keeping
+  # this to the two refused-bearing capabilities is what leaves a DEFAULT host
+  # (which selects `interactive`+`batch` but not `vsock`) free of any
+  # `require_capability` string, so the phase-5 assertion "the default
+  # launcher contains no capability guard" still holds.
+  refusedCapabilities =
+    lib.optional (!agentCapabilities.interactive) "interactive"
+    ++ lib.optional (!agentCapabilities.batch) "batch";
+  capabilityHelpers = lib.optionalString (refusedCapabilities != [ ]) (
+    mkFragment topIndent ''
+      # ---- capability gating (lightweight plan phase 5) -------------------
+      # This host selects only: ${lib.concatStringsSep ", " agentCapabilities.selected}.
+      # The capabilities ${lib.concatStringsSep ", " refusedCapabilities} are
+      # absent, so the subcommands whose guest-side machinery they back are
+      # refused below, because that machinery is ABSENT from this host's
+      # guests, not merely disabled. (`vsock` is never refused on its own: it
+      # shares `ssh` with `interactive`, so a vsock-capable host still allows
+      # `ssh` over VSOCK.)
+      #
+      # A MEMBERSHIP test against the rendered set rather than an unconditional
+      # `die`: the refusal is data-driven (so it cannot disagree with the set the
+      # rest of the module was built from) and the subcommand body stays
+      # reachable, which is also what keeps shellcheck from flagging it.
+      require_capability() {
+          case " $SELECTED_CAPABILITIES " in
+              *" $2 "*) return 0 ;;
+          esac
+          die "'$1' needs the '$2' capability, which this host does not select (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ]); add \"$2\" to that list and rebuild to enable it"
+      }
+      # The `ssh` control channel is usable over the TAP (`interactive`) OR
+      # over VSOCK (`vsock`, lightweight plan phase 6). `ssh` is refused only
+      # when a host selects NEITHER (e.g. a batch-only host without `vsock`).
+      require_capability_any() {
+          local cmd="$1" cap
+          shift
+          for cap in "$@"; do
+              case " $SELECTED_CAPABILITIES " in
+                  *" $cap "*) return 0 ;;
+              esac
+          done
+          die "'$cmd' needs one of these capabilities, which this host does not select (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ]); add one of: $*"
+      }''
+  );
+  # One splice per subcommand, at the TOP of its function body.
+  requireCapability =
+    cap: cmd:
+    lib.optionalString (!agentCapabilities.${cap}) (
+      mkFragment bodyIndent "require_capability ${cmd} ${cap}"
+    );
+  # `doctor`'s host-key section. On a host WITHOUT the `interactive` AND
+  # without the `vsock` capability there is no key material to look for
+  # (hostkeys.nix provisions none and ../session.nix's table creates no
+  # `hostkeys/` subdirectory), so the check would be vacuous; it reports the
+  # capability instead. A host that selects EITHER (a TCP sshd or a VSOCK
+  # sshd) provisions keys and is checked. The interactive variant is
+  # byte-for-byte the block this fragment replaced, so the launcher of a host
+  # with both `interactive` and `batch` is unchanged.
+  # NOTE: `indentFragment`, not `mkFragment` — the splice site supplies the
+  # trailing newline, so no trailing whitespace is introduced. The indent is the
+  # column the block has in the GENERATED script (Nix strips the `text = ''`
+  # string's common indentation, interpolated values are inserted verbatim), so
+  # that the interactive variant reproduces the replaced block byte for byte.
+  doctorHostKeys = indentFragment bodyIndent (
+    if (agentCapabilities.interactive || agentCapabilities.vsock) then
+      ''
+        local missing=0 s
+        for s in "''${SLOT_NAMES[@]}"; do
+            [[ -e "$HOSTKEYS_ROOT/$s" ]] || missing=$((missing + 1))
+        done
+        if (( missing == 0 )); then
+            ok "every slot has a host-key directory under $HOSTKEYS_ROOT"
+        else
+            fail "$missing slot(s) lack a host-key directory (systemctl restart agent-microvm-hostkeys.service)"
+        fi''
+    else
+      ''ok "no per-slot SSH host keys are expected: this host selects neither the \"interactive\" nor the \"vsock\" capability (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ])"''
+  );
+  # --- the TAP-ONLY configuration constants (lightweight plan phase 6) -----
+  # The bridge, the gateway address and the guest subnet only EXIST under the
+  # `tap` transport; under `vsock` there is no bridge, no gateway and no guest
+  # subnet, so rendering them would be dead configuration (and
+  # `writeShellApplication`'s shellcheck gate rejects an unused `readonly`,
+  # which is exactly the "emit it only where it can fire" rule ../job.nix
+  # applies to its `promptUnusedSuppression`).
+  # `indentFragment`, not `mkFragment`: the splice site is on its own line and
+  # supplies the trailing newline, so appending one would insert a blank line
+  # (and, before this file's indents were corrected, a whitespace-only one).
+  tapNetworkConfig = lib.optionalString agentNetwork.transportCaps.guestInterface (
+    indentFragment topIndent ''
+      # The private bridge + the bridge-only LiteLLM endpoint a guest reaches
+      # (network.nix §16, guest.nix forwarder). The host launcher's endpoint
+      # preflight and `doctor` probe exactly this address, and the per-task
+      # stderr surfacing labels the endpoint in its hint.
+      readonly BRIDGE=${lib.escapeShellArg cfg.bridgeName}
+      readonly GATEWAY=${lib.escapeShellArg cfg.gatewayAddress}
+      # The private subnet the guest slots live in (network.nix). `doctor`
+      # builds the EXACT `iptables -C AGENT_MICROVM_INPUT -s $SUBNET -d
+      # $GATEWAY -p tcp --dport $LITELLM_PORT -j ACCEPT` spec from these SAME
+      # variables network.nix installs the rule with (its `inputAllowLines`),
+      # so the check and the rule it verifies can never drift apart.
+      readonly SUBNET=${lib.escapeShellArg cfg.subnet}''
+  );
+
+  # The endpoint the PREFLIGHT probes: the address a GUEST would reach the model
+  # API at, expressed in host terms. Under `tap` that is the bridge endpoint
+  # (which also proves the bridge and its socket are up); under `vsock` the guest
+  # path ends at the host loopback proxy (through the per-VM forwarder), so the
+  # loopback IS the endpoint to probe. There is no bridge address to try.
+  preflightUrl =
+    if agentNetwork.transportCaps.bridgeLitellm then
+      ''"http://$GATEWAY:$LITELLM_PORT/v1/models"''
+    else
+      ''"http://127.0.0.1:$LITELLM_PORT/v1/models"'';
+
+  # ... and the actionable hint names the components that EXIST on this host.
+  # Spliced INSIDE a heredoc in a function body, hence `bodyIndent` (the bullets
+  # sit at column 4 of the generated script, exactly where the block this
+  # fragment replaced had them).
+  preflightHint = indentFragment bodyIndent (
+    if agentNetwork.transportCaps.bridgeLitellm then
+      ''
+        - systemctl is-active agent-litellm-proxy.socket  (must be active;
+          it needs the bridge device, so it is ordered after
+          $BRIDGE-netdev.service)
+        - systemctl is-active litellm.service  (the loopback backend on
+          127.0.0.1:$LITELLM_PORT)
+        - ip -br addr show $BRIDGE  (the bridge + its $GATEWAY address)
+        - curl -fsS http://127.0.0.1:$LITELLM_PORT/v1/models  (the backend)''
+    else
+      ''
+        - systemctl is-active litellm.service  (the loopback backend on
+          127.0.0.1:$LITELLM_PORT)
+        - systemctl is-active agent-litellm-vsock-<slot>.socket  (the per-VM
+          AF_VSOCK forwarder; the guest has no network interface at all)
+        - curl -fsS http://127.0.0.1:$LITELLM_PORT/v1/models  (the backend)''
+  );
+
+  # `doctor`'s header line: it may only name components this host has.
+  doctorHeader = indentFragment bodyIndent (
+    if agentNetwork.transportCaps.bridgeLitellm then
+      ''
+        printf '%s: host-side diagnosis (transport=%s bridge=%s gateway=%s litellmPort=%s profile=%s)\n' \
+            "$PROG" "$NETWORK_TRANSPORT" "$BRIDGE" "$GATEWAY" "$LITELLM_PORT" \
+            "''${NETWORK_PROFILE:-<unset>}"''
+    else
+      ''
+        printf '%s: host-side diagnosis (transport=%s litellmPort=%s profile=%s)\n' \
+            "$PROG" "$NETWORK_TRANSPORT" "$LITELLM_PORT" "''${NETWORK_PROFILE:-<unset>}"''
+  );
+
+  # `doctor`'s MODEL-TRANSPORT sections (lightweight plan phase 6). The
+  # host-side components of the model path are transport-specific, and a check
+  # for a component the host deliberately does not build would be a permanent,
+  # dishonest FAIL:
+  #
+  #   tap   — the bridge-only forwarder socket, the bridge + gateway address and
+  #           the AGENT_MICROVM_* chains (byte-for-byte the block this fragment
+  #           replaced, so a `tap` host's launcher is unchanged);
+  #   vsock — the per-VM `agent-litellm-vsock-<slot>.socket` listeners, plus an
+  #           explicit statement that no bridge/TAP/firewall is expected.
+  #
+  # NOTE: `indentFragment`, not `mkFragment` — the splice site supplies the
+  # trailing newline (same reason as `doctorHostKeys`).
+  doctorTransport = indentFragment bodyIndent (
+    if agentNetwork.transportCaps.bridgeLitellm then
+      ''
+        section_hdr "bridge-only forwarder socket ($GATEWAY:$LITELLM_PORT)"
+        # The socket must be active AND ordered after the bridge netdev; a
+        # socket that failed at boot (BindToDevice before the bridge exists)
+        # stays failed and has no listener.
+        if systemctl is-active --quiet agent-litellm-proxy.socket 2>/dev/null; then
+            ok "agent-litellm-proxy.socket is active"
+        else
+            fail "agent-litellm-proxy.socket is NOT active (it needs $BRIDGE-netdev.service; try: systemctl restart agent-litellm-proxy.socket)"
+        fi
+        # Match the unit name LITERALLY: `.` is a regex wildcard in grep,
+        # and a bare "$BRIDGE-netdev.service" would also match a (hypothetical)
+        # `agentbr0-netdevXservice`. Escape every `.` — the same hardening the
+        # gateway-address grep below uses — so the match is exact.
+        if systemctl show -p After --value agent-litellm-proxy.socket 2>/dev/null \
+                | grep -qw -- "''${BRIDGE//./\\.}-netdev\\.service"; then
+            ok "socket is ordered after $BRIDGE-netdev.service"
+        else
+            fail "socket is NOT ordered after $BRIDGE-netdev.service (a boot race leaves it with no listener)"
+        fi
+        url="http://$GATEWAY:$LITELLM_PORT/v1/models"
+        if curl -fsS -m "$PREFLIGHT_TIMEOUT" --connect-timeout "$PREFLIGHT_TIMEOUT" \
+                -o /dev/null "$url" 2>/dev/null; then
+            ok "bridge endpoint answers GET $url"
+        else
+            fail "bridge endpoint does NOT answer $url (the guest-forwarded path is broken)"
+        fi
+
+        section_hdr "private bridge + gateway address"
+        if ip -br link show "$BRIDGE" >/dev/null 2>&1; then
+            ok "bridge interface $BRIDGE exists"
+        else
+            fail "bridge interface $BRIDGE does NOT exist"
+        fi
+        if ip -br addr show "$BRIDGE" 2>/dev/null \
+                | grep -qw -- "''${GATEWAY//./\\.}"; then
+            ok "bridge carries the gateway address $GATEWAY"
+        else
+            fail "bridge $BRIDGE does NOT carry the gateway address $GATEWAY"
+        fi
+
+        section_hdr "firewall (AGENT_MICROVM_* chains)"
+        if iptables -L AGENT_MICROVM_INPUT -n >/dev/null 2>&1; then
+            ok "AGENT_MICROVM_INPUT chain is installed"
+        else
+            fail "AGENT_MICROVM_INPUT chain is NOT installed (reload the firewall / switch-to-configuration)"
+        fi
+        # Test the rule instead of parsing `iptables -S`'s printed form.
+        # `iptables -S` CANONICALISES the destination address: a rule added
+        # as `-d 192.168.83.1` is printed back as `-d 192.168.83.1/32`, and a
+        # grep for "-d <addr> <space> ..." therefore never matched — so the
+        # check ALWAYS reported a problem and `doctor` exited non-zero on a
+        # healthy host (breaking `sudo agent-microvm doctor && ...`).
+        # `iptables -C <chain> <spec>` exits 0 iff a rule matching <spec>
+        # exists; it is exactly what network.nix itself uses to guard its own
+        # idempotent `-I` inserts. The spec is built from the SAME
+        # `$SUBNET`/`$GATEWAY`/`$LITELLM_PORT` variables network.nix's
+        # `inputAllowLines` installs the rule with, so the two cannot drift —
+        # and `-C` still returns non-zero when the rule is genuinely absent.
+        if iptables -C AGENT_MICROVM_INPUT \
+                -s "$SUBNET" -d "$GATEWAY" -p tcp --dport "$LITELLM_PORT" -j ACCEPT \
+                2>/dev/null; then
+            ok "INPUT chain ACCEPTs tcp dport $LITELLM_PORT to $GATEWAY from the subnet"
+        else
+            fail "INPUT chain does NOT ACCEPT the LiteLLM endpoint (guest -> $GATEWAY:$LITELLM_PORT)"
+        fi
+        if iptables -L AGENT_MICROVM_FORWARD -n >/dev/null 2>&1; then
+            ok "AGENT_MICROVM_FORWARD chain is installed"
+        else
+            fail "AGENT_MICROVM_FORWARD chain is NOT installed"
+        fi
+      ''
+    else
+      ''
+        section_hdr "per-VM AF_VSOCK model forwarder (the vsock transport)"
+        # THE LITERAL PHASE-6 TRANSPORT: no bridge, no TAP, no firewall chain and no
+        # bridge-only socket exist on this host — the guest has no network interface
+        # at all. What must exist instead is ONE forwarder per slot, listening on the
+        # cloud-hypervisor VSOCK socket in that slot's state directory and forwarding
+        # to the loopback LiteLLM proxy. Reporting the ABSENT bridge/firewall as a
+        # problem here would be the same dishonesty the batch-only host-key section
+        # removed, so those sections are not rendered on this host at all.
+        local vs vs_missing=0 vs_socket
+        for vs in "''${SLOT_NAMES[@]}"; do
+            vs_socket="$STATE_ROOT/$vs/notify.vsock_$LITELLM_PORT"
+            if systemctl is-active --quiet "agent-litellm-vsock-$vs.socket" 2>/dev/null; then
+                ok "agent-litellm-vsock-$vs.socket is active (listening on $vs_socket)"
+            else
+                fail "agent-litellm-vsock-$vs.socket is NOT active (systemctl start agent-litellm-vsock-$vs.socket); slot $vs would have no model endpoint"
+                vs_missing=$((vs_missing + 1))
+            fi
+        done
+        if (( vs_missing == 0 )); then
+            ok "every slot has an AF_VSOCK model forwarder"
+        fi
+        # The guest side is a loopback listener inside the VM, so the only host-side
+        # reachability the host can prove is the loopback LiteLLM check above.
+        ok "no private bridge, TAP device or AGENT_MICROVM_* firewall chain is expected under the \"vsock\" model transport (the guest has no network interface)"
+      ''
+  );
+  runCapability = requireCapability "interactive" "run";
+  # `ssh` is the control channel: usable over the TAP (`interactive`) OR over
+  # VSOCK (`vsock`, lightweight plan phase 6). Refused only when NEITHER is
+  # selected (e.g. a batch-only host without `vsock`).
+  sshCapability = lib.optionalString (!agentCapabilities.interactive && !agentCapabilities.vsock) (
+    mkFragment bodyIndent "require_capability_any ssh interactive vsock"
+  );
+  submitCapability = requireCapability "batch" "submit";
+  cancelCapability = requireCapability "batch" "cancel";
+
+  # --- the per-session tree (lightweight plan phase 4) --------------------
+  # `install -d` line for ONE layout entry, generated from the SINGLE source of
+  # truth (session.nix's table). `install -d` also RESETS the mode and ownership
+  # of an existing directory, which is exactly what is needed: the guest agent
+  # owns `worker/` and could have chmodded it during a previous session.
+  # The two BIND-MOUNT points are only created when missing — they may still
+  # carry a live bind at this point, and chmodding through it would change the
+  # workspace clone or the task's persisted state.
+  #
+  # A failure RETURNS non-zero, it never `die`s: `prepare_session` is also
+  # reached from `clear_session`, which runs inside the EXIT trap
+  # (`cleanup_slot`). A `die` (i.e. `exit 1`) there would abort the trap before
+  # `rm -rf "$SLOTS_DIR/$slot"`, reserving the slot FOREVER — the "second fault
+  # on top of the leak" the teardown comments say must never happen. The call
+  # sites decide what a failure means.
+  sessionInstallLine =
+    tree: e:
+    let
+      path = if e.rel == "" then "\"$dir\"" else "\"$dir/${e.rel}\"";
+      install = "install -d -m ${e.mode} -o ${toString e.uid} -g ${toString e.gid} -- ${path}";
+      guard = if e.strictMode then "" else "[[ -d ${path} ]] || ";
+    in
+    "${guard}${install} \\\n    || { log \"ERROR: could not prepare ${tree} ${
+      if e.rel == "" then "root" else e.rel
+    } of slot $slot\"; return 1; }";
+
+  # The per-slot paths of the two trees, spliced into the configuration section
+  # next to the other roots.
+  sessionConfig = mkFragment topIndent ''
+    # ---- the per-session tree (lightweight plan phase 4) ---------------
+    # ONE writable virtiofs share per slot (the session tree) plus ONE
+    # read-only share (the slot's SSH host identity + the staged host
+    # configuration). The trust boundaries are expressed by OWNERSHIP and
+    # MODES, which virtiofsd passes through unchanged — see session.nix, which owns
+    # the layout table every generated line below comes from.
+    readonly SESSION_ROOT=${lib.escapeShellArg agentSession.root}
+    readonly SESSION_RO_ROOT=${lib.escapeShellArg agentSession.roRoot}
+    readonly SESSION_WORKSPACE_SUBDIR=${lib.escapeShellArg agentSession.subdirs.workspace}
+    readonly SESSION_STATE_SUBDIR=${lib.escapeShellArg agentSession.subdirs.state}
+    # The MODES of the two directories other parts of this launcher also touch
+    # (`prepare_job` on the session root, `setup_agent_state` on the state bind
+    # point). They are read from the layout table so no second authority over
+    # them exists in this script.
+    readonly SESSION_ROOT_MODE=${lib.escapeShellArg (agentSession.modeOf "")}
+    readonly SESSION_WORKSPACE_MODE=${lib.escapeShellArg (agentSession.modeOf agentSession.subdirs.workspace)}
+    readonly SESSION_STATE_MODE=${lib.escapeShellArg (agentSession.modeOf agentSession.subdirs.state)}
+    # The generated PRE-LAUNCH verifier: it re-derives every expected owner and
+    # mode from the same table and refuses the launch on any mismatch, symlink
+    # or replaceable parent directory. The launcher cannot weaken it (it takes
+    # no policy argument, only a slot name).
+    readonly SESSION_VERIFIER=${lib.getExe agentSession.verifier}'';
+
+  # WHERE a slot's two bind-mount targets live: both are INSIDE the session
+  # tree, and there is exactly ONE definition of each in the generated script,
+  # so `status`, `list`, `recover`, `doctor`, `destroy` and every teardown path
+  # agree.
+  mountPointDef = ''mount_point()  { printf '%s' "$SESSION_ROOT/$1/$SESSION_WORKSPACE_SUBDIR"; }'';
+  stateSlotDirDef = ''state_slot_dir() { printf '%s' "$SESSION_ROOT/$1/$SESSION_STATE_SUBDIR"; }'';
+
+  sessionHelpers = mkFragment topIndent ''
+    # ---- the session tree: preparation / verification / removal ---------
+    session_dir()    { printf '%s' "$SESSION_ROOT/$1"; }
+    session_ro_dir() { printf '%s' "$SESSION_RO_ROOT/$1"; }
+
+    # Remove every top-level entry of a tree the layout table does NOT declare
+    # for this host. Two things produce such entries: a generation that selected
+    # a capability this one does not (`myconfig.ai.microvm.capabilities`,
+    # lightweight plan phase 5 — nothing sweeps the batch subdirectories at boot,
+    # so an unclean shutdown followed by a narrowing rebuild leaves them behind),
+    # and an operator who put something into the tree by hand. Either way they
+    # would sit inside the ONE writable share, exported to the untrusted guest,
+    # with no rule of the table covering their owner or mode.
+    #
+    # A mount anywhere underneath is a hard STOP, never a removal: the two binds
+    # this module creates are table entries (so they are never candidates here),
+    # and `rm -rf` through some other mount would destroy data outside the tree.
+    # The generated pre-launch verifier refuses the launch on any entry that
+    # survives this, so a failed sweep cannot silently export one.
+    session_sweep_extras() {
+        local dir="$1" label="$2"
+        shift 2
+        local name known allowed rc=0
+        [[ -d "$dir" ]] || return 0
+        while IFS= read -r name; do
+            known=0
+            for allowed in "$@"; do
+                [[ "$name" == "$allowed" ]] && known=1
+            done
+            (( known )) && continue
+            if ! session_subtree_unmounted "$dir/$name"; then
+                log "ERROR: refusing to remove the undeclared $label entry $dir/$name while a mount survives under it"
+                rc=1
+                continue
+            fi
+            log "removing the undeclared $label entry $dir/$name (not part of this host's capability set: $SELECTED_CAPABILITIES)"
+            # `:?` on BOTH components (shellcheck SC2115, and the property it is
+            # about): an empty `$dir` or `$name` must abort instead of expanding
+            # to `/` or to the tree root itself.
+            rm -rf -- "''${dir:?}/''${name:?}" || {
+                log "ERROR: could not remove the undeclared $label entry $dir/$name"
+                rc=1
+            }
+        done < <(find "$dir" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null || true)
+        return "$rc"
+    }
+
+    # Create (or RESET) the per-session tree with the exact ownership and modes
+    # the trust split needs, before anything is staged into it.
+    prepare_session() {
+        local slot="$1" dir
+        dir="$(session_dir "$slot")"
+        session_sweep_extras "$dir" "session tree" ${
+          lib.concatMapStringsSep " " (e: lib.escapeShellArg e.rel) (
+            lib.filter (e: e.rel != "") agentSession.layout
+          )
+        } \
+            || { log "ERROR: could not sweep the session tree of slot $slot"; return 1; }
+        ${lib.concatMapStringsSep "\n    " (sessionInstallLine "the session") agentSession.layout}
+        dir="$(session_ro_dir "$slot")"
+        session_sweep_extras "$dir" "read-only session tree" ${
+          lib.concatMapStringsSep " " (e: lib.escapeShellArg e.rel) (
+            lib.filter (e: e.rel != "") agentSession.roLayout
+          )
+        } \
+            || { log "ERROR: could not sweep the read-only session tree of slot $slot"; return 1; }
+        ${lib.concatMapStringsSep "\n    " (sessionInstallLine "the read-only session")
+          agentSession.roLayout
+        }
+    }
+
+    # Fail CLOSED before the VM (and therefore virtiofsd) starts: a tree whose
+    # ownership/modes are not exactly what the trust split needs must never be
+    # handed to a guest.
+    verify_session() {
+        "$SESSION_VERIFIER" "$1" \
+            || die "the session tree of slot $1 failed its pre-launch ownership/mode verification"
+    }
+
+    # NOTHING may still be mounted anywhere under a tree we are about to
+    # `rm -rf`: the removal would descend THROUGH the mount and destroy the
+    # user's clone or a task's persisted state, both of which live outside the
+    # tree and must survive it. `rm --one-file-system` is no help here — a bind
+    # mount of a same-filesystem directory shares its st_dev. The two binds this
+    # module creates are unmounted (and verified) by the caller; this catches
+    # every OTHER mount that could be under the tree (an operator's manual
+    # mount, a nested bind, a future third share).
+    session_subtree_unmounted() {
+        local dir="$1" target rc=0
+        while read -r target; do
+            [[ -n "$target" ]] || continue
+            if [[ "$target" == "$dir" || "$target" == "$dir"/* ]]; then
+                log "ERROR: a mount is still present under the session tree $dir: $target"
+                rc=1
+            fi
+        done < <(findmnt -rn -o TARGET 2>/dev/null || true)
+        return "$rc"
+    }
+
+    # Remove the COMPLETE per-session tree and recreate the empty skeleton.
+    # Both binds must be VERIFIABLY gone first: deleting through a live bind
+    # would destroy the workspace clone or the task's persisted state (which
+    # both live outside the tree and must survive it). The skeleton is
+    # recreated because virtiofsd refuses to start without its share source.
+    #
+    # ORDER MATTERS in `cleanup_slot`: the config-seed clear runs BEFORE this,
+    # because it `rm -rf`s the payload subdirectory of the READ-ONLY slot
+    # directory and the `prepare_session` call at the end of this function is
+    # what puts that (empty) subdirectory back. Reversed, the next launch would
+    # be refused by `verify_session`, which requires every directory of both
+    # layout tables to exist.
+    clear_session() {
+        local slot="$1" dir
+        dir="$(session_dir "$slot")"
+        unmount_verified "$(mount_point "$slot")" "$slot" || {
+            log "ERROR: refusing to remove the session tree of $slot while its workspace bind mount survives"
+            return 1
+        }
+        unmount_verified "$(state_slot_dir "$slot")" "$slot" || {
+            log "ERROR: refusing to remove the session tree of $slot while its agent-state bind mount survives"
+            return 1
+        }
+        session_subtree_unmounted "$dir" || {
+            log "ERROR: refusing to remove the session tree of $slot while a mount survives underneath it"
+            return 1
+        }
+        if [[ -d "$dir" ]]; then
+            rm -rf -- "''${dir:?}" || {
+                log "ERROR: could not remove the session tree $dir"
+                return 1
+            }
+        fi
+        if [[ -e "$dir" || -L "$dir" ]]; then
+            log "ERROR: the session tree $dir still exists after removing it"
+            return 1
+        fi
+        # virtiofsd refuses to start without its share source, so the empty
+        # skeleton must come back. A failure here is REPORTED, never fatal: this
+        # runs from the EXIT trap, which has to finish releasing the slot.
+        prepare_session "$slot" || {
+            log "ERROR: could not recreate the session skeleton of $slot after removing it"
+            return 1
+        }
+    }
+
+    # Bytes of the per-slot job data for `usage`. `du` descends into a bind
+    # mount whose source is on the SAME filesystem (they share st_dev, so
+    # --one-file-system does not stop it), and under this layout the per-slot
+    # job directory CONTAINS the workspace clone and the task's agent state —
+    # both already reported on their own `usage` lines. Excluding them keeps
+    # the "job data" figure meaning what it says instead of double-counting
+    # every byte of the clone.
+    session_job_data_bytes() {
+        [[ -d "$SESSION_ROOT" ]] || { printf '0'; return 0; }
+        du -sb --one-file-system \
+            --exclude="*/$SESSION_WORKSPACE_SUBDIR" \
+            --exclude="*/$SESSION_STATE_SUBDIR" \
+            -- "$SESSION_ROOT" 2>/dev/null | cut -f1
+    }
+
+    # NOTE on the FOREIGN per-slot state scan further down: $JOBS_ROOT is the
+    # writable session root and $HOSTKEYS_ROOT the read-only one, so the scan
+    # covers both trees. $STATE_SLOTS_ROOT and the
+    # `$STATE_ROOT/agent-*/workspace` branch find nothing on a host that has
+    # only ever run this layout — they are kept DELIBERATELY, because a host
+    # migrated from the historical four-share layout still carries residue
+    # there, and reporting it is exactly what those branches are for.
+  '';
+
+  # One call site each in `run` and `submit`, BEFORE the workspace bind mount
+  # and before anything is staged into the tree.
+  sessionPrepare = mkFragment bodyIndent ''
+    prepare_session "$slot" \
+        || die "could not prepare the session tree of slot $slot"
+    # The clone is about to be bind-mounted ONTO a directory of the session
+    # tree, and a mount point shows the MOUNTED tree's root mode — which the
+    # pre-launch verifier rejects if it grants group/other WRITE. That mode
+    # comes from `git clone`, i.e. from root's umask and from what the SOURCE
+    # repository does (`core.sharedRepository` makes git create group-writable
+    # directories), neither of which this launcher controls. Normalise the clone
+    # ROOT to the mode the layout table declares for the mount point, so a
+    # legitimately shared source repository cannot produce a confusing
+    # pre-launch refusal. Only the ROOT: the modes inside the clone are the
+    # user's business.
+    chmod "$SESSION_WORKSPACE_MODE" -- "$clone" \
+        || die "could not normalise the mode of the workspace clone root: $clone"'';
+  # ... and one immediately before the VM is started.
+  sessionVerify = mkFragment bodyIndent ''verify_session "$slot"'';
+  # ... and one in the teardown, so no per-session data outlives the session.
+  sessionClear = mkFragment bodyIndent ''clear_session "$slot" || leaked=1'';
+
+  # The MODE of the two directories the rest of this launcher also creates and
+  # which the layout table already declares: they resolve to the table's value
+  # at RUNTIME, so session.nix stays the only authority over them.
+  jobRootModeArg = ''"$SESSION_ROOT_MODE"'';
+  stateSlotModeArg = ''"$SESSION_STATE_MODE"'';
+  # The state directory is a BIND-MOUNT POINT that `prepare_session` already
+  # created with the table's owner/mode. `install -d` would chmod/chown THROUGH
+  # a surviving stale bind (i.e. through the previous task's persisted state), so
+  # only create it when missing — the same treatment session.nix's table gives
+  # every non-`strictMode` entry, and the pre-launch verifier still fails the
+  # launch if the owner is wrong.
+  stateSlotInstallGuard = ''[[ -d "$mp" ]] || '';
+
+  # The BATCH lines of the retained-usage report. The "job data" figure is
+  # computed by a helper (`session_job_data_bytes`) rather than a plain `du`,
+  # because the per-slot session directory contains the workspace and
+  # agent-state BIND MOUNTS, which `du` would descend into and double-count.
+  #
+  # On a host without the `batch`
+  # capability there is no result archive and no batch subdirectory in any session
+  # tree (../session.nix's table creates none), so reporting `0B` for
+  # `$RESULTS_DIR` would claim a directory that cannot exist — the same
+  # "reports something absent" pattern the honest `doctor` host-key section
+  # removed. The capability is reported instead.
+  jobUsageLines = mkFragment bodyIndent (
+    if agentCapabilities.batch then
+      ''
+        printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(session_job_data_bytes)")"
+        printf '  job results:   %s (%s)\n' "$RESULTS_DIR" "$(human "$(dir_bytes "$RESULTS_DIR")")"''
+    else
+      ''printf '  job data:      none: this host does not select the "batch" capability (myconfig.ai.microvm.capabilities = [ %s ])\n' "$SELECTED_CAPABILITIES"''
+  );
+
+  # ... and one in the teardown, so nothing staged survives the session.
+  configSeedClear = mkFragment bodyIndent ''clear_config_seed "$slot" || true'';
 
   # Render the deterministic slot table as bash arrays. Using the shared slot
   # helper guarantees the launcher sees exactly the names/IPs/MACs/TAPs that
@@ -88,6 +984,7 @@ let
     runtimeInputs = with pkgs; [
       coreutils
       util-linux # flock, mount, umount, findmnt
+      findutils # find — the session-tree sweep (`session_sweep_extras`)
       git
       jq
       openssh
@@ -126,19 +1023,8 @@ let
       readonly WORKSPACE_ROOT=${lib.escapeShellArg cfg.workspaceRoot}
       readonly RUNTIME_ROOT=${lib.escapeShellArg cfg.runtimeRoot}
       readonly STATE_ROOT=${lib.escapeShellArg cfg.stateRoot}
-      # The private bridge + the bridge-only LiteLLM endpoint a guest reaches
-      # (network.nix §16, guest.nix forwarder). The host launcher's endpoint
-      # preflight and `doctor` probe exactly this address, and the per-task
-      # stderr surfacing labels the endpoint in its hint.
-      readonly BRIDGE=${lib.escapeShellArg cfg.bridgeName}
-      readonly GATEWAY=${lib.escapeShellArg cfg.gatewayAddress}
       readonly LITELLM_PORT=${toString cfg.litellmPort}
-      # The private subnet the guest slots live in (network.nix). `doctor`
-      # builds the EXACT `iptables -C AGENT_MICROVM_INPUT -s $SUBNET -d
-      # $GATEWAY -p tcp --dport $LITELLM_PORT -j ACCEPT` spec from these SAME
-      # variables network.nix installs the rule with (its `inputAllowLines`),
-      # so the check and the rule it verifies can never drift apart.
-      readonly SUBNET=${lib.escapeShellArg cfg.subnet}
+      ${tapNetworkConfig}
       # Whether the effective profile grants model-API access at all. Under
       # `offline` there is no endpoint to probe, so the preflight/doctor skip
       # the LiteLLM checks rather than reporting a spurious failure.
@@ -162,7 +1048,34 @@ let
       # result-channel scenario before it started. Production callers MUST NOT
       # set this — a skipped preflight is strictly less safe than a real one.
       readonly SKIP_PREFLIGHT="''${AGENT_MICROVM_SKIP_PREFLIGHT:-0}"
-      readonly SSH_ENABLED=${lib.escapeShellArg (if cfg.enableSsh then "1" else "0")}
+      # Whether the TCP sshd on a guest NETWORK interface is a usable control
+      # channel. This is `enableSsh` AND "the guest has an interface at all":
+      # under the `vsock` transport (lightweight plan phase 6) the guest has NO
+      # network interface, so a TCP sshd would listen where nothing can connect —
+      # ../guest.nix therefore masks it, and every path below takes the VSOCK
+      # channel instead. Resolved ONCE in ../default.nix
+      # (`agentNetwork.tapSshUsable`), never re-derived here.
+      readonly SSH_ENABLED=${lib.escapeShellArg (if agentNetwork.tapSshUsable then "1" else "0")}
+      # The ONE resolved MODEL transport (lightweight plan phase 6):
+      #   tap   — the guest has a TAP on the private bridge and reaches LiteLLM at
+      #           <gateway>:<litellmPort>; the host carries the bridge, the
+      #           AGENT_MICROVM_* chains and the bridge-only forwarder socket.
+      #   vsock — the guest has NO network interface; it reaches LiteLLM over
+      #           AF_VSOCK through the per-VM host forwarder
+      #           `agent-litellm-vsock-<slot>.socket`.
+      # Reported by `capabilities` so ../runtime-validation.sh can gate its
+      # network sections on it instead of assuming a TAP exists.
+      readonly NETWORK_TRANSPORT=${lib.escapeShellArg agentNetwork.transport}
+      readonly GUEST_INTERFACE=${
+        lib.escapeShellArg (if agentNetwork.transportCaps.guestInterface then "1" else "0")
+      }
+      # The VSOCK control channel (lightweight plan phase 6): 1 iff this host
+      # selects the `vsock` capability. `ssh` (and the readiness poll) connect
+      # over VSOCK when VSOCK is the ONLY control channel
+      # (`VSOCK_ENABLED=1 && SSH_ENABLED=0`, i.e. a batch+vsock host); a host
+      # with the TCP sshd (`SSH_ENABLED=1`, the `interactive` capability) keeps
+      # using the TAP, so a default host's `ssh` path is unchanged in behaviour.
+      readonly VSOCK_ENABLED=${lib.escapeShellArg (if agentCapabilities.vsock then "1" else "0")}
       readonly SSH_USER="agent"
       # ---- §18 / ticket 3 B: AUTHENTICATED control channel ---------------
       # Every slot has a STABLE ed25519 host identity, provisioned on the host
@@ -273,7 +1186,7 @@ let
           )
         )
       })
-      # ---- structured lifecycle logs (ticket 6 B) ------------------------
+      ${sessionConfig}${capabilityConfig}# ---- structured lifecycle logs (ticket 6 B) ------------------------
       readonly LOGS_DIR="$RUNTIME_ROOT/logs"
       readonly LOG_MAX_BYTES=${toString cfg.taskLogMaxBytes}
       readonly RUN_DIR="/run/agent-microvms"
@@ -283,6 +1196,12 @@ let
       readonly SHUTDOWN_TIMEOUT=30
       # Bounded guest-readiness window (seconds) when waiting for SSH.
       readonly READY_TIMEOUT=90
+      # Exponential-backoff bounds (milliseconds) of that wait: the first probe
+      # follows almost immediately, so a warm slot no longer pays a fixed
+      # multi-second sleep after it is already reachable, while a cold boot
+      # backs off to one probe every 2 s instead of hammering sshd.
+      readonly READY_POLL_MIN_MS=250
+      readonly READY_POLL_MAX_MS=2000
 
       PROG="agent-microvm"
 
@@ -392,7 +1311,7 @@ let
       }
 
       session_file() { printf '%s' "$SLOTS_DIR/$1/session.json"; }
-      mount_point()  { printf '%s' "$STATE_ROOT/$1/workspace"; }
+      ${mountPointDef}
       job_dir()      { printf '%s' "$JOBS_ROOT/$1"; }
       job_input_dir()      { printf '%s' "$JOBS_ROOT/$1/$JOB_INPUT_SUBDIR"; }
       job_controller_dir() { printf '%s' "$JOBS_ROOT/$1/$JOB_CONTROLLER_SUBDIR"; }
@@ -679,6 +1598,14 @@ let
           gcd="$(realpath -e -- "$gcd")"
           [[ "$gd"  == "$cr"/* ]] || die "git-dir escapes the workspace: $gd"
           [[ "$gcd" == "$cr"/* ]] || die "git-common-dir escapes the workspace: $gcd"
+          # A clone that BORROWS objects (`--shared` / `--reference`, i.e. an
+          # `objects/info/alternates` file) would still read from the original
+          # repository at runtime and would break the moment the source is
+          # gc'ed — the exact opposite of "standalone". `clone --local
+          # --no-hardlinks` never writes one; verify it anyway, because this is
+          # the invariant that makes the clone disposable.
+          [[ ! -e "$gcd/objects/info/alternates" ]] \
+              || die "clone borrows objects from another repository (alternates present): $gcd"
       }
 
       # Creates the standalone clone at $WORKSPACE_ROOT/<task>. Runs in the
@@ -698,15 +1625,34 @@ let
           [[ ! -e "$clone" ]] \
               || die "workspace already exists: $clone (pick another --name or 'workspace-remove')"
           mkdir -p -- "$WORKSPACE_ROOT"
-          # --no-local forbids hardlinks/alternates: a fully independent copy
-          # of the objects, so the original repo is never shared into the VM.
+          # `--local --no-hardlinks` COPIES the object store: no hardlinks into
+          # the source repository and — crucially — no `--shared` / `--reference`
+          # and therefore no `objects/info/alternates`, so the clone is exactly
+          # as independent and disposable as the previous `--no-local` transfer
+          # while being roughly an order of magnitude faster on this repo (0.6 s
+          # vs 5 s), because it skips pack negotiation and re-compression.
+          # `verify_clone` below re-checks the independence invariants (git-dir,
+          # git-common-dir, absence of alternates) rather than trusting the flag.
+          #
+          # Git's local clone reads the source's loose objects and packs
+          # directly, so a source repository that is MUTATED concurrently (a
+          # running `git gc`, a rebase in another worktree) can yield an
+          # inconsistent copy. That surfaces as a failing clone, which is why
+          # the fallback below redoes the clone through the ordinary git
+          # transport (`--no-local`), which is consistency-checked by the
+          # protocol itself.
+          #
           # The scoped safe.directory covers reading the user-owned SOURCE
           # repo as root (dubious-ownership check); the fresh clone itself is
           # root-owned at this point, so it needs no override. All later git
           # calls in create_clone/verify_clone (rev-parse, checkout -b) also
           # run on the root-owned clone BEFORE the chown to 1000:1000 below.
-          git -c safe.directory="$repo" clone --no-local -- "$repo" "$clone" \
-              || die "git clone --no-local failed"
+          if ! git -c safe.directory="$repo" clone --local --no-hardlinks -- "$repo" "$clone"; then
+              log "warning: fast local clone failed (is the source repository being mutated?); retrying via the git transport"
+              rm -rf -- "$clone"
+              git -c safe.directory="$repo" clone --no-local -- "$repo" "$clone" \
+                  || die "git clone failed"
+          fi
           verify_clone "$clone"
           if [[ -n "$branch" ]]; then
               git -C "$clone" checkout -b "$branch" >/dev/null 2>&1 \
@@ -817,24 +1763,12 @@ let
           # <stateRoot>/<slot>/current from `install-microvm-<slot>.service`,
           # which runs on host activation. A slot started after a host rebuild
           # whose install step has not re-run would otherwise boot the OLD
-          # guest config (e.g. missing the home-manager dotfile provisioning),
-          # which looks like "the sandbox is not provisioned". The unit is an
+          # guest config, which looks like "the sandbox is not provisioned". The unit is an
           # idempotent host oneshot that only re-links a symlink; ignore any
           # failure so a refresh problem never blocks launch. Safe here because
           # the freshly-allocated slot is not yet running.
           systemctl restart "install-microvm-$1.service" 2>/dev/null || true
-          # Make sure the slot's SSH host identity exists BEFORE the VM (and
-          # thus its virtiofsd for the read-only hostkey share) starts: the
-          # provisioning unit is an idempotent RemainAfterExit oneshot, so this
-          # is a no-op once it has run. It is also wantedBy multi-user.target,
-          # so on a booted host this only covers the "key dir deleted by hand"
-          # / "slotCount just increased" cases. Failure is fatal: without the
-          # key sshd cannot start in the guest.
-          if [[ "$SSH_ENABLED" == "1" ]]; then
-              systemctl start agent-microvm-hostkeys.service \
-                  || die "failed to provision per-slot SSH host keys (agent-microvm-hostkeys.service)"
-          fi
-          systemctl start "microvm@$1.service" \
+          ${hostIdentityEnsure}systemctl start "microvm@$1.service" \
               || die "failed to start microvm@$1.service"
       }
 
@@ -881,7 +1815,7 @@ let
           worker="$(job_worker_dir "$slot")"
           logs="$(job_worker_logs_dir "$slot")"
           spec="$(job_spec "$slot")"
-          install -d -m 0755 -o root -g root -- "$dir"
+          install -d -m ${jobRootModeArg} -o root -g root -- "$dir"
           install -d -m "$JOB_INPUT_DIR_MODE" -o root -g root -- "$input"
           install -d -m "$JOB_CONTROLLER_DIR_MODE" -o root -g root -- "$ctrl"
           install -d -m "$JOB_WORKER_DIR_MODE" \
@@ -1105,7 +2039,7 @@ let
       }
 
       # ---- task-scoped agent state (ticket 5 B) ---------------------------
-      state_slot_dir() { printf '%s' "$STATE_SLOTS_ROOT/$1"; }
+      ${stateSlotDirDef}
       state_task_dir() { printf '%s' "$STATE_TASKS_ROOT/$1/$2"; }
 
       agent_state_dirs() {
@@ -1130,7 +2064,7 @@ let
           (( ''${#dirs[@]} > 0 )) \
               || die "--persist-agent-state: agent '$agent' declares no persistent state directories"
           mp="$(state_slot_dir "$slot")"
-          install -d -m 0755 -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$mp"
+          ${stateSlotInstallGuard}install -d -m ${stateSlotModeArg} -o "$GUEST_AGENT_UID" -g "$GUEST_AGENT_GID" -- "$mp"
           local task_dir
           task_dir="$(state_task_dir "$task" "$agent")"
           install -d -m 0755 -o root -g root -- "$STATE_TASKS_ROOT"
@@ -1173,7 +2107,7 @@ let
           find "$mp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
       }
 
-      # ---- §21 slot cleanup / interrupt handling -------------------------
+      ${sessionHelpers}${configSeedHelpers}${capabilityHelpers}${hostIdentityHelpers}# ---- §21 slot cleanup / interrupt handling -------------------------
       # Tear a slot down WITHOUT deleting the workspace clone (§26/§35): stop
       # the VM, unmount the bind, remove the slot transient state. Locks are
       # released implicitly when this process exits and closes their fds.
@@ -1194,7 +2128,7 @@ let
           # Unmount the per-task agent state (the task's DIRECTORY is kept, like
           # the workspace clone) and leave the slot's share source empty.
           clear_agent_state_slot "$slot" || leaked=1
-          rm -rf -- "''${SLOTS_DIR:?}/$slot"
+          ${configSeedClear}${sessionClear}rm -rf -- "''${SLOTS_DIR:?}/$slot"
           if (( leaked )); then
               log "WARNING: slot $slot was released with a LEAKED mount; re-run '$PROG recover' once the holder is gone"
               # The teardown CONTINUED (see above) but it did not succeed, and
@@ -1224,28 +2158,60 @@ let
       # verification, so say so once, clearly, instead of timing out.
       require_known_hosts() {
           [[ -r "$KNOWN_HOSTS" ]] || die \
-              "missing host-key database $KNOWN_HOSTS; run: systemctl start agent-microvm-hostkeys.service"
+              "missing host-key database $KNOWN_HOSTS; run: systemctl restart agent-microvm-hostkeys.service"
+      }
+
+      # THE ONE decision of which control channel an ssh invocation uses: the
+      # VSOCK mux socket when there is no reachable TCP sshd (a batch+vsock host,
+      # or ANY host under the `vsock` model transport, where the guest has no
+      # network interface at all), the TAP otherwise. Every ssh call site below
+      # asks this predicate instead of re-deriving the condition.
+      vsock_control_channel() {
+          [[ "$VSOCK_ENABLED" == "1" && "$SSH_ENABLED" != "1" ]]
       }
 
       guest_ssh_ready() {
-          local ip="$1"
-          [[ "$SSH_ENABLED" == "1" ]] || return 1
+          local slot="$1" ip="$2" target
+          [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]] || return 1
           [[ -r "$KNOWN_HOSTS" ]] || return 1
-          ssh -o BatchMode=yes "''${SSH_VERIFY_OPTS[@]}" -o ConnectTimeout=3 \
-              ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
-              "$SSH_USER@$ip" true >/dev/null 2>&1
+          # The VSOCK control channel (lightweight plan phase 6): a batch+vsock
+          # host has no TCP sshd, so reach `sshd-vsock@` (vsock::22) through
+          # cloud-hypervisor's VSOCK mux socket `<stateRoot>/<slot>/notify.vsock`.
+          # The SAME per-slot host key is pinned under that address in
+          # $KNOWN_HOSTS, so StrictHostKeyChecking=yes applies to VSOCK too.
+          # A host with the TCP sshd (`SSH_ENABLED=1`) always uses the TAP, so
+          # its readiness path is unchanged in behaviour.
+          if vsock_control_channel; then
+              target="vsock-mux/$STATE_ROOT/$slot/notify.vsock"
+              ssh -o BatchMode=yes "''${SSH_VERIFY_OPTS[@]}" -o ConnectTimeout=3 \
+                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                  -l "$SSH_USER" "$target" true >/dev/null 2>&1
+          else
+              ssh -o BatchMode=yes "''${SSH_VERIFY_OPTS[@]}" -o ConnectTimeout=3 \
+                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                  "$SSH_USER@$ip" true >/dev/null 2>&1
+          fi
       }
 
+      # Poll with EXPONENTIAL BACKOFF instead of a fixed 3 s interval: a warm
+      # slot answers within a few hundred milliseconds, and the old fixed sleep
+      # made every launch pay up to 3 s of pure waiting after the guest was
+      # already up (lightweight plan phase 7). The backoff starts at
+      # READY_POLL_MIN_MS, doubles up to READY_POLL_MAX_MS and is bounded by the
+      # SAME overall READY_TIMEOUT as before, so the worst case is unchanged.
+      # `sleep` accepts fractional seconds (coreutils).
       wait_ready() {
-          local ip="$1" waited=0
-          [[ "$SSH_ENABLED" == "1" ]] || { log "SSH disabled; not waiting for guest readiness"; return 0; }
-          while ! guest_ssh_ready "$ip"; do
-              if (( waited >= READY_TIMEOUT )); then
-                  log "guest at $ip not reachable via SSH within ''${READY_TIMEOUT}s"
+          local slot="$1" ip="$2" waited_ms=0 delay_ms="$READY_POLL_MIN_MS"
+          [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]] || { log "no SSH control channel (enableSsh is false and vsock is not selected); not waiting for guest readiness"; return 0; }
+          while ! guest_ssh_ready "$slot" "$ip"; do
+              if (( waited_ms >= READY_TIMEOUT * 1000 )); then
+                  log "guest at $ip not reachable via the SSH control channel within ''${READY_TIMEOUT}s"
                   return 1
               fi
-              sleep 3
-              waited=$(( waited + 3 ))
+              sleep "$(printf '%d.%03d' $(( delay_ms / 1000 )) $(( delay_ms % 1000 )))"
+              waited_ms=$(( waited_ms + delay_ms ))
+              delay_ms=$(( delay_ms * 2 ))
+              (( delay_ms <= READY_POLL_MAX_MS )) || delay_ms="$READY_POLL_MAX_MS"
           done
           return 0
       }
@@ -1297,6 +2263,12 @@ let
                               and per-slot host keys). Exits non-zero if any
                               component is broken; run it when run/submit
                               fails the endpoint preflight.
+        capabilities          Print the execution capabilities of this host's
+                              guests, machine-readably
+                              ('capabilities: <selected>' plus a 'declared:'
+                              line). Needs no root and starts nothing; it is how
+                              tooling (runtime-validation.sh) decides what can be
+                              exercised here.
         list                  One-line status for every slot.
         ssh <slot|task> [--] [cmd...]   SSH into the guest 'agent' user.
         console <slot|task>   Attach to the VM serial console (journal).
@@ -1333,12 +2305,12 @@ let
                               slot still holding the clone before removing it.
 
       Supported agents (--agent), generated from the module's agent registry:
-        ${lib.concatStringsSep "\n  " agentRegistry.names}
+        ${usageList agentRegistry.names}
 
       --persist-agent-state keeps ONLY the agent's declared state directories,
       scoped to the task, under ${agentState.tasksRoot}/<task>/<agent>/.
       Without it the guest home stays disposable. Declared directories:
-        ${lib.concatStringsSep "\n  " (
+        ${usageList (
           lib.concatMap (a: map (d: "${a.name}: ~/${d}") a.persistentState.directories) (
             lib.attrValues agentRegistry.agents
           )
@@ -1347,7 +2319,7 @@ let
       Resource classes (--resource-class), generated from the module options
       (the allocator NEVER substitutes a different class; --wait <sec> bounds
       how long it waits for a free slot in the requested one):
-        ${lib.concatStringsSep "\n  " (
+        ${usageList (
           lib.mapAttrsToList (
             n: c: "${n}: ${toString c.count} slot(s), ${toString c.vcpu} vCPU, ${toString c.memoryMiB} MiB"
           ) agentResourceClasses
@@ -1434,7 +2406,7 @@ let
       preflight_model_endpoint() {
           [[ "$LITELLM_CAPABLE" == "1" ]] || return 0
           [[ "$SKIP_PREFLIGHT" == "1" ]] && return 0
-          local url="http://$GATEWAY:$LITELLM_PORT/v1/models"
+          local url=${preflightUrl}
           local attempt
           # A COLD LiteLLM (DB init/migration on the first post-boot request)
           # can take a few seconds to answer even though it is healthy. Retry
@@ -1454,13 +2426,7 @@ let
         reachable at $url (bounded to ''${PREFLIGHT_TIMEOUT}s).
         The guest agent would die within seconds of starting. Before booting a
         sandbox, check on THIS host:
-          - systemctl is-active agent-litellm-proxy.socket  (must be active;
-            it needs the bridge device, so it is ordered after
-            $BRIDGE-netdev.service)
-          - systemctl is-active litellm.service  (the loopback backend on
-            127.0.0.1:$LITELLM_PORT)
-          - ip -br addr show $BRIDGE  (the bridge + its $GATEWAY address)
-          - curl -fsS http://127.0.0.1:$LITELLM_PORT/v1/models  (the backend)
+          ${preflightHint}
         or run: sudo $PROG doctor   (full diagnosis)
         (set AGENT_MICROVM_SKIP_PREFLIGHT=1 only in the stubbed test harness.)
       EOF
@@ -1468,7 +2434,7 @@ let
       }
 
       cmd_run() {
-          require_root run
+          ${runCapability}require_root run
           local task="" repo="" agent="" branch="" attach=0
           local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0 no_preflight=0
           while [[ $# -gt 0 ]]; do
@@ -1567,8 +2533,8 @@ let
           clone="$WORKSPACE_ROOT/$task"
           create_clone "$top" "$task" "$branch"
           emit_event workspace-created
-          setup_bind_mount "$slot" "$clone"
-          # An interactive slot must not accidentally pick up a stale batch job.
+          ${sessionPrepare}setup_bind_mount "$slot" "$clone"
+          ${configSeedStage}# An interactive slot must not accidentally pick up a stale batch job.
           clear_job "$slot"
           # Agent state is DISPOSABLE unless explicitly requested (ticket 5 B).
           if (( persist )); then
@@ -1580,7 +2546,7 @@ let
               clear_agent_state_slot "$slot" \
                   || die "could not clear the agent-state share of slot $slot"
           fi
-          emit_event vm-start-requested
+          ${sessionVerify}emit_event vm-start-requested
           start_vm "$slot"
 
           # Persist the full session record for status/list (§34). No secrets.
@@ -1588,18 +2554,30 @@ let
               "$clone" "$agent" "$branch" "" "$persist"
 
           if (( attach )); then
-              [[ "$SSH_ENABLED" == "1" ]] || die "--attach requires enableSsh = true"
+              # An SSH control channel is required — the TAP one (`enableSsh`
+              # plus a guest interface) or the VSOCK one (`vsock`, lightweight
+              # plan phase 6). An interactive guest under the `vsock` model
+              # transport has no network interface, so `--attach` goes over VSOCK.
+              [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]] \
+                  || die "--attach requires an SSH control channel (enableSsh = true, or the \"vsock\" capability)"
               [[ -n "$agent" ]] || die "--attach requires --agent <name>"
               # On readiness failure the EXIT trap runs cleanup_slot: the VM is
               # stopped and the bind unmounted, but the workspace clone is kept.
               require_known_hosts
-              wait_ready "$ip" || die "guest not ready; tearing down slot $slot (workspace kept at $clone)"
+              wait_ready "$slot" "$ip" || die "guest not ready; tearing down slot $slot (workspace kept at $clone)"
               emit_event vm-ready
               emit_event agent-started
               log "attaching to $slot; running 'agent-run $agent' in /workspace"
-              ssh "''${SSH_VERIFY_OPTS[@]}" \
-                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
-                  -t "$SSH_USER@$ip" -- agent-run "$agent" || true
+              if vsock_control_channel; then
+                  ssh "''${SSH_VERIFY_OPTS[@]}" \
+                      ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                      -t -l "$SSH_USER" "vsock-mux/$STATE_ROOT/$slot/notify.vsock" \
+                      -- agent-run "$agent" || true
+              else
+                  ssh "''${SSH_VERIFY_OPTS[@]}" \
+                      ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                      -t "$SSH_USER@$ip" -- agent-run "$agent" || true
+              fi
               # Foreground session finished: tear the VM down, keep the clone.
               emit_event agent-finished
               log "session ended; tearing down $slot (workspace kept at $clone)"
@@ -1635,7 +2613,7 @@ let
       # Mirrors cmd_run's allocation/trap structure, then waits for the GUEST's
       # structured result instead of attaching a terminal.
       cmd_submit() {
-          require_root submit
+          ${submitCapability}require_root submit
           local task="" repo="" agent="" branch="" prompt="" timeout_s=""
           local rclass="$DEFAULT_RESOURCE_CLASS" wait_for=0 persist=0
           while [[ $# -gt 0 ]]; do
@@ -1715,8 +2693,8 @@ let
           clone="$WORKSPACE_ROOT/$task"
           create_clone "$top" "$task" "$branch"
           emit_event workspace-created
-          setup_bind_mount "$slot" "$clone"
-          prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s" \
+          ${sessionPrepare}setup_bind_mount "$slot" "$clone"
+          ${configSeedStage}prepare_job "$slot" "$task" "$agent" "$prompt_real" "$timeout_s" \
               "$token" "$rclass" "$persist"
           if (( persist )); then
               setup_agent_state "$slot" "$task" "$agent"
@@ -1727,7 +2705,7 @@ let
           fi
           write_session_marker "$slot" "$token" "batch" "$task" "$top" \
               "$clone" "$agent" "$branch" "$timeout_s" "$persist"
-          emit_event vm-start-requested
+          ${sessionVerify}emit_event vm-start-requested
           start_vm "$slot"
 
           # --- wait for the AUTHORITATIVE controller result ------------------
@@ -1899,7 +2877,7 @@ let
 
       # ==== cancellation (ticket 4) ========================================
       cmd_cancel() {
-          require_root cancel
+          ${cancelCapability}require_root cancel
           [[ $# -ge 1 ]] || die "cancel: <task> required"
           local task="$1"
           validate_task_name "$task"
@@ -2296,9 +3274,7 @@ let
           printf '\nruntime:\n'
           printf '  workspaces:    %s (%s)\n' "$WORKSPACE_ROOT" "$(human "$(dir_bytes "$WORKSPACE_ROOT")")"
           printf '  agent state:   %s (%s)\n' "$STATE_TASKS_ROOT" "$(human "$(dir_bytes "$STATE_TASKS_ROOT")")"
-          printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(dir_bytes "$JOBS_ROOT")")"
-          printf '  job results:   %s (%s)\n' "$RESULTS_DIR" "$(human "$(dir_bytes "$RESULTS_DIR")")"
-          printf '\nremove a retained workspace (and its task state) with:\n'
+          ${jobUsageLines}printf '\nremove a retained workspace (and its task state) with:\n'
           printf '  %s workspace-remove <task>\n' "$PROG"
       }
 
@@ -2404,14 +3380,15 @@ let
               mnt="unmounted"
               if findmnt -n -- "$(mount_point "$slot")" >/dev/null 2>&1; then mnt="mounted"; fi
               ssh_ready="n/a"
-              if [[ "$SSH_ENABLED" == "1" ]]; then
-                  if guest_ssh_ready "$ip"; then ssh_ready="ready"; else ssh_ready="not-ready"; fi
+              if [[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]]; then
+                  if guest_ssh_ready "$slot" "$ip"; then ssh_ready="ready"; else ssh_ready="not-ready"; fi
               fi
               cat <<EOF
       slot:        $slot
         class:     $(slot_class "$slot") ($(slot_vcpu "$slot") vCPU, $(slot_mem "$slot") MiB)
         service:   $state
-        ip:        $ip
+        ip:        $( [[ "$GUEST_INTERFACE" == "1" ]] && printf '%s' "$ip" \
+                          || printf 'none (%s model transport, loopback-only guest)' "$NETWORK_TRANSPORT" )
         mac:       $mac
         vsock cid: $cid
         task:      ''${task:-<none>}
@@ -2443,10 +3420,34 @@ let
           done
       }
 
+      # ==== the capability set, machine-readably (plan phase 5) =============
+      # The ONE way to ASK a host what its guests can do. Rendered on every host
+      # (the capability set is unconditional configuration, see
+      # SELECTED_CAPABILITIES) and deliberately:
+      #   * unprivileged — no `require_root`; it reads no runtime state at all,
+      #     so tooling can query it before deciding whether to become root;
+      #   * side-effect free — it starts, stops and allocates nothing;
+      #   * STABLE and machine-readable — `capabilities: <space-separated>` on
+      #     stdout. ../runtime-validation.sh parses exactly this line and
+      #     HARD-ABORTS if it cannot, instead of inferring the set from a refusal
+      #     message (which would fail OPEN when the message is reworded).
+      # `declared:` is printed too, so a tool can tell "this capability is not
+      # selected" from "this launcher predates that capability".
+      cmd_capabilities() {
+          [[ $# -eq 0 ]] || die "capabilities: takes no arguments"
+          printf 'capabilities: %s\n' "$SELECTED_CAPABILITIES"
+          printf 'declared: %s\n' "$DECLARED_CAPABILITIES"
+          # The resolved MODEL transport (lightweight plan phase 6). Machine-
+          # readable for the same reason the capability set is: a suite that
+          # asserts "the guest cannot reach the LAN" must know whether the guest
+          # has a network interface at all, or its denials pass VACUOUSLY.
+          printf 'network-transport: %s\n' "$NETWORK_TRANSPORT"
+      }
+
       cmd_ssh() {
-          [[ "$SSH_ENABLED" == "1" ]] || die "ssh: enableSsh is false"
+          ${sshCapability}[[ "$SSH_ENABLED" == "1" || "$VSOCK_ENABLED" == "1" ]] || die "ssh: no SSH control channel (enableSsh is false and the vsock capability is not selected)"
           [[ $# -ge 1 ]] || die "ssh: <slot|task> required"
-          local slot ip
+          local slot ip target
           slot="$(resolve_slot "$1")" || die "no such slot or task: $1"
           shift
           ip="$(slot_ip "$slot")"
@@ -2458,13 +3459,32 @@ let
           # independent layers now protect this session: strict host-key
           # verification here, and per-TAP L2 `isolated` on the bridge
           # (network.nix), which prevents a co-resident guest from ARP-spoofing
-          # the gateway or another slot in the first place.
+          # the gateway or another slot in the first place. The VSOCK channel
+          # (lightweight plan phase 6) reuses the SAME pinned key under the
+          # `vsock-mux/<stateRoot>/<slot>/notify.vsock` address, so a batch+vsock
+          # host's `ssh` is verified exactly like the TAP one.
           require_known_hosts
-          exec ssh "''${SSH_VERIFY_OPTS[@]}" \
-              ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
-              -t "$SSH_USER@$ip" "$@"
+          # The control channel: the TAP (`agent@<ip>`) when the TCP sshd is
+          # up, or the VSOCK mux socket (`vsock-mux/<path>`, login user via -l)
+          # when VSOCK is the ONLY channel (a batch+vsock host).
+          if vsock_control_channel; then
+              target="vsock-mux/$STATE_ROOT/$slot/notify.vsock"
+              exec ssh "''${SSH_VERIFY_OPTS[@]}" \
+                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                  -t -l "$SSH_USER" "$target" "$@"
+          else
+              exec ssh "''${SSH_VERIFY_OPTS[@]}" \
+                  ''${AGENT_MICROVM_SSH_KEY:+-i "$AGENT_MICROVM_SSH_KEY"} \
+                  -t "$SSH_USER@$ip" "$@"
+          fi
       }
 
+      # DELIBERATELY NOT capability-gated (unlike `run`/`ssh`, which need
+      # `interactive`, and `submit`/`cancel`, which need `batch`): the serial
+      # console is the journal of the HOST's `microvm@<slot>` unit, so it exists
+      # for every guest and needs nothing inside it. It is the only way to debug a
+      # batch-only guest — which has no sshd at all — so gating it would remove
+      # the last observation channel from the narrowing that needs it most.
       cmd_console() {
           [[ $# -ge 1 ]] || die "console: <slot|task> required"
           local slot
@@ -2580,8 +3600,7 @@ let
           fail()   { report FAIL "$1"; problems=$((problems + 1)); }
           ok()     { report OK   "$1"; }
 
-          printf '%s: host-side diagnosis (bridge=%s gateway=%s litellmPort=%s profile=%s)\n' \
-              "$PROG" "$BRIDGE" "$GATEWAY" "$LITELLM_PORT" "''${NETWORK_PROFILE:-<unset>}"
+          ${doctorHeader}
           section_hdr() { printf '\n== %s ==\n' "$1"; }
 
           if [[ "$LITELLM_CAPABLE" != "1" ]]; then
@@ -2605,87 +3624,9 @@ let
               fail "loopback LiteLLM does NOT answer $loopback_url (is litellm.service running on port $LITELLM_PORT?)"
           fi
 
-          section_hdr "bridge-only forwarder socket ($GATEWAY:$LITELLM_PORT)"
-          # The socket must be active AND ordered after the bridge netdev; a
-          # socket that failed at boot (BindToDevice before the bridge exists)
-          # stays failed and has no listener.
-          if systemctl is-active --quiet agent-litellm-proxy.socket 2>/dev/null; then
-              ok "agent-litellm-proxy.socket is active"
-          else
-              fail "agent-litellm-proxy.socket is NOT active (it needs $BRIDGE-netdev.service; try: systemctl restart agent-litellm-proxy.socket)"
-          fi
-          # Match the unit name LITERALLY: `.` is a regex wildcard in grep,
-          # and a bare "$BRIDGE-netdev.service" would also match a (hypothetical)
-          # `agentbr0-netdevXservice`. Escape every `.` — the same hardening the
-          # gateway-address grep below uses — so the match is exact.
-          if systemctl show -p After --value agent-litellm-proxy.socket 2>/dev/null \
-                  | grep -qw -- "''${BRIDGE//./\\.}-netdev\\.service"; then
-              ok "socket is ordered after $BRIDGE-netdev.service"
-          else
-              fail "socket is NOT ordered after $BRIDGE-netdev.service (a boot race leaves it with no listener)"
-          fi
-          url="http://$GATEWAY:$LITELLM_PORT/v1/models"
-          if curl -fsS -m "$PREFLIGHT_TIMEOUT" --connect-timeout "$PREFLIGHT_TIMEOUT" \
-                  -o /dev/null "$url" 2>/dev/null; then
-              ok "bridge endpoint answers GET $url"
-          else
-              fail "bridge endpoint does NOT answer $url (the guest-forwarded path is broken)"
-          fi
-
-          section_hdr "private bridge + gateway address"
-          if ip -br link show "$BRIDGE" >/dev/null 2>&1; then
-              ok "bridge interface $BRIDGE exists"
-          else
-              fail "bridge interface $BRIDGE does NOT exist"
-          fi
-          if ip -br addr show "$BRIDGE" 2>/dev/null \
-                  | grep -qw -- "''${GATEWAY//./\\.}"; then
-              ok "bridge carries the gateway address $GATEWAY"
-          else
-              fail "bridge $BRIDGE does NOT carry the gateway address $GATEWAY"
-          fi
-
-          section_hdr "firewall (AGENT_MICROVM_* chains)"
-          if iptables -L AGENT_MICROVM_INPUT -n >/dev/null 2>&1; then
-              ok "AGENT_MICROVM_INPUT chain is installed"
-          else
-              fail "AGENT_MICROVM_INPUT chain is NOT installed (reload the firewall / switch-to-configuration)"
-          fi
-          # Test the rule instead of parsing `iptables -S`'s printed form.
-          # `iptables -S` CANONICALISES the destination address: a rule added
-          # as `-d 192.168.83.1` is printed back as `-d 192.168.83.1/32`, and a
-          # grep for "-d <addr> <space> ..." therefore never matched — so the
-          # check ALWAYS reported a problem and `doctor` exited non-zero on a
-          # healthy host (breaking `sudo agent-microvm doctor && ...`).
-          # `iptables -C <chain> <spec>` exits 0 iff a rule matching <spec>
-          # exists; it is exactly what network.nix itself uses to guard its own
-          # idempotent `-I` inserts. The spec is built from the SAME
-          # `$SUBNET`/`$GATEWAY`/`$LITELLM_PORT` variables network.nix's
-          # `inputAllowLines` installs the rule with, so the two cannot drift —
-          # and `-C` still returns non-zero when the rule is genuinely absent.
-          if iptables -C AGENT_MICROVM_INPUT \
-                  -s "$SUBNET" -d "$GATEWAY" -p tcp --dport "$LITELLM_PORT" -j ACCEPT \
-                  2>/dev/null; then
-              ok "INPUT chain ACCEPTs tcp dport $LITELLM_PORT to $GATEWAY from the subnet"
-          else
-              fail "INPUT chain does NOT ACCEPT the LiteLLM endpoint (guest -> $GATEWAY:$LITELLM_PORT)"
-          fi
-          if iptables -L AGENT_MICROVM_FORWARD -n >/dev/null 2>&1; then
-              ok "AGENT_MICROVM_FORWARD chain is installed"
-          else
-              fail "AGENT_MICROVM_FORWARD chain is NOT installed"
-          fi
-
+          ${doctorTransport}
           section_hdr "per-slot SSH host keys"
-          local missing=0 s
-          for s in "''${SLOT_NAMES[@]}"; do
-              [[ -e "$HOSTKEYS_ROOT/$s" ]] || missing=$((missing + 1))
-          done
-          if (( missing == 0 )); then
-              ok "every slot has a host-key directory under $HOSTKEYS_ROOT"
-          else
-              fail "$missing slot(s) lack a host-key directory (systemctl start agent-microvm-hostkeys.service)"
-          fi
+          ${doctorHostKeys}
 
           printf '\n%s: %d problem(s)\n' "$PROG" "$problems"
           (( problems == 0 ))
@@ -2704,6 +3645,7 @@ let
               destroy)          cmd_destroy "$@" ;;
               status)           cmd_status "$@" ;;
               doctor)           cmd_doctor "$@" ;;
+              capabilities)     cmd_capabilities "$@" ;;
               list)             cmd_list "$@" ;;
               ssh)              cmd_ssh "$@" ;;
               console)          cmd_console "$@" ;;

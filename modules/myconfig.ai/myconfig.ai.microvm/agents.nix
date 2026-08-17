@@ -44,6 +44,26 @@
 #   batchStdin       when true, the worker pipes the prompt FILE on stdin
 #                    instead of substituting `%PROMPT%` (for CLIs that read
 #                    instructions from stdin). Defaults to `false`.
+#   configPaths      the agent's ALLOWLIST of host configuration paths, relative
+#                    to `myconfig.ai.microvm.configSeed.hostHome`, staged into
+#                    the disposable guest home at LAUNCH time (lightweight plan
+#                    phase 3, see ./config-seed.nix). EXACT files and EXACT
+#                    directories only — never a whole agent configuration root,
+#                    because those mix configuration with CREDENTIALS
+#                    (`.codex/auth.json`, `.hermes/.env`, …). Model-provider
+#                    credentials stay in the host LiteLLM proxy and are never
+#                    staged; a credential-shaped entry is rejected at
+#                    evaluation time by the denylist in ./config-seed.nix.
+#                    Missing paths are simply absent in the guest, so an entry
+#                    may name something this host does not have. Defaults to
+#                    `[ ]` (the agent gets only the module-wide
+#                    `configSeed.extraPaths`).
+#   extraPackages    additional guest packages this agent NEEDS at runtime
+#                    (e.g. a language runtime it shells out to). Added to the
+#                    guest closure only while the agent is SELECTED
+#                    (`enabledAgents`), so a deselected agent takes its
+#                    dependencies with it. Defaults to `[ ]` — most agents wrap
+#                    their own PATH.
 #   guestEnvironment attrs merged into the guest's `environment.variables`.
 #                    Model-endpoint plumbing ONLY — never a real credential
 #                    (§17: the upstream key lives only in the host LiteLLM
@@ -70,6 +90,15 @@
   # Model name for agents that cannot discover one themselves
   # (`config.myconfig.ai.hermes.model.default`, a LiteLLM route).
   hermesModel,
+  # SELECTED agents (lightweight plan phase 2), resolved ONCE in default.nix
+  # from `myconfig.ai.microvm.enabledAgents` and the profile's own default.
+  # `null` means "every agent this registry declares" — the historical
+  # behaviour. Everything agent-shaped downstream (guest closure + guest env,
+  # `agent-run` dispatch, batch dispatch, launcher validation/help, workmux
+  # registrations, persistent-state directories) is derived from the FILTERED
+  # `agents` set below, so selecting a subset removes those runtimes from the
+  # guest instead of merely hiding them.
+  enabledNames ? null,
 }:
 let
   # The single OpenAI-compatible endpoint every guest agent must use (§17).
@@ -101,6 +130,13 @@ let
         "-p"
         "%PROMPT%"
       ];
+      # `~/.claude` also holds `.credentials.json`, so only the two paths the
+      # host home-manager config actually RENDERS are allowlisted.
+      configPaths = [
+        ".agents/skills"
+        ".claude/settings.json"
+        ".claude/skills"
+      ];
     };
     codex = {
       package = pkgs.codex;
@@ -112,6 +148,15 @@ let
         "-"
       ];
       batchStdin = true;
+      # Codex keeps its OAuth/API credential in `~/.codex/auth.json` (and its
+      # session transcripts in `~/.codex/sessions`), so the DIRECTORY is never
+      # staged — only the rendered configuration and the skills tree.
+      configPaths = [
+        ".agents/skills"
+        ".codex/config.toml"
+        ".codex/hooks.json"
+        ".codex/skills"
+      ];
     };
     opencode = {
       package = pkgs.opencode;
@@ -120,6 +165,18 @@ let
         "run"
         "%PROMPT%"
       ];
+      # `~/.config/opencode` also collects `auth.json` and host-coupled
+      # plugins, so only the rendered configuration, agents/commands and the
+      # skills tree are staged. The LIVE model list is provisioned separately,
+      # at guest boot, by ./guest-model-config.nix.
+      configPaths = [
+        ".agents/skills"
+        ".config/opencode/agents"
+        ".config/opencode/commands"
+        ".config/opencode/opencode.json"
+        ".config/opencode/skills"
+        ".config/opencode/tui.json"
+      ];
     };
     pi = {
       package = pkgs.nixos-unstable.pi-coding-agent;
@@ -127,6 +184,16 @@ let
       batchArgs = [
         "--print"
         "%PROMPT%"
+      ];
+      # `~/.pi` also holds session state and provider credentials, so only the
+      # rendered agent configuration is staged.
+      configPaths = [
+        ".agents/skills"
+        ".pi/agent/agents"
+        ".pi/agent/extensions"
+        ".pi/agent/keybindings.json"
+        ".pi/agent/prompts"
+        ".pi/agent/themes"
       ];
     };
     # Hermes Agent (NousResearch). The SAME flake input + package attr the
@@ -171,6 +238,13 @@ let
         enabledByDefault = false;
         directories = [ ".hermes" ];
       };
+      # DELIBERATELY EMPTY: hermes keeps config.yaml, `.env`, `auth.json`,
+      # state.db and sessions/ in ONE root (`~/.hermes`), i.e. configuration is
+      # inseparable from credentials there, and even `config.yaml` carries a
+      # provider key. Nothing of it may be staged; the guest gets its endpoint
+      # from `guestEnvironment` above instead. Only the module-wide
+      # `configSeed.extraPaths` reach a hermes guest.
+      configPaths = [ ];
     };
   };
 
@@ -183,6 +257,8 @@ let
       interactiveArgs = [ ];
       batchArgs = null;
       batchStdin = false;
+      configPaths = [ ];
+      extraPackages = [ ];
       guestEnvironment = { };
       persistentState = {
         enabledByDefault = false;
@@ -194,7 +270,16 @@ let
       workmuxName = "microvm-${name}";
     };
 
-  agents = lib.mapAttrs normalise specs;
+  allAgents = lib.mapAttrs normalise specs;
+
+  # The selection is applied HERE, at the single source of truth, rather than at
+  # each consumer — so a disabled agent cannot leak into one derived list while
+  # being absent from another.
+  agents =
+    if enabledNames == null then
+      allAgents
+    else
+      lib.filterAttrs (n: _: lib.elem n enabledNames) allAgents;
 
   agentList = lib.attrValues agents;
 
@@ -234,6 +319,26 @@ let
       a.batchArgs != null && !a.batchStdin && !lib.elem "%PROMPT%" a.batchArgs
     ) "myconfig.ai.microvm: agent '${a.name}' batchArgs must contain %PROMPT% (or set batchStdin)."
     ++ lib.optional (
+      !lib.isList a.configPaths
+    ) "myconfig.ai.microvm: agent '${a.name}' configPaths must be a list."
+    ++
+      lib.optional
+        (
+          !lib.all (
+            p:
+            lib.isString p
+            && p != ""
+            && !lib.hasPrefix "/" p
+            && !lib.hasPrefix "-" p
+            && !lib.hasSuffix "/" p
+            && !lib.hasInfix ".." p
+          ) a.configPaths
+        )
+        "myconfig.ai.microvm: agent '${a.name}' configPaths must be non-empty, relative, '..'-free paths that neither start with '-'/'/' nor end with '/' (they are joined onto the host home and re-checked by ./config-seed.nix, which also applies the credential denylist)."
+    ++ lib.optional (
+      !lib.isList a.extraPackages
+    ) "myconfig.ai.microvm: agent '${a.name}' extraPackages must be a list."
+    ++ lib.optional (
       !lib.isAttrs a.guestEnvironment
     ) "myconfig.ai.microvm: agent '${a.name}' guestEnvironment must be an attrset."
     ++ lib.optional (
@@ -260,11 +365,37 @@ in
 rec {
   inherit agents;
 
-  # Alphabetically ordered `--agent` tokens.
+  # Every agent this registry DECLARES, whether selected or not. Used by
+  # default.nix to reject an unknown `enabledAgents` entry with a message that
+  # can name the valid tokens.
+  declaredNames = lib.attrNames allAgents;
+
+  # ... and the batch-capable subset of them, for the same reason.
+  declaredBatchNames = lib.attrNames (lib.filterAttrs (_: a: a.batchArgs != null) allAgents);
+
+  # `enabledAgents` entries that no spec declares (empty when the selection is
+  # valid). Surfaced as a NixOS assertion by default.nix — a typo must fail at
+  # EVAL, not silently produce a guest without any agent.
+  unknownEnabled =
+    if enabledNames == null then [ ] else lib.filter (n: !(allAgents ? ${n})) enabledNames;
+
+  # Alphabetically ordered `--agent` tokens of the SELECTED agents.
   names = lib.attrNames agents;
 
   # Guest closure packages, in registry order (§7).
   packages = map (a: a.package) agentList;
+
+  # Per-agent extra runtime packages of the SELECTED agents, deduplicated
+  # (two agents may need the same runtime).
+  extraPackages = lib.unique (lib.concatMap (a: a.extraPackages) agentList);
+
+  # The union of the SELECTED agents' configuration ALLOWLISTS (lightweight plan
+  # phase 3), sorted + deduplicated so the generated stager is stable. Because
+  # it is derived from the FILTERED `agents` set, the staged configuration
+  # follows `enabledAgents`: a deselected agent's config never reaches a guest.
+  # ./config-seed.nix validates this union (shape + credential denylist) and
+  # renders it into the host-side stager.
+  configPaths = lib.unique (lib.sort (a: b: a < b) (lib.concatMap (a: a.configPaths) agentList));
 
   # `claude|codex|opencode|pi` — used verbatim in launcher help/error text and
   # in the guest dispatch's `case` fallback message.
@@ -311,6 +442,19 @@ rec {
   batchNames = map (a: a.name) batchAgents;
   batchNamesAlternation = lib.concatStringsSep "|" batchNames;
   batchNamesCasePattern = lib.concatStringsSep " | " batchNames;
+
+  # Does ANY selected batch agent take the prompt TEXT as an argv token
+  # (`%PROMPT%`), as opposed to reading the prompt FILE from stdin?
+  #
+  # This is a property of the FILTERED registry, so it differs per host: a host
+  # whose `enabledAgents` selects only stdin-driven agents (e.g.
+  # `[ "codex" ]`) generates a dispatch that never reads the worker's `prompt`
+  # variable.
+  # ../myconfig.ai.microvm/job.nix needs to know, because `writeShellApplication`
+  # runs shellcheck and an unread variable is an SC2034 BUILD failure there.
+  batchUsesPromptText = lib.any (
+    a: lib.elem "%PROMPT%" ([ a.executable ] ++ a.batchArgs)
+  ) batchAgents;
 
   # A bash `case` body for the UNTRUSTED guest batch worker
   # (`agent-job-worker`). Each arm calls one of its two helpers:
