@@ -27,6 +27,24 @@ let
       fi
     '';
   });
+  # On headless hosts (SSH + vnc/ast-vnc-style access, see
+  # modules/myconfig.headless.nix) there is no physical monitor to size
+  # windows against, so the initial foot terminal — the one autostarted as
+  # `foot-host-tmux-session`/`host-tmux-session` in
+  # myconfig.desktop.wayland.autostartCommands and hosting the main/host
+  # agent session — should just take over the whole output instead of
+  # tiling at some fraction of it.
+  headless = cfg.headless.enable;
+  headlessWindowRules = lib.optionalString headless ''
+    // headless (myconfig.headless.enable): the initial foot terminal hosts
+    // the main/host agent session (see myconfig.desktop.wayland.autostartCommands),
+    // open it fullscreen instead of tiled.
+    window-rule {
+        match app-id="^foot-host-tmux-session$|^host-tmux-session$"
+
+        open-fullscreen true
+    }
+  '';
   uwsmCfg = cfg.desktop.wayland.uwsm;
   # Compositor entrypoint used when running niri under uwsm. uwsm itself sets
   # up the graphical-session systemd targets, so we launch `niri --session`
@@ -201,7 +219,7 @@ in
 
                         $(cat $src)
 
-                        xwayland-satellite {
+                        ${headlessWindowRules}xwayland-satellite {
                             path "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
                         }
 
