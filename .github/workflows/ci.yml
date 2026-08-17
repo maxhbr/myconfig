@@ -71,6 +71,8 @@ jobs:
           # - { host: test-r6c , action: "build" }
           - { host: test-thing , action: "build --dry-run" }
           # - { host: test-thing , action: "build" }
+          - { host: test-optiplex , action: "build --dry-run" }
+          # - { host: test-optiplex , action: "build" }
       fail-fast: false
 
     steps:
