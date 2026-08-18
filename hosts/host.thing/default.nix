@@ -59,7 +59,6 @@
     # ./myconfig.ai.vllm
     ./myconfig.ai.vllm/docker.vllm.rocm.nix
     ./services.open-webui.nix
-    ./services.wyoming.nix
     # ./services.qdrant.nix
     ./services.litellm.nix
     ./services.orca.nix
