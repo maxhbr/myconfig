@@ -179,9 +179,12 @@ into the store, never on a command line.
 
 **Requires**: `/dev/kvm` (otherwise slow TCG), flakes.
 
-Session-wide variant: `alacritty-sandboxed-workmux-here`
-(`myconfig.ai.workmux.sandbox`, off by default) puts a whole workmux session
-in one VM.
+Session-wide variant: `sandboxed-workmux` (in-terminal, like
+`jailed-workmux-tmux`) and `alacritty-sandboxed-workmux-here` (Alacritty
+popup, like `alacritty-workmux-here`) — both under
+`myconfig.ai.workmux.sandbox`, off by default — put a whole workmux session in
+one VM. The in-terminal `sandboxed-workmux` is the reusable entry point; the
+Alacritty variant is a thin popup around it.
 
 **`sandboxed-herdr` variant**: the same microVM, but instead of exec'ing `pi`
 it exec's `herdr` (the agent multiplexer), and the guest carries `herdr` plus
