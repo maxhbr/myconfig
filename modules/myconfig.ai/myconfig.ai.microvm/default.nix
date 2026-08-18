@@ -248,6 +248,7 @@ in
 {
   imports = [
     ./config-seed.nix
+    ./guest-shell-convenience.nix
     ./guest.nix
     ./guest-model-config.nix
     ./hostkeys.nix

@@ -2241,16 +2241,20 @@ let
       Usage: $PROG <command> [options]
 
       Commands:
-        run --name <task> --repository <path> [--agent <name>] [--branch <br>]
+        run [--name <task>] [--repository <path>] [--agent <name>] [--branch <br>]
             [--resource-class <class>] [--wait <sec>] [--persist-agent-state]
             [--attach] [--no-preflight]
                               Allocate a free slot, create a standalone clone,
                               bind-mount it at the slot's /workspace source and
-                              start the microVM. With --attach, SSH in running
-                              'agent-run <agent>' and tear the VM down on exit
-                              (the workspace clone is always kept). --no-preflight
-                              skips the model-endpoint preflight (an interactive
-                              escape hatch for debugging; 'submit' has none).
+                              start the microVM. --name defaults to the basename
+                              of the current directory and --repository to the
+                              current directory, so a bare `run` from inside a
+                              repo checkout launches a slot for that repo. With
+                              --attach, SSH in running 'agent-run <agent>' and
+                              tear the VM down on exit (the workspace clone is
+                              always kept). --no-preflight skips the
+                              model-endpoint preflight (an interactive escape
+                              hatch for debugging; 'submit' has none).
         stop <slot|task>      Stop the VM, unmount the bind, drop slot transient
                               state. Keeps workspace/git/patches.
         destroy <slot|task>   Like stop, plus clear ephemeral slot runtime.
@@ -2270,6 +2274,13 @@ let
                               tooling (runtime-validation.sh) decides what can be
                               exercised here.
         list                  One-line status for every slot.
+        dashboard            Self-view: one-line status of every slot as a table,
+                             plus the retained-workspace list. Read-only and
+                             root-optional (job state shows 'unreadable' without
+                             root). Wrap with 'watch' for a live dashboard, e.g.
+                             'watch -n 2 sudo agent-microvm dashboard'
+                             (passwordlessControl avoids a sudo prompt every
+                             refresh, or run 'sudo -v' first).
         ssh <slot|task> [--] [cmd...]   SSH into the guest 'agent' user.
         console <slot|task>   Attach to the VM serial console (journal).
         submit --name <task> --repository <path> --agent <name>
@@ -2465,8 +2476,14 @@ let
           validate_wait "$wait_for"
           (( ! persist )) || [[ -n "$agent" ]] \
               || die "run: --persist-agent-state requires --agent <name>"
-          [[ -n "$task" ]] || die "run: --name <task> is required"
-          [[ -n "$repo" ]] || die "run: --repository <path> is required"
+          # Defaults: when omitted, --repository is the current directory
+          # and --name is its basename, so `run` can be invoked bare from
+          # inside a repo checkout. The basename must still pass task-name
+          # validation ([a-zA-Z0-9._-]), so a directory with other chars
+          # (spaces, slashes) is rejected with an actionable message.
+          [[ -n "$repo" ]] || repo="$PWD"
+          [[ -n "$task" ]] || task="$(basename -- "$PWD")"
+          [[ -n "$task" ]] || die "run: could not derive --name from the current directory; pass --name <task>"
           validate_task_name "$task"
           [[ -z "$agent" ]] || validate_agent_name "$agent"
           local top
@@ -3232,10 +3249,14 @@ let
       # Workspace clones and task-scoped agent state are deliberately KEPT after
       # a run, so they grow without bound unless the operator prunes them. This
       # makes that growth visible (and points at the command that removes it).
-      cmd_usage() {
-          require_root usage
+      #
+      # Retained-workspace + task-scoped agent-state table, shared by `usage`
+      # and `dashboard`. The `dir_bytes` / `human` helpers it defines remain in
+      # scope for the runtime footer `usage` prints afterwards (bash nested
+      # functions persist after first call), which keeps that footer
+      # byte-identical to the inlined original.
+      print_workspaces() {
           local task ws_bytes st_bytes total_ws=0 total_st=0 dir
-
           dir_bytes() {
               local d="$1"
               [[ -d "$d" ]] || { printf '0'; return 0; }
@@ -3267,6 +3288,11 @@ let
                   "$(human "$st_bytes")" "$holder"
           done
           printf '%-32s %12s %12s\n' "TOTAL" "$(human "$total_ws")" "$(human "$total_st")"
+      }
+
+      cmd_usage() {
+          require_root usage
+          print_workspaces
 
           # Transient runtime data, for completeness: per-slot job dirs and the
           # archived results. These are small, but a runaway agent could fill the
@@ -3311,6 +3337,48 @@ let
               || die "slot $slot was released but a bind mount SURVIVED; run '$PROG recover' once its holder is gone"
       }
 
+      # Job state for one slot, as a single string for a table cell.
+      # Factored out of `cmd_status` so `cmd_dashboard` reuses the EXACT same
+      # root-aware logic: the VERIFIED live controller result while the slot
+      # runs (or its progress phase, or `rejected` when the document does not
+      # belong to this allocation), else the archived result of the last run
+      # of that task. A worker-written file is never read. Re-reads the
+      # session fields itself so callers pass only the slot name. Prints the
+      # state string (possibly empty) on stdout; never aborts under `set -e`
+      # (the verifier rc is captured with `|| svrc=$?`).
+      slot_job_state() {
+          local slot="$1" f task jstate=""
+          f="$(session_file "$slot")"
+          [[ -e "$f" ]] || { printf '%s' "$jstate"; return 0; }
+          task="$(jq -r '.task // ""' "$f" 2>/dev/null || true)"
+          local stoken sagent svrc=0
+          stoken="$(jq -r '.token // ""' "$f" 2>/dev/null || true)"
+          sagent="$(jq -r '.agent // ""' "$f" 2>/dev/null || true)"
+          if [[ "$(id -u)" -ne 0 ]]; then
+              # The live controller channel is root-only 0700, so for a
+              # non-root caller "no result yet" and "permission denied"
+              # are indistinguishable. Say so instead of silently
+              # implying the job has no state.
+              jstate="unreadable (run as root)"
+          elif [[ -n "$task" && -n "$stoken" && -n "$sagent" ]]; then
+              verify_job_result "$slot" "$task" "$stoken" "$sagent" || svrc=$?
+              if (( svrc == 0 )); then
+                  jstate="$(jq -r '.state // ""' <<< "$VERIFY_JSON")"
+              elif (( svrc == 3 )); then
+                  jstate="unverifiable (host-side verifier error)"
+              elif (( svrc == 2 )); then
+                  jstate="rejected (protocol error)"
+              else
+                  jstate="$(job_phase "$slot" "$task" "$stoken" "$sagent" || true)"
+                  [[ -z "$jstate" ]] || jstate="running ($jstate)"
+              fi
+          fi
+          if [[ -z "$jstate" && -n "$task" && -e "$RESULTS_DIR/$task.json" ]]; then
+              jstate="$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null || true)"
+          fi
+          printf '%s' "$jstate"
+      }
+
       cmd_status() {
           local targets=()
           if [[ $# -ge 1 ]]; then
@@ -3346,34 +3414,7 @@ let
               # runs (or its progress phase, or `rejected` when the document
               # does not belong to this allocation), else the archived result of
               # the last run of that task. A worker-written file is never read.
-              jstate=""
-              if [[ -e "$f" ]]; then
-                  local stoken sagent svrc=0
-                  stoken="$(jq -r '.token // ""' "$f" 2>/dev/null || true)"
-                  sagent="$(jq -r '.agent // ""' "$f" 2>/dev/null || true)"
-                  if [[ "$(id -u)" -ne 0 ]]; then
-                      # The live controller channel is root-only 0700, so for a
-                      # non-root caller "no result yet" and "permission denied"
-                      # are indistinguishable. Say so instead of silently
-                      # implying the job has no state.
-                      jstate="unreadable (run as root)"
-                  elif [[ -n "$task" && -n "$stoken" && -n "$sagent" ]]; then
-                      verify_job_result "$slot" "$task" "$stoken" "$sagent" || svrc=$?
-                      if (( svrc == 0 )); then
-                          jstate="$(jq -r '.state // ""' <<< "$VERIFY_JSON")"
-                      elif (( svrc == 3 )); then
-                          jstate="unverifiable (host-side verifier error)"
-                      elif (( svrc == 2 )); then
-                          jstate="rejected (protocol error)"
-                      else
-                          jstate="$(job_phase "$slot" "$task" "$stoken" "$sagent" || true)"
-                          [[ -z "$jstate" ]] || jstate="running ($jstate)"
-                      fi
-                  fi
-              fi
-              if [[ -z "$jstate" && -n "$task" && -e "$RESULTS_DIR/$task.json" ]]; then
-                  jstate="$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null || true)"
-              fi
+              jstate="$(slot_job_state "$slot")"
               # A slot with a persisted marker but an inactive unit is stale
               # (see slot_is_free NOTE): clear it with 'destroy <slot>'.
               if [[ -e "$f" ]] && ! service_active "$slot"; then stale="yes"; fi
@@ -3418,6 +3459,80 @@ let
               printf '%-18s %-8s %-8s %-16s %s\n' "$slot" "$(slot_class "$slot")" \
                   "$state" "$(slot_ip "$slot")" "''${task:-<free>}"
           done
+      }
+
+      # ==== `dashboard`: one-screen live overview ============================
+      # A single, side-effect-free, `watch`-friendly summary: a fixed-width
+      # SLOTS table (one row per slot, full state columns) followed by the
+      # retained-workspace list. It is READ-ONLY and ROOT-OPTIONAL: it calls no
+      # `require_root` and starts/allocates nothing. The job-state column
+      # mirrors `status` exactly via the shared `slot_job_state` helper, so
+      # without root it degrades to 'unreadable (run as root)' instead of
+      # silently implying the job has no state. Wrap it for a live view:
+      #   watch -n 2 sudo agent-microvm dashboard
+      # (`watch` clears the screen itself, so this emits NO screen-clear or
+      # ANSI escapes — just a plain monochrome stdout dump that is stable
+      # across runs and `cat -v`-safe.)
+      cmd_dashboard() {
+          # Accept only an optional --no-clear placeholder for forward-compat;
+          # the dashboard never clears, so the flag is a no-op (accepted,
+          # not errored) to keep `watch`/scripted invocations stable.
+          while [[ $# -gt 0 ]]; do
+              case "$1" in
+                  --no-clear) shift ;;
+                  *) die "dashboard: unknown argument '$1'" ;;
+              esac
+          done
+
+          printf '%s dashboard  %s\n' "$PROG" "$(date -u +%FT%TZ)"
+          printf '\n'
+          # ---- SLOTS table ----
+          printf '%-18s %-8s %-8s %-10s %-5s %-20s %-12s %-28s %s\n' \
+              "SLOT" "CLASS" "SVC" "STATE" "STALE" "TASK" "AGENT" "JOB" "IP"
+          local slot f state task agent sstate stale jstate running=0
+          for slot in "''${SLOT_NAMES[@]}"; do
+              f="$(session_file "$slot")"
+              if service_active "$slot"; then state="running"; running=$(( running + 1 )); else state="stopped"; fi
+              task=""; agent=""; sstate=""; stale="no"; jstate=""
+              if [[ -e "$f" ]]; then
+                  task="$(jq -r '.task // ""' "$f" 2>/dev/null || true)"
+                  agent="$(jq -r '.agent // ""' "$f" 2>/dev/null || true)"
+                  sstate="$(jq -r '.state // ""' "$f" 2>/dev/null || true)"
+                  # A slot with a persisted marker but an inactive unit is
+                  # stale (see slot_is_free NOTE): clear with 'destroy <slot>'.
+                  if ! service_active "$slot"; then stale="yes"; fi
+              fi
+              jstate="$(slot_job_state "$slot")"
+              local ipcol
+              if [[ "$GUEST_INTERFACE" == "1" ]]; then
+                  ipcol="$(slot_ip "$slot")"
+              else
+                  ipcol="-"
+              fi
+              printf '%-18s %-8s %-8s %-10s %-5s %-20s %-12s %-28s %s\n' \
+                  "$slot" "$(slot_class "$slot")" "$state" \
+                  "''${sstate:-<none>}" "$stale" \
+                  "''${task:-<free>}" "''${agent:-<none>}" \
+                  "''${jstate:-<none>}" "$ipcol"
+          done
+
+          # ---- WORKSPACES table (same view as `usage`) ----
+          printf '\n'
+          print_workspaces
+
+          # ---- footer ----
+          local total_ws total_st ws_count=0 dir
+          for dir in "$WORKSPACE_ROOT"/*; do
+              [[ -d "$dir" ]] || continue
+              ws_count=$(( ws_count + 1 ))
+          done
+          total_ws="$(dir_bytes "$WORKSPACE_ROOT")"
+          total_st="$(dir_bytes "$STATE_TASKS_ROOT")"
+          printf '\n'
+          printf '%d/%d slots running, %d workspaces, %s workspace + %s state\n' \
+              "$running" "''${#SLOT_NAMES[@]}" \
+              "$ws_count" "$(human "$total_ws")" "$(human "$total_st")"
+          printf 'live view: watch -n 2 sudo %s dashboard\n' "$PROG"
       }
 
       # ==== the capability set, machine-readably (plan phase 5) =============
@@ -3647,6 +3762,7 @@ let
               doctor)           cmd_doctor "$@" ;;
               capabilities)     cmd_capabilities "$@" ;;
               list)             cmd_list "$@" ;;
+              dashboard)        cmd_dashboard "$@" ;;
               ssh)              cmd_ssh "$@" ;;
               console)          cmd_console "$@" ;;
               workspace-remove) cmd_workspace_remove "$@" ;;
@@ -3664,6 +3780,25 @@ let
       platforms = platforms.linux;
     };
   };
+
+  # A thin convenience wrapper: `agent-microvm-herdr` is the common interactive
+  # one-liner `agent-microvm run --attach --agent herdr`. It is a fixed argv
+  # into the SAME launcher (no separate logic), so the sudoers NOPASSWD rule
+  # for `agent-microvm` does NOT cover it — run it via `sudo` like `run`, or
+  # extend the passwordless rule to this wrapper too if desired.
+  agent-microvm-herdr = pkgs.writeShellApplication {
+    name = "agent-microvm-herdr";
+    runtimeInputs = [ agent-microvm ];
+    text = ''
+      set -euo pipefail
+      exec agent-microvm run --attach --agent herdr "$@"
+    '';
+    meta = with lib; {
+      description = "Convenience alias: `agent-microvm run --attach --agent herdr`";
+      maintainers = [ ];
+      platforms = platforms.linux;
+    };
+  };
 in
 {
   config = lib.mkIf cfg.enable (
@@ -3671,7 +3806,10 @@ in
       {
         # Host-side tool: it mounts, drives systemctl and manages runtime
         # state, so it belongs in the system environment (invoked via sudo).
-        environment.systemPackages = [ agent-microvm ];
+        environment.systemPackages = [
+          agent-microvm
+          agent-microvm-herdr
+        ];
       }
 
       # --- optional passwordless operator control (secure default: off) ---
@@ -3705,6 +3843,17 @@ in
                 # The target is a single fixed, shellcheck-gated launcher
                 # that reads only a small known env set, so scoping SETENV to
                 # just this command is a narrow, deliberate grant.
+                options = [
+                  "NOPASSWD"
+                  "SETENV"
+                ];
+              }
+              {
+                # Same grant for the `agent-microvm-herdr` convenience alias,
+                # a fixed `exec agent-microvm run --attach --agent herdr` into
+                # the same launcher above, so `sudo agent-microvm-herdr` is
+                # passwordless too.
+                command = "/run/current-system/sw/bin/agent-microvm-herdr";
                 options = [
                   "NOPASSWD"
                   "SETENV"

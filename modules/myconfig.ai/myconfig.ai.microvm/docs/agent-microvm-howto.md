@@ -94,6 +94,14 @@ sudo agent-microvm run --attach \
   --agent pi --resource-class normal
 ```
 
+Both `--name` and `--repository` are optional: when omitted, `--repository`
+defaults to the current directory and `--name` to its basename. So a bare
+invocation from inside a repo checkout launches a slot for that repo:
+
+```bash
+sudo agent-microvm run --attach --agent pi
+```
+
 When the agent exits, the VM is stopped and torn down and **the clone is kept**.
 
 Only one slot per class exists on `f13`, so a second task in the same class

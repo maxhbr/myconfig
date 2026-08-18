@@ -91,6 +91,19 @@
   # subdirectories follow ../job.nix's and ../session.nix's own per-capability
   # decisions.
   agentCapabilities,
+  # The OPT-IN guest shell convenience (../guest-shell-convenience.nix): when
+  # its `enable` is true this host bakes fish + neovim (built from the GUEST's
+  # own pkgs) into the closure, sets the guest `agent` user's login shell to
+  # fish (or bash, per the option), and contributes a root-owned guest oneshot
+  # that copies a GUEST-BUILT fish config tree into the disposable home AFTER
+  # `agent-config-seed` has seeded it. When `enable` is false this arg is
+  # inert: `packages` is the empty list, `shell` is the historical bash, the
+  # oneshot contributes nothing, so a host that does not opt in is
+  # byte-for-byte unchanged. See ../guest-shell-convenience.nix for why this
+  # shape (and not in-guest home-manager or staging the host's rendered
+  # profile) keeps the sandbox's read-only-store / no-host-share / disposable-
+  # home invariants intact.
+  agentShellConvenience,
   ...
 }:
 let
@@ -226,12 +239,25 @@ let
   };
 
   # --- guest toolchain (plan §7, lightweight plan phase 8) ----------------
-  # The interactive login shell of the guest `agent` user: plain bash. The guest
-  # deliberately does NOT ship fish (the host primary user's shell) any more —
-  # that dropped the fish closure and the `programs.fish` machinery from every
-  # guest, and nothing in the guest configures fish since guest home-manager
-  # provisioning was replaced by launch-time config staging.
-  guestShell = pkgs.bashInteractive;
+  # The interactive login shell of the guest `agent` user. Defaults to plain
+  # bash (the historical guest shell, deliberately NOT the host primary
+  # user's fish — that dropped the fish closure and `programs.fish` machinery
+  # from every guest, and nothing in the guest configured fish since guest
+  # home-manager provisioning was replaced by launch-time config staging).
+  #
+  # OPT-IN shell convenience (../guest-shell-convenience.nix): when that is
+  # enabled the operator gets fish as the login shell (built from the GUEST's
+  # own pkgs, so it lands in the immutable EROFS store) plus a root-owned
+  # oneshot that copies a guest-built fish config tree into the disposable
+  # home. The invariant is unchanged: the guest store is still a build-time
+  # image, the home is still disposable, nothing host-coupled crosses the
+  # boundary (the fish config is rendered from guest pkgs, not copied from
+  # the host home).
+  guestShell =
+    if agentShellConvenience.enable then
+      agentShellConvenience.shell
+    else
+      pkgs.bashInteractive;
 
   # Generic CLI toolset available to the agent inside the guest. Everything the
   # module's OWN guest scripts need is already in their `writeShellApplication`
@@ -344,6 +370,13 @@ let
       # disposable home BEFORE sshd, the batch job controller and the
       # agent-state linker.
       agentConfigSeed.guestModule
+      # OPT-IN shell convenience (../guest-shell-convenience.nix): a root-owned
+      # oneshot that copies a GUEST-BUILT fish config tree into the disposable
+      # home AFTER `agent-config-seed` (so it does not clobber host-staged
+      # config) and before sshd/the job controller. An EMPTY attrset when the
+      # feature is disabled, so `mkMerge` contributes nothing and a default
+      # host is byte-for-byte unchanged.
+      agentShellConvenience.guestModule
       # The consolidated session share (lightweight plan phase 4): bind-mounts
       # `<session>/workspace` to `/workspace`, so `agent-run`'s findmnt +
       # writability checks and every agent's expectation of `/workspace` keep
@@ -552,7 +585,12 @@ let
       # with whatever extra runtime each of them declares.
       ++ agentRegistry.packages
       ++ agentRegistry.extraPackages
-      ++ guestCommonPackages;
+      ++ guestCommonPackages
+      # OPT-IN shell convenience (../guest-shell-convenience.nix): fish,
+      # neovim and their guest-built plugin/runtime deps, baked into the
+      # immutable guest closure from the GUEST's own pkgs. Empty when the
+      # host does not opt in, so a default host's package list is unchanged.
+      ++ agentShellConvenience.packages;
 
     # NixOS' `environment.defaultPackages` (perl, rsync, strace) is a
     # convenience set for interactive general-purpose machines. None of it has

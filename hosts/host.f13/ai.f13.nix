@@ -105,6 +105,18 @@
           # lives in the separate ../priv repository. Point ssh at it via
           # `AGENT_MICROVM_SSH_KEY=/path/to/private-key agent-microvm ssh …`.
           sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
+
+          # OPT-IN shell convenience (modules/myconfig.ai/myconfig.ai.microvm/
+          # guest-shell-convenience.nix): bake fish + neovim (built from the
+          # GUEST's own pkgs, so they land in the immutable EROFS store) into
+          # every guest closure and render the host's *config source* for them
+          # into the disposable home. An operator who SSHes into a sandbox
+          # gets the same fish prompt/abbreviations and neovim keybindings as
+          # on the host, WITHOUT running home-manager in the guest or staging
+          # the host's rendered (host-closure-coupled) dotfiles. Cost: a
+          # sizeable addition to the guest closure; OFF by default, enabled
+          # here because this laptop's operator drives sandboxes interactively.
+          guestShellConvenience.enable = true;
         };
       };
     };
