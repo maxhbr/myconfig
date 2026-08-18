@@ -14,12 +14,12 @@ let
   common = import ./common.nix { inherit pkgs; };
   mkVllm = common.mkRocmVllmDockerized;
 
-  # --- Variant 6: Qwen3.6-27B-FP8 (Qwen official, ROCm / AMD) ---
-  vllmQwen36_27B_FP8_ROCm = mkVllm {
-    modelHostPath = "/models/Qwen-Qwen3.6-27B-FP8";
-    modelHfRepo = "Qwen/Qwen3.6-27B-FP8";
-    servedModelName = "Qwen3.6-27B-FP8";
-    containerName = "vllm-dockerized-Qwen3.6-27B-FP8-ROCm";
+  # --- Variant 6: Qwen3.8-27B-FP8 (Qwen official, ROCm / AMD) ---
+  vllmQwen38_27B_FP8_ROCm = mkVllm {
+    modelHostPath = "/models/Qwen-Qwen3.8-27B-FP8";
+    modelHfRepo = "Qwen/Qwen3.8-27B-FP8";
+    servedModelName = "Qwen3.8-27B-FP8";
+    containerName = "vllm-dockerized-Qwen3.8-27B-FP8-ROCm";
     port = 22549;
     maxModelLen = 131072;
     dtype = "auto";
@@ -55,8 +55,8 @@ in
   ];
   config = {
     environment.systemPackages = [
-      vllmQwen36_27B_FP8_ROCm.vllmPkg
+      vllmQwen38_27B_FP8_ROCm.vllmPkg
     ];
-    services.llama-swap.settings.models = vllmQwen36_27B_FP8_ROCm.modelConfig;
+    services.llama-swap.settings.models = vllmQwen38_27B_FP8_ROCm.modelConfig;
   };
 }

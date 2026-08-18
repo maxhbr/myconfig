@@ -105,13 +105,14 @@ let
 
     # Increase the server-side slot timeout (seconds). The default (30 s)
     # is hit when a slot waits longer than that for the next generated
-    # token — which happens routinely on large Qwen3.6 prompts that need
+    # token — which happens routinely on large Qwen3.8 prompts that need
     # full re-prefilling (SWA forces a reset): the prefill alone can take
     # tens of seconds at > 1 k tokens/s on 40 k-token contexts.
     # See https://github.com/ggml-org/llama.cpp/pull/22907
     timeout = 600;
 
-    # Disable idle sleep — Qwen3.6-27B has a CUDA bug that triggers
+    # Disable idle sleep — Qwen3.8-27B (same qwen35 CUDA path as
+    # Qwen3.6-27B) has a CUDA bug that triggers
     # after the server goes to sleep and wakes up.
     # See https://github.com/ggml-org/llama.cpp/issues/24694
     # sleep-idle-seconds = 500;

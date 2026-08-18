@@ -132,8 +132,8 @@
           # ./myconfig.ai.llama-cpp.nix).
           models = {
             "/home/mhuber/models" = [
-              "unsloth/Qwen3.6-27B-NVFP4"
-              "sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP"
+              "unsloth/Qwen3.8-27B-NVFP4"
+              "sakamakismile/Qwen3.8-27B-MTP-NVFP4"
             ];
           };
         };
