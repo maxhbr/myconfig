@@ -16,6 +16,7 @@ the upstream flake input `inputs.workmux.packages.${system}.default`.
 | ------------- | ----------------------------- | ----------------------------------------------------------------------- |
 | `default.nix` | `myconfig.ai.workmux`         | Install workmux, generate `~/.config/workmux/config.yaml`, status hooks |
 | `jail.nix`    | `myconfig.ai.workmux.jail`    | Run the whole workmux/tmux session inside a single bubblewrap jail      |
+| `sandbox.nix` | `myconfig.ai.workmux.sandbox` | Run the whole workmux/tmux session inside a single microvm.nix VM       |
 
 The reusable helper that turns a jailed agent wrapper into a workmux
 "named agent" lives one level up in
@@ -121,9 +122,31 @@ config/credentials). Everything else (nerdfont, `<agent>` pane layout, default
 Enabled by default (`myconfig.ai.workmux.jail.enable`) wherever
 `myconfig.ai.workmux` is enabled.
 
+### `sandboxed-workmux` / `alacritty-sandboxed-workmux-here` (from `sandbox.nix`)
+
+The microVM counterpart of the bubblewrap `jail.nix` above, gated behind
+`myconfig.ai.workmux.sandbox.enable` (off by default; requires `/dev/kvm`):
+
+- `sandboxed-workmux` — the in-terminal entry point (like `jailed-workmux-tmux`).
+  Run it from the main git checkout: it resolves the `<basename>__worktrees`
+  sibling, builds the per-invocation microVM runner, boots the VM, waits for
+  guest SSH, forwards LLM credentials over the SSH environment and execs the
+  in-guest `workmux-sandbox-entry` (which boots the workmux tmux session on a
+  private socket and attaches) in the current terminal.
+- `alacritty-sandboxed-workmux-here` — a thin popup that opens
+  `sandboxed-workmux` in a dedicated Alacritty window (like
+  `alacritty-workmux-here` opens `jailed-workmux-tmux`).
+
+Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
+[`../../../flake.sandboxed-pi.nix`](../../../flake.sandboxed-pi.nix)). The
+in-terminal sandbox is the reusable entry point; the Alacritty variant is a
+thin popup around it so the two wrappers stay byte-identical in everything but
+the window.
+
 ## Two sandboxing approaches at a glance
 
 | Approach                    | Sandbox unit           | tmux server | Agent in pane          |
 | --------------------------- | ---------------------- | ----------- | ---------------------- |
 | Per-agent worktree wrappers | one jail per agent     | host tmux   | nested `jailed-*` agent |
 | `alacritty-workmux-here`    | one jail per session   | in-jail tmux (private socket) | plain agent (jail is the sandbox) |
+| `sandboxed-workmux`         | one microVM per session | in-VM tmux (private socket) | plain agent (VM is the sandbox)   |

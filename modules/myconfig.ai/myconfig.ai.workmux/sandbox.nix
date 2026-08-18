@@ -2,17 +2,25 @@
 # SPDX-License-Identifier: MIT
 #
 # myconfig.ai.workmux.sandbox — the microVM counterpart of
-# `myconfig.ai.workmux.jail` (`alacritty-workmux-here`).
+# `myconfig.ai.workmux.jail` (`alacritty-workmux-here` / `jailed-workmux-tmux`).
 #
-# `alacritty-sandboxed-workmux-here` runs the *whole* workmux/tmux session —
-# main git checkout, its `<basename>__worktrees` sibling, tmux, workmux and the
-# agents it launches — inside a single microvm.nix VM (its own kernel), popped
-# up in a dedicated Alacritty window. This is the same "one sandbox owns the
-# whole session" model as the bubblewrap `alacritty-workmux-here`, but with the
-# stronger isolation of a real VM: an ephemeral, discarded-on-exit root
-# filesystem and an unprivileged `agent` user. Only the main checkout
-# (/workspace) and the worktrees sibling (/workspace__worktrees) are writable;
-# the host home directory, credentials and sockets are never exposed.
+# `sandboxed-workmux` runs the *whole* workmux/tmux session — main git
+# checkout, its `<basename>__worktrees` sibling, tmux, workmux and the agents
+# it launches — inside a single microvm.nix VM (its own kernel), attaching in
+# the current terminal. `alacritty-sandboxed-workmux-here` opens the same
+# sandbox in a dedicated Alacritty window. This is the same "one sandbox owns
+# the whole session" model as the bubblewrap `alacritty-workmux-here` /
+# `jailed-workmux-tmux`, but with the stronger isolation of a real VM: an
+# ephemeral, discarded-on-exit root filesystem and an unprivileged `agent`
+# user. Only the main checkout (/workspace) and the worktrees sibling
+# (/workspace__worktrees) are writable; the host home directory, credentials
+# and sockets are never exposed.
+#
+# `sandboxed-workmux` is to `alacritty-sandboxed-workmux-here` what
+# `jailed-workmux-tmux` is to `alacritty-workmux-here`: the in-terminal sandbox
+# is the reusable entry point, and the Alacritty variant is a thin popup
+# around it. Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
+# ../../../flake.sandboxed-pi.nix).
 #
 # See ../../../flake.sandboxed-pi.nix (`mkSandboxedWorkmuxRunner`) for the
 # guest and the rationale for qemu + user-mode networking over
@@ -55,10 +63,21 @@ let
   # host has no /etc/tmux.conf (the guest then uses tmux defaults).
   tmuxConf = config.environment.etc."tmux.conf".source or "";
 
-  alacritty-sandboxed-workmux-here = pkgs.writeShellApplication {
-    name = "alacritty-sandboxed-workmux-here";
+  # `sandboxed-workmux` — the in-terminal microVM counterpart of
+  # `jailed-workmux-tmux`. Run it from the main git checkout: it resolves the
+  # `<basename>__worktrees` sibling, builds the per-invocation microVM runner
+  # (the same `mkSandboxedWorkmuxRunner` the Alacritty variant uses), boots the
+  # VM, waits for guest SSH, forwards LLM credentials over the SSH environment
+  # and execs the in-guest `workmux-sandbox-entry` (which boots the workmux tmux
+  # session on a private socket and attaches) *in the current terminal*. On
+  # exit the VM is torn down and the runtime dir removed.
+  #
+  # This is to `alacritty-sandboxed-workmux-here` what `jailed-workmux-tmux` is
+  # to `alacritty-workmux-here`: the same sandbox without the Alacritty window,
+  # so it can be run from an existing terminal / tmux pane / SSH session.
+  sandboxed-workmux = pkgs.writeShellApplication {
+    name = "sandboxed-workmux";
     runtimeInputs = [
-      pkgs.alacritty
       pkgs.git
       pkgs.coreutils
       pkgs.nix
@@ -67,8 +86,8 @@ let
     text = ''
       # Must be run from a git checkout.
       if ! top="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-        echo "alacritty-sandboxed-workmux-here: not inside a git repository." >&2
-        echo "alacritty-sandboxed-workmux-here: run it from your main git checkout." >&2
+        echo "sandboxed-workmux: not inside a git repository." >&2
+        echo "sandboxed-workmux: run it from your main git checkout." >&2
         exit 1
       fi
 
@@ -77,8 +96,8 @@ let
       git_dir="$(git rev-parse --path-format=absolute --git-dir)"
       git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
       if [ "$git_dir" != "$git_common_dir" ]; then
-        echo "alacritty-sandboxed-workmux-here: refusing to run from a linked worktree." >&2
-        echo "alacritty-sandboxed-workmux-here: run it from the main checkout ($(dirname "$git_common_dir"))." >&2
+        echo "sandboxed-workmux: refusing to run from a linked worktree." >&2
+        echo "sandboxed-workmux: run it from the main checkout ($(dirname "$git_common_dir"))." >&2
         exit 1
       fi
 
@@ -111,7 +130,7 @@ let
       export SANDBOXED_WORKMUX_TMUXCONF=${lib.escapeShellArg (toString tmuxConf)}
       export SANDBOXED_WORKMUX_NETWORK=1
 
-      echo "alacritty-sandboxed-workmux-here: building microvm runner for $top" >&2
+      echo "sandboxed-workmux: building microvm runner for $top" >&2
       # `path:` flakeref (not a bare store path): a bare `/nix/store/...-source`
       # argument is re-resolved by Nix to its originating `git+file://`
       # flakeref, which libgit2 refuses because /nix/store is not owned by the
@@ -129,7 +148,7 @@ let
       # directory. (Plain `microvm-run` would exit immediately because
       # nothing would have created the virtiofs share sockets.)
       cd "$runtime_dir"
-      echo "alacritty-sandboxed-workmux-here: starting microvm (guest SSH on 127.0.0.1:$ssh_port)" >&2
+      echo "sandboxed-workmux: starting microvm (guest SSH on 127.0.0.1:$ssh_port)" >&2
       "$runner/bin/sandboxed-launch" >"$runtime_dir/console.log" 2>&1 &
       vm_pid=$!
 
@@ -144,7 +163,7 @@ let
       ready=0
       for _ in $(seq 1 120); do
         if ! kill -0 "$vm_pid" 2>/dev/null; then
-          echo "alacritty-sandboxed-workmux-here: microvm exited before SSH; console log:" >&2
+          echo "sandboxed-workmux: microvm exited before SSH; console log:" >&2
           tail -n 40 "$runtime_dir/console.log" >&2 || true
           exit 1
         fi
@@ -155,7 +174,7 @@ let
         sleep 1
       done
       if [ "$ready" -ne 1 ]; then
-        echo "alacritty-sandboxed-workmux-here: timed out waiting for guest SSH; console log:" >&2
+        echo "sandboxed-workmux: timed out waiting for guest SSH; console log:" >&2
         tail -n 40 "$runtime_dir/console.log" >&2 || true
         exit 1
       fi
@@ -168,14 +187,45 @@ let
         fi
       done
 
-      # Open Alacritty running an interactive SSH into the guest that boots the
-      # workmux tmux session. Runs in the foreground: when the window is
-      # closed, the EXIT trap tears the VM down.
+      # Interactive SSH into the guest that boots the workmux tmux session via
+      # the in-guest `workmux-sandbox-entry`. Runs in the foreground (current
+      # terminal): when the SSH session exits, the EXIT trap tears the VM down.
+      exec ssh -tt "''${ssh_opts[@]}" agent@127.0.0.1 -- exec workmux-sandbox-entry
+    '';
+  };
+
+  # `alacritty-sandboxed-workmux-here` — open `sandboxed-workmux` in a dedicated
+  # Alacritty window. This mirrors `alacritty-workmux-here` (which opens
+  # `jailed-workmux-tmux` in Alacritty): the in-terminal sandbox is the reusable
+  # entry point, and the Alacritty variant is a thin popup around it. Running
+  # `sandboxed-workmux` inside Alacritty (rather than duplicating the VM boot
+  # here) keeps the two wrappers byte-identical in everything but the window.
+  alacritty-sandboxed-workmux-here = pkgs.writeShellApplication {
+    name = "alacritty-sandboxed-workmux-here";
+    runtimeInputs = [
+      pkgs.alacritty
+      pkgs.git
+      pkgs.coreutils
+    ];
+    text = ''
+      # Must be run from a git checkout (forward the rest to sandboxed-workmux
+      # so the error messages name the right command).
+      if ! top="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+        echo "alacritty-sandboxed-workmux-here: not inside a git repository." >&2
+        echo "alacritty-sandboxed-workmux-here: run it from your main git checkout." >&2
+        exit 1
+      fi
+      top="$(realpath "$top")"
+
+      # Open Alacritty running the in-terminal sandbox wrapper. Alacritty
+      # itself stays as the primary user so it can reach the display; the VM
+      # boot and SSH attach happen inside the new window. When the window is
+      # closed, the VM is torn down (sandboxed-workmux's EXIT trap).
       cd "$top"
       exec alacritty \
         --title "sandboxed-workmux: $(basename "$top")" \
         --working-directory "$top" \
-        -e ssh -tt "''${ssh_opts[@]}" agent@127.0.0.1 -- exec workmux-sandbox-entry
+        -e sandboxed-workmux
     '';
   };
 in
@@ -185,12 +235,16 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Provide `alacritty-sandboxed-workmux-here`: run the whole workmux/tmux
-        session — main repo, worktrees, agents — inside a single microvm.nix
-        VM (its own kernel, ephemeral root, unprivileged `agent` user), opened
-        in a dedicated Alacritty window. This is the microVM counterpart of
-        `myconfig.ai.workmux.jail` (`alacritty-workmux-here`). Off by default;
-        requires KVM (`/dev/kvm`) on the host. See ./sandbox.nix.
+        Provide `sandboxed-workmux` (in-terminal) and
+        `alacritty-sandboxed-workmux-here` (Alacritty popup): run the whole
+        workmux/tmux session — main repo, worktrees, agents — inside a single
+        microvm.nix VM (its own kernel, ephemeral root, unprivileged `agent`
+        user). This is the microVM counterpart of `myconfig.ai.workmux.jail`
+        (`alacritty-workmux-here` / `jailed-workmux-tmux`): `sandboxed-workmux`
+        is the in-terminal entry point (like `jailed-workmux-tmux`) and
+        `alacritty-sandboxed-workmux-here` opens it in a dedicated Alacritty
+        window (like `alacritty-workmux-here`). Off by default; requires KVM
+        (`/dev/kvm`) on the host. See ./sandbox.nix.
       '';
     };
   };
@@ -199,6 +253,7 @@ in
     home-manager.sharedModules = [
       {
         home.packages = [
+          sandboxed-workmux
           alacritty-sandboxed-workmux-here
         ];
       }

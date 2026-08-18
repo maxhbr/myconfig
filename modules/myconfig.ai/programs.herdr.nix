@@ -17,6 +17,7 @@
   config,
   lib,
   pkgs,
+  flake,
   ...
 }:
 let
@@ -70,12 +71,177 @@ let
     # tmux: bind -n M-S-Right previous-window
     previous_tab = "alt+shift+right"
   '';
+
+  # The coding-agent CLIs this repo can install on the host, mapped from
+  # their `myconfig.ai.<name>.enable` flag to the package attribute the
+  # matching host wrapper uses. Mirrors the `agentPackagesByFlag` set in
+  # modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix so the
+  # `sandboxed-herdr` guest carries exactly the same agents the host (and
+  # the gVisor sandbox image) offers.
+  agentPackagesByFlag = {
+    pi-coding-agent = pkgs.nixos-unstable.pi-coding-agent;
+    opencode = pkgs.opencode;
+    claude-code = pkgs.claude-code;
+    codex = pkgs.codex;
+    github-copilot-cli = pkgs.github-copilot-cli;
+    qwen-code = pkgs.qwen-code;
+  };
+
+  # The subset of agents actually enabled on this host, as a list of store
+  # paths. Baked into the `sandboxed-herdr` wrapper as the default value of
+  # SANDBOXED_HERDR_AGENT_PACKAGES (a JSON array), which the impure flake
+  # output `sandboxed-herdr-runner` reads and passes to
+  # `mkSandboxedHerdrRunner` as `agentPackages`. Only public store paths are
+  # baked in (never credentials); this matches `sandboxed-pi`, which bakes the
+  # `piPackage` store path into its runner the same way.
+  enabledAgentPackages = lib.attrValues (
+    lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentPackagesByFlag
+  );
+
+  agentPackagesJson = builtins.toJSON (map (p: p.outPath) enabledAgentPackages);
+
+  # `sandboxed-herdr` — the `herdr` analogue of `sandboxed-pi`. Same
+  # ergonomics (run it from a project subdirectory; the working directory is
+  # the only writable thing the agent sees) and the same microVM machinery
+  # (qemu + SLiRP user-mode networking, ephemeral root, unprivileged `agent`
+  # user, virtiofs workspace share), but instead of exec'ing `pi` over SSH it
+  # execs `herdr` — the agent multiplexer — so that from inside the sandbox
+  # the user is dropped into a `herdr` session and can start `pi` / other
+  # coding agents from within it.
+  #
+  # The guest closure carries `herdr` plus whatever coding-agent CLIs are
+  # enabled on the building host (see `enabledAgentPackages` above), so the
+  # agents `herdr` launches are available on PATH inside the VM.
+  #
+  # Workspace handling, credential forwarding and the refuse-$HOME guard are
+  # identical to `sandboxed-pi`. See
+  # ../../../flake.sandboxed-pi.nix (`mkSandboxedHerdrRunner`) and
+  # ./sandboxed-herdr.README.md.
+  sandboxed-herdr = pkgs.writeShellApplication {
+    name = "sandboxed-herdr";
+    runtimeInputs = with pkgs; [
+      nix
+      openssh
+      coreutils
+      gnugrep
+    ];
+    text = ''
+      # Refuse to run in $HOME: like sandboxed-pi, the working directory is
+      # shared writable into the sandbox, and sharing the whole home
+      # directory would defeat the isolation. Run from a project subdirectory.
+      if [ "$PWD" = "$HOME" ]; then
+        echo "sandboxed-herdr: refusing to run in home directory ($HOME):" >&2
+        echo "sandboxed-herdr: the working directory is shared writable into the VM." >&2
+        echo "sandboxed-herdr: run from a project subdirectory instead." >&2
+        exit 1
+      fi
+
+      workspace="$(realpath "$PWD")"
+      if [ ! -d "$workspace" ]; then
+        echo "sandboxed-herdr: workspace is not a directory: $workspace" >&2
+        exit 1
+      fi
+
+      # Per-invocation runtime state (throwaway SSH key, VM control socket).
+      runtime_dir="$(mktemp -d "''${XDG_RUNTIME_DIR:-/tmp}/sandboxed-herdr.XXXXXX")"
+      # Pick a pseudo-random host-localhost port for the forwarded guest SSH.
+      ssh_port=$(( (RANDOM % 20000) + 20000 ))
+
+      vm_pid=""
+      cleanup() {
+        # Killing the launcher triggers its own trap, which tears down the
+        # qemu VM and the virtiofsd daemon(s) it started.
+        if [ -n "$vm_pid" ] && kill -0 "$vm_pid" 2>/dev/null; then
+          kill "$vm_pid" 2>/dev/null || true
+          wait "$vm_pid" 2>/dev/null || true
+        fi
+        rm -rf "$runtime_dir"
+      }
+      trap cleanup EXIT INT TERM
+
+      # Throwaway SSH keypair authorizing the launcher into the guest.
+      ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C sandboxed-herdr
+
+      export SANDBOXED_HERDR_WORKSPACE="$workspace"
+      export SANDBOXED_HERDR_SSH_PORT="$ssh_port"
+      export SANDBOXED_HERDR_AUTHORIZED_KEYS="$runtime_dir/id.pub"
+      export SANDBOXED_HERDR_NETWORK=1
+      # JSON array of enabled coding-agent store paths, baked in at build
+      # time from the host's myconfig.ai.<name>.enable flags.
+      export SANDBOXED_HERDR_AGENT_PACKAGES='${agentPackagesJson}'
+
+      echo "sandboxed-herdr: building microvm runner for workspace: $workspace" >&2
+      # Use an explicit `path:` flakeref for the flake source store path;
+      # see sandboxed-pi for the rationale (libgit2 dubious-ownership check).
+      runner=$(nix build --impure --no-link --print-out-paths \
+        "path:${flake.outPath}#packages.${pkgs.stdenv.hostPlatform.system}.sandboxed-herdr-runner")
+
+      # microvm.nix's qemu runner connects to the virtiofs daemons over
+      # RELATIVE unix socket paths; the runner's `bin/sandboxed-launch`
+      # starts virtiofsd, waits for the sockets, then runs qemu — all from the
+      # current directory. Run it from $runtime_dir so the relative socket
+      # paths resolve to a stable, per-invocation location.
+      cd "$runtime_dir"
+
+      echo "sandboxed-herdr: starting microvm (guest SSH forwarded to 127.0.0.1:$ssh_port)" >&2
+      "$runner/bin/sandboxed-launch" >"$runtime_dir/console.log" 2>&1 &
+      vm_pid=$!
+
+      # Wait for the guest SSH server to accept our key (or the VM to die).
+      ssh_opts=(
+        -p "$ssh_port"
+        -i "$runtime_dir/id"
+        -o StrictHostKeyChecking=no
+        -o UserKnownHostsFile=/dev/null
+        -o ConnectTimeout=3
+        -o LogLevel=ERROR
+      )
+      ready=0
+      for _ in $(seq 1 120); do
+        if ! kill -0 "$vm_pid" 2>/dev/null; then
+          echo "sandboxed-herdr: microvm exited before SSH became ready; console log:" >&2
+          tail -n 40 "$runtime_dir/console.log" >&2 || true
+          exit 1
+        fi
+        if ssh "''${ssh_opts[@]}" agent@127.0.0.1 true 2>/dev/null; then
+          ready=1
+          break
+        fi
+        sleep 1
+      done
+      if [ "$ready" -ne 1 ]; then
+        echo "sandboxed-herdr: timed out waiting for guest SSH; console log:" >&2
+        tail -n 40 "$runtime_dir/console.log" >&2 || true
+        exit 1
+      fi
+
+      # Forward LLM credentials over the SSH environment (never in argv or the
+      # store). Only forward variables that are actually set on the host.
+      for var in OPENAI_API_KEY OPENAI_BASE_URL OPENROUTER_BASE_URL ANTHROPIC_API_KEY; do
+        if [ -n "''${!var:-}" ]; then
+          ssh_opts+=(-o "SetEnv=$var=''${!var}")
+        fi
+      done
+
+      # Build a safely-quoted remote command: cd into the workspace and exec
+      # herdr (the agent multiplexer) with the caller's argument vector
+      # preserved via printf %q. From inside the herdr session the user starts
+      # pi / opencode / etc.
+      remote_cmd='cd /workspace && exec herdr'
+      for a in "$@"; do
+        remote_cmd+=" $(printf '%q' "$a")"
+      done
+
+      # Interactive session (-t for a TTY so the herdr TUI works).
+      ssh -tt "''${ssh_opts[@]}" agent@127.0.0.1 "$remote_cmd"
+    '';
+  };
 in
 {
   config = lib.mkIf agenticCodingEnabled {
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [ herdr ];
+        home.packages = with pkgs; [ herdr ] ++ [ sandboxed-herdr ];
         xdg.configFile."herdr/config.toml".text = herdrConfig;
       }
     ];

@@ -1,0 +1,136 @@
+<!-- Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
+SPDX-License-Identifier: MIT -->
+
+# `sandboxed-herdr` — `herdr` inside a QEMU/SLiRP microVM
+
+`sandboxed-herdr` is the `herdr`-driven counterpart of `sandboxed-pi`. It reuses
+**the same** microVM/runner machinery (`mkSandboxedRunner` from
+`flake.sandboxed-pi.nix`) — it does **not** fork a parallel guest builder. The
+only difference is what runs at the end of the SSH session: instead of exec'ing
+`pi`, it exec's `herdr`, the agent multiplexer. From inside that `herdr`
+session the user starts `pi` / `opencode` / `claude-code` / … as panes — all
+running **inside** the VM.
+
+## Why
+
+`sandboxed-pi` drops you straight into a single `pi` session inside a
+disposable VM. `sandboxed-herdr` drops you into a `herdr` multiplexer inside
+the same disposable VM, so you can run several agents (and shells) side by
+side in one sandbox, switching between them with the same keybindings you use
+for `herdr` on the host. The agents themselves run *inside* the VM, not via
+the host wrapper.
+
+## Usage
+
+```bash
+cd ~/some/project      # NOT $HOME — it refuses to run there
+sandboxed-herdr        # launches a VM, opens herdr in /workspace
+sandboxed-herdr --help # arguments are forwarded to herdr unchanged
+```
+
+Inside the VM you are dropped at a `herdr` prompt in `/workspace`. Open a new
+pane and run `pi`, `opencode`, `claude-code`, … exactly as you would on the
+host (see [What the guest sees](#what-the-guest-sees) for which agents are
+available). On exit the VM is torn down and all guest state is discarded.
+Only the files under the shared working directory persist (they are the same
+inodes on the host — edits made by the agents are immediately visible on the
+host).
+
+## What the guest sees
+
+Shared into the guest:
+
+- The current working directory, read-write, at `/workspace` (virtiofs).
+- The host `/nix/store`, **read-only** (so the VM needs no disk image and
+  boots fast).
+
+On the guest `PATH`:
+
+- `herdr` (the agent multiplexer the user is dropped into).
+- The coding-agent CLIs that are enabled on the **building** host — the same
+  set the gVisor sandbox image bakes in (see
+  `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix`,
+  `agentPackagesByFlag`): `pi-coding-agent`, `opencode`, `claude-code`,
+  `codex`, `github-copilot-cli`, `qwen-code`. Only agents whose
+  `myconfig.ai.<name>.enable` flag is true on the host are included, so the
+  guest closure stays minimal. The list of enabled agent store paths is baked
+  into the wrapper at build time and forwarded to the impure flake output as
+  `SANDBOXED_HERDR_AGENT_PACKAGES` (a JSON array); only public store paths are
+  baked in — never credentials.
+
+Plus the standard minimal coding-agent environment every `sandboxed-*` guest
+carries (bash, coreutils, git, ripgrep, fd, jq, curl, …).
+
+Deliberately **not** shared:
+
+- The host home directory, `~/.ssh`, `~/.gnupg`, credential/agent sockets.
+- The host D-Bus / systemd / nix-daemon / container-runtime sockets.
+- `/run`, `/dev`, a writable host `/nix/store`.
+
+## Networking
+
+Identical to `sandboxed-pi`: qemu SLiRP user-mode networking. The guest gets
+outbound NAT through the host (so the agents can reach LLM endpoints), but
+nothing on the host LAN can reach the guest and the guest reaches the host
+only through the single forwarded SSH port on `127.0.0.1`. No host bridge,
+firewall or NAT configuration is required.
+
+## Credentials
+
+Identical to `sandboxed-pi`: `OPENAI_API_KEY`, `OPENAI_BASE_URL`,
+`OPENROUTER_BASE_URL`, `ANTHROPIC_API_KEY` are forwarded **at launch over the
+SSH session environment** — only if they are set on the host. They are never
+baked into the Nix store, never passed on a process command line, and never
+written to a tracked file. The agents launched from inside `herdr` inherit
+them from the SSH session environment.
+
+## How it works
+
+- `flake.sandboxed-pi.nix` exports `mkSandboxedHerdrRunner`, a thin wrapper
+  around the shared `mkSandboxedRunner` that provisions one workspace share
+  plus `herdr` and the enabled coding-agent CLIs as guest packages. This is
+  the same factory `mkSandboxedPiRunner` uses; the guest system, kernel,
+  virtiofsd and run script are built by the identical code path.
+- The flake output `packages.<system>.sandboxed-herdr-runner` evaluates that
+  builder **impurely** from `SANDBOXED_HERDR_*` environment variables, so the
+  workspace path never lands in a tracked file or flake output. Under pure
+  evaluation (`nix flake check`) it is a harmless placeholder.
+- The host wrapper `sandboxed-herdr` lives in
+  `modules/myconfig.ai/programs.herdr.nix`. It validates the working directory
+  (refuses `$HOME`), generates a throwaway SSH keypair, picks a random
+  `127.0.0.1` port, `nix build --impure`s the runner for the current
+  directory, starts the VM, waits for guest SSH, forwards credentials over the
+  SSH environment and execs `herdr` in `/workspace`. On exit it kills the VM
+  and removes the runtime directory.
+
+## How it differs from `sandboxed-pi`
+
+| | `sandboxed-pi` | `sandboxed-herdr` |
+| --- | --- | --- |
+| In-guest entry point | `pi` | `herdr` |
+| Guest packages | `pi` only | `herdr` + enabled coding-agent CLIs |
+| Multiple agents in one VM | no (one `pi` session) | yes (via `herdr` panes) |
+| Workspace sharing | CWD rw at `/workspace`, host store ro | identical |
+| Credential forwarding | same 4 env vars over SSH env | identical |
+| Refuse `$HOME` | yes | yes |
+| Runner factory | `mkSandboxedPiRunner` | `mkSandboxedHerdrRunner` (same `mkSandboxedRunner`) |
+
+## Requirements
+
+Same as `sandboxed-pi`:
+
+- Access to `/dev/kvm` for the invoking user (KVM acceleration). Without it,
+  qemu falls back to slow TCG emulation.
+- `nix` with flakes; the wrapper runs `nix build --impure` against the pinned
+  flake revision it was built from.
+
+## Status / validation
+
+The runner builds and evaluates successfully (`nix flake check`, pure-eval
+placeholder, impure runner build, and the guest closure confirmed to carry
+`herdr` plus the enabled agent CLIs). `sandboxed-pi` is provably unchanged
+(snapshot/diff of its runner drvPath is identical before and after this
+change). A live VM boot has not yet been exercised here for the same reason
+as `sandboxed-pi` (no `/dev/kvm` in the build environment); run one
+`sandboxed-herdr` session on a KVM-capable host to complete runtime
+validation.
