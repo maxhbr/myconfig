@@ -752,7 +752,29 @@ change. `sudo agent-microvm --help` lists the currently supported agents.
 Batch invocations are verified against each pinned build's own `--help`:
 `claude -p <prompt>`, `codex exec -` (prompt on **stdin**),
 `opencode run <prompt>`, `pi --print <prompt>`,
-`hermes --model <m> --oneshot <prompt>`.
+`hermes --model <m> --oneshot <prompt>`. `herdr` has **no** batch mode (see
+below), so `submit --agent herdr` is rejected.
+
+### herdr specifics
+
+`herdr` (`pkgs.herdr`, the same package the host `programs.herdr` and the
+tier-3 `sandboxed-herdr` runner install) is the odd one out: it is not itself a
+coding agent but the **agent multiplexer** — a terminal TUI that launches the
+*other* agents (pi, opencode, claude, codex, hermes) in its panes. Inside a
+guest, `agent-run herdr` drops the operator into a herdr session from which
+those agents can be started, exactly like the tier-3 `sandboxed-herdr` variant
+execs `herdr` over SSH in its QEMU microVM. The agents herdr can launch are the
+ones the host also SELECTS via `enabledAgents`, because those are the runtimes
+baked into the guest closure and on `PATH`.
+
+Being a multiplexer, herdr is **interactive-only**: it has no unattended
+one-shot mode, so it declares no `batchArgs` and `submit --agent herdr` is
+rejected. Its `--attach` / workmux path is unaffected — a `microvm-herdr` pane
+launches `agent-microvm run --attach --agent herdr` like every other
+interactive agent. Only the rendered keybinding config
+(`~/.config/herdr/config.toml`, no credentials) is staged, so a herdr guest
+gets the same `ctrl+b` prefix / pane-focus bindings the host uses. workmux has
+no `herdr` profile, so the pane falls back to workmux's default profile.
 
 ### Hermes specifics
 
