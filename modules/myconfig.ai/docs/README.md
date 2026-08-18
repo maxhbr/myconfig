@@ -243,6 +243,15 @@ Documentation set:
 - `agent-microvm submit` — unattended batch with structured results, hard
   timeouts, cancellation (`cancel`, exit `130`) and recovery.
 
+Like tier 3's `sandboxed-herdr` variant, a guest can run **`herdr`** (the agent
+multiplexer) instead of a single agent: `herdr` is a selectable registry agent
+(`enabledAgents = [ … "herdr" ]`, on by default in the `null`
+"all declared agents" mode and on `f13`), so `agent-microvm run --attach
+--agent herdr` (or its `microvm-herdr` workmux pane) drops the operator into a
+`herdr` session from which the *other* selected agents can be launched. Being a
+multiplexer it is **interactive-only** — it has no batch mode, so `submit
+--agent herdr` is rejected.
+
 Operational commands: `doctor`, `status`, `ssh`, `collect`, `remove`,
 `recover --dry-run`.
 

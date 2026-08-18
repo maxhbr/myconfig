@@ -196,6 +196,42 @@ let
         ".pi/agent/themes"
       ];
     };
+    # `herdr` — the agent MULTIPLEXER (https://herdr.dev, `pkgs.herdr`), the
+    # SAME package the host `myconfig.ai.programs.herdr` and the tier-3
+    # `sandboxed-herdr` runner install. Unlike the other registry entries it is
+    # not itself a coding agent: it is a terminal TUI that launches the OTHER
+    # agents (pi, opencode, claude, codex, hermes) in its panes. Inside a guest
+    # `agent-run herdr` therefore drops the operator into a herdr session from
+    # which those agents can be started — mirroring how the tier-3
+    # `sandboxed-herdr` variant execs `herdr` over SSH in its QEMU microVM
+    # (../programs.herdr.nix). The agents herdr can launch are exactly the ones
+    # this host also SELECTS via `enabledAgents`, because they are the ones
+    # baked into the guest closure and on PATH.
+    #
+    # OPT-IN like every other agent: it reaches a guest ONLY when `herdr` is in
+    # `myconfig.ai.microvm.enabledAgents` (or the `null` "all declared agents"
+    # default), so a host that does not select it carries neither the package
+    # nor a `microvm-herdr` workmux pane.
+    herdr = {
+      package = pkgs.herdr;
+      executable = "herdr";
+      # workmux knows no `herdr` profile, so it resolves to workmux's DEFAULT
+      # profile (no prompt injection / resume flags), exactly like `hermes`.
+      # Not an error — the `microvm-herdr` pane still launches (see workmux
+      # `resolve_profile_with_type`).
+      workmuxType = "herdr";
+      # herdr is a MULTIPLEXER, not a batch runner: there is no unattended
+      # one-shot mode to drive from `agent-job-worker`. Leaving `batchArgs` at
+      # its `null` default makes `submit --agent herdr` be rejected, so herdr is
+      # interactive-only (the `--attach` / workmux path), which is the only mode
+      # a TUI multiplexer has.
+      #
+      # Stage ONLY the rendered keybinding config (../programs.herdr.nix writes
+      # exactly `~/.config/herdr/config.toml`, no credentials), so a herdr guest
+      # gets the same ctrl+b prefix / pane-focus bindings the host uses. The
+      # EXACT file, never the `.config/herdr` directory, per the allowlist rule.
+      configPaths = [ ".config/herdr/config.toml" ];
+    };
     # Hermes Agent (NousResearch). The SAME flake input + package attr the
     # host `myconfig.ai.hermes` backends use, so the guest runs the identical
     # build — baked into the immutable guest closure, never installed at
