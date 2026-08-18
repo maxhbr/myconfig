@@ -102,7 +102,7 @@ myconfig.ai.microvm = {
 | `configSeed.extraPaths` | `.config/git/attributes`, `.config/git/config` | Agent-independent additions to the staging allowlist. Same validation as the registry's per-agent `configPaths`. |
 | `guestModelConfig.enable` | `true` | Guest boot-time model discovery: query the loopback LiteLLM endpoint and render the **live** model list into pi + opencode config. See [Boot-time model discovery](#boot-time-model-discovery). |
 | `guestModelConfig.providerKey` / `providerName` | `litellm` / `LiteLLM (microVM)` | Provider key/name written into the generated configs. The key matches the host-side generators, so the runtime list *replaces* the build-time one. |
-| `guestModelConfig.defaultContextWindow` / `maxTokens` | `131072` / `4096` | Fallbacks for models whose real values the endpoint does not expose. |
+| `guestModelConfig.defaultContextWindow` / `maxTokensCap` | `131072` / `65536` | Context-window fallback for models whose real value the endpoint does not expose, and the upper bound for the reported per-model output budget (`min(contextWindow / 4, maxTokensCap)`). |
 | `guestModelConfig.attempts` / `retryDelaySeconds` / `timeoutSeconds` | `5` / `2` / `5` | Endpoint query retry/timeout budget. Exhausting it is **not** an error (fail soft). |
 | `networkProfile` | `"proxy-only"` | Named guest network policy. See [Network profiles](#network-profiles). |
 | `packageProxyPort` | `null` | **Required** by `networkProfile = "package-access"`: the one host proxy port guests may reach. |

@@ -78,12 +78,50 @@ let
       ctxSize = mkOption {
         type = types.nullOr types.int;
         default = null;
-        description = "Context size (--ctx-size) for llama-server; null to use the model default";
+        description = ''
+          Context a SINGLE request may use, in tokens (llama.cpp's
+          `n_ctx_seq`); null to use the model default.
+
+          This is deliberately *not* `--ctx-size` verbatim: llama-server's
+          `--ctx-size` is the size of the whole KV cache, which it then
+          divides by the slot count unless the cache is unified
+          (`src/llama-context.cpp`: `n_ctx_seq = kv_unified ? n_ctx :
+          n_ctx / n_seq_max`). The generated command line therefore emits
+          `--ctx-size (ctxSize * parallel)` when `kvUnified = false` and
+          plain `--ctx-size ctxSize` when `kvUnified = true`, so that
+          `ctxSize` means the same thing either way.
+        '';
       };
       parallel = mkOption {
         type = types.int;
         default = 1;
-        description = "Number of parallel requests, increases the set ctx-size by its value";
+        description = ''
+          Number of llama-server slots (`--parallel`), i.e. how many
+          requests are served concurrently.
+
+          Leaving this at 1 emits NO `--parallel` flag, which selects
+          llama.cpp's *auto* mode: 4 slots with a unified KV cache
+          (`tools/server/server.cpp`: `if (params.n_parallel < 0) {
+          n_parallel = 4; kv_unified = true; }`). Setting it explicitly
+          turns unified KV OFF unless `kvUnified` is also set, and then
+          the KV cache costs `ctxSize * parallel` tokens.
+        '';
+      };
+      kvUnified = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Pass `--kv-unified`: use ONE KV buffer shared by all slots
+          instead of statically partitioning it per slot.
+
+          Only meaningful together with an explicit `parallel > 1`
+          (llama.cpp already enables it implicitly when `--parallel` is
+          omitted). With it, `parallel` concurrent requests share a pool
+          of `ctxSize` tokens and each may address all of it, instead of
+          each getting a fixed `ctxSize` slice — same per-request
+          context at 1/parallel of the KV memory. The trade-off is that
+          concurrent long-context requests compete for the pool.
+        '';
       };
       cacheType = mkOption {
         type = types.nullOr (
@@ -206,7 +244,12 @@ let
               parallel = mkOption {
                 type = types.nullOr types.int;
                 default = null;
-                description = "Number of parallel requests; null to inherit from the parent model";
+                description = "Number of llama-server slots (--parallel); null to inherit from the parent model";
+              };
+              kvUnified = mkOption {
+                type = types.nullOr types.bool;
+                default = null;
+                description = "Share one KV buffer across slots (--kv-unified); null to inherit from the parent model";
               };
             };
           }

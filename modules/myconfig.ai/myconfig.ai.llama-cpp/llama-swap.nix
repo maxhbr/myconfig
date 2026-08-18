@@ -308,9 +308,16 @@ let
       ++ (m._userTags or [ ])
     );
 
-  # Effective context window for a model entry.
-  # ctxSize * parallel when explicitly set; null when the model uses its own default.
-  effectiveContextWindow = m: if m.ctxSize != null then m.ctxSize * m.parallel else null;
+  # Effective context window for a model entry: the context a SINGLE
+  # request can use, i.e. llama.cpp's `n_ctx_seq`, which is exactly
+  # `ctxSize` under both slot layouts (see the `ctxSize` option in
+  # ./options.nix). null when the model uses its own default.
+  #
+  # This used to be `ctxSize * parallel`, which advertised `parallel`
+  # times the context any single request can address (a 262144-token
+  # model with `parallel = 4` was published to LiteLLM — and from there
+  # to the agents — as a 1048576-token model).
+  effectiveContextWindow = m: m.ctxSize;
 
   mkModelEntriesForDevices =
     { model, devices }:

@@ -125,7 +125,14 @@ in
         "opencode-fast"
       ];
       ctxSize = 262144;
+      # 4 slots sharing ONE 262144-token KV pool instead of four private
+      # 262144-token slices: same per-request context, a quarter of the
+      # KV memory. Without `kvUnified` an explicit `--parallel` turns
+      # llama.cpp's unified cache off and `--ctx-size` is emitted as
+      # `ctxSize * parallel` (= 1048576 here). See the `kvUnified`
+      # option in modules/myconfig.ai/myconfig.ai.llama-cpp/options.nix.
       parallel = 4;
+      kvUnified = true;
       variants = recommended_variants_Qwen3_6-35B-A3B;
       ttl = 3600;
     }
@@ -146,6 +153,7 @@ in
       ];
       ctxSize = 262144;
       parallel = 4;
+      kvUnified = true;
       variants = recommended_variants_Qwen3_6-35B-A3B;
       ttl = 3600;
     }
@@ -165,6 +173,7 @@ in
       ];
       ctxSize = 262144;
       parallel = 4;
+      kvUnified = true;
       cacheType = "f16";
       variants = recommended_variants_Qwen3_6-35B-A3B;
       ttl = 3600;
@@ -187,6 +196,7 @@ in
       ];
       ctxSize = 262144;
       parallel = 4;
+      kvUnified = true;
       variants = recommended_variants_Qwen3_6-35B-A3B;
       ttl = 3600;
     }

@@ -35,9 +35,17 @@ declare -A CTX_SOURCE_URLS=(
     [gfx1151]="https://gfx1151.thing.wg0.maxhbr.local/v1/models"
 )
 
-# CTX_MAP[<prefix>:<model-or-alias>] = <ctx-size in tokens>, populated by
-# build_ctx_map and consulted by write_nix_litellm.
+# The upstream LiteLLM's own model registry. Unlike CTX_SOURCE_URLS this
+# reports the DECLARED budgets (from `myconfig.ai.localModels`, i.e. the
+# llama-cpp module's `ctxSize`), so it works for every model regardless
+# of whether llama-swap currently has it loaded. See build_budget_map.
+LITELLM_INFO_URL="http://thing.wg0.maxhbr.local:4000/model/info"
+
+# CTX_MAP[<prefix>:<model-or-alias>] = <ctx-size in tokens> and
+# MAXOUT_MAP[<same key>] = <max output tokens>, populated by
+# build_ctx_map / build_budget_map and consulted by write_nix_litellm.
 declare -A CTX_MAP=()
+declare -A MAXOUT_MAP=()
 
 # Scrape `--ctx-size` for every model (and alias) each CTX_SOURCE_URLS
 # backend exposes, keyed by the litellm provider prefix. Models without a
@@ -62,6 +70,42 @@ build_ctx_map() {
         ' || true)
     done
     echo "Scraped ${#CTX_MAP[@]} context-size entries" >&2
+}
+
+# Scrape the DECLARED budgets from the upstream LiteLLM's /model/info.
+#
+# This is the authoritative source and is preferred over build_ctx_map:
+# `/v1/models` only carries `status.args` for models llama-swap has
+# currently LOADED, so with a short `ttl` almost every model is
+# "unloaded" at scrape time and contributes nothing (that is why most
+# gfx1151 entries used to end up as bare strings). /model/info instead
+# reflects what the Nix config declares, so it is stable.
+#
+# Keys match write_nix_litellm's model names because LiteLLM's
+# `model_name` is already the prefixed form (e.g. `gfx1151:<model>`).
+build_budget_map() {
+    local key ctx maxout n_ctx=0 n_out=0
+    echo "Scraping declared budgets from $LITELLM_INFO_URL ..." >&2
+    while IFS=$'\t' read -r key ctx maxout; do
+        [[ -z $key ]] && continue
+        if [[ -n $ctx && $ctx != null ]]; then
+            CTX_MAP["$key"]="$ctx"
+            n_ctx=$((n_ctx + 1))
+        fi
+        if [[ -n $maxout && $maxout != null ]]; then
+            MAXOUT_MAP["$key"]="$maxout"
+            n_out=$((n_out + 1))
+        fi
+    done < <(curl -sk --fail --max-time 30 "$LITELLM_INFO_URL" | jq -r '
+        .data[]
+        | . as $e
+        | [ .model_name
+          , ((.litellm_params.max_input_tokens // .model_info.max_input_tokens) // "null")
+          , ((.litellm_params.max_tokens // .model_info.max_output_tokens) // "null")
+          ]
+        | @tsv
+    ' || true)
+    echo "Scraped $n_ctx context-window and $n_out max-output entries" >&2
 }
 
 fetch_models() {
@@ -140,8 +184,9 @@ NIXEOF
 # wrapper modules hosts/shared.localModels.litellm.nix and
 # hosts/shared.litellm.proxy.nix both `import` this file. Each entry is
 # either a bare model-name string or, when a context size was scraped for
-# it (see build_ctx_map), a `{ name; contextWindow; }` attrset — both
-# accepted by the consumers' `models` options.
+# it (see build_ctx_map / build_budget_map), a
+# `{ name; contextWindow; maxOutputTokens?; }` attrset — both accepted
+# by the consumers' `models` options.
 write_nix_litellm() {
     local output="$1"
     local url="$2"
@@ -149,13 +194,15 @@ write_nix_litellm() {
     local models=("$@")
 
     local models_nix=""
-    local m ctx
+    local m ctx maxout
     for m in "${models[@]}"; do
         ctx="${CTX_MAP[$m]:-}"
-        if [[ -n $ctx ]]; then
+        maxout="${MAXOUT_MAP[$m]:-}"
+        if [[ -n $ctx || -n $maxout ]]; then
             models_nix+="  {"$'\n'
             models_nix+="    name = \"${m}\";"$'\n'
-            models_nix+="    contextWindow = ${ctx};"$'\n'
+            [[ -n $ctx ]] && models_nix+="    contextWindow = ${ctx};"$'\n'
+            [[ -n $maxout ]] && models_nix+="    maxOutputTokens = ${maxout};"$'\n'
             models_nix+="  }"$'\n'
         else
             models_nix+="  \"${m}\""$'\n'
@@ -174,9 +221,11 @@ write_nix_litellm() {
 #   - hosts/shared.litellm.proxy.nix          (local LiteLLM proxy: f13, p14)
 #
 # Each entry is either a bare model-name string or a
-# \`{ name; contextWindow; }\` attrset. contextWindow (tokens) is scraped
-# from the backend llama-server's \`--ctx-size\` for models whose backend
-# publishes it; the rest are bare strings.
+# \`{ name; contextWindow; maxOutputTokens?; }\` attrset. Both numbers
+# come from the upstream LiteLLM's \`/model/info\` (which reports what the
+# llama-cpp module declares), falling back to the backend
+# llama-server's \`--ctx-size\` for models that LiteLLM does not describe;
+# the rest are bare strings.
 #
 # Regenerate with: ./hosts/shared.localModels.update.sh
 [
@@ -206,7 +255,11 @@ for name in "${TARGETS[@]}"; do
             write_nix_rtxgfx "hosts/shared.localModels.${name}.nix" "$name" "$url" "${models_arr[@]}"
             ;;
         litellm)
+            # Least specific first: the /v1/models `--ctx-size` scrape
+            # only sees currently-loaded models, and build_budget_map
+            # overwrites its keys with the declared values.
             build_ctx_map
+            build_budget_map
             write_nix_litellm "hosts/shared.localModels.${name}.models.nix" "$url" "${models_arr[@]}"
             ;;
     esac
