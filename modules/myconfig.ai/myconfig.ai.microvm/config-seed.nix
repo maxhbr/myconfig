@@ -164,7 +164,34 @@ let
     "token"
   ];
 
+  # ── denylist OVERRIDES (exceptions for trademark/name collisions) ─────
+  # A small, explicit allowlist of path PREFIXES (relative to `hostHome`)
+  # that are EXEMPT from the credential denylist. The denylist matches by
+  # NAME only (defence in depth), and a few legitimate, non-secret files
+  # have names that collide with a deny infix/suffix purely as a trademark —
+  # most notably the `trustedtokens-provider` pi extension ("TrustedTokens" is
+  # a TNG inference-service trademark; the directory contains only TypeScript
+  # source + metadata, no API key). Kept in sync with the sandboxed-* seeder
+  # (../fns/seed-agent-config.nix `denyOverrides`).
+  #
+  # Overrides are PREFIXES, so an override exempts everything UNDER it. Each
+  # override is STILL subject to the eval-time `pathWellFormed` check and to
+  # the allowlist itself — an override does not GRANT staging rights; it only
+  # lifts the denylist for an entry the allowlist already covers.
+  denyOverrides = [
+    # Pi provider extension for TrustedTokens (TNG Technology Consulting).
+    # Contains only extension source (`index.ts`, `README.md`, `package.json`);
+    # the API key flows through the `OPENAI_API_KEY` environment, never a file.
+    ".pi/agent/extensions/trustedtokens-provider"
+  ];
+
   lower = lib.toLower;
+  # A path is OVERRIDDEN when it lies under one of the `denyOverrides`
+  # prefixes. The denylist is then SKIPPED for that path — but only the
+  # INFIX checks (see `componentDenied`); exact-name and suffix checks
+  # always apply, so a real `auth.json` placed inside an overridden directory
+  # is still refused at eval AND runtime.
+  pathOverridden = p: lib.any (prefix: p == prefix || lib.hasPrefix "${prefix}/" p) denyOverrides;
   componentDenied =
     c:
     let
@@ -173,7 +200,20 @@ let
     lib.elem lc denyNames
     || lib.any (s: lib.hasSuffix s lc) denySuffixes
     || lib.any (i: lib.hasInfix i lc) denyInfixes;
-  pathDenied = p: lib.any componentDenied (lib.splitString "/" p);
+  # Like `pathDenied` but skips the infix checks (the override exists
+  # precisely for trademark names colliding with a deny infix).
+  componentDeniedNoInfix =
+    c:
+    let
+      lc = lower c;
+    in
+    lib.elem lc denyNames || lib.any (s: lib.hasSuffix s lc) denySuffixes;
+  pathDenied =
+    p:
+    if pathOverridden p then
+      lib.any componentDeniedNoInfix (lib.splitString "/" p)
+    else
+      lib.any componentDenied (lib.splitString "/" p);
 
   # A staged entry must be a plain, relative, `..`-free path in a conservative
   # character set: it is rendered into a shell array and joined onto both the
@@ -197,6 +237,11 @@ let
   );
 
   malformedPaths = lib.filter (p: !pathWellFormed p) allowedPaths;
+  # `pathDenied` already applies the surgical override (infix-only exemption),
+  # so a credential-shaped entry like `auth.json` is STILL rejected even under
+  # an override prefix — matching the runtime bash logic exactly. The override
+  # only exempts the INFIX checks that collide with trademarks like
+  # "trustedtokens".
   deniedPaths = lib.filter (p: pathWellFormed p && pathDenied p) allowedPaths;
 
   # Staged configuration and PERSISTED agent state must be disjoint: the
@@ -280,6 +325,7 @@ let
       denyNames
       denySuffixes
       denyInfixes
+      denyOverrides
       ;
     hostHome = seedCfg.hostHome;
   };
@@ -328,6 +374,7 @@ let
       readonly DENY_NAMES=(${bashArray paths.denyNames})
       readonly DENY_SUFFIXES=(${bashArray paths.denySuffixes})
       readonly DENY_INFIXES=(${bashArray paths.denyInfixes})
+      readonly DENY_OVERRIDES=(${bashArray paths.denyOverrides})
       readonly SLOTS=(${bashArray (map (s: s.name) slots)})
 
       PROG="agent-microvm-stage-config"
@@ -353,10 +400,27 @@ let
       readonly MANIFEST="$MANIFEST_DIR/$MANIFEST_NAME"
 
       # ---- denylist ------------------------------------------------------
+      # `path_is_denied <path>` returns 0 (denied) when ANY component of
+      # `<path>` matches the denylist. A path under one of the
+      # `DENY_OVERRIDES` prefixes (trademark/name-collision exceptions) is
+      # exempt from the INFIX checks ONLY — the exact-name and suffix checks
+      # still apply, so a real `auth.json` or `*.pem` placed inside an
+      # overridden directory is still refused.
+      path_is_overridden() {
+          local path="$1" prefix
+          for prefix in "''${DENY_OVERRIDES[@]+''${DENY_OVERRIDES[@]}}"; do
+              if [[ "$path" == "$prefix" || "$path" == "$prefix"/* ]]; then
+                  return 0
+              fi
+          done
+          return 1
+      }
       path_is_denied() {
           local path="$1" comp lc pat
           local -a comps=()
           local IFS=/
+          local overridden=0
+          path_is_overridden "$path" && overridden=1
           # `read -ra` splits on IFS WITHOUT globbing, so a file name
           # containing shell metacharacters cannot expand here.
           read -ra comps <<< "$path"
@@ -373,11 +437,16 @@ let
                       return 0
                   fi
               done
-              for pat in "''${DENY_INFIXES[@]}"; do
-                  if [[ "$lc" == *"$pat"* ]]; then
-                      return 0
-                  fi
-              done
+              # Infix checks are SKIPPED for overridden paths (the override
+              # exists precisely to allow trademark names like "trustedtokens"
+              # that collide with a deny infix).
+              if [[ "$overridden" == 0 ]]; then
+                  for pat in "''${DENY_INFIXES[@]}"; do
+                      if [[ "$lc" == *"$pat"* ]]; then
+                          return 0
+                      fi
+                  done
+              fi
           done
           return 1
       }
@@ -523,7 +592,11 @@ let
               sub="''${f#"$real"}"
               sub="''${sub#/}"
               [[ -n "$sub" ]] || continue
-              if path_is_denied "$sub"; then
+              # Check the denylist on the FULL home-relative path
+              # ("$rel/$sub"), not just "$sub" relative to the walked
+              # directory, so a `DENY_OVERRIDES` prefix (which is a full
+              # home-relative path) can match.
+              if path_is_denied "$rel/$sub"; then
                   note_skipped "$rel/$sub" "rejected: matches the credential denylist"
                   continue
               fi

@@ -43,6 +43,10 @@ Shared into the guest:
 - The current working directory, read-write, at `/workspace` (virtiofs).
 - The host `/nix/store`, **read-only** (so the VM needs no disk image and
   boots fast).
+- The allowlisted host configuration for every registered agent, **copied**
+  into the guest `/home/agent` at launch (see
+  [Agent-configuration seeding](#agent-configuration-seeding)). Credentials are
+  never copied.
 
 On the guest `PATH`:
 
@@ -84,6 +88,47 @@ baked into the Nix store, never passed on a process command line, and never
 written to a tracked file. The agents launched from inside `herdr` inherit
 them from the SSH session environment.
 
+## Agent-configuration seeding
+
+The guest home is an ephemeral tmpfs, so without seeding every agent `herdr`
+can launch would start with empty/default configuration. To avoid that,
+`sandboxed-herdr` copies the relevant, allowlisted host configuration for
+**every** registered agent into the guest `/home/agent` over the SSH channel
+**at launch**, after the VM boots and before `herdr` is exec'd. This mirrors
+the heavyweight `myconfig.ai.microvm` config-seed mechanism
+(`modules/myconfig.ai/myconfig.ai.microvm/config-seed.nix`), adapted for the
+user-space qemu tier (no privileged host daemon: staging + transfer happen
+entirely in the launcher, over the already-established SSH channel).
+
+The seeded agent set is the union of the per-agent `configPaths` for every
+registered agent (from `modules/myconfig.ai/fns/seed-agent-config.nix`,
+mirroring `myconfig.ai.microvm/agents.nix`):
+
+- `pi` — `~/.pi/agent/{agents,extensions,keybindings.json,prompts,themes}`.
+- `opencode` — `~/.config/opencode/{agents,commands,opencode.json,tui.json,skills}`.
+- `claude` (`claude-code`) — `~/.claude/settings.json`, `~/.claude/skills`.
+- `codex` — `~/.codex/{config.toml,hooks.json,skills}`.
+- `qwen-code`, `github-copilot-cli` — the shared `~/.agents/skills` tree.
+- `hermes` — nothing (its config root mixes credentials; the guest gets its
+  endpoint from the SSH environment).
+- Plus the module-wide `.config/git/{config,attributes}` and `.agents/skills`.
+
+What is **never** seeded:
+
+- **Credentials.** `.pi/agent/auth.json`, `.codex/auth.json`,
+  `.claude/.credentials.json`, and any file matching the credential denylist
+  (applied to every path component **and** the resolved symlink target):
+  `auth.json`, `credentials*`, `*.pem`, `*.key`, `id_rsa`, `id_ed25519`,
+  `.env`, `.netrc`, `cookies*`, `*session*`, `*token*`, …. Model keys keep
+  flowing over the SSH environment (`SetEnv`), exactly as before.
+- The host home directory as a whole — only the exact allowlisted paths are
+  copied.
+
+Nothing is baked into the Nix store: the allowlist + denylist are, but the
+host home contents are read at launch. The seeder script
+(`seed-agent-config`) is built into the runner output and invoked by the
+host wrapper as `seed-agent-config <ssh-port> <identity> 127.0.0.1 agent`.
+
 ## How it works
 
 - `flake.sandboxed-pi.nix` exports `mkSandboxedHerdrRunner`, a thin wrapper
@@ -100,8 +145,10 @@ them from the SSH session environment.
   (refuses `$HOME`), generates a throwaway SSH keypair, picks a random
   `127.0.0.1` port, `nix build --impure`s the runner for the current
   directory, starts the VM, waits for guest SSH, forwards credentials over the
-  SSH environment and execs `herdr` in `/workspace`. On exit it kills the VM
-  and removes the runtime directory.
+  SSH environment, **seeds the in-guest agent configuration for every
+  registered agent from the host** (see [Agent-configuration seeding](
+  #agent-configuration-seeding)), and execs `herdr` in `/workspace`. On exit it
+  kills the VM and removes the runtime directory.
 
 ## How it differs from `sandboxed-pi`
 
@@ -112,6 +159,7 @@ them from the SSH session environment.
 | Multiple agents in one VM | no (one `pi` session) | yes (via `herdr` panes) |
 | Workspace sharing | CWD rw at `/workspace`, host store ro | identical |
 | Credential forwarding | same 4 env vars over SSH env | identical |
+| Config seeding | `pi` allowlist only (`~/.pi`) | union for every registered agent |
 | Refuse `$HOME` | yes | yes |
 | Runner factory | `mkSandboxedPiRunner` | `mkSandboxedHerdrRunner` (same `mkSandboxedRunner`) |
 

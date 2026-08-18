@@ -883,6 +883,21 @@ let
         fi
       done
 
+      # Seed the in-guest `pi` configuration from the host `~/.pi` (and the
+      # shared skills/git config). The runner carries a `seed-agent-config`
+      # script that copies the ALLOWLISTED, denylist-filtered host
+      # configuration into the guest `/home/agent` over SSH — never baking
+      # anything into the store and never copying credential files (keys keep
+      # flowing over the SSH environment above). See
+      # ../../../flake.sandboxed-pi.nix (`mkSeedScript`) and
+      # ../fns/seed-agent-config.nix. Run it BEFORE the interactive session
+      # so the agent starts already configured.
+      if [ -x "$runner/bin/seed-agent-config" ]; then
+        echo "sandboxed-pi: seeding guest agent config from host" >&2
+        "$runner/bin/seed-agent-config" "$ssh_port" "$runtime_dir/id" 127.0.0.1 agent \
+          || echo "sandboxed-pi: warning: config seeding reported errors (continuing)" >&2
+      fi
+
       # Build a safely-quoted remote command: cd into the workspace and exec
       # pi with the caller's argument vector preserved via printf %q.
       remote_cmd='cd /workspace && exec pi'
