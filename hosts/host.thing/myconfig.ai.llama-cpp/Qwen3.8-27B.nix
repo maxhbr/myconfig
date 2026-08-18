@@ -123,6 +123,43 @@ in
         variants = recommended_variants_Qwen3_8-27B;
       }
     )
+    # MTP (multi-token prediction) Q4_0. Same standalone-draft-head
+    # situation as the Q8_0 MTP entry below (amdModels) — ggml-org
+    # publishes only the MTP head, not the base weights:
+    # https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF/blob/main/mtp-Qwen3.8-27B-Q4_0.gguf
+    # At Q4_0 the head is ~1.6 GB, so pairing it with the Q4_K_XL base
+    # (~16.7 GB) fits comfortably in the RTX 5090's 32 GB budget,
+    # unlike the Q8_0 head (~2.9 GB) which only fits paired with the
+    # 29.3 GB Q8_0 base on the AMD host (see amdModels below).
+    (
+      baseModel "Q4_K_XL"
+      // {
+        name = "Qwen3.8-27B-MTP-Q4_0";
+        cacheType = "q8_0";
+        parallel = 1;
+        pull-models = {
+          target_directory = modelsPullDir;
+          hf_spec = [
+            "unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf"
+            "ggml-org/Qwen3.8-27B-GGUF/mtp-Qwen3.8-27B-Q4_0.gguf"
+          ];
+        };
+        params = [
+          "--batch-size"
+          "2048"
+          "--ubatch-size"
+          "512"
+          "--spec-type"
+          "draft-mtp"
+          "--spec-draft-model"
+          "/models/ggml-org-Qwen3.8-27B-GGUF/mtp-Qwen3.8-27B-Q4_0.gguf"
+          "--spec-draft-n-max"
+          "3"
+        ];
+        variants = recommended_variants_Qwen3_8-27B;
+        ttl = 900;
+      }
+    )
     (
       baseModel "Q5_K_XL"
       // {
@@ -256,22 +293,35 @@ in
         variants = recommended_variants_Qwen3_8-27B;
       }
     )
-    # MTP (multi-token prediction) Q8_0. ggml-org publishes the MTP
-    # draft head bundled with the base weights directly in the main
-    # GGUF repo (file prefixed `mtp-` rather than the unsloth/`ggml-org`
-    # Qwen3.6 convention of a dedicated `*-MTP-GGUF` repo suffixed
-    # `MTP-Q8_0`) — see the repo tree:
+    # MTP (multi-token prediction) Q8_0. Unlike the unsloth Qwen3.6
+    # `*-MTP-GGUF` repos (a single self-speculative GGUF bundling base
+    # weights + MTP head, so `-m` alone suffices), ggml-org publishes
+    # the MTP head for Qwen3.8-27B as a STANDALONE file — `mtp-` prefix,
+    # ~18 tensors (`eh_proj`, `enorm`, `hnorm`, `shared_head_norm`, MTP
+    # block), base weights NOT included:
     # https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF/blob/main/mtp-Qwen3.8-27B-Q8_0.gguf
+    # It must be loaded as the *draft* model (`--spec-draft-model`,
+    # a.k.a. `-md`/`--model-draft`) alongside the ordinary Q8_0 base
+    # weights loaded via `-m`; llama.cpp's `--spec-type draft-mtp` then
+    # reads the MTP tensors from the draft file. This mirrors upstream
+    # llama.cpp's own `--mtp` auto-download fallback (see `arg.cpp`,
+    # which sets `params.speculative.draft.mparams.path` to the
+    # resolved MTP head file).
     {
       name = "Qwen3.8-27B-MTP-Q8_0";
-      path = "/models/ggml-org-Qwen3.8-27B-GGUF/mtp-Qwen3.8-27B-Q8_0.gguf";
+      path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf";
       pull-models = {
         target_directory = modelsPullDir;
-        hf_spec = [ "ggml-org/Qwen3.8-27B-GGUF/mtp-Qwen3.8-27B-Q8_0.gguf" ];
+        hf_spec = [
+          "unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf"
+          "ggml-org/Qwen3.8-27B-GGUF/mtp-Qwen3.8-27B-Q8_0.gguf"
+        ];
       };
       params = [
         "--spec-type"
         "draft-mtp"
+        "--spec-draft-model"
+        "/models/ggml-org-Qwen3.8-27B-GGUF/mtp-Qwen3.8-27B-Q8_0.gguf"
         "--spec-draft-n-max"
         "3"
       ];
