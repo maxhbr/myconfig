@@ -87,82 +87,6 @@
     maxOutputTokens = 65536;
   }
   {
-    name = "gfx1151:Qwen3.6-27B-MTP-Q8_0";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-MTP-Q8_0-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-MTP-Q8_0-instruct-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-MTP-Q8_0-instruct-reasoning-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-MTP-Q8_0-precise-coding-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-MTP-Q8_0-q8_0";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-Q6_K-MTP";
-    contextWindow = 131072;
-    maxOutputTokens = 32768;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-Q8_0";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-Q8_0-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-Q8_0-instruct-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-Q8_0-instruct-reasoning-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-Q8_0-precise-coding-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-Q8_0-q8_0";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  "gfx1151:Qwen3.6-27B-UD-Q4_K_XL"
-  {
-    name = "gfx1151:Qwen3.6-27B-UD-Q5_K_XL";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:Qwen3.6-27B-UD-Q6_K_XL";
-    contextWindow = 196608;
-    maxOutputTokens = 49152;
-  }
-  {
     name = "gfx1151:Qwen3.6-35B-A3B-BF16";
     contextWindow = 262144;
     maxOutputTokens = 65536;
@@ -270,6 +194,71 @@
   }
   {
     name = "gfx1151:Qwen3.8-27B-ABL-Q5_K_M";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-MTP-Q8_0";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-MTP-Q8_0-general-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-MTP-Q8_0-instruct-general-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-MTP-Q8_0-instruct-reasoning-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-MTP-Q8_0-precise-coding-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-MTP-Q8_0-q8_0";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-Q6_K-MTP";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-Q8_0";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-Q8_0-general-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-Q8_0-instruct-general-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-Q8_0-instruct-reasoning-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-Q8_0-precise-coding-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Qwen3.8-27B-Q8_0-q8_0";
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
@@ -383,82 +372,6 @@
     maxOutputTokens = 65536;
   }
   {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-MTP-Q8_0";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-MTP-Q8_0-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-MTP-Q8_0-instruct-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-MTP-Q8_0-instruct-reasoning-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-MTP-Q8_0-precise-coding-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-MTP-Q8_0-q8_0";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-Q6_K-MTP";
-    contextWindow = 131072;
-    maxOutputTokens = 32768;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-Q8_0";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-Q8_0-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-Q8_0-instruct-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-Q8_0-instruct-reasoning-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-Q8_0-precise-coding-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-Q8_0-q8_0";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  "gfx1151:ROCm0:Qwen3.6-27B-UD-Q4_K_XL"
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-UD-Q5_K_XL";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:Qwen3.6-27B-UD-Q6_K_XL";
-    contextWindow = 196608;
-    maxOutputTokens = 49152;
-  }
-  {
     name = "gfx1151:ROCm0:Qwen3.6-35B-A3B-BF16";
     contextWindow = 262144;
     maxOutputTokens = 65536;
@@ -566,6 +479,71 @@
   }
   {
     name = "gfx1151:ROCm0:Qwen3.8-27B-ABL-Q5_K_M";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-MTP-Q8_0";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-MTP-Q8_0-general-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-MTP-Q8_0-instruct-general-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-MTP-Q8_0-instruct-reasoning-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-MTP-Q8_0-precise-coding-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-MTP-Q8_0-q8_0";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-Q6_K-MTP";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-Q8_0";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-Q8_0-general-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-Q8_0-instruct-general-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-Q8_0-instruct-reasoning-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-Q8_0-precise-coding-tasks";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-Q8_0-q8_0";
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
@@ -743,72 +721,6 @@
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
-  {
-    name = "rtx5090:Qwen3.6-27B-NVFP4";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-Q6_K-MTP";
-    contextWindow = 131072;
-    maxOutputTokens = 32768;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-Q6_K-MTP-full-ctx";
-    contextWindow = 184320;
-    maxOutputTokens = 46080;
-  }
-  "rtx5090:Qwen3.6-27B-UD-Q4_K_XL"
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-instruct-general-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-instruct-reasoning-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-precise-coding-tasks";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL";
-    contextWindow = 196608;
-    maxOutputTokens = 49152;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-general-tasks";
-    contextWindow = 196608;
-    maxOutputTokens = 49152;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-instruct-general-tasks";
-    contextWindow = 196608;
-    maxOutputTokens = 49152;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-instruct-reasoning-tasks";
-    contextWindow = 196608;
-    maxOutputTokens = 49152;
-  }
-  {
-    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-precise-coding-tasks";
-    contextWindow = 196608;
-    maxOutputTokens = 49152;
-  }
   "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL"
   {
     name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP";
@@ -863,6 +775,16 @@
     name = "rtx5090:Qwen3.8-27B-ABL-Q5_K_M-precise-coding-tasks";
     contextWindow = 262144;
     maxOutputTokens = 65536;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-Q6_K-MTP";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-Q6_K-MTP-full-ctx";
+    contextWindow = 184320;
+    maxOutputTokens = 46080;
   }
   {
     name = "rtx5090:Qwen3.8-27B-UD-Q4_K_XL";
@@ -1002,11 +924,6 @@
     name = "rtx5090:opencode";
     contextWindow = 131072;
     maxOutputTokens = 32768;
-  }
-  {
-    name = "rtx5090:opencode-fallback";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
   }
   "rtx5090:opencode-fast-fallback"
   {
