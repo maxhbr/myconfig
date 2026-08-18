@@ -2241,16 +2241,20 @@ let
       Usage: $PROG <command> [options]
 
       Commands:
-        run --name <task> --repository <path> [--agent <name>] [--branch <br>]
+        run [--name <task>] [--repository <path>] [--agent <name>] [--branch <br>]
             [--resource-class <class>] [--wait <sec>] [--persist-agent-state]
             [--attach] [--no-preflight]
                               Allocate a free slot, create a standalone clone,
                               bind-mount it at the slot's /workspace source and
-                              start the microVM. With --attach, SSH in running
-                              'agent-run <agent>' and tear the VM down on exit
-                              (the workspace clone is always kept). --no-preflight
-                              skips the model-endpoint preflight (an interactive
-                              escape hatch for debugging; 'submit' has none).
+                              start the microVM. --name defaults to the basename
+                              of the current directory and --repository to the
+                              current directory, so a bare `run` from inside a
+                              repo checkout launches a slot for that repo. With
+                              --attach, SSH in running 'agent-run <agent>' and
+                              tear the VM down on exit (the workspace clone is
+                              always kept). --no-preflight skips the
+                              model-endpoint preflight (an interactive escape
+                              hatch for debugging; 'submit' has none).
         stop <slot|task>      Stop the VM, unmount the bind, drop slot transient
                               state. Keeps workspace/git/patches.
         destroy <slot|task>   Like stop, plus clear ephemeral slot runtime.
@@ -2472,8 +2476,14 @@ let
           validate_wait "$wait_for"
           (( ! persist )) || [[ -n "$agent" ]] \
               || die "run: --persist-agent-state requires --agent <name>"
-          [[ -n "$task" ]] || die "run: --name <task> is required"
-          [[ -n "$repo" ]] || die "run: --repository <path> is required"
+          # Defaults: when omitted, --repository is the current directory
+          # and --name is its basename, so `run` can be invoked bare from
+          # inside a repo checkout. The basename must still pass task-name
+          # validation ([a-zA-Z0-9._-]), so a directory with other chars
+          # (spaces, slashes) is rejected with an actionable message.
+          [[ -n "$repo" ]] || repo="$PWD"
+          [[ -n "$task" ]] || task="$(basename -- "$PWD")"
+          [[ -n "$task" ]] || die "run: could not derive --name from the current directory; pass --name <task>"
           validate_task_name "$task"
           [[ -z "$agent" ]] || validate_agent_name "$agent"
           local top
@@ -3770,6 +3780,25 @@ let
       platforms = platforms.linux;
     };
   };
+
+  # A thin convenience wrapper: `agent-microvm-herdr` is the common interactive
+  # one-liner `agent-microvm run --attach --agent herdr`. It is a fixed argv
+  # into the SAME launcher (no separate logic), so the sudoers NOPASSWD rule
+  # for `agent-microvm` does NOT cover it — run it via `sudo` like `run`, or
+  # extend the passwordless rule to this wrapper too if desired.
+  agent-microvm-herdr = pkgs.writeShellApplication {
+    name = "agent-microvm-herdr";
+    runtimeInputs = [ agent-microvm ];
+    text = ''
+      set -euo pipefail
+      exec agent-microvm run --attach --agent herdr "$@"
+    '';
+    meta = with lib; {
+      description = "Convenience alias: `agent-microvm run --attach --agent herdr`";
+      maintainers = [ ];
+      platforms = platforms.linux;
+    };
+  };
 in
 {
   config = lib.mkIf cfg.enable (
@@ -3777,7 +3806,10 @@ in
       {
         # Host-side tool: it mounts, drives systemctl and manages runtime
         # state, so it belongs in the system environment (invoked via sudo).
-        environment.systemPackages = [ agent-microvm ];
+        environment.systemPackages = [
+          agent-microvm
+          agent-microvm-herdr
+        ];
       }
 
       # --- optional passwordless operator control (secure default: off) ---
@@ -3811,6 +3843,17 @@ in
                 # The target is a single fixed, shellcheck-gated launcher
                 # that reads only a small known env set, so scoping SETENV to
                 # just this command is a narrow, deliberate grant.
+                options = [
+                  "NOPASSWD"
+                  "SETENV"
+                ];
+              }
+              {
+                # Same grant for the `agent-microvm-herdr` convenience alias,
+                # a fixed `exec agent-microvm run --attach --agent herdr` into
+                # the same launcher above, so `sudo agent-microvm-herdr` is
+                # passwordless too.
+                command = "/run/current-system/sw/bin/agent-microvm-herdr";
                 options = [
                   "NOPASSWD"
                   "SETENV"
