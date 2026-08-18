@@ -34,5 +34,26 @@
             "url": "https://raw.githubusercontent.com/BerriAI/litellm/ead62528e607b9d8e61273def638799c9c3a69ba/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
         },
         "version": "ead62528e607b9d8e61273def638799c9c3a69ba"
+    },
+    "simple-english": {
+        "cargoLock": null,
+        "date": "2026-08-17",
+        "extract": null,
+        "name": "simple-english",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
+            "name": null,
+            "owner": "AminBlg",
+            "repo": "SimpleEnglish",
+            "rev": "63f5d57f0c56e24108f63655d40f1a2680bd4e6f",
+            "sha256": "sha256-0YvDvgNOL9q+BOmIinyaxIbokdB6XFfwnq/BilBvsj0=",
+            "sparseCheckout": [],
+            "type": "github"
+        },
+        "version": "63f5d57f0c56e24108f63655d40f1a2680bd4e6f"
     }
 }

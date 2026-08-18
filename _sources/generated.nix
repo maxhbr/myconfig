@@ -28,4 +28,16 @@
     };
     date = "2026-08-04";
   };
+  simple-english = {
+    pname = "simple-english";
+    version = "63f5d57f0c56e24108f63655d40f1a2680bd4e6f";
+    src = fetchFromGitHub {
+      owner = "AminBlg";
+      repo = "SimpleEnglish";
+      rev = "63f5d57f0c56e24108f63655d40f1a2680bd4e6f";
+      fetchSubmodules = false;
+      sha256 = "sha256-0YvDvgNOL9q+BOmIinyaxIbokdB6XFfwnq/BilBvsj0=";
+    };
+    date = "2026-08-17";
+  };
 }

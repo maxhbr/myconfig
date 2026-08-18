@@ -19,6 +19,14 @@ src.git = "https://github.com/grafana/skills"
 src.branch = "main"
 fetch.github = "grafana/skills"
 
+# SimpleEnglish (ASD-STE100 Simplified Technical English) skill, consumed by
+# modules/myconfig.ai/skills/simple-english.nix. Only the `skills/simple-english`
+# subdirectory of the upstream repo is used.
+[simple-english]
+src.git = "https://github.com/AminBlg/SimpleEnglish"
+src.branch = "main"
+fetch.github = "AminBlg/SimpleEnglish"
+
 # Official LiteLLM Grafana dashboard.
 #
 # Track the tip of LiteLLM's main branch, but fetch only the dashboard JSON
