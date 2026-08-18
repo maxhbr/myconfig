@@ -12,10 +12,9 @@ let
   gemma4 = import ./gemma4.nix { inherit modelsPullDir; };
   minimaxM2_7 = import ./MiniMax-M2.7-GGUF.nix { inherit modelsPullDir; };
   nemotron3Super = import ./Nemotron-3-Super.nix { inherit modelsPullDir; };
-  qwen3_6_27B = import ./Qwen3.6-27B.nix { inherit modelsPullDir; };
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix { inherit modelsPullDir; };
-  qwen3_6_27B-multiGpu = qwen3_6_27B.multiGpuModels;
   qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
+  qwen3_8_27B-multiGpu = qwen3_8_27B.multiGpuModels;
   hy3-multiGpu = hy3.multiGpuModels;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix { inherit modelsPullDir; };
   ornith = import ./Ornith-1.0-35B.nix { inherit modelsPullDir; };
@@ -40,7 +39,6 @@ let
   rtxModels = [
     sidekickModel
   ]
-  ++ withGroup "dense" qwen3_6_27B.rtxModels
   ++ withGroup "MoE" qwen3_6_35B-A3B.rtxModels
   ++ gemma4.rtxModels
   ++ thedrummerSkyfall31B.rtxModels
@@ -69,7 +67,6 @@ let
         ttl = 1800;
       }
     ]
-    ++ withGroup "dense" qwen3_6_27B.amdModels
     ++ withGroup "MoE" qwen3_6_35B-A3B.amdModels
     ++ withGroup "MoE" ornith.amdModels
     ++ gemma4.amdModels
@@ -158,7 +155,7 @@ let
     serviceOpenFirewall = true;
     serviceProviderName = "gfx1151";
     groups = {
-      "Qwen3.6-27B" = {
+      "Qwen3.8-27B" = {
         swap = true;
         exclusive = false;
       };
@@ -221,7 +218,7 @@ let
       ) amdModels
       # Multi-GPU models already carry their own `devices` list (e.g.
       # "Vulkan0,Vulkan1") and must not have it overridden.
-      ++ qwen3_6_27B-multiGpu
+      ++ qwen3_8_27B-multiGpu
       ++ qwen3_6_35B-A3B-multiGpu
       ++ hy3-multiGpu;
   };
@@ -237,7 +234,7 @@ in
     # separate bind mount, which is out of scope for this helper).
     myconfig.ai.pull_models.models.${modelsPullDir} = lib.concatMap (m: m.pull-models.hf_spec) (
       builtins.filter (m: (m.pull-models or null) != null) (
-        amdModels ++ qwen3_6_27B-multiGpu ++ qwen3_6_35B-A3B-multiGpu ++ hy3-multiGpu
+        amdModels ++ qwen3_8_27B-multiGpu ++ qwen3_6_35B-A3B-multiGpu ++ hy3-multiGpu
       )
     );
 

@@ -14,23 +14,27 @@ let
   common = import ./common.nix { inherit pkgs; };
   mkVllm = common.mkCudaVllmDockerized;
 
-  # --- Variant 1: Qwen3.6-27B-NVFP4 (base) ---
-  vllmQwen36_27B_NVFP4 = mkVllm {
-    modelHostPath = "/models/unsloth-Qwen3.6-27B-NVFP4";
-    modelHfRepo = "unsloth/Qwen3.6-27B-NVFP4";
-    servedModelName = "Qwen3.6-27B-NVFP4";
-    containerName = "vllm-dockerized-Qwen3.6-27B-NVFP4";
+  # --- Variant 1: Qwen3.8-27B-NVFP4 (base) ---
+  vllmQwen38_27B_NVFP4 = mkVllm {
+    modelHostPath = "/models/unsloth-Qwen3.8-27B-NVFP4";
+    modelHfRepo = "unsloth/Qwen3.8-27B-NVFP4";
+    servedModelName = "Qwen3.8-27B-NVFP4";
+    containerName = "vllm-dockerized-Qwen3.8-27B-NVFP4";
     port = 22548;
     maxModelLen = 185024;
     extraConfig = { };
   };
 
-  # --- Variant 2: Qwen3.6-27B-Text-NVFP4-MTP (multi-token prediction) ---
-  vllmQwen36_27B_Text_NVFP4_MTP = mkVllm {
-    modelHostPath = "/models/sakamakismile-Qwen3.6-27B-Text-NVFP4-MTP";
-    modelHfRepo = "sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP";
-    servedModelName = "Qwen3.6-27B-Text-NVFP4-MTP";
-    containerName = "vllm-dockerized-Qwen3.6-27B-Text-NVFP4-MTP";
+  # --- Variant 2: Qwen3.8-27B-MTP-NVFP4 (multi-token prediction) ---
+  # NOTE: upstream renamed the repo suffix order from
+  # `Text-NVFP4-MTP` (3.6) to `MTP-NVFP4` (3.8); functionally
+  # equivalent (NVFP4 weights + MTP draft head).
+  # https://huggingface.co/sakamakismile/Qwen3.8-27B-MTP-NVFP4
+  vllmQwen38_27B_MTP_NVFP4 = mkVllm {
+    modelHostPath = "/models/sakamakismile-Qwen3.8-27B-MTP-NVFP4";
+    modelHfRepo = "sakamakismile/Qwen3.8-27B-MTP-NVFP4";
+    servedModelName = "Qwen3.8-27B-MTP-NVFP4";
+    containerName = "vllm-dockerized-Qwen3.8-27B-MTP-NVFP4";
     port = 22548;
     maxModelLen = 185024;
     extraConfig = {
@@ -41,6 +45,9 @@ let
   };
 
   # --- Variant 3: Qwen3.6-27B-int4-AutoRound (Intel AutoRound int4) ---
+  # NOTE: kept on 3.6 — Intel has not published a Qwen3.8-27B
+  # AutoRound int4 checkpoint as of this migration (checked via
+  # `curl https://huggingface.co/api/models?author=Intel`, 2026-08).
   vllmQwen36_27B_int4_AutoRound = mkVllm {
     modelHostPath = "/models/Intel-Qwen3.6-27B-int4-AutoRound";
     modelHfRepo = "Intel/Qwen3.6-27B-int4-AutoRound";
@@ -75,6 +82,8 @@ let
   };
 
   # --- Variant 4: Qwen3.6-27B-int4-AutoRound (Lorbus, MTP + reasoning) ---
+  # NOTE: kept on 3.6 — Lorbus has not published a Qwen3.8-27B
+  # AutoRound checkpoint as of this migration.
   vllmQwen36_27B_int4_AutoRound_Lorbus = mkVllm {
     modelHostPath = "/models/Lorbus-Qwen3.6-27B-int4-AutoRound";
     modelHfRepo = "Lorbus/Qwen3.6-27B-int4-AutoRound";
@@ -128,15 +137,15 @@ in
   ];
   config = {
     environment.systemPackages = [
-      vllmQwen36_27B_NVFP4.vllmPkg
-      vllmQwen36_27B_Text_NVFP4_MTP.vllmPkg
+      vllmQwen38_27B_NVFP4.vllmPkg
+      vllmQwen38_27B_MTP_NVFP4.vllmPkg
       vllmQwen36_27B_int4_AutoRound.vllmPkg
       vllmQwen36_27B_int4_AutoRound_Lorbus.vllmPkg
       vllmQwenAgentWorld35B_A3B.vllmPkg
     ];
     services.llama-swap.settings.models =
-      vllmQwen36_27B_NVFP4.modelConfig
-      // vllmQwen36_27B_Text_NVFP4_MTP.modelConfig
+      vllmQwen38_27B_NVFP4.modelConfig
+      // vllmQwen38_27B_MTP_NVFP4.modelConfig
       // vllmQwen36_27B_int4_AutoRound.modelConfig
       // vllmQwen36_27B_int4_AutoRound_Lorbus.modelConfig
       // vllmQwenAgentWorld35B_A3B.modelConfig;
@@ -148,12 +157,12 @@ in
             name = "vllm";
             api_base = "http://localhost:22548/v1";
             models = [
-              { name = "Qwen3.6-27B-NVFP4"; }
-              { name = "Qwen3.6-27B-Text-NVFP4-MTP"; }
+              { name = "Qwen3.8-27B-NVFP4"; }
+              { name = "Qwen3.8-27B-MTP-NVFP4"; }
               { name = "Qwen3.6-27B-int4-AutoRound"; }
               { name = "Qwen3.6-27B-int4-AutoRound-Lorbus"; }
               { name = "Qwen-AgentWorld-35B-A3B"; }
-              { name = "Qwen3.6-27B-FP8"; }
+              { name = "Qwen3.8-27B-FP8"; }
             ];
           }
         ];
