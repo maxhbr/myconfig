@@ -21,7 +21,7 @@
               lib.optionals config.services.litellm.enable [
                 {
                   type = "openai-compatible";
-                  name = "litellm";
+                  name = "${config.networking.hostName}-litellm";
                   api_base = "http://localhost:${toString config.services.litellm.port}/v1";
                   models = builtins.map (model: {
                     name = model.model_name;

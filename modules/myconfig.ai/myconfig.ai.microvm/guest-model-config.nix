@@ -300,17 +300,20 @@ in
 
     providerKey = mkOption {
       type = types.str;
-      default = "litellm";
+      default = "${config.networking.hostName}-litellm";
+      defaultText = literalExpression ''"''${config.networking.hostName}-litellm"'';
       description = ''
         Provider key registered in the generated pi extension and opencode
-        overlay. Defaults to the SAME key the host-side generators use, so the
-        runtime model list replaces (rather than duplicates) the build-time one.
+        overlay. Defaults to the SAME key the host-side generators use
+        (`<hostname>-litellm`), so the runtime model list replaces (rather
+        than duplicates) the build-time one.
       '';
     };
 
     providerName = mkOption {
       type = types.str;
-      default = "LiteLLM (microVM)";
+      default = "LiteLLM (${config.networking.hostName} microVM)";
+      defaultText = literalExpression ''"LiteLLM (''${config.networking.hostName} microVM)"'';
       description = "Human-readable provider name shown by the agents.";
     };
 
