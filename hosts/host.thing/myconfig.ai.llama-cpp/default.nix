@@ -101,6 +101,24 @@ let
           aliases ? [ ],
           params ? [ ],
           group ? "default",
+          # KV-cache shape. This block MUST be carried over: the
+          # rebuild below is an explicit allowlist, so anything not
+          # named here is silently dropped. `ctxSize` used to be, which
+          # meant every RTX model re-served on gfx1151 started without
+          # `--ctx-size` (llama-server then falls back to the GGUF's
+          # n_ctx_train) AND published `contextWindow = null` into
+          # `myconfig.ai.localModels`. That null propagates to LiteLLM
+          # (no `max_input_tokens` / `max_tokens` on the model entry)
+          # and from there to the agents, which then have to guess the
+          # context window — see
+          # modules/myconfig.ai/docs/debug-litellm-max-output-tokens.md.
+          #
+          # These values were sized for the RTX 5090's 32 GB; gfx1151
+          # has more memory available, so re-using them is safe.
+          ctxSize ? null,
+          cacheType ? null,
+          parallel ? 1,
+          kvUnified ? false,
           ...
         }:
         {
@@ -109,6 +127,10 @@ let
             path
             params
             group
+            ctxSize
+            cacheType
+            parallel
+            kvUnified
             ;
           aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
           # variants are dropped for now
