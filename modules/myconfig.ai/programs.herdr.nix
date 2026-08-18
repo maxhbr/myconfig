@@ -223,6 +223,22 @@ let
         fi
       done
 
+      # Seed the in-guest configuration for EVERY agent `herdr` can launch
+      # (pi, opencode, claude-code, codex, qwen-code, github-copilot-cli,
+      # hermes) from the matching host dotfiles. The runner carries a
+      # `seed-agent-config` script that copies the ALLOWLISTED,
+      # denylist-filtered host configuration into the guest `/home/agent` over
+      # SSH — never baking anything into the store and never copying
+      # credential files (keys keep flowing over the SSH environment above).
+      # See ../../../flake.sandboxed-pi.nix (`mkSeedScript`) and
+      # ../fns/seed-agent-config.nix. Run it BEFORE the interactive session so
+      # the agents launched from inside `herdr` start already configured.
+      if [ -x "$runner/bin/seed-agent-config" ]; then
+        echo "sandboxed-herdr: seeding guest agent config from host" >&2
+        "$runner/bin/seed-agent-config" "$ssh_port" "$runtime_dir/id" 127.0.0.1 agent \
+          || echo "sandboxed-herdr: warning: config seeding reported errors (continuing)" >&2
+      fi
+
       # Build a safely-quoted remote command: cd into the workspace and exec
       # herdr (the agent multiplexer) with the caller's argument vector
       # preserved via printf %q. From inside the herdr session the user starts

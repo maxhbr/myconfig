@@ -8,6 +8,9 @@
 #
 # Exports:
 #   * `mkSandboxedRunner`         — generic parameterized qemu runner builder.
+#     * `mkSeedScript`         — builds the `seed-agent-config` host-side
+#                                 seeder for a given config-path allowlist
+#                                 (see modules/myconfig.ai/fns/seed-agent-config.nix).
 #   * `mkSandboxedPiRunner`       — thin wrapper: one workspace + `pi`.
 #                                   Backs `sandboxed-pi` (jailed-pi analogue).
 #   * `mkSandboxedHerdrRunner`    — thin wrapper: one workspace + `herdr` and
@@ -51,8 +54,48 @@
 # read-only only) are never writable from the guest. LLM credentials are
 # forwarded at launch over the SSH channel's environment (never baked into the
 # Nix store, never in process argv).
+#
+# ── Agent-configuration seeding ────────────────────────────────────────────
+# The guest home is an ephemeral tmpfs, so an agent would otherwise start with
+# empty/default configuration. To avoid that, the host wrapper copies the
+# RELEVANT, ALLOWLISTED host configuration into the guest `/home/agent` over
+# the SSH channel at launch (after the VM boots, before the agent is exec'd) —
+# see `mkSeedScript` below and
+# modules/myconfig.ai/fns/seed-agent-config.nix. Only non-sensitive
+# configuration (settings, extensions, themes, skills) is copied; credential
+# files are excluded by a denylist applied to every path component AND the
+# resolved target, so secrets never touch the Nix store (they keep flowing
+# over the SSH environment, exactly as before). The allowlist + denylist are
+# BAKED into the seeder script by Nix; the launcher cannot widen them.
 inputs:
 let
+  # The shared host→guest agent-config seeder library
+  # (modules/myconfig.ai/fns/seed-agent-config.nix). Imported once so every
+  # runner factory shares the same allowlist/denylist vocabulary. Resolved
+  # against x86_64-linux (the only sandboxed-* host platform); the library is
+  # platform-independent (it only uses lib + writeShellApplication).
+  seedLib = import ./modules/myconfig.ai/fns/seed-agent-config.nix {
+    inherit (inputs.nixpkgs) lib;
+    pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
+  };
+
+  # Build the `seed-agent-config` host-side seeder script for a given union
+  # config-path allowlist. The resulting script is added to the runner's
+  # `bin/` so the host wrapper can invoke it as
+  #   $runner/bin/seed-agent-config <ssh-port> <identity> <host> <user>
+  # after the VM boots. The allowlist + denylist are baked in; the script takes
+  # no policy argument. See modules/myconfig.ai/fns/seed-agent-config.nix.
+  mkSeedScript =
+    { system, configPaths }:
+    if configPaths == [ ] then
+      # No seeding requested: emit a no-op so the wrapper can call it
+      # unconditionally. Keeps the wrapper logic branch-free.
+      inputs.nixpkgs.legacyPackages.${system}.writeShellScriptBin "seed-agent-config" ''
+        echo "seed-agent-config: nothing to seed (empty allowlist)" >&2
+      ''
+    else
+      seedLib.mkSeeder { inherit configPaths; };
+
   # Generic sandbox guest/runner builder shared by all sandboxed-* wrappers.
   #
   # Arguments:
@@ -79,6 +122,14 @@ let
       vcpu ? 4,
       mem ? 8192,
       allowNetwork ? true,
+      # The host→guest config-seed allowlist (a union of per-agent
+      # `configPaths`, see modules/myconfig.ai/fns/seed-agent-config.nix).
+      # When non-empty, a `bin/seed-agent-config` seeder script is built into
+      # the runner output so the host wrapper can copy the allowlisted host
+      # configuration into the guest home over SSH at launch. When empty
+      # (the default), no seeding happens and the wrapper starts the agent
+      # with an empty/default config (the previous behaviour).
+      seedConfigPaths ? [ ],
     }:
     let
       pkgs = inputs.nixpkgs.legacyPackages.${system};
@@ -305,15 +356,22 @@ let
         '';
       };
     in
-    # A thin package exposing both microvm.nix's original scripts (so
-    # `bin/microvm-run`, `bin/microvm-shutdown`, ... stay available) and the
-    # combined `bin/sandboxed-launch` entry point the host wrappers call.
+    # A thin package exposing microvm.nix's original scripts (so
+    # `bin/microvm-run`, `bin/microvm-shutdown`, ... stay available), the
+    # combined `bin/sandboxed-launch` entry point the host wrappers call, and
+    # — when `seedConfigPaths` is non-empty — the `bin/seed-agent-config`
+    # seeder the wrapper runs after the VM boots to copy the allowlisted host
+    # configuration into the guest home over SSH.
     pkgs.symlinkJoin {
       name = "sandboxed-runner-${guest.config.networking.hostName}";
       paths = [
         launcher
         runner
-      ];
+      ]
+      ++ lib.optional (seedConfigPaths != [ ]) (mkSeedScript {
+        inherit system;
+        configPaths = seedConfigPaths;
+      });
     };
 
 in
@@ -331,6 +389,9 @@ in
       vcpu ? 4,
       mem ? 8192,
       allowNetwork ? true,
+      # Override the default `pi`-only seed allowlist. Defaults to the `pi`
+      # agent's configPaths from the shared seeder library.
+      seedConfigPaths ? seedLib.configPathsFor [ "pi" ],
     }:
     mkSandboxedRunner {
       inherit
@@ -340,6 +401,7 @@ in
         vcpu
         mem
         allowNetwork
+        seedConfigPaths
         ;
       hostname = "sandboxed-pi";
       shares = [
@@ -371,6 +433,20 @@ in
       vcpu ? 4,
       mem ? 8192,
       allowNetwork ? true,
+      # Override the default seed allowlist. Defaults to the union of
+      # `configPaths` for every registered agent (pi, opencode, claude, codex,
+      # qwen-code, github-copilot-cli, hermes), so a `sandboxed-herdr` guest is
+      # seeded with the configuration for ALL agents `herdr` can launch. The
+      # union follows the shared seeder library's `configPathsFor`.
+      seedConfigPaths ? seedLib.configPathsFor [
+        "pi"
+        "opencode"
+        "claude"
+        "codex"
+        "qwen-code"
+        "github-copilot-cli"
+        "hermes"
+      ],
     }:
     mkSandboxedRunner {
       inherit
@@ -380,6 +456,7 @@ in
         vcpu
         mem
         allowNetwork
+        seedConfigPaths
         ;
       hostname = "sandboxed-herdr";
       shares = [

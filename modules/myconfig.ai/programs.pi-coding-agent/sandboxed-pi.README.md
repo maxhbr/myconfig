@@ -28,6 +28,9 @@ Shared into the guest:
 - The current working directory, read-write, at `/workspace` (virtiofs).
 - The host `/nix/store`, **read-only** (so the VM needs no disk image and
   boots fast).
+- The allowlisted host `~/.pi` configuration, **copied** into the guest
+  `/home/agent` at launch (see [Agent-configuration seeding](
+  #agent-configuration-seeding)). Credentials are never copied.
 
 Deliberately **not** shared:
 
@@ -50,6 +53,53 @@ environment** — only if they are set on the host. They are never baked into
 the Nix store, never passed on a process command line, and never written to a
 tracked file. If none are set, `pi` starts without credentials.
 
+## Agent-configuration seeding
+
+The guest home is an ephemeral tmpfs, so without seeding `pi` would start
+with empty/default configuration. To avoid that, `sandboxed-pi` copies the
+relevant, allowlisted host `~/.pi` configuration into the guest `/home/agent`
+over the SSH channel **at launch**, after the VM boots and before `pi` is
+exec'd. This mirrors the heavyweight `myconfig.ai.microvm` config-seed
+mechanism (`modules/myconfig.ai/myconfig.ai.microvm/config-seed.nix`), adapted
+for the user-space qemu tier (no privileged host daemon: staging + transfer
+happen entirely in the launcher, over the already-established SSH channel).
+
+What is seeded (the `pi` allowlist, from
+`modules/myconfig.ai/fns/seed-agent-config.nix`, mirroring
+`myconfig.ai.microvm/agents.nix`):
+
+- `.pi/agent/agents` — sample subagent definitions.
+- `.pi/agent/extensions` — the auto-generated provider extension, the
+  jail-marker extension, the subagent/handoff examples, etc.
+- `.pi/agent/keybindings.json`, `.pi/agent/themes`, `.pi/agent/prompts`.
+- `.agents/skills` — the handcrafted skills tree.
+- `.config/git/{config,attributes}` — git identity/tools.
+
+What is **never** seeded:
+
+- **Credentials.** `.pi/agent/auth.json`, session state under
+  `.pi/agent/sessions/`, and any file matching the credential denylist
+  (applied to every path component **and** the resolved symlink target):
+  `auth.json`, `credentials*`, `*.pem`, `*.key`, `id_rsa`, `id_ed25519`,
+  `.env`, `.netrc`, `cookies*`, `*session*`, `*token*`, …. Model keys keep
+  flowing over the SSH environment (`SetEnv`), exactly as before.
+- The host home directory as a whole — only the exact allowlisted paths are
+  copied.
+
+Nothing is baked into the Nix store: the allowlist + denylist are, but the
+host home contents are read at launch. A file whose name matches the denylist
+is skipped even if it lives inside an allowlisted directory (defence in
+depth). A small, explicit `denyOverrides` allowlist exempts trademark /
+name-collision exceptions from the INFIX checks only — e.g. the
+`trustedtokens-provider` pi extension ("TrustedTokens" is a TNG inference-
+service trademark; the directory holds only TypeScript source + metadata,
+no API key) is staged despite the deny infix "token". Exact-name and suffix
+checks still apply everywhere, so a real `auth.json` or `*.pem` placed inside
+an overridden directory is still refused. This matches the heavyweight tier's
+behaviour. The seeder script (`seed-agent-config`) is built into the runner
+output and invoked by the host wrapper as
+`seed-agent-config <ssh-port> <identity> 127.0.0.1 agent`.
+
 ## How it works
 
 - `flake.sandboxed-pi.nix` exports `mkSandboxedPiRunner`, which builds a qemu
@@ -65,8 +115,10 @@ tracked file. If none are set, `pi` starts without credentials.
   directory (refuses `$HOME`), generates a throwaway SSH keypair, picks a
   random `127.0.0.1` port, `nix build --impure`s the runner for the current
   directory, starts the VM, waits for guest SSH, forwards credentials over the
-  SSH environment and execs `pi` in `/workspace`. On exit it kills the VM and
-  removes the runtime directory.
+  SSH environment, **seeds the in-guest `pi` configuration from the host**
+  (see [Agent-configuration seeding](#agent-configuration-seeding)), and execs
+  `pi` in `/workspace`. On exit it kills the VM and removes the runtime
+  directory.
 
 ## Why qemu and not Cloud Hypervisor
 
