@@ -315,18 +315,124 @@ Qwen3.8 variants, evaluated on `thing`) get that value verbatim —
 **A `nixos-rebuild switch` (or at least a home-manager activation) is
 required on `f13` for the regenerated extension to take effect.**
 
+## Part 2 — why the budget information never reached the agents
+
+The fix above makes pi *derive* a budget, but it derives it from a
+fallback `contextWindow` of 131072 because nothing in the chain told it
+the truth. Three separate defects caused that.
+
+### 2a. `--ctx-size` is not the per-request context
+
+llama-server's `--ctx-size` sizes the WHOLE KV cache and is divided by
+the slot count unless the cache is unified
+(`src/llama-context.cpp:286`):
+
+```cpp
+if (cparams.kv_unified) {
+    cparams.n_ctx_seq = cparams.n_ctx;
+} else {
+    cparams.n_ctx_seq = cparams.n_ctx / cparams.n_seq_max;
+}
+```
+
+and unified KV is enabled implicitly ONLY in auto mode, i.e. when
+`--parallel` is not passed at all (`tools/server/server.cpp:146`):
+
+```cpp
+if (params.n_parallel < 0) { n_parallel = 4; kv_unified = true; }
+```
+
+So the module's `parallel` option had a counter-intuitive cost model:
+
+| config | flags | slots | ctx per request | KV memory |
+|---|---|---|---|---|
+| `parallel = 1` | `--ctx-size C` | 4 (auto) | **C** (shared pool) | 1×C |
+| `parallel = 4` | `--ctx-size 4C --parallel 4` | 4 | C (static slice) | **4×C** |
+| `parallel = 4` + `kvUnified` | `--ctx-size C --parallel 4 --kv-unified` | 4 | **C** (shared pool) | 1×C |
+
+A new `kvUnified` option (`options.nix`) selects the third row;
+`lib/scripts.nix` and `router.nix` only multiply `--ctx-size` by
+`parallel` when it is off. thing's `Qwen3.6-35B-A3B` entries — the
+models behind the `hermes` and `opencode-fast` aliases — were the only
+`parallel > 1` models and now use it:
+
+```
+-  --ctx-size 1048576 --parallel 4 --cont-batching
++  --ctx-size 262144  --parallel 4 --cont-batching --kv-unified
+```
+
+### 2b. The advertised context window was `parallel`× too large
+
+`effectiveContextWindow = m: m.ctxSize * m.parallel` (`llama-swap.nix`,
+`router.nix`) is published through `myconfig.ai.localModels` into
+LiteLLM's `max_input_tokens` and from there to the agents. For the
+`parallel = 4` models it advertised **1048576** tokens while each slot
+could really hold 262144 — pi would happily fill a prompt four times
+larger than the slot. It is now `m.ctxSize`, which equals llama.cpp's
+`n_ctx_seq` under both layouts (a no-op for every `parallel = 1` model).
+
+### 2c. `ctxSize` was dropped when re-serving RTX models on gfx1151
+
+`hosts/host.thing/myconfig.ai.llama-cpp/default.nix`'s `fromRtxModels`
+rebuilds each model from an explicit allowlist
+(`name`/`path`/`params`/`group`/`aliases`) — so `ctxSize`, `cacheType`,
+`parallel` and `kvUnified` were silently discarded. Consequence:
+llama-server started without `--ctx-size` (falling back to the GGUF's
+`n_ctx_train`) and the model published `contextWindow = null`, so
+LiteLLM emitted no `max_input_tokens`/`max_tokens` at all.
+
+That is exactly why the test model looked like this on thing:
+
+```json
+{"model_name":"gfx1151:Qwen3.6-27B-UD-Q5_K_XL",
+ "litellm_params":{"model":"openai/Qwen3.6-27B-UD-Q5_K_XL"}}   // no budgets
+```
+
+despite `hosts/host.thing/myconfig.ai.llama-cpp/Qwen3.6-27B.nix:104`
+declaring `ctxSize = 262144`. Carrying the four attributes through
+raises the gfx1151 models that publish a context window from
+**101/154 to 131/154**, and the test model now evaluates to:
+
+```json
+{"model_name":"gfx1151:Qwen3.6-27B-UD-Q5_K_XL",
+ "litellm_params":{"max_input_tokens":262144,"max_tokens":65536, ...}}
+```
+
+### 2d. The model-list scrape only saw *loaded* models
+
+`hosts/shared.localModels.update.sh` regenerates
+`hosts/shared.localModels.litellm.models.nix`, which is what f13's local
+proxy forwards. It scraped `--ctx-size` out of `status.args` in the
+backends' `/v1/models` — but llama-swap only publishes the command line
+for models it currently has **loaded**. With `ttl` between 300 and
+1800s essentially everything is unloaded at scrape time; a run during
+this investigation recovered **55** entries that way, out of 179
+available. Hence the bare strings.
+
+`build_budget_map` now reads the upstream LiteLLM's `/model/info`
+instead, which reports what the Nix config declares and is therefore
+independent of load state (**179** context windows and **171** output
+budgets in the same run). It also emits `maxOutputTokens`, populating
+the `myconfig.ai.litellm.proxy.models[*].maxOutputTokens` option that
+existed but had never been fed.
+
+## Deployment order
+
+1. Rebuild **thing** — 2a/2b/2c only take effect there, and the models
+   must be reloaded (or their `ttl` expire) for the new llama-server
+   command line to apply.
+2. Re-run `./hosts/shared.localModels.update.sh litellm` and commit the
+   regenerated `hosts/shared.localModels.litellm.models.nix`. Doing it
+   *before* step 1 would bake in the pre-fix `ctxSize * parallel`
+   context windows.
+3. Rebuild **f13** / **p14** so the local proxy forwards the new
+   `model_info` and pi regenerates `myconfig-providers.ts`.
+
 ## Follow-ups (not done here)
 
-* `hosts/shared.localModels.update.sh` could emit
-  `{ name; contextWindow; maxOutputTokens; }` attrsets for the local
-  proxy's model list, so `f13` learns the *real* 262144 context window
-  and 65536 output budget instead of falling back to
-  `131072` / `32768`. The plumbing already exists
-  (`myconfig.ai.litellm.proxy.models[*].maxOutputTokens`).
 * The generators register all models with `reasoning = false`; marking
   the thinking variants as reasoning models would let pi budget the
   `<think>` block explicitly.
-* `modules/myconfig.ai/services.litellm.nix` only emits
-  `max_input_tokens`/`max_tokens` for models whose `contextWindow` is
-  known; several `gfx1151:*` entries (including the test model) still
-  publish nothing.
+* `modules/myconfig.ai/services.litellm.nix` still emits no
+  `max_input_tokens`/`max_tokens` for models whose `ctxSize` is unset
+  (23 of 154 gfx1151 entries after the fixes above).
