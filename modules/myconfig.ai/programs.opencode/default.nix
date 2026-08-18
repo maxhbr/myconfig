@@ -249,9 +249,9 @@ in
                       if osconfig.services.litellm.host == "0.0.0.0" then "localhost" else osconfig.services.litellm.host;
                   in
                   {
-                    "litellm" = {
+                    "${osconfig.networking.hostName}-litellm" = {
                       "npm" = "@ai-sdk/openai-compatible";
-                      "name" = "LiteLLM";
+                      "name" = "LiteLLM (${osconfig.networking.hostName})";
                       "options" = {
                         "baseURL" = "http://${litellmHost}:${toString osconfig.services.litellm.port}/v1";
                       };
