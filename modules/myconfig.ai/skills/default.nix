@@ -95,6 +95,7 @@ in
     ./playwright-cli.nix
     ./research.nix
     ./review.nix
+    ./simple-english.nix
     ./workmux.nix
   ];
 
