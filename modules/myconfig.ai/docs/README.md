@@ -26,7 +26,9 @@ The tiers are largely orthogonal and compose: an agent user (tier 1) can run
 
 All tiers are agent-agnostic in principle; `pi` is the reference agent. Tier 2
 also exists as `jailed-opencode` / `jailed-claude`, and tier 4 carries a whole
-registry of agents inside its guests.
+registry of agents inside its guests. Tier 3 also has a `sandboxed-herdr`
+variant (below) that drops into a `herdr` multiplexer instead of a single
+`pi`.
 
 ---
 
@@ -180,6 +182,16 @@ into the store, never on a command line.
 Session-wide variant: `alacritty-sandboxed-workmux-here`
 (`myconfig.ai.workmux.sandbox`, off by default) puts a whole workmux session
 in one VM.
+
+**`sandboxed-herdr` variant**: the same microVM, but instead of exec'ing `pi`
+it exec's `herdr` (the agent multiplexer), and the guest carries `herdr` plus
+the coding-agent CLIs enabled on the host so the user can start `pi` /
+`opencode` / `claude-code` / … from *inside* the `herdr` session. It reuses
+the same `mkSandboxedRunner` factory (no parallel guest builder) and shares
+`sandboxed-pi`'s workspace handling, credential forwarding and refuse-`$HOME`
+guard. See
+[`../programs.herdr.nix`](../programs.herdr.nix) (wrapper) and
+[`../sandboxed-herdr.README.md`](../sandboxed-herdr.README.md).
 
 **Limits**: the host store is visible read-only; the guest still shares the
 host store closure and reaches the network via the host. See the status note

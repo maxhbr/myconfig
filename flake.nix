@@ -606,6 +606,48 @@
                   workmuxPackage = inputs.workmux.packages.${system}.default;
                   allowNetwork = getEnvOr "SANDBOXED_WORKMUX_NETWORK" "1" != "0";
                 };
+
+            # Per-invocation microvm runner for `sandboxed-herdr`. Built
+            # impurely by the host-side `sandboxed-herdr` wrapper, which sets
+            # the SANDBOXED_HERDR_* environment variables (workspace path,
+            # forwarded SSH port, throwaway authorized-keys file) before
+            # `nix build --impure`. The workspace path therefore never appears
+            # in any tracked file or flake output. See flake.sandboxed-pi.nix
+            # and modules/myconfig.ai/programs.herdr.nix.
+            #
+            # The guest carries `herdr` plus the coding-agent CLIs it
+            # launches (mirroring the gVisor sandbox image's
+            # `agentPackagesByFlag` set, resolved against the host's
+            # `myconfig.ai.<name>.enable` flags). Only agents enabled on the
+            # building host are included, so the guest closure stays minimal.
+            sandboxed-herdr-runner =
+              let
+                getEnvOr =
+                  name: fallback:
+                  let
+                    v = builtins.getEnv name;
+                  in
+                  if v == "" then fallback else v;
+                workspace = builtins.getEnv "SANDBOXED_HERDR_WORKSPACE";
+                agentPackages = builtins.fromJSON (getEnvOr "SANDBOXED_HERDR_AGENT_PACKAGES" "[]");
+              in
+              if workspace == "" then
+                # Pure eval (e.g. `nix flake check`, `nix flake show`): the
+                # env vars are empty, so emit a harmless placeholder derivation
+                # instead of failing. The real runner is only ever built
+                # impurely by the wrapper.
+                nixpkgs.legacyPackages.${system}.writeShellScriptBin "sandboxed-herdr-runner" ''
+                  echo "sandboxed-herdr-runner must be built via the sandboxed-herdr wrapper (SANDBOXED_HERDR_WORKSPACE unset)" >&2
+                  exit 1
+                ''
+              else
+                self.lib.mkSandboxedHerdrRunner {
+                  inherit system workspace agentPackages;
+                  sshPort = lib.toInt (getEnvOr "SANDBOXED_HERDR_SSH_PORT" "2222");
+                  authorizedKeysFile = getEnvOr "SANDBOXED_HERDR_AUTHORIZED_KEYS" "/var/empty/authorized_keys";
+                  herdrPackage = nixpkgs.legacyPackages.${system}.herdr;
+                  allowNetwork = getEnvOr "SANDBOXED_HERDR_NETWORK" "1" != "0";
+                };
           };
 
           formatter = nixpkgs.legacyPackages.${system}.nixfmt-tree;

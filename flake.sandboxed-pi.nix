@@ -10,6 +10,10 @@
 #   * `mkSandboxedRunner`         — generic parameterized qemu runner builder.
 #   * `mkSandboxedPiRunner`       — thin wrapper: one workspace + `pi`.
 #                                   Backs `sandboxed-pi` (jailed-pi analogue).
+#   * `mkSandboxedHerdrRunner`    — thin wrapper: one workspace + `herdr` and
+#                                   the coding-agent CLIs it launches. Backs
+#                                   `sandboxed-herdr` (herdr-in-VM variant of
+#                                   `sandboxed-pi`).
 #   * `mkSandboxedWorkmuxRunner`  — main repo + its `__worktrees` sibling +
 #                                   tmux/workmux/pi. Backs
 #                                   `alacritty-sandboxed-workmux-here`
@@ -346,6 +350,46 @@ in
         }
       ];
       guestPackages = [ piPackage ];
+    };
+
+  # One workspace + `herdr` and the coding-agent CLIs it launches. Backs
+  # `sandboxed-herdr`. Unlike `mkSandboxedPiRunner` (which carries just `pi`),
+  # the guest gets `herdr` (the agent multiplexer the user is dropped into)
+  # plus whichever coding-agent CLIs `herdr` is expected to start from inside
+  # the VM — the same set the gVisor sandbox image bakes in (see
+  # modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix,
+  # `agentPackagesByFlag`). The host wrapper execs `herdr` (not `pi`) over SSH;
+  # from within that `herdr` session the user starts `pi` / `opencode` / etc.
+  mkSandboxedHerdrRunner =
+    {
+      system,
+      workspace,
+      sshPort,
+      authorizedKeysFile,
+      herdrPackage,
+      agentPackages ? [ ],
+      vcpu ? 4,
+      mem ? 8192,
+      allowNetwork ? true,
+    }:
+    mkSandboxedRunner {
+      inherit
+        system
+        sshPort
+        authorizedKeysFile
+        vcpu
+        mem
+        allowNetwork
+        ;
+      hostname = "sandboxed-herdr";
+      shares = [
+        {
+          tag = "workspace";
+          source = workspace;
+          mountPoint = "/workspace";
+        }
+      ];
+      guestPackages = [ herdrPackage ] ++ agentPackages;
     };
 
   # Main repo + its `__worktrees` sibling + tmux/workmux/pi. Backs
