@@ -62,6 +62,11 @@ let
       dt = "difftool --dir-diff";
       dAncestor = "!f() { git diff $(git merge-base master HEAD); }; f";
       dsAncestor = "!f() { git diff --stat $(git merge-base master HEAD); }; f";
+      # See `git-branch-summary` (installed via home.packages below) and
+      # modules/shell.git/docs/branch-diff.md for why this isn't just
+      # another `dAncestor`-style alias: it auto-detects the base branch
+      # instead of hardcoding master.
+      bs = "!git-branch-summary";
       changes = "diff --name-status -r";
       diffstat = "diff --stat -r";
       sortdiff = "!sh -c 'git diff \"$@\" | grep \"^[+-]\" | sort --key=1.2 | uniq -u -s1'";
@@ -231,6 +236,116 @@ in
 }:
 let
   nixosConfig = config;
+
+  # `git branch-summary` (short alias: `git bs`): show what the *current*
+  # branch adds on top of its base -- the commits (base..HEAD) and, by
+  # default, a combined diffstat (base...HEAD). Unlike the `dAncestor` /
+  # `dsAncestor` aliases above, it auto-detects the base branch (origin's
+  # default branch, then "main", then "master") instead of hardcoding
+  # "master". See modules/shell.git/docs/branch-diff.md for the rationale.
+  gitBranchSummary = pkgs.writeShellApplication {
+    name = "git-branch-summary";
+    runtimeInputs = [ pkgs.git ];
+    text = ''
+      usage() {
+          cat <<'EOF'
+      Usage: git branch-summary [<base>] [--log|--stat|--diff|--patch|--name-only|--range]
+
+      Show what the current branch adds on top of <base>: the commits
+      (base..HEAD) and, by default, a combined diffstat (base...HEAD).
+
+        <base>        explicit base branch/ref; auto-detected if omitted
+                      (origin's default branch, then "main", then "master")
+        --log         show only the commit log
+        --stat        show only the diffstat
+        --diff/--patch
+                      show the full diff instead of the stat
+        --name-only   show only the names of changed files
+        --range       show git range-diff instead of a plain diff
+        -h, --help    show this help
+      EOF
+      }
+
+      resolve_ref() {
+          local name="$1" ref
+          for ref in "origin/$name" "$name"; do
+              if git rev-parse --verify --quiet "$ref" >/dev/null 2>&1; then
+                  printf '%s\n' "$ref"
+                  return 0
+              fi
+          done
+          return 1
+      }
+
+      detect_base() {
+          local sym candidate
+          sym="$(git symbolic-ref --short --quiet refs/remotes/origin/HEAD 2>/dev/null || true)"
+          for candidate in "''${sym#origin/}" main master; do
+              [ -n "$candidate" ] || continue
+              if resolve_ref "$candidate"; then
+                  return 0
+              fi
+          done
+          return 1
+      }
+
+      mode="default"
+      base=""
+
+      while [ $# -gt 0 ]; do
+          case "$1" in
+              --log) mode="log" ;;
+              --stat) mode="stat" ;;
+              --diff | --patch) mode="diff" ;;
+              --name-only) mode="name-only" ;;
+              --range) mode="range" ;;
+              -h | --help)
+                  usage
+                  exit 0
+                  ;;
+              -*)
+                  echo "git-branch-summary: unknown option: $1" >&2
+                  usage >&2
+                  exit 1
+                  ;;
+              *) base="$1" ;;
+          esac
+          shift
+      done
+
+      if [ -n "$base" ]; then
+          requested_base="$base"
+          if ! base="$(resolve_ref "$base")"; then
+              echo "git-branch-summary: base branch not found: $requested_base" >&2
+              exit 1
+          fi
+      else
+          if ! base="$(detect_base)"; then
+              echo "git-branch-summary: could not determine base branch (tried origin's default, main, master)" >&2
+              exit 1
+          fi
+      fi
+
+      case "$mode" in
+          log) exec git log --oneline "$base..HEAD" ;;
+          stat) exec git diff --stat "$base...HEAD" ;;
+          diff) exec git diff "$base...HEAD" ;;
+          name-only) exec git diff --name-only "$base...HEAD" ;;
+          range) exec git range-diff "$base...HEAD" ;;
+          default)
+              echo "## commits ($base..HEAD)"
+              git log --oneline "$base..HEAD"
+              echo
+              echo "## diffstat ($base...HEAD)"
+              git diff --stat "$base...HEAD"
+              ;;
+          *)
+              echo "git-branch-summary: internal error: unknown mode: $mode" >&2
+              exit 1
+              ;;
+      esac
+    '';
+  };
 in
 {
   config = {
@@ -263,6 +378,7 @@ in
             git-absorb
             git-crypt
             git-secrets
+            gitBranchSummary
           ];
 
           programs.git = lib.mkMerge [
