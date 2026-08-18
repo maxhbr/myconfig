@@ -137,6 +137,22 @@ in
         name = "Qwen3.8-27B-MTP-Q4_0";
         cacheType = "q8_0";
         parallel = 1;
+        # The MTP draft context allocates its own pp compute buffers,
+        # dominated by the logits buffer (n_vocab ~151936 * f32 *
+        # n_batch): 2048 * 151936 * 4 B ~= 1360 MiB — exactly the
+        # `cudaMalloc failed` size observed. On top of the base weights
+        # (~16.7 GB), the q8_0 KV cache at the inherited 262144 ctx and
+        # the ~1.6 GB MTP head that overflows the RTX 5090's 32 GB and
+        # llama-server aborts with `graph_reserve: failed to allocate
+        # compute buffers` / `common_speculative_init_result: failed to
+        # create MTP context`. So: halve the context (131072, mirroring
+        # the working Qwen3.8-27B-Q6_K-MTP entry below) and drop the
+        # batch size to the ubatch size (512), which shrinks the MTP
+        # compute buffer to ~340 MiB.
+        ctxSize = 131072;
+        # mlock of the 1.44 GB MTP head fails with "Cannot allocate
+        # memory" (same as the Q6_K MTP entry below).
+        mlock = false;
         pull-models = {
           target_directory = modelsPullDir;
           hf_spec = [
@@ -146,7 +162,7 @@ in
         };
         params = [
           "--batch-size"
-          "2048"
+          "512"
           "--ubatch-size"
           "512"
           "--spec-type"
