@@ -196,7 +196,12 @@ let
         model = m.path;
       }
       // lib.optionalAttrs (m.mlock != null) { mlock = m.mlock; }
-      // lib.optionalAttrs (m.ctxSize != null) { ctx-size = (m.ctxSize * m.parallel); }
+      # See lib/scripts.nix: `ctxSize` is the PER-REQUEST context, and
+      # llama-server only divides `--ctx-size` by the slot count when the
+      # KV cache is not unified.
+      // lib.optionalAttrs (m.ctxSize != null) {
+        ctx-size = (if m.kvUnified then m.ctxSize else m.ctxSize * m.parallel);
+      }
       // lib.optionalAttrs (m.cacheType != null) {
         cache-type-k = m.cacheType;
         cache-type-v = m.cacheType;
@@ -204,6 +209,7 @@ let
         spec-draft-type-v = m.cacheType;
       }
       // lib.optionalAttrs (m.parallel > 1) { parallel = m.parallel; }
+      // lib.optionalAttrs m.kvUnified { kv-unified = true; }
       // lib.optionalAttrs (m.aliases != [ ]) { alias = lib.concatStringsSep "," m.aliases; }
       // lib.optionalAttrs (tagsList != [ ]) { tags = lib.concatStringsSep "," tagsList; }
       // translated.keys;
@@ -280,8 +286,10 @@ let
   #   - alias of variant -> [ <variant.name>, <base.name> ]
 
   # Effective context window for a model entry.
-  # ctxSize * parallel when explicitly set; null when the model uses its own default.
-  effectiveContextWindow = m: if m.ctxSize != null then m.ctxSize * m.parallel else null;
+  # The context a single request can actually use, i.e. llama.cpp's
+  # `n_ctx_seq` — which is exactly `ctxSize` under both slot layouts (see
+  # the `ctxSize` option). null when the model uses its own default.
+  effectiveContextWindow = m: m.ctxSize;
 
   serviceLocalModelsEntries =
     (map (m: {

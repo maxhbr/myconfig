@@ -42,7 +42,7 @@ let
   # llama-swap.nix, router.nix) reads `model.params`. The earlier
   # `args = ...` was a typo that silently dropped per-variant `params`
   # and `mmproj` overrides while letting `ctxSize` / `aliases` through.
-  # Variants can also override `cacheType` and `parallel`.
+  # Variants can also override `cacheType`, `parallel` and `kvUnified`.
   applyVariant =
     variantName: variant: model:
     (builtins.removeAttrs model [ "variants" ])
@@ -62,7 +62,8 @@ let
     }
     // lib.optionalAttrs (variant.ctxSize != null) { inherit (variant) ctxSize; }
     // lib.optionalAttrs (variant.cacheType != null) { inherit (variant) cacheType; }
-    // lib.optionalAttrs (variant.parallel != null) { inherit (variant) parallel; };
+    // lib.optionalAttrs (variant.parallel != null) { inherit (variant) parallel; }
+    // lib.optionalAttrs (variant.kvUnified != null) { inherit (variant) kvUnified; };
 
   unpackContainedVariants =
     model:

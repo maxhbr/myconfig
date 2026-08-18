@@ -52,15 +52,22 @@ let
           e: if lib.hasPrefix "UNSET:" e then "unset ${lib.removePrefix "UNSET:" e}" else "export ${e}"
         ) (envForDevice device)
       );
+      # `model.ctxSize` is the PER-REQUEST context. llama-server's
+      # `--ctx-size` is the whole KV cache and gets divided by the slot
+      # count unless the cache is unified, so scale it up only in the
+      # non-unified case. See the `ctxSize` option description.
       ctxSizeFlag =
         lib.optionalString (model.ctxSize != null)
-          "--ctx-size ${toString (model.ctxSize * model.parallel)}";
+          "--ctx-size ${
+            toString (if model.kvUnified then model.ctxSize else model.ctxSize * model.parallel)
+          }";
       cacheTypeFlag =
         lib.optionalString (model.cacheType != null)
           "--cache-type-k ${model.cacheType} --cache-type-v ${model.cacheType} --spec-draft-type-k ${model.cacheType} --spec-draft-type-v ${model.cacheType}";
       parallelFlag = lib.optionalString (
         model.parallel > 1
       ) "--parallel ${toString model.parallel} --cont-batching";
+      kvUnifiedFlag = lib.optionalString model.kvUnified "--kv-unified";
       aliasesFlag = lib.optionalString (
         model.aliases != [ ]
       ) "--alias ${lib.concatStringsSep "," model.aliases}";
@@ -151,7 +158,7 @@ let
           --metrics \
           --no-webui \
           --timeout 600 \
-          ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${multiDeviceFlags} ${aliasesFlag} ${paramsStr} "''${@:2}"
+          ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${kvUnifiedFlag} ${multiDeviceFlags} ${aliasesFlag} ${paramsStr} "''${@:2}"
       '';
     };
 
