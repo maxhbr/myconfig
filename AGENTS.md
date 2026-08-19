@@ -7,8 +7,30 @@ This file contains guidelines for agentic coding agents working on this NixOS fl
 ### Core Nix Commands
 - `nix build .#nixosConfigurations.<hostname>.config.system.build.toplevel` - Build a specific host configuration
 - `nix build .#x86_64-linux.myconfig-iso` - Build ISO image
-- `nix flake check` - Validate all flake outputs across all systems
+- `nix flake check` - Validate all flake outputs across all systems (**slow**, see below)
 - `nix develop --impure` - Enter development environment (requires --impure flag)
+
+### Prefer Per-Host Checks over `nix flake check`
+`nix flake check` evaluates *and builds* every flake output for every system
+(all hosts, ISO, checks). It takes a very long time — do not use it as the
+default feedback loop.
+
+For a normal change, check only the hosts you touched:
+```bash
+# eval-only, fastest: does it still evaluate?
+nix eval --raw .#nixosConfigurations.<hostname>.config.system.build.toplevel.drvPath
+
+# full build of one host
+nix build .#nixosConfigurations.<hostname>.config.system.build.toplevel
+
+# dry-run: show what would be built without building it
+nix build --dry-run .#nixosConfigurations.<hostname>.config.system.build.toplevel
+```
+
+Run the full `nix flake check` only when:
+- the change is cross-cutting (shared files in `modules/`, `_flake.nix_` /
+  `flake.nix`, overlays), or
+- you want the exact CI-equivalent result before a release.
 
 ### Building Single home-manager Packages
 - `./build-pkg-for-host.sh <pkg-name> [<hostname>]` - Build a single package as
@@ -147,7 +169,12 @@ diverged when it does change — use the JSON snapshot to localise diffs.
 
 ### Before Committing
 - Run `./nixfmtall.sh` to format all Nix files
-- Run `nix flake check` to validate configuration
+- Evaluate or build the hosts you touched, e.g.
+  `nix eval --raw .#nixosConfigurations.<hostname>.config.system.build.toplevel.drvPath`
+  or `nix build .#nixosConfigurations.<hostname>.config.system.build.toplevel`
+- Run the full `nix flake check` only for cross-cutting changes (`modules/`,
+  `_flake.nix_`/`flake.nix`, overlays) or before a release — it builds all
+  outputs for all systems and is very slow
 - Review staged changes with `git diff --staged`
 - Only commit when explicitly requested by the user
 
