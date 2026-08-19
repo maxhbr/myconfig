@@ -149,6 +149,7 @@ mkBTRFS() {
         mount -t tmpfs -o noatime,mode=755 none $MNT
     else
         mount -t btrfs -o compress=zstd,subvol=@ "$btrfsDev" $MNT/
+        mkdir -p $MNT/.snapshots
         mount -t btrfs -o compress=zstd,subvol=@snapshots "$btrfsDev" $MNT/.snapshots
     fi
     mkdir -p $MNT/{nix,var/log,.snapshots}
