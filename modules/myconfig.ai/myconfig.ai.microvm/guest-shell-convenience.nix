@@ -163,12 +163,13 @@ let
            "$root/conf.d/hydro.fish"
 
         # --- functions: hydro prompt pieces + the host's helpers ---------
-        cp ${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_mode_prompt.fish \
-           "$root/functions/fish_mode_prompt.fish"
-        cp ${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_title.fish \
-           "$root/functions/fish_title.fish"
-        cp ${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_prompt.fish \
-           "$root/functions/fish_prompt.fish"
+        # Copy WHATEVER the plugin ships rather than a hardcoded file list:
+        # hydro's set of vendor functions changes across releases (it used to
+        # ship `fish_title.fish`, current versions do not), and a missing name
+        # would fail this build — and with it every guest of a host that opted
+        # into the convenience shell.
+        cp ${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/*.fish \
+           "$root/functions/"
         cp ${fishEx} "$root/functions/ex.fish"
         cp ${fishConfigFish} "$root/config.fish"
       '';
@@ -177,15 +178,13 @@ let
   # the conf.d/functions above rely on: colored-man-pages, done, grc, sponge,
   # z). These are packages that must be on PATH so fish finds their
   # functions; built from the guest's own pkgs.
-  fishPluginPackages =
-    with pkgs.fishPlugins;
-    [
-      colored-man-pages
-      done
-      grc
-      sponge
-      z
-    ];
+  fishPluginPackages = with pkgs.fishPlugins; [
+    colored-man-pages
+    done
+    grc
+    sponge
+    z
+  ];
 
   # The package set folded into the guest's `environment.systemPackages`.
   # EMPTY when the feature is disabled, so a host that does not opt in never
@@ -313,6 +312,19 @@ let
     # `environment.variables`).
     environment.variables.EDITOR = "nvim";
     environment.variables.VISUAL = "nvim";
+  }
+  # When fish is the guest `agent` user's LOGIN shell, NixOS asserts that the
+  # matching `programs.fish` module is enabled (`users.users.<name>.shell is
+  # set to fish, but programs.fish.enable is not true`). That assertion is
+  # load-bearing here rather than cosmetic: only the fish module installs
+  # `/etc/fish/config.fish` + `nixos-env-preinit.fish`, which is what makes
+  # `environment.variables` (the guest's model-endpoint env, EDITOR, ...)
+  # and the nix profile directories visible in a fish login shell — fish does
+  # NOT read the bash-flavoured `/etc/set-environment` on its own. So enable
+  # the module instead of silencing the check with
+  # `ignoreShellProgramCheck`.
+  // lib.optionalAttrs (convCfg.shell == "fish") {
+    programs.fish.enable = true;
   };
 in
 {

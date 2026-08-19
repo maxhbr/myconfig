@@ -15,8 +15,8 @@
 # `agent-microvm ssh <slot> -- <argv...>` cannot preserve argument boundaries —
 # OpenSSH joins the remaining argv with single spaces and the guest's LOGIN
 # SHELL re-parses the result. That shell is the one guest.nix gives the agent
-# user (`$GUEST_SHELL` here, plain bash since the lightweight guest dropped
-# fish). So a payload like
+# user (`$GUEST_SHELL` here: plain bash by default, fish when the host opts
+# into `guestShellConvenience` with `shell = "fish"`). So a payload like
 #
 #     ssh <slot> -- sh -c "timeout 5 sh -c '</dev/tcp/GW/22'"
 #

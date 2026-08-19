@@ -719,6 +719,13 @@ in
   microvm-eval-guest-shape =
     let
       guestPkgPaths = map (p: p.outPath) guest0Cfg.environment.systemPackages;
+      # A guest of a host that does NOT opt into the guest shell convenience
+      # (../modules/myconfig.ai/myconfig.ai.microvm/guest-shell-convenience.nix).
+      # The reference host f13 DOES opt in, so the "no fish anywhere" part of
+      # the lightweight shape has to be asserted on the default-shaped variant
+      # guest instead — the opt-in is checked separately below.
+      baseGuestCfg = (variantHostWith [ ]).config.microvm.vms.${variantSlot.name}.config.config;
+      baseGuestPkgPaths = map (p: p.outPath) baseGuestCfg.environment.systemPackages;
     in
     mkEvalCheck "microvm-eval-guest-shape" [
       {
@@ -739,13 +746,36 @@ in
       }
       # --- lightweight plan phase 8: minimized guest closure --------------
       {
-        # A plain bash login shell: no fish closure, no `programs.fish`
-        # machinery, and nothing in the guest configures fish any more.
+        # A plain bash login shell by DEFAULT: no fish closure, no
+        # `programs.fish` machinery, and nothing in the guest configures fish.
         assertion =
-          guest0Cfg.users.users.agent.shell.outPath == pkgs.bashInteractive.outPath
-          && !guest0Cfg.programs.fish.enable
-          && !(builtins.elem pkgs.fish.outPath guestPkgPaths);
-        message = "the guest must use a plain bash login shell and contain no fish";
+          baseGuestCfg.users.users.agent.shell.outPath == pkgs.bashInteractive.outPath
+          && !baseGuestCfg.programs.fish.enable
+          && !(builtins.elem pkgs.fish.outPath baseGuestPkgPaths);
+        message = "a guest without guestShellConvenience must use a plain bash login shell and contain no fish";
+      }
+      {
+        # The OPT-IN convenience shell (the reference host enables it with the
+        # `fish` default): fish is in the closure AND `programs.fish.enable` is
+        # on. The pairing is load-bearing, not cosmetic — NixOS asserts it
+        # (`users.users.<name>.shell is set to fish, but programs.fish.enable
+        # is not true`, which THROWS during guest eval), and only the fish
+        # module installs the `/etc/fish` env-preinit that makes
+        # `environment.variables` and the nix profile dirs visible in a fish
+        # login shell.
+        assertion =
+          let
+            conv = enabledCfg.myconfig.ai.microvm.guestShellConvenience;
+            wantsFish = conv.enable && conv.shell == "fish";
+          in
+          if wantsFish then
+            guest0Cfg.users.users.agent.shell.outPath == pkgs.fish.outPath
+            && guest0Cfg.programs.fish.enable
+            && builtins.elem pkgs.fish.outPath guestPkgPaths
+          else
+            guest0Cfg.users.users.agent.shell.outPath == pkgs.bashInteractive.outPath
+            && !guest0Cfg.programs.fish.enable;
+        message = "a fish login shell in the guest must come with programs.fish.enable = true";
       }
       {
         # Every tool `guestCommonPackages` documents a consumer for is present.
@@ -4706,7 +4736,11 @@ in
         # about which shell runs. Read off the evaluated guest, so it follows a
         # change of the guest login shell instead of pinning one.
         SUITE = ../modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh;
-        GUEST_SHELL = "${guest0Cfg.users.users.agent.shell}/bin/bash";
+        # `getExe`, not `<store>/bin/bash`: the guest login shell is bash by
+        # default but fish when the host opts into `guestShellConvenience`
+        # with `shell = "fish"` (the reference host does), and the point of
+        # reading it off the evaluated guest is to FOLLOW that choice.
+        GUEST_SHELL = lib.getExe guest0Cfg.users.users.agent.shell;
       }
       ''
         mkdir -p work && cd work

@@ -254,10 +254,7 @@ let
   # boundary (the fish config is rendered from guest pkgs, not copied from
   # the host home).
   guestShell =
-    if agentShellConvenience.enable then
-      agentShellConvenience.shell
-    else
-      pkgs.bashInteractive;
+    if agentShellConvenience.enable then agentShellConvenience.shell else pkgs.bashInteractive;
 
   # Generic CLI toolset available to the agent inside the guest. Everything the
   # module's OWN guest scripts need is already in their `writeShellApplication`

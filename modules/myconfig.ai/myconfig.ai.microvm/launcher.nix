@@ -2248,7 +2248,7 @@ let
                               bind-mount it at the slot's /workspace source and
                               start the microVM. --name defaults to the basename
                               of the current directory and --repository to the
-                              current directory, so a bare `run` from inside a
+                              current directory, so a bare 'run' from inside a
                               repo checkout launches a slot for that repo. With
                               --attach, SSH in running 'agent-run <agent>' and
                               tear the VM down on exit (the workspace clone is

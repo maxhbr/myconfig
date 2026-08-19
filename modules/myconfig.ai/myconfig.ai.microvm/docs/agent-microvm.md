@@ -163,7 +163,7 @@ one code path to read, test and audit.
 | Pool | from `resourceClasses` |
 | Guest store disk | pinned `microvm.optimize.enable = true`, `microvm.storeDiskType = "erofs"` |
 | Selected agents | `enabledAgents`; `null` (the default) means every agent `../agents.nix` declares |
-| Guest toolset | the minimal documented set (POSIX toolbox, git, diffutils/patch, ripgrep, jq, less, procps, util-linux, openssh when `enableSsh`) plus a **bash** login shell, with NixOS' `environment.defaultPackages` dropped |
+| Guest toolset | the minimal documented set (POSIX toolbox, git, diffutils/patch, ripgrep, jq, less, procps, util-linux, openssh when `enableSsh`) plus a **bash** login shell, with NixOS' `environment.defaultPackages` dropped. The opt-in `guestShellConvenience` (default off) adds neovim + fish and, when `guestShellConvenience.shell = "fish"`, switches the login shell to fish and enables `programs.fish` in the guest |
 | Guest home | **runtime configuration staging** (`configSeed`): an allowlisted, root-owned copy staged per launch; **no** home-manager inside the guest |
 | virtiofs shares per slot | two: ONE writable per-session share at `/run/agent-session` and ONE read-only share at `/run/agent-session-ro` — see [The session share](#the-session-share) |
 | Capabilities | `capabilities`; both by default. Narrowing it removes units, guest programs and session subdirectories — see [Capabilities](#capabilities) |
