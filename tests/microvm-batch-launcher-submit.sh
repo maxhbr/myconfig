@@ -383,7 +383,7 @@ chmod +x "$STUBS/curl-fail"
 # table), and its PRE-LAUNCH verifier re-checks exactly that — so a tree left
 # behind by a previous scenario would appear root-owned to the next one and
 # refuse the launch. Reset the two trees before each scenario; everything the
-# assertions read afterwards (workspaces/, results/, slots/) is untouched.
+# assertions read afterwards (the per-repo clone group, results/, slots/) is untouched.
 reset_session_trees() {
     rm -rf "$WORK/runtime/${JOBS_ROOT##*/}" "$WORK/runtime/${JOBS_ROOT##*/}-ro"
 }
@@ -694,7 +694,7 @@ expect "submit reports an infrastructure error (70)" 70 "$rc"
 
 printf '\n=== 9. the workspace clone survives every one of those ===\n'
 for t in ok-task stale-task slot-task v1-task bad-task forge-task silent-task; do
-    if [[ -d "$OUT_RUNTIME/workspaces/$t/.git" ]]; then
+    if [[ -d "$OUT_RUNTIME/src__agent-microvm/$t/.git" ]]; then
         pass "the clone of $t was kept"
     else
         fail "the clone of $t was lost"
@@ -751,7 +751,7 @@ else
 fi
 # The workspace clone of a FAILED job must survive too (§35: the clone is
 # ALWAYS kept, regardless of outcome).
-if [[ -d "$OUT_RUNTIME/workspaces/die-task/.git" ]]; then
+if [[ -d "$OUT_RUNTIME/src__agent-microvm/die-task/.git" ]]; then
     pass "the clone of die-task was kept"
 else
     fail "the clone of die-task was lost"

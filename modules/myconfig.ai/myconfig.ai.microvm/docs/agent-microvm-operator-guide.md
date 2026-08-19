@@ -72,7 +72,7 @@ sudo agent-microvm run --attach \
 ```
 
 The session ends when the agent exits; the VM is then stopped and the clone kept
-at `/var/lib/agent-microvms/workspaces/my-feature`.
+at `/var/lib/agent-microvms/workspaces/my-repo__agent-microvm/my-feature`.
 
 Detached variant (VM keeps running, connect later):
 
@@ -253,14 +253,14 @@ cat /var/lib/agent-microvms/results/fix-parser.json
 jq -r '.state, .exitCode, .source' /var/lib/agent-microvms/results/fix-parser.json
 
 # what the agent changed:
-git -C /var/lib/agent-microvms/workspaces/fix-parser diff
-git -C /var/lib/agent-microvms/workspaces/fix-parser log --oneline origin/HEAD..
+git -C /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser diff
+git -C /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser log --oneline origin/HEAD..
 
 # import into your own checkout:
-git -C ~/src/my-repo fetch /var/lib/agent-microvms/workspaces/fix-parser agent/fix-parser
+git -C ~/src/my-repo fetch /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser agent/fix-parser
 git -C ~/src/my-repo log --oneline FETCH_HEAD
 # or as patches:
-git -C /var/lib/agent-microvms/workspaces/fix-parser format-patch origin/HEAD..agent/fix-parser -o /tmp/patches
+git -C /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser format-patch origin/HEAD..agent/fix-parser -o /tmp/patches
 ```
 
 ## 7. Stop, destroy, remove

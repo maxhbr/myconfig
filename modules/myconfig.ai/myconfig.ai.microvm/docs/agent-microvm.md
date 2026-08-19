@@ -90,7 +90,7 @@ myconfig.ai.microvm = {
 | `subnet` | `192.168.83.0/24` | Private subnet. |
 | `gatewayAddress` | `192.168.83.1` | Host-side bridge address + LiteLLM forwarder bind address. |
 | `litellmPort` | `4000` | LiteLLM proxy port. |
-| `workspaceRoot` | `/var/lib/agent-microvms/workspaces` | Where per-task standalone clones are created. |
+| `workspaceRoot` | `/var/lib/agent-microvms/workspaces` | Where per-task standalone clones are created, grouped as `<workspaceRoot>/<repoSlug>__agent-microvm/<task>`. |
 | `runtimeRoot` | `/var/lib/agent-microvms` | Runtime state (locks, markers, jobs, results, logs). |
 | `stateRoot` | `/var/lib/microvms` | microvm.nix per-VM state / bind-mount source. MUST equal `config.microvm.stateDir` (asserted) — the VSOCK ssh target and the per-slot `known_hosts` entry key on it. |
 | `guestAgentUid` / `guestAgentGid` | `1000` | Numeric ids of the guest `agent` user, and the host-side owner of every guest-writable path. Asserted unprivileged. |

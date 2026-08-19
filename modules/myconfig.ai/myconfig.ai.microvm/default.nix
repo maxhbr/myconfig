@@ -453,6 +453,16 @@ in
         Absolute host path under which per-task standalone git clones are
         created. Exactly one clone is mounted read-write into a slot at
         /workspace.
+
+        Clones are grouped one level down by the source repository, so a
+        task's clone lives at
+        `<workspaceRoot>/<repoSlug>__agent-microvm/<task>` rather than a flat
+        `<workspaceRoot>/<task>`. `<repoSlug>` is a filesystem-safe slug of the
+        cloned repository's git toplevel basename with the literal suffix
+        `__agent-microvm` appended, mirroring the `<basename>__worktrees`
+        convention used by workmux (../fns/workmux-worktree.nix). Two
+        repositories therefore never share a clone directory, and one
+        repository's tasks sit next to each other.
       '';
     };
 

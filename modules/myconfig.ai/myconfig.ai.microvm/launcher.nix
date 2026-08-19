@@ -23,11 +23,16 @@
 #        `realpath`; rejects non-repos, `/`, host home, the runtime/workspace
 #        roots, symlink escapes and existing microVM workspaces. $PWD is not
 #        trusted (the given --repository is canonicalised).
-#   §24  Standalone clone under `workspaceRoot/<task>` via
+#   §24  Standalone clone under
+#        `workspaceRoot/<repoSlug>__agent-microvm/<task>` via
 #        `git clone --local --no-hardlinks` (never `--shared`/`--reference`,
 #        with a `--no-local` fallback when the source is being mutated);
 #        verifies git-dir + git-common-dir resolve INSIDE the workspace and
 #        that the clone borrows no objects (no `objects/info/alternates`).
+#        The per-repo `<repoSlug>__agent-microvm/` group mirrors the
+#        `<basename>__worktrees` convention (../fns/workmux-worktree.nix), so
+#        one repository's tasks land next to each other and never share a
+#        directory with another repo's.
 #   §26  Bind-mount lifecycle: mkdir `stateRoot/<slot>/workspace`,
 #        `mount --bind`, `findmnt` verify; cleanup unmounts, removes slot
 #        transient files, releases the lock, but never deletes the clone.
@@ -1534,6 +1539,50 @@ let
           printf '%s' "$top"
       }
 
+      # ---- §24a repository slug -----------------------------------------
+      # Maps a canonical git toplevel to a filesystem-safe per-repository
+      # directory name, so every task's standalone clone is grouped under
+      # `<workspaceRoot>/<repoSlug>__agent-microvm/<task>` instead of a flat
+      # `<workspaceRoot>/<task>`. The `__agent-microvm` suffix mirrors the
+      # existing `<basename>__worktrees` convention (see
+      # modules/myconfig.ai/fns/workmux-worktree.nix and
+      # flake.sandboxed-pi.nix), so a human listing the workspace root can
+      # tell a per-repo agent-microvm group from a workmux worktree group at a
+      # glance. Two different repositories never share a clone directory, and
+      # the same repository's tasks land next to each other.
+      #
+      # The slug is the toplevel's basename, normalised with the SAME pipeline
+      # the workmux pane launcher (./workmux.nix) uses to slug a branch name,
+      # so the two stay consistent: disallowed bytes collapse to '-', runs
+      # collapse, leading/trailing noise is stripped, and the result is
+      # truncated to 64 chars. Empty (e.g. a repo whose basename is all
+      # whitespace) is rejected rather than producing a bare
+      # `__agent-microvm` group every repo would collide in.
+      repo_slug() {
+          local top="$1" slug
+          [[ -n "$top" && "$top" == /* ]] || die "repo_slug: not an absolute toplevel: '$top'"
+          slug="$(basename -- "$top")"
+          slug="$(printf '%s' "$slug" \
+              | tr -c 'a-zA-Z0-9._-' '-' \
+              | sed -e 's#\.\.*#.#g' \
+                    -e 's#--*#-#g' \
+                    -e 's#^[-.]*##' \
+                    -e 's#[-.]*$##' \
+            | cut -c1-64 \
+            | sed -e 's#[-.]*$##')"
+          [[ -n "$slug" ]] || die "could not derive a repository slug from '$top'"
+          printf '%s' "${slug}__agent-microvm"
+      }
+
+      # The per-task clone path under <workspaceRoot>/<repoSlug>__agent-microvm/.
+      # ONE place computes the shape, so create_clone, cmd_run, cmd_submit and
+      # cmd_workspace_remove cannot disagree about where a task's clone lives.
+      clone_path() {
+          local top="$1" task="$2" slug
+          slug="$(repo_slug "$top")"
+          printf '%s/%s/%s' "$WORKSPACE_ROOT" "$slug" "$task"
+      }
+
       # ---- branch-name validation (guards `git checkout -b`) -------------
       # A caller-supplied --branch could begin with '-' and be mistaken for a
       # git option; there is no shell injection (the value is always quoted),
@@ -1608,23 +1657,27 @@ let
               || die "clone borrows objects from another repository (alternates present): $gcd"
       }
 
-      # Creates the standalone clone at $WORKSPACE_ROOT/<task>. Runs in the
+      # Creates the standalone clone at
+      # `<WORKSPACE_ROOT>/<repoSlug>__agent-microvm/<task>`. Runs in the
       # CALLER's shell (NOT a command substitution) so a `die` here exits
       # cmd_run directly and its EXIT trap fires with `slot` still in scope,
       # tearing the just-allocated slot down. The clone path is deterministic
-      # ($WORKSPACE_ROOT/<task>), so the caller derives it itself rather than
-      # capturing it from this function's stdout. Running create_clone in a
-      # `$(...)` subshell instead would fire the EXIT trap inside that
-      # subshell, where the enclosing `slot`/`committed` locals are NOT in
-      # scope: cleanup would no-op AND the parent trap would never run, so a
-      # failure (e.g. "workspace already exists") both tripped `set -u`
-      # ("slot: unbound variable") and leaked the allocated slot forever.
+      # (the per-repo group + the task name), so the caller derives it itself
+      # rather than capturing it from this function's stdout. Running
+      # create_clone in a `$(...)` subshell instead would fire the EXIT trap
+      # inside that subshell, where the enclosing `slot`/`committed` locals
+      # are NOT in scope: cleanup would no-op AND the parent trap would never
+      # run, so a failure (e.g. "workspace already exists") both tripped
+      # `set -u` ("slot: unbound variable") and leaked the allocated slot
+      # forever.
       create_clone() {
           local repo="$1" task="$2" branch="$3"
-          local clone="$WORKSPACE_ROOT/$task"
+          local clone group
+          clone="$(clone_path "$repo" "$task")"
+          group="$(dirname -- "$clone")"
           [[ ! -e "$clone" ]] \
               || die "workspace already exists: $clone (pick another --name or 'workspace-remove')"
-          mkdir -p -- "$WORKSPACE_ROOT"
+          mkdir -p -- "$group"
           # `--local --no-hardlinks` COPIES the object store: no hardlinks into
           # the source repository and — crucially — no `--shared` / `--reference`
           # and therefore no `objects/info/alternates`, so the clone is exactly
@@ -2547,7 +2600,7 @@ let
           log "allocated slot $slot ($ip; class $rclass, $(slot_vcpu "$slot") vCPU, $(slot_mem "$slot") MiB)"
           # Deterministic clone path; create_clone runs in THIS shell (see its
           # header) so a failure exits cmd_run and its EXIT trap cleans up.
-          clone="$WORKSPACE_ROOT/$task"
+          clone="$(clone_path "$top" "$task")"
           create_clone "$top" "$task" "$branch"
           emit_event workspace-created
           ${sessionPrepare}setup_bind_mount "$slot" "$clone"
@@ -2707,7 +2760,7 @@ let
           local clone ip
           ip="$(slot_ip "$slot")"
           log "allocated slot $slot ($ip; class $rclass, $(slot_vcpu "$slot") vCPU, $(slot_mem "$slot") MiB) for batch task '$task'"
-          clone="$WORKSPACE_ROOT/$task"
+          clone="$(clone_path "$top" "$task")"
           create_clone "$top" "$task" "$branch"
           emit_event workspace-created
           ${sessionPrepare}setup_bind_mount "$slot" "$clone"
@@ -3256,7 +3309,7 @@ let
       # functions persist after first call), which keeps that footer
       # byte-identical to the inlined original.
       print_workspaces() {
-          local task ws_bytes st_bytes total_ws=0 total_st=0 dir
+          local task repo ws_bytes st_bytes total_ws=0 total_st=0 dir
           dir_bytes() {
               local d="$1"
               [[ -d "$d" ]] || { printf '0'; return 0; }
@@ -3264,10 +3317,14 @@ let
           }
           human() { numfmt --to=iec --suffix=B -- "$1"; }
 
-          printf '%-32s %12s %12s %s\n' "TASK" "WORKSPACE" "AGENTSTATE" "IN USE BY"
-          for dir in "$WORKSPACE_ROOT"/*; do
+          # Clones live one level down: <WORKSPACE_ROOT>/<repoSlug>__agent-microvm/<task>.
+          # The glob spans both levels so a task is reported once per clone, with
+          # the repo group it belongs to.
+          printf '%-24s %-20s %12s %12s %s\n' "TASK" "REPO" "WORKSPACE" "AGENTSTATE" "IN USE BY"
+          for dir in "$WORKSPACE_ROOT"/*/*; do
               [[ -d "$dir" ]] || continue
               task="$(basename -- "$dir")"
+              repo="$(basename -- "$(dirname -- "$dir")")"
               ws_bytes="$(dir_bytes "$dir")"
               st_bytes=0
               if [[ -d "$STATE_TASKS_ROOT/$task" ]]; then
@@ -3284,10 +3341,10 @@ let
                       break
                   fi
               done
-              printf '%-32s %12s %12s %s\n' "$task" "$(human "$ws_bytes")" \
+              printf '%-24s %-20s %12s %12s %s\n' "$task" "$repo" "$(human "$ws_bytes")" \
                   "$(human "$st_bytes")" "$holder"
           done
-          printf '%-32s %12s %12s\n' "TOTAL" "$(human "$total_ws")" "$(human "$total_st")"
+          printf '%-24s %-20s %12s %12s\n' "TOTAL" "" "$(human "$total_ws")" "$(human "$total_st")"
       }
 
       cmd_usage() {
@@ -3522,7 +3579,8 @@ let
 
           # ---- footer ----
           local total_ws total_st ws_count=0 dir
-          for dir in "$WORKSPACE_ROOT"/*; do
+          # Clones are grouped one level down: <WORKSPACE_ROOT>/<repoSlug>__agent-microvm/<task>.
+          for dir in "$WORKSPACE_ROOT"/*/*; do
               [[ -d "$dir" ]] || continue
               ws_count=$(( ws_count + 1 ))
           done
@@ -3621,7 +3679,24 @@ let
               esac
           done
           validate_task_name "$task"
-          local clone="$WORKSPACE_ROOT/$task"
+          # The clone lives under `<WORKSPACE_ROOT>/<repoSlug>__agent-microvm/<task>`
+          # (see clone_path), so a task name alone no longer pins a single path.
+          # Find the EXACT one clone directory this task name owns. Zero matches
+          # is "no such workspace"; more than one is an inconsistency that must
+          # be reported rather than guessed (two repos slugging to the same
+          # group, or a half-removed clone).
+          local clone group found=0 d
+          for d in "$WORKSPACE_ROOT"/*/"$task"; do
+              [[ -d "$d" ]] || continue
+              clone="$d"
+              found=$(( found + 1 ))
+          done
+          if (( found == 0 )); then
+              die "no such workspace: $task (searched $WORKSPACE_ROOT/*/<task>)"
+          elif (( found > 1 )); then
+              die "workspace '$task' is ambiguous: found $found clones under $WORKSPACE_ROOT/*/$task — remove the one you mean directly"
+          fi
+          group="$(dirname -- "$clone")"
           [[ -d "$clone" ]] || die "no such workspace: $clone"
           # §35: guard against losing uncommitted work / unexported commits.
           # The clone is owned by 1000:1000 and this runs as root, so each git
@@ -3650,10 +3725,10 @@ let
           fi
           # Refuse while any slot still has this clone bind-mounted. For a bind
           # mount `findmnt -no SOURCE` reports DEVICE[/subpath] (e.g.
-          # `none[/var/lib/.../workspaces/<task>]`), never the bare path, so
-          # strip the bracketed suffix before comparing. Cross-check the
-          # recorded session workspace too, so an active slot bound to this
-          # clone always blocks even if the mount source parsing changes.
+          # `none[/var/lib/.../<repoSlug>__agent-microvm/<task>]`), never the
+          # bare path, so strip the bracketed suffix before comparing. Cross-
+          # check the recorded session workspace too, so an active slot bound to
+          # this clone always blocks even if the mount source parsing changes.
           # When a slot still holds this clone (bind-mounted or recorded as the
           # running slot's workspace), --force tears that slot down first
           # (stop VM + unmount + drop slot transient, exactly like `stop`)
@@ -3688,6 +3763,13 @@ let
           done
           log "removing workspace $clone"
           rm -rf -- "$clone"
+          # Drop the per-repo group directory too when it is now empty, so a
+          # repository whose last task was removed does not leave a stray
+          # `<slug>__agent-microvm/` behind. Only an empty dir is removed — a
+          # sibling task's clone keeps the group.
+          if [[ -d "$group" ]] && ! rmdir -- "$group" 2>/dev/null; then
+              log "keeping non-empty repo group $group"
+          fi
           # The task's persisted agent state is part of the same task and would
           # otherwise be orphaned (and keep growing) after its workspace is
           # gone. Nothing outside <state>/tasks/<task> is touched.

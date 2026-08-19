@@ -23,9 +23,9 @@ Two things to internalise before you start:
   this does not prompt (`passwordlessControl = true`), so the workmux panes work
   unattended too.
 - **The agent never touches your checkout.** It works in a *standalone git
-  clone* at `/var/lib/agent-microvms/workspaces/<task>`, on branch
-  `agent/<task>`. You pull the result back yourself (step 5). Nothing deletes
-  that clone until you say so (step 6).
+  clone* at `/var/lib/agent-microvms/workspaces/<repoSlug>__agent-microvm/<task>`,
+  on branch `agent/<task>`. You pull the result back yourself (step 5).
+  Nothing deletes that clone until you say so (step 6).
 
 For anything not covered here, follow the links in
 [Where to go next](#where-to-go-next) — this document deliberately does not
@@ -193,7 +193,7 @@ result.
 The clone is a normal git repository, so just use git:
 
 ```bash
-WS=/var/lib/agent-microvms/workspaces/fix-parser
+WS=/var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser
 
 sudo git -C "$WS" log --oneline origin/HEAD..agent/fix-parser
 sudo git -C "$WS" diff origin/HEAD..agent/fix-parser
