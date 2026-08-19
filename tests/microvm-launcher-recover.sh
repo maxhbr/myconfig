@@ -223,7 +223,7 @@ fixture() {
     local stub_dir="$WORK/stub-$name"
     rm -rf "$stub_dir" "$WORK/runtime-$name" "$WORK/state-$name"
     mkdir -p "$stub_dir/mounts" "$WORK/runtime-$name" "$WORK/state-$name"
-    printf '%s' "$RUNTIME_ROOT/workspaces/some-task" \
+    printf '%s' "$RUNTIME_ROOT/workspaces/src__agent-microvm/some-task" \
         >"$stub_dir/mounts/$(printf '%s' "$WORKSPACE_MOUNT" | tr / _)"
 }
 
@@ -262,7 +262,7 @@ fixture_foreign() {
     mkdir -p "$WORK/runtime-$name/$SESSION_RO_REL/$SLOT/$HOSTKEYS_SUBDIR"
     : >"$WORK/runtime-$name/$SESSION_RO_REL/$SLOT/$HOSTKEYS_SUBDIR/ssh_host_ed25519_key"
     if [[ -n $with_mount ]]; then
-        printf '%s' "$RUNTIME_ROOT/workspaces/old-task" \
+        printf '%s' "$RUNTIME_ROOT/workspaces/src__agent-microvm/old-task" \
             >"$stub_dir/mounts/$(printf '%s' "$FOREIGN_WORKSPACE_MOUNT" | tr / _)"
     fi
 }

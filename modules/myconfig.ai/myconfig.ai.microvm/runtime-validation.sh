@@ -268,6 +268,33 @@ command -v "$LAUNCHER" >/dev/null || die "$LAUNCHER is not on PATH (is the featu
 [[ -n $REPO ]] || usage
 [[ -d "$REPO/.git" ]] || die "--repository must be a git repository: $REPO"
 
+# The per-repository slug the launcher groups task clones under (see
+# launcher.nix `repo_slug`): a filesystem-safe slug of the cloned repo's git
+# toplevel basename with the literal `__agent-microvm` suffix. Mirrored here so
+# this suite inspects/seeds a task's clone at the SAME path the launcher uses.
+REPO_TOPLEVEL="$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n $REPO_TOPLEVEL ]] || die "could not resolve the git toplevel of $REPO"
+# Canonicalise the SAME way the launcher's `validate_repository` does
+# (realpath -e), so the basename this suite slugs matches the basename the
+# launcher slugs even when $REPO reaches the repo through symlinks.
+REPO_TOPLEVEL="$(realpath -e -- "$REPO_TOPLEVEL")" || die "could not canonicalise the git toplevel of $REPO"
+repo_slug() {
+    local slug
+    slug="$(basename -- "$REPO_TOPLEVEL")"
+    slug="$(printf '%s' "$slug" \
+        | tr -c 'a-zA-Z0-9._-' '-' \
+        | sed -e 's#\.\.*#.#g' \
+              -e 's#--*#-#g' \
+              -e 's#^[-.]*##' \
+              -e 's#[-.]*$##' \
+        | cut -c1-64 \
+        | sed -e 's#[-.]*$##')"
+    [[ -n $slug ]] || die "could not derive a repository slug from $REPO_TOPLEVEL"
+    printf '%s' "${slug}__agent-microvm"
+}
+# The on-host clone directory the launcher creates for <task> of $REPO.
+clone_dir() { printf '%s/%s/%s' "$WORKSPACE_ROOT" "$(repo_slug)" "$1"; }
+
 # --- helpers ---------------------------------------------------------------
 # `agent-microvm list` prints one line per slot of the CURRENT pool:
 #   <slot> <class> <running|stopped> <ip> <task|"<free>">
@@ -646,7 +673,7 @@ section_boot() {
             fail "class $class: could not create the ephemerality markers in the guest, so 'they did not persist' would prove nothing"
         fi
         "$LAUNCHER" stop "$task" >/dev/null 2>&1 || true
-        if [[ -f "$WORKSPACE_ROOT/$task/rtv-persisted.txt" ]]; then
+        if [[ -f "$(clone_dir "$task")/rtv-persisted.txt" ]]; then
             pass "class $class: workspace changes persist in the clone"
         else
             fail "class $class: workspace changes were lost"
@@ -678,11 +705,12 @@ section_boot() {
     cleanup_task rtv-iso-b
     rc=0
     # A SECOND workspace must really EXIST on the host while A is asked about
-    # it: `rtv-iso-b` used to be cleaned up and never started, so the path
-    # `$WORKSPACE_ROOT/rtv-iso-b` did not exist anywhere and "A cannot see it"
-    # was unconditionally true. Start B if the pool allows it; otherwise create
-    # the host path directly (that alone is enough for the property under test:
-    # the guest must not be able to reach ANY host workspace path).
+    # it: `rtv-iso-b` used to be cleaned up and never started, so its clone path
+    # did not exist anywhere and "A cannot see it" was unconditionally true.
+    # Start B if the pool allows it; otherwise create the host path directly
+    # (that alone is enough for the property under test: the guest must not be
+    # able to reach ANY host workspace path). The path is the SAME grouped
+    # `<WORKSPACE_ROOT>/<repoSlug>__agent-microvm/<task>` the launcher uses.
     local iso_b_started=0
     rc=0
     slot_b="$(start_task rtv-iso-b "$class_a" 2>/dev/null)" || rc=$?
@@ -690,20 +718,20 @@ section_boot() {
         iso_b_started=1
     else
         cleanup_task rtv-iso-b
-        mkdir -p "$WORKSPACE_ROOT/rtv-iso-b"
-        printf 'other task data\n' >"$WORKSPACE_ROOT/rtv-iso-b/secret.txt"
-        info "task isolation: could not start a second guest; created the host path $WORKSPACE_ROOT/rtv-iso-b directly"
+        mkdir -p "$(clone_dir rtv-iso-b)"
+        printf 'other task data\n' >"$(clone_dir rtv-iso-b)/secret.txt"
+        info "task isolation: could not start a second guest; created the host path $(clone_dir rtv-iso-b) directly"
     fi
     rc=0
     slot_a="$(start_task rtv-iso-a "$class_a" hermes)" || rc=$?
     if ((rc == 0)) && [[ -n $slot_a ]]; then
         assert_transport "$slot_a" "task isolation"
         # The path really is there on the host — stated, not assumed.
-        if [[ -e "$WORKSPACE_ROOT/rtv-iso-b" ]]; then
-            pass "task isolation: the other task's workspace really exists on the host ($WORKSPACE_ROOT/rtv-iso-b)"
+        if [[ -e "$(clone_dir rtv-iso-b)" ]]; then
+            pass "task isolation: the other task's workspace really exists on the host ($(clone_dir rtv-iso-b))"
             # Task A must not see it (there is no path to it at all).
             check_denied "task A cannot see another task's workspace" "$slot_a" \
-                test -e "$WORKSPACE_ROOT/rtv-iso-b"
+                test -e "$(clone_dir rtv-iso-b)"
         else
             skip "task A cannot see another task's workspace (the other workspace could not be created, so the denial would prove nothing)"
         fi
@@ -717,7 +745,7 @@ section_boot() {
     if ((iso_b_started)); then
         cleanup_task rtv-iso-b
     else
-        rm -rf "${WORKSPACE_ROOT:?}/rtv-iso-b"
+        rm -rf "$(clone_dir rtv-iso-b)"
     fi
     # Declared-path-only persistence. Uses the SAME start path (and therefore
     # the same readiness gate) as everything else — it used to inline `run`
@@ -1247,7 +1275,7 @@ section_lifecycle() {
 
     # (a) clone creation fails (workspace already exists).
     cleanup_task rtv-life
-    mkdir -p "$WORKSPACE_ROOT/rtv-life"
+    mkdir -p "$(clone_dir rtv-life)"
     if "$LAUNCHER" run --name rtv-life --repository "$REPO" --agent pi \
         --resource-class "$class" >/dev/null 2>&1; then
         fail "clone-creation failure is detected"
@@ -1255,7 +1283,7 @@ section_lifecycle() {
         pass "clone-creation failure is detected"
     fi
     check_no_residue "after a failed clone"
-    rmdir "$WORKSPACE_ROOT/rtv-life" 2>/dev/null || rm -rf "$WORKSPACE_ROOT/rtv-life"
+    rmdir "$(clone_dir rtv-life)" 2>/dev/null || rm -rf "$(clone_dir rtv-life)"
 
     # (b) repository validation fails.
     check_fails "a non-repository is rejected" \
@@ -1283,12 +1311,12 @@ section_lifecycle() {
     # subtest must say so instead of silently passing/failing.
     while ((waited < 120)); do
         kslot="$(slot_of_task rtv-kill)"
-        [[ -n $kslot && -d "$WORKSPACE_ROOT/rtv-kill/.git" ]] && break
+        [[ -n $kslot && -d "$(clone_dir rtv-kill)/.git" ]] && break
         kill -0 "$pid" 2>/dev/null || break
         sleep 3
         waited=$((waited + 3))
     done
-    if [[ -z $kslot || ! -d "$WORKSPACE_ROOT/rtv-kill/.git" ]]; then
+    if [[ -z $kslot || ! -d "$(clone_dir rtv-kill)/.git" ]]; then
         kill -9 "$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
         skip "killed launcher: the submit never allocated a slot and created a clone (see /tmp/rtv-kill-submit.log), so killing it would have tested nothing"
@@ -1300,7 +1328,7 @@ section_lifecycle() {
         "$LAUNCHER" recover --dry-run | sed 's/^/#     /'
         "$LAUNCHER" recover | sed 's/^/#     /'
         check_no_residue "after a killed launcher + recover"
-        if [[ -d "$WORKSPACE_ROOT/rtv-kill" ]]; then
+        if [[ -d "$(clone_dir rtv-kill)" ]]; then
             pass "the workspace clone survived the killed launcher"
         else
             fail "the workspace clone was lost"

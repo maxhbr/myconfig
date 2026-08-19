@@ -95,13 +95,21 @@ part of the share the unit needs.
 
 The guest's `/workspace` share source is a **fixed** per-slot path, because the
 guest config is prebuilt. The launcher makes that path *mean* the task's
-workspace:
+workspace. Clones are grouped one level down by the source repository, so a
+task's clone lives at
+`<workspaceRoot>/<repoSlug>__agent-microvm/<task>` (the `<repoSlug>__agent-microvm`
+suffix mirrors the `<basename>__worktrees` convention workmux uses):
 
 ```text
-git clone --local --no-hardlinks <repo> /var/lib/agent-microvms/workspaces/<task>
-mount --bind          …/workspaces/<task>  /var/lib/microvms/<slot>/workspace
+git clone --local --no-hardlinks <repo> /var/lib/agent-microvms/workspaces/<repoSlug>__agent-microvm/<task>
+mount --bind          …/<repoSlug>__agent-microvm/<task>  /var/lib/microvms/<slot>/workspace
 virtiofsd            (that path)  ->  guest /workspace
 ```
+
+`<repoSlug>` is a filesystem-safe slug of the cloned repository's git toplevel
+basename with the literal `__agent-microvm` suffix appended, so two
+repositories never share a clone directory and one repository's tasks sit next
+to each other.
 
 So the guest only ever sees one repository — a **standalone clone** (no
 hardlinks, no alternates, no shared git metadata with your checkout) — and the
