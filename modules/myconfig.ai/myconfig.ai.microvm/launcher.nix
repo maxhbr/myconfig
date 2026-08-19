@@ -1571,7 +1571,7 @@ let
             | cut -c1-64 \
             | sed -e 's#[-.]*$##')"
           [[ -n "$slug" ]] || die "could not derive a repository slug from '$top'"
-          printf '%s' "${slug}__agent-microvm"
+          printf '%s' "''${slug}__agent-microvm"
       }
 
       # The per-task clone path under <workspaceRoot>/<repoSlug>__agent-microvm/.
