@@ -281,14 +281,14 @@ REPO_TOPLEVEL="$(realpath -e -- "$REPO_TOPLEVEL")" || die "could not canonicalis
 repo_slug() {
     local slug
     slug="$(basename -- "$REPO_TOPLEVEL")"
-    slug="$(printf '%s' "$slug" \
-        | tr -c 'a-zA-Z0-9._-' '-' \
-        | sed -e 's#\.\.*#.#g' \
-              -e 's#--*#-#g' \
-              -e 's#^[-.]*##' \
-              -e 's#[-.]*$##' \
-        | cut -c1-64 \
-        | sed -e 's#[-.]*$##')"
+    slug="$(printf '%s' "$slug" |
+        tr -c 'a-zA-Z0-9._-' '-' |
+        sed -e 's#\.\.*#.#g' \
+            -e 's#--*#-#g' \
+            -e 's#^[-.]*##' \
+            -e 's#[-.]*$##' |
+        cut -c1-64 |
+        sed -e 's#[-.]*$##')"
     [[ -n $slug ]] || die "could not derive a repository slug from $REPO_TOPLEVEL"
     printf '%s' "${slug}__agent-microvm"
 }
