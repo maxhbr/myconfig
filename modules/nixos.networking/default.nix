@@ -26,6 +26,7 @@ in
     ./service.stubby.nix
     ./service.dhcpcd-optimization.nix
     ./helpers.nix
+    ./myconfig.networking.forceConnectWifi.nix
     (
       {
         pkgs,
