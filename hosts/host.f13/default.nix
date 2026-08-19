@@ -51,7 +51,7 @@ in
     ./hermes-agent.nix
     ./myconfig.agentUsers.nix
     ./NanoKVM-USB.nix
-    ./force-connect-Xvlcwkhgfq.nix
+    { myconfig.networking.forceConnectWifi.ssids = [ "Xvlcwkhgfq" ]; }
     # NOTE: f13 does NOT import ../shared.localModels.litellm.nix. That
     # file registers thing's LiteLLM as myconfig.ai.localModels providers,
     # which would create *direct* provider entries in the AI client configs

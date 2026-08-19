@@ -2,16 +2,25 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Force a WiFi connection to a fixed SSID.
+# Force a WiFi connection to a given SSID.
+#
+# Usage: force-connect-wifi <ssid>
+#        SSID=<ssid> force-connect-wifi
 #
 # - Exits successfully if the SSID is already the active connection.
 # - Rescans and waits until the SSID becomes visible.
 # - Prefers an existing saved profile so that no password prompt is needed.
 set -euo pipefail
 
-SSID="Xvlcwkhgfq"
-MAX_TRIES=10
-SLEEP_SECONDS=3
+SSID="${SSID:-${1:-}}"
+MAX_TRIES="${MAX_TRIES:-10}"
+SLEEP_SECONDS="${SLEEP_SECONDS:-3}"
+
+if [[ -z $SSID ]]; then
+    echo "force-connect-wifi: ERROR: no SSID given" >&2
+    echo "usage: force-connect-wifi <ssid>" >&2
+    exit 2
+fi
 
 log() {
     echo "force-connect-$SSID: $*" >&2
