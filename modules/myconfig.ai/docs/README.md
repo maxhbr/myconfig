@@ -279,6 +279,45 @@ section before trusting the tier.
 
 ---
 
+## `sandboxed-herdr` vs. `agent-microvm run --agent herdr`
+
+Both tier 3 and tier 4 can put the `herdr` multiplexer inside a microVM, which
+looks like duplication but isn't: they sit at different rungs of the ladder
+above and solve different problems. Full comparison, with file/line
+references:
+[`doc/sandboxed-herdr-vs-agent-microvm-herdr.md`](../../../doc/sandboxed-herdr-vs-agent-microvm-herdr.md).
+Condensed:
+
+| | `sandboxed-herdr` (tier 3) | `agent-microvm --agent herdr` (tier 4) |
+| --- | --- | --- |
+| Purpose | ad hoc, zero-config sandbox for one project directory | one selectable agent inside the prebuilt, policy-hardened fleet |
+| Host `/nix/store` | shared into guest read-only | not shared — guest has its own store disk |
+| Workspace | host CWD bind-mounted read-write (live edits) | standalone git clone; host checkout untouched, import the branch after |
+| Model-API credentials | real keys forwarded over the SSH session environment | never reach the guest — proxied through the host LiteLLM service |
+| Network | SLiRP NAT, no host bridge/firewall | dedicated bridge + per-TAP L2 isolation (or no NIC at all under `vsock`) |
+| Activation | always installed with any coding agent enabled | explicit per-host opt-in (`myconfig.ai.microvm.enable`); currently f13 only |
+| Execution modes | interactive only | interactive **and** unattended batch (batch not available for herdr itself) |
+
+**Overlap**: both reuse the same config-seeding allowlist/denylist library
+(`../fns/seed-agent-config.nix`) and near-identical "why herdr" rationale text
+(kept manually in sync between `../sandboxed-herdr.README.md` and
+`../myconfig.ai.microvm/docs/agent-microvm.md`). `agent-microvm`'s herdr guest
+is a strict security superset of `sandboxed-herdr`'s on every shared axis
+(store exposure, credential exposure, network egress, workspace isolation),
+but `sandboxed-herdr` is not redundant: it needs zero host configuration and
+shares the live working directory, which `agent-microvm` deliberately does
+not offer.
+
+**Recommendation**: keep both — they are intentionally orthogonal tiers, not
+a superset/subset pair to collapse. Use `sandboxed-herdr` for the common
+ad hoc case; use `agent-microvm` when the task is untrusted enough to keep
+the model key off the guest, needs a throwaway workspace, or is unattended.
+The only worthwhile cleanup is deduplicating the copy-pasted rationale text
+and the thrice-repeated "which coding-agent CLIs to bake in" logic
+(`../programs.herdr.nix`, `../myconfig.ai.microvm/agents.nix`,
+`../myconfig.ai.gvisor-agent-sandbox/default.nix`'s `agentPackagesByFlag`) —
+a documentation/DRY change, not a behavior change.
+
 ## Choosing a tier
 
 - **Keep the agent out of your home directory, keys and shell history, at zero
