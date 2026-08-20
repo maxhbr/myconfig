@@ -56,6 +56,7 @@
     )
     ./nixpkgs.overlays.llama-cpp.nix
     ./myconfig.ai.llama-cpp
+    ./myconfig.observability.llama-swap-metrics.nix
     # ./myconfig.ai.vllm
     ./myconfig.ai.vllm/docker.vllm.rocm.nix
     ./services.open-webui.nix

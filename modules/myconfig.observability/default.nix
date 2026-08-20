@@ -24,6 +24,7 @@ in
     ./host.weather.nix
     ./host.temperature-humidity.nix
     ./host.llama-server.nix
+    ./host.llama-swap.nix
     ./host.dcgm.nix
     ./host.amd-smi.nix
     ./host.unifi.nix
