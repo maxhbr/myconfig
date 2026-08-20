@@ -198,6 +198,7 @@
     },
     "optiplex": {
       "network": "home",
+      "ip4": "192.168.1.80",
       "pubkeys": {
         "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCjcsRGMgIZht8rP5o0PXLlOPAfvbkyUmiFvBaqOwprRzME76GfpBevK2lLsOt1LvP0ECKn42uDTuzo1QGkxIFMEuQnU1Y5zGkbtp8fKAp99vHVbAzOvV0loAisb2SwH4NOofhi6NMc86tpc0jy/0KpYkrQSYunI6Op/7BfdzWMK24L/KUXg/kuhdpOFAyR5/ymsSQP3tymDGB1X0pKgUDzIV3fT0I3oLyDPNPFuaFxDL2dpS9yYNkQOWKYkQrPoLhZC6LhbJgdtS3mpiIayy9jmtzBDix6mMfTNuM4v1alVefYLUwvI7zOu/b/edfDtdHY4pjzDtxxqCIjzKg6SZG9x8re0FV8whokGQia9TNEiVv7D8LMeTd2u80+XYJO0fx2MZUlntLKjTBfa9Aet/fu9oCEKh0LZkMGRkC+2G0540fGb9/bo9nLkdbsf/taKKCMQAtrLZMRSgsOmNNg8hvVvqy4jSH1y6XvIEoDrpclnc2/LVRj8GAxYpS2Ri3BWd8= root@optiplex"
       },
