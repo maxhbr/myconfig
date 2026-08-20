@@ -630,6 +630,12 @@
                   if v == "" then fallback else v;
                 workspace = builtins.getEnv "SANDBOXED_HERDR_WORKSPACE";
                 agentPackages = builtins.fromJSON (getEnvOr "SANDBOXED_HERDR_AGENT_PACKAGES" "[]");
+                # The invoking host user's uid/gid (`id -u`/`id -g`), so the
+                # guest `agent` user can be pinned to match — see
+                # flake.sandboxed-pi.nix (`mkSandboxedRunner`) for why this is
+                # required for the shared workspace to stay writable.
+                hostUidStr = getEnvOr "SANDBOXED_HERDR_UID" "";
+                hostGidStr = getEnvOr "SANDBOXED_HERDR_GID" "";
               in
               if workspace == "" then
                 # Pure eval (e.g. `nix flake check`, `nix flake show`): the
@@ -647,6 +653,8 @@
                   authorizedKeysFile = getEnvOr "SANDBOXED_HERDR_AUTHORIZED_KEYS" "/var/empty/authorized_keys";
                   herdrPackage = nixpkgs.legacyPackages.${system}.herdr;
                   allowNetwork = getEnvOr "SANDBOXED_HERDR_NETWORK" "1" != "0";
+                  hostUid = if hostUidStr == "" then null else lib.toInt hostUidStr;
+                  hostGid = if hostGidStr == "" then null else lib.toInt hostGidStr;
                 };
           };
 

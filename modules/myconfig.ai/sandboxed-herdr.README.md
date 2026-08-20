@@ -40,7 +40,13 @@ host).
 
 Shared into the guest:
 
-- The current working directory, read-write, at `/workspace` (virtiofs).
+- The current working directory, read-write, at `/workspace` (virtiofs). The
+  guest `agent` user's uid/gid is pinned to the invoking host user's own
+  uid/gid (forwarded as `SANDBOXED_HERDR_UID`/`_GID`), because the rootless
+  virtiofsd daemon backing this share runs without `--translate-uid` and so
+  passes the workspace's real host ownership straight through; without a
+  matching guest uid, the guest kernel's permission check would deny writes
+  (`EACCES`) while reads kept working via the usual world-readable bits.
 - The host `/nix/store`, **read-only** (so the VM needs no disk image and
   boots fast).
 - The allowlisted host configuration for every registered agent, **copied**

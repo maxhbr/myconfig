@@ -166,6 +166,18 @@ let
       export SANDBOXED_HERDR_SSH_PORT="$ssh_port"
       export SANDBOXED_HERDR_AUTHORIZED_KEYS="$runtime_dir/id.pub"
       export SANDBOXED_HERDR_NETWORK=1
+      # Pin the guest `agent` user's uid/gid to ours: virtiofsd runs
+      # unprivileged (no --translate-uid) and passes the workspace's real
+      # host ownership straight through, so the guest kernel's permission
+      # check only allows writes when the guest uid matches ours. Without
+      # this, `agent`'s auto-assigned uid only accidentally matches the host
+      # owner, and writes to /workspace fail with EACCES while reads (backed
+      # by the usual world-readable bits) keep working. See
+      # ../../../flake.sandboxed-pi.nix (`mkSandboxedRunner`).
+      sandboxed_herdr_uid="$(id -u)"
+      sandboxed_herdr_gid="$(id -g)"
+      export SANDBOXED_HERDR_UID="$sandboxed_herdr_uid"
+      export SANDBOXED_HERDR_GID="$sandboxed_herdr_gid"
       # JSON array of enabled coding-agent store paths, baked in at build
       # time from the host's myconfig.ai.<name>.enable flags.
       export SANDBOXED_HERDR_AGENT_PACKAGES='${agentPackagesJson}'

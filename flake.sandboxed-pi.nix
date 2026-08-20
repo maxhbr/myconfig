@@ -110,6 +110,20 @@ let
   #   extraGuestModules   — extra NixOS modules merged into the guest.
   #   vcpu / mem          — guest resource bounds.
   #   allowNetwork        — when false, no network interface / SSH (offline).
+  #   hostUid / hostGid   — when non-null, pin the unprivileged guest `agent`
+  #                         user's uid/gid to these values (the invoking host
+  #                         user's own uid/gid). virtiofsd runs unprivileged
+  #                         (`--sandbox none`, no `--translate-uid`), so every
+  #                         share is passed through with the REAL host
+  #                         owner/mode unchanged; the guest kernel then
+  #                         enforces the usual POSIX permission check against
+  #                         the calling (guest) process's uid/gid. Without a
+  #                         match, `agent`'s auto-assigned guest uid is only
+  #                         accidentally the same as the host owner, so
+  #                         writes to an owner-only-writable share can fail
+  #                         with EACCES even though the world-readable bits
+  #                         still make reads succeed. Defaults to null (no
+  #                         pinning), preserving the previous behaviour.
   mkSandboxedRunner =
     {
       system,
@@ -122,6 +136,8 @@ let
       vcpu ? 4,
       mem ? 8192,
       allowNetwork ? true,
+      hostUid ? null,
+      hostGid ? null,
       # The host→guest config-seed allowlist (a union of per-agent
       # `configPaths`, see modules/myconfig.ai/fns/seed-agent-config.nix).
       # When non-empty, a `bin/seed-agent-config` seeder script is built into
@@ -185,6 +201,12 @@ let
               # (and the read-only host store) survive.
 
               # ── Unprivileged agent user ─────────────────────────────────
+              # When `hostUid`/`hostGid` are given, `agent` is pinned to the
+              # invoking host user's own uid/gid so the ownership virtiofsd
+              # passes through unchanged (no `--translate-uid`) matches the
+              # guest-side permission check exactly, keeping every share
+              # writable exactly as it is on the host — see `mkSandboxedRunner`
+              # above for the failure mode this avoids.
               users.users.agent = {
                 isNormalUser = true;
                 home = "/home/agent";
@@ -194,6 +216,14 @@ let
                 hashedPassword = "!";
                 shell = pkgs.bashInteractive;
                 openssh.authorizedKeys.keyFiles = [ authorizedKeysFile ];
+              }
+              // lib.optionalAttrs (hostUid != null) {
+                uid = hostUid;
+                group = "agent";
+              };
+
+              users.groups = lib.optionalAttrs (hostGid != null) {
+                agent.gid = hostGid;
               };
 
               security.sudo.enable = false;
@@ -433,6 +463,13 @@ in
       vcpu ? 4,
       mem ? 8192,
       allowNetwork ? true,
+      # Pin the guest `agent` user's uid/gid to the invoking host user's own
+      # uid/gid (see `mkSandboxedRunner` above). Passed through by the
+      # `sandboxed-herdr` host wrapper as `SANDBOXED_HERDR_UID`/`_GID` (`id
+      # -u`/`id -g`), so writes to the shared workspace succeed regardless of
+      # which uid the guest's ephemeral user database happens to allocate.
+      hostUid ? null,
+      hostGid ? null,
       # Override the default seed allowlist. Defaults to the union of
       # `configPaths` for every registered agent (pi, opencode, claude, codex,
       # qwen-code, github-copilot-cli, hermes), so a `sandboxed-herdr` guest is
@@ -457,6 +494,8 @@ in
         mem
         allowNetwork
         seedConfigPaths
+        hostUid
+        hostGid
         ;
       hostname = "sandboxed-herdr";
       shares = [
