@@ -1167,6 +1167,11 @@ in
             type = "file";
             disableDeletion = true;
             updateIntervalSeconds = 60;
+            # Group with the other AI-related dashboards ( "llama-swap",
+            # "LiteLLM") under the "AI" Grafana folder. The dashboard's
+            # `uid` ("myconfig-llama-server", set above) is unaffected by
+            # the folder move, so existing links/bookmarks keep working.
+            folder = "AI";
             options.path = pkgs.runCommand "llama-server-dashboards" { } ''
               mkdir -p $out
               cp ${llamaDashboardFile} $out/llama-server.json
