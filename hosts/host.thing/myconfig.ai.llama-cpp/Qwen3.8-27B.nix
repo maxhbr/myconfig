@@ -300,10 +300,16 @@ in
     # Q8_0 (29.3 GB, single file — the same weights as the AMD-only
     # `Qwen3.8-27B-Q8_0` entry in amdModels) split across both GPUs.
     # Alone it does not fit the RTX 5090's 32 GB at full context (see
-    # amdModels), but with the same "1,2" ratio as the BF16-split entry
-    # above only ~9.8 GB of weights land on Vulkan0 (RTX 5090) and
-    # ~19.5 GB on Vulkan1 (gfx1151, more than 32 GB), and the q8_0 KV
-    # cache at 262144 ctx is split in the same ratio. No --no-mmap:
+    # amdModels). Unlike the BF16-split entry above ("1,2"), the Q8_0
+    # entry deliberately inverts the ratio ("2,1"): the model is small
+    # enough that the larger 2/3 share still fits on the RTX 5090 side —
+    # ~19.5 GB of weights plus the q8_0 KV cache at 262144 ctx on
+    # Vulkan0, ~9.8 GB on Vulkan1 (gfx1151, the KV cache is split in
+    # the same ratio). The base GGUF is also declared by the
+    # `Qwen3.8-27B-Q8_0` entry in amdModels; the merged pull list in
+    # `default.nix` is de-duplicated, so this does not cause a double
+    # download.
+    # No --no-mmap:
     # unlike the BF16-split entry this is a single-file GGUF (the
     # single-file multi-GPU precedent, Qwen3.6-35B-A3B-BF16-MTP-split,
     # omits it as well).

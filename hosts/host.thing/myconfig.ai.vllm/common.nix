@@ -22,7 +22,7 @@ let
     {
       containerRuntime ? "docker", # "docker" or "podman"
       # --- Backend-specific ---
-      backendDockerImage, # e.g. "docker.io/vllm/vllm-openai:latest"
+      backendDockerImage, # e.g. "docker.io/vllm/vllm-openai:v0.27.1"
       backendDockerRunArgs, # shell fragment (inside the args=(...) block)
       backendModelArg, # shell fragment for passing model path (e.g. "/model" or "--model" "/model")
 
@@ -97,7 +97,7 @@ let
           # Host-side model checkout.
           MODEL_HOST_PATH="''${MODEL_HOST_PATH:-${modelHostPath}}"
 
-          # Docker/vLLM settings.
+          # Container/vLLM settings.
           DOCKER_IMAGE="''${DOCKER_IMAGE:-${img}}"
 
           # vLLM model/server settings.
@@ -261,7 +261,8 @@ let
           # Always add localhost:$HOST_PORT so callers can address the model
           # generically without knowing the internal model name in advance.
           # Optionally append extra names via EXTRA_SERVED_MODEL_NAMES (space-separated).
-          # Order matters: the LAST --served-model-name becomes the model id.
+          # One --served-model-name flag takes the whole list below (vLLM's
+          # flag is multiple-valued); every name addresses the same server.
           all_served_names=("${servedModelName}")
           all_served_names+=("localhost:$HOST_PORT")
           if [ -n "''${EXTRA_SERVED_MODEL_NAMES:-}" ]; then
@@ -273,11 +274,11 @@ let
             args+=("$extra_name")
           done
 
-          echo "Starting vLLM Docker container:"
+          echo "Starting vLLM container:"
           echo "  model:              $MODEL_HOST_PATH"
           echo "  served model name:  ${servedModelName}"
           echo "  endpoint:           http://localhost:$HOST_PORT/v1"
-          echo "  docker image:       $DOCKER_IMAGE"
+          echo "  image:              $DOCKER_IMAGE"
           echo "  gpu utilization:    $GPU_MEMORY_UTILIZATION"
           echo
 
@@ -342,7 +343,12 @@ in
       generationConfig ? null,
     }:
     mkVllmDockerized {
-      backendDockerImage = "docker.io/vllm/vllm-openai:latest";
+      # Pinned (same version as the ad-hoc server variant 7 was modelled
+      # on): the baked flag sets (--speculative-config, --quantization, ...)
+      # were tuned against this image; a silent :latest upgrade would pull
+      # in a changed flag surface. The DOCKER_IMAGE env override still
+      # overrides this per launch.
+      backendDockerImage = "docker.io/vllm/vllm-openai:v0.27.1";
       backendDockerRunArgs = "--device nvidia.com/gpu=all";
       backendModelArg = "\"/model\"";
       inherit

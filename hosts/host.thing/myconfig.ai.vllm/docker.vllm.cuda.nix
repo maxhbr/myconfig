@@ -125,23 +125,18 @@ in
 {
   imports = [
     {
-      # The host mainline already enables Podman; these are self-contained
-      # defaults for this module (consistent with the ROCm sibling).
+      # Self-contained defaults for this module (consistent with the ROCm
+      # sibling); the Podman start dependencies of the llama-swap unit are
+      # declared in myconfig.ai.vllm/default.nix so they are not duplicated.
       virtualisation.podman.enable = lib.mkDefault true;
       # NVIDIA CDI specs come from the same generator that served Docker.
       hardware.nvidia-container-toolkit.enable = lib.mkDefault true;
 
+      # NVIDIA extra only; the Podman part is handled by the directory
+      # default.nix.
       systemd.services.llama-swap = {
-        wants = [
-          "podman.service"
-          "podman.socket"
-          "nvidia-container-toolkit-cdi-generator.service"
-        ];
-        after = [
-          "podman.service"
-          "podman.socket"
-          "nvidia-container-toolkit-cdi-generator.service"
-        ];
+        wants = [ "nvidia-container-toolkit-cdi-generator.service" ];
+        after = [ "nvidia-container-toolkit-cdi-generator.service" ];
       };
     }
   ];
@@ -165,13 +160,17 @@ in
           {
             type = "openai-compatible";
             name = "vllm";
-            api_base = "http://localhost:22548/v1";
+            # Matches the port all CUDA vllm variants consolidated onto with
+            # the Podman/CDI migration.
+            api_base = "http://localhost:22545/v1";
             models = [
               { name = "Qwen3.8-27B-NVFP4"; }
               { name = "Qwen3.8-27B-MTP-NVFP4"; }
               # { name = "Qwen3.6-27B-int4-AutoRound"; }
               # { name = "Qwen3.6-27B-int4-AutoRound-Lorbus"; }
-              { name = "Qwen3.8-27B-FP8"; }
+              # FP8 is the ROCm variant, served on its own port (22549); add
+              # a second client pointing at 22549 to reach it from aichat
+              # { name = "Qwen3.8-27B-FP8"; }
               { name = "Qwen3.8-27B-NVFP4-RTX5090"; }
             ];
           }
