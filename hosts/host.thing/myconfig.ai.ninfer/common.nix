@@ -96,7 +96,6 @@ let
           NINFER_GIT_REF="''${NINFER_GIT_REF:-${ninferGitRef}}"
           BUILD_IMAGE="''${BUILD_IMAGE:-1}"
 
-          # NInfer server settings.
           MAX_CONTEXT="''${MAX_CONTEXT:-${toString maxContext}}"
           KV_CAPACITY="''${KV_CAPACITY:-${kvCapacity}}"
           KV_DTYPE="''${KV_DTYPE:-${kvDtype}}"
@@ -180,7 +179,6 @@ let
             args+=(--vision)
           fi
 
-          # Append any positional arguments beyond the port.
           if [ ''${#EXTRA_ARGS[@]} -gt 0 ]; then
             args+=("''${EXTRA_ARGS[@]}")
           fi
