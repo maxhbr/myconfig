@@ -126,18 +126,12 @@ in
   imports = [
     {
       # Self-contained defaults for this module (consistent with the ROCm
-      # sibling); the Podman start dependencies of the llama-swap unit are
-      # declared in myconfig.ai.vllm/default.nix so they are not duplicated.
+      # sibling); the llama-swap unit's Podman and NVIDIA CDI start
+      # dependencies are declared in myconfig.ai.vllm/default.nix so
+      # they are not duplicated.
       virtualisation.podman.enable = lib.mkDefault true;
       # NVIDIA CDI specs come from the same generator that served Docker.
       hardware.nvidia-container-toolkit.enable = lib.mkDefault true;
-
-      # NVIDIA extra only; the Podman part is handled by the directory
-      # default.nix.
-      systemd.services.llama-swap = {
-        wants = [ "nvidia-container-toolkit-cdi-generator.service" ];
-        after = [ "nvidia-container-toolkit-cdi-generator.service" ];
-      };
     }
   ];
   config = {
@@ -154,6 +148,17 @@ in
       # // vllmQwen36_27B_int4_AutoRound.modelConfig
       # // vllmQwen36_27B_int4_AutoRound_Lorbus.modelConfig
       // vllmQwen38_27B_NVFP4_Cuda.modelConfig;
+
+    # Pull specs declared next to the variants above (rather than in
+    # host.thing/default.nix) so a spec isn't silently left behind
+    # (and still downloaded) if its variant is ever dropped from this
+    # file. Only the enabled variants are listed; the commented-out
+    # ones would re-join here when re-enabled.
+    myconfig.ai.pull_models.models."/home/mhuber/models" = [
+      "unsloth/Qwen3.8-27B-NVFP4" # vllmQwen38_27B_NVFP4
+      "sakamakismile/Qwen3.8-27B-MTP-NVFP4" # vllmQwen38_27B_MTP_NVFP4
+      "gittensor-model-hub/Qwen3.8-27B-NVFP4-RTX5090" # vllmQwen38_27B_NVFP4_Cuda
+    ];
     home-manager.sharedModules = [
       {
         programs.aichat.settings.clients = [
