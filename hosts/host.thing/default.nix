@@ -135,6 +135,9 @@
               "unsloth/Qwen3.8-27B-NVFP4"
               "sakamakismile/Qwen3.8-27B-MTP-NVFP4"
               "gittensor-model-hub/Qwen3.8-27B-NVFP4-RTX5090"
+              # NInfer artifact (single .ninfer file, ~20 GiB) served by
+              # ./myconfig.ai.vllm/docker.ninfer.cuda.nix.
+              "neroued/Qwen3.8-27B-nvfp4-NInfer"
             ];
           };
         };

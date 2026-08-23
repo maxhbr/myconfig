@@ -126,18 +126,12 @@ in
   imports = [
     {
       # Self-contained defaults for this module (consistent with the ROCm
-      # sibling); the Podman start dependencies of the llama-swap unit are
-      # declared in myconfig.ai.vllm/default.nix so they are not duplicated.
+      # sibling); the llama-swap unit's Podman and NVIDIA CDI start
+      # dependencies are declared in myconfig.ai.vllm/default.nix so
+      # they are not duplicated.
       virtualisation.podman.enable = lib.mkDefault true;
       # NVIDIA CDI specs come from the same generator that served Docker.
       hardware.nvidia-container-toolkit.enable = lib.mkDefault true;
-
-      # NVIDIA extra only; the Podman part is handled by the directory
-      # default.nix.
-      systemd.services.llama-swap = {
-        wants = [ "nvidia-container-toolkit-cdi-generator.service" ];
-        after = [ "nvidia-container-toolkit-cdi-generator.service" ];
-      };
     }
   ];
   config = {
