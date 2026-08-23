@@ -58,6 +58,7 @@
     ./myconfig.ai.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix
     ./myconfig.ai.vllm
+    ./myconfig.ai.ninfer/docker.ninfer.cuda.nix
     ./services.open-webui.nix
     # ./services.qdrant.nix
     ./services.litellm.nix
