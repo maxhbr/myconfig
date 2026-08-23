@@ -57,8 +57,7 @@
     ./nixpkgs.overlays.llama-cpp.nix
     ./myconfig.ai.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix
-    # ./myconfig.ai.vllm
-    ./myconfig.ai.vllm/docker.vllm.rocm.nix
+    ./myconfig.ai.vllm
     ./services.open-webui.nix
     # ./services.qdrant.nix
     ./services.litellm.nix
@@ -135,6 +134,7 @@
             "/home/mhuber/models" = [
               "unsloth/Qwen3.8-27B-NVFP4"
               "sakamakismile/Qwen3.8-27B-MTP-NVFP4"
+              "gittensor-model-hub/Qwen3.8-27B-NVFP4-RTX5090"
             ];
           };
         };

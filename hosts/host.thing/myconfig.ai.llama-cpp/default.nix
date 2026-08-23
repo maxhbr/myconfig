@@ -232,9 +232,16 @@ in
     # them here explicitly so `pull-models` on the host still downloads
     # them into ${modelsPullDir} (the container reads `/models/` via a
     # separate bind mount, which is out of scope for this helper).
-    myconfig.ai.pull_models.models.${modelsPullDir} = lib.concatMap (m: m.pull-models.hf_spec) (
-      builtins.filter (m: (m.pull-models or null) != null) (
-        amdModels ++ qwen3_8_27B-multiGpu ++ qwen3_6_35B-A3B-multiGpu ++ hy3-multiGpu
+    # Each model entry above keeps its own full, self-contained
+    # `pull-models.hf_spec` (e.g. the Q8_0 base GGUF is declared by both
+    # `Qwen3.8-27B-Q8_0` and `Qwen3.8-27B-MTP-Q8_0`); the merged list is
+    # de-duplicated here so `pull-models` does not run the same
+    # `hf download` twice.
+    myconfig.ai.pull_models.models.${modelsPullDir} = lib.unique (
+      lib.concatMap (m: m.pull-models.hf_spec) (
+        builtins.filter (m: (m.pull-models or null) != null) (
+          amdModels ++ qwen3_8_27B-multiGpu ++ qwen3_6_35B-A3B-multiGpu ++ hy3-multiGpu
+        )
       )
     );
 

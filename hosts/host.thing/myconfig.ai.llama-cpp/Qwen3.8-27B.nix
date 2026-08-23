@@ -297,6 +297,40 @@ in
       cacheType = "f16";
       ttl = 3600;
     }
+    # Q8_0 (29.3 GB, single file — the same weights as the AMD-only
+    # `Qwen3.8-27B-Q8_0` entry in amdModels) split across both GPUs.
+    # Alone it does not fit the RTX 5090's 32 GB at full context (see
+    # amdModels). Unlike the BF16-split entry above ("1,2"), the Q8_0
+    # entry deliberately inverts the ratio ("2,1"): the model is small
+    # enough that the larger 2/3 share still fits on the RTX 5090 side —
+    # ~19.5 GB of weights plus the q8_0 KV cache at 262144 ctx on
+    # Vulkan0, ~9.8 GB on Vulkan1 (gfx1151, the KV cache is split in
+    # the same ratio). The base GGUF is also declared by the
+    # `Qwen3.8-27B-Q8_0` entry in amdModels; the merged pull list in
+    # `default.nix` is de-duplicated, so this does not cause a double
+    # download.
+    # No --no-mmap:
+    # unlike the BF16-split entry this is a single-file GGUF (the
+    # single-file multi-GPU precedent, Qwen3.6-35B-A3B-BF16-MTP-split,
+    # omits it as well).
+    {
+      name = "Qwen3.8-27B-Q8_0-split";
+      path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf" ];
+      };
+      devices = [ "Vulkan0,Vulkan1" ];
+      tensorSplit = "2,1";
+      params = [
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+      ];
+      ctxSize = 262144;
+      parallel = 1;
+      cacheType = "q8_0";
+      ttl = 3600;
+    }
   ];
 
   # Q8 (29.3 GB) is too large for the RTX 5090, so it is AMD-only.

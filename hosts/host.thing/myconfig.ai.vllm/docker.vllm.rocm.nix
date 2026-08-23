@@ -38,19 +38,10 @@ in
 {
   imports = [
     {
+      # Podman start dependencies of the llama-swap unit are declared in
+      # myconfig.ai.vllm/default.nix so they are not duplicated.
       virtualisation.podman.enable = lib.mkDefault true;
       virtualisation.podman.dockerCompat = lib.mkDefault true;
-
-      systemd.services.llama-swap = {
-        wants = [
-          "podman.service"
-          "podman.socket"
-        ];
-        after = [
-          "podman.service"
-          "podman.socket"
-        ];
-      };
     }
   ];
   config = {
