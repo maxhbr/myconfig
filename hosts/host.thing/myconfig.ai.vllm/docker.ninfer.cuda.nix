@@ -185,6 +185,12 @@ let
         args+=("''${EXTRA_ARGS[@]}")
       fi
 
+      if [ -n "''${EXTRA_NINFER_ARGS:-}" ]; then
+        # shellcheck disable=SC2206
+        extra_args=( $EXTRA_NINFER_ARGS )
+        args+=("''${extra_args[@]}")
+      fi
+
       echo "Starting NInfer container:"
       echo "  model:              $MODEL_HOST_PATH/$MODEL_FILE"
       echo "  served model id:    ${servedModelName}"
