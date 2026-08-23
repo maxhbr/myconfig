@@ -53,6 +53,12 @@ in
       ninferQwen38_27B_NVFP4.ninferPkg
     ];
     services.llama-swap.settings.models = ninferQwen38_27B_NVFP4.modelConfig;
+    # Declared next to the variant above (rather than in
+    # host.thing/default.nix) so this pull spec isn't silently left
+    # behind and still downloaded if this variant is ever dropped.
+    myconfig.ai.pull_models.models."/home/mhuber/models" = [
+      "neroued/Qwen3.8-27B-nvfp4-NInfer" # ninferQwen38_27B_NVFP4
+    ];
     home-manager.sharedModules = [
       {
         programs.aichat.settings.clients = [
