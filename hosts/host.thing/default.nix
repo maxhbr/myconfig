@@ -58,6 +58,7 @@
     ./myconfig.ai.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix
     ./myconfig.ai.vllm
+    ./myconfig.ai.ninfer
     ./services.open-webui.nix
     # ./services.qdrant.nix
     ./services.litellm.nix
@@ -129,14 +130,12 @@
           # entry stay declared here. Everything that *is* served by
           # llama-cpp is collected automatically from each model's
           # `pull-models = { target_directory; hf_spec; }` (see
-          # ./myconfig.ai.llama-cpp.nix).
-          models = {
-            "/home/mhuber/models" = [
-              "unsloth/Qwen3.8-27B-NVFP4"
-              "sakamakismile/Qwen3.8-27B-MTP-NVFP4"
-              "gittensor-model-hub/Qwen3.8-27B-NVFP4-RTX5090"
-            ];
-          };
+          # ./myconfig.ai.llama-cpp.nix). The Docker/Podman-served vLLM
+          # and NInfer models declare their own `models` entries next to
+          # their variant definitions (./myconfig.ai.vllm/docker.vllm.cuda.nix,
+          # ./myconfig.ai.ninfer/docker.ninfer.cuda.nix) so a spec isn't
+          # silently left behind (and still downloaded) if its variant is
+          # ever dropped.
         };
         inference-cpp = {
           enable = true;
