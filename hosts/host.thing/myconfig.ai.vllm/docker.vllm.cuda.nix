@@ -148,6 +148,17 @@ in
       # // vllmQwen36_27B_int4_AutoRound.modelConfig
       # // vllmQwen36_27B_int4_AutoRound_Lorbus.modelConfig
       // vllmQwen38_27B_NVFP4_Cuda.modelConfig;
+
+    # Pull specs declared next to the variants above (rather than in
+    # host.thing/default.nix) so a spec isn't silently left behind
+    # (and still downloaded) if its variant is ever dropped from this
+    # file. Only the enabled variants are listed; the commented-out
+    # ones would re-join here when re-enabled.
+    myconfig.ai.pull_models.models."/home/mhuber/models" = [
+      "unsloth/Qwen3.8-27B-NVFP4" # vllmQwen38_27B_NVFP4
+      "sakamakismile/Qwen3.8-27B-MTP-NVFP4" # vllmQwen38_27B_MTP_NVFP4
+      "gittensor-model-hub/Qwen3.8-27B-NVFP4-RTX5090" # vllmQwen38_27B_NVFP4_Cuda
+    ];
     home-manager.sharedModules = [
       {
         programs.aichat.settings.clients = [

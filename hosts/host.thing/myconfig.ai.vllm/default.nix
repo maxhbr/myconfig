@@ -1,14 +1,15 @@
-# The vLLM CUDA/ROCm variant modules and the NInfer CUDA variant
-# module are loaded together on this host. The llama-swap unit's start
-# dependencies (Podman, and the NVIDIA CDI generator that the CUDA
-# containers use for GPU access) are declared *here* instead of in
-# each variant module, so the generated systemd unit does not carry
-# duplicate Wants=/After= entries.
+# The vLLM CUDA/ROCm variant modules are loaded together on this host.
+# The llama-swap unit's start dependencies (Podman, and the NVIDIA CDI
+# generator that the CUDA containers use for GPU access) are declared
+# *here* — the single shared declaration site for the container-based
+# engine modules on this host, including the separate NInfer engine
+# module in ../myconfig.ai.ninfer/ (imported alongside on this host) —
+# instead of in each variant module, so the generated systemd unit does
+# not carry duplicate Wants=/After= entries.
 {
   imports = [
     ./docker.vllm.cuda.nix
     ./docker.vllm.rocm.nix
-    ./docker.ninfer.cuda.nix
   ];
 
   config = {
