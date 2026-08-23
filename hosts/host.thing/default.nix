@@ -58,7 +58,7 @@
     ./myconfig.ai.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix
     ./myconfig.ai.vllm
-    ./myconfig.ai.ninfer/docker.ninfer.cuda.nix
+    ./myconfig.ai.ninfer
     ./services.open-webui.nix
     # ./services.qdrant.nix
     ./services.litellm.nix
@@ -136,6 +136,9 @@
               "unsloth/Qwen3.8-27B-NVFP4"
               "sakamakismile/Qwen3.8-27B-MTP-NVFP4"
               "gittensor-model-hub/Qwen3.8-27B-NVFP4-RTX5090"
+              # NInfer artifact (single .ninfer file, ~20 GiB) served by
+              # ./myconfig.ai.ninfer/docker.ninfer.cuda.nix.
+              "neroued/Qwen3.8-27B-nvfp4-NInfer"
             ];
           };
         };
