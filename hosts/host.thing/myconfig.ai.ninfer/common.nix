@@ -10,10 +10,10 @@
 # and the "Docker" section of the README), so the runtime image is built
 # once from a pinned upstream git revision into the local container store
 # and tagged `ninfer:local` by default. When that image is missing, the
-# launch script itself performs the build
-# (`<runtime> build git+https://github.com/Neroued/ninfer.git#<ref>:`)
-# so the variant is turnkey rather than requiring an out-of-band build
-# step.
+# launch script itself performs the build, mirroring the upstream README
+# (`<runtime> build --tag ninfer:local .` in a clone of the repo at the
+# pinned revision) so the variant is turnkey rather than requiring an
+# out-of-band build step.
 #
 # Model-path constraint (host.thing): the model subvolumes live on a
 # Btrfs volume that is exposed *twice* — writable at
@@ -96,8 +96,8 @@ let
 
         runtimeInputs = [
           pkgs.coreutils
-          # First launch may build the image from a remote git context
-          # (`<runtime> build git+https://...`), which requires git.
+          # First launch may build the image from a clone of the pinned
+          # git revision, which requires git.
           pkgs.git
           runtime
           (pkgs.python3.withPackages (ps: [ ps.huggingface-hub ]))
@@ -184,12 +184,23 @@ let
 
           if ! ${runtimeBin} image exists "$NINFER_IMAGE"; then
               if [ "$BUILD_IMAGE" != "1" ]; then
-                  echo "Image $NINFER_IMAGE not found and BUILD_IMAGE != 1; build it with:" >&2
-                  echo "  ${runtimeBin} build --pull -t $NINFER_IMAGE git+https://github.com/Neroued/ninfer.git#''${NINFER_GIT_REF}:" >&2
+                  echo "Image $NINFER_IMAGE not found and BUILD_IMAGE != 1; build it from a local clone:" >&2
+                  echo "  git clone https://github.com/Neroued/ninfer.git && cd ninfer && git checkout ''${NINFER_GIT_REF}" >&2
+                  echo "  ${runtimeBin} build --pull -t $NINFER_IMAGE ." >&2
                   exit 1
               fi
-              echo "Building image $NINFER_IMAGE from git+https://github.com/Neroued/ninfer.git#''${NINFER_GIT_REF} (one-time; pulls the CUDA base images and compiles the engine)..." >&2
-              ${runtimeBin} build --pull --tag "$NINFER_IMAGE" "git+https://github.com/Neroued/ninfer.git#''${NINFER_GIT_REF}:"
+              # No registry distribution exists upstream and neither
+              # podman nor docker accept a git URL as build context; the
+              # README builds from a local clone, so clone the pinned
+              # revision into a temp dir and build from that tree.
+              echo "Building image $NINFER_IMAGE from github.com/Neroued/ninfer @ ''${NINFER_GIT_REF} (one-time; pulls the CUDA base images and compiles the engine)..." >&2
+              NINFER_BUILD_DIR="$(mktemp -d)"
+              trap 'rm -rf "$NINFER_BUILD_DIR"' EXIT
+              git clone --quiet https://github.com/Neroued/ninfer.git "$NINFER_BUILD_DIR/ninfer"
+              git -C "$NINFER_BUILD_DIR/ninfer" checkout --quiet "$NINFER_GIT_REF"
+              ${runtimeBin} build --pull --tag "$NINFER_IMAGE" "$NINFER_BUILD_DIR/ninfer"
+              rm -rf "$NINFER_BUILD_DIR"
+              trap - EXIT
           fi
 
           if [ "$REMOVE_EXISTING_CONTAINER" = "1" ]; then
