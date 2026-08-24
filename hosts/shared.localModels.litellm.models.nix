@@ -198,6 +198,11 @@
     maxOutputTokens = 65536;
   }
   {
+    name = "gfx1151:Qwen3.8-27B-MTP-Q4_0";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
+  }
+  {
     name = "gfx1151:Qwen3.8-27B-MTP-Q8_0";
     contextWindow = 262144;
     maxOutputTokens = 65536;
@@ -481,6 +486,11 @@
     name = "gfx1151:ROCm0:Qwen3.8-27B-ABL-Q5_K_M";
     contextWindow = 262144;
     maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Qwen3.8-27B-MTP-Q4_0";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
   }
   {
     name = "gfx1151:ROCm0:Qwen3.8-27B-MTP-Q8_0";
@@ -775,6 +785,31 @@
     name = "rtx5090:Qwen3.8-27B-ABL-Q5_K_M-precise-coding-tasks";
     contextWindow = 262144;
     maxOutputTokens = 65536;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-MTP-Q4_0";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-MTP-Q4_0-general-tasks";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-MTP-Q4_0-instruct-general-tasks";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-MTP-Q4_0-instruct-reasoning-tasks";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
+  }
+  {
+    name = "rtx5090:Qwen3.8-27B-MTP-Q4_0-precise-coding-tasks";
+    contextWindow = 131072;
+    maxOutputTokens = 32768;
   }
   {
     name = "rtx5090:Qwen3.8-27B-Q6_K-MTP";
