@@ -1,7 +1,7 @@
 {
     "grafana-skills": {
         "cargoLock": null,
-        "date": "2026-08-05",
+        "date": "2026-08-18",
         "extract": null,
         "name": "grafana-skills",
         "passthru": null,
@@ -13,16 +13,16 @@
             "name": null,
             "owner": "grafana",
             "repo": "skills",
-            "rev": "d9dfb9ec7a6b1ac6c8ec9741ec045ad6f412dec6",
-            "sha256": "sha256-blw2Xpo1IzS5EfYC4TBRQj6ozRJPWe+8vGtz+GaDpts=",
+            "rev": "51d33e71e191b409bbd25fc7be2684c610d18166",
+            "sha256": "sha256-13pDO69zgLkDjJ49O/8a4ncmm6MTppAhDK8wioELpwY=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "d9dfb9ec7a6b1ac6c8ec9741ec045ad6f412dec6"
+        "version": "51d33e71e191b409bbd25fc7be2684c610d18166"
     },
     "litellm-grafana-dashboard": {
         "cargoLock": null,
-        "date": "2026-08-04",
+        "date": "2026-08-22",
         "extract": null,
         "name": "litellm-grafana-dashboard",
         "passthru": null,
@@ -31,13 +31,13 @@
             "name": "litellm-grafana-dashboard.json",
             "sha256": "sha256-EteGQo3xd5GvvkjKre7wqOZ6Hr/Yty78VZe6le55Zcw=",
             "type": "url",
-            "url": "https://raw.githubusercontent.com/BerriAI/litellm/ead62528e607b9d8e61273def638799c9c3a69ba/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
+            "url": "https://raw.githubusercontent.com/BerriAI/litellm/947dbbf0298eecd3d226f765d4a4fb7ea3fd2551/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
         },
-        "version": "ead62528e607b9d8e61273def638799c9c3a69ba"
+        "version": "947dbbf0298eecd3d226f765d4a4fb7ea3fd2551"
     },
     "simple-english": {
         "cargoLock": null,
-        "date": "2026-08-17",
+        "date": "2026-08-21",
         "extract": null,
         "name": "simple-english",
         "passthru": null,
@@ -49,11 +49,11 @@
             "name": null,
             "owner": "AminBlg",
             "repo": "SimpleEnglish",
-            "rev": "63f5d57f0c56e24108f63655d40f1a2680bd4e6f",
-            "sha256": "sha256-0YvDvgNOL9q+BOmIinyaxIbokdB6XFfwnq/BilBvsj0=",
+            "rev": "8e8a008a13e4b478f9ccc20ca16e79aef66c0739",
+            "sha256": "sha256-vOnXjdzdo+EtWB7wjjCeou53Y43I+1CvuDmen4tLYFo=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "63f5d57f0c56e24108f63655d40f1a2680bd4e6f"
+        "version": "8e8a008a13e4b478f9ccc20ca16e79aef66c0739"
     }
 }
