@@ -83,14 +83,29 @@
       # which is required for the `prometheus` callback used below for
       # observability. Rebuild the wrapped Python application with that
       # extra dependency added.
+      #
+      # The package is taken from the `master` nixpkgs input (exposed as
+      # `pkgs.master` by nixosModules.core), not from the pinned `nixpkgs`
+      # input: litellm 1.97.0's `[proxy]` extra requires the `expression`
+      # module (`expression>=5.6.0,<6.0`), but the `nixpkgs` input tracks
+      # the stable `nixos-unstable` branch, which has not received upstream
+      # nixpkgs PR #555030 (merged to master 2026-08-24, commit
+      # 432724c94f152e92dd3308bf021d4e35101ea44c) that packages `expression`
+      # 5.6.0 and adds it to the litellm `proxy` dependencies. Without it
+      # the proxy dies at startup with
+      #   ModuleNotFoundError: No module named 'expression'.
+      # At the moment the master-tree litellm 1.97.0 closure is identical
+      # to the pinned one plus `expression` (same Python 3.14.7), so this
+      # is the minimal fix. TODO: once the `nixpkgs` input includes commit
+      # 432724c94f15, switch `pkgs.master` back to `pkgs` below.
       package = lib.mkIf config.myconfig.observability.client.enable (
-        pkgs.python3Packages.toPythonApplication (
-          pkgs.python3Packages.litellm.overridePythonAttrs (oldAttrs: {
+        pkgs.master.python3Packages.toPythonApplication (
+          pkgs.master.python3Packages.litellm.overridePythonAttrs (oldAttrs: {
             dependencies =
               (oldAttrs.dependencies or [ ])
-              ++ pkgs.python3Packages.litellm.optional-dependencies.proxy
-              ++ pkgs.python3Packages.litellm.optional-dependencies.extra_proxy
-              ++ [ pkgs.python3Packages.prometheus-client ];
+              ++ pkgs.master.python3Packages.litellm.optional-dependencies.proxy
+              ++ pkgs.master.python3Packages.litellm.optional-dependencies.extra_proxy
+              ++ [ pkgs.master.python3Packages.prometheus-client ];
           })
         )
       );

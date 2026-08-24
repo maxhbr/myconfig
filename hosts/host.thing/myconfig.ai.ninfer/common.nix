@@ -15,6 +15,15 @@
 # pinned revision) so the variant is turnkey rather than requiring an
 # out-of-band build step.
 #
+# The Dockerfile's unqualified `FROM nvidia/cuda:...` base image still
+# needs a default registry to resolve. Podman (c/image) takes that from
+# `unqualified-search-registries` in registries.conf, and a bare NixOS
+# host ships no such file, so the build passes a generated one-liner
+# (`unqualified-search-registries = ["docker.io"]`) through the
+# CONTAINERS_REGISTRIES_CONF environment variable instead of touching
+# the host. Docker ignores the variable and always defaults to
+# Docker Hub anyway.
+#
 # Model-path constraint (host.thing): the model subvolumes live on a
 # Btrfs volume that is exposed *twice* — writable at
 # /home/mhuber/models (the download location) and read-only at /models
@@ -35,9 +44,9 @@
 #
 # llama-swap aliases must be unique across *all* models (the config
 # loader hard-fails on duplicates). The factory only claims
-# `ninfer:<modelId>`, which is unique per artifact by construction; the
-# human-friendly bare `ninfer` alias is claimed by the primary variant
-# via `extraConfig.aliases` (see ./docker.ninfer.cuda.nix).
+# `ninfer:<modelId>` (one per llama-swap entry); the human-friendly
+# bare `ninfer` alias is claimed by the primary variant via
+# `extraConfig.aliases` (see ./docker.ninfer.cuda.nix).
 
 { pkgs }:
 
@@ -52,9 +61,11 @@ let
       modelFilename, # e.g. "qwen3_8_27b_nvfp4.ninfer"
       modelSha256 ? null, # published SHA-256 of the artifact; null skips verification
       modelHfRepo ? null, # Hugging Face repo for on-demand download; null skips it
-      # The artifact's identity.model_id — the public OpenAI-facing model
-      # id. Passed explicitly as --model-id instead of relying on the
-      # artifact default, and used as the llama-swap `useModelName`.
+      # Public OpenAI-facing model id — the engine accepts exactly one
+      # (requests with any other model name are rejected). Defaults to
+      # the artifact's identity.model_id unless set here; the launch
+      # script allows a final override via the MODEL_ID env var. Used
+      # as the llama-swap `useModelName`.
       modelId,
       # Display name for the llama-swap entry; the model key is
       # "ninfer:<name>".
@@ -128,6 +139,8 @@ let
           MODEL_HOST_DIR="''${MODEL_HOST_DIR:-${modelHostDir}}"
           # Registered artifact inside those directories.
           MODEL_FILENAME="''${MODEL_FILENAME:-${modelFilename}}"
+          # Public OpenAI-facing model id (ninfer-serve --model-id).
+          MODEL_ID="''${MODEL_ID:-${modelId}}"
 
           # Locally built NInfer image; built from pinned GitHub source on
           # first use (there is no registry distribution).
@@ -135,11 +148,12 @@ let
           NINFER_GIT_REF="''${NINFER_GIT_REF:-${ninferGitRef}}"
           BUILD_IMAGE="''${BUILD_IMAGE:-1}"
 
-          # Server tuning. Defaults mirror the published Qwen3.8-27B NVFP4
-          # RTX 5090 profile: the NVFP4 weights need a 252,928-token context
-          # to fit the card; the saturated measurements use INT8 group-64 KV
-          # with CUDA Graphs and MTP3 (draft tokens) plus the optimized
-          # proposal head.
+          # Server tuning. The Nix-side default mirrors the published
+          # Qwen3.8-27B NVFP4 RTX 5090 profile: the NVFP4 weights need a
+          # 252,928-token context to fit the card; the saturated
+          # measurements use INT8 group-64 KV with CUDA Graphs and MTP3
+          # (draft tokens) plus the optimized proposal head. A variant
+          # may override maxContext.
           MAX_CONTEXT="''${MAX_CONTEXT:-${toString maxContext}}"
           KV_CAPACITY="''${KV_CAPACITY:-${kvCapacity}}"
           MAX_CONCURRENCY="''${MAX_CONCURRENCY:-${toString maxConcurrency}}"
@@ -186,6 +200,7 @@ let
               if [ "$BUILD_IMAGE" != "1" ]; then
                   echo "Image $NINFER_IMAGE not found and BUILD_IMAGE != 1; build it from a local clone:" >&2
                   echo "  git clone https://github.com/Neroued/ninfer.git && cd ninfer && git checkout ''${NINFER_GIT_REF}" >&2
+                  echo "  (podman: additionally point CONTAINERS_REGISTRIES_CONF at a file with 'unqualified-search-registries = [\"docker.io\"]')" >&2
                   echo "  ${runtimeBin} build --pull -t $NINFER_IMAGE ." >&2
                   exit 1
               fi
@@ -198,7 +213,10 @@ let
               trap 'rm -rf "$NINFER_BUILD_DIR"' EXIT
               git clone --quiet https://github.com/Neroued/ninfer.git "$NINFER_BUILD_DIR/ninfer"
               git -C "$NINFER_BUILD_DIR/ninfer" checkout --quiet "$NINFER_GIT_REF"
-              ${runtimeBin} build --pull --tag "$NINFER_IMAGE" "$NINFER_BUILD_DIR/ninfer"
+              # Provide Podman a default registry for the unqualified
+              # `FROM` base image (host NixOS ships no registries.conf).
+              printf 'unqualified-search-registries = ["docker.io"]\n' >"$NINFER_BUILD_DIR/registries.conf"
+              CONTAINERS_REGISTRIES_CONF="$NINFER_BUILD_DIR/registries.conf" ${runtimeBin} build --pull --tag "$NINFER_IMAGE" "$NINFER_BUILD_DIR/ninfer"
               rm -rf "$NINFER_BUILD_DIR"
               trap - EXIT
           fi
@@ -221,7 +239,7 @@ let
               ninfer-serve "/models/$MODEL_FILENAME"
               --host 0.0.0.0
               --port 8080
-              --model-id "${modelId}"
+              --model-id "$MODEL_ID"
               --max-context "$MAX_CONTEXT"
               --kv-capacity "$KV_CAPACITY"
               --max-concurrency "$MAX_CONCURRENCY"
@@ -258,7 +276,7 @@ let
 
           echo "Starting NInfer container:"
           echo "  model:              $MODEL_HOST_DIR/$MODEL_FILENAME"
-          echo "  served model id:    ${modelId}"
+          echo "  served model id:    $MODEL_ID"
           echo "  endpoint:           http://localhost:$HOST_PORT/v1"
           echo "  image:              $NINFER_IMAGE"
           echo "  max context:        $MAX_CONTEXT (kv: $KV_CAPACITY, $KV_DTYPE)"
