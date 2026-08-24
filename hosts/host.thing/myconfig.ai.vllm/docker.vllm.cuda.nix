@@ -81,7 +81,6 @@ let
     reasoningParser = "qwen3";
     compilationConfig = "none";
     speculativeConfig = "{\"method\": \"mtp\", \"num_speculative_tokens\": 1}";
-    enableEnforceEager = false;
     extraConfig = {
       aliases = [
         "vllm:lorbus"

@@ -42,7 +42,7 @@ let
       reasoningParser ? null,
       compilationConfig ? null,
       speculativeConfig ? null,
-      enableEnforceEager ? null, # null = keep existing default (1)
+      enableEnforceEager ? null, # null = keep existing default (0)
 
       # Hugging Face repo for on-demand download (null = skip download)
       modelHfRepo ? null,
@@ -127,7 +127,7 @@ let
           TRUST_REMOTE_CODE="''${TRUST_REMOTE_CODE:-1}"
           LANGUAGE_MODEL_ONLY="''${LANGUAGE_MODEL_ONLY:-1}"
           ENFORCE_EAGER="''${ENFORCE_EAGER-${
-            if enableEnforceEager != null then (if enableEnforceEager then "1" else "0") else "1"
+            if enableEnforceEager != null then (if enableEnforceEager then "1" else "0") else "0"
           }}"
           REMOVE_EXISTING_CONTAINER="''${REMOVE_EXISTING_CONTAINER:-1}"
 
