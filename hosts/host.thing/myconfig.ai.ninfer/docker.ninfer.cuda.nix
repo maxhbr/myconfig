@@ -22,10 +22,16 @@ let
   mkNinfer = common.mkNinferDockerized;
 
   port = 22545;
-  # The artifact's identity.model_id — what ninfer-serve advertises
-  # and accepts by default; also the OpenAI-facing model name the
-  # aichat client below uses.
-  modelId = "qwen3.8-27b";
+  # Public OpenAI-facing model id (the engine accepts exactly one).
+  # Uses the generic "localhost:<port>" name so clients that address
+  # the container port directly work without knowing the internal
+  # name: the { port = 22545; } entry in myconfig.ai.localModels
+  # (host.thing/default.nix) becomes the "localhost:22545" model on
+  # http://localhost:22545/v1 in pi-coding-agent, mirroring the vLLM
+  # variants that serve "localhost:$HOST_PORT" alongside their names.
+  # Also the model name the aichat client below uses; overridable at
+  # launch via the MODEL_ID env var.
+  modelId = "localhost:${toString port}";
 
   # --- Qwen3.8-27B NVFP4 (NInfer artifact) ---
   # The model subvolume is mounted writable at /home/mhuber/models and
@@ -42,6 +48,10 @@ let
     servedModelName = "Qwen3.8-27B-NVFP4";
     containerName = "ninfer-dockerized-Qwen3.8-27B-NVFP4";
     inherit port;
+    # Half of the published saturated RTX 5090 context (252,928, the
+    # factory default) so the INT8 KV cache has headroom on the card.
+    # Overridable at launch via MAX_CONTEXT.
+    maxContext = 126464;
     # Pinned engine source (master @ 2026-08-19); newer than the
     # artifact's minimum_revision (5d2c1f55, see artifact-manifest.json).
     # The image is built from this revision on first launch.
@@ -89,8 +99,8 @@ in
             type = "openai-compatible";
             name = "ninfer";
             # Points straight at the container port (like the vllm
-            # client), so the model name is the artifact's public
-            # model id, not a llama-swap alias.
+            # client), so the model name is the served public model
+            # id, not a llama-swap alias.
             api_base = "http://localhost:${toString port}/v1";
             models = [
               { name = modelId; }
