@@ -15,6 +15,15 @@
 # pinned revision) so the variant is turnkey rather than requiring an
 # out-of-band build step.
 #
+# The Dockerfile's unqualified `FROM nvidia/cuda:...` base image still
+# needs a default registry to resolve. Podman (c/image) takes that from
+# `unqualified-search-registries` in registries.conf, and a bare NixOS
+# host ships no such file, so the build passes a generated one-liner
+# (`unqualified-search-registries = ["docker.io"]`) through the
+# CONTAINERS_REGISTRIES_CONF environment variable instead of touching
+# the host. Docker ignores the variable and always defaults to
+# Docker Hub anyway.
+#
 # Model-path constraint (host.thing): the model subvolumes live on a
 # Btrfs volume that is exposed *twice* — writable at
 # /home/mhuber/models (the download location) and read-only at /models
@@ -186,6 +195,7 @@ let
               if [ "$BUILD_IMAGE" != "1" ]; then
                   echo "Image $NINFER_IMAGE not found and BUILD_IMAGE != 1; build it from a local clone:" >&2
                   echo "  git clone https://github.com/Neroued/ninfer.git && cd ninfer && git checkout ''${NINFER_GIT_REF}" >&2
+                  echo "  (podman: additionally point CONTAINERS_REGISTRIES_CONF at a file with 'unqualified-search-registries = [\"docker.io\"]')" >&2
                   echo "  ${runtimeBin} build --pull -t $NINFER_IMAGE ." >&2
                   exit 1
               fi
@@ -198,7 +208,10 @@ let
               trap 'rm -rf "$NINFER_BUILD_DIR"' EXIT
               git clone --quiet https://github.com/Neroued/ninfer.git "$NINFER_BUILD_DIR/ninfer"
               git -C "$NINFER_BUILD_DIR/ninfer" checkout --quiet "$NINFER_GIT_REF"
-              ${runtimeBin} build --pull --tag "$NINFER_IMAGE" "$NINFER_BUILD_DIR/ninfer"
+              # Provide Podman a default registry for the unqualified
+              # `FROM` base image (host NixOS ships no registries.conf).
+              printf 'unqualified-search-registries = ["docker.io"]\n' >"$NINFER_BUILD_DIR/registries.conf"
+              CONTAINERS_REGISTRIES_CONF="$NINFER_BUILD_DIR/registries.conf" ${runtimeBin} build --pull --tag "$NINFER_IMAGE" "$NINFER_BUILD_DIR/ninfer"
               rm -rf "$NINFER_BUILD_DIR"
               trap - EXIT
           fi
