@@ -7,10 +7,31 @@ description: Commit the current working-tree changes with a well-formed message.
 
 Commit the current state following best practices.
 
-Commit the changes that are relevant to the current conversation. Run
-`git status` and `git diff` to see what changed, write a clear conventional
-commit message matching the repository's existing style (`git log --oneline
--15`), stage the relevant changes, and commit.
+Commit the CURRENT STATE of the working tree. Run `git status` and `git diff`
+to see what changed, and `git log --oneline -15` to match the repository's
+existing message style. Write a clear conventional commit message that
+describes the actual changes in the context of the current history — not
+filtered by conversation relevance — stage the changes, and commit.
+
+## Unrelated changes
+
+Prefer one focused commit. If the working tree holds clearly unrelated
+changes alongside the ones being committed, exclude them when that is
+straightforward — stage by path (`git add <paths>`) or by hunk
+(`git add -p`), leaving the rest for a separate commit. Do this only when
+the boundary is obvious; do not agonise over it or split changes that belong
+together. When the unrelated changes are entangled or the boundary is
+unclear, just commit the whole current state.
+
+## Do not validate
+
+The commit is a snapshot of the current state, not a quality gate. The agent
+must **not**:
+
+- run builds, tests, linters, formatters, or type checks
+- review the diff for correctness or judge whether the work is finished
+- refuse to commit because something looks wrong, unfinished, or broken
+- ask the user to confirm before committing
 
 ## Attribution trailer
 
@@ -59,7 +80,7 @@ determined, omit the trailer line entirely. Never emit `supported by  in `,
 
 ## On failure
 
-Do **not** try to fix things. If a pre-commit hook or check fails, or if
-something looks off (secrets, unrelated dirty files, failing builds), stop
-and explain to the user why the commit cannot be made. Surface the relevant
-error output so the user can decide how to proceed.
+If `git commit` itself fails (for example, a repository pre-commit hook
+rejects the commit), stop and surface the error output so the user can decide
+how to proceed. Do **not** try to repair the working tree or amend the change
+to satisfy the hook.
