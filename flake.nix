@@ -705,6 +705,10 @@
                   # human on the gfx1151 hardware).
                   "tests/qwen38-toolcall-fixture.sh"
                   "tests/qwen38-benchmark-comparison.sh"
+                  # Standalone script embedded into a writeShellApplication
+                  # wrapper (`git-branch-to-worktree`); shfmt is not covered
+                  # by writeShellApplication's own shellcheck pass.
+                  "modules/shell.git/bin/git-branch-to-worktree.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {
