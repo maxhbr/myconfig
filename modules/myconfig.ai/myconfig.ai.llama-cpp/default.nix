@@ -31,6 +31,7 @@
 {
   imports = [
     ./options.nix
+    ./version-check.nix
     ./all-scripts.nix
     ./services.llama-cpp.nix
     ./llama-swap.nix

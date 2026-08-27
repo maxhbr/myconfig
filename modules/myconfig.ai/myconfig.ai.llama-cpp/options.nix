@@ -354,6 +354,34 @@ in
       example = "rtx5090";
     };
 
+    # Vendored chat templates exposed to model declarations so hosts can
+    # reference a pinned, store-path-stable template file with
+    # `--jinja --chat-template <path>` without pointing at a mutable
+    # checkout. See ./templates/ for the pinned assets and their
+    # provenance files.
+    chatTemplates = mkOption {
+      type = types.submodule {
+        options = {
+          qwen38-sharp = mkOption {
+            type = types.path;
+            default = ./templates/sharp.jinja;
+            defaultText = lib.literalExpression "./templates/sharp.jinja";
+            description = ''
+              Path to the vendored Qwen3.8 "sharp" jinja chat template
+              (PieBru, template_version `qwen3.8-froggeric-v22.3`, MIT).
+              Used by Qwen3.8 profiles that need OpenAI-compatible
+              tool-call templating via `--jinja --chat-template <this
+              path>`. The file is kept byte-identical to upstream; see
+              `./templates/sharp.jinja.provenance` for the pinned SHA-256,
+              upstream URL and re-pinning instructions.
+            '';
+          };
+        };
+      };
+      default = { };
+      description = "Vendored chat templates exposed to model declarations.";
+    };
+
     router = {
       enable = mkEnableOption "per-device llama-server router scripts driven by INI presets (home-manager wrappers, independent of `serviceVariant`)";
 
