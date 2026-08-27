@@ -52,5 +52,38 @@
         }
       '';
     };
+
+    # Opt-in specialisation for Vulkan deep-context (>128k) testing.
+    #
+    # `amdgpu.lockup_timeout=-1` disables the kernel's GPU lockup
+    # watchdog, which can falsely trigger during long Vulkan fills on
+    # gfx1151 / Strix Halo (the GPU appears "locked" while processing a
+    # very large batch, then recovers). With the watchdog off, those
+    # false positives no longer reset the GPU — but a REAL lockup also
+    # no longer recovers, so the system can hang instead of resetting.
+    #
+    # This is NOT the default. Boot into this specialisation only for
+    # deep-context Vulkan benchmarking; boot the default config for all
+    # other workloads (ROCm 262k is unaffected — keep it on the default).
+    #
+    # Recovery / rollback: if the GPU hangs under this specialisation,
+    # a soft reboot may not complete (the hung GPU can block the
+    # shutdown path). Use a hard reset (physical power button) and
+    # select the default boot entry. The specialisation only adds the
+    # kernel param; it does not change the root filesystem, so no
+    # rollback of store paths is needed.
+    #
+    # GPU canary: after booting into this specialisation, verify the GPU
+    # is responsive before starting a deep-context run:
+    #   rocm-smi            # device visible + utilisation
+    #   vulkaninfo --summary  # Vulkan instance + physical device
+    # If either fails, do NOT start the benchmark — the kernel param
+    # may have interacted badly with the driver; hard-reset and use the
+    # default config instead.
+    specialisation.amdgpu-no-lockup-timeout = {
+      configuration = {
+        boot.kernelParams = [ "amdgpu.lockup_timeout=-1" ];
+      };
+    };
   };
 }
