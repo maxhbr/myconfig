@@ -194,6 +194,31 @@ let
           even if the global disables it.
         '';
       };
+      package = mkOption {
+        type = types.nullOr types.package;
+        default = null;
+        description = ''
+          Per-model llama-cpp package override. When set, the
+          per-(model, device) script wrappers and llama-swap entries
+          for this model use `package.bin/llama-server` and
+          `package.bin/llama-bench` instead of the device-default
+          build from `pkgs.llama-cpp-vulkan` / `pkgs.llama-cpp-rocm` /
+          `pkgs.llama-cpp` (CUDA).
+
+          Models with a non-null `package` are **excluded from the
+          router** (the `llama-server` service backend and the
+          `llama-server_<Device>` INI-preset wrappers). They are still
+          available via llama-swap and the per-(model, device) script
+          wrappers. This is because the router uses a single
+          `services.llama-cpp.package` binary for every model in its
+          INI preset and cannot mix per-model packages.
+
+          Use this for models that require a patched or custom
+          llama-cpp build (e.g. PR-27742 for the `qwen4exp`
+          architecture) without forcing the entire host onto that
+          build.
+        '';
+      };
       variants = mkOption {
         type = types.attrsOf (
           types.submodule {

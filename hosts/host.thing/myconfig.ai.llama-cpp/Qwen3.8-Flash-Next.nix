@@ -10,7 +10,10 @@
 # downloads all shards — same pattern as `qwen3.5-122B-A10B-Q5_K_M` in
 # default.nix and `Qwen3.8-27B-BF16-split` in Qwen3.8-27B.nix.
 # https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF
-{ modelsPullDir }:
+{
+  modelsPullDir,
+  package,
+}:
 {
   # Served by the `llama-cpp-33657` container (llama-swap on
   # Vulkan0/ROCm0) on the PR-27742-patched llama-cpp
@@ -33,6 +36,7 @@
   amdModels = [
     {
       name = "Qwen3.8-Flash-Next-UD-IQ4_XS";
+      inherit package;
       path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00003.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -54,6 +58,7 @@
     }
     {
       name = "Qwen3.8-Flash-Next-UD-Q4_K_XL";
+      inherit package;
       path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf";
       pull-models = {
         target_directory = modelsPullDir;

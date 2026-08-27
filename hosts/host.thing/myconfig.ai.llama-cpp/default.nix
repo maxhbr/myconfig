@@ -21,7 +21,10 @@ let
   qwen3_235B = import ./Qwen3-235B-A22B.nix { inherit modelsPullDir; };
   qwen3_8_27B = import ./Qwen3.8-27B.nix { inherit modelsPullDir; };
   hy3 = import ./Hy3-Q2_K_L.nix { inherit modelsPullDir; };
-  qwen38_flash_next = import ./Qwen3.8-Flash-Next.nix { inherit modelsPullDir; };
+  qwen38_flash_next = import ./Qwen3.8-Flash-Next.nix {
+    inherit modelsPullDir;
+    package = patched-llama-cpp-pkg;
+  };
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -144,26 +147,21 @@ let
         ) rtxModels
       );
 
-  # Lookup of what the host's inference-cpp hook currently resolves to;
-  # after the `myconfig.ai.inference-cpp.llama-cpp.package` assignment
-  # below, this is the patched package itself (pre-PR-27742 it was the
-  # unpinned nixpkgs build, which is the one-line rollback value for
-  # both the hook and the container override below).
+  # Lookup of what the host's inference-cpp hook currently resolves to
+  # (the stock nixpkgs build selected by services.llama-cpp.nix for the
+  # host's GPU variants).  Used by the container override below.
   host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
 
-  # GPU flags mirror the logic in services.llama-cpp.nix (`my-llama-cpp`):
-  # the host has both "nvidia" (RTX 5090) and "amd" (gfx1151) variants,
-  # so the patched package must be built with CUDA + ROCm + Vulkan to
-  # serve both the host's CUDA0 llama-server and the container's
-  # Vulkan0/ROCm0 llama-swap.  Hardcoding cudaSupport = false (as the
-  # original commented-out version did) breaks the host's RTX service
-  # with "invalid device: CUDA0".
-  gpuvariants = config.myconfig.hardware.gpu.variant;
-  hasVariant = v: builtins.elem v gpuvariants;
+  # PR-27742 patched build for qwen4exp (Qwen3.8-Flash-Next) support.
+  # Only the Flash-Next models need this — it is set per-model via the
+  # `package` option so the rest of the host (RTX llama-server, other
+  # ad-hoc wrappers) keeps the stock nixpkgs build.  The Flash-Next
+  # models run on Vulkan0/ROCm0 (container llama-swap) and Vulkan1
+  # (host scriptOnlyModels), never on CUDA, so ROCm+Vulkan suffices.
   patched-llama-cpp-pkg = pkgs.llama-cpp-pr-27742.override {
-    rocmSupport = hasVariant "amd";
-    vulkanSupport = hasVariant "amd-no-rocm" || hasVariant "amd";
-    cudaSupport = hasVariant "nvidia";
+    rocmSupport = true;
+    vulkanSupport = true;
+    cudaSupport = false;
     blasSupport = false;
   };
 
@@ -267,15 +265,6 @@ in
 
     myconfig.ai.llama-cpp = rtx-llama-cpp-config;
 
-    # Single binary on the host: point the inference-cpp package hook at
-    # the PR-27742 build instead of the unpinned nixpkgs one. Without
-    # this, the host's ad-hoc `llama-server_*` ad-hoc wrappers (and host
-    # llama-cpp services, which default to this package) run the
-    # unpatched build, which cannot load architectures added by the PR
-    # — the Flash-Next GGUFs declare `qwen4exp` and fail with
-    # "unknown model architecture" unless this override is in place.
-    myconfig.ai.inference-cpp.llama-cpp.package = patched-llama-cpp-pkg;
-
     ############
     # Vulkan-only sibling instance running the llama-server router
     # backend (single llama-server bound to Vulkan0 with an INI preset
@@ -333,7 +322,6 @@ in
           ];
           hardware.graphics.enable = true;
           services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
-          # services.llama-cpp.package = lib.mkForce patched-llama-cpp-pkg;
           myconfig.ai.llama-cpp = gfx-llama-cpp-config;
         };
     };

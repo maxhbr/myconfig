@@ -41,7 +41,8 @@ let
         else
           null;
 
-      server = llamaServerFor device;
+      server =
+        if model.package != null then lib.getExe' model.package "llama-server" else llamaServerFor device;
       # Sanitise the device string for use in the script/package name:
       # replace commas with dashes so "Vulkan0,Vulkan1" -> "Vulkan0-Vulkan1".
       safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
@@ -168,7 +169,8 @@ let
       device,
     }:
     let
-      bench = llamaBenchFor device;
+      bench =
+        if model.package != null then lib.getExe' model.package "llama-bench" else llamaBenchFor device;
       safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-bench_${safeDevice}_${safeName}";
