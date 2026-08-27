@@ -144,7 +144,6 @@ let
         ) rtxModels
       );
 
-  # Package built for the host with ROCm+Vulkan support (variant = "amd").
   # Lookup of what the host's inference-cpp hook currently resolves to;
   # after the `myconfig.ai.inference-cpp.llama-cpp.package` assignment
   # below, this is the patched package itself (pre-PR-27742 it was the
@@ -152,10 +151,19 @@ let
   # both the hook and the container override below).
   host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
 
+  # GPU flags mirror the logic in services.llama-cpp.nix (`my-llama-cpp`):
+  # the host has both "nvidia" (RTX 5090) and "amd" (gfx1151) variants,
+  # so the patched package must be built with CUDA + ROCm + Vulkan to
+  # serve both the host's CUDA0 llama-server and the container's
+  # Vulkan0/ROCm0 llama-swap.  Hardcoding cudaSupport = false (as the
+  # original commented-out version did) breaks the host's RTX service
+  # with "invalid device: CUDA0".
+  gpuvariants = config.myconfig.hardware.gpu.variant;
+  hasVariant = v: builtins.elem v gpuvariants;
   patched-llama-cpp-pkg = pkgs.llama-cpp-pr-27742.override {
-    rocmSupport = true;
-    vulkanSupport = true;
-    cudaSupport = false;
+    rocmSupport = hasVariant "amd";
+    vulkanSupport = hasVariant "amd-no-rocm" || hasVariant "amd";
+    cudaSupport = hasVariant "nvidia";
     blasSupport = false;
   };
 
