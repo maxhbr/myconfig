@@ -18,15 +18,37 @@
   # Vulkan1 script wrappers from `scriptOnlyModels` keep the unpinned
   # build — acceptable, the vulkan-serving instance is the container.
   #
-  # No deliberate `ctxSize`/`cacheType`/`variants` yet: leave the GGUF
-  # defaults, retune for gfx1151 headroom after the first serving test.
+  # Multimodal: the repo ships `mmproj-F16.gguf` / `mmproj-BF16.gguf`
+  # sidecars (the VLM projector). Both are 16-bit, so the download size
+  # is identical; F16 keeps the full 10-bit mantissa while BF16 trades
+  # mantissa precision for fp32-style exponent range — irrelevant for
+  # normalised pre-trained vision-tower weights, so F16 is the faithful
+  # choice. It is also the native matrix dtype of the gfx1151 RDNA3.5
+  # backend, whereas BF16 runs software-converted; this matches the
+  # mmproj pick this host already makes for gemma-4. Each entry gets a
+  # `:mmproj` variant (auto-generated, see lib/variants.nix) serving
+  # the same shards plus `--mmproj <file>`. No deliberate `ctxSize` /
+  # `cacheType` retuning yet: leave the GGUF defaults, retune for
+  # gfx1151 headroom after the first serving test.
   amdModels = [
     {
       name = "Qwen3.8-Flash-Next-UD-IQ4_XS";
       path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00003.gguf";
       pull-models = {
         target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/Qwen3.8-Flash-Next-GGUF/UD-IQ4_XS" ]; # all 3 shards
+        hf_spec = [
+          "unsloth/Qwen3.8-Flash-Next-GGUF/UD-IQ4_XS" # all 3 LLM shards
+          "unsloth/Qwen3.8-Flash-Next-GGUF/mmproj-F16.gguf"
+          # BF16 sibling: same contents, software-converted on RDNA3.5.
+          "unsloth/Qwen3.8-Flash-Next-GGUF/mmproj-BF16.gguf"
+        ];
+      };
+      variants = {
+        # Multimodal serving of the same shards; the :mmproj variant
+        # publishes the alias `Qwen3.8-Flash-Next-UD-IQ4_XS-mmproj`.
+        mmproj = {
+          mmproj = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/mmproj-F16.gguf";
+        };
       };
       ttl = 1800;
     }
@@ -35,7 +57,16 @@
       path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf";
       pull-models = {
         target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL" ]; # all 4 shards
+        hf_spec = [
+          "unsloth/Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL" # all 4 LLM shards
+          "unsloth/Qwen3.8-Flash-Next-GGUF/mmproj-F16.gguf"
+          "unsloth/Qwen3.8-Flash-Next-GGUF/mmproj-BF16.gguf"
+        ];
+      };
+      variants = {
+        mmproj = {
+          mmproj = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/mmproj-F16.gguf";
+        };
       };
       ttl = 1800;
     }
