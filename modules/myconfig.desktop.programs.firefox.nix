@@ -51,7 +51,15 @@
                     # https-everywhere
                     link-cleaner
                     privacy-badger
-                    tree-style-tab
+                    # tree-style-tab: upstream rycee/NUR pin (4.4.1 /
+                    # AMO file 4983025) 404s because AMO rotated the file id.
+                    # Override the fetch pin until nur-expressions regenerates:
+                    # https://gitlab.com/rycee/nur-expressions
+                    (tree-style-tab.override {
+                      version = "4.4.3";
+                      url = "https://addons.mozilla.org/firefox/downloads/file/4985978/tree_style_tab-4.4.3.xpi";
+                      sha256 = "5d4d2a7ec7e3027d8e8e4e0b3d8a0355070267fbda8c927dfaeb0fd3b7cb09c8";
+                    })
                     multi-account-containers
                     ublock-origin
                     vimium
