@@ -24,6 +24,22 @@ let
 
   # Returns true iff the device string spans multiple physical devices.
   isMultiDevice = device: builtins.length (lib.splitString "," device) > 1;
+
+  # Pick the right llama.cpp build for a device string.
+  # Multi-device: select package based on the first device in the list.
+  # Defined in the `let` so llamaServerFor / llamaBenchFor can reference it
+  # (the `in` attrset is not recursive) and re-exported via `inherit`.
+  packageForDevice =
+    device:
+    let
+      d = firstDevice device;
+    in
+    if lib.hasPrefix "Vulkan" d then
+      pkgs.llama-cpp-vulkan
+    else if lib.hasPrefix "ROCm" d then
+      pkgs.llama-cpp-rocm
+    else
+      llama-cpp-cuda;
 in
 {
   # `hasGpuVariant` is parameterised on a module's `config` + `options`
@@ -56,31 +72,9 @@ in
     else
       false;
 
-  # Pick the right llama.cpp build for a device string.
-  # Multi-device: select binary based on the first device in the list.
-  llamaServerFor =
-    device:
-    let
-      d = firstDevice device;
-    in
-    if lib.hasPrefix "Vulkan" d then
-      lib.getExe' pkgs.llama-cpp-vulkan "llama-server"
-    else if lib.hasPrefix "ROCm" d then
-      lib.getExe' pkgs.llama-cpp-rocm "llama-server"
-    else
-      lib.getExe' llama-cpp-cuda "llama-server";
+  llamaServerFor = device: lib.getExe' (packageForDevice device) "llama-server";
 
-  llamaBenchFor =
-    device:
-    let
-      d = firstDevice device;
-    in
-    if lib.hasPrefix "Vulkan" d then
-      lib.getExe' pkgs.llama-cpp-vulkan "llama-bench"
-    else if lib.hasPrefix "ROCm" d then
-      lib.getExe' pkgs.llama-cpp-rocm "llama-bench"
-    else
-      lib.getExe' llama-cpp-cuda "llama-bench";
+  llamaBenchFor = device: lib.getExe' (packageForDevice device) "llama-bench";
 
   # Environment variables exported around llama-server / llama-bench runs to
   # pin them to a specific device. For multi-device strings the full
@@ -132,4 +126,8 @@ in
 
   # Whether the device string spans multiple physical devices.
   inherit isMultiDevice;
+
+  # The llama.cpp package derivation for a device string (exposed so
+  # callers can read .version / .src.rev for startup banners).
+  inherit packageForDevice;
 }

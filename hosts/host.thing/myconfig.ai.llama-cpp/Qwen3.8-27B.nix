@@ -1,4 +1,8 @@
-{ modelsPullDir }:
+{
+  modelsPullDir,
+  sharpTemplate,
+  forkPkg,
+}:
 let
   # Best-practice sampling parameters from the unsloth Qwen3.8-27B GGUF
   # README (https://huggingface.co/unsloth/Qwen3.8-27B-GGUF).
@@ -104,7 +108,127 @@ let
   };
 in
 {
-  # Q4/Q5/Q6 fit on the RTX 5090 (32 GB). These are served as rtxModels
+  # Candidate profiles for the gfx1151 Vulkan DFlash2 and ROCm MTP/ngram
+  # experiments (task items 4 & 5). These are opt-in: unique explicit names,
+  # no production aliases, single-backend `devices`, and per-model options
+  # (serverPackage / extraEnv / noMmap) that do NOT affect existing models.
+  # They carry their own `devices` so the `gfx-llama-cpp-config.models` map
+  # (which forces ["Vulkan0" "ROCm0"] on legacy models) must NOT override
+  # them — they are appended AFTER that map in default.nix.
+  #
+  # Model SHA-256 values are the HuggingFace LFS oids (verified via the
+  # /api/.../tree/main?blobs=true endpoint, 2026-08-27). They are logged in
+  # the startup banner for provenance but NOT verified at runtime.
+  candidateModels = [
+    # --- Vulkan DFlash2 candidate (task item 4) ---------------------------
+    # Approximates PieBru's balanced/coding configuration: Vulkan-only,
+    # Nathanw1014 strix-halo-vulkan fork, Q6_K_XL target + DFlash2 Q8_0
+    # draft, draft-dflash speculation (n-max 6), f16 KV, 131k context,
+    # 4096/4096 batch, -t 16 -tb 32, mmap+mlock (noMmap=false, tested
+    # against the repo's current --no-mmap), sharp.jinja tool template.
+    {
+      name = "Qwen3.8-27B-DFlash2-Q6_K_XL";
+      path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q6_K_XL.gguf";
+      devices = [ "Vulkan0" ];
+      serverPackage = forkPkg;
+      noMmap = false; # mmap+mlock (test against current --no-mmap)
+      cacheType = "f16";
+      ctxSize = 131072;
+      parallel = 1;
+      group = "Qwen3.8-27B";
+      ttl = 1800;
+      tags = [
+        "candidate"
+        "vulkan"
+        "dflash2"
+        "Q6_K_XL"
+        "f16"
+        "ctx131072"
+        "fork-strix-halo"
+      ];
+      sha256 = "701d8fa9ed214ab21bfc130cd2a7df19ca89bbef7713e2dfb19f3c63696aa917";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [
+          "unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q6_K_XL.gguf"
+          "z-lab/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q8_0.gguf"
+        ];
+      };
+      params = [
+        "--spec-type"
+        "draft-dflash"
+        "--spec-draft-model"
+        "/models/z-lab-Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q8_0.gguf"
+        "--spec-draft-n-max"
+        "6"
+        "--batch-size"
+        "4096"
+        "--ubatch-size"
+        "4096"
+        "-t"
+        "16"
+        "-tb"
+        "32"
+        "--jinja"
+        "--chat-template"
+        "${sharpTemplate}"
+      ];
+    }
+    # --- ROCm MTP/ngram candidate (task item 5) ----------------------------
+    # Based on KyaniteLabs' final profile: ROCm-only, upstream b10549,
+    # Q4_K_XL target + mtp-Q8_0 draft, draft-mtp+ngram-mod speculation
+    # (n-max 12, ngram n-min 24 / n-max 12), q4_0 KV, 1 slot, 262k context,
+    # -t 16, flash-attn+jinja. Candidate-only HSA_ENABLE_SDMA=0 + HSA_XNACK=1
+    # (NOT applied globally until the candidate passes stability tests).
+    {
+      name = "Qwen3.8-27B-MTP-ngram-Q4_K_XL";
+      path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf";
+      devices = [ "ROCm0" ];
+      extraEnv = {
+        HSA_ENABLE_SDMA = "0";
+        HSA_XNACK = "1";
+      };
+      cacheType = "q4_0";
+      ctxSize = 262144;
+      parallel = 1;
+      group = "Qwen3.8-27B";
+      ttl = 1800;
+      tags = [
+        "candidate"
+        "rocm"
+        "mtp-ngram"
+        "Q4_K_XL"
+        "q4_0"
+        "ctx262144"
+      ];
+      sha256 = "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [
+          "unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf"
+          "ggml-org/Qwen3.8-27B-GGUF/mtp-Qwen3.8-27B-Q8_0.gguf"
+        ];
+      };
+      params = [
+        "--spec-type"
+        "draft-mtp,ngram-mod"
+        "--spec-draft-model"
+        "/models/ggml-org-Qwen3.8-27B-GGUF/mtp-Qwen3.8-27B-Q8_0.gguf"
+        "--spec-draft-n-max"
+        "12"
+        "--spec-ngram-mod-n-min"
+        "24"
+        "--spec-ngram-mod-n-max"
+        "12"
+        "--parallel"
+        "1"
+        "-t"
+        "16"
+        "--jinja"
+      ];
+    }
+  ];
+
   # and must NOT overlap with amdModels — a model name present in both
   # lists produces two `llama-server_Vulkan1_*` wrappers with different
   # store paths, which breaks `pkgs.buildEnv` in home-manager.

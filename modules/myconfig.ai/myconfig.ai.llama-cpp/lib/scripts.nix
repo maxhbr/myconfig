@@ -19,6 +19,8 @@ let
     llamaBenchFor
     envForDevice
     isMultiDevice
+    packageForDevice
+    backendForDevice
     ;
 
   # Build a shell application that launches llama-server for a specific
@@ -41,17 +43,85 @@ let
         else
           null;
 
-      server = llamaServerFor device;
+      server =
+        if model.serverPackage != null then
+          lib.getExe' model.serverPackage "llama-server"
+        else
+          llamaServerFor device;
+      # Effective package (for the startup banner's version/rev). When a
+      # per-model fork is set, read its version/src; otherwise the
+      # device-default package.
+      pkg = model.serverPackage;
+      pkg' = if pkg != null then pkg else packageForDevice device;
+      versionStr = pkg'.version or "unknown";
+      srcRevStr = pkg'.src.rev or pkg'.src.tag or "unknown";
+      backendStr =
+        let
+          b = backendForDevice device;
+        in
+        if b == null then "unknown" else b;
+      # Apply the structured `noMmap` option on top of the free-form
+      # `params` list. null = pass params through as-is (legacy); true =
+      # ensure --no-mmap is present; false = strip --no-mmap so the
+      # model is served with mmap+mlock.
+      effectiveParams =
+        if model.noMmap == true then
+          model.params ++ (lib.optional (!lib.elem "--no-mmap" model.params) "--no-mmap")
+        else if model.noMmap == false then
+          lib.filter (p: p != "--no-mmap") model.params
+        else
+          model.params;
       # Sanitise the device string for use in the script/package name:
       # replace commas with dashes so "Vulkan0,Vulkan1" -> "Vulkan0-Vulkan1".
       safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-server_${safeDevice}_${safeName}";
+      # Per-model extra env vars (attrsOf str) appended to the
+      # device-specific env exports. Converted to "KEY=VALUE" strings
+      # and run through the same export logic (no UNSET: prefix).
+      extraEnvList = lib.mapAttrsToList (k: v: "${k}=${v}") model.extraEnv;
       envExports = lib.concatStringsSep "\n" (
         map (
           e: if lib.hasPrefix "UNSET:" e then "unset ${lib.removePrefix "UNSET:" e}" else "export ${e}"
-        ) (envForDevice device)
+        ) (envForDevice device ++ extraEnvList)
       );
+      # Startup banner: log the resolved llama.cpp revision, backend,
+      # device, model path/hash, cache type, context and effective
+      # mmap policy so an operator can verify which engine / flags a
+      # running llama-server actually started with (task item 7).
+      # The full effective command line is printed by `set -x` below.
+      noMmapRepr =
+        if model.noMmap == null then
+          "inherit(params)"
+        else if model.noMmap then
+          "true(--no-mmap)"
+        else
+          "false(mmap+mlock)";
+      banner = ''
+        echo "[llama-cpp] === startup banner ===" >&2
+        echo "[llama-cpp]   model:     ${model.name}" >&2
+        echo "[llama-cpp]   backend:   ${backendStr}" >&2
+        echo "[llama-cpp]   device:    ${device}" >&2
+        echo "[llama-cpp]   version:   ${versionStr}" >&2
+        echo "[llama-cpp]   srcRev:    ${srcRevStr}" >&2
+        echo "[llama-cpp]   modelPath: ${model.path}" >&2
+        echo "[llama-cpp]   sha256:    ${if model.sha256 != null then model.sha256 else "not pinned"}" >&2
+        echo "[llama-cpp]   cacheType: ${
+          if model.cacheType != null then model.cacheType else "default"
+        }" >&2
+        echo "[llama-cpp]   ctxSize:   ${
+          if model.ctxSize != null then toString model.ctxSize else "default"
+        }" >&2
+        echo "[llama-cpp]   parallel:  ${toString model.parallel}" >&2
+        echo "[llama-cpp]   noMmap:    ${noMmapRepr}" >&2
+        echo "[llama-cpp]   serverPkg: ${
+          if model.serverPackage != null then
+            "fork:" + (model.serverPackage.name or "?")
+          else
+            "device-default"
+        }" >&2
+        echo "[llama-cpp] === effective flags (see set -x below) ===" >&2
+      '';
       # `model.ctxSize` is the PER-REQUEST context. llama-server's
       # `--ctx-size` is the whole KV cache and gets divided by the slot
       # count unless the cache is unified, so scale it up only in the
@@ -75,7 +145,7 @@ let
       multiDeviceFlags = lib.optionalString (isMultiDevice device) (
         "--split-mode layer --tensor-split ${model.tensorSplit}"
       );
-      paramsStr = lib.concatStringsSep " " (map lib.escapeShellArg model.params);
+      paramsStr = lib.concatStringsSep " " (map lib.escapeShellArg effectiveParams);
 
       # Optional `pull-models` metadata (see ./options.nix). When set, the
       # generated script first checks whether `model.path` exists and, if
@@ -147,6 +217,7 @@ let
       text = ''
         ${envExports}
         ${pullBlock}
+        ${banner}
 
         set -x
         ${server} \
@@ -168,16 +239,21 @@ let
       device,
     }:
     let
-      bench = llamaBenchFor device;
+      bench =
+        if model.serverPackage != null then
+          lib.getExe' model.serverPackage "llama-bench"
+        else
+          llamaBenchFor device;
       safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-bench_${safeDevice}_${safeName}";
       # Exported for capture_metadata's llama-server invocation. llama-bench
       # itself ignores LLAMA_ARG_DEVICE and uses the explicit -dev CLI flag.
+      extraEnvList = lib.mapAttrsToList (k: v: "${k}=${v}") model.extraEnv;
       envExports = lib.concatStringsSep "\n" (
         map (
           e: if lib.hasPrefix "UNSET:" e then "unset ${lib.removePrefix "UNSET:" e}" else "export ${e}"
-        ) (envForDevice device)
+        ) (envForDevice device ++ extraEnvList)
       );
       # Matching llama-server script — used to capture
       # runtime metadata via /props before benchmarking.

@@ -1,0 +1,37 @@
+Provenance for sharp.jinja
+=========================
+
+This is a vendored, pinned copy of the Qwen3.8 "sharp" chat template from
+the PieBru Strix-Halo/gfx1151 deployment repo. It is kept byte-identical to
+the upstream file so its SHA-256 is reproducible.
+
+Upstream URL (fetched 2026-08-27):
+  https://github.com/PieBru/Qwen-3.8-27B_Strix-Halo_gfx1151/blob/main/models/sharp.jinja
+
+Upstream repository:
+  https://github.com/PieBru/Qwen-3.8-27B_Strix-Halo_gfx1151
+  (MIT License, Copyright (c) 2026 PieBru <piebru@gmail.com>)
+
+Template version (line 1 of the file):
+  qwen3.8-froggeric-v22.3
+
+SHA-256 of this vendored file (verify with `sha256sum sharp.jinja`):
+  6e1439c913ad7df4a966493ad70de7e7fc5a548d41bbe417c1571f766603629b
+
+Why this template
+-----------------
+The Qwen3.8-27B GGUF embedded chat template does not correctly round-trip
+OpenAI-compatible tool calls (see PieBru issue tracker and
+ggml-org/llama.cpp issue #27588: trailing `assistant(tool_calls)` is silently
+dropped in the auto-prefill/continuation path). `sharp.jinja` is a reviewed,
+tested replacement that handles tool calls (default `tool_call_format = xml`),
+the `enable_thinking` / `preserve_thinking` / `preserve_reasoning` kwargs,
+and reasoning-effort steering. It is loaded with `--jinja --chat-template
+<path>`.
+
+Re-pinning
+----------
+To re-pin to a newer upstream version, fetch the new file, record its new
+SHA-256 here, and re-run the tool-call fixtures (see
+doc/qwen38-gfx1151/ and tests/qwen38-toolcall/). Do NOT ship a template
+change based only on a successful model load.

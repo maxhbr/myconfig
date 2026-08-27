@@ -19,7 +19,11 @@ let
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix { inherit modelsPullDir; };
   ornith = import ./Ornith-1.0-35B.nix { inherit modelsPullDir; };
   qwen3_235B = import ./Qwen3-235B-A22B.nix { inherit modelsPullDir; };
-  qwen3_8_27B = import ./Qwen3.8-27B.nix { inherit modelsPullDir; };
+  qwen3_8_27B = import ./Qwen3.8-27B.nix {
+    inherit modelsPullDir;
+    sharpTemplate = ../../../modules/myconfig.ai/myconfig.ai.llama-cpp/templates/sharp.jinja;
+    forkPkg = pkgs.llama-cpp-strix-halo;
+  };
   hy3 = import ./Hy3-Q2_K_L.nix { inherit modelsPullDir; };
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
@@ -168,16 +172,21 @@ let
         exclusive = true;
       };
     };
-    models = map (
-      model:
-      model
-      // {
-        devices = [
-          "Vulkan0"
-          "ROCm0"
-        ];
-      }
-    ) (amdModels ++ fromRtxModels);
+    models =
+      map (
+        model:
+        model
+        // {
+          devices = [
+            "Vulkan0"
+            "ROCm0"
+          ];
+        }
+      ) (amdModels ++ fromRtxModels)
+      # Candidate profiles carry their own single-backend `devices` and
+      # per-model options (serverPackage/extraEnv/noMmap); they must NOT be
+      # forced to ["Vulkan0" "ROCm0"], so they are appended AFTER the map.
+      ++ qwen3_8_27B.candidateModels;
   };
   rtx-llama-cpp-config = {
     # Single CUDA0-bound llama-server instance on port 33656 (the new
@@ -240,7 +249,11 @@ in
     myconfig.ai.pull_models.models.${modelsPullDir} = lib.unique (
       lib.concatMap (m: m.pull-models.hf_spec) (
         builtins.filter (m: (m.pull-models or null) != null) (
-          amdModels ++ qwen3_8_27B-multiGpu ++ qwen3_6_35B-A3B-multiGpu ++ hy3-multiGpu
+          amdModels
+          ++ qwen3_8_27B-multiGpu
+          ++ qwen3_6_35B-A3B-multiGpu
+          ++ hy3-multiGpu
+          ++ qwen3_8_27B.candidateModels
         )
       )
     );
