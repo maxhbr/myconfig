@@ -199,7 +199,8 @@ let
       # ROCm -> llama-cpp-rocm, CUDA -> llama-cpp+cudaSupport). When set,
       # the given package's `llama-server` / `llama-bench` binaries are
       # used instead — e.g. a pinned fork for one backend without
-      # moving the other backends off upstream.
+      # moving the other backends off upstream. Such models are also
+      # excluded from the router (see the description below).
       serverPackage = mkOption {
         type = types.nullOr types.package;
         default = null;
@@ -207,10 +208,25 @@ let
           Override the llama.cpp package used to serve and benchmark
           this model. When null (default), the package is auto-selected
           from the device string. When set (e.g. to a pinned fork), the
-          fork's `llama-server` / `llama-bench` binaries are used for
-          this model only — other models keep their device-default
-          package. The package must provide `llama-server` and
-          `llama-bench`.
+          per-(model, device) script wrappers and llama-swap entries for
+          this model use `serverPackage.bin/llama-server` and
+          `serverPackage.bin/llama-bench` instead of the device-default
+          build from `pkgs.llama-cpp-vulkan` / `pkgs.llama-cpp-rocm` /
+          `pkgs.llama-cpp` (CUDA). The package must provide
+          `llama-server` and `llama-bench`.
+
+          Models with a non-null `serverPackage` are **excluded from
+          the router** (the `llama-server` service backend and the
+          `llama-server_<Device>` INI-preset wrappers): the router runs
+          a single `services.llama-cpp.package` binary for every
+          section in its INI preset and cannot mix per-model packages.
+          They remain available via llama-swap and the
+          per-(model, device) script wrappers.
+
+          Use this for models that require a patched or custom
+          llama.cpp build (e.g. the PR-27742 `qwen4exp` build for
+          Qwen3.8-Flash-Next, or the Nathanw1014 strix-halo-vulkan
+          fork) without forcing the entire host onto that build.
         '';
       };
       # Per-model extra environment variables, exported around the

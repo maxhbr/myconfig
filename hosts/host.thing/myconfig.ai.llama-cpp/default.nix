@@ -25,6 +25,10 @@ let
     forkPkg = pkgs.llama-cpp-strix-halo;
   };
   hy3 = import ./Hy3-Q2_K_L.nix { inherit modelsPullDir; };
+  qwen38_flash_next = import ./Qwen3.8-Flash-Next.nix {
+    inherit modelsPullDir;
+    serverPackage = patched-llama-cpp-pkg;
+  };
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -80,6 +84,7 @@ let
     ++ agentsA1.amdModels
     ++ qwen3_235B.amdModels
     ++ qwen3_8_27B.amdModels
+    ++ qwen38_flash_next.amdModels
     ++ hy3.amdModels
   );
   fromRtxModels =
@@ -146,10 +151,24 @@ let
         ) rtxModels
       );
 
-  # Package built for the host with ROCm+Vulkan support (variant = "amd").
-  # Passed into the container so it reuses the same binary instead of
-  # falling back to the plain llama-cpp without GPU backends.
+  # Lookup of what the host's inference-cpp hook currently resolves to
+  # (the stock nixpkgs build selected by services.llama-cpp.nix for the
+  # host's GPU variants).  Used by the container override below.
   host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
+
+  # PR-27742 patched build for qwen4exp (Qwen3.8-Flash-Next) support.
+  # Only the Flash-Next models need this — it is set per-model via the
+  # `serverPackage` option so the rest of the host (RTX llama-server,
+  # other ad-hoc wrappers) keeps the stock nixpkgs build.  The
+  # Flash-Next models run on Vulkan0/ROCm0 (container llama-swap) and
+  # Vulkan1 (host scriptOnlyModels), never on CUDA, so ROCm+Vulkan
+  # suffices.
+  patched-llama-cpp-pkg = pkgs.llama-cpp-pr-27742.override {
+    rocmSupport = true;
+    vulkanSupport = true;
+    cudaSupport = false;
+    blasSupport = false;
+  };
 
   gfx-llama-cpp-config = {
     serviceVariant = "llama-swap";
@@ -254,6 +273,7 @@ in
           ++ qwen3_6_35B-A3B-multiGpu
           ++ hy3-multiGpu
           ++ qwen3_8_27B.candidateModels
+          ++ qwen38_flash_next.amdModels
         )
       )
     );
@@ -316,9 +336,6 @@ in
             rocmPackages.rocm-smi
           ];
           hardware.graphics.enable = true;
-          # Use the host's llama-cpp binary (built with ROCm+Vulkan for
-          # variant = "amd") instead of the container's default plain
-          # build which lacks GPU backend support.
           services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
           myconfig.ai.llama-cpp = gfx-llama-cpp-config;
         };

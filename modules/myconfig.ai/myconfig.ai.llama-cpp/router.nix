@@ -60,8 +60,17 @@ let
   # analogue — every section in the INI is API-reachable. We fold both
   # lists in so the router exposes every model the user marked for
   # this device.
+  #
+  # Models with a per-model `serverPackage` override are excluded: the
+  # router uses a single `services.llama-cpp.package` binary for every
+  # section in its INI preset, so it cannot serve models that need a
+  # different build. Those models are still available via llama-swap
+  # and the per-(model, device) script wrappers.
   modelsForDevice =
-    device: builtins.filter (m: builtins.elem device (m.devices ++ m.unlistedDevices)) unpackedModels;
+    device:
+    builtins.filter (
+      m: m.serverPackage == null && builtins.elem device (m.devices ++ m.unlistedDevices)
+    ) unpackedModels;
 
   # `[*]` shared defaults applied to every model unless overridden in
   # a per-model section. Mirrors the flags that scripts.nix bakes into
