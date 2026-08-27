@@ -194,6 +194,75 @@ let
           even if the global disables it.
         '';
       };
+      # Per-model llama.cpp package override. When null the package is
+      # selected from the device string (Vulkan -> llama-cpp-vulkan,
+      # ROCm -> llama-cpp-rocm, CUDA -> llama-cpp+cudaSupport). When set,
+      # the given package's `llama-server` / `llama-bench` binaries are
+      # used instead — e.g. a pinned fork for one backend without
+      # moving the other backends off upstream.
+      serverPackage = mkOption {
+        type = types.nullOr types.package;
+        default = null;
+        description = ''
+          Override the llama.cpp package used to serve and benchmark
+          this model. When null (default), the package is auto-selected
+          from the device string. When set (e.g. to a pinned fork), the
+          fork's `llama-server` / `llama-bench` binaries are used for
+          this model only — other models keep their device-default
+          package. The package must provide `llama-server` and
+          `llama-bench`.
+        '';
+      };
+      # Per-model extra environment variables, exported around the
+      # llama-server / llama-bench run in ADDITION to the device-specific
+      # vars (LLAMA_ARG_DEVICE, CUDA_VISIBLE_DEVICES suppression). Use
+      # for backend tuning that should NOT be applied globally.
+      extraEnv = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        description = ''
+          Extra environment variables exported around this model's
+          llama-server / llama-bench runs, on top of the device-specific
+          vars. Keys are variable names, values are their string values.
+          Use for backend-specific tuning scoped to one model (e.g.
+          `HSA_ENABLE_SDMA = "0"` for a single ROCm candidate) that
+          should NOT be applied to other ROCm models.
+        '';
+      };
+      # Explicit --no-mmap control. null = pass params through as-is
+      # (the legacy behaviour: --no-mmap is present iff it is in
+      # `params`). true = force --no-mmap on. false = strip --no-mmap
+      # so the model is served with mmap+mlock.
+      noMmap = mkOption {
+        type = types.nullOr types.bool;
+        default = null;
+        description = ''
+          Control the `--no-mmap` flag explicitly, independent of the
+          free-form `params` list.
+          null (default): pass `params` through verbatim; `--no-mmap` is
+            present iff it appears in `params`.
+          true: ensure `--no-mmap` is in the effective flags (added if
+            not already in `params`).
+          false: strip `--no-mmap` from `params` so the model is served
+            with mmap + mlock (the GGUF is mmap'd then mlock'd into
+            RAM), which can reduce resident memory for large models.
+        '';
+      };
+      # Pinned SHA-256 of the target model file (the LFS oid, hex).
+      # Logged in the server startup banner for provenance. Not
+      # verified at runtime (hashing a multi-GB file at startup would
+      # add minutes of I/O); verify out-of-band with `sha256sum`.
+      sha256 = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Pinned SHA-256 (hex digest, the LFS oid) of the target model
+          file. Logged in the server startup banner for provenance /
+          audit. Not verified at startup (verifying a multi-GB file
+          would add minutes of I/O); verify out-of-band with
+          `sha256sum <path>`.
+        '';
+      };
       variants = mkOption {
         type = types.attrsOf (
           types.submodule {
