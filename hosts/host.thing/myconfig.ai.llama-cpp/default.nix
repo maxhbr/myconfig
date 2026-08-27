@@ -324,8 +324,8 @@ in
             rocmPackages.rocm-smi
           ];
           hardware.graphics.enable = true;
-          # services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
-          services.llama-cpp.package = lib.mkForce patched-llama-cpp-pkg;
+          services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
+          # services.llama-cpp.package = lib.mkForce patched-llama-cpp-pkg;
           myconfig.ai.llama-cpp = gfx-llama-cpp-config;
         };
     };
