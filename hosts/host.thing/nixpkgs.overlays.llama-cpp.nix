@@ -50,6 +50,19 @@ let
   version = "10549";
   hash = "sha256-ULVNojWLWvNCCqggfrK5+hZqmscbOaqoTa7n5r/jDm8=";
   npmDepsHash = "sha256-2Q7XhaLAArmviOLdQsNbYTfdyDE5pW9lR26cRHEVl9k="; # == nixpkgs b10408 (lock unchanged)
+
+  # Nathanw1014 strix-halo-vulkan fork, pinned to the measured reference
+  # commit. Rechecked before pinning: commit 0eb5280 is on the
+  # `strix-halo-vulkan` branch (not a moving branch). The fork's
+  # `tools/ui/package-lock.json` is byte-identical to b10549's (and
+  # b10408's), so it reuses the same npmDepsHash. Built as a Vulkan
+  # variant on top of the overlaid b10549 llama-cpp-vulkan so it shares
+  # the same build infrastructure (cmake flags, deps) and only swaps
+  # the source. Exposed as a SEPARATE derivation (llama-cpp-strix-halo)
+  # so the upstream Vulkan/ROCm/CUDA backends stay on b10549.
+  forkVersion = "0eb5280-strix-halo";
+  forkRev = "0eb528051a56f34567312ce63ab4e14a3fc71d89";
+  forkHash = "sha256-2PG8G3P4q+S4TUH4Te/tOStrHqrDycpxJZeiBc+89kI=";
 in
 {
   nixpkgs.overlays = [
@@ -61,6 +74,28 @@ in
           repo = "llama.cpp";
           tag = "b${version}";
           inherit hash;
+          leaveDotGit = true;
+          postFetch = ''
+            git -C "$out" rev-parse --short HEAD > $out/COMMIT
+            find "$out" -name .git -print0 | xargs -0 rm -rf
+          '';
+        };
+        inherit npmDepsHash;
+      });
+
+      # Pinned Nathanw1014 strix-halo-vulkan fork (Vulkan only). Built on
+      # top of the overlaid llama-cpp-vulkan (b10549 build infra +
+      # vulkanSupport) with the fork source swapped in. Used ONLY by the
+      # DFlash2 candidate via its per-model `serverPackage`; does NOT
+      # replace the upstream llama-cpp-vulkan used by every other Vulkan
+      # model.
+      llama-cpp-strix-halo = final.llama-cpp-vulkan.overrideAttrs (oldAttrs: {
+        version = forkVersion;
+        src = prev.fetchFromGitHub {
+          owner = "Nathanw1014";
+          repo = "llama.cpp";
+          rev = forkRev;
+          hash = forkHash;
           leaveDotGit = true;
           postFetch = ''
             git -C "$out" rev-parse --short HEAD > $out/COMMIT
