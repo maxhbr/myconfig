@@ -145,19 +145,13 @@ let
       );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
-  # Passed into the container so it reuses the same binary instead of
-  # falling back to the plain llama-cpp without GPU backends.
+  # Lookup of what the host's inference-cpp hook currently resolves to;
+  # after the `myconfig.ai.inference-cpp.llama-cpp.package` assignment
+  # below, this is the patched package itself (pre-PR-27742 it was the
+  # unpinned nixpkgs build, which is the one-line rollback value for
+  # both the hook and the container override below).
   host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
 
-  # Sibling of host-llama-cpp-pkg: same b10056 pin with
-  # ggml-org/llama.cpp PR #27742 applied (host-scoped overlay,
-  # nixpkgs.overlays.llama-cpp-pr-27742.nix), with the same GPU flags
-  # as host-llama-cpp-pkg (variant = [ "amd" ] on this host, see
-  # hardware.Radeon8060S.nix -> rocm + vulkan). Only consumed by the
-  # llama-cpp-33657 container below.
-  #
-  # Keep the flags in sync with `my-llama-cpp` in
-  # modules/myconfig.ai/myconfig.ai.llama-cpp/services.llama-cpp.nix.
   patched-llama-cpp-pkg = pkgs.llama-cpp-pr-27742.override {
     rocmSupport = true;
     vulkanSupport = true;
@@ -265,6 +259,15 @@ in
 
     myconfig.ai.llama-cpp = rtx-llama-cpp-config;
 
+    # Single binary on the host: point the inference-cpp package hook at
+    # the PR-27742 build instead of the unpinned nixpkgs one. Without
+    # this, the host's ad-hoc `llama-server_*` ad-hoc wrappers (and host
+    # llama-cpp services, which default to this package) run the
+    # unpatched build, which cannot load architectures added by the PR
+    # — the Flash-Next GGUFs declare `qwen4exp` and fail with
+    # "unknown model architecture" unless this override is in place.
+    myconfig.ai.inference-cpp.llama-cpp.package = patched-llama-cpp-pkg;
+
     ############
     # Vulkan-only sibling instance running the llama-server router
     # backend (single llama-server bound to Vulkan0 with an INI preset
@@ -321,13 +324,7 @@ in
             rocmPackages.rocm-smi
           ];
           hardware.graphics.enable = true;
-          # llama-cpp PR-27742 build (b10056 + PR, rocm+vulkan) — needed
-          # by the Qwen3.8-Flash-Next models above. All other
-          # container-served models run the same patched binary; the
-          # host-side build (CUDA router on 33656, ad-hoc
-          # Vulkan1 scripts, m-home wrappers) stays on the unpinned
-          # llama-cpp. host-llama-cpp-pkg is kept above
-          # for a one-line rollback.
+          # services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
           services.llama-cpp.package = lib.mkForce patched-llama-cpp-pkg;
           myconfig.ai.llama-cpp = gfx-llama-cpp-config;
         };
