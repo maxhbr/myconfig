@@ -143,9 +143,19 @@ let
       );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
-  # Passed into the container so it reuses the same binary instead of
-  # falling back to the plain llama-cpp without GPU backends.
+  # Lookup of what the host's inference-cpp hook currently resolves to;
+  # after the `myconfig.ai.inference-cpp.llama-cpp.package` assignment
+  # below, this is the patched package itself (pre-PR-27742 it was the
+  # unpinned nixpkgs build, which is the one-line rollback value for
+  # both the hook and the container override below).
   host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
+
+  patched-llama-cpp-pkg = pkgs.llama-cpp-pr-27742.override {
+    rocmSupport = true;
+    vulkanSupport = true;
+    cudaSupport = false;
+    blasSupport = false;
+  };
 
   gfx-llama-cpp-config = {
     serviceVariant = "llama-swap";
@@ -247,6 +257,15 @@ in
 
     myconfig.ai.llama-cpp = rtx-llama-cpp-config;
 
+    # Single binary on the host: point the inference-cpp package hook at
+    # the PR-27742 build instead of the unpinned nixpkgs one. Without
+    # this, the host's ad-hoc `llama-server_*` ad-hoc wrappers (and host
+    # llama-cpp services, which default to this package) run the
+    # unpatched build, which cannot load architectures added by the PR
+    # — the Flash-Next GGUFs declare `qwen4exp` and fail with
+    # "unknown model architecture" unless this override is in place.
+    myconfig.ai.inference-cpp.llama-cpp.package = patched-llama-cpp-pkg;
+
     ############
     # Vulkan-only sibling instance running the llama-server router
     # backend (single llama-server bound to Vulkan0 with an INI preset
@@ -303,10 +322,8 @@ in
             rocmPackages.rocm-smi
           ];
           hardware.graphics.enable = true;
-          # Use the host's llama-cpp binary (built with ROCm+Vulkan for
-          # variant = "amd") instead of the container's default plain
-          # build which lacks GPU backend support.
-          services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
+          # services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
+          services.llama-cpp.package = lib.mkForce patched-llama-cpp-pkg;
           myconfig.ai.llama-cpp = gfx-llama-cpp-config;
         };
     };
