@@ -346,6 +346,16 @@ let
       esac
     '';
   };
+  # `git branch-to-worktree`: move a branch out of the main checkout into a
+  # workmux-style sibling worktree (`../<repo>__worktrees/<slugified-branch>`).
+  gitBranchToWorktree = pkgs.writeShellApplication {
+    name = "git-branch-to-worktree";
+    runtimeInputs = with pkgs; [
+      git
+      gawk
+    ];
+    text = builtins.readFile ./bin/git-branch-to-worktree.sh;
+  };
 in
 {
   config = {
@@ -379,6 +389,7 @@ in
             git-crypt
             git-secrets
             gitBranchSummary
+            gitBranchToWorktree
           ];
 
           programs.git = lib.mkMerge [
