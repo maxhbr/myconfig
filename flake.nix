@@ -701,6 +701,10 @@
                   # also executed by a human on a KVM host.
                   "tests/measure-boot.sh"
                   "modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh"
+                  # Qwen3.8-27B gfx1151 benchmark + tool-call fixtures (run by a
+                  # human on the gfx1151 hardware).
+                  "tests/qwen38-toolcall-fixture.sh"
+                  "tests/qwen38-benchmark-comparison.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {
