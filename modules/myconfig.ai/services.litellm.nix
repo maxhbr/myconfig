@@ -7,6 +7,31 @@
   config,
   ...
 }:
+let
+  # `expression>=5.6.0,<6.0` is a runtime dependency of litellm 1.97.0's
+  # `[proxy]` extra — imported in
+  # litellm/proxy/_experimental/mcp_server/outbound_credentials/types.py.
+  # It is not packaged in the pinned `nixpkgs` yet, only in the `master`
+  # nixpkgs input (upstream PR #555030, merged 2026-08-24, commit
+  # 432724c94f15). Build it here against the pinned nixpkgs' Python so the
+  # interpreter derivation matches the one litellm uses — mixing Python
+  # packages built from different nixpkgs revisions fails the nixpkgs
+  # same-Python-interpreter check, even when the version string is identical.
+  # TODO: replace with `pkgs.python3Packages.expression` once the `nixpkgs`
+  # input packages it.
+  expression = pkgs.python3Packages.buildPythonPackage (finalAttrs: {
+    pname = "expression";
+    version = "5.6.0";
+    pyproject = true;
+    src = pkgs.python3Packages.fetchPypi {
+      inherit (finalAttrs) pname version;
+      sha256 = "sha256-RU9v4Tg0cZSkPH+HjZWO/puEucx3DkYgEMelLhgFgGU=";
+    };
+    build-system = [ pkgs.python3Packages.poetry-core ];
+    dependencies = [ pkgs.python3Packages.typing-extensions ];
+    pythonImportsCheck = [ "expression" ];
+  });
+in
 {
 
   imports = [
@@ -79,35 +104,38 @@
     services.litellm = {
       host = lib.mkForce "127.0.0.1";
       port = lib.mkForce 4000;
-      # The upstream litellm package does not include prometheus_client,
-      # which is required for the `prometheus` callback used below for
-      # observability. Rebuild the wrapped Python application with that
-      # extra dependency added.
+      # litellm 1.97.0's `[proxy]` extra needs two things that are not
+      # both available in a single nixpkgs input right now:
       #
-      # The package is taken from the `master` nixpkgs input (exposed as
-      # `pkgs.master` by nixosModules.core), not from the pinned `nixpkgs`
-      # input: litellm 1.97.0's `[proxy]` extra requires the `expression`
-      # module (`expression>=5.6.0,<6.0`), but the `nixpkgs` input tracks
-      # the stable `nixos-unstable` branch, which has not received upstream
-      # nixpkgs PR #555030 (merged to master 2026-08-24, commit
-      # 432724c94f152e92dd3308bf021d4e35101ea44c) that packages `expression`
-      # 5.6.0 and adds it to the litellm `proxy` dependencies. Without it
-      # the proxy dies at startup with
-      #   ModuleNotFoundError: No module named 'expression'.
-      # At the moment the master-tree litellm 1.97.0 closure is identical
-      # to the pinned one plus `expression` (same Python 3.14.7), so this
-      # is the minimal fix. TODO: once the `nixpkgs` input includes commit
-      # 432724c94f15, switch `pkgs.master` back to `pkgs` below.
-      package = lib.mkIf config.myconfig.observability.client.enable (
-        pkgs.master.python3Packages.toPythonApplication (
-          pkgs.master.python3Packages.litellm.overridePythonAttrs (oldAttrs: {
-            dependencies =
-              (oldAttrs.dependencies or [ ])
-              ++ pkgs.master.python3Packages.litellm.optional-dependencies.proxy
-              ++ pkgs.master.python3Packages.litellm.optional-dependencies.extra_proxy
-              ++ [ pkgs.master.python3Packages.prometheus-client ];
-          })
-        )
+      # 1. `expression>=5.6.0,<6.0` — imported at runtime in
+      #    litellm/proxy/_experimental/mcp_server/outbound_credentials/types.py.
+      #    Not packaged in the pinned `nixpkgs` (only in `master`, PR #555030).
+      #    Built locally against the pinned Python above (see `expression`
+      #    let-binding) so the interpreter derivation matches litellm's.
+      #
+      # 2. fastapi — litellm 1.97.0 imports `get_flat_dependant` from
+      #    `fastapi.dependencies.utils`, which was removed in fastapi 0.141.x.
+      #    The `master` input already ships fastapi 0.141.1 (broken), while the
+      #    pinned `nixpkgs` input still ships fastapi 0.139.0 (works).
+      #
+      # So the litellm package is taken from the pinned `nixpkgs` input (for
+      # a compatible fastapi), and `expression` is built locally. The nixpkgs
+      # `litellm` by-name wrapper adds proxy + extra_proxy + proxy-runtime
+      # (the last already includes prometheus-client, needed for the
+      # `prometheus` callback configured below when observability is enabled);
+      # we replicate that here and add the missing `expression`.
+      # TODO: once the `nixpkgs` input packages `expression` (or litellm drops
+      # the `get_flat_dependant` import for newer fastapi), replace this with
+      # plain `pkgs.litellm`.
+      package = pkgs.python3Packages.toPythonApplication (
+        pkgs.python3Packages.litellm.overridePythonAttrs (oldAttrs: {
+          dependencies =
+            (oldAttrs.dependencies or [ ])
+            ++ pkgs.python3Packages.litellm.optional-dependencies.proxy
+            ++ pkgs.python3Packages.litellm.optional-dependencies.extra_proxy
+            ++ pkgs.python3Packages.litellm.optional-dependencies.proxy-runtime
+            ++ [ expression ];
+        })
       );
       settings.general_settings = {
         disable_spend_logs = true;
