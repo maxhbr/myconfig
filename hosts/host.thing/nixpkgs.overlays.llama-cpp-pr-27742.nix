@@ -4,26 +4,28 @@
 # Sibling attr of the pinned `llama-cpp` (nixpkgs.overlays.llama-cpp.nix)
 # with ggml-org/llama.cpp PR #27742 applied:
 #   https://github.com/ggml-org/llama.cpp/pull/27742
-# Exposes `llama-cpp-pr-27742` on the host's pkgs (same pinned b10056
-# source + committed COMMIT/npmDepsHash handling, no new fetch).
+# ("qwen4exp" architecture — Qwen3.8-Flash-Next support).
 #
-# NOTE: the pinned source parameters (version/hash/npmDepsHash) are
-# duplicated from nixpkgs.overlays.llama-cpp.nix rather than depending on
-# prev being the pinned build: the overlay application order for
-# `nixpkgs.overlays` does not guarantee that an earlier-listed overlay's
-# rewrite of `llama-cpp` is visible to this one, so prev-derived pins
-# silently fall back to the unpinned nixpkgs source. Keep the constants
-# below in sync with ./nixpkgs.overlays.llama-cpp.nix when bumping.
+# Instead of pinning to a release tag and applying a fragile patch that
+# breaks every time the base source drifts, this overlay fetches the PR
+# head commit directly.  The PR branch lives in the `unslothai` fork:
+#   https://github.com/unslothai/llama.cpp/tree/qwen4exp/qwen3.8-flash-next
+# and is mirrored as `refs/pull/27742/head` on the upstream repo.
 #
-# GPU-flag overrides are applied by the consumer
+# Exposes `llama-cpp-pr-27742` on the host's pkgs.  GPU-flag overrides
+# are applied by the consumer
 # (hosts/host.thing/myconfig.ai.llama-cpp/default.nix:
 # `patched-llama-cpp-pkg`) and stay out of this overlay.
 { ... }:
 let
-  # keep in sync with ./nixpkgs.overlays.llama-cpp.nix
+  # PR #27742 head commit (unslothai:qwen4exp/qwen3.8-flash-next).
+  rev = "ef6876693f058169161143dc8e301ac104b45373";
+  # `version` is only used for the package name and LLAMA_BUILD_NUMBER
+  # (a cosmetic integer printed in --version output).  It does NOT need
+  # to correspond to a release tag — the source is pinned by `rev`.
   version = "10056";
-  hash = "sha256-1EU1JUHfsTqZYdk55eYY4FHkH7uhLeMCT5Hy5xq7GA0=";
-  npmDepsHash = "sha256-6s9skw1wzEfm9QKktTqea3J+oudQAsS6O2VnZEMXAdw=";
+  hash = "sha256-I/rakfFFIWK7Zeo8duZ9tYppPEpViVLWfT22MEnsPLM=";
+  npmDepsHash = "sha256-2Q7XhaLAArmviOLdQsNbYTfdyDE5pW9lR26cRHEVl9k=";
 in
 {
   nixpkgs.overlays = [
@@ -33,15 +35,14 @@ in
         src = prev.fetchFromGitHub {
           owner = "ggml-org";
           repo = "llama.cpp";
-          tag = "b${version}";
-          inherit hash;
+          inherit rev hash;
           leaveDotGit = true;
           postFetch = ''
             git -C "$out" rev-parse --short HEAD > $out/COMMIT
             find "$out" -name .git -print0 | xargs -0 rm -rf
           '';
         };
-        patches = (oldAttrs.patches or [ ]) ++ [ ./llama-cpp-pr-27742.patch ];
+        patches = [ ];
       });
     })
   ];
