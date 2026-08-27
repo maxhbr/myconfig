@@ -21,6 +21,7 @@ let
   qwen3_235B = import ./Qwen3-235B-A22B.nix { inherit modelsPullDir; };
   qwen3_8_27B = import ./Qwen3.8-27B.nix { inherit modelsPullDir; };
   hy3 = import ./Hy3-Q2_K_L.nix { inherit modelsPullDir; };
+  qwen38_flash_next = import ./Qwen3.8-Flash-Next.nix { inherit modelsPullDir; };
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -76,6 +77,7 @@ let
     ++ agentsA1.amdModels
     ++ qwen3_235B.amdModels
     ++ qwen3_8_27B.amdModels
+    ++ qwen38_flash_next.amdModels
     ++ hy3.amdModels
   );
   fromRtxModels =
@@ -146,6 +148,22 @@ let
   # Passed into the container so it reuses the same binary instead of
   # falling back to the plain llama-cpp without GPU backends.
   host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
+
+  # Sibling of host-llama-cpp-pkg: same b10056 pin with
+  # ggml-org/llama.cpp PR #27742 applied (host-scoped overlay,
+  # nixpkgs.overlays.llama-cpp-pr-27742.nix), with the same GPU flags
+  # as host-llama-cpp-pkg (variant = [ "amd" ] on this host, see
+  # hardware.Radeon8060S.nix -> rocm + vulkan). Only consumed by the
+  # llama-cpp-33657 container below.
+  #
+  # Keep the flags in sync with `my-llama-cpp` in
+  # modules/myconfig.ai/myconfig.ai.llama-cpp/services.llama-cpp.nix.
+  patched-llama-cpp-pkg = pkgs.llama-cpp-pr-27742.override {
+    rocmSupport = true;
+    vulkanSupport = true;
+    cudaSupport = false;
+    blasSupport = false;
+  };
 
   gfx-llama-cpp-config = {
     serviceVariant = "llama-swap";
@@ -303,10 +321,14 @@ in
             rocmPackages.rocm-smi
           ];
           hardware.graphics.enable = true;
-          # Use the host's llama-cpp binary (built with ROCm+Vulkan for
-          # variant = "amd") instead of the container's default plain
-          # build which lacks GPU backend support.
-          services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
+          # llama-cpp PR-27742 build (b10056 + PR, rocm+vulkan) — needed
+          # by the Qwen3.8-Flash-Next models above. All other
+          # container-served models run the same patched binary; the
+          # host-side build (CUDA router on 33656, ad-hoc
+          # Vulkan1 scripts, m-home wrappers) stays on the unpinned
+          # llama-cpp. host-llama-cpp-pkg is kept above
+          # for a one-line rollback.
+          services.llama-cpp.package = lib.mkForce patched-llama-cpp-pkg;
           myconfig.ai.llama-cpp = gfx-llama-cpp-config;
         };
     };
