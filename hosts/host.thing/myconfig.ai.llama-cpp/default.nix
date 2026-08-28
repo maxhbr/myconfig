@@ -29,6 +29,10 @@ let
     inherit modelsPullDir;
     serverPackage = patched-llama-cpp-pkg;
   };
+  glm53_flash = import ./GLM-5.3-Flash.nix {
+    inherit modelsPullDir;
+    serverPackage = patched-llama-cpp-pr-27754-pkg;
+  };
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -85,6 +89,7 @@ let
     ++ qwen3_235B.amdModels
     ++ qwen3_8_27B.amdModels
     ++ qwen38_flash_next.amdModels
+    ++ glm53_flash.amdModels
     ++ hy3.amdModels
   );
   fromRtxModels =
@@ -164,6 +169,20 @@ let
   # Vulkan1 (host scriptOnlyModels), never on CUDA, so ROCm+Vulkan
   # suffices.
   patched-llama-cpp-pkg = pkgs.llama-cpp-pr-27742.override {
+    rocmSupport = true;
+    vulkanSupport = true;
+    cudaSupport = false;
+    blasSupport = false;
+  };
+
+  # PR-27754 patched build for glm5next (GLM-5.3-Flash) support.
+  # Only the GLM-5.3-Flash models need this — it is set per-model via
+  # the `serverPackage` option so the rest of the host (RTX
+  # llama-server, other ad-hoc wrappers) keeps the stock nixpkgs build.
+  # The GLM-5.3-Flash models run on Vulkan0/ROCm0 (container
+  # llama-swap) and Vulkan1 (host scriptOnlyModels), never on CUDA, so
+  # ROCm+Vulkan suffices.
+  patched-llama-cpp-pr-27754-pkg = pkgs.llama-cpp-pr-27754.override {
     rocmSupport = true;
     vulkanSupport = true;
     cudaSupport = false;
@@ -274,6 +293,7 @@ in
           ++ hy3-multiGpu
           ++ qwen3_8_27B.candidateModels
           ++ qwen38_flash_next.amdModels
+          ++ glm53_flash.amdModels
         )
       )
     );

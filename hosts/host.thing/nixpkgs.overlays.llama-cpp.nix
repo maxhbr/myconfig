@@ -103,6 +103,20 @@ in
           '';
         };
         inherit npmDepsHash;
+        # nixpkgs's package.nix passes `LLAMA_BUILD_NUMBER` as a cmake
+        # feature derived from `finalAttrs.version` (see
+        # `cmakeFeature "LLAMA_BUILD_NUMBER" finalAttrs.version`).
+        # `LLAMA_BUILD_NUMBER` is substituted into `build-info.cpp.in`
+        # as `int LLAMA_BUILD_NUMBER = @LLAMA_BUILD_NUMBER@;`, so it
+        # MUST be an integer. The descriptive `forkVersion`
+        # ("0eb5280-strix-halo") is not an integer and would produce
+        # `int LLAMA_BUILD_NUMBER = 0eb5280-strix-halo;` (invalid C++).
+        # Drop the auto-generated flag and pass 0 instead — the build
+        # number is cosmetic (printed in `--version`); the fork identity
+        # is already captured in the package name and COMMIT file.
+        cmakeFlags =
+          builtins.filter (f: builtins.match "-DLLAMA_BUILD_NUMBER:STRING=.*" f == null) oldAttrs.cmakeFlags
+          ++ [ "-DLLAMA_BUILD_NUMBER:STRING=0" ];
       });
     })
   ];

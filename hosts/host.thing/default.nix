@@ -56,6 +56,7 @@
     )
     ./nixpkgs.overlays.llama-cpp.nix
     ./nixpkgs.overlays.llama-cpp-pr-27742.nix
+    ./nixpkgs.overlays.llama-cpp-pr-27754.nix
     ./myconfig.ai.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix
     ./myconfig.ai.vllm
