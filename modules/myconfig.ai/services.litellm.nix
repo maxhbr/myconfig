@@ -6,33 +6,7 @@
   lib,
   config,
   ...
-}:
-let
-  # `expression>=5.6.0,<6.0` is a runtime dependency of litellm 1.97.0's
-  # `[proxy]` extra — imported in
-  # litellm/proxy/_experimental/mcp_server/outbound_credentials/types.py.
-  # It is not packaged in the pinned `nixpkgs` yet, only in the `master`
-  # nixpkgs input (upstream PR #555030, merged 2026-08-24, commit
-  # 432724c94f15). Build it here against the pinned nixpkgs' Python so the
-  # interpreter derivation matches the one litellm uses — mixing Python
-  # packages built from different nixpkgs revisions fails the nixpkgs
-  # same-Python-interpreter check, even when the version string is identical.
-  # TODO: replace with `pkgs.python3Packages.expression` once the `nixpkgs`
-  # input packages it.
-  expression = pkgs.python3Packages.buildPythonPackage (finalAttrs: {
-    pname = "expression";
-    version = "5.6.0";
-    pyproject = true;
-    src = pkgs.python3Packages.fetchPypi {
-      inherit (finalAttrs) pname version;
-      sha256 = "sha256-RU9v4Tg0cZSkPH+HjZWO/puEucx3DkYgEMelLhgFgGU=";
-    };
-    build-system = [ pkgs.python3Packages.poetry-core ];
-    dependencies = [ pkgs.python3Packages.typing-extensions ];
-    pythonImportsCheck = [ "expression" ];
-  });
-in
-{
+}: {
 
   imports = [
     #{
@@ -104,40 +78,108 @@ in
     services.litellm = {
       host = lib.mkForce "127.0.0.1";
       port = lib.mkForce 4000;
-      # litellm 1.97.0's `[proxy]` extra needs two things that are not
-      # both available in a single nixpkgs input right now:
+      # litellm 1.97.0 (pinned `nixpkgs` input) predates the `fastapi>=0.140.7`
+      # compatibility fix landed upstream just after 1.97.0: its
+      # `litellm/proxy/management_endpoints/management_v1/common.py` imports
+      # `fastapi.dependencies.utils.get_flat_dependant`, which fastapi 0.140.7
+      # removed — the proxy dies at startup with that `ImportError` (this is
+      # exactly what happened when we ran it with the `master`-input build,
+      # which ships fastapi 0.141.1). Upstream fixed it in BerriAI/litellm
+      # commit f9b86b253a3f ("fix(proxy): restore query-param validation
+      # under fastapi>=0.140.7"), but no litellm release containing that
+      # commit exists yet (1.97.0 stays the latest release), so we apply that
+      # commit to the pinned 1.97.0 source via `postPatch`. The patched code
+      # uses `get_flat_params` + `ParamTypes`, which exist in *both* fastapi
+      # 0.139.0 and 0.141.x, so it stays valid across fastapi version bumps.
+      # The patch step is self-invalidating: the moment the litellm source
+      # ships the upstream fix, the `grep` below matches nothing and the step
+      # is skipped. See `doc/TODOs/drop-litellm-fastapi-source-patch.md` for
+      # how to drop this once nixpkgs bundles a fixed litellm.
       #
-      # 1. `expression>=5.6.0,<6.0` — imported at runtime in
-      #    litellm/proxy/_experimental/mcp_server/outbound_credentials/types.py.
-      #    Not packaged in the pinned `nixpkgs` (only in `master`, PR #555030).
-      #    Built locally against the pinned Python above (see `expression`
-      #    let-binding) so the interpreter derivation matches litellm's.
-      #
-      # 2. fastapi — litellm 1.97.0 imports `get_flat_dependant` from
-      #    `fastapi.dependencies.utils`, which was removed in fastapi 0.141.x.
-      #    The `master` input already ships fastapi 0.141.1 (broken), while the
-      #    pinned `nixpkgs` input still ships fastapi 0.139.0 (works).
-      #
-      # So the litellm package is taken from the pinned `nixpkgs` input (for
-      # a compatible fastapi), and `expression` is built locally. The nixpkgs
-      # `litellm` by-name wrapper adds proxy + extra_proxy + proxy-runtime
-      # (the last already includes prometheus-client, needed for the
-      # `prometheus` callback configured below when observability is enabled);
-      # we replicate that here and add the missing `expression`.
-      # TODO: once the `nixpkgs` input packages `expression` (or litellm drops
-      # the `get_flat_dependant` import for newer fastapi), replace this with
-      # plain `pkgs.litellm`.
+      # `expression>=5.6.0,<6.0` (another proxy runtime dep, imported in
+      # `litellm/proxy/_experimental/mcp_server/outbound_credentials/types.py`)
+      # is now packaged by the pinned `nixpkgs` input, so it is provided via
+      # the `optional-dependencies` additions below — no local build needed
+      # anymore. The same additions replicate the closure the nixpkgs module
+      # uses: proxy + extra_proxy + proxy-runtime (the last includes
+      # prometheus-client, needed for the `prometheus` callback configured
+      # below when observability is enabled).
       package = pkgs.python3Packages.toPythonApplication (
         pkgs.python3Packages.litellm.overridePythonAttrs (oldAttrs: {
+          # The pinned nixpkgs layout's litellm definition is a lazy def: on
+          # it, only `overridePythonAttrs` accepts the classic one-argument
+          # `oldAttrs` lambda; a plain `overrideAttrs` there expects a set
+          # and does not evaluate.
+          #
+          # `postPatch` appends to litellm's own `postPatch` (which pins the
+          # maturin version in `pyproject.toml`); `pythonImportsCheck` adds
+          # the proxy module that crashed under `fastapi>=0.141`, so the
+          # build fails loudly again if the source-vs-fastapi
+          # incompatibility regresses.
+          postPatch = oldAttrs.postPatch + ''
+            # Apply BerriAI/litellm f9b86b253a3f ("fix(proxy): restore
+            # query-param validation under fastapi>=0.140.7") to the pinned
+            # 1.97.0 source. No-op once litellm ships that fix upstream
+            # (nothing to replace in that case).
+            # locate the crash-site module (layout-independent)
+            c=$(grep -rl "^from fastapi.dependencies.utils import get_flat_dependant" . | head -n1)
+            if [ -n "$c" ]; then
+              python - "$c" <<'PYEOF'
+import re
+import sys
+
+path = sys.argv[1]
+with open(path) as f:
+    s = f.read()
+
+old_import = "from fastapi.dependencies.utils import get_flat_dependant"
+if old_import in s:
+    s = s.replace(
+        old_import,
+        "from fastapi.dependencies.utils import get_flat_params"
+        "\nfrom fastapi.params import ParamTypes",
+    )
+
+pat = re.compile(
+    r"^(\s*)return frozenset\(field\.alias"
+    r" for field in get_flat_dependant\(dependant, skip_repeats=True\)"
+    r"\.query_params\)\s*$"
+    re.MULTILINE,
+)
+m = pat.search(s)
+assert m, "unexpected litellm source: no get_flat_dependant call"
+s = s[: m.start()] + (
+    m.group(1) + "return frozenset(\n"
+    + m.group(1) + "    field.alias\n"
+    + m.group(1) + "    for field in get_flat_params(dependant)\n"
+    + m.group(1) + '    if getattr(field.field_info, "in_", None) == ParamTypes.query\n'
+    + m.group(1) + ")"
+) + s[m.end():]
+assert "get_flat_dependant" not in s
+with open(path, "w") as f:
+    f.write(s)
+print("fastapi>=0.140.7 compatibility patch applied to", path)
+PYEOF
+            fi
+          '';
+          pythonImportsCheck = [
+            "litellm"
+            "litellm.proxy.management_endpoints.management_v1.common"
+          ];
+          # Extend the PEP508 closure with the same optional-dependency lists
+          # the nixpkgs module adds for the service: proxy + extra_proxy +
+          # proxy-runtime (the last one includes prometheus-client, needed
+          # for the `prometheus` callback; `expression`, the other proxy
+          # runtime dep, ships in that list too).
           dependencies =
             (oldAttrs.dependencies or [ ])
             ++ pkgs.python3Packages.litellm.optional-dependencies.proxy
             ++ pkgs.python3Packages.litellm.optional-dependencies.extra_proxy
-            ++ pkgs.python3Packages.litellm.optional-dependencies.proxy-runtime
-            ++ [ expression ];
+            ++ pkgs.python3Packages.litellm.optional-dependencies.proxy-runtime;
         })
       );
-      settings.general_settings = {
+
+settings.general_settings = {
         disable_spend_logs = true;
         request_timeout = 3600; # 60 minutes, upstream default is 600s (10 min)
       };
