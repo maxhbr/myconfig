@@ -46,6 +46,7 @@ device lists.
 | Target | `Qwen3.8-27B-UD-Q6_K_XL.gguf` (25.3 GB) |
 | Draft | `z-lab/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q8_0.gguf` (2.0 GB) |
 | Speculation | `draft-dflash`, `spec-draft-n-max = 6` |
+| Workaround | `--override-tensor-draft output.weight=CPU` + `--no-op-offload` — the fork aborts creating the DFlash2 draft context (`pre-allocated tensor (output.weight) ... cannot run the operation (NONE)`); see `doc/TODOs/fix-dflash2-fork-abort-draft-output-weight.md` |
 | KV cache | f16 (target + draft) |
 | Context | 131,072 tokens |
 | Batch / microbatch | 4096 / 4096 |
