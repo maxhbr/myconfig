@@ -161,6 +161,19 @@ in
         "/models/z-lab-Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q8_0.gguf"
         "--spec-draft-n-max"
         "6"
+        # Workaround for a fork bug: creating the DFlash2 draft context
+        # aborts with `pre-allocated tensor (output.weight) in a buffer
+        # (Vulkan*) that cannot run the operation (NONE)` (draft lm_head
+        # is pre-allocated on the GPU but unused by the draft-dflash
+        # graph). Keep the draft's output.weight off the Vulkan weights
+        # buffer AND disable the op-offload / fused-op resolution path
+        # that trips over it. See
+        # doc/TODOs/fix-dflash2-fork-abort-draft-output-weight.md.
+        # TODO(prune): once confirmed on the gfx1151 hardware, reduce to
+        # the minimal working subset of these two flags.
+        "--override-tensor-draft"
+        "output.weight=CPU"
+        "--no-op-offload"
         "--batch-size"
         "4096"
         "--ubatch-size"
