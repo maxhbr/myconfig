@@ -34,7 +34,8 @@ set -euo pipefail
 
 for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET MOUNT_TARGET \
     UMOUNT_TARGET FINDMNT_TARGET JQ_TARGET CURL_TARGET RUNTIME_ROOT STATE_ROOT \
-    JOBS_ROOT WORKSPACE_SUBDIR HOST_HOME INPUT_SUBDIR \
+    JOBS_ROOT WORKSPACE_SUBDIR WORKSPACE_ROOT WORKSPACE_LAYOUT WORKSPACE_INDEX \
+    WORKSPACE_GROUP_SUFFIX HOST_HOME INPUT_SUBDIR \
     CONTROLLER_SUBDIR WORKER_SUBDIR WORKER_LOGS_SUBDIR WORKER_STDERR_NAME SPEC_NAME PROMPT_NAME \
     RESULT_NAME SPEC_VERSION CONTROLLER_VERSION AGENT WORKER_UID \
     PROVISION_HOSTKEYS; do
@@ -405,6 +406,13 @@ tampered_key() {
 }
 
 # run_submit <mode> <task> [extra submit args...]
+#
+# $SUBMIT_POST (optional) is a shell fragment run in the SAME sandbox and the
+# SAME fakeroot session right after `submit` returns. It exists because fakeroot
+# only fakes ownership for the processes of one session: a `workspace-remove`
+# started as a separate fakeroot run would see the clone's REAL owner instead of
+# the uid 1000 the launcher chowned it to, and its ownership guard would refuse
+# for a reason that cannot happen in production.
 run_submit() {
     local mode="$1" task="$2"
     shift 2
@@ -441,8 +449,11 @@ run_submit() {
             # EMPTY, so the stager stages nothing and writes an empty manifest.
             mkdir -p '$HOST_HOME'
             printf 'prompt for %s\n' '$task' > '$WORK/prompt-$task.md'
-            exec '$LAUNCHER' submit --name '$task' --repository '$REPO' \
-                --agent '$AGENT' --prompt-file '$WORK/prompt-$task.md' $*
+            rc=0
+            '$LAUNCHER' submit --name '$task' --repository '$REPO' \
+                --agent '$AGENT' --prompt-file '$WORK/prompt-$task.md' $* || rc=\$?
+            ${SUBMIT_POST:-:}
+            exit \$rc
         " >"$WORK/submit-$task.log" 2>&1 || rc=$?
     printf '%s' "$rc"
 }
@@ -563,6 +574,41 @@ run_cancel() {
 # The launcher's runtime root, as seen from OUTSIDE the sandbox (it is bound
 # over $RUNTIME_ROOT inside it, so the archived results survive).
 OUT_RUNTIME="$WORK/runtime"
+
+# --- where the launcher under test puts a task's clone ----------------------
+# Derived from the MODULE values ($WORKSPACE_ROOT / $WORKSPACE_LAYOUT /
+# $WORKSPACE_INDEX, passed in by tests/microvm.nix), never hardcoded: the same
+# harness runs against a `central` and a `beside-repo` launcher.
+#
+# Inside the sandbox $RUNTIME_ROOT is $WORK/runtime, so a path under the
+# runtime root is translated by swapping that prefix. $REPO ($WORK/src) is
+# bind-mounted at its own path, so a `beside-repo` clone is directly visible.
+out_of_sandbox() { printf '%s%s' "$OUT_RUNTIME" "${1#"$RUNTIME_ROOT"}"; }
+OUT_WORKSPACE_ROOT="$(out_of_sandbox "$WORKSPACE_ROOT")"
+OUT_WORKSPACE_INDEX="$(out_of_sandbox "$WORKSPACE_INDEX")"
+
+# The clone directory of <task>, as seen from outside the sandbox.
+clone_dir() {
+    case "$WORKSPACE_LAYOUT" in
+        central) printf '%s/%s%s/%s' "$OUT_WORKSPACE_ROOT" "$(basename "$REPO")" "$WORKSPACE_GROUP_SUFFIX" "$1" ;;
+        beside-repo) printf '%s%s/%s' "$REPO" "$WORKSPACE_GROUP_SUFFIX" "$1" ;;
+        *)
+            printf 'harness: unknown workspace layout %s\n' "$WORKSPACE_LAYOUT" >&2
+            exit 2
+            ;;
+    esac
+}
+# The workspace-index entry of <task>, as seen from outside the sandbox.
+index_entry() { printf '%s/%s' "$OUT_WORKSPACE_INDEX" "$1"; }
+
+# The same clone directory as the LAUNCHER sees it (inside the sandbox), for
+# arguments that are handed to the launcher rather than inspected here.
+clone_dir_in_sandbox() {
+    case "$WORKSPACE_LAYOUT" in
+        central) printf '%s/%s%s/%s' "$WORKSPACE_ROOT" "$(basename "$REPO")" "$WORKSPACE_GROUP_SUFFIX" "$1" ;;
+        *) printf '%s%s/%s' "$REPO" "$WORKSPACE_GROUP_SUFFIX" "$1" ;;
+    esac
+}
 
 archived() {
     local task="$1" field="$2"
@@ -694,10 +740,10 @@ expect "submit reports an infrastructure error (70)" 70 "$rc"
 
 printf '\n=== 9. the workspace clone survives every one of those ===\n'
 for t in ok-task stale-task slot-task v1-task bad-task forge-task silent-task; do
-    if [[ -d "$OUT_RUNTIME/src__agent-microvm/$t/.git" ]]; then
-        pass "the clone of $t was kept"
+    if [[ -d "$(clone_dir "$t")/.git" ]]; then
+        pass "the clone of $t was kept ($(clone_dir "$t"))"
     else
-        fail "the clone of $t was lost"
+        fail "the clone of $t was lost (expected $(clone_dir "$t"))"
     fi
 done
 # ... and no slot stays allocated.
@@ -751,10 +797,10 @@ else
 fi
 # The workspace clone of a FAILED job must survive too (§35: the clone is
 # ALWAYS kept, regardless of outcome).
-if [[ -d "$OUT_RUNTIME/src__agent-microvm/die-task/.git" ]]; then
+if [[ -d "$(clone_dir die-task)/.git" ]]; then
     pass "the clone of die-task was kept"
 else
-    fail "the clone of die-task was lost"
+    fail "the clone of die-task was lost (expected $(clone_dir die-task))"
 fi
 
 printf '\n=== 11. the endpoint preflight aborts before booting a VM ===\n'
@@ -1030,6 +1076,131 @@ if grep -q 'start microvm@' "$WORK/stub-swappedkey-task/systemctl.log" 2>/dev/nu
     fail "the launcher started a VM on a mismatched key pair"
 else
     pass "no VM was started (fail closed)"
+fi
+
+printf '\n=== 19. the workspace layout and the workspace index ===\n'
+# The clone of a completed task must sit exactly where the LAYOUT of this
+# launcher says, and be registered in the root-owned workspace index. Under
+# `beside-repo` this is the whole point: the clone lands next to the source
+# repository ($REPO__agent-microvm/<task>), not under the central root.
+if [[ -d "$(clone_dir ok-task)/.git" ]]; then
+    pass "the clone of ok-task is at the $WORKSPACE_LAYOUT location $(clone_dir ok-task)"
+else
+    fail "no clone at the $WORKSPACE_LAYOUT location $(clone_dir ok-task)"
+fi
+case "$WORKSPACE_LAYOUT" in
+    beside-repo)
+        # NEGATIVE CONTROL: nothing may be created under the central root, or
+        # the layout option would be cosmetic.
+        if [[ -d $OUT_WORKSPACE_ROOT ]] && [[ -n "$(ls -A "$OUT_WORKSPACE_ROOT" 2>/dev/null)" ]]; then
+            fail "beside-repo still populated the central workspace root $OUT_WORKSPACE_ROOT"
+        else
+            pass "beside-repo created nothing under the central workspace root"
+        fi
+        # It really is a SIBLING of the repository, not a path inside it.
+        if [[ "$(dirname "$(clone_dir ok-task)")" == "$(dirname "$REPO")/$(basename "$REPO")$WORKSPACE_GROUP_SUFFIX" ]]; then
+            pass "the clone group is a sibling of the source repository"
+        else
+            fail "the clone group is not a sibling of the source repository: $(dirname "$(clone_dir ok-task)")"
+        fi
+        ;;
+    central)
+        if [[ "$(clone_dir ok-task)" == "$OUT_WORKSPACE_ROOT"/* ]]; then
+            pass "the clone is under the central workspace root"
+        else
+            fail "the clone is not under the central workspace root"
+        fi
+        ;;
+esac
+# The index is what makes a task NAME resolvable once clones no longer share a
+# root, so it must exist, be a symlink, and point at THIS clone.
+entry="$(index_entry ok-task)"
+if [[ -L $entry ]]; then
+    pass "ok-task is registered in the workspace index"
+    # The link target is an INSIDE-the-sandbox path; translate it the same way
+    # every other path in this harness is translated.
+    target="$(readlink "$entry")"
+    if [[ "$(out_of_sandbox "$target")" == "$(clone_dir ok-task)" || $target == "$(clone_dir ok-task)" ]]; then
+        pass "the index entry points at the clone ($target)"
+    else
+        fail "the index entry points elsewhere: $target (expected $(clone_dir ok-task))"
+    fi
+else
+    fail "ok-task is NOT registered in the workspace index ($entry)"
+fi
+
+printf '\n=== 20. workspace-remove deletes the clone AND its index entry ===\n'
+# Runs inside the SAME fakeroot session as its `submit` (see SUBMIT_POST), so
+# the launcher's ownership guard sees the uid it chowned the clone to.
+SUBMIT_POST="'$LAUNCHER' workspace-remove 'rm-task' || printf 'REMOVE-FAILED %s\n' \$?"
+rc="$(run_submit valid rm-task --timeout 30)"
+unset SUBMIT_POST
+expect "submit exits 0 for the removable task" 0 "$rc"
+if grep -q 'REMOVE-FAILED' "$WORK/submit-rm-task.log"; then
+    fail "workspace-remove failed: $(grep -A2 REMOVE-FAILED "$WORK/submit-rm-task.log" | head -3)"
+    sed 's/^/      /' "$WORK/submit-rm-task.log" | tail -20
+else
+    pass "workspace-remove succeeded on a clean clone"
+fi
+if [[ -e "$(clone_dir rm-task)" ]]; then
+    fail "the clone of rm-task survived workspace-remove"
+else
+    pass "the clone of rm-task is gone"
+fi
+if [[ -L "$(index_entry rm-task)" ]]; then
+    fail "the index entry of rm-task survived workspace-remove"
+else
+    pass "the index entry of rm-task is gone"
+fi
+# The clone of ok-task must NOT have been touched by removing another task.
+if [[ -d "$(clone_dir ok-task)/.git" ]]; then
+    pass "removing rm-task left ok-task's clone alone"
+else
+    fail "removing rm-task also destroyed ok-task's clone"
+fi
+
+printf '\n=== 21. a repository that IS an agent workspace is refused ===\n'
+# LOCATION-INDEPENDENT guard: cloning an agent-written workspace as if it were
+# a source repository must be refused in EVERY layout (in `beside-repo` the
+# clone is not under the central root, so only the group-name/index tests can
+# catch it).
+rc=0
+"$BWRAP" --unshare-user --uid 0 --gid 0 --unshare-uts --hostname launcher-host \
+    --tmpfs / --ro-bind /nix /nix --ro-bind-try /etc /etc \
+    --dev /dev --proc /proc --tmpfs /tmp \
+    --bind "$WORK" "$WORK" \
+    --bind "$WORK/runtime" "$RUNTIME_ROOT" \
+    --bind "$WORK/state" "$STATE_ROOT" \
+    --bind "$STUBS/systemctl" "$SYSTEMCTL_TARGET" \
+    --bind "$STUBS/mount" "$MOUNT_TARGET" \
+    --bind "$STUBS/umount" "$UMOUNT_TARGET" \
+    --bind "$STUBS/findmnt" "$FINDMNT_TARGET" \
+    --setenv STUB_DIR "$WORK/stub-ok-task" \
+    --setenv STUB_MODE valid \
+    --setenv AGENT_MICROVM_SKIP_PREFLIGHT 1 \
+    --setenv HOME "$WORK" \
+    -- "$FAKEROOT" -- "$BASH_BIN" -c "
+        set -e
+        mkdir -p '$HOST_HOME'
+        printf 'prompt\n' > '$WORK/prompt-nested.md'
+        exec '$LAUNCHER' submit --name nested-task --repository '$(clone_dir_in_sandbox ok-task)' \
+            --agent '$AGENT' --prompt-file '$WORK/prompt-nested.md' --timeout 30
+    " >"$WORK/submit-nested.log" 2>&1 || rc=$?
+if [[ $rc -ne 0 ]]; then
+    pass "submit refused a repository that is itself an agent workspace (exit $rc)"
+else
+    fail "submit ACCEPTED an agent workspace as a source repository"
+fi
+# Which guard fires depends on the layout, and all three are correct refusals:
+# under `central` the clone sits inside the runtime root, so that (earlier)
+# check wins; under `beside-repo` only the location-independent group-name /
+# index checks can catch it. The point of the assertion is that the refusal is
+# a WORKSPACE refusal, not an unrelated failure (a missing repo, a broken stub).
+if grep -qE 'is itself an agent workspace|registered agent workspace|repository inside the agent runtime root' \
+    "$WORK/submit-nested.log"; then
+    pass "the refusal names a workspace/runtime-root reason"
+else
+    fail "no workspace refusal in the log: $(tail -3 "$WORK/submit-nested.log")"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

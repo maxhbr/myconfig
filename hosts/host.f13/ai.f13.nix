@@ -87,6 +87,17 @@
               memoryMiB = 8192;
             };
           };
+          # Put each task's standalone clone NEXT TO its source repository
+          # (`~/myconfig/myconfig__agent-microvm/<task>` for `~/myconfig/myconfig`)
+          # instead of under /var/lib, mirroring the `<project>__worktrees`
+          # convention of workmux. On this interactive laptop the clone is the
+          # artefact the operator diffs, fetches from and merges back, so it
+          # belongs beside the repository and reachable WITHOUT sudo (the clone
+          # is chowned to the guest agent uid = mhuber). The task -> clone
+          # index that keeps `workspace-remove`/`usage`/`dashboard` working
+          # stays root-owned under runtimeRoot. See
+          # ../../modules/myconfig.ai/myconfig.ai.microvm/docs/workspace-layout.md.
+          workspaceLayout = "beside-repo";
           # Named network profile (the secure default): the guest's only egress
           # is the bridge-only host LiteLLM endpoint. Guest-to-guest traffic,
           # the host LAN/VPN, cloud metadata and the public internet are all

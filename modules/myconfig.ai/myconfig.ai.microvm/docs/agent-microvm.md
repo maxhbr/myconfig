@@ -46,6 +46,7 @@ secure default prioritises **isolation over convenience**.
 | this file | activation, option reference, agent registry, network profiles, the per-slot SSH host identity, the dedicated SSH key, batch job format, limitations |
 | [Architecture](./agent-microvm-architecture.md) | module map, slot pool, workspace indirection, network path, credential boundary, execution paths, state lifetimes |
 | [Operator guide](./agent-microvm-operator-guide.md) | exact procedures: start, submit, status, attach, cancel, collect, remove, recover, logs |
+| [Workspace layout](./workspace-layout.md) | where a task's clone is created (`central` vs `beside-repo`), the task -> clone index, and the guards that replace the central root |
 | [Security model](./agent-microvm-security-model.md) | trusted vs untrusted, what the boundary protects, mitigated attacks, residual risks |
 | [Runtime validation](./agent-microvm-runtime-validation.md) | the real-KVM test procedure for `runtime-validation.sh` |
 
@@ -90,7 +91,8 @@ myconfig.ai.microvm = {
 | `subnet` | `192.168.83.0/24` | Private subnet. |
 | `gatewayAddress` | `192.168.83.1` | Host-side bridge address + LiteLLM forwarder bind address. |
 | `litellmPort` | `4000` | LiteLLM proxy port. |
-| `workspaceRoot` | `/var/lib/agent-microvms/workspaces` | Where per-task standalone clones are created, grouped as `<workspaceRoot>/<repoSlug>__agent-microvm/<task>`. |
+| `workspaceRoot` | `/var/lib/agent-microvms/workspaces` | Storage root of the `central` layout: clones are grouped as `<workspaceRoot>/<repoSlug>__agent-microvm/<task>`. |
+| `workspaceLayout` | `"central"` | Where a task's clone is created: `central` (under `workspaceRoot`) or `beside-repo` (next to the source repository, `<repo-parent>/<repo>__agent-microvm/<task>`, mirroring workmux's `<project>__worktrees`). Either way the clone is registered in the root-owned index `<runtimeRoot>/workspace-index/<task>`. See [workspace-layout.md](workspace-layout.md). |
 | `runtimeRoot` | `/var/lib/agent-microvms` | Runtime state (locks, markers, jobs, results, logs). |
 | `stateRoot` | `/var/lib/microvms` | microvm.nix per-VM state / bind-mount source. MUST equal `config.microvm.stateDir` (asserted) — the VSOCK ssh target and the per-slot `known_hosts` entry key on it. |
 | `guestAgentUid` / `guestAgentGid` | `1000` | Numeric ids of the guest `agent` user, and the host-side owner of every guest-writable path. Asserted unprivileged. |

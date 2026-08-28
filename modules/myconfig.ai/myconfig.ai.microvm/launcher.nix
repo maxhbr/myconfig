@@ -69,6 +69,10 @@
   agentJobs,
   # The ONE definition of the task-scoped agent-state paths (state.nix).
   agentState,
+  # The ONE definition of WHERE a task's standalone clone lives and how a task
+  # name is resolved back to it (workspace.nix): the layout, the reserved
+  # per-repository group suffix and the root-owned workspace index.
+  agentWorkspace,
   # The ONE resolved network decision (profile + capabilities + DNS policy),
   # from default.nix (`_module.args.agentNetwork`). The host launcher's
   # endpoint preflight and `doctor` use `caps.litellm` so they only fire when
@@ -136,6 +140,16 @@ let
   # a whitespace-only line. `(none)` is both honest and whitespace-clean; a
   # non-empty list renders exactly as before.
   usageList = items: if items == [ ] then "(none)" else lib.concatStringsSep "\n  " items;
+
+  # The `usage` paragraph that states WHERE this host stores task clones and how
+  # a task name is resolved back to one. Generated from ../workspace.nix rather
+  # than written twice, so the help can never describe a layout the launcher
+  # does not implement.
+  workspaceUsageText =
+    if agentWorkspace.layout == "central" then
+      "Clones live at ${agentWorkspace.root}/<repo>${agentWorkspace.groupSuffix}/<task>."
+    else
+      "Clones live BESIDE their repository, at <repo-parent>/<repo>${agentWorkspace.groupSuffix}/<task>.";
 
   # A top-level statement of the generated script (splice site at column 6 here).
   topIndent = "";
@@ -1025,7 +1039,18 @@ let
       readonly DEFAULT_RESOURCE_CLASS=${lib.escapeShellArg (lib.head (lib.attrNames agentResourceClasses))}
 
       # ==== configuration (from the Nix module options) ====================
-      readonly WORKSPACE_ROOT=${lib.escapeShellArg cfg.workspaceRoot}
+      readonly WORKSPACE_ROOT=${lib.escapeShellArg agentWorkspace.root}
+      # Where a task's clone is CREATED: `central` (under WORKSPACE_ROOT) or
+      # `beside-repo` (next to the source repository). ../workspace.nix is the
+      # authority; see ../docs/workspace-layout.md.
+      readonly WORKSPACE_LAYOUT=${lib.escapeShellArg agentWorkspace.layout}
+      # The RESERVED per-repository group-directory suffix. Intrinsic marker of
+      # "this directory holds agent workspaces", in every layout.
+      readonly WORKSPACE_GROUP_SUFFIX=${lib.escapeShellArg agentWorkspace.groupSuffix}
+      # Root-owned task -> clone registry. It replaces the WORKSPACE_ROOT glob
+      # as the authoritative lookup, because under `beside-repo` a task name is
+      # not resolvable from any single root.
+      readonly WORKSPACE_INDEX=${lib.escapeShellArg agentWorkspace.indexRoot}
       readonly RUNTIME_ROOT=${lib.escapeShellArg cfg.runtimeRoot}
       readonly STATE_ROOT=${lib.escapeShellArg cfg.stateRoot}
       readonly LITELLM_PORT=${toString cfg.litellmPort}
@@ -1536,14 +1561,33 @@ let
               || die "refusing a repository that is itself an agent workspace"
           [[ "$top" != "$STATE_ROOT"/* ]] \
               || die "refusing a repository inside the microVM state root"
+          # LOCATION-INDEPENDENT form of the same guard. Under `beside-repo` a
+          # clone lives next to its source repository, so the WORKSPACE_ROOT
+          # test above cannot see it; every clone does however sit in a
+          # `*<groupSuffix>` group directory (see `workspace_group`), and every
+          # clone this launcher created is in the workspace index. Both are
+          # checked, so cloning an agent's own (agent-written) workspace is
+          # refused in EVERY layout.
+          ! is_group_name "$(basename -- "$(dirname -- "$top")")" \
+              || die "refusing a repository that is itself an agent workspace: $top"
+          local entry target
+          if [[ -d "$WORKSPACE_INDEX" ]]; then
+              for entry in "$WORKSPACE_INDEX"/*; do
+                  [[ -L "$entry" ]] || continue
+                  target="$(realpath -m -- "$(readlink -- "$entry")" 2>/dev/null || true)"
+                  [[ "$target" == "$top" ]] \
+                      && die "refusing a repository that is a registered agent workspace (task $(basename -- "$entry")): $top"
+              done
+          fi
           printf '%s' "$top"
       }
 
       # ---- §24a repository slug -----------------------------------------
       # Maps a canonical git toplevel to a filesystem-safe per-repository
       # directory name, so every task's standalone clone is grouped under
-      # `<workspaceRoot>/<repoSlug>__agent-microvm/<task>` instead of a flat
-      # `<workspaceRoot>/<task>`. The `__agent-microvm` suffix mirrors the
+      # `<parent>/<repoSlug>__agent-microvm/<task>` instead of a flat
+      # `<parent>/<task>` (the `<parent>` is chosen by WORKSPACE_LAYOUT; see
+      # `workspace_group`). The `__agent-microvm` suffix mirrors the
       # existing `<basename>__worktrees` convention (see
       # modules/myconfig.ai/fns/workmux-worktree.nix and
       # flake.sandboxed-pi.nix), so a human listing the workspace root can
@@ -1571,16 +1615,156 @@ let
             | cut -c1-64 \
             | sed -e 's#[-.]*$##')"
           [[ -n "$slug" ]] || die "could not derive a repository slug from '$top'"
-          printf '%s' "''${slug}__agent-microvm"
+          printf '%s%s' "$slug" "$WORKSPACE_GROUP_SUFFIX"
       }
 
-      # The per-task clone path under <workspaceRoot>/<repoSlug>__agent-microvm/.
-      # ONE place computes the shape, so create_clone, cmd_run, cmd_submit and
-      # cmd_workspace_remove cannot disagree about where a task's clone lives.
-      clone_path() {
-          local top="$1" task="$2" slug
+      # True when a directory NAME is a per-repository workspace group. This is
+      # the INTRINSIC "these are agent workspaces" marker: it holds in every
+      # layout, so `validate_repository` can refuse a clone as a source
+      # repository without knowing where clones are stored.
+      is_group_name() {
+          [[ "$1" == *"$WORKSPACE_GROUP_SUFFIX" && "$1" != "$WORKSPACE_GROUP_SUFFIX" ]]
+      }
+
+      # The per-repository group directory a task's clone is created in.
+      # ONE place decides the layout:
+      #   central     <workspaceRoot>/<repoSlug>__agent-microvm
+      #   beside-repo <dirname toplevel>/<repoSlug>__agent-microvm
+      # `beside-repo` creates a GUEST-WRITABLE tree next to the user's
+      # repository, so the parent is validated here: never '/', and never
+      # inside the runtime / state / workspace roots (a clone there would be
+      # indistinguishable from launcher-owned state, and `validate_repository`
+      # would later refuse the clone's own group for the wrong reason).
+      workspace_group() {
+          local top="$1" slug parent
           slug="$(repo_slug "$top")"
-          printf '%s/%s/%s' "$WORKSPACE_ROOT" "$slug" "$task"
+          case "$WORKSPACE_LAYOUT" in
+              central)
+                  printf '%s/%s' "$WORKSPACE_ROOT" "$slug"
+                  ;;
+              beside-repo)
+                  parent="$(dirname -- "$top")"
+                  [[ "$parent" == /* ]] \
+                      || die "workspace_group: repository parent is not absolute: '$parent'"
+                  [[ "$parent" != "/" ]] \
+                      || die "refusing to create a workspace group in '/' (repository: $top)"
+                  [[ "$parent" != "$RUNTIME_ROOT" && "$parent" != "$RUNTIME_ROOT"/* ]] \
+                      || die "refusing to create a workspace group inside the agent runtime root: $parent"
+                  [[ "$parent" != "$STATE_ROOT" && "$parent" != "$STATE_ROOT"/* ]] \
+                      || die "refusing to create a workspace group inside the microVM state root: $parent"
+                  [[ "$parent" != "$WORKSPACE_ROOT" && "$parent" != "$WORKSPACE_ROOT"/* ]] \
+                      || die "refusing to create a workspace group inside the central workspace root: $parent"
+                  printf '%s/%s' "$parent" "$slug"
+                  ;;
+              *)
+                  die "unknown workspace layout '$WORKSPACE_LAYOUT'"
+                  ;;
+          esac
+      }
+
+      # The per-task clone path inside that group. ONE place computes the
+      # shape, so create_clone, cmd_run, cmd_submit and cmd_workspace_remove
+      # cannot disagree about where a task's clone lives.
+      clone_path() {
+          local top="$1" task="$2"
+          printf '%s/%s' "$(workspace_group "$top")" "$task"
+      }
+
+      # Where clones are stored, for the operator-facing footers. Under
+      # `beside-repo` there is no single root to name, so the label says so
+      # rather than printing an empty WORKSPACE_ROOT.
+      workspace_location_label() {
+          case "$WORKSPACE_LAYOUT" in
+              central) printf '%s' "$WORKSPACE_ROOT" ;;
+              *) printf 'beside each repository (*%s/), indexed in %s' \
+                     "$WORKSPACE_GROUP_SUFFIX" "$WORKSPACE_INDEX" ;;
+          esac
+      }
+
+      # ---- the workspace index (task -> clone) ---------------------------
+      # Under `beside-repo` a task NAME no longer resolves to a path by
+      # globbing one root, so every clone is registered as a root-owned symlink
+      # `<runtimeRoot>/workspace-index/<task>`. Registered on creation, dropped
+      # on removal, pruned by `recover` when it dangles. It lives in the
+      # runtime root, which is never shared into a guest — an agent that could
+      # retarget an entry would be retargeting `workspace-remove`'s `rm -rf`.
+      index_entry() { printf '%s/%s' "$WORKSPACE_INDEX" "$1"; }
+
+      register_workspace() {
+          local task="$1" clone="$2" entry
+          entry="$(index_entry "$task")"
+          install -d -m 0755 -o root -g root -- "$WORKSPACE_INDEX" \
+              || die "could not create the workspace index: $WORKSPACE_INDEX"
+          # `ln -sfn`: replace a stale entry of the same task atomically, and
+          # never descend into an existing directory symlink.
+          ln -sfn -- "$clone" "$entry" \
+              || die "could not register the workspace of task '$task': $entry"
+      }
+
+      unregister_workspace() {
+          local entry
+          entry="$(index_entry "$1")"
+          [[ -L "$entry" ]] || return 0
+          rm -f -- "$entry" || log "warning: could not drop the workspace index entry $entry"
+      }
+
+      # Resolve an index entry to the clone it names, or nothing. Only the LINK
+      # is trusted to be a name — the target is verified by the caller
+      # (`assert_is_workspace`) before anything destructive happens to it.
+      indexed_clone() {
+          local entry
+          entry="$(index_entry "$1")"
+          [[ -L "$entry" ]] || return 1
+          readlink -- "$entry"
+      }
+
+      # Every known clone, as `<task>\t<clone>` lines. The union of the index
+      # and the legacy `<workspaceRoot>/<group>/<task>` glob: clones created
+      # before the index existed (or by a `central` generation of this host)
+      # stay visible to `usage`/`dashboard` and removable by
+      # `workspace-remove`. Entries are deduplicated by TASK, index first.
+      each_workspace() {
+          local entry task target dir seen=""
+          if [[ -d "$WORKSPACE_INDEX" ]]; then
+              for entry in "$WORKSPACE_INDEX"/*; do
+                  [[ -L "$entry" ]] || continue
+                  task="$(basename -- "$entry")"
+                  target="$(readlink -- "$entry")"
+                  [[ -d "$target" ]] || continue
+                  seen="$seen$task"$'\n'
+                  printf '%s\t%s\n' "$task" "$target"
+              done
+          fi
+          for dir in "$WORKSPACE_ROOT"/*/*; do
+              [[ -d "$dir" ]] || continue
+              task="$(basename -- "$dir")"
+              [[ $'\n'"$seen" == *$'\n'"$task"$'\n'* ]] && continue
+              printf '%s\t%s\n' "$task" "$dir"
+          done
+      }
+
+      # PROVE that a path is an agent workspace before `rm -rf` follows it.
+      # The path may have been reached through an index symlink, so its
+      # location alone establishes nothing: require the INTRINSIC properties a
+      # clone created by create_clone always has. Fails CLOSED.
+      assert_is_workspace() {
+          local clone="$1" task="$2" real group owner
+          real="$(realpath -e -- "$clone" 2>/dev/null)" \
+              || die "workspace path does not resolve: $clone"
+          [[ -d "$real" ]] || die "workspace is not a directory: $real"
+          [[ "$real" != "/" ]] || die "refusing to treat '/' as a workspace"
+          [[ "$real" != "$RUNTIME_ROOT" && "$real" != "$STATE_ROOT" && "$real" != "$WORKSPACE_ROOT" ]] \
+              || die "refusing to treat a launcher root as a workspace: $real"
+          [[ "$(basename -- "$real")" == "$task" ]] \
+              || die "workspace does not belong to task '$task': $real"
+          group="$(basename -- "$(dirname -- "$real")")"
+          is_group_name "$group" \
+              || die "workspace is not inside a *$WORKSPACE_GROUP_SUFFIX group: $real"
+          [[ -e "$real/.git" ]] || die "workspace is not a git clone (no .git): $real"
+          owner="$(stat -c %u -- "$real" 2>/dev/null || true)"
+          [[ "$owner" == "$GUEST_AGENT_UID" ]] \
+              || die "workspace is not owned by the guest agent uid $GUEST_AGENT_UID (owner $owner): $real"
+          printf '%s' "$real"
       }
 
       # ---- branch-name validation (guards `git checkout -b`) -------------
@@ -1658,7 +1842,8 @@ let
       }
 
       # Creates the standalone clone at
-      # `<WORKSPACE_ROOT>/<repoSlug>__agent-microvm/<task>`. Runs in the
+      # `<group>/<task>` (the group is chosen by WORKSPACE_LAYOUT; see
+      # `workspace_group`) and REGISTERS it in the workspace index. Runs in the
       # CALLER's shell (NOT a command substitution) so a `die` here exits
       # cmd_run directly and its EXIT trap fires with `slot` still in scope,
       # tearing the just-allocated slot down. The clone path is deterministic
@@ -1677,7 +1862,25 @@ let
           group="$(dirname -- "$clone")"
           [[ ! -e "$clone" ]] \
               || die "workspace already exists: $clone (pick another --name or 'workspace-remove')"
-          mkdir -p -- "$group"
+          # A task name is GLOBAL (it addresses `stop`/`status`/
+          # `workspace-remove`), so the same name must not name two clones of
+          # two different repositories. The index makes that collision visible
+          # even when the two clones live in different groups. A DANGLING entry
+          # is not a collision — it is residue and gets overwritten below.
+          local existing_clone
+          existing_clone="$(indexed_clone "$task" 2>/dev/null || true)"
+          [[ -z "$existing_clone" || ! -d "$existing_clone" ]] \
+              || die "task '$task' already has a workspace: $existing_clone (pick another --name or 'workspace-remove $task')"
+          # Under `beside-repo` this creates the group in a USER-owned
+          # directory. Hand a freshly created group to the guest agent uid (the
+          # human who owns the source repo, §11), so the clones below it can be
+          # listed, fetched from and deleted without root. An EXISTING group is
+          # left exactly as the user has it.
+          local group_created=0
+          if [[ ! -d "$group" ]]; then
+              mkdir -p -- "$group" || die "could not create the workspace group: $group"
+              group_created=1
+          fi
           # `--local --no-hardlinks` COPIES the object store: no hardlinks into
           # the source repository and — crucially — no `--shared` / `--reference`
           # and therefore no `objects/info/alternates`, so the clone is exactly
@@ -1729,6 +1932,16 @@ let
           # checkout so freshly written git metadata is owned by the agent too.
           chown -R "$GUEST_AGENT_UID:$GUEST_AGENT_GID" -- "$clone" \
               || die "failed to chown workspace clone to $GUEST_AGENT_UID:$GUEST_AGENT_GID: $clone"
+          if (( group_created )); then
+              chmod 0755 -- "$group" \
+                  || die "could not normalise the mode of the workspace group: $group"
+              chown "$GUEST_AGENT_UID:$GUEST_AGENT_GID" -- "$group" \
+                  || die "failed to chown the workspace group to $GUEST_AGENT_UID:$GUEST_AGENT_GID: $group"
+          fi
+          # Register LAST: an entry exists only for a clone that was fully
+          # created, so a failed creation cannot leave a dangling lookup that
+          # `validate_repository` or `workspace-remove` would then trust.
+          register_workspace "$task" "$clone"
       }
 
       # ---- §26 bind-mount lifecycle --------------------------------------
@@ -2368,6 +2581,11 @@ let
                               without --force. With --force it also stops any
                               slot still holding the clone before removing it.
 
+      Workspace layout of this host: ${agentWorkspace.layout}
+      ${workspaceUsageText}
+      A task name is resolved back to its clone through the root-owned index
+      ${agentWorkspace.indexRoot}/<task>.
+
       Supported agents (--agent), generated from the module's agent registry:
         ${usageList agentRegistry.names}
 
@@ -2564,7 +2782,7 @@ let
               preflight_model_endpoint
           fi
 
-          mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT"
+          mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT" "$WORKSPACE_INDEX"
 
           # Arm the cleanup trap BEFORE creating any slot state, so a signal
           # in the allocation window still tears the slot down (keeping the
@@ -2735,7 +2953,7 @@ let
           # whose agent can only die in seconds. See preflight_model_endpoint.
           preflight_model_endpoint
 
-          mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT"
+          mkdir -p -- "$RUN_DIR" "$SLOTS_DIR" "$WORKSPACE_ROOT" "$WORKSPACE_INDEX"
           # Root-only: an archived result carries its run's allocation token.
           install -d -m "$JOB_ARCHIVE_DIR_MODE" -o root -g root -- "$RESULTS_DIR"
 
@@ -3290,7 +3508,32 @@ let
               printf 'foreign: no per-slot state outside the current pool\n'
           fi
 
-          if (( ! acted && ! found_foreign )); then
+          # --- dangling workspace-index entries -------------------------------
+          # The index is a task -> clone lookup (workspace.nix); an entry whose
+          # target is gone (a clone deleted by hand) makes the next `run` of
+          # that task name refuse with "already has a workspace". Pruning it
+          # NEVER touches a clone — only a symlink whose target does not exist
+          # — so it needs no --prune-foreign guard.
+          local entry itask itarget pruned_index=0
+          if [[ -d "$WORKSPACE_INDEX" ]]; then
+              for entry in "$WORKSPACE_INDEX"/*; do
+                  [[ -L "$entry" ]] || continue
+                  itarget="$(readlink -- "$entry")"
+                  [[ -d "$itarget" ]] && continue
+                  itask="$(basename -- "$entry")"
+                  pruned_index=1
+                  if (( dry )); then
+                      printf 'index: would drop the dangling entry of task %s (-> %s)\n' \
+                          "$itask" "$itarget"
+                      continue
+                  fi
+                  printf 'index: dropping the dangling entry of task %s (-> %s)\n' \
+                      "$itask" "$itarget"
+                  rm -f -- "$entry" || failed=1
+              done
+          fi
+
+          if (( ! acted && ! found_foreign && ! pruned_index )); then
               log "nothing to recover"
           fi
           # Nothing to do is success; a recovery that could not complete is not.
@@ -3308,8 +3551,14 @@ let
       # scope for the runtime footer `usage` prints afterwards (bash nested
       # functions persist after first call), which keeps that footer
       # byte-identical to the inlined original.
+      # Set by print_workspaces: the SUMMED size of the enumerated clones and
+      # how many there were. The footer of `usage`/`dashboard` reports these
+      # instead of `du` on WORKSPACE_ROOT, which under `beside-repo` holds no
+      # clone at all.
+      WORKSPACE_TOTAL_BYTES=0
+      WORKSPACE_COUNT=0
       print_workspaces() {
-          local task repo ws_bytes st_bytes total_ws=0 total_st=0 dir
+          local task repo ws_bytes st_bytes total_ws=0 total_st=0 dir count=0
           dir_bytes() {
               local d="$1"
               [[ -d "$d" ]] || { printf '0'; return 0; }
@@ -3317,13 +3566,14 @@ let
           }
           human() { numfmt --to=iec --suffix=B -- "$1"; }
 
-          # Clones live one level down: <WORKSPACE_ROOT>/<repoSlug>__agent-microvm/<task>.
-          # The glob spans both levels so a task is reported once per clone, with
-          # the repo group it belongs to.
+          # Every clone this host knows about, from the workspace index UNION
+          # the legacy <WORKSPACE_ROOT>/<group>/<task> glob (see
+          # each_workspace) — under `beside-repo` the clones are not under one
+          # root, so a glob alone would report nothing.
           printf '%-24s %-20s %12s %12s %s\n' "TASK" "REPO" "WORKSPACE" "AGENTSTATE" "IN USE BY"
-          for dir in "$WORKSPACE_ROOT"/*/*; do
-              [[ -d "$dir" ]] || continue
-              task="$(basename -- "$dir")"
+          while IFS=$'\t' read -r task dir; do
+              [[ -n "$task" && -d "$dir" ]] || continue
+              count=$(( count + 1 ))
               repo="$(basename -- "$(dirname -- "$dir")")"
               ws_bytes="$(dir_bytes "$dir")"
               st_bytes=0
@@ -3343,8 +3593,10 @@ let
               done
               printf '%-24s %-20s %12s %12s %s\n' "$task" "$repo" "$(human "$ws_bytes")" \
                   "$(human "$st_bytes")" "$holder"
-          done
+          done < <(each_workspace)
           printf '%-24s %-20s %12s %12s\n' "TOTAL" "" "$(human "$total_ws")" "$(human "$total_st")"
+          WORKSPACE_TOTAL_BYTES="$total_ws"
+          WORKSPACE_COUNT="$count"
       }
 
       cmd_usage() {
@@ -3355,7 +3607,7 @@ let
           # archived results. These are small, but a runaway agent could fill the
           # job output dir.
           printf '\nruntime:\n'
-          printf '  workspaces:    %s (%s)\n' "$WORKSPACE_ROOT" "$(human "$(dir_bytes "$WORKSPACE_ROOT")")"
+          printf '  workspaces:    %s (%s)\n' "$(workspace_location_label)" "$(human "$WORKSPACE_TOTAL_BYTES")"
           printf '  agent state:   %s (%s)\n' "$STATE_TASKS_ROOT" "$(human "$(dir_bytes "$STATE_TASKS_ROOT")")"
           ${jobUsageLines}printf '\nremove a retained workspace (and its task state) with:\n'
           printf '  %s workspace-remove <task>\n' "$PROG"
@@ -3578,13 +3830,12 @@ let
           print_workspaces
 
           # ---- footer ----
-          local total_ws total_st ws_count=0 dir
-          # Clones are grouped one level down: <WORKSPACE_ROOT>/<repoSlug>__agent-microvm/<task>.
-          for dir in "$WORKSPACE_ROOT"/*/*; do
-              [[ -d "$dir" ]] || continue
-              ws_count=$(( ws_count + 1 ))
-          done
-          total_ws="$(dir_bytes "$WORKSPACE_ROOT")"
+          # Counted and summed by print_workspaces above, from the SAME
+          # enumeration the table used (index ∪ legacy glob), so the footer
+          # cannot disagree with the rows in any layout.
+          local total_ws total_st ws_count
+          ws_count="$WORKSPACE_COUNT"
+          total_ws="$WORKSPACE_TOTAL_BYTES"
           total_st="$(dir_bytes "$STATE_TASKS_ROOT")"
           printf '\n'
           printf '%d/%d slots running, %d workspaces, %s workspace + %s state\n' \
@@ -3679,23 +3930,50 @@ let
               esac
           done
           validate_task_name "$task"
-          # The clone lives under `<WORKSPACE_ROOT>/<repoSlug>__agent-microvm/<task>`
-          # (see clone_path), so a task name alone no longer pins a single path.
-          # Find the EXACT one clone directory this task name owns. Zero matches
-          # is "no such workspace"; more than one is an inconsistency that must
-          # be reported rather than guessed (two repos slugging to the same
-          # group, or a half-removed clone).
+          # A task name is not a path: the clone sits in a group directory
+          # whose parent depends on WORKSPACE_LAYOUT. The workspace INDEX is
+          # the authoritative lookup; the legacy `<WORKSPACE_ROOT>/*/<task>`
+          # glob is the fallback for clones created before the index existed
+          # (or by a `central` generation), so those stay removable. Zero
+          # matches is "no such workspace"; more than one glob match is an
+          # inconsistency that must be reported rather than guessed (two repos
+          # slugging to the same group, or a half-removed clone).
           local clone group found=0 d
-          for d in "$WORKSPACE_ROOT"/*/"$task"; do
-              [[ -d "$d" ]] || continue
-              clone="$d"
-              found=$(( found + 1 ))
-          done
+          clone="$(indexed_clone "$task" 2>/dev/null || true)"
+          if [[ -n "$clone" && -d "$clone" ]]; then
+              found=1
+          else
+              clone=""
+              for d in "$WORKSPACE_ROOT"/*/"$task"; do
+                  [[ -d "$d" ]] || continue
+                  clone="$d"
+                  found=$(( found + 1 ))
+              done
+          fi
           if (( found == 0 )); then
-              die "no such workspace: $task (searched $WORKSPACE_ROOT/*/<task>)"
+              # A dangling index entry is residue of a clone somebody removed
+              # by hand: drop it here rather than making `recover` the only way
+              # to get rid of it.
+              if [[ -L "$(index_entry "$task")" ]]; then
+                  log "dropping the dangling workspace index entry of task '$task'"
+                  unregister_workspace "$task"
+              fi
+              die "no such workspace: $task (searched the workspace index and $WORKSPACE_ROOT/*/<task>)"
           elif (( found > 1 )); then
               die "workspace '$task' is ambiguous: found $found clones under $WORKSPACE_ROOT/*/$task — remove the one you mean directly"
           fi
+          # The path may have been reached by following an index SYMLINK, so
+          # its location proves nothing: require the intrinsic properties of a
+          # clone (group directory, .git, guest-agent ownership, matching task
+          # basename) BEFORE anything below can `rm -rf` it.
+          # Keep the UNRESOLVED path too: the bind mount and the session
+          # marker record the clone path as `run`/`submit` computed it, so the
+          # "is a slot still using this clone?" comparison below must accept
+          # either spelling. Comparing only the canonical form would let a
+          # symlinked component hide a LIVE mount from the check, and the
+          # `rm -rf` further down would then delete a clone THROUGH the mount.
+          local clone_raw="$clone"
+          clone="$(assert_is_workspace "$clone" "$task")"
           group="$(dirname -- "$clone")"
           [[ -d "$clone" ]] || die "no such workspace: $clone"
           # §35: guard against losing uncommitted work / unexported commits.
@@ -3742,11 +4020,13 @@ let
                   src="$(findmnt -no SOURCE -- "$mp" 2>/dev/null || true)"
                   src="''${src##*[}"
                   src="''${src%]}"
-                  [[ "$src" == "$clone" ]] && matched=1
+                  [[ "$src" == "$clone" || "$src" == "$clone_raw" ]] && matched=1
+                  [[ "$(realpath -m -- "$src" 2>/dev/null || true)" == "$clone" ]] && matched=1
               fi
               if service_active "$slot" && [[ -e "$(session_file "$slot")" ]]; then
                   sess_ws="$(jq -r '.workspace // ""' "$(session_file "$slot")" 2>/dev/null || true)"
-                  [[ "$sess_ws" == "$clone" ]] && matched=1
+                  [[ "$sess_ws" == "$clone" || "$sess_ws" == "$clone_raw" ]] && matched=1
+                  [[ -n "$sess_ws" && "$(realpath -m -- "$sess_ws" 2>/dev/null || true)" == "$clone" ]] && matched=1
               fi
               if (( matched )); then
                   if (( force )); then
@@ -3763,6 +4043,10 @@ let
           done
           log "removing workspace $clone"
           rm -rf -- "$clone"
+          # The lookup that pointed here must go with it, or the next `run` of
+          # the same task name would refuse on a stale "already has a
+          # workspace" entry.
+          unregister_workspace "$task"
           # Drop the per-repo group directory too when it is now empty, so a
           # repository whose last task was removed does not leave a stray
           # `<slug>__agent-microvm/` behind. Only an empty dir is removed — a

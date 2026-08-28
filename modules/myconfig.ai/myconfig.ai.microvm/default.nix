@@ -255,6 +255,7 @@ in
     ./job.nix
     ./session.nix
     ./state.nix
+    ./workspace.nix
     ./network.nix
     ./launcher.nix
     ./secrets.nix
@@ -463,6 +464,42 @@ in
         convention used by workmux (../fns/workmux-worktree.nix). Two
         repositories therefore never share a clone directory, and one
         repository's tasks sit next to each other.
+
+        Only used by `workspaceLayout = "central"` (the default). Under
+        `beside-repo` no clone is created here, but the path stays meaningful:
+        clones created by an earlier generation remain enumerable by `usage` /
+        `dashboard` and removable by `workspace-remove`.
+      '';
+    };
+
+    workspaceLayout = mkOption {
+      type = types.enum [
+        "central"
+        "beside-repo"
+      ];
+      default = "central";
+      description = ''
+        Where a task's standalone clone is created (see
+        ./docs/workspace-layout.md).
+
+        `central` (the default) groups every clone under `workspaceRoot`:
+        `<workspaceRoot>/<repoSlug>__agent-microvm/<task>`.
+
+        `beside-repo` creates the group next to the SOURCE repository instead:
+        a task of `/home/u/src/myrepo` lands in
+        `/home/u/src/myrepo__agent-microvm/<task>`, mirroring the
+        `<project>__worktrees` convention of workmux, so the clone a human has
+        to diff / fetch from / merge back sits next to the repository it
+        belongs to and is reachable without `sudo`.
+
+        Independent of the layout, every clone is registered in the root-owned
+        workspace index (`<runtimeRoot>/workspace-index/<task>`), which is what
+        keeps the task-addressed commands (`workspace-remove`, `usage`,
+        `dashboard`, `recover`) working when clones no longer share one root.
+
+        `beside-repo` refuses a repository whose parent directory is `/` or
+        which sits inside `runtimeRoot` / `stateRoot` / `workspaceRoot`: a
+        guest-writable tree must never be created there.
       '';
     };
 

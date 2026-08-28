@@ -23,8 +23,10 @@ Two things to internalise before you start:
   this does not prompt (`passwordlessControl = true`), so the workmux panes work
   unattended too.
 - **The agent never touches your checkout.** It works in a *standalone git
-  clone* at `/var/lib/agent-microvms/workspaces/<repoSlug>__agent-microvm/<task>`,
-  on branch `agent/<task>`. You pull the result back yourself (step 5).
+  clone* at `<repoSlug>__agent-microvm/<task>` — on `f13` beside the repository
+  itself (`~/myconfig/myconfig__agent-microvm/<task>`), on a host with the
+  default `workspaceLayout = "central"` under
+  `/var/lib/agent-microvms/workspaces/` — on branch `agent/<task>`. You pull the result back yourself (step 5).
   Nothing deletes that clone until you say so (step 6).
 
 For anything not covered here, follow the links in
@@ -193,10 +195,16 @@ result.
 The clone is a normal git repository, so just use git:
 
 ```bash
-WS=/var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser
+# Beside the repo (f13 default); use
+# /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser under
+# `workspaceLayout = "central"`. `sudo agent-microvm usage` prints the path.
+WS=~/src/my-repo__agent-microvm/fix-parser
 
-sudo git -C "$WS" log --oneline origin/HEAD..agent/fix-parser
-sudo git -C "$WS" diff origin/HEAD..agent/fix-parser
+# The clone is owned by your uid, so this needs NO sudo. Running git in it as
+# root would leave root-owned files in a clone the guest expects to own; if you
+# must, use `sudo git --no-optional-locks -c safe.directory="$WS" -C "$WS" …`.
+git -C "$WS" log --oneline origin/HEAD..agent/fix-parser
+git -C "$WS" diff origin/HEAD..agent/fix-parser
 ```
 
 Then bring it into your own checkout — fetch the branch:

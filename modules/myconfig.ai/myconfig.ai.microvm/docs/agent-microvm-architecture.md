@@ -96,20 +96,28 @@ part of the share the unit needs.
 The guest's `/workspace` share source is a **fixed** per-slot path, because the
 guest config is prebuilt. The launcher makes that path *mean* the task's
 workspace. Clones are grouped one level down by the source repository, so a
-task's clone lives at
-`<workspaceRoot>/<repoSlug>__agent-microvm/<task>` (the `<repoSlug>__agent-microvm`
-suffix mirrors the `<basename>__worktrees` convention workmux uses):
+task's clone lives at `<group>/<task>` where `<group>` is
+`<repoSlug>__agent-microvm` (that suffix mirrors the `<basename>__worktrees`
+convention workmux uses). WHERE that group is created is the
+`workspaceLayout` option (see [workspace-layout.md](workspace-layout.md)):
 
 ```text
-git clone --local --no-hardlinks <repo> /var/lib/agent-microvms/workspaces/<repoSlug>__agent-microvm/<task>
-mount --bind          …/<repoSlug>__agent-microvm/<task>  /var/lib/microvms/<slot>/workspace
+central     <workspaceRoot>/<repoSlug>__agent-microvm/<task>
+beside-repo <dirname repo>/<repoSlug>__agent-microvm/<task>
+
+git clone --local --no-hardlinks <repo> <group>/<task>
+mount --bind                            <group>/<task>  /var/lib/microvms/<slot>/workspace
 virtiofsd            (that path)  ->  guest /workspace
 ```
 
 `<repoSlug>` is a filesystem-safe slug of the cloned repository's git toplevel
 basename with the literal `__agent-microvm` suffix appended, so two
 repositories never share a clone directory and one repository's tasks sit next
-to each other.
+to each other. Because the clones no longer necessarily share one root, every
+clone is also registered in a root-owned index
+(`<runtimeRoot>/workspace-index/<task>` -> the clone), which is how
+`workspace-remove`, `usage`, `dashboard` and `recover` resolve a task NAME back
+to a path.
 
 So the guest only ever sees one repository — a **standalone clone** (no
 hardlinks, no alternates, no shared git metadata with your checkout) — and the

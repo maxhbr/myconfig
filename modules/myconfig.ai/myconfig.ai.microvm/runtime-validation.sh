@@ -292,8 +292,30 @@ repo_slug() {
     [[ -n $slug ]] || die "could not derive a repository slug from $REPO_TOPLEVEL"
     printf '%s' "${slug}__agent-microvm"
 }
-# The on-host clone directory the launcher creates for <task> of $REPO.
-clone_dir() { printf '%s/%s/%s' "$WORKSPACE_ROOT" "$(repo_slug)" "$1"; }
+# The on-host clone directory the launcher creates for <task> of $REPO. WHERE
+# the group directory lives depends on the host's `myconfig.ai.microvm`
+# `.workspaceLayout` (see docs/workspace-layout.md): `central` puts it under
+# the workspace root, `beside-repo` next to the source repository. The launcher
+# is the authority, so the layout is READ BACK from it (`--help` states it)
+# rather than assumed here; AGENT_WORKSPACE_LAYOUT overrides that probe for a
+# launcher too old to print the line.
+probe_workspace_layout() {
+    local line
+    line="$("$LAUNCHER" --help 2>&1 | sed -n 's/^ *Workspace layout of this host: //p' | head -1)"
+    case "$line" in
+        central | beside-repo) printf '%s' "$line" ;;
+        *) printf 'central' ;;
+    esac
+}
+WORKSPACE_LAYOUT="${AGENT_WORKSPACE_LAYOUT:-$(probe_workspace_layout)}"
+# The root-owned task -> clone index every layout maintains.
+WORKSPACE_INDEX="${AGENT_WORKSPACE_INDEX:-$RUNTIME_ROOT/workspace-index}"
+clone_dir() {
+    case "$WORKSPACE_LAYOUT" in
+        beside-repo) printf '%s/%s/%s' "$(dirname -- "$REPO_TOPLEVEL")" "$(repo_slug)" "$1" ;;
+        *) printf '%s/%s/%s' "$WORKSPACE_ROOT" "$(repo_slug)" "$1" ;;
+    esac
+}
 
 # --- helpers ---------------------------------------------------------------
 # `agent-microvm list` prints one line per slot of the CURRENT pool:
@@ -735,8 +757,11 @@ section_boot() {
         else
             skip "task A cannot see another task's workspace (the other workspace could not be created, so the denial would prove nothing)"
         fi
-        check_denied "task A cannot see the host workspace root" "$slot_a" \
-            test -d "$WORKSPACE_ROOT"
+        # The per-repository GROUP directory holds every task's clone of this
+        # repo, so it is the "root" a guest must not be able to see in EITHER
+        # layout (under `beside-repo` there is nothing under $WORKSPACE_ROOT).
+        check_denied "task A cannot see the host workspace group directory" "$slot_a" \
+            test -d "$(dirname -- "$(clone_dir rtv-iso-a)")"
         cleanup_task rtv-iso-a
     else
         report_start_failure "$rc" "task isolation (rtv-iso-a)"
@@ -1322,6 +1347,14 @@ section_lifecycle() {
         skip "killed launcher: the submit never allocated a slot and created a clone (see /tmp/rtv-kill-submit.log), so killing it would have tested nothing"
     else
         pass "killed launcher: the submit allocated $kslot and created the clone before the kill"
+        # The clone must be RESOLVABLE by task name, which under any layout
+        # means the root-owned index entry points at it (docs/workspace-layout.md).
+        if [[ -L "$WORKSPACE_INDEX/rtv-kill" ]] &&
+            [[ "$(realpath -m -- "$(readlink -- "$WORKSPACE_INDEX/rtv-kill")")" == "$(realpath -m -- "$(clone_dir rtv-kill)")" ]]; then
+            pass "the workspace index resolves task rtv-kill to its clone"
+        else
+            fail "the workspace index does not resolve rtv-kill to $(clone_dir rtv-kill) (entry: $(readlink -- "$WORKSPACE_INDEX/rtv-kill" 2>/dev/null || printf '<none>'))"
+        fi
         kill -9 "$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
         info "launcher killed; recovering"
@@ -1549,8 +1582,12 @@ HOOK
     # a small /var — which the very next check then reports as a host-health
     # failure caused by the suite itself. Bound the attempt by what the host can
     # spare (at most 2 GiB, and only if 4 GiB remain free afterwards).
-    local avail_mb fill_mb=0
-    avail_mb="$(df -Pm --output=avail "$WORKSPACE_ROOT" 2>/dev/null | tail -1 | tr -dc '0-9')"
+    # Measure the filesystem the CLONE actually lives on: under `beside-repo`
+    # that is the repository's filesystem, not $WORKSPACE_ROOT.
+    local avail_mb fill_mb=0 fill_fs
+    fill_fs="$(dirname -- "$(clone_dir rtv-mal)")"
+    [[ -d $fill_fs ]] || fill_fs="$WORKSPACE_ROOT"
+    avail_mb="$(df -Pm --output=avail "$fill_fs" 2>/dev/null | tail -1 | tr -dc '0-9')"
     if [[ -n ${avail_mb:-} ]] && ((avail_mb > 6144)); then
         fill_mb=2048
         ((avail_mb - fill_mb > 4096)) || fill_mb=$((avail_mb - 4096))
@@ -1559,7 +1596,7 @@ HOOK
         guest "$slot" sh -c "dd if=/dev/zero of=/workspace/rtv-fill bs=1M count=$fill_mb 2>/dev/null || true" >/dev/null 2>&1 || true
         check "the guest is still reachable after a disk-filling attempt (${fill_mb} MiB)" guest "$slot" true
     else
-        skip "disk-filling attempt: the host has too little free space under $WORKSPACE_ROOT (${avail_mb:-unknown} MiB) to run it safely"
+        skip "disk-filling attempt: the host has too little free space under $fill_fs (${avail_mb:-unknown} MiB) to run it safely"
     fi
     check "the host is still healthy (systemd is running)" systemctl is-system-running --quiet
     guest "$slot" sh -c 'rm -f /workspace/rtv-fill' >/dev/null 2>&1 || true

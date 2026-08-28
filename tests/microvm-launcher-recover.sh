@@ -31,7 +31,7 @@ set -euo pipefail
 for v in LAUNCHER BWRAP FAKEROOT BASH_BIN SYSTEMCTL_TARGET MOUNT_TARGET \
     UMOUNT_TARGET FINDMNT_TARGET RUNTIME_ROOT STATE_ROOT SESSION_ROOT \
     SESSION_RO_ROOT STATE_SLOTS_ROOT WORKSPACE_SUBDIR STATE_SUBDIR HOSTKEYS_SUBDIR \
-    SLOT FOREIGN_SLOT; do
+    WORKSPACE_INDEX SLOT FOREIGN_SLOT; do
     [[ -n ${!v:-} ]] || {
         printf 'harness: required environment variable %s is unset\n' "$v" >&2
         exit 2
@@ -578,6 +578,50 @@ if grep -q "no per-slot state outside the current pool" "$WORK/recover-clean.log
     pass "it says there was nothing foreign to prune"
 else
     fail "no 'nothing foreign' line: $(cat "$WORK/recover-clean.log")"
+fi
+
+printf '\n=== 9. a DANGLING workspace-index entry is pruned ===\n'
+# The index (workspace.nix) maps a task name to its clone. An entry whose
+# target is gone — a clone deleted by hand — would make the next `run` of that
+# task refuse with "already has a workspace", so `recover` drops it. It must
+# NEVER touch an entry whose clone still exists.
+fixture index
+rm -f "$WORK/stub-index/mounts"/*
+index_dir="$WORK/runtime-index/${WORKSPACE_INDEX#"$RUNTIME_ROOT"/}"
+mkdir -p "$index_dir"
+# A live clone (target exists) and a dangling one (target does not).
+live_clone="$WORK/runtime-index/live-repo__agent-microvm/live-task"
+mkdir -p "$live_clone/.git"
+ln -sfn "$live_clone" "$index_dir/live-task"
+ln -sfn "$RUNTIME_ROOT/gone__agent-microvm/gone-task" "$index_dir/gone-task"
+rc="$(run_recover index free --dry-run)"
+expect "recover --dry-run exits 0" 0 "$rc"
+if grep -q 'index: would drop the dangling entry of task gone-task' "$WORK/recover-index.log"; then
+    pass "--dry-run reports the dangling index entry"
+else
+    fail "no dangling-entry line in --dry-run: $(cat "$WORK/recover-index.log")"
+fi
+if [[ -L "$index_dir/gone-task" ]]; then
+    pass "--dry-run changed nothing"
+else
+    fail "--dry-run removed the dangling entry"
+fi
+rc="$(run_recover index free)"
+expect "recover exits 0" 0 "$rc"
+if [[ -L "$index_dir/gone-task" ]]; then
+    fail "the dangling index entry survived recover"
+else
+    pass "the dangling index entry was pruned"
+fi
+if [[ -L "$index_dir/live-task" ]]; then
+    pass "the index entry of a still-existing clone was left alone"
+else
+    fail "recover pruned the entry of a clone that still exists"
+fi
+if [[ -d "$live_clone/.git" ]]; then
+    pass "recover never touched the clone itself"
+else
+    fail "recover removed a workspace clone"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASSED" "$FAILED"

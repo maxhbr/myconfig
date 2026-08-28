@@ -498,6 +498,110 @@ let
   session = self.nixosConfigurations.test-f13._module.args.agentSession;
   seed = self.nixosConfigurations.test-f13._module.args.agentConfigSeed;
   launcherPkg = findPkg enabledCfg.environment.systemPackages "agent-microvm";
+
+  # --- (l4) the parameterised host-submit harness ------------------------
+  # Defined in the `let` block (not among the checks) because it is a
+  # FUNCTION: every attribute of the returned set must be a derivation.
+  mkSubmitCheck =
+    { name, layout }:
+    let
+      cfgForLayout =
+        if layout == microvmOpts.workspaceLayout then
+          enabledCfg
+        else
+          (self.nixosConfigurations.test-f13.extendModules {
+            modules = [ { myconfig.ai.microvm.workspaceLayout = lib.mkForce layout; } ];
+          }).config;
+      opts = cfgForLayout.myconfig.ai.microvm;
+      hostLauncher = findPkg cfgForLayout.environment.systemPackages "agent-microvm";
+    in
+    pkgs.runCommand name
+      {
+        nativeBuildInputs = [
+          pkgs.bubblewrap
+          pkgs.fakeroot
+          pkgs.jq
+          pkgs.git
+          pkgs.coreutils
+          # The TAMPER scenarios (a corrupt / swapped private key) both PRODUCE
+          # key material and JUDGE it with `ssh-keygen -y`, outside the sandbox.
+          pkgs.openssh
+        ];
+        harness = ./microvm-batch-launcher-submit.sh;
+        LAUNCHER = "${hostLauncher}/bin/agent-microvm";
+        BWRAP = lib.getExe pkgs.bubblewrap;
+        FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
+        BASH_BIN = "${pkgs.bash}/bin/bash";
+        # The REAL per-slot host-identity provisioner (hostkeys.nix). The
+        # harness's `systemctl` stub runs THIS on
+        # `start|restart agent-microvm-hostkeys.service`, so the launcher's
+        # pre-launch identity validation is satisfied by genuine key material
+        # produced by the genuine script, never by planted files.
+        PROVISION_HOSTKEYS = lib.getExe hostKeys.provisioner;
+        # The EXACT binaries the launcher resolves from its own runtimeInputs;
+        # the harness bind-mounts its stubs over these, so the launcher under
+        # test stays byte-identical to the installed one.
+        SYSTEMCTL_TARGET = "${pkgs.systemd}/bin/systemctl";
+        # `util-linux`'s bin/mount and bin/umount are SYMLINKS into its
+        # separate `mount` output; bwrap resolves the destination, so bind over
+        # the real files.
+        MOUNT_TARGET = "${pkgs.util-linux.mount}/bin/mount";
+        UMOUNT_TARGET = "${pkgs.util-linux.mount}/bin/umount";
+        FINDMNT_TARGET = "${pkgs.util-linux.bin}/bin/findmnt";
+        # The exact `jq` the launcher resolves: the harness binds an ARGV
+        # RECORDER over it to PROVE, by execution, that the allocation token
+        # never lands in a world-readable /proc/<pid>/cmdline.
+        JQ_TARGET = "${pkgs.jq}/bin/jq";
+        # The exact `curl` the launcher resolves (from its runtimeInputs): the
+        # harness binds a stub over it for the endpoint-preflight test, so the
+        # launcher under test stays byte-identical to the installed one.
+        CURL_TARGET = "${pkgs.curl}/bin/curl";
+        RUNTIME_ROOT = opts.runtimeRoot;
+        STATE_ROOT = opts.stateRoot;
+        # WHERE this launcher stores task clones and how it resolves a task
+        # name back to one (workspace.nix). The harness derives the expected
+        # clone path from these instead of hardcoding one layout.
+        WORKSPACE_ROOT = opts.workspaceRoot;
+        WORKSPACE_LAYOUT = opts.workspaceLayout;
+        WORKSPACE_INDEX = "${opts.runtimeRoot}/workspace-index";
+        WORKSPACE_GROUP_SUFFIX = "__agent-microvm";
+        # The per-slot job data root and the workspace subdirectory of the ONE
+        # writable session share, from the module rather than a literal in the
+        # harness.
+        JOBS_ROOT = jobs.root;
+        WORKSPACE_SUBDIR = session.subdirs.workspace;
+        # The host home the config stager resolves: the harness creates it
+        # (empty) inside the sandbox so the launch-time staging step succeeds.
+        HOST_HOME = microvmOpts.configSeed.hostHome;
+        INPUT_SUBDIR = jobs.inputSubdir;
+        CONTROLLER_SUBDIR = jobs.controllerSubdir;
+        WORKER_SUBDIR = jobs.workerSubdir;
+        WORKER_LOGS_SUBDIR = jobs.workerLogsSubdir;
+        WORKER_STDERR_NAME = jobs.workerStderrName;
+        SPEC_NAME = jobs.specName;
+        PROMPT_NAME = jobs.promptName;
+        RESULT_NAME = jobs.resultName;
+        SPEC_VERSION = toString jobs.specVersion;
+        CONTROLLER_VERSION = toString jobs.controllerVersion;
+        WORKER_UID = toString jobs.workerUid;
+        AGENT = lib.head agentRegistry.batchNames;
+      }
+      ''
+        mkdir -p work && cd work
+        bash "$harness" > report.txt 2>&1 || {
+          echo "--- host submit harness FAILED ---" >&2
+          cat report.txt >&2
+          exit 1
+        }
+        {
+          echo "$name"
+          echo "  launcher: $LAUNCHER"
+          echo "  layout:   $WORKSPACE_LAYOUT"
+          echo
+          cat report.txt
+        } > "$out"
+      '';
+
 in
 {
   # ---------------------------------------------------------------------- #
@@ -4549,6 +4653,72 @@ in
       '';
 
   # ---------------------------------------------------------------------- #
+  # WORKSPACE LAYOUT (docs/workspace-layout.md): the `workspaceLayout` option  #
+  # really drives the generated launcher and the host tmpfiles rules, in both  #
+  # values. EVAL-level companion to the two EXECUTED submit harnesses below.   #
+  # ---------------------------------------------------------------------- #
+  microvm-eval-workspace-layout =
+    let
+      # BOTH layouts are pinned explicitly rather than reusing whatever the
+      # reference host happens to select, so this check keeps proving the
+      # option's effect if f13 switches layout.
+      variant =
+        layout:
+        self.nixosConfigurations.test-f13.extendModules {
+          modules = [ { myconfig.ai.microvm.workspaceLayout = lib.mkForce layout; } ];
+        };
+      centralSys = variant "central";
+      besideSys = variant "beside-repo";
+      # The ONE workspace-layout authority (../modules/.../workspace.nix), as
+      # each config resolved it. Every consumer (launcher.nix, the tmpfiles
+      # rules) reads exactly this, so asserting on it — instead of grepping the
+      # generated script — keeps the check pure (no IFD) and still binding.
+      centralWs = centralSys._module.args.agentWorkspace;
+      besideWs = besideSys._module.args.agentWorkspace;
+      indexRule = "d ${microvmOpts.runtimeRoot}/workspace-index 0755 root root - -";
+      launcherOf = cfg: findPkg cfg.environment.systemPackages "agent-microvm";
+    in
+    mkEvalCheck "microvm-eval-workspace-layout" [
+      {
+        # A guest-writable tree beside a user's repository must stay OPT-IN.
+        assertion =
+          self.nixosConfigurations.test-f13.options.myconfig.ai.microvm.workspaceLayout.default == "central";
+        message = "the DEFAULT workspace layout must stay `central` (beside-repo puts a guest-writable tree next to the user's repository, so it is opt-in)";
+      }
+      {
+        assertion = centralWs.layout == "central" && besideWs.layout == "beside-repo";
+        message = "the workspaceLayout option does not reach the workspace-path authority (_module.args.agentWorkspace)";
+      }
+      {
+        assertion =
+          centralWs.groupSuffix == "__agent-microvm" && besideWs.groupSuffix == centralWs.groupSuffix;
+        message = "the per-repository group suffix must be the SAME reserved marker in both layouts (it is what identifies a clone outside the central root)";
+      }
+      {
+        assertion =
+          centralWs.indexRoot == "${microvmOpts.runtimeRoot}/workspace-index"
+          && besideWs.indexRoot == centralWs.indexRoot;
+        message = "the workspace index must live under the runtime root in every layout (it is root-owned and never shared into a guest)";
+      }
+      {
+        # If the option did not reach the generated script, both launchers
+        # would be the SAME derivation — the layout would be cosmetic.
+        assertion = (launcherOf centralSys.config).outPath != (launcherOf besideSys.config).outPath;
+        message = "the workspaceLayout option does not change the generated `agent-microvm` launcher";
+      }
+      {
+        assertion =
+          builtins.elem indexRule centralSys.config.systemd.tmpfiles.rules
+          && builtins.elem indexRule besideSys.config.systemd.tmpfiles.rules;
+        message = "the workspace index directory has no root-owned tmpfiles rule: expected `${indexRule}`";
+      }
+      {
+        assertion = !(builtins.elem indexRule disabledCfg.systemd.tmpfiles.rules);
+        message = "the disabled module still creates the workspace index directory";
+      }
+    ];
+
+  # ---------------------------------------------------------------------- #
   # (l4) HOST SUBMIT PATH (ticket 7): actually RUN `agent-microvm submit`.     #
   #      `bwrap` (tmpfs root) + `fakeroot` give the launcher the absolute      #
   #      roots and the uid 0 it needs; `systemctl`, `mount`, `umount` and      #
@@ -4563,89 +4733,23 @@ in
   #      allocation is accepted — a foreign token, a foreign slot, a v1         #
   #      document, a malformed one, worker-written fakes and silence all become #
   #      exit 70. It SKIPS honestly if the sandbox forbids user namespaces.     #
+  #                                                                          #
+  #      Parameterised over the WORKSPACE LAYOUT (workspace.nix): the same     #
+  #      harness runs against the default `central` launcher and against one    #
+  #      built with `workspaceLayout = "beside-repo"`, so the clone location,   #
+  #      the workspace index and `workspace-remove` are proven BY EXECUTION in  #
+  #      both layouts instead of only in the one this host happens to use      #
+  #      (mkSubmitCheck is defined in the `let` block above).                   #
   # ---------------------------------------------------------------------- #
-  microvm-batch-launcher-submit =
-    let
-      hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
-    in
-    pkgs.runCommand "microvm-batch-launcher-submit"
-      {
-        nativeBuildInputs = [
-          pkgs.bubblewrap
-          pkgs.fakeroot
-          pkgs.jq
-          pkgs.git
-          pkgs.coreutils
-          # The TAMPER scenarios (a corrupt / swapped private key) both PRODUCE
-          # key material and JUDGE it with `ssh-keygen -y`, outside the sandbox.
-          pkgs.openssh
-        ];
-        harness = ./microvm-batch-launcher-submit.sh;
-        LAUNCHER = "${hostLauncher}/bin/agent-microvm";
-        BWRAP = lib.getExe pkgs.bubblewrap;
-        FAKEROOT = "${pkgs.fakeroot}/bin/fakeroot";
-        BASH_BIN = "${pkgs.bash}/bin/bash";
-        # The REAL per-slot host-identity provisioner (hostkeys.nix). The
-        # harness's `systemctl` stub runs THIS on
-        # `start|restart agent-microvm-hostkeys.service`, so the launcher's
-        # pre-launch identity validation is satisfied by genuine key material
-        # produced by the genuine script, never by planted files.
-        PROVISION_HOSTKEYS = lib.getExe hostKeys.provisioner;
-        # The EXACT binaries the launcher resolves from its own runtimeInputs;
-        # the harness bind-mounts its stubs over these, so the launcher under
-        # test stays byte-identical to the installed one.
-        SYSTEMCTL_TARGET = "${pkgs.systemd}/bin/systemctl";
-        # `util-linux`'s bin/mount and bin/umount are SYMLINKS into its
-        # separate `mount` output; bwrap resolves the destination, so bind over
-        # the real files.
-        MOUNT_TARGET = "${pkgs.util-linux.mount}/bin/mount";
-        UMOUNT_TARGET = "${pkgs.util-linux.mount}/bin/umount";
-        FINDMNT_TARGET = "${pkgs.util-linux.bin}/bin/findmnt";
-        # The exact `jq` the launcher resolves: the harness binds an ARGV
-        # RECORDER over it to PROVE, by execution, that the allocation token
-        # never lands in a world-readable /proc/<pid>/cmdline.
-        JQ_TARGET = "${pkgs.jq}/bin/jq";
-        # The exact `curl` the launcher resolves (from its runtimeInputs): the
-        # harness binds a stub over it for the endpoint-preflight test, so the
-        # launcher under test stays byte-identical to the installed one.
-        CURL_TARGET = "${pkgs.curl}/bin/curl";
-        RUNTIME_ROOT = microvmOpts.runtimeRoot;
-        STATE_ROOT = microvmOpts.stateRoot;
-        # The per-slot job data root and the workspace subdirectory of the ONE
-        # writable session share, from the module rather than a literal in the
-        # harness.
-        JOBS_ROOT = jobs.root;
-        WORKSPACE_SUBDIR = session.subdirs.workspace;
-        # The host home the config stager resolves: the harness creates it
-        # (empty) inside the sandbox so the launch-time staging step succeeds.
-        HOST_HOME = microvmOpts.configSeed.hostHome;
-        INPUT_SUBDIR = jobs.inputSubdir;
-        CONTROLLER_SUBDIR = jobs.controllerSubdir;
-        WORKER_SUBDIR = jobs.workerSubdir;
-        WORKER_LOGS_SUBDIR = jobs.workerLogsSubdir;
-        WORKER_STDERR_NAME = jobs.workerStderrName;
-        SPEC_NAME = jobs.specName;
-        PROMPT_NAME = jobs.promptName;
-        RESULT_NAME = jobs.resultName;
-        SPEC_VERSION = toString jobs.specVersion;
-        CONTROLLER_VERSION = toString jobs.controllerVersion;
-        WORKER_UID = toString jobs.workerUid;
-        AGENT = lib.head agentRegistry.batchNames;
-      }
-      ''
-        mkdir -p work && cd work
-        bash "$harness" > report.txt 2>&1 || {
-          echo "--- host submit harness FAILED ---" >&2
-          cat report.txt >&2
-          exit 1
-        }
-        {
-          echo "microvm-batch-launcher-submit"
-          echo "  launcher: $LAUNCHER"
-          echo
-          cat report.txt
-        } > "$out"
-      '';
+  microvm-batch-launcher-submit = mkSubmitCheck {
+    name = "microvm-batch-launcher-submit";
+    layout = "central";
+  };
+
+  microvm-batch-launcher-submit-beside-repo = mkSubmitCheck {
+    name = "microvm-batch-launcher-submit-beside-repo";
+    layout = "beside-repo";
+  };
 
   # ---------------------------------------------------------------------- #
   # (l5) RECOVERY PATH: actually RUN `agent-microvm recover` against a stale   #
@@ -4688,6 +4792,9 @@ in
         WORKSPACE_SUBDIR = session.subdirs.workspace;
         STATE_SUBDIR = session.subdirs.state;
         HOSTKEYS_SUBDIR = session.roSubdirs.hostkeys;
+        # The root-owned task -> clone index (workspace.nix): `recover` prunes
+        # entries whose clone is gone, and must leave live ones alone.
+        WORKSPACE_INDEX = "${microvmOpts.runtimeRoot}/workspace-index";
         # The PRE-consolidation per-slot state root: nothing creates anything
         # there any more, but `recover` still scans it so a host migrated from
         # the four-share layout gets its residue reported.

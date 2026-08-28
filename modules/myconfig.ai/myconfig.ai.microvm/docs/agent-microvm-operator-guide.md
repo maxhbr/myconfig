@@ -72,7 +72,10 @@ sudo agent-microvm run --attach \
 ```
 
 The session ends when the agent exits; the VM is then stopped and the clone kept
-at `/var/lib/agent-microvms/workspaces/my-repo__agent-microvm/my-feature`.
+at `<group>/my-feature` — `~/src/my-repo__agent-microvm/my-feature` under
+`workspaceLayout = "beside-repo"` (f13), or
+`/var/lib/agent-microvms/workspaces/my-repo__agent-microvm/my-feature` under the
+default `central` layout. `run` prints the exact path.
 
 Detached variant (VM keeps running, connect later):
 
@@ -252,16 +255,30 @@ confirm in time, the archived record says so explicitly (`source: "host"`).
 cat /var/lib/agent-microvms/results/fix-parser.json
 jq -r '.state, .exitCode, .source' /var/lib/agent-microvms/results/fix-parser.json
 
-# what the agent changed:
-git -C /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser diff
-git -C /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser log --oneline origin/HEAD..
+# where the clone is (the layout is per host, see workspace-layout.md):
+#   beside-repo (f13):  ~/src/my-repo__agent-microvm/fix-parser
+#   central (default):  /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser
+# `sudo agent-microvm usage` lists every clone with its path, and
+# `<runtimeRoot>/workspace-index/<task>` is a symlink to it.
+WS=~/src/my-repo__agent-microvm/fix-parser
+
+# what the agent changed (the clone is owned by YOUR uid — no sudo, so no
+# root-owned files end up in it):
+git -C "$WS" diff
+git -C "$WS" log --oneline origin/HEAD..
 
 # import into your own checkout:
-git -C ~/src/my-repo fetch /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser agent/fix-parser
+git -C ~/src/my-repo fetch "$WS" agent/fix-parser
 git -C ~/src/my-repo log --oneline FETCH_HEAD
 # or as patches:
-git -C /var/lib/agent-microvms/workspaces/my-repo__agent-microvm/fix-parser format-patch origin/HEAD..agent/fix-parser -o /tmp/patches
+git -C "$WS" format-patch origin/HEAD..agent/fix-parser -o /tmp/patches
 ```
+
+Under `workspaceLayout = "beside-repo"` the clone sits next to your repository,
+so it is a sibling of workmux's `my-repo__worktrees/` and can be fetched from
+without `sudo`. Never run `sudo git` *inside your own checkout*; if you must
+read a clone as root, use `sudo git --no-optional-locks -c safe.directory=…`,
+which does not rewrite the clone's index.
 
 ## 7. Stop, destroy, remove
 
@@ -285,6 +302,11 @@ sudo agent-microvm usage                        # what is retained, and how big
 sudo agent-microvm workspace-remove fix-parser  # guarded
 sudo agent-microvm workspace-remove fix-parser --force
 ```
+
+It resolves the task name through the workspace index
+(`<runtimeRoot>/workspace-index/<task>`), then PROVES the resolved path really is
+an agent workspace (correct group directory, a `.git`, owned by the guest agent
+uid) before deleting anything, and drops the index entry with it.
 
 Without `--force` it refuses on uncommitted changes, unexported commits, or while
 a slot still holds the clone (it tells you which). It also removes that task's

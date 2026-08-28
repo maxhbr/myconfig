@@ -219,6 +219,7 @@ Documentation set:
 | [Reference](../myconfig.ai.microvm/docs/agent-microvm.md) | activation, options, agent registry, network profiles, batch job format, limitations |
 | [Architecture](../myconfig.ai.microvm/docs/agent-microvm-architecture.md) | module map, slot pool, workspace indirection, credential boundary |
 | [Operator guide](../myconfig.ai.microvm/docs/agent-microvm-operator-guide.md) | exact start/submit/status/attach/cancel/collect/recover procedures |
+| [Workspace layout](../myconfig.ai.microvm/docs/workspace-layout.md) | `central` vs `beside-repo` task clones and the task -> clone index |
 | [Security model](../myconfig.ai.microvm/docs/agent-microvm-security-model.md) | trusted vs untrusted, mitigated attacks, residual risks |
 | [Runtime validation](../myconfig.ai.microvm/docs/agent-microvm-runtime-validation.md) | the real-KVM measurement procedure |
 
