@@ -20,7 +20,9 @@
 # either replaced wholesale or extended via the matching `extra*` argument.
 # In addition, every wrapper inherits `myconfig.ai.jail.fwdEnvs` from the
 # NixOS config passed in as `osconfig` — see `globalFwdEnvs` below. This
-# extends the always-forwarded `OPENAI_API_KEY`.
+# extends the always-forwarded `OPENAI_API_KEY`. The shared sandbox tool
+# option `myconfig.ai.sandboxTools` (packages + env) is inherited the same
+# way — see `sharedTools`/`sharedEnv` below.
 #
 # The resulting derivation is a `jail` permission bundle. See
 # `vendor/alexdavid-jail.nix/lib/combinators/` for available primitives.
@@ -230,7 +232,14 @@ let
 
   fwdEnvPerms = lib.map try-fwd-env (fwdEnv ++ extraFwdEnv ++ globalFwdEnvs);
 
-  runtimeEnvPerms = lib.mapAttrsToList (name: value: set-env name value) extraRuntimeEnv;
+  # Shared sandbox tooling (see ../myconfig.ai.sandboxTools.nix): packages
+  # appended to the tool set below for EVERY `jail-app` wrapper, and env
+  # vars set unconditionally via `set-env`. Wrapper-specific
+  # `extraRuntimeEnv` wins over `sharedEnv` on a name clash.
+  sharedTools = osconfig.myconfig.ai.sandboxTools.extraPackages or [ ];
+  sharedEnv = osconfig.myconfig.ai.sandboxTools.extraEnv or { };
+
+  runtimeEnvPerms = lib.mapAttrsToList (name: value: set-env name value) (sharedEnv // extraRuntimeEnv);
 
   # Bind host paths named by env vars read-only at runtime. Each `var` is
   # the name of an environment variable; when it is set and non-empty the
@@ -375,7 +384,7 @@ let
     ]
     ++ configDirPerms
     ++ [
-      (add-pkg-deps (devTools ++ extraDevTools))
+      (add-pkg-deps (devTools ++ extraDevTools ++ sharedTools))
     ]
     ++ fwdEnvPerms
     ++ runtimeEnvPerms

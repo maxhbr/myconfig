@@ -58,6 +58,15 @@ let
   // wmCfg.settings;
   sandboxWorkmuxConfigFile = yamlFormat.generate "workmux-sandbox-config.yaml" sandboxWorkmuxConfig;
 
+  # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
+  # paths, baked into the `alacritty-sandboxed-workmux-here` wrapper and read
+  # (via SANDBOXED_WORKMUX_EXTRA_PACKAGES) by the impure flake output that
+  # builds the per-invocation VM runner. Same pattern as
+  # SANDBOXED_HERDR_AGENT_PACKAGES in ../programs.herdr.nix.
+  sandboxToolsJson = builtins.toJSON (
+    map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages
+  );
+
   # Host tmux configuration, exposed read-only inside the guest so the in-VM
   # tmux server picks up the same keybindings/theme. Empty string when the
   # host has no /etc/tmux.conf (the guest then uses tmux defaults).
@@ -129,6 +138,10 @@ let
       export SANDBOXED_WORKMUX_CONFIG=${lib.escapeShellArg "${sandboxWorkmuxConfigFile}"}
       export SANDBOXED_WORKMUX_TMUXCONF=${lib.escapeShellArg (toString tmuxConf)}
       export SANDBOXED_WORKMUX_NETWORK=1
+      # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
+      # time as a JSON array of store paths; read by the impure
+      # `sandboxed-workmux-runner` flake output.
+      export SANDBOXED_WORKMUX_EXTRA_PACKAGES='${sandboxToolsJson}'
 
       echo "sandboxed-workmux: building microvm runner for $top" >&2
       # `path:` flakeref (not a bare store path): a bare `/nix/store/...-source`

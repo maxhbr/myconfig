@@ -118,6 +118,14 @@ let
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
   netCaps = agentNetwork.caps;
+
+  # Shared sandbox tooling (see ../myconfig.ai.sandboxTools.nix) — evaluated
+  # HERE in the HOST config and threaded into the guest modules below as
+  # plain values, because the guest evaluation does not carry the host's
+  # `myconfig.*` options.
+  sharedSandboxPackages = config.myconfig.ai.sandboxTools.extraPackages;
+  sharedSandboxEnv = config.myconfig.ai.sandboxTools.extraEnv;
+
   # The ONE transport decision (lightweight plan phase 6), resolved in
   # default.nix from ./network-profiles.nix. `netTransport.guestInterface` is
   # what decides whether this guest has a network interface AT ALL: under the
@@ -393,6 +401,14 @@ let
       # worker unit exists at all, so this cannot define one behind its back.
       (agentJobs.mkWorkerEnvironmentModule modelEndpointEnv)
       (mkGuestBase slot)
+      # Shared sandbox tooling (../myconfig.ai.sandboxTools.nix): packages
+      # and env evaluated in the HOST config (see `sharedSandboxPackages` /
+      # `sharedSandboxEnv` above) and merged into the guest closure. Empty
+      # by default, so a host that does not opt in is unchanged.
+      {
+        environment.systemPackages = sharedSandboxPackages;
+        environment.variables = sharedSandboxEnv;
+      }
       # VSOCK-only control channel (lightweight plan phase 6): when VSOCK is the
       # ONLY control channel (a batch+vsock host: `enableSsh = false`, no
       # `interactive`), suppress the TCP sshd entirely — do NOT install the

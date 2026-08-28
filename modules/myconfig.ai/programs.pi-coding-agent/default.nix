@@ -818,6 +818,10 @@ let
       export SANDBOXED_PI_SSH_PORT="$ssh_port"
       export SANDBOXED_PI_AUTHORIZED_KEYS="$runtime_dir/id.pub"
       export SANDBOXED_PI_NETWORK=1
+      # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
+      # time as a JSON array of store paths; read by the impure
+      # `sandboxed-pi-runner` flake output.
+      export SANDBOXED_PI_EXTRA_PACKAGES='${sandboxToolsJson}'
 
       echo "sandboxed-pi: building microvm runner for workspace: $workspace" >&2
       # Use an explicit `path:` flakeref for the flake source store path.
@@ -909,6 +913,15 @@ let
       ssh -tt "''${ssh_opts[@]}" agent@127.0.0.1 "$remote_cmd"
     '';
   };
+
+  # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
+  # paths, baked into the `sandboxed-pi` wrapper and read (via the
+  # SANDBOXED_PI_EXTRA_PACKAGES env var) by the impure flake output that
+  # builds the per-invocation VM runner. Same pattern as
+  # SANDBOXED_HERDR_AGENT_PACKAGES in ../programs.herdr.nix.
+  sandboxToolsJson = builtins.toJSON (
+    map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages
+  );
 in
 {
   options.myconfig = with lib; {

@@ -181,6 +181,10 @@ let
       # JSON array of enabled coding-agent store paths, baked in at build
       # time from the host's myconfig.ai.<name>.enable flags.
       export SANDBOXED_HERDR_AGENT_PACKAGES='${agentPackagesJson}'
+      # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
+      # time as a JSON array of store paths; read by the impure
+      # `sandboxed-herdr-runner` flake output.
+      export SANDBOXED_HERDR_EXTRA_PACKAGES='${sandboxToolsJson}'
 
       echo "sandboxed-herdr: building microvm runner for workspace: $workspace" >&2
       # Use an explicit `path:` flakeref for the flake source store path;
@@ -264,6 +268,14 @@ let
       ssh -tt "''${ssh_opts[@]}" agent@127.0.0.1 "$remote_cmd"
     '';
   };
+
+  # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
+  # paths, baked into the `sandboxed-herdr` wrapper and read (via
+  # SANDBOXED_HERDR_EXTRA_PACKAGES) by the impure flake output that builds
+  # the per-invocation VM runner. Same pattern as `agentPackagesJson` above.
+  sandboxToolsJson = builtins.toJSON (
+    map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages
+  );
 in
 {
   config = lib.mkIf agenticCodingEnabled {

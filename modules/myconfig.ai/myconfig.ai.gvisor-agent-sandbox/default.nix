@@ -153,11 +153,16 @@ in
 
     extraImagePackages = mkOption {
       type = types.listOf types.package;
-      default = enabledAgentPackages ++ lib.optional herdrEnabled pkgs.herdr;
+      default =
+        enabledAgentPackages
+        ++ lib.optional herdrEnabled pkgs.herdr
+        # Shared sandbox tooling (see ../myconfig.ai.sandboxTools.nix).
+        ++ config.myconfig.ai.sandboxTools.extraPackages;
       defaultText = literalExpression ''
         the packages of the coding agents enabled on this host, i.e. one entry
         per set `myconfig.ai.<pi-coding-agent|opencode|claude-code|codex|github-copilot-cli|qwen-code>.enable`,
-        plus `pkgs.herdr` when any of them is enabled
+        plus `pkgs.herdr` when any of them is enabled,
+        plus `myconfig.ai.sandboxTools.extraPackages`
       '';
       example = literalExpression "[ pkgs.claude-code ]";
       description = ''
