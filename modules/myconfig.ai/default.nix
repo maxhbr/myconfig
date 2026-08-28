@@ -18,6 +18,7 @@ in
     ./myconfig.ai.pull_models.nix
     ./myconfig.ai.llama-cpp
     ./myconfig.ai.jail.nix
+    ./myconfig.ai.sandboxTools.nix
     ./myconfig.ai.microvm
     ./myconfig.ai.gvisor-agent-sandbox
     ./comfyui.nix

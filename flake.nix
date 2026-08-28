@@ -570,6 +570,11 @@
                   authorizedKeysFile = getEnvOr "SANDBOXED_PI_AUTHORIZED_KEYS" "/var/empty/authorized_keys";
                   piPackage = inputs.nixos-unstable.legacyPackages.${system}.pi-coding-agent;
                   allowNetwork = getEnvOr "SANDBOXED_PI_NETWORK" "1" != "0";
+                  # Shared sandbox tools (myconfig.ai.sandboxTools), baked into
+                  # the wrapper as a JSON array of store paths.
+                  extraGuestPackagePaths = builtins.fromJSON (
+                    getEnvOr "SANDBOXED_PI_EXTRA_PACKAGES" "[]"
+                  );
                 };
 
             # Per-invocation microvm runner for the whole workmux/tmux session
@@ -605,6 +610,11 @@
                   piPackage = inputs.nixos-unstable.legacyPackages.${system}.pi-coding-agent;
                   workmuxPackage = inputs.workmux.packages.${system}.default;
                   allowNetwork = getEnvOr "SANDBOXED_WORKMUX_NETWORK" "1" != "0";
+                  # Shared sandbox tools (myconfig.ai.sandboxTools), baked
+                  # into the wrapper as a JSON array of store paths.
+                  extraGuestPackagePaths = builtins.fromJSON (
+                    getEnvOr "SANDBOXED_WORKMUX_EXTRA_PACKAGES" "[]"
+                  );
                 };
 
             # Per-invocation microvm runner for `sandboxed-herdr`. Built
@@ -655,6 +665,11 @@
                   allowNetwork = getEnvOr "SANDBOXED_HERDR_NETWORK" "1" != "0";
                   hostUid = if hostUidStr == "" then null else lib.toInt hostUidStr;
                   hostGid = if hostGidStr == "" then null else lib.toInt hostGidStr;
+                  # Shared sandbox tools (myconfig.ai.sandboxTools), baked
+                  # into the wrapper as a JSON array of store paths.
+                  extraGuestPackagePaths = builtins.fromJSON (
+                    getEnvOr "SANDBOXED_HERDR_EXTRA_PACKAGES" "[]"
+                  );
                 };
           };
 

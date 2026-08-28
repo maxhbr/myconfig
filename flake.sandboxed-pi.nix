@@ -146,6 +146,14 @@ let
       # (the default), no seeding happens and the wrapper starts the agent
       # with an empty/default config (the previous behaviour).
       seedConfigPaths ? [ ],
+
+      # Shared sandbox tooling (see
+      # modules/myconfig.ai/myconfig.ai.sandboxTools.nix): store-path strings
+      # baked into a `SANDBOXED_*_EXTRA_PACKAGES` JSON env var by the host-side
+      # wrapper (same pattern as `SANDBOXED_HERDR_AGENT_PACKAGES`) and passed
+      # through by the flake outputs in `_flake.nix_`. Folded into ONE
+      # `buildEnv` package that joins `guestPackages`.
+      extraGuestPackagePaths ? [ ],
     }:
     let
       pkgs = inputs.nixpkgs.legacyPackages.${system};
@@ -281,7 +289,11 @@ let
                   unzip
                   which
                 ])
-                ++ guestPackages;
+                ++ guestPackages
+                ++ lib.optional (extraGuestPackagePaths != [ ]) (pkgs.buildEnv {
+                  name = "sandboxed-extra-tools";
+                  paths = extraGuestPackagePaths;
+                });
 
               system.stateVersion = "25.11";
             }
@@ -422,6 +434,8 @@ in
       # Override the default `pi`-only seed allowlist. Defaults to the `pi`
       # agent's configPaths from the shared seeder library.
       seedConfigPaths ? seedLib.configPathsFor [ "pi" ],
+      # Shared sandbox tooling store paths (see mkSandboxedRunner).
+      extraGuestPackagePaths ? [ ],
     }:
     mkSandboxedRunner {
       inherit
@@ -442,6 +456,7 @@ in
         }
       ];
       guestPackages = [ piPackage ];
+      inherit extraGuestPackagePaths;
     };
 
   # One workspace + `herdr` and the coding-agent CLIs it launches. Backs
@@ -484,6 +499,8 @@ in
         "github-copilot-cli"
         "hermes"
       ],
+      # Shared sandbox tooling store paths (see mkSandboxedRunner).
+      extraGuestPackagePaths ? [ ],
     }:
     mkSandboxedRunner {
       inherit
@@ -506,6 +523,7 @@ in
         }
       ];
       guestPackages = [ herdrPackage ] ++ agentPackages;
+      inherit extraGuestPackagePaths;
     };
 
   # Main repo + its `__worktrees` sibling + tmux/workmux/pi. Backs
@@ -532,6 +550,8 @@ in
       vcpu ? 4,
       mem ? 8192,
       allowNetwork ? true,
+      # Shared sandbox tooling store paths (see mkSandboxedRunner).
+      extraGuestPackagePaths ? [ ],
     }:
     let
       pkgs = inputs.nixpkgs.legacyPackages.${system};
@@ -606,6 +626,7 @@ in
         pkgs.tmux
         entry
       ];
+      inherit extraGuestPackagePaths;
       # Expose the host's tmux configuration inside the guest so the in-VM
       # tmux server picks up the same keybindings/theme. Skipped when empty.
       extraGuestModules = pkgs.lib.optional (tmuxConf != "") {
