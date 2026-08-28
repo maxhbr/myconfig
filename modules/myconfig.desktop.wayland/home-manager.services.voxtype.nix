@@ -10,9 +10,17 @@
 {
   config = lib.mkIf config.services.voxtype.enable {
     services.voxtype = {
-      # Use the Vulkan variant for GPU-accelerated Whisper inference.
-      package = pkgs.voxtype-vulkan;
-      loadModels = [ "large-v3-turbo" ];
+      # Use the ONNX variant so the NVIDIA Parakeet engine (onnxruntime) is
+      # available. The nixpkgs onnx build registers no GPU execution
+      # providers, so Parakeet runs on CPU; the int8 model keeps
+      # push-to-talk latency acceptable there. flake.pkgs_overrides.nix
+      # carries the osd-gtk4 override this variant also needs.
+      package = pkgs.voxtype-onnx;
+      # parakeet-tdt-0.6b-v3-int8: quantized (~700 MB) multilingual TDT
+      # model, the fastest sensible CPU choice. Swap in
+      # "parakeet-tdt-0.6b-v3" (fp32, ~2.6 GB, slightly better accuracy)
+      # here and in settings.parakeet.model if accuracy ever disappoints.
+      loadModels = [ "parakeet-tdt-0.6b-v3-int8" ];
       settings = {
         # State file for Waybar/polybar integration. The daemon writes
         # its current state (idle/recording/transcribing) here; the
@@ -40,12 +48,14 @@
             volume = 0.7; # 0.0 to 1.0
           };
         };
-        whisper = {
-          model = "large-v3-turbo";
-          language = [
-            "en"
-            "de"
-          ];
+        # Engine selection + model. Parakeet replaces whisper.cpp: the v3
+        # TDT model auto-detects among its 25 supported languages (covers
+        # the previous whisper `language = [ "en" "de" ]` setup) and emits
+        # punctuation natively, so spoken_punctuation stays on only for
+        # explicitly dictated symbols.
+        engine = "parakeet";
+        parakeet = {
+          model = "parakeet-tdt-0.6b-v3-int8";
         };
         output = {
           mode = "type";
@@ -111,8 +121,9 @@
       Install.WantedBy = lib.mkForce [ "graphical-session.target" ];
     };
 
-    # Persist downloaded whisper models across reboots so the
-    # voxtype-model-loader service doesn't re-download them.
+    # Persist downloaded parakeet models across reboots so the
+    # voxtype-model-loader service doesn't re-download them (the int8
+    # model is ~700 MB, the fp32 v3 model ~2.6 GB).
     myconfig.persistence.cache-directories = [ ".local/share/voxtype/" ];
 
     programs.waybar = {

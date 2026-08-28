@@ -24,7 +24,7 @@
 # |                | pinned nixpkgs builds the package with `python3` (= python314),|
 # |                | so every `services.pass-secret-service` user unit crashes on  |
 # |                | startup. Override bumps src to the upstream fix commit.       |
-# | voxtype-vulkan | nixpkgs builds without any `osd-*` cargo feature, so neither   |
+# | voxtype-onnx   | nixpkgs builds without any `osd-*` cargo feature, so neither   |
 # |                | `voxtype-osd-gtk4` nor `voxtype-osd-native` lands on PATH and   |
 # |                | the `voxtype-osd` launcher crashes on every daemon start.    |
 # |                | Override builds the `osd-gtk4` feature + GTK4 deps.           |
@@ -67,7 +67,7 @@
       ];
     })
 
-    # voxtype-vulkan: build the optional `osd-gtk4` cargo feature so the GTK4
+    # voxtype-onnx: build the optional `osd-gtk4` cargo feature so the GTK4
     # OSD binary (`voxtype-osd-gtk4`) ships with the package. Upstream nixpkgs
     # builds voxtype with no OSD feature enabled, so the always-built
     # `voxtype-osd` launcher fails with:
@@ -75,20 +75,24 @@
     #   was found on PATH or next to this binary.
     # …on every daemon start, then gives up after 3 retries.
     #
-    # `voxtype-vulkan` is a separate top-level attribute
-    # (callPackage ... { vulkanSupport = true; }), so the override must target
+    # `voxtype-onnx` is a separate top-level attribute
+    # (callPackage ... { onnxSupport = true; }), so the override must target
     # it directly, not `voxtype`. `overrideAttrs` targets `cargoBuildFeatures`
     # (the derivation attr the cargo-build-hook actually reads — `buildFeatures`
     # is only an input to buildRustPackage's flag computation, which already
     # ran) and appends the GTK4 runtime libs to `buildInputs`. The optional deps
     # are already pinned in Cargo.lock, so `cargoHash` is unchanged.
     #
+    # (The same override previously targeted `voxtype-vulkan`; that variant
+    # is no longer used since the voxtype config switched from Whisper to
+    # Parakeet, so only the onnx variant is patched now.)
+    #
     # Upstream issue: https://github.com/NixOS/nixpkgs/issues/533080
     #
     # TODO: remove once nixpkgs enables `osd-gtk4` (or `osd-native`) in
     # pkgs/by-name/vo/voxtype/package.nix.
     (_final: prev: {
-      voxtype-vulkan = prev.voxtype-vulkan.overrideAttrs (old: {
+      voxtype-onnx = prev.voxtype-onnx.overrideAttrs (old: {
         cargoBuildFeatures = (old.cargoBuildFeatures or [ ]) ++ [ "osd-gtk4" ];
         cargoCheckFeatures = (old.cargoCheckFeatures or old.cargoBuildFeatures or [ ]) ++ [ "osd-gtk4" ];
         buildInputs = (old.buildInputs or [ ]) ++ [
