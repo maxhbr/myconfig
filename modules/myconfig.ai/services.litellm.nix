@@ -8,29 +8,63 @@
   ...
 }:
 let
-  # `expression>=5.6.0,<6.0` is a runtime dependency of litellm 1.97.0's
-  # `[proxy]` extra — imported in
-  # litellm/proxy/_experimental/mcp_server/outbound_credentials/types.py.
-  # It is not packaged in the pinned `nixpkgs` yet, only in the `master`
-  # nixpkgs input (upstream PR #555030, merged 2026-08-24, commit
-  # 432724c94f15). Build it here against the pinned nixpkgs' Python so the
-  # interpreter derivation matches the one litellm uses — mixing Python
-  # packages built from different nixpkgs revisions fails the nixpkgs
-  # same-Python-interpreter check, even when the version string is identical.
-  # TODO: replace with `pkgs.python3Packages.expression` once the `nixpkgs`
-  # input packages it.
-  expression = pkgs.python3Packages.buildPythonPackage (finalAttrs: {
-    pname = "expression";
-    version = "5.6.0";
-    pyproject = true;
-    src = pkgs.python3Packages.fetchPypi {
-      inherit (finalAttrs) pname version;
-      sha256 = "sha256-RU9v4Tg0cZSkPH+HjZWO/puEucx3DkYgEMelLhgFgGU=";
-    };
-    build-system = [ pkgs.python3Packages.poetry-core ];
-    dependencies = [ pkgs.python3Packages.typing-extensions ];
-    pythonImportsCheck = [ "expression" ];
-  });
+  litellmPkg = pkgs.python3Packages.litellm;
+
+  # litellm 1.97.0 imports `get_flat_dependant` from
+  # `fastapi.dependencies.utils`. FastAPI removed that helper in 0.141.0
+  # (only `get_flat_params` remains), so with the fastapi 0.141.1 shipped by
+  # the current `nixpkgs` input the proxy dies on startup with
+  #   ImportError: cannot import name 'get_flat_dependant'
+  # while importing litellm.proxy.proxy_server.
+  #
+  # Re-add the removed helper locally: drop the now-invalid import and append
+  # a compat definition at the end of the module. `get_flat_dependant` is only
+  # called at request time (from `_declared_query_params`), so defining it
+  # below its use site is fine. The implementation mirrors fastapi <= 0.140,
+  # restricted to the `Dependant` fields that still exist in 0.141
+  # (`security_requirements` is gone).
+  #
+  # TODO: drop this once nixpkgs ships a litellm release that works with
+  # fastapi >= 0.141 (see doc/TODOs/drop-litellm-fastapi-get-flat-dependant-shim.md).
+  fastapiCompatPatch = ''
+    substituteInPlace litellm/proxy/management_endpoints/management_v1/common.py \
+      --replace-fail "from fastapi.dependencies.utils import get_flat_dependant" ""
+    cat >> litellm/proxy/management_endpoints/management_v1/common.py <<'PY'
+
+
+    try:  # fastapi <= 0.140
+        from fastapi.dependencies.utils import get_flat_dependant  # type: ignore[attr-defined]
+    except ImportError:  # fastapi >= 0.141 removed get_flat_dependant
+        from fastapi.dependencies.models import Dependant
+
+        def get_flat_dependant(dependant, *, skip_repeats=False, visited=None):
+            if visited is None:
+                visited = []
+            visited.append(id(dependant))
+
+            flat_dependant = Dependant(
+                path_params=list(dependant.path_params),
+                query_params=list(dependant.query_params),
+                header_params=list(dependant.header_params),
+                cookie_params=list(dependant.cookie_params),
+                body_params=list(dependant.body_params),
+                use_cache=dependant.use_cache,
+                path=dependant.path,
+            )
+            for sub_dependant in dependant.dependencies:
+                if skip_repeats and id(sub_dependant) in visited:
+                    continue
+                flat_sub = get_flat_dependant(
+                    sub_dependant, skip_repeats=skip_repeats, visited=visited
+                )
+                flat_dependant.path_params.extend(flat_sub.path_params)
+                flat_dependant.query_params.extend(flat_sub.query_params)
+                flat_dependant.header_params.extend(flat_sub.header_params)
+                flat_dependant.cookie_params.extend(flat_sub.cookie_params)
+                flat_dependant.body_params.extend(flat_sub.body_params)
+            return flat_dependant
+    PY
+  '';
 in
 {
 
@@ -104,37 +138,19 @@ in
     services.litellm = {
       host = lib.mkForce "127.0.0.1";
       port = lib.mkForce 4000;
-      # litellm 1.97.0's `[proxy]` extra needs two things that are not
-      # both available in a single nixpkgs input right now:
-      #
-      # 1. `expression>=5.6.0,<6.0` — imported at runtime in
-      #    litellm/proxy/_experimental/mcp_server/outbound_credentials/types.py.
-      #    Not packaged in the pinned `nixpkgs` (only in `master`, PR #555030).
-      #    Built locally against the pinned Python above (see `expression`
-      #    let-binding) so the interpreter derivation matches litellm's.
-      #
-      # 2. fastapi — litellm 1.97.0 imports `get_flat_dependant` from
-      #    `fastapi.dependencies.utils`, which was removed in fastapi 0.141.x.
-      #    The `master` input already ships fastapi 0.141.1 (broken), while the
-      #    pinned `nixpkgs` input still ships fastapi 0.139.0 (works).
-      #
-      # So the litellm package is taken from the pinned `nixpkgs` input (for
-      # a compatible fastapi), and `expression` is built locally. The nixpkgs
-      # `litellm` by-name wrapper adds proxy + extra_proxy + proxy-runtime
-      # (the last already includes prometheus-client, needed for the
-      # `prometheus` callback configured below when observability is enabled);
-      # we replicate that here and add the missing `expression`.
-      # TODO: once the `nixpkgs` input packages `expression` (or litellm drops
-      # the `get_flat_dependant` import for newer fastapi), replace this with
-      # plain `pkgs.litellm`.
+      # Same as the nixpkgs `litellm` by-name wrapper (proxy + extra_proxy +
+      # proxy-runtime extras; the last one pulls in prometheus-client, needed
+      # for the `prometheus` callback configured below when observability is
+      # enabled), plus the fastapi >= 0.141 compat patch from the let-block.
+      # Replace with plain `pkgs.litellm` once that patch is no longer needed.
       package = pkgs.python3Packages.toPythonApplication (
-        pkgs.python3Packages.litellm.overridePythonAttrs (oldAttrs: {
+        litellmPkg.overridePythonAttrs (oldAttrs: {
+          postPatch = (oldAttrs.postPatch or "") + fastapiCompatPatch;
           dependencies =
             (oldAttrs.dependencies or [ ])
-            ++ pkgs.python3Packages.litellm.optional-dependencies.proxy
-            ++ pkgs.python3Packages.litellm.optional-dependencies.extra_proxy
-            ++ pkgs.python3Packages.litellm.optional-dependencies.proxy-runtime
-            ++ [ expression ];
+            ++ litellmPkg.optional-dependencies.proxy
+            ++ litellmPkg.optional-dependencies.extra_proxy
+            ++ litellmPkg.optional-dependencies.proxy-runtime;
         })
       );
       settings.general_settings = {
