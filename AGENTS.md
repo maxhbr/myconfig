@@ -293,3 +293,22 @@ Consider adding copyright headers to new files:
 # Copyright <year> Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 ```
+
+### TODO Notes
+When a change introduces temporary workarounds (e.g. a patched
+package, a pinned commit, a disabled check) that should be removed once
+an upstream merge or a future release makes them unnecessary, write a
+TODO note as an individual Markdown file in `doc/TODOs/`.
+
+- One file per topic; the file name should be descriptive
+  (e.g. `drop-patched-llama-cpp-pr-27742.md`).
+- Reference the **relevant code parts** (file paths, option names,
+  function/attribute names) and the **commit hash** that introduced the
+  workaround, so the note stays findable after the code evolves.
+- Describe **what to do** (what to remove, what condition must be met,
+  how to verify), not **how** to re-derive the original solution. The
+  goal is a checklist that a future agent or contributor can execute,
+  not a tutorial that re-explains the problem.
+- Do not add TODO notes inline in code as `# TODO:` comments unless the
+  note is too small to justify its own file (one or two lines); prefer a
+  `doc/TODOs/` entry that links back to the relevant code.
