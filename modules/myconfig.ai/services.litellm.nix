@@ -7,65 +7,6 @@
   config,
   ...
 }:
-let
-  litellmPkg = pkgs.python3Packages.litellm;
-
-  # litellm 1.97.0 imports `get_flat_dependant` from
-  # `fastapi.dependencies.utils`. FastAPI removed that helper in 0.141.0
-  # (only `get_flat_params` remains), so with the fastapi 0.141.1 shipped by
-  # the current `nixpkgs` input the proxy dies on startup with
-  #   ImportError: cannot import name 'get_flat_dependant'
-  # while importing litellm.proxy.proxy_server.
-  #
-  # Re-add the removed helper locally: drop the now-invalid import and append
-  # a compat definition at the end of the module. `get_flat_dependant` is only
-  # called at request time (from `_declared_query_params`), so defining it
-  # below its use site is fine. The implementation mirrors fastapi <= 0.140,
-  # restricted to the `Dependant` fields that still exist in 0.141
-  # (`security_requirements` is gone).
-  #
-  # TODO: drop this once nixpkgs ships a litellm release that works with
-  # fastapi >= 0.141 (see doc/TODOs/drop-litellm-fastapi-get-flat-dependant-shim.md).
-  fastapiCompatPatch = ''
-    substituteInPlace litellm/proxy/management_endpoints/management_v1/common.py \
-      --replace-fail "from fastapi.dependencies.utils import get_flat_dependant" ""
-    cat >> litellm/proxy/management_endpoints/management_v1/common.py <<'PY'
-
-
-    try:  # fastapi <= 0.140
-        from fastapi.dependencies.utils import get_flat_dependant  # type: ignore[attr-defined]
-    except ImportError:  # fastapi >= 0.141 removed get_flat_dependant
-        from fastapi.dependencies.models import Dependant
-
-        def get_flat_dependant(dependant, *, skip_repeats=False, visited=None):
-            if visited is None:
-                visited = []
-            visited.append(id(dependant))
-
-            flat_dependant = Dependant(
-                path_params=list(dependant.path_params),
-                query_params=list(dependant.query_params),
-                header_params=list(dependant.header_params),
-                cookie_params=list(dependant.cookie_params),
-                body_params=list(dependant.body_params),
-                use_cache=dependant.use_cache,
-                path=dependant.path,
-            )
-            for sub_dependant in dependant.dependencies:
-                if skip_repeats and id(sub_dependant) in visited:
-                    continue
-                flat_sub = get_flat_dependant(
-                    sub_dependant, skip_repeats=skip_repeats, visited=visited
-                )
-                flat_dependant.path_params.extend(flat_sub.path_params)
-                flat_dependant.query_params.extend(flat_sub.query_params)
-                flat_dependant.header_params.extend(flat_sub.header_params)
-                flat_dependant.cookie_params.extend(flat_sub.cookie_params)
-                flat_dependant.body_params.extend(flat_sub.body_params)
-            return flat_dependant
-    PY
-  '';
-in
 {
 
   imports = [
@@ -138,21 +79,101 @@ in
     services.litellm = {
       host = lib.mkForce "127.0.0.1";
       port = lib.mkForce 4000;
-      # Same as the nixpkgs `litellm` by-name wrapper (proxy + extra_proxy +
-      # proxy-runtime extras; the last one pulls in prometheus-client, needed
-      # for the `prometheus` callback configured below when observability is
-      # enabled), plus the fastapi >= 0.141 compat patch from the let-block.
-      # Replace with plain `pkgs.litellm` once that patch is no longer needed.
+      # `expression`, `prometheus-client` and the other proxy runtime deps
+      # are all covered by the nixpkgs `optional-dependencies` lists below
+      # (`expression` 5.6.0 is packaged by the pinned `nixpkgs` input now,
+      # so no local build is needed anymore).
+      #
+      # litellm 1.97.0 still imports `fastapi.dependencies.utils.get_flat_dependant`,
+      # which fastapi >= 0.140.7 removed (the pinned `nixpkgs` input ships
+      # 0.141.x), so the proxy dies at startup with that `ImportError`.
+      # Apply the upstream fix (BerriAI/litellm f9b86b253a3f) to the pinned
+      # source instead: the `get_flat_params` + `ParamTypes` form works in
+      # fastapi 0.139.0 and 0.141.x alike. The patch step is
+      # self-invalidating — its `grep` matches nothing while a litellm
+      # source without that import is bundled, so it silently does nothing
+      # once nixpkgs bundles a release containing the fix.
+      # See doc/TODOs/drop-litellm-fastapi-source-patch.md.
+      #
+      # The pinned litellm definition is a lazy def; only `overridePythonAttrs`
+      # (not a plain `overrideAttrs`) accepts the classic one-argument
+      # `oldAttrs` lambda. `postPatch` is appended to litellm's own
+      # (which pins the maturin version in `pyproject.toml`);
+      # `pythonImportsCheck` adds `litellm` itself plus the module that
+      # used to crash (`_declared_query_params`), so the build fails
+      # loudly again if the source-vs-fastapi incompatibility regresses.
       package = pkgs.python3Packages.toPythonApplication (
-        litellmPkg.overridePythonAttrs (oldAttrs: {
-          postPatch = (oldAttrs.postPatch or "") + fastapiCompatPatch;
+        pkgs.python3Packages.litellm.overridePythonAttrs (oldAttrs: {
+          postPatch = (oldAttrs.postPatch or "") + ''
+                        # BerriAI/litellm f9b86b253a3f ("fix(proxy): restore
+                        # query-param validation under fastapi>=0.140.7"). No-op while
+                        # the bundled litellm source lacks the old import.
+                        files=$(grep -r --include="*.py" -l "^from fastapi.dependencies.utils import get_flat_dependant" . || true)
+                        if [ -n "$files" ]; then
+                          python - $files <<'PYEOF'
+            import re
+            import sys
+
+            OLD_IMPORT = "from fastapi.dependencies.utils import get_flat_dependant"
+            NEW_IMPORTS = (
+                "from fastapi.dependencies.utils import get_flat_params"
+                "\nfrom fastapi.params import ParamTypes"
+            )
+
+            pat = re.compile(
+                r"^(\s*)return frozenset\(field\.alias"
+                r" for field in get_flat_dependant\(dependant, skip_repeats=True\)"
+                r"\.query_params\)\s*$",
+                re.MULTILINE,
+            )
+
+            for path in sys.argv[1:]:
+                with open(path) as f:
+                    s = f.read()
+                s = s.replace(OLD_IMPORT, NEW_IMPORTS)
+                m = pat.search(s)
+                assert m, (
+                    f"unexpected litellm source in {path}: old "
+                    "get_flat_dependant import found, but the expected call "
+                    "shape is missing or shaped differently; refusing to "
+                    "rewrite only part of it"
+                )
+                s = s[: m.start()] + (
+                    m.group(1) + "return frozenset(\n"
+                    + m.group(1) + "    field.alias\n"
+                    + m.group(1) + "    for field in get_flat_params(dependant)\n"
+                    + m.group(1) + '    if getattr(field.field_info, "in_", None) == ParamTypes.query\n'
+                    + m.group(1) + ")"
+                ) + s[m.end():]
+                assert "get_flat_dependant" not in s, (
+                    f"unexpected litellm source in {path}: get_flat_dependant still "
+                    "present after rewrite"
+                )
+                with open(path, "w") as f:
+                    f.write(s)
+                print("fastapi>=0.140.7 compatibility patch applied to", path)
+            PYEOF
+                        fi
+          '';
+          # Extend any existing import checks rather than replacing them.
+          pythonImportsCheck = (oldAttrs.pythonImportsCheck or [ ]) ++ [
+            "litellm"
+            "litellm.proxy.management_endpoints.management_v1.common"
+          ];
+          # PEP 517 closure: base dependencies plus the extra lists the
+          # nixpkgs module adds for the service: proxy + extra_proxy +
+          # proxy-runtime (the last includes prometheus-client, needed
+          # for the `prometheus` callback configured below when
+          # observability is enabled; `expression` ships in these lists
+          # too).
           dependencies =
             (oldAttrs.dependencies or [ ])
-            ++ litellmPkg.optional-dependencies.proxy
-            ++ litellmPkg.optional-dependencies.extra_proxy
-            ++ litellmPkg.optional-dependencies.proxy-runtime;
+            ++ pkgs.python3Packages.litellm.optional-dependencies.proxy
+            ++ pkgs.python3Packages.litellm.optional-dependencies.extra_proxy
+            ++ pkgs.python3Packages.litellm.optional-dependencies.proxy-runtime;
         })
       );
+
       settings.general_settings = {
         disable_spend_logs = true;
         request_timeout = 3600; # 60 minutes, upstream default is 600s (10 min)
