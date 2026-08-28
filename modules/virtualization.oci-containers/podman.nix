@@ -19,20 +19,16 @@
             (
               { config, ... }:
               {
-                home.file.".config/containers/storage.conf".text = ''
-                  [storage]
-                  driver    = "overlay"
-                  graphroot = "/persistent/cache/${config.home.username}-podman-containers"
-                  runroot   = "/run/user/${toString nixosConfig.users.users.${config.home.username}.uid}/podman"
-
-                  [storage.options]
-                  mount_program = "${pkgs.fuse-overlayfs}/bin/fuse-overlayfs"
-                '';
-                home.file.".config/containers/containers.conf".text = ''
-                  [engine]
-                  image_copy_tmp_dir = "/persistent/cache/${config.home.username}-podman-tmp"
-                  tmp_dir            = "/persistent/cache/${config.home.username}-podman-tmp"
-                '';
+                services.podman.settings.storage.storage = {
+                  driver = "overlay";
+                  graphroot = "/persistent/cache/${config.home.username}-podman-containers";
+                  runroot = "/run/user/${toString nixosConfig.users.users.${config.home.username}.uid}/podman";
+                  options.mount_program = "${pkgs.fuse-overlayfs}/bin/fuse-overlayfs";
+                };
+                services.podman.settings.containers.engine = {
+                  image_copy_tmp_dir = "/persistent/cache/${config.home.username}-podman-tmp";
+                  tmp_dir = "/persistent/cache/${config.home.username}-podman-tmp";
+                };
               }
             )
           ];
@@ -71,6 +67,22 @@
           podman-compose
         ];
         myconfig.persistence.cache-directories = [ ".local/share/containers/cache/" ];
+
+        # home-manager's podman module renders ~/.config/containers/{registries,
+        # storage,containers,policy}.conf. Keep policy in sync with the
+        # system-wide one from ./default.nix so the user config does not weaken
+        # or diverge from /etc/containers/policy.json.
+        services.podman = {
+          enable = true;
+          package = config.virtualisation.podman.package;
+          settings = {
+            registries.search = [
+              "docker.io"
+              "quay.io"
+            ];
+            policy = config.virtualisation.containers.policy;
+          };
+        };
       }
     ];
     virtualisation.podman = {
