@@ -7,7 +7,7 @@ import Data.Maybe (fromJust)
 import Data.String.Interpolate.Util
 import GHC.IO.Exception (ExitCode (..))
 import System.Directory.Extra (createDirectoryIfMissing, doesFileExist, doesPathExist)
-import System.Posix (getProcessStatus, sigKILL, signalProcess)
+import System.Posix (createSymbolicLink, getProcessStatus, sigKILL, signalProcess)
 import System.Process qualified as Process
 import Test.Hspec
 import TestPrelude
@@ -168,6 +168,23 @@ spec = parallel $ inTestM $ do
               jail' "test" "unused" (c: [ c.network ])
           |]
       liftIO $ (read out :: Int) `shouldSatisfy` (< 100)
+
+    it "follows /etc/resolv.conf symlink chains (for WSL)" $ do
+      [i|
+        let
+          withFakeEtcResolvConf = program:
+            jail program.name program (c: [
+              (c.write-text "/mnt/wsl/resolv.conf" "expected resolv.conf contents")
+              (c.unsafe-add-raw-args "--symlink /mnt/wsl/resolv.conf /etc/resolv.conf")
+            ]);
+        in
+          withFakeEtcResolvConf (
+            jail "print-resolv-conf" (sh "cat /etc/resolv.conf") (c: [
+              c.network
+            ])
+          )
+      |]
+        `shouldOutput` "expected resolv.conf contents"
 
     it "works on systems using systemd-resolved" $ do
       out <-
@@ -447,6 +464,22 @@ spec = parallel $ inTestM $ do
           ])
       |]
         `shouldOutput` "/test-from-post-reset-jail-permissions\n"
+
+  describe "runtime-deep-ro-bind" $ do
+    it "follows multiple layers of symlinks that aren't in the nix store" $ do
+      tmpDir <- getTestDir
+      liftIO $ do
+        writeFile (tmpDir </> "actual") "this is the actual file"
+        createSymbolicLink (tmpDir </> "actual") (tmpDir </> "a")
+        createSymbolicLink (tmpDir </> "a") (tmpDir </> "b")
+        createSymbolicLink (tmpDir </> "b") (tmpDir </> "c")
+      let target = tmpDir </> "c"
+      [i|
+        jail "test" (sh "cat #{target}") (c: [
+          (c.runtime-deep-ro-bind "#{target}")
+        ])
+      |]
+        `shouldOutput` "this is the actual file"
 
   describe "set-argv" $ do
     it "overrides argv passed to the jailed program" $ do
