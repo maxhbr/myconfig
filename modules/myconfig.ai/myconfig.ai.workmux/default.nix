@@ -32,6 +32,21 @@ let
   # same files `workmux setup` would copy).
   workmuxSrc = inputs.workmux;
 
+  # Upstream moves these resources between releases (`.pi/extensions/` became
+  # `resources/pi/extensions/`), and `home.file.<n>.source` accepts a
+  # non-existent store path without complaining — the result is a DANGLING
+  # symlink in `~`, which only shows up much later (e.g. `cp -L` of the
+  # home-manager generation into a sandbox fails). Fail at eval instead.
+  srcFile =
+    rel:
+    let
+      p = "${workmuxSrc}/${rel}";
+    in
+    if builtins.pathExists p then
+      p
+    else
+      throw "myconfig.ai.workmux: ${rel} is missing from the workmux source (${workmuxSrc}); upstream probably moved it — check the `workmux setup` resources.";
+
   yamlFormat = pkgs.formats.yaml { };
 
   # --- declarative equivalent of `workmux setup` -------------------------
@@ -39,7 +54,7 @@ let
   # into each agent's config so panes report 🤖/💬/✅ in tmux window names.
   # We wire the exact same artefacts declaratively instead, gated on which
   # agent this host actually enables. See the embedded resources in the
-  # workmux source: `.pi/extensions/`, `resources/opencode/`,
+  # workmux source: `resources/pi/extensions/`, `resources/opencode/`,
   # `.codex/hooks/workmux-status.json`, `.claude-plugin/plugin.json`.
   statusCmd = status: "workmux set-window-status ${status}";
   # A hook "group" with no matcher, as used by codex and (mostly) claude.
@@ -254,12 +269,12 @@ in
       config = lib.mkMerge [
         (lib.mkIf aiCfg.pi-coding-agent.enable {
           home.file.".pi/agent/extensions/workmux-status.ts".source =
-            "${workmuxSrc}/.pi/extensions/workmux-status.ts";
+            srcFile "resources/pi/extensions/workmux-status.ts";
         })
         (lib.mkIf aiCfg.opencode.enable {
-          home.file.".config/opencode/package.json".source = "${workmuxSrc}/resources/opencode/package.json";
+          home.file.".config/opencode/package.json".source = srcFile "resources/opencode/package.json";
           home.file.".config/opencode/plugins/workmux-status.ts".source =
-            "${workmuxSrc}/resources/opencode/plugins/workmux-status.ts";
+            srcFile "resources/opencode/plugins/workmux-status.ts";
         })
         (lib.mkIf aiCfg.codex.enable {
           programs.codex.hooks = codexStatusHooks;
