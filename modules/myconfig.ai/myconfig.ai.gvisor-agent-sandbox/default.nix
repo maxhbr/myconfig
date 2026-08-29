@@ -104,6 +104,13 @@ let
       # --map-gw was dropped.
       AGENT_SANDBOX_NETWORK = "pasta:--map-guest-addr,${cfg.litellm.address}";
     }
+    // lib.optionalAttrs (cfg.litellm.enable && cfg.litellm.loopbackForward) {
+      # Relay the endpoint onto the sandbox's own loopback, from inside the
+      # sandbox (the only place that can bind a port gVisor's netstack serves).
+      # Makes `http://127.0.0.1:<litellm port>` work verbatim in the sandbox.
+      # See ./litellm-endpoint.nix (option `litellm.loopbackForward`).
+      AGENT_SANDBOX_LOOPBACK_FORWARD = "${toString cfg.litellm.port}:${cfg.litellm.address}:${toString cfg.litellm.forwardPort}";
+    }
     // lib.optionalAttrs (cfg.defaultCommand != null) {
       AGENT_SANDBOX_DEFAULT_COMMAND = cfg.defaultCommand;
     };

@@ -164,6 +164,28 @@ in
       '';
     };
 
+    loopbackForward = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Also serve the endpoint on the sandbox's OWN `127.0.0.1:${"port"}`, by
+        relaying it there from inside the sandbox
+        (`/bin/agent-sandbox-init`, baked into the image).
+
+        The host loopback is not reachable from a sandbox and cannot be made
+        reachable from the outside: runsc runs its own network stack, so only a
+        process INSIDE the sandbox can bind a port that sandboxed processes see
+        on `127.0.0.1` (this is why pasta's `-T` does not work here). The relay
+        is that process; it forwards to `address:${"forwardPort"}`, which is
+        the path the sandbox can already use.
+
+        It therefore grants no additional reach — it only lets configuration
+        that names `http://127.0.0.1:${"port"}` verbatim (host agent configs,
+        `OPENAI_BASE_URL`, MCP servers, a hand-typed `curl`) work unchanged,
+        including everything the `home.rewriteEndpoints` rules do not catch.
+      '';
+    };
+
     endpoint = mkOption {
       type = types.str;
       readOnly = true;

@@ -2,6 +2,7 @@
   lib,
   dockerTools,
   buildEnv,
+  writeTextFile,
   bashInteractive,
   cacert,
   coreutils-full,
@@ -27,6 +28,7 @@
   python3,
   ripgrep,
   shadow,
+  socat,
   util-linux,
   which,
 
@@ -66,11 +68,24 @@ let
     python3
     ripgrep
     shadow # getent, id helpers
+    socat # in-sandbox loopback relays, see ./agent-sandbox-init.sh
     util-linux
     which
   ];
 
-  rootPackages = (if packages == null then defaultPackages else packages) ++ extraPackages;
+  # Entrypoint wrapper: sets up the reverse port forwards a sandboxed agent
+  # needs (a gVisor loopback listener can only be opened from inside), then
+  # execs the payload. It must NOT carry a /nix/store shebang — the sandbox
+  # has no /nix — hence a plain `#!/bin/bash` script dropped into /bin.
+  initScript = writeTextFile {
+    name = "agent-sandbox-init";
+    destination = "/bin/agent-sandbox-init";
+    executable = true;
+    text = builtins.readFile ./agent-sandbox-init.sh;
+  };
+
+  rootPackages =
+    (if packages == null then defaultPackages else packages) ++ extraPackages ++ [ initScript ];
 
   imageRoot = buildEnv {
     name = "agent-sandbox-root";

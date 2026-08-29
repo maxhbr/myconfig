@@ -101,6 +101,12 @@ environment:
   AGENT_SANDBOX_NETWORK         Default --network mode for sessions and for the
                                 `doctor` endpoint probe, e.g. a "pasta:..." spec
                                 mapping the model endpoint to the host loopback
+  AGENT_SANDBOX_LOOPBACK_FORWARD
+                                Space-separated LPORT:RHOST:RPORT rules. Each is
+                                relayed INSIDE the sandbox from 127.0.0.1:LPORT
+                                to RHOST:RPORT, so configuration naming the host
+                                loopback (e.g. http://127.0.0.1:4000) works
+                                verbatim. Set up by /bin/agent-sandbox-init.
   AGENT_SANDBOX_DEFAULT_COMMAND Command run by `start`/`run` when no COMMAND is
                                 given (default: /bin/bash)
 
@@ -257,6 +263,12 @@ run_container() {
     --env AGENT_WORKTREE="$worktree"
   )
 
+  # Reverse port forwards, set up by /bin/agent-sandbox-init inside the
+  # sandbox: gVisor's loopback can only be bound from within, so this is the
+  # only way to make a host-side endpoint answer on the sandbox's 127.0.0.1.
+  [[ -z "${AGENT_SANDBOX_LOOPBACK_FORWARD-}" ]] ||
+    cmd+=(--env "AGENT_SANDBOX_LOOPBACK_FORWARD=$AGENT_SANDBOX_LOOPBACK_FORWARD")
+
   if cgroups_ignored; then
     log "warning: memory/cpu/pids limits $(limits_note)"
   else
@@ -282,6 +294,9 @@ run_container() {
   fi
 
   cmd+=("$image")
+  # Wrap the payload so the relays exist before it starts. The wrapper execs,
+  # so the payload still gets PID 1, the TTY and the signals.
+  [[ -z "${AGENT_SANDBOX_LOOPBACK_FORWARD-}" ]] || cmd+=(/bin/agent-sandbox-init)
   if (( $# == 0 )); then
     # No COMMAND given: run the configured default. Word-split so a default
     # like "herdr --flag" works; `agent-session shell` is unaffected and
@@ -768,6 +783,7 @@ cmd_doctor() {
   printf 'image:           %s\n' "$DEFAULT_IMAGE"
   printf 'state:           %s\n' "$STATE_ROOT"
   printf 'model endpoint:  %s\n' "${AGENT_SANDBOX_MODEL_ENDPOINT:-<unset>}"
+  printf 'loopback fwd:    %s\n' "${AGENT_SANDBOX_LOOPBACK_FORWARD:-<none>}"
   check_runtime
   check_image "$DEFAULT_IMAGE"
   log "running a throwaway sandbox container"
@@ -830,6 +846,43 @@ cmd_doctor() {
         printf '(agent-litellm-forward) is active on 0.0.0.0:<forward-port>.'
       )"
     fi
+  fi
+
+  # The in-sandbox relays are what make the endpoint answer on the sandbox's
+  # OWN 127.0.0.1, so a configuration that names the host loopback verbatim
+  # (as every host-side agent config does) works unchanged. Probe them through
+  # the entrypoint wrapper, i.e. exactly as a session starts them.
+  if [[ -n "${AGENT_SANDBOX_LOOPBACK_FORWARD-}" ]]; then
+    local -a fwd_net=() rules=()
+    [[ -z "${AGENT_SANDBOX_NETWORK-}" ]] || fwd_net=(--network "$AGENT_SANDBOX_NETWORK")
+    read -r -a rules <<<"$AGENT_SANDBOX_LOOPBACK_FORWARD"
+    local rule lport
+    for rule in "${rules[@]}"; do
+      lport=${rule%%:*}
+      log "checking in-sandbox relay 127.0.0.1:$lport ($rule)"
+      if podman_c run --rm \
+        --read-only \
+        --read-only-tmpfs=true \
+        --cap-drop=ALL \
+        --security-opt=no-new-privileges \
+        --userns=keep-id \
+        --env "AGENT_SANDBOX_LOOPBACK_FORWARD=$rule" \
+        "${fwd_net[@]}" \
+        "$DEFAULT_IMAGE" \
+        /bin/agent-sandbox-init \
+        /bin/sh -c "curl -sS -o /dev/null --max-time 5 -w 'HTTP %{http_code}\n' \"\$0\"" \
+        "http://127.0.0.1:$lport/"; then
+        log "127.0.0.1:$lport is served inside the sandbox"
+      else
+        log "$(
+          printf 'warning: the relay for 127.0.0.1:%s does not answer.\n' "$lport"
+          printf 'It is started by /bin/agent-sandbox-init inside the sandbox and\n'
+          printf 'needs socat in the image; check that the image is current\n'
+          printf '(agent-sandbox-load-image --test) and that the target of the rule\n'
+          printf '%q is reachable from a sandbox (see the model endpoint check above).' "$rule"
+        )"
+      fi
+    done
   fi
 }
 

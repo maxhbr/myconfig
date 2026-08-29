@@ -178,8 +178,9 @@ Set the option to `[ ]` to copy the configuration verbatim.
 target pasta translates to the host's global address (see *Model access (host
 LiteLLM)* below), where a port-scoped forwarder listens on `14000` and
 proxies to the loopback-only LiteLLM proxy on `127.0.0.1:4000`. Making
-`localhost:4000` work literally inside the sandbox is **not** an available
-alternative, despite what the podman/pasta documentation suggests:
+`localhost:4000` work inside the sandbox cannot be arranged from the **host**
+side at all, despite what the podman/pasta documentation suggests (it takes a
+relay *inside* the sandbox instead — see *Reverse forward* below):
 
 - `--network 'pasta:-T,4000'` (namespace→host forwarding) does not help,
   because `runsc` runs its **own network stack**. pasta's `-T` listener lives
@@ -191,10 +192,37 @@ alternative, despite what the podman/pasta documentation suggests:
   address, not to its loopback (`pasta(1)`), so a loopback-only service is not
   behind it.
 
+### Reverse forward: `127.0.0.1:4000` inside the sandbox
+
+The rewrite rules above only fix the *files* the allowlist copies. Anything
+else that names the host loopback — an `OPENAI_BASE_URL` the user exports, an
+MCP server definition outside the seed, a hand-typed `curl
+localhost:4000` — still fails, because the sandbox's `127.0.0.1` is gVisor's
+loopback.
+
+So the endpoint is *also* served on the sandbox's own loopback, by a relay that
+runs **inside** the sandbox: `/bin/agent-sandbox-init` (baked into the image,
+see `nix/agent-sandbox-init.sh`) starts one `socat` per rule in
+`AGENT_SANDBOX_LOOPBACK_FORWARD` (`LPORT:RHOST:RPORT`, baked by the module as
+`4000:192.168.84.1:14000`), waits for the listener, then `exec`s the payload —
+which therefore keeps PID 1, the TTY and its signals. `agent-session shell`
+and `agent-session logs` attach to the same container and share its network
+stack, so they see the relay too.
+
+Inside the sandbox must be where it runs: a listener that gVisor's netstack
+serves can only be opened by a process inside that netstack. This is the same
+reason pasta's `-T` does not work (see above) — and the reason this is not a
+security regression: the relay only re-labels a connection the sandbox can
+already make (`192.168.84.1:14000`, port-scoped), it does not add reach.
+Switch it off with `myconfig.ai.gvisor-agent-sandbox.litellm.loopbackForward =
+false`; a slimmed image without `socat` degrades to a warning, not a failure.
+
 Verify the whole chain from inside a sandbox with `agent-session doctor`,
 which probes `AGENT_SANDBOX_MODEL_ENDPOINT` (baked from `litellm.endpoint`)
 through the same pasta network a session uses (see below) in a throwaway
-container and accepts any HTTP status as "reachable".
+container and accepts any HTTP status as "reachable", and then probes each
+loopback relay through `/bin/agent-sandbox-init`, exactly as a session starts
+it.
 
 Per invocation: `--no-home-seed` for an empty home, `--home-seed PATH` for a
 different source tree, `AGENT_SANDBOX_HOME_SEED` /
