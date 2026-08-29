@@ -74,10 +74,13 @@ Patched:
   partially copyable one is copied as far as possible and reported, and the
   summary line counts how many paths came over incomplete.
 
+- `nix/load-image.nix` — `agent-sandbox-load-image` no longer decides by tag
+  alone. See *Image freshness check* below.
+
 Kept unchanged in substance (only nixfmt-rfc-style reformatting):
 
-- `nix/overlay.nix`, `nix/agent-session.nix`, `nix/agent-image.nix`,
-  `nix/load-image.nix` — the package definitions.
+- `nix/overlay.nix`, `nix/agent-session.nix`, `nix/agent-image.nix` — the
+  package definitions.
 
 ## Usage in this repo
 
@@ -287,6 +290,42 @@ First run on a host:
 agent-sandbox-load-image   # load the Nix-built image into the rootless store
 agent-session doctor       # verify runtime, image and sandbox startup
 ```
+
+### Image freshness check
+
+The image tag (`localhost/agent-dev:latest`) is reused by every rebuild, so
+"is this reference present?" does not answer "is the *current* artifact
+loaded?". After adding an agent to `extraImagePackages`, or after any input
+change, the store still holds the previous build under the same tag.
+
+`agent-sandbox-load-image` therefore compares **image IDs**: the digest of the
+OCI config blob, which Podman reports as `.Id` and which a docker-archive
+records in `manifest.json` as its config file name. The expected digest is
+extracted from the tarball once **at build time** (derivation
+`agent-sandbox-image-id`) and baked into the wrapper, so no invocation has to
+decompress the multi-hundred-MB image.
+
+```bash
+agent-sandbox-load-image           # load if absent or stale, else no-op
+agent-sandbox-load-image --force   # reload unconditionally
+agent-sandbox-load-image --test    # report only; exit 0 iff already current
+```
+
+`--test` never touches the store and prints the full state, which makes it
+usable in scripts and health checks:
+
+```
+image:    /nix/store/…-agent-dev.tar.gz
+ref:      localhost/agent-dev:latest
+expected: sha256:0803…
+loaded:   sha256:0803…
+state:    current
+```
+
+`state` is `current` (exit 0), `stale` (a different build is loaded under the
+tag, exit 1) or `absent` (nothing loaded under the tag, `loaded: -`, exit 1).
+The same report is written to stderr after a load, so a plain run also shows
+what the store now holds.
 
 See `docs/upstream-README.md` for the full CLI reference.
 
