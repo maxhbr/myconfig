@@ -267,7 +267,8 @@ let
       # "Vulkan0,Vulkan1") and must not have it overridden.
       ++ qwen3_8_27B-multiGpu
       ++ qwen3_6_35B-A3B-multiGpu
-      ++ hy3-multiGpu;
+      ++ hy3-multiGpu
+      ++ qwen3_8_27B.candidateModels;
   };
 in
 {

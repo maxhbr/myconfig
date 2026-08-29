@@ -14,6 +14,33 @@
   modelsPullDir,
   serverPackage,
 }:
+let
+  # `sequential` variant — serve a single request at a time.
+  #
+  # Why this exists: with more than one slot, concurrent Flash-Next
+  # requests share the gfx1151 GPU and the KV pool, each request gets
+  # slower, and serving degrades until the 600 s `--timeout` that
+  # `lib/scripts.nix` passes to llama-server fires and the request times
+  # out instead of finishing. One slot answers fewer requests per second
+  # but every request finishes, which is what interactive use needs.
+  #
+  # Why the flag goes through `params`: `parallel = 1` alone does NOT
+  # serialise anything. `lib/scripts.nix` emits `--parallel` only when
+  # `parallel > 1`, so `parallel = 1` leaves the flag out and llama.cpp
+  # falls back to its auto mode of 4 slots with a unified KV cache
+  # (`tools/server/server.cpp`: `if (params.n_parallel < 0) { n_parallel
+  # = 4; kv_unified = true; }`, see the `parallel` option in
+  # modules/myconfig.ai/myconfig.ai.llama-cpp/options.nix). The explicit
+  # `--parallel 1` in `params` is what pins the slot count to 1; the same
+  # pattern as `Qwen3.8-27B-MTP-ngram-Q4_K_XL` in Qwen3.8-27B.nix.
+  sequential_variant = {
+    parallel = 1;
+    params = [
+      "--parallel"
+      "1"
+    ];
+  };
+in
 {
   # Served by the `llama-cpp-33657` container (llama-swap on
   # Vulkan0/ROCm0) on the PR-27742-patched llama-cpp
@@ -35,6 +62,16 @@
   # the same shards plus `--mmproj <file>`. No deliberate `ctxSize` /
   # `cacheType` retuning yet: leave the GGUF defaults, retune for
   # gfx1151 headroom after the first serving test.
+  #
+  # Each quantisation additionally gets a `sequential` variant (model
+  # name suffix `-sequential`) that serves one request at a time; see
+  # `sequential_variant` above.
+  # Variant expansion is flat — every variant derives from the base
+  # entry, never from another variant — so the `mmproj` variant keeps
+  # the llama.cpp default (auto, 4 slots). Add
+  # `"mmproj-sequential" = sequential_variant // { mmproj = "<same
+  # mmproj-F16 path>"; };` to both `variants` sets if image requests
+  # must be serialised too.
   amdModels = [
     {
       name = "Qwen3.8-Flash-Next-UD-IQ4_XS";
@@ -55,6 +92,7 @@
         mmproj = {
           mmproj = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/mmproj-F16.gguf";
         };
+        sequential = sequential_variant;
       };
       ttl = 1800;
     }
@@ -74,6 +112,7 @@
         mmproj = {
           mmproj = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/mmproj-F16.gguf";
         };
+        sequential = sequential_variant;
       };
       ttl = 1800;
     }
