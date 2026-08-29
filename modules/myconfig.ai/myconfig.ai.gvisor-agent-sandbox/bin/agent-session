@@ -314,21 +314,42 @@ resolve_home_files() {
   return 1
 }
 
+# Seeding must never abort `start`: `home-files` regularly contains symlinks
+# whose /nix/store target is gone (garbage-collected, or an input update moved
+# the file while the OLD generation is still the activated one). `cp -RL` then
+# fails on that single entry, and under `set -e` that used to kill the whole
+# session creation. Copy what exists, report what does not.
 seed_home() {
   local home=$1 seed=$2
   local -a paths=()
   read -r -a paths <<<"${AGENT_SANDBOX_HOME_SEED_PATHS-}"
   (( ${#paths[@]} )) || return 0
-  local rel copied=0
+  local rel copied=0 incomplete=0 errs
+  errs=$(mktemp)
   for rel in "${paths[@]}"; do
-    [[ -n "$rel" && -e "$seed/$rel" ]] || continue
+    [[ -n "$rel" ]] || continue
+    if [[ ! -e "$seed/$rel" ]]; then
+      # Absent is normal (the allowlist is host-wide); a DANGLING symlink is
+      # not, so tell the two apart instead of silently skipping both.
+      [[ -L "$seed/$rel" ]] &&
+        log "warning: skipping dangling seed path $rel -> $(readlink -- "$seed/$rel")"
+      continue
+    fi
     mkdir -p "$home/$(dirname "$rel")"
-    cp -RL --no-preserve=mode -- "$seed/$rel" "$home/$rel"
     copied=$((copied + 1))
+    if ! cp -RL --no-preserve=mode -- "$seed/$rel" "$home/$rel" 2>"$errs"; then
+      # cp still copies everything it can, so keep going with a partial tree.
+      incomplete=$((incomplete + 1))
+      log "warning: seed path $rel copied incompletely (broken links in the home-manager generation):"
+      sed 's/^/  /' "$errs" >&2
+    fi
   done
+  rm -f "$errs"
   # Store files are read-only; the agent must be able to rewrite its config.
   chmod -R u+rwX "$home"
-  log "seeded /home/agent with $copied path(s) from $seed"
+  local suffix=''
+  (( incomplete )) && suffix=" ($incomplete of them incomplete)"
+  log "seeded /home/agent with $copied path(s) from $seed$suffix"
   rewrite_seeded_home "$home"
 }
 

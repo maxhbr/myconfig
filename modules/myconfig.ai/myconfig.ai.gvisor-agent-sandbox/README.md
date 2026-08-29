@@ -65,7 +65,14 @@ Patched:
   `--network` (overridable per session), and `doctor` probes the model
   endpoint through that same network so the check exercises the real path —
   both needed to make a host-loopback model endpoint reachable from a runsc
-  sandbox (see *Model access (host LiteLLM)*).
+  sandbox (see *Model access (host LiteLLM)*). Home seeding is also
+  *resilient*: `home-files` regularly contains symlinks whose `/nix/store`
+  target is gone (garbage-collected, or an input update moved the file while
+  the old generation is still activated). `cp -RL` fails on such an entry, and
+  under `set -e` that used to abort the whole `start` with a bare `cp: cannot
+  stat …`. Now a dangling top-level seed path is skipped with a warning, a
+  partially copyable one is copied as far as possible and reported, and the
+  summary line counts how many paths came over incomplete.
 
 Kept unchanged in substance (only nixfmt-rfc-style reformatting):
 
