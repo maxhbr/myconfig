@@ -7,11 +7,11 @@
   gzip,
   jq,
   podman,
-  agent-sandbox-image,
+  agent-gvisor-image,
 }:
 
 let
-  ref = "${agent-sandbox-image.imageName}:${agent-sandbox-image.imageTag}";
+  ref = "${agent-gvisor-image.imageName}:${agent-gvisor-image.imageTag}";
 
   # The identity of an OCI image is the digest of its config blob: Podman
   # reports it as the image ID, and in a docker-archive it is the name of the
@@ -24,7 +24,7 @@ let
   # once at build time and bake the resulting one-line file into the script
   # instead of paying for it on every invocation.
   imageIdFile =
-    runCommand "agent-sandbox-image-id"
+    runCommand "agent-gvisor-image-id"
       {
         nativeBuildInputs = [
           gnutar
@@ -33,7 +33,7 @@ let
         ];
       }
       ''
-        tar --extract --to-stdout --file ${agent-sandbox-image} manifest.json \
+        tar --extract --to-stdout --file ${agent-gvisor-image} manifest.json \
           | jq -r '.[0].Config | rtrimstr(".json") | ltrimstr("sha256:")' > $out
       '';
 in
@@ -46,7 +46,7 @@ writeShellApplication {
   ];
 
   text = ''
-    image=${agent-sandbox-image}
+    image=${agent-gvisor-image}
     ref=${ref}
     expected=$(cat ${imageIdFile})
 

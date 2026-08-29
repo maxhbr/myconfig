@@ -48,7 +48,7 @@
 #      port so the `0.0.0.0` wildcard bind does not collide with LiteLLM's own
 #      `127.0.0.1:${port}` listener.
 #
-#   2. The `agent-gvisor` wrapper bakes `AGENT_SANDBOX_NETWORK` as a
+#   2. The `agent-gvisor` wrapper bakes `AGENT_GVISOR_NETWORK` as a
 #      `pasta:--map-guest-addr,<address>` podman network spec (in ./default.nix).
 #      `--map-guest-addr` translates <address> to the *guest's assigned address
 #      on the host* — by default the host's global address (the address on the
@@ -114,7 +114,7 @@ in
         Make the loopback-only host LiteLLM proxy reachable from sandboxes by
         running a port-scoped forwarder and advertising a host address that
         pasta maps to the host's global address (see ./default.nix,
-        `AGENT_SANDBOX_NETWORK`). On by default whenever the host runs LiteLLM
+        `AGENT_GVISOR_NETWORK`). On by default whenever the host runs LiteLLM
         at all.
       '';
     };
@@ -170,7 +170,7 @@ in
       description = ''
         Also serve the endpoint on the sandbox's OWN `127.0.0.1:${"port"}`, by
         relaying it there from inside the sandbox
-        (`/bin/agent-sandbox-init`, baked into the image).
+        (`/bin/agent-gvisor-init`, baked into the image).
 
         The host loopback is not reachable from a sandbox and cannot be made
         reachable from the outside: runsc runs its own network stack, so only a
@@ -195,7 +195,7 @@ in
         OpenAI-compatible base URL of the endpoint, as seen from inside a
         sandbox (pasta maps `address` to the host's global address, where the
         port-scoped forwarder listens on `forwardPort`). Read-only; also
-        written to `~/.config/agent-sandbox/litellm.env` for
+        written to `~/.config/agent-gvisor/litellm.env` for
         `agent-gvisor start --env-file`.
       '';
     };
@@ -253,7 +253,7 @@ in
     # the API key stays out of the Nix store and out of the session state.
     home-manager.sharedModules = [
       {
-        xdg.configFile."agent-sandbox/litellm.env".text = ''
+        xdg.configFile."agent-gvisor/litellm.env".text = ''
           OPENAI_BASE_URL=${lcfg.endpoint}
         '';
       }

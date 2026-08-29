@@ -2,7 +2,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# agent-sandbox-init — entrypoint wrapper that sets up "reverse port forwards"
+# agent-gvisor-init — entrypoint wrapper that sets up "reverse port forwards"
 # inside the sandbox and then execs the real command.
 #
 # WHY THIS RUNS INSIDE THE CONTAINER
@@ -21,12 +21,12 @@
 # connection itself. It only gives the same connection the name the agent
 # configuration uses, so `http://127.0.0.1:4000/v1` works verbatim.
 #
-# AGENT_SANDBOX_LOOPBACK_FORWARD is a space-separated list of
+# AGENT_GVISOR_LOOPBACK_FORWARD is a space-separated list of
 # `LPORT:RHOST:RPORT` rules. Failures never abort the session: a broken or
 # missing relay is reported and the payload still runs.
 set -u
 
-log() { printf 'agent-sandbox-init: %s\n' "$*" >&2; }
+log() { printf 'agent-gvisor-init: %s\n' "$*" >&2; }
 
 # Wait until the relay actually accepts connections, so an agent that connects
 # immediately does not race the listener. Bash's /dev/tcp is used because the
@@ -65,7 +65,7 @@ start_forward() {
     fi
 }
 
-for rule in ${AGENT_SANDBOX_LOOPBACK_FORWARD-}; do
+for rule in ${AGENT_GVISOR_LOOPBACK_FORWARD-}; do
     start_forward "$rule"
 done
 

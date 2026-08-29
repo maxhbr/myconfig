@@ -218,7 +218,7 @@ If a host ever needs to bypass the netstack anyway, the upstream script already
 supports it at runtime — no NixOS option is involved:
 
 ```bash
-AGENT_PODMAN_RUNTIME_FLAGS='ignore-cgroups network=host' agent-gvisor start …
+AGENT_GVISOR_PODMAN_RUNTIME_FLAGS='ignore-cgroups network=host' agent-gvisor start …
 ```
 
 Be aware this carries every downside listed under

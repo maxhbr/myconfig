@@ -3,9 +3,9 @@ final: prev: {
   agent-gvisor = final.callPackage ./agent-gvisor.nix { };
 
   # The agent container image, built by Nix instead of a Containerfile.
-  agent-sandbox-image = final.callPackage ./agent-image.nix { };
+  agent-gvisor-image = final.callPackage ./agent-image.nix { };
 
-  # Helper that loads `agent-sandbox-image` into the caller's Podman store.
+  # Helper that loads `agent-gvisor-image` into the caller's Podman store.
   agent-gvisor-load-image = final.callPackage ./load-image.nix { };
 
   # gVisor with the point-to-point address fix. Without it `runsc start` aborts

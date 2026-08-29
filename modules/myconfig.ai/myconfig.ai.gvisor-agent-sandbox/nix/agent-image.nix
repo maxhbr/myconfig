@@ -68,7 +68,7 @@ let
     python3
     ripgrep
     shadow # getent, id helpers
-    socat # in-sandbox loopback relays, see ./agent-sandbox-init.sh
+    socat # in-sandbox loopback relays, see ./agent-gvisor-init.sh
     util-linux
     which
   ];
@@ -78,17 +78,17 @@ let
   # execs the payload. It must NOT carry a /nix/store shebang — the sandbox
   # has no /nix — hence a plain `#!/bin/bash` script dropped into /bin.
   initScript = writeTextFile {
-    name = "agent-sandbox-init";
-    destination = "/bin/agent-sandbox-init";
+    name = "agent-gvisor-init";
+    destination = "/bin/agent-gvisor-init";
     executable = true;
-    text = builtins.readFile ./agent-sandbox-init.sh;
+    text = builtins.readFile ./agent-gvisor-init.sh;
   };
 
   rootPackages =
     (if packages == null then defaultPackages else packages) ++ extraPackages ++ [ initScript ];
 
   imageRoot = buildEnv {
-    name = "agent-sandbox-root";
+    name = "agent-gvisor-root";
     paths = rootPackages;
     pathsToLink = [
       "/bin"

@@ -10,9 +10,9 @@
   podman,
   util-linux,
   gvisor,
-  agent-sandbox-image,
+  agent-gvisor-image,
   # Default image reference used by `agent-gvisor start --image`.
-  defaultImage ? "${agent-sandbox-image.imageName}:${agent-sandbox-image.imageTag}",
+  defaultImage ? "${agent-gvisor-image.imageName}:${agent-gvisor-image.imageTag}",
   # Default Podman `--runtime` value. An absolute path works without
   # registering a named runtime in containers.conf.
   defaultRuntime ? "${gvisor}/bin/runsc",
@@ -33,8 +33,8 @@ writeShellApplication {
   ];
 
   runtimeEnv = {
-    AGENT_SANDBOX_DEFAULT_IMAGE = defaultImage;
-    AGENT_SANDBOX_DEFAULT_RUNTIME = defaultRuntime;
+    AGENT_GVISOR_DEFAULT_IMAGE = defaultImage;
+    AGENT_GVISOR_DEFAULT_RUNTIME = defaultRuntime;
   };
 
   text = builtins.readFile ../bin/agent-gvisor;

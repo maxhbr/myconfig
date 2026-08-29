@@ -4,20 +4,20 @@ A flake-based starting point for container-based coding-agent isolation. It
 
 - registers Nixpkgs' `gvisor` package as Podman's `runsc` OCI runtime,
 - builds the sandbox image with Nix (no Containerfile / no `apt`),
-- ships `agent-session`, a rootless session manager for parallel Git worktree
+- ships `agent-gvisor`, a rootless session manager for parallel Git worktree
   sessions.
 
 ## Flake outputs
 
 | Output | Description |
 | --- | --- |
-| `packages.<system>.agent-session` (`default`) | Session manager CLI |
-| `packages.<system>.agent-sandbox-image` | OCI image tarball built by `dockerTools` |
-| `packages.<system>.agent-sandbox-load-image` | Loads that image into rootless Podman |
-| `apps.<system>.agent-session` / `.load-image` | `nix run` entry points |
+| `packages.<system>.agent-gvisor` (`default`) | Session manager CLI |
+| `packages.<system>.agent-gvisor-image` | OCI image tarball built by `dockerTools` |
+| `packages.<system>.agent-gvisor-load-image` | Loads that image into rootless Podman |
+| `apps.<system>.agent-gvisor` / `.load-image` | `nix run` entry points |
 | `nixosModules.default` | `programs.agentSandboxes` NixOS module |
 | `overlays.default` | Adds the three packages to Nixpkgs |
-| `devShells.<system>.default` | agent-session + podman + gvisor + shellcheck |
+| `devShells.<system>.default` | agent-gvisor + podman + gvisor + shellcheck |
 | `checks.<system>` | package builds and `shellcheck` |
 
 Try it without installing anything. The image must be in the local Podman
@@ -29,7 +29,7 @@ nix run github:you/gvisor-agent-sandbox#load-image
 nix run github:you/gvisor-agent-sandbox -- start --name demo --repo "$HOME/src/example"
 ```
 
-Set `AGENT_PODMAN_RUNTIME=runsc` to use a runtime *name* registered in
+Set `AGENT_GVISOR_PODMAN_RUNTIME=runsc` to use a runtime *name* registered in
 `containers.conf` (what the NixOS module configures) instead of the baked
 absolute path.
 
@@ -62,8 +62,8 @@ nix run .# -- doctor
 }
 ```
 
-The module enables Podman, registers `runsc`, and installs `agent-session`
-plus `agent-sandbox-load-image`.
+The module enables Podman, registers `runsc`, and installs `agent-gvisor`
+plus `agent-gvisor-load-image`.
 
 Rebuild, log out/in if subordinate ID mappings changed, then verify:
 
@@ -80,8 +80,8 @@ deliberately generic: bash, coreutils, git, a C toolchain, Node.js, Python,
 Load it into the rootless Podman store of the user that runs sessions:
 
 ```bash
-agent-sandbox-load-image          # skips work if the tag is already present
-agent-sandbox-load-image --force  # reload after changing the image definition
+agent-gvisor-load-image          # skips work if the tag is already present
+agent-gvisor-load-image --force  # reload after changing the image definition
 ```
 
 `packages`, `extraPackages`, `imageName` and `imageTag` are overridable. Do
@@ -94,12 +94,12 @@ The image intentionally ships no agent CLI, so `claude`, `codex` or `pi` are
 binary: its whole Nix store closure would have to come along, and mounting
 host `/nix` breaks the isolation boundary. Rebuild the image instead.
 
-Via the NixOS module (`agent-session`'s default image reference follows the
+Via the NixOS module (`agent-gvisor`'s default image reference follows the
 override):
 
 ```nix
 { inputs, pkgs, ... }: {
-  programs.agentSandboxes.image = pkgs.agent-sandbox-image.override {
+  programs.agentSandboxes.image = pkgs.agent-gvisor-image.override {
     extraPackages = [
       pkgs.claude-code
       inputs.pi.packages.${pkgs.stdenv.hostPlatform.system}.default
@@ -116,7 +116,7 @@ nix build --impure --expr '
     self = builtins.getFlake (toString ./.);
     pkgs = self.packages.${builtins.currentSystem};
     pi = builtins.getFlake "github:badlogic/pi-mono";
-  in pkgs.agent-sandbox-image.override {
+  in pkgs.agent-gvisor-image.override {
     extraPackages = [ pi.packages.${builtins.currentSystem}.default ];
   }'
 podman load --input ./result
@@ -128,7 +128,7 @@ with `--config "$HOME/.pi:/home/agent/.pi:ro"`.
 ## 3. Start parallel sessions
 
 ```bash
-agent-session start \
+agent-gvisor start \
   --name parser-refactor \
   --repo "$HOME/src/example" \
   --base main \
@@ -136,7 +136,7 @@ agent-session start \
   -- claude \
      "Refactor the parser and commit the result"
 
-agent-session start \
+agent-gvisor start \
   --name tests \
   --repo "$HOME/src/example" \
   --base main \
@@ -149,26 +149,26 @@ Each session gets branch `agent/<name>`. The host checkout itself is not
 mounted. A disposable bare Git pool is seeded from committed refs in the host
 repository, and each session gets a worktree from that pool.
 
-Image selection order: `--image`, then `$AGENT_SANDBOX_IMAGE`, then the
-Nix-built default baked into the package (`$AGENT_SANDBOX_DEFAULT_IMAGE`).
-Runtime selection order: `$AGENT_PODMAN_RUNTIME`, then the baked
-`$AGENT_SANDBOX_DEFAULT_RUNTIME` (absolute `runsc` path).
+Image selection order: `--image`, then `$AGENT_GVISOR_IMAGE`, then the
+Nix-built default baked into the package (`$AGENT_GVISOR_DEFAULT_IMAGE`).
+Runtime selection order: `$AGENT_GVISOR_PODMAN_RUNTIME`, then the baked
+`$AGENT_GVISOR_DEFAULT_RUNTIME` (absolute `runsc` path).
 
 `start` verifies the OCI runtime and the image *before* creating any worktree
 or session state, so a misconfigured host leaves nothing behind.
 
 ## Troubleshooting
 
-`agent-session doctor` reports the effective settings and starts a throwaway
+`agent-gvisor doctor` reports the effective settings and starts a throwaway
 sandbox container. Relevant knobs:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AGENT_PODMAN_RUNTIME` | baked `runsc` path | Runtime name or absolute path |
-| `AGENT_PODMAN_CGROUP_MANAGER` | `cgroupfs` rootless, Podman default as root | Podman cgroup manager |
-| `AGENT_PODMAN_RUNTIME_FLAGS` | `ignore-cgroups` rootless, empty as root | Extra `runsc` flags, space separated |
-| `AGENT_SANDBOX_IMAGE` | baked image ref | Image override |
-| `AGENT_SANDBOX_STATE` | `$XDG_STATE_HOME/agent-sandbox` | State directory |
+| `AGENT_GVISOR_PODMAN_RUNTIME` | baked `runsc` path | Runtime name or absolute path |
+| `AGENT_GVISOR_PODMAN_CGROUP_MANAGER` | `cgroupfs` rootless, Podman default as root | Podman cgroup manager |
+| `AGENT_GVISOR_PODMAN_RUNTIME_FLAGS` | `ignore-cgroups` rootless, empty as root | Extra `runsc` flags, space separated |
+| `AGENT_GVISOR_IMAGE` | baked image ref | Image override |
+| `AGENT_GVISOR_STATE` | `$XDG_STATE_HOME/agent-gvisor` | State directory |
 
 ### Rootless cgroups
 
@@ -183,26 +183,26 @@ Two rootless defaults exist because of how `runsc` handles cgroups:
 
 **Consequence:** rootless sessions run without cgroup limits. `--memory`,
 `--cpus` and `--pids-limit` are then *not* passed to Podman, and
-`agent-session` warns on every start. To get enforcement back, unset
-`AGENT_PODMAN_RUNTIME_FLAGS` and provide a cgroup hierarchy that `runsc` may
+`agent-gvisor` warns on every start. To get enforcement back, unset
+`AGENT_GVISOR_PODMAN_RUNTIME_FLAGS` and provide a cgroup hierarchy that `runsc` may
 write (for example run the session manager as root, or delegate the needed
 controllers).
 - `container image ... is not in the local Podman store`: run
-  `agent-sandbox-load-image` (or `nix run .#load-image`).
+  `agent-gvisor-load-image` (or `nix run .#load-image`).
 - Podman flags are re-applied to every container command, so `logs`, `shell`,
   `stop` and `destroy` also work with a path-based runtime.
 
 ## 4. Operate sessions
 
 ```bash
-agent-session list
-agent-session status tests
-agent-session logs tests --follow
-agent-session shell tests
-agent-session stop tests
-agent-session run tests --detach -- codex exec "Continue the task"
-agent-session merge tests
-agent-session destroy tests
+agent-gvisor list
+agent-gvisor status tests
+agent-gvisor logs tests --follow
+agent-gvisor shell tests
+agent-gvisor stop tests
+agent-gvisor run tests --detach -- codex exec "Continue the task"
+agent-gvisor merge tests
+agent-gvisor destroy tests
 ```
 
 `destroy` refuses to remove a dirty worktree unless `--force` is supplied. It

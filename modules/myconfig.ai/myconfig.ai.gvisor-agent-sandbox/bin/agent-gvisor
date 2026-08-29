@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-STATE_ROOT="${AGENT_SANDBOX_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-sandbox}"
-# AGENT_SANDBOX_DEFAULT_RUNTIME is baked in by the Nix package and is the
+STATE_ROOT="${AGENT_GVISOR_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-gvisor}"
+# AGENT_GVISOR_DEFAULT_RUNTIME is baked in by the Nix package and is the
 # absolute path of Nixpkgs' runsc, so gVisor works even when it is not
-# registered as a named runtime in containers.conf. Set AGENT_PODMAN_RUNTIME to
-# a name (for example "runsc") to use a runtime registered there instead.
-PODMAN_RUNTIME="${AGENT_PODMAN_RUNTIME:-${AGENT_SANDBOX_DEFAULT_RUNTIME:-runsc}}"
+# registered as a named runtime in containers.conf. Set
+# AGENT_GVISOR_PODMAN_RUNTIME to a name (for example "runsc") to use a runtime
+# registered there instead.
+PODMAN_RUNTIME="${AGENT_GVISOR_PODMAN_RUNTIME:-${AGENT_GVISOR_DEFAULT_RUNTIME:-runsc}}"
 # Rootless cgroup handling with runsc needs two adjustments, so both defaults
 # depend on whether we are root:
 #
@@ -19,15 +20,15 @@ PODMAN_RUNTIME="${AGENT_PODMAN_RUNTIME:-${AGENT_SANDBOX_DEFAULT_RUNTIME:-runsc}}
 # Consequence: rootless sandboxes are NOT resource limited. See limits_note().
 # Both variables can be overridden, including to the empty string.
 if (( EUID == 0 )); then
-  CGROUP_MANAGER="${AGENT_PODMAN_CGROUP_MANAGER-}"
-  read -r -a PODMAN_RUNTIME_FLAGS <<<"${AGENT_PODMAN_RUNTIME_FLAGS-}"
+  CGROUP_MANAGER="${AGENT_GVISOR_PODMAN_CGROUP_MANAGER-}"
+  read -r -a PODMAN_RUNTIME_FLAGS <<<"${AGENT_GVISOR_PODMAN_RUNTIME_FLAGS-}"
 else
-  CGROUP_MANAGER="${AGENT_PODMAN_CGROUP_MANAGER-cgroupfs}"
-  read -r -a PODMAN_RUNTIME_FLAGS <<<"${AGENT_PODMAN_RUNTIME_FLAGS-ignore-cgroups}"
+  CGROUP_MANAGER="${AGENT_GVISOR_PODMAN_CGROUP_MANAGER-cgroupfs}"
+  read -r -a PODMAN_RUNTIME_FLAGS <<<"${AGENT_GVISOR_PODMAN_RUNTIME_FLAGS-ignore-cgroups}"
 fi
-# AGENT_SANDBOX_DEFAULT_IMAGE is baked in by the Nix package and points at the
-# image built from this flake. AGENT_SANDBOX_IMAGE overrides it at runtime.
-DEFAULT_IMAGE="${AGENT_SANDBOX_IMAGE:-${AGENT_SANDBOX_DEFAULT_IMAGE:-localhost/agent-dev:latest}}"
+# AGENT_GVISOR_DEFAULT_IMAGE is baked in by the Nix package and points at the
+# image built from this flake. AGENT_GVISOR_IMAGE overrides it at runtime.
+DEFAULT_IMAGE="${AGENT_GVISOR_IMAGE:-${AGENT_GVISOR_DEFAULT_IMAGE:-localhost/agent-dev:latest}}"
 
 log() { printf 'agent-gvisor: %s\n' "$*" >&2; }
 die() { log "error: $*"; exit 1; }
@@ -50,13 +51,13 @@ Usage:
 start options:
   --base REF                  Base commit/ref in the host repository (default: HEAD)
   --branch BRANCH             Worktree branch (default: agent/NAME)
-  --image IMAGE               Podman image (default: $AGENT_SANDBOX_DEFAULT_IMAGE)
+  --image IMAGE               Podman image (default: $AGENT_GVISOR_DEFAULT_IMAGE)
   --config HOST:DEST[:ro|rw]  Mount an agent configuration path; repeatable
   --mount HOST:DEST[:ro|rw]   Add another bind mount; repeatable
   --env KEY=VALUE             Pass an environment variable; repeatable
   --env-file PATH             Pass a Podman environment file
   --network MODE              Podman network mode; omit for the rootless
-                              default ($AGENT_SANDBOX_NETWORK if set)
+                              default ($AGENT_GVISOR_NETWORK if set)
   --detach                    Run detached rather than interactively
   --memory LIMIT              Memory limit (default: 8g)
   --cpus NUMBER               CPU limit (default: 4)
@@ -82,32 +83,34 @@ merge options:
                               (e.g. -- -m "merge feature work")
 
 environment:
-  AGENT_SANDBOX_IMAGE           Override the default image
-  AGENT_PODMAN_RUNTIME          Runtime name or absolute path (default: runsc)
-  AGENT_PODMAN_CGROUP_MANAGER   Podman cgroup manager (default: cgroupfs)
-  AGENT_PODMAN_RUNTIME_FLAGS    Extra runsc flags, e.g. "ignore-cgroups"
-  AGENT_SANDBOX_STATE           State directory
-  AGENT_SANDBOX_HOME_SEED       Directory to seed /home/agent from (default:
+  AGENT_GVISOR_IMAGE            Override the default image
+  AGENT_GVISOR_STATE            State directory
+  AGENT_GVISOR_PODMAN_RUNTIME   Runtime name or absolute path (default: runsc)
+  AGENT_GVISOR_PODMAN_CGROUP_MANAGER
+                                Podman cgroup manager (default: cgroupfs)
+  AGENT_GVISOR_PODMAN_RUNTIME_FLAGS
+                                Extra runsc flags, e.g. "ignore-cgroups"
+  AGENT_GVISOR_HOME_SEED        Directory to seed /home/agent from (default:
                                 the activated home-manager generation's
                                 home-files)
-  AGENT_SANDBOX_HOME_SEED_PATHS Space-separated relative paths copied from that
+  AGENT_GVISOR_HOME_SEED_PATHS  Space-separated relative paths copied from that
                                 directory; empty disables seeding
-  AGENT_SANDBOX_HOME_SEED_REWRITE
+  AGENT_GVISOR_HOME_SEED_REWRITE
                                 Space-separated OLD=NEW rules applied literally
                                 to the seeded files, to point host-only
                                 endpoints at sandbox-reachable ones
-  AGENT_SANDBOX_MODEL_ENDPOINT  Model API base URL as seen from a sandbox;
+  AGENT_GVISOR_MODEL_ENDPOINT   Model API base URL as seen from a sandbox;
                                 `doctor` probes it from inside one
-  AGENT_SANDBOX_NETWORK         Default --network mode for sessions and for the
+  AGENT_GVISOR_NETWORK          Default --network mode for sessions and for the
                                 `doctor` endpoint probe, e.g. a "pasta:..." spec
                                 mapping the model endpoint to the host loopback
-  AGENT_SANDBOX_LOOPBACK_FORWARD
+  AGENT_GVISOR_LOOPBACK_FORWARD
                                 Space-separated LPORT:RHOST:RPORT rules. Each is
                                 relayed INSIDE the sandbox from 127.0.0.1:LPORT
                                 to RHOST:RPORT, so configuration naming the host
                                 loopback (e.g. http://127.0.0.1:4000) works
-                                verbatim. Set up by /bin/agent-sandbox-init.
-  AGENT_SANDBOX_DEFAULT_COMMAND Command run by `start`/`run` when no COMMAND is
+                                verbatim. Set up by /bin/agent-gvisor-init.
+  AGENT_GVISOR_DEFAULT_COMMAND  Command run by `start`/`run` when no COMMAND is
                                 given (default: /bin/bash)
 
 Run `agent-gvisor doctor` to verify runtime, image and sandbox startup.
@@ -178,8 +181,9 @@ check_runtime() {
   # its default one, so probe the requested name instead of parsing config.
   podman_c info >/dev/null 2>&1 || die "$(
     printf 'Podman OCI runtime %q is not registered.\n' "$PODMAN_RUNTIME"
-    printf 'Register it in containers.conf (see nixos/agent-sandboxes.nix), or\n'
-    printf 'set AGENT_PODMAN_RUNTIME to the absolute path of a runsc binary.'
+    printf 'Register it in containers.conf (on NixOS:\n'
+    printf 'virtualisation.containers.containersConf.settings.engine.runtimes), or\n'
+    printf 'set AGENT_GVISOR_PODMAN_RUNTIME to the absolute path of a runsc binary.'
   )"
 }
 
@@ -263,11 +267,11 @@ run_container() {
     --env AGENT_WORKTREE="$worktree"
   )
 
-  # Reverse port forwards, set up by /bin/agent-sandbox-init inside the
+  # Reverse port forwards, set up by /bin/agent-gvisor-init inside the
   # sandbox: gVisor's loopback can only be bound from within, so this is the
   # only way to make a host-side endpoint answer on the sandbox's 127.0.0.1.
-  [[ -z "${AGENT_SANDBOX_LOOPBACK_FORWARD-}" ]] ||
-    cmd+=(--env "AGENT_SANDBOX_LOOPBACK_FORWARD=$AGENT_SANDBOX_LOOPBACK_FORWARD")
+  [[ -z "${AGENT_GVISOR_LOOPBACK_FORWARD-}" ]] ||
+    cmd+=(--env "AGENT_GVISOR_LOOPBACK_FORWARD=$AGENT_GVISOR_LOOPBACK_FORWARD")
 
   if cgroups_ignored; then
     log "warning: memory/cpu/pids limits $(limits_note)"
@@ -296,13 +300,13 @@ run_container() {
   cmd+=("$image")
   # Wrap the payload so the relays exist before it starts. The wrapper execs,
   # so the payload still gets PID 1, the TTY and the signals.
-  [[ -z "${AGENT_SANDBOX_LOOPBACK_FORWARD-}" ]] || cmd+=(/bin/agent-sandbox-init)
+  [[ -z "${AGENT_GVISOR_LOOPBACK_FORWARD-}" ]] || cmd+=(/bin/agent-gvisor-init)
   if (( $# == 0 )); then
     # No COMMAND given: run the configured default. Word-split so a default
     # like "herdr --flag" works; `agent-gvisor shell` is unaffected and
     # always gives a plain shell.
     local -a default_cmd=()
-    read -r -a default_cmd <<<"${AGENT_SANDBOX_DEFAULT_COMMAND:-/bin/bash}"
+    read -r -a default_cmd <<<"${AGENT_GVISOR_DEFAULT_COMMAND:-/bin/bash}"
     (( ${#default_cmd[@]} )) || default_cmd=(/bin/bash)
     cmd+=("${default_cmd[@]}")
   else
@@ -349,7 +353,7 @@ resolve_home_files() {
 seed_home() {
   local home=$1 seed=$2
   local -a paths=()
-  read -r -a paths <<<"${AGENT_SANDBOX_HOME_SEED_PATHS-}"
+  read -r -a paths <<<"${AGENT_GVISOR_HOME_SEED_PATHS-}"
   (( ${#paths[@]} )) || return 0
   local rel copied=0 incomplete=0 errs
   errs=$(mktemp)
@@ -385,12 +389,12 @@ seed_home() {
 # 127.0.0.1 is the container's loopback. Rewrite such references to the
 # addresses that ARE reachable from a sandbox.
 #
-# AGENT_SANDBOX_HOME_SEED_REWRITE is a space-separated list of OLD=NEW rules;
+# AGENT_GVISOR_HOME_SEED_REWRITE is a space-separated list of OLD=NEW rules;
 # replacement is literal (no regex), and binary files are skipped.
 rewrite_seeded_home() {
   local home=$1
   local -a rules=()
-  read -r -a rules <<<"${AGENT_SANDBOX_HOME_SEED_REWRITE-}"
+  read -r -a rules <<<"${AGENT_GVISOR_HOME_SEED_REWRITE-}"
   (( ${#rules[@]} )) || return 0
   local rule from to file content changed=0
   for rule in "${rules[@]}"; do
@@ -449,7 +453,7 @@ confirm_destroy_existing() {
 
 cmd_start() {
   local name='' repo='' base=HEAD branch='' image=$DEFAULT_IMAGE
-  local detach=false memory=8g cpus=4 pids_limit=2048 network="${AGENT_SANDBOX_NETWORK-}"
+  local detach=false memory=8g cpus=4 pids_limit=2048 network="${AGENT_GVISOR_NETWORK-}"
   local seccomp_unconfined=false env_file='' force=false
   local home_seed='' seed_home_enabled=true
   local -a mount_specs=() env_specs=()
@@ -530,7 +534,7 @@ cmd_start() {
   chmod 700 "$meta_dir" "$home"
 
   if [[ "$seed_home_enabled" = true ]]; then
-    local seed=${home_seed:-${AGENT_SANDBOX_HOME_SEED-}}
+    local seed=${home_seed:-${AGENT_GVISOR_HOME_SEED-}}
     [[ -n "$seed" ]] || seed=$(resolve_home_files || true)
     if [[ -n "$seed" ]]; then
       [[ -d "$seed" ]] || die "home seed is not a directory: $seed"
@@ -775,15 +779,15 @@ cmd_doctor() {
     "${PODMAN_RUNTIME_FLAGS[*]+"${PODMAN_RUNTIME_FLAGS[*]}"}"
   if cgroups_ignored; then
     printf 'limits:          %s\n' "$(limits_note)"
-    printf '                 unset AGENT_PODMAN_RUNTIME_FLAGS and delegate\n'
+    printf '                 unset AGENT_GVISOR_PODMAN_RUNTIME_FLAGS and delegate\n'
     printf '                 cgroup controllers to enforce them\n'
   else
     printf 'limits:          enforced via cgroups\n'
   fi
   printf 'image:           %s\n' "$DEFAULT_IMAGE"
   printf 'state:           %s\n' "$STATE_ROOT"
-  printf 'model endpoint:  %s\n' "${AGENT_SANDBOX_MODEL_ENDPOINT:-<unset>}"
-  printf 'loopback fwd:    %s\n' "${AGENT_SANDBOX_LOOPBACK_FORWARD:-<none>}"
+  printf 'model endpoint:  %s\n' "${AGENT_GVISOR_MODEL_ENDPOINT:-<unset>}"
+  printf 'loopback fwd:    %s\n' "${AGENT_GVISOR_LOOPBACK_FORWARD:-<none>}"
   check_runtime
   check_image "$DEFAULT_IMAGE"
   log "running a throwaway sandbox container"
@@ -798,9 +802,9 @@ cmd_doctor() {
       printf 'sandbox startup failed; see the Podman/runsc error above.\n'
       printf 'Common causes:\n'
       printf '  - "systemd error: Access denied": the systemd cgroup manager\n'
-      printf '    needs the system bus; set AGENT_PODMAN_CGROUP_MANAGER=cgroupfs\n'
+      printf '    needs the system bus; set AGENT_GVISOR_PODMAN_CGROUP_MANAGER=cgroupfs\n'
       printf '  - "cannot set up cgroup for root": runsc cannot write the root\n'
-      printf '    cgroup; set AGENT_PODMAN_RUNTIME_FLAGS=ignore-cgroups\n'
+      printf '    cgroup; set AGENT_GVISOR_PODMAN_RUNTIME_FLAGS=ignore-cgroups\n'
       printf '  - unprivileged user namespaces disabled, or missing\n'
       printf '    /etc/subuid and /etc/subgid ranges for this user'
     )"
@@ -813,13 +817,13 @@ cmd_doctor() {
   #
   # Any HTTP response counts as reachable (401/404 included) — this checks
   # connectivity, not the API contract, so no token is needed.
-  if [[ -n "${AGENT_SANDBOX_MODEL_ENDPOINT-}" ]]; then
+  if [[ -n "${AGENT_GVISOR_MODEL_ENDPOINT-}" ]]; then
     # Probe the endpoint from a sandbox using the SAME network sessions use, so
     # the check exercises the real path (e.g. pasta --map-guest-addr) rather
     # than podman's rootless default, which cannot reach a host-only endpoint.
     local -a net_args=()
-    [[ -z "${AGENT_SANDBOX_NETWORK-}" ]] || net_args=(--network "$AGENT_SANDBOX_NETWORK")
-    log "checking model endpoint $AGENT_SANDBOX_MODEL_ENDPOINT from inside a sandbox"
+    [[ -z "${AGENT_GVISOR_NETWORK-}" ]] || net_args=(--network "$AGENT_GVISOR_NETWORK")
+    log "checking model endpoint $AGENT_GVISOR_MODEL_ENDPOINT from inside a sandbox"
     if podman_c run --rm \
       --read-only \
       --read-only-tmpfs=true \
@@ -829,18 +833,18 @@ cmd_doctor() {
       "${net_args[@]}" \
       "$DEFAULT_IMAGE" \
       /bin/sh -c "curl -sS -o /dev/null --max-time 5 -w 'HTTP %{http_code}\n' \"\$0\"" \
-      "$AGENT_SANDBOX_MODEL_ENDPOINT"; then
+      "$AGENT_GVISOR_MODEL_ENDPOINT"; then
       log "model endpoint reachable from the sandbox"
     else
       log "$(
         printf 'warning: model endpoint %s is NOT reachable from a sandbox.\n' \
-          "$AGENT_SANDBOX_MODEL_ENDPOINT"
+          "$AGENT_GVISOR_MODEL_ENDPOINT"
         printf 'runsc runs its own network stack: neither the host loopback nor\n'
         printf 'a pasta "-T" listener in the container netns is visible to it.\n'
         printf 'The supported path is pasta --map-guest-addr, which maps a chosen\n'
         printf 'address to the host global address, where a port-scoped forwarder\n'
         printf '(systemd-socket-proxyd) proxies to the loopback-only LiteLLM proxy.\n'
-        printf 'Set it via the AGENT_SANDBOX_NETWORK env (a "pasta:..." podman network\n'
+        printf 'Set it via the AGENT_GVISOR_NETWORK env (a "pasta:..." podman network\n'
         printf 'spec, e.g. pasta:--map-guest-addr,<endpoint-host>). Also confirm the\n'
         printf 'host litellm proxy is up on 127.0.0.1:<port> and the forwarder socket\n'
         printf '(agent-litellm-forward) is active on 0.0.0.0:<forward-port>.'
@@ -852,10 +856,10 @@ cmd_doctor() {
   # OWN 127.0.0.1, so a configuration that names the host loopback verbatim
   # (as every host-side agent config does) works unchanged. Probe them through
   # the entrypoint wrapper, i.e. exactly as a session starts them.
-  if [[ -n "${AGENT_SANDBOX_LOOPBACK_FORWARD-}" ]]; then
+  if [[ -n "${AGENT_GVISOR_LOOPBACK_FORWARD-}" ]]; then
     local -a fwd_net=() rules=()
-    [[ -z "${AGENT_SANDBOX_NETWORK-}" ]] || fwd_net=(--network "$AGENT_SANDBOX_NETWORK")
-    read -r -a rules <<<"$AGENT_SANDBOX_LOOPBACK_FORWARD"
+    [[ -z "${AGENT_GVISOR_NETWORK-}" ]] || fwd_net=(--network "$AGENT_GVISOR_NETWORK")
+    read -r -a rules <<<"$AGENT_GVISOR_LOOPBACK_FORWARD"
     local rule lport
     for rule in "${rules[@]}"; do
       lport=${rule%%:*}
@@ -866,17 +870,17 @@ cmd_doctor() {
         --cap-drop=ALL \
         --security-opt=no-new-privileges \
         --userns=keep-id \
-        --env "AGENT_SANDBOX_LOOPBACK_FORWARD=$rule" \
+        --env "AGENT_GVISOR_LOOPBACK_FORWARD=$rule" \
         "${fwd_net[@]}" \
         "$DEFAULT_IMAGE" \
-        /bin/agent-sandbox-init \
+        /bin/agent-gvisor-init \
         /bin/sh -c "curl -sS -o /dev/null --max-time 5 -w 'HTTP %{http_code}\n' \"\$0\"" \
         "http://127.0.0.1:$lport/"; then
         log "127.0.0.1:$lport is served inside the sandbox"
       else
         log "$(
           printf 'warning: the relay for 127.0.0.1:%s does not answer.\n' "$lport"
-          printf 'It is started by /bin/agent-sandbox-init inside the sandbox and\n'
+          printf 'It is started by /bin/agent-gvisor-init inside the sandbox and\n'
           printf 'needs socat in the image; check that the image is current\n'
           printf '(agent-gvisor-load-image --test) and that the target of the rule\n'
           printf '%q is reachable from a sandbox (see the model endpoint check above).' "$rule"

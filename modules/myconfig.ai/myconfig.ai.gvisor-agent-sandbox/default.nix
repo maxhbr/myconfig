@@ -73,7 +73,7 @@ let
 
   # Thread the effective image through both helpers, so overriding the image
   # also changes the default image reference baked into `agent-gvisor`.
-  withImage = pkg: if image == null then pkg else pkg.override { agent-sandbox-image = image; };
+  withImage = pkg: if image == null then pkg else pkg.override { agent-gvisor-image = image; };
 
   # Host-configured defaults baked into `agent-gvisor`:
   #   * the home-seed allowlist and endpoint-rewrite rules. The seed SOURCE is
@@ -88,11 +88,11 @@ let
   # `--set-default` keeps every variable overridable per invocation.
   sessionEnv =
     lib.optionalAttrs cfg.home.enable {
-      AGENT_SANDBOX_HOME_SEED_PATHS = lib.concatStringsSep " " cfg.home.seedPaths;
-      AGENT_SANDBOX_HOME_SEED_REWRITE = lib.concatStringsSep " " cfg.home.rewriteEndpoints;
+      AGENT_GVISOR_HOME_SEED_PATHS = lib.concatStringsSep " " cfg.home.seedPaths;
+      AGENT_GVISOR_HOME_SEED_REWRITE = lib.concatStringsSep " " cfg.home.rewriteEndpoints;
     }
     // lib.optionalAttrs cfg.litellm.enable {
-      AGENT_SANDBOX_MODEL_ENDPOINT = cfg.litellm.endpoint;
+      AGENT_GVISOR_MODEL_ENDPOINT = cfg.litellm.endpoint;
       # pasta(1) network spec: --map-guest-addr translates the endpoint host
       # (cfg.litellm.address) to the host's global address (the address on the
       # default-route interface), where the port-scoped forwarder listens on
@@ -102,17 +102,17 @@ let
       # unreachable. Podman's default --no-map-gw applies (no gateway→loopback
       # mapping). See ./litellm-endpoint.nix for the full mechanism and why
       # --map-gw was dropped.
-      AGENT_SANDBOX_NETWORK = "pasta:--map-guest-addr,${cfg.litellm.address}";
+      AGENT_GVISOR_NETWORK = "pasta:--map-guest-addr,${cfg.litellm.address}";
     }
     // lib.optionalAttrs (cfg.litellm.enable && cfg.litellm.loopbackForward) {
       # Relay the endpoint onto the sandbox's own loopback, from inside the
       # sandbox (the only place that can bind a port gVisor's netstack serves).
       # Makes `http://127.0.0.1:<litellm port>` work verbatim in the sandbox.
       # See ./litellm-endpoint.nix (option `litellm.loopbackForward`).
-      AGENT_SANDBOX_LOOPBACK_FORWARD = "${toString cfg.litellm.port}:${cfg.litellm.address}:${toString cfg.litellm.forwardPort}";
+      AGENT_GVISOR_LOOPBACK_FORWARD = "${toString cfg.litellm.port}:${cfg.litellm.address}:${toString cfg.litellm.forwardPort}";
     }
     // lib.optionalAttrs (cfg.defaultCommand != null) {
-      AGENT_SANDBOX_DEFAULT_COMMAND = cfg.defaultCommand;
+      AGENT_GVISOR_DEFAULT_COMMAND = cfg.defaultCommand;
     };
 
   withSessionEnv =
@@ -149,8 +149,8 @@ in
 
     image = mkOption {
       type = types.nullOr types.package;
-      default = pkgs.agent-sandbox-image;
-      defaultText = literalExpression "pkgs.agent-sandbox-image";
+      default = pkgs.agent-gvisor-image;
+      defaultText = literalExpression "pkgs.agent-gvisor-image";
       description = ''
         Nix-built OCI image used as sandbox base. Set to `null` to manage
         images entirely outside this module (then no

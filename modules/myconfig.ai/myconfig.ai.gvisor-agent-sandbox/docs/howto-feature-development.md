@@ -17,7 +17,7 @@ agent-gvisor start \
   --name fix-parser \
   --repo ~/src/myconfig \
   --base main \
-  --env-file ~/.config/agent-sandbox/litellm.env \
+  --env-file ~/.config/agent-gvisor/litellm.env \
   --env OPENAI_API_KEY="$OPENAI_API_KEY" \
   -- pi "Refactor the parser and commit the result"
 ```
@@ -31,8 +31,8 @@ What happens:
    loopback LiteLLM URLs in those files are rewritten to the sandbox-reachable
    bridge endpoint (`http://192.168.84.1:4000`).
 3. A bare pool is created (or reused) at
-   `~/.local/state/agent-sandbox/pools/<repo-id>.git`, a worktree is added at
-   `~/.local/state/agent-sandbox/worktrees/<repo-id>/fix-parser` on branch
+   `~/.local/state/agent-gvisor/pools/<repo-id>.git`, a worktree is added at
+   `~/.local/state/agent-gvisor/worktrees/<repo-id>/fix-parser` on branch
    `agent/fix-parser`, and the container starts.
 4. `pi` runs as the default command (it was baked into the image because
    `myconfig.ai.pi-coding-agent.enable = true` on the host). Omit the trailing
