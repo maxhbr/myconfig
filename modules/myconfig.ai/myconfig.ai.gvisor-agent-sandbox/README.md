@@ -1,7 +1,7 @@
 # myconfig.ai.gvisor-agent-sandbox
 
 Rootless Podman + gVisor (`runsc`) sandboxes for coding agents, providing the
-`agent-session` session manager and a Nix-built sandbox image.
+`agent-gvisor` session manager and a Nix-built sandbox image.
 
 ## Origin
 
@@ -24,7 +24,9 @@ git subtree pull --prefix=modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox \
 
 Expect conflicts in the files touched during integration (see below), notably
 `README.md` (upstream's version now lives at `docs/upstream-README.md`) and
-`bin/agent-session` (locally patched `start`).
+`bin/agent-session` (locally patched `start`, and renamed to
+`bin/agent-gvisor` — see *Renamed* below, so a pull re-adds the upstream path
+and its content has to be merged into the renamed file by hand).
 
 ## What changed during integration
 
@@ -45,11 +47,31 @@ Moved:
 - `README.md` → `docs/upstream-README.md` (verbatim upstream documentation:
   usage of `agent-session`, image contents, isolation boundaries,
   troubleshooting). Its "install as a flake input" section does not apply
-  here.
+  here. It is deliberately **not** touched by the rename below: its value is
+  being a faithful snapshot of upstream at the imported commit, and rewriting
+  names in it would have to be re-applied on every `git subtree pull` instead
+  of just taking upstream's side.
+
+Renamed (the upstream names are generic enough to collide with the other
+agent-sandbox tiers in `modules/myconfig.ai/`; the new ones say which tier
+they are):
+
+- `agent-session` → `agent-gvisor` (`bin/agent-session` →
+  `bin/agent-gvisor`, `nix/agent-session.nix` → `nix/agent-gvisor.nix`,
+  overlay attribute `agent-session` → `agent-gvisor`, module wrapper
+  `agent-session-configured` → `agent-gvisor-configured`).
+- `agent-sandbox-load-image` → `agent-gvisor-load-image` (overlay attribute
+  and binary; the file `nix/load-image.nix` keeps its name).
+
+Not renamed, on purpose: the `AGENT_SANDBOX_*` environment variables, the
+`agent-sandbox-image` overlay attribute, `/bin/agent-sandbox-init` and the
+state directory `~/.local/state/agent-sandbox`. Those name the *sandbox*, not
+the CLI, are shared with the image and its entrypoint, and renaming the state
+directory would orphan existing sessions.
 
 Patched:
 
-- `bin/agent-session` — `start` no longer dies outright when a session of
+- `bin/agent-gvisor` (upstream `bin/agent-session`) — `start` no longer dies outright when a session of
   the same name exists. With the new `start --force` it destroys the old
   session (including its branch) unattended; otherwise, on a terminal, it
   asks `session NAME already exists; destroy it and delete branch BRANCH?
@@ -82,13 +104,13 @@ Patched:
   `incomplete`, and every other command explains it instead of claiming the
   name is unknown.
 
-- `nix/load-image.nix` — `agent-sandbox-load-image` no longer decides by tag
+- `nix/load-image.nix` — `agent-gvisor-load-image` no longer decides by tag
   alone. See *Image freshness check* below.
 
 Kept unchanged in substance (only nixfmt-rfc-style reformatting):
 
-- `nix/overlay.nix`, `nix/agent-session.nix`, `nix/agent-image.nix` — the
-  package definitions.
+- `nix/overlay.nix`, `nix/agent-gvisor.nix` (upstream `nix/agent-session.nix`),
+  `nix/agent-image.nix` — the package definitions.
 
 ## Usage in this repo
 
@@ -109,9 +131,9 @@ host-side chat front-ends `aichat` / `llm` are deliberately excluded.
 Whenever at least one of those agents is enabled, `pkgs.herdr` (the terminal
 agent multiplexer) is added too — the same condition `../programs.herdr.nix`
 uses on the host — and becomes the session's default command via
-`defaultCommand`. A bare `agent-session start --name x --repo …` therefore
+`defaultCommand`. A bare `agent-gvisor start --name x --repo …` therefore
 drops you into `herdr` rather than a plain shell; `-- COMMAND` still wins, and
-`agent-session shell` always gives a shell. Its host configuration is seeded
+`agent-gvisor shell` always gives a shell. Its host configuration is seeded
 via `.config/herdr` in `home.seedPaths`. Set `defaultCommand = null` for the
 upstream `/bin/bash` behaviour, or to any command line (word-split, e.g.
 `"herdr --flag"`).
@@ -125,11 +147,11 @@ myconfig.ai.gvisor-agent-sandbox.extraImagePackages = [ pkgs.claude-code ];
 When enabled the module
 
 - bakes the enabled agent CLIs into the image (see above),
-- adds `nix/overlay.nix` to `nixpkgs.overlays`, providing `agent-session`,
-  `agent-sandbox-image` and `agent-sandbox-load-image`,
+- adds `nix/overlay.nix` to `nixpkgs.overlays`, providing `agent-gvisor`,
+  `agent-sandbox-image` and `agent-gvisor-load-image`,
 - enables rootless Podman and registers `${pkgs.gvisor}/bin/runsc` as the
   `runsc` OCI runtime in `containers.conf`,
-- installs `agent-session`, `agent-sandbox-load-image` and `gvisor` into the
+- installs `agent-gvisor`, `agent-gvisor-load-image` and `gvisor` into the
   user's `home.packages`,
 - grants subordinate UID/GID ranges (`autoSubUidGidRange`) to
   `myconfig.ai.gvisor-agent-sandbox.users` (default: `myconfig.user`).
@@ -148,7 +170,7 @@ from, in order:
 So the agent finds its own skills, prompts and settings inside the sandbox,
 and a dotfile change needs no image rebuild.
 
-Baking the dotfiles into the *image* would not work: `agent-session` bind
+Baking the dotfiles into the *image* would not work: `agent-gvisor` bind
 mounts the per-session home over `/home/agent`, which masks whatever the
 image carried there (upstream creates the XDG dirs host-side for exactly that
 reason).
@@ -205,8 +227,8 @@ runs **inside** the sandbox: `/bin/agent-sandbox-init` (baked into the image,
 see `nix/agent-sandbox-init.sh`) starts one `socat` per rule in
 `AGENT_SANDBOX_LOOPBACK_FORWARD` (`LPORT:RHOST:RPORT`, baked by the module as
 `4000:192.168.84.1:14000`), waits for the listener, then `exec`s the payload —
-which therefore keeps PID 1, the TTY and its signals. `agent-session shell`
-and `agent-session logs` attach to the same container and share its network
+which therefore keeps PID 1, the TTY and its signals. `agent-gvisor shell`
+and `agent-gvisor logs` attach to the same container and share its network
 stack, so they see the relay too.
 
 Inside the sandbox must be where it runs: a listener that gVisor's netstack
@@ -217,7 +239,7 @@ already make (`192.168.84.1:14000`, port-scoped), it does not add reach.
 Switch it off with `myconfig.ai.gvisor-agent-sandbox.litellm.loopbackForward =
 false`; a slimmed image without `socat` degrades to a warning, not a failure.
 
-Verify the whole chain from inside a sandbox with `agent-session doctor`,
+Verify the whole chain from inside a sandbox with `agent-gvisor doctor`,
 which probes `AGENT_SANDBOX_MODEL_ENDPOINT` (baked from `litellm.endpoint`)
 through the same pasta network a session uses (see below) in a throwaway
 container and accepts any HTTP status as "reachable", and then probes each
@@ -249,7 +271,7 @@ The endpoint is reached with a **port-scoped forwarder** + pasta's
     `allowedTCPPorts`), so the forwarder is reachable only from the host and
     from sandboxes, never from external hosts.
 
-2.  The `agent-session` wrapper bakes `AGENT_SANDBOX_NETWORK` as a
+2.  The `agent-gvisor` wrapper bakes `AGENT_SANDBOX_NETWORK` as a
     `pasta:--map-guest-addr,<address>` podman network spec (see
     `./default.nix`). `--map-guest-addr` translates `<address>` to the *guest's
     assigned address on the host* — by default the host's global address (the
@@ -277,7 +299,7 @@ runsc's netstack, and `host.containers.internal` maps to the host global
 address, not the loopback. An earlier version used `--map-host-loopback`,
 which worked for reachability but was address-scoped (all loopback ports).
 
-The pasta options are baked into the `agent-session` wrapper as
+The pasta options are baked into the `agent-gvisor` wrapper as
 `AGENT_SANDBOX_NETWORK` (see `./default.nix`): a
 `pasta:--map-guest-addr,<address>` podman network spec. Podman's default
 `--no-map-gw` applies (no gateway→loopback mapping). The old `--map-gw` flag
@@ -285,8 +307,8 @@ The pasta options are baked into the `agent-session` wrapper as
 shows `--map-host-loopback`/`--map-guest-addr` set their config fields
 directly, and `--no-map-gw` only fills in the *default* (gateway) mapping
 when those fields are still unspecified — an explicit mapping is never
-overridden. `agent-session start` uses `AGENT_SANDBOX_NETWORK` as the default
-`--network`, and `agent-session doctor` probes the endpoint through the same
+overridden. `agent-gvisor start` uses `AGENT_SANDBOX_NETWORK` as the default
+`--network`, and `agent-gvisor doctor` probes the endpoint through the same
 network, so the check exercises the real path. Override per session with
 `--network`, or `--network none` for an offline session.
 
@@ -309,12 +331,12 @@ Use it from a session (the generated env file carries only the base URL — no
 secret ends up in the Nix store or in the session state):
 
 ```bash
-agent-session start --name demo --repo ~/src/foo \
+agent-gvisor start --name demo --repo ~/src/foo \
   --env-file ~/.config/agent-sandbox/litellm.env \
   --env OPENAI_API_KEY="$OPENAI_API_KEY" \
   -- pi
 
-agent-session shell demo -c 'curl -s "$OPENAI_BASE_URL/models"'
+agent-gvisor shell demo -c 'curl -s "$OPENAI_BASE_URL/models"'
 ```
 
 Networking is otherwise podman's rootless default (pasta, full outbound NAT);
@@ -323,8 +345,8 @@ pass `--network none` for an offline session.
 First run on a host:
 
 ```bash
-agent-sandbox-load-image   # load the Nix-built image into the rootless store
-agent-session doctor       # verify runtime, image and sandbox startup
+agent-gvisor-load-image   # load the Nix-built image into the rootless store
+agent-gvisor doctor       # verify runtime, image and sandbox startup
 ```
 
 ### Image freshness check
@@ -334,7 +356,7 @@ The image tag (`localhost/agent-dev:latest`) is reused by every rebuild, so
 loaded?". After adding an agent to `extraImagePackages`, or after any input
 change, the store still holds the previous build under the same tag.
 
-`agent-sandbox-load-image` therefore compares **image IDs**: the digest of the
+`agent-gvisor-load-image` therefore compares **image IDs**: the digest of the
 OCI config blob, which Podman reports as `.Id` and which a docker-archive
 records in `manifest.json` as its config file name. The expected digest is
 extracted from the tarball once **at build time** (derivation
@@ -342,9 +364,9 @@ extracted from the tarball once **at build time** (derivation
 decompress the multi-hundred-MB image.
 
 ```bash
-agent-sandbox-load-image           # load if absent or stale, else no-op
-agent-sandbox-load-image --force   # reload unconditionally
-agent-sandbox-load-image --test    # report only; exit 0 iff already current
+agent-gvisor-load-image           # load if absent or stale, else no-op
+agent-gvisor-load-image --force   # reload unconditionally
+agent-gvisor-load-image --test    # report only; exit 0 iff already current
 ```
 
 `--test` never touches the store and prints the full state, which makes it
@@ -373,6 +395,6 @@ the ISO and the impure microvm runners, and `nix flake check` would otherwise
 build the multi-hundred-MB OCI image on every check):
 
 ```bash
-./build-pkg-for-host.sh agent-session f13
+./build-pkg-for-host.sh agent-gvisor-configured f13
 nix build --impure --expr '(builtins.getFlake (toString ./.)).nixosConfigurations.f13.pkgs.agent-sandbox-image'
 ```

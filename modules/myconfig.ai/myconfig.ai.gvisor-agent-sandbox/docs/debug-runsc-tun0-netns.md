@@ -3,18 +3,18 @@
 ## Symptom
 
 On a host running OpenVPN (or WireGuard — anything creating a point-to-point
-`tun` device), every `agent-session start` aborts before the container runs:
+`tun` device), every `agent-gvisor start` aborts before the container runs:
 
 ```
-❱ agent-session start --name local-litellm-dashboard --repo (pwd)
+❱ agent-gvisor start --name local-litellm-dashboard --repo (pwd)
 …
-agent-session: warning: memory/cpu/pids limits not enforced, the runtime ignores cgroups
+agent-gvisor: warning: memory/cpu/pids limits not enforced, the runtime ignores cgroups
 starting container: setting up network: creating interfaces from net namespace "/proc/3928114/ns/net": removing link addresses for interface "tun0": removing address 10.16.23.62/32 from device "tun0": cannot assign requested address
 Error: `/nix/store/…-gvisor-20260406.0/bin/runsc --ignore-cgroups start ad39063ce817…` failed: exit status 128
 ```
 
 The container is never created; the session state is left behind and must be
-cleaned up with `agent-session destroy <name> --force`.
+cleaned up with `agent-gvisor destroy <name> --force`.
 
 ## Root cause
 
@@ -218,7 +218,7 @@ If a host ever needs to bypass the netstack anyway, the upstream script already
 supports it at runtime — no NixOS option is involved:
 
 ```bash
-AGENT_PODMAN_RUNTIME_FLAGS='ignore-cgroups network=host' agent-session start …
+AGENT_PODMAN_RUNTIME_FLAGS='ignore-cgroups network=host' agent-gvisor start …
 ```
 
 Be aware this carries every downside listed under
@@ -234,7 +234,7 @@ $ grep -c 'listing addresses for interface' <unpatched>/bin/.runsc-wrapped
 0
 ```
 
-End-to-end (`agent-session start` on the affected host) still needs to be run
+End-to-end (`agent-gvisor start` on the affected host) still needs to be run
 on `f13` itself; it could not be exercised from inside an agent sandbox, which
 has neither the container image nor a rootless Podman store.
 

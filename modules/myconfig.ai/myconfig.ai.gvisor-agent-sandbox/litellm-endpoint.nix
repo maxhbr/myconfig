@@ -48,7 +48,7 @@
 #      port so the `0.0.0.0` wildcard bind does not collide with LiteLLM's own
 #      `127.0.0.1:${port}` listener.
 #
-#   2. The `agent-session` wrapper bakes `AGENT_SANDBOX_NETWORK` as a
+#   2. The `agent-gvisor` wrapper bakes `AGENT_SANDBOX_NETWORK` as a
 #      `pasta:--map-guest-addr,<address>` podman network spec (in ./default.nix).
 #      `--map-guest-addr` translates <address> to the *guest's assigned address
 #      on the host* — by default the host's global address (the address on the
@@ -85,9 +85,9 @@
 # therefore changes nothing and removes one address→loopback exposure path.
 #
 # This module contributes the forwarder (the host-side port-scoped proxy), the
-# *address, forward-port and endpoint URL* used by `agent-session`, and the
-# `--env-file` for `agent-session start`. The actual pasta network spec is baked
-# into the `agent-session` wrapper in ./default.nix.
+# *address, forward-port and endpoint URL* used by `agent-gvisor`, and the
+# `--env-file` for `agent-gvisor start`. The actual pasta network spec is baked
+# into the `agent-gvisor` wrapper in ./default.nix.
 {
   config,
   lib,
@@ -196,7 +196,7 @@ in
         sandbox (pasta maps `address` to the host's global address, where the
         port-scoped forwarder listens on `forwardPort`). Read-only; also
         written to `~/.config/agent-sandbox/litellm.env` for
-        `agent-session start --env-file`.
+        `agent-gvisor start --env-file`.
       '';
     };
   };
@@ -249,7 +249,7 @@ in
       };
     };
 
-    # Ready-made `--env-file` for `agent-session start`. Contains no secret:
+    # Ready-made `--env-file` for `agent-gvisor start`. Contains no secret:
     # the API key stays out of the Nix store and out of the session state.
     home-manager.sharedModules = [
       {

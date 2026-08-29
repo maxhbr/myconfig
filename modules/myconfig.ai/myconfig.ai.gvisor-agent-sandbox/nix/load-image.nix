@@ -38,7 +38,7 @@ let
       '';
 in
 writeShellApplication {
-  name = "agent-sandbox-load-image";
+  name = "agent-gvisor-load-image";
 
   runtimeInputs = [
     coreutils
@@ -52,7 +52,7 @@ writeShellApplication {
 
     usage() {
       cat <<EOF
-    Usage: agent-sandbox-load-image [--force|--test|--help]
+    Usage: agent-gvisor-load-image [--force|--test|--help]
 
     Loads the Nix-built agent sandbox image into the caller's Podman store.
     Without options it loads the image when it is missing or when the loaded
@@ -137,7 +137,7 @@ writeShellApplication {
 
   meta = {
     description = "Load the Nix-built agent sandbox image into Podman";
-    mainProgram = "agent-sandbox-load-image";
+    mainProgram = "agent-gvisor-load-image";
     platforms = lib.platforms.linux;
   };
 }

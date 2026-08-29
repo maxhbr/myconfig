@@ -335,7 +335,7 @@ When in doubt, compose: run `jailed-pi` *inside* an `agent-tmux` session.
 ## Related
 
 A fifth, container-based tier — rootless Podman with the **gVisor** runtime
-(`agent-session`) — is vendored under
+(`agent-gvisor`) — is vendored under
 [`../myconfig.ai.gvisor-agent-sandbox/`](../myconfig.ai.gvisor-agent-sandbox/)
 and enabled per host (`myconfig.ai.gvisor-agent-sandbox.enable`). It sits
 between tiers 1 and 2: a user-space kernel (`runsc`) rather than namespaces,

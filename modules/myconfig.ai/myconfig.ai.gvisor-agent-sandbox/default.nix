@@ -72,16 +72,16 @@ let
       cfg.image.override { extraPackages = cfg.extraImagePackages; };
 
   # Thread the effective image through both helpers, so overriding the image
-  # also changes the default image reference baked into `agent-session`.
+  # also changes the default image reference baked into `agent-gvisor`.
   withImage = pkg: if image == null then pkg else pkg.override { agent-sandbox-image = image; };
 
-  # Host-configured defaults baked into `agent-session`:
+  # Host-configured defaults baked into `agent-gvisor`:
   #   * the home-seed allowlist and endpoint-rewrite rules. The seed SOURCE is
   #     resolved by the script at runtime (the activated home-manager
   #     generation of the calling user), so a dotfile change needs no rebuild
   #     here; only *which* paths are copied, and how host-only URLs are
   #     rewritten, is a build-time decision.
-  #   * the model endpoint, so `agent-session doctor` can probe it from INSIDE
+  #   * the model endpoint, so `agent-gvisor doctor` can probe it from INSIDE
   #     a sandbox — the only place where the answer means anything — and the
   #     pasta network spec that makes that endpoint reachable (see
   #     ./litellm-endpoint.nix).
@@ -120,15 +120,15 @@ let
     if sessionEnv == { } then
       pkg
     else
-      pkgs.runCommand "agent-session-configured"
+      pkgs.runCommand "agent-gvisor-configured"
         {
           nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
           meta = (pkg.meta or { }) // {
-            mainProgram = "agent-session";
+            mainProgram = "agent-gvisor";
           };
         }
         ''
-          makeWrapper ${pkg}/bin/agent-session $out/bin/agent-session \
+          makeWrapper ${pkg}/bin/agent-gvisor $out/bin/agent-gvisor \
             ${lib.concatStringsSep " \\\n            " (
               lib.mapAttrsToList (n: v: "--set-default ${n} ${lib.escapeShellArg v}") sessionEnv
             )}
@@ -142,9 +142,9 @@ in
 
     package = mkOption {
       type = types.package;
-      default = pkgs.agent-session;
-      defaultText = literalExpression "pkgs.agent-session";
-      description = "The `agent-session` session manager package.";
+      default = pkgs.agent-gvisor;
+      defaultText = literalExpression "pkgs.agent-gvisor";
+      description = "The `agent-gvisor` session manager package.";
     };
 
     image = mkOption {
@@ -154,7 +154,7 @@ in
       description = ''
         Nix-built OCI image used as sandbox base. Set to `null` to manage
         images entirely outside this module (then no
-        `agent-sandbox-load-image` is installed either).
+        `agent-gvisor-load-image` is installed either).
       '';
     };
 
@@ -193,7 +193,7 @@ in
           agent finds its own configuration (skills, prompts, settings) inside
           the sandbox.
 
-          The generation is resolved by `agent-session` at RUNTIME (via
+          The generation is resolved by `agent-gvisor` at RUNTIME (via
           `~/.local/state/home-manager/gcroots/current-home/home-files` and
           the legacy profile locations), not baked into the image: the session
           home is bind-mounted over `/home/agent`, so anything the image
@@ -262,14 +262,14 @@ in
       defaultText = literalExpression ''"herdr" when any coding agent is enabled, else null'';
       example = "/bin/bash";
       description = ''
-        Command `agent-session start` / `run` execute when no `-- COMMAND` is
+        Command `agent-gvisor start` / `run` execute when no `-- COMMAND` is
         given, i.e. the session's entrypoint. Word-split, so `"herdr --flag"`
         works. `null` keeps the upstream default (`/bin/bash`).
 
         Defaults to `herdr`, the agent multiplexer, whenever the image carries
-        at least one coding agent — so a bare `agent-session start` drops you
+        at least one coding agent — so a bare `agent-gvisor start` drops you
         into the multiplexer instead of a plain shell.
-        `agent-session shell` is unaffected and always gives a shell.
+        `agent-gvisor shell` is unaffected and always gives a shell.
       '';
     };
 
@@ -307,7 +307,7 @@ in
 
     virtualisation.podman.enable = true;
 
-    # Register gVisor as an alternate OCI runtime. `agent-session` selects it
+    # Register gVisor as an alternate OCI runtime. `agent-gvisor` selects it
     # explicitly, so ordinary Podman containers keep Podman's default runtime.
     virtualisation.containers.containersConf.settings.engine.runtimes.${cfg.runtime} = [
       "${pkgs.gvisor}/bin/runsc"
@@ -319,7 +319,7 @@ in
           (withSessionEnv (withImage cfg.package))
           pkgs.gvisor
         ]
-        ++ lib.optional (image != null) (withImage pkgs.agent-sandbox-load-image);
+        ++ lib.optional (image != null) (withImage pkgs.agent-gvisor-load-image);
       }
     ];
 

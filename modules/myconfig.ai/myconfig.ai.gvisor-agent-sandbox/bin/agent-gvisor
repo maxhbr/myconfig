@@ -29,23 +29,23 @@ fi
 # image built from this flake. AGENT_SANDBOX_IMAGE overrides it at runtime.
 DEFAULT_IMAGE="${AGENT_SANDBOX_IMAGE:-${AGENT_SANDBOX_DEFAULT_IMAGE:-localhost/agent-dev:latest}}"
 
-log() { printf 'agent-session: %s\n' "$*" >&2; }
+log() { printf 'agent-gvisor: %s\n' "$*" >&2; }
 die() { log "error: $*"; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing command: $1"; }
 
 usage() {
   cat <<'USAGE'
 Usage:
-  agent-session start --name NAME --repo PATH [options] -- [COMMAND...]
-  agent-session list
-  agent-session status NAME
-  agent-session run NAME [--detach] -- [COMMAND...]
-  agent-session shell NAME [COMMAND...]
-  agent-session logs NAME [PODMAN-LOGS-ARGS...]
-  agent-session stop NAME
-  agent-session merge NAME [--no-ff] [--ff] [--squash] [--repo PATH] [GIT-MERGE-ARGS...]
-  agent-session destroy NAME [--force] [--delete-branch]
-  agent-session doctor
+  agent-gvisor start --name NAME --repo PATH [options] -- [COMMAND...]
+  agent-gvisor list
+  agent-gvisor status NAME
+  agent-gvisor run NAME [--detach] -- [COMMAND...]
+  agent-gvisor shell NAME [COMMAND...]
+  agent-gvisor logs NAME [PODMAN-LOGS-ARGS...]
+  agent-gvisor stop NAME
+  agent-gvisor merge NAME [--no-ff] [--ff] [--squash] [--repo PATH] [GIT-MERGE-ARGS...]
+  agent-gvisor destroy NAME [--force] [--delete-branch]
+  agent-gvisor doctor
 
 start options:
   --base REF                  Base commit/ref in the host repository (default: HEAD)
@@ -110,7 +110,7 @@ environment:
   AGENT_SANDBOX_DEFAULT_COMMAND Command run by `start`/`run` when no COMMAND is
                                 given (default: /bin/bash)
 
-Run `agent-session doctor` to verify runtime, image and sandbox startup.
+Run `agent-gvisor doctor` to verify runtime, image and sandbox startup.
 
 The host checkout is never bind-mounted. It seeds a disposable bare Git pool.
 The worktree and its Git pool are mounted at identical absolute paths because
@@ -188,7 +188,7 @@ check_image() {
   podman image exists "$image" && return
   die "$(
     printf 'container image %q is not in the local Podman store.\n' "$image"
-    printf 'Build and load it with: agent-sandbox-load-image\n'
+    printf 'Build and load it with: agent-gvisor-load-image\n'
     printf '(or: nix run .#load-image), or pass --image with another reference.'
   )"
 }
@@ -299,7 +299,7 @@ run_container() {
   [[ -z "${AGENT_SANDBOX_LOOPBACK_FORWARD-}" ]] || cmd+=(/bin/agent-sandbox-init)
   if (( $# == 0 )); then
     # No COMMAND given: run the configured default. Word-split so a default
-    # like "herdr --flag" works; `agent-session shell` is unaffected and
+    # like "herdr --flag" works; `agent-gvisor shell` is unaffected and
     # always gives a plain shell.
     local -a default_cmd=()
     read -r -a default_cmd <<<"${AGENT_SANDBOX_DEFAULT_COMMAND:-/bin/bash}"
@@ -441,7 +441,7 @@ reset_partial_session() {
 confirm_destroy_existing() {
   local session=$1 old_branch=$2 reply
   [[ -t 0 && -t 2 ]] || return 1
-  printf 'agent-session: session %s already exists; destroy it and delete branch %s? [y/N] ' \
+  printf 'agent-gvisor: session %s already exists; destroy it and delete branch %s? [y/N] ' \
     "$session" "$old_branch" >&2
   read -r reply || return 1
   [[ "$reply" == [Yy] || "$reply" == [Yy][Ee][Ss] ]]
@@ -518,7 +518,7 @@ cmd_start() {
       log "--force: destroying existing session $name and deleting branch $old_branch"
     else
       confirm_destroy_existing "$name" "$old_branch" \
-        || die "session already exists: $name (pass --force, or remove it with 'agent-session destroy $name --force --delete-branch')"
+        || die "session already exists: $name (pass --force, or remove it with 'agent-gvisor destroy $name --force --delete-branch')"
     fi
     (cmd_destroy "$name" --force --delete-branch) \
       || die "could not destroy the existing session: $name"
@@ -585,8 +585,8 @@ cmd_start() {
   flock -u 9
   log "created worktree $worktree on branch $branch"
   log "if the container fails to start the session is kept; retry with" \
-      "'agent-session run $name', diagnose with 'agent-session doctor', or" \
-      "clean up with 'agent-session destroy $name --force'"
+      "'agent-gvisor run $name', diagnose with 'agent-gvisor doctor', or" \
+      "clean up with 'agent-gvisor destroy $name --force'"
   run_container "$name" "$detach" "$@"
 }
 
@@ -878,7 +878,7 @@ cmd_doctor() {
           printf 'warning: the relay for 127.0.0.1:%s does not answer.\n' "$lport"
           printf 'It is started by /bin/agent-sandbox-init inside the sandbox and\n'
           printf 'needs socat in the image; check that the image is current\n'
-          printf '(agent-sandbox-load-image --test) and that the target of the rule\n'
+          printf '(agent-gvisor-load-image --test) and that the target of the rule\n'
           printf '%q is reachable from a sandbox (see the model endpoint check above).' "$rule"
         )"
       fi

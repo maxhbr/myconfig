@@ -11,7 +11,7 @@
   util-linux,
   gvisor,
   agent-sandbox-image,
-  # Default image reference used by `agent-session start --image`.
+  # Default image reference used by `agent-gvisor start --image`.
   defaultImage ? "${agent-sandbox-image.imageName}:${agent-sandbox-image.imageTag}",
   # Default Podman `--runtime` value. An absolute path works without
   # registering a named runtime in containers.conf.
@@ -19,7 +19,7 @@
 }:
 
 writeShellApplication {
-  name = "agent-session";
+  name = "agent-gvisor";
 
   runtimeInputs = [
     bashInteractive
@@ -37,11 +37,11 @@ writeShellApplication {
     AGENT_SANDBOX_DEFAULT_RUNTIME = defaultRuntime;
   };
 
-  text = builtins.readFile ../bin/agent-session;
+  text = builtins.readFile ../bin/agent-gvisor;
 
   meta = {
     description = "Manage rootless Podman + gVisor coding-agent worktree sessions";
-    mainProgram = "agent-session";
+    mainProgram = "agent-gvisor";
     platforms = lib.platforms.linux;
   };
 }

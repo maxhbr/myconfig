@@ -3,17 +3,17 @@
 This walks through one complete session — start a sandboxed worktree, let an
 agent do the work, bring the result back to the host checkout, then clean up.
 It assumes the module is enabled on the host and the image is loaded (see
-`../README.md` for first-run setup; verify with `agent-session doctor`).
+`../README.md` for first-run setup; verify with `agent-gvisor doctor`).
 
 ## 1. Start a session (creates the branch)
 
-`agent-session start` is the single entry point. It never mounts the host
+`agent-gvisor start` is the single entry point. It never mounts the host
 checkout. Instead it seeds a **disposable bare Git pool** from the host repo's
 committed refs and checks out a worktree from that pool on a fresh branch,
 defaulting to `agent/<name>`.
 
 ```bash
-agent-session start \
+agent-gvisor start \
   --name fix-parser \
   --repo ~/src/myconfig \
   --base main \
@@ -41,7 +41,7 @@ What happens:
 
 If a session named `fix-parser` already exists, an interactive terminal asks
 whether to destroy it (and its branch); pass `--force` to do so unattended,
-or run `agent-session destroy fix-parser --force --delete-branch` first.
+or run `agent-gvisor destroy fix-parser --force --delete-branch` first.
 
 ## 2. Interact with the agent
 
@@ -51,24 +51,24 @@ in the disposable pool. The host checkout is untouched.
 Inspect progress from the host:
 
 ```bash
-agent-session list                       # all sessions, status + branch
-agent-session status fix-parser          # pool/worktree/container + git status
-agent-session logs fix-parser --follow   # container stdout/stderr
+agent-gvisor list                       # all sessions, status + branch
+agent-gvisor status fix-parser          # pool/worktree/container + git status
+agent-gvisor logs fix-parser --follow   # container stdout/stderr
 ```
 
 Drop into the running sandbox for an interactive look (the worktree is mounted
 at the same absolute path inside as outside, so the agent's paths line up):
 
 ```bash
-agent-session shell fix-parser           # a shell in the container
-agent-session shell fix-parser -- pi "now add tests"
+agent-gvisor shell fix-parser           # a shell in the container
+agent-gvisor shell fix-parser -- pi "now add tests"
 ```
 
 Run another command against the same session (it refuses if the container is
 already running unless you `stop` it first):
 
 ```bash
-agent-session run fix-parser --detach -- pi "fix the failing test"
+agent-gvisor run fix-parser --detach -- pi "fix the failing test"
 ```
 
 The agent's commits live only in the pool — they are **not** in the host repo
@@ -89,7 +89,7 @@ Switch to the target branch (e.g. `main`), make sure the tree is clean,
 then:
 
 ```bash
-agent-session merge fix-parser
+agent-gvisor merge fix-parser
 ```
 
 It defaults to `--no-ff` (a merge commit) so the feature work stays
@@ -104,8 +104,8 @@ refuses a **dirty** worktree unless `--force` is given, and preserves the
 branch by default — add `--delete-branch` to remove it from the pool too:
 
 ```bash
-agent-session stop fix-parser                            # stop the container
-agent-session destroy fix-parser --delete-branch         # worktree + branch
+agent-gvisor stop fix-parser                            # stop the container
+agent-gvisor destroy fix-parser --delete-branch         # worktree + branch
 ```
 
 `--force --delete-branch` skips the dirty-check and removes everything. The
@@ -116,12 +116,12 @@ stays until its last session is destroyed.
 
 | Step | Command |
 | --- | --- |
-| Start / create branch | `agent-session start --name N --repo R --base main -- pi …` |
-| List / status | `agent-session list` · `agent-session status N` |
-| Watch output | `agent-session logs N --follow` |
-| Enter sandbox | `agent-session shell N` |
-| Run more work | `agent-session run N --detach -- pi …` |
-| Fetch result | `agent-session merge N` (into the current branch) |
-| Stop container | `agent-session stop N` |
-| Destroy | `agent-session destroy N --delete-branch` |
-| Verify host setup | `agent-session doctor` |
+| Start / create branch | `agent-gvisor start --name N --repo R --base main -- pi …` |
+| List / status | `agent-gvisor list` · `agent-gvisor status N` |
+| Watch output | `agent-gvisor logs N --follow` |
+| Enter sandbox | `agent-gvisor shell N` |
+| Run more work | `agent-gvisor run N --detach -- pi …` |
+| Fetch result | `agent-gvisor merge N` (into the current branch) |
+| Stop container | `agent-gvisor stop N` |
+| Destroy | `agent-gvisor destroy N --delete-branch` |
+| Verify host setup | `agent-gvisor doctor` |
