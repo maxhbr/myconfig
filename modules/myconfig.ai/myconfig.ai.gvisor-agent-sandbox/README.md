@@ -73,6 +73,14 @@ Patched:
   stat …`. Now a dangling top-level seed path is skipped with a warning, a
   partially copyable one is copied as far as possible and reported, and the
   summary line counts how many paths came over incomplete.
+  Half-created sessions are recoverable: `meta` is written *last*, so a start
+  that dies before that (aborted seed, `^C`, failed `worktree add`) used to
+  leave a directory that `start` counted as "already exists" while `destroy`
+  rejected it as "unknown session" — unremovable without `rm -rf`. Such debris
+  is now cleared by the next `start` (with its leftover worktree, unless that
+  has uncommitted changes; the branch is never touched), `list` shows it as
+  `incomplete`, and every other command explains it instead of claiming the
+  name is unknown.
 
 - `nix/load-image.nix` — `agent-sandbox-load-image` no longer decides by tag
   alone. See *Image freshness check* below.
