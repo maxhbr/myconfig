@@ -223,28 +223,42 @@ in
     ];
 
     # Port-scoped forwarder: 0.0.0.0:${forwardPort} → 127.0.0.1:${port}.
-    # Socket-activated (one service instance per connection) so it costs nothing
-    # when idle. The 0.0.0.0 bind is safe because the NixOS firewall drops
-    # ${forwardPort} on non-loopback interfaces (not in allowedTCPPorts).
+    # Socket-activated, so it costs nothing until a sandbox connects, and it
+    # exits again after an idle period. The 0.0.0.0 bind is safe because the
+    # NixOS firewall drops ${forwardPort} on non-loopback interfaces (it is not
+    # in allowedTCPPorts).
+    #
+    # `Accept` MUST stay at its default (`no`): systemd-socket-proxyd inherits
+    # the LISTENING socket and accepts connections itself (systemd-socket-proxyd(8):
+    # "support for socket activation with Accept=no"). With `Accept = true`
+    # systemd passes an already-accepted CONNECTION socket instead, the proxy
+    # fails on it and exits, and the client sees the TCP handshake succeed and
+    # then an immediate reset — which is exactly how this looked from inside a
+    # sandbox: `curl: (56) Recv failure: Connection reset by peer`, and through
+    # the in-sandbox relay `socat[7] E read(5, …): Connection reset by peer`.
     systemd.sockets.agent-litellm-forward = {
       description = "Socket for the agent LiteLLM port-scoped forwarder";
       wantedBy = [ "sockets.target" ];
-      socketConfig = {
-        ListenStream = "0.0.0.0:${forwardPort}";
-        Accept = true;
-      };
+      socketConfig.ListenStream = "0.0.0.0:${forwardPort}";
     };
 
-    systemd.services."agent-litellm-forward@" = {
-      description = "Agent LiteLLM port-scoped forwarder (per-connection)";
+    systemd.services.agent-litellm-forward = {
+      description = "Agent LiteLLM port-scoped forwarder (0.0.0.0:${forwardPort} -> 127.0.0.1:${port})";
+      requires = [
+        "agent-litellm-forward.socket"
+        "litellm.service"
+      ];
+      after = [
+        "agent-litellm-forward.socket"
+        "litellm.service"
+      ];
       serviceConfig = {
-        ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd 127.0.0.1:${port}";
-        # Per-connection service (Accept=yes)
-        RefuseManualStart = true;
+        Type = "notify";
+        ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd --exit-idle-time=5min 127.0.0.1:${port}";
         ProtectSystem = "strict";
         PrivateTmp = true;
         PrivateDevices = true;
-        # Need host network to reach the loopback-only LiteLLM proxy.
+        # Needs the host network namespace to reach the loopback-only proxy.
         PrivateNetwork = false;
       };
     };

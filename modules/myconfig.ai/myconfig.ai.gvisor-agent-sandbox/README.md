@@ -271,6 +271,14 @@ The endpoint is reached with a **port-scoped forwarder** + pasta's
     `allowedTCPPorts`), so the forwarder is reachable only from the host and
     from sandboxes, never from external hosts.
 
+    The socket unit must keep `Accept=no` (the default):
+    `systemd-socket-proxyd` inherits the *listening* socket and accepts
+    connections itself. With `Accept=yes` systemd passes an already-accepted
+    *connection* socket, the proxy fails on it and exits, and every client sees
+    the handshake succeed followed by an immediate reset (`curl: (56) Recv
+    failure: Connection reset by peer`) — a failure mode that looks exactly
+    like a networking problem but is not one.
+
 2.  The `agent-gvisor` wrapper bakes `AGENT_GVISOR_NETWORK` as a
     `pasta:--map-guest-addr,<address>` podman network spec (see
     `./default.nix`). `--map-guest-addr` translates `<address>` to the *guest's
