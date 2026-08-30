@@ -1,0 +1,92 @@
+Usage:
+  agent-gvisor [start] NAME [options] -- [COMMAND...]
+  agent-gvisor start --name NAME --repo PATH [options] -- [COMMAND...]
+  agent-gvisor list
+  agent-gvisor status NAME
+  agent-gvisor run NAME [--detach] -- [COMMAND...]
+  agent-gvisor shell NAME [COMMAND...]
+  agent-gvisor logs NAME [PODMAN-LOGS-ARGS...]
+  agent-gvisor stop NAME
+  agent-gvisor merge NAME [--no-ff] [--ff] [--squash] [--repo PATH] [GIT-MERGE-ARGS...]
+  agent-gvisor destroy NAME [--force] [--delete-branch]
+  agent-gvisor doctor
+
+start options:
+  NAME                        Positional session name, an alternative to --name.
+                              A bare `agent-gvisor NAME` (without any action
+                              word) is shorthand for `agent-gvisor start NAME`.
+  --repo PATH                 Host repository (default: the current directory)
+  --base REF                  Base commit/ref in the host repository (default: HEAD)
+  --branch BRANCH             Worktree branch (default: agent/gvisor/NAME)
+  --image IMAGE               Podman image (default: $AGENT_GVISOR_DEFAULT_IMAGE)
+  --config HOST:DEST[:ro|rw]  Mount an agent configuration path; repeatable
+  --mount HOST:DEST[:ro|rw]   Add another bind mount; repeatable
+  --env KEY=VALUE             Pass an environment variable; repeatable
+  --env-file PATH             Pass a Podman environment file
+  --network MODE              Podman network mode; omit for the rootless
+                              default ($AGENT_GVISOR_NETWORK if set)
+  --detach                    Run detached rather than interactively
+  --memory LIMIT              Memory limit (default: 8g)
+  --cpus NUMBER               CPU limit (default: 4)
+  --pids-limit NUMBER         Process limit (default: 2048)
+  --seccomp-unconfined        Disable the inner OCI seccomp profile
+  --force                     Destroy an existing session of the same name,
+                              including its branch, instead of failing. Without
+                              it an interactive terminal is asked to confirm,
+                              and a non-interactive run fails.
+  --home-seed PATH            Seed /home/agent from this directory instead of
+                              the activated home-manager generation
+  --no-home-seed              Start with an empty /home/agent
+
+merge options:
+  --repo PATH                 Original host repo to merge into (default: the
+                              repository the session was started from)
+  --no-ff                     Create a merge commit even if a fast-forward is
+                              possible (the default)
+  --ff                        Allow a fast-forward, creating no merge commit
+  --squash                    Produce a single squashed commit on the target
+                              branch (no merge commit, no merge ancestry)
+  --                          Pass any further flags verbatim to git merge
+                              (e.g. -- -m "merge feature work")
+
+environment:
+  AGENT_GVISOR_IMAGE            Override the default image
+  AGENT_GVISOR_STATE            Session registry directory (name -> session
+                                dirs); pools and session state live in
+                                <repo>_agent-gvisor/ next to each repository
+  AGENT_GVISOR_WORKTREES        Worktree root directory; empty (default) puts
+                                worktrees next to the repo, as
+                                <repo>_agent-gvisor/NAME
+  AGENT_GVISOR_PODMAN_RUNTIME   Runtime name or absolute path (default: runsc)
+  AGENT_GVISOR_PODMAN_CGROUP_MANAGER
+                                Podman cgroup manager (default: cgroupfs)
+  AGENT_GVISOR_PODMAN_RUNTIME_FLAGS
+                                Extra runsc flags, e.g. "ignore-cgroups"
+  AGENT_GVISOR_HOME_SEED        Directory to seed /home/agent from (default:
+                                the activated home-manager generation's
+                                home-files)
+  AGENT_GVISOR_HOME_SEED_PATHS  Space-separated relative paths copied from that
+                                directory; empty disables seeding
+  AGENT_GVISOR_HOME_SEED_REWRITE
+                                Space-separated OLD=NEW rules applied literally
+                                to the seeded files, to point host-only
+                                endpoints at sandbox-reachable ones
+  AGENT_GVISOR_MODEL_ENDPOINT   Model API base URL as seen from a sandbox;
+                                `doctor` probes it from inside one
+  AGENT_GVISOR_NETWORK          Default --network mode for sessions and for the
+                                `doctor` endpoint probe, e.g. a "pasta:..." spec
+                                mapping the model endpoint to the host loopback
+  AGENT_GVISOR_LOOPBACK_FORWARD
+                                Space-separated LPORT:RHOST:RPORT rules. Each is
+                                relayed INSIDE the sandbox from 127.0.0.1:LPORT
+                                to RHOST:RPORT, so configuration naming the host
+                                loopback (e.g. http://127.0.0.1:4000) works
+                                verbatim. Set up by /bin/agent-gvisor-init.
+  AGENT_GVISOR_DEFAULT_COMMAND  Command run by `start`/`run` when no COMMAND is
+                                given (default: /bin/bash)
+
+Run `agent-gvisor doctor` to verify runtime, image and sandbox startup.
+
+The host checkout is never bind-mounted. It seeds a disposable bare Git pool.
+The worktree and its Git pool are mounted at identical absolute paths because
+Git worktree administrative files contain absolute paths.

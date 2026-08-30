@@ -1,0 +1,21 @@
+# Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+[package]
+name = "agent-gvisor"
+version = "0.1.0"
+edition = "2021"
+description = "Manage rootless Podman + gVisor coding-agent worktree sessions"
+license = "MIT"
+
+# Zero dependencies by design: the CLI is small and stable, a hand-rolled
+# argument parser keeps `--help` byte-identical to the historical bash
+# heredoc, and `cargoLock` needs no `outputHashes`. geteuid/isatty/flock come
+# from libc via `extern "C"`, everything else is std. See docs/spec.md.
+
+[lib]
+name = "agent_gvisor"
+path = "src/lib.rs"
+
+[[bin]]
+name = "agent-gvisor"
+path = "src/main.rs"

@@ -336,7 +336,8 @@ per registry entry (alphabetical). Status via `podman container exists` +
 `inspect --format '{{.State.Status}}'` (`unknown` if inspect fails), `stopped`
 if absent. Incomplete entries (symlink without `meta`): status `incomplete`,
 branch `-`, worktree = the registry path. Pre-rewrite entries (real
-directory): status `incompatible (pre-rewrite layout)` (§ "Dropped").
+directory): status `incompatible (pre-rewrite layout)` (§ "Dropped"), with
+`-` for BRANCH and the registry path for WORKTREE (like `incomplete` rows).
 
 ## 10. The podman `run` argument vector
 
@@ -493,9 +494,34 @@ All old-layout compatibility from the bash CLI is gone. Concretely:
 6. The bash `${2:?}` "parameter null or not set" diagnostics for a missing
    flag value are replaced by `error: option requires a value: <flag>`
    (§2).
+7. The bash `${1:?session name required}` diagnostics for the subcommands
+   that take a positional NAME (`status`, `run`, `logs`, `shell`, `stop`,
+   `merge`, `destroy`) embed the bash line number and are not reproducible;
+   they become `error: session name required`.
 
 Everything else — subcommands, flags, env vars, state layout, podman argv,
 exit codes, message texts — is preserved. Sessions created by the CURRENT
 bash layout (registry symlink + repo-adjacent `__pools`/`__sessions`) remain
 fully loadable because repo-ids are path-based (stable across sessions) and
 `meta` keeps the shell-quoted format.
+
+## 15. Validation
+
+Two layers, both wired into `nix flake check` via `nix/checks.nix`:
+
+- `rust/tests/` — cargo integration tests (`tests/common/mod.rs` builds
+  isolated scenarios and installs the recording `git`/`podman` stubs from
+  `rust/tests/stubs/` into a PATH-prepended directory; stub behaviour is
+  switched by marker files, invocations are recorded NUL-separated):
+  `podman_argv.rs` (the exact `run` vector, pure + recorded),
+  `state_layout.rs` (registry/pools/sessions tree, `meta` bytes, `list`,
+  `status`, `destroy`), `error_paths.rs` (every fatal message verbatim),
+  `shellwords.rs` (bash-`%q` fixtures, reader, `split_ws`),
+  `home_seed.rs` (seeding, partial copies, rewrite rules, through `start`).
+- `tests/agent-gvisor-cli-harness.sh` — end-to-end CLI flows (`doctor`
+  happy/sad, a full session cycle, `list` rows, podman argv sanity) driving
+  the UNWRAPPED binary (the production wrapper's PATH would shadow the
+  stubs).
+
+TTY behaviour (§13) is deliberately not automated: there is no terminal in
+a build sandbox. The nix checks run on `x86_64-linux` only.
