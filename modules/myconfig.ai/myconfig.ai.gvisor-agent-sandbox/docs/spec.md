@@ -28,6 +28,8 @@ agent-gvisor shell NAME [COMMAND...]
 agent-gvisor logs NAME [PODMAN-LOGS-ARGS...]
 agent-gvisor stop NAME
 agent-gvisor merge NAME [--no-ff] [--ff] [--squash] [--repo PATH] [GIT-MERGE-ARGS...]
+agent-gvisor fetch NAME [--repo PATH]
+agent-gvisor push NAME [REMOTE] [--repo PATH]
 agent-gvisor destroy NAME [--force] [--delete-branch]
 agent-gvisor doctor
 ```
@@ -37,7 +39,7 @@ Dispatch (first argument):
 | first argument | action |
 | --- | --- |
 | `start` | `cmd_start` on the remaining arguments |
-| `list` `status` `run` `logs` `shell` `stop` `merge` `destroy` `doctor` | the matching subcommand |
+| `list` `status` `run` `logs` `shell` `stop` `merge` `fetch` `push` `destroy` `doctor` | the matching subcommand |
 | `-h`, `--help`, `help`, or no arguments at all | print `usage()` to stdout, exit 0 |
 | anything else not starting with `-` | **positional shorthand**: `cmd_start NAME <rest...>` |
 | anything starting with `-` | `error: unknown subcommand: <arg>`, exit 1 |
@@ -133,6 +135,8 @@ Resolved mounts are stored tab-separated in `__sessions/<name>/mounts.tsv`.
 - `stop NAME` — `podman <globals> stop --time 10 <container>` if the container
   exists, else logs `container already absent: <container>`.
 - `merge NAME [...]` — see §9.
+- `fetch NAME [--repo PATH]` — see §9.
+- `push NAME [REMOTE] [--repo PATH]` — see §9.
 - `destroy NAME [--force] [--delete-branch]` — see §9; any other argument:
   `error: unknown destroy option: <arg>`.
 - `doctor` — see §10.
@@ -332,12 +336,46 @@ session" inventory).
 4. `--no-ff` is the default; `--ff`/`--squash`/explicit git-merge args are
    passed through (args after `--` verbatim).
 5. fetch the session branch from the pool into `refs/heads/<branch>`
-   (`git fetch --no-tags <pool> +<branch>:refs/heads/<branch>`); failure:
+   (`git fetch --no-tags <pool> +<branch>:refs/heads/<branch>`; the shared
+   `try_fetch_branch_from_pool`, also used by `fetch` and `push`); failure:
    `error: fetch from pool failed; is the session pool still present?`
 6. `git merge <merge-args...> <branch>`; on success the temporary ref is
    deleted; on failure:
    `error: merge failed; resolve conflicts in <repo>, then delete the leftover ref with 'git -C "<repo>" branch -D <branch>'`
    (note the literal double quotes around the repo path).
+
+### `fetch`
+
+The `merge` step 5 without the merge: bring the session branch into the
+local `refs/heads/<branch>` of a repository, to inspect, diff or cherry-pick
+it without touching the checked-out branch.
+
+1. target repository: `--repo PATH` (realpath'd; the same `--repo: …`
+   errors as `merge`), else the Git working tree containing the current
+   directory (`git rev-parse --show-toplevel`); outside one:
+   `error: not a Git working tree: <cwd>`.
+2. the shared pool fetch (`merge` step 5); failure:
+   `error: fetch from pool failed; is the session pool still present?`
+3. log `fetching branch <branch> from pool <pool> into <repo>`, then
+   `fetched <branch> into <repo>; merge it with 'agent-gvisor merge <name>'`,
+   exit 0. Any other argument:
+   `error: unknown fetch option: <arg>`.
+
+### `push`
+
+Publish the session branch: the implicit `fetch` (the shared pool fetch,
+run first so the pushed ref is current), then `git push` from the target
+repository, where the remotes are configured.
+
+1. arguments like `fetch`, plus ONE optional positional REMOTE
+   (default `origin`); a second positional:
+   `error: push accepts at most one remote: <arg>`; an unknown flag:
+   `error: unknown push option: <arg>`.
+2. target repository: like `fetch` (the `--repo: …` errors, the
+   current-directory default).
+3. the shared pool fetch, then
+   `git -C <repo> push <remote> <branch>`; the exit code is git's own
+   (bash `set -e` parity — git's stderr passes through, no `die` prefix).
 
 ### `destroy`
 

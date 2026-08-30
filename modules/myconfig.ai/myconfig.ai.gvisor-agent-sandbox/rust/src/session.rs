@@ -1,8 +1,9 @@
 // Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
 //! The subcommand bodies (docs/spec.md §3, §9): `start`, `list`, `status`,
-//! `run`, `logs`, `shell`, `stop`, `merge`, `destroy`, plus the shared
-//! `run_container` orchestration and the incomplete-session recovery.
+//! `run`, `logs`, `shell`, `stop`, `merge`, `fetch`, `push`, `destroy`,
+//! plus the shared `run_container` orchestration and the incomplete-session
+//! recovery.
 //!
 //! External-command failure handling mirrors bash `set -e`: a failing
 //! `git`/`podman` step exits with the external command's code and its own
@@ -752,6 +753,73 @@ pub fn cmd_stop(env: &Env, name: &str) -> ! {
     std::process::exit(0);
 }
 
+/// Resolve the target repository of `merge`/`fetch`/`push` (docs/spec.md
+/// §9): `--repo PATH` when given (realpath'd; bash parity: realpath's own
+/// RAW diagnostic, then the `--repo` `die` message), else `fallback`. The
+/// target must contain `.git`.
+fn resolve_target_repo(repo_override: &Option<String>, fallback: String) -> String {
+    let target_repo = match repo_override {
+        Some(p) => {
+            let resolved = fs::canonicalize(p).map(|r| r.display().to_string()).ok();
+            match resolved {
+                Some(r) => r,
+                None => {
+                    eprintln!("realpath: {p}: No such file or directory");
+                    die(&format!("--repo: not a path: {p}"))
+                }
+            }
+        }
+        None => fallback,
+    };
+    let dot_git = Path::new(&target_repo).join(".git");
+    if !(dot_git.is_dir() || dot_git.is_file()) {
+        die(&format!("--repo: not a Git work tree: {target_repo}"));
+    }
+    target_repo
+}
+
+/// The Git working tree containing the current directory — the default
+/// target of `fetch`/`push` — anchored at the repository ROOT, like the
+/// `start` repo resolution.
+fn current_repo() -> String {
+    let toplevel = git_stdout(&["rev-parse".to_string(), "--show-toplevel".to_string()])
+        .filter(|t| !t.is_empty());
+    match toplevel {
+        Some(t) => fs::canonicalize(&t)
+            .map(|p| p.display().to_string())
+            .unwrap_or(t),
+        None => {
+            let cwd = std::env::current_dir().unwrap_or_default();
+            die(&format!("not a Git working tree: {}", cwd.display()))
+        }
+    }
+}
+
+/// Fetch the session branch from the pool into `refs/heads/<branch>` of
+/// `target_repo` — the shared step of `merge` (§9 "merge" step 5), the
+/// standalone `fetch`, and the implicit fetch of `push`. `Err` carries the
+/// `die` message.
+fn try_fetch_branch_from_pool(
+    target_repo: &str,
+    pool: &str,
+    branch: &str,
+) -> Result<(), String> {
+    let fetch_ok = git_stdout(&[
+        "-C".to_string(),
+        target_repo.to_string(),
+        "fetch".to_string(),
+        "--no-tags".to_string(),
+        pool.to_string(),
+        format!("+{branch}:refs/heads/{branch}"),
+    ])
+    .is_some();
+    if fetch_ok {
+        Ok(())
+    } else {
+        Err("fetch from pool failed; is the session pool still present?".to_string())
+    }
+}
+
 /// `agent-gvisor merge NAME …` (docs/spec.md §9 "merge").
 pub fn cmd_merge(env: Env, args: &[String]) -> ! {
     let name = args[0].clone();
@@ -788,25 +856,7 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
 
     // The original repository the session was started from. Allow --repo to
     // override for the unusual case of merging into a different clone.
-    let target_repo = match &repo_override {
-        Some(p) => {
-            // bash parity: realpath prints its own RAW diagnostic, then the
-            // `|| die` fires with the --repo message.
-            let resolved = fs::canonicalize(p).map(|r| r.display().to_string()).ok();
-            match resolved {
-                Some(r) => r,
-                None => {
-                    eprintln!("realpath: {p}: No such file or directory");
-                    die(&format!("--repo: not a path: {p}"));
-                }
-            }
-        }
-        None => meta.repo.clone(),
-    };
-    let dot_git = Path::new(&target_repo).join(".git");
-    if !(dot_git.is_dir() || dot_git.is_file()) {
-        die(&format!("--repo: not a Git work tree: {target_repo}"));
-    }
+    let target_repo = resolve_target_repo(&repo_override, meta.repo.clone());
 
     // Refuse to merge into a detached HEAD or a dirty tree, so a conflict
     // does not leave the host checkout half-merged.
@@ -846,18 +896,8 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
         "fetching branch {} from pool {} into {target_repo}",
         meta.branch, meta.pool
     ));
-    let fetch_ok = git_stdout(&[
-        "-C".to_string(),
-        target_repo.clone(),
-        "fetch".to_string(),
-        "--no-tags".to_string(),
-        meta.pool.clone(),
-        format!("+{}:refs/heads/{}", meta.branch, meta.branch),
-    ])
-    .is_some();
-    if !fetch_ok {
-        die("fetch from pool failed; is the session pool still present?");
-    }
+    try_fetch_branch_from_pool(&target_repo, &meta.pool, &meta.branch)
+        .unwrap_or_else(|m| die(&m));
     log(&format!(
         "merging {} into {current_branch} of {target_repo}",
         meta.branch
@@ -889,6 +929,97 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
         ));
     }
     std::process::exit(0);
+}
+
+/// `agent-gvisor fetch NAME [--repo PATH]` (docs/spec.md §9 "fetch"):
+/// the shared pool fetch of `merge` WITHOUT the merge — bring the session
+/// branch into `refs/heads/<branch>` of the target repo to inspect,
+/// cherry-pick or diff it. Default target: the repository containing the
+/// current directory.
+pub fn cmd_fetch(env: Env, args: &[String]) -> ! {
+    let name = args[0].clone();
+    let mut repo_override: Option<String> = None;
+    let mut i = 1;
+    while i < args.len() {
+        let arg = args[i].clone();
+        i += 1;
+        match arg.as_str() {
+            "--repo" => {
+                if i >= args.len() {
+                    die("option requires a value: --repo");
+                }
+                repo_override = Some(args[i].clone());
+                i += 1;
+            }
+            other => die(&format!("unknown fetch option: {other}")),
+        }
+    }
+    let session = state::load_session(&env, &name);
+    let meta = &session.meta;
+    let target_repo = resolve_target_repo(&repo_override, current_repo());
+    log(&format!(
+        "fetching branch {} from pool {} into {target_repo}",
+        meta.branch, meta.pool
+    ));
+    try_fetch_branch_from_pool(&target_repo, &meta.pool, &meta.branch)
+        .unwrap_or_else(|m| die(&m));
+    log(&format!(
+        "fetched {} into {target_repo}; merge it with 'agent-gvisor merge {name}'",
+        meta.branch
+    ));
+    std::process::exit(0);
+}
+
+/// `agent-gvisor push NAME [REMOTE] [--repo PATH]` (docs/spec.md §9
+/// "push"): publish the session branch. Fetches it from the pool into the
+/// target repo first (the implicit `fetch`, so the pushed ref is current),
+/// then `git push REMOTE <branch>` from it. REMOTE defaults to `origin`;
+/// default target: the repository containing the current directory.
+pub fn cmd_push(env: Env, args: &[String]) -> ! {
+    let name = args[0].clone();
+    let mut repo_override: Option<String> = None;
+    let mut remote: Option<String> = None;
+    let mut i = 1;
+    while i < args.len() {
+        let arg = args[i].clone();
+        i += 1;
+        match arg.as_str() {
+            "--repo" => {
+                if i >= args.len() {
+                    die("option requires a value: --repo");
+                }
+                repo_override = Some(args[i].clone());
+                i += 1;
+            }
+            a if a.starts_with('-') => die(&format!("unknown push option: {a}")),
+            a => {
+                if remote.is_some() {
+                    die(&format!("push accepts at most one remote: {a}"));
+                }
+                remote = Some(a.to_string());
+            }
+        }
+    }
+    let session = state::load_session(&env, &name);
+    let meta = &session.meta;
+    let target_repo = resolve_target_repo(&repo_override, current_repo());
+    log(&format!(
+        "fetching branch {} from pool {} into {target_repo}",
+        meta.branch, meta.pool
+    ));
+    try_fetch_branch_from_pool(&target_repo, &meta.pool, &meta.branch)
+        .unwrap_or_else(|m| die(&m));
+    let remote = remote.unwrap_or_else(|| "origin".to_string());
+    log(&format!("pushing {} to {remote} of {target_repo}", meta.branch));
+    // bash `set -e` parity: git push's own stderr, its exit code.
+    let st = git_status(&[
+        "-C".to_string(),
+        target_repo.clone(),
+        "push".to_string(),
+        remote,
+        meta.branch.clone(),
+    ]);
+    std::process::exit(st.code().unwrap_or(1));
 }
 
 /// The destroy body, as a `Result` so `cmd_start`'s existing-session path

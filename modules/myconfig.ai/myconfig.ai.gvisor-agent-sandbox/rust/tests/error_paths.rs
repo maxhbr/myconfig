@@ -74,6 +74,8 @@ fn session_name_required() {
     s.run_fail(&["shell"], 1, "agent-gvisor: error: session name required\n");
     s.run_fail(&["stop"], 1, "agent-gvisor: error: session name required\n");
     s.run_fail(&["merge"], 1, "agent-gvisor: error: session name required\n");
+    s.run_fail(&["fetch"], 1, "agent-gvisor: error: session name required\n");
+    s.run_fail(&["push"], 1, "agent-gvisor: error: session name required\n");
     s.run_fail(&["destroy"], 1, "agent-gvisor: error: session name required\n");
 }
 
@@ -107,6 +109,16 @@ fn unknown_subcommand_and_option() {
         1,
         "agent-gvisor: error: unknown destroy option: --bad\n",
     );
+    s.run_fail(
+        &["fetch", "s1", "--bad"],
+        1,
+        "agent-gvisor: error: unknown fetch option: --bad\n",
+    );
+    s.run_fail(
+        &["push", "s1", "--bad"],
+        1,
+        "agent-gvisor: error: unknown push option: --bad\n",
+    );
 }
 
 #[test]
@@ -124,6 +136,16 @@ fn missing_flag_value() {
     );
     s.run_fail(
         &["merge", "s1", "--repo"],
+        1,
+        "agent-gvisor: error: option requires a value: --repo\n",
+    );
+    s.run_fail(
+        &["fetch", "s1", "--repo"],
+        1,
+        "agent-gvisor: error: option requires a value: --repo\n",
+    );
+    s.run_fail(
+        &["push", "s1", "--repo"],
         1,
         "agent-gvisor: error: option requires a value: --repo\n",
     );
@@ -250,7 +272,7 @@ fn existing_session_without_force() {
 #[test]
 fn unknown_session() {
     let s = Scenario::new("unknown-session");
-    for sub in ["status", "run", "logs", "shell", "stop", "merge", "destroy"] {
+    for sub in ["status", "run", "logs", "shell", "stop", "merge", "fetch", "push", "destroy"] {
         s.run_fail(&[sub, "nope"], 1, "agent-gvisor: error: unknown session: nope\n");
     }
 }
@@ -269,7 +291,7 @@ fn pre_rewrite_registry_entries() {
          rm -rf {}\n",
         old.display()
     );
-    for sub in ["status", "run", "logs", "shell", "stop", "merge", "destroy"] {
+    for sub in ["status", "run", "logs", "shell", "stop", "merge", "fetch", "push", "destroy"] {
         s.run_fail(&[sub, "old"], 1, &msg);
     }
     // start refuses it too (like any existing session)...

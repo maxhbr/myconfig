@@ -42,7 +42,7 @@ they compare.
 The package also ships a hand-written fish tab completion
 ([`rust/completions/agent-gvisor.fish`](./rust/completions/agent-gvisor.fish),
 installed into `share/fish/vendor_completions.d/`): subcommands with
-descriptions, the `start`/`merge`/`destroy`/`run`/`logs` flags, and
+descriptions, the `start`/`merge`/`fetch`/`push`/`destroy`/`run`/`logs` flags, and
 existing session names read from the session registry — also offered for
 `start --name`. It mirrors `rust/src/usage.txt` and is kept in sync by the
 `agent-gvisor-completions` check (`nix/checks.nix`).

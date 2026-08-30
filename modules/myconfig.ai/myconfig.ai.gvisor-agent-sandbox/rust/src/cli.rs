@@ -3,8 +3,10 @@
 //! Usage text and argument parsing (docs/spec.md §1–§3).
 //!
 //! Hand-rolled on purpose: the CLI is small, stable and fully specified, and
-//! embedding the historical usage heredoc verbatim keeps `agent-gvisor
+//! embedding the historical usage heredoc verbatim kept `agent-gvisor
 //! --help` byte-identical to the bash CLI (a help formatter would not).
+//! Subcommands added after the rewrite (`fetch`, `push`) extend the same
+//! text; docs/spec.md §1 is the authoritative grammar.
 
 use crate::error::{die, fail_raw};
 use crate::state::{validate_name, Env};

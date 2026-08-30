@@ -80,7 +80,14 @@ case "$sub" in
         exit 0
         ;;
     remote) exit 0 ;;
-    fetch) exit 0 ;;
+    fetch)
+        [ -f "$RECORD/fetch-fail" ] && exit 1
+        exit 0
+        ;;
+    push)
+        [ -f "$RECORD/push-fail" ] && exit 3
+        exit 0
+        ;;
     cat-file) exit 0 ;;
     show-ref)
         [ -f "$RECORD/branch-exists" ] && exit 0
