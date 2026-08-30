@@ -84,7 +84,9 @@ merge options:
 
 environment:
   AGENT_GVISOR_IMAGE            Override the default image
-  AGENT_GVISOR_STATE            State directory
+  AGENT_GVISOR_STATE            Session registry directory (name -> session
+                                dirs); pools and session state live in
+                                <repo>_agent-gvisor/ next to each repository
   AGENT_GVISOR_WORKTREES        Worktree root directory; empty (default) puts
                                 worktrees next to the repo, as
                                 <repo>_agent-gvisor/NAME
@@ -131,6 +133,15 @@ sanitize_container_name() {
 validate_name() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] ||
     die "invalid session name '$1' (allowed: letters, digits, dot, underscore, hyphen)"
+}
+
+# Repo-adjacent root that hosts the session worktrees, pools and session
+# state: /x/my/repository -> /x/my/repository_agent-gvisor. Session names
+# cannot start with an underscore (validate_name), so the `__pools` and
+# `__sessions` subdirectories below it never collide with a worktree.
+repo_agent_root() {
+  local repo=$1
+  printf '%s/%s_agent-gvisor' "$(dirname "$repo")" "$(basename "$repo")"
 }
 
 # Global Podman flags. They must be repeated for every command that touches a
@@ -215,7 +226,12 @@ parse_mount() {
 
 load_meta() {
   local name=$1
-  META_DIR="$STATE_ROOT/sessions/$name"
+  local reg="$STATE_ROOT/sessions/$name"
+  [[ -e "$reg" ]] || die "unknown session: $name"
+  # $reg is the session's registry entry: a symlink into the repo-adjacent
+  # <repo>_agent-gvisor/__sessions/ tree for new sessions, the real session
+  # directory for old ones (readlink -f returns real directories unchanged).
+  META_DIR=$(readlink -f -- "$reg")
   if [[ ! -f "$META_DIR/meta" ]]; then
     # `meta` is written LAST by `start`, so a session directory without it is
     # the debris of an interrupted start rather than an unknown name. Say so,
@@ -423,7 +439,7 @@ rewrite_seeded_home() {
 # clear it (and a matching leftover worktree) instead. The BRANCH is never
 # touched here: it may predate the interrupted start and carry real commits.
 reset_partial_session() {
-  local name=$1 meta_dir=$2 pool=$3 worktree=$4
+  local name=$1 reg=$2 meta_dir=$3 pool=$4 worktree=$5
   log "session $name is incomplete (interrupted start); removing $meta_dir"
   if [[ -e "$worktree" ]]; then
     if [[ -d "$pool" ]] && git -C "$worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -439,6 +455,10 @@ reset_partial_session() {
     fi
   fi
   rm -rf -- "$meta_dir"
+  # Also drop the registry entry: for old-layout sessions it IS the session
+  # directory (already removed above, so this is a no-op), for new-layout
+  # ones a symlink there (rm -rf removes the link, not its target).
+  rm -rf -- "$reg"
 }
 
 # Interactive recovery from a leftover session of the same name: ask whether
@@ -502,28 +522,41 @@ cmd_start() {
   base_commit=$(git -C "$repo" rev-parse --verify "$base^{commit}") || die "cannot resolve base ref: $base"
   branch=${branch:-agent/$name}
 
-  mkdir -p "$STATE_ROOT" "$STATE_ROOT/pools" "$STATE_ROOT/sessions"
-  local repo_id pool worktree meta_dir home container lockfile
+  local agent_root
+  agent_root=$(repo_agent_root "$repo")
+  mkdir -p "$STATE_ROOT" "$STATE_ROOT/sessions" \
+    "$agent_root/__pools" "$agent_root/__sessions"
+  local repo_id pool worktree meta_dir home container lockfile reg
   repo_id=$(printf '%s' "$repo" | sha256sum | cut -c1-16)
-  pool="$STATE_ROOT/pools/$repo_id.git"
-  # The worktree lives NEXT TO the host repository (repo /x/my/repository →
-  # /x/my/repository_agent-gvisor/NAME), so it stays close to the actual repo
-  # instead of being buried in the state directory. Set AGENT_GVISOR_WORKTREES
-  # to a directory to restore a central layout ($ROOT/<repo-id>/NAME), e.g.
-  # "$XDG_STATE_HOME/agent-gvisor/worktrees" for the previous default.
+  # Pools, session state and worktrees all live NEXT TO the host repository
+  # (repo /x/my/repository -> /x/my/repository_agent-gvisor/...), so they stay
+  # close to the actual repo instead of being buried in the central state
+  # directory:
+  #   __pools/<repo-id>.git     disposable bare pools, one per repo
+  #   __sessions/<name>/        session meta, home and mounts/env files
+  #   <name>/                   session worktrees
+  # $STATE_ROOT/sessions remains the name->session REGISTRY: `start` creates
+  # a symlink there per session, so commands that only get a name (run, stop,
+  # destroy, ...) can resolve it without a --repo argument. Set
+  # AGENT_GVISOR_WORKTREES to a directory to move worktrees to a central
+  # ($ROOT/<repo-id>/NAME) layout; pools and session state stay repo-adjacent.
+  pool="$agent_root/__pools/$repo_id.git"
+  lockfile="$agent_root/__pools/$repo_id.lock"
+  reg="$STATE_ROOT/sessions/$name"
   if [[ -n "${AGENT_GVISOR_WORKTREES-}" ]]; then
     worktree="$AGENT_GVISOR_WORKTREES/$repo_id/$name"
   else
-    worktree="$(dirname "$repo")/$(basename "$repo")_agent-gvisor/$name"
+    worktree="$agent_root/$name"
   fi
-  meta_dir="$STATE_ROOT/sessions/$name"
+  meta_dir="$agent_root/__sessions/$name"
   home="$meta_dir/home"
   container=$(sanitize_container_name "agent-$repo_id-$name")
-  lockfile="$STATE_ROOT/pools/$repo_id.lock"
 
-  if [[ -e "$meta_dir" && ! -f "$meta_dir/meta" ]]; then
-    reset_partial_session "$name" "$meta_dir" "$pool" "$worktree"
-  elif [[ -e "$meta_dir" ]]; then
+  # Probe the registry entry, not $meta_dir: sessions started before the
+  # pools/session-state moved next to the repo still live there.
+  if [[ -e "$reg" && ! -f "$reg/meta" ]]; then
+    reset_partial_session "$name" "$reg" "$meta_dir" "$pool" "$worktree"
+  elif [[ -e "$reg" ]]; then
     local old_branch
     # Both calls run in a subshell: load_meta sources the OLD session's meta
     # file, and cmd_destroy calls it, so without the subshell bash's dynamic
@@ -540,6 +573,8 @@ cmd_start() {
       || die "could not destroy the existing session: $name"
   fi
   mkdir -p "$(dirname "$worktree")" "$meta_dir" "$home"
+  # Register the session so name-only commands find the repo-adjacent state.
+  ln -sfn "$meta_dir" "$reg"
   # The session home is bind-mounted over /home/agent, which masks the XDG
   # directories created in the image, so create them on the host side.
   mkdir -p "$home/.cache" "$home/.config" "$home/.local/state"
@@ -779,6 +814,9 @@ cmd_destroy() {
     git --git-dir="$pool" branch -D "$branch"
   fi
   rm -rf -- "$META_DIR"
+  # Remove the registry entry too: for old-layout sessions it IS $META_DIR
+  # (already removed above, so this is a no-op), for new-layout ones a symlink.
+  rm -rf -- "$STATE_ROOT/sessions/$session"
   log "destroyed session $session"
 }
 
@@ -797,7 +835,8 @@ cmd_doctor() {
     printf 'limits:          enforced via cgroups\n'
   fi
   printf 'image:           %s\n' "$DEFAULT_IMAGE"
-  printf 'state:           %s\n' "$STATE_ROOT"
+  printf 'state:           %s (session name registry)\n' "$STATE_ROOT"
+  printf 'pools/sessions:  <repo>_agent-gvisor/{__pools,__sessions} next to each repo\n'
   printf 'model endpoint:  %s\n' "${AGENT_GVISOR_MODEL_ENDPOINT:-<unset>}"
   printf 'loopback fwd:    %s\n' "${AGENT_GVISOR_LOOPBACK_FORWARD:-<none>}"
   check_runtime

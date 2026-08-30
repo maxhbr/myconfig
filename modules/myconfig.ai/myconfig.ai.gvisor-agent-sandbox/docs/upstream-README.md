@@ -168,8 +168,8 @@ sandbox container. Relevant knobs:
 | `AGENT_GVISOR_PODMAN_CGROUP_MANAGER` | `cgroupfs` rootless, Podman default as root | Podman cgroup manager |
 | `AGENT_GVISOR_PODMAN_RUNTIME_FLAGS` | `ignore-cgroups` rootless, empty as root | Extra `runsc` flags, space separated |
 | `AGENT_GVISOR_IMAGE` | baked image ref | Image override |
-| `AGENT_GVISOR_STATE` | `$XDG_STATE_HOME/agent-gvisor` | State directory (pools, sessions); worktrees live next to the repo as `<repo>_agent-gvisor/NAME` |
-| `AGENT_GVISOR_WORKTREES` | unset | Worktree root directory; when set, worktrees go to `$ROOT/<repo-id>/NAME` instead of next to the repo |
+| `AGENT_GVISOR_STATE` | `$XDG_STATE_HOME/agent-gvisor` | Session registry directory (name → session dirs); pools and session state live next to the repo as `<repo>_agent-gvisor/{__pools,__sessions}` |
+| `AGENT_GVISOR_WORKTREES` | unset | Worktree root directory; when set, worktrees go to `$ROOT/<repo-id>/NAME` instead of next to the repo (pools and session state stay repo-adjacent) |
 
 ### Rootless cgroups
 

@@ -108,6 +108,18 @@ Patched:
   has uncommitted changes; the branch is never touched), `list` shows it as
   `incomplete`, and every other command explains it instead of claiming the
   name is unknown.
+  The pools and session state moved NEXT TO the repository, into the same
+  `<repo>_agent-gvisor/` directory that already hosts the worktrees: the bare
+  pool at `__pools/<repo-id>.git`, the per-session meta/home/mounts/env at
+  `__sessions/<name>/`. `$XDG_STATE_HOME/agent-gvisor/sessions` remains the
+  name→session REGISTRY — `start` puts a symlink per session there, so
+  name-only commands (`run`, `stop`, `destroy`, `merge`, …) still resolve
+  sessions without a `--repo` argument, and sessions started with the old
+  central layout keep working (their registry entry is the real session
+  directory). Merge or destroy those before starting a same-repo session:
+  the fresh pool under `__pools/` does not know their branches, and the old
+  `$XDG_STATE_HOME/agent-gvisor/pools/` pools are left behind as orphans
+  (safe to delete by hand once no old session references them).
 
 - `nix/load-image.nix` — `agent-gvisor-load-image` no longer decides by tag
   alone. See *Image freshness check* below.
