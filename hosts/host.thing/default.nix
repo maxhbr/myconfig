@@ -61,6 +61,7 @@
     ./myconfig.observability.llama-swap-metrics.nix
     ./myconfig.ai.vllm
     ./myconfig.ai.ninfer
+    ./myconfig.ai.sglang
     ./services.open-webui.nix
     # ./services.qdrant.nix
     ./services.litellm.nix
