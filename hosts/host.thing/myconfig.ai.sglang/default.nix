@@ -86,13 +86,39 @@ let
       MEM_FRACTION_STATIC="''${MEM_FRACTION_STATIC:-0.9}"
       ATTENTION_BACKEND="''${ATTENTION_BACKEND:-flashinfer}"
       MAX_RUNNING_REQUESTS="''${MAX_RUNNING_REQUESTS:-1}"
-      CUDA_GRAPH_MAX_BS="''${CUDA_GRAPH_MAX_BS:-1}"
+      CUDA_GRAPH_MAX_BS="''${CUDA_GRAPH_MAX_BS:-1}" # used for --cuda-graph-max-bs-decode
       REASONING_PARSER="''${REASONING_PARSER:-qwen3}"
       TOOL_CALL_PARSER="''${TOOL_CALL_PARSER:-qwen3_coder}"
+      # The Qwen3.8-27B-NVFP4 target is a hybrid model with
+      # mamba/linear-attention layers that need a per-request state
+      # cache (~147 MB/req in the default float32). SGLang's auto-fit
+      # resolves the mamba radix cache strategy to "extra_buffer"
+      # (overlap schedule is on by default), which raises the per-request
+      # slot ratio to 5 (base 3 + 2 ping-pong). With float32 states the
+      # mamba budget only fits 3-4 slots, so max_num_reqs = 3//5 = 0 and
+      # SGLang aborts with "Hybrid state cache is too small to serve any
+      # requests". Halving the state size to bfloat16 (~73 MB/req) lets
+      # the auto-fit allocate 8-10 slots (1-2 requests) and leaves
+      # ~1.8-2.2 GB for the FP8 KV cache. SGLang recommends this option
+      # directly in the error message.
+      MAMBA_SSM_DTYPE="''${MAMBA_SSM_DTYPE:-bfloat16}"
 
       # DFlash2 speculative decoding (the point of the dev-*-dflash2
       # image); set SPECULATIVE=0 to fall back to greedy decoding.
       SPECULATIVE="''${SPECULATIVE:-1}"
+      # Number of draft tokens per speculative step. The cookbook default
+      # is 8, but the Qwen3.8-27B-NVFP4 target is a hybrid model with
+      # mamba/linear-attention layers that need a per-request state cache
+      # (~147 MB/req). With D=8 the intermediate mamba state memory
+      # (per_req * (1 + D) = ~1.32 GB) exceeds the mamba budget derived
+      # from the ~2.4 GB of rest memory after loading both models on the
+      # RTX 5090, so SGLang aborts with
+      # "Not enough GPU memory for hybrid (mamba/linear-attention) state
+      # cache" (max_mamba_cache_size <= 0). D=4 is the highest value
+      # that fits at --mem-fraction-static 0.9 (max_mamba_cache_size=1,
+      # matching --max-running-requests 1). Raise to 8 only with
+      # --mem-fraction-static >= 0.95 (risky: only 5% runtime slack).
+      SPECULATIVE_NUM_DRAFT_TOKENS="''${SPECULATIVE_NUM_DRAFT_TOKENS:-4}"
 
       # Shared Hugging Face cache (the cookbook mount target is
       # /root/.cache/huggingface inside the container).
@@ -107,7 +133,6 @@ let
       args=(
         podman run
         --rm
-        --shm-size 32g
         --ipc=host
         --name "$CONTAINER_NAME"
         -p "$HOST_PORT:$HOST_PORT"
@@ -133,16 +158,17 @@ let
         --mem-fraction-static "$MEM_FRACTION_STATIC"
         --attention-backend "$ATTENTION_BACKEND"
         --max-running-requests "$MAX_RUNNING_REQUESTS"
-        --cuda-graph-max-bs "$CUDA_GRAPH_MAX_BS"
+        --cuda-graph-max-bs-decode "$CUDA_GRAPH_MAX_BS"
         --reasoning-parser "$REASONING_PARSER"
         --tool-call-parser "$TOOL_CALL_PARSER"
+        --mamba-ssm-dtype "$MAMBA_SSM_DTYPE"
       )
 
       if [ "$SPECULATIVE" = "1" ]; then
         args+=(
           --speculative-algorithm DFLASH
           --speculative-draft-model-path "$DRAFT_MODEL_PATH"
-          --speculative-num-draft-tokens 8
+          --speculative-num-draft-tokens "$SPECULATIVE_NUM_DRAFT_TOKENS"
         )
       fi
 
