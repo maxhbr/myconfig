@@ -53,13 +53,17 @@
 # environment (`SetEnv`), exactly as before.
 #
 # ── The allowlist source of truth ──────────────────────────────────────────
-# The per-agent `configPaths` below MIRROR `../myconfig.ai.microvm/agents.nix`
-# (the authoritative registry for the heavyweight tier). They are duplicated
-# here only because `agents.nix` is instantiated inside the microvm module
-# tree with coupling arguments (litellmPort, hermesModel, enabledNames) that
-# make importing it standalone impractical. Keep the two in sync: the SAME
-# paths, the SAME credential-exclusion rationale. A future cleanup should
-# lift the path lists into a dependency-free data module both tiers import.
+# The per-agent `configPaths` below TRACK `../myconfig.ai.microvm/agents.nix`
+# (the authoritative registry for the heavyweight tier), but they are NOT an
+# exact mirror: there is no `herdr` entry here — tier-4 `agents.nix` stages
+# `.config/herdr/config.toml`, tier 3 does not (a known divergence tracked
+# in doc/TODOs/seed-herdr-config-tier3-sandboxed-herdr.md). The lists are
+# duplicated here only because `agents.nix` is instantiated inside the microvm
+# module tree with coupling arguments (litellmPort, hermesModel, enabledNames)
+# that make importing it standalone impractical. Keep the two in sync apart
+# from that documented divergence, and preserve the SAME
+# credential-exclusion rationale. A future cleanup should lift the path lists
+# into a dependency-free data module both tiers import.
 {
   lib,
   pkgs,

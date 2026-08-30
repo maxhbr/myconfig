@@ -120,7 +120,7 @@ writing.
 | | `sandboxed-herdr` | `agent-microvm` |
 | --- | --- | --- |
 | Option path | none — it is unconditionally installed whenever any agent flag is enabled (`agenticCodingEnabled`, `modules/myconfig.ai/programs.herdr.nix:23-29`) | `myconfig.ai.microvm.*` (`enable`, `enabledAgents`, `resourceClasses`, `networkProfile`, `capabilities`, …), all under `modules/myconfig.ai/myconfig.ai.microvm/default.nix` |
-| Entry point | `sandboxed-herdr` shell wrapper, home-manager package (`programs.herdr.nix:121-232`) | `agent-microvm run\|submit\|ssh\|...` launcher (`modules/myconfig.ai/myconfig.ai.microvm/launcher.nix`), plus `microvm-<agent>` workmux panes when `interactive` is selected |
+| Entry point | `sandboxed-herdr` shell wrapper (`programs.herdr.nix:120-270`), installed via `home.packages` (`programs.herdr.nix:284`) | `agent-microvm run\|submit\|ssh\|...` launcher (`modules/myconfig.ai/myconfig.ai.microvm/launcher.nix`), plus `microvm-<agent>` workmux panes when `interactive` is selected |
 | Guest builder | `mkSandboxedHerdrRunner` in `flake.sandboxed-pi.nix:470`, a thin wrapper over the shared `mkSandboxedRunner` (same factory `mkSandboxedPiRunner` uses) | the module's own guest NixOS system (`guest.nix`), driven by the agent registry `agents.nix` |
 | Impure evaluation seam | `packages.<system>.sandboxed-herdr-runner` in `flake.nix:623-643`, built from `SANDBOXED_HERDR_*` env vars set by the wrapper (workspace path never lands in a tracked file) | none needed — slots are declared statically per host and prebuilt at system-build time |
 | herdr's role in the config | hard-coded as the guest's SSH-exec target; not configurable per invocation | one entry in the agent registry (`../agents.nix`), selected via `enabledAgents` like any other agent |
@@ -196,7 +196,7 @@ inside a VM) but diverge in *mechanism and guarantees*:
   firewall chains, resource classes) just to get a disposable interactive
   shell, or weaken `agent-microvm`'s no-credentials-in-guest / no-shared-store
   guarantees down to tier 3's level. Both are explicitly against the repo's own
-  "ladder" design (`README.md:24-25`: "the tiers are largely orthogonal and
+  "ladder" design (`modules/myconfig.ai/docs/README.md:24-25`: "the tiers are largely orthogonal and
   compose").
 - **Do** deduplicate the *incidental* overlap: the herdr-rationale prose is
   copy-pasted across `sandboxed-herdr.README.md` and `agent-microvm.md`, and

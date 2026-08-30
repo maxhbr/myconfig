@@ -12,9 +12,10 @@ tier 3 is the tier whose *entry point* is `herdr`:
 - **Tier 3** (`modules/myconfig.ai/fns/seed-agent-config.nix`,
   `agentConfigPaths`) has **no `herdr` entry**, so `sandboxed-herdr`
   (`modules/myconfig.ai/programs.herdr.nix`) drops the user into a `herdr`
-  that starts with its **default** configuration. `fns/seed-agent-config.nix`'s
-  header still claims the per-agent `configPaths` *mirror*
-  `../myconfig.ai.microvm/agents.nix` — they no longer do.
+  that starts with its **default** configuration. (The header's stale
+  "mirror" claim was corrected — comments only — by the review-fixup commit
+  on branch `agent/gvisor-fun`, 2026-08; this TODO tracks the remaining
+  *decision* about the missing entry itself.)
 
 The divergence was documented (not fixed) in
 `modules/myconfig.ai/sandboxed-herdr.README.md` ("Agent-configuration seeding")
@@ -31,9 +32,11 @@ Decide between:
    `validatePaths` assertions). Then update the README paragraph and the
    "mirrors" claims in both `fns/seed-agent-config.nix` and
    `doc/sandboxed-herdr-vs-agent-microvm-herdr.md` to say the sets match again.
-2. **Accept the divergence**: make `fns/seed-agent-config.nix`'s header stop
-   claiming an exact mirror and note the deliberate omission (e.g. tier-3
-   `herdr` guests are disposable and a default config is acceptable).
+2. **Accept the divergence**: the comment part is already done —
+   `fns/seed-agent-config.nix`'s header now states the divergence and points
+   back to this TODO. What remains is to *ratify* the omission (e.g. tier-3
+   `herdr` guests are disposable and a default config is acceptable),
+   optionally noting that rationale in the header, and to close this TODO.
 
 ## How to verify
 

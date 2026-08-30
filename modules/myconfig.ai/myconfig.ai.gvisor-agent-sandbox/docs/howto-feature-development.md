@@ -32,7 +32,7 @@ What happens:
    sandbox-reachable endpoint `http://192.168.84.1:14000` — the
    `--map-guest-addr` address pasta translates to the host, where a
    port-scoped forwarder proxies to the loopback-only LiteLLM proxy (see
-   *Model access* in `../README.md`).
+   *Model access (host LiteLLM)* in `../README.md`).
 3. A bare pool is created (or reused) at
    `~/.local/state/agent-gvisor/pools/<repo-id>.git`, a worktree is added at
    `~/.local/state/agent-gvisor/worktrees/<repo-id>/fix-parser` on branch
