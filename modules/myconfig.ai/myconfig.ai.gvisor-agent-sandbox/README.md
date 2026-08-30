@@ -39,6 +39,14 @@ It is the container-based tier of the repo's sandboxing ladder — see
 other tiers (`agent-tmux`, `jailed-*`, `sandboxed-*`, `agent-microvm`) and how
 they compare.
 
+The package also ships a hand-written fish tab completion
+([`rust/completions/agent-gvisor.fish`](./rust/completions/agent-gvisor.fish),
+installed into `share/fish/vendor_completions.d/`): subcommands with
+descriptions, the `start`/`merge`/`destroy`/`run`/`logs` flags, and
+existing session names read from the session registry — also offered for
+`start --name`. It mirrors `rust/src/usage.txt` and is kept in sync by the
+`agent-gvisor-completions` check (`nix/checks.nix`).
+
 ## Origin
 
 - Upstream: <https://github.com/maxhbr/gvisor-agent-sandbox>
@@ -221,7 +229,9 @@ When enabled the module
 - enables rootless Podman and registers `${pkgs.gvisor}/bin/runsc` as the
   `runsc` OCI runtime in `containers.conf`,
 - installs `agent-gvisor`, `agent-gvisor-load-image` and `gvisor` into the
-  user's `home.packages`,
+  user's `home.packages` (the `agent-gvisor` re-wrap that bakes the host
+  defaults keeps the package's `share/` tree, so the fish tab completion
+  ships too),
 - grants subordinate UID/GID ranges (`autoSubUidGidRange`) to
   `myconfig.ai.gvisor-agent-sandbox.users` (default: `myconfig.user`).
 

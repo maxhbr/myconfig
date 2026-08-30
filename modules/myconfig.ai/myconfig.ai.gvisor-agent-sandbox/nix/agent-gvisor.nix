@@ -48,6 +48,15 @@ rustPlatform.buildRustPackage {
       } \
       --set-default AGENT_GVISOR_DEFAULT_IMAGE "${defaultImage}" \
       --set-default AGENT_GVISOR_DEFAULT_RUNTIME "${defaultRuntime}"
+
+    # Hand-written fish tab completion (../rust/completions, kept in sync
+    # with src/usage.txt by the `agent-gvisor-completions` check in
+    # checks.nix). The crate stays zero-dependency: this is a plain fish
+    # script, not clap-generated. The vendor path is the one
+    # `installShellFiles --fish` uses and fish's NixOS integration
+    # collects.
+    install -Dm 0644 $src/completions/agent-gvisor.fish \
+      $out/share/fish/vendor_completions.d/agent-gvisor.fish
   '';
 
   meta = {
