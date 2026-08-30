@@ -97,9 +97,9 @@ fn build_run_args_full_vector() {
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges",
         "--workdir",
-        "/w/s1",
+        "/repo",
         "--mount",
-        "type=bind,src=/w/s1,dst=/w/s1,rw",
+        "type=bind,src=/w/s1,dst=/repo,rw",
         "--mount",
         "type=bind,src=/pools/abc012.git,dst=/pools/abc012.git,rw",
         "--mount",
@@ -115,7 +115,7 @@ fn build_run_args_full_vector() {
         "--env",
         "AGENT_SESSION=s1",
         "--env",
-        "AGENT_WORKTREE=/w/s1",
+        "AGENT_WORKTREE=/repo",
         "--env",
         "AGENT_GVISOR_LOOPBACK_FORWARD=8080:127.0.0.1:8080",
         // cgroups ignored -> no --pids-limit/--memory/--cpus here:
@@ -164,7 +164,7 @@ fn build_run_args_rootful_limits() {
     // Limits directly follow the fixed --env block:
     let wt = args
         .iter()
-        .position(|a| a == &format!("AGENT_WORKTREE={}", meta.worktree))
+        .position(|a| a == &format!("AGENT_WORKTREE={}", meta.repo))
         .expect("AGENT_WORKTREE env");
     assert_eq!(
         args[wt + 1..wt + 7],
@@ -269,9 +269,9 @@ fn start_records_exact_podman_argv() {
         "--cap-drop=ALL".into(),
         "--security-opt=no-new-privileges".into(),
         "--workdir".into(),
-        worktree.display().to_string(),
+        repo.display().to_string(),
         "--mount".into(),
-        format!("type=bind,src={},dst={},rw", worktree.display(), worktree.display()),
+        format!("type=bind,src={},dst={},rw", worktree.display(), repo.display()),
         "--mount".into(),
         format!("type=bind,src={},dst={},rw", pool.display(), pool.display()),
         "--mount".into(),
@@ -287,7 +287,7 @@ fn start_records_exact_podman_argv() {
         "--env".into(),
         "AGENT_SESSION=s1".into(),
         "--env".into(),
-        format!("AGENT_WORKTREE={}", worktree.display()),
+        format!("AGENT_WORKTREE={}", repo.display()),
         // rootless (ignore-cgroups) -> no --pids-limit/--memory/--cpus:
         "--network".into(),
         "slirp4netns".into(),

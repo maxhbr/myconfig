@@ -356,8 +356,8 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --read-only-tmpfs=true
   --cap-drop=ALL
   --security-opt=no-new-privileges
-  --workdir <worktree>
-  --mount type=bind,src=<worktree>,dst=<worktree>,rw
+  --workdir <repo>
+  --mount type=bind,src=<worktree>,dst=<repo>,rw
   --mount type=bind,src=<pool>,dst=<pool>,rw
   --mount type=bind,src=<home>,dst=/home/agent,rw
   --env HOME=/home/agent
@@ -365,7 +365,7 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --env XDG_CACHE_HOME=/home/agent/.cache
   --env XDG_STATE_HOME=/home/agent/.local/state
   --env AGENT_SESSION=<session name>
-  --env AGENT_WORKTREE=<worktree>
+  --env AGENT_WORKTREE=<repo>
   [--env AGENT_GVISOR_LOOPBACK_FORWARD=<value>]      # only when set
   (--pids-limit <n> --memory <m> --cpus <c>)         # only when limits enforced (§5)
   [--network <mode>]                                 # only when non-empty
@@ -377,6 +377,11 @@ podman <global args> run --replace (--detach | --interactive --tty)
   [/bin/agent-gvisor-init]                            # only when LOOPBACK_FORWARD is set
   <COMMAND...>                                       # or the word-split AGENT_GVISOR_DEFAULT_COMMAND
 ```
+
+`<repo>` is the original repository path recorded in `meta`; the session
+worktree (a HOST path) is bind-mounted at that path inside the container, so
+the worktree appears where the repository normally lives and `--workdir` /
+`AGENT_WORKTREE` point at it. The host checkout itself is never mounted.
 
 Before `exec`ing, the full vector (including the leading literal `podman`)
 is written to `<session>/last-command` as `%q`-quoted, space-joined words

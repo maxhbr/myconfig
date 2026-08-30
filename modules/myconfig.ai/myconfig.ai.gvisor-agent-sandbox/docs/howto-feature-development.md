@@ -13,7 +13,9 @@ and the repository defaults to the current directory, so the shorthand
 from the repository you want to work on. It never mounts the host
 checkout. Instead it seeds a **disposable bare Git pool** from the host repo's
 committed refs and checks out a worktree from that pool on a fresh branch,
-defaulting to `agent/gvisor/<name>`.
+defaulting to `agent/gvisor/<name>`. Inside the container the worktree is
+mounted **at the original repository's path**, so the in-container paths
+match the host ones.
 
 ```bash
 agent-gvisor start \
@@ -67,7 +69,7 @@ agent-gvisor logs fix-parser --follow   # container stdout/stderr
 ```
 
 Drop into the running sandbox for an interactive look (the worktree is mounted
-at the same absolute path inside as outside, so the agent's paths line up):
+at the original repo's path inside, so the agent's paths line up):
 
 ```bash
 agent-gvisor shell fix-parser           # a shell in the container

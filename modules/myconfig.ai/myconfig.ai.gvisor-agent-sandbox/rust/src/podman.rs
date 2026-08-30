@@ -110,10 +110,14 @@ pub fn build_run_args(
         "--cap-drop=ALL".to_string(),
         "--security-opt=no-new-privileges".to_string(),
         "--workdir".to_string(),
-        meta.worktree.clone(),
+        meta.repo.clone(),
     ]);
+    // The session worktree is mounted AT THE ORIGINAL REPO'S PATH inside the
+    // container (host src = worktree, dst = repo), so the in-container path
+    // matches where the repository normally lives on the host. The host
+    // checkout itself is never mounted.
     for (src, dst) in [
-        (meta.worktree.as_str(), meta.worktree.as_str()),
+        (meta.worktree.as_str(), meta.repo.as_str()),
         (meta.pool.as_str(), meta.pool.as_str()),
         (meta.home.as_str(), "/home/agent"),
     ] {
@@ -134,7 +138,8 @@ pub fn build_run_args(
         "--env".to_string(),
         format!("AGENT_SESSION={}", meta.name),
         "--env".to_string(),
-        format!("AGENT_WORKTREE={}", meta.worktree),
+        // The worktree's in-container path (the original repo's path).
+        format!("AGENT_WORKTREE={}", meta.repo),
     ]);
 
     // Reverse port forwards, set up by /bin/agent-gvisor-init inside the
