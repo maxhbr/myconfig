@@ -239,7 +239,9 @@ let
   sharedTools = osconfig.myconfig.ai.sandboxTools.extraPackages or [ ];
   sharedEnv = osconfig.myconfig.ai.sandboxTools.extraEnv or { };
 
-  runtimeEnvPerms = lib.mapAttrsToList (name: value: set-env name value) (sharedEnv // extraRuntimeEnv);
+  runtimeEnvPerms = lib.mapAttrsToList (name: value: set-env name value) (
+    sharedEnv // extraRuntimeEnv
+  );
 
   # Bind host paths named by env vars read-only at runtime. Each `var` is
   # the name of an environment variable; when it is set and non-empty the
