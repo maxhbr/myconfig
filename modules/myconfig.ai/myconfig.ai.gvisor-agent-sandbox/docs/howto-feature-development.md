@@ -109,6 +109,18 @@ traceable; pass `--ff` or `--squash` for the matching `git merge` behaviour,
 or `--repo PATH` to target a different clone. The session worktree is left
 untouched — tear it down afterwards (step 4).
 
+Without merging, two related commands bring the branch out of the pool:
+
+```bash
+agent-gvisor fetch fix-parser   # into the repository you are in (--repo to
+                                 # target another one); no merge, just the
+                                 # local branch agent/gvisor/fix-parser
+agent-gvisor push fix-parser     # fetch first, then git push origin
+agent-gvisor push fix-parser myremote   # … or any other configured remote
+```
+
+`merge` runs the same fetch internally before merging.
+
 ## 4. Clean up
 
 Once the result is in the host checkout, tear the session down. `destroy`
@@ -134,6 +146,8 @@ stays until its last session is destroyed.
 | Enter sandbox | `agent-gvisor shell N` |
 | Run more work | `agent-gvisor run N --detach -- pi …` |
 | Fetch result | `agent-gvisor merge N` (into the current branch) |
+| Fetch branch only | `agent-gvisor fetch N` (into the current repo) |
+| Push branch | `agent-gvisor push N [REMOTE]` (fetches, then pushes) |
 | Stop container | `agent-gvisor stop N` |
 | Destroy | `agent-gvisor destroy N --delete-branch` |
 | Verify host setup | `agent-gvisor doctor` |

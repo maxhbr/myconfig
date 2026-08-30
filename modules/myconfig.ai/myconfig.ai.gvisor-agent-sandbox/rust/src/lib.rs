@@ -19,7 +19,7 @@ pub mod state;
 /// Entry point: environment setup, subcommand dispatch.
 ///
 /// Mirrors `main`/`cmd_*` dispatch of the historical bash implementation:
-/// `start|list|status|run|logs|shell|stop|merge|destroy|doctor`,
+/// `start|list|status|run|logs|shell|stop|merge|fetch|push|destroy|doctor`,
 /// `''|-h|--help|help` → usage (exit 0), any other non-`-` word is the
 /// positional session-name shorthand for `start`.
 pub fn run() -> ! {
@@ -60,6 +60,8 @@ pub fn run() -> ! {
             session::cmd_stop(&env, &name)
         }
         Some("merge") => session::cmd_merge(env, &rest1(&args)),
+        Some("fetch") => session::cmd_fetch(env, &rest1(&args)),
+        Some("push") => session::cmd_push(env, &rest1(&args)),
         Some("destroy") => session::cmd_destroy(env, &rest1(&args)),
         Some("doctor") => session::cmd_doctor(env),
         Some("-h") | Some("--help") | Some("help") => {

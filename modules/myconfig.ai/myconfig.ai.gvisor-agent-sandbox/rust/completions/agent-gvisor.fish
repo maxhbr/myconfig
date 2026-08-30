@@ -45,7 +45,7 @@ end
 function __agent_gvisor_in_start
     __fish_seen_subcommand_from start
     and return 0
-    __fish_seen_subcommand_from list status run logs shell stop merge destroy doctor
+    __fish_seen_subcommand_from list status run logs shell stop merge fetch push destroy doctor
     and return 1
     test (count (commandline -opc)) -ge 2
 end
@@ -53,7 +53,7 @@ end
 # The NAME position of every name-taking subcommand (docs/spec.md §3):
 # NAME is always the first word after the action.
 function __agent_gvisor_expects_name
-    __fish_seen_subcommand_from status run logs shell stop merge destroy
+    __fish_seen_subcommand_from status run logs shell stop merge fetch push destroy
     and test (count (commandline -opc)) -eq 2
 end
 
@@ -66,6 +66,8 @@ complete -c agent-gvisor -f -n '__fish_use_subcommand' -a logs -d 'Show the cont
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a shell -d 'Open a shell (or run COMMAND) in the session'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a stop -d 'Stop the session container'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a merge -d 'Merge the session branch into the host repo'
+complete -c agent-gvisor -f -n '__fish_use_subcommand' -a fetch -d 'Fetch the session branch from the pool into a local branch'
+complete -c agent-gvisor -f -n '__fish_use_subcommand' -a push -d 'Push the session branch to a remote (fetches it first)'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a destroy -d 'Remove container, worktree and session state'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a doctor -d 'Verify runtime, image and sandbox startup'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a help -d 'Print usage'
@@ -107,6 +109,9 @@ complete -c agent-gvisor -n '__fish_seen_subcommand_from merge' -l repo -r -d 'O
 complete -c agent-gvisor -n '__fish_seen_subcommand_from merge' -l no-ff -d 'Create a merge commit even if a fast-forward is possible (the default)'
 complete -c agent-gvisor -n '__fish_seen_subcommand_from merge' -l ff -d 'Allow a fast-forward, creating no merge commit'
 complete -c agent-gvisor -n '__fish_seen_subcommand_from merge' -l squash -d 'Produce a single squashed commit on the target branch'
+
+# fetch/push options (docs/spec.md §9 "fetch"/"push").
+complete -c agent-gvisor -n '__fish_seen_subcommand_from fetch push' -l repo -r -d 'Target repository (default: the repository containing the current directory)'
 
 # destroy options (docs/spec.md §9 "destroy").
 complete -c agent-gvisor -n '__fish_seen_subcommand_from destroy' -l force -d 'Remove even a worktree with uncommitted changes'

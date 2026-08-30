@@ -8,6 +8,8 @@ Usage:
   agent-gvisor logs NAME [PODMAN-LOGS-ARGS...]
   agent-gvisor stop NAME
   agent-gvisor merge NAME [--no-ff] [--ff] [--squash] [--repo PATH] [GIT-MERGE-ARGS...]
+  agent-gvisor fetch NAME [--repo PATH]
+  agent-gvisor push NAME [REMOTE] [--repo PATH]
   agent-gvisor destroy NAME [--force] [--delete-branch]
   agent-gvisor doctor
 
@@ -48,6 +50,18 @@ merge options:
                               branch (no merge commit, no merge ancestry)
   --                          Pass any further flags verbatim to git merge
                               (e.g. -- -m "merge feature work")
+
+fetch options:
+  --repo PATH                 Repository to fetch the session branch into
+                              (default: the repository containing the current
+                              directory)
+
+push options:
+  REMOTE                      Remote to push the session branch to (default:
+                              origin)
+  --repo PATH                 Repository to push the session branch from
+                              (default: the repository containing the current
+                              directory); the branch is fetched into it first
 
 environment:
   AGENT_GVISOR_IMAGE            Override the default image

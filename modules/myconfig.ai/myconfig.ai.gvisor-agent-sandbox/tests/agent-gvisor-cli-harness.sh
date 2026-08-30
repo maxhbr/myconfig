@@ -161,6 +161,18 @@ mkdir -p "$STATE/sessions/old"
 expect_ok "list shows a pre-rewrite entry" list
 expect_out "list flags the pre-rewrite entry" "incompatible (pre-rewrite layout)"
 
+echo "== fetch/push =="
+# The harness runs outside any Git work tree, so fetch/push need --repo
+# (the same error a bare `agent-gvisor fetch NAME` prints there).
+expect_fail "fetch outside a work tree fails" 1 fetch s1
+expect_err "fetch names the problem" "not a Git working tree"
+expect_ok "fetch brings the branch into the repo" fetch s1 --repo "$REPO"
+expect_err "fetch logs the branch" "fetching branch agent/gvisor/s1"
+expect_ok "push pushes the branch to origin" push s1 --repo "$REPO"
+expect_err "push names the remote" "pushing agent/gvisor/s1 to origin"
+expect_ok "push to an explicit remote" push s1 --repo "$REPO" upstream
+expect_err "push names the explicit remote" "pushing agent/gvisor/s1 to upstream"
+
 echo "== summary =="
 if [ "$failed" -eq 0 ]; then
     printf 'all %s harness checks passed\n' "$passed"
