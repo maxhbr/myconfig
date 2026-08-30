@@ -3,6 +3,37 @@
 Rootless Podman + gVisor (`runsc`) sandboxes for coding agents, providing the
 `agent-gvisor` session manager and a Nix-built sandbox image.
 
+## Rust rewrite
+
+The session manager CLI is implemented in Rust ([`rust/`](./rust), packaged by
+[`nix/agent-gvisor.nix`](./nix/agent-gvisor.nix) via `rustPlatform.buildRustPackage`),
+replacing the original bash script (`bin/agent-gvisor`, now deleted). The
+authoritative contract — subcommands, flags, env vars, session-state layout,
+the exact podman argument vector, error-message texts, and the behaviours
+dropped by the rewrite — is written down in
+[`docs/spec.md`](./docs/spec.md); the cargo tests in `rust/tests/` and the
+executed stub harness `tests/agent-gvisor-cli-harness.sh` enforce it (wired
+into `nix flake check` via `nix/checks.nix`, x86_64-linux only).
+
+Compatibility notes:
+
+- Sessions created by the bash CLI (current layout: registry symlink +
+  repo-adjacent `__pools`/`__sessions`) keep working unchanged: repo-ids are
+  path-based and the shell-quoted `meta` format is preserved (see
+  `docs/spec.md` §8/§12).
+- Pre-rewrite-layout sessions (registry entry = real session directory, old
+  central `$XDG_STATE_HOME/agent-gvisor/pools/`) are NOT loadable any more:
+  `list` shows them as `incompatible (pre-rewrite layout)` and every other
+  subcommand asks you to remove them by hand. The full list of dropped
+  behaviours is in `docs/spec.md` §14.
+- Only `git`, `podman` and `sha256sum` are exec'd from `PATH`; `realpath`,
+  `flock`, binary-file detection etc. are implemented in Rust (zero cargo
+dependencies).
+
+Because everything under this directory is a vendored `git subtree`, future
+`git subtree pull`s will conflict with the Rust additions — see
+[`doc/TODOs/agent-gvisor-subtree-rust-conflict.md`](../../../doc/TODOs/agent-gvisor-subtree-rust-conflict.md).
+
 It is the container-based tier of the repo's sandboxing ladder — see
 [`../docs/README.md`](../docs/README.md) ("Agent sandboxing tiers") for the
 other tiers (`agent-tmux`, `jailed-*`, `sandboxed-*`, `agent-microvm`) and how
@@ -69,6 +100,8 @@ Removed (existed only to make upstream a standalone flake):
 
 Moved:
 
+- `bin/agent-gvisor` → reimplemented in Rust under `rust/` (the bash CLI was
+  deleted after stub-parity against it was proven; see "Rust rewrite" above).
 - `README.md` → `docs/upstream-README.md` (upstream documentation: usage of
   `agent-gvisor`, image contents, isolation boundaries, troubleshooting),
   with the names adjusted to the ones used here. Its "install as a flake
