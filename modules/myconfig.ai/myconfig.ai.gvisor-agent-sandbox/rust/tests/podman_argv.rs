@@ -181,9 +181,10 @@ fn build_run_args_rootful_limits() {
     assert!(!args.iter().any(|a| a.starts_with("--network")));
     assert!(!args.iter().any(|a| a.starts_with("--env-file")));
     assert!(!args.iter().any(|a| a.contains("seccomp=unconfined")));
-    // Empty mounts.tsv/env.list contribute nothing; only the 5 fixed --envs:
-    assert!(!args.contains(&"--mount".to_string()));
-    assert_eq!(args.iter().filter(|a| *a == "--env").count(), 5);
+    // Empty mounts.tsv/env.list contribute nothing beyond the 3 fixed binds
+    // and the 6 fixed --envs (bash run_container always emits both blocks):
+    assert_eq!(args.iter().filter(|a| *a == "--mount").count(), 3);
+    assert_eq!(args.iter().filter(|a| *a == "--env").count(), 6);
     // No command given and no default -> /bin/bash:
     assert_eq!(args.last().unwrap(), "/bin/bash");
 }

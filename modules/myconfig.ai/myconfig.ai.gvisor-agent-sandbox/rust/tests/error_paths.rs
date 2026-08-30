@@ -13,6 +13,23 @@ fn started(s: &Scenario) {
     s.run_ok(&["start", "s1", "--detach"]);
 }
 
+/// The pool path of session `s1` started from this scenario's repo, as
+/// recorded in its meta.
+fn pool_of(s: &Scenario) -> String {
+    let repo = s.repo.canonicalize().unwrap();
+    let repo_id = common::expected_repo_id(&s.repo);
+    repo.parent()
+        .unwrap()
+        .join(format!(
+            "{}_agent-gvisor",
+            repo.file_name().unwrap().to_string_lossy()
+        ))
+        .join("__pools")
+        .join(format!("{repo_id}.git"))
+        .display()
+        .to_string()
+}
+
 #[test]
 fn help_and_usage() {
     let s = Scenario::new("help-and-usage");
@@ -74,7 +91,12 @@ fn session_name_given_twice() {
 fn unknown_subcommand_and_option() {
     let s = Scenario::new("unknown-subcommand-and-option");
     s.run_fail(&["--bad"], 1, "agent-gvisor: error: unknown subcommand: --bad\n");
-    s.run_fail(&["frobnicate"], 1, "agent-gvisor: error: invalid session name 'frobnicate' (allowed: letters, digits, dot, underscore, hyphen)\n");
+    // The positional-NAME shorthand still validates the name:
+    s.run_fail(
+        &["frob!nicate"],
+        1,
+        "agent-gvisor: error: invalid session name 'frob!nicate' (allowed: letters, digits, dot, underscore, hyphen)\n",
+    );
     s.run_fail(
         &["start", "s1", "--bad"],
         1,
@@ -167,7 +189,10 @@ fn missing_paths_and_repos() {
     s.run_fail(
         &["start", "s1", "--repo", &s.repo.display().to_string()],
         1,
-        &format!("agent-gvisor: error: not a Git working tree: {}", s.repo.canonicalize().unwrap().display()),
+        &format!(
+            "agent-gvisor: error: not a Git working tree: {}\n",
+            s.repo.canonicalize().unwrap().display()
+        ),
     );
 }
 
@@ -178,7 +203,7 @@ fn image_and_runtime_checks() {
     s.run_fail(
         &["start", "s1"],
         1,
-        "agent-gvisor: error: container image 'localhost/agent-gvisor-test:latest' is not in the local Podman store.\n\
+        "agent-gvisor: error: container image localhost/agent-gvisor-test:latest is not in the local Podman store.\n\
          Build and load it with: agent-gvisor-load-image\n\
          (or: nix run .#load-image), or pass --image with another reference.\n",
     );
@@ -307,17 +332,23 @@ fn merge_guards() {
         ),
     );
 
+    // Bash parity: realpath prints its own diagnostic (raw, no prefix),
+    // then the `|| die` fires with the --repo message.
     s.run_fail(
         &["merge", "s1", "--repo", &s.root.join("nope").display().to_string()],
         1,
-        &format!("realpath: {}: No such file or directory\n", s.root.join("nope").display()),
+        &format!(
+            "realpath: {}: No such file or directory\nagent-gvisor: error: --repo: not a path: {}\n",
+            s.root.join("nope").display(),
+            s.root.join("nope").display()
+        ),
     );
     let plain = s.root.join("plain");
     fs::create_dir_all(&plain).unwrap();
     s.run_fail(
         &["merge", "s1", "--repo", &plain.display().to_string()],
         1,
-        &format!("agent-gvisor: error: --repo: not a Git work tree: {}", plain.display()),
+        &format!("agent-gvisor: error: --repo: not a Git work tree: {}\n", plain.display()),
     );
 }
 
@@ -366,7 +397,10 @@ fn merge_failure_message() {
         &["merge", "s1"],
         1,
         &format!(
-            "agent-gvisor: error: merge failed; resolve conflicts in {repo}, then delete the leftover ref with 'git -C \"{repo}\" branch -D agent/gvisor/s1'\n"
+            "agent-gvisor: fetching branch agent/gvisor/s1 from pool {pool} into {repo}\n\
+             agent-gvisor: merging agent/gvisor/s1 into main of {repo}\n\
+             agent-gvisor: error: merge failed; resolve conflicts in {repo}, then delete the leftover ref with 'git -C \"{repo}\" branch -D agent/gvisor/s1'\n",
+            pool = pool_of(&s)
         ),
     );
 }

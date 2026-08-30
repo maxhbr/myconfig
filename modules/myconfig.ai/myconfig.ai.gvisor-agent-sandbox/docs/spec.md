@@ -478,7 +478,7 @@ All old-layout compatibility from the bash CLI is gone. Concretely:
    `destroy` — fails with
    ```
    error: session <name> is from the pre-rewrite layout; remove it by hand with:
-     rm -rf <registry-entry-q>
+   rm -rf <registry-entry-q>
    ```
 2. **The old central pool layout** (`$STATE_ROOT/pools/<repo-id>.git`) is
    not consulted; orphaned central pools are ignored entirely.

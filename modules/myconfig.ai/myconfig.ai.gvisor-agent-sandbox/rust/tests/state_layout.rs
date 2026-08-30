@@ -182,7 +182,7 @@ fn status_output() {
          pool:      {}\n\
          container: agent-{repo_id}-s1\n\
          image:     {IMAGE}\n\
-         status:    running\\npid:       42\\nstarted:   2025-01-01T00:00:00Z\\n\n\
+         status:    running\\npid:       42\\nstarted:   2025-01-01T00:00:00Z\n\
          ## main\n",
         repo.display(),
         worktree.display(),

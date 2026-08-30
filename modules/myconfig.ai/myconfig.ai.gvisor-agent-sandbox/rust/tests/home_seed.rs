@@ -102,10 +102,10 @@ fn seed_home_warnings_and_summary() {
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
         format!(
-            "agent-gvisor: warning: skipping dangling seed path gone-link -> ../gone\n\
-             agent-gvisor: seeded /home/agent with 3 path(s) from {seed}\n\
-             agent-gvisor: --force: destroying existing session s1 and deleting branch agent/gvisor/s1\n\
+            "agent-gvisor: --force: destroying existing session s1 and deleting branch agent/gvisor/s1\n\
              agent-gvisor: destroyed session s1\n\
+             agent-gvisor: warning: skipping dangling seed path gone-link -> ../gone\n\
+             agent-gvisor: seeded /home/agent with 3 path(s) from {seed}\n\
              agent-gvisor: created worktree {wt} on branch agent/gvisor/s1\n\
              agent-gvisor: if the container fails to start the session is kept; retry with 'agent-gvisor run s1', diagnose with 'agent-gvisor doctor', or clean up with 'agent-gvisor destroy s1'\n\
              agent-gvisor: warning: memory/cpu/pids limits not enforced, the runtime ignores cgroups\n"
@@ -231,6 +231,10 @@ fn invalid_rewrite_rule() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
-        "agent-gvisor: error: invalid home-seed rewrite rule (expected OLD=NEW): noequals\n"
+        format!(
+            "agent-gvisor: seeded /home/agent with 1 path(s) from {}\n\
+             agent-gvisor: error: invalid home-seed rewrite rule (expected OLD=NEW): noequals\n",
+            seed.display()
+        )
     );
 }

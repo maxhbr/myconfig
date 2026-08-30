@@ -2,7 +2,8 @@
 # Recording stub: podman. Global args (--runtime=*, --cgroup-manager=*,
 # --runtime-flag=*) are skipped, everything else dispatched. Container state
 # lives in $RECORD/containers/<name>/: existence = the directory, running
-# state = contents of the "running" file.
+# state = contents of the "running" file. The recorded argv includes the
+# leading "podman" (argv[0]), matching the `last-command` the CLI writes.
 RECORD="${RECORD:?stub podman: RECORD not set}"
 record() {
     _tool=$1
@@ -17,7 +18,7 @@ record() {
     printf '%s\0' "$@" >"$RECORD/$_tool-$_seq.argv"
     rmdir "$RECORD/.seqlock"
 }
-record podman "$@"
+record podman podman "$@"
 sub=
 while [ $# -gt 0 ]; do
     case $1 in
@@ -55,19 +56,21 @@ case "$sub" in
                     printf '%s\n' false
                 fi
                 ;;
+            status:*)
+                # podman does not interpret literal \n in --format: one line,
+                # and podman appends a trailing newline after the output.
+                # (This case must precede *State.Status*: the cmd_status
+                # format contains {{.State.Status}} as well.)
+                _st=stopped
+                [ "$(cat "$RECORD/containers/$cname/running" 2>/dev/null)" = true ] && _st=running
+                printf 'status:    %s\\npid:       %s\\nstarted:   %s\n' "$_st" 42 2025-01-01T00:00:00Z
+                ;;
             *State.Status*)
                 if [ "$(cat "$RECORD/containers/$cname/running" 2>/dev/null)" = true ]; then
                     printf '%s\n' running
                 else
                     printf '%s\n' stopped
                 fi
-                ;;
-            status:*)
-                # podman does not interpret literal \n in --format: one line,
-                # and podman appends a trailing newline after the output.
-                _st=stopped
-                [ "$(cat "$RECORD/containers/$cname/running" 2>/dev/null)" = true ] && _st=running
-                printf 'status:    %s\\npid:       %s\\nstarted:   %s\n' "$_st" 42 2025-01-01T00:00:00Z
                 ;;
             *) exit 0 ;;
         esac

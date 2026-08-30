@@ -48,13 +48,21 @@ case "$sub" in
                 if [ -f "$RECORD/base-unresolvable" ]; then
                     exit 128
                 fi
-                printf '%s\n' BASE
-                exit 0
+                # Only HEAD resolves by default; any other ref fails like
+                # real git would for a ref it does not know.
+                if [ "$2" = 'HEAD^{commit}' ]; then
+                    printf '%s\n' BASE
+                    exit 0
+                fi
+                exit 128
                 ;;
         esac
         exit 0
         ;;
-    init) exit 0 ;;
+    init)
+        [ "$1" = "--bare" ] && mkdir -p "$2"
+        exit 0
+        ;;
     remote) exit 0 ;;
     fetch) exit 0 ;;
     cat-file) exit 0 ;;
@@ -66,9 +74,7 @@ case "$sub" in
         case "$1" in
             add)
                 shift
-                while [ $# -gt 1 ]; do
-                    shift
-                done
+                [ "$1" = "-b" ] && shift 2
                 mkdir -p "$1"
                 exit 0
                 ;;

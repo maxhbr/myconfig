@@ -31,3 +31,28 @@ pub fn fail_raw(msg: &str) -> ! {
     eprintln!("{msg}");
     std::process::exit(1);
 }
+
+/// Locate `cmd` on PATH (bash `command -v`), returning its path.
+pub fn which(cmd: &str) -> Option<std::path::PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
+    let path = std::env::var("PATH").ok()?;
+    for dir in path.split(':') {
+        if dir.is_empty() {
+            continue;
+        }
+        let cand = std::path::Path::new(dir).join(cmd);
+        if let Ok(m) = std::fs::metadata(&cand) {
+            if m.is_file() && m.permissions().mode() & 0o111 != 0 {
+                return Some(cand);
+            }
+        }
+    }
+    None
+}
+
+/// Die when an external command is not on PATH (bash `need`).
+pub fn need(cmd: &str) {
+    if which(cmd).is_none() {
+        die(&format!("missing command: {cmd}"));
+    }
+}

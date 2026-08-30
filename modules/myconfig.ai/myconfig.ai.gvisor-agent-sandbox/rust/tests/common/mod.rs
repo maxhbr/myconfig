@@ -91,6 +91,10 @@ impl Scenario {
         fs::create_dir_all(&s.record).unwrap();
         fs::create_dir_all(&s.stub_bin).unwrap();
         fs::create_dir_all(&s.repo).unwrap();
+        // Make the repo look like a Git work tree (a plain empty `.git` is
+        // enough for the CLI's `-d/-f` probe; deeper git answers come from
+        // the stub).
+        fs::create_dir_all(s.repo.join(".git")).unwrap();
         fs::create_dir_all(s.state.join("sessions")).unwrap();
         fs::create_dir_all(&s.home).unwrap();
         s.write_stub("git", GIT_STUB);
@@ -115,15 +119,39 @@ impl Scenario {
     }
 
     /// A `Command` for the binary with the scenario environment applied.
+    /// The CWD is the scenario's `repo`, so a `start` without `--repo`
+    /// resolves the repo to it (the shorthand path).
     pub fn cmd(&self, args: &[&str]) -> Command {
         let mut c = Command::new(BIN);
         c.args(args);
+        c.current_dir(&self.repo);
         self.apply_env(&mut c);
         c
     }
 
     /// The scenario environment, applied to a `Command`.
     pub fn apply_env(&self, c: &mut Command) {
+        // Hermeticity: strip every AGENT_GVISOR_* variable the CLI reads,
+        // then set the scenario defaults (cmd_with_env re-adds overrides).
+        for var in [
+            "AGENT_GVISOR_STATE",
+            "AGENT_GVISOR_PODMAN_RUNTIME",
+            "AGENT_GVISOR_DEFAULT_RUNTIME",
+            "AGENT_GVISOR_PODMAN_CGROUP_MANAGER",
+            "AGENT_GVISOR_PODMAN_RUNTIME_FLAGS",
+            "AGENT_GVISOR_IMAGE",
+            "AGENT_GVISOR_DEFAULT_IMAGE",
+            "AGENT_GVISOR_DEFAULT_COMMAND",
+            "AGENT_GVISOR_NETWORK",
+            "AGENT_GVISOR_LOOPBACK_FORWARD",
+            "AGENT_GVISOR_MODEL_ENDPOINT",
+            "AGENT_GVISOR_WORKTREES",
+            "AGENT_GVISOR_HOME_SEED",
+            "AGENT_GVISOR_HOME_SEED_PATHS",
+            "AGENT_GVISOR_HOME_SEED_REWRITE",
+        ] {
+            c.env_remove(var);
+        }
         let path = format!("{}:{}", self.stub_bin.display(), std::env::var("PATH").unwrap_or_default());
         c.env("PATH", &path)
             .env("HOME", &self.home)
@@ -199,10 +227,25 @@ impl Scenario {
     }
 
     /// Only the recorded calls of `tool` whose first argument equals `head`.
+    /// Recorded calls of `tool` whose subcommand (first arg after the tool
+    /// name and podman's global args) is `head`.
     pub fn recorded_starting_with(&self, tool: &str, head: &str) -> Vec<Vec<String>> {
         self.recorded(tool)
             .into_iter()
-            .filter(|c| c.first().map(String::as_str) == Some(head))
+            .filter(|c| {
+                if c.first().map(String::as_str) != Some(tool) {
+                    return false;
+                }
+                let mut i = 1;
+                while i < c.len()
+                    && (c[i].starts_with("--runtime=")
+                        || c[i].starts_with("--cgroup-manager=")
+                        || c[i].starts_with("--runtime-flag="))
+                {
+                    i += 1;
+                }
+                c.get(i).map(String::as_str) == Some(head)
+            })
             .collect()
     }
 }
@@ -241,13 +284,23 @@ pub fn strip_podman_globals(argv: &[String]) -> Vec<String> {
 
 /// Compute the repo ID exactly like `state::repo_id` does (first 16 hex
 /// chars of `sha256(realpath repo)`), via `sha256sum` — independent of the
-/// code under test.
+/// code under test. The path string is fed via STDIN without a trailing
+/// newline, matching the bash `printf '%s' "$repo" | sha256sum`.
 pub fn expected_repo_id(repo: &std::path::Path) -> String {
+    use std::io::Write;
+    use std::process::Stdio;
     let real = repo.canonicalize().unwrap();
-    let out = Command::new("sha256sum")
-        .arg(&real)
-        .output()
+    let mut child = Command::new("sha256sum")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
         .expect("sha256sum (tests rely on coreutils being present)");
+    let _ = child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(real.to_string_lossy().as_bytes());
+    let out = child.wait_with_output().unwrap();
     let text = String::from_utf8(out.stdout).unwrap();
     text.trim()
         .split_whitespace()
