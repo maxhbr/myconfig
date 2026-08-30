@@ -6,7 +6,8 @@
 # This is the written contract the Rust implementation (../rust/) follows and
 # the test suites (../rust/tests/, ../tests/agent-gvisor-cli-harness.sh)
 # enforce. It was derived line-by-line from the original bash implementation
-# (the historical bin/agent-gvisor); where the two disagree, this file wins and
+# (the historical bin/agent-gvisor, since deleted — see the git history);
+# where the two disagree, this file wins and
 # the difference is listed in "Dropped in the rewrite" below.
 #
 # The observable API is preserved byte-for-byte where users can script
@@ -95,7 +96,10 @@ Spec form is `HOST:DEST[:MODE]`:
    `--mount`), must be `ro` or `rw` — otherwise
    `error: mount mode must be ro or rw: <spec>`.
 4. `HOST` must exist — otherwise `error: mount source does not exist: <host>`
-   (host paths are canonicalised like `realpath -e`).
+   with the path AS THE CALLER GAVE IT (bash's failed
+   `host=$(realpath -e …)` assignment clobbered the variable and printed an
+   empty path; the rewrite deliberately keeps the original). Host paths are
+   canonicalised like `realpath -e`.
 
 Resolved mounts are stored tab-separated in `__sessions/<name>/mounts.tsv`.
 
@@ -522,6 +526,21 @@ Two layers, both wired into `nix flake check` via `nix/checks.nix`:
   happy/sad, a full session cycle, `list` rows, podman argv sanity) driving
   the UNWRAPPED binary (the production wrapper's PATH would shadow the
   stubs).
+
+### Deletion gate (bash parity)
+
+Before deleting the bash CLI, both implementations were run through the
+same ~40-step scenario (same directory layout, so repo-ids — and therefore
+container names, pool paths and every printed path — were identical;
+same stubs): every step's stdout, stderr and exit code matched
+byte-for-byte, as did the `meta`/`mounts.tsv`/`env.list`/`last-command`
+bytes and every recorded `git`/`podman` argv (including the full `podman
+run` vector with loopback forwarding, mounts, env-file and `-- COMMAND`).
+The only diffs were the deliberate normalizations: the `session name
+required` wording (§14.7), `mount source does not exist: <original-host>`
+keeping the path the caller gave (§2, mount rule 4), and `list`'s
+`incompatible (pre-rewrite layout)` row (§14.1). The bash CLI remains
+recoverable from the git history for re-running the comparison.
 
 TTY behaviour (§13) is deliberately not automated: there is no terminal in
 a build sandbox. The nix checks run on `x86_64-linux` only.

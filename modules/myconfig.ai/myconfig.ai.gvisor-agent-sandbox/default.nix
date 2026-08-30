@@ -9,7 +9,8 @@
 # container with gVisor (`runsc`) as OCI runtime, on a Nix-built sandbox image,
 # and gets its own git worktree from a disposable bare pool.
 #
-# The sources under ./bin and ./nix are vendored from
+# The sources under ./nix (and the historical bash CLI that lived in ./bin,
+# deleted in favor of the Rust rewrite) are vendored from
 # https://github.com/maxhbr/gvisor-agent-sandbox via `git subtree`; see
 # ./README.md for the import commit and how to pull upstream changes. The
 # upstream standalone-flake plumbing (flake.nix / flake.lock /

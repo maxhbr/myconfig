@@ -107,7 +107,7 @@ fn seed_home_warnings_and_summary() {
              agent-gvisor: warning: skipping dangling seed path gone-link -> ../gone\n\
              agent-gvisor: seeded /home/agent with 3 path(s) from {seed}\n\
              agent-gvisor: created worktree {wt} on branch agent/gvisor/s1\n\
-             agent-gvisor: if the container fails to start the session is kept; retry with 'agent-gvisor run s1', diagnose with 'agent-gvisor doctor', or clean up with 'agent-gvisor destroy s1'\n\
+             agent-gvisor: if the container fails to start the session is kept; retry with 'agent-gvisor run s1', diagnose with 'agent-gvisor doctor', or clean up with 'agent-gvisor destroy s1 --force'\n\
              agent-gvisor: warning: memory/cpu/pids limits not enforced, the runtime ignores cgroups\n"
         )
     );

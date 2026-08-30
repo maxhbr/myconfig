@@ -294,15 +294,16 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
             match state::try_load_session(&env, &name) {
                 Ok(old) => {
                     let old_branch = old.meta.branch.clone();
-                    if !parsed.force {
+                    if parsed.force {
+                        log(&format!(
+                            "--force: destroying existing session {name} and deleting branch {old_branch}"
+                        ));
+                    } else if !confirm_destroy_existing(&name, &old_branch) {
                         die(&format!(
                             "session already exists: {name} (pass --force, or remove it with \
                              'agent-gvisor destroy {name} --force --delete-branch')"
                         ));
                     }
-                    log(&format!(
-                        "--force: destroying existing session {name} and deleting branch {old_branch}"
-                    ));
                     destroy_session(&env, &old, true, true)
                         .unwrap_or_else(|_| die(&format!("could not destroy the existing session: {name}")));
                 }
@@ -474,7 +475,7 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     log(&format!(
         "if the container fails to start the session is kept; retry with \
          'agent-gvisor run {name}', diagnose with 'agent-gvisor doctor', or \
-         clean up with 'agent-gvisor destroy {name}'"
+         clean up with 'agent-gvisor destroy {name} --force'"
     ));
     run_container(&env, &name, parsed.detach, &parsed.command)
 }
@@ -500,6 +501,28 @@ pub fn run_container(env: &Env, name: &str, detach: bool, command: &[String]) ->
     let _ = err;
     eprintln!("agent-gvisor: error: failed to run podman");
     std::process::exit(127);
+}
+
+/// The interactive `start`-on-existing-session prompt (docs/spec.md §13):
+/// on a terminal (stdin AND stderr), ask before destroying; `y`/`yes` in
+/// any case confirms, EOF or anything else fails like the non-interactive
+/// case. Returns false without printing when not on a terminal.
+fn confirm_destroy_existing(name: &str, old_branch: &str) -> bool {
+    use std::io::{BufRead, IsTerminal, Write};
+    if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+        return false;
+    }
+    // No trailing newline, like the bash `printf '… [y/N] ' >&2`.
+    eprint!(
+        "agent-gvisor: session {name} already exists; destroy it and delete branch {old_branch}? [y/N] "
+    );
+    let _ = std::io::stderr().flush();
+    let mut reply = String::new();
+    if std::io::stdin().lock().read_line(&mut reply).unwrap_or(0) == 0 {
+        return false;
+    }
+    let reply = reply.trim_end_matches(['\n', '\r']);
+    matches!(reply.to_lowercase().as_str(), "y" | "yes")
 }
 
 /// `agent-gvisor list` — registry table incl. `incomplete` and

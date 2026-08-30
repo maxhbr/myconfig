@@ -109,6 +109,11 @@ Moved:
 
 Patched:
 
+(The patches below describe the bash CLI as it was last vendored — the
+file itself is deleted; the Rust rewrite preserves all of them — see
+`docs/spec.md`, the authoritative contract — including the interactive
+`[y/N]` confirm on `start` of an existing session (spec §13).)
+
 - `bin/agent-gvisor` — the session name and repository can be given
   positionally: a first argument that is no action word is a session name, so
   `agent-gvisor NAME` is shorthand for
