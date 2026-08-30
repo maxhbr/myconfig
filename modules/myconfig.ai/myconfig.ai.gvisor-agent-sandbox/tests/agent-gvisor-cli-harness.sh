@@ -150,6 +150,27 @@ for flag in \
     fi
 done
 
+# A `--nix` session: the store volume mount in the argv, and its cleanup.
+echo "== nix sessions =="
+expect_ok "start a --nix session" start n1 --repo "$REPO" --nix --detach
+if argv_has 'type=volume,src=.*-n1-nix,dst=/nix/store'; then
+    printf 'ok   podman argv mounts the nix store volume\n'
+    passed=$((passed + 1))
+else
+    printf 'FAIL podman argv lacks the nix store volume mount\n' >&2
+    failed=$((failed + 1))
+fi
+expect_ok "destroy removes the nix session" destroy n1 --force --delete-branch
+# Only destroy dispatches a `volume` subcommand (exists/rm) — proof it
+# cleaned up the store volume (the stub accepts any volume command).
+if argv_has '^volume$'; then
+    printf 'ok   destroy removes the nix volume\n'
+    passed=$((passed + 1))
+else
+    printf 'FAIL destroy does not touch the nix volume\n' >&2
+    failed=$((failed + 1))
+fi
+
 echo "== list =="
 expect_ok "list exits 0" list
 expect_out "list shows the session" "s1 .*running .*agent/gvisor/s1"

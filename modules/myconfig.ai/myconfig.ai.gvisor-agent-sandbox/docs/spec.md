@@ -85,6 +85,8 @@ arguments after `--`). `--name` plus a positional name is
 | `--cpus NUMBER` | `4` | dito |
 | `--pids-limit NUMBER` | `2048` | dito |
 | `--seccomp-unconfined` | off | adds `--security-opt=seccomp=unconfined` |
+| `--nix` | `$AGENT_GVISOR_NIX` | writable Nix store volume at `/nix/store` (see `docs/nix-in-sandbox.md`); recorded in `meta` as `nix=true` |
+| `--no-nix` | — | start without the Nix store, even when `$AGENT_GVISOR_NIX` enables it by default |
 | `--force` | off | destroy an existing session of the same name |
 | `--home-seed PATH` | see §6 | realpath'd; must be a directory |
 | `--no-home-seed` | seeding on | start with an empty `/home/agent` |
@@ -157,6 +159,8 @@ Resolved mounts are stored tab-separated in `__sessions/<name>/mounts.tsv`.
 | `AGENT_GVISOR_NETWORK` | unset ⇒ empty | default `--network` for sessions and `doctor` probes |
 | `AGENT_GVISOR_LOOPBACK_FORWARD` | unset | **space-separated** `LPORT:RHOST:RPORT` rules; passed into the container and set up by `/bin/agent-gvisor-init` |
 | `AGENT_GVISOR_DEFAULT_COMMAND` | `/bin/bash` | word-split command run by `start`/`run` when no COMMAND is given; `shell` is unaffected |
+| `AGENT_GVISOR_NIX` | unset ⇒ off | default for `--nix`; enabled unless unset, empty or exactly `false` |
+| `AGENT_GVISOR_NIX_CONFIG` | unset | passed into `--nix` sessions as the container env `NIX_CONFIG` (the in-sandbox `nix.conf`; see `docs/nix-in-sandbox.md`) |
 
 The Nix module (../default.nix) bakes the list-encoded variables joined with
 single spaces via `makeWrapper --set-default`, so they remain overridable per
@@ -246,13 +250,16 @@ rules). Fields, in this exact order:
 
 ```
 name= repo= repo_id= pool= worktree= home= container= branch= image=
-memory= cpus= pids_limit= network= seccomp_unconfined= env_file=
+memory= cpus= pids_limit= network= seccomp_unconfined= env_file= nix=
 ```
 
 `seccomp_unconfined` is the literal string `true`/`false`; the run-time
 `--security-opt=seccomp=unconfined` flag is added whenever the field is
-anything but exactly `false` (bash-source semantics). Empty values are
-written as `''`. The reader accepts general shell quoting: bare words,
+anything but exactly `false` (bash-source semantics). `nix` is the literal
+`true`/`false` too, but STRICTER: the Nix mounts apply only when it is
+exactly `true` — a field absent from bash-era metas parses as empty and
+must not gain mounts, because the CLI never created a backing volume for
+those sessions. Empty values are written as `''`. The reader accepts general shell quoting: bare words,
 backslash escapes, `'…'`, `"…"`, `$'…'` (ANSI-C); unknown keys are ignored,
 missing keys default to empty.
 
@@ -343,11 +350,14 @@ session" inventory).
 
 1. remove the container if it exists (`podman rm --force --time 10`? — no:
    `podman rm --force --time 5 <container>`).
-2. if the worktree dir exists: refuse a dirty tree without `--force`
+2. remove the session's Nix store volume if the session is a `nix=true`
+   session and the volume exists (`podman volume rm <container>-nix`;
+   see `docs/nix-in-sandbox.md`).
+3. if the worktree dir exists: refuse a dirty tree without `--force`
    (`error: worktree has uncommitted changes; commit them or use --force`);
    `git --git-dir=<pool> worktree remove [--force] <worktree>`.
-3. `--delete-branch`: `git --git-dir=<pool> branch -D <branch>`.
-4. `rm -rf` the session dir **and** the registry entry; log
+4. `--delete-branch`: `git --git-dir=<pool> branch -D <branch>`.
+5. `rm -rf` the session dir **and** the registry entry; log
    `destroyed session <name>`.
 
 ### `list`
@@ -377,6 +387,7 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --mount type=bind,src=<worktree>,dst=<repo>,rw
   --mount type=bind,src=<pool>,dst=<pool>,rw
   --mount type=bind,src=<home>,dst=/home/agent,rw
+  [--mount type=volume,src=<container>-nix,dst=/nix/store]  # only when nix=true
   --env HOME=/home/agent
   --env XDG_CONFIG_HOME=/home/agent/.config
   --env XDG_CACHE_HOME=/home/agent/.cache
@@ -384,6 +395,12 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --env AGENT_SESSION=<session name>
   --env AGENT_WORKTREE=<repo>
   [--env AGENT_GVISOR_LOOPBACK_FORWARD=<value>]      # only when set
+  [--env NIX_REMOTE=local                            # only when nix=true:
+   --env NIX_STATE_DIR=/home/agent/.local/state/nix    # the daemon-less store
+   --env NIX_LOG_DIR=/home/agent/.local/state/nix/log  # and its on-home state,
+   --env TMPDIR=/home/agent/.cache/nix-tmp             # see docs/nix-in-sandbox.md
+   --env AGENT_GVISOR_NIX=1]
+  [--env NIX_CONFIG=<nix.conf>]                      # only when AGENT_GVISOR_NIX_CONFIG is set
   (--pids-limit <n> --memory <m> --cpus <c>)         # only when limits enforced (§5)
   [--network <mode>]                                 # only when non-empty
   [--security-opt=seccomp=unconfined]                # seccomp_unconfined != "false"
@@ -391,7 +408,7 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --mount type=bind,src=<host>,dst=<dest>,<mode>      # per mounts.tsv line, in order
   --env <KEY=VALUE>                                  # per env.list line, in order
   <image>
-  [/bin/agent-gvisor-init]                            # only when LOOPBACK_FORWARD is set
+  [/bin/agent-gvisor-init]                            # when LOOPBACK_FORWARD is set OR nix=true
   <COMMAND...>                                       # or the word-split AGENT_GVISOR_DEFAULT_COMMAND
 ```
 
@@ -546,10 +563,14 @@ Two behavioural layers, both wired into `nix flake check` via
   `status`, `destroy`), `error_paths.rs` (every fatal message verbatim),
   `shellwords.rs` (bash-`%q` fixtures, reader, `split_ws`),
   `home_seed.rs` (seeding, partial copies, rewrite rules, through `start`).
+  The `--nix` surface (volume mount, in-container Nix env block, init
+  wrapper, `meta` `nix=`, `destroy`'s `podman volume rm`) lives in
+  `podman_argv.rs` (`build_run_args_nix`,
+  `start_nix_records_volume_and_destroy_removes_it`).
 - `tests/agent-gvisor-cli-harness.sh` — end-to-end CLI flows (`doctor`
-  happy/sad, a full session cycle, `list` rows, podman argv sanity) driving
-  the UNWRAPPED binary (the production wrapper's PATH would shadow the
-  stubs).
+  happy/sad, a full session cycle, `list` rows, podman argv sanity, a
+  `--nix` session incl. its volume cleanup) driving the UNWRAPPED binary
+  (the production wrapper's PATH would shadow the stubs).
 - `agent-gvisor-completions` (`nix/checks.nix`) — the fish tab completion
   shipped by the production package (§1): installed at the vendor path,
   byte-identical to `rust/completions/agent-gvisor.fish`, parsed by

@@ -24,6 +24,11 @@
 # AGENT_GVISOR_LOOPBACK_FORWARD is a space-separated list of
 # `LPORT:RHOST:RPORT` rules. Failures never abort the session: a broken or
 # missing relay is reported and the payload still runs.
+#
+# The wrapper is also installed as the payload for `--nix` sessions
+# (AGENT_GVISOR_NIX=1, see docs/nix-in-sandbox.md): those need a few
+# directories prepared before the first `nix` invocation, because the
+# session home bind mount masks the image's /home/agent content.
 set -u
 
 log() { printf 'agent-gvisor-init: %s\n' "$*" >&2; }
@@ -68,6 +73,17 @@ start_forward() {
 for rule in ${AGENT_GVISOR_LOOPBACK_FORWARD-}; do
     start_forward "$rule"
 done
+
+# Nix inside the sandbox (`--nix` / AGENT_GVISOR_NIX=1, docs/nix-in-sandbox.md).
+# The CLI mounts the writable store volume at /nix/store and points Nix at
+# state and temp directories on the session home bind mount (the container
+# rootfs is --read-only, and /tmp is a small tmpfs); nothing here can create
+# those the first time except this wrapper. Failures never abort the session.
+if [ -n "${AGENT_GVISOR_NIX-}" ]; then
+    mkdir -p "${TMPDIR:-/home/agent/.cache/nix-tmp}" \
+        /home/agent/.local/state/nix/log 2>/dev/null \
+        || log "warning: could not prepare the Nix state directories"
+fi
 
 # The payload replaces this shell, so it keeps PID 1, the TTY and all signals.
 # The relays stay as its children and die with the container.

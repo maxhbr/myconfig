@@ -51,6 +51,8 @@ pub struct StartArgs {
     pub cpus: String,
     pub pids_limit: String,
     pub seccomp_unconfined: bool,
+    /// `--nix` / `--no-nix` (default: `$AGENT_GVISOR_NIX`, docs/spec.md §4).
+    pub nix: bool,
     pub force: bool,
     /// Canonicalized `--home-seed` path.
     pub home_seed: Option<String>,
@@ -98,6 +100,7 @@ pub fn parse_start(env: &Env, args: &[String]) -> StartArgs {
     let mut cpus = "4".to_string();
     let mut pids_limit = "2048".to_string();
     let mut seccomp_unconfined = false;
+    let mut nix = env.nix;
     let mut force = false;
     let mut home_seed: Option<String> = None;
     let mut seed_home_enabled = true;
@@ -131,6 +134,8 @@ pub fn parse_start(env: &Env, args: &[String]) -> StartArgs {
             "--cpus" => cpus = val("--cpus", args, &mut i),
             "--pids-limit" => pids_limit = val("--pids-limit", args, &mut i),
             "--seccomp-unconfined" => seccomp_unconfined = true,
+            "--nix" => nix = true,
+            "--no-nix" => nix = false,
             "--force" => force = true,
             "--home-seed" => match realpath_e(&val("--home-seed", args, &mut i)) {
                 Ok(p) => home_seed = Some(p),
@@ -185,6 +190,7 @@ pub fn parse_start(env: &Env, args: &[String]) -> StartArgs {
         cpus,
         pids_limit,
         seccomp_unconfined,
+        nix,
         force,
         home_seed,
         seed_home_enabled,

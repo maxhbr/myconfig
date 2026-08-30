@@ -72,6 +72,28 @@ let
     else
       cfg.image.override { extraPackages = cfg.extraImagePackages; };
 
+  # In-sandbox `nix.conf`, baked into `agent-gvisor` as
+  # AGENT_GVISOR_NIX_CONFIG and passed into `--nix` sessions as NIX_CONFIG
+  # (see ./docs/nix-in-sandbox.md). `sandbox = false` is REQUIRED: gVisor
+  # gives the sandbox neither user namespaces nor mount(2), so nix cannot
+  # set up its build sandbox; builds run directly in the container instead.
+  # Substituters and keys mirror the host configuration so a sandbox build
+  # substitutes from the same caches (e.g. a LAN binary cache) instead of
+  # rebuilding everything from source.
+  nixConfigText = lib.concatStringsSep "\n" (
+    [
+      "sandbox = false"
+      "experimental-features = nix-command flakes"
+    ]
+    ++ lib.optional (cfg.nix.substituters != [ ]) (
+      "substituters = ${lib.concatStringsSep " " cfg.nix.substituters}"
+    )
+    ++ lib.optional (cfg.nix.trustedPublicKeys != [ ]) (
+      "trusted-public-keys = ${lib.concatStringsSep " " cfg.nix.trustedPublicKeys}"
+    )
+    ++ lib.optional (cfg.nix.extraConfig != "") cfg.nix.extraConfig
+  );
+
   # Thread the effective image through both helpers, so overriding the image
   # also changes the default image reference baked into `agent-gvisor`.
   withImage = pkg: if image == null then pkg else pkg.override { agent-gvisor-image = image; };
@@ -114,6 +136,12 @@ let
     }
     // lib.optionalAttrs (cfg.defaultCommand != null) {
       AGENT_GVISOR_DEFAULT_COMMAND = cfg.defaultCommand;
+    }
+    // lib.optionalAttrs cfg.nix.enable {
+      # `--nix` by default, with the in-sandbox nix.conf above. Overridable
+      # per session with `start --no-nix` (or AGENT_GVISOR_NIX=false).
+      AGENT_GVISOR_NIX = "1";
+      AGENT_GVISOR_NIX_CONFIG = nixConfigText;
     };
 
   withSessionEnv =
@@ -170,12 +198,16 @@ in
         enabledAgentPackages
         ++ lib.optional herdrEnabled pkgs.herdr
         # Shared sandbox tooling (see ../myconfig.ai.sandboxTools.nix).
-        ++ config.myconfig.ai.sandboxTools.extraPackages;
+        ++ config.myconfig.ai.sandboxTools.extraPackages
+        # Nix for in-session builds, when enabled below
+        # (myconfig.ai.gvisor-agent-sandbox.nix).
+        ++ lib.optionals cfg.nix.enable [ cfg.nix.package ];
       defaultText = literalExpression ''
         the packages of the coding agents enabled on this host, i.e. one entry
         per set `myconfig.ai.<pi-coding-agent|opencode|claude-code|codex|github-copilot-cli|qwen-code>.enable`,
         plus `pkgs.herdr` when any of them is enabled,
-        plus `myconfig.ai.sandboxTools.extraPackages`
+        plus `myconfig.ai.sandboxTools.extraPackages`,
+        plus `nix.package` when `myconfig.ai.gvisor-agent-sandbox.nix.enable`
       '';
       example = literalExpression "[ pkgs.claude-code ]";
       description = ''
@@ -205,9 +237,11 @@ in
           home is bind-mounted over `/home/agent`, so anything the image
           carried there would be masked anyway.
 
-          Files are copied dereferenced, because the sandbox has no `/nix`.
-          Configuration whose *content* references `/nix/store` paths still
-          dangles inside the sandbox.
+          Files are copied dereferenced, because the sandbox image carries no
+          usable Nix store of its own (`--nix` sessions add one, but seeded
+          files must not rely on that). Configuration whose *content*
+          references `/nix/store` paths still dangles inside the sandbox
+          unless `nix.enable` substitutes those exact paths.
         '';
       };
 
@@ -258,6 +292,69 @@ in
           global address so a sandbox can reach the port-scoped forwarder.
 
           Set to `[ ]` to copy the configuration verbatim.
+        '';
+      };
+    };
+
+    nix = {
+      enable = mkEnableOption ''
+        a writable Nix store inside agent sandboxes (`nix build` / `nix run`
+        in-session). Sessions started with `agent-gvisor start --nix` (the
+        default while enabled) get a per-session Podman volume mounted at
+        /nix/store, seeded by copy-up with the image's own store paths, so
+        the image toolchain keeps working and nix substitutes everything
+        else from the configured binary caches. `agent-gvisor destroy`
+        removes the volume with the session. See ./docs/nix-in-sandbox.md
+        for the mechanism, the flake workflow and the security trade-offs.
+      '';
+
+      package = mkOption {
+        type = types.package;
+        default = config.nix.package;
+        defaultText = literalExpression "config.nix.package";
+        description = ''
+          The nix package baked into the sandbox image. Defaults to the
+          host's `nix.package`, so the in-sandbox nix speaks the same store
+          protocol the host's flake inputs assume. It runs daemon-less
+          inside the sandbox (`NIX_REMOTE=local`): there is no nix-daemon,
+          and the image's /nix/var stays read-only — the store state lives
+          on the session home instead.
+        '';
+      };
+
+      substituters = mkOption {
+        type = types.listOf types.str;
+        default = config.nix.settings.substituters;
+        defaultText = literalExpression "config.nix.settings.substituters";
+        description = ''
+          Binary-cache URLs passed into the sandbox (as NIX_CONFIG
+          `substituters`). Mirrors the host by default, so sandbox builds
+          substitute like host builds — in particular from a LAN cache,
+          which is the difference between a one-minute and an overnight
+          `nix build`.
+        '';
+      };
+
+      trustedPublicKeys = mkOption {
+        type = types.listOf types.str;
+        default = config.nix.settings.trusted-public-keys;
+        defaultText = literalExpression "config.nix.settings.trusted-public-keys";
+        description = ''
+          Binary-cache public keys passed into the sandbox (as NIX_CONFIG
+          `trusted-public-keys`). Mirrors the host by default. The sandbox
+          trusts these caches for the SAME reason the host does; a cache
+          that would serve a compromised path compromises sandbox builds
+          just as it would compromise host builds.
+        '';
+      };
+
+      extraConfig = mkOption {
+        type = types.lines;
+        default = "";
+        description = ''
+          Extra `nix.conf` lines appended to the in-sandbox NIX_CONFIG,
+          after the fixed settings (`sandbox = false`, the experimental
+          features) and the substituter settings above.
         '';
       };
     };

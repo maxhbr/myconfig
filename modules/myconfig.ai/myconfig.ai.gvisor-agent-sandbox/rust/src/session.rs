@@ -205,6 +205,11 @@ fn meta_from_start(
             "false".to_string()
         },
         env_file: parsed.env_file.clone().unwrap_or_default(),
+        nix: if parsed.nix {
+            "true".to_string()
+        } else {
+            "false".to_string()
+        },
     }
 }
 
@@ -920,6 +925,31 @@ pub fn destroy_session(
         }
     }
 
+    // The writable Nix store volume of a `--nix` session
+    // (docs/nix-in-sandbox.md). Guarded by `volume exists` so non-nix and
+    // pre-rewrite sessions (empty `nix`) destroy unchanged. The volume may
+    // never have materialized when the container never actually started.
+    if meta.nix == "true" {
+        let vol = podman::nix_volume_name(meta);
+        if pod.ok(&[
+            "volume".to_string(),
+            "exists".to_string(),
+            vol.clone(),
+        ]) {
+            // No --force: the container is gone, so the volume cannot be
+            // in use, and the flag's availability varies across podman
+            // versions.
+            let st = pod.run(&[
+                "volume".to_string(),
+                "rm".to_string(),
+                vol,
+            ]);
+            if !st.success() {
+                std::process::exit(st.code().unwrap_or(1));
+            }
+        }
+    }
+
     if Path::new(&worktree).is_dir() {
         if !force {
             let porcelain = git_stdout(&[
@@ -1024,6 +1054,14 @@ pub fn cmd_doctor(env: Env) -> ! {
     println!(
         "loopback fwd:    {}",
         env.loopback_forward.clone().unwrap_or_else(|| "<none>".to_string())
+    );
+    println!(
+        "nix:             {}",
+        if env.nix {
+            "enabled (--nix default; see docs/nix-in-sandbox.md)"
+        } else {
+            "disabled"
+        }
     );
 
     podman::try_check_runtime(&env).unwrap_or_else(|m| die(&m));

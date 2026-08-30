@@ -70,7 +70,8 @@ fn start_creates_expected_tree() {
          pids_limit=2048\n\
          network=''\n\
          seccomp_unconfined=false\n\
-         env_file=''\n",
+         env_file=''\n\
+         nix=false\n",
         repo.display(),
         pool.display(),
         worktree.display(),
@@ -277,6 +278,8 @@ fn meta_parses_bash_fixture() {
             network: String::new(),
             seccomp_unconfined: "true".to_string(),
             env_file: "/e 1".to_string(),
+            // No `nix` line: the parse default is empty (pre-rewrite meta).
+            nix: String::new(),
         }
     );
     // Round-trip: to_text produces the canonical quoted form.
@@ -294,7 +297,8 @@ fn meta_parses_bash_fixture() {
                     pids_limit=2048\n\
                     network=''\n\
                     seccomp_unconfined=true\n\
-                    env_file=/e\\ 1\n";
+                    env_file=/e\\ 1\n\
+                    nix=''\n";
     assert_eq!(meta.to_text(), expected);
 }
 

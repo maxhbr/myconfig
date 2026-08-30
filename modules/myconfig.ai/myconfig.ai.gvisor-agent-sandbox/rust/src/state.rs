@@ -41,6 +41,12 @@ pub struct Env {
     pub home_seed_paths: Vec<String>,
     /// `AGENT_GVISOR_HOME_SEED_REWRITE` `OLD=NEW` rules
     pub home_seed_rewrite: Vec<String>,
+    /// `AGENT_GVISOR_NIX` — default for `start --nix` (a writable Nix
+    /// store inside the sandbox; enabled unless unset, empty or `false`).
+    pub nix: bool,
+    /// `AGENT_GVISOR_NIX_CONFIG` — passed into the container as `NIX_CONFIG`
+    /// when `--nix` is on (docs/nix-in-sandbox.md).
+    pub nix_config: Option<String>,
 }
 
 /// `${VAR:-default}`: the default also applies to a set-but-empty value.
@@ -122,6 +128,10 @@ impl Env {
             home_seed: env_opt_nonempty("AGENT_GVISOR_HOME_SEED"),
             home_seed_paths: split_ws(&env_or_unset("AGENT_GVISOR_HOME_SEED_PATHS", "")),
             home_seed_rewrite: split_ws(&env_or_unset("AGENT_GVISOR_HOME_SEED_REWRITE", "")),
+            nix: env_opt_nonempty("AGENT_GVISOR_NIX")
+                .map(|v| v != "false")
+                .unwrap_or(false),
+            nix_config: env_opt_nonempty("AGENT_GVISOR_NIX_CONFIG"),
         }
     }
 }
@@ -246,7 +256,9 @@ pub struct Session {
 /// The `meta` record. All values are strings, like the bash variables the
 /// file assigns (docs/spec.md §8): `seccomp_unconfined` is the literal
 /// `true`/`false`, and the `--security-opt=seccomp=unconfined` flag applies
-/// whenever it is anything but exactly `false`.
+/// whenever it is anything but exactly `false`. `nix` (a newer field with
+/// no bash-written sessions to stay compatible with) is stricter: the Nix
+/// mounts apply only when it is exactly `true`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Meta {
     pub name: String,
@@ -264,6 +276,8 @@ pub struct Meta {
     pub network: String,
     pub seccomp_unconfined: String,
     pub env_file: String,
+    /// `true`/`false`; empty in sessions created before the field existed.
+    pub nix: String,
 }
 
 impl Meta {
@@ -271,7 +285,7 @@ impl Meta {
     /// (docs/spec.md §8).
     pub fn to_text(&self) -> String {
         format!(
-            "name={}\nrepo={}\nrepo_id={}\npool={}\nworktree={}\nhome={}\ncontainer={}\nbranch={}\nimage={}\nmemory={}\ncpus={}\npids_limit={}\nnetwork={}\nseccomp_unconfined={}\nenv_file={}\n",
+            "name={}\nrepo={}\nrepo_id={}\npool={}\nworktree={}\nhome={}\ncontainer={}\nbranch={}\nimage={}\nmemory={}\ncpus={}\npids_limit={}\nnetwork={}\nseccomp_unconfined={}\nenv_file={}\nnix={}\n",
             quote(&self.name),
             quote(&self.repo),
             quote(&self.repo_id),
@@ -287,6 +301,7 @@ impl Meta {
             quote(&self.network),
             quote(&self.seccomp_unconfined),
             quote(&self.env_file),
+            quote(&self.nix),
         )
     }
 
@@ -309,6 +324,7 @@ impl Meta {
             network: String::new(),
             seccomp_unconfined: String::new(),
             env_file: String::new(),
+            nix: String::new(),
         };
         for line in text.lines() {
             if line.is_empty() {
@@ -334,6 +350,7 @@ impl Meta {
                 "network" => meta.network = parsed,
                 "seccomp_unconfined" => meta.seccomp_unconfined = parsed,
                 "env_file" => meta.env_file = parsed,
+                "nix" => meta.nix = parsed,
                 _ => {} // unknown keys are ignored (forward compatibility)
             }
         }
