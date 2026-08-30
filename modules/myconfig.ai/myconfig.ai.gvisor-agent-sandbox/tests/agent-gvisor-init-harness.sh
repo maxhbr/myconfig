@@ -42,21 +42,22 @@ scenario() {
     printf '%s' "$root"
 }
 
-# run_init ROOT [LOGDIR] — runs the wrapper with a payload that records that
-# it ran, capturing stdout+stderr in $OUT and the exit code in $STATUS. The
-# output file and the payload marker live OUTSIDE the scenario tree, so they
-# also work when the scenario made a directory read-only.
+# run_init ROOT [STATEDIR] [LOGDIR] — runs the wrapper with a payload that
+# records that it ran, capturing stdout+stderr in $OUT and the exit code in
+# $STATUS. The output file and the payload marker live OUTSIDE the scenario
+# tree, so they also work when the scenario made a directory read-only.
 OUT="$WORK/output"
 MARKER="$WORK/payload-ran"
 STATUS=0
 run_init() {
-    local root=$1 logdir=${2:-$1/log}
+    local root=$1 statedir=${2:-$1/state} logdir=${3:-$1/log}
     rm -f "$MARKER"
     set +e
     env -i \
         PATH="$PATH" \
         AGENT_GVISOR_NIX=1 \
         NIX_STORE_DIR="$root/store" \
+        NIX_STATE_DIR="$statedir" \
         TMPDIR="$root/tmp" \
         NIX_LOG_DIR="$logdir" \
         bash "$INIT" touch "$MARKER" >"$OUT" 2>&1
@@ -107,6 +108,11 @@ if [ -d "$root/tmp" ] && [ -d "$root/log" ]; then
 else
     fail "state dirs created"
 fi
+if [ -d "$root/state" ]; then
+    pass "NIX_STATE_DIR created"
+else
+    fail "NIX_STATE_DIR created"
+fi
 
 # 2. Store not writable (the copy-up/ownership failure mode, §7 V1): refuse.
 root="$(scenario ro-store)"
@@ -116,17 +122,27 @@ expect_status "unwritable store aborts the session" 1
 expect_output "unwritable store is reported" "is not writable in this sandbox"
 expect_payload "payload does not run on an unusable store" not-ran
 
-# 3. Store writable, but the Nix state dir cannot be created (read-only
-#    parent, i.e. a session home that did not mount): refuse as well.
+# 3. Store writable, but NIX_STATE_DIR cannot be created (read-only parent,
+#    i.e. a session home that did not mount): refuse as well.
 root="$(scenario ro-parent)"
-mkdir -p "$root/state"
-chmod a-w "$root/state"
-run_init "$root" "$root/state/nix/log"
+mkdir -p "$root/state-parent"
+chmod a-w "$root/state-parent"
+run_init "$root" "$root/state-parent/nix"
 expect_status "uncreatable state dir aborts the session" 1
 expect_output "uncreatable state dir is reported" "could not create the Nix state directory"
 expect_payload "payload does not run without Nix state" not-ran
 
-# 4. Existing but unwritable state dir: same refusal, different message.
+# 4. Existing but unwritable NIX_STATE_DIR: refuse even when the separately
+#    configured log directory is writable.
+root="$(scenario ro-state)"
+mkdir -p "$root/state"
+chmod a-w "$root/state"
+run_init "$root"
+expect_status "unwritable NIX_STATE_DIR aborts the session" 1
+expect_output "unwritable NIX_STATE_DIR is reported" "the Nix state directory $root/state is not writable"
+expect_payload "payload does not run with an unwritable NIX_STATE_DIR" not-ran
+
+# 5. Existing but unwritable log dir: same refusal.
 root="$(scenario ro-log)"
 chmod a-w "$root/log"
 run_init "$root"
@@ -134,7 +150,7 @@ expect_status "unwritable state dir aborts the session" 1
 expect_output "unwritable state dir is reported" "is not writable"
 expect_payload "payload does not run with an unwritable state dir" not-ran
 
-# 5. Without --nix nothing is probed: a session with an unwritable store is a
+# 6. Without --nix nothing is probed: a session with an unwritable store is a
 #    perfectly normal (non-nix) session.
 root="$(scenario no-nix)"
 chmod a-w "$root/store"

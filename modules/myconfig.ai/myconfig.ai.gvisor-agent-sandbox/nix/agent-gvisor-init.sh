@@ -106,7 +106,8 @@ done
 # here aborts the session: `--nix` was asked for explicitly, so an unusable
 # store is an error, not a degraded mode.
 if [ -n "${AGENT_GVISOR_NIX-}" ]; then
-    for dir in "${TMPDIR:-/home/agent/.cache/nix-tmp}" \
+    for dir in "${NIX_STATE_DIR:-/home/agent/.local/state/nix}" \
+        "${TMPDIR:-/home/agent/.cache/nix-tmp}" \
         "${NIX_LOG_DIR:-/home/agent/.local/state/nix/log}"; do
         mkdir -p "$dir" 2>/dev/null ||
             die "could not create the Nix state directory $dir;" \
