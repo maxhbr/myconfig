@@ -7,6 +7,12 @@ SPDX-License-Identifier: MIT
 
 Investigation of the frequent abort of AI coding agents on `f13`.
 
+> Note (2026-08-30): the model file
+> `hosts/host.thing/myconfig.ai.llama-cpp/Qwen3.6-27B.nix` cited below has
+> since been renamed to `Qwen3.8-27B.nix` (and its entries updated to the
+> Qwen3.8-27B models). The file and line references reflect the tree at the
+> time of the investigation.
+
 ## Symptom
 
 pi-coding-agent sessions on `f13` regularly end a turn with:

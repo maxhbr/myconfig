@@ -73,7 +73,7 @@ podman --runtime=runsc run --rm docker.io/library/alpine:latest uname -a
 
 ## 2. The agent image
 
-The image is defined in [`nix/agent-image.nix`](nix/agent-image.nix) and is
+The image is defined in [`nix/agent-image.nix`](../nix/agent-image.nix) and is
 deliberately generic: bash, coreutils, git, a C toolchain, Node.js, Python,
 `jq`, `ripgrep`, `fd`, `curl`, CA certificates, and an SSH client.
 

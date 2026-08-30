@@ -35,17 +35,17 @@ concrete recommendation.
 - **`sandboxed-herdr`** (`modules/myconfig.ai/programs.herdr.nix:110-125`) is
   the herdr-flavoured sibling of `sandboxed-pi`: run it from a project
   subdirectory to get "the same loop as `jailed-pi`, but with a kernel
-  boundary" (`modules/myconfig.ai/docs/README.md:150-153`), except instead of
+  boundary" (`modules/myconfig.ai/docs/README.md:144-146`), except instead of
   dropping straight into `pi` it drops into a `herdr` multiplexer session so
   several agents/shells can run side by side in the one VM
-  (`modules/myconfig.ai/sandboxed-herdr.README.md:13-20`). It is a *disposable,
+  (`modules/myconfig.ai/sandboxed-herdr.README.md:14-21`). It is a *disposable,
   one-shot* command a developer types ad hoc.
-- **`agent-microvm`** (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md:9-25`)
+- **`agent-microvm`** (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md:8-25`)
   is "a second, stronger isolation tier", the only one "designed for
   unattended, autonomous agent runs"
-  (`modules/myconfig.ai/docs/README.md:203-206`). `herdr` is just one of the
+  (`modules/myconfig.ai/docs/README.md:207-209`). `herdr` is just one of the
   registry's selectable agents there
-  (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md:600-620`,
+  (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md:765-784`,
   "herdr specifics") — a way to get a multi-agent pane session *inside* one of
   the fleet's slots, mirroring what tier 3 does, not the tier's reason to
   exist.
@@ -54,29 +54,29 @@ concrete recommendation.
 
 | Aspect | `sandboxed-herdr` | `agent-microvm` (`--agent herdr`) |
 | --- | --- | --- |
-| Hypervisor | QEMU, SLiRP (`flake.sandboxed-pi.nix:97-136`) | Cloud Hypervisor (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md`, guest shape table) |
+| Hypervisor | QEMU, SLiRP (`flake.sandboxed-pi.nix:170-204`) | Cloud Hypervisor (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md`, guest shape table) |
 | Kernel | own guest kernel | own guest kernel |
-| Guest store | host `/nix/store` shared **read-only** via virtiofs (`flake.sandboxed-pi.nix:139-146`) — the guest closure is the *host's* store | self-contained EROFS store disk built into the guest image; host store not reachable from the guest at all (`agent-microvm.md:9-13`) |
-| Network boundary | SLiRP NAT (outbound only) + one loopback-forwarded SSH port; no host bridge/firewall (`sandboxed-herdr.README.md:78-83`) | dedicated bridge `agentbr0`, per-TAP L2 isolation, nftables `AGENT_MICROVM_*` chains, named `networkProfile`s (`offline`/`proxy-only`/`package-access`/`internet`), and — with the `vsock` capability — literally **no network interface at all** (`agent-microvm.md`, "VSOCK versus TAP transport") |
-| Credential exposure to guest | real `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/etc. land in the guest process environment via SSH `SetEnv` (`programs.herdr.nix:214-219`) | upstream keys **never** reach the guest; only a bridge-/VSOCK-restricted forwarding endpoint to the host LiteLLM proxy is visible (`agent-microvm.md:9-25`, "model-API access restricted to the host LiteLLM proxy") |
+| Guest store | host `/nix/store` shared **read-only** via virtiofs (`flake.sandboxed-pi.nix:175-186`) — the guest closure is the *host's* store | self-contained EROFS store disk built into the guest image; host store not reachable from the guest at all (`agent-microvm.md:13-14`) |
+| Network boundary | SLiRP NAT (outbound only) + one loopback-forwarded SSH port; no host bridge/firewall (`sandboxed-herdr.README.md:80-86`) | dedicated bridge `agentbr0`, per-TAP L2 isolation, nftables `AGENT_MICROVM_*` chains, named `networkProfile`s (`offline`/`proxy-only`/`package-access`/`internet`), and — with the `vsock` capability — literally **no network interface at all** (`agent-microvm.md`, "VSOCK versus TAP transport") |
+| Credential exposure to guest | real `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/etc. land in the guest process environment via SSH `SetEnv` (`programs.herdr.nix:236-238`) | upstream keys **never** reach the guest; only a bridge-/VSOCK-restricted forwarding endpoint to the host LiteLLM proxy is visible (`agent-microvm.md:9-25`, "model-API access restricted to the host LiteLLM proxy") |
 | What one compromised guest can attack | the host store is read-only, so a guest exploit cannot corrupt it, but it *can read* the entire host store contents (world-readable anyway) and reach outbound network via SLiRP | no store to read, egress is default-deny beyond the proxy port, guest-to-guest traffic is dropped at L2 and L3, and the workspace is a throwaway clone, not the real checkout |
 
 Net: `agent-microvm`'s boundary is **strictly more defensive** on every axis
 the two share (store exposure, network egress, credential exposure). Tier 3's
 own docs concede this: "the host store is visible read-only; the guest still
 shares the host store closure and reaches the network via the host"
-(`modules/myconfig.ai/docs/README.md:172-174`).
+(`modules/myconfig.ai/docs/README.md:199-201`).
 
 ## What is shared with the host
 
 | | `sandboxed-herdr` | `agent-microvm` |
 | --- | --- | --- |
-| Filesystem | CWD read-write at `/workspace`, **same inodes as the host checkout** (`sandboxed-herdr.README.md:32-46`) — agent edits appear live on the host; host `/nix/store` read-only | a **standalone git clone**, never the host checkout; import the resulting branch afterwards (`agent-microvm.md`, workspace section) |
+| Filesystem | CWD read-write at `/workspace`, **same inodes as the host checkout** (`sandboxed-herdr.README.md:41-55`) — agent edits appear live on the host; host `/nix/store` read-only | a **standalone git clone**, never the host checkout; import the resulting branch afterwards (`agent-microvm.md`, workspace section) |
 | Network | outbound NAT through the host, one inbound SSH port on loopback | bridge-restricted; default profile allows only guest → gateway:litellmPort |
 | Devices | none beyond the virtio devices QEMU/virtiofs need | none beyond virtio; VSOCK capability removes even the NIC |
-| Env vars | 4 LLM credential vars forwarded over SSH `SetEnv`, only if set on host (`programs.herdr.nix:213-219`) | none — model auth is fully proxied through the host LiteLLM service; guest only gets an endpoint URL |
+| Env vars | 4 LLM credential vars forwarded over SSH `SetEnv`, only if set on host (`programs.herdr.nix:236-238`) | none — model auth is fully proxied through the host LiteLLM service; guest only gets an endpoint URL |
 | Secrets | forwarded live over SSH session env, never in the store, never in argv | never leave the host; guest config seeding explicitly denylists credential-shaped files (`agent-microvm.md`, "Runtime configuration staging") |
-| Agent home/state | ephemeral guest `/home/agent`, **seeded once at launch** from an SSH-copied allowlist of every registered agent's `configPaths` (`sandboxed-herdr.README.md:96-118`) | ephemeral guest `/home/agent` by default, seeded from a **root-owned read-only virtiofs share** staged before boot with the same allowlist/denylist model; **opt-in, task-scoped persistence** for agents that declare `persistentState.directories` (only `hermes` today) |
+| Agent home/state | ephemeral guest `/home/agent`, **seeded once at launch** from an SSH-copied allowlist of every registered agent's `configPaths` (`sandboxed-herdr.README.md:97-127`) | ephemeral guest `/home/agent` by default, seeded from a **root-owned read-only virtiofs share** staged before boot with the same allowlist/denylist model; **opt-in, task-scoped persistence** for agents that declare `persistentState.directories` (only `hermes` today) |
 
 Both tiers use the *same* seeding vocabulary
 (`modules/myconfig.ai/fns/seed-agent-config.nix`), so the credential denylist
@@ -102,14 +102,14 @@ boot vs. a pre-boot root-owned share).
   authoritative launch-to-ready latency numbers exist yet: the reference doc
   explicitly marks "launch-to-ready latency, idle RSS per slot, ... warm build
   time" as **"STILL PENDING a real-KVM run (deliberately NOT estimated)"**
-  (`modules/myconfig.ai/myconfig.ai.microvm/docs/myconfig-ai-microvm-lightweight-plan.md:7`).
+  (`modules/myconfig.ai/myconfig.ai.microvm/docs/myconfig-ai-microvm-lightweight-plan.md:8`).
   Uncertainty flagged: this document cannot state whether tier 4 is faster or
   slower to reach an interactive prompt than tier 3's boot+SSH loop — only
   that tier 4 avoids a `nix build` in the hot path while tier 3 does not need
   a prebuilt pool at all.
 
 Both tiers state **neither has been runtime-validated against real KVM** in
-this checkout: `sandboxed-herdr.README.md:141-147` ("A live VM boot has not yet
+this checkout: `sandboxed-herdr.README.md:187-196` ("A live VM boot has not yet
 been exercised here ... no `/dev/kvm` in the build environment") and
 `agent-microvm.md`'s own verification-boundary note ("must be measured ... on
 real KVM"). Both are eval/build-clean, not empirically measured, as of this
@@ -121,7 +121,7 @@ writing.
 | --- | --- | --- |
 | Option path | none — it is unconditionally installed whenever any agent flag is enabled (`agenticCodingEnabled`, `modules/myconfig.ai/programs.herdr.nix:23-29`) | `myconfig.ai.microvm.*` (`enable`, `enabledAgents`, `resourceClasses`, `networkProfile`, `capabilities`, …), all under `modules/myconfig.ai/myconfig.ai.microvm/default.nix` |
 | Entry point | `sandboxed-herdr` shell wrapper, home-manager package (`programs.herdr.nix:121-232`) | `agent-microvm run\|submit\|ssh\|...` launcher (`modules/myconfig.ai/myconfig.ai.microvm/launcher.nix`), plus `microvm-<agent>` workmux panes when `interactive` is selected |
-| Guest builder | `mkSandboxedHerdrRunner` in `flake.sandboxed-pi.nix:417-461`, a thin wrapper over the shared `mkSandboxedRunner` (same factory `mkSandboxedPiRunner` uses) | the module's own guest NixOS system (`guest.nix`), driven by the agent registry `agents.nix` |
+| Guest builder | `mkSandboxedHerdrRunner` in `flake.sandboxed-pi.nix:470`, a thin wrapper over the shared `mkSandboxedRunner` (same factory `mkSandboxedPiRunner` uses) | the module's own guest NixOS system (`guest.nix`), driven by the agent registry `agents.nix` |
 | Impure evaluation seam | `packages.<system>.sandboxed-herdr-runner` in `flake.nix:623-643`, built from `SANDBOXED_HERDR_*` env vars set by the wrapper (workspace path never lands in a tracked file) | none needed — slots are declared statically per host and prebuilt at system-build time |
 | herdr's role in the config | hard-coded as the guest's SSH-exec target; not configurable per invocation | one entry in the agent registry (`../agents.nix`), selected via `enabledAgents` like any other agent |
 
@@ -153,7 +153,7 @@ inside a VM) but diverge in *mechanism and guarantees*:
 - Both reuse the identical config-seeding vocabulary
   (`modules/myconfig.ai/fns/seed-agent-config.nix`) and the identical
   documented rationale for "why herdr" (compare
-  `sandboxed-herdr.README.md:13-20` with `agent-microvm.md`'s "herdr
+  `sandboxed-herdr.README.md:14-21` with `agent-microvm.md`'s "herdr
   specifics" section — near-verbatim phrasing, deliberately kept in sync per
   the module comments).
 - `agent-microvm`'s herdr guest is a **strict security superset** of
@@ -196,7 +196,7 @@ inside a VM) but diverge in *mechanism and guarantees*:
   firewall chains, resource classes) just to get a disposable interactive
   shell, or weaken `agent-microvm`'s no-credentials-in-guest / no-shared-store
   guarantees down to tier 3's level. Both are explicitly against the repo's own
-  "ladder" design (`README.md:16-23`: "the tiers are largely orthogonal and
+  "ladder" design (`README.md:24-25`: "the tiers are largely orthogonal and
   compose").
 - **Do** deduplicate the *incidental* overlap: the herdr-rationale prose is
   copy-pasted across `sandboxed-herdr.README.md` and `agent-microvm.md`, and

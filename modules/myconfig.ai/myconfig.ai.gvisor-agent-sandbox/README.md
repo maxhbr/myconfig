@@ -3,6 +3,11 @@
 Rootless Podman + gVisor (`runsc`) sandboxes for coding agents, providing the
 `agent-gvisor` session manager and a Nix-built sandbox image.
 
+It is the container-based tier of the repo's sandboxing ladder — see
+[`../docs/README.md`](../docs/README.md) ("Agent sandboxing tiers") for the
+other tiers (`agent-tmux`, `jailed-*`, `sandboxed-*`, `agent-microvm`) and how
+they compare.
+
 ## Origin
 
 - Upstream: <https://github.com/maxhbr/gvisor-agent-sandbox>
@@ -183,7 +188,8 @@ Two consequences of the isolation boundary:
 - The tree also contains `.ssh`, mail and browser configuration, so the copy
   is an **allowlist**, `myconfig.ai.gvisor-agent-sandbox.home.seedPaths`,
   baked into the wrapper as `AGENT_GVISOR_HOME_SEED_PATHS`. Default:
-  `.agents .agignore .claude .codex .pi .config/git .config/opencode`.
+  `.agents .agignore .claude .codex .pi .config/git .config/herdr
+  .config/opencode`.
   Anything added here is readable by a possibly hostile agent — never add
   credentials.
 

@@ -22,7 +22,7 @@ The reusable helper that turns a jailed agent wrapper into a workmux
 "named agent" lives one level up in
 [`../fns/workmux-worktree.nix`](../fns/workmux-worktree.nix); the coding-agent
 modules (`programs.pi-coding-agent`, `programs.claude-code`, `programs.codex`,
-`programs.opencode`, `programs.github-copilot-cli`) call it to register
+`programs.opencode`) call it to register
 themselves under `myconfig.ai.workmux.agents.<name>`.
 
 ## Concepts

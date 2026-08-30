@@ -15,14 +15,14 @@ pinned source overlay that fetches the PR head commit directly:
   release tag).
 - **Consumer**: `hosts/host.thing/myconfig.ai.llama-cpp/default.nix` —
   builds `patched-llama-cpp-pkg` (ROCm + Vulkan, no CUDA) and passes it
-  per-model to the Flash-Next model definitions via the `package` option
-  added to the llama-cpp model submodule
+  per-model to the Flash-Next model definitions via the `serverPackage`
+  option of the llama-cpp model submodule
   (`modules/myconfig.ai/myconfig.ai.llama-cpp/options.nix`).
 - **Model files**: `hosts/host.thing/myconfig.ai.llama-cpp/Qwen3.8-Flash-Next.nix`
-  — sets `package = patched-llama-cpp-pkg` on both quantisations and their
-  `:mmproj` variants.
+  — sets `serverPackage = patched-llama-cpp-pkg` on both quantisations and
+  their `:mmproj` variants.
 
-Models with a non-null `package` are excluded from the router (the
+Models with a non-null `serverPackage` are excluded from the router (the
 `llama-server` service backend and the `llama-server_<Device>` INI-preset
 wrappers) because the router uses a single `services.llama-cpp.package`
 binary for every section and cannot mix per-model packages. They remain
@@ -32,7 +32,7 @@ available via llama-swap and the per-(model, device) script wrappers.
 
 Once PR #27742 is merged into llama.cpp's `master` and a release tag
 (e.g. `b10xxx`) includes the `qwen4exp` architecture, the pinned overlay
-and the per-model `package` overrides are no longer needed. The stock
+and the per-model `serverPackage` overrides are no longer needed. The stock
 nixpkgs `llama-cpp` (pinned by `hosts/host.thing/nixpkgs.overlays.llama-cpp.nix`
 to the release tag) will then load Flash-Next GGUFs directly.
 
@@ -56,19 +56,19 @@ to the release tag) will then load Flash-Next GGUFs directly.
     `hosts/host.thing/myconfig.ai.llama-cpp/default.nix`:
     - Delete the `patched-llama-cpp-pkg` binding (and its GPU-flag
       comment block).
-    - Stop passing `package = patched-llama-cpp-pkg` to the
+    - Stop passing `serverPackage = patched-llama-cpp-pkg` to the
       `Qwen3.8-Flash-Next.nix` import (revert to
       `import ./Qwen3.8-Flash-Next.nix { inherit modelsPullDir; }`).
 
-4.  **Remove the `package` parameter** from
+4.  **Remove the `serverPackage` parameter** from
     `hosts/host.thing/myconfig.ai.llama-cpp/Qwen3.8-Flash-Next.nix`:
     - Revert the function header to `{ modelsPullDir }:`.
-    - Remove the `inherit package;` lines from each model entry.
+    - Remove the `inherit serverPackage;` lines from each model entry.
 
-5.  **Optionally revert the `package` option** in
+5.  **Optionally revert the `serverPackage` option** in
     `modules/myconfig.ai/myconfig.ai.llama-cpp/options.nix` and the
-    `model.package != null` checks in `lib/scripts.nix` and `router.nix`
-    — or keep them, since they are harmless when no model sets `package`.
+    `model.serverPackage != null` checks in `lib/scripts.nix` and `router.nix`
+    — or keep them, since they are harmless when no model sets `serverPackage`.
     Keeping the option means future patched builds can use the same
     mechanism without re-implementing it.
 

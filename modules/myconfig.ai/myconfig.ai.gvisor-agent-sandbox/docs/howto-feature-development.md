@@ -28,8 +28,11 @@ What happens:
    misconfigured host leaves nothing behind.
 2. `/home/agent` is seeded from the **activated home-manager generation** of
    the calling user (the agent's skills, prompts and settings come along). The
-   loopback LiteLLM URLs in those files are rewritten to the sandbox-reachable
-   bridge endpoint (`http://192.168.84.1:4000`).
+   loopback LiteLLM URLs in those files are rewritten to the
+   sandbox-reachable endpoint `http://192.168.84.1:14000` — the
+   `--map-guest-addr` address pasta translates to the host, where a
+   port-scoped forwarder proxies to the loopback-only LiteLLM proxy (see
+   *Model access* in `../README.md`).
 3. A bare pool is created (or reused) at
    `~/.local/state/agent-gvisor/pools/<repo-id>.git`, a worktree is added at
    `~/.local/state/agent-gvisor/worktrees/<repo-id>/fix-parser` on branch
