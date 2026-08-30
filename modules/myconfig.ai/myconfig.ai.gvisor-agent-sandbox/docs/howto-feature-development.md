@@ -35,8 +35,8 @@ What happens:
    *Model access (host LiteLLM)* in `../README.md`).
 3. A bare pool is created (or reused) at
    `~/.local/state/agent-gvisor/pools/<repo-id>.git`, a worktree is added at
-   `~/.local/state/agent-gvisor/worktrees/<repo-id>/fix-parser` on branch
-   `agent/fix-parser`, and the container starts.
+   `<repo>_agent-gvisor/fix-parser` — i.e. next to the host repository — on
+   branch `agent/fix-parser`, and the container starts.
 4. `pi` runs as the default command (it was baked into the image because
    `myconfig.ai.pi-coding-agent.enable = true` on the host). Omit the trailing
    `-- COMMAND` to drop into `herdr` (the configured `defaultCommand`), or pass
