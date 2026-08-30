@@ -7,14 +7,17 @@ It assumes the module is enabled on the host and the image is loaded (see
 
 ## 1. Start a session (creates the branch)
 
-`agent-gvisor start` is the single entry point. It never mounts the host
+`agent-gvisor start` is the single entry point. The name may be positional
+and the repository defaults to the current directory, so the shorthand
+`agent-gvisor NAME` means `agent-gvisor start --name NAME --repo .`; run it
+from the repository you want to work on. It never mounts the host
 checkout. Instead it seeds a **disposable bare Git pool** from the host repo's
 committed refs and checks out a worktree from that pool on a fresh branch,
 defaulting to `agent/gvisor/<name>`.
 
 ```bash
 agent-gvisor start \
-  --name fix-parser \
+  fix-parser \
   --repo ~/src/myconfig \
   --base main \
   --env-file ~/.config/agent-gvisor/litellm.env \
@@ -123,7 +126,7 @@ stays until its last session is destroyed.
 
 | Step | Command |
 | --- | --- |
-| Start / create branch | `agent-gvisor start --name N --repo R --base main -- pi …` |
+| Start / create branch | `agent-gvisor start N --base main -- pi …` (from the repo; `agent-gvisor N` for short) |
 | List / status | `agent-gvisor list` · `agent-gvisor status N` |
 | Watch output | `agent-gvisor logs N --follow` |
 | Enter sandbox | `agent-gvisor shell N` |

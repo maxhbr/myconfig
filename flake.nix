@@ -718,6 +718,13 @@
                   # wrapper (`git-branch-to-worktree`); shfmt is not covered
                   # by writeShellApplication's own shellcheck pass.
                   "modules/shell.git/bin/git-branch-to-worktree.sh"
+                  # The Rust agent-gvisor rewrite: its CLI harness and the
+                  # POSIX-sh git/podman recording stubs shared by the cargo
+                  # tests (include_str!) and the harness. Executed via bash /
+                  # the tested binary, so nothing else gates them.
+                  "modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/tests/agent-gvisor-cli-harness.sh"
+                  "modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/rust/tests/stubs/git.sh"
+                  "modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/rust/tests/stubs/podman.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {
@@ -745,6 +752,11 @@
           # KVM/network runtime proof (see tests/microvm.nix header).
           // lib.optionalAttrs (system == "x86_64-linux") (
             import ./tests/microvm.nix { inherit self inputs system; }
+          )
+          // lib.optionalAttrs (system == "x86_64-linux") (
+            # Rust agent-gvisor parity suite + CLI harness
+            # (modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox).
+            import ./modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix { inherit self inputs system; }
           );
 
           devShells.default =
