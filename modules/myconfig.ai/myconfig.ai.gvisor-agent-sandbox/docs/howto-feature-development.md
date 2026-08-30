@@ -34,9 +34,13 @@ What happens:
    port-scoped forwarder proxies to the loopback-only LiteLLM proxy (see
    *Model access (host LiteLLM)* in `../README.md`).
 3. A bare pool is created (or reused) at
-   `~/.local/state/agent-gvisor/pools/<repo-id>.git`, a worktree is added at
-   `<repo>_agent-gvisor/fix-parser` — i.e. next to the host repository — on
-   branch `agent/fix-parser`, and the container starts.
+   `<repo>_agent-gvisor/__pools/<repo-id>.git`, the session state
+   (meta, home, mounts, env) at `<repo>_agent-gvisor/__sessions/fix-parser/`
+   — i.e. next to the host repository — a worktree is added at
+   `<repo>_agent-gvisor/fix-parser` on branch `agent/fix-parser`, and the
+   container starts. A symlink in the session registry
+   (`~/.local/state/agent-gvisor/sessions/fix-parser`) points to the session
+   directory, so commands that only take a session name find it.
 4. `pi` runs as the default command (it was baked into the image because
    `myconfig.ai.pi-coding-agent.enable = true` on the host). Omit the trailing
    `-- COMMAND` to drop into `herdr` (the configured `defaultCommand`), or pass
