@@ -290,10 +290,12 @@ let
                   which
                 ])
                 ++ guestPackages
-                ++ lib.optional (extraGuestPackagePaths != [ ]) (pkgs.buildEnv {
-                  name = "sandboxed-extra-tools";
-                  paths = extraGuestPackagePaths;
-                });
+                ++ lib.optional (extraGuestPackagePaths != [ ]) (
+                  pkgs.buildEnv {
+                    name = "sandboxed-extra-tools";
+                    paths = extraGuestPackagePaths;
+                  }
+                );
 
               system.stateVersion = "25.11";
             }
