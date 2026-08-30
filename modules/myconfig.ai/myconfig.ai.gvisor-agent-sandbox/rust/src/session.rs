@@ -243,6 +243,24 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     ]) {
         die(&format!("not a Git working tree: {}", repo.display()));
     }
+    // Anchor at the repository ROOT even when started from a subdirectory,
+    // so <root>__agent-gvisor/ (pools, session state, by default the
+    // worktrees) always sits NEXT TO the root, never inside it — and the
+    // in-container --workdir / AGENT_WORKTREE (§10) is the root path.
+    let toplevel = git_stdout(&[
+        "-C".to_string(),
+        repo.display().to_string(),
+        "rev-parse".to_string(),
+        "--show-toplevel".to_string(),
+    ])
+    .filter(|t| !t.is_empty())
+    .unwrap_or_else(|| {
+        die(&format!(
+            "cannot determine the repository root of: {}",
+            repo.display()
+        ))
+    });
+    let repo = fs::canonicalize(&toplevel).unwrap_or(PathBuf::from(toplevel));
     let base_commit = git_stdout(&[
         "-C".to_string(),
         repo.display().to_string(),
@@ -998,7 +1016,7 @@ pub fn cmd_doctor(env: Env) -> ! {
         "state:           {} (session name registry)",
         env.state_root.display()
     );
-    println!("pools/sessions:  <repo>_agent-gvisor/{{__pools,__sessions}} next to each repo");
+    println!("pools/sessions:  <repo>__agent-gvisor/{{__pools,__sessions}} next to each repo");
     println!(
         "model endpoint:  {}",
         env.model_endpoint.clone().unwrap_or_else(|| "<unset>".to_string())

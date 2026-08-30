@@ -19,7 +19,7 @@ fn start_simple(s: &Scenario, name: &str) {
 fn agent_root_of(s: &Scenario) -> std::path::PathBuf {
     let repo = s.repo.canonicalize().unwrap();
     repo.parent().unwrap().join(format!(
-        "{}_agent-gvisor",
+        "{}__agent-gvisor",
         repo.file_name().unwrap().to_string_lossy()
     ))
 }
@@ -82,6 +82,53 @@ fn start_creates_expected_tree() {
     assert_eq!(fs::read(meta_dir.join("mounts.tsv")).unwrap(), b"\n");
     assert_eq!(fs::read(meta_dir.join("env.list")).unwrap(), b"\n");
     assert!(meta_dir.join("last-command").is_file());
+}
+
+#[test]
+fn start_from_subdir_anchors_at_repo_root() {
+    let s = Scenario::new("start-from-subdir-anchors-at-repo-root");
+    // The shorthand start resolves the repo from the CWD; started from a
+    // subdirectory it must still anchor at the repository ROOT, so
+    // <root>__agent-gvisor/ sits NEXT TO the root and the podman argv
+    // points --workdir / the worktree mount at the root path.
+    let subdir = s.repo.join("sub");
+    fs::create_dir_all(&subdir).unwrap();
+    let mut c = s.cmd(&["start", "s1", "--detach"]);
+    c.current_dir(&subdir);
+    let out = c.output().expect("spawn agent-gvisor");
+    assert!(
+        out.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+
+    let repo = s.repo.canonicalize().unwrap();
+    let repo_id = expected_repo_id(&s.repo);
+    let agent_root = agent_root_of(&s);
+    let worktree = agent_root.join("s1");
+
+    // meta records the ROOT, not the subdirectory:
+    let meta_text =
+        fs::read_to_string(agent_root.join("__sessions").join("s1").join("meta")).unwrap();
+    let meta = Meta::parse(&meta_text).expect("parse");
+    assert_eq!(meta.repo, repo.display().to_string());
+    assert_eq!(meta.worktree, worktree.display().to_string());
+    // The pool and the worktree live under the agent root next to the ROOT:
+    assert!(agent_root.join("__pools").join(format!("{repo_id}.git")).is_dir());
+    assert!(worktree.is_dir());
+    // Nothing was created inside the repo or next to the subdirectory:
+    assert!(!subdir.join("__agent-gvisor").exists());
+
+    // The podman argv uses the repo root as --workdir and mount dst:
+    let run = s.recorded_starting_with("podman", "run")[0].clone();
+    assert!(run.iter().any(|a| *a == format!(
+        "type=bind,src={},dst={},rw",
+        worktree.display(),
+        repo.display()
+    )));
+    let wd = run.iter().position(|a| a == "--workdir").expect("--workdir");
+    assert_eq!(run[wd + 1], repo.display().to_string());
 }
 
 #[test]

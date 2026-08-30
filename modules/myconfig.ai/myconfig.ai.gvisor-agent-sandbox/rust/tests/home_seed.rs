@@ -57,7 +57,7 @@ impl SeedFixture {
     fn home(&self) -> std::path::PathBuf {
         self.s
             .root
-            .join("repo_agent-gvisor")
+            .join("repo__agent-gvisor")
             .join("__sessions")
             .join("s1")
             .join("home")
@@ -87,7 +87,7 @@ fn seed_home_warnings_and_summary() {
         None,
     );
     let seed = f.seed.display().to_string();
-    let wt = f.s.root.join("repo_agent-gvisor").join("s1").display().to_string();
+    let wt = f.s.root.join("repo__agent-gvisor").join("s1").display().to_string();
     // (re-run to capture stderr; the fixture already started the session)
     let out = f.s.cmd_with_env(
         &["start", "s1", "--force", "--detach"],

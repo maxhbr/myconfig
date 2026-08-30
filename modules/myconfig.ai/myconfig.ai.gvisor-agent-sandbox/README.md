@@ -156,7 +156,7 @@ file itself is deleted; the Rust rewrite preserves all of them — see
   `incomplete`, and every other command explains it instead of claiming the
   name is unknown.
   The pools and session state moved NEXT TO the repository, into the same
-  `<repo>_agent-gvisor/` directory that already hosts the worktrees: the bare
+  `<repo>__agent-gvisor/` directory that already hosts the worktrees: the bare
   pool at `__pools/<repo-id>.git`, the per-session meta/home/mounts/env at
   `__sessions/<name>/`. `$XDG_STATE_HOME/agent-gvisor/sessions` remains the
   name→session REGISTRY — `start` puts a symlink per session there, so

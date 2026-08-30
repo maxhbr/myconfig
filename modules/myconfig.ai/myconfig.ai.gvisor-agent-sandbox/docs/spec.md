@@ -58,7 +58,7 @@ arguments after `--`). `--name` plus a positional name is
 | flag | default | notes |
 | --- | --- | --- |
 | `NAME` (positional) | — | alternative to `--name` |
-| `--repo PATH` | current directory | host repository; resolved with realpath |
+| `--repo PATH` | current directory | host repository; realpath'd, then anchored at the repository root (`rev-parse --show-toplevel`), so a subdirectory start behaves like one from the root |
 | `--base REF` | `HEAD` | must resolve to a commit in the host repo |
 | `--branch BRANCH` | `agent/gvisor/NAME` | worktree branch |
 | `--image IMAGE` | `$AGENT_GVISOR_IMAGE` / `$AGENT_GVISOR_DEFAULT_IMAGE` / `localhost/agent-dev:latest` | podman image |
@@ -132,7 +132,7 @@ Resolved mounts are stored tab-separated in `__sessions/<name>/mounts.tsv`.
 | `AGENT_GVISOR_IMAGE` | — | overrides the default image (highest priority) |
 | `AGENT_GVISOR_DEFAULT_IMAGE` | `localhost/agent-dev:latest` | baked into the Nix wrapper (`--set-default`) |
 | `AGENT_GVISOR_STATE` | `${XDG_STATE_HOME:-$HOME/.local/state}/agent-gvisor` | session REGISTRY root (`sessions/` name→symlink) |
-| `AGENT_GVISOR_WORKTREES` | empty | empty ⇒ worktrees repo-adjacent as `<repo>_agent-gvisor/<name>`; a directory ⇒ `$ROOT/<repo-id>/<name>` |
+| `AGENT_GVISOR_WORKTREES` | empty | empty ⇒ worktrees repo-adjacent as `<repo>__agent-gvisor/<name>`; a directory ⇒ `$ROOT/<repo-id>/<name>` |
 | `AGENT_GVISOR_PODMAN_RUNTIME` | — | runtime name or absolute path; overrides `AGENT_GVISOR_DEFAULT_RUNTIME` |
 | `AGENT_GVISOR_DEFAULT_RUNTIME` | `runsc` | baked into the Nix wrapper (absolute runsc path) |
 | `AGENT_GVISOR_PODMAN_CGROUP_MANAGER` | see §5 | podman `--cgroup-manager` value; empty string ⇒ flag omitted |
@@ -192,11 +192,13 @@ Every podman invocation starts with the global arguments, in this order:
 
 ## 8. Session-state layout
 
-Per host repository at `<repo>`, everything lives repo-adjacent in
-`$(dirname <repo>)/$(basename <repo>)_agent-gvisor/` ("agent root"):
+Per host repository at `<repo>` (the repository ROOT — `start` anchors
+there via `rev-parse --show-toplevel`, even from a subdirectory), everything
+lives repo-adjacent in
+`$(dirname <repo>)/$(basename <repo>)__agent-gvisor/` ("agent root"):
 
 ```
-<repo>_agent-gvisor/
+<repo>__agent-gvisor/
   __pools/<repo-id>.git      disposable bare pool (one per repo)
   __pools/<repo-id>.lock     flock target serialising pool access
   __sessions/<name>/         session state (meta last, see §9)
@@ -220,7 +222,7 @@ Per host repository at `<repo>`, everything lives repo-adjacent in
 - Default branch: `agent/gvisor/<name>`.
 
 The registry `$STATE_ROOT/sessions/<name>` is ALWAYS a symlink to
-`<repo>_agent-gvisor/__sessions/<name>` (created with `ln -sfn` semantics).
+`<repo>__agent-gvisor/__sessions/<name>` (created with `ln -sfn` semantics).
 
 ### `meta` format
 
@@ -249,6 +251,8 @@ missing keys default to empty.
    name validation, `need` checks (`git`, `podman`, `sha256sum`).
 2. `check_runtime` and `check_image` — fail BEFORE anything is created.
 3. `realpath` the repo; `git -C <repo> rev-parse --is-inside-work-tree`;
+   anchor at the repository root via `git -C <repo> rev-parse
+   --show-toplevel` (a subdirectory start behaves like one from the root);
    resolve `--base` via `git rev-parse --verify <base>^{commit}`.
 4. create `$STATE_ROOT/sessions`, agent-root `__pools`, `__sessions`.
 5. existing-session probe on the registry entry (below).
@@ -356,8 +360,8 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --read-only-tmpfs=true
   --cap-drop=ALL
   --security-opt=no-new-privileges
-  --workdir <worktree>
-  --mount type=bind,src=<worktree>,dst=<worktree>,rw
+  --workdir <repo>
+  --mount type=bind,src=<worktree>,dst=<repo>,rw
   --mount type=bind,src=<pool>,dst=<pool>,rw
   --mount type=bind,src=<home>,dst=/home/agent,rw
   --env HOME=/home/agent
@@ -365,7 +369,7 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --env XDG_CACHE_HOME=/home/agent/.cache
   --env XDG_STATE_HOME=/home/agent/.local/state
   --env AGENT_SESSION=<session name>
-  --env AGENT_WORKTREE=<worktree>
+  --env AGENT_WORKTREE=<repo>
   [--env AGENT_GVISOR_LOOPBACK_FORWARD=<value>]      # only when set
   (--pids-limit <n> --memory <m> --cpus <c>)         # only when limits enforced (§5)
   [--network <mode>]                                 # only when non-empty
@@ -377,6 +381,12 @@ podman <global args> run --replace (--detach | --interactive --tty)
   [/bin/agent-gvisor-init]                            # only when LOOPBACK_FORWARD is set
   <COMMAND...>                                       # or the word-split AGENT_GVISOR_DEFAULT_COMMAND
 ```
+
+`<repo>` is the repository ROOT recorded in `meta` (§8: `start` anchors
+there via `rev-parse --show-toplevel`); the session
+worktree (a HOST path) is bind-mounted at that path inside the container, so
+the worktree appears where the repository normally lives and `--workdir` /
+`AGENT_WORKTREE` point at it. The host checkout itself is never mounted.
 
 Before `exec`ing, the full vector (including the leading literal `podman`)
 is written to `<session>/last-command` as `%q`-quoted, space-joined words
