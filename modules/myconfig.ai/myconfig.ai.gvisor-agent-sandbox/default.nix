@@ -133,6 +133,11 @@ let
             ${lib.concatStringsSep " \\\n            " (
               lib.mapAttrsToList (n: v: "--set-default ${n} ${lib.escapeShellArg v}") sessionEnv
             )}
+
+          # Carry the package payload besides the binary: the fish tab
+          # completion (share/fish/vendor_completions.d) must survive the
+          # re-wrap, or hosts that bake sessionEnv defaults would lose it.
+          ln -s ${pkg}/share $out/share
         '';
 in
 {

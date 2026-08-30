@@ -46,6 +46,19 @@ Dispatch (first argument):
 printed for `--help`); the Rust binary embeds it verbatim so
 `agent-gvisor --help` output is byte-identical to the bash CLI's.
 
+The Nix package (`nix/agent-gvisor.nix`) also ships a hand-written fish
+tab completion (`rust/completions/agent-gvisor.fish`, installed to
+`$out/share/fish/vendor_completions.d/agent-gvisor.fish`; the crate stays
+zero-dependency, so it is a plain fish script, not clap-generated). It
+mirrors this grammar: the dispatch words with descriptions, the `start`
+options (§2), the per-subcommand flags (§3/§9), and existing session
+names read from the registry (§4) — offered for the NAME positions of the
+name-taking subcommands and for `start --name`. Keep it in sync when the
+grammar changes; the `agent-gvisor-completions` check (`nix/checks.nix`)
+enforces the sync: it fails when the file does not parse (`fish -n`) or a
+subcommand or an option documented in `rust/src/usage.txt` is not
+completed.
+
 `start` flag parsing continues across positionals: in
 `start NAME --detach -- x`, `NAME` is the positional session name and
 `--detach` is still parsed as a flag. The first positional is the session
@@ -521,7 +534,8 @@ fully loadable because repo-ids are path-based (stable across sessions) and
 
 ## 15. Validation
 
-Two layers, both wired into `nix flake check` via `nix/checks.nix`:
+Two behavioural layers, both wired into `nix flake check` via
+`nix/checks.nix` (which adds a third, packaging-level check):
 
 - `rust/tests/` — cargo integration tests (`tests/common/mod.rs` builds
   isolated scenarios and installs the recording `git`/`podman` stubs from
@@ -536,6 +550,12 @@ Two layers, both wired into `nix flake check` via `nix/checks.nix`:
   happy/sad, a full session cycle, `list` rows, podman argv sanity) driving
   the UNWRAPPED binary (the production wrapper's PATH would shadow the
   stubs).
+- `agent-gvisor-completions` (`nix/checks.nix`) — the fish tab completion
+  shipped by the production package (§1): installed at the vendor path,
+  byte-identical to `rust/completions/agent-gvisor.fish`, parsed by
+  `fish -n`, and covering every subcommand and every option documented in
+  `rust/src/usage.txt` (built with neutral defaults so it needs neither
+  the sandbox image nor gvisor).
 
 ### Deletion gate (bash parity)
 
