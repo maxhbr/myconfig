@@ -145,7 +145,7 @@ agent-gvisor start \
   -- codex exec "Improve parser coverage and commit the result"
 ```
 
-Each session gets branch `agent/<name>`. The host checkout itself is not
+Each session gets branch `agent/gvisor/<name>`. The host checkout itself is not
 mounted. A disposable bare Git pool is seeded from committed refs in the host
 repository, and each session gets a worktree from that pool.
 

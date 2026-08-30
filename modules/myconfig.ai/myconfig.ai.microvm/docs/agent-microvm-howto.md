@@ -26,7 +26,7 @@ Two things to internalise before you start:
   clone* at `<repoSlug>__agent-microvm/<task>` — on `f13` beside the repository
   itself (`~/myconfig/myconfig__agent-microvm/<task>`), on a host with the
   default `workspaceLayout = "central"` under
-  `/var/lib/agent-microvms/workspaces/` — on branch `agent/<task>`. You pull the result back yourself (step 5).
+  `/var/lib/agent-microvms/workspaces/` — on branch `agent/microvm/<task>`. You pull the result back yourself (step 5).
   Nothing deletes that clone until you say so (step 6).
 
 For anything not covered here, follow the links in
@@ -203,14 +203,14 @@ WS=~/src/my-repo__agent-microvm/fix-parser
 # The clone is owned by your uid, so this needs NO sudo. Running git in it as
 # root would leave root-owned files in a clone the guest expects to own; if you
 # must, use `sudo git --no-optional-locks -c safe.directory="$WS" -C "$WS" …`.
-git -C "$WS" log --oneline origin/HEAD..agent/fix-parser
-git -C "$WS" diff origin/HEAD..agent/fix-parser
+git -C "$WS" log --oneline origin/HEAD..agent/microvm/fix-parser
+git -C "$WS" diff origin/HEAD..agent/microvm/fix-parser
 ```
 
 Then bring it into your own checkout — fetch the branch:
 
 ```bash
-git -C ~/src/my-repo fetch "$WS" agent/fix-parser
+git -C ~/src/my-repo fetch "$WS" agent/microvm/fix-parser
 git -C ~/src/my-repo log --oneline FETCH_HEAD
 git -C ~/src/my-repo switch -c review/fix-parser FETCH_HEAD    # or cherry-pick
 ```
@@ -219,7 +219,7 @@ git -C ~/src/my-repo switch -c review/fix-parser FETCH_HEAD    # or cherry-pick
 object store:
 
 ```bash
-sudo git -C "$WS" format-patch origin/HEAD..agent/fix-parser -o /tmp/patches
+sudo git -C "$WS" format-patch origin/HEAD..agent/microvm/fix-parser -o /tmp/patches
 git -C ~/src/my-repo am /tmp/patches/*.patch
 ```
 

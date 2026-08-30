@@ -90,7 +90,7 @@ Options worth knowing:
 ```text
 --resource-class small|normal|…   allocate from that class only (never substituted)
 --wait <sec>                      bounded wait for a free slot in that class
---branch <name>                   default: agent/<task>
+--branch <name>                   default: agent/microvm/<task>
 --persist-agent-state             keep the agent's DECLARED state for this task
 --no-preflight                    skip the model-endpoint preflight (interactive
                                   `run` only; `submit` has no such flag — batch
@@ -268,10 +268,10 @@ git -C "$WS" diff
 git -C "$WS" log --oneline origin/HEAD..
 
 # import into your own checkout:
-git -C ~/src/my-repo fetch "$WS" agent/fix-parser
+git -C ~/src/my-repo fetch "$WS" agent/microvm/fix-parser
 git -C ~/src/my-repo log --oneline FETCH_HEAD
 # or as patches:
-git -C "$WS" format-patch origin/HEAD..agent/fix-parser -o /tmp/patches
+git -C "$WS" format-patch origin/HEAD..agent/microvm/fix-parser -o /tmp/patches
 ```
 
 Under `workspaceLayout = "beside-repo"` the clone sits next to your repository,
