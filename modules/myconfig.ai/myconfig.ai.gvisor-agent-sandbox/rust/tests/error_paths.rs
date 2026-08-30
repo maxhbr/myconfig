@@ -392,7 +392,7 @@ fn merge_dirty_worktree() {
 #[test]
 fn destroy_dirty_worktree() {
     let s = Scenario::new("destroy-dirty-worktree");
-    started(&s);
+    s.run_ok(&["start", "s1", "--nix", "--detach"]);
     let worktree = s
         .root
         .join("repo__agent-gvisor")
@@ -405,8 +405,16 @@ fn destroy_dirty_worktree() {
         1,
         "agent-gvisor: error: worktree has uncommitted changes; commit them or use --force\n",
     );
+    // Refusing a non-force destroy must leave every session resource intact,
+    // including the writable Nix store volume.
+    assert!(s.recorded_starting_with("podman", "rm").is_empty());
+    assert!(s.recorded_starting_with("podman", "volume").is_empty());
     // --force overrides:
     s.run_ok(&["destroy", "s1", "--force"]);
+    assert!(s
+        .recorded_starting_with("podman", "volume")
+        .iter()
+        .any(|call| call.contains(&"rm".to_string())));
 }
 
 #[test]

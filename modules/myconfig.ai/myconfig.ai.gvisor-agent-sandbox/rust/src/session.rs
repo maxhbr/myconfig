@@ -1038,10 +1038,28 @@ pub fn destroy_session(
     delete_branch: bool,
 ) -> Result<(), String> {
     let meta = &session.meta;
-    let pod = Pod::new(env);
     let pool = meta.pool.clone();
     let worktree = meta.worktree.clone();
 
+    // Validate the non-force safety condition before deleting any session
+    // resources. In particular, keep the container and its Nix store volume
+    // intact when a dirty worktree causes destroy to be refused.
+    if Path::new(&worktree).is_dir() && !force {
+        let porcelain = git_stdout(&[
+            "-C".to_string(),
+            worktree.clone(),
+            "status".to_string(),
+            "--porcelain".to_string(),
+        ])
+        .unwrap_or_default();
+        if !porcelain.is_empty() {
+            return Err(
+                "worktree has uncommitted changes; commit them or use --force".to_string(),
+            );
+        }
+    }
+
+    let pod = Pod::new(env);
     if pod.container_exists(&meta.container) {
         let st = pod.run(&[
             "rm".to_string(),
@@ -1082,20 +1100,6 @@ pub fn destroy_session(
     }
 
     if Path::new(&worktree).is_dir() {
-        if !force {
-            let porcelain = git_stdout(&[
-                "-C".to_string(),
-                worktree.clone(),
-                "status".to_string(),
-                "--porcelain".to_string(),
-            ])
-            .unwrap_or_default();
-            if !porcelain.is_empty() {
-                return Err(
-                    "worktree has uncommitted changes; commit them or use --force".to_string(),
-                );
-            }
-        }
         let mut rm_args = vec![
             format!("--git-dir={pool}"),
             "worktree".to_string(),
