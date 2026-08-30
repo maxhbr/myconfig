@@ -73,7 +73,7 @@ podman --runtime=runsc run --rm docker.io/library/alpine:latest uname -a
 
 ## 2. The agent image
 
-The image is defined in [`nix/agent-image.nix`](nix/agent-image.nix) and is
+The image is defined in [`nix/agent-image.nix`](../nix/agent-image.nix) and is
 deliberately generic: bash, coreutils, git, a C toolchain, Node.js, Python,
 `jq`, `ripgrep`, `fd`, `curl`, CA certificates, and an SSH client.
 
@@ -168,7 +168,8 @@ sandbox container. Relevant knobs:
 | `AGENT_GVISOR_PODMAN_CGROUP_MANAGER` | `cgroupfs` rootless, Podman default as root | Podman cgroup manager |
 | `AGENT_GVISOR_PODMAN_RUNTIME_FLAGS` | `ignore-cgroups` rootless, empty as root | Extra `runsc` flags, space separated |
 | `AGENT_GVISOR_IMAGE` | baked image ref | Image override |
-| `AGENT_GVISOR_STATE` | `$XDG_STATE_HOME/agent-gvisor` | State directory |
+| `AGENT_GVISOR_STATE` | `$XDG_STATE_HOME/agent-gvisor` | State directory (pools, sessions); worktrees live next to the repo as `<repo>_agent-gvisor/NAME` |
+| `AGENT_GVISOR_WORKTREES` | unset | Worktree root directory; when set, worktrees go to `$ROOT/<repo-id>/NAME` instead of next to the repo |
 
 ### Rootless cgroups
 

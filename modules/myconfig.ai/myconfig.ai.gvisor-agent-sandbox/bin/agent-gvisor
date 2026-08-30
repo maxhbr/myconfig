@@ -85,6 +85,9 @@ merge options:
 environment:
   AGENT_GVISOR_IMAGE            Override the default image
   AGENT_GVISOR_STATE            State directory
+  AGENT_GVISOR_WORKTREES        Worktree root directory; empty (default) puts
+                                worktrees next to the repo, as
+                                <repo>_agent-gvisor/NAME
   AGENT_GVISOR_PODMAN_RUNTIME   Runtime name or absolute path (default: runsc)
   AGENT_GVISOR_PODMAN_CGROUP_MANAGER
                                 Podman cgroup manager (default: cgroupfs)
@@ -499,11 +502,20 @@ cmd_start() {
   base_commit=$(git -C "$repo" rev-parse --verify "$base^{commit}") || die "cannot resolve base ref: $base"
   branch=${branch:-agent/$name}
 
-  mkdir -p "$STATE_ROOT" "$STATE_ROOT/pools" "$STATE_ROOT/worktrees" "$STATE_ROOT/sessions"
+  mkdir -p "$STATE_ROOT" "$STATE_ROOT/pools" "$STATE_ROOT/sessions"
   local repo_id pool worktree meta_dir home container lockfile
   repo_id=$(printf '%s' "$repo" | sha256sum | cut -c1-16)
   pool="$STATE_ROOT/pools/$repo_id.git"
-  worktree="$STATE_ROOT/worktrees/$repo_id/$name"
+  # The worktree lives NEXT TO the host repository (repo /x/my/repository →
+  # /x/my/repository_agent-gvisor/NAME), so it stays close to the actual repo
+  # instead of being buried in the state directory. Set AGENT_GVISOR_WORKTREES
+  # to a directory to restore a central layout ($ROOT/<repo-id>/NAME), e.g.
+  # "$XDG_STATE_HOME/agent-gvisor/worktrees" for the previous default.
+  if [[ -n "${AGENT_GVISOR_WORKTREES-}" ]]; then
+    worktree="$AGENT_GVISOR_WORKTREES/$repo_id/$name"
+  else
+    worktree="$(dirname "$repo")/$(basename "$repo")_agent-gvisor/$name"
+  fi
   meta_dir="$STATE_ROOT/sessions/$name"
   home="$meta_dir/home"
   container=$(sanitize_container_name "agent-$repo_id-$name")

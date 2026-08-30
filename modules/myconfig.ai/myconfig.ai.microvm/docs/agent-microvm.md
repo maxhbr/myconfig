@@ -722,6 +722,11 @@ In **every** profile:
 
 `package-access` and `internet` require `acknowledgeInsecureNetwork = true`.
 
+The profile is deliberately a **single global option** — per-resource-class
+profiles were planned but never implemented; see the historical
+[per-resource-class network plan](./plan-per-resource-class-network.md) for
+the constraints that couple every slot to the one value.
+
 ---
 
 ## Supported agents — the authoritative registry

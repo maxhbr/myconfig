@@ -1,5 +1,10 @@
 # Plan: per-resource-class network profiles
 
+> Historical planning artifact (noted 2026-08-30): the per-class profiles
+> sketched here were **not** implemented; superseded by the single global
+> `networkProfile` option (later extended with the per-host `vsock`
+> transport capability).
+
 Status: revised after code review. **Scope is deliberately narrowed to v1**
 (per-class *profile capabilities*, ONE shared *transport* per host); per-class
 transports are a documented follow-up, because they would rewrite the

@@ -28,6 +28,12 @@ How the pieces fit together. Option-level reference lives in
 | `launcher.nix` | the host `agent-microvm` CLI: allocation, clones, mounts, lifecycle, events |
 | `workmux.nix` | registers `microvm-<agent>` agents with workmux |
 | `secrets.nix` | agenix stub for the dedicated SSH private key |
+| `workspace.nix` | **the** authority over where a task's standalone clone lives (`workspaceLayout`: `central` vs `beside-repo`) and the root-owned task -> clone index that makes a task name resolvable to a path (see [workspace-layout.md](workspace-layout.md)) |
+| `guest-model-config.nix` | guest **boot-time model discovery**: a guest oneshot queries the LiteLLM forwarder and re-renders the per-agent model lists that the staged configs froze at image-build time |
+| `guest-shell-convenience.nix` | opt-in guest fish + neovim: bakes a small guest-built toolset into the closure and renders its config into the disposable home (the sanctioned alternative to running home-manager in the guest) |
+| `convenience/` | config sources baked by `guest-shell-convenience.nix` (`neovim.lua`, `fish-config.fish`, `ex.fish`) |
+| `mk-dedicated-agent-vm-key.sh` | generates the dedicated agent SSH keypair: the private key into the separate secrets repo, the public key committed per host |
+| `runtime-validation.sh` | the operator-run, real-KVM validation suite (see [agent-microvm-runtime-validation.md](agent-microvm-runtime-validation.md)) |
 
 ## Prebuilt slot pool
 
