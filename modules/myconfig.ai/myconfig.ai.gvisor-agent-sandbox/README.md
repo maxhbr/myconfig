@@ -120,6 +120,10 @@ Patched:
   the fresh pool under `__pools/` does not know their branches, and the old
   `$XDG_STATE_HOME/agent-gvisor/pools/` pools are left behind as orphans
   (safe to delete by hand once no old session references them).
+  The default session branch is `agent/gvisor/<name>` instead of upstream's
+  `agent/<name>`, so branches from the different sandboxing tiers are
+  distinguishable (`agent-microvm` uses `agent/microvm/<task>`). Existing
+  sessions keep the branch recorded in their `meta`.
 
 - `nix/load-image.nix` — `agent-gvisor-load-image` no longer decides by tag
   alone. See *Image freshness check* below.

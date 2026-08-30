@@ -50,7 +50,7 @@ Usage:
 
 start options:
   --base REF                  Base commit/ref in the host repository (default: HEAD)
-  --branch BRANCH             Worktree branch (default: agent/NAME)
+  --branch BRANCH             Worktree branch (default: agent/gvisor/NAME)
   --image IMAGE               Podman image (default: $AGENT_GVISOR_DEFAULT_IMAGE)
   --config HOST:DEST[:ro|rw]  Mount an agent configuration path; repeatable
   --mount HOST:DEST[:ro|rw]   Add another bind mount; repeatable
@@ -520,7 +520,7 @@ cmd_start() {
   git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not a Git working tree: $repo"
   local base_commit
   base_commit=$(git -C "$repo" rev-parse --verify "$base^{commit}") || die "cannot resolve base ref: $base"
-  branch=${branch:-agent/$name}
+  branch=${branch:-agent/gvisor/$name}
 
   local agent_root
   agent_root=$(repo_agent_root "$repo")

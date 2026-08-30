@@ -10,7 +10,7 @@ It assumes the module is enabled on the host and the image is loaded (see
 `agent-gvisor start` is the single entry point. It never mounts the host
 checkout. Instead it seeds a **disposable bare Git pool** from the host repo's
 committed refs and checks out a worktree from that pool on a fresh branch,
-defaulting to `agent/<name>`.
+defaulting to `agent/gvisor/<name>`.
 
 ```bash
 agent-gvisor start \
@@ -37,7 +37,7 @@ What happens:
    `<repo>_agent-gvisor/__pools/<repo-id>.git`, the session state
    (meta, home, mounts, env) at `<repo>_agent-gvisor/__sessions/fix-parser/`
    — i.e. next to the host repository — a worktree is added at
-   `<repo>_agent-gvisor/fix-parser` on branch `agent/fix-parser`, and the
+   `<repo>_agent-gvisor/fix-parser` on branch `agent/gvisor/fix-parser`, and the
    container starts. A symlink in the session registry
    (`~/.local/state/agent-gvisor/sessions/fix-parser`) points to the session
    directory, so commands that only take a session name find it.
@@ -52,7 +52,7 @@ or run `agent-gvisor destroy fix-parser --force --delete-branch` first.
 
 ## 2. Interact with the agent
 
-The agent works **inside** the sandbox and commits to branch `agent/fix-parser`
+The agent works **inside** the sandbox and commits to branch `agent/gvisor/fix-parser`
 in the disposable pool. The host checkout is untouched.
 
 Inspect progress from the host:

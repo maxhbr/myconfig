@@ -2759,8 +2759,8 @@ let
           [[ -z "$agent" ]] || validate_agent_name "$agent"
           local top
           top="$(validate_repository "$repo")"
-          [[ -z "$branch" ]] && branch="agent/$task"
-          # The default `agent/<task>` is safe (task is regex-validated); a
+          [[ -z "$branch" ]] && branch="agent/microvm/$task"
+          # The default `agent/microvm/<task>` is safe (task is regex-validated); a
           # caller-supplied branch is validated so it cannot look like a flag.
           validate_branch_name "$branch"
 
@@ -2946,7 +2946,7 @@ let
           [[ -s "$prompt_real" ]] || die "submit: --prompt-file is empty: $prompt"
           local top
           top="$(validate_repository "$repo")"
-          [[ -z "$branch" ]] && branch="agent/$task"
+          [[ -z "$branch" ]] && branch="agent/microvm/$task"
           validate_branch_name "$branch"
 
           # Same fast-fail host-side endpoint check as `run`: do not boot a VM
