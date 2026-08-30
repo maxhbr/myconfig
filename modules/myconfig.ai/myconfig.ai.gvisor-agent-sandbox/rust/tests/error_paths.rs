@@ -21,7 +21,7 @@ fn pool_of(s: &Scenario) -> String {
     repo.parent()
         .unwrap()
         .join(format!(
-            "{}_agent-gvisor",
+            "{}__agent-gvisor",
             repo.file_name().unwrap().to_string_lossy()
         ))
         .join("__pools")
@@ -373,7 +373,7 @@ fn destroy_dirty_worktree() {
     started(&s);
     let worktree = s
         .root
-        .join("repo_agent-gvisor")
+        .join("repo__agent-gvisor")
         .join("s1")
         .canonicalize()
         .unwrap();

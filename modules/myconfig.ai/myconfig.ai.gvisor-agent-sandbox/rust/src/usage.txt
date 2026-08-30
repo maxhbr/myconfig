@@ -53,10 +53,10 @@ environment:
   AGENT_GVISOR_IMAGE            Override the default image
   AGENT_GVISOR_STATE            Session registry directory (name -> session
                                 dirs); pools and session state live in
-                                <repo>_agent-gvisor/ next to each repository
+                                <repo>__agent-gvisor/ next to each repository
   AGENT_GVISOR_WORKTREES        Worktree root directory; empty (default) puts
                                 worktrees next to the repo, as
-                                <repo>_agent-gvisor/NAME
+                                <repo>__agent-gvisor/NAME
   AGENT_GVISOR_PODMAN_RUNTIME   Runtime name or absolute path (default: runsc)
   AGENT_GVISOR_PODMAN_CGROUP_MANAGER
                                 Podman cgroup manager (default: cgroupfs)

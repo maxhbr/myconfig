@@ -39,10 +39,10 @@ What happens:
    port-scoped forwarder proxies to the loopback-only LiteLLM proxy (see
    *Model access (host LiteLLM)* in `../README.md`).
 3. A bare pool is created (or reused) at
-   `<repo>_agent-gvisor/__pools/<repo-id>.git`, the session state
-   (meta, home, mounts, env) at `<repo>_agent-gvisor/__sessions/fix-parser/`
+   `<repo>__agent-gvisor/__pools/<repo-id>.git`, the session state
+   (meta, home, mounts, env) at `<repo>__agent-gvisor/__sessions/fix-parser/`
    — i.e. next to the host repository — a worktree is added at
-   `<repo>_agent-gvisor/fix-parser` on branch `agent/gvisor/fix-parser`, and the
+   `<repo>__agent-gvisor/fix-parser` on branch `agent/gvisor/fix-parser`, and the
    container starts. A symlink in the session registry
    (`~/.local/state/agent-gvisor/sessions/fix-parser`) points to the session
    directory, so commands that only take a session name find it.

@@ -240,7 +240,7 @@ fn start_records_exact_podman_argv() {
     let repo = s.repo.canonicalize().unwrap();
     let repo_id = common::expected_repo_id(&s.repo);
     let agent_root = repo.parent().unwrap().join(format!(
-        "{}_agent-gvisor",
+        "{}__agent-gvisor",
         repo.file_name().unwrap().to_string_lossy()
     ));
     let worktree = agent_root.join("s1");

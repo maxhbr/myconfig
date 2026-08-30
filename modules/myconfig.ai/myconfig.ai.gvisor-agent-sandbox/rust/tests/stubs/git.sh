@@ -40,6 +40,22 @@ case "$sub" in
                 if marker_has "$RECORD/not-git" "$wd"; then exit 128; fi
                 exit 0
                 ;;
+            --show-toplevel)
+                # Walk up to the topmost dir containing .git, like real
+                # git does, so a start from a subdirectory anchors at the
+                # repository root.
+                _d=$wd
+                [ -n "$_d" ] || _d=$PWD
+                while :; do
+                    if [ -e "$_d/.git" ]; then
+                        printf '%s\n' "$_d"
+                        exit 0
+                    fi
+                    [ "$_d" = / ] && break
+                    _d=$(dirname "$_d")
+                done
+                exit 128
+                ;;
             --verify)
                 if [ -f "$RECORD/base-sha" ]; then
                     cat "$RECORD/base-sha"

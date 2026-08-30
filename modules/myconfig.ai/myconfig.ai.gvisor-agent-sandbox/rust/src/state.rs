@@ -182,15 +182,18 @@ pub fn validate_name(name: &str) -> Result<(), String> {
     }
 }
 
-/// `<dirname repo>/$(basename repo)_agent-gvisor` — the repo-adjacent root
-/// hosting `__pools`, `__sessions` and (by default) the worktrees.
+/// `<dirname repo>/$(basename repo)__agent-gvisor` — the repo-adjacent root
+/// hosting `__pools`, `__sessions` and (by default) the worktrees. `repo`
+/// must be the repository ROOT (`start` anchors it there via
+/// `rev-parse --show-toplevel`), so this always sits NEXT TO the root,
+/// never inside it — even when a session was started from a subdirectory.
 pub fn repo_agent_root(repo: &Path) -> PathBuf {
     let parent = repo.parent().unwrap_or_else(|| Path::new("/"));
     let name = repo
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    parent.join(format!("{name}_agent-gvisor"))
+    parent.join(format!("{name}__agent-gvisor"))
 }
 
 /// First 16 hex chars of `sha256(<realpath repo>)`, computed by exec'ing
@@ -236,7 +239,7 @@ pub struct Session {
     pub name: String,
     /// Parsed `meta`.
     pub meta: Meta,
-    /// `<repo>_agent-gvisor/__sessions/<name>` (symlink target).
+    /// `<repo>__agent-gvisor/__sessions/<name>` (symlink target).
     pub meta_dir: PathBuf,
 }
 
