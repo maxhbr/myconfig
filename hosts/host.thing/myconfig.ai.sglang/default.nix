@@ -83,7 +83,16 @@ let
 
       # sglang server settings (recipe defaults for the RTX 5090 cell).
       KV_CACHE_DTYPE="''${KV_CACHE_DTYPE:-fp8_e4m3}"
-      MEM_FRACTION_STATIC="''${MEM_FRACTION_STATIC:-0.9}"
+      # Lowered from the cookbook 0.9 to 0.88: the hybrid model's
+      # mamba state cache + FP8 KV cache fit at 0.88 (max_mamba_cache_size=8
+      # with --mamba-ssm-dtype bfloat16, 1 request), and the extra ~0.6 GB
+      # of runtime slack prevents CUDA OOM during inference. At 0.9 the
+      # prefill CUDA graph capture (1.38 GB) + Triton kernel JIT (~0.87 GB)
+      # consume almost all of the 3.05 GB slack, leaving <0.1 GB free; a
+      # 48 MiB activation allocation then OOMs (with ~487 MiB reserved but
+      # fragmented). 0.88 raises slack to 3.66 GB while keeping K=8 mamba
+      # slots and ~1.6 GB of KV cache.
+      MEM_FRACTION_STATIC="''${MEM_FRACTION_STATIC:-0.88}"
       ATTENTION_BACKEND="''${ATTENTION_BACKEND:-flashinfer}"
       MAX_RUNNING_REQUESTS="''${MAX_RUNNING_REQUESTS:-1}"
       CUDA_GRAPH_MAX_BS="''${CUDA_GRAPH_MAX_BS:-1}" # used for --cuda-graph-max-bs-decode
@@ -146,6 +155,14 @@ let
       if [ -n "''${HF_TOKEN:-}" ]; then
         args+=(-e HF_TOKEN)
       fi
+
+      # Reduce PyTorch CUDA allocator fragmentation so the ~487 MiB of
+      # reserved-but-unallocated memory becomes usable for inference
+      # activations. The prefill CUDA graph capture and Triton kernel JIT
+      # leave the cache highly fragmented; without this the allocator
+      # cannot satisfy a 48 MiB request even when enough total memory is
+      # free.
+      args+=(-e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True)
 
       args+=(
         "$DOCKER_IMAGE"
