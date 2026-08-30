@@ -49,7 +49,7 @@ let
 
     runtimeInputs = [
       pkgs.coreutils
-      pkgs.grep
+      pkgs.gnugrep
       pkgs.podman
     ];
 
