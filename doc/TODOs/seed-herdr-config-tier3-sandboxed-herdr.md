@@ -18,7 +18,7 @@ tier 3 is the tier whose *entry point* is `herdr`:
 
 The divergence was documented (not fixed) in
 `modules/myconfig.ai/sandboxed-herdr.README.md` ("Agent-configuration seeding")
-by the doc-review commit `6729a352d0` ("docs(ai): fix doc-vs-code drift and gaps found in the myconfig.ai review", branch `agent/gvisor-fun`, 2026-08).
+by the doc-review commit `04c9e05f0a` ("docs(ai): fix doc-vs-code drift and gaps found in the myconfig.ai review", branch `agent/gvisor-fun`, 2026-08).
 
 ## What to do
 
