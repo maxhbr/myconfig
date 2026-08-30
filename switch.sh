@@ -151,6 +151,26 @@ get_out_link_of_target() {
     local target="$1"
     echo '../result.'"$target"
 }
+git_repo_is_clean() {
+    local repo="$1"
+    [[ -d "$repo/.git" || -f "$repo/.git" ]] || return 0
+    git -C "$repo" diff --quiet HEAD 2>/dev/null
+}
+# Returns 0 if the running system was built from exactly the current state of
+# the myconfig repo: `myconfig-ahead` (see flake.lib.nix) compares the repo
+# HEAD against the commit recorded in /run/myconfig/myconfig-commit and exits
+# 1 while printing "0" iff HEAD matches and the tree is clean. Additionally
+# the flake directory we build from (the cwd, e.g. priv) must be clean.
+is_up_to_date() {
+    local script_dir="$1"
+    local out rc
+    have myconfig-ahead || return 1
+    rc=0
+    out="$(MYCONFIG_REPO="$script_dir" myconfig-ahead 2>/dev/null)" || rc=$?
+    [[ $rc -eq 1 && $out == "0" ]] || return 1
+    git_repo_is_clean "." || return 1
+    return 0
+}
 build() (
     local target="$1"
     shift
@@ -410,6 +430,10 @@ sbom() (
 main() {
     local MODE=""
     local COMMAND="switch"
+    local no_args="false"
+    if [[ $# -eq 0 ]]; then
+        no_args="true"
+    fi
     if [[ $# -gt 0 && ($1 == "--verbose" || $1 == "-v" || $1 == "-vv") ]]; then
         verbose="--verbose"
         if [[ $1 == "-vv" ]]; then
@@ -514,6 +538,11 @@ main() {
     fi
     local latest_logfile="${out_link}.log"
     ln -sf "$(realpath -m --relative-to="$(dirname "$latest_logfile")" "$logfile")" "$latest_logfile"
+
+    if [[ $no_args == "true" && $target == "$(hostname)" ]] && is_up_to_date "$script_dir"; then
+        log_info "nothing to do: $target already runs $(cat /run/myconfig/myconfig-commit) and there are no uncommitted changes"
+        return 0
+    fi
 
     if [[ $MODE == "--build-vm" ]]; then
         BUILD_ATTR="vm" build "$target" "$out_link" "${local_build[@]}" ||
