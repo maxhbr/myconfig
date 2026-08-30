@@ -37,6 +37,7 @@ need() { command -v "$1" >/dev/null 2>&1 || die "missing command: $1"; }
 usage() {
   cat <<'USAGE'
 Usage:
+  agent-gvisor [start] NAME [options] -- [COMMAND...]
   agent-gvisor start --name NAME --repo PATH [options] -- [COMMAND...]
   agent-gvisor list
   agent-gvisor status NAME
@@ -49,6 +50,10 @@ Usage:
   agent-gvisor doctor
 
 start options:
+  NAME                        Positional session name, an alternative to --name.
+                              A bare `agent-gvisor NAME` (without any action
+                              word) is shorthand for `agent-gvisor start NAME`.
+  --repo PATH                 Host repository (default: the current directory)
   --base REF                  Base commit/ref in the host repository (default: HEAD)
   --branch BRANCH             Worktree branch (default: agent/gvisor/NAME)
   --image IMAGE               Podman image (default: $AGENT_GVISOR_DEFAULT_IMAGE)
@@ -483,7 +488,7 @@ cmd_start() {
   local detach=false memory=8g cpus=4 pids_limit=2048 network="${AGENT_GVISOR_NETWORK-}"
   local seccomp_unconfined=false env_file='' force=false
   local home_seed='' seed_home_enabled=true
-  local -a mount_specs=() env_specs=()
+  local -a mount_specs=() env_specs=() positional=()
 
   while (( $# )); do
     case "$1" in
@@ -507,12 +512,22 @@ cmd_start() {
       --no-home-seed) seed_home_enabled=false; shift ;;
       --) shift; break ;;
       -h|--help) usage; exit 0 ;;
-      *) die "unknown start option: $1" ;;
+      -*) die "unknown start option: $1" ;;
+      *) positional+=("$1"); shift ;;
     esac
   done
 
-  [[ -n "$name" ]] || die "--name is required"
-  [[ -n "$repo" ]] || die "--repo is required"
+  # The session name may be given positionally; anything after it is the
+  # command, exactly like the arguments after `--`.
+  if (( ${#positional[@]} )); then
+    [[ -z "$name" ]] || die "session name given twice (--name and positional)"
+    name=${positional[0]}
+    set -- "${positional[@]:1}" "$@"
+  fi
+  [[ -n "$name" ]] || die "session name is required (NAME or --name)"
+  # Without --repo, start from the current directory, which is what the
+  # shorthand `agent-gvisor NAME` is for.
+  repo=${repo:-$PWD}
   validate_name "$name"
   need git; need podman; need flock; need sha256sum; need realpath
 
@@ -959,7 +974,14 @@ main() {
     destroy) shift; cmd_destroy "$@" ;;
     doctor) shift; cmd_doctor "$@" ;;
     -h|--help|help|'') usage ;;
-    *) die "unknown subcommand: $sub" ;;
+    *)
+      # Any first argument that is not an action word is a session name:
+      # `agent-gvisor NAME` is shorthand for `agent-gvisor start NAME` with
+      # the current directory as the repository. Names must still pass
+      # validate_name (checked inside cmd_start), so garbage fails as
+      # before instead of silently starting things.
+      [[ "$sub" != -* ]] || die "unknown subcommand: $sub"
+      shift; cmd_start "$sub" "$@" ;;
   esac
 }
 

@@ -76,6 +76,15 @@ Moved:
 
 Patched:
 
+- `bin/agent-gvisor` — the session name and repository can be given
+  positionally: a first argument that is no action word is a session name, so
+  `agent-gvisor NAME` is shorthand for
+  `agent-gvisor start --name NAME --repo "$PWD"`, and
+  `agent-gvisor start NAME` works as well. Any further positional argument
+  before `--` is the command, like the arguments after `--`. `--name` and
+  `--repo` keep working; `--repo` now defaults to the current directory. A
+  first argument starting with `-` is still an unknown subcommand, so a
+  mistyped flag does not silently start a session.
 - `bin/agent-gvisor` — `start` no longer dies outright when a session of
   the same name exists. With the new `start --force` it destroys the old
   session (including its branch) unattended; otherwise, on a terminal, it
@@ -152,7 +161,8 @@ host-side chat front-ends `aichat` / `llm` are deliberately excluded.
 Whenever at least one of those agents is enabled, `pkgs.herdr` (the terminal
 agent multiplexer) is added too — the same condition `../programs.herdr.nix`
 uses on the host — and becomes the session's default command via
-`defaultCommand`. A bare `agent-gvisor start --name x --repo …` therefore
+`defaultCommand`. A bare `agent-gvisor x` (shorthand for
+`start --name x --repo .`) therefore
 drops you into `herdr` rather than a plain shell; `-- COMMAND` still wins, and
 `agent-gvisor shell` always gives a shell. Its host configuration is seeded
 via `.config/herdr` in `home.seedPaths`. Set `defaultCommand = null` for the
@@ -361,7 +371,7 @@ Use it from a session (the generated env file carries only the base URL — no
 secret ends up in the Nix store or in the session state):
 
 ```bash
-agent-gvisor start --name demo --repo ~/src/foo \
+agent-gvisor demo --repo ~/src/foo \
   --env-file ~/.config/agent-gvisor/litellm.env \
   --env OPENAI_API_KEY="$OPENAI_API_KEY" \
   -- pi
