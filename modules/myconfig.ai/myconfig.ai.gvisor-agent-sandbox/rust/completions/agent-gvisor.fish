@@ -97,6 +97,8 @@ complete -c agent-gvisor -n '__agent_gvisor_in_start' -l memory -x -d 'Memory li
 complete -c agent-gvisor -n '__agent_gvisor_in_start' -l cpus -x -d 'CPU limit (default: 4)'
 complete -c agent-gvisor -n '__agent_gvisor_in_start' -l pids-limit -x -d 'Process limit (default: 2048)'
 complete -c agent-gvisor -n '__agent_gvisor_in_start' -l seccomp-unconfined -d 'Disable the inner OCI seccomp profile'
+complete -c agent-gvisor -n '__agent_gvisor_in_start' -l nix -d 'Give the session a writable Nix store volume at /nix/store'
+complete -c agent-gvisor -n '__agent_gvisor_in_start' -l no-nix -d 'Start without the writable Nix store, even if enabled by default'
 complete -c agent-gvisor -n '__agent_gvisor_in_start' -l force -d 'Destroy an existing session of the same name first'
 complete -c agent-gvisor -n '__agent_gvisor_in_start' -l home-seed -r -d 'Seed /home/agent from this directory'
 complete -c agent-gvisor -n '__agent_gvisor_in_start' -l no-home-seed -d 'Start with an empty /home/agent'

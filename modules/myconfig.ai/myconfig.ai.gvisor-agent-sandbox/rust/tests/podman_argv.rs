@@ -29,6 +29,8 @@ fn test_env() -> Env {
         home_seed: None,
         home_seed_paths: vec![],
         home_seed_rewrite: vec![],
+        nix: false,
+        nix_config: None,
     }
 }
 
@@ -49,6 +51,8 @@ fn test_meta() -> Meta {
         network: "pasta:--map-guest-addr,10.0.2.2".to_string(),
         seccomp_unconfined: "true".to_string(),
         env_file: "/envs/s1.list".to_string(),
+        // Empty = a session predating the `nix` field (parse default).
+        nix: String::new(),
     }
 }
 
@@ -61,6 +65,114 @@ fn meta_dir_with(mounts: &str, env_list: &str) -> (PathBuf, TempDir) {
     fs::write(meta_dir.join("mounts.tsv"), mounts).unwrap();
     fs::write(meta_dir.join("env.list"), env_list).unwrap();
     (meta_dir, dir)
+}
+
+#[test]
+fn build_run_args_nix() {
+    let mut env = test_env();
+    env.nix_config = Some("sandbox = false\nsubstituters = https://cache.nixos.org".to_string());
+    let mut meta = test_meta();
+    meta.nix = "true".to_string();
+    let (meta_dir, _keep) = meta_dir_with("\n", "\n");
+
+    let args = build_run_args(&env, &meta, &meta_dir, true, &[]);
+
+    // The store volume mount directly follows the 3 fixed binds.
+    let home_mount = format!("type=bind,src={},dst=/home/agent,rw", meta.home);
+    let pos = args.iter().position(|a| a == &home_mount).expect("home bind");
+    assert_eq!(
+        &args[pos + 1..pos + 3],
+        &[
+            "--mount".to_string(),
+            format!("type=volume,src={},dst=/nix/store", agent_gvisor::podman::nix_volume_name(&meta)),
+        ]
+    );
+    // The Nix env block directly follows the fixed envs (no loopback forward
+    // set in this scenario).
+    let wt = args
+        .iter()
+        .position(|a| a == "AGENT_WORKTREE=/repo")
+        .expect("worktree env");
+    let expected: Vec<String> = [
+        "NIX_REMOTE=local",
+        "NIX_STATE_DIR=/home/agent/.local/state/nix",
+        "NIX_LOG_DIR=/home/agent/.local/state/nix/log",
+        "TMPDIR=/home/agent/.cache/nix-tmp",
+        "AGENT_GVISOR_NIX=1",
+        "NIX_CONFIG=sandbox = false\nsubstituters = https://cache.nixos.org",
+    ]
+    .iter()
+    .flat_map(|e| ["--env".to_string(), e.to_string()])
+    .collect();
+    assert_eq!(&args[wt + 1..wt + 1 + expected.len()], &expected[..]);
+
+    // Counts: 3 fixed binds + 1 volume; 6 fixed envs + 6 Nix envs.
+    assert_eq!(args.iter().filter(|a| *a == "--mount").count(), 4);
+    assert_eq!(args.iter().filter(|a| *a == "--env").count(), 12);
+    // The init wrapper is the payload (no loopback forward), before the
+    // default /bin/bash.
+    assert_eq!(&args[args.len() - 2..args.len() - 1], &["/bin/agent-gvisor-init".to_string()]);
+    assert_eq!(args.last().unwrap(), "/bin/bash");
+
+    // An old-session meta (empty `nix` — pre-dating the field) gains NO
+    // volume and no init wrapper on `run`, whatever the env defaults say
+    // (they only feed `start`).
+    env.nix_config = None;
+    let args = build_run_args(&env, &test_meta(), &meta_dir, true, &[]);
+    assert!(!args.iter().any(|a| a.starts_with("type=volume")));
+    assert!(!args.contains(&"/bin/agent-gvisor-init".to_string()));
+}
+
+#[test]
+fn start_nix_records_volume_and_destroy_removes_it() {
+    let s = Scenario::new("start-nix-records-volume");
+    s.run_ok(&["start", "s1", "--nix", "--detach"]);
+
+    let repo = s.repo.canonicalize().unwrap();
+    let repo_id = common::expected_repo_id(&s.repo);
+    let container = format!("agent-{repo_id}-s1");
+    let meta_dir = repo
+        .parent()
+        .unwrap()
+        .join(format!("{}__agent-gvisor", repo.file_name().unwrap().to_string_lossy()))
+        .join("__sessions")
+        .join("s1");
+
+    let run = s.recorded_starting_with("podman", "run")[0].clone();
+    assert!(run.contains(&format!("type=volume,src={container}-nix,dst=/nix/store")));
+    assert!(run.contains(&"NIX_REMOTE=local".to_string()));
+    assert!(run.contains(&"AGENT_GVISOR_NIX=1".to_string()));
+    assert!(run.contains(&"/bin/agent-gvisor-init".to_string()));
+    // `--nix` is recorded in the meta (and `--no-nix` would be `nix=false`).
+    let meta_text = fs::read_to_string(meta_dir.join("meta")).unwrap();
+    assert!(meta_text.contains("\nnix=true\n"));
+
+    // destroy removes the volume along with the session.
+    s.run_ok(&["destroy", "s1", "--force", "--delete-branch"]);
+    let volume_calls = s.recorded_starting_with("podman", "volume");
+    let rm_call = volume_calls
+        .iter()
+        .find(|c| c.contains(&"rm".to_string()))
+        .expect("podman volume rm");
+    assert!(rm_call.contains(&format!("{container}-nix".to_string())));
+
+    // A plain (non-nix) session never touches volumes.
+    let s2 = Scenario::new("start-plain-has-no-volume");
+    s2.run_ok(&["start", "s1", "--detach"]);
+    let run = s2.recorded_starting_with("podman", "run")[0].clone();
+    assert!(!run.iter().any(|a| a.starts_with("type=volume")));
+    let s2_repo = s2.repo.canonicalize().unwrap();
+    let s2_meta_dir = s2_repo
+        .parent()
+        .unwrap()
+        .join(format!(
+            "{}__agent-gvisor",
+            s2_repo.file_name().unwrap().to_string_lossy()
+        ))
+        .join("__sessions")
+        .join("s1");
+    let meta_text = fs::read_to_string(s2_meta_dir.join("meta")).unwrap();
+    assert!(meta_text.contains("\nnix=false\n"));
 }
 
 #[test]

@@ -32,6 +32,12 @@ start options:
   --cpus NUMBER               CPU limit (default: 4)
   --pids-limit NUMBER         Process limit (default: 2048)
   --seccomp-unconfined        Disable the inner OCI seccomp profile
+  --nix                       Give the session a writable Nix store volume at
+                              /nix/store (nix build / nix run inside the
+                              sandbox; default: $AGENT_GVISOR_NIX, see
+                              docs/nix-in-sandbox.md)
+  --no-nix                    Start without the writable Nix store, even when
+                              $AGENT_GVISOR_NIX enables it by default
   --force                     Destroy an existing session of the same name,
                               including its branch, instead of failing. Without
                               it an interactive terminal is asked to confirm,
@@ -98,6 +104,12 @@ environment:
                                 verbatim. Set up by /bin/agent-gvisor-init.
   AGENT_GVISOR_DEFAULT_COMMAND  Command run by `start`/`run` when no COMMAND is
                                 given (default: /bin/bash)
+  AGENT_GVISOR_NIX              Default for --nix: give sessions a writable Nix
+                                store (any value except unset, empty and
+                                "false" enables)
+  AGENT_GVISOR_NIX_CONFIG       Nix configuration passed into the container as
+                                NIX_CONFIG when --nix is on, e.g. substituters
+                                and trusted keys; see docs/nix-in-sandbox.md
 
 Run `agent-gvisor doctor` to verify runtime, image and sandbox startup.
 

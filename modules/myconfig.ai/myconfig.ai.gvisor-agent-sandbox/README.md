@@ -437,6 +437,29 @@ agent-gvisor-load-image   # load the Nix-built image into the rootless store
 agent-gvisor doctor       # verify runtime, image and sandbox startup
 ```
 
+### Nix inside sessions (`nix build` / `nix run` in the sandbox)
+
+With `myconfig.ai.gvisor-agent-sandbox.nix.enable = true` the image bakes
+`config.nix.package` and every session defaults to `--nix`: a per-session
+Podman volume mounted at `/nix/store`, seeded by copy-up with the image's
+own store paths (so the `/bin` toolchain keeps working) and writable, so
+nix substitutes what a build needs from the configured binary caches —
+host-mirrored `substituters` and `trusted-public-keys`, passed in as the
+container env `NIX_CONFIG` via `AGENT_GVISOR_NIX_CONFIG`. Nix runs
+daemon-less (`NIX_REMOTE=local`, state under `/home/agent/.local/state/nix`)
+because there is no daemon and the image's `/nix/var` stays read-only; nix's
+build sandbox is disabled (`sandbox = false`) because gVisor provides
+neither user namespaces nor `mount(2)`. `agent-gvisor destroy` removes the
+volume with the session.
+
+The host `/nix/store` is never mounted. The accepted trade-offs — nix
+builds running without an inner sandbox, and host disk exposure via the
+volume — plus the alternatives that were rejected (host-store mount,
+session-dir store with an image-view symlink farm, writable rootfs) are
+documented in `docs/nix-in-sandbox.md`, together with the flake workflow
+inside a session and the host verification checklist for the first
+`--nix` session on real hardware.
+
 ### Image freshness check
 
 The image tag (`localhost/agent-dev:latest`) is reused by every rebuild, so

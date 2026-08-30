@@ -78,6 +78,13 @@ pub fn try_check_image(env: &Env, image: &str) -> Result<(), String> {
     ))
 }
 
+/// The Podman volume backing the writable Nix store of a `--nix` session:
+/// `<container>-nix`, a per-session name derived from the already sanitized
+/// container name (docs/nix-in-sandbox.md).
+pub fn nix_volume_name(meta: &Meta) -> String {
+    format!("{}-nix", meta.container)
+}
+
 /// Build the exact `podman run` argument vector (docs/spec.md §10),
 /// INCLUDING the leading literal `podman` (argv[0], like the bash array).
 /// Reads `mounts.tsv` / `env.list` from `meta_dir`; emits the
@@ -89,6 +96,10 @@ pub fn build_run_args(
     detach: bool,
     command: &[String],
 ) -> Vec<String> {
+    // Stricter than `seccomp_unconfined` (see docs/spec.md §8): empty
+    // (a session predating the field) must NOT gain a Nix store mount,
+    // because the CLI never created the backing volume for such sessions.
+    let nix_on = meta.nix == "true";
     let mut cmd: Vec<String> = vec!["podman".to_string()];
     cmd.extend(global_args(env));
     cmd.push("run".to_string());
@@ -126,6 +137,17 @@ pub fn build_run_args(
             format!("type=bind,src={src},dst={dst},rw"),
         ]);
     }
+    // Writable Nix store for `--nix` sessions: a named volume bound at
+    // /nix/store, populated by Podman's copy-up with the image's own store
+    // (so the /bin toolchain — all symlinks into /nix/store — keeps
+    // working) and writable by the agent. The volume outlives container
+    // recreation (`run --replace`) and is removed by `destroy`.
+    if nix_on {
+        cmd.extend([
+            "--mount".to_string(),
+            format!("type=volume,src={},dst=/nix/store", nix_volume_name(meta)),
+        ]);
+    }
     cmd.extend([
         "--env".to_string(),
         "HOME=/home/agent".to_string(),
@@ -151,6 +173,32 @@ pub fn build_run_args(
             "--env".to_string(),
             format!("AGENT_GVISOR_LOOPBACK_FORWARD={fwd}"),
         ]);
+    }
+
+    // Nix inside the sandbox (docs/nix-in-sandbox.md): daemon-less local
+    // store (the image's /nix/var stays read-only, so the state lives on
+    // the session home), disk-backed TMPDIR (the container /tmp is a
+    // tmpfs and large builds would hit the memory limit) and the gate env
+    // for /bin/agent-gvisor-init.
+    if nix_on {
+        cmd.extend([
+            "--env".to_string(),
+            "NIX_REMOTE=local".to_string(),
+            "--env".to_string(),
+            "NIX_STATE_DIR=/home/agent/.local/state/nix".to_string(),
+            "--env".to_string(),
+            "NIX_LOG_DIR=/home/agent/.local/state/nix/log".to_string(),
+            "--env".to_string(),
+            "TMPDIR=/home/agent/.cache/nix-tmp".to_string(),
+            "--env".to_string(),
+            "AGENT_GVISOR_NIX=1".to_string(),
+        ]);
+        if let Some(nix_config) = &env.nix_config {
+            cmd.extend([
+                "--env".to_string(),
+                format!("NIX_CONFIG={nix_config}"),
+            ]);
+        }
     }
 
     if cgroups_ignored(env) {
@@ -209,7 +257,7 @@ pub fn build_run_args(
     cmd.push(meta.image.clone());
     // Wrap the payload so the relays exist before it starts. The wrapper
     // execs, so the payload still gets PID 1, the TTY and the signals.
-    if env.loopback_forward.is_some() {
+    if env.loopback_forward.is_some() || nix_on {
         cmd.push("/bin/agent-gvisor-init".to_string());
     }
     if command.is_empty() {

@@ -149,6 +149,8 @@ impl Scenario {
             "AGENT_GVISOR_HOME_SEED",
             "AGENT_GVISOR_HOME_SEED_PATHS",
             "AGENT_GVISOR_HOME_SEED_REWRITE",
+            "AGENT_GVISOR_NIX",
+            "AGENT_GVISOR_NIX_CONFIG",
         ] {
             c.env_remove(var);
         }
