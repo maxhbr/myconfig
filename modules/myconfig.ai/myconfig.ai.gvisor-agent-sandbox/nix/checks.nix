@@ -11,6 +11,12 @@
 #   agent-gvisor-cli-harness end-to-end CLI flows (doctor, a full session
 #                             cycle, list) through the same stubs, driven
 #                             by ../tests/agent-gvisor-cli-harness.sh.
+#   agent-gvisor-init        the in-container entrypoint wrapper
+#                             (./agent-gvisor-init.sh): the `--nix`
+#                             preflight must fail closed when the store
+#                             volume or the Nix state directories are not
+#                             writable, driven by
+#                             ../tests/agent-gvisor-init-harness.sh.
 #   agent-gvisor-completions the fish tab completion shipped by the
 #                             production package: installed at the vendor
 #                             path, identical to the maintained source,
@@ -54,6 +60,22 @@ in
         BIN=${crate}/bin/agent-gvisor \
         STUBS=${../rust/tests/stubs} \
           bash ${../tests/agent-gvisor-cli-harness.sh}
+        touch "$out"
+      '';
+
+  agent-gvisor-init =
+    pkgs.runCommand "agent-gvisor-init"
+      {
+        nativeBuildInputs = with pkgs; [
+          bash
+          coreutils
+          gnugrep
+          gnused
+        ];
+      }
+      ''
+        INIT=${./agent-gvisor-init.sh} \
+          bash ${../tests/agent-gvisor-init-harness.sh}
         touch "$out"
       '';
 

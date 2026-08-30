@@ -452,6 +452,13 @@ build sandbox is disabled (`sandbox = false`) because gVisor provides
 neither user namespaces nor `mount(2)`. `agent-gvisor destroy` removes the
 volume with the session.
 
+The in-container entrypoint (`/bin/agent-gvisor-init`) verifies this setup
+before the payload starts and **aborts the session** if `/nix/store` or the
+Nix state directories are not writable, instead of handing out a session in
+which every later `nix` call fails obscurely. `nix.enable` therefore stays
+off until the host verification checklist (`docs/nix-in-sandbox.md` §7) has
+been run on that machine.
+
 The host `/nix/store` is never mounted. The accepted trade-offs — nix
 builds running without an inner sandbox, and host disk exposure via the
 volume — plus the alternatives that were rejected (host-store mount,

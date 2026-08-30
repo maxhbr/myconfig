@@ -56,6 +56,20 @@ four ways:
    payload process runs (the wrapper is the payload whenever
    `AGENT_GVISOR_NIX=1`, even without loopback forwards).
 
+   **The wrapper fails closed.** Unlike the loopback relays (a broken
+   relay only warns), the Nix preflight aborts the session with exit 1
+   when a state directory cannot be created or written, or when the store
+   at `NIX_STORE_DIR` (`/nix/store` in every real session) does not accept
+   a write. `--nix` is an explicit request for a usable store, and the
+   copy-up + `keep-id` ownership behaviour under runsc is precisely the
+   part that can silently not work on a given host (§7 V1): without the
+   preflight a session would start and then fail deep inside some later
+   `nix` invocation with an unrelated-looking error. The probe is a real
+   file creation, not `test -w`, because an unmapped owner leaves the
+   permission bits looking fine while every write returns `EACCES`.
+   `nix/checks.nix` exercises all of this without a container
+   (`agent-gvisor-init`, driven by `tests/agent-gvisor-init-harness.sh`).
+
    `NIX_REMOTE=local` is belt and braces: without it a nix built with
    daemon support might spend its first seconds probing `/nix/var/nix/daemon.socket`
    (absent, on a read-only layer) before falling back.
@@ -217,6 +231,9 @@ The implementation is static-verified (argv tests, meta round-trip,
 completions sync, module eval) in `nix/checks.nix`; the following needs a
 real host with rootless Podman + runsc + the loaded image, in this order:
 
+Until V1–V5 have been run on a host, keep `nix.enable` off there: the
+module defaults to off for exactly that reason.
+
 1. **Volume + copy-up + keep-id under runsc** (the core unknown):
    `agent-gvisor start t1 --nix --detach`, then inside
    (`agent-gvisor shell t1`) check that `ls /nix/store` shows the image
@@ -225,6 +242,9 @@ real host with rootless Podman + runsc + the loaded image, in this order:
    (uid unmapped under `keep-id`) and the write fails: this host needs
    the read-only-rootfs fallback — image-level writable rootfs —
    and the volume approach must be revisited upstream.
+   The failure is *loud*: `start --nix` aborts with
+   `agent-gvisor-init: error: /nix/store is not writable in this sandbox`
+   (§1.2), so V1 cannot pass by accident.
 2. **Daemon-less nix:** `nix store info` in the session must print the
    store without daemon errors; `nix build nixpkgs#hello` must
    substitute, build and run.

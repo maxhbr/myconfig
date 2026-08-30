@@ -154,7 +154,7 @@ fn start_nix_records_volume_and_destroy_removes_it() {
         .iter()
         .find(|c| c.contains(&"rm".to_string()))
         .expect("podman volume rm");
-    assert!(rm_call.contains(&format!("{container}-nix".to_string())));
+    assert!(rm_call.contains(&format!("{container}-nix")));
 
     // A plain (non-nix) session never touches volumes.
     let s2 = Scenario::new("start-plain-has-no-volume");

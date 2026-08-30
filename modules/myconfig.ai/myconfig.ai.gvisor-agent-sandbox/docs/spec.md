@@ -447,6 +447,8 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --env <KEY=VALUE>                                  # per env.list line, in order
   <image>
   [/bin/agent-gvisor-init]                            # when LOOPBACK_FORWARD is set OR nix=true
+                                                     # (nix=true: exits 1 if /nix/store or the
+                                                     #  Nix state dirs are not writable)
   <COMMAND...>                                       # or the word-split AGENT_GVISOR_DEFAULT_COMMAND
 ```
 

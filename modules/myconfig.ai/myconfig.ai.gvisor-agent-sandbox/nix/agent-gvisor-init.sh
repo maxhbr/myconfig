@@ -29,9 +29,33 @@
 # (AGENT_GVISOR_NIX=1, see docs/nix-in-sandbox.md): those need a few
 # directories prepared before the first `nix` invocation, because the
 # session home bind mount masks the image's /home/agent content.
+#
+# Unlike the relays, the Nix setup FAILS CLOSED: `--nix` is an explicit
+# request for a usable store, and the core mechanism (podman copy-up into
+# the named volume, owned by the keep-id mapped user, under runsc) is
+# exactly the part that can silently not work on a given host
+# (docs/nix-in-sandbox.md §7 V1). A session whose /nix/store or Nix state
+# directory is not writable would fail later, deep inside some `nix`
+# invocation, with an unrelated-looking error — so refuse to start it.
 set -u
 
 log() { printf 'agent-gvisor-init: %s\n' "$*" >&2; }
+
+die() {
+    log "error: $*"
+    exit 1
+}
+
+# True when a file can actually be created inside $1 (as this user). Not
+# `test -w`: under keep-id the copy-up can land owned by an unmapped uid,
+# where the permission bits look fine but every write is EACCES.
+dir_is_writable() {
+    local dir=$1 probe
+    probe=$dir/.agent-gvisor-write-probe.$$
+    (: >"$probe") 2>/dev/null || return 1
+    rm -f "$probe" 2>/dev/null
+    return 0
+}
 
 # Wait until the relay actually accepts connections, so an agent that connects
 # immediately does not race the listener. Bash's /dev/tcp is used because the
@@ -78,11 +102,29 @@ done
 # The CLI mounts the writable store volume at /nix/store and points Nix at
 # state and temp directories on the session home bind mount (the container
 # rootfs is --read-only, and /tmp is a small tmpfs); nothing here can create
-# those the first time except this wrapper. Failures never abort the session.
+# those the first time except this wrapper. Unlike the relays above, a failure
+# here aborts the session: `--nix` was asked for explicitly, so an unusable
+# store is an error, not a degraded mode.
 if [ -n "${AGENT_GVISOR_NIX-}" ]; then
-    mkdir -p "${TMPDIR:-/home/agent/.cache/nix-tmp}" \
-        /home/agent/.local/state/nix/log 2>/dev/null \
-        || log "warning: could not prepare the Nix state directories"
+    for dir in "${TMPDIR:-/home/agent/.cache/nix-tmp}" \
+        "${NIX_LOG_DIR:-/home/agent/.local/state/nix/log}"; do
+        mkdir -p "$dir" 2>/dev/null ||
+            die "could not create the Nix state directory $dir;" \
+                "start the session without --nix, or see docs/nix-in-sandbox.md"
+        dir_is_writable "$dir" ||
+            die "the Nix state directory $dir is not writable;" \
+                "start the session without --nix, or see docs/nix-in-sandbox.md"
+    done
+    # The store volume itself: seeded by podman's copy-up and writable by
+    # the mapped user, or --nix is not usable on this host at all
+    # (docs/nix-in-sandbox.md §2 "Drop --read-only", §7 V1). NIX_STORE_DIR
+    # is the store nix would actually use; the CLI never sets it, so this
+    # is /nix/store in every real session.
+    store=${NIX_STORE_DIR:-/nix/store}
+    dir_is_writable "$store" ||
+        die "$store is not writable in this sandbox;" \
+            "the --nix store volume did not come up (copy-up/ownership);" \
+            "see docs/nix-in-sandbox.md §7 V1"
 fi
 
 # The payload replaces this shell, so it keeps PID 1, the TTY and all signals.
