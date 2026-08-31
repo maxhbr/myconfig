@@ -1,9 +1,9 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# CI checks for the Rust `agent-gvisor` rewrite (../docs/spec.md):
+# CI checks for the Rust `agent-gvisor` CLI (../docs/spec.md):
 #
-#   agent-gvisor-tests        cargo test — the full parity suite in
+#   agent-gvisor-tests        cargo test — the full behavioural suite in
 #                             ../rust/tests/ (podman argv, state layout,
 #                             exact error messages, shell quoting, home
 #                             seeding), against recording git/podman stubs

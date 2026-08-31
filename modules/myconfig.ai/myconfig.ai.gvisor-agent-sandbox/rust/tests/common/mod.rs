@@ -77,6 +77,28 @@ impl Drop for TempDir {
 impl Scenario {
     /// Create the directory tree, write and chmod the stubs.
     pub fn new(test_name: &str) -> Scenario {
+        Scenario::init(test_name, true)
+    }
+
+    /// A REAL-Git scenario (docs/spec.md §15: Git semantics are tested
+    /// against the real `git`, not the recording stub): only `podman` (and
+    /// `runsc`) are stubbed; `git` resolves to the real binary on PATH, so
+    /// git argv recordings are meaningless here — these scenarios test
+    /// branch-lifecycle behavior. The repo is a real repository on
+    /// `master` with one commit and a repo-local identity, so in-test
+    /// `git commit` works.
+    pub fn new_real_git(test_name: &str) -> Scenario {
+        let s = Scenario::init(test_name, false);
+        git_in(&s.repo, &["init", "-q", "-b", "master"]);
+        git_in(&s.repo, &["config", "user.email", "agent-gvisor@example.com"]);
+        git_in(&s.repo, &["config", "user.name", "agent-gvisor tests"]);
+        fs::write(s.repo.join("base.txt"), "base\n").unwrap();
+        git_in(&s.repo, &["add", "."]);
+        git_in(&s.repo, &["commit", "-qm", "base commit"]);
+        s
+    }
+
+    fn init(test_name: &str, git_stub: bool) -> Scenario {
         let dir = TempDir::new(test_name);
         let root = dir.path.clone();
         let s = Scenario {
@@ -94,10 +116,14 @@ impl Scenario {
         // Make the repo look like a Git work tree (a plain empty `.git` is
         // enough for the CLI's `-d/-f` probe; deeper git answers come from
         // the stub).
-        fs::create_dir_all(s.repo.join(".git")).unwrap();
+        if git_stub {
+            fs::create_dir_all(s.repo.join(".git")).unwrap();
+        }
         fs::create_dir_all(s.state.join("sessions")).unwrap();
         fs::create_dir_all(&s.home).unwrap();
-        s.write_stub("git", GIT_STUB);
+        if git_stub {
+            s.write_stub("git", GIT_STUB);
+        }
         s.write_stub("podman", PODMAN_STUB);
         // AGENT_GVISOR_PODMAN_RUNTIME: an absolute path only needs to be
         // executable for `need`.
@@ -267,6 +293,34 @@ fn make_executable(path: &std::path::Path) {
     let mut perm = fs::metadata(path).unwrap().permissions();
     perm.set_mode(0o755);
     fs::set_permissions(path, perm).unwrap();
+}
+
+/// Run the REAL `git` inside `repo` (test-side helper for real-git
+/// scenarios; unrelated to the stubbed git of normal scenarios).
+pub fn git_in(repo: &std::path::Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .current_dir(repo)
+        .args(args)
+        .output()
+        .expect("spawn git");
+    assert!(
+        out.status.success(),
+        "git {args:?} in {} failed: {}",
+        repo.display(),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// Run the REAL `git` inside `repo` WITHOUT asserting success — returns
+/// the exit success flag (for expected-failure probes).
+pub fn git_try_in(repo: &std::path::Path, args: &[&str]) -> bool {
+    std::process::Command::new("git")
+        .current_dir(repo)
+        .args(args)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 

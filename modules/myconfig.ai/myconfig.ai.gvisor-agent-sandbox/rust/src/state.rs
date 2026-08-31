@@ -193,7 +193,7 @@ pub fn validate_name(name: &str) -> Result<(), String> {
 }
 
 /// `<dirname repo>/$(basename repo)__agent-gvisor` — the repo-adjacent root
-/// hosting `__pools`, `__sessions` and (by default) the worktrees. `repo`
+/// hosting `__sessions` and (by default) the session clones. `repo`
 /// must be the repository ROOT (`start` anchors it there via
 /// `rev-parse --show-toplevel`), so this always sits NEXT TO the root,
 /// never inside it — even when a session was started from a subdirectory.
@@ -207,8 +207,7 @@ pub fn repo_agent_root(repo: &Path) -> PathBuf {
 }
 
 /// First 16 hex chars of `sha256(<realpath repo>)`, computed by exec'ing
-/// `sha256sum` so IDs match sessions created by the bash CLI (no trailing
-/// newline in the hashed string).
+/// `sha256sum` (no trailing newline in the hashed string).
 pub fn repo_id(repo: &Path) -> String {
     use std::io::Write;
     use std::process::{Command, Stdio};
@@ -253,18 +252,17 @@ pub struct Session {
     pub meta_dir: PathBuf,
 }
 
-/// The `meta` record. All values are strings, like the bash variables the
-/// file assigns (docs/spec.md §8): `seccomp_unconfined` is the literal
+/// The `meta` record. All values are strings (docs/spec.md §8):
+/// `seccomp_unconfined` is the literal
 /// `true`/`false`, and the `--security-opt=seccomp=unconfined` flag applies
 /// whenever it is anything but exactly `false`. `nix` (a newer field with
-/// no bash-written sessions to stay compatible with) is stricter: the Nix
+/// no legacy-written sessions to stay compatible with) is stricter: the Nix
 /// mounts apply only when it is exactly `true`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Meta {
     pub name: String,
     pub repo: String,
     pub repo_id: String,
-    pub pool: String,
     pub worktree: String,
     pub home: String,
     pub container: String,
@@ -285,11 +283,10 @@ impl Meta {
     /// (docs/spec.md §8).
     pub fn to_text(&self) -> String {
         format!(
-            "name={}\nrepo={}\nrepo_id={}\npool={}\nworktree={}\nhome={}\ncontainer={}\nbranch={}\nimage={}\nmemory={}\ncpus={}\npids_limit={}\nnetwork={}\nseccomp_unconfined={}\nenv_file={}\nnix={}\n",
+            "name={}\nrepo={}\nrepo_id={}\nworktree={}\nhome={}\ncontainer={}\nbranch={}\nimage={}\nmemory={}\ncpus={}\npids_limit={}\nnetwork={}\nseccomp_unconfined={}\nenv_file={}\nnix={}\n",
             quote(&self.name),
             quote(&self.repo),
             quote(&self.repo_id),
-            quote(&self.pool),
             quote(&self.worktree),
             quote(&self.home),
             quote(&self.container),
@@ -305,14 +302,14 @@ impl Meta {
         )
     }
 
-    /// Parse the shell-quoted `key=value` lines. Unknown keys are ignored,
-    /// missing keys default to empty. `Err` carries the `die` message.
+    /// Parse the shell-quoted `key=value` lines. Unknown keys are ignored
+    /// (a legacy `pool=` line from the pre-clone layout loads fine), missing
+    /// keys default to empty. `Err` carries the `die` message.
     pub fn parse(text: &str) -> Result<Meta, String> {
         let mut meta = Meta {
             name: String::new(),
             repo: String::new(),
             repo_id: String::new(),
-            pool: String::new(),
             worktree: String::new(),
             home: String::new(),
             container: String::new(),
@@ -338,7 +335,6 @@ impl Meta {
                 "name" => meta.name = parsed,
                 "repo" => meta.repo = parsed,
                 "repo_id" => meta.repo_id = parsed,
-                "pool" => meta.pool = parsed,
                 "worktree" => meta.worktree = parsed,
                 "home" => meta.home = parsed,
                 "container" => meta.container = parsed,

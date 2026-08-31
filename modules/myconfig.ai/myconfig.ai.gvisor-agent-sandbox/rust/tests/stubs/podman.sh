@@ -11,7 +11,13 @@ record() {
     until mkdir "$RECORD/.seqlock" 2>/dev/null; do sleep 1; done
     _seq=0
     if [ -f "$RECORD/seq" ]; then
-        read -r _seq <"$RECORD/seq" || _seq=0
+        # The seq file has NO trailing newline, so `read` hits EOF (and
+        # fails) AFTER assigning the value; validate it instead of
+        # resetting it, or every call would overwrite <tool>-1.argv.
+        read -r _seq <"$RECORD/seq" || :
+        case $_seq in
+            '' | *[!0-9]*) _seq=0 ;;
+        esac
     fi
     _seq=$((_seq + 1))
     printf '%s' "$_seq" >"$RECORD/seq"

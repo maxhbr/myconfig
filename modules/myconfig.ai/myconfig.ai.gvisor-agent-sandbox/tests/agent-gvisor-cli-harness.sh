@@ -24,6 +24,10 @@ STATE="$WORK/state"
 export HOME="$WORK/home"
 REPO="$WORK/repo"
 mkdir -p "$RECORD" "$STUB_BIN" "$STATE/sessions" "$HOME" "$REPO"
+# A plain empty .git makes the repo look like a Git work tree for the CLI's
+# probe; the deeper git answers come from the stub (like the cargo tests'
+# Scenario::new).
+mkdir -p "$REPO/.git"
 install -m 0755 "$STUBS/git.sh" "$STUB_BIN/git"
 install -m 0755 "$STUBS/podman.sh" "$STUB_BIN/podman"
 printf '#!/bin/sh\nexit 0\n' >"$STUB_BIN/runsc"
@@ -127,11 +131,16 @@ echo "== podman argv sanity =="
 expect_ok "recreate the session" start s1 --repo "$REPO" --detach
 # argv_has PATTERN — matched against every recorded podman invocation
 # (one argument per line, NULs replaced by newlines).
+# NOTE: the `|| :` is load-bearing — under the script's `pipefail`, the
+# `grep -q` early exit SIGPIPEs the still-running `tr`s once more than one
+# recording exists; without it every lookup would return 141.
 argv_has() {
     local f
-    for f in "$RECORD"/podman-*.argv; do
-        tr '\0' '\n' <"$f"
-    done | grep -q -- "$1"
+    {
+        for f in "$RECORD"/podman-*.argv; do
+            tr '\0' '\n' <"$f" || :
+        done
+    } | grep -q -- "$1"
 }
 for flag in \
     "--userns=keep-id" \

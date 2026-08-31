@@ -12,7 +12,6 @@
 
 use std::fs;
 use std::os::unix::fs::{symlink, PermissionsExt};
-use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
@@ -33,7 +32,7 @@ fn git_status(args: &[String]) -> ExitStatus {
         .unwrap_or_else(|_| die("missing command: git"))
 }
 
-/// Run `git …` and exit with ITS code on failure (bash `set -e` parity).
+/// Run `git …` and exit with ITS code on failure (mirrors `set -e`).
 fn git_check(args: &[String]) {
     let st = git_status(args);
     if !st.success() {
@@ -96,48 +95,124 @@ fn chmod_700(p: &Path) {
     }
 }
 
-/// Open `path` and take an exclusive `flock` on it (bash `exec 9>…; flock 9`).
-/// The lock is held until the returned File is dropped.
-fn flock_exclusive(path: &Path) -> fs::File {
-    let f = fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(path)
-        .unwrap_or_else(|e| die(&format!("cannot open lockfile: {e}")));
-    extern "C" {
-        fn flock(fd: std::os::unix::io::RawFd, operation: i32) -> i32;
+/// Check out the session branch inside the freshly cloned session worktree
+/// (docs/spec.md §9 "start"), by EXACT-REF precedence — a tag or a
+/// similarly named ref can never be selected:
+///   1. `refs/heads/<branch>` is local in the clone (the host's checked-out
+///      branch is the only one `git clone` makes local): check it out;
+///   2. `refs/remotes/origin/<branch>` exists — a host branch that is NOT
+///      the host's current branch: create the local branch AT that exact
+///      remote-tracking ref, so an existing host branch tip is the
+///      session's starting point, NOT the base commit. The clone pins
+///      its remote name with `--origin origin`, so a user's
+///      `clone.defaultRemoteName` cannot move the host branches out of
+///      `refs/remotes/origin/*`. `--no-track`:
+///      the session owns the branch, `origin/<branch>` is not its
+///      upstream (inside the sandbox the origin path would point at the
+///      mounted worktree, and a pull/push through it must not be
+///      suggested or configured);
+///   3. otherwise the branch is new and starts at the resolved base
+///      commit.
+fn checkout_session_branch(worktree: &Path, branch: &str, base_commit: &str) {
+    let wt = worktree.display().to_string();
+    let local_ref = format!("refs/heads/{branch}");
+    let remote_ref = format!("refs/remotes/origin/{branch}");
+    let exists = |r: &str| {
+        git_ok(&[
+            "-C".to_string(),
+            wt.clone(),
+            "show-ref".to_string(),
+            "--verify".to_string(),
+            "--quiet".to_string(),
+            r.to_string(),
+        ])
+    };
+    if exists(&local_ref) {
+        git_check(&[
+            "-C".to_string(),
+            wt.clone(),
+            "checkout".to_string(),
+            branch.to_string(),
+        ]);
+    } else if exists(&remote_ref) {
+        git_check(&[
+            "-C".to_string(),
+            wt.clone(),
+            "checkout".to_string(),
+            "--no-track".to_string(),
+            "-b".to_string(),
+            branch.to_string(),
+            remote_ref,
+        ]);
+    } else {
+        git_check(&[
+            "-C".to_string(),
+            wt.clone(),
+            "checkout".to_string(),
+            "-b".to_string(),
+            branch.to_string(),
+            base_commit.to_string(),
+        ]);
     }
-    const LOCK_EX: i32 = 2;
-    let rc = unsafe { flock(f.as_raw_fd(), LOCK_EX) };
-    if rc != 0 {
-        die("cannot lock the pool lockfile");
+}
+
+/// Delete the session branch's HOST-LOCAL copy when one exists (docs/spec.md
+/// §9 "destroy"). The session branch is primarily clone-local — removing
+/// the session clone IS its deletion — so an ABSENT host-local branch is
+/// success, not an error (a never-fetched session's branch exists only in
+/// its clone). Only a genuine Git failure (an unwritable repository, a
+/// branch checked out in the host, a corrupt object store, …) is an
+/// `Err`; the caller runs this BEFORE the destructive cleanup so a failed
+/// destroy leaves a recoverable session. Exact refs only:
+/// `refs/heads/<branch>` never resolves to a tag or a remote-tracking
+/// branch.
+fn try_delete_host_branch(repo: &str, branch: &str) -> Result<(), String> {
+    let refname = format!("refs/heads/{branch}");
+    // `show-ref --verify --quiet`: 0 = the exact ref exists, 1 = it does
+    // not, anything else (128, …) is a genuine Git error, not "absent".
+    let probe = Command::new("git")
+        .args(["-C", repo, "show-ref", "--verify", "--quiet", &refname])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    match probe.map(|s| s.code().unwrap_or(128)).unwrap_or(128) {
+        0 => {
+            let st = git_status(&[
+                "-C".to_string(),
+                repo.to_string(),
+                "branch".to_string(),
+                "-D".to_string(),
+                branch.to_string(),
+            ]);
+            if st.success() {
+                Ok(())
+            } else {
+                Err(format!("could not delete branch {branch} of {repo}"))
+            }
+        }
+        // The exact ref is absent: nothing to delete, not an error.
+        1 => Ok(()),
+        _ => Err(format!("cannot look up branch {branch} of {repo}")),
     }
-    f
 }
 
 /// Recover from interrupted-start debris (docs/spec.md §9): log, remove the
-/// leftover worktree (via git when the pool still owns it), session dir and
-/// registry entry.
-fn reset_partial_session(
-    name: &str,
-    reg: &Path,
-    meta_dir: &Path,
-    pool: &Path,
-    worktree: &Path,
-) {
+/// leftover worktree, session dir and registry entry. The session worktree
+/// is a standalone clone, so a clean leftover is plain `rm -rf`'d — no
+/// linked-worktree bookkeeping exists.
+fn reset_partial_session(name: &str, reg: &Path, meta_dir: &Path, worktree: &Path) {
     log(&format!(
         "session {name} is incomplete (interrupted start); removing {}",
         meta_dir.display()
     ));
     if worktree.exists() {
         let wt = worktree.display().to_string();
-        let inside = pool.is_dir()
-            && git_ok(&[
-                "-C".to_string(),
-                wt.clone(),
-                "rev-parse".to_string(),
-                "--is-inside-work-tree".to_string(),
-            ]);
+        let inside = git_ok(&[
+            "-C".to_string(),
+            wt.clone(),
+            "rev-parse".to_string(),
+            "--is-inside-work-tree".to_string(),
+        ]);
         if inside {
             let dirty = git_stdout(&[
                 "-C".to_string(),
@@ -150,25 +225,12 @@ fn reset_partial_session(
                 die(&format!(
                     "leftover worktree has uncommitted changes: {wt}\n\
                      Inspect it, then remove it with:\n\
-                     \x20 git --git-dir={} worktree remove --force {}",
-                    quote(&pool.display().to_string()),
+                     \x20 rm -rf {}",
                     quote(&wt)
                 ));
             }
-            let st = git_status(&[
-                format!("--git-dir={}", pool.display()),
-                "worktree".to_string(),
-                "remove".to_string(),
-                "--force".to_string(),
-                wt.clone(),
-            ]);
-            if !st.success() {
-                // bash parity: `|| die "could not remove leftover worktree: …"`
-                die(&format!("could not remove leftover worktree: {wt}"));
-            }
-        } else {
-            rm_rf(worktree);
         }
+        rm_rf(worktree);
     }
     rm_rf(meta_dir);
     rm_rf(reg);
@@ -179,7 +241,6 @@ fn meta_from_start(
     name: &str,
     repo: &Path,
     repo_id: &str,
-    pool: &Path,
     worktree: &Path,
     home: &Path,
     container: &str,
@@ -190,7 +251,6 @@ fn meta_from_start(
         name: name.to_string(),
         repo: repo.display().to_string(),
         repo_id: repo_id.to_string(),
-        pool: pool.display().to_string(),
         worktree: worktree.display().to_string(),
         home: home.display().to_string(),
         container: container.to_string(),
@@ -234,7 +294,7 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     podman::try_check_runtime(&env).unwrap_or_else(|m| die(&m));
     podman::try_check_image(&env, &parsed.image).unwrap_or_else(|m| die(&m));
 
-    // bash parity: a failing `realpath -e` dies RAW (no `die` prefix).
+    // A failing `realpath -e` dies RAW (no `die` prefix).
     let repo = match fs::canonicalize(&repo_arg) {
         Ok(p) => p,
         Err(_) => crate::error::fail_raw(&format!(
@@ -250,8 +310,8 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
         die(&format!("not a Git working tree: {}", repo.display()));
     }
     // Anchor at the repository ROOT even when started from a subdirectory,
-    // so <root>__agent-gvisor/ (pools, session state, by default the
-    // worktrees) always sits NEXT TO the root, never inside it — and the
+    // so <root>__agent-gvisor/ (session state, by default the session
+    // clones) always sits NEXT TO the root, never inside it — and the
     // in-container --workdir / AGENT_WORKTREE (§10) is the root path.
     let toplevel = git_stdout(&[
         "-C".to_string(),
@@ -284,18 +344,15 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     for d in [
         env.state_root.clone(),
         env.state_root.join("sessions"),
-        agent_root.join("__pools"),
         agent_root.join("__sessions"),
     ] {
         fs::create_dir_all(&d).unwrap_or_else(|e| die(&format!("cannot create {d:?}: {e}")));
     }
     let repo_id = state::repo_id(&repo);
-    // Pools, session state and worktrees all live NEXT TO the host
-    // repository (docs/spec.md §8): `__pools/<repo-id>.git` disposable bare
-    // pools, `__sessions/<name>/` session state, `<name>/` worktrees.
+    // Session state and the session clone live NEXT TO the host repository
+    // (docs/spec.md §8): `__sessions/<name>/` session state, `<name>/` the
+    // session's own `git clone` of the repository.
     // `$STATE_ROOT/sessions` stays the name→session REGISTRY.
-    let pool = agent_root.join("__pools").join(format!("{repo_id}.git"));
-    let lockfile = agent_root.join("__pools").join(format!("{repo_id}.lock"));
     let reg = state::registry_path(&env, &name);
     let worktree = match &env.worktrees {
         Some(wt) => PathBuf::from(wt).join(&repo_id).join(&name),
@@ -313,7 +370,7 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
             .unwrap_or(false);
         if !meta_present {
             // Debris of an interrupted start: report and clean it up.
-            reset_partial_session(&name, &reg, &meta_dir, &pool, &worktree);
+            reset_partial_session(&name, &reg, &meta_dir, &worktree);
         } else {
             match state::try_load_session(&env, &name) {
                 Ok(old) => {
@@ -375,96 +432,33 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
         }
     }
 
-    let _lock = flock_exclusive(&lockfile);
-
-    if !pool.is_dir() {
-        git_check(&[
-            "init".to_string(),
-            "--bare".to_string(),
-            pool.display().to_string(),
-        ]);
-        git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "remote".to_string(),
-            "add".to_string(),
-            "host".to_string(),
-            repo.display().to_string(),
-        ]);
-    } else {
-        git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "remote".to_string(),
-            "set-url".to_string(),
-            "host".to_string(),
-            repo.display().to_string(),
-        ]);
-    }
-    git_check(&[
-        format!("--git-dir={}", pool.display()),
-        "fetch".to_string(),
-        "--prune".to_string(),
-        "--no-recurse-submodules".to_string(),
-        "host".to_string(),
-        "+refs/heads/*:refs/remotes/host/*".to_string(),
-        "+refs/tags/*:refs/tags/*".to_string(),
-    ]);
-    let have_base = Command::new("git")
-        .args([
-            format!("--git-dir={}", pool.display()),
-            "cat-file".to_string(),
-            "-e".to_string(),
-            format!("{base_commit}^{{commit}}"),
-        ])
-        .stderr(Stdio::null())
-        .stdout(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-    if !have_base {
-        git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "fetch".to_string(),
-            "--no-tags".to_string(),
-            "host".to_string(),
-            base_commit.clone(),
-        ]);
-    }
-
     if worktree.exists() {
         die(&format!("worktree path already exists: {}", worktree.display()));
     }
-    let branch_exists = git_ok(&[
-        format!("--git-dir={}", pool.display()),
-        "show-ref".to_string(),
-        "--verify".to_string(),
-        "--quiet".to_string(),
-        format!("refs/heads/{branch}"),
+    // A fully isolated clone per session (docs/spec.md §9): `--no-hardlinks`
+    // is REQUIRED — hardlinked object files would let the session write
+    // through to the host repository. `--origin origin` PINS the clone's
+    // remote name: a user's `clone.defaultRemoteName` would otherwise put
+    // the host branches under `refs/remotes/<name>/*`, and the exact
+    // `refs/remotes/origin/<branch>` probe below would silently miss an
+    // existing host branch.
+    git_check(&[
+        "clone".to_string(),
+        "--origin".to_string(),
+        "origin".to_string(),
+        "--no-hardlinks".to_string(),
+        repo.display().to_string(),
+        worktree.display().to_string(),
     ]);
-    if branch_exists {
-        git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "worktree".to_string(),
-            "add".to_string(),
-            worktree.display().to_string(),
-            branch.clone(),
-        ]);
-    } else {
-        git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "worktree".to_string(),
-            "add".to_string(),
-            "-b".to_string(),
-            branch.clone(),
-            worktree.display().to_string(),
-            base_commit.clone(),
-        ]);
-    }
+    // The session branch (docs/spec.md §9 "start"): exact-ref precedence —
+    // local in the clone, else at the host's remote-tracking branch, else a
+    // new branch at the base commit.
+    checkout_session_branch(&worktree, &branch, &base_commit);
 
     let meta = meta_from_start(
         &name,
         &repo,
         &repo_id,
-        &pool,
         &worktree,
         &home,
         &container,
@@ -491,7 +485,6 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     }
     fs::write(meta_dir.join("env.list"), list).unwrap();
 
-    drop(_lock);
     log(&format!(
         "created worktree {} on branch {branch}",
         worktree.display()
@@ -511,7 +504,7 @@ pub fn run_container(env: &Env, name: &str, detach: bool, command: &[String]) ->
     podman::try_check_runtime(env).unwrap_or_else(|m| die(&m));
     podman::try_check_image(env, &session.meta.image).unwrap_or_else(|m| die(&m));
     let argv = podman::build_run_args(env, &session.meta, &session.meta_dir, detach, command);
-    // bash parity: `printf '%q ' "${cmd[@]}" > last-command; printf '\n'`.
+    // `printf '%q ' "${cmd[@]}" > last-command; printf '\n'` semantics.
     let mut lc = String::new();
     for a in &argv {
         lc.push_str(&quote(a));
@@ -637,12 +630,11 @@ pub fn cmd_status(env: &Env, name: &str) -> ! {
     let session = state::load_session(env, name);
     let meta = &session.meta;
     print!(
-        "session:   {}\nrepo:      {}\nbranch:    {}\nworktree:  {}\npool:      {}\ncontainer: {}\nimage:     {}\n",
+        "session:   {}\nrepo:      {}\nbranch:    {}\nworktree:  {}\ncontainer: {}\nimage:     {}\n",
         meta.name,
         meta.repo,
         meta.branch,
         meta.worktree,
-        meta.pool,
         meta.container,
         meta.image
     );
@@ -759,10 +751,13 @@ pub fn cmd_stop(env: &Env, name: &str) -> ! {
 }
 
 /// Resolve the target repository of `merge`/`fetch`/`push` (docs/spec.md
-/// §9): `--repo PATH` when given (realpath'd; bash parity: realpath's own
+/// §9): `--repo PATH` when given (realpath'd; realpath's own
 /// RAW diagnostic, then the `--repo` `die` message), else `fallback`. The
 /// target must contain `.git`.
-fn resolve_target_repo(repo_override: &Option<String>, fallback: String) -> String {
+fn resolve_target_repo(repo_override: &Option<String>, fallback: impl FnOnce() -> String) -> String {
+    // The fallback is a CLOSURE on purpose (the bash `${REPO:-$(…)}` was
+    // lazy): with `--repo` given, the current directory does NOT have to
+    // be inside a Git work tree.
     let target_repo = match repo_override {
         Some(p) => {
             let resolved = fs::canonicalize(p).map(|r| r.display().to_string()).ok();
@@ -774,7 +769,7 @@ fn resolve_target_repo(repo_override: &Option<String>, fallback: String) -> Stri
                 }
             }
         }
-        None => fallback,
+        None => fallback(),
     };
     let dot_git = Path::new(&target_repo).join(".git");
     if !(dot_git.is_dir() || dot_git.is_file()) {
@@ -800,28 +795,53 @@ fn current_repo() -> String {
     }
 }
 
-/// Fetch the session branch from the pool into `refs/heads/<branch>` of
-/// `target_repo` — the shared step of `merge` (§9 "merge" step 5), the
-/// standalone `fetch`, and the implicit fetch of `push`. `Err` carries the
-/// `die` message.
-fn try_fetch_branch_from_pool(
+/// Fetch the session branch from the session worktree into
+/// `refs/heads/<branch>` of `target_repo` — the shared step of `merge`
+/// (§9 "merge" step 5), the standalone `fetch`, and the implicit fetch of
+/// `push`. FAST-FORWARD-ONLY by default: the refspec has NO leading `+`,
+/// so Git creates an absent destination ref, advances one that is an
+/// ancestor of the session tip, and REJECTS a diverged or rewound
+/// destination WITHOUT touching it — with standalone clones the host
+/// branch and the session branch can advance independently, and a forced
+/// fetch would silently discard the host-only commits. Publishing rebased
+/// or amended session history requires reconciling the host-local branch
+/// explicitly (inspect it, then `git branch -D`/`reset` it) — destructive
+/// replacement is never automatic. `Err` carries the `die` message.
+fn try_fetch_branch_from_worktree(
     target_repo: &str,
-    pool: &str,
+    worktree: &str,
     branch: &str,
 ) -> Result<(), String> {
-    let fetch_ok = git_stdout(&[
-        "-C".to_string(),
-        target_repo.to_string(),
-        "fetch".to_string(),
-        "--no-tags".to_string(),
-        pool.to_string(),
-        format!("+{branch}:refs/heads/{branch}"),
-    ])
-    .is_some();
+    // BOTH sides are FULLY QUALIFIED. A short source ref would be
+    // ambiguous — a branch named `nested` could resolve to a same-named
+    // tag — and worse, a branch literally named `+topic` would produce
+    // `+topic:refs/heads/+topic`, where git parses the leading `+` as a
+    // FORCE marker and fetches `topic` instead, bypassing the
+    // fast-forward-only policy.
+    let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
+    // git's own diagnostics stay visible on stderr (inherited — only
+    // stdout is nulled), so the non-fast-forward rejection is reported by
+    // Git itself.
+    let fetch_ok = Command::new("git")
+        .args([
+            "-C",
+            target_repo,
+            "fetch",
+            "--no-tags",
+            worktree,
+            refspec.as_str(),
+        ])
+        .stdout(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
     if fetch_ok {
         Ok(())
     } else {
-        Err("fetch from pool failed; is the session pool still present?".to_string())
+        Err(format!(
+            "fetch from session clone failed; the session worktree may be missing, \
+             or the host branch {branch} may have diverged from the session branch"
+        ))
     }
 }
 
@@ -861,7 +881,7 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
 
     // The original repository the session was started from. Allow --repo to
     // override for the unusual case of merging into a different clone.
-    let target_repo = resolve_target_repo(&repo_override, meta.repo.clone());
+    let target_repo = resolve_target_repo(&repo_override, || meta.repo.clone());
 
     // Refuse to merge into a detached HEAD or a dirty tree, so a conflict
     // does not leave the host checkout half-merged.
@@ -898,10 +918,10 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
     }
 
     log(&format!(
-        "fetching branch {} from pool {} into {target_repo}",
-        meta.branch, meta.pool
+        "fetching branch {} from worktree {} into {target_repo}",
+        meta.branch, meta.worktree
     ));
-    try_fetch_branch_from_pool(&target_repo, &meta.pool, &meta.branch)
+    try_fetch_branch_from_worktree(&target_repo, &meta.worktree, &meta.branch)
         .unwrap_or_else(|m| die(&m));
     log(&format!(
         "merging {} into {current_branch} of {target_repo}",
@@ -913,7 +933,11 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
         "merge".to_string(),
     ];
     merge_cmd.extend(merge_args.iter().cloned());
-    merge_cmd.push(meta.branch.clone());
+    // The EXACT fetched ref, not the bare name: `git merge <name>` would
+    // be ambiguous against a same-named tag (git's DWIM order checks
+    // refs/tags/ first) and could "successfully" merge the tag instead of
+    // the session branch.
+    merge_cmd.push(format!("refs/heads/{}", meta.branch));
     if git_status(&merge_cmd).success() {
         let _ = Command::new("git")
             .args([
@@ -937,7 +961,7 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
 }
 
 /// `agent-gvisor fetch NAME [--repo PATH]` (docs/spec.md §9 "fetch"):
-/// the shared pool fetch of `merge` WITHOUT the merge — bring the session
+/// the shared worktree fetch of `merge` WITHOUT the merge — bring the session
 /// branch into `refs/heads/<branch>` of the target repo to inspect,
 /// cherry-pick or diff it. Default target: the repository containing the
 /// current directory.
@@ -961,12 +985,12 @@ pub fn cmd_fetch(env: Env, args: &[String]) -> ! {
     }
     let session = state::load_session(&env, &name);
     let meta = &session.meta;
-    let target_repo = resolve_target_repo(&repo_override, current_repo());
+    let target_repo = resolve_target_repo(&repo_override, current_repo);
     log(&format!(
-        "fetching branch {} from pool {} into {target_repo}",
-        meta.branch, meta.pool
+        "fetching branch {} from worktree {} into {target_repo}",
+        meta.branch, meta.worktree
     ));
-    try_fetch_branch_from_pool(&target_repo, &meta.pool, &meta.branch)
+    try_fetch_branch_from_worktree(&target_repo, &meta.worktree, &meta.branch)
         .unwrap_or_else(|m| die(&m));
     log(&format!(
         "fetched {} into {target_repo}; merge it with 'agent-gvisor merge {name}'",
@@ -976,7 +1000,7 @@ pub fn cmd_fetch(env: Env, args: &[String]) -> ! {
 }
 
 /// `agent-gvisor push NAME [REMOTE] [--repo PATH]` (docs/spec.md §9
-/// "push"): publish the session branch. Fetches it from the pool into the
+/// "push"): publish the session branch. Fetches it from the session worktree into the
 /// target repo first (the implicit `fetch`, so the pushed ref is current),
 /// then `git push REMOTE <branch>` from it. REMOTE defaults to `origin`;
 /// default target: the repository containing the current directory.
@@ -1007,22 +1031,27 @@ pub fn cmd_push(env: Env, args: &[String]) -> ! {
     }
     let session = state::load_session(&env, &name);
     let meta = &session.meta;
-    let target_repo = resolve_target_repo(&repo_override, current_repo());
+    let target_repo = resolve_target_repo(&repo_override, current_repo);
     log(&format!(
-        "fetching branch {} from pool {} into {target_repo}",
-        meta.branch, meta.pool
+        "fetching branch {} from worktree {} into {target_repo}",
+        meta.branch, meta.worktree
     ));
-    try_fetch_branch_from_pool(&target_repo, &meta.pool, &meta.branch)
+    try_fetch_branch_from_worktree(&target_repo, &meta.worktree, &meta.branch)
         .unwrap_or_else(|m| die(&m));
     let remote = remote.unwrap_or_else(|| "origin".to_string());
     log(&format!("pushing {} to {remote} of {target_repo}", meta.branch));
-    // bash `set -e` parity: git push's own stderr, its exit code.
+    // An explicit, NON-FORCED refspec with BOTH sides qualified: a bare
+    // `git push <remote> <branch>` would parse a branch literally named
+    // `+topic` as `+topic` — a FORCE marker plus the branch `topic` — and
+    // publish the wrong branch.
+    let push_refspec = format!("refs/heads/{0}:refs/heads/{0}", meta.branch);
+    // `set -e` semantics: git push's own stderr, its exit code.
     let st = git_status(&[
         "-C".to_string(),
         target_repo.clone(),
         "push".to_string(),
         remote,
-        meta.branch.clone(),
+        push_refspec,
     ]);
     std::process::exit(st.code().unwrap_or(1));
 }
@@ -1038,7 +1067,6 @@ pub fn destroy_session(
     delete_branch: bool,
 ) -> Result<(), String> {
     let meta = &session.meta;
-    let pool = meta.pool.clone();
     let worktree = meta.worktree.clone();
 
     // Validate the non-force safety condition before deleting any session
@@ -1059,6 +1087,17 @@ pub fn destroy_session(
         }
     }
 
+    // `--delete-branch` runs FIRST, before ANY session resource — the
+    // container, the persistent Nix store volume (docs/nix-in-sandbox.md),
+    // the clone, the metadata — is removed, so a genuine Git failure (an
+    // unwritable host repository, a host branch that is checked out, …)
+    // leaves a FULLY recoverable session and the destroy can simply be
+    // retried. An absent host-local branch is success — the session
+    // branch is clone-local and dies with the clone below.
+    if delete_branch {
+        try_delete_host_branch(&meta.repo, &meta.branch)?;
+    }
+
     let pod = Pod::new(env);
     if pod.container_exists(&meta.container) {
         let st = pod.run(&[
@@ -1069,7 +1108,7 @@ pub fn destroy_session(
             meta.container.clone(),
         ]);
         if !st.success() {
-            // bash `set -e` parity: podman's own stderr, its exit code.
+            // `set -e` semantics: podman's own stderr, its exit code.
             std::process::exit(st.code().unwrap_or(1));
         }
     }
@@ -1099,32 +1138,10 @@ pub fn destroy_session(
         }
     }
 
+    // The session worktree is a standalone clone: removing the directory
+    // removes the session's Git state entirely. Nothing else tracks it.
     if Path::new(&worktree).is_dir() {
-        let mut rm_args = vec![
-            format!("--git-dir={pool}"),
-            "worktree".to_string(),
-            "remove".to_string(),
-        ];
-        if force {
-            rm_args.push("--force".to_string());
-        }
-        rm_args.push(worktree.clone());
-        let st = git_status(&rm_args);
-        if !st.success() {
-            std::process::exit(st.code().unwrap_or(1));
-        }
-    }
-
-    if delete_branch {
-        let st = git_status(&[
-            format!("--git-dir={pool}"),
-            "branch".to_string(),
-            "-D".to_string(),
-            meta.branch.clone(),
-        ]);
-        if !st.success() {
-            std::process::exit(st.code().unwrap_or(1));
-        }
+        rm_rf(Path::new(&worktree));
     }
     rm_rf(&session.meta_dir);
     // Remove the registry entry too: for old-layout sessions it IS the
@@ -1181,7 +1198,7 @@ pub fn cmd_doctor(env: Env) -> ! {
         "state:           {} (session name registry)",
         env.state_root.display()
     );
-    println!("pools/sessions:  <repo>__agent-gvisor/{{__pools,__sessions}} next to each repo");
+    println!("sessions:        <repo>__agent-gvisor/{{__sessions}} and session clones next to each repo");
     println!(
         "model endpoint:  {}",
         env.model_endpoint.clone().unwrap_or_else(|| "<unset>".to_string())

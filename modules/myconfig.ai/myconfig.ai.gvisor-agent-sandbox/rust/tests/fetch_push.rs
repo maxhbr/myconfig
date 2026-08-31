@@ -1,8 +1,9 @@
 // Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! `fetch` and `push` (docs/spec.md §9): the shared pool fetch, the
+//! `fetch` and `push` (docs/spec.md §9): the shared worktree fetch, the
 //! current-repository default, the `--repo` override and the implicit
-//! fetch of `push` — against the recording git stub.
+//! fetch of `push` — against the recording git stub. Recorded git argv
+//! vectors exclude argv0 (the stub records the arguments only).
 
 mod common;
 
@@ -12,39 +13,39 @@ fn started(s: &Scenario) {
     s.run_ok(&["start", "s1", "--detach"]);
 }
 
-/// The pool path of session `s1` started from this scenario's repo, as
-/// recorded in its meta.
-fn pool_of(s: &Scenario) -> String {
+/// The worktree (session clone) path of session `s1` started from this
+/// scenario's repo, as recorded in its meta.
+fn worktree_of(s: &Scenario) -> String {
     let repo = s.repo.canonicalize().unwrap();
-    let repo_id = common::expected_repo_id(&s.repo);
     repo.parent()
         .unwrap()
         .join(format!(
             "{}__agent-gvisor",
             repo.file_name().unwrap().to_string_lossy()
         ))
-        .join("__pools")
-        .join(format!("{repo_id}.git"))
+        .join("s1")
         .display()
         .to_string()
 }
 
-/// The recorded `git -C <repo> fetch --no-tags <pool> +<branch>:…` call
-/// every fetch/merge/push performs (the shared `try_fetch_branch_from_pool`).
-fn expect_pool_fetch(s: &Scenario, repo: &str) {
+/// The recorded `git -C <repo> fetch --no-tags <worktree> <refspec>` call
+/// every fetch/merge/push performs (the shared
+/// `try_fetch_branch_from_worktree`). Both sides are FULLY QUALIFIED
+/// (fast-forward-only — no leading `+`, and a branch named `+topic`
+/// cannot smuggle one in).
+fn expect_worktree_fetch(s: &Scenario, repo: &str) {
     let expected: Vec<String> = [
-        "git".to_string(),
         "-C".to_string(),
         repo.to_string(),
         "fetch".to_string(),
         "--no-tags".to_string(),
-        pool_of(s),
-        "+agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
+        worktree_of(s),
+        "refs/heads/agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
     assert!(
         s.recorded("git").iter().any(|c| *c == expected),
-        "no recorded pool fetch: {:?}",
+        "no recorded worktree fetch: {:?}",
         s.recorded("git")
     );
 }
@@ -60,12 +61,12 @@ fn fetch_into_the_current_repo() {
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
         format!(
-            "agent-gvisor: fetching branch agent/gvisor/s1 from pool {pool} into {repo}\n\
+            "agent-gvisor: fetching branch agent/gvisor/s1 from worktree {worktree} into {repo}\n\
              agent-gvisor: fetched agent/gvisor/s1 into {repo}; merge it with 'agent-gvisor merge s1'\n",
-            pool = pool_of(&s)
+            worktree = worktree_of(&s)
         )
     );
-    expect_pool_fetch(&s, &repo);
+    expect_worktree_fetch(&s, &repo);
 }
 
 #[test]
@@ -83,7 +84,7 @@ fn fetch_repo_override() {
         out.status,
         String::from_utf8_lossy(&out.stderr),
     );
-    expect_pool_fetch(&s, &repo);
+    expect_worktree_fetch(&s, &repo);
 }
 
 #[test]
@@ -113,9 +114,10 @@ fn fetch_failure_message() {
         &["fetch", "s1"],
         1,
         &format!(
-            "agent-gvisor: fetching branch agent/gvisor/s1 from pool {pool} into {repo}\n\
-             agent-gvisor: error: fetch from pool failed; is the session pool still present?\n",
-            pool = pool_of(&s)
+            "agent-gvisor: fetching branch agent/gvisor/s1 from worktree {worktree} into {repo}\n\
+             agent-gvisor: error: fetch from session clone failed; the session worktree may be missing, \
+             or the host branch agent/gvisor/s1 may have diverged from the session branch\n",
+            worktree = worktree_of(&s)
         ),
     );
 }
@@ -124,7 +126,7 @@ fn fetch_failure_message() {
 fn fetch_repo_override_errors() {
     let s = Scenario::new("fetch-repo-override-errors");
     started(&s);
-    // Bash parity: realpath's own RAW diagnostic, then the --repo die.
+    // realpath's own RAW diagnostic, then the --repo die.
     let missing = s.root.join("nope").display().to_string();
     s.run_fail(
         &["fetch", "s1", "--repo", &missing],
@@ -163,25 +165,24 @@ fn push_defaults_to_origin() {
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
         format!(
-            "agent-gvisor: fetching branch agent/gvisor/s1 from pool {pool} into {repo}\n\
+            "agent-gvisor: fetching branch agent/gvisor/s1 from worktree {worktree} into {repo}\n\
              agent-gvisor: pushing agent/gvisor/s1 to origin of {repo}\n",
-            pool = pool_of(&s)
+            worktree = worktree_of(&s)
         )
     );
     // The implicit fetch runs BEFORE the push.
-    expect_pool_fetch(&s, &repo);
+    expect_worktree_fetch(&s, &repo);
     let calls = s.recorded("git");
     let fetch_pos = calls
         .iter()
         .position(|c| c.contains(&"fetch".to_string()) && c.contains(&repo))
-        .expect("pool fetch recorded");
+        .expect("worktree fetch recorded");
     let push: Vec<String> = [
-        "git".to_string(),
         "-C".to_string(),
         repo.to_string(),
         "push".to_string(),
         "origin".to_string(),
-        "agent/gvisor/s1".to_string(),
+        "refs/heads/agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
     let push_pos = calls.iter().position(|c| *c == push).expect("push recorded");
@@ -195,12 +196,11 @@ fn push_explicit_remote() {
     let repo = s.repo.canonicalize().unwrap().display().to_string();
     s.run_ok(&["push", "s1", "upstream"]);
     let push: Vec<String> = [
-        "git".to_string(),
         "-C".to_string(),
         repo,
         "push".to_string(),
         "upstream".to_string(),
-        "agent/gvisor/s1".to_string(),
+        "refs/heads/agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
     assert!(
@@ -226,17 +226,40 @@ fn push_repo_override_and_remote() {
         String::from_utf8_lossy(&out.stderr),
     );
     let push: Vec<String> = [
-        "git".to_string(),
         "-C".to_string(),
         repo,
         "push".to_string(),
         "review".to_string(),
-        "agent/gvisor/s1".to_string(),
+        "refs/heads/agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
     assert!(
         s.recorded("git").iter().any(|c| *c == push),
         "no recorded push to review"
+    );
+}
+
+/// `merge` consumes the EXACT fetched ref — the fully qualified
+/// `refs/heads/<branch>`, never the bare name (which git's DWIM order
+/// would resolve to a same-named TAG first).
+#[test]
+fn merge_uses_the_fully_qualified_ref() {
+    let s = Scenario::new("merge-qualified-ref");
+    started(&s);
+    let repo = s.repo.canonicalize().unwrap().display().to_string();
+    s.run_ok(&["merge", "s1"]);
+    let expected: Vec<String> = [
+        "-C".to_string(),
+        repo,
+        "merge".to_string(),
+        "--no-ff".to_string(),
+        "refs/heads/agent/gvisor/s1".to_string(),
+    ]
+    .to_vec();
+    assert!(
+        s.recorded("git").iter().any(|c| *c == expected),
+        "no recorded qualified merge: {:?}",
+        s.recorded("git")
     );
 }
 
@@ -257,15 +280,15 @@ fn push_failure_exits_with_gits_code() {
     started(&s);
     let repo = s.repo.canonicalize().unwrap().display().to_string();
     s.marker("push-fail", "1");
-    // bash `set -e` parity: the exit code is git push's own (the stub's 3).
+    // `set -e` semantics: the exit code is git push's own (the stub's 3).
     let out = s.run(&["push", "s1"]);
     assert_eq!(out.status.code(), Some(3));
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
         format!(
-            "agent-gvisor: fetching branch agent/gvisor/s1 from pool {pool} into {repo}\n\
+            "agent-gvisor: fetching branch agent/gvisor/s1 from worktree {worktree} into {repo}\n\
              agent-gvisor: pushing agent/gvisor/s1 to origin of {repo}\n",
-            pool = pool_of(&s)
+            worktree = worktree_of(&s)
         )
     );
 }

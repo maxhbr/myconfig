@@ -7,14 +7,7 @@
 # bubblewrap `jail-app` wrappers (`myconfig.ai.jail`) and the Cloud Hypervisor
 # microVM tier (`myconfig.ai.microvm`). Each session runs in a rootless Podman
 # container with gVisor (`runsc`) as OCI runtime, on a Nix-built sandbox image,
-# and gets its own git worktree from a disposable bare pool.
-#
-# The sources under ./nix (and the historical bash CLI that lived in ./bin,
-# deleted in favor of the Rust rewrite) are vendored from
-# https://github.com/maxhbr/gvisor-agent-sandbox via `git subtree`; see
-# ./README.md for the import commit and how to pull upstream changes. The
-# upstream standalone-flake plumbing (flake.nix / flake.lock /
-# nixos/agent-sandboxes.nix) was dropped — this module replaces it.
+# and gets its own fully isolated git clone of the repository.
 {
   config,
   lib,
@@ -215,7 +208,7 @@ in
         that are enabled on this host, so the sandbox ships the same agents as
         the host. Set explicitly to slim the image down or to add tooling.
 
-        The upstream image deliberately ships no agent CLI; host binaries must
+        The base image deliberately ships no agent CLI; host binaries must
         not be bind-mounted, since that would drag the host `/nix` store into
         the sandbox.
       '';
@@ -367,7 +360,7 @@ in
       description = ''
         Command `agent-gvisor start` / `run` execute when no `-- COMMAND` is
         given, i.e. the session's entrypoint. Word-split, so `"herdr --flag"`
-        works. `null` keeps the upstream default (`/bin/bash`).
+        works. `null` keeps the default (`/bin/bash`).
 
         Defaults to `herdr`, the agent multiplexer, whenever the image carries
         at least one coding agent — so a bare `agent-gvisor start` drops you

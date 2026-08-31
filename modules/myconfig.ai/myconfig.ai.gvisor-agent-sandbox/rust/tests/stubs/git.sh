@@ -8,7 +8,13 @@ record() {
     until mkdir "$RECORD/.seqlock" 2>/dev/null; do sleep 1; done
     _seq=0
     if [ -f "$RECORD/seq" ]; then
-        read -r _seq <"$RECORD/seq" || _seq=0
+        # The seq file has NO trailing newline, so `read` hits EOF (and
+        # fails) AFTER assigning the value; validate it instead of
+        # resetting it, or every call would overwrite <tool>-1.argv.
+        read -r _seq <"$RECORD/seq" || :
+        case $_seq in
+            '' | *[!0-9]*) _seq=0 ;;
+        esac
     fi
     _seq=$((_seq + 1))
     printf '%s' "$_seq" >"$RECORD/seq"
@@ -79,6 +85,15 @@ case "$sub" in
         [ "$1" = "--bare" ] && mkdir -p "$2"
         exit 0
         ;;
+    clone)
+        # git clone [--origin origin --no-hardlinks] <repo> <worktree>:
+        # materialize the destination directory like a real clone would.
+        _dst=
+        for _a in "$@"; do _dst=$_a; done
+        mkdir -p "$_dst"
+        exit 0
+        ;;
+    checkout) exit 0 ;;
     remote) exit 0 ;;
     fetch)
         [ -f "$RECORD/fetch-fail" ] && exit 1

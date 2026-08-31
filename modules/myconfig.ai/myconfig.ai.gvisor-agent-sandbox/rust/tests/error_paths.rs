@@ -13,19 +13,17 @@ fn started(s: &Scenario) {
     s.run_ok(&["start", "s1", "--detach"]);
 }
 
-/// The pool path of session `s1` started from this scenario's repo, as
-/// recorded in its meta.
-fn pool_of(s: &Scenario) -> String {
+/// The worktree (session clone) path of session `s1` started from this
+/// scenario's repo, as recorded in its meta.
+fn worktree_of(s: &Scenario) -> String {
     let repo = s.repo.canonicalize().unwrap();
-    let repo_id = common::expected_repo_id(&s.repo);
     repo.parent()
         .unwrap()
         .join(format!(
             "{}__agent-gvisor",
             repo.file_name().unwrap().to_string_lossy()
         ))
-        .join("__pools")
-        .join(format!("{repo_id}.git"))
+        .join("s1")
         .display()
         .to_string()
 }
@@ -189,7 +187,7 @@ fn mount_parsing_errors() {
 fn missing_paths_and_repos() {
     let s = Scenario::new("missing-paths-and-repos");
     let missing = s.root.join("nope");
-    // bash dies on `realpath -e`'s own diagnostic (no agent-gvisor prefix):
+    // A failing `realpath -e` dies on its own diagnostic (no agent-gvisor prefix):
     s.run_fail(
         &["start", "s1", "--repo", &missing.display().to_string()],
         1,
@@ -301,7 +299,7 @@ fn pre_rewrite_registry_entries() {
         "agent-gvisor: error: session already exists: old (pass --force, or remove it with 'agent-gvisor destroy old --force --delete-branch')\n",
     );
     // ...and --force cannot rescue it either: the destroy fails with the
-    // pre-rewrite error, which start wraps (bash subshell parity, §9):
+    // pre-rewrite error, which start wraps (§9):
     s.run_fail(
         &["start", "old", "--force", "--detach"],
         1,
@@ -354,7 +352,7 @@ fn merge_guards() {
         ),
     );
 
-    // Bash parity: realpath prints its own diagnostic (raw, no prefix),
+    // realpath prints its own diagnostic (raw, no prefix),
     // then the `|| die` fires with the --repo message.
     s.run_fail(
         &["merge", "s1", "--repo", &s.root.join("nope").display().to_string()],
@@ -427,10 +425,10 @@ fn merge_failure_message() {
         &["merge", "s1"],
         1,
         &format!(
-            "agent-gvisor: fetching branch agent/gvisor/s1 from pool {pool} into {repo}\n\
+            "agent-gvisor: fetching branch agent/gvisor/s1 from worktree {worktree} into {repo}\n\
              agent-gvisor: merging agent/gvisor/s1 into main of {repo}\n\
              agent-gvisor: error: merge failed; resolve conflicts in {repo}, then delete the leftover ref with 'git -C \"{repo}\" branch -D agent/gvisor/s1'\n",
-            pool = pool_of(&s)
+            worktree = worktree_of(&s)
         ),
     );
 }

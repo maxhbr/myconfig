@@ -138,7 +138,7 @@ dockerTools.buildLayeredImage {
       "PAGER=less"
     ];
     Labels = {
-      "org.opencontainers.image.title" = "gvisor-agent-sandbox";
+      "org.opencontainers.image.title" = "agent-dev";
       "org.opencontainers.image.description" = "Generic coding-agent sandbox image, built with Nix";
     };
   };
