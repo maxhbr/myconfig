@@ -364,8 +364,11 @@ debris (§ "unknown session" inventory).
 5. fetch the session branch from the session worktree into
    `refs/heads/<branch>` — the shared `try_fetch_branch_from_worktree`,
    also used by `fetch` and `push` — with the FAST-FORWARD-ONLY refspec
-   (`git -C <repo> fetch --no-tags <worktree> <branch>:refs/heads/<branch>`;
-   no leading `+`): Git creates an ABSENT destination ref, advances one
+   (`git -C <repo> fetch --no-tags <worktree> refs/heads/<branch>:refs/heads/<branch>`;
+   BOTH sides fully qualified — a short source ref is ambiguous against
+   same-named tags, and a branch literally named `+topic` would otherwise
+   make git parse the leading `+` as a FORCE marker and fetch `topic`
+   instead; no leading `+` anywhere): Git creates an ABSENT destination ref, advances one
    that is an ANCESTOR of the session tip, and REJECTS a diverged or
    rewound destination WITHOUT touching it — with standalone clones the
    host branch and the session branch can advance independently, and a

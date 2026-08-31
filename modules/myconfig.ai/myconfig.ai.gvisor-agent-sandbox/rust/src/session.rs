@@ -812,7 +812,13 @@ fn try_fetch_branch_from_worktree(
     worktree: &str,
     branch: &str,
 ) -> Result<(), String> {
-    let refspec = format!("{branch}:refs/heads/{branch}");
+    // BOTH sides are FULLY QUALIFIED. A short source ref would be
+    // ambiguous — a branch named `nested` could resolve to a same-named
+    // tag — and worse, a branch literally named `+topic` would produce
+    // `+topic:refs/heads/+topic`, where git parses the leading `+` as a
+    // FORCE marker and fetches `topic` instead, bypassing the
+    // fast-forward-only policy.
+    let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
     // git's own diagnostics stay visible on stderr (inherited — only
     // stdout is nulled), so the non-fast-forward rejection is reported by
     // Git itself.

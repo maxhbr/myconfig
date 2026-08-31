@@ -28,9 +28,11 @@ fn worktree_of(s: &Scenario) -> String {
         .to_string()
 }
 
-/// The recorded `git -C <repo> fetch --no-tags <worktree> <branch>:…`
-/// (FAST-FORWARD-ONLY — no leading `+`) call every fetch/merge/push
-/// performs (the shared `try_fetch_branch_from_worktree`).
+/// The recorded `git -C <repo> fetch --no-tags <worktree> <refspec>` call
+/// every fetch/merge/push performs (the shared
+/// `try_fetch_branch_from_worktree`). Both sides are FULLY QUALIFIED
+/// (fast-forward-only — no leading `+`, and a branch named `+topic`
+/// cannot smuggle one in).
 fn expect_worktree_fetch(s: &Scenario, repo: &str) {
     let expected: Vec<String> = [
         "-C".to_string(),
@@ -38,7 +40,7 @@ fn expect_worktree_fetch(s: &Scenario, repo: &str) {
         "fetch".to_string(),
         "--no-tags".to_string(),
         worktree_of(s),
-        "agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
+        "refs/heads/agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
     assert!(

@@ -324,6 +324,82 @@ fn fetch_rejects_rewritten_session_history() {
     );
 }
 
+/// A branch literally named `+topic` must be transferred as ITSELF: with
+/// a short source ref, the refspec would read `+topic:refs/heads/+topic`
+/// and git would parse the leading `+` as a FORCE marker — fetching
+/// `topic` instead, transferring the wrong branch and bypassing the
+/// fast-forward-only policy. Fully qualified refs close the hole.
+#[test]
+fn fetch_transfers_the_plus_named_branch_itself() {
+    let s = Scenario::new_real_git("fetch-plus-named-branch");
+    // Session branch `+topic`, absent in the host, starts at the base.
+    s.run_ok(&["start", "s1", "--branch", "+topic", "--detach"]);
+    let wt = worktree_of(&s, "s1");
+
+    // A DISTRACTER branch `topic` with a DIFFERENT tip exists in the
+    // session clone: a misparsed refspec would transfer this one.
+    git_in(&wt, &["checkout", "-qb", "topic"]);
+    commit_file(&wt, "wrong.txt");
+    let topic_tip = git_in(&wt, &["rev-parse", "refs/heads/topic"]);
+    git_in(&wt, &["checkout", "+topic"]);
+    commit_file(&wt, "right.txt");
+    let plus_tip = git_in(&wt, &["rev-parse", "refs/heads/+topic"]);
+
+    // The transfer picks `+topic`, the SESSION branch — not `topic`.
+    s.run_ok(&["fetch", "s1"]);
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/+topic"]),
+        plus_tip
+    );
+    assert_ne!(git_in(&s.repo, &["rev-parse", "refs/heads/+topic"]), topic_tip);
+    // The distracter branch did not leak into the host either.
+    assert!(!git_try_in(
+        &s.repo,
+        &["rev-parse", "-q", "--verify", "refs/heads/topic"]
+    ));
+
+    // Diverge the host `+topic` and retry: the rejection proves the
+    // leading `+` can no longer become a force marker.
+    git_in(&s.repo, &["checkout", "+topic"]);
+    commit_file(&s.repo, "host.txt");
+    let host_tip = git_in(&s.repo, &["rev-parse", "refs/heads/+topic"]);
+    git_in(&s.repo, &["checkout", "master"]);
+
+    let out = s.run(&["fetch", "s1"]);
+    assert!(
+        !out.status.success(),
+        "a diverged host +topic must be rejected, not force-updated"
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("may have diverged"));
+    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/heads/+topic"]), host_tip);
+}
+
+/// A short source ref is AMBIGUOUS: git's DWIM order checks
+/// `refs/tags/<name>` BEFORE `refs/heads/<name>`, so a session branch
+/// `nested` with a same-named tag would transfer the TAG tip. Fully
+/// qualifying the source pins the branch.
+#[test]
+fn fetch_prefers_the_branch_over_a_same_named_tag() {
+    let s = Scenario::new_real_git("fetch-branch-not-tag");
+    s.run_ok(&["start", "s1", "--branch", "nested", "--detach"]);
+    let wt = worktree_of(&s, "s1");
+    commit_file(&wt, "branch.txt");
+    let branch_tip = git_in(&wt, &["rev-parse", "refs/heads/nested"]);
+    // A same-named TAG pointing at the BASE commit (a different tip).
+    git_in(&wt, &["tag", "nested", "HEAD~1"]);
+    let tag_tip = git_in(&wt, &["rev-parse", "refs/tags/nested"]);
+    assert_ne!(branch_tip, tag_tip);
+
+    s.run_ok(&["fetch", "s1"]);
+
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/nested"]),
+        branch_tip,
+        "the BRANCH tip must be transferred, not the tag's"
+    );
+    assert_ne!(git_in(&s.repo, &["rev-parse", "refs/heads/nested"]), tag_tip);
+}
+
 // --- destruction ----------------------------------------------------------
 
 /// `clone.defaultRemoteName` must not move the clone's remote: the CLI
