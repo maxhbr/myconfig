@@ -39,7 +39,6 @@ fn test_meta() -> Meta {
         name: "s1".to_string(),
         repo: "/repo".to_string(),
         repo_id: "abc012".to_string(),
-        pool: "/pools/abc012.git".to_string(),
         worktree: "/w/s1".to_string(),
         home: "/meta/s1/home".to_string(),
         container: "agent-abc012-s1".to_string(),
@@ -77,7 +76,7 @@ fn build_run_args_nix() {
 
     let args = build_run_args(&env, &meta, &meta_dir, true, &[]);
 
-    // The store volume mount directly follows the 3 fixed binds.
+    // The store volume mount directly follows the 2 fixed binds.
     let home_mount = format!("type=bind,src={},dst=/home/agent,rw", meta.home);
     let pos = args.iter().position(|a| a == &home_mount).expect("home bind");
     assert_eq!(
@@ -106,8 +105,8 @@ fn build_run_args_nix() {
     .collect();
     assert_eq!(&args[wt + 1..wt + 1 + expected.len()], &expected[..]);
 
-    // Counts: 3 fixed binds + 1 volume; 6 fixed envs + 6 Nix envs.
-    assert_eq!(args.iter().filter(|a| *a == "--mount").count(), 4);
+    // Counts: 2 fixed binds + 1 volume; 6 fixed envs + 6 Nix envs.
+    assert_eq!(args.iter().filter(|a| *a == "--mount").count(), 3);
     assert_eq!(args.iter().filter(|a| *a == "--env").count(), 12);
     // The init wrapper is the payload (no loopback forward), before the
     // default /bin/bash.
@@ -213,8 +212,6 @@ fn build_run_args_full_vector() {
         "--mount",
         "type=bind,src=/w/s1,dst=/repo,rw",
         "--mount",
-        "type=bind,src=/pools/abc012.git,dst=/pools/abc012.git,rw",
-        "--mount",
         "type=bind,src=/meta/s1/home,dst=/home/agent,rw",
         "--env",
         "HOME=/home/agent",
@@ -293,9 +290,9 @@ fn build_run_args_rootful_limits() {
     assert!(!args.iter().any(|a| a.starts_with("--network")));
     assert!(!args.iter().any(|a| a.starts_with("--env-file")));
     assert!(!args.iter().any(|a| a.contains("seccomp=unconfined")));
-    // Empty mounts.tsv/env.list contribute nothing beyond the 3 fixed binds
-    // and the 6 fixed --envs (bash run_container always emits both blocks):
-    assert_eq!(args.iter().filter(|a| *a == "--mount").count(), 3);
+    // Empty mounts.tsv/env.list contribute nothing beyond the 2 fixed binds
+    // and the 6 fixed --envs (both blocks are always emitted):
+    assert_eq!(args.iter().filter(|a| *a == "--mount").count(), 2);
     assert_eq!(args.iter().filter(|a| *a == "--env").count(), 6);
     // No command given and no default -> /bin/bash:
     assert_eq!(args.last().unwrap(), "/bin/bash");
@@ -356,7 +353,6 @@ fn start_records_exact_podman_argv() {
         repo.file_name().unwrap().to_string_lossy()
     ));
     let worktree = agent_root.join("s1");
-    let pool = agent_root.join("__pools").join(format!("{repo_id}.git"));
     let home = agent_root.join("__sessions").join("s1").join("home");
     let container = format!("agent-{repo_id}-s1");
     let runtime = format!("--runtime={}", s.stub_bin.join("runsc").display());
@@ -384,8 +380,6 @@ fn start_records_exact_podman_argv() {
         repo.display().to_string(),
         "--mount".into(),
         format!("type=bind,src={},dst={},rw", worktree.display(), repo.display()),
-        "--mount".into(),
-        format!("type=bind,src={},dst={},rw", pool.display(), pool.display()),
         "--mount".into(),
         format!("type=bind,src={},dst=/home/agent,rw", home.display()),
         "--env".into(),

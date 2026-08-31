@@ -13,19 +13,17 @@ fn started(s: &Scenario) {
     s.run_ok(&["start", "s1", "--detach"]);
 }
 
-/// The pool path of session `s1` started from this scenario's repo, as
-/// recorded in its meta.
-fn pool_of(s: &Scenario) -> String {
+/// The worktree (session clone) path of session `s1` started from this
+/// scenario's repo, as recorded in its meta.
+fn worktree_of(s: &Scenario) -> String {
     let repo = s.repo.canonicalize().unwrap();
-    let repo_id = common::expected_repo_id(&s.repo);
     repo.parent()
         .unwrap()
         .join(format!(
             "{}__agent-gvisor",
             repo.file_name().unwrap().to_string_lossy()
         ))
-        .join("__pools")
-        .join(format!("{repo_id}.git"))
+        .join("s1")
         .display()
         .to_string()
 }
@@ -427,10 +425,10 @@ fn merge_failure_message() {
         &["merge", "s1"],
         1,
         &format!(
-            "agent-gvisor: fetching branch agent/gvisor/s1 from pool {pool} into {repo}\n\
+            "agent-gvisor: fetching branch agent/gvisor/s1 from worktree {worktree} into {repo}\n\
              agent-gvisor: merging agent/gvisor/s1 into main of {repo}\n\
              agent-gvisor: error: merge failed; resolve conflicts in {repo}, then delete the leftover ref with 'git -C \"{repo}\" branch -D agent/gvisor/s1'\n",
-            pool = pool_of(&s)
+            worktree = worktree_of(&s)
         ),
     );
 }

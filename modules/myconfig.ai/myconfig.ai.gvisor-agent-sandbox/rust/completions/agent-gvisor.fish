@@ -66,7 +66,7 @@ complete -c agent-gvisor -f -n '__fish_use_subcommand' -a logs -d 'Show the cont
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a shell -d 'Open a shell (or run COMMAND) in the session'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a stop -d 'Stop the session container'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a merge -d 'Merge the session branch into the host repo'
-complete -c agent-gvisor -f -n '__fish_use_subcommand' -a fetch -d 'Fetch the session branch from the pool into a local branch'
+complete -c agent-gvisor -f -n '__fish_use_subcommand' -a fetch -d 'Fetch the session branch from the session worktree into a local branch'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a push -d 'Push the session branch to a remote (fetches it first)'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a destroy -d 'Remove container, worktree and session state'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a doctor -d 'Verify runtime, image and sandbox startup'

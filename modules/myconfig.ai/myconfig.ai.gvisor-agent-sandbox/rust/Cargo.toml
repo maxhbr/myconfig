@@ -9,7 +9,7 @@ license = "MIT"
 
 # Zero dependencies by design: the CLI is small and stable, a hand-rolled
 # argument parser keeps `--help` byte-identical to the historical bash
-# heredoc, and `cargoLock` needs no `outputHashes`. geteuid/isatty/flock come
+# heredoc, and `cargoLock` needs no `outputHashes`. geteuid/isatty come
 # from libc via `extern "C"`, everything else is std. See docs/spec.md.
 
 [lib]

@@ -72,10 +72,10 @@ push options:
 environment:
   AGENT_GVISOR_IMAGE            Override the default image
   AGENT_GVISOR_STATE            Session registry directory (name -> session
-                                dirs); pools and session state live in
+                                dirs); session state lives in
                                 <repo>__agent-gvisor/ next to each repository
   AGENT_GVISOR_WORKTREES        Worktree root directory; empty (default) puts
-                                worktrees next to the repo, as
+                                session worktrees next to the repo, as
                                 <repo>__agent-gvisor/NAME
   AGENT_GVISOR_PODMAN_RUNTIME   Runtime name or absolute path (default: runsc)
   AGENT_GVISOR_PODMAN_CGROUP_MANAGER
@@ -113,6 +113,6 @@ environment:
 
 Run `agent-gvisor doctor` to verify runtime, image and sandbox startup.
 
-The host checkout is never bind-mounted. It seeds a disposable bare Git pool.
-The worktree and its Git pool are mounted at identical absolute paths because
-Git worktree administrative files contain absolute paths.
+The host checkout is never bind-mounted. Each session gets an isolated Git
+clone of the repository; the clone is mounted at the repository's host path
+so tools configured for the host checkout keep working.

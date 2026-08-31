@@ -129,7 +129,6 @@ pub fn build_run_args(
     // checkout itself is never mounted.
     for (src, dst) in [
         (meta.worktree.as_str(), meta.repo.as_str()),
-        (meta.pool.as_str(), meta.pool.as_str()),
         (meta.home.as_str(), "/home/agent"),
     ] {
         cmd.extend([

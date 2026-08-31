@@ -1,8 +1,8 @@
 // Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
 //! Session-state layout: the registry symlink, the repo-adjacent
-//! `__pools`/`__sessions` tree, the exact `meta` bytes, `list`/`status`
-//! output, and `destroy` cleanup (docs/spec.md §8, §9).
+//! `__sessions` tree with the session clones, the exact `meta` bytes,
+//! `list`/`status` output, and `destroy` cleanup (docs/spec.md §8, §9).
 
 mod common;
 
@@ -34,7 +34,6 @@ fn start_creates_expected_tree() {
     let agent_root = agent_root_of(&s);
     let meta_dir = agent_root.join("__sessions").join("s1");
     let home = meta_dir.join("home");
-    let pool = agent_root.join("__pools").join(format!("{repo_id}.git"));
     let worktree = agent_root.join("s1");
 
     // Registry: symlink to the repo-adjacent session dir.
@@ -42,8 +41,7 @@ fn start_creates_expected_tree() {
     assert!(reg.is_symlink());
     assert_eq!(fs::read_link(&reg).unwrap(), meta_dir);
 
-    // The disposable bare pool and the worktree exist.
-    assert!(pool.is_dir());
+    // The session clone exists (the stub `git clone` materializes it).
     assert!(worktree.is_dir());
 
     // Session dir: 0700, XDG dirs pre-created in the home.
@@ -59,7 +57,6 @@ fn start_creates_expected_tree() {
         "name=s1\n\
          repo={}\n\
          repo_id={repo_id}\n\
-         pool={}\n\
          worktree={}\n\
          home={}\n\
          container=agent-{repo_id}-s1\n\
@@ -73,7 +70,6 @@ fn start_creates_expected_tree() {
          env_file=''\n\
          nix=false\n",
         repo.display(),
-        pool.display(),
         worktree.display(),
         home.display(),
     );
@@ -105,7 +101,6 @@ fn start_from_subdir_anchors_at_repo_root() {
     );
 
     let repo = s.repo.canonicalize().unwrap();
-    let repo_id = expected_repo_id(&s.repo);
     let agent_root = agent_root_of(&s);
     let worktree = agent_root.join("s1");
 
@@ -115,8 +110,7 @@ fn start_from_subdir_anchors_at_repo_root() {
     let meta = Meta::parse(&meta_text).expect("parse");
     assert_eq!(meta.repo, repo.display().to_string());
     assert_eq!(meta.worktree, worktree.display().to_string());
-    // The pool and the worktree live under the agent root next to the ROOT:
-    assert!(agent_root.join("__pools").join(format!("{repo_id}.git")).is_dir());
+    // The session clone lives under the agent root next to the ROOT:
     assert!(worktree.is_dir());
     // Nothing was created inside the repo or next to the subdirectory:
     assert!(!subdir.join("__agent-gvisor").exists());
@@ -221,28 +215,26 @@ fn status_output() {
     let repo_id = expected_repo_id(&s.repo);
     let agent_root = agent_root_of(&s);
     let worktree = agent_root.join("s1");
-    let pool = agent_root.join("__pools").join(format!("{repo_id}.git"));
     let expected = format!(
         "session:   s1\n\
          repo:      {}\n\
          branch:    agent/gvisor/s1\n\
          worktree:  {}\n\
-         pool:      {}\n\
          container: agent-{repo_id}-s1\n\
          image:     {IMAGE}\n\
          status:    running\\npid:       42\\nstarted:   2025-01-01T00:00:00Z\n\
          ## main\n",
         repo.display(),
         worktree.display(),
-        pool.display(),
     );
     assert_eq!(String::from_utf8(out.stdout).unwrap(), expected);
 }
 
 #[test]
 fn meta_parses_bash_fixture() {
-    // A meta file exactly as the bash CLI could have written it (including
-    // $'…' and quoted forms) must load identically.
+    // A meta file exactly as an earlier layout could have written it
+    // (including $'…' and quoted forms) must load identically. The `pool=`
+    // line is from the retired pool layout: unknown keys are ignored.
     let fixture = "name='s 1'\n\
                    repo=$'/tmp/re\\tpo'\n\
                    repo_id=abc012\n\
@@ -266,7 +258,6 @@ fn meta_parses_bash_fixture() {
             name: "s 1".to_string(),
             repo: "/tmp/re\tpo".to_string(),
             repo_id: "abc012".to_string(),
-            pool: "/x/pool.git".to_string(),
             worktree: "w t".to_string(),
             home: "/h".to_string(),
             container: "agent-abc012-s_1".to_string(),
@@ -286,7 +277,6 @@ fn meta_parses_bash_fixture() {
     let expected = "name=s\\ 1\n\
                     repo=$'/tmp/re\\tpo'\n\
                     repo_id=abc012\n\
-                    pool=/x/pool.git\n\
                     worktree=w\\ t\n\
                     home=/h\n\
                     container=agent-abc012-s_1\n\
@@ -317,18 +307,15 @@ fn destroy_removes_everything() {
     assert!(!s.state.join("sessions").join("s1").exists());
     assert!(!meta_dir.exists());
     assert!(!worktree.exists());
-    // The pool is disposable but kept; the container record is gone.
-    assert!(agent_root.join("__pools").join(format!("{repo_id}.git")).is_dir());
+    // The container record is gone.
     assert!(!s.record.join("containers").join(&container).exists());
 
-    // git was told to remove the worktree (without --delete-branch):
-    let git = s.recorded("git");
-    let removed: Vec<Vec<String>> = git
-        .into_iter()
-        .filter(|c| c.contains(&"worktree".to_string()) && c.contains(&"remove".to_string()))
-        .collect();
-    assert_eq!(removed.len(), 1);
-    assert!(!removed[0].contains(&"--force".to_string()));
+    // The clone is plain-`rm -rf`'d — no git removal call at all (no
+    // `worktree remove`, no `branch -D` without --delete-branch):
+    assert!(!s
+        .recorded("git")
+        .iter()
+        .any(|c| c.contains(&"worktree".to_string()) && c.contains(&"remove".to_string())));
     assert!(!s
         .recorded("git")
         .iter()
@@ -348,12 +335,11 @@ fn destroy_delete_branch() {
     let s = Scenario::new("destroy-delete-branch");
     start_simple(&s, "s1");
     s.run_ok(&["destroy", "s1", "--delete-branch"]);
-    let pool = agent_root_of(&s)
-        .join("__pools")
-        .join(format!("{}.git", expected_repo_id(&s.repo)));
+    let repo = s.repo.canonicalize().unwrap();
     assert!(s.recorded("git").iter().any(|c| {
         *c == vec![
-            format!("--git-dir={}", pool.display()),
+            "-C".to_string(),
+            repo.display().to_string(),
             "branch".to_string(),
             "-D".to_string(),
             "agent/gvisor/s1".to_string(),

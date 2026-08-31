@@ -17,8 +17,9 @@ into `nix flake check` via `nix/checks.nix`, x86_64-linux only).
 Compatibility notes:
 
 - Sessions created by earlier layouts (registry symlink + repo-adjacent
-  `__pools`/`__sessions`) keep loading: repo-ids are path-based and the
-  shell-quoted `meta` format is preserved (see `docs/spec.md` §8/§12).
+  `__sessions`, and the retired `__pools`) keep loading: repo-ids are
+  path-based and the shell-quoted `meta` format is preserved (unknown meta
+  keys like `pool=` are ignored; see `docs/spec.md` §8/§12).
 - Pre-rewrite-layout sessions (registry entry = real session directory, old
   central `$XDG_STATE_HOME/agent-gvisor/pools/`) are NOT loadable any more:
   `list` shows them as `incompatible (pre-rewrite layout)` and every other

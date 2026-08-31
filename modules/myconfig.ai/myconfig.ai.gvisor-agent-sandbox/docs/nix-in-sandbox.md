@@ -164,7 +164,7 @@ four ways:
   inputs, fetched from their registries (e.g. GitHub) over pasta.
 - `path:` flake inputs pointing OUTSIDE the worktree (this repo has none
   in `_flake.nix_`, but e.g. `../priv` style inputs would) are not
-  reachable: only the worktree, the pool, the session home and explicit
+  reachable: only the session worktree, the session home and explicit
   `--mount`/`--config` paths exist inside the sandbox. Add a `--mount`
   if such an input must build in-session.
 - `result` symlinks created by `nix build` point into `/nix/store` —

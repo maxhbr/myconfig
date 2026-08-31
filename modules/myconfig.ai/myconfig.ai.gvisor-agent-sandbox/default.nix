@@ -7,7 +7,7 @@
 # bubblewrap `jail-app` wrappers (`myconfig.ai.jail`) and the Cloud Hypervisor
 # microVM tier (`myconfig.ai.microvm`). Each session runs in a rootless Podman
 # container with gVisor (`runsc`) as OCI runtime, on a Nix-built sandbox image,
-# and gets its own git worktree from a disposable bare pool.
+# and gets its own fully isolated git clone of the repository.
 {
   config,
   lib,

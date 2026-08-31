@@ -12,7 +12,6 @@
 
 use std::fs;
 use std::os::unix::fs::{symlink, PermissionsExt};
-use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
@@ -96,48 +95,23 @@ fn chmod_700(p: &Path) {
     }
 }
 
-/// Open `path` and take an exclusive `flock` on it (bash `exec 9>…; flock 9`).
-/// The lock is held until the returned File is dropped.
-fn flock_exclusive(path: &Path) -> fs::File {
-    let f = fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(path)
-        .unwrap_or_else(|e| die(&format!("cannot open lockfile: {e}")));
-    extern "C" {
-        fn flock(fd: std::os::unix::io::RawFd, operation: i32) -> i32;
-    }
-    const LOCK_EX: i32 = 2;
-    let rc = unsafe { flock(f.as_raw_fd(), LOCK_EX) };
-    if rc != 0 {
-        die("cannot lock the pool lockfile");
-    }
-    f
-}
-
 /// Recover from interrupted-start debris (docs/spec.md §9): log, remove the
-/// leftover worktree (via git when the pool still owns it), session dir and
-/// registry entry.
-fn reset_partial_session(
-    name: &str,
-    reg: &Path,
-    meta_dir: &Path,
-    pool: &Path,
-    worktree: &Path,
-) {
+/// leftover worktree, session dir and registry entry. The session worktree
+/// is a standalone clone, so a clean leftover is plain `rm -rf`'d — no
+/// linked-worktree bookkeeping exists.
+fn reset_partial_session(name: &str, reg: &Path, meta_dir: &Path, worktree: &Path) {
     log(&format!(
         "session {name} is incomplete (interrupted start); removing {}",
         meta_dir.display()
     ));
     if worktree.exists() {
         let wt = worktree.display().to_string();
-        let inside = pool.is_dir()
-            && git_ok(&[
-                "-C".to_string(),
-                wt.clone(),
-                "rev-parse".to_string(),
-                "--is-inside-work-tree".to_string(),
-            ]);
+        let inside = git_ok(&[
+            "-C".to_string(),
+            wt.clone(),
+            "rev-parse".to_string(),
+            "--is-inside-work-tree".to_string(),
+        ]);
         if inside {
             let dirty = git_stdout(&[
                 "-C".to_string(),
@@ -150,25 +124,12 @@ fn reset_partial_session(
                 die(&format!(
                     "leftover worktree has uncommitted changes: {wt}\n\
                      Inspect it, then remove it with:\n\
-                     \x20 git --git-dir={} worktree remove --force {}",
-                    quote(&pool.display().to_string()),
+                     \x20 rm -rf {}",
                     quote(&wt)
                 ));
             }
-            let st = git_status(&[
-                format!("--git-dir={}", pool.display()),
-                "worktree".to_string(),
-                "remove".to_string(),
-                "--force".to_string(),
-                wt.clone(),
-            ]);
-            if !st.success() {
-                // `|| die "could not remove leftover worktree: …"`
-                die(&format!("could not remove leftover worktree: {wt}"));
-            }
-        } else {
-            rm_rf(worktree);
         }
+        rm_rf(worktree);
     }
     rm_rf(meta_dir);
     rm_rf(reg);
@@ -179,7 +140,6 @@ fn meta_from_start(
     name: &str,
     repo: &Path,
     repo_id: &str,
-    pool: &Path,
     worktree: &Path,
     home: &Path,
     container: &str,
@@ -190,7 +150,6 @@ fn meta_from_start(
         name: name.to_string(),
         repo: repo.display().to_string(),
         repo_id: repo_id.to_string(),
-        pool: pool.display().to_string(),
         worktree: worktree.display().to_string(),
         home: home.display().to_string(),
         container: container.to_string(),
@@ -250,8 +209,8 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
         die(&format!("not a Git working tree: {}", repo.display()));
     }
     // Anchor at the repository ROOT even when started from a subdirectory,
-    // so <root>__agent-gvisor/ (pools, session state, by default the
-    // worktrees) always sits NEXT TO the root, never inside it — and the
+    // so <root>__agent-gvisor/ (session state, by default the session
+    // clones) always sits NEXT TO the root, never inside it — and the
     // in-container --workdir / AGENT_WORKTREE (§10) is the root path.
     let toplevel = git_stdout(&[
         "-C".to_string(),
@@ -284,18 +243,15 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     for d in [
         env.state_root.clone(),
         env.state_root.join("sessions"),
-        agent_root.join("__pools"),
         agent_root.join("__sessions"),
     ] {
         fs::create_dir_all(&d).unwrap_or_else(|e| die(&format!("cannot create {d:?}: {e}")));
     }
     let repo_id = state::repo_id(&repo);
-    // Pools, session state and worktrees all live NEXT TO the host
-    // repository (docs/spec.md §8): `__pools/<repo-id>.git` disposable bare
-    // pools, `__sessions/<name>/` session state, `<name>/` worktrees.
+    // Session state and the session clone live NEXT TO the host repository
+    // (docs/spec.md §8): `__sessions/<name>/` session state, `<name>/` the
+    // session's own `git clone` of the repository.
     // `$STATE_ROOT/sessions` stays the name→session REGISTRY.
-    let pool = agent_root.join("__pools").join(format!("{repo_id}.git"));
-    let lockfile = agent_root.join("__pools").join(format!("{repo_id}.lock"));
     let reg = state::registry_path(&env, &name);
     let worktree = match &env.worktrees {
         Some(wt) => PathBuf::from(wt).join(&repo_id).join(&name),
@@ -313,7 +269,7 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
             .unwrap_or(false);
         if !meta_present {
             // Debris of an interrupted start: report and clean it up.
-            reset_partial_session(&name, &reg, &meta_dir, &pool, &worktree);
+            reset_partial_session(&name, &reg, &meta_dir, &worktree);
         } else {
             match state::try_load_session(&env, &name) {
                 Ok(old) => {
@@ -375,66 +331,23 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
         }
     }
 
-    let _lock = flock_exclusive(&lockfile);
-
-    if !pool.is_dir() {
-        git_check(&[
-            "init".to_string(),
-            "--bare".to_string(),
-            pool.display().to_string(),
-        ]);
-        git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "remote".to_string(),
-            "add".to_string(),
-            "host".to_string(),
-            repo.display().to_string(),
-        ]);
-    } else {
-        git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "remote".to_string(),
-            "set-url".to_string(),
-            "host".to_string(),
-            repo.display().to_string(),
-        ]);
-    }
-    git_check(&[
-        format!("--git-dir={}", pool.display()),
-        "fetch".to_string(),
-        "--prune".to_string(),
-        "--no-recurse-submodules".to_string(),
-        "host".to_string(),
-        "+refs/heads/*:refs/remotes/host/*".to_string(),
-        "+refs/tags/*:refs/tags/*".to_string(),
-    ]);
-    let have_base = Command::new("git")
-        .args([
-            format!("--git-dir={}", pool.display()),
-            "cat-file".to_string(),
-            "-e".to_string(),
-            format!("{base_commit}^{{commit}}"),
-        ])
-        .stderr(Stdio::null())
-        .stdout(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-    if !have_base {
-        git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "fetch".to_string(),
-            "--no-tags".to_string(),
-            "host".to_string(),
-            base_commit.clone(),
-        ]);
-    }
-
     if worktree.exists() {
         die(&format!("worktree path already exists: {}", worktree.display()));
     }
+    // A fully isolated clone per session (docs/spec.md §9): `--no-hardlinks`
+    // is REQUIRED — hardlinked object files would let the session write
+    // through to the host repository.
+    git_check(&[
+        "clone".to_string(),
+        "--no-hardlinks".to_string(),
+        repo.display().to_string(),
+        worktree.display().to_string(),
+    ]);
+    // The session branch: check it out when the cloned repository already
+    // carries it, otherwise create it at the base commit.
     let branch_exists = git_ok(&[
-        format!("--git-dir={}", pool.display()),
+        "-C".to_string(),
+        worktree.display().to_string(),
         "show-ref".to_string(),
         "--verify".to_string(),
         "--quiet".to_string(),
@@ -442,20 +355,18 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     ]);
     if branch_exists {
         git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "worktree".to_string(),
-            "add".to_string(),
+            "-C".to_string(),
             worktree.display().to_string(),
+            "checkout".to_string(),
             branch.clone(),
         ]);
     } else {
         git_check(&[
-            format!("--git-dir={}", pool.display()),
-            "worktree".to_string(),
-            "add".to_string(),
+            "-C".to_string(),
+            worktree.display().to_string(),
+            "checkout".to_string(),
             "-b".to_string(),
             branch.clone(),
-            worktree.display().to_string(),
             base_commit.clone(),
         ]);
     }
@@ -464,7 +375,6 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
         &name,
         &repo,
         &repo_id,
-        &pool,
         &worktree,
         &home,
         &container,
@@ -491,7 +401,6 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     }
     fs::write(meta_dir.join("env.list"), list).unwrap();
 
-    drop(_lock);
     log(&format!(
         "created worktree {} on branch {branch}",
         worktree.display()
@@ -637,12 +546,11 @@ pub fn cmd_status(env: &Env, name: &str) -> ! {
     let session = state::load_session(env, name);
     let meta = &session.meta;
     print!(
-        "session:   {}\nrepo:      {}\nbranch:    {}\nworktree:  {}\npool:      {}\ncontainer: {}\nimage:     {}\n",
+        "session:   {}\nrepo:      {}\nbranch:    {}\nworktree:  {}\ncontainer: {}\nimage:     {}\n",
         meta.name,
         meta.repo,
         meta.branch,
         meta.worktree,
-        meta.pool,
         meta.container,
         meta.image
     );
@@ -762,7 +670,10 @@ pub fn cmd_stop(env: &Env, name: &str) -> ! {
 /// §9): `--repo PATH` when given (realpath'd; realpath's own
 /// RAW diagnostic, then the `--repo` `die` message), else `fallback`. The
 /// target must contain `.git`.
-fn resolve_target_repo(repo_override: &Option<String>, fallback: String) -> String {
+fn resolve_target_repo(repo_override: &Option<String>, fallback: impl FnOnce() -> String) -> String {
+    // The fallback is a CLOSURE on purpose (the bash `${REPO:-$(…)}` was
+    // lazy): with `--repo` given, the current directory does NOT have to
+    // be inside a Git work tree.
     let target_repo = match repo_override {
         Some(p) => {
             let resolved = fs::canonicalize(p).map(|r| r.display().to_string()).ok();
@@ -774,7 +685,7 @@ fn resolve_target_repo(repo_override: &Option<String>, fallback: String) -> Stri
                 }
             }
         }
-        None => fallback,
+        None => fallback(),
     };
     let dot_git = Path::new(&target_repo).join(".git");
     if !(dot_git.is_dir() || dot_git.is_file()) {
@@ -800,13 +711,13 @@ fn current_repo() -> String {
     }
 }
 
-/// Fetch the session branch from the pool into `refs/heads/<branch>` of
-/// `target_repo` — the shared step of `merge` (§9 "merge" step 5), the
-/// standalone `fetch`, and the implicit fetch of `push`. `Err` carries the
-/// `die` message.
-fn try_fetch_branch_from_pool(
+/// Fetch the session branch from the session worktree into
+/// `refs/heads/<branch>` of `target_repo` — the shared step of `merge`
+/// (§9 "merge" step 5), the standalone `fetch`, and the implicit fetch of
+/// `push`. `Err` carries the `die` message.
+fn try_fetch_branch_from_worktree(
     target_repo: &str,
-    pool: &str,
+    worktree: &str,
     branch: &str,
 ) -> Result<(), String> {
     let fetch_ok = git_stdout(&[
@@ -814,14 +725,14 @@ fn try_fetch_branch_from_pool(
         target_repo.to_string(),
         "fetch".to_string(),
         "--no-tags".to_string(),
-        pool.to_string(),
+        worktree.to_string(),
         format!("+{branch}:refs/heads/{branch}"),
     ])
     .is_some();
     if fetch_ok {
         Ok(())
     } else {
-        Err("fetch from pool failed; is the session pool still present?".to_string())
+        Err("fetch from session clone failed; is the session worktree still present?".to_string())
     }
 }
 
@@ -861,7 +772,7 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
 
     // The original repository the session was started from. Allow --repo to
     // override for the unusual case of merging into a different clone.
-    let target_repo = resolve_target_repo(&repo_override, meta.repo.clone());
+    let target_repo = resolve_target_repo(&repo_override, || meta.repo.clone());
 
     // Refuse to merge into a detached HEAD or a dirty tree, so a conflict
     // does not leave the host checkout half-merged.
@@ -898,10 +809,10 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
     }
 
     log(&format!(
-        "fetching branch {} from pool {} into {target_repo}",
-        meta.branch, meta.pool
+        "fetching branch {} from worktree {} into {target_repo}",
+        meta.branch, meta.worktree
     ));
-    try_fetch_branch_from_pool(&target_repo, &meta.pool, &meta.branch)
+    try_fetch_branch_from_worktree(&target_repo, &meta.worktree, &meta.branch)
         .unwrap_or_else(|m| die(&m));
     log(&format!(
         "merging {} into {current_branch} of {target_repo}",
@@ -937,7 +848,7 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
 }
 
 /// `agent-gvisor fetch NAME [--repo PATH]` (docs/spec.md §9 "fetch"):
-/// the shared pool fetch of `merge` WITHOUT the merge — bring the session
+/// the shared worktree fetch of `merge` WITHOUT the merge — bring the session
 /// branch into `refs/heads/<branch>` of the target repo to inspect,
 /// cherry-pick or diff it. Default target: the repository containing the
 /// current directory.
@@ -961,12 +872,12 @@ pub fn cmd_fetch(env: Env, args: &[String]) -> ! {
     }
     let session = state::load_session(&env, &name);
     let meta = &session.meta;
-    let target_repo = resolve_target_repo(&repo_override, current_repo());
+    let target_repo = resolve_target_repo(&repo_override, current_repo);
     log(&format!(
-        "fetching branch {} from pool {} into {target_repo}",
-        meta.branch, meta.pool
+        "fetching branch {} from worktree {} into {target_repo}",
+        meta.branch, meta.worktree
     ));
-    try_fetch_branch_from_pool(&target_repo, &meta.pool, &meta.branch)
+    try_fetch_branch_from_worktree(&target_repo, &meta.worktree, &meta.branch)
         .unwrap_or_else(|m| die(&m));
     log(&format!(
         "fetched {} into {target_repo}; merge it with 'agent-gvisor merge {name}'",
@@ -976,7 +887,7 @@ pub fn cmd_fetch(env: Env, args: &[String]) -> ! {
 }
 
 /// `agent-gvisor push NAME [REMOTE] [--repo PATH]` (docs/spec.md §9
-/// "push"): publish the session branch. Fetches it from the pool into the
+/// "push"): publish the session branch. Fetches it from the session worktree into the
 /// target repo first (the implicit `fetch`, so the pushed ref is current),
 /// then `git push REMOTE <branch>` from it. REMOTE defaults to `origin`;
 /// default target: the repository containing the current directory.
@@ -1007,12 +918,12 @@ pub fn cmd_push(env: Env, args: &[String]) -> ! {
     }
     let session = state::load_session(&env, &name);
     let meta = &session.meta;
-    let target_repo = resolve_target_repo(&repo_override, current_repo());
+    let target_repo = resolve_target_repo(&repo_override, current_repo);
     log(&format!(
-        "fetching branch {} from pool {} into {target_repo}",
-        meta.branch, meta.pool
+        "fetching branch {} from worktree {} into {target_repo}",
+        meta.branch, meta.worktree
     ));
-    try_fetch_branch_from_pool(&target_repo, &meta.pool, &meta.branch)
+    try_fetch_branch_from_worktree(&target_repo, &meta.worktree, &meta.branch)
         .unwrap_or_else(|m| die(&m));
     let remote = remote.unwrap_or_else(|| "origin".to_string());
     log(&format!("pushing {} to {remote} of {target_repo}", meta.branch));
@@ -1038,7 +949,6 @@ pub fn destroy_session(
     delete_branch: bool,
 ) -> Result<(), String> {
     let meta = &session.meta;
-    let pool = meta.pool.clone();
     let worktree = meta.worktree.clone();
 
     // Validate the non-force safety condition before deleting any session
@@ -1099,25 +1009,16 @@ pub fn destroy_session(
         }
     }
 
+    // The session worktree is a standalone clone: removing the directory
+    // removes the session's Git state entirely. Nothing else tracks it.
     if Path::new(&worktree).is_dir() {
-        let mut rm_args = vec![
-            format!("--git-dir={pool}"),
-            "worktree".to_string(),
-            "remove".to_string(),
-        ];
-        if force {
-            rm_args.push("--force".to_string());
-        }
-        rm_args.push(worktree.clone());
-        let st = git_status(&rm_args);
-        if !st.success() {
-            std::process::exit(st.code().unwrap_or(1));
-        }
+        rm_rf(Path::new(&worktree));
     }
 
     if delete_branch {
         let st = git_status(&[
-            format!("--git-dir={pool}"),
+            "-C".to_string(),
+            meta.repo.clone(),
             "branch".to_string(),
             "-D".to_string(),
             meta.branch.clone(),
@@ -1181,7 +1082,7 @@ pub fn cmd_doctor(env: Env) -> ! {
         "state:           {} (session name registry)",
         env.state_root.display()
     );
-    println!("pools/sessions:  <repo>__agent-gvisor/{{__pools,__sessions}} next to each repo");
+    println!("sessions:        <repo>__agent-gvisor/{{__sessions}} and session clones next to each repo");
     println!(
         "model endpoint:  {}",
         env.model_endpoint.clone().unwrap_or_else(|| "<unset>".to_string())

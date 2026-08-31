@@ -11,11 +11,12 @@ It assumes the module is enabled on the host and the image is loaded (see
 and the repository defaults to the current directory, so the shorthand
 `agent-gvisor NAME` means `agent-gvisor start --name NAME --repo .`; run it
 from the repository you want to work on. It never mounts the host
-checkout. Instead it seeds a **disposable bare Git pool** from the host repo's
-committed refs and checks out a worktree from that pool on a fresh branch,
-defaulting to `agent/gvisor/<name>`. Inside the container the worktree is
-mounted **at the original repository's path**, so the in-container paths
-match the host ones.
+checkout. Instead every session gets its own **fully isolated
+`git clone --no-hardlinks`** of the repository — no hardlinks, so the
+sandbox can never write through to the host's object files — checked out on
+a fresh branch, defaulting to `agent/gvisor/<name>`. Inside the container
+the clone is mounted **at the original repository's path**, so the
+in-container paths match the host ones.
 
 ```bash
 agent-gvisor start \
@@ -38,12 +39,11 @@ What happens:
    `--map-guest-addr` address pasta translates to the host, where a
    port-scoped forwarder proxies to the loopback-only LiteLLM proxy (see
    *Model access (host LiteLLM)* in `../README.md`).
-3. A bare pool is created (or reused) at
-   `<repo>__agent-gvisor/__pools/<repo-id>.git`, the session state
-   (meta, home, mounts, env) at `<repo>__agent-gvisor/__sessions/fix-parser/`
-   — i.e. next to the host repository — a worktree is added at
-   `<repo>__agent-gvisor/fix-parser` on branch `agent/gvisor/fix-parser`, and the
-   container starts. A symlink in the session registry
+3. The session state (meta, home, mounts, env) is created at
+   `<repo>__agent-gvisor/__sessions/fix-parser/` — i.e. next to the host
+   repository — the session's own clone is created at
+   `<repo>__agent-gvisor/fix-parser` on branch `agent/gvisor/fix-parser`, and
+   the container starts. A symlink in the session registry
    (`~/.local/state/agent-gvisor/sessions/fix-parser`) points to the session
    directory, so commands that only take a session name find it.
 4. `pi` runs as the default command (it was baked into the image because
@@ -58,13 +58,13 @@ or run `agent-gvisor destroy fix-parser --force --delete-branch` first.
 ## 2. Interact with the agent
 
 The agent works **inside** the sandbox and commits to branch `agent/gvisor/fix-parser`
-in the disposable pool. The host checkout is untouched.
+in its own clone. The host checkout is untouched.
 
 Inspect progress from the host:
 
 ```bash
 agent-gvisor list                       # all sessions, status + branch
-agent-gvisor status fix-parser          # pool/worktree/container + git status
+agent-gvisor status fix-parser          # worktree/container + git status
 agent-gvisor logs fix-parser --follow   # container stdout/stderr
 ```
 
@@ -83,13 +83,13 @@ already running unless you `stop` it first):
 agent-gvisor run fix-parser --detach -- pi "fix the failing test"
 ```
 
-The agent's commits live only in the pool — they are **not** in the host repo
-yet.
+The agent's commits live only in the session clone — they are **not** in the
+host repo yet.
 
 ## 3. Merge the result back
 
 Use the built-in `merge` subcommand to fetch the session branch from its
-disposable pool into the **original** host repository and merge it into the
+worktree into the **original** host repository and merge it into the
 branch you currently have checked out. The host repo is never mounted into
 the sandbox, so this is the path the work takes back.
 
@@ -109,7 +109,8 @@ traceable; pass `--ff` or `--squash` for the matching `git merge` behaviour,
 or `--repo PATH` to target a different clone. The session worktree is left
 untouched — tear it down afterwards (step 4).
 
-Without merging, two related commands bring the branch out of the pool:
+Without merging, two related commands bring the branch out of the session
+clone:
 
 ```bash
 agent-gvisor fetch fix-parser   # into the repository you are in (--repo to
@@ -125,16 +126,17 @@ agent-gvisor push fix-parser myremote   # … or any other configured remote
 
 Once the result is in the host checkout, tear the session down. `destroy`
 refuses a **dirty** worktree unless `--force` is given, and preserves the
-branch by default — add `--delete-branch` to remove it from the pool too:
+branch by default — add `--delete-branch` to remove it from the host
+repository too:
 
 ```bash
 agent-gvisor stop fix-parser                            # stop the container
 agent-gvisor destroy fix-parser --delete-branch         # worktree + branch
 ```
 
-`--force --delete-branch` skips the dirty-check and removes everything. The
-disposable pool itself is shared across sessions for the same repo, so it
-stays until its last session is destroyed.
+`--force --delete-branch` skips the dirty-check and removes everything
+(container, session home, session clone, and the branch from the host
+repository).
 
 ## Quick reference
 

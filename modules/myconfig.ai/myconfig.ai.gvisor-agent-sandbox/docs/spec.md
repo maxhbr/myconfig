@@ -219,15 +219,14 @@ lives repo-adjacent in
 
 ```
 <repo>__agent-gvisor/
-  __pools/<repo-id>.git      disposable bare pool (one per repo)
-  __pools/<repo-id>.lock     flock target serialising pool access
   __sessions/<name>/         session state (meta last, see §9)
     meta                     shell-quoted key=value (see below)
     mounts.tsv               tab-separated host,dest,mode (+ trailing empty line)
     env.list                 one KEY=VALUE per line (+ trailing empty line)
     home/                    bind-mounted over /home/agent (mode 700)
     last-command             the exec'd podman argv, %q-quoted, space-joined
-  <name>/                    session worktree (or $AGENT_GVISOR_WORKTREES/<repo-id>/<name>)
+  <name>/                    session worktree, an isolated clone
+                             (or $AGENT_GVISOR_WORKTREES/<repo-id>/<name>)
 ```
 
 - `<repo-id>` is the first 16 hex characters of `sha256(<realpath of repo>)`,
@@ -235,8 +234,8 @@ lives repo-adjacent in
   by the bash CLI). The hashed string has NO trailing newline.
 - Session names match `^[A-Za-z0-9][A-Za-z0-9_.-]*$`; anything else:
   `error: invalid session name '<name>' (allowed: letters, digits, dot, underscore, hyphen)`.
-  Because names cannot start with an underscore, `__pools`/`__sessions`
-  never collide with a worktree.
+  Because names cannot start with an underscore, `__sessions`
+  never collides with a session clone.
 - Container name: `agent-<repo-id>-<name>`, lowercased, every
   `[^a-z0-9_.-]` run collapsed to `-`, leading/trailing `-` stripped.
 - Default branch: `agent/gvisor/<name>`.
@@ -252,7 +251,7 @@ created by the bash CLI stay loadable. Writer output is byte-identical to
 rules). Fields, in this exact order:
 
 ```
-name= repo= repo_id= pool= worktree= home= container= branch= image=
+name= repo= repo_id= worktree= home= container= branch= image=
 memory= cpus= pids_limit= network= seccomp_unconfined= env_file= nix=
 ```
 
@@ -277,25 +276,29 @@ missing keys default to empty.
    anchor at the repository root via `git -C <repo> rev-parse
    --show-toplevel` (a subdirectory start behaves like one from the root);
    resolve `--base` via `git rev-parse --verify <base>^{commit}`.
-4. create `$STATE_ROOT/sessions`, agent-root `__pools`, `__sessions`.
+4. create `$STATE_ROOT/sessions` and the agent-root `__sessions`.
 5. existing-session probe on the registry entry (below).
 6. `mkdir -p` worktree parent, `__sessions/<name>`, `home`; **create the
    registry symlink**; create `home/.cache`, `home/.config`, `home/.local/state`;
    `chmod 700` the session dir and home.
 7. home seeding (§11) — never aborts the start on a partially copyable tree.
-8. `flock` `__pools/<repo-id>.lock`.
-9. pool: `git init --bare` + `remote add host <repo>` if absent, else
-   `remote set-url host <repo>`; `fetch --prune --no-recurse-submodules host
-   +refs/heads/*:refs/remotes/host/* +refs/tags/*:refs/tags/*`; if the base
-   commit is missing: `fetch --no-tags host <base-commit>`.
-10. refuse an existing worktree path (`error: worktree path already exists: …`);
-    `git worktree add` (existing pool branch checked out as-is, otherwise
-    `-b <branch>` at the base commit).
-11. write `mounts.tsv` and `env.list` (a single newline when the list is
-    empty — historical byte layout), **`meta` LAST**.
-12. release the flock; log
+8. clone: refuse an existing worktree path
+   (`error: worktree path already exists: …`); then
+   `git clone --no-hardlinks <repo> <worktree>` — a fully isolated copy per
+   session. `--no-hardlinks` is REQUIRED: hardlinks would let the session
+   write through to the host repository's object files. The branch:
+   `git -C <worktree> checkout <branch>` when `refs/heads/<branch>` exists
+   in the clone (the repository already carries the session branch),
+   otherwise `git -C <worktree> checkout -b <branch> <base-commit>`.
+9. write `mounts.tsv` and `env.list` (a single newline when the list is
+   empty — historical byte layout), **`meta` LAST**.
+10. log
     `created worktree <path> on branch <branch>` and the retry/doctor/destroy
     hint line; then run the container (§10 argv) via `exec`.
+
+   There is no locking: nothing is shared between sessions any more (no
+   pool, no flock), so concurrent starts of different sessions cannot
+   interfere.
 
 ### Existing session of the same name
 
@@ -317,20 +320,20 @@ The probe looks at the registry entry, not the session dir:
 `meta` written last means a session dir without `meta` is debris: the next
 `start` of the same name logs
 `session <name> is incomplete (interrupted start); removing <meta-dir>` and
-removes it — plus the leftover worktree: if it is a git worktree with a
-present pool, it must be clean, else
+removes it — plus the leftover worktree: if it is a git work tree, it must
+be clean, else
 
 ```
 error: leftover worktree has uncommitted changes: <worktree>
 Inspect it, then remove it with:
-  git --git-dir=<pool-q> worktree remove --force <worktree-q>
+  rm -rf <worktree-q>
 ```
 
-(`%q`-quoted arguments); `worktree remove --force` failure:
-`error: could not remove leftover worktree: <worktree>`. A non-worktree path
-is plain `rm -rf`'d. The BRANCH is never touched. `list` shows such names as
-`incomplete` and every name-only command explains the debris (§ "unknown
-session" inventory).
+(`%q`-quoted argument). A clean leftover worktree — and any non-worktree
+path — is plain `rm -rf`'d; the session clone is standalone, so no linked
+worktree bookkeeping has to be updated. The BRANCH is never touched. `list`
+shows such names as `incomplete` and every name-only command explains the
+debris (§ "unknown session" inventory).
 
 ### `merge`
 
@@ -341,10 +344,12 @@ session" inventory).
 3. refuse a dirty tree: `error: working tree of <path> is dirty; commit or stash before merging`
 4. `--no-ff` is the default; `--ff`/`--squash`/explicit git-merge args are
    passed through (args after `--` verbatim).
-5. fetch the session branch from the pool into `refs/heads/<branch>`
-   (`git fetch --no-tags <pool> +<branch>:refs/heads/<branch>`; the shared
-   `try_fetch_branch_from_pool`, also used by `fetch` and `push`); failure:
-   `error: fetch from pool failed; is the session pool still present?`
+5. fetch the session branch from the session worktree into
+   `refs/heads/<branch>`
+   (`git -C <repo> fetch --no-tags <worktree> +<branch>:refs/heads/<branch>`;
+   the shared `try_fetch_branch_from_worktree`, also used by `fetch` and
+   `push`); failure:
+   `error: fetch from session clone failed; is the session worktree still present?`
 6. `git merge <merge-args...> <branch>`; on success the temporary ref is
    deleted; on failure:
    `error: merge failed; resolve conflicts in <repo>, then delete the leftover ref with 'git -C "<repo>" branch -D <branch>'`
@@ -360,18 +365,18 @@ it without touching the checked-out branch.
    errors as `merge`), else the Git working tree containing the current
    directory (`git rev-parse --show-toplevel`); outside one:
    `error: not a Git working tree: <cwd>`.
-2. the shared pool fetch (`merge` step 5); failure:
-   `error: fetch from pool failed; is the session pool still present?`
-3. log `fetching branch <branch> from pool <pool> into <repo>`, then
+2. the shared worktree fetch (`merge` step 5); failure:
+   `error: fetch from session clone failed; is the session worktree still present?`
+3. log `fetching branch <branch> from worktree <worktree> into <repo>`, then
    `fetched <branch> into <repo>; merge it with 'agent-gvisor merge <name>'`,
    exit 0. Any other argument:
    `error: unknown fetch option: <arg>`.
 
 ### `push`
 
-Publish the session branch: the implicit `fetch` (the shared pool fetch,
-run first so the pushed ref is current), then `git push` from the target
-repository, where the remotes are configured.
+Publish the session branch: the implicit `fetch` (the shared worktree
+fetch, run first so the pushed ref is current), then `git push` from the
+target repository, where the remotes are configured.
 
 1. arguments like `fetch`, plus ONE optional positional REMOTE
    (default `origin`); a second positional:
@@ -379,7 +384,7 @@ repository, where the remotes are configured.
    `error: unknown push option: <arg>`.
 2. target repository: like `fetch` (the `--repo: …` errors, the
    current-directory default).
-3. the shared pool fetch, then
+3. the shared worktree fetch, then
    `git -C <repo> push <remote> <branch>`; the exit code is git's own
    (mirrors `set -e` — git's stderr passes through, no `die` prefix).
 
@@ -392,8 +397,11 @@ repository, where the remotes are configured.
    see `docs/nix-in-sandbox.md`).
 3. if the worktree dir exists: refuse a dirty tree without `--force`
    (`error: worktree has uncommitted changes; commit them or use --force`);
-   `git --git-dir=<pool> worktree remove [--force] <worktree>`.
-4. `--delete-branch`: `git --git-dir=<pool> branch -D <branch>`.
+   then `rm -rf <worktree>` — the session worktree is a standalone clone,
+   so removing the directory removes the session's Git state entirely
+   (merge/fetch/push it out first).
+4. `--delete-branch`: `git -C <repo> branch -D <branch>` (a branch the
+   session left in the host repository).
 5. `rm -rf` the session dir **and** the registry entry; log
    `destroyed session <name>`.
 
@@ -422,7 +430,6 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --security-opt=no-new-privileges
   --workdir <repo>
   --mount type=bind,src=<worktree>,dst=<repo>,rw
-  --mount type=bind,src=<pool>,dst=<pool>,rw
   --mount type=bind,src=<home>,dst=/home/agent,rw
   [--mount type=volume,src=<container>-nix,dst=/nix/store]  # only when nix=true
   --env HOME=/home/agent
@@ -565,28 +572,36 @@ All old-layout compatibility from the bash CLI is gone. Concretely:
    ```
 2. **The old central pool layout** (`$STATE_ROOT/pools/<repo-id>.git`) is
    not consulted; orphaned central pools are ignored entirely.
-3. **Old-layout session-state dual paths** in `load_meta` (following real
+3. **The shared repo-adjacent bare pool** (`<repo>__agent-gvisor/__pools/`)
+   is gone: every session is a standalone `git clone --no-hardlinks` of the
+   host repository. Legacy metas carrying a `pool=` line still load (unknown
+   meta keys are ignored, §8), and orphaned `__pools` directories can be
+   removed by hand once no legacy session references them.
+4. **Old-layout session-state dual paths** in `load_meta` (following real
    directories instead of symlinks) — see 1.
-4. **Bash dynamic-scoping workarounds** (the subshell indirection around
+5. **Bash dynamic-scoping workarounds** (the subshell indirection around
    `load_meta`/`cmd_destroy` in `cmd_start`) — internal to bash, obsolete.
-5. **`realpath`/`flock`/`grep`/`sed`/`tr`/`cut` as external runtime
-   dependencies** — `realpath` is `fs::canonicalize`, `flock` a libc
-   binding, binary-file detection a NUL-byte scan; only `git`, `podman` and
-   `sha256sum` are still exec'd from PATH (see AGENTS/repo docs for the
-   wrapper PATH).
-6. The bash `${2:?}` "parameter null or not set" diagnostics for a missing
+5. **`realpath`/`grep`/`sed`/`tr`/`cut` as external runtime
+   dependencies** — `realpath` is `fs::canonicalize`, binary-file detection
+   a NUL-byte scan; only `git`, `podman` and `sha256sum` are still exec'd
+   from PATH (see AGENTS/repo docs for the wrapper PATH). The `flock`
+   serialization the pool needed is gone with the pool.
+7. The bash `${2:?}` "parameter null or not set" diagnostics for a missing
    flag value are replaced by `error: option requires a value: <flag>`
    (§2).
-7. The bash `${1:?session name required}` diagnostics for the subcommands
+8. The bash `${1:?session name required}` diagnostics for the subcommands
    that take a positional NAME (`status`, `run`, `logs`, `shell`, `stop`,
    `merge`, `destroy`) embed the bash line number and are not reproducible;
    they become `error: session name required`.
 
 Everything else — subcommands, flags, env vars, state layout, podman argv,
-exit codes, message texts — is preserved. Sessions created by the CURRENT
-bash layout (registry symlink + repo-adjacent `__pools`/`__sessions`) remain
-fully loadable because repo-ids are path-based (stable across sessions) and
-`meta` keeps the shell-quoted format.
+exit codes, message texts — is preserved. Sessions created by the earlier
+bash layout (registry symlink + repo-adjacent `__pools`/`__sessions`)
+remain loadable because repo-ids are path-based (stable across sessions)
+and `meta` keeps the shell-quoted format; their pool-backed worktrees are
+no longer maintained (no pool is consulted: `destroy` plain-`rm -rf`s such
+a worktree and `--delete-branch` runs against the host repository), so
+merge/fetch them out or destroy them before relying on them again.
 
 ## 15. Validation
 
@@ -598,7 +613,7 @@ Two behavioural layers, both wired into `nix flake check` via
   `rust/tests/stubs/` into a PATH-prepended directory; stub behaviour is
   switched by marker files, invocations are recorded NUL-separated):
   `podman_argv.rs` (the exact `run` vector, pure + recorded),
-  `state_layout.rs` (registry/pools/sessions tree, `meta` bytes, `list`,
+  `state_layout.rs` (registry/sessions tree, `meta` bytes, `list`,
   `status`, `destroy`), `error_paths.rs` (every fatal message verbatim),
   `shellwords.rs` (bash-`%q` fixtures, reader, `split_ws`),
   `home_seed.rs` (seeding, partial copies, rewrite rules, through `start`).
@@ -627,7 +642,7 @@ byte-for-byte, as did the `meta`/`mounts.tsv`/`env.list`/`last-command`
 bytes and every recorded `git`/`podman` argv (including the full `podman
 run` vector with loopback forwarding, mounts, env-file and `-- COMMAND`).
 The only diffs were the deliberate normalizations: the `session name
-required` wording (§14.7), `mount source does not exist: <original-host>`
+required` wording (§14.8), `mount source does not exist: <original-host>`
 keeping the path the caller gave (§2, mount rule 4), and `list`'s
 `incompatible (pre-rewrite layout)` row (§14.1). That comparison is kept
 here as the record of how the current texts were fixed; it cannot be
