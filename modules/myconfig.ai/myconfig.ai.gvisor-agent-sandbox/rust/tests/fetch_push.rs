@@ -124,7 +124,7 @@ fn fetch_failure_message() {
 fn fetch_repo_override_errors() {
     let s = Scenario::new("fetch-repo-override-errors");
     started(&s);
-    // Bash parity: realpath's own RAW diagnostic, then the --repo die.
+    // realpath's own RAW diagnostic, then the --repo die.
     let missing = s.root.join("nope").display().to_string();
     s.run_fail(
         &["fetch", "s1", "--repo", &missing],
@@ -257,7 +257,7 @@ fn push_failure_exits_with_gits_code() {
     started(&s);
     let repo = s.repo.canonicalize().unwrap().display().to_string();
     s.marker("push-fail", "1");
-    // bash `set -e` parity: the exit code is git push's own (the stub's 3).
+    // `set -e` semantics: the exit code is git push's own (the stub's 3).
     let out = s.run(&["push", "s1"]);
     assert_eq!(out.status.code(), Some(3));
     assert_eq!(

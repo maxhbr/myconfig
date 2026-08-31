@@ -270,7 +270,7 @@ pub fn rewrite_seeded_home(env: &crate::state::Env, home: &Path) {
         grep_files(home, from.as_bytes(), &mut files);
         for file in files {
             let text = fs::read_to_string(&file).unwrap_or_default();
-            // bash parity: `$(<file)` strips ALL trailing newlines, the
+            // `$(<file)` strips ALL trailing newlines, the
             // printf re-adds exactly one.
             let stripped = text.trim_end_matches('\n');
             let rewritten = stripped.replace(&from, &to);

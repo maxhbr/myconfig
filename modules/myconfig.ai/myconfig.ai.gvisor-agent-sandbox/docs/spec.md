@@ -1,19 +1,19 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# `agent-gvisor` CLI specification — authoritative contract of the Rust rewrite
+# `agent-gvisor` CLI specification — the authoritative contract of the
+# implementation under ../rust/
 #
 # This is the written contract the Rust implementation (../rust/) follows and
 # the test suites (../rust/tests/, ../tests/agent-gvisor-cli-harness.sh)
-# enforce. It was derived line-by-line from the original bash implementation
-# (the historical bin/agent-gvisor, since deleted — see the git history);
-# where the two disagree, this file wins and
-# the difference is listed in "Dropped in the rewrite" below.
+# enforce. Where the text references the historical bash CLI (whose sources
+# are recoverable from the git history), it does so only to pin down an
+# observable semantic — never to keep a second implementation in sync.
 #
-# The observable API is preserved byte-for-byte where users can script
+# The observable API is stable where users can script
 # against it: subcommands, flags, env vars, the session-state layout, the
 # podman argument vector and the error-message texts. Everything that existed
-# only to keep sessions from PRE-rewrite layouts loadable is dropped (see the
+# only to keep sessions from older layouts loadable is dropped (see the
 # dedicated section).
 
 ## 1. Command surface
@@ -44,9 +44,8 @@ Dispatch (first argument):
 | anything else not starting with `-` | **positional shorthand**: `cmd_start NAME <rest...>` |
 | anything starting with `-` | `error: unknown subcommand: <arg>`, exit 1 |
 
-`usage()` prints the exact historical heredoc text (the one the bash CLI
-printed for `--help`); the Rust binary embeds it verbatim so
-`agent-gvisor --help` output is byte-identical to the bash CLI's.
+`usage()` prints the historical usage text; the Rust binary embeds it
+verbatim, so `agent-gvisor --help` output is byte-stable across releases.
 
 The Nix package (`nix/agent-gvisor.nix`) also ships a hand-written fish
 tab completion (`rust/completions/agent-gvisor.fish`, installed to
@@ -382,7 +381,7 @@ repository, where the remotes are configured.
    current-directory default).
 3. the shared pool fetch, then
    `git -C <repo> push <remote> <branch>`; the exit code is git's own
-   (bash `set -e` parity — git's stderr passes through, no `die` prefix).
+   (mirrors `set -e` — git's stderr passes through, no `die` prefix).
 
 ### `destroy`
 
@@ -618,20 +617,21 @@ Two behavioural layers, both wired into `nix flake check` via
   `rust/src/usage.txt` (built with neutral defaults so it needs neither
   the sandbox image nor gvisor).
 
-### Deletion gate (bash parity)
+### Deletion gate
 
-Before deleting the bash CLI, both implementations were run through the
-same ~40-step scenario (same directory layout, so repo-ids — and therefore
-container names, pool paths and every printed path — were identical;
-same stubs): every step's stdout, stderr and exit code matched
+Before the historical bash CLI was deleted, both implementations were run
+through the same ~40-step scenario (same directory layout, so repo-ids —
+and therefore container names, pool paths and every printed path — were
+identical; same stubs): every step's stdout, stderr and exit code matched
 byte-for-byte, as did the `meta`/`mounts.tsv`/`env.list`/`last-command`
 bytes and every recorded `git`/`podman` argv (including the full `podman
 run` vector with loopback forwarding, mounts, env-file and `-- COMMAND`).
 The only diffs were the deliberate normalizations: the `session name
 required` wording (§14.7), `mount source does not exist: <original-host>`
 keeping the path the caller gave (§2, mount rule 4), and `list`'s
-`incompatible (pre-rewrite layout)` row (§14.1). The bash CLI remains
-recoverable from the git history for re-running the comparison.
+`incompatible (pre-rewrite layout)` row (§14.1). That comparison is kept
+here as the record of how the current texts were fixed; it cannot be
+re-run, the bash sources are gone from the tree (git history only).
 
 TTY behaviour (§13) is deliberately not automated: there is no terminal in
 a build sandbox. The nix checks run on `x86_64-linux` only.

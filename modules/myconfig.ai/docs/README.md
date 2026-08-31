@@ -346,7 +346,7 @@ quick reference for which models a host serves.
 ## Related
 
 A fifth, container-based tier — rootless Podman with the **gVisor** runtime
-(`agent-gvisor`) — is vendored under
+(`agent-gvisor`) — lives in
 [`../myconfig.ai.gvisor-agent-sandbox/`](../myconfig.ai.gvisor-agent-sandbox/)
 and enabled per host (`myconfig.ai.gvisor-agent-sandbox.enable`). In isolation
 strength it sits between the bubblewrap jail (tier 2) and the QEMU microVM

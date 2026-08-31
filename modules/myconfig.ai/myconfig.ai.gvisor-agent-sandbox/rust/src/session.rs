@@ -33,7 +33,7 @@ fn git_status(args: &[String]) -> ExitStatus {
         .unwrap_or_else(|_| die("missing command: git"))
 }
 
-/// Run `git …` and exit with ITS code on failure (bash `set -e` parity).
+/// Run `git …` and exit with ITS code on failure (mirrors `set -e`).
 fn git_check(args: &[String]) {
     let st = git_status(args);
     if !st.success() {
@@ -163,7 +163,7 @@ fn reset_partial_session(
                 wt.clone(),
             ]);
             if !st.success() {
-                // bash parity: `|| die "could not remove leftover worktree: …"`
+                // `|| die "could not remove leftover worktree: …"`
                 die(&format!("could not remove leftover worktree: {wt}"));
             }
         } else {
@@ -234,7 +234,7 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     podman::try_check_runtime(&env).unwrap_or_else(|m| die(&m));
     podman::try_check_image(&env, &parsed.image).unwrap_or_else(|m| die(&m));
 
-    // bash parity: a failing `realpath -e` dies RAW (no `die` prefix).
+    // A failing `realpath -e` dies RAW (no `die` prefix).
     let repo = match fs::canonicalize(&repo_arg) {
         Ok(p) => p,
         Err(_) => crate::error::fail_raw(&format!(
@@ -511,7 +511,7 @@ pub fn run_container(env: &Env, name: &str, detach: bool, command: &[String]) ->
     podman::try_check_runtime(env).unwrap_or_else(|m| die(&m));
     podman::try_check_image(env, &session.meta.image).unwrap_or_else(|m| die(&m));
     let argv = podman::build_run_args(env, &session.meta, &session.meta_dir, detach, command);
-    // bash parity: `printf '%q ' "${cmd[@]}" > last-command; printf '\n'`.
+    // `printf '%q ' "${cmd[@]}" > last-command; printf '\n'` semantics.
     let mut lc = String::new();
     for a in &argv {
         lc.push_str(&quote(a));
@@ -759,7 +759,7 @@ pub fn cmd_stop(env: &Env, name: &str) -> ! {
 }
 
 /// Resolve the target repository of `merge`/`fetch`/`push` (docs/spec.md
-/// §9): `--repo PATH` when given (realpath'd; bash parity: realpath's own
+/// §9): `--repo PATH` when given (realpath'd; realpath's own
 /// RAW diagnostic, then the `--repo` `die` message), else `fallback`. The
 /// target must contain `.git`.
 fn resolve_target_repo(repo_override: &Option<String>, fallback: String) -> String {
@@ -1016,7 +1016,7 @@ pub fn cmd_push(env: Env, args: &[String]) -> ! {
         .unwrap_or_else(|m| die(&m));
     let remote = remote.unwrap_or_else(|| "origin".to_string());
     log(&format!("pushing {} to {remote} of {target_repo}", meta.branch));
-    // bash `set -e` parity: git push's own stderr, its exit code.
+    // `set -e` semantics: git push's own stderr, its exit code.
     let st = git_status(&[
         "-C".to_string(),
         target_repo.clone(),
@@ -1069,7 +1069,7 @@ pub fn destroy_session(
             meta.container.clone(),
         ]);
         if !st.success() {
-            // bash `set -e` parity: podman's own stderr, its exit code.
+            // `set -e` semantics: podman's own stderr, its exit code.
             std::process::exit(st.code().unwrap_or(1));
         }
     }

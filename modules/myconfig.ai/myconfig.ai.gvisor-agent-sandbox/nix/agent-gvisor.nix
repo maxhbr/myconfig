@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# The Rust rewrite of the agent-gvisor CLI (../rust, ../docs/spec.md).
+# The Rust `agent-gvisor` CLI (../rust, ../docs/spec.md).
 # The crate is zero-dependency by design, so the lockfile is trivial and no
 # `outputHashes` can ever be needed.
 {
@@ -27,7 +27,7 @@ rustPlatform.buildRustPackage {
   src = ../rust;
   cargoLock.lockFile = ../rust/Cargo.lock;
 
-  # The parity suite (cargo test + the CLI harness) runs in `nix/checks.nix`
+  # The test suite (cargo test + the CLI harness) runs in `nix/checks.nix`
   # against the recording git/podman stubs; keep it out of every production
   # host rebuild.
   doCheck = false;
@@ -35,8 +35,8 @@ rustPlatform.buildRustPackage {
   nativeBuildInputs = [ makeBinaryWrapper ];
 
   # The binary execs only `git`, `podman` and `sha256sum` from PATH
-  # (docs/spec.md §14.5); everything else the bash CLI needed is now
-  # internal (realpath/flock/grep/sed/tr).
+  # (docs/spec.md §14.5); everything else is internal
+  # (realpath/grep/sed/tr).
   postInstall = ''
     wrapProgram $out/bin/agent-gvisor \
       --prefix PATH : ${

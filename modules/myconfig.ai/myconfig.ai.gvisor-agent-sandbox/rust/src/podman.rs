@@ -311,8 +311,8 @@ impl<'a> Pod<'a> {
             .unwrap_or_else(|_| crate::error::die("missing command: podman"))
     }
 
-    /// Like [`Pod::run`] but without the global arguments (bash parity: the
-    /// bash original also mixed plain `podman …` calls in).
+    /// Like [`Pod::run`] but without the global arguments (plain `podman …`
+    /// calls, no globals).
     pub fn run_no_globals(&self, args: &[String]) -> std::process::ExitStatus {
         Self::command_no_globals(args)
             .status()

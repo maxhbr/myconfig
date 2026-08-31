@@ -189,7 +189,7 @@ fn mount_parsing_errors() {
 fn missing_paths_and_repos() {
     let s = Scenario::new("missing-paths-and-repos");
     let missing = s.root.join("nope");
-    // bash dies on `realpath -e`'s own diagnostic (no agent-gvisor prefix):
+    // A failing `realpath -e` dies on its own diagnostic (no agent-gvisor prefix):
     s.run_fail(
         &["start", "s1", "--repo", &missing.display().to_string()],
         1,
@@ -301,7 +301,7 @@ fn pre_rewrite_registry_entries() {
         "agent-gvisor: error: session already exists: old (pass --force, or remove it with 'agent-gvisor destroy old --force --delete-branch')\n",
     );
     // ...and --force cannot rescue it either: the destroy fails with the
-    // pre-rewrite error, which start wraps (bash subshell parity, §9):
+    // pre-rewrite error, which start wraps (§9):
     s.run_fail(
         &["start", "old", "--force", "--detach"],
         1,
@@ -354,7 +354,7 @@ fn merge_guards() {
         ),
     );
 
-    // Bash parity: realpath prints its own diagnostic (raw, no prefix),
+    // realpath prints its own diagnostic (raw, no prefix),
     // then the `|| die` fires with the --repo message.
     s.run_fail(
         &["merge", "s1", "--repo", &s.root.join("nope").display().to_string()],

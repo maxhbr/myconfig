@@ -1,6 +1,6 @@
 // Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! `shellwords` parity with bash's `printf %q` (docs/spec.md §12).
+//! `shellwords`: the writer reproduces bash's `printf %q` (docs/spec.md §12).
 //! The quoting fixtures were generated with bash 5.3 itself.
 
 use agent_gvisor::shellwords::{quote, split_ws, unquote};
@@ -45,7 +45,7 @@ const FIXTURES: &[(&str, &str)] = &[
 ];
 
 #[test]
-fn quote_matches_bash() {
+fn quote_matches_printf_q() {
     for (input, expected) in FIXTURES {
         assert_eq!(&quote(input), expected, "quote({input:?})");
     }
