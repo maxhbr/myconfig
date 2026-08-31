@@ -162,7 +162,7 @@ done
 # A `--nix` session: the store volume mount in the argv, and its cleanup.
 echo "== nix sessions =="
 expect_ok "start a --nix session" start n1 --repo "$REPO" --nix --detach
-if argv_has 'type=volume,src=.*-n1-nix,dst=/nix/store'; then
+if argv_has 'type=volume,src=.*-n1-nix,dst=/nix/store,U'; then
     printf 'ok   podman argv mounts the nix store volume\n'
     passed=$((passed + 1))
 else

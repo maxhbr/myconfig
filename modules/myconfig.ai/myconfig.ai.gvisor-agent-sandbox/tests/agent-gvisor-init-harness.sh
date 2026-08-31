@@ -114,12 +114,15 @@ else
     fail "NIX_STATE_DIR created"
 fi
 
-# 2. Store not writable (the copy-up/ownership failure mode, §7 V1): refuse.
+# 2. Store not writable (the copy-up/ownership failure mode, §7 V1): refuse,
+#    with a diagnosis line that names owner/mode/entry count so a host run
+#    pinpoint which part of V1 broke.
 root="$(scenario ro-store)"
 chmod a-w "$root/store"
 run_init "$root"
 expect_status "unwritable store aborts the session" 1
 expect_output "unwritable store is reported" "is not writable in this sandbox"
+expect_output "store failure is diagnosed" "store diagnosis"
 expect_payload "payload does not run on an unusable store" not-ran
 
 # 3. Store writable, but NIX_STATE_DIR cannot be created (read-only parent,

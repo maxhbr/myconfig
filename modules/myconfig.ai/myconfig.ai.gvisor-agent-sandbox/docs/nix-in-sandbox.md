@@ -20,7 +20,7 @@ four ways:
    `<container>-nix`, i.e. `agent-<repo-id>-<name>-nix`):
 
    ```
-   --mount type=volume,src=<container>-nix,dst=/nix/store
+   --mount type=volume,src=<container>-nix,dst=/nix/store,U
    ```
 
    The image *contains* a real `/nix/store` (the closure of the baked
@@ -31,6 +31,22 @@ four ways:
    itself — baked into the image when `nix.enable` is set) keeps working
    *before the first in-container process runs*, and the store becomes
    writable, so nix can substitute new paths into it.
+
+   The `U` (chown) mount option is what makes the last sentence true
+   under `--userns=keep-id`. Without it, Podman's post-copy-up
+   `fixVolumePermissions` chmods the volume root to the image
+   directory's mode — and nixpkgs' `dockerTools` builds `/nix/store`
+   read-only (0555) in every image layer, precisely so the store is
+   world-readable. 0555 is unwritable even for its owner, so the store
+   can never accept a write, the init preflight (§1.2) aborts the
+   session with the §7 V1 error, and the failure is deterministic — no
+   host quirk. With `U`, Podman instead recursively chowns the seeded
+   store to the container's process user — under keep-id, the session's
+   own host uid — and skips the mode copy, so the root keeps the 0755
+   the volume driver created it with. The chown re-runs on every `run
+   --replace` recreation (a walk that skips already-owned entries, cheap
+   next to the copy-up), which also heals a volume seeded by an older
+   CLI without the option.
 
    The volume is the only writable Nix store state; it lives in the
    rootless Podman volume store (`~/.local/share/containers/storage/`),
@@ -124,6 +140,15 @@ four ways:
   which is masked). The farm would have to be created host-side before
   container start, which requires shipping the image's closure list to
   the CLI — complexity with no advantage over copy-up.
+- **Rely on the copy-up without the `U` mount option.** Rejected after it
+  failed on the first real host (§7 V1): Podman's post-copy-up
+  `fixVolumePermissions` chmods the volume root to the image directory's
+  mode when `U` is absent, and nixpkgs' `dockerTools` marks `/nix/store`
+  read-only (0555) in every image — so the store could not accept a
+  single write and the init preflight failed closed. The `U` option is
+  Podman's own mechanism for exactly this case (chown the volume to the
+  container user, keep the driver's mode), so it is part of the design
+  now, not a fallback.
 - **Drop `--read-only`** (writable container rootfs): everything
   "just works" mechanically — the image store stays visible and the
   writable layer accepts new paths. Rejected as the default because it
@@ -241,13 +266,15 @@ module defaults to off for exactly that reason.
    `agent-gvisor start t1 --nix --detach`, then inside
    (`agent-gvisor shell t1`) check that `ls /nix/store` shows the image
    closure AND that the store dir is writable by the agent
-   (`touch /nix/store/.probe`). If the copy-up lands as container-root
-   (uid unmapped under `keep-id`) and the write fails: this host needs
-   the read-only-rootfs fallback — image-level writable rootfs —
-   and the volume approach must be revisited upstream.
-   The failure is *loud*: `start --nix` aborts with
-   `agent-gvisor-init: error: /nix/store is not writable in this sandbox`
-   (§1.2), so V1 cannot pass by accident.
+   (`touch /nix/store/.probe`). The volume mount carries the `U` option
+   (§1.1), so the copy-up content is chowned to the session user at
+   create time and the write must succeed on any conforming
+   Podman; if it still fails on a host, the `U` chown itself misbehaves
+   under that runsc/Podman combination — that host needs the read-only-
+   rootfs fallback (image-level writable rootfs) and the volume approach
+   must be revisited upstream. The failure is *loud*: `start --nix` aborts
+   with `agent-gvisor-init: error: /nix/store is not writable in this
+   sandbox` (§1.2), so V1 cannot pass by accident.
 2. **Daemon-less nix:** `nix store info` in the session must print the
    store without daemon errors; `nix build nixpkgs#hello` must
    substitute, build and run.

@@ -21,8 +21,10 @@ that carries this note.
   state dirs and probes `NIX_STORE_DIR` for writability, aborting the
   session with exit 1 otherwise.
 - `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/rust/src/podman.rs`
-  — the `--mount type=volume,src=<container>-nix,dst=/nix/store` argv and
-  the `NIX_*` env for the session.
+  — the `--mount type=volume,src=<container>-nix,dst=/nix/store,U` argv
+  (the `U` chowns the copy-up to the session user; without it the volume
+  lands root-owned and unwritable under `keep-id` — the failure the first
+  real-host run hit) and the `NIX_*` env for the session.
 - `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/docs/nix-in-sandbox.md`
   §7 — the host verification checklist V1–V6.
 
@@ -36,6 +38,10 @@ that carries this note.
    In that case switch the host to the documented writable-rootfs fallback
    (§2 "Drop `--read-only`") or drop `--nix` on that host — do not paper
    over the preflight.
+   (History: the first real-host run of V1 failed because the volume mount
+   lacked the `U` option — the copy-up landed root-owned and unwritable
+   under `keep-id`. Fixed since; only a `U`-chown failure under a specific
+   Podman/runsc combination still justifies the fallback.)
 3. Record the outcome (host, podman/runsc versions, what worked) in
    `docs/nix-in-sandbox.md` §7, then enable `nix.enable` for that host in
    `hosts/host.<name>/ai.<name>.nix`.

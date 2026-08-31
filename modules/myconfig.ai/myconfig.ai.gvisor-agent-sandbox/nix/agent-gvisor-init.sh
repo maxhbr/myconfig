@@ -122,10 +122,22 @@ if [ -n "${AGENT_GVISOR_NIX-}" ]; then
     # is the store nix would actually use; the CLI never sets it, so this
     # is /nix/store in every real session.
     store=${NIX_STORE_DIR:-/nix/store}
-    dir_is_writable "$store" ||
+    if ! dir_is_writable "$store"; then
+        # Diagnose before dying: an EMPTY store means the copy-up never
+        # seeded the volume; a read-only mode bit on the root is the
+        # chmod-to-image-mode failure the `U` mount option prevents
+        # (§1.1); ownership by someone else (an unmapped uid under
+        # keep-id) is the remaining case. `id`/`stat`/`ls` are in the
+        # image (shadow, coreutils); their absence degrades to a bare
+        # die.
+        store_stat=$(stat -c 'owner %u:%g mode %a' "$store" 2>/dev/null || true)
+        store_count=$(ls -A "$store" 2>/dev/null | wc -l)
+        log "store diagnosis: $store: ${store_stat:-stat unavailable}, " \
+            "${store_count} entries; this process is $(id -u 2>/dev/null):$(id -g 2>/dev/null)"
         die "$store is not writable in this sandbox;" \
             "the --nix store volume did not come up (copy-up/ownership);" \
             "see docs/nix-in-sandbox.md §7 V1"
+    fi
 fi
 
 # The payload replaces this shell, so it keeps PID 1, the TTY and all signals.

@@ -485,7 +485,9 @@ podman <global args> run --replace (--detach | --interactive --tty)
   --workdir <repo>
   --mount type=bind,src=<worktree>,dst=<repo>,rw
   --mount type=bind,src=<home>,dst=/home/agent,rw
-  [--mount type=volume,src=<container>-nix,dst=/nix/store]  # only when nix=true
+  [--mount type=volume,src=<container>-nix,dst=/nix/store,U]  # only when nix=true;
+                                                          # U chowns the copy-up to the
+                                                          # session user (§7 V1)
   --env HOME=/home/agent
   --env XDG_CONFIG_HOME=/home/agent/.config
   --env XDG_CACHE_HOME=/home/agent/.cache
