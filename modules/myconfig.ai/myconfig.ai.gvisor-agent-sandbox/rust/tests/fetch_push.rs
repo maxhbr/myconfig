@@ -182,7 +182,7 @@ fn push_defaults_to_origin() {
         repo.to_string(),
         "push".to_string(),
         "origin".to_string(),
-        "agent/gvisor/s1".to_string(),
+        "refs/heads/agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
     let push_pos = calls.iter().position(|c| *c == push).expect("push recorded");
@@ -200,7 +200,7 @@ fn push_explicit_remote() {
         repo,
         "push".to_string(),
         "upstream".to_string(),
-        "agent/gvisor/s1".to_string(),
+        "refs/heads/agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
     assert!(
@@ -230,12 +230,36 @@ fn push_repo_override_and_remote() {
         repo,
         "push".to_string(),
         "review".to_string(),
-        "agent/gvisor/s1".to_string(),
+        "refs/heads/agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
     assert!(
         s.recorded("git").iter().any(|c| *c == push),
         "no recorded push to review"
+    );
+}
+
+/// `merge` consumes the EXACT fetched ref — the fully qualified
+/// `refs/heads/<branch>`, never the bare name (which git's DWIM order
+/// would resolve to a same-named TAG first).
+#[test]
+fn merge_uses_the_fully_qualified_ref() {
+    let s = Scenario::new("merge-qualified-ref");
+    started(&s);
+    let repo = s.repo.canonicalize().unwrap().display().to_string();
+    s.run_ok(&["merge", "s1"]);
+    let expected: Vec<String> = [
+        "-C".to_string(),
+        repo,
+        "merge".to_string(),
+        "--no-ff".to_string(),
+        "refs/heads/agent/gvisor/s1".to_string(),
+    ]
+    .to_vec();
+    assert!(
+        s.recorded("git").iter().any(|c| *c == expected),
+        "no recorded qualified merge: {:?}",
+        s.recorded("git")
     );
 }
 

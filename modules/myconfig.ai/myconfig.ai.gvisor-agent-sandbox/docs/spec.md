@@ -379,7 +379,11 @@ debris (§ "unknown session" inventory).
    git's own non-fast-forward diagnostic stays on stderr. Failure:
    `error: fetch from session clone failed; the session worktree may be missing, or the host branch <branch> may have diverged from the session branch`
    — the merge does NOT run.
-6. `git merge <merge-args...> <branch>`; on success the temporary ref is
+6. `git merge <merge-args...> refs/heads/<branch>` — the EXACT fetched
+   ref, never the bare name (ambiguous against a same-named tag: git's
+   DWIM order checks refs/tags/ first, so `git merge nested` could
+   "successfully" merge the tag instead of the session branch and then
+   delete the fetched ref); on success the temporary ref is
    deleted; on failure:
    `error: merge failed; resolve conflicts in <repo>, then delete the leftover ref with 'git -C "<repo>" branch -D <branch>'`
    (note the literal double quotes around the repo path).
@@ -417,7 +421,11 @@ target repository, where the remotes are configured.
 3. the shared worktree fetch (fast-forward-only, `merge` step 5; a
    diverged or rewound host branch fails the push BEFORE anything is
    published), then
-   `git -C <repo> push <remote> <branch>`; the exit code is git's own
+   `git -C <repo> push <remote> refs/heads/<branch>:refs/heads/<branch>` —
+   an explicit, NON-FORCED, fully qualified refspec: a bare
+   `git push <remote> <branch>` would parse a branch literally named
+   `+topic` as a force marker plus the branch `topic` and publish the
+   wrong branch. The exit code is git's own
    (mirrors `set -e` — git's stderr passes through, no `die` prefix).
 
 ### `destroy`
@@ -672,7 +680,10 @@ Two behavioural layers, both wired into `nix flake check` via
   FAST-FORWARD-ONLY session-to-host transfer (absent branch created,
   ordinary advance fast-forwarded, diverged host branch and rewritten
   session history REJECTED with the host ref byte-identical, `merge`
-  and `push` stopping before any merge state or publication),
+  and `push` stopping before any merge state or publication, the
+  qualified `merge`/`push` ref consumption (a same-named tag never
+  wins the merge, a branch literally named `+topic` is pushed as
+  itself),
   `--delete-branch` with absent and present host branches (incl. after
   `merge` and via `start --force`), tags and remote-tracking refs left
   untouched, and a genuine deletion failure aborting the destroy before

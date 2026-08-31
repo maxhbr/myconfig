@@ -933,7 +933,11 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
         "merge".to_string(),
     ];
     merge_cmd.extend(merge_args.iter().cloned());
-    merge_cmd.push(meta.branch.clone());
+    // The EXACT fetched ref, not the bare name: `git merge <name>` would
+    // be ambiguous against a same-named tag (git's DWIM order checks
+    // refs/tags/ first) and could "successfully" merge the tag instead of
+    // the session branch.
+    merge_cmd.push(format!("refs/heads/{}", meta.branch));
     if git_status(&merge_cmd).success() {
         let _ = Command::new("git")
             .args([
@@ -1036,13 +1040,18 @@ pub fn cmd_push(env: Env, args: &[String]) -> ! {
         .unwrap_or_else(|m| die(&m));
     let remote = remote.unwrap_or_else(|| "origin".to_string());
     log(&format!("pushing {} to {remote} of {target_repo}", meta.branch));
+    // An explicit, NON-FORCED refspec with BOTH sides qualified: a bare
+    // `git push <remote> <branch>` would parse a branch literally named
+    // `+topic` as `+topic` — a FORCE marker plus the branch `topic` — and
+    // publish the wrong branch.
+    let push_refspec = format!("refs/heads/{0}:refs/heads/{0}", meta.branch);
     // `set -e` semantics: git push's own stderr, its exit code.
     let st = git_status(&[
         "-C".to_string(),
         target_repo.clone(),
         "push".to_string(),
         remote,
-        meta.branch.clone(),
+        push_refspec,
     ]);
     std::process::exit(st.code().unwrap_or(1));
 }

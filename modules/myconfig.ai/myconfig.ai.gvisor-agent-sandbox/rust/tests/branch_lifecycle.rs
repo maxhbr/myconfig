@@ -400,6 +400,77 @@ fn fetch_prefers_the_branch_over_a_same_named_tag() {
     assert_ne!(git_in(&s.repo, &["rev-parse", "refs/heads/nested"]), tag_tip);
 }
 
+/// `merge` must consume the EXACT fetched ref: with a host tag named
+/// like the session branch, a bare `git merge <name>` resolves the TAG
+/// (git's DWIM order checks refs/tags/ first), reports success WITHOUT
+/// merging the session branch, and then deletes the fetched branch.
+/// The ambiguity lives in the HOST ref database — the merge runs there.
+#[test]
+fn merge_uses_the_branch_not_a_same_named_tag() {
+    let s = Scenario::new_real_git("merge-branch-not-tag");
+    // A second commit on master, so the tag can point "elsewhere" than
+    // the session base.
+    commit_file(&s.repo, "host.txt");
+    let tag_target = git_in(&s.repo, &["rev-parse", "HEAD~1"]);
+
+    s.run_ok(&["start", "s1", "--branch", "nested", "--detach"]);
+    let wt = worktree_of(&s, "s1");
+    commit_file(&wt, "session.txt");
+
+    // A HOST tag `nested` pointing elsewhere.
+    git_in(&s.repo, &["tag", "nested", &tag_target]);
+
+    s.run_ok(&["merge", "s1"]);
+
+    // The session work IS merged into master …
+    assert!(
+        git_try_in(&s.repo, &["cat-file", "-e", "refs/heads/master:session.txt"]),
+        "the session branch commit must be merged, not the tag's"
+    );
+    // … the tag still points elsewhere, untouched …
+    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/tags/nested"]), tag_target);
+    // … and the temporary fetched branch is cleaned up.
+    assert!(!git_try_in(
+        &s.repo,
+        &["rev-parse", "-q", "--verify", "refs/heads/nested"]
+    ));
+}
+
+/// `push` must publish the session branch via an explicit, NON-FORCED,
+/// fully qualified refspec: a bare `git push origin +topic` would parse
+/// the leading `+` as a FORCE marker and push the branch `topic`
+/// instead — the wrong branch, or an outright failure.
+#[test]
+fn push_publishes_the_plus_named_branch_itself() {
+    let s = Scenario::new_real_git("push-plus-named-branch");
+    // A real bare remote for the host repository (the push target).
+    git_in(&s.root, &["init", "-q", "--bare", "remote.git"]);
+    let bare = s.root.join("remote.git");
+    git_in(
+        &s.repo,
+        &["remote", "add", "origin", &bare.display().to_string()],
+    );
+
+    s.run_ok(&["start", "s1", "--branch", "+topic", "--detach"]);
+    let wt = worktree_of(&s, "s1");
+    commit_file(&wt, "right.txt");
+    let plus_tip = git_in(&wt, &["rev-parse", "refs/heads/+topic"]);
+    // A DISTRACTER branch `topic` with a DIFFERENT tip in the session
+    // clone (NOT transferred to the host by the implicit fetch).
+    git_in(&wt, &["checkout", "-qb", "topic"]);
+    commit_file(&wt, "wrong.txt");
+    git_in(&wt, &["checkout", "+topic"]);
+
+    s.run_ok(&["push", "s1"]);
+
+    // The remote got `+topic` — the session branch — and nothing else.
+    assert_eq!(git_in(&bare, &["rev-parse", "refs/heads/+topic"]), plus_tip);
+    assert!(!git_try_in(
+        &bare,
+        &["rev-parse", "-q", "--verify", "refs/heads/topic"]
+    ));
+}
+
 // --- destruction ----------------------------------------------------------
 
 /// `clone.defaultRemoteName` must not move the clone's remote: the CLI
