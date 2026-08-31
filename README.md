@@ -2,9 +2,16 @@
 
 <!-- Thanks to ~whynothugo for inspiration for this set of links: -->
 [Docs](https://alexdav.id/projects/jail-nix/)
-| [Source](https://git.sr.ht/~alexdavid/jail.nix)
-| [Issues](https://todo.sr.ht/~alexdavid/jail.nix)
-| [Patches](https://lists.sr.ht/~alexdavid/general)
+| [SourceHut](https://sr.ht/~alexdavid/jail.nix)
+<small>
+  [Issues](https://todo.sr.ht/~alexdavid/jail.nix)
+  / [Patches](https://lists.sr.ht/~alexdavid/general)
+</small>
+| [Codeberg](https://codeberg.org/alexdavid/jail.nix)
+<small>
+  [Issues](https://codeberg.org/alexdavid/jail.nix/issues)
+  / [Patches](https://codeberg.org/alexdavid/jail.nix/pulls)
+</small>
 | [Matrix](https://matrix.to/#/#jail.nix:woh.place)
 
 A helper to make it easy and ergonomic to wrap your derivations in
