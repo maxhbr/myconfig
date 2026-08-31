@@ -20,13 +20,13 @@
   };
   litellm-grafana-dashboard = {
     pname = "litellm-grafana-dashboard";
-    version = "947dbbf0298eecd3d226f765d4a4fb7ea3fd2551";
+    version = "10631eb834c7802aa61611e807474170b8a4d425";
     src = fetchurl {
-      url = "https://raw.githubusercontent.com/BerriAI/litellm/947dbbf0298eecd3d226f765d4a4fb7ea3fd2551/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
+      url = "https://raw.githubusercontent.com/BerriAI/litellm/10631eb834c7802aa61611e807474170b8a4d425/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
       name = "litellm-grafana-dashboard.json";
       sha256 = "sha256-EteGQo3xd5GvvkjKre7wqOZ6Hr/Yty78VZe6le55Zcw=";
     };
-    date = "2026-08-22";
+    date = "2026-08-29";
   };
   simple-english = {
     pname = "simple-english";
