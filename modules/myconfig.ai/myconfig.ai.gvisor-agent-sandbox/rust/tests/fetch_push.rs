@@ -28,9 +28,9 @@ fn worktree_of(s: &Scenario) -> String {
         .to_string()
 }
 
-/// The recorded `git -C <repo> fetch --no-tags <worktree> +<branch>:…` call
-/// every fetch/merge/push performs (the shared
-/// `try_fetch_branch_from_worktree`).
+/// The recorded `git -C <repo> fetch --no-tags <worktree> <branch>:…`
+/// (FAST-FORWARD-ONLY — no leading `+`) call every fetch/merge/push
+/// performs (the shared `try_fetch_branch_from_worktree`).
 fn expect_worktree_fetch(s: &Scenario, repo: &str) {
     let expected: Vec<String> = [
         "-C".to_string(),
@@ -38,7 +38,7 @@ fn expect_worktree_fetch(s: &Scenario, repo: &str) {
         "fetch".to_string(),
         "--no-tags".to_string(),
         worktree_of(s),
-        "+agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
+        "agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
     assert!(
@@ -113,7 +113,8 @@ fn fetch_failure_message() {
         1,
         &format!(
             "agent-gvisor: fetching branch agent/gvisor/s1 from worktree {worktree} into {repo}\n\
-             agent-gvisor: error: fetch from session clone failed; is the session worktree still present?\n",
+             agent-gvisor: error: fetch from session clone failed; the session worktree may be missing, \
+             or the host branch agent/gvisor/s1 may have diverged from the session branch\n",
             worktree = worktree_of(&s)
         ),
     );

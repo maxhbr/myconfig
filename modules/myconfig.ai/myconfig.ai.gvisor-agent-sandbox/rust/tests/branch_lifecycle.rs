@@ -117,9 +117,9 @@ fn start_branch_name_with_slashes() {
 
 #[test]
 fn session_fetch_preserves_existing_host_branch_history() {
-    // The forced session-to-host fetch must ADVANCE an existing host
-    // branch, never replace it with a branch incorrectly created at the
-    // base commit.
+    // The session-to-host fetch is FAST-FORWARD-ONLY: it must ADVANCE an
+    // existing host branch, never replace it with a branch incorrectly
+    // created at the base commit.
     let s = Scenario::new_real_git("fetch-preserves-branch-history");
     git_in(&s.repo, &["checkout", "-qb", "feature"]);
     commit_file(&s.repo, "f1.txt");
@@ -146,15 +146,193 @@ fn session_fetch_preserves_existing_host_branch_history() {
     );
 }
 
+// --- session-to-host transfer (FAST-FORWARD-ONLY) -------------------------
+
+/// An absent host-local branch is CREATED at the session tip by the
+/// transfer.
+#[test]
+fn fetch_creates_absent_host_branch_at_session_tip() {
+    let s = Scenario::new_real_git("fetch-creates-absent-host-branch");
+    s.run_ok(&["start", "s1", "--detach"]);
+    let wt = worktree_of(&s, "s1");
+    commit_file(&wt, "work.txt");
+    let session_tip = git_in(&wt, &["rev-parse", "agent/gvisor/s1"]);
+
+    s.run_ok(&["fetch", "s1"]);
+
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/agent/gvisor/s1"]),
+        session_tip,
+        "the absent host branch must be created at the session tip"
+    );
+}
+
+/// The transfer is FAST-FORWARD-ONLY: a host branch that diverged from
+/// the session branch must NOT be replaced. Without the fix, the forced
+/// refspec discarded the host-only commit without warning.
+#[test]
+fn fetch_rejects_divergent_host_branch_and_leaves_it_unchanged() {
+    let s = Scenario::new_real_git("fetch-rejects-divergent-host-branch");
+    git_in(&s.repo, &["checkout", "-qb", "feature"]);
+    commit_file(&s.repo, "f1.txt"); // the common base
+    git_in(&s.repo, &["checkout", "master"]);
+
+    s.run_ok(&["start", "s1", "--branch", "feature", "--detach"]);
+    let wt = worktree_of(&s, "s1");
+    commit_file(&wt, "session.txt"); // session: S
+    let session_tip = git_in(&wt, &["rev-parse", "feature"]);
+
+    // The host branch advances INDEPENDENTLY: H.
+    git_in(&s.repo, &["checkout", "feature"]);
+    commit_file(&s.repo, "host.txt");
+    let host_tip = git_in(&s.repo, &["rev-parse", "refs/heads/feature"]);
+    // Switch the host checkout AWAY from feature, so the rejection below
+    // is the fast-forward check, not checked-out-branch protection.
+    git_in(&s.repo, &["checkout", "master"]);
+
+    let out = s.run(&["fetch", "s1"]);
+    assert!(
+        !out.status.success(),
+        "fetch must fail on a diverged host branch"
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("may have diverged"),
+        "stderr must explain possible divergence: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // The host ref is UNCHANGED, byte for byte: S did not replace H.
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/feature"]),
+        host_tip,
+        "the diverged host ref must not move"
+    );
+    assert_ne!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/feature"]),
+        session_tip
+    );
+}
+
+/// `merge` runs the transfer FIRST: when it is rejected, NO merge happens
+/// — no merge state, no merge commit, no moved refs.
+#[test]
+fn merge_stops_when_the_transfer_is_rejected() {
+    let s = Scenario::new_real_git("merge-stops-on-divergent-transfer");
+    git_in(&s.repo, &["checkout", "-qb", "feature"]);
+    commit_file(&s.repo, "f1.txt");
+    git_in(&s.repo, &["checkout", "master"]);
+
+    s.run_ok(&["start", "s1", "--branch", "feature", "--detach"]);
+    let wt = worktree_of(&s, "s1");
+    commit_file(&wt, "session.txt");
+
+    git_in(&s.repo, &["checkout", "feature"]);
+    commit_file(&s.repo, "host.txt"); // host: H
+    let host_tip = git_in(&s.repo, &["rev-parse", "refs/heads/feature"]);
+    // The merge target: master, clean, checked out.
+    git_in(&s.repo, &["checkout", "master"]);
+    let master_tip = git_in(&s.repo, &["rev-parse", "refs/heads/master"]);
+
+    let out = s.run(&["merge", "s1"]);
+    assert!(
+        !out.status.success(),
+        "merge must fail when the session-to-host transfer is rejected"
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("may have diverged"));
+    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/heads/feature"]), host_tip);
+    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/heads/master"]), master_tip);
+    // No merge state was created.
+    assert!(!git_try_in(
+        &s.repo,
+        &["rev-parse", "-q", "--verify", "MERGE_HEAD"]
+    ));
+}
+
+/// `push` runs the implicit transfer FIRST: when it is rejected, nothing
+/// is published — not even probed. A real bare remote receives no ref at
+/// all.
+#[test]
+fn push_stops_when_the_transfer_is_rejected() {
+    let s = Scenario::new_real_git("push-stops-on-divergent-transfer");
+    // A real bare remote for the host repository (the push target).
+    git_in(&s.root, &["init", "-q", "--bare", "remote.git"]);
+    let bare = s.root.join("remote.git");
+    git_in(
+        &s.repo,
+        &["remote", "add", "origin", &bare.display().to_string()],
+    );
+
+    git_in(&s.repo, &["checkout", "-qb", "feature"]);
+    commit_file(&s.repo, "f1.txt");
+    git_in(&s.repo, &["checkout", "master"]);
+
+    s.run_ok(&["start", "s1", "--branch", "feature", "--detach"]);
+    let wt = worktree_of(&s, "s1");
+    commit_file(&wt, "session.txt");
+
+    git_in(&s.repo, &["checkout", "feature"]);
+    commit_file(&s.repo, "host.txt"); // host: H
+    let host_tip = git_in(&s.repo, &["rev-parse", "refs/heads/feature"]);
+    git_in(&s.repo, &["checkout", "master"]);
+
+    let out = s.run(&["push", "s1"]);
+    assert!(
+        !out.status.success(),
+        "push must fail when the session-to-host transfer is rejected"
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("may have diverged"));
+    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/heads/feature"]), host_tip);
+    // The remote received NOTHING.
+    assert_eq!(
+        git_in(&bare, &["for-each-ref"]),
+        "",
+        "the bare remote must still be empty"
+    );
+}
+
+/// Rewritten (amended/rebased) session history is NOT published by
+/// default: the non-fast-forward update is rejected and the host ref
+/// stays where the last fast-forward transfer left it. Reconcile such
+/// history explicitly.
+#[test]
+fn fetch_rejects_rewritten_session_history() {
+    let s = Scenario::new_real_git("fetch-rejects-rewritten-history");
+    git_in(&s.repo, &["checkout", "-qb", "feature"]);
+    commit_file(&s.repo, "f1.txt");
+    git_in(&s.repo, &["checkout", "master"]);
+
+    s.run_ok(&["start", "s1", "--branch", "feature", "--detach"]);
+    let wt = worktree_of(&s, "s1");
+    commit_file(&wt, "work.txt");
+    // An ordinary advance transfers fine.
+    s.run_ok(&["fetch", "s1"]);
+    let fetched_tip = git_in(&s.repo, &["rev-parse", "refs/heads/feature"]);
+
+    // Amend the session commit: the next update is non-fast-forward.
+    git_in(&wt, &["commit", "--amend", "-qm", "rewritten work"]);
+
+    let out = s.run(&["fetch", "s1"]);
+    assert!(
+        !out.status.success(),
+        "fetch must reject rewritten session history by default"
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("may have diverged"));
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/feature"]),
+        fetched_tip,
+        "the host ref must stay at the last fast-forward state"
+    );
+}
+
 // --- destruction ----------------------------------------------------------
 
 /// `clone.defaultRemoteName` must not move the clone's remote: the CLI
 /// pins the remote with `--origin origin`, so an existing non-current
 /// host branch is still found at `refs/remotes/origin/<branch>` even
 /// when the user's Git configuration defaults new clones to a different
-/// remote name. Without the pin, the probe misses the branch, the
-/// session silently starts at the base commit, and the forced
-/// session-to-host fetch would replace the real host branch.
+/// remote name. Without the pin, the probe misses the branch and the
+/// session silently starts at the base commit, diverging from the real
+/// host branch.
 #[test]
 fn start_pins_the_clone_remote_name_against_default_remote_name() {
     let s = Scenario::new_real_git("clone-remote-name-pinned");

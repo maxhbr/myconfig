@@ -291,8 +291,8 @@ missing keys default to empty.
    `clone.defaultRemoteName` would otherwise put the host branches under
    `refs/remotes/<name>/*`, and step 9's exact
    `refs/remotes/origin/<branch>` probe would silently miss an existing
-   host branch (and the forced session-to-host fetch would later replace
-   it with a session branch that started at the wrong commit).
+   host branch (and the session branch would then diverge from the real
+   host branch from its very first commit).
 9. the session branch, by EXACT-REF precedence (a tag or a similarly
    named ref can never be selected):
    - `refs/heads/<branch>` exists in the clone (the host's checked-out
@@ -362,11 +362,20 @@ debris (§ "unknown session" inventory).
 4. `--no-ff` is the default; `--ff`/`--squash`/explicit git-merge args are
    passed through (args after `--` verbatim).
 5. fetch the session branch from the session worktree into
-   `refs/heads/<branch>`
-   (`git -C <repo> fetch --no-tags <worktree> +<branch>:refs/heads/<branch>`;
-   the shared `try_fetch_branch_from_worktree`, also used by `fetch` and
-   `push`); failure:
-   `error: fetch from session clone failed; is the session worktree still present?`
+   `refs/heads/<branch>` — the shared `try_fetch_branch_from_worktree`,
+   also used by `fetch` and `push` — with the FAST-FORWARD-ONLY refspec
+   (`git -C <repo> fetch --no-tags <worktree> <branch>:refs/heads/<branch>`;
+   no leading `+`): Git creates an ABSENT destination ref, advances one
+   that is an ANCESTOR of the session tip, and REJECTS a diverged or
+   rewound destination WITHOUT touching it — with standalone clones the
+   host branch and the session branch can advance independently, and a
+   forced fetch would silently discard the host-only commits. Publishing
+   rebased or amended session history requires reconciling the
+   host-local branch explicitly (inspect it, then
+   `git branch -D`/`reset`); destructive replacement is never automatic.
+   git's own non-fast-forward diagnostic stays on stderr. Failure:
+   `error: fetch from session clone failed; the session worktree may be missing, or the host branch <branch> may have diverged from the session branch`
+   — the merge does NOT run.
 6. `git merge <merge-args...> <branch>`; on success the temporary ref is
    deleted; on failure:
    `error: merge failed; resolve conflicts in <repo>, then delete the leftover ref with 'git -C "<repo>" branch -D <branch>'`
@@ -382,8 +391,9 @@ it without touching the checked-out branch.
    errors as `merge`), else the Git working tree containing the current
    directory (`git rev-parse --show-toplevel`); outside one:
    `error: not a Git working tree: <cwd>`.
-2. the shared worktree fetch (`merge` step 5); failure:
-   `error: fetch from session clone failed; is the session worktree still present?`
+2. the shared worktree fetch (`merge` step 5) — fast-forward-only, like
+   everywhere; failure:
+   `error: fetch from session clone failed; the session worktree may be missing, or the host branch <branch> may have diverged from the session branch`
 3. log `fetching branch <branch> from worktree <worktree> into <repo>`, then
    `fetched <branch> into <repo>; merge it with 'agent-gvisor merge <name>'`,
    exit 0. Any other argument:
@@ -401,7 +411,9 @@ target repository, where the remotes are configured.
    `error: unknown push option: <arg>`.
 2. target repository: like `fetch` (the `--repo: …` errors, the
    current-directory default).
-3. the shared worktree fetch, then
+3. the shared worktree fetch (fast-forward-only, `merge` step 5; a
+   diverged or rewound host branch fails the push BEFORE anything is
+   published), then
    `git -C <repo> push <remote> <branch>`; the exit code is git's own
    (mirrors `set -e` — git's stderr passes through, no `die` prefix).
 
@@ -650,14 +662,19 @@ Two behavioural layers, both wired into `nix flake check` via
   `home_seed.rs` (seeding, partial copies, rewrite rules, through `start`).
   `branch_lifecycle.rs` runs against REAL Git repositories
   (`Scenario::new_real_git`: only `podman` is stubbed), because the
-  recording stub cannot model clone ref layout or ref-deletion failures:
-  the branch-start precedence (local ref, remote-tracking ref, base
-  commit), the `--origin origin` remote-name pin against a hostile
-  `clone.defaultRemoteName`, `--delete-branch` with absent and present
-  host branches (incl. after `merge` and via `start --force`), tags and
-  remote-tracking refs left untouched, and a genuine deletion failure
-  aborting the destroy before ANY Podman cleanup — container and Nix
-  store volume included — so the session stays fully recoverable.
+  recording stub cannot model clone ref layout, ref-deletion failures or
+  non-fast-forward rejections: the branch-start precedence (local ref,
+  remote-tracking ref, base commit), the `--origin origin` remote-name
+  pin against a hostile `clone.defaultRemoteName`, the
+  FAST-FORWARD-ONLY session-to-host transfer (absent branch created,
+  ordinary advance fast-forwarded, diverged host branch and rewritten
+  session history REJECTED with the host ref byte-identical, `merge`
+  and `push` stopping before any merge state or publication),
+  `--delete-branch` with absent and present host branches (incl. after
+  `merge` and via `start --force`), tags and remote-tracking refs left
+  untouched, and a genuine deletion failure aborting the destroy before
+  ANY Podman cleanup — container and Nix store volume included — so the
+  session stays fully recoverable.
   The `--nix` surface (volume mount, in-container Nix env block, init
   wrapper, `meta` `nix=`, `destroy`'s `podman volume rm`) lives in
   `podman_argv.rs` (`build_run_args_nix`,

@@ -115,6 +115,15 @@ traceable; pass `--ff` or `--squash` for the matching `git merge` behaviour,
 or `--repo PATH` to target a different clone. The session worktree is left
 untouched — tear it down afterwards (step 4).
 
+The transfer into the host repository is **fast-forward-only**: an absent
+host-local branch is created, and an unchanged one is advanced by the
+session commits. If the host branch has advanced independently — or the
+session history was rebased or amended — the transfer is REJECTED without
+touching the host ref, and `merge`/`push` stop right there. Reconcile such
+cases explicitly: inspect the host branch, then reset or delete the
+host-local copy (`git branch -D <branch>`) and retry; destructive
+replacement is never done automatically.
+
 Without merging, two related commands bring the branch out of the session
 clone:
 

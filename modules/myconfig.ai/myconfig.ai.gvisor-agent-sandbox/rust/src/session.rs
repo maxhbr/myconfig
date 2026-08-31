@@ -798,25 +798,44 @@ fn current_repo() -> String {
 /// Fetch the session branch from the session worktree into
 /// `refs/heads/<branch>` of `target_repo` — the shared step of `merge`
 /// (§9 "merge" step 5), the standalone `fetch`, and the implicit fetch of
-/// `push`. `Err` carries the `die` message.
+/// `push`. FAST-FORWARD-ONLY by default: the refspec has NO leading `+`,
+/// so Git creates an absent destination ref, advances one that is an
+/// ancestor of the session tip, and REJECTS a diverged or rewound
+/// destination WITHOUT touching it — with standalone clones the host
+/// branch and the session branch can advance independently, and a forced
+/// fetch would silently discard the host-only commits. Publishing rebased
+/// or amended session history requires reconciling the host-local branch
+/// explicitly (inspect it, then `git branch -D`/`reset` it) — destructive
+/// replacement is never automatic. `Err` carries the `die` message.
 fn try_fetch_branch_from_worktree(
     target_repo: &str,
     worktree: &str,
     branch: &str,
 ) -> Result<(), String> {
-    let fetch_ok = git_stdout(&[
-        "-C".to_string(),
-        target_repo.to_string(),
-        "fetch".to_string(),
-        "--no-tags".to_string(),
-        worktree.to_string(),
-        format!("+{branch}:refs/heads/{branch}"),
-    ])
-    .is_some();
+    let refspec = format!("{branch}:refs/heads/{branch}");
+    // git's own diagnostics stay visible on stderr (inherited — only
+    // stdout is nulled), so the non-fast-forward rejection is reported by
+    // Git itself.
+    let fetch_ok = Command::new("git")
+        .args([
+            "-C",
+            target_repo,
+            "fetch",
+            "--no-tags",
+            worktree,
+            refspec.as_str(),
+        ])
+        .stdout(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
     if fetch_ok {
         Ok(())
     } else {
-        Err("fetch from session clone failed; is the session worktree still present?".to_string())
+        Err(format!(
+            "fetch from session clone failed; the session worktree may be missing, \
+             or the host branch {branch} may have diverged from the session branch"
+        ))
     }
 }
 
