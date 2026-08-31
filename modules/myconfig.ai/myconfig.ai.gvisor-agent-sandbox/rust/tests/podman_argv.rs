@@ -83,7 +83,7 @@ fn build_run_args_nix() {
         &args[pos + 1..pos + 3],
         &[
             "--mount".to_string(),
-            format!("type=volume,src={},dst=/nix/store", agent_gvisor::podman::nix_volume_name(&meta)),
+            format!("type=volume,src={},dst=/nix/store,U", agent_gvisor::podman::nix_volume_name(&meta)),
         ]
     );
     // The Nix env block directly follows the fixed envs (no loopback forward
@@ -138,7 +138,7 @@ fn start_nix_records_volume_and_destroy_removes_it() {
         .join("s1");
 
     let run = s.recorded_starting_with("podman", "run")[0].clone();
-    assert!(run.contains(&format!("type=volume,src={container}-nix,dst=/nix/store")));
+    assert!(run.contains(&format!("type=volume,src={container}-nix,dst=/nix/store,U")));
     assert!(run.contains(&"NIX_REMOTE=local".to_string()));
     assert!(run.contains(&"AGENT_GVISOR_NIX=1".to_string()));
     assert!(run.contains(&"/bin/agent-gvisor-init".to_string()));

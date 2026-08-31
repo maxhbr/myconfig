@@ -297,8 +297,9 @@ agent-gvisor doctor       # verify runtime, image and sandbox startup
 With `myconfig.ai.gvisor-agent-sandbox.nix.enable = true` the image bakes
 `config.nix.package` and every session defaults to `--nix`: a per-session
 Podman volume mounted at `/nix/store`, seeded by copy-up with the image's
-own store paths (so the `/bin` toolchain keeps working) and writable, so
-nix substitutes what a build needs from the configured binary caches —
+own store paths (so the `/bin` toolchain keeps working) and chowned to the
+session user (Podman's `U` mount option) so nix can substitute what a
+build needs from the configured binary caches —
 host-mirrored `substituters` and `trusted-public-keys`, passed in as the
 container env `NIX_CONFIG` via `AGENT_GVISOR_NIX_CONFIG`. Nix runs
 daemon-less (`NIX_REMOTE=local`, state under `/home/agent/.local/state/nix`)

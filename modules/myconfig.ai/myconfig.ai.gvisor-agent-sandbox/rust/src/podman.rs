@@ -141,10 +141,24 @@ pub fn build_run_args(
     // (so the /bin toolchain — all symlinks into /nix/store — keeps
     // working) and writable by the agent. The volume outlives container
     // recreation (`run --replace`) and is removed by `destroy`.
+    //
+    // The `U` (chown) option makes the store usable: Podman's post-copy-up
+    // `fixVolumePermissions` otherwise chmods the volume root to the image
+    // directory's mode — and dockerTools marks /nix/store read-only (0555)
+    // in every image, unwritable even for its owner, so the store could
+    // not accept a single write and the init preflight aborted the session
+    // (docs/nix-in-sandbox.md §7 V1 — deterministic, not host-specific).
+    // With `U`, Podman instead recursively chowns the seeded volume to the
+    // container's process user — under `--userns=keep-id` the session's
+    // own host uid — and skips the mode copy, keeping the 0755 the volume
+    // driver created the root with. The chown re-runs on every `run
+    // --replace` recreation (a walk that skips already-owned entries,
+    // cheap next to the copy-up) and thereby heals volumes seeded by an
+    // older CLI without the option.
     if nix_on {
         cmd.extend([
             "--mount".to_string(),
-            format!("type=volume,src={},dst=/nix/store", nix_volume_name(meta)),
+            format!("type=volume,src={},dst=/nix/store,U", nix_volume_name(meta)),
         ]);
     }
     cmd.extend([
