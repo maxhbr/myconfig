@@ -284,9 +284,15 @@ missing keys default to empty.
 7. home seeding (§11) — never aborts the start on a partially copyable tree.
 8. clone: refuse an existing worktree path
    (`error: worktree path already exists: …`); then
-   `git clone --no-hardlinks <repo> <worktree>` — a fully isolated copy per
-   session. `--no-hardlinks` is REQUIRED: hardlinks would let the session
-   write through to the host repository's object files.
+   `git clone --origin origin --no-hardlinks <repo> <worktree>` — a fully
+   isolated copy per session. `--no-hardlinks` is REQUIRED: hardlinks
+   would let the session write through to the host repository's object
+   files. `--origin origin` PINS the clone's remote name: a user's
+   `clone.defaultRemoteName` would otherwise put the host branches under
+   `refs/remotes/<name>/*`, and step 9's exact
+   `refs/remotes/origin/<branch>` probe would silently miss an existing
+   host branch (and the forced session-to-host fetch would later replace
+   it with a session branch that started at the wrong commit).
 9. the session branch, by EXACT-REF precedence (a tag or a similarly
    named ref can never be selected):
    - `refs/heads/<branch>` exists in the clone (the host's checked-out
@@ -404,15 +410,14 @@ target repository, where the remotes are configured.
 1. refuse a dirty worktree without `--force`
    (`error: worktree has uncommitted changes; commit them or use --force`)
    — before ANY session resource is removed.
-2. remove the container if it exists (`podman rm --force --time 5 <container>`).
-3. remove the session's Nix store volume if the session is a `nix=true`
-   session and the volume exists (`podman volume rm <container>-nix`;
-   see `docs/nix-in-sandbox.md`).
-4. `--delete-branch` — BEFORE the destructive cleanup, so a genuine
-   failure leaves a RECOVERABLE session (the clone and the metadata
-   survive, the destroy can be retried). The session branch is primarily
-   CLONE-LOCAL — it dies with the worktree in the next step — so only a
-   HOST-LOCAL copy is deleted, and only when the EXACT ref exists:
+2. `--delete-branch` — directly after the dirty check and BEFORE any
+   session resource (container, Nix store volume, clone, metadata) is
+   removed, so a genuine failure leaves a FULLY recoverable session —
+   even the persistent Nix store volume (docs/nix-in-sandbox.md), which
+   no retry could bring back, survives — and the destroy can simply be
+   run again. The session branch is primarily CLONE-LOCAL — it dies with
+   the worktree in step 5 — so only a HOST-LOCAL copy is deleted, and
+   only when the EXACT ref exists:
    `git -C <repo> show-ref --verify --quiet refs/heads/<branch>`, then
    `git -C <repo> branch -D <branch>`. An ABSENT host-local branch is
    success, not an error (a never-fetched session's branch was never in
@@ -421,6 +426,10 @@ target repository, where the remotes are configured.
    unwritable repository, …) fails the destroy with
    `error: could not delete branch <branch> of <repo>`. A tag or a
    remote-tracking ref of the same name is never touched.
+3. remove the container if it exists (`podman rm --force --time 5 <container>`).
+4. remove the session's Nix store volume if the session is a `nix=true`
+   session and the volume exists (`podman volume rm <container>-nix`;
+   see `docs/nix-in-sandbox.md`).
 5. `rm -rf <worktree>` — the session worktree is a standalone clone, so
    removing the directory removes the session's Git state entirely
    (merge/fetch/push it out first).
@@ -643,10 +652,12 @@ Two behavioural layers, both wired into `nix flake check` via
   (`Scenario::new_real_git`: only `podman` is stubbed), because the
   recording stub cannot model clone ref layout or ref-deletion failures:
   the branch-start precedence (local ref, remote-tracking ref, base
-  commit), `--delete-branch` with absent and present host branches (incl.
-  after `merge` and via `start --force`), tags and remote-tracking refs
-  left untouched, and a genuine deletion failure keeping the session
-  recoverable.
+  commit), the `--origin origin` remote-name pin against a hostile
+  `clone.defaultRemoteName`, `--delete-branch` with absent and present
+  host branches (incl. after `merge` and via `start --force`), tags and
+  remote-tracking refs left untouched, and a genuine deletion failure
+  aborting the destroy before ANY Podman cleanup — container and Nix
+  store volume included — so the session stays fully recoverable.
   The `--nix` surface (volume mount, in-container Nix env block, init
   wrapper, `meta` `nix=`, `destroy`'s `podman volume rm`) lives in
   `podman_argv.rs` (`build_run_args_nix`,

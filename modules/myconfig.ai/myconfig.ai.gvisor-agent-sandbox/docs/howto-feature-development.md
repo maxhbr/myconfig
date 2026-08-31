@@ -14,7 +14,9 @@ from the repository you want to work on. It never mounts the host
 checkout. Instead every session gets its own **fully isolated
 `git clone --no-hardlinks`** of the repository — no hardlinks, so the
 sandbox can never write through to the host's object files — checked out
-on the session branch, defaulting to `agent/gvisor/<name>`. If the
+on the session branch, defaulting to `agent/gvisor/<name>`. The clone's
+remote is pinned to `origin` (`--origin origin`), independent of the
+host user's `clone.defaultRemoteName`. If the
 repository already has a branch with that name, the session continues it
 at its tip; a new session branch otherwise starts at `--base` (default
 `HEAD`). The branch belongs to the session clone and does not track
@@ -145,7 +147,9 @@ agent-gvisor destroy fix-parser --delete-branch         # session clone + host-l
 (container, session home, session clone, and a host-local branch copy if
 one exists). A `--delete-branch` destroy that fails on a genuine Git
 problem (for example a host-local branch that is currently checked out in
-the host) keeps the session recoverable — resolve the cause and run it
+the host) removes NOTHING at all — the container, the persistent Nix
+store volume, the session clone and its metadata all survive, so the
+session stays fully recoverable: resolve the cause and run the destroy
 again.
 
 ## Quick reference

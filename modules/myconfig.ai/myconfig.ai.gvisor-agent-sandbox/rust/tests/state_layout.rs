@@ -44,6 +44,29 @@ fn start_creates_expected_tree() {
     // The session clone exists (the stub `git clone` materializes it).
     assert!(worktree.is_dir());
 
+    // The clone PINS its remote name: `--origin origin` keeps the
+    // `refs/remotes/origin/<branch>` branch probe independent of the
+    // user's `clone.defaultRemoteName` configuration.
+    let expected_clone = vec![
+        "clone".to_string(),
+        "--origin".to_string(),
+        "origin".to_string(),
+        "--no-hardlinks".to_string(),
+        repo.display().to_string(),
+        worktree.display().to_string(),
+    ];
+    let clones: Vec<_> = s
+        .recorded("git")
+        .into_iter()
+        .filter(|c| *c == expected_clone)
+        .collect();
+    assert_eq!(
+        clones.len(),
+        1,
+        "expected exactly one pinned git clone, got {:?}",
+        s.recorded("git")
+    );
+
     // Session dir: 0700, XDG dirs pre-created in the home.
     assert_eq!(fs::metadata(&meta_dir).unwrap().permissions().mode() & 0o777, 0o700);
     assert_eq!(fs::metadata(&home).unwrap().permissions().mode() & 0o777, 0o700);

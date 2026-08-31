@@ -35,7 +35,10 @@ four ways:
    The volume is the only writable Nix store state; it lives in the
    rootless Podman volume store (`~/.local/share/containers/storage/`),
    NOT in the session directory. `destroy` removes it (`podman volume
-   rm`, after a `volume exists` guard); `stop` + `run` keep it, and even `run --replace`
+   rm`, after a `volume exists` guard); a `--delete-branch` destroy that
+   fails on a genuine Git problem never gets that far — the branch
+   operation runs before any Podman cleanup, so the volume survives the
+   failed destroy. `stop` + `run` keep it, and even `run --replace`
    (container recreation) keeps it, so a rebuilt store survives session
    restarts. `start --force` destroys and re-creates it (copy-up runs
    again).

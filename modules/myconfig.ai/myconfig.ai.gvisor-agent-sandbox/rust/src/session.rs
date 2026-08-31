@@ -103,7 +103,10 @@ fn chmod_700(p: &Path) {
 ///   2. `refs/remotes/origin/<branch>` exists — a host branch that is NOT
 ///      the host's current branch: create the local branch AT that exact
 ///      remote-tracking ref, so an existing host branch tip is the
-///      session's starting point, NOT the base commit. `--no-track`:
+///      session's starting point, NOT the base commit. The clone pins
+///      its remote name with `--origin origin`, so a user's
+///      `clone.defaultRemoteName` cannot move the host branches out of
+///      `refs/remotes/origin/*`. `--no-track`:
 ///      the session owns the branch, `origin/<branch>` is not its
 ///      upstream (inside the sandbox the origin path would point at the
 ///      mounted worktree, and a pull/push through it must not be
@@ -434,9 +437,15 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     }
     // A fully isolated clone per session (docs/spec.md §9): `--no-hardlinks`
     // is REQUIRED — hardlinked object files would let the session write
-    // through to the host repository.
+    // through to the host repository. `--origin origin` PINS the clone's
+    // remote name: a user's `clone.defaultRemoteName` would otherwise put
+    // the host branches under `refs/remotes/<name>/*`, and the exact
+    // `refs/remotes/origin/<branch>` probe below would silently miss an
+    // existing host branch.
     git_check(&[
         "clone".to_string(),
+        "--origin".to_string(),
+        "origin".to_string(),
         "--no-hardlinks".to_string(),
         repo.display().to_string(),
         worktree.display().to_string(),
@@ -1044,6 +1053,17 @@ pub fn destroy_session(
         }
     }
 
+    // `--delete-branch` runs FIRST, before ANY session resource — the
+    // container, the persistent Nix store volume (docs/nix-in-sandbox.md),
+    // the clone, the metadata — is removed, so a genuine Git failure (an
+    // unwritable host repository, a host branch that is checked out, …)
+    // leaves a FULLY recoverable session and the destroy can simply be
+    // retried. An absent host-local branch is success — the session
+    // branch is clone-local and dies with the clone below.
+    if delete_branch {
+        try_delete_host_branch(&meta.repo, &meta.branch)?;
+    }
+
     let pod = Pod::new(env);
     if pod.container_exists(&meta.container) {
         let st = pod.run(&[
@@ -1082,16 +1102,6 @@ pub fn destroy_session(
                 std::process::exit(st.code().unwrap_or(1));
             }
         }
-    }
-
-    // `--delete-branch` runs BEFORE the destructive cleanup below, so a
-    // genuine Git failure (an unwritable host repository, a host branch
-    // that is checked out, …) leaves a RECOVERABLE session: the clone and
-    // the metadata survive and the destroy can be retried. An absent
-    // host-local branch is success — the session branch is clone-local
-    // and dies with the clone below.
-    if delete_branch {
-        try_delete_host_branch(&meta.repo, &meta.branch)?;
     }
 
     // The session worktree is a standalone clone: removing the directory

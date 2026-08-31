@@ -86,8 +86,8 @@ case "$sub" in
         exit 0
         ;;
     clone)
-        # git clone [--no-hardlinks] <repo> <worktree>: materialize the
-        # destination directory like a real clone would.
+        # git clone [--origin origin --no-hardlinks] <repo> <worktree>:
+        # materialize the destination directory like a real clone would.
         _dst=
         for _a in "$@"; do _dst=$_a; done
         mkdir -p "$_dst"
