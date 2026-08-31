@@ -13,8 +13,12 @@ and the repository defaults to the current directory, so the shorthand
 from the repository you want to work on. It never mounts the host
 checkout. Instead every session gets its own **fully isolated
 `git clone --no-hardlinks`** of the repository — no hardlinks, so the
-sandbox can never write through to the host's object files — checked out on
-a fresh branch, defaulting to `agent/gvisor/<name>`. Inside the container
+sandbox can never write through to the host's object files — checked out
+on the session branch, defaulting to `agent/gvisor/<name>`. If the
+repository already has a branch with that name, the session continues it
+at its tip; a new session branch otherwise starts at `--base` (default
+`HEAD`). The branch belongs to the session clone and does not track
+`origin`. Inside the container
 the clone is mounted **at the original repository's path**, so the
 in-container paths match the host ones.
 
@@ -125,18 +129,24 @@ agent-gvisor push fix-parser myremote   # … or any other configured remote
 ## 4. Clean up
 
 Once the result is in the host checkout, tear the session down. `destroy`
-refuses a **dirty** worktree unless `--force` is given, and preserves the
-branch by default — add `--delete-branch` to remove it from the host
-repository too:
+refuses a **dirty** worktree unless `--force` is given. The session branch
+lives in the session clone, so `destroy` removes it with the clone. Add
+`--delete-branch` to also remove a **host-local copy** of the branch when
+one exists (e.g. one left behind by `fetch` or `push`); when the host has
+no such branch — the normal case after `merge`, which already cleans up
+its temporary ref — `--delete-branch` simply succeeds:
 
 ```bash
 agent-gvisor stop fix-parser                            # stop the container
-agent-gvisor destroy fix-parser --delete-branch         # worktree + branch
+agent-gvisor destroy fix-parser --delete-branch         # session clone + host-local branch, if any
 ```
 
 `--force --delete-branch` skips the dirty-check and removes everything
-(container, session home, session clone, and the branch from the host
-repository).
+(container, session home, session clone, and a host-local branch copy if
+one exists). A `--delete-branch` destroy that fails on a genuine Git
+problem (for example a host-local branch that is currently checked out in
+the host) keeps the session recoverable — resolve the cause and run it
+again.
 
 ## Quick reference
 

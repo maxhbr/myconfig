@@ -286,13 +286,24 @@ missing keys default to empty.
    (`error: worktree path already exists: …`); then
    `git clone --no-hardlinks <repo> <worktree>` — a fully isolated copy per
    session. `--no-hardlinks` is REQUIRED: hardlinks would let the session
-   write through to the host repository's object files. The branch:
-   `git -C <worktree> checkout <branch>` when `refs/heads/<branch>` exists
-   in the clone (the repository already carries the session branch),
-   otherwise `git -C <worktree> checkout -b <branch> <base-commit>`.
-9. write `mounts.tsv` and `env.list` (a single newline when the list is
-   empty — historical byte layout), **`meta` LAST**.
-10. log
+   write through to the host repository's object files.
+9. the session branch, by EXACT-REF precedence (a tag or a similarly
+   named ref can never be selected):
+   - `refs/heads/<branch>` exists in the clone (the host's checked-out
+     branch is the only one `git clone` makes local):
+     `git -C <worktree> checkout <branch>`;
+   - `refs/remotes/origin/<branch>` exists (a host branch that is NOT the
+     host's current branch): the local branch starts AT that exact
+     remote-tracking ref, so an existing host branch TIP is the
+     session's starting point, never the base commit:
+     `git -C <worktree> checkout --no-track -b <branch> refs/remotes/origin/<branch>`
+     (the session owns the branch; `origin/<branch>` is not its
+     upstream);
+   - otherwise the branch is new and starts at the base commit:
+     `git -C <worktree> checkout -b <branch> <base-commit>`.
+10. write `mounts.tsv` and `env.list` (a single newline when the list is
+    empty — historical byte layout), **`meta` LAST**.
+11. log
     `created worktree <path> on branch <branch>` and the retry/doctor/destroy
     hint line; then run the container (§10 argv) via `exec`.
 
@@ -390,19 +401,30 @@ target repository, where the remotes are configured.
 
 ### `destroy`
 
-1. remove the container if it exists (`podman rm --force --time 10`? — no:
-   `podman rm --force --time 5 <container>`).
-2. remove the session's Nix store volume if the session is a `nix=true`
+1. refuse a dirty worktree without `--force`
+   (`error: worktree has uncommitted changes; commit them or use --force`)
+   — before ANY session resource is removed.
+2. remove the container if it exists (`podman rm --force --time 5 <container>`).
+3. remove the session's Nix store volume if the session is a `nix=true`
    session and the volume exists (`podman volume rm <container>-nix`;
    see `docs/nix-in-sandbox.md`).
-3. if the worktree dir exists: refuse a dirty tree without `--force`
-   (`error: worktree has uncommitted changes; commit them or use --force`);
-   then `rm -rf <worktree>` — the session worktree is a standalone clone,
-   so removing the directory removes the session's Git state entirely
+4. `--delete-branch` — BEFORE the destructive cleanup, so a genuine
+   failure leaves a RECOVERABLE session (the clone and the metadata
+   survive, the destroy can be retried). The session branch is primarily
+   CLONE-LOCAL — it dies with the worktree in the next step — so only a
+   HOST-LOCAL copy is deleted, and only when the EXACT ref exists:
+   `git -C <repo> show-ref --verify --quiet refs/heads/<branch>`, then
+   `git -C <repo> branch -D <branch>`. An ABSENT host-local branch is
+   success, not an error (a never-fetched session's branch was never in
+   the host; the temporary host ref of a completed `merge` is already
+   gone). A genuine Git failure (a host branch that is checked out, an
+   unwritable repository, …) fails the destroy with
+   `error: could not delete branch <branch> of <repo>`. A tag or a
+   remote-tracking ref of the same name is never touched.
+5. `rm -rf <worktree>` — the session worktree is a standalone clone, so
+   removing the directory removes the session's Git state entirely
    (merge/fetch/push it out first).
-4. `--delete-branch`: `git -C <repo> branch -D <branch>` (a branch the
-   session left in the host repository).
-5. `rm -rf` the session dir **and** the registry entry; log
+6. `rm -rf` the session dir **and** the registry entry; log
    `destroyed session <name>`.
 
 ### `list`
@@ -617,6 +639,14 @@ Two behavioural layers, both wired into `nix flake check` via
   `status`, `destroy`), `error_paths.rs` (every fatal message verbatim),
   `shellwords.rs` (bash-`%q` fixtures, reader, `split_ws`),
   `home_seed.rs` (seeding, partial copies, rewrite rules, through `start`).
+  `branch_lifecycle.rs` runs against REAL Git repositories
+  (`Scenario::new_real_git`: only `podman` is stubbed), because the
+  recording stub cannot model clone ref layout or ref-deletion failures:
+  the branch-start precedence (local ref, remote-tracking ref, base
+  commit), `--delete-branch` with absent and present host branches (incl.
+  after `merge` and via `start --force`), tags and remote-tracking refs
+  left untouched, and a genuine deletion failure keeping the session
+  recoverable.
   The `--nix` surface (volume mount, in-container Nix env block, init
   wrapper, `meta` `nix=`, `destroy`'s `podman volume rm`) lives in
   `podman_argv.rs` (`build_run_args_nix`,

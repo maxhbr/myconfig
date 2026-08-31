@@ -334,8 +334,22 @@ fn destroy_removes_everything() {
 fn destroy_delete_branch() {
     let s = Scenario::new("destroy-delete-branch");
     start_simple(&s, "s1");
-    s.run_ok(&["destroy", "s1", "--delete-branch"]);
     let repo = s.repo.canonicalize().unwrap();
+    // A host-local copy of the session branch exists (e.g. left behind by
+    // `fetch`): the destroy probes the EXACT host ref first …
+    s.marker("branch-exists", "refs/heads/agent/gvisor/s1");
+    s.run_ok(&["destroy", "s1", "--delete-branch"]);
+    assert!(s.recorded("git").iter().any(|c| {
+        *c == vec![
+            "-C".to_string(),
+            repo.display().to_string(),
+            "show-ref".to_string(),
+            "--verify".to_string(),
+            "--quiet".to_string(),
+            "refs/heads/agent/gvisor/s1".to_string(),
+        ]
+    }));
+    // … and deletes it only because the probe found it.
     assert!(s.recorded("git").iter().any(|c| {
         *c == vec![
             "-C".to_string(),
@@ -345,6 +359,36 @@ fn destroy_delete_branch() {
             "agent/gvisor/s1".to_string(),
         ]
     }));
+}
+
+#[test]
+fn destroy_delete_branch_absent_host_branch_is_success() {
+    // A never-fetched session's branch exists ONLY in its clone: an
+    // absent host-local branch is success, not an error, and the destroy
+    // still completes (clone + metadata + registry gone).
+    let s = Scenario::new("destroy-delete-branch-absent-host-branch");
+    start_simple(&s, "s1");
+    s.run_ok(&["destroy", "s1", "--delete-branch"]);
+    let repo = s.repo.canonicalize().unwrap();
+    // The exact-ref probe ran …
+    assert!(s.recorded("git").iter().any(|c| {
+        *c == vec![
+            "-C".to_string(),
+            repo.display().to_string(),
+            "show-ref".to_string(),
+            "--verify".to_string(),
+            "--quiet".to_string(),
+            "refs/heads/agent/gvisor/s1".to_string(),
+        ]
+    }));
+    // … and no `branch -D` was attempted against the host.
+    assert!(!s
+        .recorded("git")
+        .iter()
+        .any(|c| c.contains(&"branch".to_string()) && c.contains(&"-D".to_string())));
+    assert!(!s.state.join("sessions").join("s1").exists());
+    assert!(!agent_root_of(&s).join("s1").exists());
+    assert!(!agent_root_of(&s).join("__sessions").join("s1").exists());
 }
 
 #[test]

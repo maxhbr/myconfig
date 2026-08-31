@@ -95,6 +95,104 @@ fn chmod_700(p: &Path) {
     }
 }
 
+/// Check out the session branch inside the freshly cloned session worktree
+/// (docs/spec.md §9 "start"), by EXACT-REF precedence — a tag or a
+/// similarly named ref can never be selected:
+///   1. `refs/heads/<branch>` is local in the clone (the host's checked-out
+///      branch is the only one `git clone` makes local): check it out;
+///   2. `refs/remotes/origin/<branch>` exists — a host branch that is NOT
+///      the host's current branch: create the local branch AT that exact
+///      remote-tracking ref, so an existing host branch tip is the
+///      session's starting point, NOT the base commit. `--no-track`:
+///      the session owns the branch, `origin/<branch>` is not its
+///      upstream (inside the sandbox the origin path would point at the
+///      mounted worktree, and a pull/push through it must not be
+///      suggested or configured);
+///   3. otherwise the branch is new and starts at the resolved base
+///      commit.
+fn checkout_session_branch(worktree: &Path, branch: &str, base_commit: &str) {
+    let wt = worktree.display().to_string();
+    let local_ref = format!("refs/heads/{branch}");
+    let remote_ref = format!("refs/remotes/origin/{branch}");
+    let exists = |r: &str| {
+        git_ok(&[
+            "-C".to_string(),
+            wt.clone(),
+            "show-ref".to_string(),
+            "--verify".to_string(),
+            "--quiet".to_string(),
+            r.to_string(),
+        ])
+    };
+    if exists(&local_ref) {
+        git_check(&[
+            "-C".to_string(),
+            wt.clone(),
+            "checkout".to_string(),
+            branch.to_string(),
+        ]);
+    } else if exists(&remote_ref) {
+        git_check(&[
+            "-C".to_string(),
+            wt.clone(),
+            "checkout".to_string(),
+            "--no-track".to_string(),
+            "-b".to_string(),
+            branch.to_string(),
+            remote_ref,
+        ]);
+    } else {
+        git_check(&[
+            "-C".to_string(),
+            wt.clone(),
+            "checkout".to_string(),
+            "-b".to_string(),
+            branch.to_string(),
+            base_commit.to_string(),
+        ]);
+    }
+}
+
+/// Delete the session branch's HOST-LOCAL copy when one exists (docs/spec.md
+/// §9 "destroy"). The session branch is primarily clone-local — removing
+/// the session clone IS its deletion — so an ABSENT host-local branch is
+/// success, not an error (a never-fetched session's branch exists only in
+/// its clone). Only a genuine Git failure (an unwritable repository, a
+/// branch checked out in the host, a corrupt object store, …) is an
+/// `Err`; the caller runs this BEFORE the destructive cleanup so a failed
+/// destroy leaves a recoverable session. Exact refs only:
+/// `refs/heads/<branch>` never resolves to a tag or a remote-tracking
+/// branch.
+fn try_delete_host_branch(repo: &str, branch: &str) -> Result<(), String> {
+    let refname = format!("refs/heads/{branch}");
+    // `show-ref --verify --quiet`: 0 = the exact ref exists, 1 = it does
+    // not, anything else (128, …) is a genuine Git error, not "absent".
+    let probe = Command::new("git")
+        .args(["-C", repo, "show-ref", "--verify", "--quiet", &refname])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    match probe.map(|s| s.code().unwrap_or(128)).unwrap_or(128) {
+        0 => {
+            let st = git_status(&[
+                "-C".to_string(),
+                repo.to_string(),
+                "branch".to_string(),
+                "-D".to_string(),
+                branch.to_string(),
+            ]);
+            if st.success() {
+                Ok(())
+            } else {
+                Err(format!("could not delete branch {branch} of {repo}"))
+            }
+        }
+        // The exact ref is absent: nothing to delete, not an error.
+        1 => Ok(()),
+        _ => Err(format!("cannot look up branch {branch} of {repo}")),
+    }
+}
+
 /// Recover from interrupted-start debris (docs/spec.md §9): log, remove the
 /// leftover worktree, session dir and registry entry. The session worktree
 /// is a standalone clone, so a clean leftover is plain `rm -rf`'d — no
@@ -343,33 +441,10 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
         repo.display().to_string(),
         worktree.display().to_string(),
     ]);
-    // The session branch: check it out when the cloned repository already
-    // carries it, otherwise create it at the base commit.
-    let branch_exists = git_ok(&[
-        "-C".to_string(),
-        worktree.display().to_string(),
-        "show-ref".to_string(),
-        "--verify".to_string(),
-        "--quiet".to_string(),
-        format!("refs/heads/{branch}"),
-    ]);
-    if branch_exists {
-        git_check(&[
-            "-C".to_string(),
-            worktree.display().to_string(),
-            "checkout".to_string(),
-            branch.clone(),
-        ]);
-    } else {
-        git_check(&[
-            "-C".to_string(),
-            worktree.display().to_string(),
-            "checkout".to_string(),
-            "-b".to_string(),
-            branch.clone(),
-            base_commit.clone(),
-        ]);
-    }
+    // The session branch (docs/spec.md §9 "start"): exact-ref precedence —
+    // local in the clone, else at the host's remote-tracking branch, else a
+    // new branch at the base commit.
+    checkout_session_branch(&worktree, &branch, &base_commit);
 
     let meta = meta_from_start(
         &name,
@@ -1009,23 +1084,20 @@ pub fn destroy_session(
         }
     }
 
+    // `--delete-branch` runs BEFORE the destructive cleanup below, so a
+    // genuine Git failure (an unwritable host repository, a host branch
+    // that is checked out, …) leaves a RECOVERABLE session: the clone and
+    // the metadata survive and the destroy can be retried. An absent
+    // host-local branch is success — the session branch is clone-local
+    // and dies with the clone below.
+    if delete_branch {
+        try_delete_host_branch(&meta.repo, &meta.branch)?;
+    }
+
     // The session worktree is a standalone clone: removing the directory
     // removes the session's Git state entirely. Nothing else tracks it.
     if Path::new(&worktree).is_dir() {
         rm_rf(Path::new(&worktree));
-    }
-
-    if delete_branch {
-        let st = git_status(&[
-            "-C".to_string(),
-            meta.repo.clone(),
-            "branch".to_string(),
-            "-D".to_string(),
-            meta.branch.clone(),
-        ]);
-        if !st.success() {
-            std::process::exit(st.code().unwrap_or(1));
-        }
     }
     rm_rf(&session.meta_dir);
     // Remove the registry entry too: for old-layout sessions it IS the
