@@ -40,11 +40,11 @@ let
     ];
     extraRuntimeInputs = workmuxDevTools;
   };
-  # `jailed-claude` is an alternative to `claudeCodeBwrap` that uses the
+  # `agent-bubblewrap-claude` is an alternative to `claudeCodeBwrap` that uses the
   # jail.nix library instead of a hand-rolled bubblewrap wrapper. See
   # `../fns/jail-app.nix` for the shared defaults.
-  jailed-claude = jail-app {
-    name = "jailed-claude";
+  agent-bubblewrap-claude = jail-app {
+    name = "agent-bubblewrap-claude";
     pkg = pkgs.claude-code;
     userDataDirs = [
       ".claude"
@@ -56,11 +56,11 @@ let
     ];
     extraDevTools = workmuxDevTools;
   };
-  # Worktree variant of `jailed-claude`: additionally binds the linked main
+  # Worktree variant of `agent-bubblewrap-claude`: additionally binds the linked main
   # repository read-only and remounts its shared `.git` read-write, resolved
   # at runtime from the WORKTREE_* env vars set by the workmux launcher.
-  jailed-claude-worktree-inner = jail-app {
-    name = "jailed-claude-worktree-inner";
+  agent-bubblewrap-claude-worktree-inner = jail-app {
+    name = "agent-bubblewrap-claude-worktree-inner";
     pkg = pkgs.claude-code;
     userDataDirs = [
       ".claude"
@@ -84,11 +84,11 @@ let
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
-  jailedClaudeWorktree = mkWorkmuxWorktree {
-    name = "jailed-claude-worktree";
-    agentName = "jailed-claude";
+  agentBubblewrapClaudeWorktree = mkWorkmuxWorktree {
+    name = "agent-bubblewrap-claude-worktree";
+    agentName = "agent-bubblewrap-claude";
     agentType = "claude";
-    innerPkg = jailed-claude-worktree-inner;
+    innerPkg = agent-bubblewrap-claude-worktree-inner;
     workmuxPkg = osconfig.myconfig.ai.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
@@ -103,9 +103,9 @@ in
   config = lib.mkIf config.myconfig.ai.claude-code.enable {
     myconfig.ai.skills.playwright.enable = lib.mkDefault true;
     # The default `claude-code-worktree` maps to the `claude` named agent; the
-    # jailed variant registers its own `jailed-claude` agent.
+    # jailed variant registers its own `agent-bubblewrap-claude` agent.
     myconfig.ai.workmux.agents.claude = claudeCodeWorktree.agent;
-    myconfig.ai.workmux.agents.jailed-claude = jailedClaudeWorktree.agent;
+    myconfig.ai.workmux.agents.agent-bubblewrap-claude = agentBubblewrapClaudeWorktree.agent;
     home-manager.sharedModules = [
       {
         myconfig.persistence.directories = [ ".claude" ];
@@ -116,7 +116,7 @@ in
         };
         home.packages = [
           claudeCodeBwrap
-          jailed-claude
+          agent-bubblewrap-claude
           (pkgs.writeShellApplication {
             name = "claude-code-tmp";
             runtimeInputs = with pkgs; [ coreutils ];
@@ -125,14 +125,14 @@ in
             '';
           })
           (pkgs.writeShellApplication {
-            name = "jailed-claude-tmp";
+            name = "agent-bubblewrap-claude-tmp";
             runtimeInputs = with pkgs; [ coreutils ];
             text = ''
-              cd "$(mktemp -d)" && exec ${lib.getExe jailed-claude} "$@"
+              cd "$(mktemp -d)" && exec ${lib.getExe agent-bubblewrap-claude} "$@"
             '';
           })
           claudeCodeWorktree.wrapper
-          jailedClaudeWorktree.wrapper
+          agentBubblewrapClaudeWorktree.wrapper
         ];
       }
     ];

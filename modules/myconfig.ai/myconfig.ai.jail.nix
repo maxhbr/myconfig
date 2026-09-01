@@ -1,8 +1,8 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Shared options for the `jail-app` wrappers (`jailed-pi`,
-# `jailed-opencode`, `jailed-claude`, ...). See `./fns/jail-app.nix` for the
+# Shared options for the `jail-app` wrappers (`agent-bubblewrap-pi`,
+# `agent-bubblewrap-opencode`, `agent-bubblewrap-claude`, ...). See `./fns/jail-app.nix` for the
 # wrapper library and the matching `extraFwdEnv` / `extraRuntimeEnv` arguments.
 { config, lib, ... }:
 {
@@ -12,8 +12,8 @@
       default = [ ];
       description = ''
         Environment variables forwarded from the host into every
-        `jail-app` wrapper (`jailed-pi`, `jailed-opencode`,
-        `jailed-claude`, ...), in addition to `OPENAI_API_KEY` which is
+        `jail-app` wrapper (`agent-bubblewrap-pi`, `agent-bubblewrap-opencode`,
+        `agent-bubblewrap-claude`, ...), in addition to `OPENAI_API_KEY` which is
         always forwarded.
 
         Each name is forwarded via `try-fwd-env`, i.e. it is passed through

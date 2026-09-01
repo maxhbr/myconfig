@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # Sandboxed microVM runners — the microvm.nix counterparts of the bubblewrap
-# `jailed-*` wrappers. The agent (or the whole workmux/tmux session) runs
+# `agent-bubblewrap-*` wrappers. The agent (or the whole workmux/tmux session) runs
 # inside a real VM (its own kernel) with an ephemeral, discarded-on-exit root
 # filesystem and an unprivileged `agent` user, instead of a bubblewrap jail.
 #
@@ -12,7 +12,7 @@
 #                                 seeder for a given config-path allowlist
 #                                 (see modules/myconfig.ai/fns/seed-agent-config.nix).
 #   * `mkAgentQemuPiRunner`       — thin wrapper: one workspace + `pi`.
-#                                   Backs `agent-qemu-pi` (jailed-pi analogue).
+#                                   Backs `agent-qemu-pi` (agent-bubblewrap-pi analogue).
 #   * `mkAgentQemuHerdrRunner`    — thin wrapper: one workspace + `herdr` and
 #                                   the coding-agent CLIs it launches. Backs
 #                                   `agent-qemu-herdr` (herdr-in-VM variant of
@@ -37,7 +37,7 @@
 # networking and no `forwardPorts`. Using it would require a host bridge,
 # per-VM TAP, NAT and firewall rules plus a system rebuild before the guest
 # could reach the network or be reachable over SSH. That defeats the
-# `jailed-*`-like goal of a self-contained user-space wrapper that "just
+# `agent-bubblewrap-*`-like goal of a self-contained user-space wrapper that "just
 # works" from any project directory with no host changes. qemu supports
 # `type = "user"` SLiRP networking + `forwardPorts` (the same combination the
 # in-repo hermes microVM uses), giving outbound NAT and a host-localhost SSH

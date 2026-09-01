@@ -39,11 +39,11 @@ let
     ];
     extraRuntimeInputs = workmuxDevTools;
   };
-  # `jailed-opencode` is an alternative to `opencodeBwrap` that uses the
+  # `agent-bubblewrap-opencode` is an alternative to `opencodeBwrap` that uses the
   # jail.nix library instead of a hand-rolled bubblewrap wrapper. See
   # `../fns/jail-app.nix` for the shared defaults.
-  jailed-opencode = jail-app {
-    name = "jailed-opencode";
+  agent-bubblewrap-opencode = jail-app {
+    name = "agent-bubblewrap-opencode";
     pkg = pkgs.opencode;
     userDataDirs = [
       ".config/opencode"
@@ -53,11 +53,11 @@ let
     ];
     extraDevTools = workmuxDevTools;
   };
-  # Worktree variant of `jailed-opencode`: additionally binds the linked main
+  # Worktree variant of `agent-bubblewrap-opencode`: additionally binds the linked main
   # repository read-only and remounts its shared `.git` read-write, resolved
   # at runtime from the WORKTREE_* env vars set by the workmux launcher.
-  jailed-opencode-worktree-inner = jail-app {
-    name = "jailed-opencode-worktree-inner";
+  agent-bubblewrap-opencode-worktree-inner = jail-app {
+    name = "agent-bubblewrap-opencode-worktree-inner";
     pkg = pkgs.opencode;
     userDataDirs = [
       ".config/opencode"
@@ -78,11 +78,11 @@ let
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
-  jailedOpencodeWorktree = mkWorkmuxWorktree {
-    name = "jailed-opencode-worktree";
-    agentName = "jailed-opencode";
+  agentBubblewrapOpencodeWorktree = mkWorkmuxWorktree {
+    name = "agent-bubblewrap-opencode-worktree";
+    agentName = "agent-bubblewrap-opencode";
     agentType = "opencode";
-    innerPkg = jailed-opencode-worktree-inner;
+    innerPkg = agent-bubblewrap-opencode-worktree-inner;
     workmuxPkg = osconfig.myconfig.ai.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
@@ -125,7 +125,7 @@ in
   config = lib.mkIf config.myconfig.ai.opencode.enable {
     myconfig.ai.skills.playwright.enable = lib.mkDefault true;
     myconfig.ai.workmux.agents.opencode = opencodeWorktree.agent;
-    myconfig.ai.workmux.agents.jailed-opencode = jailedOpencodeWorktree.agent;
+    myconfig.ai.workmux.agents.agent-bubblewrap-opencode = agentBubblewrapOpencodeWorktree.agent;
     home-manager.sharedModules = [
       (
         {
@@ -334,7 +334,7 @@ in
           home.packages = [
             pkgs.opencode-desktop
             opencodeBwrap
-            jailed-opencode
+            agent-bubblewrap-opencode
             (pkgs.writeShellApplication {
               name = "opencode-tmp";
               runtimeInputs = with pkgs; [ coreutils ];
@@ -343,14 +343,14 @@ in
               '';
             })
             (pkgs.writeShellApplication {
-              name = "jailed-opencode-tmp";
+              name = "agent-bubblewrap-opencode-tmp";
               runtimeInputs = with pkgs; [ coreutils ];
               text = ''
-                cd "$(mktemp -d)" && exec ${lib.getExe jailed-opencode} "$@"
+                cd "$(mktemp -d)" && exec ${lib.getExe agent-bubblewrap-opencode} "$@"
               '';
             })
             opencodeWorktree.wrapper
-            jailedOpencodeWorktree.wrapper
+            agentBubblewrapOpencodeWorktree.wrapper
           ];
         }
       )

@@ -4,7 +4,7 @@
 # myconfig.ai.workmux.jail — run the *whole* workmux/tmux session inside a
 # single bubblewrap jail and pop it up in a dedicated Alacritty window.
 #
-# Unlike the per-agent jails (`jailed-pi`, ...) which sandbox one agent binary
+# Unlike the per-agent jails (`agent-bubblewrap-pi`, ...) which sandbox one agent binary
 # each, this wrapper takes the opposite approach: it starts *one* jail that
 # contains the tmux server, workmux, the main git repository (the CWD) and its
 # sibling `<basename>__worktrees` directory. Because the tmux server and the
@@ -15,7 +15,7 @@
 #
 # Entry points:
 #
-#   * `jailed-workmux-tmux`      — the jail. Its entrypoint boots a `workmux`
+#   * `agent-bubblewrap-workmux-tmux`      — the jail. Its entrypoint boots a `workmux`
 #                                  tmux session on the private socket, wires up
 #                                  the sidebar + dashboard, and attaches.
 #   * `alacritty-workmux-here`   — user-facing launcher. Run it from the main
@@ -61,7 +61,7 @@ let
 
   # Plain (un-jailed) agent binaries made available *inside* the shared jail so
   # workmux can launch them in panes. The jail itself is the sandbox here, so
-  # these are the raw agent binaries, not the nested `jailed-*` wrappers.
+  # these are the raw agent binaries, not the nested `agent-bubblewrap-*` wrappers.
   innerAgents = lib.optional aiCfg.pi-coding-agent.enable pkgs.nixos-unstable.pi-coding-agent;
 
   # workmux config used *inside* the jail. It deliberately does NOT reuse the
@@ -147,8 +147,8 @@ let
   # The jail. `mount-cwd` (jail-app default) binds the main repo read-write;
   # `WORKMUX_WORKTREES_DIR` binds the sibling worktrees dir read-write so
   # `workmux add` can create linked worktrees next to the main checkout.
-  jailed-workmux-tmux = jail-app {
-    name = "jailed-workmux-tmux";
+  agent-bubblewrap-workmux-tmux = jail-app {
+    name = "agent-bubblewrap-workmux-tmux";
     pkg = entry;
     # rw state: pi session/config state. NOTE: `.config/workmux` is
     # deliberately *not* rw-bound here — the jail must not see the host's
@@ -194,7 +194,7 @@ let
       pkgs.alacritty
       pkgs.git
       pkgs.coreutils
-      jailed-workmux-tmux
+      agent-bubblewrap-workmux-tmux
     ];
     text = ''
       # Must be run from a git checkout.
@@ -227,7 +227,7 @@ let
       exec alacritty \
         --title "workmux: $(basename "$top")" \
         --working-directory "$top" \
-        -e jailed-workmux-tmux
+        -e agent-bubblewrap-workmux-tmux
     '';
   };
 in
@@ -239,7 +239,7 @@ in
       defaultText = literalExpression "config.myconfig.ai.workmux.enable";
       description = ''
         Provide `alacritty-workmux-here` (and the underlying
-        `jailed-workmux-tmux` jail): run the whole workmux/tmux session — main
+        `agent-bubblewrap-workmux-tmux` jail): run the whole workmux/tmux session — main
         repo, worktrees, agents — inside a single bubblewrap jail on a private
         tmux socket, opened in a dedicated Alacritty window. Defaults to on
         wherever `myconfig.ai.workmux` is enabled.
@@ -251,7 +251,7 @@ in
     home-manager.sharedModules = [
       {
         home.packages = [
-          jailed-workmux-tmux
+          agent-bubblewrap-workmux-tmux
           alacritty-workmux-here
         ];
       }

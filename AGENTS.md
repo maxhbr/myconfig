@@ -38,7 +38,7 @@ Run the full `nix flake check` only when:
   Hostname defaults to the current machine's hostname. Useful for iterating on
   bubblewrap/jail wrappers and other module-generated wrappers without
   rebuilding the whole system or home-manager closure.
-  Example: `./build-pkg-for-host.sh jailed-pi f13`
+  Example: `./build-pkg-for-host.sh agent-bubblewrap-pi f13`
 
 ### Formatting & Linting
 - `./nixfmtall.sh` - Format all Nix files (runs `nix fmt`)

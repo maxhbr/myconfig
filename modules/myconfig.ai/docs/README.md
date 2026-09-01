@@ -12,7 +12,7 @@ forming a ladder from cheap-and-convenient to strong-and-heavy:
 | Tier | Technique | Isolation boundary | Entry point | Cost |
 | --- | --- | --- | --- | --- |
 | 1 | [`agent-tmux`](#1-agent-tmux--dedicated-unix-user) | Unix user + file permissions | `agent-tmux` | ~none |
-| 2 | [`jailed-pi`](#2-jailed-pi--bubblewrap-process-jail) | Linux namespaces (bubblewrap) | `jailed-pi` | ~none |
+| 2 | [`agent-bubblewrap-pi`](#2-agent-bubblewrap-pi--bubblewrap-process-jail) | Linux namespaces (bubblewrap) | `agent-bubblewrap-pi` | ~none |
 | 3 | [`agent-qemu-pi`](#3-agent-qemu-pi--qemuslirp-microvm) | own kernel (QEMU microVM, SLiRP NAT) | `agent-qemu-pi` | seconds to boot |
 | 4 | [`agent-microvm`](#4-agent-microvm--cloud-hypervisor-microvm-fleet) | own kernel + own store + private bridge | `agent-microvm run\|submit` | host config + prebuilt slots |
 
@@ -22,10 +22,10 @@ the Nix store. Tier 1 works differently — it moves the agent to a *different
 identity* instead of restricting what one identity may see.
 
 The tiers are largely orthogonal and compose: an agent user (tier 1) can run
-`jailed-pi` (tier 2) in its own session.
+`agent-bubblewrap-pi` (tier 2) in its own session.
 
 All tiers are agent-agnostic in principle; `pi` is the reference agent. Tier 2
-also exists as `jailed-opencode` / `jailed-claude`, and tier 4 carries a whole
+also exists as `agent-bubblewrap-opencode` / `agent-bubblewrap-claude`, and tier 4 carries a whole
 registry of agents inside its guests. Tier 3 also has a `agent-qemu-herdr`
 variant (below) that drops into a `herdr` multiplexer instead of a single
 `pi`.
@@ -86,7 +86,7 @@ other agents — not the host.
 
 ---
 
-## 2. `jailed-pi` — bubblewrap process jail
+## 2. `agent-bubblewrap-pi` — bubblewrap process jail
 
 The cheapest tier. `pi` runs as **your user on your kernel**, confined by
 bubblewrap namespaces via the vendored
@@ -97,8 +97,8 @@ bubblewrap namespaces via the vendored
 - `modules/myconfig.ai/fns/jail-app.nix` — the reusable wrapper factory
   (`jail-app { name; pkg; userDataDirs; ... }`). Every jailed agent wrapper in
   the repo is one call to it.
-- `modules/myconfig.ai/programs.pi-coding-agent/default.nix` — the `jailed-pi`,
-  `jailed-pi-tmp` and `jailed-pi-worktree` instantiations.
+- `modules/myconfig.ai/programs.pi-coding-agent/default.nix` — the `agent-bubblewrap-pi`,
+  `agent-bubblewrap-pi-tmp` and `agent-bubblewrap-pi-worktree` instantiations.
 - `modules/myconfig.ai/myconfig.ai.jail.nix` — the shared
   `myconfig.ai.jail.fwdEnvs` option (host env vars forwarded into *every*
   wrapper, on top of the always-forwarded `OPENAI_API_KEY`).
@@ -122,7 +122,7 @@ only from the explicit forward lists.
 - `rejectHomeCwd` — refuses to start in `$HOME`, because `mount-cwd` would
   otherwise bind your entire home read-write.
 - The worktree variant is a *separate* wrapper
-  (`jailed-pi-worktree-inner`), so a normal invocation cannot obtain a
+  (`agent-bubblewrap-pi-worktree-inner`), so a normal invocation cannot obtain a
   writable bind into another repository merely by setting an env var.
 - `PI_JAIL_MARKER=1` is set inside the jail; the `myconfig-jail-marker.ts`
   extension paints an obvious red border when pi runs **un**jailed.
@@ -141,7 +141,7 @@ checkout plus its `__worktrees` sibling — in one bubblewrap.
 
 ## 3. `agent-qemu-pi` — QEMU/SLiRP microVM
 
-Same ergonomics as `jailed-pi` (`cd` into a project, run it, arguments are
+Same ergonomics as `agent-bubblewrap-pi` (`cd` into a project, run it, arguments are
 forwarded to `pi`), but the agent runs **in its own kernel** as an
 unprivileged `agent` user with an ephemeral root filesystem.
 
@@ -180,7 +180,7 @@ into the store, never on a command line.
 **Requires**: `/dev/kvm` (otherwise slow TCG), flakes.
 
 Session-wide variant: `sandboxed-workmux` (in-terminal, like
-`jailed-workmux-tmux`) and `alacritty-sandboxed-workmux-here` (Alacritty
+`agent-bubblewrap-workmux-tmux`) and `alacritty-sandboxed-workmux-here` (Alacritty
 popup, like `alacritty-workmux-here`) — both under
 `myconfig.ai.workmux.sandbox`, off by default — put a whole workmux session in
 one VM. The in-terminal `sandboxed-workmux` is the reusable entry point; the
@@ -326,13 +326,13 @@ a documentation/DRY change, not a behavior change.
 - **Keep the agent out of your home directory, keys and shell history, at zero
   runtime cost and with a normal interactive session** → `agent-tmux` (or a
   network-isolated `offline` agent user).
-- **Interactive work in a repo you trust, fastest loop** → `jailed-pi`.
+- **Interactive work in a repo you trust, fastest loop** → `agent-bubblewrap-pi`.
 - **Same loop, but you want a kernel boundary** (untrusted repo, sketchy
   dependency, `npm install` in the agent's path) → `agent-qemu-pi`.
 - **Autonomous / batch runs, several agents in parallel, no upstream API key
   exposure, results you collect later** → `agent-microvm`.
 
-When in doubt, compose: run `jailed-pi` *inside* an `agent-tmux` session.
+When in doubt, compose: run `agent-bubblewrap-pi` *inside* an `agent-tmux` session.
 
 ## Runtime model registry
 

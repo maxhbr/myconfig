@@ -20,7 +20,7 @@
 #                   jailed/sandboxed agent binary. workmux appends the prompt
 #                   flags (`-p ...`) for the configured agent `type`.
 #
-#   * `wrapper`   — the thin user-facing command (e.g. `jailed-pi-worktree`).
+#   * `wrapper`   — the thin user-facing command (e.g. `agent-bubblewrap-pi-worktree`).
 #                   It refuses to run outside tmux (workmux requires a running
 #                   tmux server) and otherwise just execs
 #                   `workmux add --agent <agentName> "$@"`, forwarding every
@@ -42,7 +42,7 @@
 }:
 
 {
-  # User-facing thin wrapper command name, e.g. "jailed-pi-worktree".
+  # User-facing thin wrapper command name, e.g. "agent-bubblewrap-pi-worktree".
   name,
 
   # workmux named-agent key selected via `workmux add --agent <agentName>`.

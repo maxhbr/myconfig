@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # myconfig.ai.workmux.sandbox — the microVM counterpart of
-# `myconfig.ai.workmux.jail` (`alacritty-workmux-here` / `jailed-workmux-tmux`).
+# `myconfig.ai.workmux.jail` (`alacritty-workmux-here` / `agent-bubblewrap-workmux-tmux`).
 #
 # `sandboxed-workmux` runs the *whole* workmux/tmux session — main git
 # checkout, its `<basename>__worktrees` sibling, tmux, workmux and the agents
@@ -10,14 +10,14 @@
 # the current terminal. `alacritty-sandboxed-workmux-here` opens the same
 # sandbox in a dedicated Alacritty window. This is the same "one sandbox owns
 # the whole session" model as the bubblewrap `alacritty-workmux-here` /
-# `jailed-workmux-tmux`, but with the stronger isolation of a real VM: an
+# `agent-bubblewrap-workmux-tmux`, but with the stronger isolation of a real VM: an
 # ephemeral, discarded-on-exit root filesystem and an unprivileged `agent`
 # user. Only the main checkout (/workspace) and the worktrees sibling
 # (/workspace__worktrees) are writable; the host home directory, credentials
 # and sockets are never exposed.
 #
 # `sandboxed-workmux` is to `alacritty-sandboxed-workmux-here` what
-# `jailed-workmux-tmux` is to `alacritty-workmux-here`: the in-terminal sandbox
+# `agent-bubblewrap-workmux-tmux` is to `alacritty-workmux-here`: the in-terminal sandbox
 # is the reusable entry point, and the Alacritty variant is a thin popup
 # around it. Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
 # ../../../flake.agent-qemu.nix).
@@ -73,7 +73,7 @@ let
   tmuxConf = config.environment.etc."tmux.conf".source or "";
 
   # `sandboxed-workmux` — the in-terminal microVM counterpart of
-  # `jailed-workmux-tmux`. Run it from the main git checkout: it resolves the
+  # `agent-bubblewrap-workmux-tmux`. Run it from the main git checkout: it resolves the
   # `<basename>__worktrees` sibling, builds the per-invocation microVM runner
   # (the same `mkSandboxedWorkmuxRunner` the Alacritty variant uses), boots the
   # VM, waits for guest SSH, forwards LLM credentials over the SSH environment
@@ -81,7 +81,7 @@ let
   # session on a private socket and attaches) *in the current terminal*. On
   # exit the VM is torn down and the runtime dir removed.
   #
-  # This is to `alacritty-sandboxed-workmux-here` what `jailed-workmux-tmux` is
+  # This is to `alacritty-sandboxed-workmux-here` what `agent-bubblewrap-workmux-tmux` is
   # to `alacritty-workmux-here`: the same sandbox without the Alacritty window,
   # so it can be run from an existing terminal / tmux pane / SSH session.
   sandboxed-workmux = pkgs.writeShellApplication {
@@ -209,7 +209,7 @@ let
 
   # `alacritty-sandboxed-workmux-here` — open `sandboxed-workmux` in a dedicated
   # Alacritty window. This mirrors `alacritty-workmux-here` (which opens
-  # `jailed-workmux-tmux` in Alacritty): the in-terminal sandbox is the reusable
+  # `agent-bubblewrap-workmux-tmux` in Alacritty): the in-terminal sandbox is the reusable
   # entry point, and the Alacritty variant is a thin popup around it. Running
   # `sandboxed-workmux` inside Alacritty (rather than duplicating the VM boot
   # here) keeps the two wrappers byte-identical in everything but the window.
@@ -253,8 +253,8 @@ in
         workmux/tmux session — main repo, worktrees, agents — inside a single
         microvm.nix VM (its own kernel, ephemeral root, unprivileged `agent`
         user). This is the microVM counterpart of `myconfig.ai.workmux.jail`
-        (`alacritty-workmux-here` / `jailed-workmux-tmux`): `sandboxed-workmux`
-        is the in-terminal entry point (like `jailed-workmux-tmux`) and
+        (`alacritty-workmux-here` / `agent-bubblewrap-workmux-tmux`): `sandboxed-workmux`
+        is the in-terminal entry point (like `agent-bubblewrap-workmux-tmux`) and
         `alacritty-sandboxed-workmux-here` opens it in a dedicated Alacritty
         window (like `alacritty-workmux-here`). Off by default; requires KVM
         (`/dev/kvm`) on the host. See ./sandbox.nix.

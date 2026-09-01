@@ -11,8 +11,8 @@
 #   * bubblewrap jails — `fns/jail-app.nix` reads this via the same
 #     `osconfig` mechanism as `myconfig.ai.jail.fwdEnvs` and appends the
 #     packages to its `add-pkg-deps` permission (and sets the env via
-#     `set-env`) for every `jailed-*` wrapper (`jailed-pi`, `jailed-claude`,
-#     `jailed-opencode`, ...).
+#     `set-env`) for every `agent-bubblewrap-*` wrapper (`agent-bubblewrap-pi`, `agent-bubblewrap-claude`,
+#     `agent-bubblewrap-opencode`, ...).
 #   * `myconfig.ai.microvm` guests — `myconfig.ai.microvm/guest.nix` appends
 #     the packages to the guest's `environment.systemPackages` (§7) and the
 #     env to `environment.variables`.
@@ -41,7 +41,7 @@
       type = types.listOf types.package;
       default = [ ];
       description = ''
-        Extra packages added to EVERY agent sandbox tier (bubblewrap `jailed-*`
+        Extra packages added to EVERY agent sandbox tier (bubblewrap `agent-bubblewrap-*`
         wrappers, `myconfig.ai.microvm` guests, the `sandboxed-*` microVM
         runners and the gVisor sandbox image), in addition to each tier's own
         default toolset. Default: none — the sandboxes stay minimal.

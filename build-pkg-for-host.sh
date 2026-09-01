@@ -16,15 +16,16 @@
 # Arguments:
 #   <pkg-name>  Name of the package as it appears in `home.packages`
 #               (i.e. the derivation's `name` / `pname`). Examples:
-#                 jailed-pi, jailed-pi-tmp, jailed-pi-worktree, pi-bwrap, ...
+#                 agent-bubblewrap-pi, agent-bubblewrap-pi-tmp,
+#                 agent-bubblewrap-pi-worktree, pi-bwrap, ...
 #   <hostname>  Short host name (without the `test-` prefix) to evaluate
 #               against (defaults to the current machine's hostname). The
 #               script builds against the `test-<hostname>` key in
 #               `self.nixosConfigurations`.
 #
 # Examples:
-#   # Build jailed-pi as configured for the current host:
-#   ./build-pkg-for-host.sh jailed-pi
+#   # Build agent-bubblewrap-pi as configured for the current host:
+#   ./build-pkg-for-host.sh agent-bubblewrap-pi
 #
 #   # Build the pi-bwrap wrapper as configured for host f13:
 #   ./build-pkg-for-host.sh pi-bwrap f13

@@ -34,7 +34,7 @@ concrete recommendation.
 
 - **`agent-qemu-herdr`** (`modules/myconfig.ai/programs.herdr.nix:110-125`) is
   the herdr-flavoured sibling of `agent-qemu-pi`: run it from a project
-  subdirectory to get "the same loop as `jailed-pi`, but with a kernel
+  subdirectory to get "the same loop as `agent-bubblewrap-pi`, but with a kernel
   boundary" (`modules/myconfig.ai/docs/README.md:144-146`), except instead of
   dropping straight into `pi` it drops into a `herdr` multiplexer session so
   several agents/shells can run side by side in the one VM

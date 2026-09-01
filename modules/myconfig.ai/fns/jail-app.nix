@@ -11,7 +11,7 @@
 #     jail-app = callLib ../fns/jail-app.nix;
 #   in
 #   jail-app {
-#     name = "jailed-pi";
+#     name = "agent-bubblewrap-pi";
 #     pkg = pkgs.pi-coding-agent;
 #     userDataDirs = [ ".pi" ];
 #   }
@@ -164,7 +164,7 @@
   # this is also the way to re-expose a specific host runtime path on
   # demand — e.g.:
   #
-  #   JAIL_EXTRA_RO_PATHS=/etc:/run/user/1000 jailed-pi
+  #   JAIL_EXTRA_RO_PATHS=/etc:/run/user/1000 agent-bubblewrap-pi
   #
   # Entries should be absolute paths; relative paths are rejected by
   # bubblewrap. Set to `null` to disable the mechanism for this wrapper.
@@ -371,7 +371,7 @@ let
       # socket lives under `/nix/var/nix` (bound below), so nothing here
       # depends on a blanket `/run` bind. To re-expose a specific runtime
       # path on demand use the `JAIL_EXTRA_RO_PATHS` escape hatch, e.g.
-      # `JAIL_EXTRA_RO_PATHS=/run/user/1000 jailed-pi`.
+      # `JAIL_EXTRA_RO_PATHS=/run/user/1000 agent-bubblewrap-pi`.
 
       # Expose `/etc/nix/nix.conf` read-only so that `nix` commands inside
       # the jail pick up the host's Nix configuration (substituters,

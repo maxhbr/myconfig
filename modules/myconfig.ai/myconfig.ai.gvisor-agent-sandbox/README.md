@@ -31,7 +31,7 @@ dependencies).
 
 It is the container-based tier of the repo's sandboxing ladder — see
 [`../docs/README.md`](../docs/README.md) ("Agent sandboxing tiers") for the
-other tiers (`agent-tmux`, `jailed-*`, `sandboxed-*`, `agent-microvm`) and how
+other tiers (`agent-tmux`, `agent-bubblewrap-*`, `sandboxed-*`, `agent-microvm`) and how
 they compare.
 
 The package also ships a hand-written fish tab completion

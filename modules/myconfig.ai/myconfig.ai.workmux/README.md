@@ -83,28 +83,28 @@ there is no runtime `workmux setup` step.
 
 ### `<agent>-worktree` wrappers (from `../fns/workmux-worktree.nix`)
 
-Thin per-agent commands (e.g. `jailed-pi-worktree`) registered by the
+Thin per-agent commands (e.g. `agent-bubblewrap-pi-worktree`) registered by the
 coding-agent modules. Each:
 
 - **Resumes in place** when invoked with no arguments from inside an existing
   linked worktree (re-execs the inner launcher with `--continue`).
 - **Refuses to run outside tmux** (workmux requires a running tmux server).
 - **Slugifies** a free-form first positional into a valid git branch name, so
-  `jailed-pi-worktree "Fix the parser"` still works.
+  `agent-bubblewrap-pi-worktree "Fix the parser"` still works.
 - Otherwise execs `workmux add --agent <name> "$@"`, forwarding branch name,
   `--prompt`, `--base`, etc. straight through.
 
 `workmux merge` / `workmux remove` then handle cleanup — no bespoke
 resume/cleanup scripts are needed.
 
-### `alacritty-workmux-here` / `jailed-workmux-tmux` (from `jail.nix`)
+### `alacritty-workmux-here` / `agent-bubblewrap-workmux-tmux` (from `jail.nix`)
 
 An alternative, "sandbox-the-whole-session" approach. Instead of sandboxing one
 agent binary per pane, it runs *one* bubblewrap jail containing the tmux server,
 workmux, the main git repo (the CWD) and its sibling `<basename>__worktrees`
 directory:
 
-- `jailed-workmux-tmux` — the jail. Its entrypoint boots a `workmux` tmux
+- `agent-bubblewrap-workmux-tmux` — the jail. Its entrypoint boots a `workmux` tmux
   session on a **private socket inside the jail** (`/tmp/workmux-tmux/socket`),
   wires up the sidebar + dashboard, and attaches. Because server and client
   share the same bwrap process tree, the socket never leaves the jail.
@@ -127,7 +127,7 @@ Enabled by default (`myconfig.ai.workmux.jail.enable`) wherever
 The microVM counterpart of the bubblewrap `jail.nix` above, gated behind
 `myconfig.ai.workmux.sandbox.enable` (off by default; requires `/dev/kvm`):
 
-- `sandboxed-workmux` — the in-terminal entry point (like `jailed-workmux-tmux`).
+- `sandboxed-workmux` — the in-terminal entry point (like `agent-bubblewrap-workmux-tmux`).
   Run it from the main git checkout: it resolves the `<basename>__worktrees`
   sibling, builds the per-invocation microVM runner, boots the VM, waits for
   guest SSH, forwards LLM credentials over the SSH environment and execs the
@@ -135,7 +135,7 @@ The microVM counterpart of the bubblewrap `jail.nix` above, gated behind
   private socket and attaches) in the current terminal.
 - `alacritty-sandboxed-workmux-here` — a thin popup that opens
   `sandboxed-workmux` in a dedicated Alacritty window (like
-  `alacritty-workmux-here` opens `jailed-workmux-tmux`).
+  `alacritty-workmux-here` opens `agent-bubblewrap-workmux-tmux`).
 
 Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
 [`../../../flake.agent-qemu.nix`](../../../flake.agent-qemu.nix)). The
@@ -147,6 +147,6 @@ the window.
 
 | Approach                    | Sandbox unit           | tmux server | Agent in pane          |
 | --------------------------- | ---------------------- | ----------- | ---------------------- |
-| Per-agent worktree wrappers | one jail per agent     | host tmux   | nested `jailed-*` agent |
+| Per-agent worktree wrappers | one jail per agent     | host tmux   | nested `agent-bubblewrap-*` agent |
 | `alacritty-workmux-here`    | one jail per session   | in-jail tmux (private socket) | plain agent (jail is the sandbox) |
 | `sandboxed-workmux`         | one microVM per session | in-VM tmux (private socket) | plain agent (VM is the sandbox)   |

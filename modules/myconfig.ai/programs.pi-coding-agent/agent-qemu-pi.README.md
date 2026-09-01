@@ -1,11 +1,11 @@
-# `agent-qemu-pi` — the microVM counterpart of `jailed-pi`
+# `agent-qemu-pi` — the microVM counterpart of `agent-bubblewrap-pi`
 
 `agent-qemu-pi` runs the `pi` coding agent with the same ergonomics as
-`jailed-pi`, but inside a real [microvm.nix](https://github.com/microvm-nix/microvm.nix)
+`agent-bubblewrap-pi`, but inside a real [microvm.nix](https://github.com/microvm-nix/microvm.nix)
 virtual machine (its own kernel) instead of a bubblewrap jail.
 
-Like `jailed-pi`, you run it **from a project subdirectory**; the working
-directory is the only writable thing the agent can see. Unlike `jailed-pi`, the
+Like `agent-bubblewrap-pi`, you run it **from a project subdirectory**; the working
+directory is the only writable thing the agent can see. Unlike `agent-bubblewrap-pi`, the
 agent runs in a separate kernel as an unprivileged `agent` user with an
 ephemeral root filesystem that is discarded when the VM stops.
 
@@ -126,7 +126,7 @@ Cloud Hypervisor only supports `tap`/`macvtap` network interfaces — it has no
 user-mode networking and no port forwarding. Using it would require a
 dedicated host bridge, per-VM TAP device, NAT and firewall rules **plus a
 system rebuild** before the guest could reach the network or be reachable over
-SSH. That contradicts the `jailed-pi`-like goal of a self-contained
+SSH. That contradicts the `agent-bubblewrap-pi`-like goal of a self-contained
 user-space wrapper that works from any project directory with no host changes.
 qemu's user-mode networking + `forwardPorts` (the same combination the in-repo
 hermes microVM uses) provides exactly that. Moving to Cloud Hypervisor with a
