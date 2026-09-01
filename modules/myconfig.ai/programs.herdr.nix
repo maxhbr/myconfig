@@ -76,7 +76,7 @@ let
   # their `myconfig.ai.<name>.enable` flag to the package attribute the
   # matching host wrapper uses. Mirrors the `agentPackagesByFlag` set in
   # modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix so the
-  # `sandboxed-herdr` guest carries exactly the same agents the host (and
+  # `agent-qemu-herdr` guest carries exactly the same agents the host (and
   # the gVisor sandbox image) offers.
   agentPackagesByFlag = {
     pi-coding-agent = pkgs.nixos-unstable.pi-coding-agent;
@@ -88,11 +88,11 @@ let
   };
 
   # The subset of agents actually enabled on this host, as a list of store
-  # paths. Baked into the `sandboxed-herdr` wrapper as the default value of
-  # SANDBOXED_HERDR_AGENT_PACKAGES (a JSON array), which the impure flake
-  # output `sandboxed-herdr-runner` reads and passes to
-  # `mkSandboxedHerdrRunner` as `agentPackages`. Only public store paths are
-  # baked in (never credentials); this matches `sandboxed-pi`, which bakes the
+  # paths. Baked into the `agent-qemu-herdr` wrapper as the default value of
+  # AGENT_QEMU_HERDR_AGENT_PACKAGES (a JSON array), which the impure flake
+  # output `agent-qemu-herdr-runner` reads and passes to
+  # `mkAgentQemuHerdrRunner` as `agentPackages`. Only public store paths are
+  # baked in (never credentials); this matches `agent-qemu-pi`, which bakes the
   # `piPackage` store path into its runner the same way.
   enabledAgentPackages = lib.attrValues (
     lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentPackagesByFlag
@@ -100,7 +100,7 @@ let
 
   agentPackagesJson = builtins.toJSON (map (p: p.outPath) enabledAgentPackages);
 
-  # `sandboxed-herdr` — the `herdr` analogue of `sandboxed-pi`. Same
+  # `agent-qemu-herdr` — the `herdr` analogue of `agent-qemu-pi`. Same
   # ergonomics (run it from a project subdirectory; the working directory is
   # the only writable thing the agent sees) and the same microVM machinery
   # (qemu + SLiRP user-mode networking, ephemeral root, unprivileged `agent`
@@ -114,11 +114,11 @@ let
   # agents `herdr` launches are available on PATH inside the VM.
   #
   # Workspace handling, credential forwarding and the refuse-$HOME guard are
-  # identical to `sandboxed-pi`. See
-  # ../../../flake.sandboxed-pi.nix (`mkSandboxedHerdrRunner`) and
-  # ./sandboxed-herdr.README.md.
-  sandboxed-herdr = pkgs.writeShellApplication {
-    name = "sandboxed-herdr";
+  # identical to `agent-qemu-pi`. See
+  # ../../../flake.agent-qemu.nix (`mkAgentQemuHerdrRunner`) and
+  # ./agent-qemu-herdr.README.md.
+  agent-qemu-herdr = pkgs.writeShellApplication {
+    name = "agent-qemu-herdr";
     runtimeInputs = with pkgs; [
       nix
       openssh
@@ -126,24 +126,24 @@ let
       gnugrep
     ];
     text = ''
-      # Refuse to run in $HOME: like sandboxed-pi, the working directory is
+      # Refuse to run in $HOME: like agent-qemu-pi, the working directory is
       # shared writable into the sandbox, and sharing the whole home
       # directory would defeat the isolation. Run from a project subdirectory.
       if [ "$PWD" = "$HOME" ]; then
-        echo "sandboxed-herdr: refusing to run in home directory ($HOME):" >&2
-        echo "sandboxed-herdr: the working directory is shared writable into the VM." >&2
-        echo "sandboxed-herdr: run from a project subdirectory instead." >&2
+        echo "agent-qemu-herdr: refusing to run in home directory ($HOME):" >&2
+        echo "agent-qemu-herdr: the working directory is shared writable into the VM." >&2
+        echo "agent-qemu-herdr: run from a project subdirectory instead." >&2
         exit 1
       fi
 
       workspace="$(realpath "$PWD")"
       if [ ! -d "$workspace" ]; then
-        echo "sandboxed-herdr: workspace is not a directory: $workspace" >&2
+        echo "agent-qemu-herdr: workspace is not a directory: $workspace" >&2
         exit 1
       fi
 
       # Per-invocation runtime state (throwaway SSH key, VM control socket).
-      runtime_dir="$(mktemp -d "''${XDG_RUNTIME_DIR:-/tmp}/sandboxed-herdr.XXXXXX")"
+      runtime_dir="$(mktemp -d "''${XDG_RUNTIME_DIR:-/tmp}/agent-qemu-herdr.XXXXXX")"
       # Pick a pseudo-random host-localhost port for the forwarded guest SSH.
       ssh_port=$(( (RANDOM % 20000) + 20000 ))
 
@@ -160,12 +160,12 @@ let
       trap cleanup EXIT INT TERM
 
       # Throwaway SSH keypair authorizing the launcher into the guest.
-      ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C sandboxed-herdr
+      ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C agent-qemu-herdr
 
-      export SANDBOXED_HERDR_WORKSPACE="$workspace"
-      export SANDBOXED_HERDR_SSH_PORT="$ssh_port"
-      export SANDBOXED_HERDR_AUTHORIZED_KEYS="$runtime_dir/id.pub"
-      export SANDBOXED_HERDR_NETWORK=1
+      export AGENT_QEMU_HERDR_WORKSPACE="$workspace"
+      export AGENT_QEMU_HERDR_SSH_PORT="$ssh_port"
+      export AGENT_QEMU_HERDR_AUTHORIZED_KEYS="$runtime_dir/id.pub"
+      export AGENT_QEMU_HERDR_NETWORK=1
       # Pin the guest `agent` user's uid/gid to ours: virtiofsd runs
       # unprivileged (no --translate-uid) and passes the workspace's real
       # host ownership straight through, so the guest kernel's permission
@@ -173,24 +173,24 @@ let
       # this, `agent`'s auto-assigned uid only accidentally matches the host
       # owner, and writes to /workspace fail with EACCES while reads (backed
       # by the usual world-readable bits) keep working. See
-      # ../../../flake.sandboxed-pi.nix (`mkSandboxedRunner`).
-      sandboxed_herdr_uid="$(id -u)"
-      sandboxed_herdr_gid="$(id -g)"
-      export SANDBOXED_HERDR_UID="$sandboxed_herdr_uid"
-      export SANDBOXED_HERDR_GID="$sandboxed_herdr_gid"
+      # ../../../flake.agent-qemu.nix (`mkSandboxedRunner`).
+      agent_qemu_herdr_uid="$(id -u)"
+      agent_qemu_herdr_gid="$(id -g)"
+      export AGENT_QEMU_HERDR_UID="$agent_qemu_herdr_uid"
+      export AGENT_QEMU_HERDR_GID="$agent_qemu_herdr_gid"
       # JSON array of enabled coding-agent store paths, baked in at build
       # time from the host's myconfig.ai.<name>.enable flags.
-      export SANDBOXED_HERDR_AGENT_PACKAGES='${agentPackagesJson}'
+      export AGENT_QEMU_HERDR_AGENT_PACKAGES='${agentPackagesJson}'
       # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
       # time as a JSON array of store paths; read by the impure
-      # `sandboxed-herdr-runner` flake output.
-      export SANDBOXED_HERDR_EXTRA_PACKAGES='${sandboxToolsJson}'
+      # `agent-qemu-herdr-runner` flake output.
+      export AGENT_QEMU_HERDR_EXTRA_PACKAGES='${sandboxToolsJson}'
 
-      echo "sandboxed-herdr: building microvm runner for workspace: $workspace" >&2
+      echo "agent-qemu-herdr: building microvm runner for workspace: $workspace" >&2
       # Use an explicit `path:` flakeref for the flake source store path;
-      # see sandboxed-pi for the rationale (libgit2 dubious-ownership check).
+      # see agent-qemu-pi for the rationale (libgit2 dubious-ownership check).
       runner=$(nix build --impure --no-link --print-out-paths \
-        "path:${flake.outPath}#packages.${pkgs.stdenv.hostPlatform.system}.sandboxed-herdr-runner")
+        "path:${flake.outPath}#packages.${pkgs.stdenv.hostPlatform.system}.agent-qemu-herdr-runner")
 
       # microvm.nix's qemu runner connects to the virtiofs daemons over
       # RELATIVE unix socket paths; the runner's `bin/sandboxed-launch`
@@ -199,7 +199,7 @@ let
       # paths resolve to a stable, per-invocation location.
       cd "$runtime_dir"
 
-      echo "sandboxed-herdr: starting microvm (guest SSH forwarded to 127.0.0.1:$ssh_port)" >&2
+      echo "agent-qemu-herdr: starting microvm (guest SSH forwarded to 127.0.0.1:$ssh_port)" >&2
       "$runner/bin/sandboxed-launch" >"$runtime_dir/console.log" 2>&1 &
       vm_pid=$!
 
@@ -215,7 +215,7 @@ let
       ready=0
       for _ in $(seq 1 120); do
         if ! kill -0 "$vm_pid" 2>/dev/null; then
-          echo "sandboxed-herdr: microvm exited before SSH became ready; console log:" >&2
+          echo "agent-qemu-herdr: microvm exited before SSH became ready; console log:" >&2
           tail -n 40 "$runtime_dir/console.log" >&2 || true
           exit 1
         fi
@@ -226,7 +226,7 @@ let
         sleep 1
       done
       if [ "$ready" -ne 1 ]; then
-        echo "sandboxed-herdr: timed out waiting for guest SSH; console log:" >&2
+        echo "agent-qemu-herdr: timed out waiting for guest SSH; console log:" >&2
         tail -n 40 "$runtime_dir/console.log" >&2 || true
         exit 1
       fi
@@ -246,13 +246,13 @@ let
       # denylist-filtered host configuration into the guest `/home/agent` over
       # SSH — never baking anything into the store and never copying
       # credential files (keys keep flowing over the SSH environment above).
-      # See ../../../flake.sandboxed-pi.nix (`mkSeedScript`) and
+      # See ../../../flake.agent-qemu.nix (`mkSeedScript`) and
       # ../fns/seed-agent-config.nix. Run it BEFORE the interactive session so
       # the agents launched from inside `herdr` start already configured.
       if [ -x "$runner/bin/seed-agent-config" ]; then
-        echo "sandboxed-herdr: seeding guest agent config from host" >&2
+        echo "agent-qemu-herdr: seeding guest agent config from host" >&2
         "$runner/bin/seed-agent-config" "$ssh_port" "$runtime_dir/id" 127.0.0.1 agent \
-          || echo "sandboxed-herdr: warning: config seeding reported errors (continuing)" >&2
+          || echo "agent-qemu-herdr: warning: config seeding reported errors (continuing)" >&2
       fi
 
       # Build a safely-quoted remote command: cd into the workspace and exec
@@ -270,8 +270,8 @@ let
   };
 
   # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
-  # paths, baked into the `sandboxed-herdr` wrapper and read (via
-  # SANDBOXED_HERDR_EXTRA_PACKAGES) by the impure flake output that builds
+  # paths, baked into the `agent-qemu-herdr` wrapper and read (via
+  # AGENT_QEMU_HERDR_EXTRA_PACKAGES) by the impure flake output that builds
   # the per-invocation VM runner. Same pattern as `agentPackagesJson` above.
   sandboxToolsJson = builtins.toJSON (
     map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages
@@ -281,7 +281,7 @@ in
   config = lib.mkIf agenticCodingEnabled {
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [ herdr ] ++ [ sandboxed-herdr ];
+        home.packages = with pkgs; [ herdr ] ++ [ agent-qemu-herdr ];
         xdg.configFile."herdr/config.toml".text = herdrConfig;
       }
     ];

@@ -755,12 +755,12 @@ let
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
 
-  # `sandboxed-pi` — the microVM analogue of `jailed-pi`. Same ergonomics
+  # `agent-qemu-pi` — the microVM analogue of `jailed-pi`. Same ergonomics
   # (run it from a project subdirectory; the working directory is the only
   # writable thing the agent sees), but instead of a bubblewrap jail the
   # agent runs inside a real microvm.nix VM with its own kernel, an ephemeral
   # root filesystem and an unprivileged `agent` user. See
-  # ../../../flake.sandboxed-pi.nix for the guest/runner and the rationale for
+  # ../../../flake.agent-qemu.nix for the guest/runner and the rationale for
   # qemu + user-mode networking over cloud-hypervisor.
   #
   # The current working directory is shared read-write at /workspace via
@@ -769,8 +769,8 @@ let
   # (OPENAI_API_KEY etc.) are forwarded over the SSH environment at launch —
   # never baked into the Nix store, never in process argv. The VM is torn down
   # and all guest state discarded on exit; only the workspace persists.
-  sandboxed-pi = pkgs.writeShellApplication {
-    name = "sandboxed-pi";
+  agent-qemu-pi = pkgs.writeShellApplication {
+    name = "agent-qemu-pi";
     runtimeInputs = with pkgs; [
       nix
       openssh
@@ -782,20 +782,20 @@ let
       # shared writable into the sandbox, and sharing the whole home
       # directory would defeat the isolation. Run from a project subdirectory.
       if [ "$PWD" = "$HOME" ]; then
-        echo "sandboxed-pi: refusing to run in home directory ($HOME):" >&2
-        echo "sandboxed-pi: the working directory is shared writable into the VM." >&2
-        echo "sandboxed-pi: run from a project subdirectory instead." >&2
+        echo "agent-qemu-pi: refusing to run in home directory ($HOME):" >&2
+        echo "agent-qemu-pi: the working directory is shared writable into the VM." >&2
+        echo "agent-qemu-pi: run from a project subdirectory instead." >&2
         exit 1
       fi
 
       workspace="$(realpath "$PWD")"
       if [ ! -d "$workspace" ]; then
-        echo "sandboxed-pi: workspace is not a directory: $workspace" >&2
+        echo "agent-qemu-pi: workspace is not a directory: $workspace" >&2
         exit 1
       fi
 
       # Per-invocation runtime state (throwaway SSH key, VM control socket).
-      runtime_dir="$(mktemp -d "''${XDG_RUNTIME_DIR:-/tmp}/sandboxed-pi.XXXXXX")"
+      runtime_dir="$(mktemp -d "''${XDG_RUNTIME_DIR:-/tmp}/agent-qemu-pi.XXXXXX")"
       # Pick a pseudo-random host-localhost port for the forwarded guest SSH.
       ssh_port=$(( (RANDOM % 20000) + 20000 ))
 
@@ -812,18 +812,18 @@ let
       trap cleanup EXIT INT TERM
 
       # Throwaway SSH keypair authorizing the launcher into the guest.
-      ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C sandboxed-pi
+      ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C agent-qemu-pi
 
-      export SANDBOXED_PI_WORKSPACE="$workspace"
-      export SANDBOXED_PI_SSH_PORT="$ssh_port"
-      export SANDBOXED_PI_AUTHORIZED_KEYS="$runtime_dir/id.pub"
-      export SANDBOXED_PI_NETWORK=1
+      export AGENT_QEMU_PI_WORKSPACE="$workspace"
+      export AGENT_QEMU_PI_SSH_PORT="$ssh_port"
+      export AGENT_QEMU_PI_AUTHORIZED_KEYS="$runtime_dir/id.pub"
+      export AGENT_QEMU_PI_NETWORK=1
       # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
       # time as a JSON array of store paths; read by the impure
-      # `sandboxed-pi-runner` flake output.
-      export SANDBOXED_PI_EXTRA_PACKAGES='${sandboxToolsJson}'
+      # `agent-qemu-pi-runner` flake output.
+      export AGENT_QEMU_PI_EXTRA_PACKAGES='${sandboxToolsJson}'
 
-      echo "sandboxed-pi: building microvm runner for workspace: $workspace" >&2
+      echo "agent-qemu-pi: building microvm runner for workspace: $workspace" >&2
       # Use an explicit `path:` flakeref for the flake source store path.
       # A bare `/nix/store/...-source` argument is re-resolved by Nix back to
       # its originating `git+file://` flakeref, and libgit2 then refuses the
@@ -832,13 +832,13 @@ let
       # `path:` forces the path fetcher (copies the tree), sidestepping any
       # git ownership check. The runner still must be built impurely per
       # invocation because it embeds the per-launch workspace path, forwarded
-      # SSH port and throwaway authorized-keys file via the SANDBOXED_PI_*
+      # SSH port and throwaway authorized-keys file via the AGENT_QEMU_PI_*
       # environment variables (read with builtins.getEnv in flake.nix).
       runner=$(nix build --impure --no-link --print-out-paths \
-        "path:${flake.outPath}#packages.${system}.sandboxed-pi-runner")
+        "path:${flake.outPath}#packages.${system}.agent-qemu-pi-runner")
 
       # microvm.nix's qemu runner connects to the virtiofs daemons over
-      # RELATIVE unix socket paths (e.g. `sandboxed-pi-virtiofs-nix-store.sock`),
+      # RELATIVE unix socket paths (e.g. `agent-qemu-pi-virtiofs-nix-store.sock`),
       # and virtiofsd creates those sockets in its own working directory.
       # The runner's `bin/sandboxed-launch` starts the (rootless) virtiofsd
       # daemon(s), waits for their sockets, then runs qemu — all from the
@@ -847,7 +847,7 @@ let
       # on exit.
       cd "$runtime_dir"
 
-      echo "sandboxed-pi: starting microvm (guest SSH forwarded to 127.0.0.1:$ssh_port)" >&2
+      echo "agent-qemu-pi: starting microvm (guest SSH forwarded to 127.0.0.1:$ssh_port)" >&2
       "$runner/bin/sandboxed-launch" >"$runtime_dir/console.log" 2>&1 &
       vm_pid=$!
 
@@ -863,7 +863,7 @@ let
       ready=0
       for _ in $(seq 1 120); do
         if ! kill -0 "$vm_pid" 2>/dev/null; then
-          echo "sandboxed-pi: microvm exited before SSH became ready; console log:" >&2
+          echo "agent-qemu-pi: microvm exited before SSH became ready; console log:" >&2
           tail -n 40 "$runtime_dir/console.log" >&2 || true
           exit 1
         fi
@@ -874,7 +874,7 @@ let
         sleep 1
       done
       if [ "$ready" -ne 1 ]; then
-        echo "sandboxed-pi: timed out waiting for guest SSH; console log:" >&2
+        echo "agent-qemu-pi: timed out waiting for guest SSH; console log:" >&2
         tail -n 40 "$runtime_dir/console.log" >&2 || true
         exit 1
       fi
@@ -893,13 +893,13 @@ let
       # configuration into the guest `/home/agent` over SSH — never baking
       # anything into the store and never copying credential files (keys keep
       # flowing over the SSH environment above). See
-      # ../../../flake.sandboxed-pi.nix (`mkSeedScript`) and
+      # ../../../flake.agent-qemu.nix (`mkSeedScript`) and
       # ../fns/seed-agent-config.nix. Run it BEFORE the interactive session
       # so the agent starts already configured.
       if [ -x "$runner/bin/seed-agent-config" ]; then
-        echo "sandboxed-pi: seeding guest agent config from host" >&2
+        echo "agent-qemu-pi: seeding guest agent config from host" >&2
         "$runner/bin/seed-agent-config" "$ssh_port" "$runtime_dir/id" 127.0.0.1 agent \
-          || echo "sandboxed-pi: warning: config seeding reported errors (continuing)" >&2
+          || echo "agent-qemu-pi: warning: config seeding reported errors (continuing)" >&2
       fi
 
       # Build a safely-quoted remote command: cd into the workspace and exec
@@ -915,10 +915,10 @@ let
   };
 
   # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
-  # paths, baked into the `sandboxed-pi` wrapper and read (via the
-  # SANDBOXED_PI_EXTRA_PACKAGES env var) by the impure flake output that
+  # paths, baked into the `agent-qemu-pi` wrapper and read (via the
+  # AGENT_QEMU_PI_EXTRA_PACKAGES env var) by the impure flake output that
   # builds the per-invocation VM runner. Same pattern as
-  # SANDBOXED_HERDR_AGENT_PACKAGES in ../programs.herdr.nix.
+  # AGENT_QEMU_HERDR_AGENT_PACKAGES in ../programs.herdr.nix.
   sandboxToolsJson = builtins.toJSON (
     map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages
   );
@@ -965,7 +965,7 @@ in
           pkgs.nixos-unstable.pi-coding-agent
           piBwrap
           jailed-pi
-          sandboxed-pi
+          agent-qemu-pi
           (pkgs.writeShellApplication {
             name = "pi-tmp";
             runtimeInputs = with pkgs; [ coreutils ];

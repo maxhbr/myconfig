@@ -20,9 +20,9 @@
 # `jailed-workmux-tmux` is to `alacritty-workmux-here`: the in-terminal sandbox
 # is the reusable entry point, and the Alacritty variant is a thin popup
 # around it. Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
-# ../../../flake.sandboxed-pi.nix).
+# ../../../flake.agent-qemu.nix).
 #
-# See ../../../flake.sandboxed-pi.nix (`mkSandboxedWorkmuxRunner`) for the
+# See ../../../flake.agent-qemu.nix (`mkSandboxedWorkmuxRunner`) for the
 # guest and the rationale for qemu + user-mode networking over
 # cloud-hypervisor. The session is reached over SSH on a host-localhost
 # forwarded port using a throwaway keypair generated per invocation.
@@ -62,7 +62,7 @@ let
   # paths, baked into the `alacritty-sandboxed-workmux-here` wrapper and read
   # (via SANDBOXED_WORKMUX_EXTRA_PACKAGES) by the impure flake output that
   # builds the per-invocation VM runner. Same pattern as
-  # SANDBOXED_HERDR_AGENT_PACKAGES in ../programs.herdr.nix.
+  # AGENT_QEMU_HERDR_AGENT_PACKAGES in ../programs.herdr.nix.
   sandboxToolsJson = builtins.toJSON (
     map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages
   );

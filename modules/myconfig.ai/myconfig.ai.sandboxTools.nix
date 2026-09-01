@@ -16,11 +16,11 @@
 #   * `myconfig.ai.microvm` guests — `myconfig.ai.microvm/guest.nix` appends
 #     the packages to the guest's `environment.systemPackages` (§7) and the
 #     env to `environment.variables`.
-#   * `sandboxed-pi` / `sandboxed-workmux` / `sandboxed-herdr` impure
+#   * `agent-qemu-pi` / `sandboxed-workmux` / `agent-qemu-herdr` impure
 #     runners — the host-side wrappers bake the package store paths into a
 #     `SANDBOXED_*_EXTRA_PACKAGES` JSON env var (same pattern as
-#     `SANDBOXED_HERDR_AGENT_PACKAGES`); the flake outputs in `_flake.nix_`
-#     pass it through to `mkSandboxedRunner` (`flake.sandboxed-pi.nix`),
+#     `AGENT_QEMU_HERDR_AGENT_PACKAGES`); the flake outputs in `_flake.nix_`
+#     pass it through to `mkSandboxedRunner` (`flake.agent-qemu.nix`),
 #     which folds it into the guest package set.
 #   * gVisor sandbox image — `myconfig.ai.gvisor-agent-sandbox` appends the
 #     packages to its `extraImagePackages` default.

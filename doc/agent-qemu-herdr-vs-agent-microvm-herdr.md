@@ -3,7 +3,7 @@ Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 SPDX-License-Identifier: MIT
 -->
 
-# `sandboxed-herdr` vs. `agent-microvm run --agent herdr`
+# `agent-qemu-herdr` vs. `agent-microvm run --agent herdr`
 
 Both wrappers put the `herdr` agent multiplexer inside a microVM instead of
 running it directly on the host. They are **not** the same feature under two
@@ -14,7 +14,7 @@ concrete recommendation.
 
 ## Summary
 
-| | `sandboxed-herdr` (tier 3) | `agent-microvm run --agent herdr` (tier 4) |
+| | `agent-qemu-herdr` (tier 3) | `agent-microvm run --agent herdr` (tier 4) |
 | --- | --- | --- |
 | Purpose | ad-hoc, "just run it" interactive sandbox for one project directory | fleet of prebuilt, policy-hardened sandboxes for interactive **and** unattended/batch agent work |
 | Hypervisor | QEMU + SLiRP user-mode networking | Cloud Hypervisor, real bridged networking |
@@ -32,13 +32,13 @@ concrete recommendation.
 
 ## Purpose / intended use case
 
-- **`sandboxed-herdr`** (`modules/myconfig.ai/programs.herdr.nix:110-125`) is
-  the herdr-flavoured sibling of `sandboxed-pi`: run it from a project
+- **`agent-qemu-herdr`** (`modules/myconfig.ai/programs.herdr.nix:110-125`) is
+  the herdr-flavoured sibling of `agent-qemu-pi`: run it from a project
   subdirectory to get "the same loop as `jailed-pi`, but with a kernel
   boundary" (`modules/myconfig.ai/docs/README.md:144-146`), except instead of
   dropping straight into `pi` it drops into a `herdr` multiplexer session so
   several agents/shells can run side by side in the one VM
-  (`modules/myconfig.ai/sandboxed-herdr.README.md:14-21`). It is a *disposable,
+  (`modules/myconfig.ai/agent-qemu-herdr.README.md:14-21`). It is a *disposable,
   one-shot* command a developer types ad hoc.
 - **`agent-microvm`** (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md:8-25`)
   is "a second, stronger isolation tier", the only one "designed for
@@ -52,12 +52,12 @@ concrete recommendation.
 
 ## Isolation mechanism and security boundary
 
-| Aspect | `sandboxed-herdr` | `agent-microvm` (`--agent herdr`) |
+| Aspect | `agent-qemu-herdr` | `agent-microvm` (`--agent herdr`) |
 | --- | --- | --- |
-| Hypervisor | QEMU, SLiRP (`flake.sandboxed-pi.nix:170-204`) | Cloud Hypervisor (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md`, guest shape table) |
+| Hypervisor | QEMU, SLiRP (`flake.agent-qemu.nix:170-204`) | Cloud Hypervisor (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md`, guest shape table) |
 | Kernel | own guest kernel | own guest kernel |
-| Guest store | host `/nix/store` shared **read-only** via virtiofs (`flake.sandboxed-pi.nix:175-186`) — the guest closure is the *host's* store | self-contained EROFS store disk built into the guest image; host store not reachable from the guest at all (`agent-microvm.md:13-14`) |
-| Network boundary | SLiRP NAT (outbound only) + one loopback-forwarded SSH port; no host bridge/firewall (`sandboxed-herdr.README.md:80-86`) | dedicated bridge `agentbr0`, per-TAP L2 isolation, nftables `AGENT_MICROVM_*` chains, named `networkProfile`s (`offline`/`proxy-only`/`package-access`/`internet`), and — with the `vsock` capability — literally **no network interface at all** (`agent-microvm.md`, "VSOCK versus TAP transport") |
+| Guest store | host `/nix/store` shared **read-only** via virtiofs (`flake.agent-qemu.nix:175-186`) — the guest closure is the *host's* store | self-contained EROFS store disk built into the guest image; host store not reachable from the guest at all (`agent-microvm.md:13-14`) |
+| Network boundary | SLiRP NAT (outbound only) + one loopback-forwarded SSH port; no host bridge/firewall (`agent-qemu-herdr.README.md:80-86`) | dedicated bridge `agentbr0`, per-TAP L2 isolation, nftables `AGENT_MICROVM_*` chains, named `networkProfile`s (`offline`/`proxy-only`/`package-access`/`internet`), and — with the `vsock` capability — literally **no network interface at all** (`agent-microvm.md`, "VSOCK versus TAP transport") |
 | Credential exposure to guest | real `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/etc. land in the guest process environment via SSH `SetEnv` (`programs.herdr.nix:236-238`) | upstream keys **never** reach the guest; only a bridge-/VSOCK-restricted forwarding endpoint to the host LiteLLM proxy is visible (`agent-microvm.md:9-25`, "model-API access restricted to the host LiteLLM proxy") |
 | What one compromised guest can attack | the host store is read-only, so a guest exploit cannot corrupt it, but it *can read* the entire host store contents (world-readable anyway) and reach outbound network via SLiRP | no store to read, egress is default-deny beyond the proxy port, guest-to-guest traffic is dropped at L2 and L3, and the workspace is a throwaway clone, not the real checkout |
 
@@ -69,14 +69,14 @@ shares the host store closure and reaches the network via the host"
 
 ## What is shared with the host
 
-| | `sandboxed-herdr` | `agent-microvm` |
+| | `agent-qemu-herdr` | `agent-microvm` |
 | --- | --- | --- |
-| Filesystem | CWD read-write at `/workspace`, **same inodes as the host checkout** (`sandboxed-herdr.README.md:41-55`) — agent edits appear live on the host; host `/nix/store` read-only | a **standalone git clone**, never the host checkout; import the resulting branch afterwards (`agent-microvm.md`, workspace section) |
+| Filesystem | CWD read-write at `/workspace`, **same inodes as the host checkout** (`agent-qemu-herdr.README.md:41-55`) — agent edits appear live on the host; host `/nix/store` read-only | a **standalone git clone**, never the host checkout; import the resulting branch afterwards (`agent-microvm.md`, workspace section) |
 | Network | outbound NAT through the host, one inbound SSH port on loopback | bridge-restricted; default profile allows only guest → gateway:litellmPort |
 | Devices | none beyond the virtio devices QEMU/virtiofs need | none beyond virtio; VSOCK capability removes even the NIC |
 | Env vars | 4 LLM credential vars forwarded over SSH `SetEnv`, only if set on host (`programs.herdr.nix:236-238`) | none — model auth is fully proxied through the host LiteLLM service; guest only gets an endpoint URL |
 | Secrets | forwarded live over SSH session env, never in the store, never in argv | never leave the host; guest config seeding explicitly denylists credential-shaped files (`agent-microvm.md`, "Runtime configuration staging") |
-| Agent home/state | ephemeral guest `/home/agent`, **seeded once at launch** from an SSH-copied allowlist of every registered agent's `configPaths` (`sandboxed-herdr.README.md:97-127`) | ephemeral guest `/home/agent` by default, seeded from a **root-owned read-only virtiofs share** staged before boot with the same allowlist/denylist model; **opt-in, task-scoped persistence** for agents that declare `persistentState.directories` (only `hermes` today) |
+| Agent home/state | ephemeral guest `/home/agent`, **seeded once at launch** from an SSH-copied allowlist of every registered agent's `configPaths` (`agent-qemu-herdr.README.md:97-127`) | ephemeral guest `/home/agent` by default, seeded from a **root-owned read-only virtiofs share** staged before boot with the same allowlist/denylist model; **opt-in, task-scoped persistence** for agents that declare `persistentState.directories` (only `hermes` today) |
 
 Both tiers use the *same* seeding vocabulary
 (`modules/myconfig.ai/fns/seed-agent-config.nix`), so the credential denylist
@@ -85,11 +85,11 @@ boot vs. a pre-boot root-owned share).
 
 ## Startup cost, resource overhead, latency
 
-- **`sandboxed-herdr`**: no persistent host state. Each invocation runs
+- **`agent-qemu-herdr`**: no persistent host state. Each invocation runs
   `nix build --impure` for a small per-invocation wrapper derivation (the
   cached guest system closure is reused; only the workspace-path-specific
   derivation rebuilds — "sub-second", per the module comment
-  `flake.sandboxed-pi.nix:27-31`), then boots a disposable QEMU VM and polls
+  `flake.agent-qemu.nix:27-31`), then boots a disposable QEMU VM and polls
   SSH for up to 120s before failing (`programs.herdr.nix:206-227`). No host
   services, bridges or pools exist between invocations — zero idle overhead,
   all cost is paid at launch and torn down at exit.
@@ -109,7 +109,7 @@ boot vs. a pre-boot root-owned share).
   a prebuilt pool at all.
 
 Both tiers state **neither has been runtime-validated against real KVM** in
-this checkout: `sandboxed-herdr.README.md:187-196` ("A live VM boot has not yet
+this checkout: `agent-qemu-herdr.README.md:187-196` ("A live VM boot has not yet
 been exercised here ... no `/dev/kvm` in the build environment") and
 `agent-microvm.md`'s own verification-boundary note ("must be measured ... on
 real KVM"). Both are eval/build-clean, not empirically measured, as of this
@@ -117,12 +117,12 @@ writing.
 
 ## Configuration
 
-| | `sandboxed-herdr` | `agent-microvm` |
+| | `agent-qemu-herdr` | `agent-microvm` |
 | --- | --- | --- |
 | Option path | none — it is unconditionally installed whenever any agent flag is enabled (`agenticCodingEnabled`, `modules/myconfig.ai/programs.herdr.nix:23-29`) | `myconfig.ai.microvm.*` (`enable`, `enabledAgents`, `resourceClasses`, `networkProfile`, `capabilities`, …), all under `modules/myconfig.ai/myconfig.ai.microvm/default.nix` |
-| Entry point | `sandboxed-herdr` shell wrapper (`programs.herdr.nix:120-270`), installed via `home.packages` (`programs.herdr.nix:284`) | `agent-microvm run\|submit\|ssh\|...` launcher (`modules/myconfig.ai/myconfig.ai.microvm/launcher.nix`), plus `microvm-<agent>` workmux panes when `interactive` is selected |
-| Guest builder | `mkSandboxedHerdrRunner` in `flake.sandboxed-pi.nix:470`, a thin wrapper over the shared `mkSandboxedRunner` (same factory `mkSandboxedPiRunner` uses) | the module's own guest NixOS system (`guest.nix`), driven by the agent registry `agents.nix` |
-| Impure evaluation seam | `packages.<system>.sandboxed-herdr-runner` in `flake.nix:623-643`, built from `SANDBOXED_HERDR_*` env vars set by the wrapper (workspace path never lands in a tracked file) | none needed — slots are declared statically per host and prebuilt at system-build time |
+| Entry point | `agent-qemu-herdr` shell wrapper (`programs.herdr.nix:120-270`), installed via `home.packages` (`programs.herdr.nix:284`) | `agent-microvm run\|submit\|ssh\|...` launcher (`modules/myconfig.ai/myconfig.ai.microvm/launcher.nix`), plus `microvm-<agent>` workmux panes when `interactive` is selected |
+| Guest builder | `mkAgentQemuHerdrRunner` in `flake.agent-qemu.nix:470`, a thin wrapper over the shared `mkSandboxedRunner` (same factory `mkAgentQemuPiRunner` uses) | the module's own guest NixOS system (`guest.nix`), driven by the agent registry `agents.nix` |
+| Impure evaluation seam | `packages.<system>.agent-qemu-herdr-runner` in `flake.nix:623-643`, built from `AGENT_QEMU_HERDR_*` env vars set by the wrapper (workspace path never lands in a tracked file) | none needed — slots are declared statically per host and prebuilt at system-build time |
 | herdr's role in the config | hard-coded as the guest's SSH-exec target; not configurable per invocation | one entry in the agent registry (`../agents.nix`), selected via `enabledAgents` like any other agent |
 
 ## Which hosts enable which
@@ -135,7 +135,7 @@ hosts/host.f13/ai.f13.nix
 - `agent-microvm` is enabled on **f13 only** (`hosts/host.f13/ai.f13.nix:46-124`),
   with `enabledAgents` explicitly including `"herdr"`
   (`hosts/host.f13/ai.f13.nix:64-72`).
-- `sandboxed-herdr` has **no dedicated enable option** — it piggybacks on
+- `agent-qemu-herdr` has **no dedicated enable option** — it piggybacks on
   `agenticCodingEnabled`, i.e. it is installed on **every** host with at least
   one of `claude-code`, `codex`, `opencode`, `pi-coding-agent`, `qwen-code`, or
   `github-copilot-cli` enabled. That currently includes f13
@@ -143,7 +143,7 @@ hosts/host.f13/ai.f13.nix
   thing (`hosts/host.thing/default.nix`, `hosts/host.thing/programs.opencode.nix`).
 
 So f13 is the only host where both variants coexist; every other agentic host
-only has `sandboxed-herdr`.
+only has `agent-qemu-herdr`.
 
 ## Overlap and duplication
 
@@ -153,15 +153,15 @@ inside a VM) but diverge in *mechanism and guarantees*:
 - Both reuse the identical config-seeding vocabulary
   (`modules/myconfig.ai/fns/seed-agent-config.nix`) and the identical
   documented rationale for "why herdr" (compare
-  `sandboxed-herdr.README.md:14-21` with `agent-microvm.md`'s "herdr
+  `agent-qemu-herdr.README.md:14-21` with `agent-microvm.md`'s "herdr
   specifics" section — near-verbatim phrasing, deliberately kept in sync per
   the module comments).
 - `agent-microvm`'s herdr guest is a **strict security superset** of
-  `sandboxed-herdr`'s: no shared store, no real credentials in the guest,
+  `agent-qemu-herdr`'s: no shared store, no real credentials in the guest,
   bridge/VSOCK-restricted network, throwaway clone instead of the live
   checkout, and a batch execution path for the *other* agents (though not for
   herdr itself, since herdr has no batch mode in either tier).
-- `sandboxed-herdr` is **not** a subset of `agent-microvm` operationally: it
+- `agent-qemu-herdr` is **not** a subset of `agent-microvm` operationally: it
   needs zero host configuration (no `myconfig.ai.microvm.enable`, no bridge, no
   prebuilt pool) and shares the *live* working directory (edits are
   immediately visible on the host, no import step) — properties
@@ -171,12 +171,12 @@ inside a VM) but diverge in *mechanism and guarantees*:
   (`programs.herdr.nix:80-90` mirrors `agentPackagesByFlag` from
   `myconfig.ai.gvisor-agent-sandbox/default.nix`, itself a *third* place this
   set is derived), and the herdr rationale text is duplicated across
-  `sandboxed-herdr.README.md` and `agent-microvm.md` rather than shared from
+  `agent-qemu-herdr.README.md` and `agent-microvm.md` rather than shared from
   one source.
 
 ## Recommendation
 
-- **Use `sandboxed-herdr`** for the common case: quick, ad hoc, "I want a
+- **Use `agent-qemu-herdr`** for the common case: quick, ad hoc, "I want a
   kernel boundary around a multi-agent session in this one project
   directory, right now, with no host setup." It is available everywhere
   agentic coding is enabled and needs no `sudo`, no prebuilt pool, no bridge.
@@ -188,7 +188,7 @@ inside a VM) but diverge in *mechanism and guarantees*:
   (currently f13 only).
 - **Do not unify or deprecate either.** They intentionally sit at different
   rungs of the documented sandboxing ladder
-  (`modules/myconfig.ai/docs/README.md:8-19`): `sandboxed-herdr` trades
+  (`modules/myconfig.ai/docs/README.md:8-19`): `agent-qemu-herdr` trades
   security depth for zero-config, always-available convenience; `agent-microvm`
   trades convenience (explicit per-host opt-in, a bridge, a prebuilt pool) for
   a materially stronger boundary and unattended execution. Collapsing them
@@ -199,7 +199,7 @@ inside a VM) but diverge in *mechanism and guarantees*:
   "ladder" design (`modules/myconfig.ai/docs/README.md:24-25`: "the tiers are largely orthogonal and
   compose").
 - **Do** deduplicate the *incidental* overlap: the herdr-rationale prose is
-  copy-pasted across `sandboxed-herdr.README.md` and `agent-microvm.md`, and
+  copy-pasted across `agent-qemu-herdr.README.md` and `agent-microvm.md`, and
   the "which coding-agent CLIs get baked in" logic is independently
   re-derived in three places (`programs.herdr.nix`, `agents.nix`, and
   `myconfig.ai.gvisor-agent-sandbox/default.nix`'s `agentPackagesByFlag`).

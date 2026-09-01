@@ -11,12 +11,12 @@
 #     * `mkSeedScript`         — builds the `seed-agent-config` host-side
 #                                 seeder for a given config-path allowlist
 #                                 (see modules/myconfig.ai/fns/seed-agent-config.nix).
-#   * `mkSandboxedPiRunner`       — thin wrapper: one workspace + `pi`.
-#                                   Backs `sandboxed-pi` (jailed-pi analogue).
-#   * `mkSandboxedHerdrRunner`    — thin wrapper: one workspace + `herdr` and
+#   * `mkAgentQemuPiRunner`       — thin wrapper: one workspace + `pi`.
+#                                   Backs `agent-qemu-pi` (jailed-pi analogue).
+#   * `mkAgentQemuHerdrRunner`    — thin wrapper: one workspace + `herdr` and
 #                                   the coding-agent CLIs it launches. Backs
-#                                   `sandboxed-herdr` (herdr-in-VM variant of
-#                                   `sandboxed-pi`).
+#                                   `agent-qemu-herdr` (herdr-in-VM variant of
+#                                   `agent-qemu-pi`).
 #   * `mkSandboxedWorkmuxRunner`  — main repo + its `__worktrees` sibling +
 #                                   tmux/workmux/pi. Backs
 #                                   `alacritty-sandboxed-workmux-here`
@@ -150,7 +150,7 @@ let
       # Shared sandbox tooling (see
       # modules/myconfig.ai/myconfig.ai.sandboxTools.nix): store-path strings
       # baked into a `SANDBOXED_*_EXTRA_PACKAGES` JSON env var by the host-side
-      # wrapper (same pattern as `SANDBOXED_HERDR_AGENT_PACKAGES`) and passed
+      # wrapper (same pattern as `AGENT_QEMU_HERDR_AGENT_PACKAGES`) and passed
       # through by the flake outputs in `_flake.nix_`. Folded into ONE
       # `buildEnv` package that joins `guestPackages`.
       extraGuestPackagePaths ? [ ],
@@ -422,8 +422,8 @@ in
 {
   inherit mkSandboxedRunner;
 
-  # One workspace + `pi`. Backs `sandboxed-pi`.
-  mkSandboxedPiRunner =
+  # One workspace + `pi`. Backs `agent-qemu-pi`.
+  mkAgentQemuPiRunner =
     {
       system,
       workspace,
@@ -449,7 +449,7 @@ in
         allowNetwork
         seedConfigPaths
         ;
-      hostname = "sandboxed-pi";
+      hostname = "agent-qemu-pi";
       shares = [
         {
           tag = "workspace";
@@ -462,14 +462,14 @@ in
     };
 
   # One workspace + `herdr` and the coding-agent CLIs it launches. Backs
-  # `sandboxed-herdr`. Unlike `mkSandboxedPiRunner` (which carries just `pi`),
+  # `agent-qemu-herdr`. Unlike `mkAgentQemuPiRunner` (which carries just `pi`),
   # the guest gets `herdr` (the agent multiplexer the user is dropped into)
   # plus whichever coding-agent CLIs `herdr` is expected to start from inside
   # the VM — the same set the gVisor sandbox image bakes in (see
   # modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix,
   # `agentPackagesByFlag`). The host wrapper execs `herdr` (not `pi`) over SSH;
   # from within that `herdr` session the user starts `pi` / `opencode` / etc.
-  mkSandboxedHerdrRunner =
+  mkAgentQemuHerdrRunner =
     {
       system,
       workspace,
@@ -482,14 +482,14 @@ in
       allowNetwork ? true,
       # Pin the guest `agent` user's uid/gid to the invoking host user's own
       # uid/gid (see `mkSandboxedRunner` above). Passed through by the
-      # `sandboxed-herdr` host wrapper as `SANDBOXED_HERDR_UID`/`_GID` (`id
+      # `agent-qemu-herdr` host wrapper as `AGENT_QEMU_HERDR_UID`/`_GID` (`id
       # -u`/`id -g`), so writes to the shared workspace succeed regardless of
       # which uid the guest's ephemeral user database happens to allocate.
       hostUid ? null,
       hostGid ? null,
       # Override the default seed allowlist. Defaults to the union of
       # `configPaths` for every registered agent (pi, opencode, claude, codex,
-      # qwen-code, github-copilot-cli, hermes), so a `sandboxed-herdr` guest is
+      # qwen-code, github-copilot-cli, hermes), so a `agent-qemu-herdr` guest is
       # seeded with the configuration for ALL agents `herdr` can launch. The
       # union follows the shared seeder library's `configPathsFor`.
       seedConfigPaths ? seedLib.configPathsFor [
@@ -516,7 +516,7 @@ in
         hostUid
         hostGid
         ;
-      hostname = "sandboxed-herdr";
+      hostname = "agent-qemu-herdr";
       shares = [
         {
           tag = "workspace";

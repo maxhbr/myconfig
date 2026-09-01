@@ -138,7 +138,7 @@ The microVM counterpart of the bubblewrap `jail.nix` above, gated behind
   `alacritty-workmux-here` opens `jailed-workmux-tmux`).
 
 Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
-[`../../../flake.sandboxed-pi.nix`](../../../flake.sandboxed-pi.nix)). The
+[`../../../flake.agent-qemu.nix`](../../../flake.agent-qemu.nix)). The
 in-terminal sandbox is the reusable entry point; the Alacritty variant is a
 thin popup around it so the two wrappers stay byte-identical in everything but
 the window.

@@ -198,12 +198,12 @@ let
     };
     # `herdr` — the agent MULTIPLEXER (https://herdr.dev, `pkgs.herdr`), the
     # SAME package the host `myconfig.ai.programs.herdr` and the tier-3
-    # `sandboxed-herdr` runner install. Unlike the other registry entries it is
+    # `agent-qemu-herdr` runner install. Unlike the other registry entries it is
     # not itself a coding agent: it is a terminal TUI that launches the OTHER
     # agents (pi, opencode, claude, codex, hermes) in its panes. Inside a guest
     # `agent-run herdr` therefore drops the operator into a herdr session from
     # which those agents can be started — mirroring how the tier-3
-    # `sandboxed-herdr` variant execs `herdr` over SSH in its QEMU microVM
+    # `agent-qemu-herdr` variant execs `herdr` over SSH in its QEMU microVM
     # (../programs.herdr.nix). The agents herdr can launch are exactly the ones
     # this host also SELECTS via `enabledAgents`, because they are the ones
     # baked into the guest closure and on PATH.

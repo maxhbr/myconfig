@@ -63,7 +63,7 @@
           # closure and registers a `microvm-herdr` workmux pane, so a guest can
           # run `herdr` (via `agent-microvm run --agent herdr` / the pane) and,
           # from inside its TUI, launch the OTHER agents selected below (they
-          # are on the guest PATH) — mirroring the tier-3 `sandboxed-herdr`
+          # are on the guest PATH) — mirroring the tier-3 `agent-qemu-herdr`
           # variant. It has no batch mode, so `submit --agent herdr` is rejected.
           enabledAgents = [
             "claude"

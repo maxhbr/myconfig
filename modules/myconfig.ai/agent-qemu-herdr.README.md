@@ -1,11 +1,11 @@
 <!-- Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 SPDX-License-Identifier: MIT -->
 
-# `sandboxed-herdr` — `herdr` inside a QEMU/SLiRP microVM
+# `agent-qemu-herdr` — `herdr` inside a QEMU/SLiRP microVM
 
-`sandboxed-herdr` is the `herdr`-driven counterpart of `sandboxed-pi`. It reuses
+`agent-qemu-herdr` is the `herdr`-driven counterpart of `agent-qemu-pi`. It reuses
 **the same** microVM/runner machinery (`mkSandboxedRunner` from
-`flake.sandboxed-pi.nix`) — it does **not** fork a parallel guest builder. The
+`flake.agent-qemu.nix`) — it does **not** fork a parallel guest builder. The
 only difference is what runs at the end of the SSH session: instead of exec'ing
 `pi`, it exec's `herdr`, the agent multiplexer. From inside that `herdr`
 session the user starts `pi` / `opencode` / `claude-code` / … as panes — all
@@ -13,8 +13,8 @@ running **inside** the VM.
 
 ## Why
 
-`sandboxed-pi` drops you straight into a single `pi` session inside a
-disposable VM. `sandboxed-herdr` drops you into a `herdr` multiplexer inside
+`agent-qemu-pi` drops you straight into a single `pi` session inside a
+disposable VM. `agent-qemu-herdr` drops you into a `herdr` multiplexer inside
 the same disposable VM, so you can run several agents (and shells) side by
 side in one sandbox, switching between them with the same keybindings you use
 for `herdr` on the host. The agents themselves run *inside* the VM, not via
@@ -24,8 +24,8 @@ the host wrapper.
 
 ```bash
 cd ~/some/project      # NOT $HOME — it refuses to run there
-sandboxed-herdr        # launches a VM, opens herdr in /workspace
-sandboxed-herdr --help # arguments are forwarded to herdr unchanged
+agent-qemu-herdr        # launches a VM, opens herdr in /workspace
+agent-qemu-herdr --help # arguments are forwarded to herdr unchanged
 ```
 
 Inside the VM you are dropped at a `herdr` prompt in `/workspace`. Open a new
@@ -42,7 +42,7 @@ Shared into the guest:
 
 - The current working directory, read-write, at `/workspace` (virtiofs). The
   guest `agent` user's uid/gid is pinned to the invoking host user's own
-  uid/gid (forwarded as `SANDBOXED_HERDR_UID`/`_GID`), because the rootless
+  uid/gid (forwarded as `AGENT_QEMU_HERDR_UID`/`_GID`), because the rootless
   virtiofsd daemon backing this share runs without `--translate-uid` and so
   passes the workspace's real host ownership straight through; without a
   matching guest uid, the guest kernel's permission check would deny writes
@@ -65,7 +65,7 @@ On the guest `PATH`:
   `myconfig.ai.<name>.enable` flag is true on the host are included, so the
   guest closure stays minimal. The list of enabled agent store paths is baked
   into the wrapper at build time and forwarded to the impure flake output as
-  `SANDBOXED_HERDR_AGENT_PACKAGES` (a JSON array); only public store paths are
+  `AGENT_QEMU_HERDR_AGENT_PACKAGES` (a JSON array); only public store paths are
   baked in — never credentials.
 
 Plus the standard minimal coding-agent environment every `sandboxed-*` guest
@@ -79,7 +79,7 @@ Deliberately **not** shared:
 
 ## Networking
 
-Identical to `sandboxed-pi`: qemu SLiRP user-mode networking. The guest gets
+Identical to `agent-qemu-pi`: qemu SLiRP user-mode networking. The guest gets
 outbound NAT through the host (so the agents can reach LLM endpoints), but
 nothing on the host LAN can reach the guest and the guest reaches the host
 only through the single forwarded SSH port on `127.0.0.1`. No host bridge,
@@ -87,7 +87,7 @@ firewall or NAT configuration is required.
 
 ## Credentials
 
-Identical to `sandboxed-pi`: `OPENAI_API_KEY`, `OPENAI_BASE_URL`,
+Identical to `agent-qemu-pi`: `OPENAI_API_KEY`, `OPENAI_BASE_URL`,
 `OPENROUTER_BASE_URL`, `ANTHROPIC_API_KEY` are forwarded **at launch over the
 SSH session environment** — only if they are set on the host. They are never
 baked into the Nix store, never passed on a process command line, and never
@@ -98,7 +98,7 @@ them from the SSH session environment.
 
 The guest home is an ephemeral tmpfs, so without seeding every agent `herdr`
 can launch would start with empty/default configuration. To avoid that,
-`sandboxed-herdr` copies the relevant, allowlisted host configuration for
+`agent-qemu-herdr` copies the relevant, allowlisted host configuration for
 **every** registered agent into the guest `/home/agent` over the SSH channel
 **at launch**, after the VM boots and before `herdr` is exec'd. This mirrors
 the heavyweight `myconfig.ai.microvm` config-seed mechanism
@@ -143,16 +143,16 @@ host wrapper as `seed-agent-config <ssh-port> <identity> 127.0.0.1 agent`.
 
 ## How it works
 
-- `flake.sandboxed-pi.nix` exports `mkSandboxedHerdrRunner`, a thin wrapper
+- `flake.agent-qemu.nix` exports `mkAgentQemuHerdrRunner`, a thin wrapper
   around the shared `mkSandboxedRunner` that provisions one workspace share
   plus `herdr` and the enabled coding-agent CLIs as guest packages. This is
-  the same factory `mkSandboxedPiRunner` uses; the guest system, kernel,
+  the same factory `mkAgentQemuPiRunner` uses; the guest system, kernel,
   virtiofsd and run script are built by the identical code path.
-- The flake output `packages.<system>.sandboxed-herdr-runner` evaluates that
-  builder **impurely** from `SANDBOXED_HERDR_*` environment variables, so the
+- The flake output `packages.<system>.agent-qemu-herdr-runner` evaluates that
+  builder **impurely** from `AGENT_QEMU_HERDR_*` environment variables, so the
   workspace path never lands in a tracked file or flake output. Under pure
   evaluation (`nix flake check`) it is a harmless placeholder.
-- The host wrapper `sandboxed-herdr` lives in
+- The host wrapper `agent-qemu-herdr` lives in
   `modules/myconfig.ai/programs.herdr.nix`. It validates the working directory
   (refuses `$HOME`), generates a throwaway SSH keypair, picks a random
   `127.0.0.1` port, `nix build --impure`s the runner for the current
@@ -162,9 +162,9 @@ host wrapper as `seed-agent-config <ssh-port> <identity> 127.0.0.1 agent`.
   #agent-configuration-seeding)), and execs `herdr` in `/workspace`. On exit it
   kills the VM and removes the runtime directory.
 
-## How it differs from `sandboxed-pi`
+## How it differs from `agent-qemu-pi`
 
-| | `sandboxed-pi` | `sandboxed-herdr` |
+| | `agent-qemu-pi` | `agent-qemu-herdr` |
 | --- | --- | --- |
 | In-guest entry point | `pi` | `herdr` |
 | Guest packages | `pi` only | `herdr` + enabled coding-agent CLIs |
@@ -173,11 +173,11 @@ host wrapper as `seed-agent-config <ssh-port> <identity> 127.0.0.1 agent`.
 | Credential forwarding | same 4 env vars over SSH env | identical |
 | Config seeding | `pi` allowlist only (`~/.pi`) | union for every registered agent |
 | Refuse `$HOME` | yes | yes |
-| Runner factory | `mkSandboxedPiRunner` | `mkSandboxedHerdrRunner` (same `mkSandboxedRunner`) |
+| Runner factory | `mkAgentQemuPiRunner` | `mkAgentQemuHerdrRunner` (same `mkSandboxedRunner`) |
 
 ## Requirements
 
-Same as `sandboxed-pi`:
+Same as `agent-qemu-pi`:
 
 - Access to `/dev/kvm` for the invoking user (KVM acceleration). Without it,
   qemu falls back to slow TCG emulation.
@@ -188,9 +188,9 @@ Same as `sandboxed-pi`:
 
 The runner builds and evaluates successfully (`nix flake check`, pure-eval
 placeholder, impure runner build, and the guest closure confirmed to carry
-`herdr` plus the enabled agent CLIs). `sandboxed-pi` is provably unchanged
+`herdr` plus the enabled agent CLIs). `agent-qemu-pi` is provably unchanged
 (snapshot/diff of its runner drvPath is identical before and after this
 change). A live VM boot has not yet been exercised here for the same reason
-as `sandboxed-pi` (no `/dev/kvm` in the build environment); run one
-`sandboxed-herdr` session on a KVM-capable host to complete runtime
+as `agent-qemu-pi` (no `/dev/kvm` in the build environment); run one
+`agent-qemu-herdr` session on a KVM-capable host to complete runtime
 validation.

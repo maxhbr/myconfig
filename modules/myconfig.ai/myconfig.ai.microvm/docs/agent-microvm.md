@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT
 # Agent microVM sandboxes (`myconfig.ai.microvm`)
 
 A second, stronger isolation tier for autonomous coding agents, alongside the
-QEMU/SLiRP `flake.sandboxed-pi.nix` tier and the process-jail /
+QEMU/SLiRP `flake.agent-qemu.nix` tier and the process-jail /
 dedicated-host-user tiers. Each agent session runs inside a **Cloud Hypervisor
 microVM** (via the `microvm.nix` flake input) with:
 
@@ -765,11 +765,11 @@ below), so `submit --agent herdr` is rejected.
 ### herdr specifics
 
 `herdr` (`pkgs.herdr`, the same package the host `programs.herdr` and the
-tier-3 `sandboxed-herdr` runner install) is the odd one out: it is not itself a
+tier-3 `agent-qemu-herdr` runner install) is the odd one out: it is not itself a
 coding agent but the **agent multiplexer** — a terminal TUI that launches the
 *other* agents (pi, opencode, claude, codex, hermes) in its panes. Inside a
 guest, `agent-run herdr` drops the operator into a herdr session from which
-those agents can be started, exactly like the tier-3 `sandboxed-herdr` variant
+those agents can be started, exactly like the tier-3 `agent-qemu-herdr` variant
 execs `herdr` over SSH in its QEMU microVM. The agents herdr can launch are the
 ones the host also SELECTS via `enabledAgents`, because those are the runtimes
 baked into the guest closure and on `PATH`.

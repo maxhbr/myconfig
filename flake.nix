@@ -88,7 +88,7 @@
           jail = import ./vendor/alexdavid-jail.nix/lib;
         }
         // import ./flake.lib.nix inputs
-        // import ./flake.sandboxed-pi.nix inputs;
+        // import ./flake.agent-qemu.nix inputs;
 
         ##########################################################################
         ## profiles and modules ##################################################
@@ -537,14 +537,14 @@
             } [ ];
           }
           // lib.optionalAttrs (system == "x86_64-linux" || system == "aarch64-linux") {
-            # Per-invocation microvm runner for `sandboxed-pi`. Built impurely
-            # by the host-side `sandboxed-pi` wrapper, which sets the
-            # SANDBOXED_PI_* environment variables (workspace path, forwarded
+            # Per-invocation microvm runner for `agent-qemu-pi`. Built impurely
+            # by the host-side `agent-qemu-pi` wrapper, which sets the
+            # AGENT_QEMU_PI_* environment variables (workspace path, forwarded
             # SSH port, throwaway authorized-keys file) before
             # `nix build --impure`. The workspace path therefore never appears
-            # in any tracked file or flake output. See flake.sandboxed-pi.nix
+            # in any tracked file or flake output. See flake.agent-qemu.nix
             # and modules/myconfig.ai/programs.pi-coding-agent/default.nix.
-            sandboxed-pi-runner =
+            agent-qemu-pi-runner =
               let
                 getEnvOr =
                   name: fallback:
@@ -552,27 +552,27 @@
                     v = builtins.getEnv name;
                   in
                   if v == "" then fallback else v;
-                workspace = builtins.getEnv "SANDBOXED_PI_WORKSPACE";
+                workspace = builtins.getEnv "AGENT_QEMU_PI_WORKSPACE";
               in
               if workspace == "" then
                 # Pure eval (e.g. `nix flake check`, `nix flake show`): the
                 # env vars are empty, so emit a harmless placeholder derivation
                 # instead of failing. The real runner is only ever built
                 # impurely by the wrapper.
-                nixpkgs.legacyPackages.${system}.writeShellScriptBin "sandboxed-pi-runner" ''
-                  echo "sandboxed-pi-runner must be built via the sandboxed-pi wrapper (SANDBOXED_PI_WORKSPACE unset)" >&2
+                nixpkgs.legacyPackages.${system}.writeShellScriptBin "agent-qemu-pi-runner" ''
+                  echo "agent-qemu-pi-runner must be built via the agent-qemu-pi wrapper (AGENT_QEMU_PI_WORKSPACE unset)" >&2
                   exit 1
                 ''
               else
-                self.lib.mkSandboxedPiRunner {
+                self.lib.mkAgentQemuPiRunner {
                   inherit system workspace;
-                  sshPort = lib.toInt (getEnvOr "SANDBOXED_PI_SSH_PORT" "2222");
-                  authorizedKeysFile = getEnvOr "SANDBOXED_PI_AUTHORIZED_KEYS" "/var/empty/authorized_keys";
+                  sshPort = lib.toInt (getEnvOr "AGENT_QEMU_PI_SSH_PORT" "2222");
+                  authorizedKeysFile = getEnvOr "AGENT_QEMU_PI_AUTHORIZED_KEYS" "/var/empty/authorized_keys";
                   piPackage = inputs.nixos-unstable.legacyPackages.${system}.pi-coding-agent;
-                  allowNetwork = getEnvOr "SANDBOXED_PI_NETWORK" "1" != "0";
+                  allowNetwork = getEnvOr "AGENT_QEMU_PI_NETWORK" "1" != "0";
                   # Shared sandbox tools (myconfig.ai.sandboxTools), baked into
                   # the wrapper as a JSON array of store paths.
-                  extraGuestPackagePaths = builtins.fromJSON (getEnvOr "SANDBOXED_PI_EXTRA_PACKAGES" "[]");
+                  extraGuestPackagePaths = builtins.fromJSON (getEnvOr "AGENT_QEMU_PI_EXTRA_PACKAGES" "[]");
                 };
 
             # Per-invocation microvm runner for the whole workmux/tmux session
@@ -580,7 +580,7 @@
             # wrapper, which sets the SANDBOXED_WORKMUX_* environment variables
             # (main repo, sibling worktrees dir, forwarded SSH port, throwaway
             # authorized-keys file, generated workmux config + tmux.conf store
-            # paths). See flake.sandboxed-pi.nix and
+            # paths). See flake.agent-qemu.nix and
             # modules/myconfig.ai/myconfig.ai.workmux/sandbox.nix.
             sandboxed-workmux-runner =
               let
@@ -613,12 +613,12 @@
                   extraGuestPackagePaths = builtins.fromJSON (getEnvOr "SANDBOXED_WORKMUX_EXTRA_PACKAGES" "[]");
                 };
 
-            # Per-invocation microvm runner for `sandboxed-herdr`. Built
-            # impurely by the host-side `sandboxed-herdr` wrapper, which sets
-            # the SANDBOXED_HERDR_* environment variables (workspace path,
+            # Per-invocation microvm runner for `agent-qemu-herdr`. Built
+            # impurely by the host-side `agent-qemu-herdr` wrapper, which sets
+            # the AGENT_QEMU_HERDR_* environment variables (workspace path,
             # forwarded SSH port, throwaway authorized-keys file) before
             # `nix build --impure`. The workspace path therefore never appears
-            # in any tracked file or flake output. See flake.sandboxed-pi.nix
+            # in any tracked file or flake output. See flake.agent-qemu.nix
             # and modules/myconfig.ai/programs.herdr.nix.
             #
             # The guest carries `herdr` plus the coding-agent CLIs it
@@ -626,7 +626,7 @@
             # `agentPackagesByFlag` set, resolved against the host's
             # `myconfig.ai.<name>.enable` flags). Only agents enabled on the
             # building host are included, so the guest closure stays minimal.
-            sandboxed-herdr-runner =
+            agent-qemu-herdr-runner =
               let
                 getEnvOr =
                   name: fallback:
@@ -634,36 +634,36 @@
                     v = builtins.getEnv name;
                   in
                   if v == "" then fallback else v;
-                workspace = builtins.getEnv "SANDBOXED_HERDR_WORKSPACE";
-                agentPackages = builtins.fromJSON (getEnvOr "SANDBOXED_HERDR_AGENT_PACKAGES" "[]");
+                workspace = builtins.getEnv "AGENT_QEMU_HERDR_WORKSPACE";
+                agentPackages = builtins.fromJSON (getEnvOr "AGENT_QEMU_HERDR_AGENT_PACKAGES" "[]");
                 # The invoking host user's uid/gid (`id -u`/`id -g`), so the
                 # guest `agent` user can be pinned to match — see
-                # flake.sandboxed-pi.nix (`mkSandboxedRunner`) for why this is
+                # flake.agent-qemu.nix (`mkSandboxedRunner`) for why this is
                 # required for the shared workspace to stay writable.
-                hostUidStr = getEnvOr "SANDBOXED_HERDR_UID" "";
-                hostGidStr = getEnvOr "SANDBOXED_HERDR_GID" "";
+                hostUidStr = getEnvOr "AGENT_QEMU_HERDR_UID" "";
+                hostGidStr = getEnvOr "AGENT_QEMU_HERDR_GID" "";
               in
               if workspace == "" then
                 # Pure eval (e.g. `nix flake check`, `nix flake show`): the
                 # env vars are empty, so emit a harmless placeholder derivation
                 # instead of failing. The real runner is only ever built
                 # impurely by the wrapper.
-                nixpkgs.legacyPackages.${system}.writeShellScriptBin "sandboxed-herdr-runner" ''
-                  echo "sandboxed-herdr-runner must be built via the sandboxed-herdr wrapper (SANDBOXED_HERDR_WORKSPACE unset)" >&2
+                nixpkgs.legacyPackages.${system}.writeShellScriptBin "agent-qemu-herdr-runner" ''
+                  echo "agent-qemu-herdr-runner must be built via the agent-qemu-herdr wrapper (AGENT_QEMU_HERDR_WORKSPACE unset)" >&2
                   exit 1
                 ''
               else
-                self.lib.mkSandboxedHerdrRunner {
+                self.lib.mkAgentQemuHerdrRunner {
                   inherit system workspace agentPackages;
-                  sshPort = lib.toInt (getEnvOr "SANDBOXED_HERDR_SSH_PORT" "2222");
-                  authorizedKeysFile = getEnvOr "SANDBOXED_HERDR_AUTHORIZED_KEYS" "/var/empty/authorized_keys";
+                  sshPort = lib.toInt (getEnvOr "AGENT_QEMU_HERDR_SSH_PORT" "2222");
+                  authorizedKeysFile = getEnvOr "AGENT_QEMU_HERDR_AUTHORIZED_KEYS" "/var/empty/authorized_keys";
                   herdrPackage = nixpkgs.legacyPackages.${system}.herdr;
-                  allowNetwork = getEnvOr "SANDBOXED_HERDR_NETWORK" "1" != "0";
+                  allowNetwork = getEnvOr "AGENT_QEMU_HERDR_NETWORK" "1" != "0";
                   hostUid = if hostUidStr == "" then null else lib.toInt hostUidStr;
                   hostGid = if hostGidStr == "" then null else lib.toInt hostGidStr;
                   # Shared sandbox tools (myconfig.ai.sandboxTools), baked
                   # into the wrapper as a JSON array of store paths.
-                  extraGuestPackagePaths = builtins.fromJSON (getEnvOr "SANDBOXED_HERDR_EXTRA_PACKAGES" "[]");
+                  extraGuestPackagePaths = builtins.fromJSON (getEnvOr "AGENT_QEMU_HERDR_EXTRA_PACKAGES" "[]");
                 };
           };
 
@@ -756,7 +756,9 @@
           // lib.optionalAttrs (system == "x86_64-linux") (
             # Rust agent-gvisor parity suite + CLI harness
             # (modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox).
-            import ./modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix { inherit self inputs system; }
+            import ./modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix {
+              inherit self inputs system;
+            }
           );
 
           devShells.default =

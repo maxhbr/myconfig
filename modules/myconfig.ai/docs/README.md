@@ -13,7 +13,7 @@ forming a ladder from cheap-and-convenient to strong-and-heavy:
 | --- | --- | --- | --- | --- |
 | 1 | [`agent-tmux`](#1-agent-tmux--dedicated-unix-user) | Unix user + file permissions | `agent-tmux` | ~none |
 | 2 | [`jailed-pi`](#2-jailed-pi--bubblewrap-process-jail) | Linux namespaces (bubblewrap) | `jailed-pi` | ~none |
-| 3 | [`sandboxed-pi`](#3-sandboxed-pi--qemuslirp-microvm) | own kernel (QEMU microVM, SLiRP NAT) | `sandboxed-pi` | seconds to boot |
+| 3 | [`agent-qemu-pi`](#3-agent-qemu-pi--qemuslirp-microvm) | own kernel (QEMU microVM, SLiRP NAT) | `agent-qemu-pi` | seconds to boot |
 | 4 | [`agent-microvm`](#4-agent-microvm--cloud-hypervisor-microvm-fleet) | own kernel + own store + private bridge | `agent-microvm run\|submit` | host config + prebuilt slots |
 
 Tiers 2–4 share one design rule: **the working directory is the only thing the
@@ -26,7 +26,7 @@ The tiers are largely orthogonal and compose: an agent user (tier 1) can run
 
 All tiers are agent-agnostic in principle; `pi` is the reference agent. Tier 2
 also exists as `jailed-opencode` / `jailed-claude`, and tier 4 carries a whole
-registry of agents inside its guests. Tier 3 also has a `sandboxed-herdr`
+registry of agents inside its guests. Tier 3 also has a `agent-qemu-herdr`
 variant (below) that drops into a `herdr` multiplexer instead of a single
 `pi`.
 
@@ -139,7 +139,7 @@ checkout plus its `__worktrees` sibling — in one bubblewrap.
 
 ---
 
-## 3. `sandboxed-pi` — QEMU/SLiRP microVM
+## 3. `agent-qemu-pi` — QEMU/SLiRP microVM
 
 Same ergonomics as `jailed-pi` (`cd` into a project, run it, arguments are
 forwarded to `pi`), but the agent runs **in its own kernel** as an
@@ -147,15 +147,15 @@ unprivileged `agent` user with an ephemeral root filesystem.
 
 **Implementation**
 
-- `flake.sandboxed-pi.nix` — `mkSandboxedPiRunner` builds a one-shot
+- `flake.agent-qemu.nix` — `mkAgentQemuPiRunner` builds a one-shot
   [microvm.nix](https://github.com/microvm-nix/microvm.nix) QEMU runner (guest
   NixOS system + kernel + virtiofsd + run script).
-- `packages.<system>.sandboxed-pi-runner` evaluates that builder **impurely**
-  from `SANDBOXED_PI_*` env vars, so the workspace path never lands in a
+- `packages.<system>.agent-qemu-pi-runner` evaluates that builder **impurely**
+  from `AGENT_QEMU_PI_*` env vars, so the workspace path never lands in a
   tracked file or flake output. Under pure eval it is a placeholder.
-- The host wrapper `sandboxed-pi` lives in
+- The host wrapper `agent-qemu-pi` lives in
   `modules/myconfig.ai/programs.pi-coding-agent/default.nix`.
-- Full write-up: [`../programs.pi-coding-agent/sandboxed-pi.README.md`](../programs.pi-coding-agent/sandboxed-pi.README.md).
+- Full write-up: [`../programs.pi-coding-agent/agent-qemu-pi.README.md`](../programs.pi-coding-agent/agent-qemu-pi.README.md).
 
 **Launch sequence**: validate CWD (refuses `$HOME`) → generate a throwaway
 ed25519 keypair → pick a random `127.0.0.1` port → `nix build --impure` the
@@ -186,15 +186,15 @@ popup, like `alacritty-workmux-here`) — both under
 one VM. The in-terminal `sandboxed-workmux` is the reusable entry point; the
 Alacritty variant is a thin popup around it.
 
-**`sandboxed-herdr` variant**: the same microVM, but instead of exec'ing `pi`
+**`agent-qemu-herdr` variant**: the same microVM, but instead of exec'ing `pi`
 it exec's `herdr` (the agent multiplexer), and the guest carries `herdr` plus
 the coding-agent CLIs enabled on the host so the user can start `pi` /
 `opencode` / `claude-code` / … from *inside* the `herdr` session. It reuses
 the same `mkSandboxedRunner` factory (no parallel guest builder) and shares
-`sandboxed-pi`'s workspace handling, credential forwarding and refuse-`$HOME`
+`agent-qemu-pi`'s workspace handling, credential forwarding and refuse-`$HOME`
 guard. See
 [`../programs.herdr.nix`](../programs.herdr.nix) (wrapper) and
-[`../sandboxed-herdr.README.md`](../sandboxed-herdr.README.md).
+[`../agent-qemu-herdr.README.md`](../agent-qemu-herdr.README.md).
 
 **Limits**: the host store is visible read-only; the guest still shares the
 host store closure and reaches the network via the host. See the status note
@@ -246,7 +246,7 @@ Documentation set:
 - `agent-microvm submit` — unattended batch with structured results, hard
   timeouts, cancellation (`cancel`, exit `130`) and recovery.
 
-Like tier 3's `sandboxed-herdr` variant, a guest can run **`herdr`** (the agent
+Like tier 3's `agent-qemu-herdr` variant, a guest can run **`herdr`** (the agent
 multiplexer) instead of a single agent: `herdr` is a selectable registry agent
 (`enabledAgents = [ … "herdr" ]`, on by default in the `null`
 "all declared agents" mode and on `f13`), so `agent-microvm run --attach
@@ -282,16 +282,16 @@ section before trusting the tier.
 
 ---
 
-## `sandboxed-herdr` vs. `agent-microvm run --agent herdr`
+## `agent-qemu-herdr` vs. `agent-microvm run --agent herdr`
 
 Both tier 3 and tier 4 can put the `herdr` multiplexer inside a microVM, which
 looks like duplication but isn't: they sit at different rungs of the ladder
 above and solve different problems. Full comparison, with file/line
 references:
-[`doc/sandboxed-herdr-vs-agent-microvm-herdr.md`](../../../doc/sandboxed-herdr-vs-agent-microvm-herdr.md).
+[`doc/agent-qemu-herdr-vs-agent-microvm-herdr.md`](../../../doc/agent-qemu-herdr-vs-agent-microvm-herdr.md).
 Condensed:
 
-| | `sandboxed-herdr` (tier 3) | `agent-microvm --agent herdr` (tier 4) |
+| | `agent-qemu-herdr` (tier 3) | `agent-microvm --agent herdr` (tier 4) |
 | --- | --- | --- |
 | Purpose | ad hoc, zero-config sandbox for one project directory | one selectable agent inside the prebuilt, policy-hardened fleet |
 | Host `/nix/store` | shared into guest read-only | not shared — guest has its own store disk |
@@ -303,16 +303,16 @@ Condensed:
 
 **Overlap**: both reuse the same config-seeding allowlist/denylist library
 (`../fns/seed-agent-config.nix`) and near-identical "why herdr" rationale text
-(kept manually in sync between `../sandboxed-herdr.README.md` and
+(kept manually in sync between `../agent-qemu-herdr.README.md` and
 `../myconfig.ai.microvm/docs/agent-microvm.md`). `agent-microvm`'s herdr guest
-is a strict security superset of `sandboxed-herdr`'s on every shared axis
+is a strict security superset of `agent-qemu-herdr`'s on every shared axis
 (store exposure, credential exposure, network egress, workspace isolation),
-but `sandboxed-herdr` is not redundant: it needs zero host configuration and
+but `agent-qemu-herdr` is not redundant: it needs zero host configuration and
 shares the live working directory, which `agent-microvm` deliberately does
 not offer.
 
 **Recommendation**: keep both — they are intentionally orthogonal tiers, not
-a superset/subset pair to collapse. Use `sandboxed-herdr` for the common
+a superset/subset pair to collapse. Use `agent-qemu-herdr` for the common
 ad hoc case; use `agent-microvm` when the task is untrusted enough to keep
 the model key off the guest, needs a throwaway workspace, or is unattended.
 The only worthwhile cleanup is deduplicating the copy-pasted rationale text
@@ -328,7 +328,7 @@ a documentation/DRY change, not a behavior change.
   network-isolated `offline` agent user).
 - **Interactive work in a repo you trust, fastest loop** → `jailed-pi`.
 - **Same loop, but you want a kernel boundary** (untrusted repo, sketchy
-  dependency, `npm install` in the agent's path) → `sandboxed-pi`.
+  dependency, `npm install` in the agent's path) → `agent-qemu-pi`.
 - **Autonomous / batch runs, several agents in parallel, no upstream API key
   exposure, results you collect later** → `agent-microvm`.
 

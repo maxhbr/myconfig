@@ -1,6 +1,6 @@
-# `sandboxed-pi` — the microVM counterpart of `jailed-pi`
+# `agent-qemu-pi` — the microVM counterpart of `jailed-pi`
 
-`sandboxed-pi` runs the `pi` coding agent with the same ergonomics as
+`agent-qemu-pi` runs the `pi` coding agent with the same ergonomics as
 `jailed-pi`, but inside a real [microvm.nix](https://github.com/microvm-nix/microvm.nix)
 virtual machine (its own kernel) instead of a bubblewrap jail.
 
@@ -13,8 +13,8 @@ ephemeral root filesystem that is discarded when the VM stops.
 
 ```bash
 cd ~/some/project      # NOT $HOME — it refuses to run there
-sandboxed-pi           # launches a VM, opens pi in /workspace
-sandboxed-pi --help    # arguments are forwarded to pi unchanged
+agent-qemu-pi           # launches a VM, opens pi in /workspace
+agent-qemu-pi --help    # arguments are forwarded to pi unchanged
 ```
 
 On exit the VM is torn down and all guest state is discarded. Only the files
@@ -56,7 +56,7 @@ tracked file. If none are set, `pi` starts without credentials.
 ## Agent-configuration seeding
 
 The guest home is an ephemeral tmpfs, so without seeding `pi` would start
-with empty/default configuration. To avoid that, `sandboxed-pi` copies the
+with empty/default configuration. To avoid that, `agent-qemu-pi` copies the
 relevant, allowlisted host `~/.pi` configuration into the guest `/home/agent`
 over the SSH channel **at launch**, after the VM boots and before `pi` is
 exec'd. This mirrors the heavyweight `myconfig.ai.microvm` config-seed
@@ -102,16 +102,16 @@ output and invoked by the host wrapper as
 
 ## How it works
 
-- `flake.sandboxed-pi.nix` exports `mkSandboxedPiRunner`, which builds a qemu
+- `flake.agent-qemu.nix` exports `mkAgentQemuPiRunner`, which builds a qemu
   microvm.nix runner for one session (guest NixOS system + kernel + virtiofsd
   + run script).
-- The flake output `packages.<system>.sandboxed-pi-runner` evaluates that
+- The flake output `packages.<system>.agent-qemu-pi-runner` evaluates that
   builder impurely, reading the workspace path, forwarded SSH port and a
-  throwaway authorized-keys file from `SANDBOXED_PI_*` environment variables.
+  throwaway authorized-keys file from `AGENT_QEMU_PI_*` environment variables.
   The workspace path therefore never appears in a tracked file or flake
   output. Under pure evaluation (`nix flake check`) the output is a harmless
   placeholder.
-- The host wrapper `sandboxed-pi` (in `default.nix`) validates the working
+- The host wrapper `agent-qemu-pi` (in `default.nix`) validates the working
   directory (refuses `$HOME`), generates a throwaway SSH keypair, picks a
   random `127.0.0.1` port, `nix build --impure`s the runner for the current
   directory, starts the VM, waits for guest SSH, forwards credentials over the
@@ -145,7 +145,7 @@ launches inside one VM, popped up in an Alacritty window. It is defined in
 `myconfig.ai.workmux.sandbox.enable` (off by default). The main checkout is
 shared read-write at `/workspace` and the worktrees sibling at
 `/workspace__worktrees`, so workmux's sibling-directory convention resolves
-inside the guest. See `flake.sandboxed-pi.nix` (`mkSandboxedWorkmuxRunner`).
+inside the guest. See `flake.agent-qemu.nix` (`mkSandboxedWorkmuxRunner`).
 
 ## Requirements
 
@@ -160,5 +160,5 @@ Built and evaluated successfully (`nix flake check`, host toplevel build, and
 a full build of the guest runner including kernel/initrd/virtiofsd/run script,
 with the forwarded port and workspace source confirmed baked into the run
 script). **A live VM boot has not yet been exercised** because the build
-environment used has no `/dev/kvm`; run one `sandboxed-pi` session on a
+environment used has no `/dev/kvm`; run one `agent-qemu-pi` session on a
 KVM-capable host (e.g. f13) to complete runtime validation.
