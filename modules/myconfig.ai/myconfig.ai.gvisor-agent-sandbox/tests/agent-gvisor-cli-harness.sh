@@ -111,6 +111,13 @@ touch "$RECORD/run-fail"
 expect_fail "doctor against a broken sandbox" 1 doctor
 expect_err "doctor explains the broken sandbox" "sandbox startup failed"
 rm "$RECORD/run-fail"
+# With an endpoint configured, doctor probes the base URL AND smoke-tests
+# the model list (an endpoint that answers but lists no model is useless).
+export AGENT_GVISOR_MODEL_ENDPOINT="http://model.invalid/v1"
+expect_ok "doctor with a model endpoint" doctor
+expect_err "doctor probes the model endpoint" "checking model endpoint http://model.invalid/v1 "
+expect_err "doctor probes the model list" "checking model list http://model.invalid/v1/models "
+unset AGENT_GVISOR_MODEL_ENDPOINT
 
 echo "== session cycle =="
 expect_ok "start creates a detached session" start s1 --repo "$REPO" --detach

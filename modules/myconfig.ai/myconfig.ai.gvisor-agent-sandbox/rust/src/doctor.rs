@@ -32,6 +32,22 @@ fn probe_flags() -> Vec<String> {
 /// does not interpret it either).
 const CURL_CMD: &str = "curl -sS -o /dev/null --max-time 5 -w 'HTTP %{http_code}\\n' \"$0\"";
 
+/// The models smoke test: fetch the model list, print the status line plus a
+/// short excerpt of the body, and fail when the body is empty or lists no
+/// model id (an endpoint that answers but serves no model is as useless as
+/// an unreachable one).
+const MODELS_CMD: &str = concat!(
+    "body=$(curl -sS --max-time 10 -w '\\nHTTP %{http_code}' \"$0\") || exit 1; ",
+    "printf '%s\\n' \"$body\" | head -c 400; ",
+    "case \"$body\" in *'\"id\"'*) exit 0 ;; *) exit 1 ;; esac",
+);
+
+/// The models URL for a model endpoint: `<endpoint>/models`, with any
+/// trailing slashes on the endpoint collapsed.
+pub fn models_url(endpoint: &str) -> String {
+    format!("{}/models", endpoint.trim_end_matches('/'))
+}
+
 /// The throwaway-sandbox probe argument vector (without the global args —
 /// `Pod::exec` prepends those): `run --rm --read-only … <image> /bin/sh -c
 /// 'uname -srmo; id'`.
@@ -62,6 +78,24 @@ pub fn endpoint_probe_args(env: &Env) -> Vec<String> {
         "-c".to_string(),
         CURL_CMD.to_string(),
         env.model_endpoint.clone().unwrap_or_default(),
+    ]);
+    args
+}
+
+/// The models probe argument vector: like the endpoint probe, but fetching
+/// `<endpoint>/models` and asserting the answer actually lists a model.
+pub fn models_probe_args(env: &Env) -> Vec<String> {
+    let mut args = vec!["run".to_string()];
+    args.extend(probe_flags());
+    if !env.network.is_empty() {
+        args.extend(["--network".to_string(), env.network.clone()]);
+    }
+    args.push(env.default_image.clone());
+    args.extend([
+        "/bin/sh".to_string(),
+        "-c".to_string(),
+        MODELS_CMD.to_string(),
+        models_url(&env.model_endpoint.clone().unwrap_or_default()),
     ]);
     args
 }
@@ -117,6 +151,18 @@ pub fn endpoint_unreachable_message(endpoint: &str) -> String {
          spec, e.g. pasta:--map-guest-addr,<endpoint-host>). Also confirm the\n\
          host litellm proxy is up on 127.0.0.1:<port> and the forwarder socket\n\
          (agent-litellm-forward) is active on 0.0.0.0:<forward-port>."
+    )
+}
+
+/// The warning when the model list is unusable (unreachable, empty, or
+/// without a single model id).
+pub fn models_empty_message(url: &str) -> String {
+    format!(
+        "warning: {url} did not return a usable model list.\n\
+         The endpoint answers, but the sandbox would see no model to talk to.\n\
+         Check that the host litellm proxy has models configured and that the\n\
+         API key expected by the proxy is present in the sandbox environment\n\
+         (an auth failure also shows up as an empty list here)."
     )
 }
 

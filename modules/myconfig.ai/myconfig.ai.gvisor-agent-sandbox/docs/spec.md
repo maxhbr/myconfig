@@ -158,7 +158,7 @@ Resolved mounts are stored tab-separated in `__sessions/<name>/mounts.tsv`.
 | `AGENT_GVISOR_HOME_SEED` | — | seed `/home/agent` from this directory instead of the activated home-manager generation |
 | `AGENT_GVISOR_HOME_SEED_PATHS` | empty ⇒ no seeding | **space-separated** relative paths copied from the seed tree (allowlist) |
 | `AGENT_GVISOR_HOME_SEED_REWRITE` | empty ⇒ no rewriting | **space-separated** `OLD=NEW` rules applied literally to the seeded files |
-| `AGENT_GVISOR_MODEL_ENDPOINT` | unset | probed by `doctor` from inside a sandbox |
+| `AGENT_GVISOR_MODEL_ENDPOINT` | unset | probed by `doctor` from inside a sandbox (the base URL, plus `<endpoint>/models` as a smoke test: the list must name at least one model) |
 | `AGENT_GVISOR_NETWORK` | unset ⇒ empty | default `--network` for sessions and `doctor` probes |
 | `AGENT_GVISOR_LOOPBACK_FORWARD` | unset | **space-separated** `LPORT:RHOST:RPORT` rules; passed into the container and set up by `/bin/agent-gvisor-init` |
 | `AGENT_GVISOR_DEFAULT_COMMAND` | `/bin/bash` | word-split command run by `start`/`run` when no COMMAND is given; `shell` is unaffected |

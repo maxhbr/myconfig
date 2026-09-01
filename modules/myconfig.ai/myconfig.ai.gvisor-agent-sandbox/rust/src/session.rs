@@ -1236,6 +1236,16 @@ pub fn cmd_doctor(env: Env) -> ! {
         } else {
             warn(&doctor::endpoint_unreachable_message(&endpoint));
         }
+        // Reachability alone says nothing about usability: a proxy that
+        // answers 404 on / can still serve an empty (or unauthorised) model
+        // list, which fails only later inside an agent. Smoke-test it.
+        let models = doctor::models_url(&endpoint);
+        log(&format!("checking model list {models} from inside a sandbox"));
+        if pod.run(&doctor::models_probe_args(&env)).success() {
+            log("model list is non-empty");
+        } else {
+            warn(&doctor::models_empty_message(&models));
+        }
     }
 
     // The in-sandbox relays are what make the endpoint answer on the
