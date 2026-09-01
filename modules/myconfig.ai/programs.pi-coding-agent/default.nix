@@ -686,7 +686,11 @@ let
     # untouched (after self-healing any legacy marker corruption); when unset
     # (un-jailed) it applies the red-border `unjailed` theme in-memory only.
     extraRuntimeEnv.PI_JAIL_MARKER = "1";
-    extraDevTools = workmuxDevTools;
+    # `pi` itself on the jail `PATH`: the jailed process only gets the binary
+    # exec'd by the jail wrapper, so anything that shells out to `pi` by name
+    # (subagents, `/handoff`, scripts and skills in the workspace) fails with
+    # "command not found" unless the package is also added to `PATH`.
+    extraDevTools = [ pi-coding-agent-pkg ] ++ workmuxDevTools;
     # Bind the host path named by `PI_WORKTREE_MAIN_REPO` read-only into the
     # jail. The `*-worktree` wrapper scripts set this to the *original* git
     # repository (the worktree's linked main repo) before exec'ing `agent-bubblewrap-pi`,
@@ -719,7 +723,12 @@ let
     # `workmux-status.ts` extension — is routed through the jail-to-host
     # channel below instead of shelling out to tmux (which is unreachable
     # inside the jail). Gated on workmux being enabled.
-    extraDevTools = lib.optional osconfig.myconfig.ai.workmux.enable workmuxStatusShim;
+    # Same rationale as `agent-bubblewrap-pi` above: keep `pi` reachable by
+    # name inside the jail.
+    extraDevTools = [
+      pi-coding-agent-pkg
+    ]
+    ++ lib.optional osconfig.myconfig.ai.workmux.enable workmuxStatusShim;
     extraRuntimeEnv.PI_JAIL_MARKER = "1";
     extraReadOnlyEnvPaths = [ "PI_WORKTREE_MAIN_REPO" ];
     # This bind is emitted after the read-only main-repo bind by jail-app.
