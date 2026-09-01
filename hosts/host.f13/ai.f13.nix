@@ -26,7 +26,10 @@
         # The sandbox image gets the agent CLIs enabled above
         # (pi-coding-agent, opencode, claude-code, codex) baked in
         # automatically; see `extraImagePackages` in the module.
-        gvisor-agent-sandbox.enable = true;
+        gvisor-agent-sandbox = {
+          enable = true;
+          nix.enable = true;
+        };
 
         # Cloud Hypervisor agent-sandbox tier
         # (see modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md).
