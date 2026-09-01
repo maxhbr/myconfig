@@ -17,7 +17,6 @@
   config,
   lib,
   pkgs,
-  flake,
   ...
 }:
 let
@@ -89,8 +88,8 @@ let
 
   # The subset of agents actually enabled on this host, as a list of store
   # paths. Baked into the `agent-qemu-herdr` wrapper as the default value of
-  # AGENT_QEMU_HERDR_AGENT_PACKAGES (a JSON array), which the impure flake
-  # output `agent-qemu-herdr-runner` reads and passes to
+  # AGENT_QEMU_HERDR_AGENT_PACKAGES (a JSON array), which the impure runner
+  # expression reads and passes to
   # `mkAgentQemuHerdrRunner` as `agentPackages`. Only public store paths are
   # baked in (never credentials); this matches `agent-qemu-pi`, which bakes the
   # `piPackage` store path into its runner the same way.
@@ -115,7 +114,7 @@ let
   #
   # Workspace handling, credential forwarding and the refuse-$HOME guard are
   # identical to `agent-qemu-pi`. See
-  # ../../../flake.agent-qemu.nix (`mkAgentQemuHerdrRunner`) and
+  # ./myconfig.ai.qemu-agent-sandbox/builders.nix (`mkAgentQemuHerdrRunner`) and
   # ./agent-qemu-herdr.README.md.
   agent-qemu-herdr = pkgs.writeShellApplication {
     name = "agent-qemu-herdr";
@@ -162,6 +161,7 @@ let
       # Throwaway SSH keypair authorizing the launcher into the guest.
       ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C agent-qemu-herdr
 
+      export QEMU_AGENT_SANDBOX_KIND=herdr
       export AGENT_QEMU_HERDR_WORKSPACE="$workspace"
       export AGENT_QEMU_HERDR_SSH_PORT="$ssh_port"
       export AGENT_QEMU_HERDR_AUTHORIZED_KEYS="$runtime_dir/id.pub"
@@ -173,7 +173,7 @@ let
       # this, `agent`'s auto-assigned uid only accidentally matches the host
       # owner, and writes to /workspace fail with EACCES while reads (backed
       # by the usual world-readable bits) keep working. See
-      # ../../../flake.agent-qemu.nix (`mkSandboxedRunner`).
+      # ./myconfig.ai.qemu-agent-sandbox/builders.nix (`mkSandboxedRunner`).
       agent_qemu_herdr_uid="$(id -u)"
       agent_qemu_herdr_gid="$(id -g)"
       export AGENT_QEMU_HERDR_UID="$agent_qemu_herdr_uid"
@@ -183,14 +183,14 @@ let
       export AGENT_QEMU_HERDR_AGENT_PACKAGES='${agentPackagesJson}'
       # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
       # time as a JSON array of store paths; read by the impure
-      # `agent-qemu-herdr-runner` flake output.
+      # standalone qemu-agent-sandbox runner expression.
       export AGENT_QEMU_HERDR_EXTRA_PACKAGES='${sandboxToolsJson}'
 
       echo "agent-qemu-herdr: building microvm runner for workspace: $workspace" >&2
-      # Use an explicit `path:` flakeref for the flake source store path;
-      # see agent-qemu-pi for the rationale (libgit2 dubious-ownership check).
+      # Evaluate the module-owned expression directly. Impure evaluation is
+      # required for the transient workspace, port, key, and uid/gid values.
       runner=$(nix build --impure --no-link --print-out-paths \
-        "path:${flake.outPath}#packages.${pkgs.stdenv.hostPlatform.system}.agent-qemu-herdr-runner")
+        --file ${config.myconfig.ai.qemu-agent-sandbox.runnerExpression})
 
       # microvm.nix's qemu runner connects to the virtiofs daemons over
       # RELATIVE unix socket paths; the runner's `bin/sandboxed-launch`
@@ -246,7 +246,7 @@ let
       # denylist-filtered host configuration into the guest `/home/agent` over
       # SSH — never baking anything into the store and never copying
       # credential files (keys keep flowing over the SSH environment above).
-      # See ../../../flake.agent-qemu.nix (`mkSeedScript`) and
+      # See ./myconfig.ai.qemu-agent-sandbox/builders.nix (`mkSeedScript`) and
       # ../fns/seed-agent-config.nix. Run it BEFORE the interactive session so
       # the agents launched from inside `herdr` start already configured.
       if [ -x "$runner/bin/seed-agent-config" ]; then
@@ -271,7 +271,7 @@ let
 
   # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
   # paths, baked into the `agent-qemu-herdr` wrapper and read (via
-  # AGENT_QEMU_HERDR_EXTRA_PACKAGES) by the impure flake output that builds
+  # AGENT_QEMU_HERDR_EXTRA_PACKAGES) by the impure runner expression that builds
   # the per-invocation VM runner. Same pattern as `agentPackagesJson` above.
   sandboxToolsJson = builtins.toJSON (
     map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages

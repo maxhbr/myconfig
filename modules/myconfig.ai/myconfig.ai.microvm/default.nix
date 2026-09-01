@@ -4,7 +4,7 @@
 # myconfig.ai.microvm — Cloud Hypervisor agent-sandbox tier.
 #
 # A second, stronger isolation tier for autonomous coding agents, alongside
-# the existing QEMU/SLiRP `flake.agent-qemu.nix` tier. It runs each agent
+# the existing QEMU/SLiRP `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` tier. It runs each agent
 # session inside a Cloud Hypervisor microVM (via the `microvm.nix` flake
 # input) with its own kernel, a disposable root/home, a single writable
 # virtiofs `/workspace` mount (a standalone git clone), a dedicated private

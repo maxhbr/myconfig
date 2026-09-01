@@ -147,12 +147,12 @@ unprivileged `agent` user with an ephemeral root filesystem.
 
 **Implementation**
 
-- `flake.agent-qemu.nix` — `mkAgentQemuPiRunner` builds a one-shot
+- `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` — `mkAgentQemuPiRunner` builds a one-shot
   [microvm.nix](https://github.com/microvm-nix/microvm.nix) QEMU runner (guest
   NixOS system + kernel + virtiofsd + run script).
-- `packages.<system>.agent-qemu-pi-runner` evaluates that builder **impurely**
-  from `AGENT_QEMU_PI_*` env vars, so the workspace path never lands in a
-  tracked file or flake output. Under pure eval it is a placeholder.
+- `myconfig.ai.qemu-agent-sandbox.runnerExpression` evaluates that builder
+  **impurely** from `AGENT_QEMU_PI_*` env vars, so the workspace path never
+  lands in a tracked file or flake output. It is not a flake package.
 - The host wrapper `agent-qemu-pi` lives in
   `modules/myconfig.ai/programs.pi-coding-agent/default.nix`.
 - Full write-up: [`../programs.pi-coding-agent/agent-qemu-pi.README.md`](../programs.pi-coding-agent/agent-qemu-pi.README.md).
@@ -177,7 +177,7 @@ it is QEMU and not Cloud Hypervisor: CH has no user-mode networking.)
 `ANTHROPIC_API_KEY` are pushed over SSH env at launch, only when set — never
 into the store, never on a command line.
 
-**Requires**: `/dev/kvm` (otherwise slow TCG), flakes.
+**Requires**: `/dev/kvm` (otherwise slow TCG), `nix-command`.
 
 Session-wide variant: `sandboxed-workmux` (in-terminal, like
 `agent-bubblewrap-workmux-tmux`) and `alacritty-sandboxed-workmux-here` (Alacritty

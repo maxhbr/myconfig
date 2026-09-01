@@ -4,7 +4,7 @@
 
 `doc/agent-qemu-herdr-vs-agent-microvm-herdr.md` cites its evidence as
 `<file>:<start>-<end>` line ranges (e.g. `agent-qemu-herdr.README.md:187-196`,
-`agent-microvm.md:765-784`, `flake.agent-qemu.nix:470`). Every edit to a
+`agent-microvm.md:765-784`, `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix:470`). Every edit to a
 cited file silently invalidates them: the 2026-08 doc review found ~10 drifted
 ranges, and the doc-review fixes (commit `04c9e05f0a`, branch `agent/gvisor-fun`) re-verified and
 updated all of them by hand — the second such manual pass over this file.

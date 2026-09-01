@@ -54,9 +54,9 @@ concrete recommendation.
 
 | Aspect | `agent-qemu-herdr` | `agent-microvm` (`--agent herdr`) |
 | --- | --- | --- |
-| Hypervisor | QEMU, SLiRP (`flake.agent-qemu.nix:170-204`) | Cloud Hypervisor (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md`, guest shape table) |
+| Hypervisor | QEMU, SLiRP (`modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix:170-204`) | Cloud Hypervisor (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md`, guest shape table) |
 | Kernel | own guest kernel | own guest kernel |
-| Guest store | host `/nix/store` shared **read-only** via virtiofs (`flake.agent-qemu.nix:175-186`) — the guest closure is the *host's* store | self-contained EROFS store disk built into the guest image; host store not reachable from the guest at all (`agent-microvm.md:13-14`) |
+| Guest store | host `/nix/store` shared **read-only** via virtiofs (`modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix:175-186`) — the guest closure is the *host's* store | self-contained EROFS store disk built into the guest image; host store not reachable from the guest at all (`agent-microvm.md:13-14`) |
 | Network boundary | SLiRP NAT (outbound only) + one loopback-forwarded SSH port; no host bridge/firewall (`agent-qemu-herdr.README.md:80-86`) | dedicated bridge `agentbr0`, per-TAP L2 isolation, nftables `AGENT_MICROVM_*` chains, named `networkProfile`s (`offline`/`proxy-only`/`package-access`/`internet`), and — with the `vsock` capability — literally **no network interface at all** (`agent-microvm.md`, "VSOCK versus TAP transport") |
 | Credential exposure to guest | real `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/etc. land in the guest process environment via SSH `SetEnv` (`programs.herdr.nix:236-238`) | upstream keys **never** reach the guest; only a bridge-/VSOCK-restricted forwarding endpoint to the host LiteLLM proxy is visible (`agent-microvm.md:9-25`, "model-API access restricted to the host LiteLLM proxy") |
 | What one compromised guest can attack | the host store is read-only, so a guest exploit cannot corrupt it, but it *can read* the entire host store contents (world-readable anyway) and reach outbound network via SLiRP | no store to read, egress is default-deny beyond the proxy port, guest-to-guest traffic is dropped at L2 and L3, and the workspace is a throwaway clone, not the real checkout |
@@ -89,7 +89,7 @@ boot vs. a pre-boot root-owned share).
   `nix build --impure` for a small per-invocation wrapper derivation (the
   cached guest system closure is reused; only the workspace-path-specific
   derivation rebuilds — "sub-second", per the module comment
-  `flake.agent-qemu.nix:27-31`), then boots a disposable QEMU VM and polls
+  `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix:27-31`), then boots a disposable QEMU VM and polls
   SSH for up to 120s before failing (`programs.herdr.nix:206-227`). No host
   services, bridges or pools exist between invocations — zero idle overhead,
   all cost is paid at launch and torn down at exit.
@@ -121,8 +121,8 @@ writing.
 | --- | --- | --- |
 | Option path | none — it is unconditionally installed whenever any agent flag is enabled (`agenticCodingEnabled`, `modules/myconfig.ai/programs.herdr.nix:23-29`) | `myconfig.ai.microvm.*` (`enable`, `enabledAgents`, `resourceClasses`, `networkProfile`, `capabilities`, …), all under `modules/myconfig.ai/myconfig.ai.microvm/default.nix` |
 | Entry point | `agent-qemu-herdr` shell wrapper (`programs.herdr.nix:120-270`), installed via `home.packages` (`programs.herdr.nix:284`) | `agent-microvm run\|submit\|ssh\|...` launcher (`modules/myconfig.ai/myconfig.ai.microvm/launcher.nix`), plus `microvm-<agent>` workmux panes when `interactive` is selected |
-| Guest builder | `mkAgentQemuHerdrRunner` in `flake.agent-qemu.nix:470`, a thin wrapper over the shared `mkSandboxedRunner` (same factory `mkAgentQemuPiRunner` uses) | the module's own guest NixOS system (`guest.nix`), driven by the agent registry `agents.nix` |
-| Impure evaluation seam | `packages.<system>.agent-qemu-herdr-runner` in `flake.nix:623-643`, built from `AGENT_QEMU_HERDR_*` env vars set by the wrapper (workspace path never lands in a tracked file) | none needed — slots are declared statically per host and prebuilt at system-build time |
+| Guest builder | `mkAgentQemuHerdrRunner` in `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix:470`, a thin wrapper over the shared `mkSandboxedRunner` (same factory `mkAgentQemuPiRunner` uses) | the module's own guest NixOS system (`guest.nix`), driven by the agent registry `agents.nix` |
+| Impure evaluation seam | module-owned `myconfig.ai.qemu-agent-sandbox.runnerExpression`, built directly with `nix build --impure --file` from `AGENT_QEMU_HERDR_*` env vars set by the wrapper (workspace path never lands in a tracked file) | none needed — slots are declared statically per host and prebuilt at system-build time |
 | herdr's role in the config | hard-coded as the guest's SSH-exec target; not configurable per invocation | one entry in the agent registry (`../agents.nix`), selected via `enabledAgents` like any other agent |
 
 ## Which hosts enable which

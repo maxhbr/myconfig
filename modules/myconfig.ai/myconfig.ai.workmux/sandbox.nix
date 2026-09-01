@@ -20,9 +20,9 @@
 # `agent-bubblewrap-workmux-tmux` is to `alacritty-workmux-here`: the in-terminal sandbox
 # is the reusable entry point, and the Alacritty variant is a thin popup
 # around it. Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
-# ../../../flake.agent-qemu.nix).
+# ../myconfig.ai.qemu-agent-sandbox/builders.nix).
 #
-# See ../../../flake.agent-qemu.nix (`mkSandboxedWorkmuxRunner`) for the
+# See ../myconfig.ai.qemu-agent-sandbox/builders.nix (`mkSandboxedWorkmuxRunner`) for the
 # guest and the rationale for qemu + user-mode networking over
 # cloud-hypervisor. The session is reached over SSH on a host-localhost
 # forwarded port using a throwaway keypair generated per invocation.
@@ -30,15 +30,12 @@
   config,
   lib,
   pkgs,
-  flake,
   ...
 }:
 let
   cfg = config.myconfig.ai.workmux.sandbox;
   wmCfg = config.myconfig.ai.workmux;
   aiCfg = config.myconfig.ai;
-
-  system = pkgs.stdenv.hostPlatform.system;
 
   yamlFormat = pkgs.formats.yaml { };
 
@@ -60,7 +57,7 @@ let
 
   # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
   # paths, baked into the `alacritty-sandboxed-workmux-here` wrapper and read
-  # (via SANDBOXED_WORKMUX_EXTRA_PACKAGES) by the impure flake output that
+  # (via SANDBOXED_WORKMUX_EXTRA_PACKAGES) by the impure runner expression that
   # builds the per-invocation VM runner. Same pattern as
   # AGENT_QEMU_HERDR_AGENT_PACKAGES in ../programs.herdr.nix.
   sandboxToolsJson = builtins.toJSON (
@@ -131,6 +128,7 @@ let
 
       ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C sandboxed-workmux
 
+      export QEMU_AGENT_SANDBOX_KIND=workmux
       export SANDBOXED_WORKMUX_REPO="$top"
       export SANDBOXED_WORKMUX_WORKTREES="$worktrees"
       export SANDBOXED_WORKMUX_SSH_PORT="$ssh_port"
@@ -140,20 +138,15 @@ let
       export SANDBOXED_WORKMUX_NETWORK=1
       # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
       # time as a JSON array of store paths; read by the impure
-      # `sandboxed-workmux-runner` flake output.
+      # standalone qemu-agent-sandbox runner expression.
       export SANDBOXED_WORKMUX_EXTRA_PACKAGES='${sandboxToolsJson}'
 
       echo "sandboxed-workmux: building microvm runner for $top" >&2
-      # `path:` flakeref (not a bare store path): a bare `/nix/store/...-source`
-      # argument is re-resolved by Nix to its originating `git+file://`
-      # flakeref, which libgit2 refuses because /nix/store is not owned by the
-      # current user (dubious-ownership, error 7). `path:` forces the path
-      # fetcher and copies the tree, bypassing the git ownership check. The
-      # runner is still built impurely per invocation because it embeds the
-      # per-launch main repo, worktrees dir, SSH port, keys and config via the
-      # SANDBOXED_WORKMUX_* environment variables.
+      # Evaluate the module-owned expression directly. Impure evaluation is
+      # required for the transient repository, worktrees, port, key, and
+      # generated configuration paths.
       runner=$(nix build --impure --no-link --print-out-paths \
-        "path:${flake.outPath}#packages.${system}.sandboxed-workmux-runner")
+        --file ${config.myconfig.ai.qemu-agent-sandbox.runnerExpression})
 
       # Start the rootless virtiofsd daemon(s) + qemu via the runner's
       # combined `sandboxed-launch` entry point, from $runtime_dir so the

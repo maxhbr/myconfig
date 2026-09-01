@@ -5,7 +5,6 @@
   lib,
   pkgs,
   jail,
-  flake,
   ...
 }:
 
@@ -760,7 +759,7 @@ let
   # writable thing the agent sees), but instead of a bubblewrap jail the
   # agent runs inside a real microvm.nix VM with its own kernel, an ephemeral
   # root filesystem and an unprivileged `agent` user. See
-  # ../../../flake.agent-qemu.nix for the guest/runner and the rationale for
+  # ../../myconfig.ai.qemu-agent-sandbox for the guest/runner and the rationale for
   # qemu + user-mode networking over cloud-hypervisor.
   #
   # The current working directory is shared read-write at /workspace via
@@ -814,28 +813,22 @@ let
       # Throwaway SSH keypair authorizing the launcher into the guest.
       ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C agent-qemu-pi
 
+      export QEMU_AGENT_SANDBOX_KIND=pi
       export AGENT_QEMU_PI_WORKSPACE="$workspace"
       export AGENT_QEMU_PI_SSH_PORT="$ssh_port"
       export AGENT_QEMU_PI_AUTHORIZED_KEYS="$runtime_dir/id.pub"
       export AGENT_QEMU_PI_NETWORK=1
       # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
       # time as a JSON array of store paths; read by the impure
-      # `agent-qemu-pi-runner` flake output.
+      # standalone qemu-agent-sandbox runner expression.
       export AGENT_QEMU_PI_EXTRA_PACKAGES='${sandboxToolsJson}'
 
       echo "agent-qemu-pi: building microvm runner for workspace: $workspace" >&2
-      # Use an explicit `path:` flakeref for the flake source store path.
-      # A bare `/nix/store/...-source` argument is re-resolved by Nix back to
-      # its originating `git+file://` flakeref, and libgit2 then refuses the
-      # store path with "repository path ... is not owned by current user"
-      # (dubious-ownership check, error 7) because /nix/store is root-owned.
-      # `path:` forces the path fetcher (copies the tree), sidestepping any
-      # git ownership check. The runner still must be built impurely per
-      # invocation because it embeds the per-launch workspace path, forwarded
-      # SSH port and throwaway authorized-keys file via the AGENT_QEMU_PI_*
-      # environment variables (read with builtins.getEnv in flake.nix).
+      # Evaluate the module-owned expression directly. The runner must be
+      # built impurely because it embeds the per-launch workspace path,
+      # forwarded SSH port, and throwaway authorized-keys file.
       runner=$(nix build --impure --no-link --print-out-paths \
-        "path:${flake.outPath}#packages.${system}.agent-qemu-pi-runner")
+        --file ${config.myconfig.ai.qemu-agent-sandbox.runnerExpression})
 
       # microvm.nix's qemu runner connects to the virtiofs daemons over
       # RELATIVE unix socket paths (e.g. `agent-qemu-pi-virtiofs-nix-store.sock`),
@@ -893,7 +886,7 @@ let
       # configuration into the guest `/home/agent` over SSH — never baking
       # anything into the store and never copying credential files (keys keep
       # flowing over the SSH environment above). See
-      # ../../../flake.agent-qemu.nix (`mkSeedScript`) and
+      # ../../myconfig.ai.qemu-agent-sandbox/builders.nix (`mkSeedScript`) and
       # ../fns/seed-agent-config.nix. Run it BEFORE the interactive session
       # so the agent starts already configured.
       if [ -x "$runner/bin/seed-agent-config" ]; then
@@ -916,7 +909,7 @@ let
 
   # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
   # paths, baked into the `agent-qemu-pi` wrapper and read (via the
-  # AGENT_QEMU_PI_EXTRA_PACKAGES env var) by the impure flake output that
+  # AGENT_QEMU_PI_EXTRA_PACKAGES env var) by the impure runner expression that
   # builds the per-invocation VM runner. Same pattern as
   # AGENT_QEMU_HERDR_AGENT_PACKAGES in ../programs.herdr.nix.
   sandboxToolsJson = builtins.toJSON (

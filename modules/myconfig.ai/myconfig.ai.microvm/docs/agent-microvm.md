@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT
 # Agent microVM sandboxes (`myconfig.ai.microvm`)
 
 A second, stronger isolation tier for autonomous coding agents, alongside the
-QEMU/SLiRP `flake.agent-qemu.nix` tier and the process-jail /
+QEMU/SLiRP `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` tier and the process-jail /
 dedicated-host-user tiers. Each agent session runs inside a **Cloud Hypervisor
 microVM** (via the `microvm.nix` flake input) with:
 

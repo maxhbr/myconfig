@@ -102,15 +102,14 @@ output and invoked by the host wrapper as
 
 ## How it works
 
-- `flake.agent-qemu.nix` exports `mkAgentQemuPiRunner`, which builds a qemu
+- `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` exports `mkAgentQemuPiRunner`, which builds a qemu
   microvm.nix runner for one session (guest NixOS system + kernel + virtiofsd
   + run script).
-- The flake output `packages.<system>.agent-qemu-pi-runner` evaluates that
-  builder impurely, reading the workspace path, forwarded SSH port and a
-  throwaway authorized-keys file from `AGENT_QEMU_PI_*` environment variables.
-  The workspace path therefore never appears in a tracked file or flake
-  output. Under pure evaluation (`nix flake check`) the output is a harmless
-  placeholder.
+- `myconfig.ai.qemu-agent-sandbox.runnerExpression` evaluates that builder
+  impurely, reading the workspace path, forwarded SSH port, and throwaway
+  authorized-keys file from `AGENT_QEMU_PI_*` environment variables. The
+  workspace path therefore never appears in a tracked file or flake output.
+  The runner is not exported as a flake package.
 - The host wrapper `agent-qemu-pi` (in `default.nix`) validates the working
   directory (refuses `$HOME`), generates a throwaway SSH keypair, picks a
   random `127.0.0.1` port, `nix build --impure`s the runner for the current
@@ -145,14 +144,14 @@ launches inside one VM, popped up in an Alacritty window. It is defined in
 `myconfig.ai.workmux.sandbox.enable` (off by default). The main checkout is
 shared read-write at `/workspace` and the worktrees sibling at
 `/workspace__worktrees`, so workmux's sibling-directory convention resolves
-inside the guest. See `flake.agent-qemu.nix` (`mkSandboxedWorkmuxRunner`).
+inside the guest. See `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` (`mkSandboxedWorkmuxRunner`).
 
 ## Requirements
 
 - Access to `/dev/kvm` for the invoking user (KVM acceleration). Without it,
   qemu falls back to slow TCG emulation.
-- `nix` with flakes; the wrapper runs `nix build --impure` against the pinned
-  flake revision it was built from.
+- `nix` with the `nix-command` feature; the wrapper runs
+  `nix build --impure --file` against the module-owned runner expression.
 
 ## Status / validation
 

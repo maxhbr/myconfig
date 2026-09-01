@@ -1590,7 +1590,7 @@ let
       # `workspace_group`). The `__agent-microvm` suffix mirrors the
       # existing `<basename>__worktrees` convention (see
       # modules/myconfig.ai/fns/workmux-worktree.nix and
-      # flake.agent-qemu.nix), so a human listing the workspace root can
+      # modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix), so a human listing the workspace root can
       # tell a per-repo agent-microvm group from a workmux worktree group at a
       # glance. Two different repositories never share a clone directory, and
       # the same repository's tasks land next to each other.

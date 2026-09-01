@@ -25,7 +25,7 @@
 # The host-side wrappers (see
 # `modules/myconfig.ai/programs.pi-coding-agent/default.nix` and
 # `modules/myconfig.ai/myconfig.ai.workmux/sandbox.nix`) evaluate these per
-# invocation via impure flake outputs, passing the current working directory
+# invocation via a standalone impure Nix expression, passing the current working directory
 # as the workspace. This is the "wrapper that evaluates a parameterized flake
 # output" execution model — the guest system closure is cached; only a tiny
 # wrapper derivation that embeds the workspace path and the forwarded SSH port
@@ -67,16 +67,21 @@
 # resolved target, so secrets never touch the Nix store (they keep flowing
 # over the SSH environment, exactly as before). The allowlist + denylist are
 # BAKED into the seeder script by Nix; the launcher cannot widen them.
-inputs:
+{
+  nixpkgs,
+  nixosSystem,
+  microvmModule,
+  seedAgentConfig,
+}:
 let
   # The shared host→guest agent-config seeder library
   # (modules/myconfig.ai/fns/seed-agent-config.nix). Imported once so every
   # runner factory shares the same allowlist/denylist vocabulary. Resolved
   # against x86_64-linux (the only sandboxed-* host platform); the library is
   # platform-independent (it only uses lib + writeShellApplication).
-  seedLib = import ./modules/myconfig.ai/fns/seed-agent-config.nix {
-    inherit (inputs.nixpkgs) lib;
-    pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
+  seedLib = import seedAgentConfig {
+    inherit (nixpkgs) lib;
+    pkgs = nixpkgs.legacyPackages.x86_64-linux;
   };
 
   # Build the `seed-agent-config` host-side seeder script for a given union
@@ -90,7 +95,7 @@ let
     if configPaths == [ ] then
       # No seeding requested: emit a no-op so the wrapper can call it
       # unconditionally. Keeps the wrapper logic branch-free.
-      inputs.nixpkgs.legacyPackages.${system}.writeShellScriptBin "seed-agent-config" ''
+      nixpkgs.legacyPackages.${system}.writeShellScriptBin "seed-agent-config" ''
         echo "seed-agent-config: nothing to seed (empty allowlist)" >&2
       ''
     else
@@ -151,17 +156,17 @@ let
       # modules/myconfig.ai/myconfig.ai.sandboxTools.nix): store-path strings
       # baked into a `SANDBOXED_*_EXTRA_PACKAGES` JSON env var by the host-side
       # wrapper (same pattern as `AGENT_QEMU_HERDR_AGENT_PACKAGES`) and passed
-      # through by the flake outputs in `_flake.nix_`. Folded into ONE
+      # through by `runner.nix`. Folded into ONE
       # `buildEnv` package that joins `guestPackages`.
       extraGuestPackagePaths ? [ ],
     }:
     let
-      pkgs = inputs.nixpkgs.legacyPackages.${system};
+      pkgs = nixpkgs.legacyPackages.${system};
 
-      guest = inputs.nixpkgs.lib.nixosSystem {
+      guest = nixosSystem {
         inherit system;
         modules = [
-          inputs.microvm.nixosModules.microvm
+          microvmModule
           (
             { lib, ... }:
             {
@@ -304,7 +309,7 @@ let
         ++ extraGuestModules;
       };
 
-      lib = inputs.nixpkgs.lib;
+      lib = nixpkgs.lib;
 
       # microvm.nix's declared qemu runner. Its `bin/microvm-run` launches
       # qemu, which connects to the virtiofs daemons over RELATIVE unix
@@ -556,7 +561,7 @@ in
       extraGuestPackagePaths ? [ ],
     }:
     let
-      pkgs = inputs.nixpkgs.legacyPackages.${system};
+      pkgs = nixpkgs.legacyPackages.${system};
 
       # Guest entry point: install the jail-specific workmux config, boot a
       # workmux tmux session (mirrors the bubblewrap jail's entry in

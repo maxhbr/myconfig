@@ -19,6 +19,7 @@ in
     ./myconfig.ai.llama-cpp
     ./myconfig.ai.jail.nix
     ./myconfig.ai.sandboxTools.nix
+    ./myconfig.ai.qemu-agent-sandbox
     ./myconfig.ai.microvm
     ./myconfig.ai.gvisor-agent-sandbox
     ./comfyui.nix

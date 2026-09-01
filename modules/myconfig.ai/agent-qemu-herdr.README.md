@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT -->
 
 `agent-qemu-herdr` is the `herdr`-driven counterpart of `agent-qemu-pi`. It reuses
 **the same** microVM/runner machinery (`mkSandboxedRunner` from
-`flake.agent-qemu.nix`) — it does **not** fork a parallel guest builder. The
+`modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`) — it does **not** fork a parallel guest builder. The
 only difference is what runs at the end of the SSH session: instead of exec'ing
 `pi`, it exec's `herdr`, the agent multiplexer. From inside that `herdr`
 session the user starts `pi` / `opencode` / `claude-code` / … as panes — all
@@ -64,7 +64,7 @@ On the guest `PATH`:
   `codex`, `github-copilot-cli`, `qwen-code`. Only agents whose
   `myconfig.ai.<name>.enable` flag is true on the host are included, so the
   guest closure stays minimal. The list of enabled agent store paths is baked
-  into the wrapper at build time and forwarded to the impure flake output as
+  into the wrapper at build time and forwarded to the impure runner expression as
   `AGENT_QEMU_HERDR_AGENT_PACKAGES` (a JSON array); only public store paths are
   baked in — never credentials.
 
@@ -143,15 +143,15 @@ host wrapper as `seed-agent-config <ssh-port> <identity> 127.0.0.1 agent`.
 
 ## How it works
 
-- `flake.agent-qemu.nix` exports `mkAgentQemuHerdrRunner`, a thin wrapper
+- `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` exports `mkAgentQemuHerdrRunner`, a thin wrapper
   around the shared `mkSandboxedRunner` that provisions one workspace share
   plus `herdr` and the enabled coding-agent CLIs as guest packages. This is
   the same factory `mkAgentQemuPiRunner` uses; the guest system, kernel,
   virtiofsd and run script are built by the identical code path.
-- The flake output `packages.<system>.agent-qemu-herdr-runner` evaluates that
-  builder **impurely** from `AGENT_QEMU_HERDR_*` environment variables, so the
-  workspace path never lands in a tracked file or flake output. Under pure
-  evaluation (`nix flake check`) it is a harmless placeholder.
+- `myconfig.ai.qemu-agent-sandbox.runnerExpression` evaluates that builder
+  **impurely** from `AGENT_QEMU_HERDR_*` environment variables, so the
+  workspace path never lands in a tracked file or flake output. The runner is
+  not exported as a flake package.
 - The host wrapper `agent-qemu-herdr` lives in
   `modules/myconfig.ai/programs.herdr.nix`. It validates the working directory
   (refuses `$HOME`), generates a throwaway SSH keypair, picks a random
@@ -181,8 +181,8 @@ Same as `agent-qemu-pi`:
 
 - Access to `/dev/kvm` for the invoking user (KVM acceleration). Without it,
   qemu falls back to slow TCG emulation.
-- `nix` with flakes; the wrapper runs `nix build --impure` against the pinned
-  flake revision it was built from.
+- `nix` with `nix-command`; the wrapper runs `nix build --impure --file`
+  against the module-owned runner expression.
 
 ## Status / validation
 
