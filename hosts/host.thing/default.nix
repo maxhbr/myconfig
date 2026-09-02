@@ -37,6 +37,7 @@
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
     ./programs.opencode.nix
+    ./myconfig.agentUsers.nix
     ../shared.deployedServices.nix
     ./services.caddy.nix
     ./services.forgejo.nix
