@@ -1,5 +1,8 @@
 # Drop the gVisor version override once nixpkgs ships gVisor ≥ 2026-06-05
 
+Introduced by commit `8c960494ea` ("gvisor-agent-sandbox: bump gVisor to
+20260817.0 to fix SIGWINCH on pty resize").
+
 ## What to remove
 
 The `version` / `src` / `vendorHash` / `patches = [ ]` override in
@@ -37,7 +40,11 @@ old width.
 
 nixpkgs ships a gVisor release containing `cfb7c0629521099eb14d7bd86e9fbfa47287a640`,
 i.e. any release ≥ 2026-06-05 (e.g. `20260608.0`, `20260817.0`). Check
-`pkgs/by-name/gv/gvisor/package.nix` for `version`/`rev`.
+`pkgs/by-name/gv/gvisor/package.nix` for `version`/`rev`:
+
+```bash
+grep -E 'version =|rev =|patches' "$(./get_input.sh nixpkgs)/pkgs/by-name/gv/gvisor/package.nix"
+```
 
 ## How to verify
 
@@ -51,3 +58,24 @@ i.e. any release ≥ 2026-06-05 (e.g. `20260608.0`, `20260817.0`). Check
    deliver `SIGWINCH` to the foreground process group.
 3. End-to-end: resize the host foot window and confirm the TUI inside
    the herdr pane re-renders at the new width.
+
+## Triage 2026-09-03
+
+Still blocked — do not touch the overlay yet.
+
+Verified:
+
+- Override is still present and unchanged in
+  `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/overlay.nix`
+  (pins `20260817.0` / `b1b561450fc2f05b9626b7e269c08fbc9f5029ff`, resets
+  `patches`, re-adds `./patches/gvisor-remove-p2p-addresses.patch`, which
+  still exists).
+- Pinned nixpkgs (`./get_input.sh nixpkgs`) still ships gVisor
+  `20260406.0` / `db8d2c9abca39156c61ee2769d52b8a11accbe16` with
+  `patches = [ ./fix-go-mod-tidy.diff ]`.
+- nixpkgs `nixos-unstable` and `master` (fetched over the network) also
+  still ship `20260406.0` / `db8d2c9a` — the bump has not landed upstream
+  at all, so bumping the flake input alone will not help.
+
+Next check: re-run the `grep` above after a nixpkgs input update; only
+when `version` ≥ `20260608.0` proceed with "What to remove".
