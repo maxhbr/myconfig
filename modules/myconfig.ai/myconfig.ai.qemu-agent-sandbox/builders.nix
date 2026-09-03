@@ -494,10 +494,13 @@ in
       hostGid ? null,
       # Override the default seed allowlist. Defaults to the union of
       # `configPaths` for every registered agent (pi, opencode, claude, codex,
-      # qwen-code, github-copilot-cli, hermes), so a `agent-qemu-herdr` guest is
-      # seeded with the configuration for ALL agents `herdr` can launch. The
-      # union follows the shared seeder library's `configPathsFor`.
+      # qwen-code, github-copilot-cli, hermes) plus `herdr` itself (the guest
+      # entry point, whose rendered keybinding config is staged too), so a
+      # `agent-qemu-herdr` guest is seeded with the configuration for ALL
+      # agents `herdr` can launch. The union follows the shared seeder
+      # library's `configPathsFor`.
       seedConfigPaths ? seedLib.configPathsFor [
+        "herdr"
         "pi"
         "opencode"
         "claude"

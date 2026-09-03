@@ -53,17 +53,16 @@
 # environment (`SetEnv`), exactly as before.
 #
 # ── The allowlist source of truth ──────────────────────────────────────────
-# The per-agent `configPaths` below TRACK `../myconfig.ai.microvm/agents.nix`
-# (the authoritative registry for the heavyweight tier), but they are NOT an
-# exact mirror: there is no `herdr` entry here — tier-4 `agents.nix` stages
-# `.config/herdr/config.toml`, tier 3 does not (a known divergence tracked
-# in doc/TODOs/seed-herdr-config-tier3-agent-qemu-herdr.md). The lists are
+# The per-agent `configPaths` below MIRROR `../myconfig.ai.microvm/agents.nix`
+# (the authoritative registry for the heavyweight tier): for every agent that
+# tier-4 registry knows (claude, codex, opencode, pi, herdr, hermes) the path
+# list here is identical. Two agents only this tier registers (`qwen-code`,
+# `github-copilot-cli`) contribute just the shared skills tree. The lists are
 # duplicated here only because `agents.nix` is instantiated inside the microvm
 # module tree with coupling arguments (litellmPort, hermesModel, enabledNames)
-# that make importing it standalone impractical. Keep the two in sync apart
-# from that documented divergence, and preserve the SAME
-# credential-exclusion rationale. A future cleanup should lift the path lists
-# into a dependency-free data module both tiers import.
+# that make importing it standalone impractical. Keep the two in sync and
+# preserve the SAME credential-exclusion rationale. A future cleanup should
+# lift the path lists into a dependency-free data module both tiers import.
 {
   lib,
   pkgs,
@@ -181,6 +180,12 @@ let
     # ONE root, so configuration is inseparable from credentials there:
     # nothing is staged. The guest gets its endpoint from the SSH environment.
     hermes = [ ];
+    # `herdr` (the multiplexer tier-3 `agent-qemu-herdr` drops the operator
+    # into) renders exactly `~/.config/herdr/config.toml` — keybindings only,
+    # no credentials and no host-specific paths (../programs.herdr.nix). Stage
+    # the EXACT file, never the `.config/herdr` directory, per the allowlist
+    # rule. Mirrors the tier-4 `herdr` registry entry.
+    herdr = [ ".config/herdr/config.toml" ];
     # qwen-code / github-copilot-cli carry no host-rendered configuration that
     # is safe + useful to stage (their config roots mix credentials), so they
     # contribute only the shared skills tree.
