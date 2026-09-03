@@ -7,6 +7,8 @@
     ./wifi.nix
     # hardware:
     ../../hardware/efi.nix
+    # spin down the connected USB HDD
+    ../../hardware/hdd-spinndown.nix
   ];
   config = {
     myconfig = {

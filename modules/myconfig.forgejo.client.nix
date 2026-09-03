@@ -165,12 +165,10 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    assertions = lib.mapAttrsToList (
-      name: token: {
-        assertion = token.scopes != [ ];
-        message = "myconfig.forgejo.client.tokens.${name}.scopes must not be empty.";
-      }
-    ) cfg.tokens;
+    assertions = lib.mapAttrsToList (name: token: {
+      assertion = token.scopes != [ ];
+      message = "myconfig.forgejo.client.tokens.${name}.scopes must not be empty.";
+    }) cfg.tokens;
 
     myconfig.secrets = lib.listToAttrs (
       lib.mapAttrsToList (
