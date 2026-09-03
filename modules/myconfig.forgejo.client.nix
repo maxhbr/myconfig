@@ -33,8 +33,8 @@ let
       user_password=$(tr -d '\n' < ${secret.dest} 2>/dev/null || true)
 
       if [ -z "$user_password" ]; then
-        echo "No password available, skipping token creation"
-        exit 0
+        echo "No password available, failing token creation"
+        exit 1
       fi
 
       token_dest=${tokenDest}
@@ -55,7 +55,9 @@ let
 
       auth_file=$(mktemp)
       chmod 600 "$auth_file"
-      printf 'user = "%s:%s"\n' "${name}" "$user_password" > "$auth_file"
+      escaped_user_name=$(printf '%s' "${name}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+      escaped_user_password=$(printf '%s' "$user_password" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+      printf 'user = "%s:%s"\n' "$escaped_user_name" "$escaped_user_password" > "$auth_file"
 
       delete_status=$(
         curl \
