@@ -8,8 +8,10 @@ pinned source overlay that fetches the PR head commit directly:
 
 - **PR**: <https://github.com/ggml-org/llama.cpp/pull/27754>
   ("model: add GLM-5-Next (GLM-5.3-Flash)",
-  `unslothai:glm5next/upstream`, head commit
-  `f30bed88717059d8a4728864c88f8abad8d329a0`)
+  `unslothai:glm5next/upstream`). The overlay pins head commit
+  `f30bed88717059d8a4728864c88f8abad8d329a0`; the PR head has since
+  moved on (checked 2026-09-03: `949f7efb097eb20ef36fecdb1afaebff9a4ae7ed`),
+  so `rev`/`hash` in the overlay no longer track the tip of the branch.
 - **Overlay**: `hosts/host.thing/nixpkgs.overlays.llama-cpp-pr-27754.nix`
   — exposes `pkgs.llama-cpp-pr-27754` (same source fetch shape as the
   pinned `llama-cpp` overlay, but pointing at the PR commit instead of a
@@ -88,3 +90,37 @@ will then load GLM-5.3-Flash GGUFs directly.
     ```
     The log should no longer show
     `unknown model architecture: 'glm5next'`.
+
+## Triage 2026-09-03
+
+Not actionable yet. Verified via the GitHub API and raw.githubusercontent:
+
+- PR #27754 is still **open** (created 2026-08-26, last updated
+  2026-09-01, 38 commits, mergeable_state `unstable`, zero review
+  comments).
+- `glm5next` is **absent** from `master` and from every checked tag:
+  the host pin `b10549`, newer prereleases `b10646`/`b10700`/`b10710`/
+  `b10720`/`b10730`, and the stable release `v0.3.0` (2026-08-25).
+  (`grep -c glm5next src/llama-arch.cpp` = 0 on all of them; the PR
+  head commit returns 4 matches, as expected.)
+- All code references in this note still match the tree: overlay
+  `hosts/host.thing/nixpkgs.overlays.llama-cpp-pr-27754.nix`, the
+  import line in `hosts/host.thing/default.nix`, the
+  `patched-llama-cpp-pr-27754-pkg` binding and
+  `glm53_flash` import in
+  `hosts/host.thing/myconfig.ai.llama-cpp/default.nix`, the
+  `serverPackage` parameter in
+  `hosts/host.thing/myconfig.ai.llama-cpp/GLM-5.3-Flash.nix`, and the
+  `serverPackage` option plus the `model.serverPackage != null`
+  checks in `modules/myconfig.ai/myconfig.ai.llama-cpp/{options.nix,
+  lib/scripts.nix, router.nix}`. Introduced by commit
+  `c001e0044b`.
+- The pinned PR head (`f30bed88`) is stale relative to the branch tip
+  (`949f7efb`) — harmless while the pin works, but a fresh bump must
+  re-fetch `rev`/`hash`.
+
+Related but separate: sibling PR #27742 (qwen4exp,
+ `drop-patched-llama-cpp-pr-27742.md`) **was merged** into master on
+ 2026-08-27 (commit `6c84c7d5d`); that note should be triaged on its
+  own — a release bump for #27742 may also change the base the #27754
+  overlay builds on.
