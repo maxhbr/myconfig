@@ -6,9 +6,8 @@
 # - declares the matching `myconfig.secrets.<passwordSecret>` entry (owned by
 #   root; the secret itself must be provisioned in the `priv/` repository),
 # - creates a oneshot `forgejo-create-<user>-token` systemd service that
-#   exchanges the password for a long-lived Forgejo API token at boot
-#   (fire-and-forget: a missing or unreachable Forgejo never blocks boot) and
-#   writes it to `/run/forgejo-<user>-token` for the agent to use.
+#   rotates/recreates the API token at boot and writes it to
+#   `/run/forgejo-<user>-token` for the agent to use.
 {
   config,
   pkgs,
@@ -26,54 +25,98 @@ let
     let
       secret = config.myconfig.secrets.${token.passwordSecret};
       scopesJson = builtins.toJSON token.scopes;
+      tokenDest = lib.escapeShellArg token.tokenDest;
     in
     ''
-      # Fire-and-forget: no retries, no blocking, graceful failure.
+      set -euo pipefail
 
-      PASSWORD=$(tr -d '\n' < ${secret.dest} 2>/dev/null || true)
+      user_password=$(tr -d '\n' < ${secret.dest} 2>/dev/null || true)
 
-      if [ -z "$PASSWORD" ]; then
+      if [ -z "$user_password" ]; then
         echo "No password available, skipping token creation"
         exit 0
       fi
 
-      # Token files live below /run and do not survive a reboot. Remove any
-      # pre-existing token with the same name so recreation is idempotent and
-      # does not fail/leak credentials across boots.
-      curl \
-        --silent \
-        --max-time 5 \
-        --user "${name}:$PASSWORD" \
-        --request DELETE \
-        "${forgejoApi}/users/${name}/tokens/${name}" \
-        >/dev/null 2>&1 || true
+      token_dest=${tokenDest}
+      token_dir=$(dirname "$token_dest")
+      rm -f "$token_dest"
 
-      response=$(
+      auth_file=""
+      response_file=""
+      tmp_token_file=""
+
+      cleanup() {
+        if [ -n "$auth_file" ]; then rm -f "$auth_file"; fi
+        if [ -n "$response_file" ]; then rm -f "$response_file"; fi
+        if [ -n "$tmp_token_file" ]; then rm -f "$tmp_token_file"; fi
+      }
+
+      trap cleanup EXIT
+
+      auth_file=$(mktemp)
+      chmod 600 "$auth_file"
+      printf 'user = "%s:%s"\n' "${name}" "$user_password" > "$auth_file"
+
+      delete_status=$(
         curl \
           --silent \
           --max-time 5 \
-          --user "${name}:$PASSWORD" \
+          --config "$auth_file" \
+          --request DELETE \
+          --output /dev/null \
+          --write-out '%{http_code}' \
+          "${forgejoApi}/users/${name}/tokens/${name}" \
+          2>/dev/null || echo "000"
+      )
+
+      case "$delete_status" in
+        204|404)
+          ;;
+        *)
+          echo "Failed deleting existing token ${name}: HTTP $delete_status"
+          exit 1
+          ;;
+      esac
+
+      response_file=$(mktemp)
+      create_status=$(
+        curl \
+          --silent \
+          --max-time 5 \
+          --config "$auth_file" \
           --header 'Content-Type: application/json' \
           --request POST \
+          --output "$response_file" \
+          --write-out '%{http_code}' \
           --data '{
             "name": "${name}",
             "scopes": ${scopesJson}
           }' \
           "${forgejoApi}/users/${name}/tokens" \
-          2>/dev/null || echo ""
+          2>/dev/null || echo "000"
       )
 
-      token=$(echo "$response" | jq -r '.sha1 // empty' 2>/dev/null || true)
-
-      if [ -n "$token" ]; then
-        echo "$token" > ${token.tokenDest}
-        chmod 640 ${token.tokenDest}
-        echo "Created API token for ${name}"
-      else
-        echo "Skipping token creation (Forgejo unreachable or request failed)"
+      if [ "$create_status" != 201 ]; then
+        echo "Failed creating token ${name}: HTTP $create_status"
+        cat "$response_file" || true
+        exit 1
       fi
 
-      exit 0
+      token=$(jq -r '.sha1 // empty' "$response_file" 2>/dev/null || true)
+
+      if [ -z "$token" ]; then
+        echo "Token ${name} was created but no token value was returned"
+        exit 1
+      fi
+
+      tmp_token_file=$(mktemp "$token_dir/.forgejo-${name}-token.XXXXXX")
+      umask 0077
+      printf '%s\n' "$token" > "$tmp_token_file"
+      chmod 640 "$tmp_token_file"
+      mv -f "$tmp_token_file" "$token_dest"
+      tmp_token_file=""
+
+      echo "Created API token for ${name}"
     '';
 in
 {
@@ -159,6 +202,8 @@ in
           Type = "oneshot";
           User = "root";
           Group = "root";
+          Restart = "on-failure";
+          RestartSec = "30s";
         };
 
         script = tokenScript name token;
