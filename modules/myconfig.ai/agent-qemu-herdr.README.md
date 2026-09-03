@@ -107,12 +107,9 @@ user-space qemu tier (no privileged host daemon: staging + transfer happen
 entirely in the launcher, over the already-established SSH channel).
 
 The seeded agent set is the union of the per-agent `configPaths` for every
-registered agent (from `modules/myconfig.ai/fns/seed-agent-config.nix`,
-which deliberately tracks the tier-4 registry
-`myconfig.ai.microvm/agents.nix` but is **not an exact mirror**: the tier-3
-seeder has no `herdr` entry, so `herdr` itself starts with its default
-configuration inside the guest — tier 4 stages `.config/herdr/config.toml`,
-tier 3 does not):
+registered agent (from `modules/myconfig.ai/fns/seed-agent-config.nix`, whose
+path lists **mirror** the tier-4 registry `myconfig.ai.microvm/agents.nix` for
+every agent that registry knows — including `herdr` itself):
 
 - `pi` — `~/.pi/agent/{agents,extensions,keybindings.json,prompts,themes}`.
 - `opencode` — `~/.config/opencode/{agents,commands,opencode.json,tui.json,skills}`.
@@ -121,8 +118,9 @@ tier 3 does not):
 - `qwen-code`, `github-copilot-cli` — the shared `~/.agents/skills` tree.
 - `hermes` — nothing (its config root mixes credentials; the guest gets its
   endpoint from the SSH environment).
-- `herdr` — nothing at this tier (see above), despite being the entry point
-  the guest drops into.
+- `herdr` — `~/.config/herdr/config.toml` (the rendered keybindings; the
+  guest's entry point therefore uses the host's `ctrl+b` prefix / pane-focus
+  bindings). The exact file only, never the `.config/herdr` directory.
 - Plus the module-wide `.config/git/{config,attributes}` and `.agents/skills`.
 
 What is **never** seeded:
