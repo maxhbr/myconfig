@@ -44,6 +44,10 @@ namespace also covers skills whose *sources* come from elsewhere and only the
 - `grafana-core.nix`, `simple-english.nix`, `workmux.nix` — skills fetched
   from pinned external sources (nvfetcher / flake inputs) and registered
   from those trees, no local directory needed;
+- `herdr` — skill generated at build time from the installed binary's
+  `herdr --skill` output (a derivation, not a local directory); registered
+  in `../programs.herdr.nix` and implicitly enabled by the herdr CLI, so
+  there is no glue file under `skills/`;
 - `playwright-cli.nix` — registers a package-provided skill;
 - `default.nix` — the module itself: discovers skills from flake-pinned
   sources, syncs everything into the enabled harnesses via home-manager

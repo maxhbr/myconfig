@@ -28,6 +28,21 @@ let
     || (config.myconfig.ai.qwen-code.enable or false)
     || (config.myconfig.ai.github-copilot-cli.enable or false);
 
+  # `herdr` (the multiplexer) plus the skill generated from it.
+  herdr = pkgs.herdr;
+
+  # The agent skill, generated at build time by asking the installed binary:
+  # `herdr --skill` prints the frontmatter + body matching exactly this
+  # version, so the skill stays in sync with the CLI instead of being a
+  # stale vendored copy. Registered in the
+  # `myconfig.ai.skills.handcrafted` registry, which
+  # ./skills/default.nix deploys to every enabled agent harness. Implicitly
+  # enabled by herdr — there is no separate enable flag.
+  herdrSkillSrc = pkgs.runCommand "herdr-skill" { nativeBuildInputs = [ herdr ]; } ''
+    mkdir -p $out
+    herdr --skill > $out/SKILL.md
+  '';
+
   # Keybindings mirror ~/.tmux.conf (modules/shell.programs.tmux/tmux.conf).
   # Concept mapping: tmux window->herdr tab, tmux pane->herdr pane. Bindings
   # left unset here stay at herdr defaults, several of which already match tmux:
@@ -279,9 +294,17 @@ let
 in
 {
   config = lib.mkIf agenticCodingEnabled {
+    # Install the herdr skill for every enabled agent harness (see
+    # ./skills/default.nix); string form (the derivation's outPath), same
+    # convention as the workmux and simple-english skill registrations.
+    myconfig.ai.skills.handcrafted.herdr = "${herdrSkillSrc}";
+
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [ herdr ] ++ [ agent-qemu-herdr ];
+        home.packages = [
+          herdr
+          agent-qemu-herdr
+        ];
         xdg.configFile."herdr/config.toml".text = herdrConfig;
       }
     ];
