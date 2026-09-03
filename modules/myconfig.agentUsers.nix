@@ -93,6 +93,19 @@ in
             persistent `workdir` under the work impermanence tree.
           '';
         };
+        extraGroups = lib.mkOption {
+          type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+          default = { };
+          description = ''
+            Per-agent extra Unix groups (attrset keyed by agent name).
+            This is the deliberate, narrowly-scoped exception to the
+            "agents get no extraGroups" default: use it only for
+            *device access* groups (e.g. `dialout` for serial ports,
+            `plugdev` for USB debug probes matched by udev rules),
+            never for privilege groups (`wheel`, `keys`, `docker`, …).
+            Entries for names not listed in `names` are ignored.
+          '';
+        };
         inheritFromMainUser = {
           sessionVariables = lib.mkOption {
             type = lib.types.listOf lib.types.str;
@@ -163,7 +176,11 @@ in
             shell = "/run/current-system/sw/bin/fish";
             hashedPassword = "!"; # locked: no password login
             linger = true; # let coding-agent user services run without login
-            # intentionally NO extraGroups: no wheel, no keys, no docker, ...
+            # intentionally NO extraGroups by default: no wheel, no keys, no
+            # docker, ... — the opt-in escape hatch is
+            # `myconfig.agentUsers.extraGroups` (see above), which hosts use
+            # only for device access groups (e.g. `dialout`, `plugdev`).
+            extraGroups = config.myconfig.agentUsers.extraGroups.${name} or [ ];
           }
         ) agents
       );
