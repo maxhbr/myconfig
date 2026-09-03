@@ -27,6 +27,14 @@ src.git = "https://github.com/AminBlg/SimpleEnglish"
 src.branch = "main"
 fetch.github = "AminBlg/SimpleEnglish"
 
+# `/bro` skill (re-explain the previous assistant message in plain language),
+# consumed by modules/myconfig.ai/skills/bro.nix. The upstream repo keeps
+# `SKILL.md` at its root, so the module extracts just that file.
+[bro-skill]
+src.git = "https://github.com/luchasarie/bro-skill"
+src.branch = "main"
+fetch.github = "luchasarie/bro-skill"
+
 # Official LiteLLM Grafana dashboard.
 #
 # Track the tip of LiteLLM's main branch, but fetch only the dashboard JSON

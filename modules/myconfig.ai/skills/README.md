@@ -44,6 +44,9 @@ namespace also covers skills whose *sources* come from elsewhere and only the
 - `grafana-core.nix`, `simple-english.nix`, `workmux.nix` — skills fetched
   from pinned external sources (nvfetcher / flake inputs) and registered
   from those trees, no local directory needed;
+- `bro.nix` — the upstream `/bro` skill (nvfetcher-pinned); its `SKILL.md`
+  lives at the repo root, so the module extracts it into a skill-only
+  directory and additionally derives a pi prompt template from it;
 - `herdr` — skill generated at build time from the installed binary's
   `herdr --skill` output (a derivation, not a local directory); registered
   in `../programs.herdr.nix` and implicitly enabled by the herdr CLI, so

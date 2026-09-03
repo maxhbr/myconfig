@@ -88,6 +88,7 @@ let
 in
 {
   imports = [
+    ./bro.nix
     ./commit.nix
     ./grafana-core.nix
     ./implement-and-review-and-commit.nix

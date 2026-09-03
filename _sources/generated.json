@@ -1,4 +1,25 @@
 {
+    "bro-skill": {
+        "cargoLock": null,
+        "date": "2026-08-26",
+        "extract": null,
+        "name": "bro-skill",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
+            "name": null,
+            "owner": "luchasarie",
+            "repo": "bro-skill",
+            "rev": "3aa8c40b1241111f73ab5360e770f7512193a20e",
+            "sha256": "sha256-LrkDPQQs/9nBkEf1ozB/oi320FMtin1BZcrTFBiKds0=",
+            "sparseCheckout": [],
+            "type": "github"
+        },
+        "version": "3aa8c40b1241111f73ab5360e770f7512193a20e"
+    },
     "grafana-skills": {
         "cargoLock": null,
         "date": "2026-08-18",

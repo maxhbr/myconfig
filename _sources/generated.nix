@@ -6,6 +6,18 @@
   dockerTools,
 }:
 {
+  bro-skill = {
+    pname = "bro-skill";
+    version = "3aa8c40b1241111f73ab5360e770f7512193a20e";
+    src = fetchFromGitHub {
+      owner = "luchasarie";
+      repo = "bro-skill";
+      rev = "3aa8c40b1241111f73ab5360e770f7512193a20e";
+      fetchSubmodules = false;
+      sha256 = "sha256-LrkDPQQs/9nBkEf1ozB/oi320FMtin1BZcrTFBiKds0=";
+    };
+    date = "2026-08-26";
+  };
   grafana-skills = {
     pname = "grafana-skills";
     version = "51d33e71e191b409bbd25fc7be2684c610d18166";
