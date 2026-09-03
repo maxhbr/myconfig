@@ -542,14 +542,42 @@ fn confirm_destroy_existing(name: &str, old_branch: &str) -> bool {
     matches!(reply.to_lowercase().as_str(), "y" | "yes")
 }
 
+/// The per-session Git metrics for `list`: `(AHEAD, DIRTY)`. AHEAD is the
+/// number of commits on the session branch that are NOT on the clone's
+/// default branch (`rev-list --count refs/remotes/origin/HEAD..HEAD` —
+/// `git clone` sets `origin/HEAD` to the upstream's default branch); DIRTY
+/// is the `git status --porcelain` entry count (uncommitted changes,
+/// untracked files included). `-` when the worktree is gone or the probe
+/// fails: `list` never dies on one session's Git state.
+fn git_metrics(worktree: &str) -> (String, String) {
+    let wt = worktree.to_string();
+    let ahead = git_stdout(&[
+        "-C".to_string(),
+        wt.clone(),
+        "rev-list".to_string(),
+        "--count".to_string(),
+        "refs/remotes/origin/HEAD..HEAD".to_string(),
+    ])
+    .unwrap_or_else(|| "-".to_string());
+    let dirty = git_stdout(&[
+        "-C".to_string(),
+        wt.clone(),
+        "status".to_string(),
+        "--porcelain".to_string(),
+    ])
+    .map(|s| s.lines().count().to_string())
+    .unwrap_or_else(|| "-".to_string());
+    (ahead, dirty)
+}
+
 /// `agent-gvisor list` — registry table incl. `incomplete` and
 /// `incompatible (pre-rewrite layout)` rows. Exits 0.
 pub fn cmd_list(env: &Env) -> ! {
     let sessions = env.state_root.join("sessions");
     fs::create_dir_all(&sessions).unwrap();
     println!(
-        "{:<24} {:<12} {:<28} {}",
-        "SESSION", "STATUS", "BRANCH", "WORKTREE"
+        "{:<24} {:<12} {:<28} {:<6} {:<6} {}",
+        "SESSION", "STATUS", "BRANCH", "AHEAD", "DIRTY", "WORKTREE"
     );
     let pod = Pod::new(env);
     let mut names: Vec<String> = match fs::read_dir(&sessions) {
@@ -576,9 +604,11 @@ pub fn cmd_list(env: &Env) -> ! {
             // Debris of an interrupted start: report it instead of dying on
             // the missing meta file.
             println!(
-                "{:<24} {:<12} {:<28} {}",
+                "{:<24} {:<12} {:<28} {:<6} {:<6} {}",
                 name,
                 "incomplete",
+                "-",
+                "-",
                 "-",
                 reg.display()
             );
@@ -588,9 +618,11 @@ pub fn cmd_list(env: &Env) -> ! {
             // The pre-rewrite layout: the registry entry IS the session
             // directory (docs/spec.md §14.1). list never dies.
             println!(
-                "{:<24} {:<12} {:<28} {}",
+                "{:<24} {:<12} {:<28} {:<6} {:<6} {}",
                 name,
                 "incompatible (pre-rewrite layout)",
+                "-",
+                "-",
                 "-",
                 reg.display()
             );
@@ -613,12 +645,10 @@ pub fn cmd_list(env: &Env) -> ! {
         } else {
             "stopped".to_string()
         };
+        let (ahead, dirty) = git_metrics(&meta.worktree);
         println!(
-            "{:<24} {:<12} {:<28} {}",
-            name,
-            status,
-            meta.branch,
-            meta.worktree
+            "{:<24} {:<12} {:<28} {:<6} {:<6} {}",
+            name, status, meta.branch, ahead, dirty, meta.worktree
         );
     }
     std::process::exit(0);

@@ -461,13 +461,21 @@ target repository, where the remotes are configured.
 
 ### `list`
 
-Header `SESSION STATUS BRANCH WORKTREE` (columns 24/12/28), then one line
-per registry entry (alphabetical). Status via `podman container exists` +
-`inspect --format '{{.State.Status}}'` (`unknown` if inspect fails), `stopped`
-if absent. Incomplete entries (symlink without `meta`): status `incomplete`,
-branch `-`, worktree = the registry path. Pre-rewrite entries (real
+Header `SESSION STATUS BRANCH AHEAD DIRTY WORKTREE` (columns 24/12/28/6/6),
+then one line per registry entry (alphabetical). Status via `podman container
+exists` + `inspect --format '{{.State.Status}}'` (`unknown` if inspect
+fails), `stopped` if absent. AHEAD: the number of commits on the session
+branch that are not on the clone's default branch,
+`git -C <worktree> rev-list --count refs/remotes/origin/HEAD..HEAD` (`git
+clone` sets `origin/HEAD` to the upstream's default branch). DIRTY: the
+`git -C <worktree> status --porcelain` entry count (uncommitted changes,
+untracked files included). Both are `-` when the worktree is gone or the
+probe fails — `list` never dies on one session's Git state. Incomplete
+entries (symlink without `meta`): status `incomplete`, branch `-`, AHEAD/
+DIRTY `-`, worktree = the registry path. Pre-rewrite entries (real
 directory): status `incompatible (pre-rewrite layout)` (§ "Dropped"), with
-`-` for BRANCH and the registry path for WORKTREE (like `incomplete` rows).
+`-` for BRANCH, AHEAD and DIRTY and the registry path for WORKTREE (like
+`incomplete` rows).
 
 ## 10. The podman `run` argument vector
 
