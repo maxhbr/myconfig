@@ -36,6 +36,17 @@ let
         exit 0
       fi
 
+      # Token files live below /run and do not survive a reboot. Remove any
+      # pre-existing token with the same name so recreation is idempotent and
+      # does not fail/leak credentials across boots.
+      curl \
+        --silent \
+        --max-time 5 \
+        --user "${name}:$PASSWORD" \
+        --request DELETE \
+        "${forgejoApi}/users/me/tokens/${name}" \
+        >/dev/null 2>&1 || true
+
       response=$(
         curl \
           --silent \
