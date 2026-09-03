@@ -101,7 +101,7 @@ let
       "    --header 'Content-Type: application/json' \\"
       "    --request POST \\"
       "    --data \"$key_json\" \\"
-      "    \"${forgejoApi}/admin/users/${name}/keys\""
+      "    \"${forgejoApi}/user/keys\""
       ")"
       ""
       "case \"$status\" in"
