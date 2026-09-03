@@ -16,7 +16,7 @@
 #   * `myconfig.ai.microvm` guests — `myconfig.ai.microvm/guest.nix` appends
 #     the packages to the guest's `environment.systemPackages` (§7) and the
 #     env to `environment.variables`.
-#   * `agent-qemu-pi` / `sandboxed-workmux` / `agent-qemu-herdr` impure
+#   * `agent-qemu-pi` / `agent-qemu-workmux-tmux` / `agent-qemu-herdr` impure
 #     runners — the host-side wrappers bake the package store paths into a
 #     `SANDBOXED_*_EXTRA_PACKAGES` JSON env var (same pattern as
 #     `AGENT_QEMU_HERDR_AGENT_PACKAGES`); the standalone runner expression

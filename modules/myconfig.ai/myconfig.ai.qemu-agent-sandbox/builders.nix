@@ -19,8 +19,8 @@
 #                                   `agent-qemu-pi`).
 #   * `mkSandboxedWorkmuxRunner`  — main repo + its `__worktrees` sibling +
 #                                   tmux/workmux/pi. Backs
-#                                   `alacritty-sandboxed-workmux-here`
-#                                   (alacritty-workmux-here analogue).
+#                                   `agent-qemu-alacritty-workmux-tmux`
+#                                   (agent-bubblewrap-alacritty-workmux-tmux analogue).
 #
 # The host-side wrappers (see
 # `modules/myconfig.ai/programs.pi-coding-agent/default.nix` and
@@ -537,7 +537,7 @@ in
     };
 
   # Main repo + its `__worktrees` sibling + tmux/workmux/pi. Backs
-  # `alacritty-sandboxed-workmux-here`.
+  # `agent-qemu-alacritty-workmux-tmux`.
   #
   # The main checkout is shared read-write at /workspace and the sibling
   # worktrees directory at /workspace__worktrees, so that inside the guest
@@ -617,7 +617,7 @@ in
         mem
         allowNetwork
         ;
-      hostname = "sandboxed-workmux";
+      hostname = "agent-qemu-workmux-tmux";
       shares = [
         {
           tag = "workspace";

@@ -18,7 +18,7 @@
 #   * `agent-bubblewrap-workmux-tmux`      — the jail. Its entrypoint boots a `workmux`
 #                                  tmux session on the private socket, wires up
 #                                  the sidebar + dashboard, and attaches.
-#   * `alacritty-workmux-here`   — user-facing launcher. Run it from the main
+#   * `agent-bubblewrap-alacritty-workmux-tmux`   — user-facing launcher. Run it from the main
 #                                  git checkout: it resolves the worktrees
 #                                  sibling, binds it read-write into the jail,
 #                                  and opens Alacritty running the jail.
@@ -188,8 +188,8 @@ let
     ];
   };
 
-  alacritty-workmux-here = pkgs.writeShellApplication {
-    name = "alacritty-workmux-here";
+  agent-bubblewrap-alacritty-workmux-tmux = pkgs.writeShellApplication {
+    name = "agent-bubblewrap-alacritty-workmux-tmux";
     runtimeInputs = [
       pkgs.alacritty
       pkgs.git
@@ -199,8 +199,8 @@ let
     text = ''
       # Must be run from a git checkout.
       if ! top="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-        echo "alacritty-workmux-here: not inside a git repository." >&2
-        echo "alacritty-workmux-here: run it from your main git checkout." >&2
+        echo "agent-bubblewrap-alacritty-workmux-tmux: not inside a git repository." >&2
+        echo "agent-bubblewrap-alacritty-workmux-tmux: run it from your main git checkout." >&2
         exit 1
       fi
 
@@ -210,8 +210,8 @@ let
       git_dir="$(git rev-parse --path-format=absolute --git-dir)"
       git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
       if [ "$git_dir" != "$git_common_dir" ]; then
-        echo "alacritty-workmux-here: refusing to run from a linked worktree." >&2
-        echo "alacritty-workmux-here: run it from the main checkout ($(dirname "$git_common_dir"))." >&2
+        echo "agent-bubblewrap-alacritty-workmux-tmux: refusing to run from a linked worktree." >&2
+        echo "agent-bubblewrap-alacritty-workmux-tmux: run it from the main checkout ($(dirname "$git_common_dir"))." >&2
         exit 1
       fi
 
@@ -238,7 +238,7 @@ in
       default = wmCfg.enable;
       defaultText = literalExpression "config.myconfig.ai.workmux.enable";
       description = ''
-        Provide `alacritty-workmux-here` (and the underlying
+        Provide `agent-bubblewrap-alacritty-workmux-tmux` (and the underlying
         `agent-bubblewrap-workmux-tmux` jail): run the whole workmux/tmux session — main
         repo, worktrees, agents — inside a single bubblewrap jail on a private
         tmux socket, opened in a dedicated Alacritty window. Defaults to on
@@ -252,7 +252,7 @@ in
       {
         home.packages = [
           agent-bubblewrap-workmux-tmux
-          alacritty-workmux-here
+          agent-bubblewrap-alacritty-workmux-tmux
         ];
       }
     ];

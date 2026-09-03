@@ -136,7 +136,7 @@ only from the explicit forward lists.
 escape, or a `nix`-mediated write, is not defended against. It is a strong
 *accident* barrier and a moderate *malice* barrier.
 
-Session-wide variant: `alacritty-workmux-here`
+Session-wide variant: `agent-bubblewrap-alacritty-workmux-tmux`
 (`myconfig.ai.workmux.jail`) jails an entire tmux/workmux session — main
 checkout plus its `__worktrees` sibling — in one bubblewrap.
 
@@ -182,11 +182,11 @@ into the store, never on a command line.
 
 **Requires**: `/dev/kvm` (otherwise slow TCG), `nix-command`.
 
-Session-wide variant: `sandboxed-workmux` (in-terminal, like
-`agent-bubblewrap-workmux-tmux`) and `alacritty-sandboxed-workmux-here` (Alacritty
-popup, like `alacritty-workmux-here`) — both under
+Session-wide variant: `agent-qemu-workmux-tmux` (in-terminal, like
+`agent-bubblewrap-workmux-tmux`) and `agent-qemu-alacritty-workmux-tmux` (Alacritty
+popup, like `agent-bubblewrap-alacritty-workmux-tmux`) — both under
 `myconfig.ai.workmux.sandbox`, off by default — put a whole workmux session in
-one VM. The in-terminal `sandboxed-workmux` is the reusable entry point; the
+one VM. The in-terminal `agent-qemu-workmux-tmux` is the reusable entry point; the
 Alacritty variant is a thin popup around it.
 
 **`agent-qemu-herdr` variant**: the same microVM, but instead of exec'ing `pi`

@@ -133,11 +133,11 @@ dedicated bridge/subnet + NAT/firewall is the natural follow-up once that host
 networking is provisioned; the guest module isolates the hypervisor-specific
 bits (`hypervisor`, `interfaces`, `forwardPorts`).
 
-## Related: `alacritty-sandboxed-workmux-here`
+## Related: `agent-qemu-alacritty-workmux-tmux`
 
 The same microVM approach is available for the *whole* workmux/tmux session as
-the counterpart of `alacritty-workmux-here` (the bubblewrap
-`myconfig.ai.workmux.jail`). `alacritty-sandboxed-workmux-here` runs the main
+the counterpart of `agent-bubblewrap-alacritty-workmux-tmux` (the bubblewrap
+`myconfig.ai.workmux.jail`). `agent-qemu-alacritty-workmux-tmux` runs the main
 checkout, its `<basename>__worktrees` sibling, tmux, workmux and the agents it
 launches inside one VM, popped up in an Alacritty window. It is defined in
 `modules/myconfig.ai/myconfig.ai.workmux/sandbox.nix` and gated behind
