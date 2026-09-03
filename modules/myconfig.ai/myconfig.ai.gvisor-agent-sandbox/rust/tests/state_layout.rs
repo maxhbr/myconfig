@@ -198,19 +198,60 @@ fn list_sorted_and_states() {
     let text = String::from_utf8(out.stdout).unwrap();
     let a1 = agent_root_of(&s).join("a1");
     let b1 = agent_root_of(&s).join("b1");
+    // The stubbed session clones have no refs, so `origin/HEAD` is
+    // unresolvable and AHEAD falls back to `-`; DIRTY counts the
+    // (empty) `status --porcelain` output.
     let expected = format!(
-        "{:<24} {:<12} {:<28} {}\n\
-         {:<24} {:<12} {:<28} {}\n\
-         {:<24} {:<12} {:<28} {}\n\
-         {:<24} {:<12} {:<28} {}\n\
-         {:<24} {:<12} {:<28} {}\n",
-        "SESSION", "STATUS", "BRANCH", "WORKTREE",
-        "a1", "running", "agent/gvisor/a1", a1.display(),
-        "b1", "running", "agent/gvisor/b1", b1.display(),
-        "inc", "incomplete", "-", s.state.join("sessions/inc").display(),
-        "old", "incompatible (pre-rewrite layout)", "-", s.state.join("sessions/old").display(),
+        "{:<24} {:<12} {:<28} {:<6} {:<6} {}\n\
+         {:<24} {:<12} {:<28} {:<6} {:<6} {}\n\
+         {:<24} {:<12} {:<28} {:<6} {:<6} {}\n\
+         {:<24} {:<12} {:<28} {:<6} {:<6} {}\n\
+         {:<24} {:<12} {:<28} {:<6} {:<6} {}\n",
+        "SESSION", "STATUS", "BRANCH", "AHEAD", "DIRTY", "WORKTREE",
+        "a1", "running", "agent/gvisor/a1", "-", "0", a1.display(),
+        "b1", "running", "agent/gvisor/b1", "-", "0", b1.display(),
+        "inc", "incomplete", "-", "-", "-", s.state.join("sessions/inc").display(),
+        "old",
+        "incompatible (pre-rewrite layout)",
+        "-",
+        "-",
+        "-",
+        s.state.join("sessions/old").display(),
     );
     assert_eq!(text, expected);
+}
+
+#[test]
+fn list_git_metrics() {
+    let s = Scenario::new("list-git-metrics");
+    start_simple(&s, "s1");
+    // AHEAD from the `ahead-count` marker, DIRTY from the per-worktree
+    // `dirty` marker (one porcelain entry).
+    let worktree = agent_root_of(&s).join("s1");
+    s.marker("ahead-count", "3");
+    s.marker("dirty", &worktree.display().to_string());
+
+    let out = s.run_ok(&["list"]);
+    let text = String::from_utf8(out.stdout).unwrap();
+    let expected = format!(
+        "{:<24} {:<12} {:<28} {:<6} {:<6} {}\n\
+         {:<24} {:<12} {:<28} {:<6} {:<6} {}\n",
+        "SESSION", "STATUS", "BRANCH", "AHEAD", "DIRTY", "WORKTREE",
+        "s1", "running", "agent/gvisor/s1", "3", "1", worktree.display(),
+    );
+    assert_eq!(text, expected);
+
+    // list probes the worktree's Git state, never the host repository.
+    let probe = s
+        .recorded("git")
+        .into_iter()
+        .find(|c| c.get(2).map(String::as_str) == Some("rev-list"));
+    let probe = probe.expect("no `git rev-list` recorded for list");
+    assert_eq!(probe[0], "-C");
+    assert_eq!(probe[1], worktree.display().to_string());
+    assert_eq!(probe[2], "rev-list");
+    assert_eq!(probe[3], "--count");
+    assert_eq!(probe[4], "refs/remotes/origin/HEAD..HEAD");
 }
 
 #[test]

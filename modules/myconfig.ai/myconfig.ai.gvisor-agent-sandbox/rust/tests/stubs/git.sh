@@ -104,6 +104,18 @@ case "$sub" in
         exit 0
         ;;
     cat-file) exit 0 ;;
+    rev-list)
+        # rev-list --count <ref>: the stubbed session clone has no remote
+        # refs, so the default is `origin/HEAD` unresolvable (the `-
+        # fallback in list); a first line in $RECORD/ahead-count answers
+        # the count instead.
+        if [ -f "$RECORD/ahead-count" ]; then
+            read -r _n <"$RECORD/ahead-count"
+            printf '%s\n' "$_n"
+            exit 0
+        fi
+        exit 128
+        ;;
     show-ref)
         [ -f "$RECORD/branch-exists" ] && exit 0
         exit 1
