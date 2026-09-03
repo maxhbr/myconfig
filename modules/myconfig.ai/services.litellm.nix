@@ -83,83 +83,8 @@
       # are all covered by the nixpkgs `optional-dependencies` lists below
       # (`expression` 5.6.0 is packaged by the pinned `nixpkgs` input now,
       # so no local build is needed anymore).
-      #
-      # litellm 1.97.0 still imports `fastapi.dependencies.utils.get_flat_dependant`,
-      # which fastapi >= 0.140.7 removed (the pinned `nixpkgs` input ships
-      # 0.141.x), so the proxy dies at startup with that `ImportError`.
-      # Apply the upstream fix (BerriAI/litellm f9b86b253a3f) to the pinned
-      # source instead: the `get_flat_params` + `ParamTypes` form works in
-      # fastapi 0.139.0 and 0.141.x alike. The patch step is
-      # self-invalidating — its `grep` matches nothing while a litellm
-      # source without that import is bundled, so it silently does nothing
-      # once nixpkgs bundles a release containing the fix.
-      # See doc/TODOs/drop-litellm-fastapi-source-patch.md.
-      #
-      # The pinned litellm definition is a lazy def; only `overridePythonAttrs`
-      # (not a plain `overrideAttrs`) accepts the classic one-argument
-      # `oldAttrs` lambda. `postPatch` is appended to litellm's own
-      # (which pins the maturin version in `pyproject.toml`);
-      # `pythonImportsCheck` adds `litellm` itself plus the module that
-      # used to crash (`_declared_query_params`), so the build fails
-      # loudly again if the source-vs-fastapi incompatibility regresses.
       package = pkgs.python3Packages.toPythonApplication (
         pkgs.python3Packages.litellm.overridePythonAttrs (oldAttrs: {
-          postPatch = (oldAttrs.postPatch or "") + ''
-                        # BerriAI/litellm f9b86b253a3f ("fix(proxy): restore
-                        # query-param validation under fastapi>=0.140.7"). No-op while
-                        # the bundled litellm source lacks the old import.
-                        files=$(grep -r --include="*.py" -l "^from fastapi.dependencies.utils import get_flat_dependant" . || true)
-                        if [ -n "$files" ]; then
-                          python - $files <<'PYEOF'
-            import re
-            import sys
-
-            OLD_IMPORT = "from fastapi.dependencies.utils import get_flat_dependant"
-            NEW_IMPORTS = (
-                "from fastapi.dependencies.utils import get_flat_params"
-                "\nfrom fastapi.params import ParamTypes"
-            )
-
-            pat = re.compile(
-                r"^(\s*)return frozenset\(field\.alias"
-                r" for field in get_flat_dependant\(dependant, skip_repeats=True\)"
-                r"\.query_params\)\s*$",
-                re.MULTILINE,
-            )
-
-            for path in sys.argv[1:]:
-                with open(path) as f:
-                    s = f.read()
-                s = s.replace(OLD_IMPORT, NEW_IMPORTS)
-                m = pat.search(s)
-                assert m, (
-                    f"unexpected litellm source in {path}: old "
-                    "get_flat_dependant import found, but the expected call "
-                    "shape is missing or shaped differently; refusing to "
-                    "rewrite only part of it"
-                )
-                s = s[: m.start()] + (
-                    m.group(1) + "return frozenset(\n"
-                    + m.group(1) + "    field.alias\n"
-                    + m.group(1) + "    for field in get_flat_params(dependant)\n"
-                    + m.group(1) + '    if getattr(field.field_info, "in_", None) == ParamTypes.query\n'
-                    + m.group(1) + ")"
-                ) + s[m.end():]
-                assert "get_flat_dependant" not in s, (
-                    f"unexpected litellm source in {path}: get_flat_dependant still "
-                    "present after rewrite"
-                )
-                with open(path, "w") as f:
-                    f.write(s)
-                print("fastapi>=0.140.7 compatibility patch applied to", path)
-            PYEOF
-                        fi
-          '';
-          # Extend any existing import checks rather than replacing them.
-          pythonImportsCheck = (oldAttrs.pythonImportsCheck or [ ]) ++ [
-            "litellm"
-            "litellm.proxy.management_endpoints.management_v1.common"
-          ];
           # PEP 517 closure: base dependencies plus the extra lists the
           # nixpkgs module adds for the service: proxy + extra_proxy +
           # proxy-runtime (the last includes prometheus-client, needed
