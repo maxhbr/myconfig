@@ -11,6 +11,7 @@ Usage:
   agent-gvisor fetch NAME [--repo PATH]
   agent-gvisor push NAME [REMOTE] [--repo PATH]
   agent-gvisor destroy NAME [--force] [--delete-branch]
+  agent-gvisor workmux [-- COMMAND...]
   agent-gvisor doctor
 
 start options:
@@ -104,6 +105,9 @@ environment:
                                 verbatim. Set up by /bin/agent-gvisor-init.
   AGENT_GVISOR_DEFAULT_COMMAND  Command run by `start`/`run` when no COMMAND is
                                 given (default: /bin/bash)
+  AGENT_GVISOR_WORKMUX_COMMAND  In-sandbox entrypoint of `workmux` when no
+                                COMMAND is given (default:
+                                /bin/workmux-gvisor-entry)
   AGENT_GVISOR_NIX              Default for --nix: give sessions a writable Nix
                                 store (any value except unset, empty and
                                 "false" enables)
@@ -112,6 +116,14 @@ environment:
                                 and trusted keys; see docs/nix-in-sandbox.md
 
 Run `agent-gvisor doctor` to verify runtime, image and sandbox startup.
+
+`agent-gvisor workmux` is the odd one out: it runs the WHOLE workmux/tmux
+session of the current repository in ONE sandbox. It makes no clone and no
+worktree of its own — the main checkout and its `<repo>__worktrees` sibling
+are bind-mounted at their host paths, so workmux manages the worktrees
+itself, inside the sandbox. It must be run from the main checkout of a Git
+repository (never from a linked worktree), and it registers no session, so
+none of list/status/merge/fetch/push/destroy applies to it.
 
 The host checkout is never bind-mounted. Each session gets an isolated Git
 clone of the repository; the clone is mounted at the repository's host path

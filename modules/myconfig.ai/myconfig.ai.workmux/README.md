@@ -143,6 +143,29 @@ in-terminal sandbox is the reusable entry point; the Alacritty variant is a
 thin popup around it so the two wrappers stay byte-identical in everything but
 the window.
 
+### `agent-gvisor-workmux-tmux` / `agent-gvisor-alacritty-workmux-tmux` (from the gVisor module)
+
+The gVisor tier of the same "one sandbox owns the whole session" idea, but it
+lives OUTSIDE this directory: in
+[`../myconfig.ai.gvisor-agent-sandbox/workmux.nix`](../myconfig.ai.gvisor-agent-sandbox/workmux.nix),
+enabled by `myconfig.ai.gvisor-agent-sandbox.workmux.enable` (on wherever both
+`myconfig.ai.workmux` and the gVisor tier are enabled):
+
+- `agent-gvisor-workmux-tmux` — a one-line wrapper around
+  `agent-gvisor workmux` (see `docs/spec.md` §16 of that module). The
+  subcommand refuses a non-repository and a linked worktree, bind-mounts the
+  **real** checkout at its own host path (no clone!) plus the
+  `<basename>__worktrees` sibling, and runs the in-image
+  `/bin/workmux-gvisor-entry`, which boots the workmux tmux session on a
+  private socket and attaches.
+- `agent-gvisor-alacritty-workmux-tmux` — the same in a dedicated Alacritty
+  window, like the two variants above.
+
+No worktree handling of its own: `workmux` creates and removes the linked
+worktrees itself, inside the sandbox, in the mounted sibling directory. As in
+the other two tiers, the in-sandbox workmux config maps `pi` to a **plain**
+agent binary (here the image's `/bin/pi`).
+
 ## Two sandboxing approaches at a glance
 
 | Approach                    | Sandbox unit           | tmux server | Agent in pane          |
@@ -150,3 +173,4 @@ the window.
 | Per-agent worktree wrappers | one jail per agent     | host tmux   | nested `agent-bubblewrap-*` agent |
 | `agent-bubblewrap-alacritty-workmux-tmux`    | one jail per session   | in-jail tmux (private socket) | plain agent (jail is the sandbox) |
 | `agent-qemu-workmux-tmux`         | one microVM per session | in-VM tmux (private socket) | plain agent (VM is the sandbox)   |
+| `agent-gvisor-workmux-tmux`       | one runsc container per repo | in-container tmux (private socket) | plain agent (container is the sandbox) |

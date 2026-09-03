@@ -116,7 +116,7 @@ in
         fish --no-execute "$installed" || fail "fish -n rejects the completion"
 
         # every dispatch word (docs/spec.md §1) is offered as a subcommand
-        for sub in start list status run logs shell stop merge fetch push destroy doctor help; do
+        for sub in start list status run logs shell stop merge fetch push destroy workmux doctor help; do
           grep -q -- "-a $sub" "$installed" || fail "no completion for subcommand: $sub"
         done
 

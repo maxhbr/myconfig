@@ -54,7 +54,8 @@ fn git_ok(args: &[String]) -> bool {
 
 /// Stdout of a successful `git …` with ALL trailing newlines stripped
 /// (bash `$(…)`); `None` on failure. Stderr passes through unchanged.
-fn git_stdout(args: &[String]) -> Option<String> {
+/// Shared with the `workmux` subcommand (../workmux.rs).
+pub fn git_stdout(args: &[String]) -> Option<String> {
     let out = Command::new("git")
         .args(args)
         .stderr(Stdio::null())

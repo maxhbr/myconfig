@@ -162,7 +162,10 @@ let
         '';
 in
 {
-  imports = [ ./litellm-endpoint.nix ];
+  imports = [
+    ./litellm-endpoint.nix
+    ./workmux.nix
+  ];
 
   options.myconfig.ai.gvisor-agent-sandbox = with lib; {
     enable = mkEnableOption "myconfig.ai.gvisor-agent-sandbox";
@@ -172,6 +175,19 @@ in
       default = pkgs.agent-gvisor;
       defaultText = literalExpression "pkgs.agent-gvisor";
       description = "The `agent-gvisor` session manager package.";
+    };
+
+    finalPackage = mkOption {
+      type = types.package;
+      internal = true;
+      default = withSessionEnv (withImage cfg.package);
+      defaultText = literalExpression "cfg.package with the effective image and the host session defaults baked in";
+      description = ''
+        `package` as this module actually installs it: the effective image
+        reference and the host-configured session defaults (`sessionEnv`)
+        are baked in. Companion modules (./workmux.nix) run THIS package,
+        not the bare `pkgs.agent-gvisor`.
+      '';
     };
 
     image = mkOption {
@@ -194,13 +210,17 @@ in
         ++ config.myconfig.ai.sandboxTools.extraPackages
         # Nix for in-session builds, when enabled below
         # (myconfig.ai.gvisor-agent-sandbox.nix).
-        ++ lib.optionals cfg.nix.enable [ cfg.nix.package ];
+        ++ lib.optionals cfg.nix.enable [ cfg.nix.package ]
+        # workmux + tmux + the in-sandbox entrypoint of `agent-gvisor
+        # workmux` (see ./workmux.nix); empty unless workmux is enabled.
+        ++ cfg.workmux.imagePackages;
       defaultText = literalExpression ''
         the packages of the coding agents enabled on this host, i.e. one entry
         per set `myconfig.ai.<pi-coding-agent|opencode|claude-code|codex|github-copilot-cli|qwen-code>.enable`,
         plus `pkgs.herdr` when any of them is enabled,
         plus `myconfig.ai.sandboxTools.extraPackages`,
-        plus `nix.package` when `myconfig.ai.gvisor-agent-sandbox.nix.enable`
+        plus `nix.package` when `myconfig.ai.gvisor-agent-sandbox.nix.enable`,
+        plus `myconfig.ai.gvisor-agent-sandbox.workmux.imagePackages`
       '';
       example = literalExpression "[ pkgs.claude-code ]";
       description = ''
@@ -412,7 +432,7 @@ in
     home-manager.sharedModules = [
       {
         home.packages = [
-          (withSessionEnv (withImage cfg.package))
+          cfg.finalPackage
           pkgs.gvisor
         ]
         ++ lib.optional (image != null) (withImage pkgs.agent-gvisor-load-image);

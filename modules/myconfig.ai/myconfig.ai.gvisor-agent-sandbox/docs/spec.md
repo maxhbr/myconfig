@@ -31,6 +31,7 @@ agent-gvisor merge NAME [--no-ff] [--ff] [--squash] [--repo PATH] [GIT-MERGE-ARG
 agent-gvisor fetch NAME [--repo PATH]
 agent-gvisor push NAME [REMOTE] [--repo PATH]
 agent-gvisor destroy NAME [--force] [--delete-branch]
+agent-gvisor workmux [-- COMMAND...]
 agent-gvisor doctor
 ```
 
@@ -39,7 +40,7 @@ Dispatch (first argument):
 | first argument | action |
 | --- | --- |
 | `start` | `cmd_start` on the remaining arguments |
-| `list` `status` `run` `logs` `shell` `stop` `merge` `fetch` `push` `destroy` `doctor` | the matching subcommand |
+| `list` `status` `run` `logs` `shell` `stop` `merge` `fetch` `push` `destroy` `workmux` `doctor` | the matching subcommand |
 | `-h`, `--help`, `help`, or no arguments at all | print `usage()` to stdout, exit 0 |
 | anything else not starting with `-` | **positional shorthand**: `cmd_start NAME <rest...>` |
 | anything starting with `-` | `error: unknown subcommand: <arg>`, exit 1 |
@@ -142,6 +143,8 @@ Resolved mounts are stored tab-separated in `__sessions/<name>/mounts.tsv`.
   `error: unknown destroy option: <arg>`.
 - `doctor` — see §10.
 - `list` — see §8.
+- `workmux [-- COMMAND...]` — see §16; any other leading `-` argument:
+  `error: unknown workmux option: <arg>`.
 
 ## 4. Environment variables
 
@@ -732,3 +735,49 @@ re-run, the bash sources are gone from the tree (git history only).
 
 TTY behaviour (§13) is deliberately not automated: there is no terminal in
 a build sandbox. The nix checks run on `x86_64-linux` only.
+
+## 16. `workmux` — the whole session in one sandbox
+
+`agent-gvisor workmux` is the gVisor tier of the "one sandbox owns the
+whole workmux/tmux session" family (`agent-bubblewrap-workmux-tmux` for
+bubblewrap, `agent-qemu-workmux-tmux` for microVMs). It deliberately does
+NOT behave like `start`:
+
+| | `start NAME` | `workmux` |
+| --- | --- | --- |
+| repository | an isolated `git clone` per session, mounted at the repo path | the REAL checkout, bind-mounted at its own host path |
+| worktrees | one branch/worktree per session, managed by the CLI | none of the CLI's business: `workmux` creates them itself, inside the sandbox |
+| registry | `$STATE_ROOT/sessions/NAME` → session dir | none; one sandbox per repository |
+| lifecycle | `list`/`status`/`merge`/`fetch`/`push`/`destroy` | just start and exit |
+
+Ordering:
+
+1. Parse `[-- ] COMMAND...` (a leading `-` word other than `--`/`-h`/`--help`
+   is `error: unknown workmux option: <arg>`).
+2. `need git`, `need podman`, `need sha256sum`; runtime and image checks
+   (§10) against `$AGENT_GVISOR_IMAGE`.
+3. `git rev-parse --show-toplevel` of the current directory, else
+   `error: not a Git working tree: <cwd>`; the result is canonicalized.
+4. Refuse a linked worktree — `--git-dir` ≠ `--git-common-dir` is
+   `error: refusing to run from a linked worktree; run it from the main
+   checkout (<dirname of the common dir>)`.
+5. `dirname(top)/basename(top)__worktrees` is created if absent. It is
+   bind-mounted read-write at the SAME path inside the sandbox, so
+   workmux's `dirname(top)/basename(top)__worktrees` convention resolves
+   to the same directory in both worlds.
+6. Sandbox state lives at `<repo>__agent-gvisor/__workmux/`
+   (`meta`, `mounts.tsv`, `env.list`, `last-command`, `home/`) — a sibling
+   of `__sessions/` that no session name can collide with. `/home/agent`
+   is seeded exactly like `start` (§11).
+7. The container is `agent-workmux-<repo-id>` (sanitized, §8); a RUNNING
+   one is not replaced but reported:
+   `error: a workmux sandbox is already running for this repository: …`.
+8. The `podman run` vector is the ordinary one (§10) with
+   `worktree = repo` (hence `src = dst = <repo>`), `--hostname
+   agent-gvisor-workmux-tmux`, the worktrees bind mount from `mounts.tsv`,
+   `network`/`nix` from the environment, no env-file and the default
+   limits (`8g`, `4`, `2048`).
+9. COMMAND defaults to `$AGENT_GVISOR_WORKMUX_COMMAND` (word-split), else
+   `/bin/workmux-gvisor-entry` — the in-image entrypoint the NixOS module
+   bakes in, which writes the in-sandbox workmux configuration and boots
+   the workmux tmux session on a private socket.

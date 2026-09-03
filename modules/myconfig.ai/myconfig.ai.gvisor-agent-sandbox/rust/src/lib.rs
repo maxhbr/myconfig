@@ -15,11 +15,13 @@ pub mod seed;
 pub mod session;
 pub mod shellwords;
 pub mod state;
+pub mod workmux;
 
 /// Entry point: environment setup, subcommand dispatch.
 ///
 /// Mirrors `main`/`cmd_*` dispatch of the historical bash implementation:
-/// `start|list|status|run|logs|shell|stop|merge|fetch|push|destroy|doctor`,
+/// `start|list|status|run|logs|shell|stop|merge|fetch|push|destroy|doctor`
+/// plus the later `workmux` (the whole-session sandbox, docs/spec.md §16),
 /// `''|-h|--help|help` → usage (exit 0), any other non-`-` word is the
 /// positional session-name shorthand for `start`.
 pub fn run() -> ! {
@@ -64,6 +66,9 @@ pub fn run() -> ! {
         Some("push") => session::cmd_push(env, &rest1(&args)),
         Some("destroy") => session::cmd_destroy(env, &rest1(&args)),
         Some("doctor") => session::cmd_doctor(env),
+        // The WHOLE workmux/tmux session of the current repository in ONE
+        // sandbox — no clone, no registry entry (docs/spec.md §16).
+        Some("workmux") => workmux::cmd_workmux(env, &args[1..]),
         Some("-h") | Some("--help") | Some("help") => {
             cli::usage();
             std::process::exit(0);
