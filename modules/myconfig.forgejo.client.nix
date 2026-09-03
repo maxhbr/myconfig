@@ -25,6 +25,7 @@ let
     name: token:
     let
       secret = config.myconfig.secrets.${token.passwordSecret};
+      scopesJson = builtins.toJSON token.scopes;
     in
     ''
       # Fire-and-forget: no retries, no blocking, graceful failure.
@@ -44,7 +45,7 @@ let
         --max-time 5 \
         --user "${name}:$PASSWORD" \
         --request DELETE \
-        "${forgejoApi}/users/me/tokens/${name}" \
+        "${forgejoApi}/users/${name}/tokens/${name}" \
         >/dev/null 2>&1 || true
 
       response=$(
@@ -55,9 +56,10 @@ let
           --header 'Content-Type: application/json' \
           --request POST \
           --data '{
-            "name": "${name}"
+            "name": "${name}",
+            "scopes": ${scopesJson}
           }' \
-          "${forgejoApi}/users/me/tokens" \
+          "${forgejoApi}/users/${name}/tokens" \
           2>/dev/null || echo ""
       )
 
@@ -101,6 +103,13 @@ in
                 defaultText = literalExpression ''"/run/forgejo-${name}-token"'';
                 description = "Path where the created API token is written.";
               };
+
+              scopes = mkOption {
+                type = types.listOf types.str;
+                default = [ "write:repository" ];
+                defaultText = literalExpression ''[ "write:repository" ]'';
+                description = "Forgejo token scopes. Must be a non-empty list; default grants the least privilege needed for hermes-agent repository writes.";
+              };
             };
           }
         )
@@ -111,6 +120,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = lib.mapAttrsToList (
+      name: token: {
+        assertion = token.scopes != [ ];
+        message = "myconfig.forgejo.client.tokens.${name}.scopes must not be empty.";
+      }
+    ) cfg.tokens;
+
     myconfig.secrets = lib.listToAttrs (
       lib.mapAttrsToList (
         _name: token:
