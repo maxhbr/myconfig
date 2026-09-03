@@ -55,8 +55,7 @@ let
           --header 'Content-Type: application/json' \
           --request POST \
           --data '{
-            "name": "${name}",
-            "expires_at": ${toString token.expiresAt}
+            "name": "${name}"
           }' \
           "${forgejoApi}/users/me/tokens" \
           2>/dev/null || echo ""
@@ -101,13 +100,6 @@ in
                 default = "/run/forgejo-${name}-token";
                 defaultText = literalExpression ''"/run/forgejo-${name}-token"'';
                 description = "Path where the created API token is written.";
-              };
-
-              expiresAt = mkOption {
-                type = types.int;
-                default = 4102444800;
-                defaultText = literalExpression "4102444800";
-                description = "Token expiry as a Unix timestamp (default: 2100-01-01 UTC).";
               };
             };
           }
