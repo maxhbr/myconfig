@@ -5,7 +5,7 @@
 # features (ephemeral home, launch scripts, nix access, network
 # isolation for "offline", …) each agent receives.
 #
-# `embedded` is the Zephyr/embedded-development agent: it receives
+# `agnt-embedded` is the Zephyr/embedded-development agent: it receives
 # device-access groups so west flash / pyocd / OpenOCD can reach the
 # board. Everything else (ephemeral home, no secrets, nix
 # allowed-but-untrusted) is inherited from the shared agent model.
@@ -24,9 +24,10 @@
     myconfig.agentUsers = {
       # NOTE: uid/gid are assigned positionally from 31000 (see the shared
       # module), so only ever *append* names here — reordering changes ids.
+      # The `agnt-` prefix marks this as an agent-type user.
       names = [
         "agent"
-        "embedded"
+        "agnt-embedded"
       ];
 
       # Device access for the embedded agent — the deliberate exception to
@@ -34,7 +35,7 @@
       #   dialout — /dev/ttyACM*, /dev/ttyUSB* (UART flashing, serial console)
       #   plugdev — USB debug probes (CMSIS-DAP, FTDI, J-Link, …) via the
       #              OpenOCD udev rules enabled below
-      extraGroups.embedded = [
+      extraGroups.agnt-embedded = [
         "dialout"
         "plugdev"
       ];
@@ -47,7 +48,7 @@
 
     # Upstream OpenOCD probe rules (contrib/60-openocd.rules): FT2232/CMSIS-DAP/…
     # USB probes become GROUP="plugdev" MODE 660. Without them, the
-    # `embedded` agent could only use serial-port flashing, not SWD/JTAG.
+    # `agnt-embedded` agent could only use serial-port flashing, not SWD/JTAG.
     services.udev.packages = [ pkgs.openocd ];
     # NOTE: J-Link probes need Segger's udev rules instead (not in
     # nixpkgs for licensing reasons); pyocd ships its own 70-pyocd.rules
@@ -58,7 +59,7 @@
     # (via genAttrs); these empty blocks are anchors to fill in.
     home-manager.users = {
       agent = { };
-      embedded = { };
+      agnt-embedded = { };
     };
   };
 }

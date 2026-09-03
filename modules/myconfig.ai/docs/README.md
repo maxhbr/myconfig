@@ -66,7 +66,7 @@ user:
   run without a login session), and **deliberately no `extraGroups`** — no
   `wheel`, no `keys`, no `docker`. The only opt-in escape hatch is
   `myconfig.agentUsers.extraGroups`, restricted per-host to device access
-  groups (e.g. `dialout`/`plugdev` for the `embedded` agent on host
+  groups (e.g. `dialout`/`plugdev` for the `agnt-embedded` agent on host
   `thing`, so it can flash boards over `/dev/ttyACM*` and SWD/JTAG probes).
 - Agents inherit the primary user's home-manager `sharedModules` (tmux, shell,
   dev tools, coding agents), plus an explicitly opt-in list of
