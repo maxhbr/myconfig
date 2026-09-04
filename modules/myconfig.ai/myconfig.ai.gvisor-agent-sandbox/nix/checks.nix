@@ -42,6 +42,22 @@ let
     # `outputHashes` can ever be needed.
     cargoLock.lockFile = ../rust/Cargo.lock;
     doCheck = true;
+    # ../rust/tests/branch_lifecycle.rs drives the REAL git (the stubs cannot
+    # model refs, fast-forwards and tags), so the test phase needs it on
+    # PATH; without it every scenario there dies in `git_in` with ENOENT.
+    nativeCheckInputs = [ pkgs.git ];
+    # …and real git needs a committer identity and a writable HOME, which the
+    # build sandbox has neither of (outside the sandbox the tests silently
+    # borrowed the developer's ~/.gitconfig).
+    preCheck = ''
+      export HOME=$TMPDIR
+      export GIT_CONFIG_GLOBAL=/dev/null
+      export GIT_CONFIG_SYSTEM=/dev/null
+      export GIT_AUTHOR_NAME=agent-gvisor-tests
+      export GIT_AUTHOR_EMAIL=agent-gvisor-tests@invalid
+      export GIT_COMMITTER_NAME=agent-gvisor-tests
+      export GIT_COMMITTER_EMAIL=agent-gvisor-tests@invalid
+    '';
   };
 in
 {
