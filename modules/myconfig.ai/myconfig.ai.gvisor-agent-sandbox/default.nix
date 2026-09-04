@@ -55,25 +55,13 @@ let
   # `herdr` becomes the default command of a session.
   herdrEnabled = enabledAgentPackages != [ ];
 
-  # Host tmux configuration, to be installed at /etc/tmux.conf inside the
-  # sandbox image when workmux is enabled. Empty string when the host has no
-  # /etc/tmux.conf (the sandbox then uses tmux defaults).
-  tmuxConf = config.environment.etc."tmux.conf".source or "";
-
   # The image actually used: either the configured one, or the default with
-  # `extraImagePackages` folded in. When workmux is enabled and the host has
-  # a tmux configuration, pass it to the image builder so the in-sandbox tmux
-  # server picks up the same keybindings/theme.
+  # `extraImagePackages` folded in.
   image =
     if cfg.image == null then
       null
-    else if cfg.extraImagePackages == [ ] && !(cfg.workmux.enable && tmuxConf != "") then
+    else if cfg.extraImagePackages == [ ] then
       cfg.image
-    else if cfg.workmux.enable && tmuxConf != "" then
-      cfg.image.override {
-        extraPackages = cfg.extraImagePackages;
-        inherit tmuxConf;
-      }
     else
       cfg.image.override { extraPackages = cfg.extraImagePackages; };
 
@@ -174,10 +162,7 @@ let
         '';
 in
 {
-  imports = [
-    ./litellm-endpoint.nix
-    ./workmux.nix
-  ];
+  imports = [ ./litellm-endpoint.nix ];
 
   options.myconfig.ai.gvisor-agent-sandbox = with lib; {
     enable = mkEnableOption "myconfig.ai.gvisor-agent-sandbox";
@@ -187,19 +172,6 @@ in
       default = pkgs.agent-gvisor;
       defaultText = literalExpression "pkgs.agent-gvisor";
       description = "The `agent-gvisor` session manager package.";
-    };
-
-    finalPackage = mkOption {
-      type = types.package;
-      internal = true;
-      default = withSessionEnv (withImage cfg.package);
-      defaultText = literalExpression "cfg.package with the effective image and the host session defaults baked in";
-      description = ''
-        `package` as this module actually installs it: the effective image
-        reference and the host-configured session defaults (`sessionEnv`)
-        are baked in. Companion modules (./workmux.nix) run THIS package,
-        not the bare `pkgs.agent-gvisor`.
-      '';
     };
 
     image = mkOption {
@@ -222,17 +194,13 @@ in
         ++ config.myconfig.ai.sandboxTools.extraPackages
         # Nix for in-session builds, when enabled below
         # (myconfig.ai.gvisor-agent-sandbox.nix).
-        ++ lib.optionals cfg.nix.enable [ cfg.nix.package ]
-        # workmux + tmux + the in-sandbox entrypoint of `agent-gvisor
-        # workmux` (see ./workmux.nix); empty unless workmux is enabled.
-        ++ cfg.workmux.imagePackages;
+        ++ lib.optionals cfg.nix.enable [ cfg.nix.package ];
       defaultText = literalExpression ''
         the packages of the coding agents enabled on this host, i.e. one entry
         per set `myconfig.ai.<pi-coding-agent|opencode|claude-code|codex|github-copilot-cli|qwen-code>.enable`,
         plus `pkgs.herdr` when any of them is enabled,
         plus `myconfig.ai.sandboxTools.extraPackages`,
-        plus `nix.package` when `myconfig.ai.gvisor-agent-sandbox.nix.enable`,
-        plus `myconfig.ai.gvisor-agent-sandbox.workmux.imagePackages`
+        plus `nix.package` when `myconfig.ai.gvisor-agent-sandbox.nix.enable`
       '';
       example = literalExpression "[ pkgs.claude-code ]";
       description = ''
@@ -444,7 +412,7 @@ in
     home-manager.sharedModules = [
       {
         home.packages = [
-          cfg.finalPackage
+          (withSessionEnv (withImage cfg.package))
           pkgs.gvisor
         ]
         ++ lib.optional (image != null) (withImage pkgs.agent-gvisor-load-image);

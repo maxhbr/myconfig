@@ -356,10 +356,3 @@ strength it sits between the bubblewrap jail (tier 2) and the QEMU microVM
 (tier 3): like the jail it runs on the host kernel (no full VM), but `runsc`
 interposes a user-space kernel between the sandbox and the host kernel, which
 plain namespaces do not.
-
-Its session-wide variant is `agent-gvisor-workmux-tmux` (in-terminal) /
-`agent-gvisor-alacritty-workmux-tmux` (Alacritty popup): a thin wrapper around
-`agent-gvisor workmux`, which puts a whole workmux/tmux session — the REAL
-checkout (no clone) plus its `<repo>__worktrees` sibling — into one runsc
-container. It completes the naming family next to
-`agent-bubblewrap-workmux-tmux` and `agent-qemu-workmux-tmux`.
