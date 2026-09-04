@@ -196,9 +196,11 @@ let
     userDataDirs ++ extraAllowDirs
   );
 
+  # Read-only directories: user config dirs plus the full Nix store
+  # (required so the sandboxed agent binary can be executed).
   readOnlyDirFlags = lib.concatMapStringsSep " " (dir: "--read \"$HOME/${dir}\"") (
     configDirs ++ extraConfigDirs ++ extraReadOnlyDirs
-  );
+  ) + " --read /nix/store";
 
   unixSocketFlags = lib.concatMapStringsSep " " (
     socket: "--allow-unix-socket \"${socket}\""
