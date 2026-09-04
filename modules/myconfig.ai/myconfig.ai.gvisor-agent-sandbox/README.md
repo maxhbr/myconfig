@@ -88,46 +88,7 @@ When enabled the module
   defaults keeps the package's `share/` tree, so the fish tab completion
   ships too),
 - grants subordinate UID/GID ranges (`autoSubUidGidRange`) to
-  `myconfig.ai.gvisor-agent-sandbox.users` (default: `myconfig.user`),
-- adds the workmux session sandbox when workmux is enabled (see below).
-
-### The workmux session sandbox (`agent-gvisor workmux`)
-
-[`workmux.nix`](./workmux.nix) adds the gVisor tier of the
-"one sandbox owns the WHOLE workmux/tmux session" family, next to the
-bubblewrap (`agent-bubblewrap-workmux-tmux`) and microVM
-(`agent-qemu-workmux-tmux`) tiers in
-[`../myconfig.ai.workmux/`](../myconfig.ai.workmux/):
-
-- `agent-gvisor-workmux-tmux` — runs `agent-gvisor workmux` in the current
-  terminal,
-- `agent-gvisor-alacritty-workmux-tmux` — the same in an Alacritty popup.
-
-Both are installed wherever `myconfig.ai.workmux` and this module are enabled
-(`myconfig.ai.gvisor-agent-sandbox.workmux.enable`, on by default then).
-
-`agent-gvisor workmux` (contract: [`docs/spec.md`](./docs/spec.md) §16) is
-deliberately NOT a `start` session:
-
-- **no clone** — the REAL checkout is bind-mounted read-write at its own host
-  path, so the session works on your files directly,
-- **no worktree handling** — the `<repo>__worktrees` sibling is created if
-  absent and bind-mounted at its host path (so workmux's
-  `dirname(top)/basename(top)__worktrees` convention resolves inside the
-  sandbox); `workmux` creates and removes the linked worktrees itself, in
-  there,
-- **no registry entry** — one container per repository
-  (`agent-workmux-<repo-id>`), state under `<repo>__agent-gvisor/__workmux/`;
-  `list`/`merge`/`fetch`/`push`/`destroy` do not apply. A running one is
-  reported instead of replaced.
-
-It must be run from the MAIN checkout of a git repository (a linked worktree
-is refused, like in the other two tiers). Inside, `/bin/workmux-gvisor-entry`
-(baked into the image together with `workmux` and `tmux` via
-`myconfig.ai.gvisor-agent-sandbox.workmux.imagePackages`) writes the
-in-sandbox workmux configuration — `pi` mapped to the image's PLAIN `pi`, the
-container already being the sandbox — boots the workmux tmux session on a
-private socket, wires up sidebar + dashboard and attaches.
+  `myconfig.ai.gvisor-agent-sandbox.users` (default: `myconfig.user`).
 
 ### Sandbox home seeding (home-manager dotfiles)
 

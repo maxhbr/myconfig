@@ -45,7 +45,7 @@ end
 function __agent_gvisor_in_start
     __fish_seen_subcommand_from start
     and return 0
-    __fish_seen_subcommand_from list status run logs shell stop merge fetch push destroy doctor workmux
+    __fish_seen_subcommand_from list status run logs shell stop merge fetch push destroy doctor
     and return 1
     test (count (commandline -opc)) -ge 2
 end
@@ -69,7 +69,6 @@ complete -c agent-gvisor -f -n '__fish_use_subcommand' -a merge -d 'Merge the se
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a fetch -d 'Fetch the session branch from the session worktree into a local branch'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a push -d 'Push the session branch to a remote (fetches it first)'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a destroy -d 'Remove container, worktree and session state'
-complete -c agent-gvisor -f -n '__fish_use_subcommand' -a workmux -d 'Run the whole workmux/tmux session of this repo in one sandbox'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a doctor -d 'Verify runtime, image and sandbox startup'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -a help -d 'Print usage'
 complete -c agent-gvisor -f -n '__fish_use_subcommand' -s h -l help -d 'Print usage'

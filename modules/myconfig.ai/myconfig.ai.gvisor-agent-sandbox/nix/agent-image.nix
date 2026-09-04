@@ -40,9 +40,6 @@
   # Convenience: add packages (for example a coding-agent CLI) without
   # restating the whole default list.
   extraPackages ? [ ],
-  # tmux configuration file to install at /etc/tmux.conf inside the image.
-  # When empty, no tmux.conf is installed (tmux uses its defaults).
-  tmuxConf ? "",
 }:
 
 let
@@ -95,11 +92,6 @@ let
   rootPackages =
     (if packages == null then defaultPackages else packages) ++ extraPackages ++ [ initScript ];
 
-  # tmux configuration to install at /etc/tmux.conf, when provided.
-  # `tmuxConf` is a path to a file (typically
-  # `config.environment.etc."tmux.conf".source`), so it is used as-is.
-  tmuxConfFile = if tmuxConf != "" then tmuxConf else null;
-
   imageRoot = buildEnv {
     name = "agent-gvisor-root";
     paths = rootPackages;
@@ -132,10 +124,6 @@ dockerTools.buildLayeredImage {
     mkdir -p home/agent/.cache home/agent/.config home/agent/.local/state
     chmod 1777 tmp
     chmod -R 0777 home/agent
-  ''
-  + lib.optionalString (tmuxConfFile != null) ''
-    mkdir -p etc
-    install -m 0644 ${tmuxConfFile} etc/tmux.conf
   '';
 
   config = {
