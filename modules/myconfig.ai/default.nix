@@ -18,6 +18,8 @@ in
     ./myconfig.ai.pull_models.nix
     ./myconfig.ai.llama-cpp
     ./myconfig.ai.jail.nix
+    ./myconfig.ai.nono.nix
+    ./myconfig.ai.nono-agent-sandbox.nix
     ./myconfig.ai.sandboxTools.nix
     ./myconfig.ai.qemu-agent-sandbox
     ./myconfig.ai.microvm
@@ -63,6 +65,10 @@ in
     myconfig.ai.workmux.enable = lib.mkDefault (
       config.myconfig.dev.enable && config.programs.tmux.enable
     );
+    # nono-agent-sandbox provides `agent-nono-*` wrappers (like `agent-bubblewrap-*`)
+    # for running coding agents in the nono capability-based sandbox. Enable by
+    # default whenever myconfig.ai is enabled, but allow hosts to override.
+    myconfig.ai.nono-agent-sandbox.enable = lib.mkDefault true;
     home-manager.sharedModules = [
       {
         home.packages =
