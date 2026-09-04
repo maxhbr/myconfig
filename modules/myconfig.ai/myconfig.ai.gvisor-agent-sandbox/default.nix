@@ -55,13 +55,25 @@ let
   # `herdr` becomes the default command of a session.
   herdrEnabled = enabledAgentPackages != [ ];
 
+  # Host tmux configuration, to be installed at /etc/tmux.conf inside the
+  # sandbox image when workmux is enabled. Empty string when the host has no
+  # /etc/tmux.conf (the sandbox then uses tmux defaults).
+  tmuxConf = config.environment.etc."tmux.conf".source or "";
+
   # The image actually used: either the configured one, or the default with
-  # `extraImagePackages` folded in.
+  # `extraImagePackages` folded in. When workmux is enabled and the host has
+  # a tmux configuration, pass it to the image builder so the in-sandbox tmux
+  # server picks up the same keybindings/theme.
   image =
     if cfg.image == null then
       null
-    else if cfg.extraImagePackages == [ ] then
+    else if cfg.extraImagePackages == [ ] && !(cfg.workmux.enable && tmuxConf != "") then
       cfg.image
+    else if cfg.workmux.enable && tmuxConf != "" then
+      cfg.image.override {
+        extraPackages = cfg.extraImagePackages;
+        inherit tmuxConf;
+      }
     else
       cfg.image.override { extraPackages = cfg.extraImagePackages; };
 
