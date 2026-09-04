@@ -95,8 +95,9 @@ environment:
   AGENT_GVISOR_MODEL_ENDPOINT   Model API base URL as seen from a sandbox;
                                 `doctor` probes it from inside one
   AGENT_GVISOR_NETWORK          Default --network mode for sessions and for the
-                                `doctor` endpoint probe, e.g. a "pasta:..." spec
-                                mapping the model endpoint to the host loopback
+                                `doctor` network and endpoint probes, e.g. a
+                                "pasta:..." spec mapping the model endpoint to
+                                the host loopback
   AGENT_GVISOR_LOOPBACK_FORWARD
                                 Space-separated LPORT:RHOST:RPORT rules. Each is
                                 relayed INSIDE the sandbox from 127.0.0.1:LPORT
@@ -115,7 +116,8 @@ environment:
                                 NIX_CONFIG when --nix is on, e.g. substituters
                                 and trusted keys; see docs/nix-in-sandbox.md
 
-Run `agent-gvisor doctor` to verify runtime, image and sandbox startup.
+Run `agent-gvisor doctor` to verify runtime, image and sandbox startup, the
+sandbox's interfaces and routes, and the model endpoint from inside a sandbox.
 
 `agent-gvisor workmux` is the odd one out: it runs the WHOLE workmux/tmux
 session of the current repository in ONE sandbox. It makes no clone and no

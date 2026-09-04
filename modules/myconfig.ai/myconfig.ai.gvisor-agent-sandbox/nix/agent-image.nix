@@ -19,6 +19,7 @@
   gnused,
   gnutar,
   gzip,
+  iproute2,
   jq,
   less,
   nodejs,
@@ -59,6 +60,10 @@ let
     gnused
     gnutar
     gzip
+    # `ip addr` / `ip route`: the only way to see the sandbox's ADDRESSES from
+    # inside (netstack serves /proc/net/route, but no /proc file lists
+    # addresses), which `doctor`'s network probe prints.
+    iproute2
     jq
     less
     nodejs # provides node and npm

@@ -1231,6 +1231,14 @@ pub fn cmd_doctor(env: Env) -> ! {
     );
     println!("sessions:        <repo>__agent-gvisor/{{__sessions}} and session clones next to each repo");
     println!(
+        "network:         {}",
+        if env.network.is_empty() {
+            "<podman default>".to_string()
+        } else {
+            env.network.clone()
+        }
+    );
+    println!(
         "model endpoint:  {}",
         env.model_endpoint.clone().unwrap_or_else(|| "<unset>".to_string())
     );
@@ -1256,6 +1264,16 @@ pub fn cmd_doctor(env: Env) -> ! {
         die(&doctor::sandbox_failed_message());
     }
     log("sandbox works");
+
+    // A sandbox that starts still says nothing about whether it can leave
+    // its own loopback: runsc serves its own netstack from whatever the
+    // container netns carried, so an empty netns yields a working 127.0.0.1
+    // and ENETUNREACH for everything else. Print that view before the
+    // endpoint probes, so their failure can be attributed.
+    log("checking the sandbox network (interfaces and routes it sees)");
+    if !pod.run(&doctor::network_probe_args(&env)).success() {
+        warn(&doctor::network_broken_message(&env.network));
+    }
 
     // Model access is the one thing a working sandbox still gets wrong
     // silently; probe the endpoint from inside a sandbox, which is the only

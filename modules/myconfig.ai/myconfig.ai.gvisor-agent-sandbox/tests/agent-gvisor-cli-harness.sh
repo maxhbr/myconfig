@@ -107,6 +107,11 @@ expect_ok "help exits 0" --help
 echo "== doctor =="
 expect_ok "doctor against a working sandbox" doctor
 expect_err "doctor reports a working sandbox" "sandbox works"
+# The netstack view is probed for every doctor run: an empty container netns
+# makes every off-sandbox check below fail with ENETUNREACH, which is
+# otherwise indistinguishable from a dead host-side forwarder.
+expect_err "doctor probes the sandbox network" "checking the sandbox network"
+expect_out "doctor reports the network spec" 'network:         <podman default>'
 touch "$RECORD/run-fail"
 expect_fail "doctor against a broken sandbox" 1 doctor
 expect_err "doctor explains the broken sandbox" "sandbox startup failed"

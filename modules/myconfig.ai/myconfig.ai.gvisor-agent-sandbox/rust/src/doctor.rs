@@ -42,6 +42,47 @@ const MODELS_CMD: &str = concat!(
     "case \"$body\" in *'\"id\"'*) exit 0 ;; *) exit 1 ;; esac",
 );
 
+/// The netstack probe command: report the sandbox's OWN view of its
+/// interfaces and routes, and fail when that view cannot carry the model
+/// endpoint at all.
+///
+/// Why it exists: every "endpoint unreachable" report so far had to be
+/// bisected by hand into "the host side is down" versus "the sandbox has no
+/// route at all". runsc moves the addresses and routes of the container
+/// netns (as pasta configured it) into its own netstack; when that netns
+/// arrives without a non-loopback interface or without a default route, the
+/// sandbox's loopback still works (so `sandbox works` passes and the relay
+/// listener comes up) while every off-link connect fails instantly with
+/// `ENETUNREACH` — the signature that used to be indistinguishable from a
+/// dead host-side forwarder.
+///
+/// The verdict is read from `/proc/net/dev` and `/proc/net/route`, which
+/// netstack serves, so it holds for any image; `ip` is only used, when the
+/// image has it, to ALSO print the addresses and the IPv6 routes — which is
+/// what distinguishes "the netns has no IPv4 at all" from "it has an
+/// address but no route". The hex fields of `/proc/net/route` are decoded
+/// with a POSIX-awk helper (no `strtonum`).
+const NETINFO_CMD: &str = concat!(
+    "ifaces=$(sed -e '1,2d' /proc/net/dev | sed -e 's/:.*//' -e 's/^ *//'); ",
+    "echo \"interfaces: $(echo $ifaces)\"; ",
+    "if command -v ip >/dev/null 2>&1; then ",
+    "echo 'addresses:'; ip -o addr show | sed -e 's/^/  /'; ",
+    "echo 'routes (ip route, all families):'; ",
+    "{ ip -4 route show; ip -6 route show; } | sed -e 's/^/  /'; ",
+    "fi; ",
+    "echo 'routes (IPv4, /proc/net/route):'; ",
+    "awk 'function h2d(s){d=0;for(i=1;i<=length(s);i++)",
+    "{c=tolower(substr(s,i,1));d=d*16+index(\"0123456789abcdef\",c)-1}return d} ",
+    "function ip(h){return h2d(substr(h,7,2)) \".\" h2d(substr(h,5,2)) \".\" ",
+    "h2d(substr(h,3,2)) \".\" h2d(substr(h,1,2))} ",
+    "NR>1{printf \"  %s dst %s mask %s gw %s\\n\", $1, ip($2), ip($8), ip($3)}' ",
+    "/proc/net/route; ",
+    "case \"$(echo $ifaces | tr ' ' '\\n' | grep -v '^lo$')\" in ",
+    "'') echo 'no non-loopback interface in the sandbox netstack'; exit 1 ;; esac; ",
+    "awk 'NR>1 && $2==\"00000000\"{found=1} END{exit !found}' /proc/net/route ",
+    "|| { echo 'no IPv4 default route in the sandbox netstack'; exit 1; }",
+);
+
 /// The models URL for a model endpoint: `<endpoint>/models`, with any
 /// trailing slashes on the endpoint collapsed.
 pub fn models_url(endpoint: &str) -> String {
@@ -100,6 +141,24 @@ pub fn models_probe_args(env: &Env) -> Vec<String> {
     args
 }
 
+/// The netstack probe argument vector: like the endpoint probe (same
+/// hardening, same session network — the network spec is what decides the
+/// answer), but printing the sandbox's interfaces and routes.
+pub fn network_probe_args(env: &Env) -> Vec<String> {
+    let mut args = vec!["run".to_string()];
+    args.extend(probe_flags());
+    if !env.network.is_empty() {
+        args.extend(["--network".to_string(), env.network.clone()]);
+    }
+    args.push(env.default_image.clone());
+    args.extend([
+        "/bin/sh".to_string(),
+        "-c".to_string(),
+        NETINFO_CMD.to_string(),
+    ]);
+    args
+}
+
 /// The loopback-relay probe argument vector for one `LPORT:RHOST:RPORT`
 /// rule: like the endpoint probe, but through `/bin/agent-gvisor-init` with
 /// the single rule exported, probing `http://127.0.0.1:<lport>/`.
@@ -151,6 +210,39 @@ pub fn endpoint_unreachable_message(endpoint: &str) -> String {
          spec, e.g. pasta:--map-guest-addr,<endpoint-host>). Also confirm the\n\
          host litellm proxy is up on 127.0.0.1:<port> and the forwarder socket\n\
          (agent-litellm-forward) is active on 0.0.0.0:<forward-port>."
+    )
+}
+
+/// The warning when the sandbox netstack has no usable off-link route, i.e.
+/// when every endpoint probe below is doomed regardless of the host side.
+pub fn network_broken_message(network: &str) -> String {
+    let spec = if network.is_empty() {
+        "<podman default>".to_string()
+    } else {
+        crate::shellwords::quote(network)
+    };
+    format!(
+        "warning: the sandbox has no non-loopback interface or no IPv4 default route.\n\
+         Every check below that leaves the sandbox will fail with\n\
+         \"Network is unreachable\" no matter how healthy the host side is.\n\
+         runsc copies the interfaces, addresses and routes of the container\n\
+         netns into its own netstack, so a missing route means the netns\n\
+         arrived that way: the backend (spec: {spec}) did not configure it.\n\
+         The known cause is a host interface whose address carries\n\
+         `noprefixroute` while its on-link subnet route is MISSING — pasta\n\
+         copies the address flags verbatim, so the netns gets no subnet route\n\
+         either, and the copied default route is then rejected (\"Nexthop has\n\
+         invalid gateway\"), which pasta ignores by design. Check the\n\
+         default-route interface pasta clones:\n\
+         \x20 ip route show dev \"$(ip -4 route show default | sed -e 's/.* dev //' -e 's/ .*//')\"\n\
+         It must list the subnet (e.g. 192.168.1.0/24), not only the default\n\
+         route. If it does not, re-add it (NetworkManager: reactivate the\n\
+         connection) and re-run this check.\n\
+         To confirm from the other side, compare with the netns podman builds:\n\
+         \x20 podman run --rm --runtime=crun --network {spec} <image> \\\n\
+         \x20   sh -c 'ip addr; ip route'\n\
+         crun uses the host kernel's stack instead of netstack, so an equally\n\
+         empty answer there confirms pasta, not runsc."
     )
 }
 

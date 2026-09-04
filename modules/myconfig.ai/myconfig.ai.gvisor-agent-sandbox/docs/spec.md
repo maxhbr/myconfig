@@ -162,7 +162,7 @@ Resolved mounts are stored tab-separated in `__sessions/<name>/mounts.tsv`.
 | `AGENT_GVISOR_HOME_SEED_PATHS` | empty ⇒ no seeding | **space-separated** relative paths copied from the seed tree (allowlist) |
 | `AGENT_GVISOR_HOME_SEED_REWRITE` | empty ⇒ no rewriting | **space-separated** `OLD=NEW` rules applied literally to the seeded files |
 | `AGENT_GVISOR_MODEL_ENDPOINT` | unset | probed by `doctor` from inside a sandbox (the base URL, plus `<endpoint>/models` as a smoke test: the list must name at least one model) |
-| `AGENT_GVISOR_NETWORK` | unset ⇒ empty | default `--network` for sessions and `doctor` probes |
+| `AGENT_GVISOR_NETWORK` | unset ⇒ empty | default `--network` for sessions and `doctor` probes; shown in the `doctor` header and probed there for interfaces/routes |
 | `AGENT_GVISOR_LOOPBACK_FORWARD` | unset | **space-separated** `LPORT:RHOST:RPORT` rules; passed into the container and set up by `/bin/agent-gvisor-init` |
 | `AGENT_GVISOR_DEFAULT_COMMAND` | `/bin/bash` | word-split command run by `start`/`run` when no COMMAND is given; `shell` is unaffected |
 | `AGENT_GVISOR_NIX` | unset ⇒ off | default for `--nix`; enabled unless unset, empty or exactly `false` |
@@ -534,6 +534,35 @@ the worktree appears where the repository normally lives and `--workdir` /
 Before `exec`ing, the full vector (including the leading literal `podman`)
 is written to `<session>/last-command` as `%q`-quoted, space-joined words
 plus a trailing newline — byte-identical to the bash CLI's file.
+
+### `doctor` probes
+
+After the header (`podman`, `runtime`, cgroup manager, runtime flags,
+limits, image, state, sessions, `network`, model endpoint, loopback
+forwards, nix) `doctor` runs, in order, one throwaway container per probe
+with the flags `--rm --read-only --read-only-tmpfs=true --cap-drop=ALL
+--security-opt=no-new-privileges --userns=keep-id` (plus `--network
+<AGENT_GVISOR_NETWORK>` for every probe except the first):
+
+1. **sandbox** — `/bin/sh -c 'uname -srmo; id'`; failure is fatal (exit 1).
+2. **network** — the sandbox's own view of its netstack, read from
+   `/proc/net/dev` and `/proc/net/route` (no `iproute2` in the image):
+   prints the interface list and one decoded line per route, and warns
+   when there is no non-loopback interface or no default route. runsc
+   serves its own netstack built from whatever the container netns
+   carried, so an empty netns leaves a working `127.0.0.1` while every
+   off-link connect fails instantly with `ENETUNREACH` — without this
+   probe that is indistinguishable from a dead host-side forwarder.
+3. **model endpoint** — `AGENT_GVISOR_MODEL_ENDPOINT`, any HTTP status
+   counts as reachable; warning only.
+4. **model list** — `<endpoint>/models` must name at least one model id;
+   warning only.
+5. **loopback relays** — one probe per `AGENT_GVISOR_LOOPBACK_FORWARD`
+   rule, through `/bin/agent-gvisor-init` with only that rule set,
+   fetching `http://127.0.0.1:<lport>/`; warning only.
+
+Probes 2–5 never change the exit status: `doctor` exits 0 unless the
+runtime, the image or the sandbox probe itself failed.
 
 `check_runtime`: an absolute runtime path must be executable
 (`error: OCI runtime is not executable: <runtime>`); a named runtime is

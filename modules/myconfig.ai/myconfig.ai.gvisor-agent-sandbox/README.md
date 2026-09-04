@@ -214,11 +214,20 @@ Switch it off with `myconfig.ai.gvisor-agent-sandbox.litellm.loopbackForward =
 false`; a slimmed image without `socat` degrades to a warning, not a failure.
 
 Verify the whole chain from inside a sandbox with `agent-gvisor doctor`,
-which probes `AGENT_GVISOR_MODEL_ENDPOINT` (baked from `litellm.endpoint`)
-through the same pasta network a session uses (see below) in a throwaway
-container and accepts any HTTP status as "reachable", and then probes each
-loopback relay through `/bin/agent-gvisor-init`, exactly as a session starts
-it.
+which prints the effective network spec, then dumps the sandbox's own
+interfaces and routes (`/proc/net/dev`, `/proc/net/route` as runsc's netstack
+serves them), then probes `AGENT_GVISOR_MODEL_ENDPOINT` (baked from
+`litellm.endpoint`) through the same pasta network a session uses (see below)
+in a throwaway container and accepts any HTTP status as "reachable", and
+finally probes each loopback relay through `/bin/agent-gvisor-init`, exactly
+as a session starts it.
+
+The network dump comes first on purpose: if the sandbox has no non-loopback
+interface or no default route, every later check fails with "Network is
+unreachable" no matter how healthy the host forwarder is — the loopback relay
+still *starts* (its listener lives inside the netstack), it just cannot reach
+its target. That case means the container netns arrived unconfigured, i.e. a
+pasta/podman problem, not a LiteLLM one.
 
 Per invocation: `--no-home-seed` for an empty home, `--home-seed PATH` for a
 different source tree, `AGENT_GVISOR_HOME_SEED` /
@@ -330,6 +339,12 @@ First run on a host:
 agent-gvisor-load-image   # load the Nix-built image into the rootless store
 agent-gvisor doctor       # verify runtime, image and sandbox startup
 ```
+
+When `doctor` reports the endpoint as unreachable, read
+[`docs/debug-sandbox-enetunreach.md`](./docs/debug-sandbox-enetunreach.md)
+first: it separates "the sandbox has no route at all" (an empty container
+netns — a pasta/podman problem) from "the host side is down", and records
+what has already been ruled out.
 
 ### Nix inside sessions (`nix build` / `nix run` in the sandbox)
 
