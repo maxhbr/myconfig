@@ -83,11 +83,11 @@ renewal restored it. So a sandbox that cannot reach the model endpoint *today*
 may work after the next Wi-Fi reconnect, and vice versa. This host arbitrates
 two interfaces on the same subnet (`myconfig.networking.preferWired` toggles
 the Wi-Fi radio whenever a wired link appears), which is a plausible trigger
-for NetworkManager dropping and not re-adding that route. If it recurs often,
-the durable options are a NetworkManager dispatcher guard that re-adds the
-subnet route, or pinning pasta's namespace address with `-a`/`-g` (both imply
-`--no-copy-addrs`/`--no-copy-routes`, so pasta configures the tap itself and
-never copies the `noprefixroute` flag).
+for NetworkManager dropping and not re-adding that route. If it recurs, see
+[`proposal-subnet-route-guard.md`](./proposal-subnet-route-guard.md) for the
+two durable options (a NetworkManager dispatcher guard that re-adds the subnet
+route — recommended — or pinning pasta's namespace address with `-a`/`-g`) and
+for the diagnosis to run *before* implementing either.
 
 ## Ruled out along the way
 
