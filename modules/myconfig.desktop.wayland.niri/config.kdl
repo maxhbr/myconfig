@@ -284,6 +284,13 @@ window-rule {
     geometry-corner-radius 8
     clip-to-geometry true
     open-fullscreen false
+
+    background-effect {
+        xray true
+        blur true
+        noise 0.05
+        saturation 1.5
+    }
 }
 
 window-rule {
@@ -326,6 +333,9 @@ window-rule {
     exclude app-id="^Electron$"
 
     opacity 0.8
+    background-effect {
+        saturation 0.8
+    }
 }
 
 window-rule {
