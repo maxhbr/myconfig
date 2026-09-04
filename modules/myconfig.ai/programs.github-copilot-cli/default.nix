@@ -24,7 +24,7 @@
         }:
         let
           callLib = file: import file { inherit lib pkgs; };
-          ghCopilotCliBwrap = callLib ../fns/sandboxed-app.nix {
+          ghCopilotCliBwrap = callLib ../fns/bubblewrap-simple-app.nix {
             name = "github-copilot-cli";
             pkg = pkgs.github-copilot-cli;
             writableDirs = [

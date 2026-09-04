@@ -74,11 +74,11 @@ in
         home.packages =
           with pkgs;
           [
-            (callLib ./fns/sandboxed-app.nix {
+            (callLib ./fns/bubblewrap-simple-app.nix {
               name = "fish";
               pkg = fish;
             })
-            (callLib ./fns/sandboxed-app.nix {
+            (callLib ./fns/bubblewrap-simple-app.nix {
               name = "bash";
               pkg = bash;
             })

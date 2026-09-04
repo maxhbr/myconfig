@@ -45,7 +45,7 @@ let
         osconfig
         ;
     };
-  jail-app = callJailLib ../fns/jail-app.nix;
+  jail-app = callJailLib ../fns/bubblewrap-app.nix;
 
   # Combinators used directly below (for `extraPermissions`).
   inherit (jail.init pkgs) combinators;

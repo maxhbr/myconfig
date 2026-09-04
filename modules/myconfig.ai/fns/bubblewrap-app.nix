@@ -1,16 +1,17 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Reusable wrapper around the vendored jail.nix library for jailing LLM
-# coding agents (pi, opencode, claude-code, crush, gemini-cli, ...).
+# Reusable wrapper around the vendored jail.nix library for creating
+# bubblewrap-sandboxed LLM coding agents (pi, opencode, claude-code, crush,
+# gemini-cli, ...). Generates `agent-bubblewrap-*` wrapper commands.
 #
 # Usage:
 #
 #   let
 #     callLib = file: import file { inherit lib pkgs jail; };
-#     jail-app = callLib ../fns/jail-app.nix;
+#     bubblewrap-app = callLib ../fns/bubblewrap-app.nix;
 #   in
-#   jail-app {
+#   bubblewrap-app {
 #     name = "agent-bubblewrap-pi";
 #     pkg = pkgs.pi-coding-agent;
 #     userDataDirs = [ ".pi" ];
