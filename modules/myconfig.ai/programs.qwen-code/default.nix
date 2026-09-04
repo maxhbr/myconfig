@@ -19,7 +19,7 @@ in
       {
         home.packages = with pkgs; [
           qwen-code
-          (callLib ../fns/sandboxed-app.nix {
+          (callLib ../fns/bubblewrap-simple-app.nix {
             name = "qwen-code";
             pkg = qwen-code;
             readOnlyConfigDirs = [

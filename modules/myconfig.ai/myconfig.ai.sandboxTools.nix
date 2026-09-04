@@ -8,7 +8,7 @@
 # skill's SKILL.md references but which no single tier "owns") can be made
 # available everywhere with one option instead of one edit per tier:
 #
-#   * bubblewrap jails — `fns/jail-app.nix` reads this via the same
+#   * bubblewrap jails — `fns/bubblewrap-app.nix` reads this via the same
 #     `osconfig` mechanism as `myconfig.ai.jail.fwdEnvs` and appends the
 #     packages to its `add-pkg-deps` permission (and sets the env via
 #     `set-env`) for every `agent-bubblewrap-*` wrapper (`agent-bubblewrap-pi`, `agent-bubblewrap-claude`,

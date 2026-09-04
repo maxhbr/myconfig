@@ -19,7 +19,7 @@ let
         osconfig
         ;
     };
-  jail-app = callJailLib ../fns/jail-app.nix;
+  jail-app = callJailLib ../fns/bubblewrap-app.nix;
   mkWorkmuxWorktree = callLib ../fns/workmux-worktree.nix;
 
   # Make the `workmux` binary available inside the sandboxes (for the
@@ -30,7 +30,7 @@ let
   # home-manager uses `useGlobalPkgs`, so `pkgs.claude-code` is the same
   # package `programs.claude-code.package` defaults to. Building the wrappers
   # at the NixOS scope lets us register the workmux named agents from here.
-  claudeCodeBwrap = callLib ../fns/sandboxed-app.nix {
+  claudeCodeBwrap = callLib ../fns/bubblewrap-simple-app.nix {
     name = "claude-code";
     pkg = pkgs.claude-code;
     writableDirs = [
@@ -42,7 +42,7 @@ let
   };
   # `agent-bubblewrap-claude` is an alternative to `claudeCodeBwrap` that uses the
   # jail.nix library instead of a hand-rolled bubblewrap wrapper. See
-  # `../fns/jail-app.nix` for the shared defaults.
+  # `../fns/bubblewrap-app.nix` for the shared defaults.
   agent-bubblewrap-claude = jail-app {
     name = "agent-bubblewrap-claude";
     pkg = pkgs.claude-code;

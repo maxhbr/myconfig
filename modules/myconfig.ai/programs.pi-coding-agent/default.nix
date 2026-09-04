@@ -22,7 +22,7 @@ let
         osconfig
         ;
     };
-  jail-app = callJailLib ../fns/jail-app.nix;
+  jail-app = callJailLib ../fns/bubblewrap-app.nix;
 
   # Jail library handle + the jail-to-host channel combinator. The combinator
   # exposes a program *inside* the jail that forwards its single argument over
@@ -644,7 +644,7 @@ let
   # `myconfig-*` extensions above which only use type-only imports.
   handoffExtension = "${pi-coding-agent-pkg}/lib/node_modules/pi-monorepo/examples/extensions/handoff.ts";
 
-  piBwrap = callLib ../fns/sandboxed-app.nix {
+  piBwrap = callLib ../fns/bubblewrap-simple-app.nix {
     name = "pi";
     pkg = pkgs.nixos-unstable.pi-coding-agent;
     extraRuntimeInputs = [
@@ -664,7 +664,7 @@ let
 
   # `agent-bubblewrap-pi` is an alternative to `piBwrap` that uses the jail.nix library
   # (vendored at ./vendor/alexdavid-jail.nix) instead of a hand-rolled
-  # bubblewrap wrapper. See `../fns/jail-app.nix` for the shared defaults.
+  # bubblewrap wrapper. See `../fns/bubblewrap-app.nix` for the shared defaults.
   #
   # `~/.pi` is rw-bound because the agent picks up the auto-generated
   # provider extension installed by home-manager
@@ -676,7 +676,7 @@ let
     userDataDirs = [ ".pi" ];
     # Read-only bind of `~/.agents/skills/` so pi discovers the handcrafted
     # skills deployed there by `myconfig.ai.skills`. Bound via
-    # `extraConfigDirs` (try-ro-bind inside `jail-app.nix`), so the jail still
+    # `extraConfigDirs` (try-ro-bind inside `bubblewrap-app.nix`), so the jail still
     # starts on a host where `.agents` has not been deployed.
     extraConfigDirs = [ ".agents" ];
     # Marker so `agent-bubblewrap-pi` sessions are visually distinguishable from the

@@ -16,7 +16,7 @@ let
   # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
   # a worktree pane) whenever workmux is enabled.
   workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
-  codexBwrap = callLib ../fns/sandboxed-app.nix {
+  codexBwrap = callLib ../fns/bubblewrap-simple-app.nix {
     name = "codex";
     pkg = pkgs.codex;
     writableDirs = [ ".config/codex" ];
@@ -26,7 +26,7 @@ let
   # `codex-worktree` is now a thin workmux wrapper: it requires tmux and runs
   # `workmux add --agent codex`, which launches the codex sandbox in the new
   # worktree pane (the launcher exposes the worktree's shared git dir to the
-  # sandbox via the WORKTREE_* env vars supported by `sandboxed-app.nix`).
+  # sandbox via the WORKTREE_* env vars supported by `bubblewrap-simple-app.nix`).
   codexWorktree = mkWorkmuxWorktree {
     name = "codex-worktree";
     agentName = "codex";
