@@ -87,6 +87,8 @@ let
   # Entrypoint executed as the jail's `pkg`. Mirrors the host `tmux-workmux`
   # bootstrap (see myconfig.ai.workmux.nix) but pins a private `-S <socket>`
   # and always attaches (a fresh jail is never already inside tmux).
+  # The session name is derived from the repository basename so different
+  # repositories get isolated tmux sessions even when using the same socket.
   entry = pkgs.writeShellApplication {
     name = "workmux-tmux-jail-entry";
     runtimeInputs = [
@@ -94,9 +96,18 @@ let
       pkgs.tmux
       pkgs.coreutils
       pkgs.bashInteractive
+      pkgs.git
     ];
     text = ''
-      session=workmux
+      # Derive session name from repository basename + path hash to isolate
+      # sessions per repo. The hash prevents collisions when the same basename
+      # exists in different locations (e.g., ~/code/myconfig vs ~/work/myconfig).
+      if ! repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+        echo "workmux-tmux-jail-entry: must be run inside a git repository" >&2
+        exit 1
+      fi
+      path_hash="$(echo -n "$repo_root" | sha256sum | cut -c1-4)"
+      session="workmux-$(basename "$repo_root")-$path_hash"
       socket=${lib.escapeShellArg socketPath}
       mkdir -p "$(dirname "$socket")"
 
