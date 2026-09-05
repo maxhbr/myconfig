@@ -1,0 +1,13 @@
+mysbx - my sandboxing tool
+
+Usage:
+  mysbx [COMMAND]
+
+Commands:
+  init          create the sidecar directory next to the current repo
+  version       print the version
+  help          print this help
+
+Options:
+  -h, --help    print this help
+  -V, --version print the version

@@ -1,0 +1,4 @@
+# The sidecar config `mysbx init` writes: nothing but the repo itself.
+[repo]
+path = "/home/user/src/project"
+mode = "rw"

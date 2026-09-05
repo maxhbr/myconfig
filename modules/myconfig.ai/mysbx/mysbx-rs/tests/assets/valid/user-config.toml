@@ -1,0 +1,14 @@
+# The host-wide layer ($XDG_CONFIG_HOME/mysbx/config.toml): agent config
+# files the user allows into any sandbox. No [repo] table here.
+backend = "bwrap"
+
+[[mounts]]
+path = "/home/user/.config/git"
+mode = "ro"
+
+[[mounts]]
+path = "/home/user/.config/pi/agent"
+mode = "ro"
+
+[env]
+EDITOR = "nvim"

@@ -1,0 +1,24 @@
+# Exercises the TOML subset the parser must support, not the schema:
+# comments in odd places, quoted keys, escapes, literal strings, inline
+# tables, multi-line arrays with a trailing comma.
+
+    backend = "bwrap"   # indented, trailing comment
+network	=	false
+
+[env]                      # a table header with a comment
+"WEIRD KEY" = "a\tb"
+LITERAL = 'no \t escape here'
+UNICODE = "\u00e4"
+QUOTED = "he said \"hi\""
+
+[repo]
+mode = 'rw'
+path = "/home/user/src/pro#ject"   # `#` inside a string is not a comment
+
+[[mounts]]
+path = "/a"
+mode = "ro"
+[[mounts]]
+path = "/b"
+dest = "/mnt/b"
+mode = "rw"

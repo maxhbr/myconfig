@@ -1,0 +1,4 @@
+[repo]
+path = "/home/user/src/project"
+mode = "rw"
+readonly = true
