@@ -50,6 +50,8 @@ fn every_asset_is_exercised() {
         "valid/syntax-zoo.toml",
         "valid/user-config.toml",
         "invalid/schema-bad-mode.toml",
+        "invalid/schema-env-eq-key.toml",
+        "invalid/schema-env-flag-key.toml",
         "invalid/schema-missing-mount-path.toml",
         "invalid/schema-relative-path.toml",
         "invalid/schema-repo-table.toml",
@@ -161,6 +163,14 @@ fn invalid_schema_is_reported_with_the_offending_key() {
             "missing required key `path`",
         ),
         ("invalid/schema-repo-table.toml", "unknown key `repo`"),
+        (
+            "invalid/schema-env-flag-key.toml",
+            "is not a usable variable name",
+        ),
+        (
+            "invalid/schema-env-eq-key.toml",
+            "is not a usable variable name",
+        ),
     ];
     for (rel, needle) in cases {
         let e = load_err(rel);

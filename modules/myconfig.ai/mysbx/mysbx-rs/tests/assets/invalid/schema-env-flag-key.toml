@@ -1,0 +1,6 @@
+[[mounts]]
+path = "/data"
+mode = "ro"
+
+[env]
+-X = " smuggled"

@@ -4,6 +4,7 @@
 //! tool; for now `init`, `version` and `help` exist, and the bare form does
 //! implicit init only (the sandbox backend is MVP items 4/5).
 
+pub mod bwrap;
 pub mod config;
 pub mod merge;
 pub mod repo;

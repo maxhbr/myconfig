@@ -185,6 +185,17 @@ fn mounts(value: &Value) -> Result<Vec<Mount>, Error> {
 fn env(t: &Table) -> Result<BTreeMap<String, String>, Error> {
     let mut out = BTreeMap::new();
     for (key, value) in t {
+        // Keys become `--setenv` arguments in the bwrap argv
+        // (src/bwrap.rs); one that looks like a flag, or contains `=`
+        // (ambiguous parsing), or is empty, would smuggle data past the
+        // option parser. TOML bare keys allow all of these, so reject
+        // them here, at the schema edge, where every other impossible
+        // value is rejected too.
+        if key.is_empty() || key.starts_with('-') || key.contains('=') {
+            return Err(Error::Schema(format!(
+                "env key {key:?} is not a usable variable name"
+            )));
+        }
         out.insert(
             key.clone(),
             string(value, &format!("env.{key}"))?.to_owned(),
