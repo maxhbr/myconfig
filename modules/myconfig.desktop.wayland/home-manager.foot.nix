@@ -11,7 +11,8 @@ let
     # PaperColor Light
     # Palette based on https://github.com/NLKNguyen/papercolor-theme
 
-    [colors]
+    # foot >= 1.28 replaced [colors] with [colors-dark] / [colors-light]
+    [colors-light]
     cursor=eeeeee 444444
     background=eeeeee
     foreground=444444
@@ -50,11 +51,15 @@ in
             font = "monospace:size=10";
             dpi-aware = "no"; # "yes";
             include = "${theme}";
+            initial-color-theme = "light";
           };
           mouse = {
             hide-when-typing = "yes";
           };
-          colors = {
+          colors-light = {
+            alpha = "0.85";
+          };
+          colors-dark = {
             alpha = "0.85";
           };
         };
