@@ -20,7 +20,7 @@ as a value of that option.
 
 ## Workaround in this repo
 
-Introduced by commit `aa59d851b3` on branch `herdr-worktree-location` (see
+Introduced by commit `31c6487457` on branch `herdr-worktree-location` (see
 `git log --follow modules/myconfig.ai/programs.herdr.nix`).
 
 - `modules/myconfig.ai/programs.herdr.nix`
