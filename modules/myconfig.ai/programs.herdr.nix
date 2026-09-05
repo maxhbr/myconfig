@@ -13,13 +13,29 @@
 # (modules/shell.programs.tmux/tmux.conf): ctrl+a prefix, alt+arrow pane focus,
 # alt+shift+arrow tab switching, prefix+r reload, and new tabs inheriting the
 # current directory. Run `herdr --default-config` for the full key reference.
+#
+# It also replaces herdr's built-in "new worktree" action with a custom command
+# that puts the checkout where workmux (and `git branch-to-worktree`) put
+# theirs: `<parent-of-repo>/<repo>__worktrees/<slug>`. See
+# ./programs.herdr.README.md for the layout and its limits.
 {
   config,
   lib,
   pkgs,
+  jail,
   ...
 }:
 let
+  osconfig = config;
+  jail-app = import ./fns/bubblewrap-app.nix {
+    inherit
+      lib
+      pkgs
+      jail
+      osconfig
+      ;
+  };
+
   agenticCodingEnabled =
     (config.myconfig.ai.claude-code.enable or false)
     || (config.myconfig.ai.codex.enable or false)
@@ -43,6 +59,145 @@ let
     herdr --skill > $out/SKILL.md
   '';
 
+  # `herdr-worktree-sibling` — the workmux-style replacement for herdr's
+  # built-in "new worktree" action (`prefix+shift+g`).
+  #
+  # herdr itself can only be pointed at ONE global worktree root
+  # (`[worktrees] directory`, default `~/.herdr/worktrees`) under which it
+  # creates `<repo>/<branch-slug>` checkouts; the root is expanded once at
+  # server start and knows nothing about the repository the action was
+  # triggered from, so the workmux layout
+  # (`<parent-of-repo>/<repo>__worktrees/<handle>`) is NOT expressible through
+  # that option. What IS expressible is a custom command keybinding, and
+  # `herdr worktree create --path <ABSOLUTE PATH>` accepts an arbitrary
+  # checkout path while still registering the result as a herdr-managed linked
+  # worktree workspace (so `remove_worktree` keeps working). This script glues
+  # the two together: it computes the workmux path itself and hands it to
+  # herdr. See ../../doc/TODOs/herdr-per-repo-worktree-directory.md.
+  #
+  # The handle slugification is deliberately identical to
+  # ../shell.git/bin/git-branch-to-worktree.sh (which mirrors workmux's
+  # `derive_handle`), so all three tools agree on the path for a branch.
+  herdr-worktree-sibling = pkgs.writeShellApplication {
+    name = "herdr-worktree-sibling";
+    runtimeInputs = with pkgs; [
+      herdr
+      git
+      coreutils
+      # `awk` parses `git worktree list --porcelain` below. Declared
+      # explicitly (like ../shell.git/default.nix does for
+      # `git-branch-to-worktree`) so the script does not depend on an ambient
+      # host installation: without it the pipeline dies with status 127
+      # *before* `die` can keep the popup open.
+      gawk
+    ];
+    text = ''
+      self="herdr-worktree-sibling"
+
+      die() {
+          echo "$self: $*" >&2
+          # Bound to a herdr popup, whose window disappears as soon as the
+          # command exits - keep the error on screen until acknowledged.
+          if [ -t 0 ]; then
+              read -r -p "press enter to close " _ || true
+          fi
+          exit 1
+      }
+
+      usage() {
+          cat <<'EOF'
+      Usage: herdr-worktree-sibling [<branch>]
+
+      Create a git worktree for <branch> in the workmux layout
+
+          <parent-of-repo>/<repo-name>__worktrees/<handle>
+
+      and open it as a herdr worktree workspace. Without <branch> the branch
+      name is read from stdin (herdr runs this as a popup, which has a tty).
+
+      Run from anywhere in the repository, including from a linked worktree:
+      the source is always the MAIN checkout, so a new branch forks from the
+      main checkout's HEAD, not from the worktree the popup was opened in.
+      EOF
+      }
+
+      # Same slugification as workmux's `derive_handle` and
+      # `git branch-to-worktree`: lowercase, every run of non-alphanumeric
+      # characters becomes a single "-", no leading/trailing "-".
+      slugify() {
+          local input="''${1,,}" out="" ch i
+          for ((i = 0; i < ''${#input}; i++)); do
+              ch="''${input:i:1}"
+              case "$ch" in
+                  [a-z0-9]) out+="$ch" ;;
+                  *) out+="-" ;;
+              esac
+          done
+          while [[ $out == *--* ]]; do
+              out="''${out//--/-}"
+          done
+          out="''${out#-}"
+          out="''${out%-}"
+          printf '%s\n' "$out"
+      }
+
+      branch=""
+      case "''${1:-}" in
+          -h | --help)
+              usage
+              exit 0
+              ;;
+          -*) die "unknown option: $1" ;;
+          *) branch="''${1:-}" ;;
+      esac
+
+      # herdr exports the focused pane's working directory for custom
+      # commands; fall back to the popup's own cwd.
+      start_dir="''${HERDR_ACTIVE_PANE_CWD:-$PWD}"
+      cd "$start_dir" || die "cannot enter $start_dir"
+      git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository: $start_dir"
+
+      # The MAIN working tree (first entry of `git worktree list`), so this
+      # also works when triggered from inside a linked worktree - herdr
+      # refuses `--cwd` inside one ("worktree actions start from the repo
+      # parent workspace"). NOTE: this also fixes the BASE of a new branch to
+      # the main checkout's HEAD (no `--base` is passed), which is what herdr's
+      # own action does too - it does not fork from the focused worktree.
+      repo_root="$(git worktree list --porcelain | awk '/^worktree /{print substr($0, 10); exit}')"
+      [ -n "$repo_root" ] || die "could not determine the main working tree"
+
+      if [ -z "$branch" ]; then
+          [ -t 0 ] || die "no branch given and stdin is not a terminal"
+          echo "new worktree in $(basename "$repo_root")__worktrees"
+          read -r -p "branch: " branch || true
+      fi
+      [ -n "$branch" ] || die "no branch name given"
+      git check-ref-format --branch "$branch" >/dev/null 2>&1 ||
+          die "not a valid branch name: $branch"
+
+      handle="$(slugify "$branch")"
+      [ -n "$handle" ] || die "branch name slugifies to the empty string: $branch"
+
+      worktrees_dir="$(dirname "$repo_root")/$(basename "$repo_root")__worktrees"
+      target="$worktrees_dir/$handle"
+      [ ! -e "$target" ] || die "target worktree path already exists: $target"
+      mkdir -p "$worktrees_dir"
+
+      # `--path` is what makes the sibling layout possible at all; `--cwd`
+      # selects the source repository (the checkout the worktree forks from).
+      # The CLI always answers with JSON; show it only when something failed,
+      # so a successful popup just closes.
+      if ! out="$(herdr worktree create \
+          --cwd "$repo_root" \
+          --branch "$branch" \
+          --path "$target" \
+          --focus 2>&1)"; then
+          echo "$out" >&2
+          die "herdr worktree create failed for $target"
+      fi
+    '';
+  };
+
   # Keybindings mirror ~/.tmux.conf (modules/shell.programs.tmux/tmux.conf).
   # Concept mapping: tmux window->herdr tab, tmux pane->herdr pane. Bindings
   # left unset here stay at herdr defaults, several of which already match tmux:
@@ -51,7 +206,15 @@ let
   #   status-keys/mode-keys vi  -> herdr navigate mode uses h/j/k/l by default
   # tmux's `bind-key C-a last-window` (toggle to previous window) has no herdr
   # equivalent (only last_pane exists), so it is not replicated.
-  herdrConfig = ''
+  #
+  # Split in two: `herdrConfigCommon` ends *inside* the `[keys]` table, so both
+  # consumers can append their own trailing `[keys]` entries and their own
+  # `[worktrees]` table:
+  #   * the host config (`herdrConfig`) below, and
+  #   * the config the bubblewrap jail assembles at runtime
+  #     (`herdrJailConfigCommonFile`), where the worktree root is only known
+  #     once the repository is known.
+  herdrConfigCommon = ''
     # Generated by NixOS (modules/myconfig.ai/programs.herdr.nix).
     # Mirrors ~/.tmux.conf - do not edit by hand. After Nix changes, run
     # `herdr server reload-config` (or restart herdr) to pick them up.
@@ -85,6 +248,211 @@ let
     # tmux: bind -n M-S-Right previous-window
     previous_tab = "alt+shift+right"
   '';
+
+  herdrConfig = herdrConfigCommon + ''
+
+    # herdr's built-in "new worktree" action can only create checkouts under
+    # the single global [worktrees] root below, so it is unbound here and
+    # replaced by the custom command at the end of this file, which creates
+    # the checkout in the workmux layout instead.
+    new_worktree = ""
+
+    [worktrees]
+    # Only a fallback: this root is used by flows that do NOT pass an explicit
+    # `--path` (e.g. a bare `herdr worktree create` from an agent). herdr then
+    # creates `<directory>/<repo>/<branch-slug>`, which cannot express the
+    # per-repo sibling layout. Pinned to herdr's own default so such checkouts
+    # stay clearly distinguishable from the workmux-style ones.
+    directory = "~/.herdr/worktrees"
+
+    # Workmux-style "new worktree": the script computes
+    # `<parent-of-repo>/<repo>__worktrees/<handle>` from the focused pane's
+    # repository and calls `herdr worktree create --path <that>`, which herdr
+    # cannot be configured to do on its own (see the header comment).
+    [[keys.command]]
+    key = "prefix+shift+g"
+    type = "popup"
+    command = "${herdr-worktree-sibling}/bin/herdr-worktree-sibling"
+    description = "new worktree (workmux layout)"
+    width = "70%"
+    height = "30%"
+  '';
+
+  # --- agent-bubblewrap-herdr -------------------------------------------
+  # The bubblewrap analogue of `agent-qemu-herdr`, and the one place where
+  # herdr's *own* worktree option can be pointed at the workmux layout.
+  #
+  # The host config cannot do that (one global root for all repositories, see
+  # ./programs.herdr.README.md), but a jail session has exactly ONE repository:
+  # the wrapper resolves `<parent-of-repo>/<repo>__worktrees`, creates it and
+  # binds it read-write into the jail at the identical path (identical, so the
+  # absolute paths git records in `.git/worktrees/<n>/gitdir` stay valid on the
+  # host), and the entrypoint writes a session config pointing `[worktrees]
+  # directory` at it. herdr still appends `<repo-name>/<branch-slug>`, so
+  # checkouts land in `<parent-of-repo>/<repo>__worktrees/<repo>/<slug>` — one
+  # level deeper than workmux, but inside the same sibling directory.
+  #
+  # Because the root is correct, the jail restores herdr's BUILT-IN
+  # `prefix+shift+g` instead of the host's `[[keys.command]]` popup: it needs
+  # no socket round-trip, which matters with `--no-session` below.
+  #
+  # The session config lives in the jail's tmpfs `$HOME` and is written on
+  # every start, so it can never be stale, and `~/.config/herdr` is
+  # deliberately NOT bound from the host.
+  herdrJailConfigCommonFile = pkgs.writeText "herdr-jail-config-common.toml" (
+    herdrConfigCommon
+    + ''
+
+      # Restored here (the host config unbinds it): inside the jail the
+      # [worktrees] root below is repository-local, so the built-in action
+      # already creates the checkout next to the repository.
+      new_worktree = "prefix+shift+g"
+      # Open/remove an existing herdr-managed checkout.
+      open_worktree = "prefix+shift+o"
+      remove_worktree = "prefix+shift+x"
+    ''
+  );
+
+  # Runs INSIDE the jail as the jail's entrypoint.
+  herdr-jail-entry = pkgs.writeShellApplication {
+    name = "herdr-jail-entry";
+    runtimeInputs = with pkgs; [
+      herdr
+      git
+      coreutils
+      # `awk` parses `git worktree list --porcelain` below.
+      gawk
+    ];
+    text = ''
+      self="agent-bubblewrap-herdr"
+
+      if ! git rev-parse --git-dir >/dev/null 2>&1; then
+          echo "$self: must be run inside a git repository" >&2
+          exit 1
+      fi
+
+      # The MAIN working tree, so the layout is identical whether the jail was
+      # started from the main checkout or from one of its linked worktrees.
+      repo_root="$(git worktree list --porcelain | awk '/^worktree /{print substr($0, 10); exit}')"
+      if [ -z "$repo_root" ]; then
+          echo "$self: could not determine the main working tree" >&2
+          exit 1
+      fi
+
+      worktrees="$(dirname "$repo_root")/$(basename "$repo_root")__worktrees"
+      if ! mkdir -p "$worktrees" 2>/dev/null; then
+          echo "$self: $worktrees is not writable inside the jail;" >&2
+          echo "$self: start the jail from the main checkout so the wrapper binds it." >&2
+          exit 1
+      fi
+
+      # Session config: the shared part plus the repository-local worktree
+      # root. Written fresh on every start into the jail's tmpfs $HOME.
+      #
+      # The path goes into a TOML basic string, so `\` and `"` must be
+      # escaped and control characters (which TOML forbids there) rejected -
+      # otherwise a repository name containing them yields a config herdr
+      # cannot parse, and herdr then silently FALLS BACK TO ITS DEFAULTS
+      # (`~/.herdr/worktrees`), quietly losing the repository-local root.
+      case $worktrees in
+          *[[:cntrl:]]*)
+              echo "$self: repository path contains control characters: $worktrees" >&2
+              exit 1
+              ;;
+      esac
+      worktrees_toml="''${worktrees//\\/\\\\}"
+      worktrees_toml="''${worktrees_toml//\"/\\\"}"
+
+      mkdir -p "$HOME/.config/herdr"
+      {
+          cat ${herdrJailConfigCommonFile}
+          printf '\n[worktrees]\ndirectory = "%s"\n' "$worktrees_toml"
+      } > "$HOME/.config/herdr/config.toml"
+
+      # Monolithic: no server/client split, so the session cannot attach to a
+      # differently-configured server and dies with the jail.
+      exec herdr --no-session "$@"
+    '';
+  };
+
+  # Create the `<parent-of-repo>/<repo>__worktrees` sibling on the HOST and
+  # bind it read-write at the identical path, so the checkouts herdr creates
+  # inside the jail are real host directories with valid git metadata. Runs in
+  # the wrapper before `bwrap` starts (`add-runtime`), where only coreutils is
+  # guaranteed on PATH - hence the pure-bash walk up to the repository root
+  # instead of `git rev-parse`. Unlike the equivalent in
+  # ./programs.pi-coding-agent/default.nix this *creates* the directory: herdr
+  # has to be able to write the first worktree into it.
+  worktreesSiblingPerm = (jail.init pkgs).combinators.add-runtime ''
+    _hb_root="$PWD"
+    while [ "$_hb_root" != "/" ] && [ ! -e "$_hb_root/.git" ]; do
+      _hb_root="$(dirname "$_hb_root")"
+    done
+    if [ -e "$_hb_root/.git" ]; then
+      _hb_root="$(realpath "$_hb_root")"
+      _hb_home="$(realpath "$HOME")"
+      # The shared guard (`rejectHomeCwd`) only checks the INITIAL $PWD, but
+      # the walk above can still land on $HOME - or on a parent of it - when
+      # the home directory itself is a git checkout. Binding that root
+      # read-write would hand the agent the entire home directory, so refuse
+      # instead. Matches $HOME itself and any ancestor of it.
+      case "$_hb_home" in
+        "$_hb_root" | "$_hb_root"/*)
+          echo "agent-bubblewrap-herdr: the enclosing git repository is \$HOME (or contains it): $_hb_root" >&2
+          echo "agent-bubblewrap-herdr: binding it read-write would expose the whole home directory." >&2
+          echo "agent-bubblewrap-herdr: run from a project checkout below \$HOME instead." >&2
+          exit 1
+          ;;
+      esac
+      _hb_worktrees="$(dirname "$_hb_root")/$(basename "$_hb_root")__worktrees"
+      mkdir -p "$_hb_worktrees"
+      RUNTIME_ARGS+=(--bind "$_hb_root" "$_hb_root" --bind "$_hb_worktrees" "$_hb_worktrees")
+    fi
+  '';
+
+  # Writable home state of the agents that run *inside* this jail. The jail is
+  # the sandbox here (like ./myconfig.ai.workmux/jail.nix), so the panes run
+  # the PLAIN agent binaries, which need their real state directories.
+  agentUserDataDirsByFlag = {
+    pi-coding-agent = [ ".pi" ];
+    claude-code = [
+      ".claude"
+      ".config/claude-code"
+      ".config/mcp"
+    ];
+    opencode = [
+      ".config/opencode"
+      ".local/share/opencode"
+      ".local/state/opencode"
+    ];
+    codex = [ ".codex" ];
+    qwen-code = [ ".qwen" ];
+    github-copilot-cli = [
+      ".config/.copilot"
+      ".local/state/.copilot"
+    ];
+  };
+
+  agentUserDataDirs = lib.concatLists (
+    lib.attrValues (
+      lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentUserDataDirsByFlag
+    )
+  );
+
+  agent-bubblewrap-herdr = jail-app {
+    name = "agent-bubblewrap-herdr";
+    pkg = herdr-jail-entry;
+    userDataDirs = agentUserDataDirs;
+    # claude-code keeps its account/session index in a single home file.
+    userDataFiles = lib.optional (config.myconfig.ai.claude-code.enable or false) ".claude.json";
+    # ~/.agents/skills (handcrafted skills, incl. the herdr skill) read-only.
+    # `.config/herdr` is deliberately NOT bound: the entrypoint writes the
+    # session config into the jail's tmpfs $HOME instead.
+    extraConfigDirs = [ ".agents" ];
+    # Plain (un-jailed) agent binaries for the panes - no nested sandbox.
+    extraDevTools = [ herdr ] ++ enabledAgentPackages;
+    extraPermissions = [ worktreesSiblingPerm ];
+  };
 
   # The coding-agent CLIs this repo can install on the host, mapped from
   # their `myconfig.ai.<name>.enable` flag to the package attribute the
@@ -301,8 +669,12 @@ in
 
     home-manager.sharedModules = [
       {
+        myconfig.persistence.directories = [ ".herdr" ];
+
         home.packages = [
           herdr
+          herdr-worktree-sibling
+          agent-bubblewrap-herdr
           agent-qemu-herdr
         ];
         xdg.configFile."herdr/config.toml".text = herdrConfig;
