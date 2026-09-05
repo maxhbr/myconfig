@@ -10,20 +10,34 @@ the package only ever wraps a finished CLI.
 
 ## Do
 
-- [ ] `../../nix/mysbx.nix`: wrap the binary (`makeWrapper`) and set
-      `MYSBX_BWRAP` to the absolute store path of `pkgs.bubblewrap`. The Rust
-      side reads that variable and falls back to a `PATH` lookup, so
-      `cargo run` and `cargo test` work in a dev shell without Nix wrapping.
-- [ ] Bake the dev-tool closure: build the `PATH` value the argv uses
-      (item 4, section 6) from an explicit package list in the Nix expression
-      and pass it as `MYSBX_TOOLS_PATH`. Keep the list next to the base table
-      in `../plan.md`; it is a security-relevant list, not packaging detail.
-- [ ] Provide `bash` from that closure as the interactive payload
-      (`MYSBX_SHELL`), so the bare form never depends on the host `$SHELL`.
-- [ ] Wire `cargo test` into `nix flake check` for `x86_64-linux`, following
-      `../../../myconfig.ai.gvisor-agent-sandbox/nix/checks.nix`.
-- [ ] Rebuild the host that enables the module and confirm the wrapper works:
-      `./build-pkg-for-host.sh mysbx-0.1.0 f13`.
+- [x] `../../nix/mysbx.nix`: wrap the binary and set `MYSBX_BWRAP` to the
+      absolute store path of `pkgs.bubblewrap`
+      (`/nix/store/...-bubblewrap-<ver>/bin/bwrap`). The Rust side reads that
+      variable and falls back to a `PATH` lookup, so `cargo run` and
+      `cargo test` work in a dev shell without Nix wrapping.
+- [x] Bake the dev-tool closure: build the `PATH` value the argv uses
+      (item 4, section 6) from an explicit package list in the Nix
+      expression and pass it as `MYSBX_TOOLS_PATH`. The list lives as the
+      `toolsEnv` buildEnv in `../../nix/mysbx.nix` (bash, coreutils,
+      findutils, gnugrep, gnused, gawk, which, less, procps, hostname,
+      ripgrep, fd, jq, git, nix, python3, curl); plan.md leaves the exact
+      contents to this item, and joining the shared
+      `myconfig.ai.sandboxTools` option is phase 2d there.
+- [x] Provide `bash` from that closure as the interactive payload
+      (`MYSBX_SHELL` = the wrapper's `pkgs.bash` — bashInteractive), so the
+      bare form never depends on the host `$SHELL`.
+- [x] Wire `cargo test` into `nix flake check` for `x86_64-linux`, following
+      `../../../myconfig.ai.gvisor-agent-sandbox/nix/checks.nix`: the check
+      `mysbx-tests` (`../../nix/checks.nix`) is the crate with
+      `doCheck = true`, imported from `flake.nix` like the gvisor tier's
+      check set. No bwrap on the test PATH — the real-execution tests in
+      `cargo test` skip without one, and executed bubblewrap stays out of
+      CI on purpose.
+- [x] Rebuild the host that enables the module and confirm the wrapper
+      works: `./build-pkg-for-host.sh mysbx-0.1.0 f13`, plus
+      `result/bin/mysbx --help`, `mysbx run --dry-run -- ls /` from a real
+      checkout (argv[0] is the wrapped `bwrap` store path) and a real
+      `mysbx run -- /usr/bin/env true` in a throwaway git repo under /tmp.
 
 ## Explicitly not in this item
 
@@ -36,7 +50,11 @@ the package only ever wraps a finished CLI.
 
 ## Done when
 
-- `nix flake check` covers the cargo tests.
-- `mysbx run --dry-run -- ls /` from a real checkout shows the wrapped
-  `bwrap` store path as argv[0].
-- `git diff --stat` touches nothing outside `modules/myconfig.ai/mysbx/`.
+- [x] `nix flake check` covers the cargo tests (the `mysbx-tests` check,
+      x86_64-linux only, like the microvm and gvisor check sets).
+- [x] `mysbx run --dry-run -- ls /` from a real checkout shows the wrapped
+      `bwrap` store path as argv[0].
+- [x] `git diff --stat` touches nothing outside `modules/myconfig.ai/mysbx/`.
+      Exception, blessed by the reviewer: one six-line hunk in `flake.nix`
+      imports this item's check set — the exact pattern the gvisor tier's
+      checks.nix commit already established.

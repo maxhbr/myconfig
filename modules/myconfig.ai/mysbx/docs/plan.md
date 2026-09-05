@@ -72,7 +72,7 @@ every knob is a decision:
 | tmpfs `/tmp` | yes | **not** the host-backed `/tmp/<name>` |
 | `~/tmp` rw | no | agent-session convenience, not a sandbox essential |
 | `/run` | no | D-Bus, PipeWire, the nix-daemon socket, agent sockets |
-| dev-tool closure on `PATH` | yes, as-is | git, ripgrep, fd, jq, nix, python3, coreutils, … |
+| dev-tool closure on `PATH` | yes, as-is | git, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](./nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list) |
 | `OPENAI_API_KEY` auto-forward | **no** | under `mysbx` a key is an ordinary user-config `[env]` entry (`config.md` D6) |
 
 ### Honest security claim
@@ -100,6 +100,7 @@ Ordered; each is independently reviewable.
 6. [`TODOs/mvp-6-packaging.md`](./TODOs/mvp-6-packaging.md) — Nix packaging and checks
 
 Item 4 carries the security claim; review it against the base table above.
+All six items are done; the MVP is complete.
 
 ### Definition of done
 

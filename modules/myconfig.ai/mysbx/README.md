@@ -32,6 +32,11 @@ $ mysbx init
 $ mysbx
 ```
 
+`mysbx run -- CMD...` runs one command in the sandbox;
+`mysbx run --dry-run -- CMD...` prints the exact `bwrap` argv it would
+execute (one argument per line) and exits without running it — the
+acceptance surface described in [`docs/design/cli.md`](./docs/design/cli.md).
+
 ## The sidecar directory
 The `config.toml` file in the sidecar defines
 
@@ -52,10 +57,15 @@ A system wide config in `$XDG_CONFIG_HOME/mysbx/config.toml` defines system wide
 
 # Supported Technologies
 ## Already Implemented:
-none
+- bubblewrap — the MVP (phase 1 in [`docs/plan.md`](./docs/plan.md)):
+  `mysbx run [--dry-run] -- CMD` and the bare interactive form, driven by the
+  user config + sidecar layers, with the bwrap binary, payload shell and
+  dev-tool PATH all pinned from the Nix package (see [`nix/mysbx.nix`](./nix/mysbx.nix))
 ## On the Roadmap:
 ### next:
-- bubblewrap (https://git.sr.ht/~alexdavid/jail.nix)
+- the packaged bubblewrap tier is expected to evolve per phase 2 in
+  [`docs/plan.md`](./docs/plan.md) (generated user config, credentials,
+  network policy, `sandboxTools` integration, further backends)
 ## after that:
 - container (via podman), with gvisor for additional layer of security
 - nono
