@@ -137,11 +137,42 @@ The microVM counterpart of the bubblewrap `jail.nix` above, gated behind
   `agent-qemu-workmux-tmux` in a dedicated Alacritty window (like
   `agent-bubblewrap-alacritty-workmux-tmux` opens `agent-bubblewrap-workmux-tmux`).
 
+Both `agent-*-alacritty-*` launchers detach from the calling shell — see
+[Detached GUI launchers](#detached-gui-launchers) below.
+
 Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
 [`../../../modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`](../../../modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix)). The
 in-terminal sandbox is the reusable entry point; the Alacritty variant is a
 thin popup around it so the two wrappers stay byte-identical in everything but
 the window.
+
+## Detached GUI launchers
+
+Every wrapper that pops up an Alacritty window
+(`agent-bubblewrap-alacritty-workmux-tmux`, `agent-qemu-alacritty-workmux-tmux`,
+`<name>-alacritty-tmux` from `myconfig.agentUsers`) shares the shell prelude in
+[`../../../lib/detached-gui-launcher.nix`](../../../lib/detached-gui-launcher.nix).
+Instead of `exec alacritty …` it calls `gui_launcher_exec alacritty …`, which:
+
+- starts the GUI via `setsid --fork` in its own session, with stdin from
+  `/dev/null` and stdout/stderr appended to
+  `${XDG_STATE_HOME:-~/.local/state}/myconfig-gui-launchers/<wrapper>.log`
+  (falling back to `$TMPDIR`/`/tmp` if that directory cannot be created),
+- returns immediately, so the calling shell is not blocked and the window
+  survives the shell exiting — no manual `… &disown` needed.
+
+Detaching only happens when it makes sense; the foreground (`exec`) path is
+kept when any of the following holds:
+
+- **stdout is not a TTY** (scripts, pipes, `.desktop` launchers, `-e`/`--command`
+  invocations from a window manager),
+- the first argument is **`--foreground`** (it is consumed by the prelude),
+- **`MYCONFIG_GUI_LAUNCHER_FOREGROUND=1`** is exported.
+
+All validation the wrapper performs *before* spawning (git checkout checks,
+worktree checks, …) still runs in the foreground, so its error messages and
+non-zero exit statuses reach the user unchanged. Once detached, the wrapper
+prints the log path and exits `0`; the GUI's own output goes to the log file.
 
 ## Two sandboxing approaches at a glance
 

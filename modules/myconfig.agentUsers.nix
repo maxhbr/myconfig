@@ -31,9 +31,14 @@ let
       exec sudo -u ${name} -i -- tmux new-session -A -s ${name}
     '';
 
+  # Shell prelude that makes the GUI launcher detach from the calling shell.
+  detachedGuiLauncher = import ../lib/detached-gui-launcher.nix { inherit lib pkgs; };
+
   # Open a new alacritty window running the agent's tmux session.
   # Alacritty runs as the primary user (so it can reach the display),
   # the shell inside switches to the agent via <name>-tmux.
+  # When started from an interactive shell the window is detached (see
+  # lib/detached-gui-launcher.nix).
   mkAgentAlacrittyTmux =
     name:
     let
@@ -43,7 +48,8 @@ let
     in
     pkgs.writeShellScriptBin scriptName ''
       set -euo pipefail
-      exec alacritty \
+      ${detachedGuiLauncher { name = scriptName; }}
+      gui_launcher_exec alacritty \
         --title "${windowName}" \
         --class "Alacritty:${windowName}" \
         --command "${tmuxScript}"
@@ -190,7 +196,8 @@ in
     # then applies all of home-manager.sharedModules to the agent.
     # The primary user additionally gets the agent tmux launch scripts
     #   <name>-tmux           — run in the current terminal
-    #   <name>-alacritty-tmux — open a new alacritty window
+    #   <name>-alacritty-tmux — open a new alacritty window (detached from the
+    #                           calling shell, see lib/detached-gui-launcher.nix)
     # (mkMerge: two definitions of home-manager.users in one module).
     home-manager.users = lib.mkMerge [
       (lib.genAttrs agents (_: { }))

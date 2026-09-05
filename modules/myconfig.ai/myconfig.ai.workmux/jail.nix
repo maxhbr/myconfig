@@ -47,6 +47,9 @@ let
     };
   jail-app = callJailLib ../fns/bubblewrap-app.nix;
 
+  # Shell prelude that makes the GUI launcher detach from the calling shell.
+  detachedGuiLauncher = import ../../../lib/detached-gui-launcher.nix { inherit lib pkgs; };
+
   # Combinators used directly below (for `extraPermissions`).
   inherit (jail.init pkgs) combinators;
 
@@ -208,6 +211,8 @@ let
       agent-bubblewrap-workmux-tmux
     ];
     text = ''
+      ${detachedGuiLauncher { name = "agent-bubblewrap-alacritty-workmux-tmux"; }}
+
       # Must be run from a git checkout.
       if ! top="$(git rev-parse --show-toplevel 2>/dev/null)"; then
         echo "agent-bubblewrap-alacritty-workmux-tmux: not inside a git repository." >&2
@@ -235,7 +240,7 @@ let
       # Launch Alacritty from the main checkout so the jail's mount-cwd binds
       # the repository read-write.
       cd "$top"
-      exec alacritty \
+      gui_launcher_exec alacritty \
         --title "workmux: $(basename "$top")" \
         --working-directory "$top" \
         -e agent-bubblewrap-workmux-tmux

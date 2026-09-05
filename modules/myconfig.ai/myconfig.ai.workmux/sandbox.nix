@@ -39,6 +39,9 @@ let
 
   yamlFormat = pkgs.formats.yaml { };
 
+  # Shell prelude that makes the GUI launcher detach from the calling shell.
+  detachedGuiLauncher = import ../../../lib/detached-gui-launcher.nix { inherit lib pkgs; };
+
   # Workmux config used *inside* the VM. Like the bubblewrap jail
   # (myconfig.ai.workmux/jail.nix), the `pi` named agent must be the *plain*
   # pi binary, not the bubblewrap-wrapped one — the VM is already the sandbox,
@@ -214,6 +217,8 @@ let
       pkgs.coreutils
     ];
     text = ''
+      ${detachedGuiLauncher { name = "agent-qemu-alacritty-workmux-tmux"; }}
+
       # Must be run from a git checkout (forward the rest to agent-qemu-workmux-tmux
       # so the error messages name the right command).
       if ! top="$(git rev-parse --show-toplevel 2>/dev/null)"; then
@@ -228,7 +233,7 @@ let
       # boot and SSH attach happen inside the new window. When the window is
       # closed, the VM is torn down (agent-qemu-workmux-tmux's EXIT trap).
       cd "$top"
-      exec alacritty \
+      gui_launcher_exec alacritty \
         --title "agent-qemu-workmux-tmux: $(basename "$top")" \
         --working-directory "$top" \
         -e agent-qemu-workmux-tmux
