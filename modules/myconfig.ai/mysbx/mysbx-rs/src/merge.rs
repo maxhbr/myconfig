@@ -363,8 +363,8 @@ mod tests {
     /// A fresh temporary directory per test; hand-rolled, the crate has
     /// no dependencies.
     fn tmpdir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("mysbx-merge-test-{}-{name}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("mysbx-merge-test-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -396,7 +396,10 @@ mod tests {
     }
 
     fn mount_toml(p: &Path, mode: &str) -> String {
-        format!("[[mounts]]\npath = \"{}\"\nmode = \"{mode}\"\n", p.display())
+        format!(
+            "[[mounts]]\npath = \"{}\"\nmode = \"{mode}\"\n",
+            p.display()
+        )
     }
 
     #[test]
@@ -414,7 +417,9 @@ mod tests {
         )
         .unwrap_err();
         match e {
-            Error::Canonicalize { ref file, ref path, .. } => {
+            Error::Canonicalize {
+                ref file, ref path, ..
+            } => {
                 assert_eq!(file, &user_file());
                 assert_eq!(path, &ghost);
             }
@@ -434,7 +439,9 @@ mod tests {
         let s = cfg(&mount_toml(&ghost, "ro"));
         let e = merge(u, s, &user_file(), &sidecar_file()).unwrap_err();
         match e {
-            Error::Canonicalize { ref file, ref path, .. } => {
+            Error::Canonicalize {
+                ref file, ref path, ..
+            } => {
                 assert_eq!(file, &sidecar_file());
                 assert_eq!(path, &ghost);
             }
@@ -453,12 +460,10 @@ mod tests {
         let s = cfg(&mount_toml(&granted, "rw"));
         let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
         assert_eq!(merged.mounts.len(), 2);
-        assert!(
-            merged
-                .mounts
-                .iter()
-                .all(|x| x.path == granted.to_string_lossy() && x.mode == Mode::Rw)
-        );
+        assert!(merged
+            .mounts
+            .iter()
+            .all(|x| x.path == granted.to_string_lossy() && x.mode == Mode::Rw));
     }
 
     #[test]
@@ -792,8 +797,8 @@ mod tests {
 
         // An XDG_CONFIG_HOME pointing at a directory without a mysbx
         // config: also an empty user layer.
-        let layers = load_layers(&home, Some(&home.join(".config").to_string_lossy()), &sd)
-            .unwrap();
+        let layers =
+            load_layers(&home, Some(&home.join(".config").to_string_lossy()), &sd).unwrap();
         assert_eq!(layers.user.0, Config::default());
         assert!(!layers.sidecar.0.network);
     }

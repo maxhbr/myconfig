@@ -121,8 +121,7 @@ fn syntax_zoo() {
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
     assert!(!c.network);
     assert_eq!(
-        c.env["HASHED"],
-        "home/user/src/pro#ject",
+        c.env["HASHED"], "home/user/src/pro#ject",
         "`#` inside a string must not start a comment"
     );
     assert_eq!(c.env["WEIRD KEY"], "a\tb");

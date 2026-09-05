@@ -38,9 +38,9 @@ Subcommands are single verbs (`init`, `run`, `version`, `help`). No nested
 command trees. Rationale: the surface is small and stays memorable; nesting
 would only pay off with many more commands.
 
-Currently implemented: `init`, `version`, `help`.
-Planned: entering the sandbox (see D2) and `run COMMAND` for non-interactive
-use.
+Currently implemented: `init`, `version`, `help`, the bare form (entering
+the sandbox, see D2) and `run -- COMMAND` for non-interactive use, plus the
+global `--dry-run` (D9).
 
 ### D4: `--` separates sandbox args from the payload command
 

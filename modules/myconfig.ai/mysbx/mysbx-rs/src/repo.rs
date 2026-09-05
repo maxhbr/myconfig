@@ -50,7 +50,11 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::HomeDir(p) => {
-                write!(f, "refusing to use the home directory as a repo: {}", p.display())
+                write!(
+                    f,
+                    "refusing to use the home directory as a repo: {}",
+                    p.display()
+                )
             }
             Error::RootDir => f.write_str("refusing to use / as a repo"),
             Error::Io(m) => f.write_str(m),
@@ -63,9 +67,8 @@ impl std::error::Error for Error {}
 /// Resolve the repository for the real current working directory and the
 /// real `$HOME`.
 pub fn resolve_cwd() -> Result<Repo, Error> {
-    let cwd = std::env::current_dir().map_err(|e| Error::Io(format!(
-        "cannot determine current directory: {e}"
-    )))?;
+    let cwd = std::env::current_dir()
+        .map_err(|e| Error::Io(format!("cannot determine current directory: {e}")))?;
     // A missing `$HOME` is an error, not a silent guard bypass: every
     // other failure here is loud, and the home guard must never quietly
     // disappear (cron, systemd units, `su` shells).
@@ -88,7 +91,13 @@ pub fn resolve(start: &Path, home: Option<&Path>) -> Result<Repo, Error> {
     while let Some(d) = dir {
         let sidecar = sibling_sidecar(d);
         if sidecar.is_dir() {
-            return guarded(Repo { root: d.to_owned(), sidecar }, home);
+            return guarded(
+                Repo {
+                    root: d.to_owned(),
+                    sidecar,
+                },
+                home,
+            );
         }
         dir = d.parent();
     }
@@ -98,13 +107,25 @@ pub fn resolve(start: &Path, home: Option<&Path>) -> Result<Repo, Error> {
     while let Some(d) = dir {
         if d.join(".git").exists() {
             let sidecar = sibling_sidecar(d);
-            return guarded(Repo { root: d.to_owned(), sidecar }, home);
+            return guarded(
+                Repo {
+                    root: d.to_owned(),
+                    sidecar,
+                },
+                home,
+            );
         }
         dir = d.parent();
     }
     // Step 3: no sidecar, no git — the starting directory is the repo.
     let sidecar = sibling_sidecar(start);
-    guarded(Repo { root: start.to_owned(), sidecar }, home)
+    guarded(
+        Repo {
+            root: start.to_owned(),
+            sidecar,
+        },
+        home,
+    )
 }
 
 /// `<dir>.mysbx` — the sidecar always sits next to the repo
@@ -119,16 +140,14 @@ fn sibling_sidecar(dir: &Path) -> PathBuf {
 /// (docs/TODOs/mvp-2-repo-discovery.md). Canonicalize before comparing,
 /// otherwise a symlinked home slips past.
 fn guarded(repo: Repo, home: Option<&Path>) -> Result<Repo, Error> {
-    let root = std::fs::canonicalize(&repo.root).map_err(|e| {
-        Error::Io(format!("cannot canonicalize {}: {e}", repo.root.display()))
-    })?;
+    let root = std::fs::canonicalize(&repo.root)
+        .map_err(|e| Error::Io(format!("cannot canonicalize {}: {e}", repo.root.display())))?;
     if root == Path::new("/") {
         return Err(Error::RootDir);
     }
     if let Some(home) = home {
-        let home = std::fs::canonicalize(home).map_err(|e| Error::Io(format!(
-            "cannot canonicalize home {}: {e}", home.display()
-        )))?;
+        let home = std::fs::canonicalize(home)
+            .map_err(|e| Error::Io(format!("cannot canonicalize home {}: {e}", home.display())))?;
         if root == home {
             return Err(Error::HomeDir(home));
         }
@@ -143,8 +162,8 @@ mod tests {
     /// A fresh temporary directory per test; hand-rolled, the crate has no
     /// dependencies.
     fn tmpdir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("mysbx-repo-test-{}-{name}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("mysbx-repo-test-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
