@@ -37,6 +37,38 @@ $ mysbx
 execute (one argument per line) and exits without running it — the
 acceptance surface described in [`docs/design/cli.md`](./docs/design/cli.md).
 
+`--verbose` prints what the run is configured to do before it happens
+(cli.md D10) — on stdout, every line prefixed `## `, so it can be combined
+with `--dry-run` and stripped again with `grep -v '^## '`:
+
+```
+$ mysbx --verbose --dry-run
+## mysbx 0.1.0 — run configuration
+## repo root:      /path/to/the/repo
+## sidecar:        /path/to/the/repo.mysbx (missing)
+## user config:    /home/user/.config/mysbx/config.toml (loaded)
+## sidecar config: /path/to/the/repo.mysbx/config.toml (absent — empty layer)
+## backend:        bubblewrap
+## network:        shared (--share-net)
+## mounts:         2 (in declaration order)
+##   rw /path/to/the/repo -> /path/to/the/repo  [repo, implicit]
+##   ro /home/user/data -> /data  [user config]
+## env:            1 forwarded from the host, 1 from [env] (values shown verbatim — they may be secrets)
+##   TERM=xterm-256color  [host]
+##   EDITOR=nvim  [config]
+##   PATH=/nix/store/…-mysbx-tools/bin  [tools]
+## bwrap:          /nix/store/…-bubblewrap/bin/bwrap
+## shell:          /nix/store/…-bash/bin/bash
+## tools PATH:     /nix/store/…-mysbx-tools/bin
+## payload:        shell /nix/store/…-bash/bin/bash
+## mode:           dry run — the argv follows, nothing is executed
+--clearenv
+--unshare-all
+…
+```
+
+Note that `[env]` values are printed verbatim and may be secrets.
+
 ## The sidecar directory
 The `config.toml` file in the sidecar defines
 

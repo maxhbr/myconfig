@@ -218,6 +218,238 @@ fn dry_run_after_dashdash_is_payload() {
     assert!(!stdout.contains("--clearenv"), "argv printed: {stdout}");
 }
 
+// ---- --verbose (cli.md D10) -------------------------------------------------
+
+/// The report block of a stdout stream: every `## `-prefixed line.
+fn report_lines(stdout: &str) -> Vec<&str> {
+    stdout.lines().filter(|l| l.starts_with("## ")).collect()
+}
+
+/// Everything that is NOT a report line, i.e. the `--dry-run` argv block,
+/// reassembled with its trailing newline.
+fn argv_block(stdout: &str) -> String {
+    stdout
+        .lines()
+        .filter(|l| !l.starts_with("## "))
+        .map(|l| format!("{l}\n"))
+        .collect()
+}
+
+#[test]
+fn verbose_dry_run_keeps_the_argv_byte_identical() {
+    // The D10 compatibility promise: the report is `## `-prefixed and
+    // comes first, so stripping it leaves exactly the plain --dry-run
+    // output — compared against the same mvp-4 golden.
+    let (inv, repo, _) = fixture_user_backend("verbose-dry-run", &["--verbose", "--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stderr.is_empty(), "stderr: {stderr}");
+    assert_eq!(argv_block(&stdout), expected_minimal_argv(&repo));
+    // The report precedes the argv: the last report line comes before the
+    // first argv line.
+    let first_argv = stdout.find("--clearenv").unwrap();
+    let last_report = stdout.rfind("## ").unwrap();
+    assert!(last_report < first_argv, "stdout: {stdout}");
+
+    // The reverse flag order is the same run.
+    let (inv2, _, _) = fixture_user_backend("verbose-dry-run", &["--dry-run", "--verbose"]);
+    let (code2, stdout2, _) = run_binary(&inv2);
+    assert_eq!(code2, 0);
+    assert_eq!(stdout2, stdout);
+}
+
+#[test]
+fn verbose_report_covers_the_run_configuration() {
+    // A repo whose user config grants a directory rw and whose sidecar
+    // narrows part of it to ro with an explicit dest — so the report has
+    // something from both layers to attribute.
+    let base = tmpdir("verbose-report");
+    let (repo, sidecar) = make_repo(&base, "repo");
+    let home = base.join("home");
+    let xdg = base.join("xdg");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    let granted = base.join("granted");
+    std::fs::create_dir_all(granted.join("sub")).unwrap();
+    std::fs::write(
+        xdg.join("mysbx").join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\nnetwork = false\n\
+             [[mounts]]\npath = \"{}\"\ndest = \"/granted\"\nmode = \"rw\"\n\
+             [env]\nUSER_VAR = \"u\"\n",
+            granted.display()
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "network = false\n\
+             [[mounts]]\npath = \"{}/sub\"\ndest = \"/inside\"\nmode = \"ro\"\n\
+             [env]\nSIDECAR_VAR = \"s\"\n",
+            granted.display()
+        ),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["--verbose", "--dry-run"],
+        cwd: repo.join("sub"),
+        home,
+        xdg: xdg.clone(),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+
+    // repo root and sidecar path
+    assert!(
+        report.contains(&format!("repo root:      {}", repo.display())),
+        "{report}"
+    );
+    assert!(
+        report.contains(&format!("{} (exists)", sidecar.display())),
+        "{report}"
+    );
+    // both config paths, with their loaded/absent state
+    assert!(
+        report.contains(&format!(
+            "user config:    {} (loaded)",
+            xdg.join("mysbx").join("config.toml").display()
+        )),
+        "{report}"
+    );
+    assert!(
+        report.contains(&format!(
+            "sidecar config: {} (loaded)",
+            sidecar.join("config.toml").display()
+        )),
+        "{report}"
+    );
+    // backend and network sense
+    assert!(report.contains("backend:        bubblewrap"), "{report}");
+    assert!(report.contains("network:        denied"), "{report}");
+    // mounts: the implicit repo bind, the user grant, the narrowed
+    // sidecar mount with its explicit dest — with modes and layers.
+    assert!(
+        report.contains(&format!(
+            "  rw {} -> {}  [repo, implicit]",
+            repo.display(),
+            repo.display()
+        )),
+        "{report}"
+    );
+    // (both configured mounts carry an explicit `dest`: the temporary
+    // fixture lives under /tmp, and binding a source path back onto /tmp
+    // is refused by the argv builder's protected-dest check.)
+    assert!(
+        report.contains(&format!(
+            "  rw {} -> /granted  [user config]",
+            granted.display()
+        )),
+        "{report}"
+    );
+    assert!(
+        report.contains(&format!(
+            "  ro {}/sub -> /inside  [sidecar config]",
+            granted.display()
+        )),
+        "{report}"
+    );
+    // env entries from both layers, plus the tools PATH
+    assert!(report.contains("USER_VAR=u  [config]"), "{report}");
+    assert!(report.contains("SIDECAR_VAR=s  [config]"), "{report}");
+    assert!(report.contains("PATH=/synth/bin  [tools]"), "{report}");
+    // the runtime parameters and the payload
+    assert!(
+        report.contains("shell:          /synth/bin/bash"),
+        "{report}"
+    );
+    assert!(report.contains("bwrap:          bwrap"), "{report}");
+    assert!(
+        report.contains("payload:        shell /synth/bin/bash"),
+        "{report}"
+    );
+    assert!(report.contains("dry run"), "{report}");
+}
+
+#[test]
+fn verbose_run_form_reports_the_command_payload() {
+    let (inv, _, _) = fixture_user_backend(
+        "verbose-run-form",
+        &["run", "--verbose", "--dry-run", "--", "echo", "hi"],
+    );
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains("payload:        command echo hi"),
+        "{report}"
+    );
+    // The argv is still there, unprefixed and last.
+    assert!(argv_block(&stdout).starts_with("--clearenv\n"), "{stdout}");
+}
+
+#[test]
+fn verbose_after_dashdash_is_payload() {
+    // cli.md D4 verbatim rule: after `--`, `--verbose` is payload content,
+    // never a flag — so no report may be printed.
+    let (inv, _, _) = fixture_user_backend("verbose-after-dd", &["run", "--", "--verbose"]);
+    let (code, stdout, _stderr) = run_binary(&inv);
+    assert_ne!(code, 0);
+    assert!(
+        !stdout.contains("run configuration"),
+        "report printed: {stdout}"
+    );
+}
+
+#[test]
+fn verbose_without_dry_run_reports_and_still_executes() {
+    // Without --dry-run the report is printed and the run proceeds to the
+    // real exec; needs a runnable bwrap, so it self-skips like the other
+    // execution tests.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let (inv, _, _) =
+        fixture_user_backend("verbose-exec", &["run", "--verbose", "--", "/usr/bin/env"]);
+    let mut cmd = spawn(&inv);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin").env("TERM", "dumb");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "stdout: {stdout}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(report.contains("run configuration"), "{stdout}");
+    assert!(report.contains("mode:           executing"), "{stdout}");
+    assert!(report.contains("TERM=dumb  [host]"), "{stdout}");
+    // The exec really happened: the payload's own output is there.
+    assert!(stdout.contains("PATH=/usr/bin"), "stdout: {stdout}");
+}
+
+#[test]
+fn verbose_bare_form_reports_and_still_executes() {
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    // The bare form's payload is the shell; point it at a command that
+    // exits on its own, so the test does not hang on an interactive one.
+    let (inv, _, _) = fixture_user_backend("verbose-bare-exec", &["--verbose"]);
+    let mut cmd = spawn(&inv);
+    cmd.env("MYSBX_SHELL", "/usr/bin/true")
+        .env("MYSBX_TOOLS_PATH", "/usr/bin");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains("payload:        shell /usr/bin/true"),
+        "{stdout}"
+    );
+    assert!(report.contains("mode:           executing"), "{stdout}");
+}
+
 // ---- validation still runs under --dry-run ---------------------------------
 
 #[test]
@@ -338,7 +570,11 @@ fn usage_errors_exit_2() {
         &["run", "--"],
         &["run", "ls"],
         &["run", "--dry-run"],
+        &["run", "--verbose"],
         &["--dry-run", "--dry-run"],
+        &["--verbose", "--verbose"],
+        &["--verbose", "nope"],
+        &["--verbose", "init"],
         &["run", "extra", "--", "ls"],
         &["init", "extra"],
     ];

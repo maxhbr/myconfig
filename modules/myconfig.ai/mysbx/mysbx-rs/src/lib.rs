@@ -4,23 +4,26 @@
 //! docs/design/cli.md):
 //!
 //! ```text
-//! mysbx [--dry-run]                 enter an interactive sandbox shell
-//! mysbx run [--dry-run] -- CMD...   run one command in the sandbox
+//! mysbx [FLAGS]                     enter an interactive sandbox shell
+//! mysbx run [FLAGS] -- CMD...       run one command in the sandbox
 //! mysbx init                        create the sidecar (idempotent)
 //! mysbx version | help
 //! ```
 //!
 //! The bare form is the primary action (cli.md D2): it resolves the repo,
 //! creates the sidecar implicitly when missing (D12) and execs the
-//! backend's argv. `--dry-run` is a *global* flag (first argument, before
-//! the subcommand): it runs the whole pipeline — resolve, guards, load,
-//! merge, backend check, argv build — and stops immediately before `exec`,
-//! printing the argv one argument per line on stdout.
+//! backend's argv. `--dry-run` and `--verbose` are *global* flags (before
+//! the subcommand, in any order): `--dry-run` runs the whole pipeline —
+//! resolve, guards, load, merge, backend check, argv build — and stops
+//! immediately before `exec`, printing the argv one argument per line on
+//! stdout; `--verbose` prints the `## `-prefixed run report before that
+//! (cli.md D10).
 
 pub mod bwrap;
 pub mod config;
 pub mod merge;
 pub mod repo;
+pub mod report;
 pub mod toml;
 
 /// The usage text.
@@ -46,30 +49,24 @@ pub const FORWARDED_ENV_VARS: &[&str] =
 /// error. A payload's own exit code propagates unchanged, because the real
 /// run ends in an `exec` that replaces this process.
 pub fn run(args: Vec<String>) -> i32 {
-    // The global `--dry-run` is accepted only as the FIRST argument (before
-    // the subcommand / bare form); anything after `--` is payload and never
-    // parsed (cli.md D4, D5).
-    let (dry_run, rest) = match args.split_first() {
-        Some((first, rest)) if first == "--dry-run" => (true, rest),
-        _ => (false, &args[..]),
+    // The global flags are accepted only BEFORE the subcommand / bare
+    // form; anything after `--` is payload and never parsed (cli.md D4,
+    // D5, D10).
+    let (flags, rest) = match split_global_flags(&args) {
+        Ok(x) => x,
+        Err(code) => return code,
     };
     match rest.first().map(String::as_str) {
         // Bare `mysbx` is the primary action (docs/design/cli.md D2): enter
         // the sandbox for the current repository.
-        None => sandbox(dry_run, bwrap::Payload::Shell),
-        Some("help") | Some("-h") | Some("--help") if !dry_run => {
-            usage();
-            0
-        }
-        Some("version") | Some("-V") | Some("--version") if !dry_run => {
-            println!("mysbx {VERSION}");
-            0
-        }
-        // `--dry-run` is only meaningful for the bare form and `run`; on
-        // any other verb it would promise side-effect-freeness while init
-        // still creates files — reject it instead (usage error, D8).
-        Some(other) if dry_run => {
-            eprintln!("mysbx: --dry-run is not valid with `{other}`");
+        None => sandbox(flags, bwrap::Payload::Shell),
+        Some("run") => run_command(flags, &rest[1..]),
+        // The global flags are only meaningful for the bare form and
+        // `run`: on `init` `--dry-run` would promise side-effect-freeness
+        // while files are still created, and there is no run to report on
+        // for `help`/`version` — reject them instead (usage error, D8).
+        Some(other) if flags.any() => {
+            eprintln!("mysbx: {} is not valid with `{other}`", flags.first_name());
             eprintln!("try `mysbx --help`");
             2
         }
@@ -82,7 +79,6 @@ pub fn run(args: Vec<String>) -> i32 {
             0
         }
         Some("init") => init(&rest[1..]),
-        Some("run") => run_command(dry_run, &rest[1..]),
         Some(other) => {
             eprintln!("mysbx: unknown command: {other}");
             eprintln!("try `mysbx --help`");
@@ -91,21 +87,74 @@ pub fn run(args: Vec<String>) -> i32 {
     }
 }
 
-/// `mysbx run [--dry-run] -- CMD...` — parse the `run` arguments and hand
-/// the payload to the same pipeline as the bare form (spec "Watch out":
-/// one code path, two entry points).
+/// The global flags of a sandbox run (cli.md D9, D10).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Flags {
+    pub dry_run: bool,
+    pub verbose: bool,
+}
+
+impl Flags {
+    fn any(self) -> bool {
+        self.dry_run || self.verbose
+    }
+
+    /// The flag named in the "not valid with `<verb>`" usage error —
+    /// whichever was set, `--dry-run` first (it is the older, more
+    /// dangerous-sounding promise).
+    fn first_name(self) -> &'static str {
+        if self.dry_run {
+            "--dry-run"
+        } else {
+            "--verbose"
+        }
+    }
+}
+
+/// Split the leading global flags off the argument list. They may appear
+/// in any order but never twice: a repeated flag is a typo, not an
+/// intensifier, and staying strict keeps the surface honest (D5: the
+/// parser is hand-written, so every accepted spelling is a deliberate
+/// one). Returns the exit code of the usage error on rejection.
+fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
+    let mut flags = Flags::default();
+    let mut rest = args;
+    while let Some((first, tail)) = rest.split_first() {
+        let slot = match first.as_str() {
+            "--dry-run" => &mut flags.dry_run,
+            "--verbose" => &mut flags.verbose,
+            _ => break,
+        };
+        if *slot {
+            eprintln!("mysbx: repeated flag: {first}");
+            eprintln!("try `mysbx --help`");
+            return Err(2);
+        }
+        *slot = true;
+        rest = tail;
+    }
+    Ok((flags, rest))
+}
+
+/// `mysbx run [--dry-run] [--verbose] -- CMD...` — parse the `run`
+/// arguments and hand the payload to the same pipeline as the bare form
+/// (spec "Watch out": one code path, two entry points).
 ///
 /// Everything after `--` is the payload, verbatim — including things that
-/// look like flags (cli.md D4). `--dry-run` is accepted before `--` only;
-/// `run` without `--` or without a command is a usage error (`2`), not an
-/// empty sandbox.
-fn run_command(global_dry_run: bool, args: &[String]) -> i32 {
-    let mut dry_run = global_dry_run;
+/// look like flags (cli.md D4). The global flags are accepted before `--`
+/// only; `run` without `--` or without a command is a usage error (`2`),
+/// not an empty sandbox.
+fn run_command(global: Flags, args: &[String]) -> i32 {
+    let mut flags = global;
     let mut idx = 0;
     while let Some(arg) = args.get(idx) {
         match arg.as_str() {
             "--dry-run" => {
-                dry_run = true;
+                flags.dry_run = true;
+                idx += 1;
+            }
+            "--verbose" => {
+                flags.verbose = true;
                 idx += 1;
             }
             "--" => {
@@ -114,7 +163,7 @@ fn run_command(global_dry_run: bool, args: &[String]) -> i32 {
             }
             other => {
                 eprintln!("mysbx run: unexpected argument: {other}");
-                eprintln!("usage: mysbx run [--dry-run] -- COMMAND...");
+                eprintln!("usage: mysbx run [--dry-run] [--verbose] -- COMMAND...");
                 return 2;
             }
         }
@@ -122,17 +171,18 @@ fn run_command(global_dry_run: bool, args: &[String]) -> i32 {
     let cmd = &args[idx..];
     if cmd.is_empty() {
         eprintln!("mysbx run: no command given after `--`");
-        eprintln!("usage: mysbx run [--dry-run] -- COMMAND...");
+        eprintln!("usage: mysbx run [--dry-run] [--verbose] -- COMMAND...");
         return 2;
     }
-    sandbox(dry_run, bwrap::Payload::Command(cmd.to_vec()))
+    sandbox(flags, bwrap::Payload::Command(cmd.to_vec()))
 }
 
 /// The shared pipeline of the bare form and `run`: resolve the repo, run
 /// the guards, (implicitly) init the sidecar, load and merge both layers,
 /// check the backend, build the argv — then print it (`--dry-run`) or exec
 /// it.
-fn sandbox(dry_run: bool, payload: bwrap::Payload) -> i32 {
+fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
+    let dry_run = flags.dry_run;
     // 1. repo resolution and guards (docs/TODOs/mvp-2-repo-discovery.md).
     // The guard runs BEFORE anything is created, so a `$HOME`-resolved run
     // never even creates a sidecar on disk.
@@ -143,6 +193,10 @@ fn sandbox(dry_run: bool, payload: bwrap::Payload) -> i32 {
             return 1;
         }
     };
+
+    // The report shows the state BEFORE the implicit init, so an operator
+    // sees what the run found, not what it just created.
+    let sidecar_existed = repo.sidecar.is_dir();
 
     // 2. implicit init (cli.md D2) — except under `--dry-run`, which is
     // side-effect-free: a missing sidecar config is an empty layer there.
@@ -171,6 +225,15 @@ fn sandbox(dry_run: bool, payload: bwrap::Payload) -> i32 {
                 return 1;
             }
         };
+    // Kept for the report before the configs are consumed by the merge:
+    // which files were loaded, and how many mounts the user layer
+    // contributed (the merge keeps them first and in order, so this one
+    // number attributes every merged mount to its layer).
+    let user_config_path = layers.user.1.clone();
+    let sidecar_config_path = layers.sidecar.1.clone();
+    let user_config_exists = user_config_path.exists();
+    let sidecar_config_exists = sidecar_config_path.exists();
+    let user_mount_count = layers.user.0.mounts.len();
     let merged = match merge::merge(
         layers.user.0,
         layers.sidecar.0,
@@ -218,8 +281,35 @@ fn sandbox(dry_run: bool, payload: bwrap::Payload) -> i32 {
         tools_path: &tools_path,
     };
     let argv = bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params);
+    // The Nix wrapper (item 6) pins the binary via MYSBX_BWRAP; the
+    // fallback is a plain PATH lookup so `cargo run` works unwrapped.
+    let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
 
-    // 6. print it, or exec it.
+    // 6. the `--verbose` report (cli.md D10), BEFORE the argv and before
+    // the exec: it describes the run that is about to happen, and every
+    // line is `## `-prefixed so the unprefixed argv block below stays
+    // byte-identical to a plain `--dry-run`.
+    if flags.verbose {
+        for line in report::lines(&report::Report {
+            repo: &repo,
+            sidecar_exists: sidecar_existed,
+            user_config: &user_config_path,
+            user_config_exists,
+            sidecar_config: &sidecar_config_path,
+            sidecar_config_exists,
+            merged: &merged,
+            user_mount_count,
+            host_env: &host_env,
+            params: &params,
+            bwrap_bin: &bwrap_bin,
+            payload: &payload,
+            dry_run,
+        }) {
+            println!("{line}");
+        }
+    }
+
+    // 7. print the argv, or exec it.
     if dry_run {
         // One argument per line, no prefix, no quoting: this is the
         // result, not a diagnostic (cli.md D9), so golden tests compare
@@ -230,9 +320,6 @@ fn sandbox(dry_run: bool, payload: bwrap::Payload) -> i32 {
         return 0;
     }
 
-    // The Nix wrapper (item 6) pins the binary via MYSBX_BWRAP; the
-    // fallback is a plain PATH lookup so `cargo run` works unwrapped.
-    let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
     let mut cmd = std::process::Command::new(&bwrap_bin);
     cmd.args(&argv);
     // `exec` replaces this process on success, so the payload's exit code
@@ -372,8 +459,39 @@ mod tests {
     #[test]
     fn unknown_command_fails() {
         assert_eq!(run(vec!["nope".into()]), 2);
-        // The global flag does not make an unknown verb acceptable.
+        // The global flags do not make an unknown verb acceptable.
         assert_eq!(run(vec!["--dry-run".into(), "nope".into()]), 2);
+        assert_eq!(run(vec!["--verbose".into(), "nope".into()]), 2);
+    }
+
+    #[test]
+    fn global_flags_parse_in_any_order_but_never_twice() {
+        let s = |v: &[&str]| -> Vec<String> { v.iter().map(|x| (*x).to_string()).collect() };
+        let args = s(&["--verbose", "--dry-run", "run"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert_eq!(
+            flags,
+            Flags {
+                dry_run: true,
+                verbose: true
+            }
+        );
+        assert_eq!(rest, &s(&["run"])[..]);
+
+        let args = s(&["--dry-run", "--verbose"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert!(flags.dry_run && flags.verbose);
+        assert!(rest.is_empty());
+
+        // A flag-less argument list stops the loop immediately.
+        let args = s(&["init"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert_eq!(flags, Flags::default());
+        assert_eq!(rest, &s(&["init"])[..]);
+
+        // Repeats are usage errors, per flag.
+        assert_eq!(split_global_flags(&s(&["--verbose", "--verbose"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--dry-run", "--dry-run"])), Err(2));
     }
 
     // The guard-ordering property of the bare form (docs/TODOs/
@@ -417,6 +535,7 @@ mod tests {
             "version",
             "help",
             "--dry-run",
+            "--verbose",
             "--help",
             "--version",
             "-h",
@@ -438,5 +557,6 @@ mod tests {
         assert_eq!(run(vec!["run".into(), "ls".into()]), 2);
         assert_eq!(run(vec!["run".into(), "--".into()]), 2);
         assert_eq!(run(vec!["run".into(), "--dry-run".into()]), 2);
+        assert_eq!(run(vec!["run".into(), "--verbose".into()]), 2);
     }
 }
