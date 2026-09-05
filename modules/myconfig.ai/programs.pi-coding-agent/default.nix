@@ -38,15 +38,18 @@ let
   # (the convention used by the worktree tooling), bind that directory
   # read-write into the jail so the agent can read/edit sibling worktrees.
   # The check is done at runtime (in the wrapper, before `bwrap` starts) so
-  # the bind only happens when both the `.git` marker and the worktrees
-  # directory exist on the host. `mount-cwd` already binds `$PWD` itself; this
-  # adds the out-of-tree worktrees directory next to it.
+  # the bind only happens when the `.git` marker exists on the host.
+  # `mount-cwd` already binds `$PWD` itself; this adds the out-of-tree
+  # worktrees directory next to it. The directory is CREATED when missing:
+  # bubblewrap can only bind an existing path, so without the `mkdir -p` an
+  # agent in a repository that has no worktrees yet could not create the
+  # first one (the same reasoning as in ../myconfig.ai.workmux/jail.nix and
+  # ../programs.herdr.nix).
   worktreesSiblingPerm = add-runtime ''
     if [ -e "$PWD/.git" ]; then
       _jp_worktrees="$(dirname "$PWD")/$(basename "$PWD")__worktrees"
-      if [ -d "$_jp_worktrees" ]; then
-        RUNTIME_ARGS+=(--bind "$_jp_worktrees" "$_jp_worktrees")
-      fi
+      mkdir -p "$_jp_worktrees"
+      RUNTIME_ARGS+=(--bind "$_jp_worktrees" "$_jp_worktrees")
     fi
   '';
 
