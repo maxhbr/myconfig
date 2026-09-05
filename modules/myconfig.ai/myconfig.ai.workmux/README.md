@@ -105,9 +105,12 @@ workmux, the main git repo (the CWD) and its sibling `<basename>__worktrees`
 directory:
 
 - `agent-bubblewrap-workmux-tmux` — the jail. Its entrypoint boots a `workmux` tmux
-  session on a **private socket inside the jail** (`/tmp/workmux-tmux/socket`),
-  wires up the sidebar + dashboard, and attaches. Because server and client
-  share the same bwrap process tree, the socket never leaves the jail.
+  session on a **private, repo-local socket**
+  (`<basename>__worktrees/.agent-bubblewrap/socket`, mode 0700), wires up the
+  sidebar + dashboard, and attaches. The worktrees directory is bound
+  read-write at the same path inside the jail, so the socket resolves
+  identically in and out of the sandbox while two different projects never
+  share a tmux server.
 - `agent-bubblewrap-alacritty-workmux-tmux` — the user-facing launcher. Run it from your **main**
   git checkout (it refuses to run from a linked worktree): it resolves the
   `<basename>__worktrees` sibling, binds it read-write into the jail, and opens

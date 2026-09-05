@@ -9,8 +9,10 @@
 # contains the tmux server, workmux, the main git repository (the CWD) and its
 # sibling `<basename>__worktrees` directory. Because the tmux server and the
 # attaching client both live in that single bwrap process tree, they share a
-# private tmux socket that never leaves the jail — hence "custom socket within
-# the jail". Agents that workmux launches in panes then run *inside* this
+# private tmux socket kept in the repository's own worktrees directory
+# (`<basename>__worktrees/.agent-bubblewrap/socket`), so it is repo-local and
+# never collides with the user's normal tmux server nor with another project's
+# jail. Agents that workmux launches in panes then run *inside* this
 # shared sandbox (no nested bwrap), so they must be plain (un-jailed) agents.
 #
 # Entry points:
@@ -55,12 +57,14 @@ let
 
   yamlFormat = pkgs.formats.yaml { };
 
-  # tmux socket *inside* the jail. With `persistentTmp` (jail-app default) the
-  # jail's /tmp is a host-backed directory private to this jail, so the socket
-  # never collides with the user's normal tmux server on the host default
-  # socket. Both the server and the attaching client run in the same bwrap
-  # process tree, so they resolve the same socket inode.
-  socketPath = "/tmp/workmux-tmux/socket";
+  # Directory (relative to the repository's `<basename>__worktrees` sibling)
+  # that holds the private tmux socket. Keeping the socket inside the
+  # per-repository worktrees directory makes it strictly repo-local: two
+  # different projects never share a tmux server, and the path is identical
+  # inside and outside the jail because the worktrees directory is bound
+  # read-write at the very same location (see `extraReadWriteEnvPaths`).
+  socketDirName = ".agent-bubblewrap";
+  socketBaseName = "socket";
 
   # Plain (un-jailed) agent binaries made available *inside* the shared jail so
   # workmux can launch them in panes. The jail itself is the sandbox here, so
@@ -111,8 +115,19 @@ let
       fi
       path_hash="$(echo -n "$repo_root" | sha256sum | cut -c1-4)"
       session="workmux-$(basename "$repo_root")-$path_hash"
-      socket=${lib.escapeShellArg socketPath}
-      mkdir -p "$(dirname "$socket")"
+
+      # Repo-local tmux socket: it lives inside the `<basename>__worktrees`
+      # sibling of the main checkout, which the launcher binds read-write into
+      # the jail at the same path. Deriving it here (instead of reading an env
+      # var) works because the jail clears the environment.
+      worktrees="$(dirname "$repo_root")/$(basename "$repo_root")__worktrees"
+      socket_dir="$worktrees/${socketDirName}"
+      socket="$socket_dir/${socketBaseName}"
+      if ! mkdir -p "$socket_dir" || ! chmod 0700 "$socket_dir"; then
+        echo "workmux-tmux-jail-entry: cannot create $socket_dir" >&2
+        echo "workmux-tmux-jail-entry: is the worktrees directory bound read-write?" >&2
+        exit 1
+      fi
 
       # Inside the jail, tmux resolves the login shell from the jail's
       # /etc/passwd, where mhuber's shell is `nologin`. Every new pane would
@@ -236,6 +251,11 @@ let
       worktrees="$(dirname "$top")/$(basename "$top")__worktrees"
       mkdir -p "$worktrees"
       export WORKMUX_WORKTREES_DIR="$worktrees"
+
+      # Repo-local tmux socket directory (see `socketDirName`). Created here
+      # already so the bind of `$worktrees` covers an existing, 0700 directory.
+      mkdir -p "$worktrees/${socketDirName}"
+      chmod 0700 "$worktrees/${socketDirName}"
 
       # Launch Alacritty from the main checkout so the jail's mount-cwd binds
       # the repository read-write.
