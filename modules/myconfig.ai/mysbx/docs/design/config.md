@@ -57,11 +57,14 @@ config that can execute is config that can escape.
 
 ### D5: What the sidecar config decides
 
-- which repos/paths are mounted and with which mode; by default the repo
-  itself is available read-write
+- additional host paths mounted into the sandbox (`[[mounts]]`), with mode
 - the backend and its resource limits
-- network policy
-- environment forwarded into the sandbox
+- network policy (`network = false` is the deny switch; the network is
+  shared by default)
+- environment forwarded into the sandbox (`[env]`)
+
+It does not decide the repo itself: the repo is implicit and always mounted
+read-write (see D13).
 
 ### D6: What the user config decides
 
@@ -86,11 +89,21 @@ Every path in the configuration is absolute and is canonicalized when the
 config is loaded, before the backend starts. Broken paths fail fast with a
 clear error instead of producing a sandbox with a silently missing mount.
 
-### D9: Default deny
+### D9: A strong accident barrier, a moderate malice barrier
 
-Nothing is available inside the sandbox unless it is declared: no network,
-no host paths besides the repo, no host environment. New backends must
-uphold this even when the backend's own default is permissive.
+The MVP's base is deliberately permissive: the network is shared by default
+and the backend base exposes the usual tool environment. The claim is
+therefore **not** deny-by-default confinement — it is the one the sandboxing
+ladder already makes for its bubblewrap tier: *a strong accident barrier and
+a moderate malice barrier*. A sandboxed process cannot stumble into host
+state it should not touch, and an attacker inside the sandbox does not
+trivially escape — but the shared network and the permissive base are real
+exposure, and the doc says so instead of overstating the confinement.
+
+What does hold in every backend, without exception: **nothing from the host
+filesystem is available unless it is declared** — the repo itself (D13) and
+the explicit `[[mounts]]` entries. New backends must uphold this even when
+the backend's own default is permissive.
 
 ### D10: The sidecar also holds state
 
@@ -121,6 +134,23 @@ what must be rejected.
 
 `init` creates the sidecar and a default `config.toml`. Re-running it never
 overwrites an existing `config.toml`; it reports what already exists.
+
+### D13: The repo is implicit
+
+The repo is the repo the sidecar belongs to. It is always mounted
+read-write, at its real host path, inside the sandbox — and it is not
+expressible in configuration: the schema has no repository table (a
+`repo` key at top level is an unknown key and therefore a schema error,
+D11).
+
+Rationale: the sidecar is named after the repo (`<repo>.mysbx/`, D2), so
+the repo path is already fixed by where the sidecar sits. A config that
+could name a different repo would create a contradiction class between the
+sidecar's location and its content — two sources of truth for "which
+checkout is this sandbox for", of which only one is visible in the
+filesystem layout. Making the repo inexpressible removes that class
+entirely; the only way to point `mysbx` at another checkout is to stand in
+it (cli.md D1).
 
 ## Non-goals
 

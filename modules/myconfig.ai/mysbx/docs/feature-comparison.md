@@ -73,11 +73,11 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Mechanism | bubblewrap namespaces | bubblewrap namespaces | Landlock + seccomp (`nono`) | QEMU microVM, own kernel | rootless podman + `runsc` | Cloud Hypervisor, own kernel | bubblewrap first, then podman+gVisor / nono, later qemu/microvm (`../README.md` roadmap) |
 | Kernel boundary | no | no | no | yes | user-space kernel | yes | none yet |
 | Runs as | your uid | your uid | your uid | guest `agent` user | container user | guest `agent` user | your uid (planned) |
-| Filesystem policy | curated allow-list of binds, env cleared (`--clearenv`) | ro config dirs + writable XDG dirs | `--allow` / `--read` / `--allow-cwd` | virtiofs shares only | image + explicit `--mount` | virtiofs shares only | **default deny**, everything declared (`config.md` D9) |
-| Workspace | `$PWD` rw (+ `__worktrees` sibling) | `$PWD` rw | `$PWD` rw (`--allow-cwd`) | `$PWD` rw at `/workspace` | isolated git clone at `<repo>__agent-gvisor/NAME`, mounted at the host path — host checkout never bind-mounted | standalone clone, `workspaceLayout = central\|beside-repo` | repo rw by default (`[repo] path/mode`), no clone/worktree model chosen yet |
+| Filesystem policy | curated allow-list of binds, env cleared (`--clearenv`) | ro config dirs + writable XDG dirs | `--allow` / `--read` / `--allow-cwd` | virtiofs shares only | image + explicit `--mount` | virtiofs shares only | nothing from the host filesystem unless declared: repo + explicit `[[mounts]]` (`config.md` D9, D13) |
+| Workspace | `$PWD` rw (+ `__worktrees` sibling) | `$PWD` rw | `$PWD` rw (`--allow-cwd`) | `$PWD` rw at `/workspace` | isolated git clone at `<repo>__agent-gvisor/NAME`, mounted at the host path — host checkout never bind-mounted | standalone clone, `workspaceLayout = central\|beside-repo` | the sidecar's repo, implicit, always rw at its real path (`config.md` D13), no clone/worktree model chosen yet |
 | Extra mounts | `extraReadOnly/ReadWriteEnvPaths`, `JAIL_EXTRA_*_PATHS` | `readOnlyConfigDirs`, `writableDirs` | `extraAllowDirs`, `extraReadOnlyDirs`, `--allow-unix-socket` | fixed (CWD + store) | `--mount`/`--config HOST:DEST[:ro\|rw]` | fixed share set | `[[mounts]] path/dest/mode`, `ro`/`rw` only (`../mysbx-rs/src/config.rs`) |
 | Host `/nix/store` | bound read-only (`bindFullNixStore`) | via the app closure | via the app closure | read-only virtiofs | not shared; optional writable store volume (`--nix`) | not shared — own EROFS guest store | undecided |
-| Network default | on (`network` combinator: resolv.conf + CA bundle) | on (`shareNet = true`) | off unless `--allow-domain` / `--allow-connect-port` / `--listen-port` | SLiRP user-mode NAT, outbound only + one loopback SSH port | rootless podman default, `--network`/`AGENT_GVISOR_NETWORK` (pasta spec), in-sandbox loopback forwarders | private bridge `agentbr0` with per-TAP L2 isolation, `networkProfile` (default `proxy-only`) | off (`network = false`, `config.md` D9) |
+| Network default | on (`network` combinator: resolv.conf + CA bundle) | on (`shareNet = true`) | off unless `--allow-domain` / `--allow-connect-port` / `--listen-port` | SLiRP user-mode NAT, outbound only + one loopback SSH port | rootless podman default, `--network`/`AGENT_GVISOR_NETWORK` (pasta spec), in-sandbox loopback forwarders | private bridge `agentbr0` with per-TAP L2 isolation, `networkProfile` (default `proxy-only`) | on, shared; `network = false` is the deny switch (`config.md` D5, D9) |
 | Env forwarding | `try-fwd-env` list + `myconfig.ai.jail.fwdEnvs`, always `OPENAI_API_KEY` | `envVars` attrset | same shape via `myconfig.ai.nono.fwdEnvs` | pushed over the SSH session env at launch | `--env` / `--env-file` | none needed for model access | `[env]` table |
 | Model credentials | real host key inside the sandbox | n/a | real host key inside the sandbox | real key, over SSH env | seeded config, endpoints rewritten to a sandbox-reachable proxy | **never reaches the guest** — host LiteLLM via bridge-only forwarder | **open question** — not decided in `config.md` |
 | Agent-config seeding | `try-ro-bind` of `configDirs`, rw `userDataDirs` | `readOnlyConfigDirs` | `--read` of config dirs, `--allow` of state dirs | [`fns/seed-agent-config.nix`](../../fns/seed-agent-config.nix), rsync over SSH | `home.seedPaths` + `AGENT_GVISOR_HOME_SEED_REWRITE` | root-owned staged copy via `config-seed.nix` | user config decides which host config is exposed (`config.md` D6) |
@@ -129,7 +129,9 @@ Everything below exists in at least one tier above and has no counterpart in
   is the strongest and the most expensive.
 - **A workspace model.** `bwrap`/`nono`/`qemu` use the live CWD, `gvisor` and
   `microvm` use an isolated clone plus a handoff (`merge`/`fetch`/`push`,
-  branch import). `mysbx` currently only says "repo rw by default".
+  branch import). `mysbx` fixes the repo implicitly — always rw, not
+  expressible (`design/config.md` D13) — and defers the clone/worktree
+  question.
 - **Refusing `$HOME` as CWD** — a cheap guardrail that both bubblewrap and
   nono wrappers already have.
 - **`myconfig.ai.sandboxTools` participation** — the cross-tier hook for
@@ -146,7 +148,8 @@ Everything below exists in at least one tier above and has no counterpart in
   (`0/1/124/130/70`, JSON result). `cli.md` D8 is a subset; extend it before
   the first backend lands rather than after.
 - **Isolation defaults**: `microvm`'s "no key in the guest, egress only to a
-  local proxy" is the target for D9's default-deny network.
+  local proxy" is the target for a future network-policy item; the MVP
+  shares the network and is honest about it (`config.md` D9).
 - **Mount vocabulary**: `--config HOST:DEST[:ro|rw]` from `agent-gvisor` maps
   almost 1:1 to the `[[mounts]]` table, so the flag layer can reuse it.
 - **Cross-tier hook**: honour `myconfig.ai.sandboxTools.extraPackages` /

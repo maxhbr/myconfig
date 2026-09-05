@@ -26,8 +26,11 @@ Running `mysbx` with no arguments is the primary action: enter an
 interactive sandbox shell for the current repository. Subcommands are the
 exception, not the rule.
 
-Open question: what bare `mysbx` does when no sidecar exists — fail with a
-hint to run `mysbx init`, or init implicitly?
+When no sidecar exists, bare `mysbx` creates it implicitly — exactly what
+`mysbx init` would have done (D12: idempotent, never overwrites an existing
+`config.toml`) — and then proceeds. The common case stays argument-free:
+`cd repo && mysbx` works on the first run. An operator who wants to review
+the generated `config.toml` first can still run `mysbx init` explicitly.
 
 ### D3: Verb subcommands, no nesting
 

@@ -1,1 +1,2 @@
+# Types are strict: `network` is a boolean.
 network = "yes"

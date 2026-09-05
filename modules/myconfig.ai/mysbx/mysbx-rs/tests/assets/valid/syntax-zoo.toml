@@ -7,13 +7,10 @@ network	=	false
 
 [env]                      # a table header with a comment
 "WEIRD KEY" = "a\tb"
+HASHED = "home/user/src/pro#ject"   # `#` inside a string is not a comment
 LITERAL = 'no \t escape here'
 UNICODE = "\u00e4"
 QUOTED = "he said \"hi\""
-
-[repo]
-mode = 'rw'
-path = "/home/user/src/pro#ject"   # `#` inside a string is not a comment
 
 [[mounts]]
 path = "/a"

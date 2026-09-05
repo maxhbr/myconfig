@@ -65,10 +65,24 @@ fn init(args: &[String]) -> i32 {
         println!("## exists:  {}", config.display());
         return 0;
     }
-    let contents = format!(
-        "# mysbx sidecar config\n[repo]\npath = \"{}\"\nmode = \"rw\"\n",
-        cwd.display()
-    );
+    // The repo itself is implicit (docs/design/config.md D13): it is the
+    // repo this sidecar belongs to, always mounted rw at its real path. It
+    // is deliberately not written into the config — the schema has no
+    // `[repo]` table (docs/design/config.md D11).
+    let contents = "# mysbx sidecar config\n\
+# The repo this sidecar belongs to is implicit: it is always mounted\n\
+# read-write at its real host path and cannot be changed here\n\
+# (docs/design/config.md D13).\n\
+#\n\
+# Everything else in the sandbox is opt-in. Examples:\n\
+#\n\
+# [[mounts]]\n\
+# path = \"/home/user/.config/git\"\n\
+# mode = \"ro\"\n\
+#\n\
+# [env]\n\
+# EDITOR = \"nvim\"\n";
+
     if let Err(e) = std::fs::write(&config, contents) {
         eprintln!("mysbx: cannot write {}: {e}", config.display());
         return 1;

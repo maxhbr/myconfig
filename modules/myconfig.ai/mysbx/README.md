@@ -33,10 +33,11 @@ $ mysbx
 ```
 
 ## The sidecar directory
-The `config.toml` file in the sidecar defines defines
+The `config.toml` file in the sidecar defines
 
-- which repos are accessible
-  - by default is /path/to/the/repo available as rw
+- additional mounts into the sandbox and the forwarded environment
+  - the repo itself is implicit: always available rw at its real path,
+    not expressible in the config
 - ...
 
 It is deliberately placed outside of the repo and the sandbox.

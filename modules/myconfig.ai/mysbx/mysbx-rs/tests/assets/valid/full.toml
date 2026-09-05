@@ -1,10 +1,7 @@
-# Every key of the schema, as a sidecar config would use them.
+# Every key of the schema, as a sidecar config would use them. The repo
+# itself is not part of the schema — it is implicit (config.md D13).
 backend = "bwrap"
 network = true
-
-[repo]
-path = "/home/user/src/project"
-mode = "rw"
 
 [[mounts]]
 path = "/home/user/.config/pi"

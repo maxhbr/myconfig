@@ -40,46 +40,44 @@ impl fmt::Display for Mode {
     }
 }
 
-/// The repository the sandbox is built around.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Repo {
-    /// Absolute path; `None` means "the repo the sidecar belongs to".
-    pub path: Option<String>,
-    /// Defaults to `rw` (README: the repo is available rw by default).
-    pub mode: Mode,
-}
-
-impl Default for Repo {
-    fn default() -> Self {
-        Repo {
-            path: None,
-            mode: Mode::Rw,
-        }
-    }
-}
-
 /// One additional host path exposed inside the sandbox.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount {
     pub path: String,
     /// Destination inside the sandbox; `None` means "same path".
     pub dest: Option<String>,
-    /// Defaults to `ro` (default deny, docs/design/config.md D9).
+    /// Defaults to `ro` (D9: nothing from the host filesystem unless
+    /// declared).
     pub mode: Mode,
 }
 
+// The repo itself is deliberately not part of the schema: it is the sidecar's
+// repo, always mounted rw at its real host path, not expressible in
+// configuration (docs/design/config.md D13).
+
 /// A parsed `config.toml`, from either configuration layer.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     /// Sandbox technology; `None` means "not decided by this layer"
     /// (docs/design/cli.md D7: never auto-detected).
     pub backend: Option<String>,
-    /// Defaults to `false`: no network unless declared.
+    /// Defaults to `true`: the network is shared; `network = false` is the
+    /// explicit deny switch.
     pub network: bool,
-    pub repo: Repo,
     pub mounts: Vec<Mount>,
     /// Environment forwarded into the sandbox.
     pub env: BTreeMap<String, String>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            backend: None,
+            network: true,
+            mounts: Vec::new(),
+            env: BTreeMap::new(),
+        }
+    }
 }
 
 /// Why a configuration could not be loaded.
@@ -131,7 +129,6 @@ impl Config {
             match key.as_str() {
                 "backend" => config.backend = Some(string(value, "backend")?.to_owned()),
                 "network" => config.network = boolean(value, "network")?,
-                "repo" => config.repo = repo(table(value, "repo")?)?,
                 "mounts" => config.mounts = mounts(value)?,
                 "env" => config.env = env(table(value, "env")?)?,
                 other => return Err(unknown("top level", other)),
@@ -139,18 +136,6 @@ impl Config {
         }
         Ok(config)
     }
-}
-
-fn repo(t: &Table) -> Result<Repo, Error> {
-    let mut repo = Repo::default();
-    for (key, value) in t {
-        match key.as_str() {
-            "path" => repo.path = Some(absolute(string(value, "repo.path")?, "repo.path")?),
-            "mode" => repo.mode = Mode::parse(string(value, "repo.mode")?, "repo.mode")?,
-            other => return Err(unknown("[repo]", other)),
-        }
-    }
-    Ok(repo)
 }
 
 fn mounts(value: &Value) -> Result<Vec<Mount>, Error> {
@@ -260,8 +245,7 @@ mod tests {
     fn empty_config_is_all_defaults() {
         let c = Config::parse("").unwrap();
         assert_eq!(c, Config::default());
-        assert!(!c.network);
-        assert_eq!(c.repo.mode, Mode::Rw);
+        assert!(c.network);
         assert!(c.backend.is_none());
     }
 
@@ -275,15 +259,22 @@ mod tests {
     #[test]
     fn unknown_keys_are_rejected() {
         assert!(matches!(Config::parse("nope = 1\n"), Err(Error::Schema(_))));
+    }
+
+    #[test]
+    fn repo_table_is_rejected() {
+        // The repo is implicit (docs/design/config.md D13); a `[repo]` table is
+        // an unknown top-level key and therefore a schema error (D11).
+        assert!(matches!(Config::parse("[repo]\n"), Err(Error::Schema(_))));
         assert!(matches!(
-            Config::parse("[repo]\nnope = 1\n"),
+            Config::parse("[repo]\npath = \"/home/user/src/project\"\n"),
             Err(Error::Schema(_))
         ));
     }
 
     #[test]
     fn relative_paths_are_rejected() {
-        let e = Config::parse("[repo]\npath = \"rel\"\n").unwrap_err();
+        let e = Config::parse("[[mounts]]\npath = \"rel\"\n").unwrap_err();
         assert!(e.to_string().contains("must be absolute"), "{e}");
     }
 }

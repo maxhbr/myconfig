@@ -52,6 +52,7 @@ fn every_asset_is_exercised() {
         "invalid/schema-bad-mode.toml",
         "invalid/schema-missing-mount-path.toml",
         "invalid/schema-relative-path.toml",
+        "invalid/schema-repo-table.toml",
         "invalid/schema-unknown-key.toml",
         "invalid/schema-wrong-type.toml",
         "invalid/syntax-duplicate-key.toml",
@@ -71,12 +72,15 @@ fn empty_config() {
 }
 
 #[test]
-fn minimal_config() {
+fn minimal_config_is_what_init_writes() {
+    // docs/design/config.md D13: the repo is implicit, so the sidecar config
+    // `mysbx init` writes declares nothing — comments only. It parses to the
+    // all-defaults config.
     let c = load_ok("valid/minimal.toml");
-    assert_eq!(c.repo.path.as_deref(), Some("/home/user/src/project"));
-    assert_eq!(c.repo.mode, Mode::Rw);
+    assert_eq!(c, Config::default());
+    assert!(c.network, "network is shared by default");
     assert!(c.mounts.is_empty());
-    assert!(!c.network, "network is denied unless declared");
+    assert!(c.env.is_empty());
 }
 
 #[test]
@@ -84,8 +88,6 @@ fn full_config() {
     let c = load_ok("valid/full.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
     assert!(c.network);
-    assert_eq!(c.repo.path.as_deref(), Some("/home/user/src/project"));
-    assert_eq!(c.repo.mode, Mode::Rw);
 
     assert_eq!(c.mounts.len(), 2);
     assert_eq!(c.mounts[0].path, "/home/user/.config/pi");
@@ -101,10 +103,11 @@ fn full_config() {
 }
 
 #[test]
-fn user_config_without_repo_table() {
+fn user_config_declares_no_repo() {
     let c = load_ok("valid/user-config.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
-    assert_eq!(c.repo.path, None, "the host-wide layer names no repo");
+    // The host-wide layer decides nothing about the repo: it is implicit and
+    // per-sidecar (docs/design/config.md D13). No [repo] table exists at all.
     assert_eq!(c.mounts.len(), 2);
     assert!(c.mounts.iter().all(|m| m.mode == Mode::Ro));
     assert_eq!(c.env["EDITOR"], "nvim");
@@ -116,8 +119,8 @@ fn syntax_zoo() {
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
     assert!(!c.network);
     assert_eq!(
-        c.repo.path.as_deref(),
-        Some("/home/user/src/pro#ject"),
+        c.env["HASHED"],
+        "home/user/src/pro#ject",
         "`#` inside a string must not start a comment"
     );
     assert_eq!(c.env["WEIRD KEY"], "a\tb");
@@ -157,6 +160,7 @@ fn invalid_schema_is_reported_with_the_offending_key() {
             "invalid/schema-missing-mount-path.toml",
             "missing required key `path`",
         ),
+        ("invalid/schema-repo-table.toml", "unknown key `repo`"),
     ];
     for (rel, needle) in cases {
         let e = load_err(rel);
