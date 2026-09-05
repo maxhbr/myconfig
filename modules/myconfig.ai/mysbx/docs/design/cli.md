@@ -40,7 +40,7 @@ would only pay off with many more commands.
 
 Currently implemented: `init`, `version`, `help`, the bare form (entering
 the sandbox, see D2) and `run -- COMMAND` for non-interactive use, plus the
-global `--dry-run` (D9).
+global flags `--dry-run` (D9) and `--verbose` (D10).
 
 ### D4: `--` separates sandbox args from the payload command
 
@@ -91,6 +91,53 @@ prefix so they are distinguishable from payload output.
 Diagnostics go to stderr and are prefixed `mysbx: `. Progress/result lines
 for `init` go to stdout and are prefixed `## ` (see the README transcript).
 Nothing else is written to stdout, so the tool stays pipe-friendly.
+
+The one deliberate exception is the `--dry-run` argv: it is printed to
+stdout **unprefixed, one argument per line**, because it is a *result*,
+not a diagnostic. Golden tests compare it byte for byte, and
+`mysbx run --dry-run -- ls | wc -l` is meaningful.
+
+### D10: `--verbose` prints a `## `-prefixed run report before the run
+
+`--verbose` is a global flag with the same position rule as `--dry-run`:
+it is accepted before the subcommand (`mysbx --verbose`), and `run`
+accepts it again before its `--` (`mysbx run --verbose -- CMD`). Both
+global flags may be combined and may appear in any order, but neither may
+be repeated (a repeated flag is a typo, not an intensifier: usage error,
+D8). After `--` the token is payload, verbatim, and never a flag (D4).
+
+**What it shows.** The resolved repo root and sidecar path (and whether
+the sidecar directory exists), both configuration file paths with whether
+each was loaded or absent (an absent file is an empty layer), the merged
+backend, the network sense (`shared` / `denied`), every mount in
+declaration order — the implicit repo bind first (config.md D13), then the
+configured ones with mode, source, in-sandbox destination and the layer
+that contributed it — the forwarded host variables and the `[env]`
+variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH`
+values after their fallbacks, the payload, and whether the run will exec
+or stop at the argv.
+
+The report cannot say *how* the repo was resolved (sidecar ancestor / git
+root / cwd): `repo::resolve` does not return that, and restructuring it
+just for a report line is not worth it. It shows the resolved paths
+instead.
+
+**Where it goes: stdout, `## `-prefixed, before everything else.** Not
+stderr: this is operator-facing information about a run, not an error, and
+stderr belongs to the `mysbx: ` failures (D8/D9) and to the payload. The
+`## ` prefix is what makes this safe next to the unprefixed `--dry-run`
+argv block: with `--verbose --dry-run` the report comes first and the argv
+follows, so `mysbx --verbose --dry-run | grep -v '^## '` is byte-identical
+to a plain `mysbx --dry-run`. Tests pin that. The report is also printed
+before `exec` in a real run, so the operator sees the configuration even
+when the payload takes over the terminal.
+
+**What is hidden: nothing.** In particular, `[env]` values are printed
+verbatim rather than redacted. `--dry-run` already prints them as
+`--setenv KEY VALUE`, and anyone who can run `mysbx --verbose` can read
+both config files — redaction would buy no secrecy while making the report
+lie about the run. The help text says out loud that the values may be
+secrets, so nobody pastes a verbose report into a bug tracker unaware.
 
 ## Non-goals
 

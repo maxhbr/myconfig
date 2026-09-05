@@ -1,8 +1,8 @@
 mysbx - my sandboxing tool
 
 Usage:
-  mysbx [--dry-run]
-  mysbx run [--dry-run] -- COMMAND...
+  mysbx [--dry-run] [--verbose]
+  mysbx run [--dry-run] [--verbose] -- COMMAND...
   mysbx [COMMAND]
 
 Commands:
@@ -16,6 +16,10 @@ Commands:
 
 Options:
   --dry-run     print the sandbox argv, one argument per line, and exit;
-                must be the first argument, runs no sidecar and no command
+                must precede the command, runs no sidecar and no command
+  --verbose     print the run configuration (repo, config files, backend,
+                network, mounts, environment, payload) to stdout with a
+                `## ` prefix before running; must precede the command.
+                Note: [env] values are printed verbatim and may be secrets
   -h, --help    print this help
   -V, --version print the version
