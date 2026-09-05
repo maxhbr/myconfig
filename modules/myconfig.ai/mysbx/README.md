@@ -7,6 +7,10 @@ This project defines the cli tool mysbx, which is my sandboxing tool.
 The `docs/` directory holds all documentation. This README stays a short
 overview; design decisions, TODOs and any other long text belong in `docs/`:
 
+- [`CONTEXT.md`](./CONTEXT.md) - the glossary: repo, sidecar, user config,
+  layer, backend, payload, base, mount
+- [`docs/plan.md`](./docs/plan.md) - the phase plan, starting with the MVP;
+  work items in [`docs/TODOs/`](./docs/TODOs)
 - [`docs/feature-comparison.md`](./docs/feature-comparison.md) - how mysbx
   compares to the sandboxing tiers already implemented in myconfig (CLI,
   sandboxing features, implementation state)
