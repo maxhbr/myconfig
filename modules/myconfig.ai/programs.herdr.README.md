@@ -48,7 +48,7 @@ Running it from inside a linked worktree works: the script resolves the main
 working tree first, because herdr refuses `--cwd` pointing into a linked
 worktree ("worktree actions start from the repo parent workspace").
 
-## Remaining gap
+## Remaining gap on the host
 
 Flows that do **not** pass an explicit `--path` — for example a bare
 `herdr worktree create` issued by an agent following the herdr skill, or the
@@ -56,6 +56,51 @@ socket API — still use the global `[worktrees] directory`
 (`~/.herdr/worktrees/<repo>/<branch-slug>`). That is a herdr limitation, not a
 configuration choice here; see
 [`../../doc/TODOs/herdr-per-repo-worktree-directory.md`](../../doc/TODOs/herdr-per-repo-worktree-directory.md).
+
+## `agent-bubblewrap-herdr`: the sandbox closes that gap
+
+A jail session has exactly **one** repository, so there the global option can
+be made repository-local. `agent-bubblewrap-herdr` (same module) is the
+bubblewrap analogue of `agent-qemu-herdr` and the workmux jail
+([`myconfig.ai.workmux/jail.nix`](./myconfig.ai.workmux/jail.nix)):
+
+1. The wrapper resolves the repository root from the working directory,
+   **creates** `<parent-of-repo>/<repo>__worktrees` and binds it read-write
+   into the jail *at the identical path* — identical, because `git worktree`
+   stores absolute paths in `.git/worktrees/<n>/gitdir`, so a remapped path
+   would produce checkouts that are broken on the host.
+2. The entrypoint writes a session `~/.config/herdr/config.toml` into the
+   jail's tmpfs `$HOME`: the shared keybindings plus
+   `[worktrees] directory = "<that sibling directory>"`. The host
+   `~/.config/herdr` is deliberately not bound.
+3. Because the root is now correct for *every* flow, the jail config restores
+   herdr's **built-in** `prefix+shift+g` (plus `prefix+shift+o` /
+   `prefix+shift+x` for open/remove) instead of the host's popup command; no
+   socket round-trip is involved.
+4. herdr runs as `herdr --no-session` (monolithic): no server/client split, so
+   a session can never attach to a differently-configured server, and it dies
+   with the jail.
+
+herdr still appends `<repo-name>/<branch-slug>` to its root, so inside the
+sandbox checkouts land one level deeper than on the host:
+
+```
+<parent-of-repo>/<repo>__worktrees/<repo>/<branch-slug>
+```
+
+That is intentional and accepted — it is inside the same sibling directory and
+usable from the host.
+
+Start it from the **main** checkout: only that repository's sibling directory
+is bound, so starting from a linked worktree aborts with an explanatory error.
+The panes run the plain (un-jailed) agent binaries with their real home state
+bound read-write — the jail itself is the sandbox, so no nested sandboxing.
+
+Related: the plain `agent-bubblewrap-pi` wrapper now also `mkdir -p`s the
+sibling directory before binding it
+([`programs.pi-coding-agent/default.nix`](./programs.pi-coding-agent/default.nix),
+`worktreesSiblingPerm`); bubblewrap can only bind a path that already exists,
+so without it the first worktree in a repository could not be created.
 
 ## Applying changes
 
