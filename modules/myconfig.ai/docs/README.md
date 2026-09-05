@@ -51,6 +51,15 @@ user:
   (Alacritty itself stays as the primary user so it can reach the display);
   these are also registered as Wayland `launcherCommands`.
 
+When started from an interactive shell, every `*-alacritty-*` launcher detaches
+itself (`setsid --fork`, output to
+`${XDG_STATE_HOME:-~/.local/state}/myconfig-gui-launchers/<wrapper>.log`) and
+returns immediately, so no manual `… &disown` is needed. Pass `--foreground` or
+set `MYCONFIG_GUI_LAUNCHER_FOREGROUND=1` to keep the old blocking behaviour;
+non-TTY callers keep it automatically. See
+[`../myconfig.ai.workmux/README.md`](../myconfig.ai.workmux/README.md#detached-gui-launchers)
+and [`../../../lib/detached-gui-launcher.nix`](../../../lib/detached-gui-launcher.nix).
+
 **The user model**
 
 - Each agent gets its **own primary group** and a **static uid/gid from a
