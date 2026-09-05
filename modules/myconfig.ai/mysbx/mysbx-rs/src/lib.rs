@@ -5,6 +5,7 @@
 //! implicit init only (the sandbox backend is MVP items 4/5).
 
 pub mod config;
+pub mod merge;
 pub mod repo;
 pub mod toml;
 

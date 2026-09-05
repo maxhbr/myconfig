@@ -80,6 +80,19 @@ grant access the user config does not allow. Rationale: a repo-adjacent file
 must not be able to pull more of the host into the sandbox than the user has
 approved host-wide.
 
+When several user-config grants cover the same path, the **deepest** (most
+specific) grant decides the allowed mode: a narrow `ro` grant beside a
+broad `rw` one cannot be upgraded through the broad one. Mode may equal the
+granted mode or downgrade `rw` → `ro`, never upgrade.
+
+For `[env]` the rule is asymmetric: a sidecar may introduce variables the
+user config never mentions (an invented variable is a value the repo
+already controls), but may not override a variable the user config sets.
+
+When the user config is absent it grants nothing: every sidecar
+`[[mounts]]` entry is an error telling the user to grant the path in the
+user config first. There is no implicit allow-all.
+
 Open question: how a repo requests additional access — a one-off flag, or an
 explicit allow-list entry in the user config keyed by repo path.
 
