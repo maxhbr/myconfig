@@ -234,11 +234,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     let user_config_exists = user_config_path.exists();
     let sidecar_config_exists = sidecar_config_path.exists();
     let user_mount_count = layers.user.0.mounts.len();
+    // `home` is also what `~/…` mount paths expand against (config.md
+    // D8) — on the HOST, before bwrap runs, so the sandbox's own
+    // (cleared) environment never enters the resolution.
     let merged = match merge::merge(
         layers.user.0,
         layers.sidecar.0,
         &layers.user.1,
         &layers.sidecar.1,
+        std::path::Path::new(&home),
     ) {
         Ok(m) => m,
         Err(e) => {

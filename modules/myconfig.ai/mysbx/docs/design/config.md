@@ -58,6 +58,8 @@ config that can execute is config that can escape.
 ### D5: What the sidecar config decides
 
 - additional host paths mounted into the sandbox (`[[mounts]]`), with mode
+  (each written absolute, `~/…`, or relative to the sidecar's own
+  directory — see D8)
 - the backend and its resource limits
 - network policy (`network = false` is the deny switch; the network is
   shared by default)
@@ -76,7 +78,9 @@ and a per-repo sidecar cannot silently widen them (see D7).
 On myconfig hosts the user config is not hand-written: the NixOS module
 (`../../default.nix`) generates `~/.config/mysbx/config.toml` from the
 `myconfig.ai.mysbx.config` option, with a read-only baseline of grants for
-the host tool config this repo manages (`~/.config/{git,ripgrep,bat,fish}`).
+the host tool config this repo manages, written with the `~/` prefix
+(`~/.config/{git,ripgrep,bat,fish}`) so the generated file needs no
+home-directory lookup at build time — mysbx expands it at run time (D8).
 Other modules extend it by appending to `myconfig.ai.mysbx.config.mounts`.
 Outside myconfig the file stays an ordinary hand-written file; mysbx itself
 knows nothing about where it came from.
@@ -104,11 +108,40 @@ user config first. There is no implicit allow-all.
 Open question: how a repo requests additional access — a one-off flag, or an
 explicit allow-list entry in the user config keyed by repo path.
 
-### D8: Paths are absolute and resolved eagerly
+### D8: Paths are resolved eagerly, to absolute paths
 
-Every path in the configuration is absolute and is canonicalized when the
-config is loaded, before the backend starts. Broken paths fail fast with a
-clear error instead of producing a sandbox with a silently missing mount.
+A `[[mounts]]` host path may be written in three ways:
+
+- **absolute** — taken as written;
+- **`~/…`** — expanded against the invoking user's `$HOME`. Only the `~/`
+  prefix is supported: `~` alone and `~user/…` are schema errors, because
+  "another user's home" is a passwd lookup this tool deliberately does not
+  do;
+- **relative** — resolved against the directory of *the config file that
+  declared it*. The same string therefore means `~/.config/mysbx/state`
+  in the user config and `<repo>.mysbx/state` in a sidecar config; a
+  sidecar path never resolves against the user config's directory.
+
+`..` is allowed in every form: canonicalization resolves it, and the D7
+grant check then compares canonicalized absolute paths on both sides — so
+no `~/…` or `../…` spelling can slip a path past a grant.
+
+Resolution and canonicalization happen when the config is loaded, before
+the merge and before the backend starts. Broken paths fail fast with a
+clear error — naming the file, the path *as written* and, when it
+differs, the resolved path — instead of producing a sandbox with a
+silently missing mount.
+
+Parsing itself stays string-level and knows nothing about `$HOME` or the
+file it is reading (`mysbx-rs/src/config.rs` stores the path verbatim);
+`mysbx-rs/src/merge.rs` owns the resolution, because it is the only place
+that knows both. Resolution runs on the **host**, before the backend is
+executed, so the sandbox's own (cleared) environment never influences it.
+
+`dest` is the exception: it stays absolute-only. It names a path in the
+sandbox's filesystem view, where there is no host home to expand and no
+config file to be relative to, and it is never canonicalized against the
+host.
 
 ### D9: A strong accident barrier, a moderate malice barrier
 

@@ -1,0 +1,5 @@
+# Only the `~/` prefix is supported (docs/design/config.md D8): `~` alone
+# and `~user` would require a passwd lookup this tool does not do.
+[[mounts]]
+path = "~other/data"
+mode = "ro"

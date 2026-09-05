@@ -39,10 +39,26 @@
 //! A violation is a hard error naming the offending key, the sidecar path
 //! and the granting (or missing) user-config entry — never a warning.
 //!
-//! Every path is canonicalized eagerly, before the merge, and fails on a
-//! missing path (docs/design/config.md D8) — so the error message points
-//! at the layer that wrote the path. The containment comparison uses the
-//! canonicalized paths on *both* sides: symlink resolution can turn a
+//! Every path is *resolved* and canonicalized eagerly, before the merge,
+//! and fails on a missing path (docs/design/config.md D8) — so the error
+//! message points at the layer that wrote the path. Resolution is this
+//! module's job because it is the only one that knows both `$HOME` and
+//! which file each mount came from:
+//!
+//! - `~/…` → expanded against `$HOME` (the `home` argument), the same
+//!   home for both layers: there is one invoking user.
+//! - a relative path → resolved against the **directory of the config
+//!   file that declared it**, so a user-config `foo` is
+//!   `~/.config/mysbx/foo` while a sidecar `foo` is
+//!   `<repo>.mysbx/foo`. A sidecar path never resolves against the user
+//!   config's directory.
+//! - an absolute path → taken as is.
+//!
+//! `..` is allowed in every form: canonicalization resolves it and the
+//! D7 grant check then runs on the canonicalized absolute path, so a
+//! `../…` or `~/…` spelling cannot slip a path past a grant.
+//!
+//! The containment comparison uses the canonicalized paths on *both* sides: symlink resolution can turn a
 //! granted path into one outside the grant, and that is said loudly in
 //! the error instead of silently passing or failing.
 //!
@@ -90,6 +106,11 @@ pub enum Error {
     Canonicalize {
         file: PathBuf,
         key: String,
+        /// The path exactly as written in the file, before `~/`
+        /// expansion and relative resolution — what the user has to
+        /// search for in their editor.
+        raw: String,
+        /// The resolved (absolute, not yet canonicalized) path.
         path: PathBuf,
         source: String,
     },
@@ -113,14 +134,20 @@ impl fmt::Display for Error {
             Error::Canonicalize {
                 file,
                 key,
+                raw,
                 path,
                 source,
             } => write!(
                 f,
-                "{}: `{}`: cannot canonicalize {} — every path must exist and resolve (docs/design/config.md D8): {}",
+                "{}: `{}`: cannot canonicalize `{}`{} — every path must exist and resolve (docs/design/config.md D8): {}",
                 file.display(),
                 key,
-                path.display(),
+                raw,
+                if Path::new(raw) == path {
+                    String::new()
+                } else {
+                    format!(" (resolved to {})", path.display())
+                },
                 source,
             ),
             Error::MountNotGranted { message } => f.write_str(message),
@@ -199,23 +226,57 @@ fn load_optional(path: &Path, layer: &str) -> Result<Config, Error> {
     }
 }
 
-/// Canonicalize every `[[mounts]]` path of one layer, eagerly, failing on
-/// a missing path (docs/design/config.md D8); the error points at the
-/// file that wrote the path, so it is produced before the merge starts.
+/// Resolve one `[[mounts]]` path as written into an absolute host path
+/// (docs/design/config.md D8):
+///
+/// - `~/…` → against `home` (the invoking user's home; both layers see
+///   the same one),
+/// - relative → against `config_dir`, the directory of the config file
+///   that declared the path,
+/// - absolute → unchanged.
+///
+/// The result is not canonicalized yet (`..` and symlinks survive); that
+/// is the caller's next step.
+fn resolve_path(raw: &str, home: &Path, config_dir: &Path) -> PathBuf {
+    if let Some(rest) = raw.strip_prefix("~/") {
+        // `~/` alone cannot occur: the parser rejects every `~` spelling
+        // but the `~/` prefix (config.rs).
+        home.join(rest)
+    } else if Path::new(raw).is_absolute() {
+        PathBuf::from(raw)
+    } else {
+        config_dir.join(raw)
+    }
+}
+
+/// Resolve and canonicalize every `[[mounts]]` path of one layer,
+/// eagerly, failing on a missing path (docs/design/config.md D8); the
+/// error points at the file that wrote the path, so it is produced
+/// before the merge starts.
+///
+/// Relative paths resolve against `file`'s own directory — the per-layer
+/// rule: the sidecar's `../secrets` is relative to `<repo>.mysbx/`, never
+/// to the user config's directory.
 ///
 /// `dest` is deliberately NOT canonicalized: it is an in-sandbox path,
 /// so canonicalizing it against the host filesystem would be wrong. Do
 /// not "fix" this.
-fn canonicalize_layer(cfg: &Config, file: &Path) -> Result<Vec<(PathBuf, Mount)>, Error> {
+fn canonicalize_layer(
+    cfg: &Config,
+    file: &Path,
+    home: &Path,
+) -> Result<Vec<(PathBuf, Mount)>, Error> {
+    let config_dir = file.parent().unwrap_or(Path::new("."));
     cfg.mounts
         .iter()
         .enumerate()
         .map(|(i, m)| {
-            let raw = PathBuf::from(&m.path);
-            let canon = std::fs::canonicalize(&raw).map_err(|e| Error::Canonicalize {
+            let resolved = resolve_path(&m.path, home, config_dir);
+            let canon = std::fs::canonicalize(&resolved).map_err(|e| Error::Canonicalize {
                 file: file.to_owned(),
                 key: format!("[[mounts]] #{}", i + 1),
-                path: raw.clone(),
+                raw: m.path.clone(),
+                path: resolved.clone(),
                 source: e.to_string(),
             })?;
             Ok((canon, m.clone()))
@@ -241,16 +302,23 @@ fn contains(grant: &Path, sub: &Path) -> bool {
 /// sidecar is guaranteed to exist by item 2, but both are accepted as
 /// plain `Config` values — absence was already turned into the empty
 /// default layer by `load_layers`.
+///
+/// `home` is the invoking user's home, used to expand `~/…` paths in
+/// *both* layers; relative paths resolve against each layer's own config
+/// file directory (see the module docs).
 pub fn merge(
     user: Config,
     sidecar: Config,
     user_file: &Path,
     sidecar_file: &Path,
+    home: &Path,
 ) -> Result<Merged, Error> {
-    // D8: canonicalize every path eagerly, before the merge, so error
-    // messages point at the layer that wrote the path.
-    let granted = canonicalize_layer(&user, user_file)?;
-    let sidecar_canon = canonicalize_layer(&sidecar, sidecar_file)?;
+    // D8: resolve and canonicalize every path eagerly, before the merge,
+    // so error messages point at the layer that wrote the path — and so
+    // the grant check below compares canonicalized absolute paths, which
+    // no `~/` or `../` spelling can slip past.
+    let granted = canonicalize_layer(&user, user_file, home)?;
+    let sidecar_canon = canonicalize_layer(&sidecar, sidecar_file, home)?;
 
     // network: the sidecar may deny (false), not re-enable (D7).
     if !user.network && sidecar.network {
@@ -384,6 +452,13 @@ mod tests {
         PathBuf::from("/tmp/fake-repo.mysbx/config.toml")
     }
 
+    /// The home for tests whose paths are all absolute: `~/` expansion
+    /// must not be reachable there, so a path that does not exist makes
+    /// an accidental expansion fail loudly.
+    fn no_home() -> PathBuf {
+        PathBuf::from("/nonexistent-home")
+    }
+
     /// Build real directories under `base` (so canonicalization works)
     /// and return their canonical paths.
     fn dir(base: &Path, parts: &[&str]) -> PathBuf {
@@ -414,6 +489,7 @@ mod tests {
             Config::default(),
             &user_file(),
             &sidecar_file(),
+            &no_home(),
         )
         .unwrap_err();
         match e {
@@ -437,7 +513,7 @@ mod tests {
         let ghost = base.join("missing");
         let u = cfg(&mount_toml(&good, "rw"));
         let s = cfg(&mount_toml(&ghost, "ro"));
-        let e = merge(u, s, &user_file(), &sidecar_file()).unwrap_err();
+        let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         match e {
             Error::Canonicalize {
                 ref file, ref path, ..
@@ -458,7 +534,7 @@ mod tests {
         let granted = dir(&base, &["some", "path"]);
         let u = cfg(&mount_toml(&granted, "rw"));
         let s = cfg(&mount_toml(&granted, "rw"));
-        let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert_eq!(merged.mounts.len(), 2);
         assert!(merged
             .mounts
@@ -477,7 +553,7 @@ mod tests {
 
         let u = cfg(&mount_toml(&granted, "rw"));
         let stoml = mount_toml(&below, "ro") + &mount_toml(&sibling, "ro");
-        let e = merge(u, cfg(&stoml), &user_file(), &sidecar_file()).unwrap_err();
+        let e = merge(u, cfg(&stoml), &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         assert!(matches!(e, Error::MountNotGranted { .. }), "{e}");
         // The message names the offending path, the sidecar file and the
         // missing user-config entry.
@@ -495,7 +571,7 @@ mod tests {
         let deep = dir(&granted, &["data", "sub"]);
         let u = cfg(&mount_toml(&granted, "rw"));
         let s = cfg(&mount_toml(&deep, "ro"));
-        let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert_eq!(merged.mounts.len(), 2);
         assert_eq!(merged.mounts[1].path, deep.to_string_lossy());
         assert_eq!(merged.mounts[1].mode, Mode::Ro);
@@ -511,7 +587,7 @@ mod tests {
 
         let u = cfg(&mount_toml(&granted, "rw"));
         let s = cfg(&mount_toml(&sibling, "ro"));
-        let e = merge(u, s, &user_file(), &sidecar_file()).unwrap_err();
+        let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         assert!(matches!(e, Error::MountNotGranted { .. }), "{e}");
     }
 
@@ -523,7 +599,7 @@ mod tests {
 
         let u = cfg(&mount_toml(&granted, "ro"));
         let s = cfg(&mount_toml(&below, "rw"));
-        let e = merge(u, s, &user_file(), &sidecar_file()).unwrap_err();
+        let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         assert!(matches!(e, Error::MountUpgrade { .. }), "{e}");
         let msg = e.to_string();
         assert!(msg.contains("never upgrade"), "{msg}");
@@ -539,7 +615,7 @@ mod tests {
 
         let u = cfg(&mount_toml(&granted, "rw"));
         let s = cfg(&mount_toml(&below, "ro"));
-        let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert_eq!(merged.mounts.len(), 2);
         assert_eq!(merged.mounts[0].mode, Mode::Rw);
         assert_eq!(merged.mounts[1].mode, Mode::Ro);
@@ -554,7 +630,7 @@ mod tests {
         u.env.insert("USER_ONLY".to_owned(), "u".to_owned());
         let s = cfg("[env]\nSIDECAR_NEW = \"invented\"\n");
 
-        let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert_eq!(merged.env.len(), 2);
         assert_eq!(merged.env.get("SIDECAR_NEW").unwrap(), "invented");
         assert_eq!(merged.env.get("USER_ONLY").unwrap(), "u");
@@ -566,7 +642,7 @@ mod tests {
         u.env.insert("EDITOR".to_owned(), "system-nvim".to_owned());
         let s = cfg("[env]\nEDITOR = \"repo-nvim\"\n");
 
-        let e = merge(u, s, &user_file(), &sidecar_file()).unwrap_err();
+        let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         match e {
             Error::EnvOverride { ref key, .. } => assert_eq!(key, "EDITOR"),
             other => panic!("wrong error: {other}"),
@@ -584,7 +660,7 @@ mod tests {
         let mut s = Config::default();
         s.network = true; // the sidecar re-enables: hard error
 
-        let e = merge(u, s, &user_file(), &sidecar_file()).unwrap_err();
+        let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         assert!(matches!(e, Error::NetworkUpgrade { .. }), "{e}");
         let msg = e.to_string();
         assert!(msg.contains("network"), "{msg}");
@@ -599,7 +675,7 @@ mod tests {
         let mut s = Config::default();
         s.network = false;
 
-        let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert!(!merged.network);
     }
 
@@ -610,7 +686,7 @@ mod tests {
         let mut s = Config::default();
         s.network = false;
 
-        let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert!(!merged.network);
     }
 
@@ -627,6 +703,7 @@ mod tests {
             cfg(&mount_toml(&wanted, "ro")),
             &user_file(),
             &sidecar_file(),
+            &no_home(),
         )
         .unwrap_err();
         assert!(matches!(e, Error::MountNotGranted { .. }), "{e}");
@@ -647,11 +724,19 @@ mod tests {
             cfg("[env]\nFOO = \"1\"\n"),
             &user_file(),
             &sidecar_file(),
+            &no_home(),
         )
         .unwrap();
         assert_eq!(merged.env.get("FOO").unwrap(), "1");
 
-        let merged = merge(Config::default(), s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(
+            Config::default(),
+            s,
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
         assert!(!merged.network);
         assert!(merged.mounts.is_empty());
     }
@@ -671,7 +756,7 @@ mod tests {
 
         let u = cfg(&mount_toml(&granted, "rw"));
         let s = cfg(&mount_toml(&link, "ro"));
-        let e = merge(u, s, &user_file(), &sidecar_file()).unwrap_err();
+        let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         assert!(
             matches!(e, Error::MountNotGranted { .. }),
             "a symlink resolving outside the grant must be rejected: {e}"
@@ -691,7 +776,7 @@ mod tests {
 
         let u = cfg(&mount_toml(&granted, "rw"));
         let s = cfg(&mount_toml(&link, "ro"));
-        let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert_eq!(merged.mounts.len(), 2);
         assert_eq!(merged.mounts[1].path, real.to_string_lossy());
     }
@@ -708,7 +793,7 @@ mod tests {
 
         let u = cfg(&mount_toml(&outer, "rw"));
         let s = cfg(&(mount_toml(&outer, "ro") + &mount_toml(&inner, "rw")));
-        let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert_eq!(merged.mounts.len(), 3);
         assert_eq!(merged.mounts[0].path, outer.to_string_lossy());
         assert_eq!(merged.mounts[0].mode, Mode::Rw);
@@ -725,19 +810,33 @@ mod tests {
         // layer precedence (D6: later layers override earlier ones).
         let mut u = Config::default();
         u.backend = Some("bubblewrap".to_owned());
-        let merged = merge(u, Config::default(), &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(
+            u,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
         assert_eq!(merged.backend.as_deref(), Some("bubblewrap"));
 
         let mut s = Config::default();
         s.backend = Some("qemu".to_owned());
-        let merged = merge(Config::default(), s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(
+            Config::default(),
+            s,
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
         assert_eq!(merged.backend.as_deref(), Some("qemu"));
 
         let mut u = Config::default();
         u.backend = Some("bubblewrap".to_owned());
         let mut s = Config::default();
         s.backend = Some("microvm".to_owned());
-        let merged = merge(u, s, &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert_eq!(merged.backend.as_deref(), Some("microvm"));
     }
 
@@ -772,6 +871,7 @@ mod tests {
             layers.sidecar.0,
             &layers.user.1,
             &layers.sidecar.1,
+            &home,
         )
         .unwrap();
         assert_eq!(merged.mounts.len(), 2);
@@ -880,7 +980,14 @@ mod tests {
             mount_toml(&outer, "ro"),
             mount_toml(&secret, "rw")
         ));
-        let merged = merge(u, Config::default(), &user_file(), &sidecar_file()).unwrap();
+        let merged = merge(
+            u,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
         assert_eq!(merged.mounts.len(), 2);
 
         // rw-outer/ro-deeper: asking for the deeper ro path is a legal
@@ -896,6 +1003,7 @@ mod tests {
             cfg(&mount_toml(&secret, "ro")),
             &user_file(),
             &sidecar_file(),
+            &no_home(),
         )
         .unwrap();
         assert_eq!(merged.mounts.len(), 3);
@@ -905,6 +1013,7 @@ mod tests {
             cfg(&mount_toml(&sub, "rw")),
             &user_file(),
             &sidecar_file(),
+            &no_home(),
         )
         .unwrap_err();
         assert!(matches!(e, Error::MountUpgrade { .. }), "{e}");
@@ -921,6 +1030,7 @@ mod tests {
             cfg(&mount_toml(&other, "rw")),
             &user_file(),
             &sidecar_file(),
+            &no_home(),
         )
         .unwrap();
         assert_eq!(merged.mounts.len(), 3);
@@ -940,6 +1050,7 @@ mod tests {
             cfg(&mount_toml(&wanted, "ro")),
             &user_file(),
             &sidecar_file(),
+            &no_home(),
         )
         .unwrap();
         assert_eq!(merged.mounts.len(), 2);
@@ -950,8 +1061,191 @@ mod tests {
             cfg(&mount_toml(&wanted, "rw")),
             &user_file(),
             &sidecar_file(),
+            &no_home(),
         )
         .unwrap_err();
         assert!(matches!(e, Error::MountUpgrade { .. }), "{e}");
+    }
+
+    // ---- path resolution (docs/design/config.md D8) -------------------
+
+    #[test]
+    fn resolve_path_covers_the_three_spellings() {
+        let home = Path::new("/home/u");
+        let dir = Path::new("/etc/xdg/mysbx");
+        assert_eq!(
+            resolve_path("~/.config/git", home, dir),
+            PathBuf::from("/home/u/.config/git")
+        );
+        assert_eq!(
+            resolve_path("sub/data", home, dir),
+            PathBuf::from("/etc/xdg/mysbx/sub/data")
+        );
+        assert_eq!(
+            resolve_path("../secrets", home, dir),
+            PathBuf::from("/etc/xdg/mysbx/../secrets")
+        );
+        assert_eq!(resolve_path("/abs", home, dir), PathBuf::from("/abs"));
+    }
+
+    #[test]
+    fn tilde_expands_against_home_in_both_layers() {
+        // One home for both layers: there is one invoking user.
+        let base = tmpdir("tilde-both");
+        let home = dir(&base, &["home", "u"]);
+        let granted = dir(&home, &[".config", "git"]);
+
+        let u = cfg("[[mounts]]\npath = \"~/.config/git\"\nmode = \"rw\"\n");
+        let s = cfg("[[mounts]]\npath = \"~/.config/git\"\nmode = \"ro\"\n");
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &home).unwrap();
+        assert_eq!(merged.mounts.len(), 2);
+        assert_eq!(merged.mounts[0].path, granted.to_string_lossy());
+        assert_eq!(merged.mounts[1].path, granted.to_string_lossy());
+        assert_eq!(merged.mounts[1].mode, Mode::Ro);
+    }
+
+    #[test]
+    fn relative_paths_resolve_per_layer() {
+        // The key per-layer rule: the same relative string in the two
+        // layers resolves against two different directories \u2014 each
+        // layer's own config file directory.
+        let base = tmpdir("relative-per-layer");
+        let user_dir = dir(&base, &["xdg", "mysbx"]);
+        let sidecar_dir = dir(&base, &["repo.mysbx"]);
+        let user_rel = dir(&user_dir, &["granted"]);
+        let sidecar_rel = dir(&sidecar_dir, &["granted"]);
+        let ufile = user_dir.join("config.toml");
+        let sfile = sidecar_dir.join("config.toml");
+
+        // The user config grants both its own `granted/` and, via `../`,
+        // the sidecar's directory \u2014 so the sidecar's own relative path
+        // is covered and the resolution difference is visible.
+        let u = cfg(&format!(
+            "[[mounts]]\npath = \"granted\"\nmode = \"rw\"\n{}",
+            mount_toml(&sidecar_dir, "rw")
+        ));
+        let s = cfg("[[mounts]]\npath = \"granted\"\nmode = \"ro\"\n");
+        let merged = merge(u, s, &ufile, &sfile, &no_home()).unwrap();
+        assert_eq!(merged.mounts[0].path, user_rel.to_string_lossy());
+        assert_eq!(
+            merged.mounts[2].path,
+            sidecar_rel.to_string_lossy(),
+            "a sidecar relative path must resolve against the sidecar directory"
+        );
+    }
+
+    #[test]
+    fn sidecar_relative_path_does_not_borrow_the_user_directory() {
+        // The negative half of the per-layer rule: a relative path that
+        // exists next to the USER config is not found next to the
+        // sidecar config, and fails there \u2014 with the sidecar named.
+        let base = tmpdir("relative-not-shared");
+        let user_dir = dir(&base, &["xdg", "mysbx"]);
+        let sidecar_dir = dir(&base, &["repo.mysbx"]);
+        let only_user_side = dir(&user_dir, &["only-here"]);
+        let ufile = user_dir.join("config.toml");
+        let sfile = sidecar_dir.join("config.toml");
+
+        let u = cfg(&mount_toml(&base, "rw"));
+        let s = cfg("[[mounts]]\npath = \"only-here\"\nmode = \"ro\"\n");
+        let e = merge(u, s, &ufile, &sfile, &no_home()).unwrap_err();
+        match e {
+            Error::Canonicalize {
+                ref file,
+                ref raw,
+                ref path,
+                ..
+            } => {
+                assert_eq!(file, &sfile);
+                assert_eq!(raw, "only-here");
+                assert_eq!(path, &sidecar_dir.join("only-here"));
+                assert_ne!(path, &only_user_side);
+            }
+            other => panic!("wrong error: {other}"),
+        }
+        // The message names the path as written AND the resolved one.
+        let msg = e.to_string();
+        assert!(msg.contains("`only-here`"), "{msg}");
+        assert!(msg.contains("resolved to"), "{msg}");
+    }
+
+    #[test]
+    fn sidecar_tilde_path_outside_grants_is_rejected() {
+        // D7 on canonicalized paths: a `~/` spelling cannot slip a path
+        // past the grant logic.
+        let base = tmpdir("tilde-ungranted");
+        let home = dir(&base, &["home", "u"]);
+        let granted = dir(&home, &[".config", "git"]);
+        let _secret = dir(&home, &[".ssh"]);
+
+        let u = cfg(&mount_toml(&granted, "rw"));
+        let s = cfg("[[mounts]]\npath = \"~/.ssh\"\nmode = \"ro\"\n");
+        let e = merge(u, s, &user_file(), &sidecar_file(), &home).unwrap_err();
+        assert!(matches!(e, Error::MountNotGranted { .. }), "{e}");
+        // The rejection names the RESOLVED path: that is what would have
+        // been mounted.
+        assert!(
+            e.to_string()
+                .contains(&home.join(".ssh").display().to_string()),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn dotdot_is_resolved_before_the_grant_check() {
+        // `..` is allowed (it canonicalizes away); the grant check then
+        // sees the real target, so escaping the granted tree with `../`
+        // is a rejection, staying inside it is accepted.
+        let base = tmpdir("dotdot");
+        let sidecar_dir = dir(&base, &["repo.mysbx"]);
+        let granted = dir(&base, &["repo.mysbx", "state"]);
+        let _outside = dir(&base, &["outside"]);
+        let sfile = sidecar_dir.join("config.toml");
+
+        let u = cfg(&mount_toml(&granted, "rw"));
+        let inside = cfg("[[mounts]]\npath = \"../repo.mysbx/state\"\nmode = \"ro\"\n");
+        let merged = merge(u.clone(), inside, &user_file(), &sfile, &no_home()).unwrap();
+        assert_eq!(merged.mounts[1].path, granted.to_string_lossy());
+
+        let escaping = cfg("[[mounts]]\npath = \"../outside\"\nmode = \"ro\"\n");
+        let e = merge(u, escaping, &user_file(), &sfile, &no_home()).unwrap_err();
+        assert!(matches!(e, Error::MountNotGranted { .. }), "{e}");
+    }
+
+    #[test]
+    fn load_layers_and_merge_resolve_tilde_and_relative() {
+        // End-to-end through `load_layers`: the user config uses `~/`,
+        // the sidecar a path relative to its own directory.
+        let base = tmpdir("load-resolve");
+        let home = dir(&base, &["home"]);
+        let granted = dir(&home, &["data"]);
+        let sd = dir(&base, &["fake-repo.mysbx"]);
+        let below = dir(&granted, &["sub"]);
+
+        std::fs::create_dir_all(home.join(".config").join("mysbx")).unwrap();
+        std::fs::write(
+            home.join(".config").join("mysbx").join("config.toml"),
+            "[[mounts]]\npath = \"~/data\"\nmode = \"rw\"\n",
+        )
+        .unwrap();
+        // `../home/data/sub`, relative to `<base>/fake-repo.mysbx/`.
+        std::fs::write(
+            sd.join("config.toml"),
+            "[[mounts]]\npath = \"../home/data/sub\"\nmode = \"ro\"\n",
+        )
+        .unwrap();
+
+        let layers = load_layers(&home, None, &sd).unwrap();
+        let merged = merge(
+            layers.user.0,
+            layers.sidecar.0,
+            &layers.user.1,
+            &layers.sidecar.1,
+            &home,
+        )
+        .unwrap();
+        assert_eq!(merged.mounts.len(), 2);
+        assert_eq!(merged.mounts[0].path, granted.to_string_lossy());
+        assert_eq!(merged.mounts[1].path, below.to_string_lossy());
     }
 }

@@ -43,8 +43,17 @@ impl fmt::Display for Mode {
 /// One additional host path exposed inside the sandbox.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount {
+    /// The host path **as written** in the file: absolute, `~/…` or
+    /// relative to the directory of the config file that declared it.
+    /// Parsing is string-level only; expansion and canonicalization
+    /// happen in `crate::merge` (docs/design/config.md D8), which is the
+    /// only place that knows `$HOME` and the file each mount came from.
     pub path: String,
     /// Destination inside the sandbox; `None` means "same path".
+    /// Always absolute: it names a path in the sandbox's own filesystem
+    /// view, so neither `~/` (no host home in there) nor "relative to the
+    /// config file" (a host location) would mean anything
+    /// (docs/design/config.md D8).
     pub dest: Option<String>,
     /// Defaults to `ro` (D9: nothing from the host filesystem unless
     /// declared).
@@ -160,7 +169,7 @@ fn mounts(value: &Value) -> Result<Vec<Mount>, Error> {
         for (key, value) in t {
             match key.as_str() {
                 "path" => {
-                    path = Some(absolute(
+                    path = Some(host_path(
                         string(value, &format!("{at}: path"))?,
                         &format!("{at}: path"),
                     )?)
@@ -233,14 +242,42 @@ fn table<'v>(value: &'v Value, at: &str) -> Result<&'v Table, Error> {
     })
 }
 
-/// Paths in the configuration are absolute (docs/design/config.md D8).
-/// Canonicalization happens later, when the backend is prepared; a relative
-/// path is a configuration mistake and is rejected here.
+/// A host path of a `[[mounts]]` entry (docs/design/config.md D8). It may
+/// be absolute, `~/…` (the invoking user's home) or relative to the
+/// directory of the config file that declared it. Parsing stays
+/// string-level: the parser knows neither `$HOME` nor which file it is
+/// reading, so expansion and canonicalization happen in `crate::merge`,
+/// eagerly, before the merge.
+///
+/// Rejected here are only the spellings that can never be resolved: the
+/// empty string, and a `~` that is not the `~/` prefix — `~` alone and
+/// `~user/…` are not supported, because "another user's home" is a
+/// lookup this tool deliberately does not do.
+fn host_path(path: &str, at: &str) -> Result<String, Error> {
+    if path.is_empty() {
+        return Err(Error::Schema(format!("{at}: must not be empty")));
+    }
+    if path.starts_with('~') && !path.starts_with("~/") {
+        return Err(Error::Schema(format!(
+            "{at}: only the `~/` prefix is supported, not `~` alone or `~user`: `{path}`"
+        )));
+    }
+    Ok(path.to_owned())
+}
+
+/// A `dest` is absolute (docs/design/config.md D8). Unlike a mount's
+/// host path it is an *in-sandbox* path: there is no host home to expand
+/// `~/` against and no config file to be relative to inside the sandbox's
+/// filesystem view, and it is never canonicalized against the host (see
+/// `crate::merge::canonicalize_layer`). Anything but an absolute path is
+/// therefore a configuration mistake and is rejected here.
 fn absolute(path: &str, at: &str) -> Result<String, Error> {
     if Path::new(path).is_absolute() {
         Ok(path.to_owned())
     } else {
-        Err(Error::Schema(format!("{at}: must be absolute: `{path}`")))
+        Err(Error::Schema(format!(
+            "{at}: must be absolute (it is a path inside the sandbox: no `~/`, no relative paths): `{path}`"
+        )))
     }
 }
 
@@ -284,8 +321,39 @@ mod tests {
     }
 
     #[test]
-    fn relative_paths_are_rejected() {
-        let e = Config::parse("[[mounts]]\npath = \"rel\"\n").unwrap_err();
-        assert!(e.to_string().contains("must be absolute"), "{e}");
+    fn relative_and_home_paths_are_accepted_verbatim() {
+        // The parser stores the path as written; `crate::merge` expands
+        // `~/` and resolves relative paths against the config file's
+        // directory (docs/design/config.md D8).
+        let c = Config::parse("[[mounts]]\npath = \"rel/sub\"\n").unwrap();
+        assert_eq!(c.mounts[0].path, "rel/sub");
+        let c = Config::parse("[[mounts]]\npath = \"~/.config/git\"\n").unwrap();
+        assert_eq!(c.mounts[0].path, "~/.config/git");
+        let c = Config::parse("[[mounts]]\npath = \"../outside\"\n").unwrap();
+        assert_eq!(c.mounts[0].path, "../outside");
+    }
+
+    #[test]
+    fn unsupported_tilde_spellings_are_rejected() {
+        for p in ["~", "~other", "~other/data"] {
+            let e = Config::parse(&format!("[[mounts]]\npath = \"{p}\"\n")).unwrap_err();
+            assert!(e.to_string().contains("only the `~/` prefix"), "{p}: {e}");
+        }
+    }
+
+    #[test]
+    fn empty_path_is_rejected() {
+        let e = Config::parse("[[mounts]]\npath = \"\"\n").unwrap_err();
+        assert!(e.to_string().contains("must not be empty"), "{e}");
+    }
+
+    #[test]
+    fn non_absolute_dest_is_rejected() {
+        // `dest` is an in-sandbox path and stays absolute-only.
+        for d in ["rel", "~/inside"] {
+            let e =
+                Config::parse(&format!("[[mounts]]\npath = \"/a\"\ndest = \"{d}\"\n")).unwrap_err();
+            assert!(e.to_string().contains("must be absolute"), "{d}: {e}");
+        }
     }
 }
