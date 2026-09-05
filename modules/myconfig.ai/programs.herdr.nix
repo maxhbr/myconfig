@@ -27,6 +27,11 @@
 }:
 let
   osconfig = config;
+
+  # Shell prelude that makes the GUI launcher detach from the calling shell
+  # (see ./myconfig.ai.workmux/jail.nix for the other user of it).
+  detachedGuiLauncher = import ../../lib/detached-gui-launcher.nix { inherit lib pkgs; };
+
   jail-app = import ./fns/bubblewrap-app.nix {
     inherit
       lib
@@ -578,6 +583,58 @@ let
     extraPermissions = [ worktreesSiblingPerm ];
   };
 
+  # --- agent-bubblewrap-alacritty-herdr ---------------------------------
+  # The GUI counterpart of `agent-bubblewrap-herdr`: the identical jail, but
+  # opened in its own Alacritty window instead of taking over the calling
+  # terminal. Same relationship as `agent-bubblewrap-alacritty-workmux-tmux`
+  # to `agent-bubblewrap-workmux-tmux` (./myconfig.ai.workmux/jail.nix).
+  #
+  # The window inherits the invocation directory (`--working-directory`), which
+  # is what the jail binds read-write (`mount-cwd`) and what the entrypoint
+  # roots herdr's first workspace at — so running it from a project checkout
+  # gives exactly the session `agent-bubblewrap-herdr` would give in-terminal.
+  #
+  # Validation that the jail would otherwise only report from *inside* the
+  # window (where the message vanishes with the window on exit) is done here,
+  # in the calling terminal, before Alacritty is started. Unlike the workmux
+  # launcher this does NOT refuse linked worktrees: the herdr jail supports
+  # them (it binds the shared git directory, see ./programs.herdr.README.md).
+  agent-bubblewrap-alacritty-herdr = pkgs.writeShellApplication {
+    name = "agent-bubblewrap-alacritty-herdr";
+    runtimeInputs = [
+      pkgs.alacritty
+      pkgs.git
+      pkgs.coreutils
+      agent-bubblewrap-herdr
+    ];
+    text = ''
+      ${detachedGuiLauncher { name = "agent-bubblewrap-alacritty-herdr"; }}
+
+      # Mirrors the jail's own `rejectHomeCwd` guard (../fns/bubblewrap-app.nix):
+      # the working directory is bound read-write into the jail, so $HOME would
+      # expose the entire home directory to the agents herdr launches.
+      if [ "$PWD" = "$HOME" ]; then
+        echo "agent-bubblewrap-alacritty-herdr: refusing to run in home directory ($HOME):" >&2
+        echo "agent-bubblewrap-alacritty-herdr: the working directory is bound read-write into the jail." >&2
+        echo "agent-bubblewrap-alacritty-herdr: run from a project subdirectory instead." >&2
+        exit 1
+      fi
+
+      # Not a hard error (the jail starts herdr outside a repository too, only
+      # the worktree actions are then useless) - but say so in the terminal,
+      # because the entrypoint's note scrolls away inside the TUI window.
+      if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo "agent-bubblewrap-alacritty-herdr: not inside a git repository: $PWD" >&2
+        echo "agent-bubblewrap-alacritty-herdr: starting anyway; worktree actions are not usable there." >&2
+      fi
+
+      gui_launcher_exec alacritty \
+        --title "herdr: $(basename "$PWD")" \
+        --working-directory "$PWD" \
+        -e agent-bubblewrap-herdr "$@"
+    '';
+  };
+
   # The coding-agent CLIs this repo can install on the host, mapped from
   # their `myconfig.ai.<name>.enable` flag to the package attribute the
   # matching host wrapper uses. Mirrors the `agentPackagesByFlag` set in
@@ -799,6 +856,7 @@ in
           herdr
           herdr-worktree-sibling
           agent-bubblewrap-herdr
+          agent-bubblewrap-alacritty-herdr
           agent-qemu-herdr
         ];
         xdg.configFile."herdr/config.toml".text = herdrConfig;
