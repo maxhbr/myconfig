@@ -53,9 +53,11 @@ $ mysbx --verbose --dry-run
 ## mounts:         2 (in declaration order)
 ##   rw /path/to/the/repo -> /path/to/the/repo  [repo, implicit]
 ##   ro /home/user/data -> /data  [user config]
+## home:           /mysbx-home (tmpfs; the host home is not mounted)
 ## env:            1 forwarded from the host, 1 from [env] (values shown verbatim — they may be secrets)
 ##   TERM=xterm-256color  [host]
 ##   EDITOR=nvim  [config]
+##   HOME=/mysbx-home  [sandbox home]
 ##   PATH=/nix/store/…-mysbx-tools/bin  [tools]
 ## bwrap:          /nix/store/…-bubblewrap/bin/bwrap
 ## shell:          /nix/store/…-bash/bin/bash
@@ -75,6 +77,10 @@ The `config.toml` file in the sidecar defines
 - additional mounts into the sandbox and the forwarded environment
   - the repo itself is implicit: always available rw at its real path,
     not expressible in the config
+  - `$HOME` inside the sandbox is implicit too: an empty tmpfs at
+    `/mysbx-home` (the host home is never mounted), and `HOME` and `PATH`
+    are set after `[env]`, so no layer can repoint them
+    ([`config.md` D14](./docs/design/config.md))
 - ...
 
 It is deliberately placed outside of the repo and the sandbox.

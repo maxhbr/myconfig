@@ -21,7 +21,7 @@
 //! run. Whoever can run `mysbx --verbose` can also read both config
 //! files.
 
-use crate::bwrap::{HostEnv, Params, Payload};
+use crate::bwrap::{HostEnv, Params, Payload, SANDBOX_HOME};
 use crate::config::Mode;
 use crate::merge::Merged;
 use crate::repo::Repo;
@@ -130,6 +130,13 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         ));
     }
 
+    // The sandbox's own home (config.md D14): a tmpfs, not a bind, so it
+    // is not part of the mount list above — but an operator reading the
+    // report must see where `$HOME` points and that it is not the host's.
+    p(format!(
+        "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
+    ));
+
     // Environment. Values are shown verbatim; see the module docs for
     // why they are not redacted.
     p(format!(
@@ -143,15 +150,24 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         // so a host variable that `[env]` also sets never reaches the
         // payload. Say so, instead of listing the same name twice with
         // two values and no hint which one applies.
-        if r.merged.env.contains_key(k) {
+        if infrastructure(k) {
+            p(format!("  {k}={v}  [host, ignored — set by mysbx]"));
+        } else if r.merged.env.contains_key(k) {
             p(format!("  {k}={v}  [host, overridden by [env]]"));
         } else {
             p(format!("  {k}={v}  [host]"));
         }
     }
     for (k, v) in &r.merged.env {
-        p(format!("  {k}={v}  [config]"));
+        if infrastructure(k) {
+            // `HOME` and `PATH` are set after `[env]` (config.md D14), so
+            // a layer that names them never reaches the payload.
+            p(format!("  {k}={v}  [config, ignored — set by mysbx]"));
+        } else {
+            p(format!("  {k}={v}  [config]"));
+        }
     }
+    p(format!("  HOME={SANDBOX_HOME}  [sandbox home]"));
     p(format!("  PATH={}  [tools]", r.params.tools_path));
 
     p(format!("bwrap:          {}", r.bwrap_bin));
@@ -169,6 +185,12 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         "mode:           executing".to_string()
     });
     out
+}
+
+/// The variables `bwrap_argv` sets last and no layer can override
+/// (config.md D14).
+fn infrastructure(key: &str) -> bool {
+    key == "HOME" || key == "PATH"
 }
 
 fn present(exists: bool) -> &'static str {
@@ -282,6 +304,17 @@ mod tests {
         // only TERM), so nothing claims an override.
         assert!(!joined.contains("overridden"), "{joined}");
         assert!(joined.contains("PATH=/synth/bin  [tools]"), "{joined}");
+        // The sandbox home is reported, and it is not the host's.
+        assert!(
+            joined.contains(&format!(
+                "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
+            )),
+            "{joined}"
+        );
+        assert!(
+            joined.contains(&format!("  HOME={SANDBOX_HOME}  [sandbox home]")),
+            "{joined}"
+        );
         assert!(
             joined.contains("bwrap:          /synth/bin/bwrap"),
             "{joined}"
@@ -326,6 +359,49 @@ mod tests {
         );
         assert!(joined.contains("EDITOR=nvim  [config]"), "{joined}");
         assert!(joined.contains("TERM=xterm  [host]"), "{joined}");
+    }
+
+    #[test]
+    fn an_env_home_is_reported_as_ignored() {
+        // config.md D14: `[env] HOME` (or `PATH`) does not reach the
+        // payload — the report must not pretend it does.
+        let (repo, mut merged, mut host) = fixture_report();
+        merged
+            .env
+            .insert("HOME".to_owned(), "/synth/evil".to_owned());
+        host.insert("HOME".to_owned(), "/synth/host-home".to_owned());
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+        };
+        let joined = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: true,
+            merged: &merged,
+            user_mount_count: 1,
+            host_env: &host,
+            params: &params,
+            bwrap_bin: "bwrap",
+            payload: &Payload::Shell,
+            dry_run: true,
+        })
+        .join("\n");
+        assert!(
+            joined.contains("HOME=/synth/evil  [config, ignored — set by mysbx]"),
+            "{joined}"
+        );
+        assert!(
+            joined.contains("HOME=/synth/host-home  [host, ignored — set by mysbx]"),
+            "{joined}"
+        );
+        assert!(
+            joined.contains(&format!("  HOME={SANDBOX_HOME}  [sandbox home]")),
+            "{joined}"
+        );
     }
 
     #[test]

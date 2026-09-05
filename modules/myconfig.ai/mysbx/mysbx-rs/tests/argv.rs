@@ -13,7 +13,7 @@
 //! Only the base binds are fixed absolute host paths (`/nix/store`, …),
 //! and those are identical on every machine.
 
-use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload};
+use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload, SANDBOX_HOME};
 use mysbx::config::{Mode, Mount};
 use mysbx::merge::Merged;
 use mysbx::repo::Repo;
@@ -313,11 +313,13 @@ fn golden_command_payload_with_flag_looking_args() {
 // ---- structural assertions beyond the goldens ------------------------------
 
 #[test]
-fn no_run_no_home_beyond_declared_mounts() {
+fn no_run_no_host_home_beyond_declared_mounts() {
     // The "no" rows of the base table (docs/plan.md): `/run` is never
-    // mounted, the home directory is never reachable except through a
-    // mount that declares it, and there is no automatic
-    // `OPENAI_API_KEY` forward.
+    // mounted, the HOST home directory is never reachable except through
+    // a mount that declares it, and there is no automatic
+    // `OPENAI_API_KEY` forward. The `$HOME` row is a different claim:
+    // `$HOME` inside the sandbox is a tmpfs (config.md D14), backed by
+    // nothing on the host — see `sandbox_home_is_a_tmpfs_outside_home`.
     let mut cfg = base(true);
     cfg.mounts
         .push(make_mount("/synth/data/refs", None, Mode::Ro));
@@ -364,7 +366,7 @@ fn no_run_no_home_beyond_declared_mounts() {
         );
     }
     assert!(!text.contains("/home/"), "no host home path: {text}");
-    assert!(!text.contains("$HOME"), "no $HOME: {text}");
+    assert!(!text.contains("$HOME"), "no literal $HOME: {text}");
     assert!(
         !text.contains("OPENAI_API_KEY"),
         "no auto key forward: {text}"
@@ -433,8 +435,9 @@ fn forward_only_set_host_variables() {
     assert_eq!(
         setenv_keys(&argv),
         // HostEnv is a BTreeMap: keys come in sorted order (deterministic,
-        // which is what a golden argv needs). PATH always last.
-        vec!["LC_ALL", "TERM", "PATH"],
+        // which is what a golden argv needs). The infrastructure pair
+        // `HOME`, `PATH` always last (config.md D14).
+        vec!["LC_ALL", "TERM", "HOME", "PATH"],
     );
 }
 
@@ -449,8 +452,8 @@ fn env_precedence_host_then_config_then_path() {
     let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host, &params());
     assert_eq!(
         setenv_keys(&argv),
-        // host keys sorted (BTreeMap), then [env], then PATH
-        vec!["EDITOR", "TERM", "PROJECT", "TERM", "PATH"],
+        // host keys sorted (BTreeMap), then [env], then HOME and PATH
+        vec!["EDITOR", "TERM", "PROJECT", "TERM", "HOME", "PATH"],
     );
     // The later TERM value really is the [env] one.
     let vals: Vec<&str> = argv
@@ -481,4 +484,67 @@ fn tmpfs_tmp_is_not_host_backed() {
             argv
         );
     }
+}
+
+#[test]
+fn sandbox_home_is_a_tmpfs_outside_home() {
+    // The `$HOME` row of the base table (config.md D14): the sandbox has
+    // a home of its own so `cd ~` works, it is a tmpfs (nothing of the
+    // host behind it), it is not below `/home`, and `HOME` names it.
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    );
+    let tmpfs: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--tmpfs")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert_eq!(tmpfs, vec!["/tmp", SANDBOX_HOME]);
+    assert!(!SANDBOX_HOME.starts_with("/home"), "{SANDBOX_HOME}");
+    for (src, dest) in bind_pairs(&argv) {
+        assert_ne!(
+            dest, SANDBOX_HOME,
+            "the sandbox home is bind-backed by {src}"
+        );
+    }
+    let i = argv.iter().position(|x| x == "HOME").unwrap();
+    assert_eq!(&argv[i - 1..i + 2], &["--setenv", "HOME", SANDBOX_HOME]);
+}
+
+#[test]
+fn config_env_cannot_repoint_home_or_path() {
+    // config.md D14: both infrastructure variables are set after `[env]`,
+    // so the effective values are mysbx's, whatever a layer says.
+    let mut cfg = base(true);
+    cfg.env.insert("HOME".into(), "/synth/evil-home".into());
+    cfg.env.insert("PATH".into(), "/synth/evil-bin".into());
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    );
+    assert_eq!(
+        setenv_keys(&argv),
+        vec!["HOME", "PATH", "HOME", "PATH"],
+        "[env] entries first, the infrastructure pair last"
+    );
+    let n = argv.len();
+    // … and the last pair really carries mysbx's values.
+    assert_eq!(
+        &argv[n - 10..n - 4],
+        &[
+            "--setenv",
+            "HOME",
+            SANDBOX_HOME,
+            "--setenv",
+            "PATH",
+            "/synth/bin"
+        ]
+    );
 }

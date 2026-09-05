@@ -41,6 +41,17 @@ pub enum Payload {
 /// LANG LC_ALL EDITOR VISUAL`, each only when set) into this map.
 pub type HostEnv = BTreeMap<String, String>;
 
+/// The sandbox's own home directory (docs/design/config.md D14, the
+/// `$HOME` row of the base table in docs/plan.md).
+///
+/// A fresh tmpfs, created by [`base_binds`] and exported as `HOME` — the
+/// HOST home is still not mounted, and its *value* is never forwarded
+/// either (it is not in `FORWARDED_ENV_VARS`). The path deliberately
+/// lives outside `/home`, so nothing inside the sandbox can be confused
+/// with a host home path and the "no `/home/` anywhere" invariant of the
+/// argv stays literally checkable.
+pub const SANDBOX_HOME: &str = "/mysbx-home";
+
 /// Common parameters of every invocation that do not come from a
 /// configuration layer: the shell binary and the dev-tool `PATH` closure
 /// root, both host paths the MVP carries in its own closure
@@ -66,7 +77,7 @@ pub struct Params<'a> {
 ///    either direction is assertable in the golden tests)
 /// 3. the base binds (the "The base" table of docs/plan.md):
 ///    `/nix/store` ro, `/usr/bin` ro, `--proc /proc`, `--dev /dev`,
-///    `/etc/localtime` ro, tmpfs `/tmp`
+///    `/etc/localtime` ro, tmpfs `/tmp`, tmpfs [`SANDBOX_HOME`]
 /// 4. the repo itself, read-write, at its real host path
 ///    (docs/design/config.md D13)
 /// 5. the configured mounts, in declaration order, `--ro-bind` / `--bind`,
@@ -75,12 +86,16 @@ pub struct Params<'a> {
 ///    pattern the MVP must preserve)
 /// 6. environment via `--setenv`, in this precedence: host-forwarded
 ///    variables first, then `cfg.env` (which wins by being set later),
-///    then `PATH` last
+///    then the infrastructure variables `HOME` and `PATH` last — set
+///    after `cfg.env` on purpose, so neither layer can point them
+///    somewhere else (config.md D14)
 /// 7. `--chdir` into the repo root
 /// 8. `--` and the payload, verbatim
 ///
 /// Deliberately absent (see the base table's "no" rows): `/run`, `~/tmp`,
-/// a host-backed `/tmp/<name>`, and any automatic `OPENAI_API_KEY` —
+/// a host-backed `/tmp/<name>`, the host home directory (only the empty
+/// tmpfs [`SANDBOX_HOME`] serves as `$HOME`), and any automatic
+/// `OPENAI_API_KEY` —
 /// under `mysbx` a key is an ordinary user-config `[env]` entry
 /// (docs/design/config.md D6). Nothing is forwarded implicitly: only the
 /// variables the caller put in `host_env` reach the sandbox.
@@ -150,6 +165,14 @@ pub fn bwrap_argv(
         argv.push(key.clone());
         argv.push(value.clone());
     }
+    // `HOME` and `PATH` are infrastructure, not configuration: they name
+    // paths this builder created (the tmpfs of section 3, the tool
+    // closure of `params`), so a layer that could repoint them would
+    // break the sandbox rather than configure it (config.md D14). Set
+    // last: the later `--setenv` wins, so `[env]` cannot override them.
+    argv.push("--setenv".into());
+    argv.push("HOME".into());
+    argv.push(SANDBOX_HOME.into());
     argv.push("--setenv".into());
     argv.push("PATH".into());
     argv.push(params.tools_path.into());
@@ -191,6 +214,12 @@ fn base_binds() -> Vec<String> {
         "/etc/localtime".into(),
         "--tmpfs".into(),
         "/tmp".into(),
+        // `$HOME` inside the sandbox: an empty, writable tmpfs, so
+        // `cd ~`, `~/.bash_history` and every tool that insists on a
+        // home directory work — without the host home being reachable
+        // (config.md D14).
+        "--tmpfs".into(),
+        SANDBOX_HOME.into(),
     ]
 }
 
@@ -200,6 +229,11 @@ fn base_binds() -> Vec<String> {
 /// protected) — and `/` itself, which would shadow every one of them at
 /// once. The repo root is deliberately NOT here: it is a base bind of
 /// its own (section 4) and a mount legitimately points at or below it.
+/// [`SANDBOX_HOME`] is NOT here either, for the same reason: seeding the
+/// sandbox home with host dotfiles (`~/.gitconfig`, an agent config) by
+/// pointing a mount `dest` into it is the intended way to use it, and
+/// such a mount is an explicit grant of the user layer (config.md D6/D7).
+/// The tmpfs is created in section 3, so those mounts land on top of it.
 static PROTECTED_DESTS: &[&str] = &[
     "/",
     "/nix/store",
@@ -402,30 +436,91 @@ mod tests {
             &argv[setenvs[3]..setenvs[3] + 3],
             &["--setenv", "TERM", "cfg-wins"]
         );
-        // … and `PATH` last of all env; nothing follows it but the
-        // `--chdir` and payload sections.
-        assert_eq!(argv[setenvs[4]], "--setenv");
-        assert_eq!(argv[setenvs[4] + 1], "PATH");
-        assert_eq!(argv[setenvs[4] + 2], "/synth/bin");
+        // … then the infrastructure variables, `HOME` and `PATH` last of
+        // all env; nothing follows them but the `--chdir` and payload
+        // sections.
         assert_eq!(
-            argv.len() - setenvs[4] - 3,
+            &argv[setenvs[4]..setenvs[4] + 3],
+            &["--setenv", "HOME", SANDBOX_HOME]
+        );
+        assert_eq!(argv[setenvs[5]], "--setenv");
+        assert_eq!(argv[setenvs[5] + 1], "PATH");
+        assert_eq!(argv[setenvs[5] + 2], "/synth/bin");
+        assert_eq!(
+            argv.len() - setenvs[5] - 3,
             4, // --chdir /synth/repo -- /synth/bin/bash
             "nothing after PATH but --chdir, -- and the payload"
         );
     }
 
     #[test]
-    fn no_run_no_home_no_openai() {
+    fn no_run_no_host_home_no_openai() {
         let (repo, cfg, p) = shell_repo_defaults();
         let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
         let joined = argv.join(" ");
         assert!(!joined.contains("/run"), "no /run bind");
-        // No `$HOME` bind, no host home path, no `~/tmp` — and no automatic
-        // secret forwards (the OPENAI row of the base table).
+        // No host home BIND, no host home path, no `~/tmp` — and no
+        // automatic secret forwards (the OPENAI row of the base table).
+        // `$HOME` inside the sandbox is the tmpfs of the base table's
+        // `$HOME` row (config.md D14), which is a different claim.
         assert!(!joined.contains("$HOME"));
         assert!(!joined.contains("/home/"), "no host home path anywhere");
         assert!(!joined.contains("OPENAI_API_KEY"));
         assert!(!argv.contains(&"~/tmp".to_string()));
+        // Every bind source is a base path or the repo — the sandbox home
+        // is a tmpfs, i.e. backed by nothing on the host.
+        let sources: Vec<&str> = argv
+            .windows(3)
+            .filter(|w| w[0] == "--ro-bind" || w[0] == "--bind")
+            .map(|w| w[1].as_str())
+            .collect();
+        assert!(!sources.iter().any(|s| s.contains("home")), "{sources:?}");
+    }
+
+    #[test]
+    fn sandbox_home_is_a_tmpfs_and_is_exported_as_home() {
+        // config.md D14: `$HOME` exists inside the sandbox (so `cd ~`
+        // works), is an empty tmpfs, and is not below `/home`.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let tmpfs: Vec<&str> = argv
+            .windows(2)
+            .filter(|w| w[0] == "--tmpfs")
+            .map(|w| w[1].as_str())
+            .collect();
+        assert_eq!(tmpfs, vec!["/tmp", SANDBOX_HOME]);
+        let i = pos(&argv, "HOME");
+        assert_eq!(&argv[i - 1..i + 2], &["--setenv", "HOME", SANDBOX_HOME]);
+        assert!(!SANDBOX_HOME.starts_with("/home"));
+        // The tmpfs is created before the configured mounts, so a mount
+        // may seed the home; the `--setenv HOME` comes after them.
+        assert!(pos(&argv, SANDBOX_HOME) < pos(&argv, "--setenv"));
+    }
+
+    #[test]
+    fn config_env_cannot_override_home() {
+        // Same rule as `PATH` (config.md D14): `HOME` is infrastructure,
+        // set after `[env]`, so the later `--setenv` wins.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.env.insert("HOME".into(), "/synth/evil-home".into());
+        let mut host = HostEnv::new();
+        host.insert("HOME".into(), "/synth/host-home".into());
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p);
+        let last = argv
+            .iter()
+            .enumerate()
+            .filter(|(_, x)| x.as_str() == "HOME")
+            .map(|(i, _)| i)
+            .next_back()
+            .unwrap();
+        assert_eq!(
+            &argv[last - 1..last + 2],
+            &["--setenv", "HOME", SANDBOX_HOME]
+        );
+        // The rejected values are still in the argv (the builder does not
+        // filter them), but the effective value is the last one.
+        assert!(argv.contains(&"/synth/evil-home".to_string()));
     }
 
     #[test]
