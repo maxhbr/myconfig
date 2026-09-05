@@ -7,6 +7,9 @@ This project defines the cli tool mysbx, which is my sandboxing tool.
 The `docs/` directory holds all documentation. This README stays a short
 overview; design decisions, TODOs and any other long text belong in `docs/`:
 
+- [`docs/feature-comparison.md`](./docs/feature-comparison.md) - how mysbx
+  compares to the sandboxing tiers already implemented in myconfig (CLI,
+  sandboxing features, implementation state)
 - `docs/design/` - design decisions
   - [`docs/design/cli.md`](./docs/design/cli.md) - the command line surface
   - [`docs/design/config.md`](./docs/design/config.md) - configuration and the
@@ -57,3 +60,6 @@ none
 
 ## Relation to other sandboxing methods
 The myconfig repo contains several implementations for sandboxing which are all in alpha/beta state and WIP. This repo here has the goal to learn from them and implement the future implementation. The goal is to replace all sandboxing implemented in myconfig.
+
+A feature-by-feature comparison of those implementations against mysbx is in
+[`docs/feature-comparison.md`](./docs/feature-comparison.md).
