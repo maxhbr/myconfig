@@ -50,9 +50,10 @@ none
 - bubblewrap (https://git.sr.ht/~alexdavid/jail.nix)
 ## after that:
 - container (via podman), with gvisor for additional layer of security
+- nono
 ### long term:
 - qemu
 - microvm
 
-## Relation to https://github.com/maxhbr/myconfig
+## Relation to other sandboxing methods
 The myconfig repo contains several implementations for sandboxing which are all in alpha/beta state and WIP. This repo here has the goal to learn from them and implement the future implementation. The goal is to replace all sandboxing implemented in myconfig.
