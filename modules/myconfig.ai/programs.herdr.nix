@@ -459,6 +459,8 @@ in
 
     home-manager.sharedModules = [
       {
+        myconfig.persistence.directories = [ ".herdr" ];
+
         home.packages = [
           herdr
           herdr-worktree-sibling
