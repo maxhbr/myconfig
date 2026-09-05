@@ -19,7 +19,20 @@ let
     user_data_dir="/tmp/incoChrome_$postfix"
     mkdir -p "$user_data_dir"
     trap 'rm -rf "$user_data_dir"' EXIT
+    # `--password-store=basic` keeps this throwaway session away from the
+    # freedesktop Secret Service.  Chromium >= 152 always registers an
+    # `os_crypt_async::FreedesktopSecretKeyProvider`, and for every non-KDE
+    # desktop (`XDG_CURRENT_DESKTOP=niri|sway|...` maps to
+    # `DESKTOP_ENVIRONMENT_OTHER`) it talks to `org.freedesktop.secrets` on
+    # startup.  That D-Bus name is owned here by `pass-secret-service`
+    # (see modules/programs.pass/default.nix), which reads the item back via
+    # `gpg -d ~/.password-store/secret_service/...` -> pinentry passphrase
+    # prompt.  This profile is incognito, lives in /tmp and is removed by the
+    # EXIT trap, so there is nothing at rest worth protecting with an
+    # OS-provided key -- and an incognito browser has no business unlocking
+    # the password store.  See doc/inco-sh-gpg-prompt.md.
     ${chromium}/bin/chromium --incognito \
+        --password-store=basic \
         --user-data-dir="$user_data_dir" \
         "$@"
   '';
