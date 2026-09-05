@@ -97,12 +97,54 @@ sandbox checkouts land one level deeper than on the host:
 That is intentional and accepted — it is inside the same sibling directory and
 usable from the host.
 
-Start it from the **main** checkout: only that repository's sibling directory
-is bound, so starting from a linked worktree aborts with an explanatory error.
-It also refuses to start when the enclosing repository *is* `$HOME` (or a
-parent of it): the wrapper's shared guard only rejects `$PWD == $HOME`, but the
-walk up to the repository root could otherwise land on the home directory and
-bind all of it read-write.
+### Working directory of the session
+
+The session comes up in the directory the wrapper was **invoked from**, not in
+`$HOME`. Two things are needed for that:
+
+* `bwrap` keeps the host working directory, and `mount-cwd` binds it
+  read-write at the identical path, so the invocation directory exists inside
+  the jail (the enclosing repository and its `__worktrees` sibling are bound
+  too).
+* herdr's **first** workspace is nevertheless always rooted at `$HOME` — the
+  `[terminal] new_cwd` policy only applies to workspaces created *later*, and
+  there is no CLI flag for the initial one. The entrypoint therefore waits for
+  the socket API (which `--no-session` serves too), creates a workspace with
+  `herdr workspace create --cwd <invocation directory> --focus`, and closes the
+  `~` workspace that herdr made itself. If the API never answers, herdr is left
+  alone rather than ending up with two workspaces.
+
+`new_cwd = "follow"` is deliberately kept instead of `"current"`: new
+tabs/panes must inherit the *focused* workspace's directory, which for a
+worktree workspace is the worktree and not the invocation directory.
+
+The jail config also sets `onboarding = false`. The jail's `$HOME` is a tmpfs,
+so herdr would otherwise show its first-run wizard on every start and come up
+with **no** workspace at all ("No workspaces yet") — which is what made every
+manually created workspace land in `$HOME`.
+
+### Where it can be started from
+
+* **Main checkout** — the normal case: the repository and its `__worktrees`
+  sibling are bound read-write.
+* **Linked worktree** — supported. `<worktree>/.git` is a *file* pointing at
+  `<main-repo>/.git/worktrees/<name>`, so the wrapper resolves the shared git
+  directory (via that directory's `commondir` file) and binds it read-write as
+  well; without it every git command inside the jail fails with "not a git
+  repository". The main **checkout** stays invisible — only its git metadata is
+  exposed — and the `__worktrees` sibling is computed from the main repository,
+  so it is the same directory no matter which checkout the jail was started
+  from. Note that read-write access to the shared git directory also means
+  write access to the main repository's refs, objects and hooks.
+* **Outside a git repository** — herdr starts normally in that directory; only
+  `[worktrees]` is left unset, so the worktree actions fall back to herdr's
+  default `~/.herdr/worktrees`, which is the jail's tmpfs and therefore
+  ephemeral. The entrypoint prints a note about that before starting.
+* **`$HOME` itself** — refused. The wrapper's shared guard rejects
+  `$PWD == $HOME`, and a second guard rejects the case where the walk up to the
+  repository root lands on the home directory (or a parent of it), which would
+  otherwise bind all of `$HOME` read-write.
+
 The panes run the plain (un-jailed) agent binaries with their real home state
 bound read-write — the jail itself is the sandbox, so no nested sandboxing.
 

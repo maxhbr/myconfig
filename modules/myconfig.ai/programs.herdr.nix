@@ -296,11 +296,26 @@ let
   # `prefix+shift+g` instead of the host's `[[keys.command]]` popup: it needs
   # no socket round-trip, which matters with `--no-session` below.
   #
+  # The session starts in the directory the wrapper was INVOKED from, not in
+  # the jail's `$HOME` - which takes both a working `bwrap` cwd (`mount-cwd`)
+  # and, because herdr's own first workspace is always rooted at `$HOME`, the
+  # relocation the entrypoint performs over the socket API. See the entrypoint
+  # below and ./programs.herdr.README.md ("Working directory of the session").
+  #
   # The session config lives in the jail's tmpfs `$HOME` and is written on
   # every start, so it can never be stale, and `~/.config/herdr` is
   # deliberately NOT bound from the host.
   herdrJailConfigCommonFile = pkgs.writeText "herdr-jail-config-common.toml" (
-    herdrConfigCommon
+    # `onboarding` is a top-level key, so it has to come before the first TOML
+    # table. Disabled because the jail's $HOME is a tmpfs: herdr would show its
+    # first-run wizard on EVERY start and - worse - come up with no workspace
+    # at all ("No workspaces yet"), which also leaves the entrypoint below
+    # nothing to relocate to the invocation directory.
+    ''
+      onboarding = false
+
+    ''
+    + herdrConfigCommon
     + ''
 
       # Restored here (the host config unbinds it): inside the jail the
@@ -322,52 +337,111 @@ let
       coreutils
       # `awk` parses `git worktree list --porcelain` below.
       gawk
+      # `jq` reads the workspace ids out of the socket API's JSON answers
+      # when the startup workspace is relocated below.
+      jq
     ];
     text = ''
       self="agent-bubblewrap-herdr"
 
-      if ! git rev-parse --git-dir >/dev/null 2>&1; then
-          echo "$self: must be run inside a git repository" >&2
-          exit 1
-      fi
+      # The directory the wrapper was invoked from. `bwrap` keeps the host
+      # working directory (the jail binds it read-write via `mount-cwd`), so
+      # this is the project directory the user ran the command in - it is the
+      # directory herdr's first workspace has to be rooted at (see the
+      # background job at the end of this script).
+      start_dir="$PWD"
 
-      # The MAIN working tree, so the layout is identical whether the jail was
-      # started from the main checkout or from one of its linked worktrees.
-      repo_root="$(git worktree list --porcelain | awk '/^worktree /{print substr($0, 10); exit}')"
-      if [ -z "$repo_root" ]; then
-          echo "$self: could not determine the main working tree" >&2
-          exit 1
-      fi
-
-      worktrees="$(dirname "$repo_root")/$(basename "$repo_root")__worktrees"
-      if ! mkdir -p "$worktrees" 2>/dev/null; then
-          echo "$self: $worktrees is not writable inside the jail;" >&2
-          echo "$self: start the jail from the main checkout so the wrapper binds it." >&2
-          exit 1
-      fi
-
-      # Session config: the shared part plus the repository-local worktree
-      # root. Written fresh on every start into the jail's tmpfs $HOME.
-      #
-      # The path goes into a TOML basic string, so `\` and `"` must be
-      # escaped and control characters (which TOML forbids there) rejected -
-      # otherwise a repository name containing them yields a config herdr
-      # cannot parse, and herdr then silently FALLS BACK TO ITS DEFAULTS
-      # (`~/.herdr/worktrees`), quietly losing the repository-local root.
-      case $worktrees in
-          *[[:cntrl:]]*)
-              echo "$self: repository path contains control characters: $worktrees" >&2
-              exit 1
-              ;;
-      esac
-      worktrees_toml="''${worktrees//\\/\\\\}"
-      worktrees_toml="''${worktrees_toml//\"/\\\"}"
-
+      # Session config: the shared part plus - inside a git repository - the
+      # repository-local worktree root. Written fresh on every start into the
+      # jail's tmpfs $HOME.
       mkdir -p "$HOME/.config/herdr"
-      {
-          cat ${herdrJailConfigCommonFile}
-          printf '\n[worktrees]\ndirectory = "%s"\n' "$worktrees_toml"
-      } > "$HOME/.config/herdr/config.toml"
+      cat ${herdrJailConfigCommonFile} > "$HOME/.config/herdr/config.toml"
+
+      if git rev-parse --git-dir >/dev/null 2>&1; then
+          # The MAIN working tree, so the layout is identical whether the jail
+          # was started from the main checkout or from one of its linked
+          # worktrees. Note that the main checkout itself is NOT bound into
+          # the jail when the jail was started from a linked worktree - only
+          # its shared git directory and the `__worktrees` sibling are (see
+          # `worktreesSiblingPerm`), which is all this path is used for.
+          repo_root="$(git worktree list --porcelain | awk '/^worktree /{print substr($0, 10); exit}')"
+          if [ -z "$repo_root" ]; then
+              echo "$self: could not determine the main working tree" >&2
+              exit 1
+          fi
+
+          worktrees="$(dirname "$repo_root")/$(basename "$repo_root")__worktrees"
+          if ! mkdir -p "$worktrees" 2>/dev/null; then
+              echo "$self: $worktrees is not writable inside the jail;" >&2
+              echo "$self: start the jail from the main checkout so the wrapper binds it." >&2
+              exit 1
+          fi
+
+          # The path goes into a TOML basic string, so `\` and `"` must be
+          # escaped and control characters (which TOML forbids there)
+          # rejected - otherwise a repository name containing them yields a
+          # config herdr cannot parse, and herdr then silently FALLS BACK TO
+          # ITS DEFAULTS (`~/.herdr/worktrees`), quietly losing the
+          # repository-local root.
+          case $worktrees in
+              *[[:cntrl:]]*)
+                  echo "$self: repository path contains control characters: $worktrees" >&2
+                  exit 1
+                  ;;
+          esac
+          worktrees_toml="''${worktrees//\\/\\\\}"
+          worktrees_toml="''${worktrees_toml//\"/\\\"}"
+
+          printf '\n[worktrees]\ndirectory = "%s"\n' "$worktrees_toml" \
+              >> "$HOME/.config/herdr/config.toml"
+      else
+          # Not a git repository: herdr itself works fine, only the worktree
+          # actions have nowhere sensible to write. Leave `[worktrees]`
+          # unset, so herdr uses its own default (`~/.herdr/worktrees`) -
+          # which is the jail's tmpfs $HOME and therefore ephemeral.
+          echo "$self: not inside a git repository: $start_dir" >&2
+          echo "$self: starting herdr anyway; worktree actions are not usable here." >&2
+      fi
+
+      # herdr's FIRST workspace is always rooted at $HOME: the `new_cwd`
+      # policy only applies to workspaces created later, and there is no CLI
+      # flag for the initial one. Inside the jail $HOME is a tmpfs, so this
+      # would drop the user into an empty directory instead of the project.
+      # Fix it up over the socket API (which `--no-session` also serves): once
+      # herdr is up, create a workspace rooted at the invocation directory,
+      # focus it, and close the workspace(s) that existed before. Runs in the
+      # background because the API only answers after herdr has started, and
+      # discards all output because the TUI owns the terminal from here on.
+      # `new_cwd = "follow"` is deliberately kept (rather than "current"): new
+      # tabs/panes must inherit the focused workspace's directory, which for a
+      # worktree workspace is the worktree and not the invocation directory.
+      (
+          initial_ws=()
+          for _ in $(seq 1 100); do
+              if out="$(herdr workspace list 2>/dev/null)"; then
+                  mapfile -t initial_ws < <(
+                      printf '%s' "$out" |
+                          jq -r '.result.workspaces[].workspace_id' 2>/dev/null
+                  )
+                  if [ "''${#initial_ws[@]}" -gt 0 ]; then
+                      break
+                  fi
+              fi
+              sleep 0.1
+          done
+          # No API answer (or no workspace yet) - leave herdr alone rather
+          # than adding a second workspace to an unknown state.
+          if [ "''${#initial_ws[@]}" -eq 0 ]; then
+              exit 0
+          fi
+          herdr workspace create \
+              --cwd "$start_dir" \
+              --label "$(basename "$start_dir")" \
+              --focus >/dev/null || exit 0
+          for ws in "''${initial_ws[@]}"; do
+              herdr workspace close "$ws" >/dev/null 2>&1 || true
+          done
+      ) >/dev/null 2>&1 &
 
       # Monolithic: no server/client split, so the session cannot attach to a
       # differently-configured server and dies with the jail.
@@ -383,6 +457,14 @@ let
   # instead of `git rev-parse`. Unlike the equivalent in
   # ./programs.pi-coding-agent/default.nix this *creates* the directory: herdr
   # has to be able to write the first worktree into it.
+  #
+  # When the wrapper is started from a LINKED worktree, `<repo>/.git` is a
+  # file pointing at `<main-repo>/.git/worktrees/<name>`; without that shared
+  # git directory every git command inside the jail fails with "not a git
+  # repository". It is therefore resolved (via the `commondir` file git writes
+  # next to it) and bound read-write too, while the main CHECKOUT stays
+  # invisible - the jail only ever needs the git metadata, not the other
+  # working tree.
   worktreesSiblingPerm = (jail.init pkgs).combinators.add-runtime ''
     _hb_root="$PWD"
     while [ "$_hb_root" != "/" ] && [ ! -e "$_hb_root/.git" ]; do
@@ -404,9 +486,45 @@ let
           exit 1
           ;;
       esac
-      _hb_worktrees="$(dirname "$_hb_root")/$(basename "$_hb_root")__worktrees"
+      # Linked worktree: `.git` is a file `gitdir: <path>`. `<path>/commondir`
+      # points at the MAIN repository's `.git`, which holds the shared object
+      # store, refs and config. `_hb_main` is that repository's working tree,
+      # so the `__worktrees` sibling below is the same directory no matter
+      # which checkout the jail was started from - matching what the
+      # entrypoint computes from `git worktree list`.
+      _hb_gitcommon=""
+      _hb_main="$_hb_root"
+      if [ -f "$_hb_root/.git" ]; then
+        IFS= read -r _hb_line < "$_hb_root/.git" || true
+        _hb_gitdir="''${_hb_line#gitdir:}"
+        _hb_gitdir="''${_hb_gitdir# }"
+        case "$_hb_gitdir" in
+          /*) ;;
+          *) _hb_gitdir="$_hb_root/$_hb_gitdir" ;;
+        esac
+        if [ -f "$_hb_gitdir/commondir" ]; then
+          IFS= read -r _hb_common < "$_hb_gitdir/commondir" || true
+          case "$_hb_common" in
+            /*) ;;
+            *) _hb_common="$_hb_gitdir/$_hb_common" ;;
+          esac
+          if [ -d "$_hb_common" ]; then
+            _hb_gitcommon="$(realpath "$_hb_common")"
+            # Only a conventional `<main-repo>/.git` layout tells us where the
+            # main working tree is; anything else (bare repos, separate git
+            # dirs) keeps the enclosing checkout as the reference point.
+            if [ "$(basename "$_hb_gitcommon")" = ".git" ]; then
+              _hb_main="$(dirname "$_hb_gitcommon")"
+            fi
+          fi
+        fi
+      fi
+      _hb_worktrees="$(dirname "$_hb_main")/$(basename "$_hb_main")__worktrees"
       mkdir -p "$_hb_worktrees"
       RUNTIME_ARGS+=(--bind "$_hb_root" "$_hb_root" --bind "$_hb_worktrees" "$_hb_worktrees")
+      if [ -n "$_hb_gitcommon" ]; then
+        RUNTIME_ARGS+=(--bind "$_hb_gitcommon" "$_hb_gitcommon")
+      fi
     fi
   '';
 
