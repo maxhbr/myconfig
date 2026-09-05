@@ -526,6 +526,11 @@
             "x86_64-linux"
             "aarch64-linux"
           ];
+
+          # Central list of directories that no formatter may touch.
+          formatterExcludeDirs = [ "vendor" ];
+          formatterExcludeGlobs = map (d: "${d}/**") formatterExcludeDirs; # treefmt
+          formatterExcludeRegexes = map (d: "^${d}/") formatterExcludeDirs; # pre-commit
         in
         eachDefaultSystem (system: {
           # Per-invocation QEMU agent runners are evaluated directly from
@@ -537,7 +542,9 @@
             hostName = "iso";
           } [ ];
 
-          formatter = nixpkgs.legacyPackages.${system}.nixfmt-tree;
+          formatter = nixpkgs.legacyPackages.${system}.nixfmt-tree.override {
+            settings.excludes = formatterExcludeGlobs;
+          };
 
           checks = {
             pre-commit-check = inputs.git-hooks.lib.${system}.run {
@@ -545,13 +552,7 @@
               hooks = {
                 nixfmt = {
                   enable = true;
-                  # Vendored subtrees (managed via `git subtree`) keep
-                  # their upstream formatting and may contain Nix fragments
-                  # that nixfmt cannot parse.  Exclude them here, mirroring
-                  # the `TREEFMT_EXCLUDES="vendor/**"` policy in
-                  # nixfmtall.sh so `nix flake check` and `./nixfmtall.sh`
-                  # agree on what gets formatted.
-                  excludes = [ "vendor/.*" ];
+                  excludes = formatterExcludeRegexes;
                 };
                 # shfmt.enable = true;
                 # shfmt.settings.simplify = true;
