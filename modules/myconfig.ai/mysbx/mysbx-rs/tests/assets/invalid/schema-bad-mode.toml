@@ -1,0 +1,3 @@
+[repo]
+path = "/home/user/src/project"
+mode = "readwrite"

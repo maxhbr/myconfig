@@ -1,0 +1,20 @@
+# Every key of the schema, as a sidecar config would use them.
+backend = "bwrap"
+network = true
+
+[repo]
+path = "/home/user/src/project"
+mode = "rw"
+
+[[mounts]]
+path = "/home/user/.config/pi"
+mode = "ro"
+
+[[mounts]]
+path = "/home/user/.cache/mysbx/project"
+dest = "/home/user/.cache"
+mode = "rw"
+
+[env]
+TERM = "xterm-256color"
+LANG = "C.UTF-8"
