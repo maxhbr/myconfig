@@ -12,6 +12,13 @@
 # Like the other sandbox tiers, this module is OFF by default and enabled
 # explicitly per host — it is never switched on implicitly by the broad
 # `myconfig.ai.enable`.
+#
+# The module also generates the *user* configuration layer
+# (`~/.config/mysbx/config.toml`, see ./docs/design/config.md D6) from
+# `myconfig.ai.mysbx.config`: the grant layer that pre-approves the host
+# paths a sidecar may mount. Per-agent modules (e.g.
+# ./../programs.pi-coding-agent/) are expected to extend
+# `myconfig.ai.mysbx.config.mounts` with their own agent config files.
 {
   config,
   lib,
@@ -20,6 +27,62 @@
 }:
 let
   cfg = config.myconfig.ai.mysbx;
+
+  # Nix has no `builtins.toToml` (only `builtins.fromTOML`), so the
+  # nixpkgs TOML generator is the equivalent: it renders `[[mounts]]`
+  # arrays of tables and an `[env]` table, which is exactly the subset
+  # ./mysbx-rs/src/toml.rs parses.
+  tomlFormat = pkgs.formats.toml { };
+
+  # Absolute host home of the user the generated config belongs to. Taken
+  # from the NixOS user (never from `home-manager.users.mhuber.*`, which
+  # would be an infinite recursion: this module *defines* home-manager
+  # modules).
+  homeDir = config.users.users.mhuber.home or "/home/mhuber";
+  configHome = "${homeDir}/.config";
+
+  # Baseline grants: common agent-tooling host config, read-only.
+  #
+  # CAUTION: every path here MUST exist at runtime — mysbx canonicalizes
+  # eagerly and a missing path is a hard error on *every* run
+  # (./docs/design/config.md D8). Only directories this repo itself always
+  # manages via home-manager are listed:
+  #   - `.config/git`     ← ../../shell.git (unconditional `programs.git`)
+  #   - `.config/ripgrep` ← ../../shell.programs.ripgrep.nix
+  #   - `.config/bat`     ← ../../shell.programs.bat.nix
+  #   - `.config/fish`    ← ../../programs.fish (only when fish is on)
+  # Same list as the `configDirs` default of ../fns/bubblewrap-app.nix.
+  baselineMounts =
+    map
+      (p: {
+        path = p;
+        mode = "ro";
+      })
+      (
+        [
+          "${configHome}/git"
+          "${configHome}/ripgrep"
+          "${configHome}/bat"
+        ]
+        ++ lib.optional config.programs.fish.enable "${configHome}/fish"
+      );
+
+  # `dest` is optional in the schema and there is no TOML null: a
+  # `dest = null` key would be a type error in the strict parser, so it is
+  # dropped instead of rendered.
+  renderMount =
+    m:
+    {
+      inherit (m) path mode;
+    }
+    // lib.optionalAttrs (m.dest != null) { inherit (m) dest; };
+
+  userConfigToml = {
+    inherit (cfg.config) network;
+    mounts = map renderMount cfg.config.mounts;
+    env = cfg.config.env;
+  }
+  // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; };
 in
 {
   options.myconfig.ai.mysbx = with lib; {
@@ -37,11 +100,82 @@ in
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
     };
+
+    config = mkOption {
+      description = ''
+        Content of the mysbx *user* configuration layer, generated into
+        `~/.config/mysbx/config.toml` (./docs/design/config.md D6).
+
+        This is the GRANT layer: a repo sidecar may only mount host paths
+        at or below a path granted here, and may never upgrade `ro` to
+        `rw` (D7). Modules may append to `mounts` — list definitions are
+        merged by concatenation, so per-agent modules can add their own
+        config files without replacing the baseline.
+      '';
+      default = { };
+      type = types.submodule {
+        options = {
+          backend = mkOption {
+            type = types.nullOr (types.enum [ "bubblewrap" ]);
+            default = "bubblewrap";
+            description = "Sandbox backend; `null` leaves the choice to the sidecar.";
+          };
+          network = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Share the host network; `false` is the deny switch.";
+          };
+          mounts = mkOption {
+            description = "Host paths granted into the sandbox (absolute paths only).";
+            default = [ ];
+            type = types.listOf (
+              types.submodule {
+                options = {
+                  path = mkOption {
+                    type = types.addCheck types.str (lib.hasPrefix "/");
+                    description = "Absolute host path (must exist: it is canonicalized eagerly).";
+                  };
+                  mode = mkOption {
+                    type = types.enum [
+                      "ro"
+                      "rw"
+                    ];
+                    default = "ro";
+                    description = "Granted access mode.";
+                  };
+                  dest = mkOption {
+                    type = types.nullOr (types.addCheck types.str (lib.hasPrefix "/"));
+                    default = null;
+                    description = "Absolute in-sandbox destination; `null` means the same path.";
+                  };
+                };
+              }
+            );
+          };
+          env = mkOption {
+            type = types.attrsOf types.str;
+            default = { };
+            description = "Environment variables forwarded into the sandbox.";
+          };
+        };
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
+    # Baseline grants; further definitions (from per-agent modules or the
+    # host config) are concatenated onto this list.
+    myconfig.ai.mysbx.config.mounts = baselineMounts;
+
     home-manager.sharedModules = [
       { home.packages = [ cfg.package ]; }
     ];
+
+    # The generated user config belongs to the user whose absolute home
+    # paths it contains, so it is written for `mhuber` only — not via
+    # `sharedModules` (agent users have different homes).
+    home-manager.users.mhuber = {
+      xdg.configFile."mysbx/config.toml".source = tomlFormat.generate "mysbx-config.toml" userConfigToml;
+    };
   };
 }

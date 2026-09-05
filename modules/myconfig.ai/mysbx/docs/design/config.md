@@ -73,6 +73,14 @@ exposed inside the sandbox — credentials and tool configuration that belong
 to the user, not to a repo. Keeping them here means they are declared once,
 and a per-repo sidecar cannot silently widen them (see D7).
 
+On myconfig hosts the user config is not hand-written: the NixOS module
+(`../../default.nix`) generates `~/.config/mysbx/config.toml` from the
+`myconfig.ai.mysbx.config` option, with a read-only baseline of grants for
+the host tool config this repo manages (`~/.config/{git,ripgrep,bat,fish}`).
+Other modules extend it by appending to `myconfig.ai.mysbx.config.mounts`.
+Outside myconfig the file stays an ordinary hand-written file; mysbx itself
+knows nothing about where it came from.
+
 ### D7: Sidecar may narrow, not widen
 
 A sidecar can drop or restrict what the user config grants, but cannot
