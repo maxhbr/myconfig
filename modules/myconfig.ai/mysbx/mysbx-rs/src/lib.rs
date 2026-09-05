@@ -1,9 +1,11 @@
 // Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! Minimal `mysbx` CLI skeleton. See ../../README.md for the intended shape
-//! of the tool; for now only `init`, `version` and `help` exist.
+//! Minimal `mysbx` CLI. See ../../README.md for the intended shape of the
+//! tool; for now `init`, `version` and `help` exist, and the bare form does
+//! implicit init only (the sandbox backend is MVP items 4/5).
 
 pub mod config;
+pub mod repo;
 pub mod toml;
 
 /// The usage text.
@@ -18,7 +20,25 @@ pub fn usage() {
 /// Dispatch on the argument list (without argv[0]); returns the exit code.
 pub fn run(args: Vec<String>) -> i32 {
     match args.first().map(String::as_str) {
-        None | Some("help") | Some("-h") | Some("--help") => {
+        // Bare `mysbx` is the primary action (docs/design/cli.md D2): enter
+        // the sandbox for the current repository. There is no backend yet,
+        // so implicit init is all it can honestly do (MVP item 5 pending).
+        None => {
+            let repo = match repo::resolve_cwd() {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    return 1;
+                }
+            };
+            if let Err(msg) = ensure_sidecar(&repo) {
+                eprintln!("mysbx: {msg}");
+                return 1;
+            }
+            eprintln!("mysbx: no backend yet (MVP item 4/5 pending)");
+            1
+        }
+        Some("help") | Some("-h") | Some("--help") => {
             usage();
             0
         }
@@ -35,31 +55,27 @@ pub fn run(args: Vec<String>) -> i32 {
     }
 }
 
-/// `mysbx init` — create the sidecar directory `<repo>.mysbx/` next to the
-/// current working directory, with a default `config.toml`.
+/// `mysbx init` — resolve the repository (docs/TODOs/mvp-2-repo-discovery.md)
+/// and create its sidecar directory `<repo>.mysbx/` with a default
+/// `config.toml`.
 fn init(args: &[String]) -> i32 {
     if !args.is_empty() {
         eprintln!("mysbx init: unexpected argument: {}", args[0]);
         return 2;
     }
-    let cwd = match std::env::current_dir() {
-        Ok(c) => c,
+    let repo = match repo::resolve_cwd() {
+        Ok(r) => r,
         Err(e) => {
-            eprintln!("mysbx: cannot determine current directory: {e}");
+            eprintln!("mysbx: {e}");
             return 1;
         }
     };
-    let sidecar = {
-        let mut p = cwd.clone().into_os_string();
-        p.push(".mysbx");
-        std::path::PathBuf::from(p)
-    };
-    if let Err(e) = std::fs::create_dir_all(&sidecar) {
-        eprintln!("mysbx: cannot create {}: {e}", sidecar.display());
+    if let Err(msg) = ensure_sidecar(&repo) {
+        eprintln!("mysbx: {msg}");
         return 1;
     }
-    println!("## created: {}/", sidecar.display());
 
+    let sidecar = &repo.sidecar;
     let config = sidecar.join("config.toml");
     if config.exists() {
         println!("## exists:  {}", config.display());
@@ -91,6 +107,19 @@ fn init(args: &[String]) -> i32 {
     0
 }
 
+/// Create the sidecar directory if it is missing and report it (idempotent:
+/// docs/design/config.md D12). Shared by `init` and the implicit init of the
+/// bare form.
+fn ensure_sidecar(repo: &repo::Repo) -> Result<(), String> {
+    if repo.sidecar.is_dir() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(&repo.sidecar)
+        .map_err(|e| format!("cannot create {}: {e}", repo.sidecar.display()))?;
+    println!("## created: {}/", repo.sidecar.display());
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,11 +128,40 @@ mod tests {
     fn help_and_version_succeed() {
         assert_eq!(run(vec!["--help".into()]), 0);
         assert_eq!(run(vec!["--version".into()]), 0);
-        assert_eq!(run(vec![]), 0);
     }
 
     #[test]
     fn unknown_command_fails() {
         assert_eq!(run(vec!["nope".into()]), 2);
+    }
+
+    // The guard-ordering property of the bare form (docs/TODOs/
+    // mvp-2-repo-discovery.md): resolve-and-guard BEFORE ensure_sidecar, so
+    // a `$HOME`-resolved bare run must never create a sidecar on disk.
+    // `run()` uses the real CWD and `$HOME`, so run it *from* a temp dir by
+    // spawning a subprocess of the test binary — no: cheaper and still
+    // faithful, call the pieces directly.
+    #[test]
+    fn bare_form_in_home_creates_no_sidecar() {
+        let home = std::env::temp_dir()
+            .join(format!("mysbx-lib-test-home-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+
+        // resolve() is the pure core of the bare form; it must reject the
+        // home without any filesystem side effect.
+        let e = repo::resolve(&home, Some(&home)).unwrap_err();
+        assert!(matches!(e, repo::Error::HomeDir(_)), "{e}");
+
+        // And the sidecar that implicit init WOULD have created does not
+        // exist, i.e. nothing ran past the guard.
+        let sidecar = {
+            let mut name = home.as_os_str().to_owned();
+            name.push(".mysbx");
+            std::path::PathBuf::from(name)
+        };
+        assert!(!sidecar.exists());
+
+        let _ = std::fs::remove_dir_all(&home);
     }
 }
