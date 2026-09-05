@@ -84,6 +84,12 @@ let
       herdr
       git
       coreutils
+      # `awk` parses `git worktree list --porcelain` below. Declared
+      # explicitly (like ../shell.git/default.nix does for
+      # `git-branch-to-worktree`) so the script does not depend on an ambient
+      # host installation: without it the pipeline dies with status 127
+      # *before* `die` can keep the popup open.
+      gawk
     ];
     text = ''
       self="herdr-worktree-sibling"
@@ -108,6 +114,10 @@ let
 
       and open it as a herdr worktree workspace. Without <branch> the branch
       name is read from stdin (herdr runs this as a popup, which has a tty).
+
+      Run from anywhere in the repository, including from a linked worktree:
+      the source is always the MAIN checkout, so a new branch forks from the
+      main checkout's HEAD, not from the worktree the popup was opened in.
       EOF
       }
 
@@ -150,7 +160,9 @@ let
       # The MAIN working tree (first entry of `git worktree list`), so this
       # also works when triggered from inside a linked worktree - herdr
       # refuses `--cwd` inside one ("worktree actions start from the repo
-      # parent workspace").
+      # parent workspace"). NOTE: this also fixes the BASE of a new branch to
+      # the main checkout's HEAD (no `--base` is passed), which is what herdr's
+      # own action does too - it does not fork from the focused worktree.
       repo_root="$(git worktree list --porcelain | awk '/^worktree /{print substr($0, 10); exit}')"
       [ -n "$repo_root" ] || die "could not determine the main working tree"
 
@@ -308,6 +320,8 @@ let
       herdr
       git
       coreutils
+      # `awk` parses `git worktree list --porcelain` below.
+      gawk
     ];
     text = ''
       self="agent-bubblewrap-herdr"
@@ -334,10 +348,25 @@ let
 
       # Session config: the shared part plus the repository-local worktree
       # root. Written fresh on every start into the jail's tmpfs $HOME.
+      #
+      # The path goes into a TOML basic string, so `\` and `"` must be
+      # escaped and control characters (which TOML forbids there) rejected -
+      # otherwise a repository name containing them yields a config herdr
+      # cannot parse, and herdr then silently FALLS BACK TO ITS DEFAULTS
+      # (`~/.herdr/worktrees`), quietly losing the repository-local root.
+      case $worktrees in
+          *[[:cntrl:]]*)
+              echo "$self: repository path contains control characters: $worktrees" >&2
+              exit 1
+              ;;
+      esac
+      worktrees_toml="''${worktrees//\\/\\\\}"
+      worktrees_toml="''${worktrees_toml//\"/\\\"}"
+
       mkdir -p "$HOME/.config/herdr"
       {
           cat ${herdrJailConfigCommonFile}
-          printf '\n[worktrees]\ndirectory = "%s"\n' "$worktrees"
+          printf '\n[worktrees]\ndirectory = "%s"\n' "$worktrees_toml"
       } > "$HOME/.config/herdr/config.toml"
 
       # Monolithic: no server/client split, so the session cannot attach to a
@@ -360,6 +389,21 @@ let
       _hb_root="$(dirname "$_hb_root")"
     done
     if [ -e "$_hb_root/.git" ]; then
+      _hb_root="$(realpath "$_hb_root")"
+      _hb_home="$(realpath "$HOME")"
+      # The shared guard (`rejectHomeCwd`) only checks the INITIAL $PWD, but
+      # the walk above can still land on $HOME - or on a parent of it - when
+      # the home directory itself is a git checkout. Binding that root
+      # read-write would hand the agent the entire home directory, so refuse
+      # instead. Matches $HOME itself and any ancestor of it.
+      case "$_hb_home" in
+        "$_hb_root" | "$_hb_root"/*)
+          echo "agent-bubblewrap-herdr: the enclosing git repository is \$HOME (or contains it): $_hb_root" >&2
+          echo "agent-bubblewrap-herdr: binding it read-write would expose the whole home directory." >&2
+          echo "agent-bubblewrap-herdr: run from a project checkout below \$HOME instead." >&2
+          exit 1
+          ;;
+      esac
       _hb_worktrees="$(dirname "$_hb_root")/$(basename "$_hb_root")__worktrees"
       mkdir -p "$_hb_worktrees"
       RUNTIME_ARGS+=(--bind "$_hb_root" "$_hb_root" --bind "$_hb_worktrees" "$_hb_worktrees")

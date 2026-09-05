@@ -20,6 +20,12 @@ or trailing `-`), e.g. `feature/foo bar` -> `feature-foo-bar`.
 Example: for the repo `~/myconfig/myconfig`, branch `herdr-worktree-location`
 lands in `~/myconfig/myconfig__worktrees/herdr-worktree-location`.
 
+It can be triggered from anywhere in the repository, including from inside a
+linked worktree, because it always resolves the **main** checkout first. That
+also fixes the base of a *new* branch to the main checkout's `HEAD` — it does
+not fork from the worktree the popup was opened in. Use
+`git branch-to-worktree` when you want to fork from the current HEAD.
+
 ## Why a custom command and not just a setting
 
 herdr has exactly one worktree option, `[worktrees] directory` (default
@@ -93,6 +99,10 @@ usable from the host.
 
 Start it from the **main** checkout: only that repository's sibling directory
 is bound, so starting from a linked worktree aborts with an explanatory error.
+It also refuses to start when the enclosing repository *is* `$HOME` (or a
+parent of it): the wrapper's shared guard only rejects `$PWD == $HOME`, but the
+walk up to the repository root could otherwise land on the home directory and
+bind all of it read-write.
 The panes run the plain (un-jailed) agent binaries with their real home state
 bound read-write — the jail itself is the sandbox, so no nested sandboxing.
 
