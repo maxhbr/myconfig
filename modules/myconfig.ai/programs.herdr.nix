@@ -450,7 +450,13 @@ let
     # session config into the jail's tmpfs $HOME instead.
     extraConfigDirs = [ ".agents" ];
     # Plain (un-jailed) agent binaries for the panes - no nested sandbox.
-    extraDevTools = [ herdr ] ++ enabledAgentPackages;
+    # `fish` is added so panes can run an interactive fish shell inside the
+    # jail (the base `devTools` only provide `bashInteractive`).
+    extraDevTools = [
+      herdr
+      pkgs.fish
+    ]
+    ++ enabledAgentPackages;
     extraPermissions = [ worktreesSiblingPerm ];
   };
 
