@@ -34,14 +34,14 @@ let
   # ./mysbx-rs/src/toml.rs parses.
   tomlFormat = pkgs.formats.toml { };
 
-  # Absolute host home of the user the generated config belongs to. Taken
-  # from the NixOS user (never from `home-manager.users.mhuber.*`, which
-  # would be an infinite recursion: this module *defines* home-manager
-  # modules).
-  homeDir = config.users.users.mhuber.home or "/home/mhuber";
-  configHome = "${homeDir}/.config";
-
   # Baseline grants: common agent-tooling host config, read-only.
+  #
+  # The paths are written with the `~/` prefix: mysbx expands it at run
+  # time against the invoking user's `$HOME` (./docs/design/config.md D8),
+  # so this module needs no home-directory lookup at all. That expansion
+  # happens on the HOST, before bwrap is executed — `--clearenv` does not
+  # pass `HOME` into the sandbox, but nothing inside the sandbox ever
+  # resolves these paths, so the two facts do not collide.
   #
   # CAUTION: every path here MUST exist at runtime — mysbx canonicalizes
   # eagerly and a missing path is a hard error on *every* run
@@ -60,11 +60,11 @@ let
       })
       (
         [
-          "${configHome}/git"
-          "${configHome}/ripgrep"
-          "${configHome}/bat"
+          "~/.config/git"
+          "~/.config/ripgrep"
+          "~/.config/bat"
         ]
-        ++ lib.optional config.programs.fish.enable "${configHome}/fish"
+        ++ lib.optional config.programs.fish.enable "~/.config/fish"
       );
 
   # `dest` is optional in the schema and there is no TOML null: a
@@ -126,14 +126,27 @@ in
             description = "Share the host network; `false` is the deny switch.";
           };
           mounts = mkOption {
-            description = "Host paths granted into the sandbox (absolute paths only).";
+            description = ''
+              Host paths granted into the sandbox. Each path is absolute,
+              `~/...` (expanded against the invoking user's `$HOME` at run
+              time) or relative to the generated config file's directory
+              (`~/.config/mysbx/`) — ./docs/design/config.md D8.
+            '';
             default = [ ];
             type = types.listOf (
               types.submodule {
                 options = {
                   path = mkOption {
-                    type = types.addCheck types.str (lib.hasPrefix "/");
-                    description = "Absolute host path (must exist: it is canonicalized eagerly).";
+                    # No absolute-path check: `~/...` and paths relative to
+                    # `~/.config/mysbx/` are valid too (D8). Only the empty
+                    # string is rejected here — the Rust parser rejects it
+                    # as well, but failing at eval time is cheaper.
+                    type = types.addCheck types.str (p: p != "");
+                    description = ''
+                      Host path: absolute, `~/...` or relative to
+                      `~/.config/mysbx/`. It must exist at run time — it is
+                      canonicalized eagerly.
+                    '';
                   };
                   mode = mkOption {
                     type = types.enum [
@@ -146,6 +159,9 @@ in
                   dest = mkOption {
                     type = types.nullOr (types.addCheck types.str (lib.hasPrefix "/"));
                     default = null;
+                    # `dest` stays absolute-only: it is a path inside the
+                    # sandbox, where neither `~/` nor "relative to the
+                    # config file" means anything (D8).
                     description = "Absolute in-sandbox destination; `null` means the same path.";
                   };
                 };
@@ -171,9 +187,10 @@ in
       { home.packages = [ cfg.package ]; }
     ];
 
-    # The generated user config belongs to the user whose absolute home
-    # paths it contains, so it is written for `mhuber` only — not via
-    # `sharedModules` (agent users have different homes).
+    # The generated user config is the grant layer of `mhuber`, so it is
+    # written for that user only — not via `sharedModules`: an agent user
+    # would expand the same `~/...` paths against its own home, granting
+    # paths that were never reviewed for it.
     home-manager.users.mhuber = {
       xdg.configFile."mysbx/config.toml".source = tomlFormat.generate "mysbx-config.toml" userConfigToml;
     };

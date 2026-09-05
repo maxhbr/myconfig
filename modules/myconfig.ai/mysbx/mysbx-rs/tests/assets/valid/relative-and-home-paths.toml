@@ -1,0 +1,26 @@
+# Mount paths may be written three ways (docs/design/config.md D8). The
+# parser stores them verbatim; `mysbx-rs/src/merge.rs` expands and
+# canonicalizes them eagerly, before the merge.
+
+# `~/` — the invoking user's home.
+[[mounts]]
+path = "~/.config/git"
+mode = "ro"
+
+# Relative — to the directory of THIS file, so the same string means
+# `~/.config/mysbx/state` in the user config and `<repo>.mysbx/state` in
+# a sidecar config.
+[[mounts]]
+path = "state"
+mode = "rw"
+
+# `..` is allowed: canonicalization resolves it, and the sidecar grant
+# check (D7) then runs on the resolved absolute path.
+[[mounts]]
+path = "../outside"
+mode = "ro"
+
+# Absolute — taken as written.
+[[mounts]]
+path = "/etc/hosts"
+mode = "ro"

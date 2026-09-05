@@ -1,0 +1,7 @@
+# `dest` is a path inside the sandbox and stays absolute-only: there is
+# no host home to expand and no config file to be relative to in the
+# sandbox's filesystem view (docs/design/config.md D8).
+[[mounts]]
+path = "/etc/hosts"
+dest = "etc/hosts"
+mode = "ro"

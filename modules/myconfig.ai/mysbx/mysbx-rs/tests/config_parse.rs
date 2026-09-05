@@ -47,14 +47,16 @@ fn every_asset_is_exercised() {
         "valid/empty.toml",
         "valid/full.toml",
         "valid/minimal.toml",
+        "valid/relative-and-home-paths.toml",
         "valid/syntax-zoo.toml",
         "valid/user-config.toml",
         "invalid/schema-bad-mode.toml",
         "invalid/schema-env-eq-key.toml",
         "invalid/schema-env-flag-key.toml",
         "invalid/schema-missing-mount-path.toml",
-        "invalid/schema-relative-path.toml",
+        "invalid/schema-relative-dest.toml",
         "invalid/schema-repo-table.toml",
+        "invalid/schema-tilde-user-path.toml",
         "invalid/schema-unknown-key.toml",
         "invalid/schema-wrong-type.toml",
         "invalid/syntax-duplicate-key.toml",
@@ -116,6 +118,21 @@ fn user_config_declares_no_repo() {
 }
 
 #[test]
+fn relative_and_home_paths_are_stored_verbatim() {
+    // docs/design/config.md D8: a mount path may be `~/…`, relative to
+    // its own config file, or absolute. Parsing is string-level —
+    // expansion and canonicalization happen in `mysbx::merge`, which is
+    // the only place that knows `$HOME` and the file the path came from.
+    let c = load_ok("valid/relative-and-home-paths.toml");
+    let paths: Vec<&str> = c.mounts.iter().map(|m| m.path.as_str()).collect();
+    assert_eq!(
+        paths,
+        ["~/.config/git", "state", "../outside", "/etc/hosts"]
+    );
+    assert_eq!(c.mounts[1].mode, Mode::Rw);
+}
+
+#[test]
 fn syntax_zoo() {
     let c = load_ok("valid/syntax-zoo.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
@@ -156,7 +173,11 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         ("invalid/schema-unknown-key.toml", "unknown key `readonly`"),
         ("invalid/schema-bad-mode.toml", "invalid mode `readwrite`"),
         ("invalid/schema-wrong-type.toml", "expected a boolean"),
-        ("invalid/schema-relative-path.toml", "must be absolute"),
+        ("invalid/schema-relative-dest.toml", "must be absolute"),
+        (
+            "invalid/schema-tilde-user-path.toml",
+            "only the `~/` prefix is supported",
+        ),
         (
             "invalid/schema-missing-mount-path.toml",
             "missing required key `path`",
