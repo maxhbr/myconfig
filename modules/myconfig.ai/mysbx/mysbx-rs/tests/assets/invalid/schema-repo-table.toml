@@ -1,0 +1,6 @@
+# The repo is implicit (docs/design/config.md D13): it is the repo the
+# sidecar belongs to, always mounted rw at its real path. A `[repo]` table
+# is therefore an unknown top-level key and must be rejected (D11).
+[repo]
+path = "/home/user/src/project"
+mode = "rw"

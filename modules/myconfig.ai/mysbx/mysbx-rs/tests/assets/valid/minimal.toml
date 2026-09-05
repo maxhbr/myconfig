@@ -1,0 +1,13 @@
+# mysbx sidecar config
+# The repo this sidecar belongs to is implicit: it is always mounted
+# read-write at its real host path and cannot be changed here
+# (docs/design/config.md D13).
+#
+# Everything else in the sandbox is opt-in. Examples:
+#
+# [[mounts]]
+# path = "/home/user/.config/git"
+# mode = "ro"
+#
+# [env]
+# EDITOR = "nvim"

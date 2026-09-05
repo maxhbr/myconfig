@@ -1,0 +1,6 @@
+# An unknown key inside a known table must be rejected, wherever it sits.
+# The top-level form is covered by schema-repo-table.toml; this is the
+# nested form. ([env] cannot express this: its keys are open-ended.)
+[[mounts]]
+path = "/etc/hosts"
+readonly = true

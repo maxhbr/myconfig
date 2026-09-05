@@ -1,0 +1,4 @@
+# Paths in the configuration are absolute (docs/design/config.md D8).
+[[mounts]]
+path = "../outside"
+mode = "ro"

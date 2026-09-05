@@ -630,6 +630,12 @@
             import ./modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix {
               inherit self inputs system;
             }
+          )
+          // lib.optionalAttrs (system == "x86_64-linux") (
+            # Rust mysbx cargo test suite (modules/myconfig.ai/mysbx).
+            import ./modules/myconfig.ai/mysbx/nix/checks.nix {
+              inherit self inputs system;
+            }
           );
 
           devShells.default =

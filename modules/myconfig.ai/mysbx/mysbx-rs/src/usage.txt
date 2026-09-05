@@ -1,0 +1,21 @@
+mysbx - my sandboxing tool
+
+Usage:
+  mysbx [--dry-run]
+  mysbx run [--dry-run] -- COMMAND...
+  mysbx [COMMAND]
+
+Commands:
+  (none)        enter an interactive sandbox shell for the current repo
+                (creates the sidecar implicitly when it is missing)
+  run -- CMD... run one command in the sandbox; everything after `--` is
+                passed to the command verbatim
+  init          create the sidecar directory next to the current repo
+  version       print the version
+  help          print this help
+
+Options:
+  --dry-run     print the sandbox argv, one argument per line, and exit;
+                must be the first argument, runs no sidecar and no command
+  -h, --help    print this help
+  -V, --version print the version

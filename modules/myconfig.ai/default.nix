@@ -24,6 +24,7 @@ in
     ./myconfig.ai.qemu-agent-sandbox
     ./myconfig.ai.microvm
     ./myconfig.ai.gvisor-agent-sandbox
+    ./mysbx
     ./comfyui.nix
     ./container.Kokoro-FastAPI.nix
     ./container.crawl4ai.nix

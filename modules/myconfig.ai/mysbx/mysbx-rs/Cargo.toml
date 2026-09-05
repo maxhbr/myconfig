@@ -1,0 +1,20 @@
+# Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+[package]
+name = "mysbx"
+version = "0.1.0"
+edition = "2021"
+description = "Sandboxing CLI"
+license = "MIT"
+
+# Zero dependencies by design: the CLI is small, a hand-rolled argument
+# parser keeps `--help` under our control, and `cargoLock` needs no
+# `outputHashes`.
+
+[lib]
+name = "mysbx"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mysbx"
+path = "src/main.rs"

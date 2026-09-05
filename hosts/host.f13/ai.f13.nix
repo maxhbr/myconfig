@@ -31,6 +31,11 @@
           nix.enable = true;
         };
 
+        # The `mysbx` sandboxing CLI (modules/myconfig.ai/mysbx/README.md),
+        # the WIP successor of the sandbox tiers above. Enabled explicitly
+        # per host like the other tiers; it only puts the CLI on PATH.
+        mysbx.enable = true;
+
         # Cloud Hypervisor agent-sandbox tier
         # (see modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md).
         # Explicitly enabled here — NOT via the broad `myconfig.ai.enable`

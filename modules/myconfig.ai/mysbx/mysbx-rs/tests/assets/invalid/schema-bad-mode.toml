@@ -1,0 +1,5 @@
+# `mode` must be `ro` or `rw` (top level is covered by schema-repo-table.toml,
+# which is itself rejected — so pin the mode check on a mount).
+[[mounts]]
+path = "/etc/hosts"
+mode = "readwrite"
