@@ -322,6 +322,17 @@ direction (a pointer at it, or at anything containing or inside it):
 binding it would hand the payload the file that decides what may be
 bound at all.
 
+The explicit-after-the-fact form of that trust decision is `mysbx init
+--approve-git-dirs` (review-3 item 5): against a config the implicit
+init already wrote, it adds the discovered-but-unapproved entries —
+idempotently, and never touching anything but the `git-dirs` list.
+It is additive, not reverting: an entry an operator deliberately
+REMOVED is rediscovered on a later run, so re-running the flag
+re-approves it — the flag is the operator's word each time it runs.
+Plain `init` (D12) never touches an existing config at all, which is
+what keeps a deliberately removed entry removed until the operator
+says otherwise.
+
 ## Non-goals
 
 - No global registry of sandboxes; the filesystem layout *is* the registry.

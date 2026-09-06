@@ -10,7 +10,13 @@ Commands:
                 (creates the sidecar implicitly when it is missing)
   run -- CMD... run one command in the sandbox; everything after `--` is
                 passed to the command verbatim
-  init          create the sidecar directory next to the current repo
+  init          create the sidecar directory next to the current repo;
+                idempotent: an existing config.toml is never rewritten
+  init --approve-git-dirs
+                additionally approve the git metadata directories the
+                repo still needs in an EXISTING config.toml — the
+                recovery after an implicit first-run init (which never
+                approves anything); adds only missing entries
   version       print the version
   help          print this help
 
