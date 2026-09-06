@@ -79,6 +79,20 @@ pub struct Params<'a> {
     /// passes `None` and the sandbox runs `nix` with its built-in
     /// defaults.
     pub nix_conf: Option<&'a str>,
+    /// Paths of the **trusted policy files** this run was configured
+    /// from — the user config and the sidecar config, exactly as
+    /// `load_layers` read them. Empty when a layer was absent (an
+    /// absent file grants nothing and needs no protection).
+    ///
+    /// The payload must never be able to write these: the user config
+    /// is the host-wide grant layer and the sidecar is the one file a
+    /// repository's sandbox runs are steered by, and a writable policy
+    /// file turns the NEXT run into a widened one — a `git-dirs`
+    /// approval can be added by the attacker, and the `.git` pointer
+    /// rewritten to match (review-3 item 3). `rw` mount sources that
+    /// contain one are therefore refused; the check also covers the
+    /// repo bind itself, which is `rw` by definition.
+    pub policy_paths: &'a [PathBuf],
 }
 
 /// Build the complete `bwrap` argv for `cfg` / `repo` / `payload`.
@@ -205,6 +219,34 @@ pub fn bwrap_argv(
         bind(&mut argv, false, &git_dir.to_string_lossy(), None);
     }
 
+    // Review-3 item 3: a writable bind may never expose a trusted
+    // policy file — the user config (host-wide grants) or the sidecar
+    // config (this repo's own sandbox policy). The payload writing one
+    // steers the NEXT run: a `git-dirs` approval can be added, the
+    // `.git` pointer rewritten to match. `rw` mounts are the direct
+    // case; the repo bind and the git dirs are `rw` too, so they are
+    // checked as well — a sidecar or user config sitting inside the
+    // work tree is refused, not silently exposed. `ro` mounts do not
+    // count: the payload cannot write through them.
+    for src in cfg
+        .mounts
+        .iter()
+        .filter(|m| m.mode == Mode::Rw)
+        .map(|m| normalize(&m.path))
+        .chain(std::iter::once(normalize(&root)))
+        .chain(repo.git_dirs.iter().map(|g| normalize(&g.to_string_lossy())))
+    {
+        for policy in params.policy_paths {
+            let pol = normalize(&policy.to_string_lossy());
+            if pol.starts_with(&src) {
+                return Err(Error::PolicyFileWritable {
+                    source: src.to_string_lossy().into_owned(),
+                    policy: policy.display().to_string(),
+                });
+            }
+        }
+    }
+
     // 5. configured mounts, in declaration order; dest defaults to the
     // canonicalized source path. A `dest` may never be related to a
     // protected path in either direction: bubblewrap applies binds in
@@ -220,6 +262,9 @@ pub fn bwrap_argv(
     // The protected-dest check runs FIRST: a dest that overwrites a base
     // bind is the sharper diagnosis, and the repo-covering check would
     // otherwise mask it with a generic `would hide` for dests like `/`.
+    // (The policy-file check above is even earlier; a config violating
+    // several rules reports the policy exposure, which is the one that
+    // turns the NEXT run into a widened one.)
     for m in &cfg.mounts {
         let dest = m.dest.as_deref().unwrap_or(&m.path);
         if let Some(protected) = check_dest(dest) {
@@ -345,6 +390,17 @@ pub enum Error {
         /// The writable bind it lies below.
         writable: String,
     },
+    /// A writable bind (the repo, a git dir, or an `rw` mount) would
+    /// expose a trusted policy file — the user config or the sidecar
+    /// config — to the payload (review-3 item 3). A policy file the
+    /// sandbox can write makes the NEXT run a widened one: `git-dirs`
+    /// approvals can be added, the `.git` pointer rewritten to match.
+    PolicyFileWritable {
+        /// The mount (or repo) source the policy file lies below.
+        source: String,
+        /// The policy file that would become writable.
+        policy: String,
+    },
     /// A configured mount would carry the nix daemon into a sandbox
     /// whose network is denied (review-2 item 3, review-3 item 2). The
     /// socket under `/nix/var/nix` is a network service: the daemon
@@ -391,6 +447,13 @@ impl fmt::Display for Error {
                  parent components, so a symlink planted there redirects this \
                  bind onto any path, protected ones included; mount it \
                  outside that tree instead"
+            ),
+            Error::PolicyFileWritable { source, policy } => write!(
+                f,
+                "source {source} would expose the policy file {policy} \
+                 writable — a config the sandbox can write steers the NEXT \
+                 run of itself (git-dirs approvals, .git pointers); narrow \
+                 the mount to below it, or drop it"
             ),
             Error::DaemonUnderDeniedNetwork { source } => write!(
                 f,
@@ -871,6 +934,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         }
     }
 

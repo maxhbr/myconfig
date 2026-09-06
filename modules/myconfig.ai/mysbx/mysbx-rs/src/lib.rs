@@ -288,10 +288,39 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // "bind the host's" — that file may carry access-tokens, and a
     // read-only bind hands them to the payload all the same.
     let nix_conf = env_opt("MYSBX_NIX_CONF");
+    // Review-3 item 3: the trusted policy files of THIS run, handed to
+    // the argv builder so it can refuse any `rw` bind that would expose
+    // one to the payload.
+    //
+    // Only files that exist are named: an absent file granted nothing,
+    // so exposing its would-be location writes nothing this run — and
+    // the check is not thereby bypassable, because the run that FOLLOWS
+    // a payload-created `config.toml` sees an existing file and refuses
+    // the very `rw` source that allowed creating it. Steering the next
+    // run requires the next run to launch with the policy writable —
+    // and that is exactly what this guard forbids.
+    //
+    // Both paths are CANONICALIZED: every `rw` source they are compared
+    // against is (D8, repo.rs), and a symlinked `$HOME` or
+    // `$XDG_CONFIG_HOME` would otherwise alias the user config out of
+    // the comparison. A file that exists always canonicalizes; the
+    // normalize fallback is belt-and-braces for a race between the
+    // existence check above and this call.
+    let policy_paths: Vec<std::path::PathBuf> = [
+        (user_config_exists, &user_config_path),
+        (sidecar_config_exists, &sidecar_config_path),
+    ]
+    .into_iter()
+    .filter(|(exists, _)| *exists)
+    .map(|(_, path)| {
+        std::fs::canonicalize(path).unwrap_or_else(|_| path.clone())
+    })
+    .collect();
     let params = bwrap::Params {
         shell: &shell,
         tools_path: &tools_path,
         nix_conf: nix_conf.as_deref(),
+        policy_paths: &policy_paths,
     };
     let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
         Ok(a) => a,

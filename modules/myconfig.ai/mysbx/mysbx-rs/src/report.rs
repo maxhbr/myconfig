@@ -261,6 +261,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         };
         lines(&Report {
             repo: &repo,
@@ -356,6 +357,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -394,6 +396,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -433,6 +436,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         };
         let joined = lines(&Report {
             repo: &repo,

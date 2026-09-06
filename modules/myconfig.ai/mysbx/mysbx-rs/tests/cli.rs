@@ -1272,3 +1272,34 @@ fn without_the_pin_no_nix_conf_is_bound() {
     );
     assert!(stdout.contains("## nix.conf:       (none"), "{stdout}");
 }
+
+#[test]
+fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
+    // Review-3 item 3, as a real run sees it: the sidecar config
+    // exists, and the user config grants `rw` on a directory that
+    // contains it. The run must fail with the policy-file error — a
+    // writable sidecar steers the next run (git-dirs approvals, .git
+    // rewrites) — and must NOT fall back to executing anything.
+    let (inv, _, sidecar) = fixture_with_backend("policy-writable", &[]);
+    // Put the sidecar config's PARENT tree under an rw grant: the base
+    // dir of the fixture contains both the repo and the sidecar.
+    let user_cfg = format!(
+        "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"rw\"\ndest = \"/all\"\n",
+        inv.cwd.parent().unwrap()
+    );
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(inv.xdg.join("mysbx").join("config.toml"), user_cfg).unwrap();
+    // The sidecar config must exist to count as a policy file.
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+
+    let mut cmd = spawn_with_args(&inv, &[] as &[&str]);
+    cmd.env("MYSBX_BWRAP", "/nonexistent-bwrap");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("policy file"),
+        "unexpected stderr: {stderr}"
+    );
+}
