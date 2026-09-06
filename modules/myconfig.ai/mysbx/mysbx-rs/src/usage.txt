@@ -15,8 +15,10 @@ Commands:
   help          print this help
 
 Options:
-  --dry-run     print the sandbox argv, one argument per line, and exit;
-                must precede the command, runs no sidecar and no command
+  --dry-run     print the exact bwrap invocation — the executable
+                (argv[0]) first, then the sandbox argv, one argument
+                per line — and exit; must precede the command, runs no
+                sidecar and no command
   --verbose     print the run configuration (repo, config files, backend,
                 network, mounts, environment, payload) to stdout with a
                 `## ` prefix before running; must precede the command.

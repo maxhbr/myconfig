@@ -70,21 +70,39 @@ pub struct Config {
     /// Sandbox technology; `None` means "not decided by this layer"
     /// (docs/design/cli.md D7: never auto-detected).
     pub backend: Option<String>,
-    /// Defaults to `true`: the network is shared; `network = false` is the
-    /// explicit deny switch.
-    pub network: bool,
+    /// Whether the network is shared. `None` means "not decided by
+    /// this layer" — like `backend`: a layer that does not mention
+    /// `network` must not count as an explicit `true` (which would
+    /// make an omitted sidecar value re-enable what the user config
+    /// denied, docs/design/config.md D7). The shared-by-default `true`
+    /// of docs/plan.md is applied AFTER the merge (see
+    /// `crate::merge::merge`), never inside a layer.
+    pub network: Option<bool>,
     pub mounts: Vec<Mount>,
     /// Environment forwarded into the sandbox.
     pub env: BTreeMap<String, String>,
+    /// Host directories whose git metadata a repo's `.git` FILE may
+    /// point at — the approval list for the external git-dir binds
+    /// (review-2 item 1). Written as host paths in the same three
+    /// forms as `[[mounts]]` paths (D8): absolute, `~/…` (expanded
+    /// against the invoking user's home at run time) or relative to
+    /// the config file's directory. A repo-writable `.git` file is
+    /// untrusted content (D3): the bind happens only when the
+    /// resolved target is at or below an entry of this list in the
+    /// user config or the sidecar — `mysbx init` snapshots the
+    /// discovered directories into a fresh sidecar so the common
+    /// worktree/submodule case works out of the box.
+    pub git_dirs: Vec<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
             backend: None,
-            network: true,
+            network: None,
             mounts: Vec::new(),
             env: BTreeMap::new(),
+            git_dirs: Vec::new(),
         }
     }
 }
@@ -137,9 +155,10 @@ impl Config {
         for (key, value) in root {
             match key.as_str() {
                 "backend" => config.backend = Some(string(value, "backend")?.to_owned()),
-                "network" => config.network = boolean(value, "network")?,
+                "network" => config.network = Some(boolean(value, "network")?),
                 "mounts" => config.mounts = mounts(value)?,
                 "env" => config.env = env(table(value, "env")?)?,
+                "git-dirs" => config.git_dirs = git_dirs(value)?,
                 other => return Err(unknown("top level", other)),
             }
         }
@@ -189,6 +208,28 @@ fn mounts(value: &Value) -> Result<Vec<Mount>, Error> {
         out.push(Mount { path, dest, mode });
     }
     Ok(out)
+}
+
+/// Parse the `git-dirs` approval list: an array of host-path strings,
+/// each in one of the D8 forms (absolute, `~/…`, relative). The same
+/// `host_path` shape check as `[[mounts]]` paths applies; canonicalization
+/// happens in the merge, eagerly (D8), so a dangling approval is a hard
+/// error rather than a silent no-op.
+fn git_dirs(value: &Value) -> Result<Vec<String>, Error> {
+    let items = value.as_array().ok_or_else(|| {
+        Error::Schema(format!(
+            "git-dirs: expected an array of strings, found {}",
+            value.type_name()
+        ))
+    })?;
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let at = format!("git-dirs #{}", i + 1);
+            host_path(string(v, &at)?, &at)
+        })
+        .collect()
 }
 
 fn env(t: &Table) -> Result<BTreeMap<String, String>, Error> {
@@ -293,7 +334,9 @@ mod tests {
     fn empty_config_is_all_defaults() {
         let c = Config::parse("").unwrap();
         assert_eq!(c, Config::default());
-        assert!(c.network);
+        // `network` is tri-state in a layer: None means "not decided" —
+        // the shared-by-default `true` is applied after the merge.
+        assert_eq!(c.network, None);
         assert!(c.backend.is_none());
     }
 

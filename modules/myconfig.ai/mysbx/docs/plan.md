@@ -65,7 +65,11 @@ every knob is a decision:
 | Base element | MVP | Note |
 | --- | --- | --- |
 | `--unshare-all` | yes | network re-shared unless `network = false` |
+| resolver set (ro) | yes, when network is shared | `/etc/hosts`, `/etc/nsswitch.conf`, `/etc/resolv.conf`, `/etc/ssl`, `/run/systemd/resolve` — `--ro-bind-try`, the same path set the `network` combinator of `fns/bubblewrap-app.nix` binds; DNS/TLS are unusable without them (review-1 finding 5); `/run/systemd/resolve` is the only `/run` exception to the row below, ro and narrow |
 | `/nix/store` ro | yes | agents shell out to arbitrary store paths |
+| `/nix/var/nix` ro | only when the network is shared, `--ro-bind-try` | the store database and the nix-daemon socket: `nix` on the tools PATH is unusable without them (review-1 finding 6), but a ro bind does not stop the payload from *talking* to the daemon, and the daemon builds fixed-output derivations — which keep network access. Binding it under `network = false` would make the report's "denied" false, so it rides with `--share-net` (review-2 item 3). Consequence, said out loud: `nix` needs the shared network |
+| host `/etc/nix/nix.conf` | **no** | it may hold `access-tokens` (GitHub/GitLab credentials) and `netrc-file` pointers; a read-only bind hands them to the payload all the same (review-2 item 3) |
+| generated `nix.conf` ro | yes, when the wrapper pins one (`MYSBX_NIX_CONF`) | a minimal *sanitized* client config from `nix/mysbx.nix` — flake CLI plus the public cache, no credentials, nothing copied from the host — bound at `/etc/nix/nix.conf`. Unwrapped builds pin nothing and run `nix` with its built-in defaults |
 | `/usr/bin` ro | yes | `/usr/bin/env` shebangs |
 | `--proc`, `--dev` | yes | |
 | `/etc/localtime` | yes | timestamps |
@@ -73,7 +77,7 @@ every knob is a decision:
 | tmpfs `$HOME` (`/mysbx-home`) | yes | an in-sandbox home so `cd ~`, `~/.bash_history`, git & co. work; empty, writable, outside `/home` (`config.md` D14) |
 | host `$HOME` bind | **no** | the host home stays unreachable; its *value* is not forwarded either — exposing parts of it is an explicit `[[mounts]]` grant (`config.md` D6/D7) |
 | `~/tmp` rw | no | agent-session convenience, not a sandbox essential |
-| `/run` | no | D-Bus, PipeWire, the nix-daemon socket, agent sockets |
+| `/run` | no | D-Bus, PipeWire, agent sockets; the nix-daemon socket arrives via the `/nix/var/nix` row above (and only with a shared network); the resolver exception is the only `/run` path bound |
 | dev-tool closure on `PATH` | yes, as-is | git, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](./nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list) |
 | `OPENAI_API_KEY` auto-forward | **no** | under `mysbx` a key is an ordinary user-config `[env]` entry (`config.md` D6) |
 
@@ -106,7 +110,8 @@ All six items are done; the MVP is complete.
 
 ### Definition of done
 
-- `cd <repo> && mysbx run --dry-run -- ls /` prints the argv, one argument per
+- `cd <repo> && mysbx run --dry-run -- ls /` prints the bwrap executable
+  (argv[0], review-1 finding 7) followed by the argv, one argument per
   line, on stdout, and exits `0`.
 - The golden tests pin that argv for: minimal config, a `ro` and a `rw` mount,
   `network = false`, an `[env]` entry, and a sidecar that narrows the user

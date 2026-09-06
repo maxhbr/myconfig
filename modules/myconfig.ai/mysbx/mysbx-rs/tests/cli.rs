@@ -82,12 +82,15 @@ fn make_repo(base: &Path, name: &str) -> (PathBuf, PathBuf) {
 
 /// The minimal golden fixture (tests/assets/argv/minimal.txt) with the
 /// synthetic repo path substituted — the expected `--dry-run` output of
-/// the smallest real invocation.
+/// the smallest real invocation. argv[0] (the backend executable,
+/// review-1 finding 7) is `bwrap`: the tests run without the Nix
+/// wrapper's `MYSBX_BWRAP` pin, so the fallback applies.
 fn expected_minimal_argv(repo: &Path) -> String {
     let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/assets/argv/minimal.txt");
-    std::fs::read_to_string(&golden)
+    let argv = std::fs::read_to_string(&golden)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", golden.display()))
-        .replace("/synth/repo", &repo.to_string_lossy())
+        .replace("/synth/repo", &repo.to_string_lossy());
+    format!("bwrap\n{argv}")
 }
 
 /// A standard fixture: a repo with sidecar at `base/repo`, empty home and
@@ -392,8 +395,9 @@ fn verbose_run_form_reports_the_command_payload() {
         report.contains("payload:        command echo hi"),
         "{report}"
     );
-    // The argv is still there, unprefixed and last.
-    assert!(argv_block(&stdout).starts_with("--clearenv\n"), "{stdout}");
+    // The argv is still there, unprefixed and last, argv[0] first
+    // (review-1 finding 7).
+    assert!(argv_block(&stdout).starts_with("bwrap\n--clearenv\n"), "{stdout}");
 }
 
 #[test]
@@ -483,6 +487,46 @@ fn dry_run_sidecar_widening_fails() {
 }
 
 #[test]
+fn user_network_deny_survives_a_fresh_sidecar() {
+    // Review-1 P1: an omitted sidecar `network` used to count as an
+    // explicit `true`, so a user-config deny plus a freshly `init`ed
+    // (comment-only) sidecar tripped the NetworkUpgrade hard error and
+    // made every newly initialized sandbox fail. The dry run must
+    // succeed with `--unshare-all` and WITHOUT `--share-net`.
+    let (inv, _, sidecar) = fixture("deny-fresh-sidecar", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = false\n",
+    )
+    .unwrap();
+    // Exactly what `mysbx init` writes: comments only.
+    std::fs::write(sidecar.join("config.toml"), "# mysbx sidecar config\n").unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("--unshare-all\n"), "stdout: {stdout}");
+    assert!(!stdout.contains("--share-net"), "stdout: {stdout}");
+}
+
+#[test]
+fn sidecar_network_true_still_cannot_reenable() {
+    // The guard itself is unchanged: an EXPLICIT sidecar `network = true`
+    // against a user deny stays the hard error of docs/design/config.md
+    // D7 — the tri-state only stops ABSENT values from counting as true.
+    let (inv, _, sidecar) = fixture("explicit-reenable", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = false\n",
+    )
+    .unwrap();
+    std::fs::write(sidecar.join("config.toml"), "network = true\n").unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stdout: {stdout}");
+    assert!(stderr.contains("may narrow, not widen"), "stderr: {stderr}");
+}
+
+#[test]
 fn no_backend_configured_fails() {
     // cli.md D7: the backend is explicit, never auto-detected; neither
     // layer named one, so the run is refused.
@@ -507,7 +551,7 @@ fn backend_bubblewrap_is_accepted() {
     let (inv, _, _) = fixture_with_backend("backend-ok", &["--dry-run"]);
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(stdout.starts_with("--clearenv\n"), "stdout: {stdout}");
+    assert!(stdout.starts_with("bwrap\n--clearenv\n"), "stdout: {stdout}");
 }
 
 // ---- environment forwarding and payload handling ---------------------------
@@ -854,4 +898,377 @@ fn cd_tilde_works_inside_the_sandbox() {
     // … and it is empty apart from what the payload just created, i.e.
     // it is not the host home.
     assert!(stdout.contains("no-ssh"), "host home leaked: {stdout}");
+}
+
+#[test]
+fn dry_run_prints_the_pinned_backend_as_argv0() {
+    // Review-1 finding 7: --dry-run audited only the bwrap ARGUMENTS —
+    // argv[0] (the MYSBX_BWRAP the Nix wrapper pins, i.e. the wrapped
+    // store path) was invisible because the early return came before
+    // the variable was read. It must be the FIRST line of the argv
+    // block, so the pinned backend is verifiable.
+    let (inv, repo, _) = fixture_user_backend("dry-run-argv0", &["--dry-run"]);
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    // A synthetic (never executed) store path in Nix's placeholder
+    // style: 32 zero characters instead of a real hash.
+    cmd.env("MYSBX_BWRAP", "/nix/store/0000000000000000000000000000000-mysbx-bwrap/bin/bwrap");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.starts_with("/nix/store/0000000000000000000000000000000-mysbx-bwrap/bin/bwrap\n"),
+        "argv[0] must be the pinned backend: {stdout}"
+    );
+    // And the rest is the ordinary argv block.
+    let rest: String = stdout.lines().skip(1).map(|l| format!("{l}\n")).collect();
+    assert_eq!(rest, expected_minimal_argv(&repo).strip_prefix("bwrap\n").unwrap());
+}
+
+#[test]
+fn invalid_layout_is_an_error_not_a_panic() {
+    // Review-2 item 4: a user-reachable invalid configuration (a mount
+    // dest onto a protected path) must exit 1 with a `mysbx: `-prefixed
+    // message on stderr (cli.md D8/D9) — not abort as a Rust panic.
+    let (inv, _, _) = fixture("invalid-dest", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    // The user layer grants the mount (no grant violation), but its
+    // dest lands on the protected /tmp — the argv builder must refuse.
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n\n[[mounts]]\npath = \"/etc/hosts\"\nmode = \"ro\"\ndest = \"/tmp\"\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(
+        stderr.starts_with("mysbx: "),
+        "must carry the mysbx prefix: {stderr}"
+    );
+    assert!(
+        stderr.contains("would shadow or overwrite the protected"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("panicked"),
+        "a panic leaked through: {stderr}"
+    );
+}
+
+#[test]
+fn hidden_mount_is_an_error_not_a_panic() {
+    // Review-2 item 4, the second variant: a later mount whose dest
+    // hides an earlier one is equally user-reachable, so it must also
+    // exit 1 with `mysbx: ` — never a panic.
+    let (inv, repo, _) = fixture("invalid-hidden", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    // Two user-layer mounts, narrow first then wide, with dests OUTSIDE
+    // the test tmpdir (which sits under the protected /tmp): the wide
+    // dest hides the narrow one (review-1 finding 3's scenario, .ssh
+    // under /home/u, replayed on ordinary dest paths).
+    std::fs::create_dir_all(repo.join("u/.ssh")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        &format!(
+            "backend = \"bubblewrap\"\n\n\
+             [[mounts]]\npath = \"{}/u/.ssh\"\ndest = \"/workspace/.ssh\"\nmode = \"ro\"\n\n\
+             [[mounts]]\npath = \"{}/u\"\ndest = \"/workspace\"\nmode = \"rw\"\n",
+            repo.display(),
+            repo.display()
+        ),
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
+    assert!(stderr.contains("would hide earlier mount"), "stderr: {stderr}");
+    assert!(!stderr.contains("panicked"), "a panic leaked: {stderr}");
+}
+
+// ---- git metadata approval, end to end (review-2 item 1) -------------------
+
+/// A fixture root OUTSIDE `/tmp`. Git metadata under `/tmp` is refused
+/// on principle — `/tmp` is a protected sandbox path (the base table
+/// gives the sandbox its own tmpfs), so a git dir there could never be
+/// bound. `CARGO_TARGET_TMPDIR` lives under `target/`, which is an
+/// ordinary path, and makes these fixtures represent the real case.
+fn target_tmpdir(name: &str) -> PathBuf {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("mysbx-git-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// A linked-worktree fixture: a main checkout whose `.git` directory
+/// holds the per-worktree gitdir, and a worktree whose `.git` is a FILE
+/// pointing at it. Returns (worktree, gitdir).
+fn make_worktree_fixture(base: &Path, name: &str) -> (PathBuf, PathBuf) {
+    let gitdir = base.join("main").join(".git").join("worktrees").join(name);
+    std::fs::create_dir_all(gitdir.join("refs")).unwrap();
+    std::fs::write(gitdir.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    let worktree = base.join(name);
+    std::fs::create_dir_all(&worktree).unwrap();
+    std::fs::write(
+        worktree.join(".git"),
+        format!("gitdir: {}\n", gitdir.display()),
+    )
+    .unwrap();
+    (worktree, gitdir)
+}
+
+#[test]
+fn unapproved_worktree_git_metadata_is_refused() {
+    // The regression review-2 item 1 reports: the `.git` FILE lives in
+    // the repo and is therefore untrusted content. Without an approval
+    // in a trusted layer the bind must be refused — loudly, with the
+    // `mysbx: ` prefix and exit 1.
+    let base = target_tmpdir("gitdir-unapproved");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
+    assert!(
+        !stdout.contains(&gitdir.display().to_string()),
+        "no bind may be printed: {stdout}"
+    );
+}
+
+#[test]
+fn approved_worktree_git_metadata_is_bound_rw() {
+    // With the approval in the sidecar — where `mysbx init` records it —
+    // the same repo builds an argv that binds the git dir rw.
+    let base = target_tmpdir("gitdir-approved");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!("git-dirs = [\"{}\"]\n", gitdir.display()),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let canon = std::fs::canonicalize(&gitdir).unwrap();
+    let lines: Vec<&str> = stdout.lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| *l == canon.display().to_string())
+        .unwrap_or_else(|| panic!("git dir not bound: {stdout}"));
+    assert_eq!(lines[at - 1], "--bind", "git metadata must be bound rw");
+}
+
+#[test]
+fn init_records_the_discovered_git_metadata() {
+    // `mysbx init` snapshots what it found into the fresh sidecar: the
+    // trust decision happens once, in a file outside the repo, instead
+    // of on every run from a repo-writable pointer.
+    let base = target_tmpdir("gitdir-init-snapshot");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["init"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("created"), "stdout: {stdout}");
+    let written =
+        std::fs::read_to_string(base.join("wt.mysbx").join("config.toml")).unwrap();
+    let canon = std::fs::canonicalize(&gitdir).unwrap();
+    assert!(
+        written.contains(&format!("\"{}\"", canon.display())),
+        "the snapshot must list the discovered git dir: {written}"
+    );
+    assert!(written.contains("git-dirs = ["), "{written}");
+}
+
+#[test]
+fn a_git_pointer_edited_after_init_cannot_widen_the_snapshot() {
+    // The property the snapshot buys: the repo may rewrite its own
+    // `.git` file at any time (it is inside the sandbox, rw), but the
+    // new target is not approved, so nothing new is bound.
+    let base = target_tmpdir("gitdir-tampered");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\ngit-dirs = [\"{}\"]\n",
+            std::fs::canonicalize(&gitdir).unwrap().display()
+        ),
+    )
+    .unwrap();
+    // The repo now points its `.git` file at a DIFFERENT, git-shaped
+    // directory that nobody approved.
+    let evil = base.join("evil");
+    std::fs::create_dir_all(evil.join("refs")).unwrap();
+    std::fs::write(evil.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    std::fs::write(
+        worktree.join(".git"),
+        format!("gitdir: {}\n", evil.display()),
+    )
+    .unwrap();
+
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
+    assert!(!stdout.contains("evil"), "stdout: {stdout}");
+}
+
+#[test]
+fn the_implicit_init_approves_nothing() {
+    // Review-2 item 1, the trust boundary: a first bare run in a freshly
+    // cloned hostile worktree must NOT turn the repo's own `.git`
+    // pointer into an approval. The implicit init creates the sidecar
+    // without a `git-dirs` list, and the run refuses the bind.
+    let base = target_tmpdir("gitdir-implicit-init");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["run", "--", "true"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
+    let written =
+        std::fs::read_to_string(base.join("wt.mysbx").join("config.toml")).unwrap();
+    assert!(
+        !written.contains("git-dirs"),
+        "the implicit init must not approve: {written}"
+    );
+    assert!(
+        !written.contains(&gitdir.display().to_string()),
+        "the implicit init must not approve: {written}"
+    );
+}
+
+#[test]
+fn an_unapproved_common_dir_is_refused_even_when_the_gitdir_is_approved() {
+    // `commondir` is a second repo-controlled pointer: approving the
+    // per-worktree gitdir must not implicitly approve whatever the
+    // commondir file names.
+    let base = target_tmpdir("commondir-unapproved");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    // The common dir the gitdir names is elsewhere, git-shaped, and
+    // NOT covered by the approval below.
+    let common = base.join("elsewhere");
+    std::fs::create_dir_all(common.join("refs")).unwrap();
+    std::fs::write(common.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    std::fs::write(gitdir.join("commondir"), format!("{}\n", common.display())).unwrap();
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "git-dirs = [\"{}\"]\n",
+            std::fs::canonicalize(&gitdir).unwrap().display()
+        ),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
+    assert!(!stdout.contains("elsewhere"), "stdout: {stdout}");
+}
+
+#[test]
+fn the_pinned_nix_conf_reaches_the_argv_and_the_report() {
+    // MYSBX_NIX_CONF is a pin like MYSBX_SHELL: end-to-end, a set
+    // value must appear as the source of the /etc/nix/nix.conf bind,
+    // and the report must say which file the sandbox's nix reads
+    // (review-2 item 3).
+    let (inv, _, _) = fixture_user_backend("nix-conf-pin", &["--verbose", "--dry-run"]);
+    let conf = inv.home.join("sanitized-nix.conf");
+    std::fs::write(&conf, "experimental-features = nix-command flakes\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+    cmd.env("MYSBX_NIX_CONF", &conf);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| *l == conf.display().to_string())
+        .unwrap_or_else(|| panic!("the pinned nix.conf is not bound: {stdout}"));
+    assert_eq!(lines[at - 1], "--ro-bind");
+    assert_eq!(lines[at + 1], "/etc/nix/nix.conf");
+    assert!(
+        stdout.contains(&format!("## nix.conf:       {}", conf.display())),
+        "the report must name it: {stdout}"
+    );
+}
+
+#[test]
+fn without_the_pin_no_nix_conf_is_bound() {
+    // Unset means "no nix configuration", never "the host's": that
+    // file may carry access-tokens.
+    let (inv, _, _) = fixture_user_backend("nix-conf-unset", &["--verbose", "--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        !stdout.contains("/etc/nix/nix.conf"),
+        "no nix.conf bind: {stdout}"
+    );
+    assert!(stdout.contains("## nix.conf:       (none"), "{stdout}");
 }

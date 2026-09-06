@@ -15,9 +15,9 @@
 //! backend's argv. `--dry-run` and `--verbose` are *global* flags (before
 //! the subcommand, in any order): `--dry-run` runs the whole pipeline —
 //! resolve, guards, load, merge, backend check, argv build — and stops
-//! immediately before `exec`, printing the argv one argument per line on
-//! stdout; `--verbose` prints the `## `-prefixed run report before that
-//! (cli.md D10).
+//! immediately before `exec`, printing the backend executable followed
+//! by the argv, one argument per line, on stdout; `--verbose` prints the
+//! `## `-prefixed run report before that (cli.md D10).
 
 pub mod bwrap;
 pub mod config;
@@ -205,7 +205,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
             eprintln!("mysbx: {msg}");
             return 1;
         }
-        if let Err(msg) = ensure_sidecar_config(&repo) {
+        // `false`: the implicit init must not approve anything —
+        // review-2 item 1 (the approval is an operator decision, taken
+        // by `mysbx init`).
+        if let Err(msg) = ensure_sidecar_config(&repo, false) {
             eprintln!("mysbx: {msg}");
             return 1;
         }
@@ -280,11 +283,26 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // merge.rs): `MYSBX_BWRAP=""` must not become `Command::new("")`.
     let shell = env_or("MYSBX_SHELL", "/bin/sh");
     let tools_path = env_or("MYSBX_TOOLS_PATH", "/usr/bin");
+    // The sanitized nix client configuration (review-2 item 3). There
+    // is no fallback on purpose: unset means "bind no nix.conf", never
+    // "bind the host's" — that file may carry access-tokens, and a
+    // read-only bind hands them to the payload all the same.
+    let nix_conf = env_opt("MYSBX_NIX_CONF");
     let params = bwrap::Params {
         shell: &shell,
         tools_path: &tools_path,
+        nix_conf: nix_conf.as_deref(),
     };
-    let argv = bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params);
+    let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
+        Ok(a) => a,
+        // Review-2 item 4: a config that cannot be laid out safely is an
+        // ordinary runtime failure — `mysbx:` on stderr, exit 1 — like
+        // the merge errors above, never a Rust panic.
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return 1;
+        }
+    };
     // The Nix wrapper (item 6) pins the binary via MYSBX_BWRAP; the
     // fallback is a plain PATH lookup so `cargo run` works unwrapped.
     let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
@@ -315,9 +333,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
 
     // 7. print the argv, or exec it.
     if dry_run {
-        // One argument per line, no prefix, no quoting: this is the
-        // result, not a diagnostic (cli.md D9), so golden tests compare
-        // bytes and `mysbx run --dry-run -- ls | wc -l` is meaningful.
+        // argv[0] first, then one argument per line, no prefix, no
+        // quoting: this is the *result*, not a diagnostic (cli.md D9),
+        // and the executable is part of what `--dry-run` audits — the
+        // packaging definition of done requires the wrapped store path
+        // as argv[0], which was invisible before (review-1 finding 7:
+        // `MYSBX_BWRAP` was read only after the early return). Golden
+        // tests compare bytes and `mysbx run --dry-run -- ls | wc -l`
+        // stays meaningful — one line more.
+        println!("{bwrap_bin}");
         for arg in &argv {
             println!("{arg}");
         }
@@ -349,6 +373,13 @@ fn collect_host_env() -> bwrap::HostEnv {
     env
 }
 
+/// `std::env::var` with the empty-means-unset rule, for pins that have
+/// no fallback at all: `MYSBX_NIX_CONF` unset means "bind no nix
+/// configuration", never "bind the host's" (review-2 item 3).
+fn env_opt(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
 /// `std::env::var` with the empty-means-unset rule: an empty value falls
 /// back like an absent one (see `sandbox` for why that matters).
 fn env_or(name: &str, fallback: &str) -> String {
@@ -377,7 +408,7 @@ fn init(args: &[String]) -> i32 {
         eprintln!("mysbx: {msg}");
         return 1;
     }
-    match ensure_sidecar_config(&repo) {
+    match ensure_sidecar_config(&repo, true) {
         Ok(Outcome::Created) => {}
         Ok(Outcome::Existed) => {
             println!("## exists: {}", repo.sidecar.join("config.toml").display());
@@ -414,12 +445,23 @@ enum Outcome {
     Existed,
 }
 
-/// Write the default comment-only sidecar `config.toml` if it is missing
-/// and report it. Also shared by `init` and the implicit init: a sidecar
-/// without a config file would make `load_layers` treat the layer as
-/// empty — the same outcome, but the operator could no longer *see* the
-/// file they are expected to review and edit.
-fn ensure_sidecar_config(repo: &repo::Repo) -> Result<Outcome, String> {
+/// Write the default sidecar `config.toml` if it is missing and report
+/// it. Also shared by `init` and the implicit init: a sidecar without a
+/// config file would make `load_layers` treat the layer as empty — the
+/// same outcome, but the operator could no longer *see* the file they
+/// are expected to review and edit.
+///
+/// `snapshot_git_dirs` records the discovered git metadata directories
+/// into the fresh config as a `git-dirs` approval list (review-2
+/// item 1). Only the EXPLICIT `mysbx init` does that: the pointer it
+/// reads lives inside the repo and is untrusted content (config.md
+/// D3), so turning it into an approval must be a deliberate operator
+/// action, taken in a file outside the repo (D2) and printed on
+/// stdout — never something a first bare run does for a freshly
+/// cloned repository on its own. The bare form therefore creates the
+/// sidecar WITHOUT approvals and refuses the bind with the message
+/// naming what to approve.
+fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<Outcome, String> {
     let config = repo.sidecar.join("config.toml");
     if config.exists() {
         return Ok(Outcome::Existed);
@@ -433,14 +475,61 @@ fn ensure_sidecar_config(repo: &repo::Repo) -> Result<Outcome, String> {
 # read-write at its real host path and cannot be changed here\n\
 # (docs/design/config.md D13).\n\
 #\n\
-# Everything else in the sandbox is opt-in. Examples:\n\
+# Everything else in the sandbox is opt-in. Give a host-home path a\n\
+# `dest` under /mysbx-home: HOME is /mysbx-home inside the sandbox, so\n\
+# a config bound at its host path is invisible there (config.md D14).\n\
+# Examples:\n\
 #\n\
 # [[mounts]]\n\
 # path = \"/home/user/.config/git\"\n\
+# dest = \"/mysbx-home/.config/git\"\n\
 # mode = \"ro\"\n\
 #\n\
 # [env]\n\
 # EDITOR = \"nvim\"\n";
+    let mut contents = contents.to_owned();
+    if snapshot_git_dirs && !repo.git_dirs.is_empty() {
+        contents.push_str(
+            "\n# Git metadata this repository needs from outside the work tree\n\
+             # (linked worktree or submodule). Recorded when the sidecar was\n\
+             # created: the `.git` file inside the repo is untrusted content,\n\
+             # so only directories approved HERE (or in the user config) are\n\
+             # bound (docs/design/config.md D3, review-2 item 1). Remove an\n\
+             # entry to refuse the bind; git then fails inside the sandbox.\n\
+             git-dirs = [\n",
+        );
+        for dir in &repo.git_dirs {
+            // A path is bytes, not text: one that is not UTF-8, or
+            // that carries a control character, cannot be written as
+            // a TOML basic string without either mangling it (a
+            // lossy conversion produces a DIFFERENT path, i.e. a
+            // dangling approval) or emitting a file mysbx itself
+            // could not parse on the next run. Such a path is left
+            // out and named on stdout instead — approving it stays
+            // possible, by hand, with a literal string.
+            let Some(text) = dir.to_str() else {
+                println!(
+                    "## not recorded (path is not valid UTF-8, approve it by hand): {}",
+                    dir.display()
+                );
+                continue;
+            };
+            if text.chars().any(|c| c.is_control()) {
+                println!(
+                    "## not recorded (path contains a control character, approve it by hand): {}",
+                    dir.display()
+                );
+                continue;
+            }
+            // Basic-string escaping: a path may legally contain `"` or
+            // `\`, and an unescaped one would make the file we just
+            // wrote unparsable on the next run.
+            let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+            contents.push_str(&format!("  \"{escaped}\",\n"));
+            println!("## approved git metadata: {}", dir.display());
+        }
+        contents.push_str("]\n");
+    }
     if let Err(e) = std::fs::write(&config, contents) {
         return Err(format!("cannot write {}: {e}", config.display()));
     }

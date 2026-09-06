@@ -70,6 +70,13 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
 
     p(format!("mysbx {} — run configuration", crate::VERSION));
     p(format!("repo root:      {}", r.repo.root.display()));
+    // Review-1 finding 4: git metadata a `.git` FILE points at is bound
+    // rw into the sandbox — it must be said out loud, like the rest of
+    // the run configuration, because it is host state outside the repo
+    // the sandbox can write.
+    for g in &r.repo.git_dirs {
+        p(format!("git metadata:   {} (bound rw)", g.display()));
+    }
     p(format!(
         "sidecar:        {} ({})",
         r.repo.sidecar.display(),
@@ -173,6 +180,15 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     p(format!("bwrap:          {}", r.bwrap_bin));
     p(format!("shell:          {}", r.params.shell));
     p(format!("tools PATH:     {}", r.params.tools_path));
+    // Review-2 item 3: the host's /etc/nix/nix.conf is never mounted
+    // (it may hold access-tokens); what the sandbox sees is the
+    // generated, credential-free file the wrapper pins — or nothing.
+    // Both states belong in the report: "nix reads no configuration"
+    // is as much a property of the run as which shell it starts.
+    p(format!(
+        "nix.conf:       {}",
+        r.params.nix_conf.unwrap_or("(none — nix uses its defaults)")
+    ));
     match r.payload {
         Payload::Shell => p(format!("payload:        shell {}", r.params.shell)),
         // Space-joined for readability only; the exact, unambiguous
@@ -212,6 +228,7 @@ mod tests {
         let repo = Repo {
             root: PathBuf::from("/synth/repo"),
             sidecar: PathBuf::from("/synth/repo.mysbx"),
+            git_dirs: Vec::new(),
         };
         let mut env = BTreeMap::new();
         env.insert("EDITOR".to_owned(), "nvim".to_owned());
@@ -231,6 +248,7 @@ mod tests {
                 },
             ],
             env,
+            git_dirs: Vec::new(),
         };
         let mut host = HostEnv::new();
         host.insert("TERM".to_owned(), "xterm".to_owned());
@@ -242,6 +260,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         };
         lines(&Report {
             repo: &repo,
@@ -336,6 +355,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -373,6 +393,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -411,6 +432,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         };
         let joined = lines(&Report {
             repo: &repo,

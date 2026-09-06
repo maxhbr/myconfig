@@ -13,13 +13,16 @@
 //! base table in `docs/plan.md` ("The base"). The argv order is semantic —
 //! bubblewrap applies binds in order, so a later narrower bind wins over an
 //! earlier wider one and a refactor must not reorder sections 3–5
-//! ("Watch out" in the spec).
+//! ("Watch out" in the spec). Nesting a later bind inside an earlier
+//! one is nevertheless refused when the outer content is writable —
+//! see [`check_symlinkable_dests`].
 
-use crate::config::Mode;
+use crate::config::{Mode, Mount};
 use crate::merge::Merged;
 use crate::repo::Repo;
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::fmt;
+use std::path::{Component, Path, PathBuf};
 
 /// What runs inside the sandbox. Either the interactive shell or a command
 /// vector (docs/design/cli.md D4: everything after `--` is passed verbatim
@@ -48,8 +51,10 @@ pub type HostEnv = BTreeMap<String, String>;
 /// HOST home is still not mounted, and its *value* is never forwarded
 /// either (it is not in `FORWARDED_ENV_VARS`). The path deliberately
 /// lives outside `/home`, so nothing inside the sandbox can be confused
-/// with a host home path and the "no `/home/` anywhere" invariant of the
-/// argv stays literally checkable.
+/// with a host home path: the invariant "no IN-SANDBOX path under
+/// `/home/`" (config.md D14) stays literally checkable on the argv's
+/// destinations — mount *sources* are host paths and may of course live
+/// in the host home.
 pub const SANDBOX_HOME: &str = "/mysbx-home";
 
 /// Common parameters of every invocation that do not come from a
@@ -63,6 +68,17 @@ pub struct Params<'a> {
     /// The dev-tool closure's `bin` directory, set as `PATH` inside the
     /// sandbox (git, ripgrep, fd, jq, nix, python3, coreutils, …).
     pub tools_path: &'a str,
+    /// A **sanitized** `nix.conf` to bind at `/etc/nix/nix.conf`, or
+    /// `None` for no nix configuration at all (review-2 item 3).
+    ///
+    /// The host's own `/etc/nix/nix.conf` is deliberately never bound:
+    /// it may carry `access-tokens` (GitHub/GitLab credentials) and
+    /// other secrets, and a read-only bind hands them to the payload
+    /// just the same. The Nix wrapper generates a minimal client
+    /// configuration instead and pins it here; an unwrapped build
+    /// passes `None` and the sandbox runs `nix` with its built-in
+    /// defaults.
+    pub nix_conf: Option<&'a str>,
 }
 
 /// Build the complete `bwrap` argv for `cfg` / `repo` / `payload`.
@@ -79,11 +95,21 @@ pub struct Params<'a> {
 ///    `/nix/store` ro, `/usr/bin` ro, `--proc /proc`, `--dev /dev`,
 ///    `/etc/localtime` ro, tmpfs `/tmp`, tmpfs [`SANDBOX_HOME`]
 /// 4. the repo itself, read-write, at its real host path
-///    (docs/design/config.md D13)
+///    (docs/design/config.md D13), followed by the git metadata
+///    directories its `.git` FILE points at, also rw (review-1 finding 4:
+///    worktrees and submodules are unusable without them)
 /// 5. the configured mounts, in declaration order, `--ro-bind` / `--bind`,
 ///    each `dest` defaulting to its source path (mount order is argv
 ///    order; a later rw bind nested inside an earlier ro bind is a real
-///    pattern the MVP must preserve)
+///    pattern the MVP must preserve). Two layout rules are enforced:
+///    a dest that would shadow or overwrite a base path — via `..`
+///    components or as an ancestor or descendant of one — is refused
+///    (see [`check_dest`]); a later dest that would hide an
+///    earlier mount — or the implicit repo bind — is refused
+///    (see [`check_hidden_mounts`]); and a dest BELOW a writable bind
+///    is refused, because bubblewrap follows symlinks in a dest's
+///    parent components and writable content can plant them
+///    (see [`check_symlinkable_dests`], review-2 item 2).
 /// 6. environment via `--setenv`, in this precedence: host-forwarded
 ///    variables first, then `cfg.env` (which wins by being set later),
 ///    then the infrastructure variables `HOME` and `PATH` last — set
@@ -105,51 +131,127 @@ pub fn bwrap_argv(
     payload: &Payload,
     host_env: &HostEnv,
     params: &Params<'_>,
-) -> Vec<String> {
+) -> Result<Vec<String>, Error> {
     let root = repo.root.to_string_lossy().into_owned();
     let mut argv: Vec<String> = vec!["--clearenv".into(), "--unshare-all".into()];
     if cfg.network {
         argv.push("--share-net".into());
+        // Sharing the network namespace alone does not give the new
+        // root DNS or TLS: `/etc/resolv.conf` and friends live on the
+        // host and are not part of the base table. Bind the resolver
+        // set — the same path SET the `network` combinator of
+        // `fns/bubblewrap-app.nix` binds (its mechanism differs:
+        // runtime-deep-ro-bind walks entries and re-binds symlink
+        // targets; a plain `--ro-bind-try` is enough here because
+        // bwrap resolves a symlinked source at mount time, and on
+        // NixOS `/etc/ssl` resolves through `/etc/static` into
+        // `/nix/store`, which is a base bind — `/etc/static` and
+        // `/etc/ca-certificates` of the simpler wrapper serve other
+        // distros' layouts). `--ro-bind-try`: every entry is
+        // setup-dependent — a static `/etc/resolv.conf` needs only the
+        // file, systemd-resolved symlinks it into
+        // `/run/systemd/resolve` (bound as a directory, mirroring the
+        // reference), `/etc/nsswitch.conf` may be unnecessary when
+        // glibc defaults suffice; a dangling symlink silently drops
+        // that one bind, like the reference's try-readonly.
+        // `network = false` shares nothing and binds none of them
+        // (review-1 finding 5).
+        for path in RESOLVER_PATHS {
+            argv.push("--ro-bind-try".into());
+            argv.push((*path).into());
+            argv.push((*path).into());
+        }
+        // The nix daemon socket and store database live under
+        // `/nix/var/nix`. They are bound ONLY here, with the network
+        // (review-2 item 3): a read-only bind does not stop the
+        // payload from connecting to the socket, and the daemon
+        // happily builds fixed-output derivations, which are exactly
+        // the ones that keep network access. Exposing it under
+        // `network = false` would make the report's "denied" a lie.
+        // The price is that `nix` needs the shared network to work at
+        // all — said out loud in plan.md's base table.
+        argv.push("--ro-bind-try".into());
+        argv.push("/nix/var/nix".into());
+        argv.push("/nix/var/nix".into());
     }
 
     // 3. the base binds (docs/plan.md "The base" table, fixed absolute
-    // host paths — machine-independent).
+    // host paths — machine-independent), plus the sanitized nix client
+    // configuration when the wrapper pinned one (review-2 item 3 — the
+    // host's own nix.conf stays out, it may hold access-tokens).
     argv.extend(base_binds());
+    if let Some(nix_conf) = params.nix_conf {
+        // `--ro-bind`, not `-try`: the pin is a store path the wrapper
+        // just built, so a missing one is a packaging bug that must
+        // fail loudly rather than silently drop the configuration.
+        argv.push("--ro-bind".into());
+        argv.push(nix_conf.into());
+        argv.push("/etc/nix/nix.conf".into());
+    }
 
-    // 4. the repo, rw, at its real host path (D13).
+    // 4. the repo, rw, at its real host path (D13), plus the git
+    // metadata directories a `.git` FILE points at outside the root
+    // (linked worktrees, submodules — review-1 finding 4): git needs
+    // them rw to update refs and the index. Common dir first so a
+    // gitdir nested inside it stays reachable in the degenerate
+    // layout (a later equal-or-ancestor bind would hide it).
+    // Review-2 item 1: the pointer lives in a repo-writable file, so
+    // it is NOT a mount specification — every target must be at or
+    // below an entry of `cfg.git_dirs`, the approval list of the
+    // trusted layers, before it is bound. `/`, the home directory and
+    // anything related to a protected sandbox path are never
+    // approvable and are refused outright.
     bind(&mut argv, false, &root, None);
+    for git_dir in &repo.git_dirs {
+        check_git_dir(git_dir, &cfg.git_dirs)?;
+        bind(&mut argv, false, &git_dir.to_string_lossy(), None);
+    }
 
     // 5. configured mounts, in declaration order; dest defaults to the
-    // canonicalized source path. A `dest` may never remap a mount ONTO a
-    // protected path: bubblewrap applies binds in order with
-    // later-mounts-win, so a dest of `/tmp`, `/`, `/proc` … would
-    // overwrite a base bind and reopen exactly the hole the base table
-    // closes (host-backed `/tmp`, a hidden `/proc`). The merge (D7/D8)
-    // validates grants; this validates destinations, because the base
-    // list lives here.
+    // canonicalized source path. A `dest` may never be related to a
+    // protected path in either direction: bubblewrap applies binds in
+    // order with later-mounts-win, so a dest of `/tmp`, `/`, `/proc` …
+    // would overwrite a base bind, and a dest of `/nix` would hide the
+    // protected `/nix/store` below it — either way reopening exactly
+    // the hole the base table closes. And no mount may HIDE an earlier
+    // one: a later bind whose dest is a strict ancestor of an earlier
+    // mount's dest replaces that subtree wholesale, so the earlier
+    // entry would be dead configuration (see [`check_hidden_mounts`]).
+    // The merge (D7/D8) validates grants; these validate the argv
+    // layout, because the base list and the order semantics live here.
+    // The protected-dest check runs FIRST: a dest that overwrites a base
+    // bind is the sharper diagnosis, and the repo-covering check would
+    // otherwise mask it with a generic `would hide` for dests like `/`.
     for m in &cfg.mounts {
         let dest = m.dest.as_deref().unwrap_or(&m.path);
-        for protected in PROTECTED_DESTS {
-            // `/` itself must match EXACTLY (`starts_with("/")` would
-            // match every absolute path); the others match at-or-below.
-            let hits = if *protected == "/" {
-                dest == "/"
-            } else {
-                Path::new(dest).starts_with(protected)
-            };
-            if hits {
-                // A mount that does not redirect (dest == source) can
-                // never hit this: its source is an ordinary granted host
-                // path, not a base path — the merge would have had to
-                // grant `/proc` itself for that. So any hit here means a
-                // redirect onto a protected path.
-                panic!(
-                    "mount dest {dest} would overwrite the protected sandbox \n\
-                 path {protected} (base table of docs/plan.md); refusing \n\
-                 to build the argv"
-                );
+        if let Some(protected) = check_dest(dest) {
+            // A mount that does not redirect (dest == source) can
+            // never hit this: its source is an ordinary granted host
+            // path, not a base path — the merge would have had to
+            // grant `/proc` itself for that. So any hit here means a
+            // redirect onto a protected path.
+            return Err(Error::ProtectedDest {
+                dest: dest.to_string(),
+                protected,
+            });
+        }
+    }
+    if !cfg.network {
+        // The daemon is bound with `--share-net` and nowhere else
+        // (section 2) — but a configured mount could still source it.
+        // Its dest is irrelevant: what matters is that the socket
+        // becomes reachable at all (review-2 item 3).
+        for m in &cfg.mounts {
+            if normalize(&m.path).starts_with("/nix/var/nix") {
+                return Err(Error::DaemonUnderDeniedNetwork {
+                    source: m.path.clone(),
+                });
             }
         }
+    }
+    check_hidden_mounts(&cfg.mounts, &root, &repo.git_dirs)?;
+    check_symlinkable_dests(&cfg.mounts, &root, &repo.git_dirs)?;
+    for m in &cfg.mounts {
         bind(&mut argv, m.mode == Mode::Ro, &m.path, m.dest.as_deref());
     }
 
@@ -188,15 +290,138 @@ pub fn bwrap_argv(
         Payload::Command(args) => argv.extend(args.iter().cloned()),
     }
 
-    argv
+    Ok(argv)
 }
+
+/// Why the argv cannot be built safely (review-2 item 4): a
+/// user-reachable configuration that cannot be laid out is an ordinary
+/// error — the CLI reports it on stderr with its `mysbx: ` prefix and
+/// exits `1` (cli.md D8/D9), never a Rust panic. Both variants keep the
+/// exact message texts the panic era asserted, so the diagnosis a user
+/// sees did not change with the representation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Error {
+    /// The mount's `dest` would shadow or overwrite a protected sandbox
+    /// path (base table of docs/plan.md).
+    ProtectedDest {
+        /// The offending destination.
+        dest: String,
+        /// The protected path it is related to.
+        protected: &'static str,
+    },
+    /// A later mount's dest hides an earlier bind — an earlier mount, or
+    /// an implicit one (the repo root, a git metadata directory).
+    HiddenMount { message: String },
+    /// A `.git` FILE points at git metadata outside the repo that no
+    /// trusted layer approved (review-2 item 1): the bind is refused,
+    /// because a repo-writable pointer must not become a mount
+    /// specification.
+    GitDirNotApproved { gitdir: PathBuf },
+    /// A mount `dest` lies below a writable bind — the repo, a git
+    /// metadata directory, or an earlier `rw` mount. bubblewrap
+    /// resolves the destination path in the sandbox it has built so
+    /// far and FOLLOWS symlinks in its parent components, so a
+    /// symlink planted in that writable content redirects the bind to
+    /// any path at all (review-2 item 2).
+    DestBelowWritable {
+        /// The refused destination.
+        dest: String,
+        /// The writable bind it lies below.
+        writable: String,
+    },
+    /// A configured mount would carry the nix daemon into a sandbox
+    /// whose network is denied (review-2 item 3). The socket under
+    /// `/nix/var/nix` is a network service: the daemon builds
+    /// fixed-output derivations, which keep network access, so a
+    /// mount that sources it would make `network = false` a lie no
+    /// matter what its dest is.
+    DaemonUnderDeniedNetwork { source: String },
+    /// The git metadata a `.git` FILE points at is related to a
+    /// protected sandbox path — the bind would shadow or overwrite base
+    /// infrastructure exactly like a bad mount dest, so no approval can
+    /// make it safe (review-2 item 1).
+    GitDirProtected {
+        gitdir: PathBuf,
+        protected: &'static str,
+    },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::ProtectedDest { dest, protected } => write!(
+                f,
+                "mount dest {dest} would shadow or overwrite the protected \
+                 sandbox path {protected}, which mysbx reserves whether or \
+                 not this run binds it (base table of docs/plan.md); \
+                 refusing to build the argv"
+            ),
+            Error::HiddenMount { message } => f.write_str(message),
+            Error::GitDirNotApproved { gitdir } => write!(
+                f,
+                "git metadata {} is not approved — a repo-writable .git \
+                 file must not become a mount specification \
+                 (review-2 item 1); approve the directory in \
+                 `git-dirs` in the user config or sidecar \
+                 (docs/design/config.md D8), or drop the pointer",
+                gitdir.display()
+            ),
+            Error::DestBelowWritable { dest, writable } => write!(
+                f,
+                "mount dest {dest} lies below {writable}, whose content the \
+                 sandbox can write — bubblewrap resolves a dest through the \
+                 sandbox it has built so far and follows symlinks in its \
+                 parent components, so a symlink planted there redirects this \
+                 bind onto any path, protected ones included; mount it \
+                 outside that tree instead"
+            ),
+            Error::DaemonUnderDeniedNetwork { source } => write!(
+                f,
+                "mount source {source} is inside the nix daemon directory \
+                 /nix/var/nix, and this sandbox denies the network — the \
+                 daemon builds fixed-output derivations, which keep network \
+                 access, so the mount would hand back exactly what \
+                 `network = false` takes away; drop the mount or share the \
+                 network"
+            ),
+            Error::GitDirProtected { gitdir, protected } => write!(
+                f,
+                "git metadata {} would shadow or overwrite the protected \
+                 sandbox path {protected} (base table of docs/plan.md); \
+                 no approval can make that safe \u{2014} move the repository \
+                 out of {protected}",
+                gitdir.display()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+/// The resolver and TLS paths bound read-only when the network is
+/// shared (review-1 finding 5) — the same path SET as the `network`
+/// combinator of `fns/bubblewrap-app.nix` (see the call site for why
+/// the mechanism can be a plain `--ro-bind-try` here).
+static RESOLVER_PATHS: &[&str] = &[
+    "/etc/hosts",
+    "/etc/nsswitch.conf",
+    "/etc/resolv.conf",
+    "/etc/ssl",
+    "/run/systemd/resolve",
+];
 
 /// The fixed base binds of the MVP (docs/plan.md, base table). Every row
 /// with decision "yes" appears exactly once, in the order the existing
 /// `fns/bubblewrap-app.nix` base binds them (agents shell out to
-/// arbitrary store paths → `/nix/store` first; `/usr/bin/env` shebangs →
-/// `/usr/bin`; timezones → `/etc/localtime`; a fresh tmpfs `/tmp`, NOT
-/// the host-backed one).
+/// arbitrary store paths → `/nix/store` first; `/usr/bin/env` shebangs
+/// → `/usr/bin`; timezones → `/etc/localtime`; a fresh tmpfs `/tmp`,
+/// NOT the host-backed one).
+///
+/// The two nix binds review-1 finding 6 added are NOT here (review-2
+/// item 3): `/nix/var/nix` carries the daemon socket and rides with
+/// the network switch instead (section 2), and the host
+/// `/etc/nix/nix.conf` is never bound at all — a sanitized
+/// replacement comes from [`Params::nix_conf`].
 fn base_binds() -> Vec<String> {
     vec![
         "--ro-bind".into(),
@@ -223,20 +448,39 @@ fn base_binds() -> Vec<String> {
     ]
 }
 
-/// Sandbox paths a mount `dest` may never overwrite. The roots the base
-/// binds create (`/nix/store`, `/usr/bin`, `/proc`, `/dev`,
-/// `/etc/localtime`, `/tmp`) plus `/run` (deliberately absent, so also
-/// protected) — and `/` itself, which would shadow every one of them at
-/// once. The repo root is deliberately NOT here: it is a base bind of
-/// its own (section 4) and a mount legitimately points at or below it.
+/// Sandbox paths a mount `dest` may never shadow or overwrite — the
+/// roots the base binds create (`/nix/store`, `/nix/var/nix`,
+/// `/etc/nix/nix.conf`, `/usr/bin`, `/proc`, `/dev`, `/etc/localtime`,
+/// `/tmp`) plus `/run` (no wholesale `/run`
+/// bind exists — the only `/run` path mounted is the resolver
+/// exception [`RESOLVER_PATHS`], ro and narrow — so dests related to
+/// `/run` as a whole are still refused) — and `/` itself, which would
+/// shadow every one of them at once. A dest is refused when it is
+/// RELATED to any of these in either direction: equal, a descendant
+/// (`/proc/sys` would overwrite part of the procfs), or an ANCESTOR
+/// (`/nix` would receive the mount and hide `/nix/store` below it) —
+/// see [`check_dest`]. The repo root
+/// is deliberately NOT here: it is a base bind of its own (section 4)
+/// and a mount legitimately points at or below it.
 /// [`SANDBOX_HOME`] is NOT here either, for the same reason: seeding the
 /// sandbox home with host dotfiles (`~/.gitconfig`, an agent config) by
 /// pointing a mount `dest` into it is the intended way to use it, and
 /// such a mount is an explicit grant of the user layer (config.md D6/D7).
 /// The tmpfs is created in section 3, so those mounts land on top of it.
+/// What IS refused for [`SANDBOX_HOME`] is a dest equal to or above it
+/// (review-2 item 5): that would replace the tmpfs itself rather than
+/// seed it, leaving `HOME` pointing at content no layer declared —
+/// see the one-directional check at the top of [`check_dest`].
+/// The resolver paths are likewise not protected: an explicit mount
+/// with dest `/etc/ssl` (say, to install a project-local CA) shadows the
+/// ro-bind-try by later-wins — intended, same grant logic as
+/// [`SANDBOX_HOME`]; a dest of `/etc/resolv.conf` does NOT reach
+/// `/etc/localtime` or `/run` and so is not refused either.
 static PROTECTED_DESTS: &[&str] = &[
     "/",
     "/nix/store",
+    "/nix/var/nix",
+    "/etc/nix/nix.conf",
     "/usr/bin",
     "/proc",
     "/dev",
@@ -244,6 +488,293 @@ static PROTECTED_DESTS: &[&str] = &[
     "/tmp",
     "/run",
 ];
+
+/// The protected path a mount `dest` would shadow or overwrite, if
+/// any. The dest is normalized lexically first (see [`normalize`]); the
+/// merge (`crate::merge`) guarantees that source PATHS are
+/// canonicalized against the host, but a `dest` deliberately never is
+/// (it is an in-sandbox path) — so normalization is this function's
+/// job. Symlinks are NOT resolved here: they would need
+/// host-filesystem knowledge of the sandbox's new root, which does not
+/// exist at argv-build time.
+fn check_dest(dest: &str) -> Option<&'static str> {
+    let path = normalize(dest);
+    for protected in PROTECTED_DESTS {
+        let protected_path = Path::new(protected);
+        // `/` must match EXACTLY on the normalized path: every absolute
+        // dest is at-or-below `/` by construction, so a prefix match
+        // there would refuse every legitimate dest. The `..`-cases
+        // (`/x/..`) are already collapsed onto `/` by `normalize`, so
+        // the exact match catches them. Every other protected path
+        // matches in BOTH directions on whole components
+        // (`Path::starts_with`): a dest at-or-below it (a descendant
+        // such as `/proc/sys` would replace part of the procfs the base
+        // bind provides) and a dest that contains it (an ancestor such
+        // as `/nix` would receive the mount and hide the protected
+        // `/nix/store` below it). Lookalikes stay allowed: `/usr/bin2`
+        // is NOT `/usr/bin`.
+        let hits = if *protected == "/" {
+            path == *Path::new("/")
+        } else {
+            path.starts_with(protected_path) || protected_path.starts_with(&path)
+        };
+        if hits {
+            return Some(protected);
+        }
+    }
+    // [`SANDBOX_HOME`] is protected in ONE direction only (review-2
+    // item 5): a dest equal to it — or an ancestor of it — replaces
+    // or hides the tmpfs the base binds created, while the report
+    // still says `HOME=/mysbx-home` and the payload gets a home nobody
+    // declared. Strict DESCENDANTS stay allowed: seeding dotfiles into
+    // the home by pointing a `dest` there is the documented way to use
+    // it (config.md D14). On component boundaries the sandbox home's
+    // only ancestor is `/`, which the list above already refuses — so
+    // this check runs AFTER it and effectively guards the EQUAL case,
+    // keeping the sharper "would shadow `/`" answer for the root.
+    // `/mysbx` is a string prefix, not an ancestor: a different
+    // directory, and it stays mountable like `/usr/bin2`.
+    if Path::new(SANDBOX_HOME).starts_with(&path) {
+        return Some(SANDBOX_HOME);
+    }
+    None
+}
+
+/// A later bind whose dest is a strict ancestor of an earlier mount's
+/// dest hides that earlier mount entirely: bubblewrap applies binds
+/// in argv order with later-wins per subtree, so the wide bind simply
+/// replaces the subtree the narrow one landed on. That silently undoes
+/// restrictions — `/home/u/.ssh` (ro) followed by `/home/u` (rw) leaves
+/// `.ssh` writable — and silently kills grants the other way round
+/// (`/home/u` rw followed by `/home/u/.ssh` ro does not HIDE anything —
+/// though review-2 item 2 refuses it one guard later, because the
+/// narrow dest resolves through writable content, see
+/// [`check_symlinkable_dests`]). Equal dests do not hide: re-binding
+/// the same subtree narrows by shadowing. Cross-layer escalation on an
+/// equal dest is caught by the merge — a sidecar rw needs an rw
+/// grant for its SOURCE, which shares the grant tree — so what remains
+/// here is same-layer last-wins, the layer's own doing. The implicit
+/// binds — the repo root (always rw, D13) and the git metadata
+/// directories a `.git` FILE points at (review-1 finding 4) — count as
+/// entries BEFORE every configured mount, and an EQUAL dest is
+/// refused there too: implicit binds are not configuration, and a
+/// mount that replaces the repo (even rw) changes what `--chdir` lands
+/// in; one that covers a git dir breaks `git` inside the sandbox.
+/// Returns [`Error::HiddenMount`] on violation: this guards the argv
+/// layout, and a config that cannot be laid out safely must not run —
+/// as an ordinary CLI error (review-2 item 4), never a panic.
+fn check_hidden_mounts(
+    mounts: &[Mount],
+    repo_root: &str,
+    git_dirs: &[PathBuf],
+) -> Result<(), Error> {
+    // Implicit binds come before every configured mount: the repo root
+    // and the git metadata directories a `.git` file points at. A
+    // configured mount whose dest covers any of them replaces that
+    // subtree wholesale. The implicit set is discovered per run, so it
+    // cannot be anticipated in configuration: covering it is refused in
+    // EVERY form, equal dest included, because the mount would not just
+    // shadow an entry — it would replace implicit infrastructure.
+    let mut implicit: Vec<(PathBuf, &str)> =
+        vec![(normalize(repo_root), "the repo working tree")];
+    for g in git_dirs {
+        implicit.push((normalize(&g.to_string_lossy()), "a git metadata directory"));
+    }
+    for (later_i, later) in mounts.iter().enumerate() {
+        let later_dest = normalize(later.dest.as_deref().unwrap_or(&later.path));
+        // The implicit binds come before every configured mount; a dest
+        // at-or-below them (equal included) covers them.
+        for (implicit_dest, what) in &implicit {
+            if implicit_dest.starts_with(&later_dest) {
+                return Err(Error::HiddenMount {
+                    message: format!(
+                        "mount {} ({}) would hide {} — implicit binds are not configuration and always come first, so a dest may not cover them",
+                        later_dest.display(),
+                        later.path,
+                        what,
+                    ),
+                });
+            }
+        }
+        for earlier in &mounts[..later_i] {
+            let earlier_dest =
+                normalize(earlier.dest.as_deref().unwrap_or(&earlier.path));
+            if later_dest == earlier_dest {
+                continue; // equal dests: shadowing re-bind, not hiding
+            }
+            if earlier_dest.starts_with(&later_dest) {
+                return Err(Error::HiddenMount {
+                    message: format!(
+                        "mount {} ({}) would hide earlier mount {} ({}) — bubblewrap applies binds in order, so a wider dest must come FIRST; swap the entries or drop one",
+                        later_dest.display(),
+                        later.path,
+                        earlier_dest.display(),
+                        earlier.path,
+                    ),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Review-2 item 2: a `dest` is an in-sandbox path, and bubblewrap
+/// resolves it against the sandbox it has built SO FAR — following
+/// symlinks in the parent components. Everything the guards above can
+/// check is lexical: `check_dest` normalizes `.` and `..`, but it
+/// cannot know that `<repo>/jump` is a symlink to `/`, which turns a
+/// dest of `<repo>/jump/tmp` into the protected `/tmp`.
+///
+/// Host-side `canonicalize()` is no fix: it models the HOST tree, not
+/// the composed sandbox root, and it races with the payload that may
+/// rewrite the tree between the check and the bind. The MVP therefore
+/// refuses the whole class instead: a dest may not lie BELOW a bind
+/// whose content is writable, because that content is exactly where
+/// such a symlink can be planted —
+///
+/// - the repo (always rw, D13) and the git metadata directories: the
+///   payload writes them, and what it writes persists to the next run,
+/// - any EARLIER `rw` mount: same argument, one layer out.
+///
+/// An `ro` bind whose SOURCE is ordinary host state is not in the set:
+/// the sandbox cannot change that content, so the residual risk is a
+/// symlink the user themselves put in their own granted directory —
+/// the accident barrier, not the malice barrier (D9). An `ro` bind
+/// that re-exposes writable content IS in the set, though: `ro` stops
+/// writes THROUGH the bind, not writes to the same host inode through
+/// the repo bind next door, so a `ro` mount of `<repo>/tools` is as
+/// symlink-plantable as the repo itself.
+///
+/// The writable base binds need no entry: `/tmp` and every path below
+/// it are already refused by [`check_dest`], and [`SANDBOX_HOME`] is a
+/// tmpfs bubblewrap creates empty in this very run — nothing can have
+/// planted a symlink there, which is what keeps dotfile seeding
+/// (config.md D14) possible.
+/// An EQUAL dest is not below anything and stays allowed: re-binding
+/// the same path resolves the path itself, not a component inside the
+/// writable content.
+fn check_symlinkable_dests(
+    mounts: &[Mount],
+    repo_root: &str,
+    git_dirs: &[PathBuf],
+) -> Result<(), Error> {
+    // HOST paths whose content the sandbox can write. The repo (rw by
+    // D13) and the git metadata directories start the set; an `rw`
+    // mount adds its source, because the payload writes the host path
+    // through it.
+    let mut writable_sources: Vec<PathBuf> = vec![normalize(repo_root)];
+    writable_sources.extend(git_dirs.iter().map(|g| normalize(&g.to_string_lossy())));
+    // IN-SANDBOX paths below which a dest may not land, because their
+    // content is one of the writable sources above. The repo and the
+    // git dirs are bound at their host path, so they are both.
+    let mut writable_dests: Vec<PathBuf> = writable_sources.clone();
+
+    for m in mounts {
+        let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
+        let src = normalize(&m.path);
+        if let Some(prefix) = writable_dests
+            .iter()
+            .find(|p| dest.starts_with(p) && &&dest != p)
+        {
+            return Err(Error::DestBelowWritable {
+                dest: dest.to_string_lossy().into_owned(),
+                writable: prefix.to_string_lossy().into_owned(),
+            });
+        }
+        // Only AFTER its own check does a mount extend the sets: bwrap
+        // applies binds in order, so a LATER bind cannot have planted
+        // anything an EARLIER dest resolves through.
+        //
+        // A mount makes its dest subtree writable-in-sandbox when it is
+        // `rw` — and also when it is `ro` but re-exposes content that
+        // is already writable elsewhere in the sandbox: `ro` stops the
+        // payload from writing THROUGH this bind, not from writing the
+        // same host inode through the repo bind next door.
+        let src_is_writable = writable_sources.iter().any(|w| src.starts_with(w));
+        if m.mode == Mode::Rw {
+            writable_sources.push(src);
+            writable_dests.push(dest);
+        } else if src_is_writable {
+            writable_dests.push(dest);
+        }
+    }
+    Ok(())
+}
+
+/// Review-2 item 1: refuse to bind git metadata a repo-writable `.git`
+/// FILE points at unless a trusted layer (user config or sidecar)
+/// approved the directory. The approval list `approved` holds
+/// canonicalized host paths (D8); the target `gitdir` is canonicalized
+/// too (repo.rs), so the containment is symlink-resolved on both
+/// sides. Refusals:
+///
+/// - a target related to a protected sandbox path — `/` itself, an
+///   ancestor of `/nix/store`, anything at or below `/tmp` …: the
+///   bind would shadow or overwrite base infrastructure exactly like
+///   a configured mount dest, so no approval can make it safe
+///   ([`Error::GitDirProtected`]). The home directory is refused one
+///   step earlier, at repo resolution (`crate::repo`), which is the
+///   layer that knows `$HOME`.
+/// - a target that is at-or-below NO approved entry: the pointer is
+///   untrusted content (config.md D3) and grants nothing.
+fn check_git_dir(gitdir: &Path, approved: &[PathBuf]) -> Result<(), Error> {
+    // Protected paths (`/` among them): the bind lands at the git dir's real host path,
+    // so a gitdir related to one is as bad as a mount dest that is.
+    // `check_dest` expects the normalized in-sandbox spelling; host
+    // paths are already absolute and `..`-free after canonicalize,
+    // but normalize anyway so the comparison matches the dest rules.
+    let dest = normalize(&gitdir.to_string_lossy());
+    if let Some(protected) = check_dest(&dest.to_string_lossy()) {
+        return Err(Error::GitDirProtected {
+            gitdir: gitdir.to_owned(),
+            protected,
+        });
+    }
+    let ok = approved
+        .iter()
+        .any(|a| dest.starts_with(normalize(&a.to_string_lossy())));
+    if !ok {
+        return Err(Error::GitDirNotApproved {
+            gitdir: gitdir.to_owned(),
+        });
+    }
+    Ok(())
+}
+
+/// Lexically resolve `.` and `..` components of an absolute path —
+/// mirroring how the kernel (and therefore bubblewrap, which mounts at
+/// the path it is given after resolving it) interprets a destination
+/// written with redundant components. A dest is plain string data from
+/// the TOML config, so checking it untrusted here is what makes the
+/// protected-dest guard tamper-proof (`"/nix/../proc"` must be seen as
+/// `/proc`). `/..` stays `/` — the kernel resolves the root's parent as
+/// itself.
+fn normalize(p: &str) -> PathBuf {
+    let mut out: Vec<std::ffi::OsString> = Vec::new();
+    for c in Path::new(p).components() {
+        match c {
+            Component::RootDir => out.clear(),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                // `..` above the root stays at the root (`out` never
+                // holds the root component itself — it is re-attached at
+                // the end — so popping to empty is climbing to `/`).
+                if !out.is_empty() {
+                    out.pop();
+                }
+            }
+            other => out.push(other.as_os_str().to_owned()),
+        }
+    }
+    if out.is_empty() {
+        PathBuf::from("/")
+    } else {
+        out.into_iter().fold(PathBuf::from("/"), |mut acc, c| {
+            acc.push(c);
+            acc
+        })
+    }
+}
 
 /// One bind of a host path into the sandbox, ro or rw, with the sandbox
 /// destination defaulting to the source path.
@@ -270,6 +801,7 @@ mod tests {
         Repo {
             root: PathBuf::from("/synth/repo"),
             sidecar: PathBuf::from("/synth/repo.mysbx"),
+            git_dirs: Vec::new(),
         }
     }
 
@@ -279,6 +811,7 @@ mod tests {
             network: true,
             mounts: Vec::new(),
             env: BTreeMap::new(),
+            git_dirs: Vec::new(),
         }
     }
 
@@ -286,6 +819,7 @@ mod tests {
         Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         }
     }
 
@@ -306,7 +840,8 @@ mod tests {
         // SPEC ORDER of the sections (spec "Watch out": a refactor must
         // not reorder sections 3-5).
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         assert_eq!(argv[0], "--clearenv");
         assert_eq!(argv[1], "--unshare-all");
         assert_eq!(argv[2], "--share-net");
@@ -320,7 +855,8 @@ mod tests {
     #[test]
     fn shell_payload_after_dashdash() {
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let n = argv.len();
         assert!(n >= 2);
         assert_eq!(argv[n - 2], "--");
@@ -331,7 +867,8 @@ mod tests {
     fn command_payload_is_verbatim() {
         let (repo, cfg, p) = shell_repo_defaults();
         let payload = Payload::Command(vec!["ls".into(), "-x".into(), "--help".into()]);
-        let argv = bwrap_argv(&cfg, &repo, &payload, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &payload, &HostEnv::new(), &p)
+        .unwrap();
         let n = argv.len();
         assert_eq!(&argv[n - 4..], &["--", "ls", "-x", "--help"]);
         // Flag-looking arguments stay verbatim payload content (cli.md D4).
@@ -356,7 +893,8 @@ mod tests {
                 mode: Mode::Rw,
             },
         ];
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         // A mount without `dest` binds at its own source path; the rw
         // mount with an explicit dest uses it verbatim. The ro bind must
         // precede the rw bind (mount order is argv order).
@@ -388,12 +926,14 @@ mod tests {
     #[test]
     fn network_false_denies() {
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         assert!(argv.contains(&"--share-net".to_string()));
 
         let mut deny = cfg;
         deny.network = false;
-        let argv = bwrap_argv(&deny, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&deny, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         assert!(!argv.contains(&"--share-net".to_string()));
         // But --unshare-all stays.
         assert!(argv.contains(&"--unshare-all".to_string()));
@@ -409,7 +949,8 @@ mod tests {
         host.insert("EDITOR".into(), "host-nvim".into());
         let repo = synth_repo();
         let p = params();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p)
+        .unwrap();
         // Every `--setenv` triple, in argv order.
         let setenvs: Vec<usize> = argv
             .iter()
@@ -456,9 +997,21 @@ mod tests {
     #[test]
     fn no_run_no_host_home_no_openai() {
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let joined = argv.join(" ");
-        assert!(!joined.contains("/run"), "no /run bind");
+        // No WHOLESALE `/run` bind (the base table's `no` row: D-Bus,
+        // the nix-daemon socket, agent sockets). The resolver exception
+        // of review-1 finding 5 is narrow and ro: exactly
+        // `/run/systemd/resolve`, only when the network is shared.
+        assert!(
+            !argv.windows(3).any(|w| w[0] == "--ro-bind" && w[1] == "/run"),
+            "no wholesale /run bind"
+        );
+        assert!(
+            !argv.windows(3).any(|w| w[0] == "--bind" && w[1] == "/run"),
+            "no wholesale /run bind (rw)"
+        );
         // No host home BIND, no host home path, no `~/tmp` — and no
         // automatic secret forwards (the OPENAI row of the base table).
         // `$HOME` inside the sandbox is the tmpfs of the base table's
@@ -482,7 +1035,8 @@ mod tests {
         // config.md D14: `$HOME` exists inside the sandbox (so `cd ~`
         // works), is an empty tmpfs, and is not below `/home`.
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let tmpfs: Vec<&str> = argv
             .windows(2)
             .filter(|w| w[0] == "--tmpfs")
@@ -506,7 +1060,8 @@ mod tests {
         cfg.env.insert("HOME".into(), "/synth/evil-home".into());
         let mut host = HostEnv::new();
         host.insert("HOME".into(), "/synth/host-home".into());
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p)
+        .unwrap();
         let last = argv
             .iter()
             .enumerate()
@@ -524,7 +1079,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "would overwrite the protected sandbox")]
     fn mount_dest_onto_tmp_is_refused() {
         // The hole the base table explicitly closes: binding a host path
         // ONTO /tmp reconstructs the host-backed /tmp. Later mounts win
@@ -536,11 +1090,15 @@ mod tests {
             dest: Some("/tmp".into()),
             mode: Mode::Rw,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { protected: "/tmp", .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "would overwrite the protected sandbox")]
     fn mount_dest_onto_root_is_refused() {
         // A dest of / would shadow /proc, /dev and everything else in one
         // move.
@@ -551,11 +1109,15 @@ mod tests {
             dest: Some("/".into()),
             mode: Mode::Rw,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "would overwrite the protected sandbox")]
     fn mount_dest_below_proc_is_refused() {
         // Nested, not just exact: a dest under /proc would overwrite part
         // of the procfs the base bind provides.
@@ -566,34 +1128,200 @@ mod tests {
             dest: Some("/proc/sys".into()),
             mode: Mode::Ro,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
-    fn mount_dest_inside_repo_is_fine() {
-        // The legitimate remap: a granted host path re-exposed under a
-        // (renamed) path inside the repo, or the repo itself as dest.
+    fn mount_dest_onto_ancestor_of_protected_path_is_refused() {
+        // The ancestor hole: a dest of `/nix` would receive the mount and
+        // hide the protected `/nix/store` below it; likewise `/usr` hides
+        // `/usr/bin` and `/etc` hides `/etc/localtime`.
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
-        cfg.mounts = vec![
-            Mount {
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some("/nix".into()),
+            mode: Mode::Rw,
+        }];
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
+    }
+
+    #[test]
+    fn mount_dest_etc_ancestor_is_refused() {
+        // Second ancestor case, pinned separately so a refactor cannot fix
+        // `/nix` while leaving `/etc` (hiding `/etc/localtime`) open.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some("/etc".into()),
+            mode: Mode::Ro,
+        }];
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
+    }
+
+    #[test]
+    fn mount_dest_dotdot_to_root_is_refused() {
+        // The lexical hole: `/x/..` passes a plain string check but
+        // bubblewrap resolves it to `/`, mounting over everything.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/everything".into(),
+            dest: Some("/x/..".into()),
+            mode: Mode::Rw,
+        }];
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
+    }
+
+    #[test]
+    fn mount_dest_dotdot_into_protected_is_refused() {
+        // Same, aimed at a narrower protected path: `/nix/../proc` is
+        // `/proc` after lexical resolution.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/proc-faker".into(),
+            dest: Some("/nix/../proc".into()),
+            mode: Mode::Rw,
+        }];
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
+    }
+
+    #[test]
+    fn mount_dest_redundant_component_spellings_are_refused() {
+        // Every spelling that resolves onto a protected path: `..`
+        // overshoot from the root (`/../../proc` is `/proc`), a `.` run
+        // (`/proc/./sys`), a trailing `.` (`/tmp/.`), and duplicate
+        // slashes (`//tmp///x`). The kernel drops or collapses all of
+        // them, so the guard must normalize before it compares.
+        for (i, dest) in [
+            "/../../proc",
+            "/proc/./sys",
+            "/tmp/./.",
+            "//tmp///x",
+            "/nix/store/../../..",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let (repo, cfg, p) = shell_repo_defaults();
+            let mut cfg = cfg;
+            cfg.mounts = vec![Mount {
                 path: "/synth/data".into(),
-                dest: Some("/synth/repo/.data".into()),
+                dest: Some(dest.into()),
                 mode: Mode::Ro,
-            },
-            Mount {
-                path: "/synth/repo/tools".into(),
-                dest: Some("/synth/repo/tools".into()),
-                mode: Mode::Ro,
-            },
-        ];
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+            }];
+            let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+            assert!(
+                matches!(err, Err(Error::ProtectedDest { .. })),
+                "dest {i} ({dest}) must be refused, got: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn dotdot_out_of_protected_stays_allowed() {
+        // `/tmp/../synth/dest` is `/synth/dest` — a `..` used to climb OUT
+        // of a protected path is ordinary and must stay mountable.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some("/tmp/../synth/dest".into()),
+            mode: Mode::Ro,
+        }];
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let pairs: Vec<_> = argv
             .windows(3)
             .filter(|w| w[0] == "--ro-bind")
             .map(|w| (w[1].as_str(), w[2].as_str()))
             .collect();
-        assert!(pairs.contains(&("/synth/data", "/synth/repo/.data")));
-        assert!(pairs.contains(&("/synth/repo/tools", "/synth/repo/tools")));
+        assert!(pairs.contains(&("/synth/data", "/tmp/../synth/dest")));
+    }
+
+    #[test]
+    fn component_similar_dests_stay_allowed() {
+        // The guard is component-exact: string-prefixed look-alikes are
+        // distinct paths and must stay mountable.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![
+            Mount {
+                path: "/synth/a".into(),
+                dest: Some("/usr/bin2".into()),
+                mode: Mode::Ro,
+            },
+            Mount {
+                path: "/synth/b".into(),
+                dest: Some("/tmpx".into()),
+                mode: Mode::Ro,
+            },
+            Mount {
+                path: "/synth/c".into(),
+                dest: Some("/nix/storex".into()),
+                mode: Mode::Ro,
+            },
+        ];
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
+        let cfg_dests: Vec<&str> = argv
+            .windows(3)
+            .filter(|w| w[0] == "--ro-bind" || w[0] == "--bind")
+            .map(|w| w[2].as_str())
+            // The repo bind (a --bind of the repo itself, section 4) and
+            // the base binds are not this test's subject.
+            .filter(|d| !d.starts_with("/synth/repo") && *d != "/nix/store" && *d != "/usr/bin" && *d != "/etc/localtime")
+            .collect();
+        assert_eq!(cfg_dests, vec!["/usr/bin2", "/tmpx", "/nix/storex"]);
+    }
+
+    #[test]
+    fn mount_dest_inside_repo_is_refused() {
+        // Review-2 item 2 turned this around: a dest inside the repo
+        // used to be the "legitimate remap", but the repo is writable
+        // and bubblewrap follows symlinks in a dest's parent
+        // components — `<repo>/jump -> /` makes `<repo>/jump/tmp`
+        // land on the protected `/tmp`. The whole class is refused;
+        // mount outside the work tree instead.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some("/synth/repo/.data".into()),
+            mode: Mode::Ro,
+        }];
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::DestBelowWritable { .. }),
+            "wrong error: {err}"
+        );
     }
 }

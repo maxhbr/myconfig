@@ -93,7 +93,9 @@ for `init` go to stdout and are prefixed `## ` (see the README transcript).
 Nothing else is written to stdout, so the tool stays pipe-friendly.
 
 The one deliberate exception is the `--dry-run` argv: it is printed to
-stdout **unprefixed, one argument per line**, because it is a *result*,
+stdout **unprefixed, one argument per line**, the backend executable
+(argv[0], the pinned `MYSBX_BWRAP` value) first — the executable is part
+of what `--dry-run` audits (review-1 finding 7). It is a *result*,
 not a diagnostic. Golden tests compare it byte for byte, and
 `mysbx run --dry-run -- ls | wc -l` is meaningful.
 
@@ -111,9 +113,11 @@ the sidecar directory exists), both configuration file paths with whether
 each was loaded or absent (an absent file is an empty layer), the merged
 backend, the network sense (`shared` / `denied`), every mount in
 declaration order — the implicit repo bind first (config.md D13), then the
-configured ones with mode, source, in-sandbox destination and the layer
-that contributed it — the forwarded host variables and the `[env]`
-variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH`
+git metadata directories its `.git` file points at (config.md D13), then
+the configured mounts with mode, source, in-sandbox destination and the
+layer that contributed it — the forwarded host variables and the `[env]`
+variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH` /
+`MYSBX_NIX_CONF` (the sanitized nix configuration, or `(none)`)
 values after their fallbacks, the payload, and whether the run will exec
 or stop at the argv.
 

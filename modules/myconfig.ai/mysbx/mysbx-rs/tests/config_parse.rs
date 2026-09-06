@@ -82,7 +82,9 @@ fn minimal_config_is_what_init_writes() {
     // all-defaults config.
     let c = load_ok("valid/minimal.toml");
     assert_eq!(c, Config::default());
-    assert!(c.network, "network is shared by default");
+    // No `network` key: the layer decided nothing (tri-state); the
+    // shared default is applied after the merge, not here.
+    assert_eq!(c.network, None);
     assert!(c.mounts.is_empty());
     assert!(c.env.is_empty());
 }
@@ -91,7 +93,7 @@ fn minimal_config_is_what_init_writes() {
 fn full_config() {
     let c = load_ok("valid/full.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
-    assert!(c.network);
+    assert_eq!(c.network, Some(true));
 
     assert_eq!(c.mounts.len(), 2);
     assert_eq!(c.mounts[0].path, "/home/user/.config/pi");
@@ -136,7 +138,7 @@ fn relative_and_home_paths_are_stored_verbatim() {
 fn syntax_zoo() {
     let c = load_ok("valid/syntax-zoo.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
-    assert!(!c.network);
+    assert_eq!(c.network, Some(false));
     assert_eq!(
         c.env["HASHED"], "home/user/src/pro#ject",
         "`#` inside a string must not start a comment"
@@ -206,4 +208,29 @@ fn invalid_schema_is_reported_with_the_offending_key() {
 fn missing_file_is_an_io_error() {
     let e = Config::load(&asset("valid/does-not-exist.toml")).unwrap_err();
     assert!(matches!(e, Error::Io(_)), "{e}");
+}
+
+// ---- git-dirs approval list (review-2 item 1) ------------------------------
+
+#[test]
+fn git_dirs_parses_as_a_list_of_host_paths() {
+    let cfg = Config::parse("git-dirs = [\"/abs/main/.git\", \"~/src\"]\n").unwrap();
+    assert_eq!(cfg.git_dirs, vec!["/abs/main/.git", "~/src"]);
+}
+
+#[test]
+fn git_dirs_defaults_to_empty() {
+    // Nothing approved unless said: an absent list approves nothing,
+    // like an absent user config grants nothing (config.md D7).
+    let cfg = Config::parse("backend = \"bubblewrap\"\n").unwrap();
+    assert!(cfg.git_dirs.is_empty());
+}
+
+#[test]
+fn git_dirs_rejects_non_strings_and_bad_tildes() {
+    assert!(Config::parse("git-dirs = [1]\n").is_err());
+    assert!(Config::parse("git-dirs = \"/not/an/array\"\n").is_err());
+    assert!(Config::parse("git-dirs = [\"\"]\n").is_err());
+    // `~user` is rejected for git-dirs exactly like for mount paths (D8).
+    assert!(Config::parse("git-dirs = [\"~root/x\"]\n").is_err());
 }

@@ -52,10 +52,26 @@ let
   #   - `.config/bat`     ← ../../shell.programs.bat.nix
   #   - `.config/fish`    ← ../../programs.fish (only when fish is on)
   # Same list as the `configDirs` default of ../fns/bubblewrap-app.nix.
+  # Each entry also carries a `dest` under the sandbox home (review-2
+  # item 6). Without one, the mount lands at its host path
+  # (`/home/mhuber/.config/git`) — a path that exists nowhere in the
+  # sandbox's own view: `HOME` is `/mysbx-home` (./docs/design/config.md
+  # D14), so `git` looks in `/mysbx-home/.config/git` and finds nothing,
+  # while the argv gains a `/home/…` destination the D14 invariant wants
+  # to keep out of in-sandbox paths. Mapping `~/x` to `/mysbx-home/x`
+  # keeps the configuration where every tool already looks for it.
+  homeDest =
+    p:
+    if lib.hasPrefix "~/" p then
+      "/mysbx-home/" + lib.removePrefix "~/" p
+    else
+      throw "myconfig.ai.mysbx: homeDest expects a `~/…` path, got `${p}`";
+
   baselineMounts =
     map
       (p: {
         path = p;
+        dest = homeDest p;
         mode = "ro";
       })
       (
@@ -82,7 +98,8 @@ let
     mounts = map renderMount cfg.config.mounts;
     env = cfg.config.env;
   }
-  // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; };
+  // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
+  // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; };
 in
 {
   options.myconfig.ai.mysbx = with lib; {
@@ -106,11 +123,18 @@ in
         Content of the mysbx *user* configuration layer, generated into
         `~/.config/mysbx/config.toml` (./docs/design/config.md D6).
 
-        This is the GRANT layer: a repo sidecar may only mount host paths
-        at or below a path granted here, and may never upgrade `ro` to
-        `rw` (D7). Modules may append to `mounts` — list definitions are
-        merged by concatenation, so per-agent modules can add their own
-        config files without replacing the baseline.
+        Its `mounts` play two roles at once (D7): they are mounted in
+        every sandbox of this user, AND they are the grant tree that
+        bounds what a repo sidecar may mount — a sidecar may only mount
+        host paths at or below a granted path, and may never upgrade
+        `ro` to `rw`. Modules may append to `mounts` — list definitions
+        are merged by concatenation, so per-agent modules can add their
+        own config files without replacing the baseline.
+
+        Give every entry a `dest` under `/mysbx-home` unless the host
+        path is meaningful inside the sandbox as well: `HOME` is
+        `/mysbx-home` there (D14), so a config directory bound at its
+        host path is invisible to the tools that want it.
       '';
       default = { };
       type = types.submodule {
@@ -173,12 +197,69 @@ in
             default = { };
             description = "Environment variables forwarded into the sandbox.";
           };
+          gitDirs = mkOption {
+            type = types.listOf (types.addCheck types.str (p: p != ""));
+            default = [ ];
+            example = [ "~/myconfig/myconfig/.git" ];
+            description = ''
+              Host directories approved as *external git metadata*: the
+              targets a repository's `.git` FILE may point at when the
+              repo is a linked worktree or a submodule
+              (./docs/design/config.md, review-2 item 1).
+
+              The `.git` file lives inside the repo and is therefore
+              untrusted content (D3), so it grants nothing by itself:
+              mysbx binds the metadata only when the resolved target is
+              at or below an entry approved here or in the repo's
+              sidecar — `mysbx init` records what it finds into a fresh
+              sidecar, so this host-wide list is only needed to
+              pre-approve checkout roots (e.g. `~/myconfig`).
+
+              Entries take the same three forms as mount paths (D8) and
+              must exist at run time: they are canonicalized eagerly.
+            '';
+          };
         };
       };
     };
   };
 
   config = lib.mkIf cfg.enable {
+    # The `/mysbx-home` invariant of ./docs/design/config.md D14, made
+    # checkable at eval time (review-2 item 6): no in-sandbox path may
+    # mirror a host home path, and a mount written `~/…` without a
+    # `dest` would do exactly that — it lands at its host path, which
+    # inside the sandbox is both invisible (HOME is `/mysbx-home`) and
+    # indistinguishable from a real host home.
+    assertions =
+      let
+        # What the mount actually lands on inside the sandbox: the
+        # `dest` when given, otherwise the host path itself — in every
+        # spelling D8 allows (absolute, `~/…`, or relative to the
+        # generated config's own directory, `~/.config/mysbx`).
+        effectiveDest = m: if m.dest != null then m.dest else m.path;
+        # True when that in-sandbox path lands inside the host home,
+        # however it is written: `~`/`~/…` expand there, an absolute
+        # `/home/…` is one already, and a relative path resolves
+        # against `~/.config/mysbx/`, so it is one too.
+        landsInHostHome =
+          d: lib.hasPrefix "/home/" d || d == "~" || lib.hasPrefix "~/" d || !(lib.hasPrefix "/" d);
+        offenders = builtins.filter (m: landsInHostHome (effectiveDest m)) cfg.config.mounts;
+      in
+      [
+        {
+          assertion = offenders == [ ];
+          message = ''
+            myconfig.ai.mysbx.config.mounts: these entries end up at an
+            in-sandbox path inside the host home, which the sandbox
+            deliberately does not have — `HOME` is `/mysbx-home`
+            (docs/design/config.md D14), so nothing looks for them there:
+              ${lib.concatMapStringsSep "\n  " (m: m.path) offenders}
+            Give each of them an explicit `dest` below `/mysbx-home`.
+          '';
+        }
+      ];
+
     # Baseline grants; further definitions (from per-agent modules or the
     # host config) are concatenated onto this list.
     myconfig.ai.mysbx.config.mounts = baselineMounts;

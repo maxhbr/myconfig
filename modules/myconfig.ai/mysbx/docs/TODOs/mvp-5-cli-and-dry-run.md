@@ -21,10 +21,11 @@ runs the whole pipeline — resolve the repo, load and merge both layers,
 canonicalize, apply the narrow-not-widen rule — and stops immediately before
 `exec`. A dry run that skipped validation would exercise the wrong function.
 
-Output of `--dry-run`: the argv, **one argument per line, on stdout**, with no
-`## ` prefix and no quoting. It is the result, not a diagnostic
-(`cli.md` D9 keeps stdout for results), so `mysbx run --dry-run -- ls | wc -l`
-is meaningful and the golden tests compare bytes.
+Output of `--dry-run`: the bwrap executable (argv[0]) first, then the
+argv, **one argument per line, on stdout**, with no `## ` prefix and no
+quoting. It is the result, not a diagnostic (`cli.md` D9 keeps stdout for
+results), so `mysbx run --dry-run -- ls | wc -l` is meaningful and the golden
+tests compare bytes. (argv[0] was added by review-1 finding 7.)
 
 ## Do
 
