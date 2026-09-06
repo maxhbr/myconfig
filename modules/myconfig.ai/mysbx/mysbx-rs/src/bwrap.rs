@@ -238,11 +238,28 @@ pub fn bwrap_argv(
         // The daemon is bound with `--share-net` and nowhere else
         // (section 2) — but a configured mount could still source it.
         // Its dest is irrelevant: what matters is that the socket
-        // becomes reachable at all (review-2 item 3).
-        for m in &cfg.mounts {
-            if normalize(&m.path).starts_with("/nix/var/nix") {
+        // becomes reachable at all. Both containment directions count
+        // (review-3 item 2): a source AT OR BELOW `/nix/var/nix` is one,
+        // and so is a HOST ANCESTOR — binding `/nix` or `/` read-only
+        // still exposes `/nix/var/nix/daemon-socket/socket` through
+        // the wider window. `check_dest` and `check_hidden_mounts`
+        // already refuse the in-sandbox ancestors of protected
+        // paths, so an ancestor SOURCE was the one gap.
+        const DAEMON_DIR: &str = "/nix/var/nix";
+        // Every effective source, not just the configured mounts:
+        // the implicit repo bind is checked too (review-3 item 2 said
+        // so explicitly). In practice a repo cannot sit there — `/`
+        // and the home tree are refused at discovery — but `/nix` or
+        // `/nix/var` are ordinary directories, and the rule is cheap.
+        for src in cfg
+            .mounts
+            .iter()
+            .map(|m| normalize(&m.path))
+            .chain(std::iter::once(normalize(&root)))
+        {
+            if src.starts_with(DAEMON_DIR) || Path::new(DAEMON_DIR).starts_with(&src) {
                 return Err(Error::DaemonUnderDeniedNetwork {
-                    source: m.path.clone(),
+                    source: src.to_string_lossy().into_owned(),
                 });
             }
         }
@@ -329,11 +346,12 @@ pub enum Error {
         writable: String,
     },
     /// A configured mount would carry the nix daemon into a sandbox
-    /// whose network is denied (review-2 item 3). The socket under
-    /// `/nix/var/nix` is a network service: the daemon builds
-    /// fixed-output derivations, which keep network access, so a
-    /// mount that sources it would make `network = false` a lie no
-    /// matter what its dest is.
+    /// whose network is denied (review-2 item 3, review-3 item 2). The
+    /// socket under `/nix/var/nix` is a network service: the daemon
+    /// builds fixed-output derivations, which keep network access, so
+    /// a mount that sources it — or any HOST ANCESTOR of it, like
+    /// `/nix` itself, which carries the socket along — would make
+    /// `network = false` a lie no matter what its dest is.
     DaemonUnderDeniedNetwork { source: String },
     /// The git metadata a `.git` FILE points at is related to a
     /// protected sandbox path — the bind would shadow or overwrite base
@@ -376,12 +394,11 @@ impl fmt::Display for Error {
             ),
             Error::DaemonUnderDeniedNetwork { source } => write!(
                 f,
-                "mount source {source} is inside the nix daemon directory \
-                 /nix/var/nix, and this sandbox denies the network — the \
-                 daemon builds fixed-output derivations, which keep network \
-                 access, so the mount would hand back exactly what \
-                 `network = false` takes away; drop the mount or share the \
-                 network"
+                "source {source} is inside or above the nix daemon directory \
+                 /nix/var/nix, and this sandbox denies the network — the daemon \
+                 builds fixed-output derivations, which keep network access, so a \
+                 bind exposing the socket would hand back exactly what \
+                 `network = false` takes away; drop the bind or share the network"
             ),
             Error::GitDirProtected { gitdir, protected } => write!(
                 f,
