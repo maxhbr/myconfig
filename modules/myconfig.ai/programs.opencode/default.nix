@@ -88,6 +88,48 @@ let
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
 
+  # --- mysbx integration (../mysbx) -------------------------------------
+  #
+  # opencode is wired into the `mysbx` sandbox tier the same way pi is
+  # (../programs.pi-coding-agent/default.nix):
+  #
+  #   1. the `opencode` binary on the sandbox PATH -> `myconfig.ai.mysbx.extraTools`
+  #   2. opencode's *configuration* visible inside the sandbox -> read-only
+  #      mounts in the generated user config layer (`…mysbx.config.mounts`).
+  #
+  # Only home-manager-managed paths are mounted: mysbx canonicalizes every
+  # mount path eagerly and a missing path is a hard error on EVERY run
+  # (../mysbx/docs/design/config.md D8), so each entry must be created by
+  # the very condition that adds it. The writable state directories
+  # (`~/.local/share/opencode`, `~/.local/state/opencode`, the auth files)
+  # are deliberately NOT mounted — inside the sandbox they stay in the
+  # throwaway tmpfs home, so a sandboxed session starts unauthenticated
+  # (it talks to the local LiteLLM / llama.cpp providers, which need no
+  # credentials).
+  #
+  # Every entry carries a `dest` under `/mysbx-home` because `HOME` is
+  # `/mysbx-home` in the sandbox (D14) and opencode looks for its config
+  # below `$XDG_CONFIG_HOME` (i.e. `$HOME/.config`).
+  mysbxHomeMount = path: {
+    path = "~/${path}";
+    dest = "/mysbx-home/${path}";
+    mode = "ro";
+  };
+
+  mysbxOpencodeMounts = map mysbxHomeMount [
+    # The generated config (providers, permission rules, agents, commands,
+    # skills — everything the `programs.opencode` block below writes below
+    # `~/.config/opencode`) — always present because `programs.opencode`
+    # unconditionally writes at least `opencode/AGENTS.md`.
+    ".config/opencode"
+    # MCP server definitions (`programs.mcp` writes `~/.config/mcp/mcp.json`),
+    # activated by `enableMcpIntegration` below. Mount the whole `mcp`
+    # directory rather than the single file: mysbx mounts must exist
+    # eagerly, and the directory is created unconditionally by
+    # `programs.mcp.enable` (the file only when servers are configured).
+    ".config/mcp"
+  ];
+
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   contextWindowLookup = lib.listToAttrs (
     lib.concatMap (
@@ -126,6 +168,16 @@ in
     myconfig.ai.skills.playwright.enable = lib.mkDefault true;
     myconfig.ai.workmux.agents.opencode = opencodeWorktree.agent;
     myconfig.ai.workmux.agents.agent-bubblewrap-opencode = agentBubblewrapOpencodeWorktree.agent;
+
+    # mysbx tier integration (see `mysbxOpencodeMounts` above). Gated on
+    # mysbx being enabled too: the two features are independent, and the
+    # mounts would otherwise be generated for a host that has no mysbx
+    # config file to carry them.
+    myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
+      extraTools = [ pkgs.opencode ];
+      config.mounts = mysbxOpencodeMounts;
+    };
+
     home-manager.sharedModules = [
       (
         {

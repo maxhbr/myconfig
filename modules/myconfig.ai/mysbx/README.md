@@ -117,6 +117,12 @@ enabled it adds its binary to the sandbox `PATH` via
 `myconfig.ai.mysbx.extraTools` and mounts its home-manager-managed
 configuration (`~/.pi/agent/{extensions,agents,prompts,themes,keybindings.json}`
 and `~/.agents/skills`) read-only below `/mysbx-home`.
+`opencode` ([`programs.opencode`](../programs.opencode/default.nix)) is wired
+in the same way: its binary goes on the sandbox `PATH` and its generated
+configuration (`~/.config/opencode` plus `~/.config/mcp`) is mounted
+read-only below `/mysbx-home`. Its writable state
+(`~/.local/{share,state}/opencode`, auth) is deliberately not mounted — a
+sandboxed session starts with the throwaway tmpfs home.
 
 # Supported Technologies
 ## Already Implemented:
