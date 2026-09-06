@@ -100,16 +100,14 @@ pub struct Params<'a> {
 ///    worktrees and submodules are unusable without them)
 /// 5. the configured mounts, in declaration order, `--ro-bind` / `--bind`,
 ///    each `dest` defaulting to its source path (mount order is argv
-///    order; a later rw bind nested inside an earlier ro bind is a real
-///    pattern the MVP must preserve). Two layout rules are enforced:
-///    a dest that would shadow or overwrite a base path — via `..`
-///    components or as an ancestor or descendant of one — is refused
-///    (see [`check_dest`]); a later dest that would hide an
-///    earlier mount — or the implicit repo bind — is refused
-///    (see [`check_hidden_mounts`]); and a dest BELOW a writable bind
-///    is refused, because bubblewrap follows symlinks in a dest's
-///    parent components and writable content can plant them
-///    (see [`check_symlinkable_dests`], review-2 item 2).
+///    order). Two layout rules are enforced: a dest that would shadow
+///    or overwrite a base path — via `..` components or as an ancestor
+///    or descendant of one — is refused (see [`check_dest`]); a later
+///    dest that would hide an earlier mount — or the implicit repo
+///    bind — is refused (see [`check_hidden_mounts`]); and a dest
+///    BELOW a writable bind is refused, because bubblewrap follows
+///    symlinks in a dest's parent components and writable content can
+///    plant them (see [`check_symlinkable_dests`], review-2 item 2).
 /// 6. environment via `--setenv`, in this precedence: host-forwarded
 ///    variables first, then `cfg.env` (which wins by being set later),
 ///    then the infrastructure variables `HOME` and `PATH` last — set
@@ -318,11 +316,12 @@ pub enum Error {
     /// specification.
     GitDirNotApproved { gitdir: PathBuf },
     /// A mount `dest` lies below a writable bind — the repo, a git
-    /// metadata directory, or an earlier `rw` mount. bubblewrap
-    /// resolves the destination path in the sandbox it has built so
-    /// far and FOLLOWS symlinks in its parent components, so a
-    /// symlink planted in that writable content redirects the bind to
-    /// any path at all (review-2 item 2).
+    /// metadata directory, an `rw` mount, or a `ro` alias of any of
+    /// those. bubblewrap resolves the destination path in the sandbox
+    /// it has built so far and FOLLOWS symlinks in its parent
+    /// components, so a symlink planted in that writable content
+    /// redirects the bind to any path at all (review-2 item 2,
+    /// review-3 item 1).
     DestBelowWritable {
         /// The refused destination.
         dest: String,
@@ -634,7 +633,7 @@ fn check_hidden_mounts(
 ///
 /// - the repo (always rw, D13) and the git metadata directories: the
 ///   payload writes them, and what it writes persists to the next run,
-/// - any EARLIER `rw` mount: same argument, one layer out.
+/// - any `rw` mount: same argument, one layer out.
 ///
 /// An `ro` bind whose SOURCE is ordinary host state is not in the set:
 /// the sandbox cannot change that content, so the residual risk is a
@@ -653,6 +652,18 @@ fn check_hidden_mounts(
 /// An EQUAL dest is not below anything and stays allowed: re-binding
 /// the same path resolves the path itself, not a component inside the
 /// writable content.
+///
+/// The analysis is order-INDEPENDENT (review-3 item 1) although
+/// bubblewrap applies binds in order: the symlink a payload plants
+/// persists to the NEXT run, and on that next run the declaration
+/// order is identical — a guard that depended on the order would
+/// only defend the first run against a pattern whose exploit is the
+/// second. So the writable sets are built from the mount list as a
+/// whole, in a fixed-point pass: every `rw` mount contributes its
+/// source to `writable_sources` and its dest to `writable_dests`,
+/// every `ro` mount whose source is (or comes to be) inside a
+/// writable source contributes its dest too, and contributions are
+/// propagated in BOTH directions until nothing changes.
 fn check_symlinkable_dests(
     mounts: &[Mount],
     repo_root: &str,
@@ -669,33 +680,56 @@ fn check_symlinkable_dests(
     // git dirs are bound at their host path, so they are both.
     let mut writable_dests: Vec<PathBuf> = writable_sources.clone();
 
-    for m in mounts {
-        let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
-        let src = normalize(&m.path);
-        if let Some(prefix) = writable_dests
-            .iter()
-            .find(|p| dest.starts_with(p) && &&dest != p)
-        {
-            return Err(Error::DestBelowWritable {
-                dest: dest.to_string_lossy().into_owned(),
-                writable: prefix.to_string_lossy().into_owned(),
-            });
+    // Order-independence (review-3 item 1): passes run until a
+    // fixed point, so it does not matter which alias is declared
+    // first — an `ro` parent that contains writable content
+    // anywhere below it contributes its dest, and a mount's own
+    // dest may not be below any writable dest, whenever declared.
+    loop {
+        let mut changed = false;
+        for m in mounts {
+            let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
+            let src = normalize(&m.path);
+            if let Some(prefix) = writable_dests
+                .iter()
+                .find(|p| dest.starts_with(p) && dest != **p)
+            {
+                return Err(Error::DestBelowWritable {
+                    dest: dest.to_string_lossy().into_owned(),
+                    writable: prefix.to_string_lossy().into_owned(),
+                });
+            }
+            // A mount makes its dest subtree writable-in-sandbox when
+            // it is `rw` — and also when it is `ro` but re-exposes
+            // content that is writable elsewhere in the sandbox, in
+            // EITHER direction: `ro` stops the payload from writing
+            // THROUGH this bind, not from writing the same host inode
+            // through the repo bind next door. A source INSIDE a
+            // writable subtree is the review-2 case; a source
+            // CONTAINING one (an `ro` alias of a tree holding the
+            // repo, or of a parent of an `rw` mount's source) exposes
+            // the same planted symlinks through the wider window
+            // (review-3 item 1).
+            let src_is_writable = writable_sources
+                .iter()
+                .any(|w| src.starts_with(w) || w.starts_with(&src));
+            let push_if_new = |set: &mut Vec<PathBuf>, p: PathBuf| {
+                if !set.contains(&p) {
+                    set.push(p);
+                    true
+                } else {
+                    false
+                }
+            };
+            if m.mode == Mode::Rw {
+                changed |= push_if_new(&mut writable_sources, src);
+                changed |= push_if_new(&mut writable_dests, dest);
+            } else if src_is_writable {
+                changed |= push_if_new(&mut writable_dests, dest);
+            }
         }
-        // Only AFTER its own check does a mount extend the sets: bwrap
-        // applies binds in order, so a LATER bind cannot have planted
-        // anything an EARLIER dest resolves through.
-        //
-        // A mount makes its dest subtree writable-in-sandbox when it is
-        // `rw` — and also when it is `ro` but re-exposes content that
-        // is already writable elsewhere in the sandbox: `ro` stops the
-        // payload from writing THROUGH this bind, not from writing the
-        // same host inode through the repo bind next door.
-        let src_is_writable = writable_sources.iter().any(|w| src.starts_with(w));
-        if m.mode == Mode::Rw {
-            writable_sources.push(src);
-            writable_dests.push(dest);
-        } else if src_is_writable {
-            writable_dests.push(dest);
+        if !changed {
+            break;
         }
     }
     Ok(())

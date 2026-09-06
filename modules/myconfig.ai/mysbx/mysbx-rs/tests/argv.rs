@@ -457,14 +457,17 @@ fn share_net_iff_network_true() {
 
 #[test]
 fn mount_order_is_preserved() {
-    // A later rw bind nested inside an earlier ro bind is a real pattern
-    // (the base table relies on it): the argv must keep declaration order.
+    // Declaration order between UNRELATED mounts must be kept in the
+    // argv. (This fixture used to nest an rw bind inside an ro bind;
+    // review-3 item 1 turns that pattern into a refusal — see
+    // `a_ro_parent_containing_an_rw_mount_is_not_a_safe_parent` — so
+    // the order is pinned on disjoint paths instead.)
     let cfg = Merged {
         backend: Some("bubblewrap".into()),
         network: true,
         mounts: vec![
             make_mount("/synth/data/outer", None, Mode::Ro),
-            make_mount("/synth/data/outer/nested", None, Mode::Rw),
+            make_mount("/synth/other", None, Mode::Rw),
         ],
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
@@ -482,14 +485,14 @@ fn mount_order_is_preserved() {
         .unwrap();
     let nested = argv
         .iter()
-        .position(|x| x.as_str() == "/synth/data/outer/nested")
+        .position(|x| x.as_str() == "/synth/other")
         .unwrap();
     assert!(
         outer < nested,
-        "ro outer bind must precede the nested rw bind"
+        "the earlier declared mount must be bound first"
     );
     assert_eq!(argv[outer - 1], "--ro-bind", "outer mount is ro");
-    assert_eq!(argv[nested - 1], "--bind", "nested mount is rw");
+    assert_eq!(argv[nested - 1], "--bind", "later mount is rw");
 }
 
 #[test]
@@ -1455,4 +1458,110 @@ fn a_mount_may_source_the_daemon_when_the_network_is_shared() {
         Mode::Ro,
     ));
     bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
+
+// ---- order-independent writable-alias analysis (review-3 item 1) -----------
+
+#[test]
+fn a_ro_alias_declared_before_the_rw_alias_is_caught() {
+    // Review-3 item 1, first miss: an `ro` alias is declared BEFORE
+    // the `rw` mount of a path inside it. The forward scan used to see
+    // the ro mount first, conclude "ordinary host state", and clear it
+    // as a safe parent — leaving a dest below the alias resolvable
+    // through a payload-planted symlink.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/host/tree", Some("/view"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/host/tree/writable", Some("/w"), Mode::Rw));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/view/writable/jump"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_parent_containing_the_repo_is_not_a_safe_parent() {
+    // Review-3 item 1, second miss: an `ro` mount of a tree CONTAINING
+    // the repo. The repo is always rw (D13), so the alias re-exposes
+    // writable content — a dest below `/view` is resolvable through a
+    // symlink planted in the work tree, no matter that the alias
+    // itself is `ro` and declared first.
+    let repo = synth_repo(); // root: /synth/repo
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth", Some("/view"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/view/repo/jump"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_parent_containing_an_rw_mount_is_not_a_safe_parent() {
+    // The old `mount_order_is_preserved` fixture — ro outer, rw inner —
+    // becomes a refusal (review-3 item 1): the ro alias re-exposes
+    // content the payload can write through the rw bind, so a dest
+    // below it resolves through whatever symlink the payload planted
+    // there between runs.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/data/outer", None, Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data/outer/nested", None, Mode::Rw));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_parent_containing_a_git_dir_is_not_a_safe_parent() {
+    // Same shape with the git metadata instead of the work tree: the
+    // git dirs are rw and symlink-plantable, so an ro alias above them
+    // inherits the property.
+    let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
+    cfg.mounts.push(make_mount("/synth/main", Some("/view"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/view/.git/worktrees/wt/hooks"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_chain_of_aliases_over_writable_content_is_caught() {
+    // A three-hop chain exercises more than one propagation pass of
+    // the fixed point: ro alias of an ro alias of a tree containing an
+    // rw mount. Pass 1 learns the rw source; pass 2 marks the middle
+    // alias writable; pass 3 marks the outer one — only then is the
+    // dest below the outer alias refused. A forward scan or a
+    // single-pass overlap would let it through.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/host/a/b", Some("/hop2"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/host/a", Some("/hop1"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/host/a/b/writable", Some("/w"), Mode::Rw));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/hop1/b/writable/jump"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
 }
