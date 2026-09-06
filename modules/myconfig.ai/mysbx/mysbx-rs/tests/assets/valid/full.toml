@@ -3,6 +3,11 @@
 backend = "bwrap"
 network = true
 
+# State directories (config.md D15): sandbox-home-relative paths whose
+# content persists in the sidecar across runs — backed by
+# `<repo>.mysbx/state/<entry>` and bound rw at `/mysbx-home/<entry>`.
+state-dirs = [".local/share/opencode", ".local/state/opencode"]
+
 [[mounts]]
 path = "/home/user/.config/pi"
 mode = "ro"

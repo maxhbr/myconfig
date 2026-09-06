@@ -108,7 +108,17 @@ the host variable, and a mount alone is inert — review-3 item 6). A
 repo sidecar declares its own mounts independently — both
 configuration files are trusted (`docs/design/config.md` D7). Per-agent
 modules
-append their own config files to `myconfig.ai.mysbx.config.mounts`.
+append their own config files to `myconfig.ai.mysbx.config.mounts` and
+their per-repo state directories to `myconfig.ai.mysbx.config.stateDirs`.
+
+### State directories (`state-dirs`)
+
+An entry names a path *relative to the sandbox home* whose content
+should survive the sandbox: mysbx synthesizes the host backing store
+`<repo>.mysbx/state/<entry>`, creates it before the backend starts and
+binds it rw at `/mysbx-home/<entry>`. The host home is never the source.
+Entries may not nest, no mount may cover them, and `--dry-run` creates
+nothing. See `docs/design/config.md` D15.
 
 ## Integrated coding agents
 `pi` ([`programs.pi-coding-agent`](../programs.pi-coding-agent/default.nix)) is
@@ -121,8 +131,11 @@ and `~/.agents/skills`) read-only below `/mysbx-home`.
 in the same way: its binary goes on the sandbox `PATH` and its generated
 configuration (`~/.config/opencode` plus `~/.config/mcp`) is mounted
 read-only below `/mysbx-home`. Its writable state
-(`~/.local/{share,state}/opencode`, auth) is deliberately not mounted — a
-sandboxed session starts with the throwaway tmpfs home.
+(`~/.local/{share,state}/opencode`) is *not* mounted from the host — instead
+it is declared as mysbx `state-dirs` (config.md D15) and persists per
+repository in `<repo>.mysbx/state/`. The host's own opencode state and
+auth files stay out of the sandbox, so a sandboxed session starts
+unauthenticated and talks to the local LiteLLM / llama.cpp providers.
 
 # Supported Technologies
 ## Already Implemented:

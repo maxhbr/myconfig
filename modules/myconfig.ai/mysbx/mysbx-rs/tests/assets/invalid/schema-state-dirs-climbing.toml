@@ -1,0 +1,6 @@
+# state-dirs entries are paths RELATIVE to the sandbox home; the backing
+# store is synthesized by mysbx under <repo>.mysbx/state/ (config.md D15).
+# Every spelling that could make the two joins (sidecar state tree, tmpfs
+# home) escape is a schema error: absolute, `~/`, empty components, `.`,
+# `..`.
+state-dirs = ["../outside"]

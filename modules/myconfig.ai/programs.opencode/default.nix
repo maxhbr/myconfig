@@ -96,16 +96,19 @@ let
   #   1. the `opencode` binary on the sandbox PATH -> `myconfig.ai.mysbx.extraTools`
   #   2. opencode's *configuration* visible inside the sandbox -> read-only
   #      mounts in the generated user config layer (`…mysbx.config.mounts`).
+  #   3. opencode's *state* persists across runs -> `state-dirs` entries
+  #      (`…mysbx.config.stateDirs`, ../mysbx/docs/design/config.md D15)
+  #      backed by `<repo>.mysbx/state/` in the sidecar — never the host
+  #      `~/.local`, which stays out of the sandbox entirely.
   #
   # Only home-manager-managed paths are mounted: mysbx canonicalizes every
   # mount path eagerly and a missing path is a hard error on EVERY run
   # (../mysbx/docs/design/config.md D8), so each entry must be created by
-  # the very condition that adds it. The writable state directories
-  # (`~/.local/share/opencode`, `~/.local/state/opencode`, the auth files)
-  # are deliberately NOT mounted — inside the sandbox they stay in the
-  # throwaway tmpfs home, so a sandboxed session starts unauthenticated
-  # (it talks to the local LiteLLM / llama.cpp providers, which need no
-  # credentials).
+  # the very condition that adds it. The host's own
+  # `~/.local/{share,state}/opencode` and the auth files are deliberately
+  # NOT mounted: a sandboxed session starts unauthenticated (it talks to
+  # the local LiteLLM / llama.cpp providers, which need no credentials)
+  # and writes its state to the sidecar instead.
   #
   # Every entry carries a `dest` under `/mysbx-home` because `HOME` is
   # `/mysbx-home` in the sandbox (D14) and opencode looks for its config
@@ -172,10 +175,18 @@ in
     # mysbx tier integration (see `mysbxOpencodeMounts` above). Gated on
     # mysbx being enabled too: the two features are independent, and the
     # mounts would otherwise be generated for a host that has no mysbx
-    # config file to carry them.
+    # config file to carry them. The state dirs replace what the
+    # bubblewrap jail tiers bind rw (`userDataDirs`): opencode's session
+    # and TUI state persist per repository in the sidecar
+    # (../mysbx/docs/design/config.md D15) instead of dying with the
+    # tmpfs home.
     myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
       extraTools = [ pkgs.opencode ];
       config.mounts = mysbxOpencodeMounts;
+      config.stateDirs = [
+        ".local/share/opencode"
+        ".local/state/opencode"
+      ];
     };
 
     home-manager.sharedModules = [

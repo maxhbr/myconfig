@@ -93,6 +93,18 @@ pub struct Config {
     /// discovered directories into a fresh sidecar so the common
     /// worktree/submodule case works out of the box.
     pub git_dirs: Vec<String>,
+    /// State directories (docs/design/config.md D15): paths relative
+    /// to the sandbox home whose content should persist across runs.
+    /// mysbx backs each entry with `<sidecar>/state/<entry>` on the
+    /// host, creates it before the backend starts and binds it `rw`
+    /// at `/mysbx-home/<entry>` — a sandboxed agent keeps its sessions
+    /// and caches per repository, without any host-home path entering
+    /// the sandbox. Both layers declare; the lists concatenate like
+    /// mounts. Unlike `[[mounts]]` paths these are NEVER resolved
+    /// against the host (D8 does not apply): the host path is
+    /// synthesized from the sidecar, and the only thing a layer may
+    /// say is the shape of the path below the sandbox home.
+    pub state_dirs: Vec<String>,
 }
 
 impl Default for Config {
@@ -103,6 +115,7 @@ impl Default for Config {
             mounts: Vec::new(),
             env: BTreeMap::new(),
             git_dirs: Vec::new(),
+            state_dirs: Vec::new(),
         }
     }
 }
@@ -159,6 +172,7 @@ impl Config {
                 "mounts" => config.mounts = mounts(value)?,
                 "env" => config.env = env(table(value, "env")?)?,
                 "git-dirs" => config.git_dirs = git_dirs(value)?,
+                "state-dirs" => config.state_dirs = state_dirs(value)?,
                 other => return Err(unknown("top level", other)),
             }
         }
@@ -230,6 +244,64 @@ fn git_dirs(value: &Value) -> Result<Vec<String>, Error> {
             host_path(string(v, &at)?, &at)
         })
         .collect()
+}
+
+/// Parse the `state-dirs` list (docs/design/config.md D15): an array
+/// of sandbox-home-relative paths. See [`state_dir_path`] for the
+/// per-entry shape check.
+fn state_dirs(value: &Value) -> Result<Vec<String>, Error> {
+    let items = value.as_array().ok_or_else(|| {
+        Error::Schema(format!(
+            "state-dirs: expected an array of strings, found {}",
+            value.type_name()
+        ))
+    })?;
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let at = format!("state-dirs #{}", i + 1);
+            state_dir_path(string(v, &at)?, &at)
+        })
+        .collect()
+}
+
+/// A `state-dirs` entry (docs/design/config.md D15): a path *relative
+/// to the sandbox home* naming where the persistent directory is bound
+/// (`/mysbx-home/<entry>`), with the host backing store synthesized by
+/// mysbx at `<sidecar>/state/<entry>`. It is neither a host path (so
+/// the D8 forms do not apply) nor a free-form in-sandbox `dest`: the
+/// host side is decided by the sidecar (D2/D10), the sandbox side by
+/// D14. The only thing a layer may say is the shape of the path
+/// below the home — and it must be unambiguous, because the runtime
+/// joins the entry into both trees: a leading `/`, a `~/` prefix and
+/// `.`/`..`/empty components are rejected here, so no entry can climb
+/// out of the sandbox home or of the sidecar's state tree, whatever
+/// joins it.
+fn state_dir_path(path: &str, at: &str) -> Result<String, Error> {
+    let bad = |why: &str| {
+        Error::Schema(format!(
+            "{at}: must be a relative path below the sandbox home ({why}): `{path}`"
+        ))
+    };
+    if path.is_empty() {
+        return Err(bad("must not be empty"));
+    }
+    if path.starts_with('/') {
+        return Err(bad("no leading `/` — the destination is always /mysbx-home/<entry>"));
+    }
+    if path.starts_with('~') {
+        return Err(bad("no `~/` prefix — the sandbox home is not the host home"));
+    }
+    for component in path.split('/') {
+        if component.is_empty() {
+            return Err(bad("no empty `//` components"));
+        }
+        if component == "." || component == ".." {
+            return Err(bad("no `.` or `..` components"));
+        }
+    }
+    Ok(path.to_owned())
 }
 
 fn env(t: &Table) -> Result<BTreeMap<String, String>, Error> {
@@ -381,6 +453,59 @@ mod tests {
         for p in ["~", "~other", "~other/data"] {
             let e = Config::parse(&format!("[[mounts]]\npath = \"{p}\"\n")).unwrap_err();
             assert!(e.to_string().contains("only the `~/` prefix"), "{p}: {e}");
+        }
+    }
+
+    // ---- state-dirs (docs/design/config.md D15) -----------------------
+
+    #[test]
+    fn state_dirs_parse_as_home_relative_paths() {
+        let c = Config::parse(
+            "state-dirs = [\".local/share/opencode\", \".local/state/opencode\"]\n",
+        )
+        .unwrap();
+        assert_eq!(c.state_dirs, vec![".local/share/opencode", ".local/state/opencode"]);
+
+        // A single-element array and an empty array both parse; the
+        // empty list is also the default.
+        let c = Config::parse("state-dirs = [\".cache/build\"]\n").unwrap();
+        assert_eq!(c.state_dirs, vec![".cache/build"]);
+        let c = Config::parse("state-dirs = []\n").unwrap();
+        assert!(c.state_dirs.is_empty());
+        assert!(Config::default().state_dirs.is_empty());
+    }
+
+    #[test]
+    fn state_dirs_reject_non_string_entries() {
+        assert!(Config::parse("state-dirs = [1]\n").is_err());
+        assert!(Config::parse("state-dirs = \".cache\"\n").is_err());
+        // A wrong type names the key, like every other schema error.
+        let e = Config::parse("state-dirs = true\n").unwrap_err();
+        assert!(e.to_string().contains("state-dirs"), "{e}");
+    }
+
+    #[test]
+    fn state_dirs_reject_climbing_and_ambiguous_spellings() {
+        // The entry is joined into TWO trees (the sidecar's state dir on
+        // the host, the sandbox home below the tmpfs), so every spelling
+        // that could make either join escape is rejected at the schema
+        // edge (D15): absolute (a host-path confusion), `~/`, empty,
+        // `//` runs, `.` and `..`.
+        for p in [
+            "/abs",
+            "/",
+            "~/x",
+            "",
+            "a//b",
+            "a/./b",
+            "../x",
+            "a/../b",
+            "x/..",
+        ] {
+            let e = Config::parse(&format!("state-dirs = [\"{p}\"]\n")).unwrap_err();
+            let msg = e.to_string();
+            assert!(msg.contains("state-dirs"), "{p:?}: {msg}");
+            assert!(msg.contains("sandbox home"), "{p:?}: {msg}");
         }
     }
 

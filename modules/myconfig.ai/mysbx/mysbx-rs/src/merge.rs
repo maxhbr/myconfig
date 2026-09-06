@@ -112,6 +112,16 @@ pub struct Merged {
     /// host-wide pre-approval). All canonicalized eagerly (D8), so a
     /// dangling approval is a hard error at load time.
     pub git_dirs: Vec<PathBuf>,
+    /// State directories (docs/design/config.md D15): both layers'
+    /// `state-dirs` entries, user layer first, deduplicated while
+    /// keeping the first occurrence (order-stable). Each entry is a
+    /// path below the sandbox home (`/mysbx-home/<entry>`); the host
+    /// backing directory `<sidecar>/state/<entry>` is synthesized by
+    /// the CLI at run time — the merge keeps only the declared shapes.
+    /// The parser has already rejected every ambiguous spelling
+    /// (absolute, `~/`, `.`/`..`), so no canonicalization happens
+    /// here: there is nothing on the host to resolve yet.
+    pub state_dirs: Vec<String>,
 }
 
 /// How a mount source relates to the invoking user's home directory
@@ -478,12 +488,38 @@ pub fn merge(
         })
         .collect();
 
+    // state-dirs (D15): both layers declare, the lists concatenate —
+    // but unlike mounts a repeated entry is NOT two binds: the two
+    // binds would target the same sidecar directory twice, and a
+    // later one could only win with a different (host) source that
+    // the schema makes impossible. Duplicates are therefore dropped,
+    // keeping the FIRST occurrence so the declaration order stays
+    // visible; the entries carry no host paths, so nothing needs
+    // canonicalization (the parser rejected every ambiguous spelling).
+    let state_dirs: Vec<String> = {
+        let mut seen: Vec<&str> = Vec::new();
+        user.state_dirs
+            .iter()
+            .chain(sidecar.state_dirs.iter())
+            .filter(|e| {
+                if seen.contains(&e.as_str()) {
+                    false
+                } else {
+                    seen.push(e.as_str());
+                    true
+                }
+            })
+            .cloned()
+            .collect()
+    };
+
     Ok(Merged {
         backend: sidecar.backend.or(user.backend),
         network,
         mounts,
         env,
         git_dirs: approved_git_dirs,
+        state_dirs,
     })
 }
 
@@ -1469,5 +1505,80 @@ mod tests {
             merged.git_dirs,
             vec![std::fs::canonicalize(home.join("src").join(".git")).unwrap()]
         );
+    }
+
+    // ---- state-dirs (docs/design/config.md D15) -----------------------
+
+    #[test]
+    fn state_dirs_of_both_layers_concatenate_user_first() {
+        // D15: both layers declare; the user layer's entries come first
+        // (the same layer order as mounts), the sidecar's follow in their
+        // declaration order. Nothing is canonicalized — there is no host
+        // path to resolve.
+        let merged = merge(
+            cfg("state-dirs = [\".local/share/opencode\"]\n"),
+            cfg("state-dirs = [\".cache/hypothesis\", \".local/state/opencode\"]\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(
+            merged.state_dirs,
+            vec![
+                ".local/share/opencode",
+                ".cache/hypothesis",
+                ".local/state/opencode",
+            ]
+        );
+    }
+
+    #[test]
+    fn state_dir_duplicates_are_dropped_first_occurrence_wins() {
+        // Unlike mounts, a repeated entry is not two binds: both layers
+        // naming the same entry is one state directory. The FIRST
+        // occurrence is kept, so the order stays the declaration order.
+        let merged = merge(
+            cfg("state-dirs = [\".local/share/opencode\", \".cache/x\"]\n"),
+            cfg("state-dirs = [\".cache/x\", \".local/share/opencode\"]\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.state_dirs, vec![".local/share/opencode", ".cache/x"]);
+    }
+
+    #[test]
+    fn nested_state_dirs_are_kept_as_declared() {
+        // A nested entry inside another one (`share/opencode` below
+        // `share`) is NOT cleaned up here: both binds are emitted (the
+        // argv builder validates the layout), and the operator sees the
+        // config they wrote. The useful pattern is one entry per tool
+        // (`.local/share/opencode`), which is what the modules write.
+        let merged = merge(
+            cfg("state-dirs = [\".local/share\"]\n"),
+            cfg("state-dirs = [\".local/share/opencode\"]\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.state_dirs, vec![".local/share", ".local/share/opencode"]);
+    }
+
+    #[test]
+    fn an_empty_state_dirs_list_contributes_nothing() {
+        // The default is empty, and so is a layer that does not mention
+        // the key at all (the common case: no state is persisted).
+        let merged = merge(
+            cfg(""),
+            cfg("state-dirs = []\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(merged.state_dirs.is_empty());
     }
 }

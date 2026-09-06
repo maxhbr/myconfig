@@ -111,7 +111,9 @@ pub struct Params<'a> {
 /// 4. the repo itself, read-write, at its real host path
 ///    (docs/design/config.md D13), followed by the git metadata
 ///    directories its `.git` FILE points at, also rw (review-1 finding 4:
-///    worktrees and submodules are unusable without them)
+///    worktrees and submodules are unusable without them), then the
+///    `state-dirs` binds (config.md D15): each declared entry backed
+///    by `<sidecar>/state/<entry>` and bound rw at `/mysbx-home/<entry>`
 /// 5. the configured mounts, in declaration order, `--ro-bind` / `--bind`,
 ///    each `dest` defaulting to its source path (mount order is argv
 ///    order). Two layout rules are enforced: a dest that would shadow
@@ -219,6 +221,49 @@ pub fn bwrap_argv(
         bind(&mut argv, false, &git_dir.to_string_lossy(), None);
     }
 
+    // 4b. the `state-dirs` binds (docs/design/config.md D15): one rw
+    // bind per declared entry — the host source synthesized from the
+    // sidecar (`<sidecar>/state/<entry>`, created by the CLI before
+    // the backend starts, since bwrap needs an existing source), the
+    // dest below the sandbox home (`/mysbx-home/<entry>`), where the
+    // tmpfs of section 3 lands it on the first run and the payload's
+    // writes persist in the sidecar across runs. They are implicit
+    // infrastructure like the repo bind, not configuration: no
+    // `[[mounts]]` entry may cover their dests (the hidden-mount
+    // check below treats them like the repo and the git dirs), and
+    // no entry may nest inside another — see [`check_state_dirs`].
+    let state_binds: Vec<(String, String)> = cfg
+        .state_dirs
+        .iter()
+        .map(|entry| {
+            (
+                repo.sidecar
+                    .join("state")
+                    .join(entry)
+                    .to_string_lossy()
+                    .into_owned(),
+                format!("{SANDBOX_HOME}/{entry}"),
+            )
+        })
+        .collect();
+    check_state_dirs(&cfg.state_dirs)?;
+    for (_src, dest) in &state_binds {
+        // Defense in depth: the parser already rejects every spelling
+        // that could leave the sandbox home, and a state dest is a
+        // strict descendant of [`SANDBOX_HOME`], so this can only
+        // fire if the constant itself ever moves onto a protected
+        // path — fail loudly then, not at mount time.
+        if let Some(protected) = check_dest(dest) {
+            return Err(Error::ProtectedDest {
+                dest: dest.clone(),
+                protected,
+            });
+        }
+    }
+    for (src, dest) in &state_binds {
+        bind(&mut argv, false, src, Some(dest));
+    }
+
     // Review-3 item 3: a writable bind may never expose a trusted
     // policy file — the user config (host-wide grants) or the sidecar
     // config (this repo's own sandbox policy). The payload writing one
@@ -310,8 +355,8 @@ pub fn bwrap_argv(
             }
         }
     }
-    check_hidden_mounts(&cfg.mounts, &root, &repo.git_dirs)?;
-    check_symlinkable_dests(&cfg.mounts, &root, &repo.git_dirs)?;
+    check_hidden_mounts(&cfg.mounts, &root, &repo.git_dirs, &state_binds)?;
+    check_symlinkable_dests(&cfg.mounts, &root, &repo.git_dirs, &state_binds)?;
     for m in &cfg.mounts {
         bind(&mut argv, m.mode == Mode::Ro, &m.path, m.dest.as_deref());
     }
@@ -418,6 +463,18 @@ pub enum Error {
         gitdir: PathBuf,
         protected: &'static str,
     },
+    /// Two `state-dirs` entries nest (docs/design/config.md D15): one
+    /// is a strict ancestor of the other. The later bind would land
+    /// on the sidecar subtree of the earlier one (or vice versa,
+    /// depending on argv order) and silently redirect the narrower
+    /// entry's backing directory — the layout is ambiguous, so the
+    /// configuration is refused instead.
+    StateDirNesting {
+        /// The entry declared first (the ancestor).
+        outer: String,
+        /// The entry declared later (the descendant) that would nest.
+        inner: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -471,6 +528,14 @@ impl fmt::Display for Error {
                  no approval can make that safe \u{2014} move the repository \
                  out of {protected}",
                 gitdir.display()
+            ),
+            Error::StateDirNesting { outer, inner } => write!(
+                f,
+                "state-dirs entries nest: `{inner}` is below `{outer}` — \
+                 each entry gets its own bind of \
+                 <sidecar>/state/<entry> at /mysbx-home/<entry>, and a \
+                 nested one would land inside the other's backing directory; \
+                 declare only the narrowest entry (docs/design/config.md D15)"
             ),
         }
     }
@@ -643,10 +708,39 @@ fn check_dest(dest: &str) -> Option<&'static str> {
 /// Returns [`Error::HiddenMount`] on violation: this guards the argv
 /// layout, and a config that cannot be laid out safely must not run —
 /// as an ordinary CLI error (review-2 item 4), never a panic.
+/// Docs/design/config.md D15: `state-dirs` entries may not nest. Each
+/// entry is bound rw at `/mysbx-home/<entry>` with its backing store at
+/// `<sidecar>/state/<entry>`, so a nested pair (`.local/share` and
+/// `.local/share/opencode`) would bind one backing directory inside the
+/// other's subtree: the later bind lands on `<sidecar>/state/.local/share/
+/// opencode` — a path that only exists as the earlier entry's own backing
+/// store — and the narrower entry's writes would silently go to a
+/// DIFFERENT physical directory than a flat declaration would use. The
+/// configuration is ambiguous, so it is refused rather than second-guessed:
+/// declare only the narrowest entries you need. Checked pairwise in
+/// declaration order; the first offender is reported (outer = the
+/// ancestor, inner = the descendant, whichever was declared first).
+fn check_state_dirs(state_dirs: &[String]) -> Result<(), Error> {
+    for (i, outer) in state_dirs.iter().enumerate() {
+        for inner in &state_dirs[i + 1..] {
+            let a = format!("/{outer}/");
+            let b = format!("/{inner}/");
+            if a.starts_with(&b) || b.starts_with(&a) {
+                return Err(Error::StateDirNesting {
+                    outer: outer.clone(),
+                    inner: inner.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 fn check_hidden_mounts(
     mounts: &[Mount],
     repo_root: &str,
     git_dirs: &[PathBuf],
+    state_binds: &[(String, String)],
 ) -> Result<(), Error> {
     // Implicit binds come before every configured mount: the repo root
     // and the git metadata directories a `.git` file points at. A
@@ -659,6 +753,9 @@ fn check_hidden_mounts(
         vec![(normalize(repo_root), "the repo working tree")];
     for g in git_dirs {
         implicit.push((normalize(&g.to_string_lossy()), "a git metadata directory"));
+    }
+    for (_src, dest) in state_binds {
+        implicit.push((normalize(dest), "a state directory"));
     }
     for (later_i, later) in mounts.iter().enumerate() {
         let later_dest = normalize(later.dest.as_deref().unwrap_or(&later.path));
@@ -749,6 +846,7 @@ fn check_symlinkable_dests(
     mounts: &[Mount],
     repo_root: &str,
     git_dirs: &[PathBuf],
+    state_binds: &[(String, String)],
 ) -> Result<(), Error> {
     // HOST paths whose content the sandbox can write. The repo (rw by
     // D13) and the git metadata directories start the set; an `rw`
@@ -759,7 +857,26 @@ fn check_symlinkable_dests(
     // IN-SANDBOX paths below which a dest may not land, because their
     // content is one of the writable sources above. The repo and the
     // git dirs are bound at their host path, so they are both.
+    // State dirs are rw binds too — the payload persists its agent
+    // state there — so their sources join the writable set and their
+    // dests the in-sandbox set. The SEEDING carve-out of D14 is not
+    // weakened by them: the tmpfs home itself stays seedable (its
+    // direct dests are refused one-directionally), only content BELOW
+    // a state dir becomes symlink-plantable, exactly like repo
+    // subdir content.
+    for (src, _dest) in state_binds {
+        let src = normalize(src);
+        if !writable_sources.contains(&src) {
+            writable_sources.push(src);
+        }
+    }
     let mut writable_dests: Vec<PathBuf> = writable_sources.clone();
+    for (_src, dest) in state_binds {
+        let dest = normalize(dest);
+        if !writable_dests.contains(&dest) {
+            writable_dests.push(dest);
+        }
+    }
 
     // Order-independence (review-3 item 1): passes run until a
     // fixed point, so it does not matter which alias is declared
@@ -927,6 +1044,7 @@ mod tests {
             mounts: Vec::new(),
             env: BTreeMap::new(),
             git_dirs: Vec::new(),
+            state_dirs: Vec::new(),
         }
     }
 

@@ -48,6 +48,7 @@ fn base(network: bool) -> Merged {
         mounts: Vec::new(),
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
+        state_dirs: Vec::new(),
     }
 }
 
@@ -225,6 +226,151 @@ fn golden_mount_with_explicit_dest() {
 }
 
 #[test]
+fn golden_state_dirs() {
+    // Docs/design/config.md D15: the state binds come after the repo
+    // (and its git dirs) and before every configured mount — implicit
+    // infrastructure, order-stable in declaration order. The source is
+    // synthesized from the sidecar (`<sidecar>/state/<entry>`), the
+    // dest below the sandbox home; the mount from the golden
+    // explicit-dest case follows after them.
+    let mut cfg = base(true);
+    cfg.state_dirs
+        .push(".local/share/opencode".to_string());
+    cfg.state_dirs
+        .push(".local/state/opencode".to_string());
+    cfg.mounts
+        .push(make_mount("/synth/data/configs", Some("/inside/x"), Mode::Ro));
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    ).unwrap();
+    assert_golden("state-dirs.txt", &argv);
+}
+
+#[test]
+fn nested_state_dirs_are_refused() {
+    // D15: a nested pair is an ambiguous layout (the inner bind would
+    // land inside the outer entry's backing directory), refused with
+    // the dedicated error.
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".local/share".to_string());
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    ).expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::StateDirNesting { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn sibling_state_dirs_are_fine() {
+    // Disjoint entries (the common pattern: one per tool) stay
+    // declarable side by side.
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    cfg.state_dirs.push(".local/share/pi".to_string());
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    ).unwrap();
+    assert!(argv.windows(3).any(|w| {
+        w[0] == "--bind"
+            && w[1] == "/synth/repo.mysbx/state/.local/share/opencode"
+            && w[2] == "/mysbx-home/.local/share/opencode"
+    }));
+    assert!(argv.windows(3).any(|w| {
+        w[0] == "--bind"
+            && w[1] == "/synth/repo.mysbx/state/.local/share/pi"
+            && w[2] == "/mysbx-home/.local/share/pi"
+    }));
+}
+
+#[test]
+fn a_mount_covering_a_state_dir_is_refused() {
+    // State binds are implicit infrastructure like the repo and the
+    // git dirs: a configured mount whose dest covers one replaces the
+    // subtree wholesale — the state directory would silently stop
+    // being what a layer declared.
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/mysbx-home/.local/share/opencode"),
+        Mode::Rw,
+    ));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    ).expect_err("must be refused");
+    assert!(
+        err.to_string().contains("would hide a state directory"),
+            "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_mount_dest_below_a_state_dir_is_refused() {
+    // Review-2 item 2 for the state binds: the payload can write the
+    // state tree (it is an rw bind), so a dest below it can be reached
+    // through a payload-planted symlink — refused like the same shape
+    // against the repo.
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/mysbx-home/.local/share/opencode/jump"),
+        Mode::Ro,
+    ));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    ).expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_mount_of_the_sidecar_state_tree_stays_allowed() {
+    // Reviewing the state tree from inside the sandbox (an `ro` mount
+    // of the sidecar's `state/` directory, like the ro sidecar mount
+    // of review-3 item 3) writes nothing in place and stays declarable.
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    cfg.mounts.push(make_mount(
+        "/synth/repo.mysbx/state",
+        Some("/review/state"),
+        Mode::Ro,
+    ));
+    bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    ).unwrap();
+}
+
+#[test]
 fn golden_network_false() {
     let argv = bwrap_argv(
         &base(false),
@@ -356,6 +502,7 @@ fn golden_both_layers_contribute_mounts() {
             ("PROJECT".to_string(), "demo".to_string()),     // sidecar may introduce
         ]),
         git_dirs: Vec::new(),
+        state_dirs: Vec::new(),
     };
     let argv = bwrap_argv(
         &cfg,
@@ -496,6 +643,7 @@ fn mount_order_is_preserved() {
         ],
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
+        state_dirs: Vec::new(),
     };
     let argv = bwrap_argv(
         &cfg,

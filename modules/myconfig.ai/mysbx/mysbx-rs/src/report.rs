@@ -140,9 +140,38 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // The sandbox's own home (config.md D14): a tmpfs, not a bind, so it
     // is not part of the mount list above — but an operator reading the
     // report must see where `$HOME` points and that it is not the host's.
-    p(format!(
-        "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
-    ));
+    // State dirs (D15) bind subdirectories of it to sidecar-backed
+    // stores, so with any declared entry the parenthetical says so
+    // instead of implying an all-ephemeral home.
+    p(if r.merged.state_dirs.is_empty() {
+        format!("home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)")
+    } else {
+        format!(
+            "home:           {SANDBOX_HOME} (tmpfs + {} state dir(s) persisted in the sidecar; the host home is not mounted)",
+            r.merged.state_dirs.len(),
+        )
+    });
+
+    // State dirs (config.md D15), in declaration order: what the sandbox
+    // persists across runs and where the backing store lives. They are
+    // implicit binds like the repo, so they belong with the mount
+    // listing's provenance, not buried in prose.
+    if !r.merged.state_dirs.is_empty() {
+        p(format!(
+            "state dirs:     {} (rw, persisted in the sidecar)",
+            r.merged.state_dirs.len()
+        ));
+        for entry in &r.merged.state_dirs {
+            p(format!(
+                "  /{entry} <-> {}  [state]",
+                r.repo
+                    .sidecar
+                    .join("state")
+                    .join(entry)
+                    .display()
+            ));
+        }
+    }
 
     // Environment. Values are shown verbatim; see the module docs for
     // why they are not redacted.
@@ -249,6 +278,7 @@ mod tests {
             ],
             env,
             git_dirs: Vec::new(),
+            state_dirs: Vec::new(),
         };
         let mut host = HostEnv::new();
         host.insert("TERM".to_owned(), "xterm".to_owned());
@@ -463,5 +493,86 @@ mod tests {
         );
         // With user_mount_count == 2 both mounts belong to the user layer.
         assert!(!joined.contains("[sidecar config]"), "{joined}");
+    }
+
+    #[test]
+    fn state_dirs_are_listed_with_their_sidecar_backing_store() {
+        // config.md D15: the report must show what persists across runs
+        // and where it lives — the entry below the sandbox home and the
+        // backing store below the sidecar, one line per entry. With an
+        // entry declared, the home line must also stop implying an
+        // all-ephemeral tmpfs.
+        let (repo, mut merged, host) = fixture_report();
+        merged
+            .state_dirs
+            .push(".local/share/opencode".to_string());
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            nix_conf: None,
+            policy_paths: &[],
+        };
+        let joined = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: true,
+            merged: &merged,
+            user_mount_count: 2,
+            host_env: &host,
+            params: &params,
+            bwrap_bin: "bwrap",
+            payload: &Payload::Shell,
+            dry_run: true,
+        })
+        .join("\n");
+        assert!(
+            joined.contains("state dirs:     1 (rw, persisted in the sidecar)"),
+            "{joined}"
+        );
+        assert!(
+            joined.contains("  /.local/share/opencode <-> /synth/repo.mysbx/state/.local/share/opencode  [state]"),
+            "{joined}"
+        );
+        assert!(
+            joined.contains("state dir(s) persisted in the sidecar"),
+            "{joined}"
+        );
+    }
+
+    #[test]
+    fn without_state_dirs_the_home_line_stays_the_tmpfs_one() {
+        let (repo, merged, host) = fixture_report();
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            nix_conf: None,
+            policy_paths: &[],
+        };
+        let joined = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: true,
+            merged: &merged,
+            user_mount_count: 2,
+            host_env: &host,
+            params: &params,
+            bwrap_bin: "bwrap",
+            payload: &Payload::Shell,
+            dry_run: true,
+        })
+        .join("\n");
+        assert!(
+            joined.contains(&format!(
+                "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
+            )),
+            "{joined}"
+        );
+        assert!(!joined.contains("state dirs:"), "{joined}");
     }
 }

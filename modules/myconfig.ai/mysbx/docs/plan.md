@@ -49,7 +49,7 @@ per-domain network policy.
 | Repo mount | always, `rw`, at its real host path inside the sandbox; not expressible in the config |
 | Guard | hard error when the resolved repo is `$HOME` or `/` |
 | Sidecar | created implicitly by the bare form when missing (`init` stays idempotent) |
-| Config schema | `backend`, `network`, `[[mounts]]`, `[env]` — no `[repo]` table |
+| Config schema | `backend`, `network`, `[[mounts]]`, `[env]`, `state-dirs` — no `[repo]` table |
 | Network | shared by default; `network = false` adds `--unshare-net` |
 | Layer merge | flags > sidecar > user config > defaults (`cli.md` D6); both layers' `[[mounts]]` concatenate, user layer first (`config.md` D7) |
 | Base | the `fns/bubblewrap-app.nix` base, reused as a list of decisions (see below) |

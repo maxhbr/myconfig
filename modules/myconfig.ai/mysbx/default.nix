@@ -134,7 +134,8 @@ let
     env = cfg.config.env;
   }
   // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
-  // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; };
+  // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; }
+  // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; };
 in
 {
   options.myconfig.ai.mysbx = with lib; {
@@ -269,6 +270,33 @@ in
 
               Entries take the same three forms as mount paths (D8) and
               must exist at run time: they are canonicalized eagerly.
+            '';
+          };
+          stateDirs = mkOption {
+            type = types.listOf (
+              types.addCheck types.str (p: p != "" && !lib.hasPrefix "/" p && !lib.hasPrefix "~" p)
+            );
+            default = [ ];
+            example = [ ".local/share/opencode" ];
+            description = ''
+              State directories (./docs/design/config.md D15): paths
+              *relative to the sandbox home* whose content persists
+              across runs. mysbx backs each entry with
+              `<repo>.mysbx/state/<entry>` (created at run time) and
+              binds it rw at `/mysbx-home/<entry>` — a sandboxed agent
+              keeps its sessions and caches per repository without any
+              host-home path entering the sandbox.
+
+              The entries are NOT host paths (the D8 forms do not
+              apply): the host side is derived from the sidecar, the
+              entry only shapes the path below the sandbox home.
+              Leading `/`, `~/`, empty and `.`/`..` components are
+              rejected — here with a cheap eval-time check, and again
+              by the CLI's strict parser.
+
+              Per-agent modules append their tool's state directories
+              here, exactly like they append config mounts to
+              `mounts`.
             '';
           };
         };

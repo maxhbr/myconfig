@@ -254,6 +254,23 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         }
     };
 
+    // 3b. the state-dir backing stores (docs/design/config.md D15):
+    // one directory per merged `state-dirs` entry under
+    // `<sidecar>/state/`, so the rw binds of the argv have an existing
+    // source (bwrap needs one) and the payload's writes persist there
+    // across runs. After the merge (the entries come from both layers),
+    // before the backend check (a broken state dir is as fatal as a
+    // broken config), and only for a real run — `--dry-run` stays
+    // side-effect-free and prints the argv with the would-be sources.
+    // Creation is idempotent; a failure is a runtime error like the
+    // sidecar creation above.
+    if !dry_run {
+        if let Err(msg) = ensure_state_dirs(&repo, &merged.state_dirs) {
+            eprintln!("mysbx: {msg}");
+            return 1;
+        }
+    }
+
     // 4. the backend is explicit, never auto-detected (cli.md D7): a
     // silently downgraded isolation level would be a security bug. The MVP
     // accepts exactly `bubblewrap`.
@@ -491,6 +508,27 @@ fn ensure_sidecar(repo: &repo::Repo) -> Result<(), String> {
     Ok(())
 }
 
+/// Create the `<sidecar>/state/<entry>` backing directory of every
+/// merged `state-dirs` entry (docs/design/config.md D15), idempotently,
+/// and report each creation like `ensure_sidecar` does. The argv builder
+/// binds them rw at `/mysbx-home/<entry>`; bubblewrap needs an existing
+/// source, and the writes the payload makes there are exactly the state
+/// that survives the sandbox. The parser and the merge have already
+/// rejected every ambiguous entry spelling, so a plain `create_dir_all`
+/// cannot escape the sidecar.
+fn ensure_state_dirs(repo: &repo::Repo, state_dirs: &[String]) -> Result<(), String> {
+    for entry in state_dirs {
+        let dir = repo.sidecar.join("state").join(entry);
+        if dir.is_dir() {
+            continue;
+        }
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+        println!("## created: {}/", dir.display());
+    }
+    Ok(())
+}
+
 /// What [`ensure_sidecar_config`] found: writing the default config or
 /// finding an existing one. `init` reports the difference; the implicit
 /// init of the bare form does not care (cli.md D2: it does exactly what
@@ -540,6 +578,12 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
 # path = \"/home/user/.config/git\"\n\
 # dest = \"/mysbx-home/.config/git\"\n\
 # mode = \"ro\"\n\
+#\n\
+# State directories persist across runs (config.md D15): each entry\n\
+# is backed by <repo>.mysbx/state/<entry> and bound rw at\n\
+# /mysbx-home/<entry>:\n\
+#\n\
+# state-dirs = [\".local/share/opencode\"]\n\
 #\n\
 # [env]\n\
 # EDITOR = \"nvim\"\n";
