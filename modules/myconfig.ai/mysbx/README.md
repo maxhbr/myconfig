@@ -104,9 +104,10 @@ config this repo manages read-only (`~/.config/git`, `~/.config/ripgrep`,
 explicit destination under `/mysbx-home` so the tools inside the sandbox
 find it where `$HOME` points, and `RIPGREP_CONFIG_PATH` in the generated
 `[env]` so the ripgrep mount is actually activated (the sandbox clears
-the host variable, and a mount alone is inert — review-3 item 6); those
-mount entries are also the grant tree a repo sidecar may mount below
-(`docs/design/config.md` D7). Per-agent modules
+the host variable, and a mount alone is inert — review-3 item 6). A
+repo sidecar declares its own mounts independently — both
+configuration files are trusted (`docs/design/config.md` D7). Per-agent
+modules
 append their own config files to `myconfig.ai.mysbx.config.mounts`.
 
 ## Integrated coding agents

@@ -14,8 +14,8 @@ mode = "ro"
 path = "state"
 mode = "rw"
 
-# `..` is allowed: canonicalization resolves it, and the sidecar grant
-# check (D7) then runs on the resolved absolute path.
+# `..` is allowed: canonicalization resolves it, so what is mounted is
+# the resolved absolute path (D8).
 [[mounts]]
 path = "../outside"
 mode = "ro"

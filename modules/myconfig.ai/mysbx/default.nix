@@ -15,8 +15,8 @@
 #
 # The module also generates the *user* configuration layer
 # (`~/.config/mysbx/config.toml`, see ./docs/design/config.md D6) from
-# `myconfig.ai.mysbx.config`: the grant layer that pre-approves the host
-# paths a sidecar may mount. Per-agent modules (e.g.
+# `myconfig.ai.mysbx.config`: the host-wide layer, mounted into every
+# sandbox of this user. Per-agent modules (e.g.
 # ./../programs.pi-coding-agent/) are expected to extend
 # `myconfig.ai.mysbx.config.mounts` with their own agent config files.
 {
@@ -34,7 +34,7 @@ let
   # ./mysbx-rs/src/toml.rs parses.
   tomlFormat = pkgs.formats.toml { };
 
-  # Baseline grants: common agent-tooling host config, read-only.
+  # Baseline mounts: common agent-tooling host config, read-only.
   #
   # The paths are written with the `~/` prefix: mysbx expands it at run
   # time against the invoking user's `$HOME` (./docs/design/config.md D8),
@@ -175,11 +175,11 @@ in
         Content of the mysbx *user* configuration layer, generated into
         `~/.config/mysbx/config.toml` (./docs/design/config.md D6).
 
-        Its `mounts` play two roles at once (D7): they are mounted in
-        every sandbox of this user, AND they are the grant tree that
-        bounds what a repo sidecar may mount — a sidecar may only mount
-        host paths at or below a granted path, and may never upgrade
-        `ro` to `rw`. Modules may append to `mounts` — list definitions
+        Its `mounts` are mounted in every sandbox of this user. They
+        do not bound what a repo sidecar may mount: the sidecar is a
+        trusted layer too and declares its own mounts (D7); the two
+        lists concatenate, user layer first. Modules may append to
+        `mounts` — list definitions
         are merged by concatenation, so per-agent modules can add their
         own config files without replacing the baseline.
 
@@ -203,7 +203,7 @@ in
           };
           mounts = mkOption {
             description = ''
-              Host paths granted into the sandbox. Each path is absolute,
+              Host paths mounted into the sandbox. Each path is absolute,
               `~/...` (expanded against the invoking user's `$HOME` at run
               time) or relative to the generated config file's directory
               (`~/.config/mysbx/`) — ./docs/design/config.md D8.
@@ -260,7 +260,7 @@ in
               (./docs/design/config.md, review-2 item 1).
 
               The `.git` file lives inside the repo and is therefore
-              untrusted content (D3), so it grants nothing by itself:
+              untrusted content (D3), so it approves nothing by itself:
               mysbx binds the metadata only when the resolved target is
               at or below an entry approved here or in the repo's
               sidecar — `mysbx init` records what it finds into a fresh
@@ -343,7 +343,7 @@ in
         }
       ];
 
-    # Baseline grants; further definitions (from per-agent modules or the
+    # Baseline mounts; further definitions (from per-agent modules or the
     # host config) are concatenated onto this list.
     myconfig.ai.mysbx.config.mounts = baselineMounts;
 
@@ -357,10 +357,10 @@ in
       { home.packages = [ cfg.package ]; }
     ];
 
-    # The generated user config is the grant layer of `mhuber`, so it is
-    # written for that user only — not via `sharedModules`: an agent user
-    # would expand the same `~/...` paths against its own home, granting
-    # paths that were never reviewed for it.
+    # The generated user config is the host-wide layer of `mhuber`, so it
+    # is written for that user only — not via `sharedModules`: an agent
+    # user would expand the same `~/...` paths against its own home,
+    # mounting paths that were never reviewed for it.
     home-manager.users.mhuber = {
       xdg.configFile."mysbx/config.toml".source = tomlFormat.generate "mysbx-config.toml" userConfigToml;
     };

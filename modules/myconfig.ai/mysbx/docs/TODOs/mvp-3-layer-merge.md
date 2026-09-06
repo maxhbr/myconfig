@@ -5,6 +5,13 @@ SPDX-License-Identifier: MIT
 
 # MVP 3 — configuration layers and the narrow-not-widen rule
 
+> **Superseded in part.** The mount half of the narrow-not-widen rule
+> described below is gone: `config.md` D7 now makes the sidecar a trusted
+> layer that declares its own `[[mounts]]` (any path, `ro` and `rw`), and
+> both layers' mounts concatenate. Only the `[env]` and `network`
+> restrictions below still hold. Kept as the record of the item as it was
+> implemented.
+
 Part of [`../plan.md`](../plan.md), phase 1. Depends on item 1.
 
 Produces the *merged config* that item 4 turns into an argv. Pure functions,

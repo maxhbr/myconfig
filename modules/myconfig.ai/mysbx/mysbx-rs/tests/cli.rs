@@ -270,8 +270,8 @@ fn verbose_dry_run_keeps_the_argv_byte_identical() {
 
 #[test]
 fn verbose_report_covers_the_run_configuration() {
-    // A repo whose user config grants a directory rw and whose sidecar
-    // narrows part of it to ro with an explicit dest — so the report has
+    // A repo whose user config mounts a directory rw and whose sidecar
+    // mounts part of it ro with an explicit dest — so the report has
     // something from both layers to attribute.
     let base = tmpdir("verbose-report");
     let (repo, sidecar) = make_repo(&base, "repo");
@@ -338,8 +338,8 @@ fn verbose_report_covers_the_run_configuration() {
     // backend and network sense
     assert!(report.contains("backend:        bubblewrap"), "{report}");
     assert!(report.contains("network:        denied"), "{report}");
-    // mounts: the implicit repo bind, the user grant, the narrowed
-    // sidecar mount with its explicit dest — with modes and layers.
+    // mounts: the implicit repo bind, the user mount and the sidecar
+    // mount with its explicit dest — with modes and layers.
     assert!(
         report.contains(&format!(
             "  rw {} -> {}  [repo, implicit]",
@@ -492,26 +492,49 @@ fn verbose_bare_form_reports_and_still_executes() {
 // ---- validation still runs under --dry-run ---------------------------------
 
 #[test]
-fn dry_run_sidecar_widening_fails() {
-    // A sidecar mount with no user-config grant is a hard error even in a
-    // dry run: a dry run that skipped validation would exercise the wrong
-    // function. The user config is absent here, so it grants nothing.
-    let (inv, repo, sidecar) = fixture("dry-run-widening", &["--dry-run"]);
-    std::fs::create_dir_all(repo.join("secret")).unwrap();
+fn dry_run_sidecar_mount_without_user_config_succeeds() {
+    // config.md D7: the sidecar is trusted. With NO user config at all,
+    // a sidecar `[[mounts]]` entry mounts what it names — this used to
+    // be the "widening" hard error.
+    let (inv, repo, sidecar) = fixture("dry-run-sidecar-mount", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::create_dir_all(repo.join("data")).unwrap();
     std::fs::write(
         sidecar.join("config.toml"),
         format!(
-            "[[mounts]]\npath = \"{}/secret\"\nmode = \"ro\"\n",
+            "backend = \"bubblewrap\"\n[[mounts]]\npath = \"{}/data\"\ndest = \"/data\"\nmode = \"ro\"\n",
             repo.display()
         ),
     )
     .unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stdout: {stdout}");
-    assert!(stdout.is_empty(), "no argv on failure: {stdout}");
-    assert!(stderr.contains("mysbx: "), "stderr: {stderr}");
-    assert!(stderr.contains("not at or below"), "stderr: {stderr}");
-    assert!(stderr.contains("user"), "stderr: {stderr}");
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains(&format!("--ro-bind\n{}/data\n/data\n", repo.display())),
+        "stdout: {stdout}"
+    );
+}
+
+#[test]
+fn dry_run_sidecar_rw_mount_without_user_config_succeeds() {
+    // The same for `rw`: no mode is derived from a user entry any more.
+    let (inv, repo, sidecar) = fixture("dry-run-sidecar-rw", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::create_dir_all(repo.join("data")).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\n[[mounts]]\npath = \"{}/data\"\ndest = \"/data\"\nmode = \"rw\"\n",
+            repo.display()
+        ),
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains(&format!("--bind\n{}/data\n/data\n", repo.display())),
+        "stdout: {stdout}"
+    );
 }
 
 #[test]
@@ -551,7 +574,7 @@ fn sidecar_network_true_still_cannot_reenable() {
     std::fs::write(sidecar.join("config.toml"), "network = true\n").unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 1, "stdout: {stdout}");
-    assert!(stderr.contains("may narrow, not widen"), "stderr: {stderr}");
+    assert!(stderr.contains("never re-enable it"), "stderr: {stderr}");
 }
 
 #[test]
@@ -1041,8 +1064,8 @@ fn invalid_layout_is_an_error_not_a_panic() {
     // message on stderr (cli.md D8/D9) — not abort as a Rust panic.
     let (inv, _, _) = fixture("invalid-dest", &["--dry-run"]);
     std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
-    // The user layer grants the mount (no grant violation), but its
-    // dest lands on the protected /tmp — the argv builder must refuse.
+    // The mount source itself is fine, but its dest lands on the
+    // protected /tmp — the argv builder must refuse.
     std::fs::write(
         inv.xdg.join("mysbx").join("config.toml"),
         "backend = \"bubblewrap\"\n\n[[mounts]]\npath = \"/etc/hosts\"\nmode = \"ro\"\ndest = \"/tmp\"\n",

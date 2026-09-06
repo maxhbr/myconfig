@@ -337,19 +337,19 @@ fn golden_ripgrep_config_path_activation() {
 }
 
 #[test]
-fn golden_sidecar_narrows_user_config() {
+fn golden_both_layers_contribute_mounts() {
     // docs/TODOs/mvp-3-layer-merge.md end state, hand-built (a `Merged`
     // merge.rs would have produced and the argv builder alone sees): the
-    // user config grants two mounts; the sidecar adds a ro mount below a
-    // grant and introduces a sidecar-only variable. User mounts first,
-    // accepted sidecar mounts after.
+    // user config declares two mounts; the sidecar adds a third (below
+    // one of them) and introduces a sidecar-only variable. User mounts
+    // first, sidecar mounts after (config.md D7).
     let cfg = Merged {
         backend: Some("bubblewrap".into()),
         network: true,
         mounts: vec![
             make_mount("/synth/data/refs", None, Mode::Ro), // user
             make_mount("/synth/data/cache", None, Mode::Rw), // user
-            make_mount("/synth/data/refs/docs", None, Mode::Ro), // sidecar, below a grant
+            make_mount("/synth/data/refs/docs", None, Mode::Ro), // sidecar
         ],
         env: BTreeMap::from([
             ("EDITOR".to_string(), "user-nvim".to_string()), // user layer
@@ -364,7 +364,7 @@ fn golden_sidecar_narrows_user_config() {
         &host_env(&[]),
         &params(),
     ).unwrap();
-    assert_golden("sidecar-narrowed.txt", &argv);
+    assert_golden("two-layer-mounts.txt", &argv);
 }
 
 #[test]
@@ -720,8 +720,8 @@ fn child_after_a_read_only_parent_stays_allowed() {
 
 #[test]
 fn equal_dest_rebind_stays_allowed() {
-    // Same dest twice: shadowing re-bind, policed by the merge's grant
-    // checks, not a hidden mount.
+    // Same dest twice: a shadowing re-bind where the later one simply
+    // wins, not a hidden mount.
     let mut cfg = base(true);
     cfg.mounts
         .push(make_mount("/synth/a", Some("/synth/dst"), Mode::Ro));
@@ -1086,7 +1086,7 @@ fn unapproved_git_dir_is_refused() {
 #[test]
 fn approved_git_dir_below_the_entry_is_bound() {
     // Approval is by containment: an entry covers everything at or
-    // below it, like a mount grant.
+    // below it.
     let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
     let mut cfg = base(true);
     cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
@@ -1272,7 +1272,7 @@ fn a_read_only_reexposure_of_a_writable_mount_is_writable_too() {
 
 #[test]
 fn a_read_only_mount_of_ordinary_host_state_stays_a_usable_parent() {
-    // The carve-out that keeps ro nesting usable: a granted host path
+    // The carve-out that keeps ro nesting usable: a declared host path
     // outside every writable tree cannot be rewritten from inside the
     // sandbox, so a dest below it is allowed.
     let mut cfg = base(true);

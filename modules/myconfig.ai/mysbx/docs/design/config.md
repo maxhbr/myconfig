@@ -78,7 +78,7 @@ exposed inside the sandbox — credentials and tool configuration that belong
 to the user, not to a repo. It may also pre-approve external git metadata
 host-wide (`git-dirs`, D13) — e.g. a checkout root under which every
 worktree's metadata is acceptable. Keeping them here means they are declared once,
-and a per-repo sidecar cannot silently widen them (see D7).
+so they are there in every sandbox, whatever a sidecar says (see D7).
 
 On myconfig hosts the user config is not hand-written: the NixOS module
 (`../../default.nix`) generates `~/.config/mysbx/config.toml` from the
@@ -104,63 +104,86 @@ Other modules extend it by appending to `myconfig.ai.mysbx.config.mounts`.
 Outside myconfig the file stays an ordinary hand-written file; mysbx itself
 knows nothing about where it came from.
 
-### D7: Sidecar may narrow, not widen
+### D7: The sidecar config is trusted; mounts come from both layers
 
-A sidecar cannot grant access the user config does not allow. Rationale:
-a repo-adjacent file must not be able to pull more of the host into the
-sandbox than the user has approved host-wide.
+The sidecar `config.toml` is **trusted**, at the same level as the user
+config. Rationale: it is not repo content. It lives *outside* the repo
+(D2), is never mounted into the sandbox and can therefore never be
+written by the payload; the person who wrote it is the operator who
+chose to clone this repo and work on it — the same person the user
+config belongs to. A plain file in the operator's own filesystem does
+not need a second file in the same filesystem to bless it.
+
+So **`[[mounts]]` is a direct declaration in either layer**: a sidecar
+entry may name any host path, in either mode (`ro` and `rw` alike), and
+needs no covering entry in the user config — which may be absent
+entirely. The two lists simply concatenate: the user config's entries
+first, in declaration order, then the sidecar's, in its declaration
+order. Nothing is sorted and nothing is deduplicated. When both layers
+name the same path with different modes, **both binds are emitted and
+the later one wins inside the sandbox** — bubblewrap applies binds in
+argv order (see `cli.md`/`bwrap.rs`), and mysbx does not second-guess
+that: `--verbose` shows every entry with the layer that declared it, so
+the effective result stays readable.
+
+This replaces the earlier "the sidecar may narrow, not widen" rule,
+which required every sidecar mount to sit at or below a user-config
+grant and forbade `ro` → `rw`. That rule made the common case — a repo
+that needs one adjacent directory, with no user config on the machine —
+fail with an error telling the operator to grant the path to themselves
+first. **The security claim of mysbx does not rest on a mount
+allow-list** but on the shape of the sandbox itself (D9): a fixed base
+table, a tmpfs `/tmp`, no `/run`, no host `$HOME`, a cleared
+environment, and nothing from the host filesystem inside unless a
+trusted config declared it. Removing the cross-layer grant check does
+not weaken that claim; it only stops one trusted file from having to
+ask another for permission. (The question this rule left open — how a
+repo requests access the user config does not grant — is answered by
+this decision: it declares it in its own sidecar.)
 
 **User entries are mounts, not offers** (review-2 item 6). A
-`[[mounts]]` entry in the user config plays two roles at once: it is
-mounted in every sandbox of that user, and it is the grant that bounds
-what a sidecar may mount below it. A sidecar therefore narrows *its own* additions — it may ask for less
-than the grant allows, for `ro` where `rw` was granted, or for nothing
-at all — but it changes nothing about the user's own entries, which are
-mounted either way. Downgrading a sidecar entry that sits below a user
-mount narrows only that entry, not the effective sandbox: the user's
-mount is still there. The alternative,
-treating user entries as pure offers a sidecar must claim, was
-rejected: a fresh sidecar would then start with no tool configuration
-at all, and every repository would have to re-declare the same host
-paths, turning routine setup into exactly the repo-adjacent host-path
-requests this rule exists to bound. Dropping a user mount for one
-suspicious repository stays an open question (a per-repo opt-out); the
-user config is the place to make that call today.
+`[[mounts]]` entry in the user config is mounted in every sandbox of
+that user; a sidecar changes nothing about it. Dropping a user mount
+for one suspicious repository stays an open question (a per-repo
+opt-out); the user config is the place to make that call today.
 
-When several user-config grants cover the same path, the **deepest** (most
-specific) grant decides the allowed mode: a narrow `ro` grant beside a
-broad `rw` one cannot be upgraded through the broad one. Mode may equal the
-granted mode or downgrade `rw` → `ro`, never upgrade.
+What the sidecar still may **not** do:
 
-For `[env]` the rule is asymmetric: a sidecar may introduce variables the
-user config never mentions (an invented variable is a value the repo
-already controls), but may not override a variable the user config sets.
+- **`[env]`**: it may introduce variables the user config never
+  mentions (an invented variable is a value the repo already
+  controls), but it may not override a variable the user config sets —
+  overriding is how a repo would redirect a tool at something the user
+  did not choose, and the user config is the more global statement.
+- **`network`**: it may set `false`, never `true` over a user-config
+  `false`. `network` is a host-wide policy switch with no per-entry
+  granularity: a user who denied the network host-wide means it for
+  every sandbox, and a repo re-enabling it is exactly the thing that
+  switch exists to prevent.
 
-`git-dirs` (D13) is the one deliberate exception to "narrow, not
-widen": a sidecar entry approves external git metadata the user config
-never mentioned. The rationale is that the approval is *per repo* by
-nature — every worktree points at a different metadata directory, so a
-host-wide list could only be a coarse checkout root — and that the
-sidecar is not repo-controlled: it lives outside the repo (D2) and is
-never mounted into the sandbox, so the payload cannot write it. That
-"cannot write it" is enforced, not assumed (review-3 item 3): an `rw`
-mount — or the repo bind, or a git dir — whose source contains the
-sidecar config or the user config is refused with a policy-file error,
-because a policy file the sandbox can write steers the NEXT run of
-itself: `git-dirs` approvals can be added, the `.git` pointer rewritten
-to match. Read-only mounts of the sidecar stay allowed (reviewing it
-from inside the sandbox is legitimate; `ro` cannot write it in place). What
-the exception does NOT do is let the repository approve itself: the
-`.git` pointer inside the repo grants nothing, an implicit init records
-nothing, and turning a discovered directory into an approval is an
-explicit `mysbx init` (D12) that prints every path it records.
+`backend` passes through from whichever layer named it (the sidecar
+wins when both do, per the layer precedence of D6); it is not an access
+question.
 
-When the user config is absent it grants nothing: every sidecar
-`[[mounts]]` entry is an error telling the user to grant the path in the
-user config first. There is no implicit allow-all.
+`git-dirs` (D13) works the same way as mounts: an entry in either layer
+approves external git metadata. What that does NOT do is let the
+repository approve itself: the `.git` pointer inside the repo grants
+nothing, an implicit init records nothing, and turning a discovered
+directory into an approval is an explicit `mysbx init` (D12) that
+prints every path it records. That "cannot write the policy" is
+enforced, not assumed (review-3 item 3): an `rw` mount — or the repo
+bind, or a git dir — whose source contains the sidecar config or the
+user config is refused with a policy-file error, because a policy
+file the sandbox can write steers the NEXT run of itself:
+`git-dirs` approvals can be added, the `.git` pointer rewritten to
+match. Read-only mounts of the sidecar stay allowed (reviewing it
+from inside the sandbox is legitimate; `ro` cannot write it in place).
 
-Open question: how a repo requests additional access — a one-off flag, or an
-explicit allow-list entry in the user config keyed by repo path.
+Protection that is independent of the config layers and keeps holding:
+no mount `dest` may overwrite a protected sandbox path (`/`,
+`/nix/store`, `/usr/bin`, `/proc`, `/dev`, `/etc/localtime`, `/tmp`,
+`/run` — see D8 and `bwrap.rs`), no `dest` may hide an earlier mount or
+resolve through writable content, and the repo root itself may not be
+`$HOME` or `/` (`repo.rs`).
 
 ### D8: Paths are resolved eagerly, to absolute paths
 
@@ -176,9 +199,9 @@ A `[[mounts]]` host path may be written in three ways:
   in the user config and `<repo>.mysbx/state` in a sidecar config; a
   sidecar path never resolves against the user config's directory.
 
-`..` is allowed in every form: canonicalization resolves it, and the D7
-grant check then compares canonicalized absolute paths on both sides — so
-no `~/…` or `../…` spelling can slip a path past a grant.
+`..` is allowed in every form: canonicalization resolves it, so what is
+mounted is the real target of a `~/…`, `../…` or symlinked spelling,
+not the spelling itself.
 
 Resolution and canonicalization happen when the config is loaded, before
 the merge and before the backend starts. Broken paths fail fast with a
@@ -240,6 +263,14 @@ linked worktree or submodule (D13: they are part of the repo's own git
 data, discovered with it and shown in the report), and the explicit
 `[[mounts]]` entries. New backends must uphold this even when the
 backend's own default is permissive.
+
+"Declared" means: written in one of the two **trusted** configuration
+files (D7) — the user config and the repo's sidecar, both outside the
+repo work tree and both unreachable from inside the sandbox. The claim
+is *not* that a per-repo file can only reach what a host-wide file
+pre-approved; it is that the sandbox contains nothing the operator did
+not write down, and that the base table itself (tmpfs `/tmp`, no
+`/run`, no host `$HOME`, `--clearenv`) is not configurable at all.
 
 ### D10: The sidecar also holds state
 
@@ -373,8 +404,8 @@ Rationale, in the order the constraints bite:
 - **Not the host home.** Mounting it would hand the payload `~/.ssh`,
   `~/.aws` and every agent credential in one bind — the exact thing the
   base table refuses. Exposing *parts* of the host home stays what it
-  was: an explicit `[[mounts]]` grant of the user layer (D6), which the
-  sidecar may only narrow (D7). Such a mount may point its `dest` into
+  was: an explicit `[[mounts]]` entry of one of the two trusted layers
+  (D6/D7). Such a mount may point its `dest` into
   `/mysbx-home` to seed dotfiles (`~/.gitconfig`); the tmpfs is created
   before the configured mounts, so they land on top of it. Only
   *below* it, though: a `dest` equal to `/mysbx-home` — or an ancestor
@@ -396,7 +427,7 @@ Rationale, in the order the constraints bite:
   `/home/`" — mount *sources* are host paths and may of course live in
   the host home; what must not happen is a `dest` (or `HOME` itself)
   mirroring one. That is why the generated user layer gives its
-  baseline grants explicit destinations under `/mysbx-home` (review-2
+  baseline mounts explicit destinations under `/mysbx-home` (review-2
   item 6) instead of letting them default to their host path. The check
   is a NixOS assertion on the generated layer; a hand-written config or
   sidecar can still write such a `dest`, and mysbx accepts it — the

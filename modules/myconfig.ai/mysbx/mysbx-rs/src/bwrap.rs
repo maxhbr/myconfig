@@ -257,8 +257,10 @@ pub fn bwrap_argv(
     // one: a later bind whose dest is a strict ancestor of an earlier
     // mount's dest replaces that subtree wholesale, so the earlier
     // entry would be dead configuration (see [`check_hidden_mounts`]).
-    // The merge (D7/D8) validates grants; these validate the argv
-    // layout, because the base list and the order semantics live here.
+    // The merge (D7/D8) resolves the paths of both layers; these
+    // validate the argv layout, because the base list and the order
+    // semantics live here. They run for EVERY mount, from either
+    // layer: neither file may bind onto a protected sandbox path.
     // The protected-dest check runs FIRST: a dest that overwrites a base
     // bind is the sharper diagnosis, and the repo-covering check would
     // otherwise mask it with a generic `would hide` for dests like `/`.
@@ -268,10 +270,9 @@ pub fn bwrap_argv(
     for m in &cfg.mounts {
         let dest = m.dest.as_deref().unwrap_or(&m.path);
         if let Some(protected) = check_dest(dest) {
-            // A mount that does not redirect (dest == source) can
-            // never hit this: its source is an ordinary granted host
-            // path, not a base path — the merge would have had to
-            // grant `/proc` itself for that. So any hit here means a
+            // A mount that does not redirect (dest == source) hits
+            // this only when a config declares a protected path as its
+            // own source (`path = "/proc"`); the usual hit is a
             // redirect onto a protected path.
             return Err(Error::ProtectedDest {
                 dest: dest.to_string(),
@@ -544,7 +545,8 @@ fn base_binds() -> Vec<String> {
 /// [`SANDBOX_HOME`] is NOT here either, for the same reason: seeding the
 /// sandbox home with host dotfiles (`~/.gitconfig`, an agent config) by
 /// pointing a mount `dest` into it is the intended way to use it, and
-/// such a mount is an explicit grant of the user layer (config.md D6/D7).
+/// such a mount is an explicit entry of one of the two trusted config
+/// layers (config.md D6/D7).
 /// The tmpfs is created in section 3, so those mounts land on top of it.
 /// What IS refused for [`SANDBOX_HOME`] is a dest equal to or above it
 /// (review-2 item 5): that would replace the tmpfs itself rather than
@@ -552,7 +554,7 @@ fn base_binds() -> Vec<String> {
 /// see the one-directional check at the top of [`check_dest`].
 /// The resolver paths are likewise not protected: an explicit mount
 /// with dest `/etc/ssl` (say, to install a project-local CA) shadows the
-/// ro-bind-try by later-wins — intended, same grant logic as
+/// ro-bind-try by later-wins — intended, same reasoning as
 /// [`SANDBOX_HOME`]; a dest of `/etc/resolv.conf` does NOT reach
 /// `/etc/localtime` or `/run` and so is not refused either.
 static PROTECTED_DESTS: &[&str] = &[
@@ -624,15 +626,14 @@ fn check_dest(dest: &str) -> Option<&'static str> {
 /// in argv order with later-wins per subtree, so the wide bind simply
 /// replaces the subtree the narrow one landed on. That silently undoes
 /// restrictions — `/home/u/.ssh` (ro) followed by `/home/u` (rw) leaves
-/// `.ssh` writable — and silently kills grants the other way round
+/// `.ssh` writable — and silently kills mounts the other way round
 /// (`/home/u` rw followed by `/home/u/.ssh` ro does not HIDE anything —
 /// though review-2 item 2 refuses it one guard later, because the
 /// narrow dest resolves through writable content, see
 /// [`check_symlinkable_dests`]). Equal dests do not hide: re-binding
-/// the same subtree narrows by shadowing. Cross-layer escalation on an
-/// equal dest is caught by the merge — a sidecar rw needs an rw
-/// grant for its SOURCE, which shares the grant tree — so what remains
-/// here is same-layer last-wins, the layer's own doing. The implicit
+/// the same subtree narrows by shadowing, and since both config layers
+/// are trusted (config.md D7) the last bind on an equal dest simply
+/// wins — within a layer and across the two alike. The implicit
 /// binds — the repo root (always rw, D13) and the git metadata
 /// directories a `.git` FILE points at (review-1 finding 4) — count as
 /// entries BEFORE every configured mount, and an EQUAL dest is
@@ -717,7 +718,7 @@ fn check_hidden_mounts(
 ///
 /// An `ro` bind whose SOURCE is ordinary host state is not in the set:
 /// the sandbox cannot change that content, so the residual risk is a
-/// symlink the user themselves put in their own granted directory —
+/// symlink the user themselves put in their own declared directory —
 /// the accident barrier, not the malice barrier (D9). An `ro` bind
 /// that re-exposes writable content IS in the set, though: `ro` stops
 /// writes THROUGH the bind, not writes to the same host inode through

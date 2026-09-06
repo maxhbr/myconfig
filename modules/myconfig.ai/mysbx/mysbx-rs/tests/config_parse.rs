@@ -220,8 +220,8 @@ fn git_dirs_parses_as_a_list_of_host_paths() {
 
 #[test]
 fn git_dirs_defaults_to_empty() {
-    // Nothing approved unless said: an absent list approves nothing,
-    // like an absent user config grants nothing (config.md D7).
+    // Nothing approved unless said: an absent list approves nothing
+    // (config.md D13).
     let cfg = Config::parse("backend = \"bubblewrap\"\n").unwrap();
     assert!(cfg.git_dirs.is_empty());
 }

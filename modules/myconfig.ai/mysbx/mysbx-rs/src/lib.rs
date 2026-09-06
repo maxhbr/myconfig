@@ -215,7 +215,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     }
 
     // 3. both layers, merged (docs/TODOs/mvp-3-layer-merge.md). Merge
-    // errors (widening sidecar, broken paths, unparseable files) are
+    // errors (broken paths, unparseable files, an `[env]` override) are
     // runtime failures: the full validation still runs under --dry-run —
     // a dry run that skipped it would exercise the wrong function.
     let home = std::env::var_os("HOME").unwrap_or_default();
