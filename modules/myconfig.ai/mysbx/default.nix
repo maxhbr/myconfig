@@ -83,6 +83,41 @@ let
         ++ lib.optional config.programs.fish.enable "~/.config/fish"
       );
 
+  # `home-manager.users.mhuber` is only referenced under `mkIf cfg.enable`
+  # below (Nix is lazy), and mysbx's own config block already writes
+  # `home-manager.users.mhuber.xdg.configFile.…`, so the option path is
+  # guaranteed to exist wherever this is evaluated.
+  #
+  # NOTE: the `~/.config/ripgrep` spelling below (both the mount list and
+  # `baselineEnv`) assumes Home Manager's default `xdg.configHome`, i.e.
+  # `~/.config`. HM writes its ripgreprc to
+  # `${config.home-manager.users.mhuber.xdg.configHome}/ripgrep`; a host
+  # that rewrites `xdg.configHome` would need the mount list AND the
+  # variable adjusted together — otherwise the variable points at a
+  # missing file (a hard `rg` failure). No myconfig host rewrites it;
+  # revisit if one ever does.
+  hmRipgrep = config.home-manager.users.mhuber.programs.ripgrep;
+
+  # Baseline environment: regenerate inside the sandbox what the host
+  # module layer activates through mechanisms other than files.
+  #
+  # `RIPGREP_CONFIG_PATH` (review-3 item 6): Home Manager's
+  # `programs.ripgrep` writes `~/.config/ripgrep/ripgreprc` and points
+  # `RIPGREP_CONFIG_PATH` at it — the file is mounted above, but the
+  # VARIABLE is not in the forwarding allowlist (lib.rs), so `--clearenv`
+  # kills it and `rg` inside the sandbox silently runs with defaults.
+  # The same in-sandbox path Home Manager would compute is pinned here:
+  # `homeDest` maps `~` to `/mysbx-home`, which is where the mount puts
+  # the file. An [env] entry is the mysbx-native way to set it (config.md
+  # D6); it is part of the user layer, so a sidecar may not override it
+  # (D7) and the user may. Set exactly when Home Manager would write the
+  # file AND the variable (`enable` + non-empty `arguments`): a variable
+  # pointing at a missing file is a hard `rg` failure, and mounting the
+  # directory alone does not guarantee the file.
+  baselineEnv = lib.optionalAttrs (hmRipgrep.enable && hmRipgrep.arguments != [ ]) {
+    RIPGREP_CONFIG_PATH = homeDest "~/.config/ripgrep/ripgreprc";
+  };
+
   # `dest` is optional in the schema and there is no TOML null: a
   # `dest = null` key would be a type error in the strict parser, so it is
   # dropped instead of rendered.
@@ -294,6 +329,12 @@ in
     # Baseline grants; further definitions (from per-agent modules or the
     # host config) are concatenated onto this list.
     myconfig.ai.mysbx.config.mounts = baselineMounts;
+
+    # Baseline [env] (RIPGREP_CONFIG_PATH, review-3 item 6); per-agent
+    # modules and the host config may extend it — attrset merge is by
+    # key, so a later definition of the same key REPLACES the baseline
+    # (visible in the generated file, unlike list concatenation).
+    myconfig.ai.mysbx.config.env = baselineEnv;
 
     home-manager.sharedModules = [
       { home.packages = [ cfg.package ]; }

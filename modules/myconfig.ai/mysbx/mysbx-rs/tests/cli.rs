@@ -444,10 +444,38 @@ fn verbose_bare_form_reports_and_still_executes() {
         return;
     }
     // The bare form's payload is the shell; point it at a command that
-    // exits on its own, so the test does not hang on an interactive one.
+    // exits on its own, so the test does not hang on an interactive
+    // one. `true` must be reachable INSIDE the sandbox, i.e. its real
+    // path under a base-bound directory — the same discovery
+    // `sandbox_bash()` uses, for a host whose `/usr/bin` holds only
+    // `env` (plain NixOS).
+    // NOTE: keep the ORIGINAL /nix/store/.../bin/true path, not the
+    // canonicalized one — coreutils ships `true` as a symlink to the
+    // multi-call `coreutils` binary, and canonicalize() would resolve
+    // it to a binary that no longer behaves like `true`.
+    let true_path = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            // The candidate itself must be base-bound (sandbox mounts
+            // /nix/store and /usr/bin only) — a profile symlink like
+            // /run/current-system/sw/bin/true canonicalizes INTO the
+            // store, but the profile path itself is not mounted, so
+            // profile paths must be skipped, not used. In a nix shell
+            // the PATH entry IS the store path, so `dir` qualifies.
+            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
+                return None;
+            }
+            let candidate = dir.join("true");
+            candidate.is_file().then_some(candidate)
+        })
+    });
+    let Some(true_path) = true_path else {
+        eprintln!("skipping: no sandbox-reachable true");
+        return;
+    };
+    let true_str = true_path.to_string_lossy().into_owned();
     let (inv, _, _) = fixture_user_backend("verbose-bare-exec", &["--verbose"]);
     let mut cmd = spawn(&inv);
-    cmd.env("MYSBX_SHELL", "/usr/bin/true")
+    cmd.env("MYSBX_SHELL", &true_str)
         .env("MYSBX_TOOLS_PATH", "/usr/bin");
     let out = cmd.output().expect("failed to spawn mysbx");
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -455,7 +483,7 @@ fn verbose_bare_form_reports_and_still_executes() {
     assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
     let report = report_lines(&stdout).join("\n");
     assert!(
-        report.contains("payload:        shell /usr/bin/true"),
+        report.contains(&format!("payload:        shell {true_str}")),
         "{stdout}"
     );
     assert!(report.contains("mode:           executing"), "{stdout}");
@@ -758,6 +786,88 @@ fn run_executes_payload_when_bwrap_exists() {
 }
 
 #[test]
+fn ripgrep_config_mount_is_activated_through_the_variable() {
+    // Review-3 item 6, execution-level: mounting the ripgrep config
+    // directory is inert by itself — the activation mechanism is the
+    // `RIPGREP_CONFIG_PATH` variable, which `--clearenv` kills. A run
+    // whose user layer mirrors the generated `baselineEnv` (default.nix)
+    // must hand the payload BOTH the mounted file and the variable
+    // pointing at its in-sandbox path. The payload prints the variable
+    // and the file, proving the mount and the setenv landed together.
+    // A REAL `rg` in the tools closure is not assumed (the nix build
+    // sandbox has none): reading the variable and the file is the
+    // observable contract between mysbx and whatever tool consumes it.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let base = tmpdir("ripgrep-activation");
+    let home = base.join("home");
+    let xdg = base.join("xdg");
+    let repo = base.join("repo");
+    std::fs::create_dir_all(repo.join("sub")).unwrap();
+    std::fs::create_dir_all(base.join("repo.mysbx")).unwrap();
+    std::fs::create_dir_all(home.join(".config").join("ripgrep")).unwrap();
+    std::fs::write(
+        home.join(".config").join("ripgrep").join("ripgreprc"),
+        "--max-columns-preview\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        xdg.join("mysbx").join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\n\n[[mounts]]\npath = \"~/.config/ripgrep\"\ndest = \"/mysbx-home/.config/ripgrep\"\nmode = \"ro\"\n\n[env]\nRIPGREP_CONFIG_PATH = \"/mysbx-home/.config/ripgrep/ripgreprc\"\n"
+        ),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["run"], // the real argv is passed to spawn_with_args below
+        cwd: repo,
+        home,
+        xdg,
+    };
+    // The payload bash is the same sandbox-reachable one
+    // `sandbox_bash()` discovers; it prints the variable AND the file
+    // content, so one exec proves both the setenv and the mount
+    // landed. The [env] entry below mirrors default.nix `baselineEnv`
+    // by hand — keep the two in sync (the golden test
+    // golden_ripgrep_config_path_activation pins the same shape).
+    let args = vec![
+        "run".to_owned(),
+        "--".to_owned(),
+        bash.to_string_lossy().into_owned(),
+        "-c".to_owned(),
+        // Shell builtins only (PATH inside the sandbox is the bare
+        // /usr/bin of a NixOS host): $(< file) reads the mounted file
+        // without `cat`.
+        "printf \"%s|\" \"$(< \"$RIPGREP_CONFIG_PATH\")\"; printf \"%s\" \"$RIPGREP_CONFIG_PATH\"".to_owned(),
+    ];
+    let mut cmd = spawn_with_args(&inv, &args);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "exit {:?}\nstdout: {stdout}\nstderr: {stderr}",
+        out.status.code()
+    );
+    assert!(
+        stdout.trim().ends_with("|/mysbx-home/.config/ripgrep/ripgreprc"),
+        "the variable must name the in-sandbox path: {stdout}"
+    );
+    assert!(
+        stdout.contains("--max-columns-preview"),
+        "the variable must resolve to the MOUNTED file's content: {stdout}"
+    );
+}
+
+#[test]
 fn failing_payload_propagates_exit_code() {
     if !is_bwrap_available() {
         eprintln!("skipping: bwrap not available in this environment");
@@ -1013,6 +1123,14 @@ fn make_worktree_fixture(base: &Path, name: &str) -> (PathBuf, PathBuf) {
         format!("gitdir: {}\n", gitdir.display()),
     )
     .unwrap();
+    // The sidecar sibling of the worktree, empty on purpose: repo
+    // resolution prefers the NEAREST sidecar, so this pins the
+    // resolution to the fixture instead of letting it walk up into
+    // whatever real repository the test tree happens to live in
+    // (CARGO_TARGET_TMPDIR is inside a worktree here — without this,
+    // a sidecar created at that outer repo by any earlier run would
+    // hijack every make_worktree_fixture test).
+    std::fs::create_dir_all(base.join(format!("{name}.mysbx"))).unwrap();
     (worktree, gitdir)
 }
 

@@ -90,7 +90,16 @@ Each entry carries an explicit `dest` under `/mysbx-home` (review-2
 item 6): inside the sandbox `HOME` is `/mysbx-home`, so a config bound
 at its host path would be invisible to the tools that want it. A NixOS
 assertion refuses any entry that would still land inside the host home,
-in every spelling D8 allows.
+in every spelling D8 allows. The generated `[env]` additionally carries
+`RIPGREP_CONFIG_PATH` pointing at the mounted ripgreprc (review-3 item
+6): the sandbox clears the host variable (`--clearenv`, and it is not
+in the forwarding allowlist), so the mount alone would leave ripgrep
+running with its defaults — the variable is the activation, and the
+module sets it only when Home Manager itself enables ripgrep with
+arguments, so it never points at a file that does not exist. A
+hand-written user config outside myconfig must reproduce the
+`[env]` entry itself — the mount alone is inert, and mysbx will not
+invent a variable the config never set.
 Other modules extend it by appending to `myconfig.ai.mysbx.config.mounts`.
 Outside myconfig the file stays an ordinary hand-written file; mysbx itself
 knows nothing about where it came from.
