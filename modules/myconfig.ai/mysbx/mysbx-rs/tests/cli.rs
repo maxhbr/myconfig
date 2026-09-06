@@ -923,3 +923,63 @@ fn dry_run_prints_the_pinned_backend_as_argv0() {
     let rest: String = stdout.lines().skip(1).map(|l| format!("{l}\n")).collect();
     assert_eq!(rest, expected_minimal_argv(&repo).strip_prefix("bwrap\n").unwrap());
 }
+
+#[test]
+fn invalid_layout_is_an_error_not_a_panic() {
+    // Review-2 item 4: a user-reachable invalid configuration (a mount
+    // dest onto a protected path) must exit 1 with a `mysbx: `-prefixed
+    // message on stderr (cli.md D8/D9) — not abort as a Rust panic.
+    let (inv, _, _) = fixture("invalid-dest", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    // The user layer grants the mount (no grant violation), but its
+    // dest lands on the protected /tmp — the argv builder must refuse.
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n\n[[mounts]]\npath = \"/etc/hosts\"\nmode = \"ro\"\ndest = \"/tmp\"\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(
+        stderr.starts_with("mysbx: "),
+        "must carry the mysbx prefix: {stderr}"
+    );
+    assert!(
+        stderr.contains("would shadow or overwrite the protected"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("panicked"),
+        "a panic leaked through: {stderr}"
+    );
+}
+
+#[test]
+fn hidden_mount_is_an_error_not_a_panic() {
+    // Review-2 item 4, the second variant: a later mount whose dest
+    // hides an earlier one is equally user-reachable, so it must also
+    // exit 1 with `mysbx: ` — never a panic.
+    let (inv, repo, _) = fixture("invalid-hidden", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    // Two user-layer mounts, narrow first then wide, with dests OUTSIDE
+    // the test tmpdir (which sits under the protected /tmp): the wide
+    // dest hides the narrow one (review-1 finding 3's scenario, .ssh
+    // under /home/u, replayed on ordinary dest paths).
+    std::fs::create_dir_all(repo.join("u/.ssh")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        &format!(
+            "backend = \"bubblewrap\"\n\n\
+             [[mounts]]\npath = \"{}/u/.ssh\"\ndest = \"/workspace/.ssh\"\nmode = \"ro\"\n\n\
+             [[mounts]]\npath = \"{}/u\"\ndest = \"/workspace\"\nmode = \"rw\"\n",
+            repo.display(),
+            repo.display()
+        ),
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
+    assert!(stderr.contains("would hide earlier mount"), "stderr: {stderr}");
+    assert!(!stderr.contains("panicked"), "a panic leaked: {stderr}");
+}

@@ -284,7 +284,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         shell: &shell,
         tools_path: &tools_path,
     };
-    let argv = bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params);
+    let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
+        Ok(a) => a,
+        // Review-2 item 4: a config that cannot be laid out safely is an
+        // ordinary runtime failure — `mysbx:` on stderr, exit 1 — like
+        // the merge errors above, never a Rust panic.
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return 1;
+        }
+    };
     // The Nix wrapper (item 6) pins the binary via MYSBX_BWRAP; the
     // fallback is a plain PATH lookup so `cargo run` works unwrapped.
     let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");

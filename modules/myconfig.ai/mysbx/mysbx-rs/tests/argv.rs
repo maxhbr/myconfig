@@ -158,7 +158,7 @@ fn golden_minimal_config() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_golden("minimal.txt", &argv);
 }
 
@@ -173,7 +173,7 @@ fn golden_one_ro_mount() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_golden("ro-mount.txt", &argv);
 }
 
@@ -188,7 +188,7 @@ fn golden_one_rw_mount() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_golden("rw-mount.txt", &argv);
 }
 
@@ -206,7 +206,7 @@ fn golden_mount_with_explicit_dest() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_golden("explicit-dest.txt", &argv);
 }
 
@@ -218,7 +218,7 @@ fn golden_network_false() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_golden("network-false.txt", &argv);
     // A deny sandbox is recognisable by the ABSENCE of the share (spec
     // section 2); --unshare-all is present either way.
@@ -245,7 +245,7 @@ fn network_share_binds_the_resolver_set() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_eq!(argv[0], "--clearenv");
     assert_eq!(argv[1], "--unshare-all");
     assert_eq!(argv[2], "--share-net");
@@ -293,7 +293,7 @@ fn golden_env_entry() {
         ("LANG", "C.UTF-8"),
         ("EDITOR", "host-nvim"),
     ]);
-    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host, &params());
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host, &params()).unwrap();
     assert_golden("env-entry.txt", &argv);
 }
 
@@ -323,7 +323,7 @@ fn golden_sidecar_narrows_user_config() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_golden("sidecar-narrowed.txt", &argv);
 }
 
@@ -337,7 +337,7 @@ fn golden_interactive_payload() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_golden("interactive-shell.txt", &argv);
 }
 
@@ -358,7 +358,7 @@ fn golden_command_payload_with_flag_looking_args() {
         &payload,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_golden("command-with-flags.txt", &argv);
     // And the payload really is everything after the single `--`.
     let dd = argv.iter().position(|x| x == "--").unwrap();
@@ -384,7 +384,7 @@ fn no_run_no_host_home_beyond_declared_mounts() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
 
     // Every bind source is the repo or a declared mount — nothing else
     // from the host is reachable.
@@ -434,7 +434,7 @@ fn share_net_iff_network_true() {
     let repo = synth_repo();
     let p = params();
     for (network, expect_share) in [(true, true), (false, false)] {
-        let argv = bwrap_argv(&base(network), &repo, &Payload::Shell, &host_env(&[]), &p);
+        let argv = bwrap_argv(&base(network), &repo, &Payload::Shell, &host_env(&[]), &p).unwrap();
         assert_eq!(argv.contains(&"--share-net".to_string()), expect_share);
         assert!(argv.contains(&"--unshare-all".to_string()));
     }
@@ -459,7 +459,7 @@ fn mount_order_is_preserved() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     let outer = argv
         .iter()
         .position(|x| x.as_str() == "/synth/data/outer")
@@ -486,7 +486,7 @@ fn forward_only_set_host_variables() {
         &Payload::Shell,
         &host_env(&[("TERM", "xterm"), ("LC_ALL", "C")]),
         &params(),
-    );
+    ).unwrap();
     assert_eq!(
         setenv_keys(&argv),
         // HostEnv is a BTreeMap: keys come in sorted order (deterministic,
@@ -504,7 +504,7 @@ fn env_precedence_host_then_config_then_path() {
     cfg.env.insert("TERM".into(), "cfg-wins".into());
     cfg.env.insert("PROJECT".into(), "x".into());
     let host = host_env(&[("TERM", "host-val"), ("EDITOR", "host-nvim")]);
-    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host, &params());
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host, &params()).unwrap();
     assert_eq!(
         setenv_keys(&argv),
         // host keys sorted (BTreeMap), then [env], then HOME and PATH
@@ -529,7 +529,7 @@ fn tmpfs_tmp_is_not_host_backed() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     let t = argv.iter().position(|x| x.as_str() == "--tmpfs").unwrap();
     assert_eq!(argv[t + 1], "/tmp");
     for w in argv.windows(3) {
@@ -552,7 +552,7 @@ fn sandbox_home_is_a_tmpfs_outside_home() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     let tmpfs: Vec<&str> = argv
         .windows(2)
         .filter(|w| w[0] == "--tmpfs")
@@ -583,7 +583,7 @@ fn config_env_cannot_repoint_home_or_path() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_eq!(
         setenv_keys(&argv),
         vec!["HOME", "PATH", "HOME", "PATH"],
@@ -607,15 +607,22 @@ fn config_env_cannot_repoint_home_or_path() {
 // ---- hidden mounts (review-1 finding 3) -------------------------------------
 
 #[test]
-#[should_panic(expected = "would hide earlier mount")]
-fn parent_after_child_hides_the_child_and_panics() {
+fn parent_after_child_hides_the_child_is_refused() {
+    const EXPECTED: &str = "would hide earlier mount";
     // The review scenario: ro `.ssh` FIRST, rw `/home/u` SECOND. The
     // later wide bind replaces the subtree the narrow one landed on,
     // leaving `.ssh` writable — refuse to build such an argv at all.
     let mut cfg = base(true);
     cfg.mounts.push(make_mount("/synth/u/.ssh", None, Mode::Ro));
     cfg.mounts.push(make_mount("/synth/u", None, Mode::Rw));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        err.to_string().contains(EXPECTED)
+            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
@@ -631,7 +638,7 @@ fn child_after_parent_is_the_safe_direction_and_stays_allowed() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_eq!(
         argv.windows(3)
             .filter(|w| w[0] == "--ro-bind" && w[2] == "/synth/u/.ssh")
@@ -642,7 +649,7 @@ fn child_after_parent_is_the_safe_direction_and_stays_allowed() {
 }
 
 #[test]
-fn equal_dest_rebind_does_not_panic() {
+fn equal_dest_rebind_stays_allowed() {
     // Same dest twice: shadowing re-bind, policed by the merge's grant
     // checks, not a hidden mount.
     let mut cfg = base(true);
@@ -650,12 +657,12 @@ fn equal_dest_rebind_does_not_panic() {
         .push(make_mount("/synth/a", Some("/synth/dst"), Mode::Ro));
     cfg.mounts
         .push(make_mount("/synth/b", Some("/synth/dst"), Mode::Rw));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
 }
 
 #[test]
-#[should_panic(expected = "would hide earlier mount")]
 fn hiding_is_judged_on_dest_not_source() {
+    const EXPECTED: &str = "would hide earlier mount";
     // Sources are unrelated; the DESTS make the later mount hide the
     // earlier one. `dest` defaults to the source path when absent.
     let mut cfg = base(true);
@@ -663,7 +670,14 @@ fn hiding_is_judged_on_dest_not_source() {
         .push(make_mount("/synth/elsewhere", Some("/synth/u/.ssh"), Mode::Ro));
     cfg.mounts
         .push(make_mount("/synth/other", Some("/synth/u"), Mode::Rw));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        err.to_string().contains(EXPECTED)
+            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
@@ -676,27 +690,41 @@ fn sibling_dests_and_untouched_rebinds_stay_allowed() {
     cfg.mounts.push(make_mount("/synth/v", None, Mode::Rw));
     cfg.mounts
         .push(make_mount("/synth/w", Some("/synth/u/w"), Mode::Ro));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
 }
 
 #[test]
-#[should_panic(expected = "would hide the repo working tree")]
 fn mount_covering_the_repo_is_refused() {
+    const EXPECTED: &str = "would hide the repo working tree";
     // The repo bind (always rw, D13) is implicit and comes FIRST; a
     // configured mount whose dest covers it would replace what --chdir
     // lands in — equal dest included, the repo is not configuration.
     let mut cfg = base(true);
     cfg.mounts.push(make_mount("/synth/data", Some("/synth"), Mode::Rw));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        err.to_string().contains(EXPECTED)
+            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
-#[should_panic(expected = "would hide the repo working tree")]
 fn mount_exactly_on_the_repo_is_refused() {
+    const EXPECTED: &str = "would hide the repo working tree";
     let mut cfg = base(true);
     cfg.mounts
         .push(make_mount("/synth/data", Some("/synth/repo"), Mode::Rw));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        err.to_string().contains(EXPECTED)
+            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
@@ -705,12 +733,12 @@ fn mount_below_the_repo_stays_allowed() {
     let mut cfg = base(true);
     cfg.mounts
         .push(make_mount("/synth/data", Some("/synth/repo/sub"), Mode::Ro));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
 }
 
 #[test]
-#[should_panic(expected = "would hide earlier mount")]
 fn hidden_mounts_are_judged_after_dest_normalization() {
+    const EXPECTED: &str = "would hide earlier mount";
     // `..` components must be collapsed BEFORE the ancestor comparison,
     // else `/synth/u/../u` style dests slip past the hiding guard just
     // like they slipped past the protected-dest guard before finding 1.
@@ -718,7 +746,14 @@ fn hidden_mounts_are_judged_after_dest_normalization() {
     cfg.mounts.push(make_mount("/synth/u/.ssh", None, Mode::Ro));
     cfg.mounts
         .push(make_mount("/synth/other", Some("/synth/u/../u"), Mode::Rw));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        err.to_string().contains(EXPECTED)
+            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
@@ -740,7 +775,7 @@ fn worktree_git_dirs_are_bound_rw() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     // Positions: repo bind, then common dir, then gitdir, all rw binds.
     let repo_bind = pos_pair(&argv, "--bind", "/synth/repo");
     let common = pos_pair(&argv, "--bind", "/synth/main/.git");
@@ -761,7 +796,7 @@ fn plain_repo_adds_no_git_binds() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     assert_eq!(
         argv.windows(3)
             .filter(|w| w[0] == "--bind")
@@ -786,8 +821,8 @@ fn pos_ro_bind(argv: &[String], src: &str) -> Option<usize> {
 }
 
 #[test]
-#[should_panic(expected = "would hide a git metadata directory")]
 fn mount_covering_a_git_dir_is_refused() {
+    const EXPECTED: &str = "would hide a git metadata directory";
     // The git dir binds are implicit infrastructure like the repo: a
     // configured mount covering one would silently break `git status`
     // inside the sandbox.
@@ -799,7 +834,14 @@ fn mount_covering_a_git_dir_is_refused() {
     let mut cfg = base(true);
     cfg.mounts
         .push(make_mount("/synth/data", Some("/synth/main"), Mode::Rw));
-    bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params());
+
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        err.to_string().contains(EXPECTED)
+            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
@@ -815,7 +857,7 @@ fn nix_store_db_and_config_are_bound() {
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    );
+    ).unwrap();
     let store = pos_pair(&argv, "--ro-bind", "/nix/store");
     let var_nix = pos_pair(&argv, "--ro-bind-try", "/nix/var/nix");
     let nix_conf = pos_pair(&argv, "--ro-bind-try", "/etc/nix/nix.conf");
@@ -825,18 +867,25 @@ fn nix_store_db_and_config_are_bound() {
 }
 
 #[test]
-#[should_panic(expected = "would shadow or overwrite the protected")]
 fn mount_dest_onto_nix_var_is_refused() {
+    const EXPECTED: &str = "would shadow or overwrite the protected";
     // The base's nix paths are protected like every base bind.
     let mut cfg = base(false);
     cfg.mounts
         .push(make_mount("/synth/data", Some("/nix/var/nix"), Mode::Rw));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        err.to_string().contains(EXPECTED)
+            && matches!(err, mysbx::bwrap::Error::ProtectedDest { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
-#[should_panic(expected = "would shadow or overwrite the protected")]
 fn mount_dest_below_nix_var_is_refused() {
+    const EXPECTED: &str = "would shadow or overwrite the protected";
     // A descendant of the store-database bind replaces part of it.
     let mut cfg = base(false);
     cfg.mounts.push(make_mount(
@@ -844,7 +893,14 @@ fn mount_dest_below_nix_var_is_refused() {
         Some("/nix/var/nix/daemon-socket"),
         Mode::Rw,
     ));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        err.to_string().contains(EXPECTED)
+            && matches!(err, mysbx::bwrap::Error::ProtectedDest { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
@@ -856,5 +912,5 @@ fn mount_dest_elsewhere_in_nix_stays_allowed() {
         .push(make_mount("/synth/data", Some("/nix/var/other"), Mode::Rw));
     cfg.mounts
         .push(make_mount("/synth/data", Some("/etc/nix/other.conf"), Mode::Ro));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
 }

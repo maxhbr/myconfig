@@ -19,6 +19,7 @@ use crate::config::{Mode, Mount};
 use crate::merge::Merged;
 use crate::repo::Repo;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
 /// What runs inside the sandbox. Either the interactive shell or a command
@@ -112,7 +113,7 @@ pub fn bwrap_argv(
     payload: &Payload,
     host_env: &HostEnv,
     params: &Params<'_>,
-) -> Vec<String> {
+) -> Result<Vec<String>, Error> {
     let root = repo.root.to_string_lossy().into_owned();
     let mut argv: Vec<String> = vec!["--clearenv".into(), "--unshare-all".into()];
     if cfg.network {
@@ -182,14 +183,13 @@ pub fn bwrap_argv(
             // path, not a base path — the merge would have had to
             // grant `/proc` itself for that. So any hit here means a
             // redirect onto a protected path.
-            panic!(
-                "mount dest {dest} would shadow or overwrite the protected \n\
-                 sandbox path {protected} (base table of docs/plan.md); \n\
-                 refusing to build the argv"
-            );
+            return Err(Error::ProtectedDest {
+                dest: dest.to_string(),
+                protected,
+            });
         }
     }
-    check_hidden_mounts(&cfg.mounts, &root, &repo.git_dirs);
+    check_hidden_mounts(&cfg.mounts, &root, &repo.git_dirs)?;
     for m in &cfg.mounts {
         bind(&mut argv, m.mode == Mode::Ro, &m.path, m.dest.as_deref());
     }
@@ -229,8 +229,45 @@ pub fn bwrap_argv(
         Payload::Command(args) => argv.extend(args.iter().cloned()),
     }
 
-    argv
+    Ok(argv)
 }
+
+/// Why the argv cannot be built safely (review-2 item 4): a
+/// user-reachable configuration that cannot be laid out is an ordinary
+/// error — the CLI reports it on stderr with its `mysbx: ` prefix and
+/// exits `1` (cli.md D8/D9), never a Rust panic. Both variants keep the
+/// exact message texts the panic era asserted, so the diagnosis a user
+/// sees did not change with the representation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Error {
+    /// The mount's `dest` would shadow or overwrite a protected sandbox
+    /// path (base table of docs/plan.md).
+    ProtectedDest {
+        /// The offending destination.
+        dest: String,
+        /// The protected path it is related to.
+        protected: &'static str,
+    },
+    /// A later mount's dest hides an earlier bind — an earlier mount, or
+    /// an implicit one (the repo root, a git metadata directory).
+    HiddenMount { message: String },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::ProtectedDest { dest, protected } => write!(
+                f,
+                "mount dest {dest} would shadow or overwrite the protected \
+                 sandbox path {protected} (base table of docs/plan.md); \
+                 refusing to build the argv"
+            ),
+            Error::HiddenMount { message } => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 /// The resolver and TLS paths bound read-only when the network is
 /// shared (review-1 finding 5) — the same path SET as the `network`
@@ -382,9 +419,14 @@ fn check_dest(dest: &str) -> Option<&'static str> {
 /// refused there too: implicit binds are not configuration, and a
 /// mount that replaces the repo (even rw) changes what `--chdir` lands
 /// in; one that covers a git dir breaks `git` inside the sandbox.
-/// Panics, like [`check_dest`]: this guards the argv layout, and a
-/// config that cannot be laid out safely must not run.
-fn check_hidden_mounts(mounts: &[Mount], repo_root: &str, git_dirs: &[PathBuf]) {
+/// Returns [`Error::HiddenMount`] on violation: this guards the argv
+/// layout, and a config that cannot be laid out safely must not run —
+/// as an ordinary CLI error (review-2 item 4), never a panic.
+fn check_hidden_mounts(
+    mounts: &[Mount],
+    repo_root: &str,
+    git_dirs: &[PathBuf],
+) -> Result<(), Error> {
     // Implicit binds come before every configured mount: the repo root
     // and the git metadata directories a `.git` file points at. A
     // configured mount whose dest covers any of them replaces that
@@ -403,12 +445,14 @@ fn check_hidden_mounts(mounts: &[Mount], repo_root: &str, git_dirs: &[PathBuf]) 
         // at-or-below them (equal included) covers them.
         for (implicit_dest, what) in &implicit {
             if implicit_dest.starts_with(&later_dest) {
-                panic!(
-                    "mount {} ({}) would hide {} — implicit binds are not configuration and always come first; mounts may only narrow BELOW them, never cover them",
-                    later_dest.display(),
-                    later.path,
-                    what,
-                );
+                return Err(Error::HiddenMount {
+                    message: format!(
+                        "mount {} ({}) would hide {} — implicit binds are not configuration and always come first; mounts may only narrow BELOW them, never cover them",
+                        later_dest.display(),
+                        later.path,
+                        what,
+                    ),
+                });
             }
         }
         for earlier in &mounts[..later_i] {
@@ -418,16 +462,19 @@ fn check_hidden_mounts(mounts: &[Mount], repo_root: &str, git_dirs: &[PathBuf]) 
                 continue; // equal dests: shadowing re-bind, not hiding
             }
             if earlier_dest.starts_with(&later_dest) {
-                panic!(
-                    "mount {} ({}) would hide earlier mount {} ({}) — bubblewrap applies binds in order, so a wider dest must come FIRST; swap the entries or drop one",
-                    later_dest.display(),
-                    later.path,
-                    earlier_dest.display(),
-                    earlier.path,
-                );
+                return Err(Error::HiddenMount {
+                    message: format!(
+                        "mount {} ({}) would hide earlier mount {} ({}) — bubblewrap applies binds in order, so a wider dest must come FIRST; swap the entries or drop one",
+                        later_dest.display(),
+                        later.path,
+                        earlier_dest.display(),
+                        earlier.path,
+                    ),
+                });
             }
         }
     }
+    Ok(())
 }
 
 /// Lexically resolve `.` and `..` components of an absolute path —
@@ -527,7 +574,8 @@ mod tests {
         // SPEC ORDER of the sections (spec "Watch out": a refactor must
         // not reorder sections 3-5).
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         assert_eq!(argv[0], "--clearenv");
         assert_eq!(argv[1], "--unshare-all");
         assert_eq!(argv[2], "--share-net");
@@ -541,7 +589,8 @@ mod tests {
     #[test]
     fn shell_payload_after_dashdash() {
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let n = argv.len();
         assert!(n >= 2);
         assert_eq!(argv[n - 2], "--");
@@ -552,7 +601,8 @@ mod tests {
     fn command_payload_is_verbatim() {
         let (repo, cfg, p) = shell_repo_defaults();
         let payload = Payload::Command(vec!["ls".into(), "-x".into(), "--help".into()]);
-        let argv = bwrap_argv(&cfg, &repo, &payload, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &payload, &HostEnv::new(), &p)
+        .unwrap();
         let n = argv.len();
         assert_eq!(&argv[n - 4..], &["--", "ls", "-x", "--help"]);
         // Flag-looking arguments stay verbatim payload content (cli.md D4).
@@ -577,7 +627,8 @@ mod tests {
                 mode: Mode::Rw,
             },
         ];
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         // A mount without `dest` binds at its own source path; the rw
         // mount with an explicit dest uses it verbatim. The ro bind must
         // precede the rw bind (mount order is argv order).
@@ -609,12 +660,14 @@ mod tests {
     #[test]
     fn network_false_denies() {
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         assert!(argv.contains(&"--share-net".to_string()));
 
         let mut deny = cfg;
         deny.network = false;
-        let argv = bwrap_argv(&deny, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&deny, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         assert!(!argv.contains(&"--share-net".to_string()));
         // But --unshare-all stays.
         assert!(argv.contains(&"--unshare-all".to_string()));
@@ -630,7 +683,8 @@ mod tests {
         host.insert("EDITOR".into(), "host-nvim".into());
         let repo = synth_repo();
         let p = params();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p)
+        .unwrap();
         // Every `--setenv` triple, in argv order.
         let setenvs: Vec<usize> = argv
             .iter()
@@ -677,7 +731,8 @@ mod tests {
     #[test]
     fn no_run_no_host_home_no_openai() {
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let joined = argv.join(" ");
         // No WHOLESALE `/run` bind (the base table's `no` row: D-Bus,
         // the nix-daemon socket, agent sockets). The resolver exception
@@ -714,7 +769,8 @@ mod tests {
         // config.md D14: `$HOME` exists inside the sandbox (so `cd ~`
         // works), is an empty tmpfs, and is not below `/home`.
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let tmpfs: Vec<&str> = argv
             .windows(2)
             .filter(|w| w[0] == "--tmpfs")
@@ -738,7 +794,8 @@ mod tests {
         cfg.env.insert("HOME".into(), "/synth/evil-home".into());
         let mut host = HostEnv::new();
         host.insert("HOME".into(), "/synth/host-home".into());
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p)
+        .unwrap();
         let last = argv
             .iter()
             .enumerate()
@@ -756,7 +813,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_onto_tmp_is_refused() {
         // The hole the base table explicitly closes: binding a host path
         // ONTO /tmp reconstructs the host-backed /tmp. Later mounts win
@@ -768,11 +824,15 @@ mod tests {
             dest: Some("/tmp".into()),
             mode: Mode::Rw,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { protected: "/tmp", .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_onto_root_is_refused() {
         // A dest of / would shadow /proc, /dev and everything else in one
         // move.
@@ -783,11 +843,15 @@ mod tests {
             dest: Some("/".into()),
             mode: Mode::Rw,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_below_proc_is_refused() {
         // Nested, not just exact: a dest under /proc would overwrite part
         // of the procfs the base bind provides.
@@ -798,11 +862,15 @@ mod tests {
             dest: Some("/proc/sys".into()),
             mode: Mode::Ro,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_onto_ancestor_of_protected_path_is_refused() {
         // The ancestor hole: a dest of `/nix` would receive the mount and
         // hide the protected `/nix/store` below it; likewise `/usr` hides
@@ -814,11 +882,15 @@ mod tests {
             dest: Some("/nix".into()),
             mode: Mode::Rw,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_etc_ancestor_is_refused() {
         // Second ancestor case, pinned separately so a refactor cannot fix
         // `/nix` while leaving `/etc` (hiding `/etc/localtime`) open.
@@ -829,11 +901,15 @@ mod tests {
             dest: Some("/etc".into()),
             mode: Mode::Ro,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_dotdot_to_root_is_refused() {
         // The lexical hole: `/x/..` passes a plain string check but
         // bubblewrap resolves it to `/`, mounting over everything.
@@ -844,11 +920,15 @@ mod tests {
             dest: Some("/x/..".into()),
             mode: Mode::Rw,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_dotdot_into_protected_is_refused() {
         // Same, aimed at a narrower protected path: `/nix/../proc` is
         // `/proc` after lexical resolution.
@@ -859,7 +939,12 @@ mod tests {
             dest: Some("/nix/../proc".into()),
             mode: Mode::Rw,
         }];
-        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::ProtectedDest { .. }),
+            "wrong error: {err}"
+        );
     }
 
     #[test]
@@ -886,12 +971,10 @@ mod tests {
                 dest: Some(dest.into()),
                 mode: Mode::Ro,
             }];
-            let result = std::panic::catch_unwind(move || {
-                bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
-            });
+            let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
             assert!(
-                result.is_err(),
-                "dest {i} ({dest}) must be refused: it resolves onto a protected path"
+                matches!(err, Err(Error::ProtectedDest { .. })),
+                "dest {i} ({dest}) must be refused, got: {err:?}"
             );
         }
     }
@@ -907,7 +990,8 @@ mod tests {
             dest: Some("/tmp/../synth/dest".into()),
             mode: Mode::Ro,
         }];
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let pairs: Vec<_> = argv
             .windows(3)
             .filter(|w| w[0] == "--ro-bind")
@@ -939,7 +1023,8 @@ mod tests {
                 mode: Mode::Ro,
             },
         ];
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let cfg_dests: Vec<&str> = argv
             .windows(3)
             .filter(|w| w[0] == "--ro-bind" || w[0] == "--bind")
@@ -969,7 +1054,8 @@ mod tests {
                 mode: Mode::Ro,
             },
         ];
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+        .unwrap();
         let pairs: Vec<_> = argv
             .windows(3)
             .filter(|w| w[0] == "--ro-bind")
