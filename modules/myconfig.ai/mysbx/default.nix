@@ -146,10 +146,27 @@ in
       # MYSBX_BWRAP / MYSBX_SHELL / MYSBX_TOOLS_PATH pinned to store paths.
       # The unwrapped crate build stays reachable as
       # `<package>.passthru.crate` (used by nix/checks.nix).
-      default = pkgs.callPackage ./nix/mysbx.nix { };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { }";
+      default = pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; };
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
+      '';
+    };
+
+    extraTools = mkOption {
+      type = types.listOf types.package;
+      default = [ ];
+      example = literalExpression "[ pkgs.pi-coding-agent ]";
+      description = ''
+        Extra packages appended to the dev-tool closure that is baked
+        into the sandbox `PATH` (`toolsEnv` in ./nix/mysbx.nix). This is
+        the extension point for the agent modules that integrate with
+        mysbx — ../programs.pi-coding-agent adds the `pi` binary here so
+        it is callable inside every sandbox of this host.
+
+        Anything listed here is on the PATH of every mysbx payload, so
+        the same "security-relevant list, not packaging detail" rule as
+        for the baseline closure applies.
       '';
     };
 

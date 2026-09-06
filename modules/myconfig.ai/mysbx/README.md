@@ -109,6 +109,14 @@ mount entries are also the grant tree a repo sidecar may mount below
 (`docs/design/config.md` D7). Per-agent modules
 append their own config files to `myconfig.ai.mysbx.config.mounts`.
 
+## Integrated coding agents
+`pi` ([`programs.pi-coding-agent`](../programs.pi-coding-agent/default.nix)) is
+the first coding agent integrated with mysbx: on hosts where both features are
+enabled it adds its binary to the sandbox `PATH` via
+`myconfig.ai.mysbx.extraTools` and mounts its home-manager-managed
+configuration (`~/.pi/agent/{extensions,agents,prompts,themes,keybindings.json}`
+and `~/.agents/skills`) read-only below `/mysbx-home`.
+
 # Supported Technologies
 ## Already Implemented:
 - the NixOS module ships the `mysbx` package **and** the generated user

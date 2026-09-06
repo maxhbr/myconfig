@@ -78,7 +78,7 @@ every knob is a decision:
 | host `$HOME` bind | **no** | the host home stays unreachable; its *value* is not forwarded either — exposing parts of it is an explicit `[[mounts]]` grant (`config.md` D6/D7) |
 | `~/tmp` rw | no | agent-session convenience, not a sandbox essential |
 | `/run` | no | D-Bus, PipeWire, agent sockets; the nix-daemon socket arrives via the `/nix/var/nix` row above (and only with a shared network); the resolver exception is the only `/run` path bound |
-| dev-tool closure on `PATH` | yes, as-is | git, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](./nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list) |
+| dev-tool closure on `PATH` | yes, as-is | git, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](./nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list), plus whatever a feature module appends via `myconfig.ai.mysbx.extraTools` (today: `pi`) |
 | `OPENAI_API_KEY` auto-forward | **no** | under `mysbx` a key is an ordinary user-config `[env]` entry (`config.md` D6) |
 
 ### Honest security claim

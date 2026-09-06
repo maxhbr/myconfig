@@ -54,6 +54,11 @@
   nix,
   python3,
   curl,
+  # Extra packages appended to the dev-tool closure by feature modules
+  # (`myconfig.ai.mysbx.extraTools`), e.g. the `pi` coding agent from
+  # ../../programs.pi-coding-agent. Same security note as the hardcoded
+  # list below: whatever lands here is on the sandbox PATH.
+  extraTools ? [ ],
 }:
 
 let
@@ -71,6 +76,11 @@ let
   # of growing this parallel list — until then the list lives HERE, next
   # to the code that consumes it, because (per mvp-6) "it is a
   # security-relevant list, not packaging detail".
+  #
+  # `extraTools` is the ONE extension point on top of that list: the
+  # agent modules that integrate with mysbx (today only
+  # ../../programs.pi-coding-agent) add their own binary there instead
+  # of editing this list.
   toolsEnv = buildEnv {
     name = "mysbx-tools";
     paths = [
@@ -91,7 +101,8 @@ let
       python3
       curl
       bash
-    ];
+    ]
+    ++ extraTools;
   };
 
   # The bare Rust crate, without the wrapper. Exposed as
