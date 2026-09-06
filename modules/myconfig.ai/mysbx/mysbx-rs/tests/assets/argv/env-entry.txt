@@ -19,6 +19,12 @@
 --ro-bind
 /nix/store
 /nix/store
+--ro-bind-try
+/nix/var/nix
+/nix/var/nix
+--ro-bind-try
+/etc/nix/nix.conf
+/etc/nix/nix.conf
 --ro-bind
 /usr/bin
 /usr/bin

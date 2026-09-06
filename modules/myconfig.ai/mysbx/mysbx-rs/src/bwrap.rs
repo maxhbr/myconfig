@@ -247,14 +247,29 @@ static RESOLVER_PATHS: &[&str] = &[
 /// The fixed base binds of the MVP (docs/plan.md, base table). Every row
 /// with decision "yes" appears exactly once, in the order the existing
 /// `fns/bubblewrap-app.nix` base binds them (agents shell out to
-/// arbitrary store paths → `/nix/store` first; `/usr/bin/env` shebangs →
-/// `/usr/bin`; timezones → `/etc/localtime`; a fresh tmpfs `/tmp`, NOT
-/// the host-backed one).
+/// arbitrary store paths → `/nix/store` first, then `/nix/var/nix` and
+/// `/etc/nix/nix.conf` so `nix` works — review-1 finding 6; then
+/// `/usr/bin/env` shebangs → `/usr/bin`; timezones → `/etc/localtime`;
+/// a fresh tmpfs `/tmp`, NOT the host-backed one).
 fn base_binds() -> Vec<String> {
     vec![
         "--ro-bind".into(),
         "/nix/store".into(),
         "/nix/store".into(),
+        // `/nix/var/nix` and `/etc/nix/nix.conf`, ro and try-bound, so
+        // the `nix` on the sandbox PATH can actually work: the store
+        // database and daemon socket live under `/nix/var/nix`, and
+        // without it every multi-user `nix` call fails (review-1
+        // finding 6) — the same two binds the base of
+        // `fns/bubblewrap-app.nix` makes. `--ro-bind-try`, because
+        // both may be absent in non-NixOS environments the tools
+        // closure still runs in.
+        "--ro-bind-try".into(),
+        "/nix/var/nix".into(),
+        "/nix/var/nix".into(),
+        "--ro-bind-try".into(),
+        "/etc/nix/nix.conf".into(),
+        "/etc/nix/nix.conf".into(),
         "--ro-bind".into(),
         "/usr/bin".into(),
         "/usr/bin".into(),
@@ -277,8 +292,9 @@ fn base_binds() -> Vec<String> {
 }
 
 /// Sandbox paths a mount `dest` may never shadow or overwrite — the
-/// roots the base binds create (`/nix/store`, `/usr/bin`, `/proc`,
-/// `/dev`, `/etc/localtime`, `/tmp`) plus `/run` (no wholesale `/run`
+/// roots the base binds create (`/nix/store`, `/nix/var/nix`,
+/// `/etc/nix/nix.conf`, `/usr/bin`, `/proc`, `/dev`, `/etc/localtime`,
+/// `/tmp`) plus `/run` (no wholesale `/run`
 /// bind exists — the only `/run` path mounted is the resolver
 /// exception [`RESOLVER_PATHS`], ro and narrow — so dests related to
 /// `/run` as a whole are still refused) — and `/` itself, which would
@@ -302,6 +318,8 @@ fn base_binds() -> Vec<String> {
 static PROTECTED_DESTS: &[&str] = &[
     "/",
     "/nix/store",
+    "/nix/var/nix",
+    "/etc/nix/nix.conf",
     "/usr/bin",
     "/proc",
     "/dev",

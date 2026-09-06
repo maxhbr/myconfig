@@ -249,10 +249,14 @@ fn network_share_binds_the_resolver_set() {
     assert_eq!(argv[0], "--clearenv");
     assert_eq!(argv[1], "--unshare-all");
     assert_eq!(argv[2], "--share-net");
+    // The resolver block starts immediately: nothing ro-bind-try may
+    // sneak in ahead of it (so the slice below is unambiguous).
+    assert_eq!(argv[3], "--ro-bind-try");
     let resolver_binds: Vec<&str> = argv
         .windows(3)
         .filter(|w| w[0] == "--ro-bind-try")
         .map(|w| w[1].as_str())
+        .take(5)
         .collect();
     assert_eq!(
         resolver_binds,
@@ -264,11 +268,16 @@ fn network_share_binds_the_resolver_set() {
             "/run/systemd/resolve",
         ]
     );
-    // And nothing else in the argv is a ro-bind-try.
-    assert_eq!(
-        argv.iter().filter(|a| *a == "--ro-bind-try").count(),
-        5
-    );
+    // … and nothing else BETWEEN the resolver block and the base binds
+    // is a ro-bind-try; the base's own two try-binds (`/nix/var/nix`,
+    // `/etc/nix/nix.conf`, review-1 finding 6) come later, in base order.
+    let after_resolver = &argv[3 + 3 * 5..];
+    let base_try: Vec<&str> = after_resolver
+        .windows(3)
+        .filter(|w| w[0] == "--ro-bind-try")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert_eq!(base_try, ["/nix/var/nix", "/etc/nix/nix.conf"]);
 }
 
 #[test]
@@ -762,10 +771,12 @@ fn plain_repo_adds_no_git_binds() {
     );
 }
 
-/// Index of the `flag src` pair, panicking when absent.
+/// Index of the `flag src` pair, panicking when absent. Also asserts
+/// the third element matches `src`, so a `--bind src other-dest` pair
+/// does not satisfy a source-position query.
 fn pos_pair(argv: &[String], flag: &str, src: &str) -> usize {
-    argv.windows(2)
-        .position(|w| w[0] == flag && w[1] == src)
+    argv.windows(3)
+        .position(|w| w[0] == flag && w[1] == src && w[2] == src)
         .unwrap_or_else(|| panic!("missing {flag} {src}"))
 }
 
@@ -789,4 +800,61 @@ fn mount_covering_a_git_dir_is_refused() {
     cfg.mounts
         .push(make_mount("/synth/data", Some("/synth/main"), Mode::Rw));
     bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+fn nix_store_db_and_config_are_bound() {
+    // Review-1 finding 6: `nix` is on the sandbox PATH, so
+    // /nix/var/nix (store database, daemon socket) and the host's
+    // nix.conf must be bound ro — the two binds the base of
+    // fns/bubblewrap-app.nix makes -- right after /nix/store, in base
+    // order, --ro-bind-try (both are absent on non-NixOS hosts).
+    let argv = bwrap_argv(
+        &base(false),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    );
+    let store = pos_pair(&argv, "--ro-bind", "/nix/store");
+    let var_nix = pos_pair(&argv, "--ro-bind-try", "/nix/var/nix");
+    let nix_conf = pos_pair(&argv, "--ro-bind-try", "/etc/nix/nix.conf");
+    let usr_bin = pos_pair(&argv, "--ro-bind", "/usr/bin");
+    assert!(store < var_nix, "/nix/store before /nix/var/nix");
+    assert!(var_nix < nix_conf && nix_conf < usr_bin, "base order kept");
+}
+
+#[test]
+#[should_panic(expected = "would shadow or overwrite the protected")]
+fn mount_dest_onto_nix_var_is_refused() {
+    // The base's nix paths are protected like every base bind.
+    let mut cfg = base(false);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/nix/var/nix"), Mode::Rw));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+#[should_panic(expected = "would shadow or overwrite the protected")]
+fn mount_dest_below_nix_var_is_refused() {
+    // A descendant of the store-database bind replaces part of it.
+    let mut cfg = base(false);
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/nix/var/nix/daemon-socket"),
+        Mode::Rw,
+    ));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+fn mount_dest_elsewhere_in_nix_stays_allowed() {
+    // `/nix/var` is NOT protected as a whole and neither is `/etc/nix`:
+    // only the two bound paths are; a dest beside them is ordinary.
+    let mut cfg = base(false);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/nix/var/other"), Mode::Rw));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/etc/nix/other.conf"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
 }
