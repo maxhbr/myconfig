@@ -18,7 +18,7 @@ mysbx version | help
 
 `--dry-run` is a **global flag**, valid for the bare form and for `run`. It
 runs the whole pipeline — resolve the repo, load and merge both layers,
-canonicalize, apply the narrow-not-widen rule — and stops immediately before
+canonicalize, apply the merge rules (`config.md` D7) — and stops immediately before
 `exec`. A dry run that skipped validation would exercise the wrong function.
 
 Output of `--dry-run`: the bwrap executable (argv[0]) first, then the

@@ -932,6 +932,55 @@ let
   sandboxToolsJson = builtins.toJSON (
     map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages
   );
+
+  # --- mysbx integration (../mysbx) -------------------------------------
+  #
+  # pi is the first coding agent wired into the `mysbx` sandbox tier. Two
+  # things are needed for a usable session inside a mysbx sandbox:
+  #
+  #   1. the `pi` binary on the sandbox PATH -> `myconfig.ai.mysbx.extraTools`
+  #   2. pi's *configuration* visible inside the sandbox -> read-only mounts
+  #      in the generated user config layer (`…mysbx.config.mounts`).
+  #
+  # Only home-manager-managed paths are mounted: mysbx canonicalizes every
+  # mount path eagerly and a missing path is a hard error on EVERY run
+  # (../mysbx/docs/design/config.md D8), so each entry must be created by
+  # the very condition that adds it. `~/.pi` itself is deliberately NOT
+  # mounted — it is pi's writable state directory (sessions, settings,
+  # credentials); inside the sandbox that stays the throwaway tmpfs home.
+  #
+  # Every entry carries a `dest` under `/mysbx-home` because `HOME` is
+  # `/mysbx-home` in the sandbox (D14) and pi looks for its config below
+  # `$HOME`.
+  mysbxHomeMount = path: {
+    path = "~/${path}";
+    dest = "/mysbx-home/${path}";
+    mode = "ro";
+  };
+
+  # `~/.agents/skills/` only exists when a handcrafted skill is registered
+  # (../skills/default.nix deploys the registry there for pi, which has no
+  # `programs.pi.skills` option). Gate the mount on the same condition.
+  piHasHandcraftedSkills = (config.myconfig.ai.skills.handcrafted or { }) != { };
+
+  mysbxPiMounts = map mysbxHomeMount (
+    [
+      # Generated + example extensions (myconfig-providers.ts,
+      # myconfig-jail-marker.ts, handoff.ts, subagent/) — always deployed
+      # by the `home.file` block below.
+      ".pi/agent/extensions"
+      # Sub-agent definitions (upstream samples + handcrafted ones).
+      ".pi/agent/agents"
+      # Workflow prompt templates (`/implement`, `/commit`, …).
+      ".pi/agent/prompts"
+      # Themes (`unjailed.json`).
+      ".pi/agent/themes"
+      # Keybinding overrides (./keybindings.json).
+      ".pi/agent/keybindings.json"
+    ]
+    # Handcrafted skills, discovered by pi from `~/.agents/skills/`.
+    ++ lib.optional piHasHandcraftedSkills ".agents/skills"
+  );
 in
 {
   options.myconfig = with lib; {
@@ -944,6 +993,15 @@ in
     # `agent-bubblewrap-pi-worktree` (below) can `workmux add --agent agent-bubblewrap-pi`.
     myconfig.ai.workmux.agents.agent-bubblewrap-pi = agentBubblewrapPiWorktree.agent;
     myconfig.ai.workmux.agents.pi = piWorktree.agent;
+
+    # mysbx tier integration (see `mysbxPiMounts` above). Gated on mysbx
+    # being enabled too: the two features are independent, and the mounts
+    # would otherwise be generated for a host that has no mysbx config.
+    myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
+      extraTools = [ pi-coding-agent-pkg ];
+      config.mounts = mysbxPiMounts;
+    };
+
     home-manager.sharedModules = [
       {
         myconfig.persistence.directories = [ ".pi" ];

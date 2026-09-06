@@ -237,12 +237,12 @@ mod tests {
             network: false,
             mounts: vec![
                 Mount {
-                    path: "/synth/granted".into(),
+                    path: "/synth/shared".into(),
                     dest: None,
                     mode: Mode::Rw,
                 },
                 Mount {
-                    path: "/synth/granted/sub".into(),
+                    path: "/synth/shared/sub".into(),
                     dest: Some("/inside".into()),
                     mode: Mode::Ro,
                 },
@@ -261,6 +261,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         };
         lines(&Report {
             repo: &repo,
@@ -310,11 +311,11 @@ mod tests {
             "{joined}"
         );
         assert!(
-            joined.contains("rw /synth/granted -> /synth/granted  [user config]"),
+            joined.contains("rw /synth/shared -> /synth/shared  [user config]"),
             "{joined}"
         );
         assert!(
-            joined.contains("ro /synth/granted/sub -> /inside  [sidecar config]"),
+            joined.contains("ro /synth/shared/sub -> /inside  [sidecar config]"),
             "{joined}"
         );
         assert!(joined.contains("TERM=xterm  [host]"), "{joined}");
@@ -356,6 +357,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -394,6 +396,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -433,6 +436,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         };
         let joined = lines(&Report {
             repo: &repo,

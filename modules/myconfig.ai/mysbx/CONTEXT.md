@@ -23,8 +23,9 @@ The directory `<repo>.mysbx/` next to the repo, holding the per-repo
 _Avoid_: state dir, `.mysbx`, project config dir
 
 **User config**:
-`$XDG_CONFIG_HOME/mysbx/config.toml`, the host-wide layer. Decides what the
-user allows into *any* sandbox; a sidecar can only narrow it.
+`$XDG_CONFIG_HOME/mysbx/config.toml`, the host-wide layer. Declares what is
+in *every* sandbox of this user; a sidecar adds to it (both files are
+trusted, `docs/design/config.md` D7).
 _Avoid_: global config, system config
 
 **Layer**:
