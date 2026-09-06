@@ -1,5 +1,26 @@
 Reviewed PR 77 at head [`b9338f638`](https://github.com/maxhbr/myconfig/commit/b9338f63829f7b550dfbf564c3cbaf737192c962). I would request changes: the “all seven findings are fixed” status is premature.
 
+> **Status (branch `review-rework`): all six follow-up items are addressed.**
+> One commit per item, each individually reviewed; the order is
+> dependency-driven, not the order below (item 4 first, because every
+> later refusal had to be an error rather than a panic).
+>
+> | Item | Commit | What landed |
+> | --- | --- | --- |
+> | 4. errors, not panics | `6a31f52cea` | `bwrap_argv` returns `Result<_, bwrap::Error>`; `sandbox()` prints `mysbx: …` and exits 1; every `should_panic`/`catch_unwind` test converted, plus subprocess tests for both variants |
+> | 1. `.git` trust | `3b353e3164` | targets must look like git metadata, must not be `/`, home, an ancestor of either, a directory containing the repo, or the sidecar — and must be **approved** in the new `git-dirs` list of a trusted layer. Only an explicit `mysbx init` snapshots what it found; the implicit init approves nothing |
+> | 2. symlinked dest parents | `95b1b43401` | a dest may not lie below a writable bind (repo, git dirs, earlier `rw` mounts, and `ro` re-exposures of writable content). Two previously allowed patterns are refused deliberately |
+> | 5. sandbox home | `bc9d181137` | a dest equal to (or above) `/mysbx-home` is refused; strict descendants stay the seeding path. The item's `/mysbx` example does not apply — it is a lookalike, not an ancestor |
+> | 3. nix integration | `a0c2a86aee` | `/nix/var/nix` rides with `--share-net` (and a mount may not source it under a denied network); the host `nix.conf` is never bound — a generated, credential-free one comes from the wrapper via `MYSBX_NIX_CONF` and is named in the report |
+> | 6. generated grants | `9b68a4dbb4` | baseline entries get `/mysbx-home/…` destinations, a NixOS assertion refuses any entry landing in the host home, and D7 states the decision: user entries are unconditional mounts **and** the grant tree |
+>
+> Test count 171 → 221. Two review remarks were answered with a
+> correction rather than a change: `/mysbx` is not a path-component
+> ancestor of `/mysbx-home` (item 5), and the sidecar — which lives
+> outside the repo and is never mounted — may approve `git-dirs`, which
+> D7 now documents as its one deliberate narrow-not-widen exception
+> (item 1).
+
 | Original finding          | Re-review                                                                             |
 | ------------------------- | ------------------------------------------------------------------------------------- |
 | 1. Protected destinations | Partial; lexical bypasses fixed, symlink aliases remain                               |
