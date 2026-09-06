@@ -82,12 +82,15 @@ fn make_repo(base: &Path, name: &str) -> (PathBuf, PathBuf) {
 
 /// The minimal golden fixture (tests/assets/argv/minimal.txt) with the
 /// synthetic repo path substituted — the expected `--dry-run` output of
-/// the smallest real invocation.
+/// the smallest real invocation. argv[0] (the backend executable,
+/// review-1 finding 7) is `bwrap`: the tests run without the Nix
+/// wrapper's `MYSBX_BWRAP` pin, so the fallback applies.
 fn expected_minimal_argv(repo: &Path) -> String {
     let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/assets/argv/minimal.txt");
-    std::fs::read_to_string(&golden)
+    let argv = std::fs::read_to_string(&golden)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", golden.display()))
-        .replace("/synth/repo", &repo.to_string_lossy())
+        .replace("/synth/repo", &repo.to_string_lossy());
+    format!("bwrap\n{argv}")
 }
 
 /// A standard fixture: a repo with sidecar at `base/repo`, empty home and
@@ -392,8 +395,9 @@ fn verbose_run_form_reports_the_command_payload() {
         report.contains("payload:        command echo hi"),
         "{report}"
     );
-    // The argv is still there, unprefixed and last.
-    assert!(argv_block(&stdout).starts_with("--clearenv\n"), "{stdout}");
+    // The argv is still there, unprefixed and last, argv[0] first
+    // (review-1 finding 7).
+    assert!(argv_block(&stdout).starts_with("bwrap\n--clearenv\n"), "{stdout}");
 }
 
 #[test]
@@ -547,7 +551,7 @@ fn backend_bubblewrap_is_accepted() {
     let (inv, _, _) = fixture_with_backend("backend-ok", &["--dry-run"]);
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(stdout.starts_with("--clearenv\n"), "stdout: {stdout}");
+    assert!(stdout.starts_with("bwrap\n--clearenv\n"), "stdout: {stdout}");
 }
 
 // ---- environment forwarding and payload handling ---------------------------
@@ -894,4 +898,28 @@ fn cd_tilde_works_inside_the_sandbox() {
     // … and it is empty apart from what the payload just created, i.e.
     // it is not the host home.
     assert!(stdout.contains("no-ssh"), "host home leaked: {stdout}");
+}
+
+#[test]
+fn dry_run_prints_the_pinned_backend_as_argv0() {
+    // Review-1 finding 7: --dry-run audited only the bwrap ARGUMENTS —
+    // argv[0] (the MYSBX_BWRAP the Nix wrapper pins, i.e. the wrapped
+    // store path) was invisible because the early return came before
+    // the variable was read. It must be the FIRST line of the argv
+    // block, so the pinned backend is verifiable.
+    let (inv, repo, _) = fixture_user_backend("dry-run-argv0", &["--dry-run"]);
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    // A synthetic (never executed) store path in Nix's placeholder
+    // style: 32 zero characters instead of a real hash.
+    cmd.env("MYSBX_BWRAP", "/nix/store/0000000000000000000000000000000-mysbx-bwrap/bin/bwrap");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.starts_with("/nix/store/0000000000000000000000000000000-mysbx-bwrap/bin/bwrap\n"),
+        "argv[0] must be the pinned backend: {stdout}"
+    );
+    // And the rest is the ordinary argv block.
+    let rest: String = stdout.lines().skip(1).map(|l| format!("{l}\n")).collect();
+    assert_eq!(rest, expected_minimal_argv(&repo).strip_prefix("bwrap\n").unwrap());
 }

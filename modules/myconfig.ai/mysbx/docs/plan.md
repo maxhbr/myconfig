@@ -108,7 +108,8 @@ All six items are done; the MVP is complete.
 
 ### Definition of done
 
-- `cd <repo> && mysbx run --dry-run -- ls /` prints the argv, one argument per
+- `cd <repo> && mysbx run --dry-run -- ls /` prints the bwrap executable
+  (argv[0], review-1 finding 7) followed by the argv, one argument per
   line, on stdout, and exits `0`.
 - The golden tests pin that argv for: minimal config, a `ro` and a `rw` mount,
   `network = false`, an `[env]` entry, and a sidecar that narrows the user

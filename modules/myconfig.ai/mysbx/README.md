@@ -33,9 +33,11 @@ $ mysbx
 ```
 
 `mysbx run -- CMD...` runs one command in the sandbox;
-`mysbx run --dry-run -- CMD...` prints the exact `bwrap` argv it would
-execute (one argument per line) and exits without running it — the
-acceptance surface described in [`docs/design/cli.md`](./docs/design/cli.md).
+`mysbx run --dry-run -- CMD...` prints the exact `bwrap` invocation it
+would execute — argv[0] (the backend binary, the wrapped store path under
+Nix) first, then one argument per line — and exits without running it;
+the acceptance surface described in
+[`docs/design/cli.md`](./docs/design/cli.md).
 
 `--verbose` prints what the run is configured to do before it happens
 (cli.md D10) — on stdout, every line prefixed `## `, so it can be combined
@@ -64,6 +66,7 @@ $ mysbx --verbose --dry-run
 ## tools PATH:     /nix/store/…-mysbx-tools/bin
 ## payload:        shell /nix/store/…-bash/bin/bash
 ## mode:           dry run — the argv follows, nothing is executed
+/nix/store/…-bubblewrap/bin/bwrap
 --clearenv
 --unshare-all
 …

@@ -93,7 +93,9 @@ for `init` go to stdout and are prefixed `## ` (see the README transcript).
 Nothing else is written to stdout, so the tool stays pipe-friendly.
 
 The one deliberate exception is the `--dry-run` argv: it is printed to
-stdout **unprefixed, one argument per line**, because it is a *result*,
+stdout **unprefixed, one argument per line**, the backend executable
+(argv[0], the pinned `MYSBX_BWRAP` value) first — the executable is part
+of what `--dry-run` audits (review-1 finding 7). It is a *result*,
 not a diagnostic. Golden tests compare it byte for byte, and
 `mysbx run --dry-run -- ls | wc -l` is meaningful.
 

@@ -15,9 +15,9 @@
 //! backend's argv. `--dry-run` and `--verbose` are *global* flags (before
 //! the subcommand, in any order): `--dry-run` runs the whole pipeline —
 //! resolve, guards, load, merge, backend check, argv build — and stops
-//! immediately before `exec`, printing the argv one argument per line on
-//! stdout; `--verbose` prints the `## `-prefixed run report before that
-//! (cli.md D10).
+//! immediately before `exec`, printing the backend executable followed
+//! by the argv, one argument per line, on stdout; `--verbose` prints the
+//! `## `-prefixed run report before that (cli.md D10).
 
 pub mod bwrap;
 pub mod config;
@@ -315,9 +315,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
 
     // 7. print the argv, or exec it.
     if dry_run {
-        // One argument per line, no prefix, no quoting: this is the
-        // result, not a diagnostic (cli.md D9), so golden tests compare
-        // bytes and `mysbx run --dry-run -- ls | wc -l` is meaningful.
+        // argv[0] first, then one argument per line, no prefix, no
+        // quoting: this is the *result*, not a diagnostic (cli.md D9),
+        // and the executable is part of what `--dry-run` audits — the
+        // packaging definition of done requires the wrapped store path
+        // as argv[0], which was invisible before (review-1 finding 7:
+        // `MYSBX_BWRAP` was read only after the early return). Golden
+        // tests compare bytes and `mysbx run --dry-run -- ls | wc -l`
+        // stays meaningful — one line more.
+        println!("{bwrap_bin}");
         for arg in &argv {
             println!("{arg}");
         }
