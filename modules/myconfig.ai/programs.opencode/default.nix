@@ -119,19 +119,30 @@ let
     mode = "ro";
   };
 
-  mysbxOpencodeMounts = map mysbxHomeMount [
-    # The generated config (providers, permission rules, agents, commands,
-    # skills — everything the `programs.opencode` block below writes below
-    # `~/.config/opencode`) — always present because `programs.opencode`
-    # unconditionally writes at least `opencode/AGENTS.md`.
-    ".config/opencode"
-    # MCP server definitions (`programs.mcp` writes `~/.config/mcp/mcp.json`),
-    # activated by `enableMcpIntegration` below. Mount the whole `mcp`
-    # directory rather than the single file: mysbx mounts must exist
-    # eagerly, and the directory is created unconditionally by
-    # `programs.mcp.enable` (the file only when servers are configured).
-    ".config/mcp"
-  ];
+  # Home Manager writes `~/.config/mcp/mcp.json` only when at least one
+  # MCP server is configured (upstream `modules/programs/mcp.nix`:
+  # `xdg.configFile = mkIf (cfg.servers != { })`), and with no file there
+  # is no `~/.config/mcp` DIRECTORY either. Since a missing mount source
+  # is a hard error on every mysbx run of the host (D8) — not just for
+  # opencode — the mount is gated on the same condition, read from the
+  # user whose config layer mysbx generates. Same pattern (and the same
+  # laziness argument) as `hmRipgrep` in ../mysbx/default.nix.
+  hmMcpServers = config.home-manager.users.mhuber.programs.mcp.servers or { };
+
+  mysbxOpencodeMounts = map mysbxHomeMount (
+    [
+      # The generated config (providers, permission rules, agents,
+      # commands, skills — everything the `programs.opencode` block below
+      # writes below `~/.config/opencode`) — always present because the
+      # `settings` set below is non-empty, so Home Manager writes at
+      # least `opencode/opencode.json`.
+      ".config/opencode"
+    ]
+    # MCP server definitions, activated by `enableMcpIntegration` below.
+    # The whole `mcp` directory rather than the single file: one mount
+    # covers whatever Home Manager writes there.
+    ++ lib.optional (hmMcpServers != { }) ".config/mcp"
+  );
 
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   contextWindowLookup = lib.listToAttrs (
