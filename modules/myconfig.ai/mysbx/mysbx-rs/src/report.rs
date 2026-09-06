@@ -70,6 +70,13 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
 
     p(format!("mysbx {} — run configuration", crate::VERSION));
     p(format!("repo root:      {}", r.repo.root.display()));
+    // Review-1 finding 4: git metadata a `.git` FILE points at is bound
+    // rw into the sandbox — it must be said out loud, like the rest of
+    // the run configuration, because it is host state outside the repo
+    // the sandbox can write.
+    for g in &r.repo.git_dirs {
+        p(format!("git metadata:   {} (bound rw)", g.display()));
+    }
     p(format!(
         "sidecar:        {} ({})",
         r.repo.sidecar.display(),
@@ -212,6 +219,7 @@ mod tests {
         let repo = Repo {
             root: PathBuf::from("/synth/repo"),
             sidecar: PathBuf::from("/synth/repo.mysbx"),
+            git_dirs: Vec::new(),
         };
         let mut env = BTreeMap::new();
         env.insert("EDITOR".to_owned(), "nvim".to_owned());

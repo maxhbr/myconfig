@@ -111,8 +111,9 @@ the sidecar directory exists), both configuration file paths with whether
 each was loaded or absent (an absent file is an empty layer), the merged
 backend, the network sense (`shared` / `denied`), every mount in
 declaration order — the implicit repo bind first (config.md D13), then the
-configured ones with mode, source, in-sandbox destination and the layer
-that contributed it — the forwarded host variables and the `[env]`
+git metadata directories its `.git` file points at (config.md D13), then
+the configured mounts with mode, source, in-sandbox destination and the
+layer that contributed it — the forwarded host variables and the `[env]`
 variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH`
 values after their fallbacks, the payload, and whether the run will exec
 or stop at the argv.

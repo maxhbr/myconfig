@@ -25,6 +25,7 @@ fn synth_repo() -> Repo {
     Repo {
         root: PathBuf::from("/synth/repo"),
         sidecar: PathBuf::from("/synth/repo.mysbx"),
+        git_dirs: Vec::new(),
     }
 }
 
@@ -664,4 +665,83 @@ fn hidden_mounts_are_judged_after_dest_normalization() {
     cfg.mounts
         .push(make_mount("/synth/other", Some("/synth/u/../u"), Mode::Rw));
     bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+fn worktree_git_dirs_are_bound_rw() {
+    // Review-1 finding 4: the `.git` FILE's targets must be bound rw at
+    // their real host paths, common dir BEFORE the per-worktree gitdir,
+    // right after the repo bind and before any configured mount.
+    let repo = Repo {
+        root: PathBuf::from("/synth/repo"),
+        sidecar: PathBuf::from("/synth/repo.mysbx"),
+        git_dirs: vec![
+            PathBuf::from("/synth/main/.git"),
+            PathBuf::from("/synth/main/.git/worktrees/wt"),
+        ],
+    };
+    let argv = bwrap_argv(
+        &base(true),
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    );
+    // Positions: repo bind, then common dir, then gitdir, all rw binds.
+    let repo_bind = pos_pair(&argv, "--bind", "/synth/repo");
+    let common = pos_pair(&argv, "--bind", "/synth/main/.git");
+    let gitdir = pos_pair(&argv, "--bind", "/synth/main/.git/worktrees/wt");
+    assert!(repo_bind < common, "repo before common dir");
+    assert!(common < gitdir, "common dir before gitdir");
+    // ro binds must not have been used for git metadata.
+    assert_eq!(pos_ro_bind(&argv, "/synth/main/.git"), None);
+}
+
+#[test]
+fn plain_repo_adds_no_git_binds() {
+    // git_dirs empty: the argv has exactly one --bind for the repo and
+    // no other.
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    );
+    assert_eq!(
+        argv.windows(3)
+            .filter(|w| w[0] == "--bind")
+            .count(),
+        1,
+        "only the repo bind"
+    );
+}
+
+/// Index of the `flag src` pair, panicking when absent.
+fn pos_pair(argv: &[String], flag: &str, src: &str) -> usize {
+    argv.windows(2)
+        .position(|w| w[0] == flag && w[1] == src)
+        .unwrap_or_else(|| panic!("missing {flag} {src}"))
+}
+
+/// Index of the `--ro-bind src` pair, `None` when absent.
+fn pos_ro_bind(argv: &[String], src: &str) -> Option<usize> {
+    argv.windows(2).position(|w| w[0] == "--ro-bind" && w[1] == src)
+}
+
+#[test]
+#[should_panic(expected = "would hide a git metadata directory")]
+fn mount_covering_a_git_dir_is_refused() {
+    // The git dir binds are implicit infrastructure like the repo: a
+    // configured mount covering one would silently break `git status`
+    // inside the sandbox.
+    let repo = Repo {
+        root: PathBuf::from("/synth/repo"),
+        sidecar: PathBuf::from("/synth/repo.mysbx"),
+        git_dirs: vec![PathBuf::from("/synth/main/.git/worktrees/wt")],
+    };
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/synth/main"), Mode::Rw));
+    bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params());
 }

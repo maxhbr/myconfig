@@ -155,9 +155,12 @@ trivially escape — but the shared network and the permissive base are real
 exposure, and the doc says so instead of overstating the confinement.
 
 What does hold in every backend, without exception: **nothing from the host
-filesystem is available unless it is declared** — the repo itself (D13) and
-the explicit `[[mounts]]` entries. New backends must uphold this even when
-the backend's own default is permissive.
+filesystem is available unless it is declared** — the repo itself (D13),
+the git metadata directories its `.git` file points at when the repo is a
+linked worktree or submodule (D13: they are part of the repo's own git
+data, discovered with it and shown in the report), and the explicit
+`[[mounts]]` entries. New backends must uphold this even when the
+backend's own default is permissive.
 
 ### D10: The sidecar also holds state
 
@@ -205,6 +208,14 @@ checkout is this sandbox for", of which only one is visible in the
 filesystem layout. Making the repo inexpressible removes that class
 entirely; the only way to point `mysbx` at another checkout is to stand in
 it (cli.md D1).
+
+When the repo root carries a `.git` FILE (linked worktree, submodule),
+the git metadata that file points at is part of the repo's own data:
+the gitdir and, when a `commondir` file names one, the common dir are
+discovered with the repo, bound read-write at their real host paths
+(narrowly — only those two directories, not their parents), listed in
+the report, and are equally inexpressible in configuration: a mount
+that would cover them is refused like one that covers the repo root.
 
 ## Non-goals
 

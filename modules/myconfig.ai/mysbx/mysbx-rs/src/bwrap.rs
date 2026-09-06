@@ -79,7 +79,9 @@ pub struct Params<'a> {
 ///    `/nix/store` ro, `/usr/bin` ro, `--proc /proc`, `--dev /dev`,
 ///    `/etc/localtime` ro, tmpfs `/tmp`, tmpfs [`SANDBOX_HOME`]
 /// 4. the repo itself, read-write, at its real host path
-///    (docs/design/config.md D13)
+///    (docs/design/config.md D13), followed by the git metadata
+///    directories its `.git` FILE points at, also rw (review-1 finding 4:
+///    worktrees and submodules are unusable without them)
 /// 5. the configured mounts, in declaration order, `--ro-bind` / `--bind`,
 ///    each `dest` defaulting to its source path (mount order is argv
 ///    order; a later rw bind nested inside an earlier ro bind is a real
@@ -121,8 +123,16 @@ pub fn bwrap_argv(
     // host paths — machine-independent).
     argv.extend(base_binds());
 
-    // 4. the repo, rw, at its real host path (D13).
+    // 4. the repo, rw, at its real host path (D13), plus the git
+    // metadata directories a `.git` FILE points at outside the root
+    // (linked worktrees, submodules — review-1 finding 4): git needs
+    // them rw to update refs and the index. Common dir first so a
+    // gitdir nested inside it stays reachable in the degenerate
+    // layout (a later equal-or-ancestor bind would hide it).
     bind(&mut argv, false, &root, None);
+    for git_dir in &repo.git_dirs {
+        bind(&mut argv, false, &git_dir.to_string_lossy(), None);
+    }
 
     // 5. configured mounts, in declaration order; dest defaults to the
     // canonicalized source path. A `dest` may never be related to a
@@ -154,7 +164,7 @@ pub fn bwrap_argv(
             );
         }
     }
-    check_hidden_mounts(&cfg.mounts, &root);
+    check_hidden_mounts(&cfg.mounts, &root, &repo.git_dirs);
     for m in &cfg.mounts {
         bind(&mut argv, m.mode == Mode::Ro, &m.path, m.dest.as_deref());
     }
@@ -303,24 +313,40 @@ fn check_dest(dest: &str) -> Option<&'static str> {
 /// equal dest is caught by the merge — a sidecar rw needs an rw
 /// grant for its SOURCE, which shares the grant tree — so what remains
 /// here is same-layer last-wins, the layer's own doing. The implicit
-/// repo bind (`repo_root`, always rw, D13) counts as the FIRST entry
-/// — except that a dest exactly equal to the repo root is still
-/// refused: the repo is not configuration, and a mount that replaces
-/// it (even rw) changes what `--chdir` lands in, so no mount may land
-/// on or above it. Panics, like [`check_dest`]: this guards the argv
-/// layout, and a config that cannot be laid out safely must not run.
-fn check_hidden_mounts(mounts: &[Mount], repo_root: &str) {
-    let repo_dest = normalize(repo_root);
+/// binds — the repo root (always rw, D13) and the git metadata
+/// directories a `.git` FILE points at (review-1 finding 4) — count as
+/// entries BEFORE every configured mount, and an EQUAL dest is
+/// refused there too: implicit binds are not configuration, and a
+/// mount that replaces the repo (even rw) changes what `--chdir` lands
+/// in; one that covers a git dir breaks `git` inside the sandbox.
+/// Panics, like [`check_dest`]: this guards the argv layout, and a
+/// config that cannot be laid out safely must not run.
+fn check_hidden_mounts(mounts: &[Mount], repo_root: &str, git_dirs: &[PathBuf]) {
+    // Implicit binds come before every configured mount: the repo root
+    // and the git metadata directories a `.git` file points at. A
+    // configured mount whose dest covers any of them replaces that
+    // subtree wholesale. The implicit set is discovered per run, so it
+    // cannot be anticipated in configuration: covering it is refused in
+    // EVERY form, equal dest included, because the mount would not just
+    // shadow an entry — it would replace implicit infrastructure.
+    let mut implicit: Vec<(PathBuf, &str)> =
+        vec![(normalize(repo_root), "the repo working tree")];
+    for g in git_dirs {
+        implicit.push((normalize(&g.to_string_lossy()), "a git metadata directory"));
+    }
     for (later_i, later) in mounts.iter().enumerate() {
         let later_dest = normalize(later.dest.as_deref().unwrap_or(&later.path));
-        // The repo bind comes before every configured mount.
-        if repo_dest.starts_with(&later_dest) {
-            panic!(
-                "mount {} ({}) would hide the repo working tree {} — the repo is implicit and always mounted rw; mounts may only narrow BELOW it, never cover it",
-                later_dest.display(),
-                later.path,
-                repo_dest.display(),
-            );
+        // The implicit binds come before every configured mount; a dest
+        // at-or-below them (equal included) covers them.
+        for (implicit_dest, what) in &implicit {
+            if implicit_dest.starts_with(&later_dest) {
+                panic!(
+                    "mount {} ({}) would hide {} — implicit binds are not configuration and always come first; mounts may only narrow BELOW them, never cover them",
+                    later_dest.display(),
+                    later.path,
+                    what,
+                );
+            }
         }
         for earlier in &mounts[..later_i] {
             let earlier_dest =
@@ -401,6 +427,7 @@ mod tests {
         Repo {
             root: PathBuf::from("/synth/repo"),
             sidecar: PathBuf::from("/synth/repo.mysbx"),
+            git_dirs: Vec::new(),
         }
     }
 
