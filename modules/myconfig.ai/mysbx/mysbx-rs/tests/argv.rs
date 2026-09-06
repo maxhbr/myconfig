@@ -64,6 +64,7 @@ fn params() -> Params<'static> {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
         nix_conf: None,
+        policy_paths: &[],
     }
 }
 
@@ -962,6 +963,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
         nix_conf: Some("/synth/store/mysbx-nix.conf"),
+        policy_paths: &[],
     };
     let argv = bwrap_argv(
         &base(true),
@@ -1614,4 +1616,156 @@ fn an_unrelated_nix_store_source_stays_mountable_without_the_network() {
     cfg.mounts
         .push(make_mount("/nix/store/extra", Some("/opt/extra"), Mode::Ro));
     bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
+
+// ---- trusted policy files stay out of writable binds (review-3 item 3) ----
+
+#[test]
+fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
+    // The review's scenario: for repo ~/src/r the sidecar is
+    // ~/src/r.mysbx/config.toml. An `rw` mount of ~/src — relocated or
+    // not — makes that file payload-writable, and a writable sidecar
+    // steers the NEXT run: `git-dirs` approvals can be added, the
+    // `.git` pointer rewritten to match.
+    let repo = synth_repo(); // root /synth/repo, sidecar /synth/repo.mysbx
+    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth", Some("/all-src"), Mode::Rw));
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
+    // No relocation needed: an `rw` mount that sources the sidecar
+    // directory directly is the same hole, dest aside.
+    let repo = synth_repo();
+    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/repo.mysbx", Some("/policy"), Mode::Rw));
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_read_only_mount_of_the_sidecar_stays_allowed() {
+    // The carve-out: `ro` cannot write the file in place, so reviewing
+    // the sidecar from inside the sandbox stays possible. (A symlink
+    // planted in it is the accident barrier, D9 — and no dest below it
+    // is allowed anyway, by the writable-alias rule.)
+    let repo = synth_repo();
+    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/repo.mysbx", Some("/policy"), Mode::Ro));
+    bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
+}
+
+#[test]
+fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
+    // Ordinary rw grants elsewhere on the host are the feature, not
+    // the hole: only a source CONTAINING a policy file is refused.
+    let repo = synth_repo();
+    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/work", Some("/work"), Mode::Rw));
+    bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
+}
+
+#[test]
+fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
+    // The repo bind is rw too: a user config that lives inside the
+    // work tree (or a sidecar nested into it, however that happened)
+    // is refused rather than silently exposed. This covers the case
+    // the review spelled "including the implicit repo bind" for the
+    // daemon — same reasoning, different protected path.
+    let repo = synth_repo();
+    let policy = [PathBuf::from("/synth/repo/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let cfg = base(true);
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_git_dir_exposing_a_policy_file_is_refused() {
+    // Git metadata is rw as well (D13); an approved dir containing a
+    // policy file is the same widening hole.
+    let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
+    let policy = [PathBuf::from("/synth/main/.git/worktrees/wt/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
+    // The existence filter, documented: an absent config granted
+    // nothing, so an `rw` source containing its would-be location is
+    // allowed THIS run. The guarantee is temporal, not lexical: the
+    // payload can create the file there, and the run that follows
+    // refuses the same `rw` source (the file then exists).
+    let repo = synth_repo();
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &[], // nothing exists -> nothing protected
+    };
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth", Some("/all-src"), Mode::Rw));
+    bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
 }

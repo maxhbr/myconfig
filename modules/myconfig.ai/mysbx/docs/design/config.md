@@ -133,7 +133,14 @@ never mentioned. The rationale is that the approval is *per repo* by
 nature — every worktree points at a different metadata directory, so a
 host-wide list could only be a coarse checkout root — and that the
 sidecar is not repo-controlled: it lives outside the repo (D2) and is
-never mounted into the sandbox, so the payload cannot write it. What
+never mounted into the sandbox, so the payload cannot write it. That
+"cannot write it" is enforced, not assumed (review-3 item 3): an `rw`
+mount — or the repo bind, or a git dir — whose source contains the
+sidecar config or the user config is refused with a policy-file error,
+because a policy file the sandbox can write steers the NEXT run of
+itself: `git-dirs` approvals can be added, the `.git` pointer rewritten
+to match. Read-only mounts of the sidecar stay allowed (reviewing it
+from inside the sandbox is legitimate; `ro` cannot write it in place). What
 the exception does NOT do is let the repository approve itself: the
 `.git` pointer inside the repo grants nothing, an implicit init records
 nothing, and turning a discovered directory into an approval is an
