@@ -161,9 +161,13 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             "state dirs:     {} (rw, persisted in the sidecar)",
             r.merged.state_dirs.len()
         ));
+        // The in-sandbox path in full (`/mysbx-home/<entry>`), not the
+        // bare entry: the report is read against the argv, where the
+        // dest is spelled out, and `/<entry>` would read like a path at
+        // the sandbox root.
         for entry in &r.merged.state_dirs {
             p(format!(
-                "  /{entry} <-> {}  [state]",
+                "  {SANDBOX_HOME}/{entry} <-> {}  [state]",
                 r.repo
                     .sidecar
                     .join("state")
@@ -533,7 +537,7 @@ mod tests {
             "{joined}"
         );
         assert!(
-            joined.contains("  /.local/share/opencode <-> /synth/repo.mysbx/state/.local/share/opencode  [state]"),
+            joined.contains("  /mysbx-home/.local/share/opencode <-> /synth/repo.mysbx/state/.local/share/opencode  [state]"),
             "{joined}"
         );
         assert!(

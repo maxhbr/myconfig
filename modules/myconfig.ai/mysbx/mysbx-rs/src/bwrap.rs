@@ -232,6 +232,7 @@ pub fn bwrap_argv(
     // `[[mounts]]` entry may cover their dests (the hidden-mount
     // check below treats them like the repo and the git dirs), and
     // no entry may nest inside another — see [`check_state_dirs`].
+    check_state_dirs(&cfg.state_dirs)?;
     let state_binds: Vec<(String, String)> = cfg
         .state_dirs
         .iter()
@@ -246,7 +247,6 @@ pub fn bwrap_argv(
             )
         })
         .collect();
-    check_state_dirs(&cfg.state_dirs)?;
     for (_src, dest) in &state_binds {
         // Defense in depth: the parser already rejects every spelling
         // that could leave the sandbox home, and a state dest is a

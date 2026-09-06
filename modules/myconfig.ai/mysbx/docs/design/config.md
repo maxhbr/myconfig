@@ -495,7 +495,7 @@ Why a separate key instead of `[[mounts]]`:
 
 Layer semantics:
 
-- Both trusted layers declare (`config-dirs` in the user config is the
+- Both trusted layers declare (`state-dirs` in the user config is the
   host-wide set — the agent state dirs of every sandbox of this user —
   and a sidecar adds per-repo ones). The lists concatenate, user layer
   first; duplicates are dropped (first occurrence wins), unlike mounts,

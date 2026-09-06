@@ -888,7 +888,7 @@ fn verbose_report_lists_state_dirs() {
     assert!(report.contains("state dirs:     1"), "{report}");
     assert!(
         report.contains(&format!(
-            "  /.local/share/opencode <-> {}/state/.local/share/opencode  [state]",
+            "  /mysbx-home/.local/share/opencode <-> {}/state/.local/share/opencode  [state]",
             side.display()
         )),
         "{report}"
