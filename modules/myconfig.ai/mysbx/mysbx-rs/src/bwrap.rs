@@ -15,7 +15,7 @@
 //! earlier wider one and a refactor must not reorder sections 3–5
 //! ("Watch out" in the spec).
 
-use crate::config::Mode;
+use crate::config::{Mode, Mount};
 use crate::merge::Merged;
 use crate::repo::Repo;
 use std::collections::BTreeMap;
@@ -83,9 +83,12 @@ pub struct Params<'a> {
 /// 5. the configured mounts, in declaration order, `--ro-bind` / `--bind`,
 ///    each `dest` defaulting to its source path (mount order is argv
 ///    order; a later rw bind nested inside an earlier ro bind is a real
-///    pattern the MVP must preserve). A dest that would shadow or
-///    overwrite a base path — via `..` components or as an ancestor or
-///    descendant of one — is refused (see [`check_dest`]).
+///    pattern the MVP must preserve). Two layout rules are enforced:
+///    a dest that would shadow or overwrite a base path — via `..`
+///    components or as an ancestor or descendant of one — is refused
+///    (see [`check_dest`]); and a later dest that would hide an
+///    earlier mount — or the implicit repo bind — is refused
+///    (see [`check_hidden_mounts`]).
 /// 6. environment via `--setenv`, in this precedence: host-forwarded
 ///    variables first, then `cfg.env` (which wins by being set later),
 ///    then the infrastructure variables `HOME` and `PATH` last — set
@@ -127,9 +130,15 @@ pub fn bwrap_argv(
     // order with later-mounts-win, so a dest of `/tmp`, `/`, `/proc` …
     // would overwrite a base bind, and a dest of `/nix` would hide the
     // protected `/nix/store` below it — either way reopening exactly
-    // the hole the base table closes. The merge (D7/D8) validates
-    // grants; this validates destinations, because the base list lives
-    // here.
+    // the hole the base table closes. And no mount may HIDE an earlier
+    // one: a later bind whose dest is a strict ancestor of an earlier
+    // mount's dest replaces that subtree wholesale, so the earlier
+    // entry would be dead configuration (see [`check_hidden_mounts`]).
+    // The merge (D7/D8) validates grants; these validate the argv
+    // layout, because the base list and the order semantics live here.
+    // The protected-dest check runs FIRST: a dest that overwrites a base
+    // bind is the sharper diagnosis, and the repo-covering check would
+    // otherwise mask it with a generic `would hide` for dests like `/`.
     for m in &cfg.mounts {
         let dest = m.dest.as_deref().unwrap_or(&m.path);
         if let Some(protected) = check_dest(dest) {
@@ -144,6 +153,9 @@ pub fn bwrap_argv(
                  refusing to build the argv"
             );
         }
+    }
+    check_hidden_mounts(&cfg.mounts, &root);
+    for m in &cfg.mounts {
         bind(&mut argv, m.mode == Mode::Ro, &m.path, m.dest.as_deref());
     }
 
@@ -277,6 +289,56 @@ fn check_dest(dest: &str) -> Option<&'static str> {
         }
     }
     None
+}
+
+/// A later bind whose dest is a strict ancestor of an earlier mount's
+/// dest hides that earlier mount entirely: bubblewrap applies binds
+/// in argv order with later-wins per subtree, so the wide bind simply
+/// replaces the subtree the narrow one landed on. That silently undoes
+/// restrictions — `/home/u/.ssh` (ro) followed by `/home/u` (rw) leaves
+/// `.ssh` writable — and silently kills grants the other way round
+/// (`/home/u` rw followed by `/home/u/.ssh` ro is the documented safe
+/// direction and stays allowed). Equal dests do not hide: re-binding
+/// the same subtree narrows by shadowing. Cross-layer escalation on an
+/// equal dest is caught by the merge — a sidecar rw needs an rw
+/// grant for its SOURCE, which shares the grant tree — so what remains
+/// here is same-layer last-wins, the layer's own doing. The implicit
+/// repo bind (`repo_root`, always rw, D13) counts as the FIRST entry
+/// — except that a dest exactly equal to the repo root is still
+/// refused: the repo is not configuration, and a mount that replaces
+/// it (even rw) changes what `--chdir` lands in, so no mount may land
+/// on or above it. Panics, like [`check_dest`]: this guards the argv
+/// layout, and a config that cannot be laid out safely must not run.
+fn check_hidden_mounts(mounts: &[Mount], repo_root: &str) {
+    let repo_dest = normalize(repo_root);
+    for (later_i, later) in mounts.iter().enumerate() {
+        let later_dest = normalize(later.dest.as_deref().unwrap_or(&later.path));
+        // The repo bind comes before every configured mount.
+        if repo_dest.starts_with(&later_dest) {
+            panic!(
+                "mount {} ({}) would hide the repo working tree {} — the repo is implicit and always mounted rw; mounts may only narrow BELOW it, never cover it",
+                later_dest.display(),
+                later.path,
+                repo_dest.display(),
+            );
+        }
+        for earlier in &mounts[..later_i] {
+            let earlier_dest =
+                normalize(earlier.dest.as_deref().unwrap_or(&earlier.path));
+            if later_dest == earlier_dest {
+                continue; // equal dests: shadowing re-bind, not hiding
+            }
+            if earlier_dest.starts_with(&later_dest) {
+                panic!(
+                    "mount {} ({}) would hide earlier mount {} ({}) — bubblewrap applies binds in order, so a wider dest must come FIRST; swap the entries or drop one",
+                    later_dest.display(),
+                    later.path,
+                    earlier_dest.display(),
+                    earlier.path,
+                );
+            }
+        }
+    }
 }
 
 /// Lexically resolve `.` and `..` components of an absolute path —

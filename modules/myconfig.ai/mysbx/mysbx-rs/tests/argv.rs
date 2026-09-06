@@ -548,3 +548,120 @@ fn config_env_cannot_repoint_home_or_path() {
         ]
     );
 }
+
+// ---- hidden mounts (review-1 finding 3) -------------------------------------
+
+#[test]
+#[should_panic(expected = "would hide earlier mount")]
+fn parent_after_child_hides_the_child_and_panics() {
+    // The review scenario: ro `.ssh` FIRST, rw `/home/u` SECOND. The
+    // later wide bind replaces the subtree the narrow one landed on,
+    // leaving `.ssh` writable — refuse to build such an argv at all.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/u/.ssh", None, Mode::Ro));
+    cfg.mounts.push(make_mount("/synth/u", None, Mode::Rw));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+fn child_after_parent_is_the_safe_direction_and_stays_allowed() {
+    // Wide rw FIRST, narrow ro SECOND: the narrow bind lands ON TOP of
+    // the wide one — the documented narrowing-by-shadowing pattern.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/u", None, Mode::Rw));
+    cfg.mounts.push(make_mount("/synth/u/.ssh", None, Mode::Ro));
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    );
+    assert_eq!(
+        argv.windows(3)
+            .filter(|w| w[0] == "--ro-bind" && w[2] == "/synth/u/.ssh")
+            .count(),
+        1,
+        "the narrow ro bind is present"
+    );
+}
+
+#[test]
+fn equal_dest_rebind_does_not_panic() {
+    // Same dest twice: shadowing re-bind, policed by the merge's grant
+    // checks, not a hidden mount.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/a", Some("/synth/dst"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/b", Some("/synth/dst"), Mode::Rw));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+#[should_panic(expected = "would hide earlier mount")]
+fn hiding_is_judged_on_dest_not_source() {
+    // Sources are unrelated; the DESTS make the later mount hide the
+    // earlier one. `dest` defaults to the source path when absent.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/elsewhere", Some("/synth/u/.ssh"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/other", Some("/synth/u"), Mode::Rw));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+fn sibling_dests_and_untouched_rebinds_stay_allowed() {
+    // No ancestor relation, no hiding; equal dest via defaulting also
+    // fine (already covered), and a later mount BELOW an earlier one in
+    // a different subtree is plain independent configuration.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/u", None, Mode::Rw));
+    cfg.mounts.push(make_mount("/synth/v", None, Mode::Rw));
+    cfg.mounts
+        .push(make_mount("/synth/w", Some("/synth/u/w"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+#[should_panic(expected = "would hide the repo working tree")]
+fn mount_covering_the_repo_is_refused() {
+    // The repo bind (always rw, D13) is implicit and comes FIRST; a
+    // configured mount whose dest covers it would replace what --chdir
+    // lands in — equal dest included, the repo is not configuration.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/data", Some("/synth"), Mode::Rw));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+#[should_panic(expected = "would hide the repo working tree")]
+fn mount_exactly_on_the_repo_is_refused() {
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/synth/repo"), Mode::Rw));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+fn mount_below_the_repo_stays_allowed() {
+    // Narrowing BELOW the repo root is the legitimate pattern.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/synth/repo/sub"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
+
+#[test]
+#[should_panic(expected = "would hide earlier mount")]
+fn hidden_mounts_are_judged_after_dest_normalization() {
+    // `..` components must be collapsed BEFORE the ancestor comparison,
+    // else `/synth/u/../u` style dests slip past the hiding guard just
+    // like they slipped past the protected-dest guard before finding 1.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/u/.ssh", None, Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/other", Some("/synth/u/../u"), Mode::Rw));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params());
+}
