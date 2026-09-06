@@ -273,8 +273,20 @@ in
             '';
           };
           stateDirs = mkOption {
+            # The eval-time mirror of the CLI's entry validator
+            # (mysbx-rs/src/config.rs `state_dir_path`): the same
+            # rejected spellings, so a generated layer fails at build
+            # time instead of on every run of every sandbox. Kept
+            # literal rather than clever — it must be readable next to
+            # the Rust function it mirrors.
             type = types.listOf (
-              types.addCheck types.str (p: p != "" && !lib.hasPrefix "/" p && !lib.hasPrefix "~" p)
+              types.addCheck types.str (
+                p:
+                p != ""
+                && !lib.hasPrefix "/" p
+                && !lib.hasPrefix "~" p
+                && lib.all (c: c != "" && c != "." && c != "..") (lib.splitString "/" p)
+              )
             );
             default = [ ];
             example = [ ".local/share/opencode" ];
