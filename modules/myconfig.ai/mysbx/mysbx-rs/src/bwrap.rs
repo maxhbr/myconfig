@@ -66,6 +66,17 @@ pub struct Params<'a> {
     /// The dev-tool closure's `bin` directory, set as `PATH` inside the
     /// sandbox (git, ripgrep, fd, jq, nix, python3, coreutils, …).
     pub tools_path: &'a str,
+    /// A **sanitized** `nix.conf` to bind at `/etc/nix/nix.conf`, or
+    /// `None` for no nix configuration at all (review-2 item 3).
+    ///
+    /// The host's own `/etc/nix/nix.conf` is deliberately never bound:
+    /// it may carry `access-tokens` (GitHub/GitLab credentials) and
+    /// other secrets, and a read-only bind hands them to the payload
+    /// just the same. The Nix wrapper generates a minimal client
+    /// configuration instead and pins it here; an unwrapped build
+    /// passes `None` and the sandbox runs `nix` with its built-in
+    /// defaults.
+    pub nix_conf: Option<&'a str>,
 }
 
 /// Build the complete `bwrap` argv for `cfg` / `repo` / `payload`.
@@ -148,11 +159,33 @@ pub fn bwrap_argv(
             argv.push((*path).into());
             argv.push((*path).into());
         }
+        // The nix daemon socket and store database live under
+        // `/nix/var/nix`. They are bound ONLY here, with the network
+        // (review-2 item 3): a read-only bind does not stop the
+        // payload from connecting to the socket, and the daemon
+        // happily builds fixed-output derivations, which are exactly
+        // the ones that keep network access. Exposing it under
+        // `network = false` would make the report's "denied" a lie.
+        // The price is that `nix` needs the shared network to work at
+        // all — said out loud in plan.md's base table.
+        argv.push("--ro-bind-try".into());
+        argv.push("/nix/var/nix".into());
+        argv.push("/nix/var/nix".into());
     }
 
     // 3. the base binds (docs/plan.md "The base" table, fixed absolute
-    // host paths — machine-independent).
+    // host paths — machine-independent), plus the sanitized nix client
+    // configuration when the wrapper pinned one (review-2 item 3 — the
+    // host's own nix.conf stays out, it may hold access-tokens).
     argv.extend(base_binds());
+    if let Some(nix_conf) = params.nix_conf {
+        // `--ro-bind`, not `-try`: the pin is a store path the wrapper
+        // just built, so a missing one is a packaging bug that must
+        // fail loudly rather than silently drop the configuration.
+        argv.push("--ro-bind".into());
+        argv.push(nix_conf.into());
+        argv.push("/etc/nix/nix.conf".into());
+    }
 
     // 4. the repo, rw, at its real host path (D13), plus the git
     // metadata directories a `.git` FILE points at outside the root
@@ -199,6 +232,19 @@ pub fn bwrap_argv(
                 dest: dest.to_string(),
                 protected,
             });
+        }
+    }
+    if !cfg.network {
+        // The daemon is bound with `--share-net` and nowhere else
+        // (section 2) — but a configured mount could still source it.
+        // Its dest is irrelevant: what matters is that the socket
+        // becomes reachable at all (review-2 item 3).
+        for m in &cfg.mounts {
+            if normalize(&m.path).starts_with("/nix/var/nix") {
+                return Err(Error::DaemonUnderDeniedNetwork {
+                    source: m.path.clone(),
+                });
+            }
         }
     }
     check_hidden_mounts(&cfg.mounts, &root, &repo.git_dirs)?;
@@ -281,6 +327,13 @@ pub enum Error {
         /// The writable bind it lies below.
         writable: String,
     },
+    /// A configured mount would carry the nix daemon into a sandbox
+    /// whose network is denied (review-2 item 3). The socket under
+    /// `/nix/var/nix` is a network service: the daemon builds
+    /// fixed-output derivations, which keep network access, so a
+    /// mount that sources it would make `network = false` a lie no
+    /// matter what its dest is.
+    DaemonUnderDeniedNetwork { source: String },
     /// The git metadata a `.git` FILE points at is related to a
     /// protected sandbox path — the bind would shadow or overwrite base
     /// infrastructure exactly like a bad mount dest, so no approval can
@@ -297,7 +350,8 @@ impl fmt::Display for Error {
             Error::ProtectedDest { dest, protected } => write!(
                 f,
                 "mount dest {dest} would shadow or overwrite the protected \
-                 sandbox path {protected} (base table of docs/plan.md); \
+                 sandbox path {protected}, which mysbx reserves whether or \
+                 not this run binds it (base table of docs/plan.md); \
                  refusing to build the argv"
             ),
             Error::HiddenMount { message } => f.write_str(message),
@@ -318,6 +372,15 @@ impl fmt::Display for Error {
                  parent components, so a symlink planted there redirects this \
                  bind onto any path, protected ones included; mount it \
                  outside that tree instead"
+            ),
+            Error::DaemonUnderDeniedNetwork { source } => write!(
+                f,
+                "mount source {source} is inside the nix daemon directory \
+                 /nix/var/nix, and this sandbox denies the network — the \
+                 daemon builds fixed-output derivations, which keep network \
+                 access, so the mount would hand back exactly what \
+                 `network = false` takes away; drop the mount or share the \
+                 network"
             ),
             Error::GitDirProtected { gitdir, protected } => write!(
                 f,
@@ -348,29 +411,20 @@ static RESOLVER_PATHS: &[&str] = &[
 /// The fixed base binds of the MVP (docs/plan.md, base table). Every row
 /// with decision "yes" appears exactly once, in the order the existing
 /// `fns/bubblewrap-app.nix` base binds them (agents shell out to
-/// arbitrary store paths → `/nix/store` first, then `/nix/var/nix` and
-/// `/etc/nix/nix.conf` so `nix` works — review-1 finding 6; then
-/// `/usr/bin/env` shebangs → `/usr/bin`; timezones → `/etc/localtime`;
-/// a fresh tmpfs `/tmp`, NOT the host-backed one).
+/// arbitrary store paths → `/nix/store` first; `/usr/bin/env` shebangs
+/// → `/usr/bin`; timezones → `/etc/localtime`; a fresh tmpfs `/tmp`,
+/// NOT the host-backed one).
+///
+/// The two nix binds review-1 finding 6 added are NOT here (review-2
+/// item 3): `/nix/var/nix` carries the daemon socket and rides with
+/// the network switch instead (section 2), and the host
+/// `/etc/nix/nix.conf` is never bound at all — a sanitized
+/// replacement comes from [`Params::nix_conf`].
 fn base_binds() -> Vec<String> {
     vec![
         "--ro-bind".into(),
         "/nix/store".into(),
         "/nix/store".into(),
-        // `/nix/var/nix` and `/etc/nix/nix.conf`, ro and try-bound, so
-        // the `nix` on the sandbox PATH can actually work: the store
-        // database and daemon socket live under `/nix/var/nix`, and
-        // without it every multi-user `nix` call fails (review-1
-        // finding 6) — the same two binds the base of
-        // `fns/bubblewrap-app.nix` makes. `--ro-bind-try`, because
-        // both may be absent in non-NixOS environments the tools
-        // closure still runs in.
-        "--ro-bind-try".into(),
-        "/nix/var/nix".into(),
-        "/nix/var/nix".into(),
-        "--ro-bind-try".into(),
-        "/etc/nix/nix.conf".into(),
-        "/etc/nix/nix.conf".into(),
         "--ro-bind".into(),
         "/usr/bin".into(),
         "/usr/bin".into(),
@@ -763,6 +817,7 @@ mod tests {
         Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         }
     }
 

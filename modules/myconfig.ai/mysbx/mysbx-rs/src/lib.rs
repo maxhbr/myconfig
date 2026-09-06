@@ -283,9 +283,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // merge.rs): `MYSBX_BWRAP=""` must not become `Command::new("")`.
     let shell = env_or("MYSBX_SHELL", "/bin/sh");
     let tools_path = env_or("MYSBX_TOOLS_PATH", "/usr/bin");
+    // The sanitized nix client configuration (review-2 item 3). There
+    // is no fallback on purpose: unset means "bind no nix.conf", never
+    // "bind the host's" — that file may carry access-tokens, and a
+    // read-only bind hands them to the payload all the same.
+    let nix_conf = env_opt("MYSBX_NIX_CONF");
     let params = bwrap::Params {
         shell: &shell,
         tools_path: &tools_path,
+        nix_conf: nix_conf.as_deref(),
     };
     let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
         Ok(a) => a,
@@ -365,6 +371,13 @@ fn collect_host_env() -> bwrap::HostEnv {
         }
     }
     env
+}
+
+/// `std::env::var` with the empty-means-unset rule, for pins that have
+/// no fallback at all: `MYSBX_NIX_CONF` unset means "bind no nix
+/// configuration", never "bind the host's" (review-2 item 3).
+fn env_opt(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.is_empty())
 }
 
 /// `std::env::var` with the empty-means-unset rule: an empty value falls

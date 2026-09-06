@@ -19,7 +19,10 @@ I found seven substantive issues in head `8688d3a28`.
 >    (`/etc/hosts`, `/etc/nsswitch.conf`, `/etc/resolv.conf`, `/etc/ssl`,
 >    `/run/systemd/resolve`) with `--ro-bind-try`, matching the existing
 >    jail.nix `network` combinator.
-> 6. `4285fc0c63` — chose "expose the narrow paths": `--ro-bind-try`
+> 6. `4285fc0c63` (**superseded by review-2 item 3**, which ties the
+>    daemon to the network switch and replaces the host nix.conf with a
+>    generated, credential-free one) — chose "expose the narrow paths":
+>    `--ro-bind-try`
 >    `/nix/var/nix` (daemon socket, store DB) and `/etc/nix/nix.conf`,
 >    same binds as the base of `fns/bubblewrap-app.nix`; both are
 >    protected dests.

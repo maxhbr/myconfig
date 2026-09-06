@@ -63,6 +63,7 @@ fn params() -> Params<'static> {
     Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        nix_conf: None,
     }
 }
 
@@ -280,16 +281,17 @@ fn network_share_binds_the_resolver_set() {
             "/run/systemd/resolve",
         ]
     );
-    // … and nothing else BETWEEN the resolver block and the base binds
-    // is a ro-bind-try; the base's own two try-binds (`/nix/var/nix`,
-    // `/etc/nix/nix.conf`, review-1 finding 6) come later, in base order.
+    // … and the only try-bind after the resolver block is the nix
+    // daemon socket, which rides with the network switch (review-2
+    // item 3). No sanitized nix.conf is pinned in these tests, so
+    // nothing else follows.
     let after_resolver = &argv[3 + 3 * 5..];
     let base_try: Vec<&str> = after_resolver
         .windows(3)
         .filter(|w| w[0] == "--ro-bind-try")
         .map(|w| w[1].as_str())
         .collect();
-    assert_eq!(base_try, ["/nix/var/nix", "/etc/nix/nix.conf"]);
+    assert_eq!(base_try, ["/nix/var/nix"]);
 }
 
 #[test]
@@ -885,25 +887,98 @@ fn mount_covering_a_git_dir_is_refused() {
 }
 
 #[test]
-fn nix_store_db_and_config_are_bound() {
-    // Review-1 finding 6: `nix` is on the sandbox PATH, so
-    // /nix/var/nix (store database, daemon socket) and the host's
-    // nix.conf must be bound ro — the two binds the base of
-    // fns/bubblewrap-app.nix makes -- right after /nix/store, in base
-    // order, --ro-bind-try (both are absent on non-NixOS hosts).
-    let argv = bwrap_argv(
+fn the_nix_daemon_rides_with_the_network() {
+    // Review-1 finding 6 bound /nix/var/nix (store database, daemon
+    // socket) unconditionally so the `nix` on the sandbox PATH works.
+    // Review-2 item 3 ties it to the network switch: a read-only bind
+    // does not stop the payload from connecting to the daemon, and the
+    // daemon builds fixed-output derivations, which keep network
+    // access — so under `network = false` it must be absent.
+    let shared = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    let share_net = shared
+        .iter()
+        .position(|a| a == "--share-net")
+        .expect("--share-net");
+    let var_nix = pos_pair(&shared, "--ro-bind-try", "/nix/var/nix");
+    let store = pos_pair(&shared, "--ro-bind", "/nix/store");
+    assert!(share_net < var_nix, "the daemon comes with --share-net");
+    assert!(var_nix < store, "the network section precedes the base binds");
+
+    let denied = bwrap_argv(
         &base(false),
         &synth_repo(),
         &Payload::Shell,
         &host_env(&[]),
         &params(),
-    ).unwrap();
-    let store = pos_pair(&argv, "--ro-bind", "/nix/store");
-    let var_nix = pos_pair(&argv, "--ro-bind-try", "/nix/var/nix");
-    let nix_conf = pos_pair(&argv, "--ro-bind-try", "/etc/nix/nix.conf");
-    let usr_bin = pos_pair(&argv, "--ro-bind", "/usr/bin");
-    assert!(store < var_nix, "/nix/store before /nix/var/nix");
-    assert!(var_nix < nix_conf && nix_conf < usr_bin, "base order kept");
+    )
+    .unwrap();
+    assert!(
+        !denied.contains(&"/nix/var/nix".to_string()),
+        "no daemon socket under a denied network: {denied:?}"
+    );
+    // The store itself stays readable either way: running the shipped
+    // tools needs it, and it exposes no daemon.
+    assert!(denied.contains(&"/nix/store".to_string()));
+}
+
+#[test]
+fn the_host_nix_conf_is_never_bound() {
+    // Review-2 item 3: the host's /etc/nix/nix.conf may carry
+    // `access-tokens`; a read-only bind hands them to the payload.
+    // Without a pinned replacement, the sandbox simply has no nix
+    // configuration.
+    for network in [true, false] {
+        let argv = bwrap_argv(
+            &base(network),
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env(&[]),
+            &params(),
+        )
+        .unwrap();
+        assert!(
+            !argv.contains(&"/etc/nix/nix.conf".to_string()),
+            "network={network}: {argv:?}"
+        );
+    }
+}
+
+#[test]
+fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
+    // The wrapper generates a minimal client configuration and pins
+    // it; mysbx binds THAT at /etc/nix/nix.conf, right after the base
+    // binds.
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: Some("/synth/store/mysbx-nix.conf"),
+    };
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let at = argv
+        .windows(3)
+        .position(|w| {
+            w[0] == "--ro-bind"
+                && w[1] == "/synth/store/mysbx-nix.conf"
+                && w[2] == "/etc/nix/nix.conf"
+        })
+        .expect("the pinned nix.conf is bound");
+    let localtime = pos_pair(&argv, "--ro-bind", "/etc/localtime");
+    let repo_bind = pos_pair(&argv, "--bind", "/synth/repo");
+    assert!(localtime < at && at < repo_bind, "after the base binds");
 }
 
 #[test]
@@ -1348,4 +1423,36 @@ fn a_git_dir_at_the_sandbox_home_is_refused_as_protected() {
         ),
         "wrong error: {err}"
     );
+}
+
+#[test]
+fn a_mount_may_not_source_the_daemon_under_a_denied_network() {
+    // The daemon is a network service: binding its socket back in
+    // through an ordinary mount would undo `network = false` no matter
+    // where the dest points (review-2 item 3).
+    let mut cfg = base(false);
+    cfg.mounts.push(make_mount(
+        "/nix/var/nix/daemon-socket",
+        Some("/opt/socket"),
+        Mode::Ro,
+    ));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DaemonUnderDeniedNetwork { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_mount_may_source_the_daemon_when_the_network_is_shared() {
+    // With the network shared the daemon is bound anyway, so an
+    // explicit mount adds nothing to refuse.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/nix/var/nix/daemon-socket",
+        Some("/opt/socket"),
+        Mode::Ro,
+    ));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
 }

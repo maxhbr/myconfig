@@ -1231,3 +1231,44 @@ fn an_unapproved_common_dir_is_refused_even_when_the_gitdir_is_approved() {
     assert!(stderr.contains("not approved"), "stderr: {stderr}");
     assert!(!stdout.contains("elsewhere"), "stdout: {stdout}");
 }
+
+#[test]
+fn the_pinned_nix_conf_reaches_the_argv_and_the_report() {
+    // MYSBX_NIX_CONF is a pin like MYSBX_SHELL: end-to-end, a set
+    // value must appear as the source of the /etc/nix/nix.conf bind,
+    // and the report must say which file the sandbox's nix reads
+    // (review-2 item 3).
+    let (inv, _, _) = fixture_user_backend("nix-conf-pin", &["--verbose", "--dry-run"]);
+    let conf = inv.home.join("sanitized-nix.conf");
+    std::fs::write(&conf, "experimental-features = nix-command flakes\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+    cmd.env("MYSBX_NIX_CONF", &conf);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| *l == conf.display().to_string())
+        .unwrap_or_else(|| panic!("the pinned nix.conf is not bound: {stdout}"));
+    assert_eq!(lines[at - 1], "--ro-bind");
+    assert_eq!(lines[at + 1], "/etc/nix/nix.conf");
+    assert!(
+        stdout.contains(&format!("## nix.conf:       {}", conf.display())),
+        "the report must name it: {stdout}"
+    );
+}
+
+#[test]
+fn without_the_pin_no_nix_conf_is_bound() {
+    // Unset means "no nix configuration", never "the host's": that
+    // file may carry access-tokens.
+    let (inv, _, _) = fixture_user_backend("nix-conf-unset", &["--verbose", "--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        !stdout.contains("/etc/nix/nix.conf"),
+        "no nix.conf bind: {stdout}"
+    );
+    assert!(stdout.contains("## nix.conf:       (none"), "{stdout}");
+}

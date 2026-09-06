@@ -116,7 +116,8 @@ declaration order — the implicit repo bind first (config.md D13), then the
 git metadata directories its `.git` file points at (config.md D13), then
 the configured mounts with mode, source, in-sandbox destination and the
 layer that contributed it — the forwarded host variables and the `[env]`
-variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH`
+variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH` /
+`MYSBX_NIX_CONF` (the sanitized nix configuration, or `(none)`)
 values after their fallbacks, the payload, and whether the run will exec
 or stop at the argv.
 

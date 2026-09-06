@@ -180,6 +180,15 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     p(format!("bwrap:          {}", r.bwrap_bin));
     p(format!("shell:          {}", r.params.shell));
     p(format!("tools PATH:     {}", r.params.tools_path));
+    // Review-2 item 3: the host's /etc/nix/nix.conf is never mounted
+    // (it may hold access-tokens); what the sandbox sees is the
+    // generated, credential-free file the wrapper pins — or nothing.
+    // Both states belong in the report: "nix reads no configuration"
+    // is as much a property of the run as which shell it starts.
+    p(format!(
+        "nix.conf:       {}",
+        r.params.nix_conf.unwrap_or("(none — nix uses its defaults)")
+    ));
     match r.payload {
         Payload::Shell => p(format!("payload:        shell {}", r.params.shell)),
         // Space-joined for readability only; the exact, unambiguous
@@ -251,6 +260,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         };
         lines(&Report {
             repo: &repo,
@@ -345,6 +355,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -382,6 +393,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -420,6 +432,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            nix_conf: None,
         };
         let joined = lines(&Report {
             repo: &repo,
