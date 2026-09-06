@@ -51,8 +51,10 @@ pub type HostEnv = BTreeMap<String, String>;
 /// HOST home is still not mounted, and its *value* is never forwarded
 /// either (it is not in `FORWARDED_ENV_VARS`). The path deliberately
 /// lives outside `/home`, so nothing inside the sandbox can be confused
-/// with a host home path and the "no `/home/` anywhere" invariant of the
-/// argv stays literally checkable.
+/// with a host home path: the invariant "no IN-SANDBOX path under
+/// `/home/`" (config.md D14) stays literally checkable on the argv's
+/// destinations — mount *sources* are host paths and may of course live
+/// in the host home.
 pub const SANDBOX_HOME: &str = "/mysbx-home";
 
 /// Common parameters of every invocation that do not come from a

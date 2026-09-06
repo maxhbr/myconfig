@@ -82,20 +82,41 @@ and a per-repo sidecar cannot silently widen them (see D7).
 
 On myconfig hosts the user config is not hand-written: the NixOS module
 (`../../default.nix`) generates `~/.config/mysbx/config.toml` from the
-`myconfig.ai.mysbx.config` option, with a read-only baseline of grants for
-the host tool config this repo manages, written with the `~/` prefix
+`myconfig.ai.mysbx.config` option, with a read-only baseline for the
+host tool config this repo manages, written with the `~/` prefix
 (`~/.config/{git,ripgrep,bat,fish}`) so the generated file needs no
 home-directory lookup at build time — mysbx expands it at run time (D8).
+Each entry carries an explicit `dest` under `/mysbx-home` (review-2
+item 6): inside the sandbox `HOME` is `/mysbx-home`, so a config bound
+at its host path would be invisible to the tools that want it. A NixOS
+assertion refuses any entry that would still land inside the host home,
+in every spelling D8 allows.
 Other modules extend it by appending to `myconfig.ai.mysbx.config.mounts`.
 Outside myconfig the file stays an ordinary hand-written file; mysbx itself
 knows nothing about where it came from.
 
 ### D7: Sidecar may narrow, not widen
 
-A sidecar can drop or restrict what the user config grants, but cannot
-grant access the user config does not allow. Rationale: a repo-adjacent file
-must not be able to pull more of the host into the sandbox than the user has
-approved host-wide.
+A sidecar cannot grant access the user config does not allow. Rationale:
+a repo-adjacent file must not be able to pull more of the host into the
+sandbox than the user has approved host-wide.
+
+**User entries are mounts, not offers** (review-2 item 6). A
+`[[mounts]]` entry in the user config plays two roles at once: it is
+mounted in every sandbox of that user, and it is the grant that bounds
+what a sidecar may mount below it. A sidecar therefore narrows *its own* additions — it may ask for less
+than the grant allows, for `ro` where `rw` was granted, or for nothing
+at all — but it changes nothing about the user's own entries, which are
+mounted either way. Downgrading a sidecar entry that sits below a user
+mount narrows only that entry, not the effective sandbox: the user's
+mount is still there. The alternative,
+treating user entries as pure offers a sidecar must claim, was
+rejected: a fresh sidecar would then start with no tool configuration
+at all, and every repository would have to re-declare the same host
+paths, turning routine setup into exactly the repo-adjacent host-path
+requests this rule exists to bound. Dropping a user mount for one
+suspicious repository stays an open question (a per-repo opt-out); the
+user config is the place to make that call today.
 
 When several user-config grants cover the same path, the **deepest** (most
 specific) grant decides the allowed mode: a narrow `ro` grant beside a
@@ -314,11 +335,11 @@ Rationale, in the order the constraints bite:
   before the configured mounts, so they land on top of it. Only
   *below* it, though: a `dest` equal to `/mysbx-home` — or an ancestor
   of it, which on component boundaries is `/` alone — is refused
-  (review-2 item 5). Unlike every other base path, the sandbox home is
-  protected in that one direction only: its descendants are the
-  seeding path, not an attack. Such a mount would replace
-  the tmpfs while `HOME` still names it, making the report's "tmpfs;
-  the host home is not mounted" false.
+  (review-2 item 5), because such a mount replaces the tmpfs while
+  `HOME` still names it, making the report's "tmpfs; the host home is
+  not mounted" false. Unlike every other base path, the sandbox home
+  is therefore protected in one direction only: its descendants are
+  the seeding path, not an attack.
 - **Not the repo root.** `HOME = <repo>` would make every tool that
   writes to `~` (shell history, caches, `.gitconfig` edits, agent state)
   pollute the checkout, and would make `~` and the work tree
@@ -326,8 +347,17 @@ Rationale, in the order the constraints bite:
 - **Not under `/home`.** A path such as `/home/<user>` inside the
   sandbox would mirror a host path that is deliberately absent; a payload
   (or a reviewer of `--dry-run`) could not tell the two apart. The
-  literal invariant "no `/home/` anywhere in the argv" is worth keeping
-  checkable, so the sandbox home is namespaced instead: `/mysbx-home`.
+  literal invariant is worth keeping checkable, so the sandbox home is
+  namespaced instead: `/mysbx-home`. It reads "no in-sandbox path under
+  `/home/`" — mount *sources* are host paths and may of course live in
+  the host home; what must not happen is a `dest` (or `HOME` itself)
+  mirroring one. That is why the generated user layer gives its
+  baseline grants explicit destinations under `/mysbx-home` (review-2
+  item 6) instead of letting them default to their host path. The check
+  is a NixOS assertion on the generated layer; a hand-written config or
+  sidecar can still write such a `dest`, and mysbx accepts it — the
+  invariant is a property of what myconfig generates, not something the
+  CLI enforces.
 - **Ephemeral.** A tmpfs dies with the sandbox. Persisting the sandbox
   home is a phase-2 question (the sidecar has room for state, D10); it is
   not decided here.

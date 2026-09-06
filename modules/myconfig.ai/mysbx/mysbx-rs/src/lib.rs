@@ -475,10 +475,14 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
 # read-write at its real host path and cannot be changed here\n\
 # (docs/design/config.md D13).\n\
 #\n\
-# Everything else in the sandbox is opt-in. Examples:\n\
+# Everything else in the sandbox is opt-in. Give a host-home path a\n\
+# `dest` under /mysbx-home: HOME is /mysbx-home inside the sandbox, so\n\
+# a config bound at its host path is invisible there (config.md D14).\n\
+# Examples:\n\
 #\n\
 # [[mounts]]\n\
 # path = \"/home/user/.config/git\"\n\
+# dest = \"/mysbx-home/.config/git\"\n\
 # mode = \"ro\"\n\
 #\n\
 # [env]\n\
