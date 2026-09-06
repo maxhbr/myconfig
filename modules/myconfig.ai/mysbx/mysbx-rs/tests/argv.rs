@@ -224,6 +224,51 @@ fn golden_network_false() {
     // section 2); --unshare-all is present either way.
     assert!(!argv.contains(&"--share-net".to_string()));
     assert!(argv.contains(&"--unshare-all".to_string()));
+    // Review-1 finding 5: a denied network binds NO resolver paths
+    // either — the resolver set belongs to the share, not the base.
+    assert!(
+        !argv.iter().any(|a| a.contains("resolv") || a.contains("/etc/hosts")),
+        "no resolver binds when the network is denied: {argv:?}"
+    );
+    assert!(!argv.contains(&"/run/systemd/resolve".to_string()));
+}
+
+#[test]
+fn network_share_binds_the_resolver_set() {
+    // Review-1 finding 5: sharing the namespace alone gives no DNS/TLS.
+    // The five resolver paths are bound ro, --ro-bind-try (they are
+    // setup-dependent), right after --share-net and BEFORE the base
+    // binds — so the golden files show them at a fixed position.
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    );
+    assert_eq!(argv[0], "--clearenv");
+    assert_eq!(argv[1], "--unshare-all");
+    assert_eq!(argv[2], "--share-net");
+    let resolver_binds: Vec<&str> = argv
+        .windows(3)
+        .filter(|w| w[0] == "--ro-bind-try")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert_eq!(
+        resolver_binds,
+        [
+            "/etc/hosts",
+            "/etc/nsswitch.conf",
+            "/etc/resolv.conf",
+            "/etc/ssl",
+            "/run/systemd/resolve",
+        ]
+    );
+    // And nothing else in the argv is a ro-bind-try.
+    assert_eq!(
+        argv.iter().filter(|a| *a == "--ro-bind-try").count(),
+        5
+    );
 }
 
 #[test]

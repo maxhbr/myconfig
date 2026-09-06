@@ -65,6 +65,7 @@ every knob is a decision:
 | Base element | MVP | Note |
 | --- | --- | --- |
 | `--unshare-all` | yes | network re-shared unless `network = false` |
+| resolver set (ro) | yes, when network is shared | `/etc/hosts`, `/etc/nsswitch.conf`, `/etc/resolv.conf`, `/etc/ssl`, `/run/systemd/resolve` — `--ro-bind-try`, the same path set the `network` combinator of `fns/bubblewrap-app.nix` binds; DNS/TLS are unusable without them (review-1 finding 5); `/run/systemd/resolve` is the only `/run` exception to the row below, ro and narrow |
 | `/nix/store` ro | yes | agents shell out to arbitrary store paths |
 | `/usr/bin` ro | yes | `/usr/bin/env` shebangs |
 | `--proc`, `--dev` | yes | |
@@ -73,7 +74,7 @@ every knob is a decision:
 | tmpfs `$HOME` (`/mysbx-home`) | yes | an in-sandbox home so `cd ~`, `~/.bash_history`, git & co. work; empty, writable, outside `/home` (`config.md` D14) |
 | host `$HOME` bind | **no** | the host home stays unreachable; its *value* is not forwarded either — exposing parts of it is an explicit `[[mounts]]` grant (`config.md` D6/D7) |
 | `~/tmp` rw | no | agent-session convenience, not a sandbox essential |
-| `/run` | no | D-Bus, PipeWire, the nix-daemon socket, agent sockets |
+| `/run` | no | D-Bus, PipeWire, the nix-daemon socket, agent sockets; the resolver exception above is the only `/run` path bound |
 | dev-tool closure on `PATH` | yes, as-is | git, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](./nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list) |
 | `OPENAI_API_KEY` auto-forward | **no** | under `mysbx` a key is an ordinary user-config `[env]` entry (`config.md` D6) |
 

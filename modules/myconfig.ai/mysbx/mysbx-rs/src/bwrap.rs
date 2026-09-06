@@ -117,6 +117,31 @@ pub fn bwrap_argv(
     let mut argv: Vec<String> = vec!["--clearenv".into(), "--unshare-all".into()];
     if cfg.network {
         argv.push("--share-net".into());
+        // Sharing the network namespace alone does not give the new
+        // root DNS or TLS: `/etc/resolv.conf` and friends live on the
+        // host and are not part of the base table. Bind the resolver
+        // set — the same path SET the `network` combinator of
+        // `fns/bubblewrap-app.nix` binds (its mechanism differs:
+        // runtime-deep-ro-bind walks entries and re-binds symlink
+        // targets; a plain `--ro-bind-try` is enough here because
+        // bwrap resolves a symlinked source at mount time, and on
+        // NixOS `/etc/ssl` resolves through `/etc/static` into
+        // `/nix/store`, which is a base bind — `/etc/static` and
+        // `/etc/ca-certificates` of the simpler wrapper serve other
+        // distros' layouts). `--ro-bind-try`: every entry is
+        // setup-dependent — a static `/etc/resolv.conf` needs only the
+        // file, systemd-resolved symlinks it into
+        // `/run/systemd/resolve` (bound as a directory, mirroring the
+        // reference), `/etc/nsswitch.conf` may be unnecessary when
+        // glibc defaults suffice; a dangling symlink silently drops
+        // that one bind, like the reference's try-readonly.
+        // `network = false` shares nothing and binds none of them
+        // (review-1 finding 5).
+        for path in RESOLVER_PATHS {
+            argv.push("--ro-bind-try".into());
+            argv.push((*path).into());
+            argv.push((*path).into());
+        }
     }
 
     // 3. the base binds (docs/plan.md "The base" table, fixed absolute
@@ -207,6 +232,18 @@ pub fn bwrap_argv(
     argv
 }
 
+/// The resolver and TLS paths bound read-only when the network is
+/// shared (review-1 finding 5) — the same path SET as the `network`
+/// combinator of `fns/bubblewrap-app.nix` (see the call site for why
+/// the mechanism can be a plain `--ro-bind-try` here).
+static RESOLVER_PATHS: &[&str] = &[
+    "/etc/hosts",
+    "/etc/nsswitch.conf",
+    "/etc/resolv.conf",
+    "/etc/ssl",
+    "/run/systemd/resolve",
+];
+
 /// The fixed base binds of the MVP (docs/plan.md, base table). Every row
 /// with decision "yes" appears exactly once, in the order the existing
 /// `fns/bubblewrap-app.nix` base binds them (agents shell out to
@@ -241,12 +278,15 @@ fn base_binds() -> Vec<String> {
 
 /// Sandbox paths a mount `dest` may never shadow or overwrite — the
 /// roots the base binds create (`/nix/store`, `/usr/bin`, `/proc`,
-/// `/dev`, `/etc/localtime`, `/tmp`) plus `/run` (deliberately absent, so
-/// also protected) — and `/` itself, which would shadow every one of them
-/// at once. A dest is refused when it is RELATED to any of these in
-/// either direction: equal, a descendant (`/proc/sys` would overwrite
-/// part of the procfs), or an ANCESTOR (`/nix` would receive the mount
-/// and hide `/nix/store` below it) — see [`check_dest`]. The repo root
+/// `/dev`, `/etc/localtime`, `/tmp`) plus `/run` (no wholesale `/run`
+/// bind exists — the only `/run` path mounted is the resolver
+/// exception [`RESOLVER_PATHS`], ro and narrow — so dests related to
+/// `/run` as a whole are still refused) — and `/` itself, which would
+/// shadow every one of them at once. A dest is refused when it is
+/// RELATED to any of these in either direction: equal, a descendant
+/// (`/proc/sys` would overwrite part of the procfs), or an ANCESTOR
+/// (`/nix` would receive the mount and hide `/nix/store` below it) —
+/// see [`check_dest`]. The repo root
 /// is deliberately NOT here: it is a base bind of its own (section 4)
 /// and a mount legitimately points at or below it.
 /// [`SANDBOX_HOME`] is NOT here either, for the same reason: seeding the
@@ -254,6 +294,11 @@ fn base_binds() -> Vec<String> {
 /// pointing a mount `dest` into it is the intended way to use it, and
 /// such a mount is an explicit grant of the user layer (config.md D6/D7).
 /// The tmpfs is created in section 3, so those mounts land on top of it.
+/// The resolver paths are likewise not protected: an explicit mount
+/// with dest `/etc/ssl` (say, to install a project-local CA) shadows the
+/// ro-bind-try by later-wins — intended, same grant logic as
+/// [`SANDBOX_HOME`]; a dest of `/etc/resolv.conf` does NOT reach
+/// `/etc/localtime` or `/run` and so is not refused either.
 static PROTECTED_DESTS: &[&str] = &[
     "/",
     "/nix/store",
@@ -616,7 +661,18 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
         let joined = argv.join(" ");
-        assert!(!joined.contains("/run"), "no /run bind");
+        // No WHOLESALE `/run` bind (the base table's `no` row: D-Bus,
+        // the nix-daemon socket, agent sockets). The resolver exception
+        // of review-1 finding 5 is narrow and ro: exactly
+        // `/run/systemd/resolve`, only when the network is shared.
+        assert!(
+            !argv.windows(3).any(|w| w[0] == "--ro-bind" && w[1] == "/run"),
+            "no wholesale /run bind"
+        );
+        assert!(
+            !argv.windows(3).any(|w| w[0] == "--bind" && w[1] == "/run"),
+            "no wholesale /run bind (rw)"
+        );
         // No host home BIND, no host home path, no `~/tmp` — and no
         // automatic secret forwards (the OPENAI row of the base table).
         // `$HOME` inside the sandbox is the tmpfs of the base table's
