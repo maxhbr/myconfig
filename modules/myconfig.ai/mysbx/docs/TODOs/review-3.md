@@ -35,3 +35,28 @@ Reviewed PR 77 at [`4d5ae8411`](https://github.com/maxhbr/myconfig/commit/4d5ae8
    it).
 
 `git diff --check` passes, and the source contains 221 tests. I could not independently execute the Rust/Nix suites because this environment has neither Cargo nor Nix.
+
+---
+
+## Status (round 3 rework, branch `review-rework`)
+
+All six items are done, one commit each; the full suite runs green under
+real bubblewrap (`nix shell nixpkgs#bubblewrap …`), 249 tests across 6
+binaries (114 lib + 0 integration + 76 bwrap + 47 cli + 13 argv + 0):
+
+| # | item | commit |
+|---|------|--------|
+| 1 | order-independent writable-alias analysis | `7a04de91bf` |
+| 2 | daemon-socket ancestors refused when network is denied | `068a2cdab4` |
+| 3 | trusted policy files out of writable binds | `e18f29e089` |
+| 4 | host home never mounted, every spelling | `fdcdade874` |
+| 5 | `init --approve-git-dirs` recovery | `51b120639d` |
+| 6 | ripgrep config activated through its variable | `5d9d31107f` |
+
+Each commit went through an independent reviewer pass; their findings
+(beyond what the items themselves asked for) were folded back in before
+committing. Running the suite under real bwrap for the first time on this
+host also exposed two test-environment assumptions, repaired in the item-6
+commit: worktree fixtures now pin an empty sidecar sibling against
+outer-repo debris, and no test depends on `/usr/bin/true` (absent on
+plain NixOS).
