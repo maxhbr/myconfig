@@ -19,7 +19,7 @@ use crate::config::Mode;
 use crate::merge::Merged;
 use crate::repo::Repo;
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 /// What runs inside the sandbox. Either the interactive shell or a command
 /// vector (docs/design/cli.md D4: everything after `--` is passed verbatim
@@ -83,7 +83,9 @@ pub struct Params<'a> {
 /// 5. the configured mounts, in declaration order, `--ro-bind` / `--bind`,
 ///    each `dest` defaulting to its source path (mount order is argv
 ///    order; a later rw bind nested inside an earlier ro bind is a real
-///    pattern the MVP must preserve)
+///    pattern the MVP must preserve). A dest that would shadow or
+///    overwrite a base path — via `..` components or as an ancestor or
+///    descendant of one — is refused (see [`check_dest`]).
 /// 6. environment via `--setenv`, in this precedence: host-forwarded
 ///    variables first, then `cfg.env` (which wins by being set later),
 ///    then the infrastructure variables `HOME` and `PATH` last — set
@@ -120,35 +122,27 @@ pub fn bwrap_argv(
     bind(&mut argv, false, &root, None);
 
     // 5. configured mounts, in declaration order; dest defaults to the
-    // canonicalized source path. A `dest` may never remap a mount ONTO a
-    // protected path: bubblewrap applies binds in order with
-    // later-mounts-win, so a dest of `/tmp`, `/`, `/proc` … would
-    // overwrite a base bind and reopen exactly the hole the base table
-    // closes (host-backed `/tmp`, a hidden `/proc`). The merge (D7/D8)
-    // validates grants; this validates destinations, because the base
-    // list lives here.
+    // canonicalized source path. A `dest` may never be related to a
+    // protected path in either direction: bubblewrap applies binds in
+    // order with later-mounts-win, so a dest of `/tmp`, `/`, `/proc` …
+    // would overwrite a base bind, and a dest of `/nix` would hide the
+    // protected `/nix/store` below it — either way reopening exactly
+    // the hole the base table closes. The merge (D7/D8) validates
+    // grants; this validates destinations, because the base list lives
+    // here.
     for m in &cfg.mounts {
         let dest = m.dest.as_deref().unwrap_or(&m.path);
-        for protected in PROTECTED_DESTS {
-            // `/` itself must match EXACTLY (`starts_with("/")` would
-            // match every absolute path); the others match at-or-below.
-            let hits = if *protected == "/" {
-                dest == "/"
-            } else {
-                Path::new(dest).starts_with(protected)
-            };
-            if hits {
-                // A mount that does not redirect (dest == source) can
-                // never hit this: its source is an ordinary granted host
-                // path, not a base path — the merge would have had to
-                // grant `/proc` itself for that. So any hit here means a
-                // redirect onto a protected path.
-                panic!(
-                    "mount dest {dest} would overwrite the protected sandbox \n\
-                 path {protected} (base table of docs/plan.md); refusing \n\
-                 to build the argv"
-                );
-            }
+        if let Some(protected) = check_dest(dest) {
+            // A mount that does not redirect (dest == source) can
+            // never hit this: its source is an ordinary granted host
+            // path, not a base path — the merge would have had to
+            // grant `/proc` itself for that. So any hit here means a
+            // redirect onto a protected path.
+            panic!(
+                "mount dest {dest} would shadow or overwrite the protected \n\
+                 sandbox path {protected} (base table of docs/plan.md); \n\
+                 refusing to build the argv"
+            );
         }
         bind(&mut argv, m.mode == Mode::Ro, &m.path, m.dest.as_deref());
     }
@@ -223,12 +217,16 @@ fn base_binds() -> Vec<String> {
     ]
 }
 
-/// Sandbox paths a mount `dest` may never overwrite. The roots the base
-/// binds create (`/nix/store`, `/usr/bin`, `/proc`, `/dev`,
-/// `/etc/localtime`, `/tmp`) plus `/run` (deliberately absent, so also
-/// protected) — and `/` itself, which would shadow every one of them at
-/// once. The repo root is deliberately NOT here: it is a base bind of
-/// its own (section 4) and a mount legitimately points at or below it.
+/// Sandbox paths a mount `dest` may never shadow or overwrite — the
+/// roots the base binds create (`/nix/store`, `/usr/bin`, `/proc`,
+/// `/dev`, `/etc/localtime`, `/tmp`) plus `/run` (deliberately absent, so
+/// also protected) — and `/` itself, which would shadow every one of them
+/// at once. A dest is refused when it is RELATED to any of these in
+/// either direction: equal, a descendant (`/proc/sys` would overwrite
+/// part of the procfs), or an ANCESTOR (`/nix` would receive the mount
+/// and hide `/nix/store` below it) — see [`check_dest`]. The repo root
+/// is deliberately NOT here: it is a base bind of its own (section 4)
+/// and a mount legitimately points at or below it.
 /// [`SANDBOX_HOME`] is NOT here either, for the same reason: seeding the
 /// sandbox home with host dotfiles (`~/.gitconfig`, an agent config) by
 /// pointing a mount `dest` into it is the intended way to use it, and
@@ -244,6 +242,77 @@ static PROTECTED_DESTS: &[&str] = &[
     "/tmp",
     "/run",
 ];
+
+/// The protected path a mount `dest` would shadow or overwrite, if
+/// any. The dest is normalized lexically first (see [`normalize`]); the
+/// merge (`crate::merge`) guarantees that source PATHS are
+/// canonicalized against the host, but a `dest` deliberately never is
+/// (it is an in-sandbox path) — so normalization is this function's
+/// job. Symlinks are NOT resolved here: they would need
+/// host-filesystem knowledge of the sandbox's new root, which does not
+/// exist at argv-build time.
+fn check_dest(dest: &str) -> Option<&'static str> {
+    let path = normalize(dest);
+    for protected in PROTECTED_DESTS {
+        let protected_path = Path::new(protected);
+        // `/` must match EXACTLY on the normalized path: every absolute
+        // dest is at-or-below `/` by construction, so a prefix match
+        // there would refuse every legitimate dest. The `..`-cases
+        // (`/x/..`) are already collapsed onto `/` by `normalize`, so
+        // the exact match catches them. Every other protected path
+        // matches in BOTH directions on whole components
+        // (`Path::starts_with`): a dest at-or-below it (a descendant
+        // such as `/proc/sys` would replace part of the procfs the base
+        // bind provides) and a dest that contains it (an ancestor such
+        // as `/nix` would receive the mount and hide the protected
+        // `/nix/store` below it). Lookalikes stay allowed: `/usr/bin2`
+        // is NOT `/usr/bin`.
+        let hits = if *protected == "/" {
+            path == *Path::new("/")
+        } else {
+            path.starts_with(protected_path) || protected_path.starts_with(&path)
+        };
+        if hits {
+            return Some(protected);
+        }
+    }
+    None
+}
+
+/// Lexically resolve `.` and `..` components of an absolute path —
+/// mirroring how the kernel (and therefore bubblewrap, which mounts at
+/// the path it is given after resolving it) interprets a destination
+/// written with redundant components. A dest is plain string data from
+/// the TOML config, so checking it untrusted here is what makes the
+/// protected-dest guard tamper-proof (`"/nix/../proc"` must be seen as
+/// `/proc`). `/..` stays `/` — the kernel resolves the root's parent as
+/// itself.
+fn normalize(p: &str) -> PathBuf {
+    let mut out: Vec<std::ffi::OsString> = Vec::new();
+    for c in Path::new(p).components() {
+        match c {
+            Component::RootDir => out.clear(),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                // `..` above the root stays at the root (`out` never
+                // holds the root component itself — it is re-attached at
+                // the end — so popping to empty is climbing to `/`).
+                if !out.is_empty() {
+                    out.pop();
+                }
+            }
+            other => out.push(other.as_os_str().to_owned()),
+        }
+    }
+    if out.is_empty() {
+        PathBuf::from("/")
+    } else {
+        out.into_iter().fold(PathBuf::from("/"), |mut acc, c| {
+            acc.push(c);
+            acc
+        })
+    }
+}
 
 /// One bind of a host path into the sandbox, ro or rw, with the sandbox
 /// destination defaulting to the source path.
@@ -524,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "would overwrite the protected sandbox")]
+    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_onto_tmp_is_refused() {
         // The hole the base table explicitly closes: binding a host path
         // ONTO /tmp reconstructs the host-backed /tmp. Later mounts win
@@ -540,7 +609,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "would overwrite the protected sandbox")]
+    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_onto_root_is_refused() {
         // A dest of / would shadow /proc, /dev and everything else in one
         // move.
@@ -555,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "would overwrite the protected sandbox")]
+    #[should_panic(expected = "would shadow or overwrite the protected")]
     fn mount_dest_below_proc_is_refused() {
         // Nested, not just exact: a dest under /proc would overwrite part
         // of the procfs the base bind provides.
@@ -567,6 +636,156 @@ mod tests {
             mode: Mode::Ro,
         }];
         bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+    }
+
+    #[test]
+    #[should_panic(expected = "would shadow or overwrite the protected")]
+    fn mount_dest_onto_ancestor_of_protected_path_is_refused() {
+        // The ancestor hole: a dest of `/nix` would receive the mount and
+        // hide the protected `/nix/store` below it; likewise `/usr` hides
+        // `/usr/bin` and `/etc` hides `/etc/localtime`.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some("/nix".into()),
+            mode: Mode::Rw,
+        }];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+    }
+
+    #[test]
+    #[should_panic(expected = "would shadow or overwrite the protected")]
+    fn mount_dest_etc_ancestor_is_refused() {
+        // Second ancestor case, pinned separately so a refactor cannot fix
+        // `/nix` while leaving `/etc` (hiding `/etc/localtime`) open.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some("/etc".into()),
+            mode: Mode::Ro,
+        }];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+    }
+
+    #[test]
+    #[should_panic(expected = "would shadow or overwrite the protected")]
+    fn mount_dest_dotdot_to_root_is_refused() {
+        // The lexical hole: `/x/..` passes a plain string check but
+        // bubblewrap resolves it to `/`, mounting over everything.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/everything".into(),
+            dest: Some("/x/..".into()),
+            mode: Mode::Rw,
+        }];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+    }
+
+    #[test]
+    #[should_panic(expected = "would shadow or overwrite the protected")]
+    fn mount_dest_dotdot_into_protected_is_refused() {
+        // Same, aimed at a narrower protected path: `/nix/../proc` is
+        // `/proc` after lexical resolution.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/proc-faker".into(),
+            dest: Some("/nix/../proc".into()),
+            mode: Mode::Rw,
+        }];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+    }
+
+    #[test]
+    fn mount_dest_redundant_component_spellings_are_refused() {
+        // Every spelling that resolves onto a protected path: `..`
+        // overshoot from the root (`/../../proc` is `/proc`), a `.` run
+        // (`/proc/./sys`), a trailing `.` (`/tmp/.`), and duplicate
+        // slashes (`//tmp///x`). The kernel drops or collapses all of
+        // them, so the guard must normalize before it compares.
+        for (i, dest) in [
+            "/../../proc",
+            "/proc/./sys",
+            "/tmp/./.",
+            "//tmp///x",
+            "/nix/store/../../..",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let (repo, cfg, p) = shell_repo_defaults();
+            let mut cfg = cfg;
+            cfg.mounts = vec![Mount {
+                path: "/synth/data".into(),
+                dest: Some(dest.into()),
+                mode: Mode::Ro,
+            }];
+            let result = std::panic::catch_unwind(move || {
+                bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            });
+            assert!(
+                result.is_err(),
+                "dest {i} ({dest}) must be refused: it resolves onto a protected path"
+            );
+        }
+    }
+
+    #[test]
+    fn dotdot_out_of_protected_stays_allowed() {
+        // `/tmp/../synth/dest` is `/synth/dest` — a `..` used to climb OUT
+        // of a protected path is ordinary and must stay mountable.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some("/tmp/../synth/dest".into()),
+            mode: Mode::Ro,
+        }];
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let pairs: Vec<_> = argv
+            .windows(3)
+            .filter(|w| w[0] == "--ro-bind")
+            .map(|w| (w[1].as_str(), w[2].as_str()))
+            .collect();
+        assert!(pairs.contains(&("/synth/data", "/tmp/../synth/dest")));
+    }
+
+    #[test]
+    fn component_similar_dests_stay_allowed() {
+        // The guard is component-exact: string-prefixed look-alikes are
+        // distinct paths and must stay mountable.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let mut cfg = cfg;
+        cfg.mounts = vec![
+            Mount {
+                path: "/synth/a".into(),
+                dest: Some("/usr/bin2".into()),
+                mode: Mode::Ro,
+            },
+            Mount {
+                path: "/synth/b".into(),
+                dest: Some("/tmpx".into()),
+                mode: Mode::Ro,
+            },
+            Mount {
+                path: "/synth/c".into(),
+                dest: Some("/nix/storex".into()),
+                mode: Mode::Ro,
+            },
+        ];
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p);
+        let cfg_dests: Vec<&str> = argv
+            .windows(3)
+            .filter(|w| w[0] == "--ro-bind" || w[0] == "--bind")
+            .map(|w| w[2].as_str())
+            // The repo bind (a --bind of the repo itself, section 4) and
+            // the base binds are not this test's subject.
+            .filter(|d| !d.starts_with("/synth/repo") && *d != "/nix/store" && *d != "/usr/bin" && *d != "/etc/localtime")
+            .collect();
+        assert_eq!(cfg_dests, vec!["/usr/bin2", "/tmpx", "/nix/storex"]);
     }
 
     #[test]
