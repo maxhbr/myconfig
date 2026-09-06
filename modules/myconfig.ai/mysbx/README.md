@@ -126,7 +126,11 @@ the first coding agent integrated with mysbx: on hosts where both features are
 enabled it adds its binary to the sandbox `PATH` via
 `myconfig.ai.mysbx.extraTools` and mounts its home-manager-managed
 configuration (`~/.pi/agent/{extensions,agents,prompts,themes,keybindings.json}`
-and `~/.agents/skills`) read-only below `/mysbx-home`.
+and `~/.agents/skills`) read-only below `/mysbx-home`. Its state
+directory `~/.pi` is neither mounted nor persisted: it dies with the
+tmpfs home on purpose — it holds sessions *and* credentials in one
+tree, so persisting it per repository would need the two split apart
+first. Until then a sandboxed `pi` starts fresh every run.
 `opencode` ([`programs.opencode`](../programs.opencode/default.nix)) is wired
 in the same way: its binary goes on the sandbox `PATH` and its generated
 configuration (`~/.config/opencode` plus `~/.config/mcp`) is mounted
@@ -136,6 +140,9 @@ it is declared as mysbx `state-dirs` (config.md D15) and persists per
 repository in `<repo>.mysbx/state/`. The host's own opencode state and
 auth files stay out of the sandbox, so a sandboxed session starts
 unauthenticated and talks to the local LiteLLM / llama.cpp providers.
+That is the difference to `pi` above: opencode keeps its sessions and
+its credentials in separate paths, so the session state can be
+persisted without the credentials following it.
 
 # Supported Technologies
 ## Already Implemented:
