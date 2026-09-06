@@ -334,6 +334,16 @@ tmpfs created with the other base mounts. The host home directory is
 still **not** mounted, and the host's `HOME` *value* is never forwarded
 (it is not in the forwarded list, plan.md "Environment").
 
+"The host home is not mounted" is enforced, not merely claimed
+(review-3 item 4): a mount source that IS the home (`path = "~/"`, or
+a symlink resolving to it) or CONTAINS it (`path = "/home"`, or a
+checkout root the home lives below) is refused in either layer, before
+grant semantics apply — the merge compares canonicalized paths, so no
+spelling slips past. Subdirectories (`~/.config/git`) stay the
+supported shape. The NixOS assertion on the generated layer checks the
+`dest` side of the same invariant at eval time, with lexical `..`
+normalization; the runtime holds both.
+
 Rationale, in the order the constraints bite:
 
 - **Something must be there.** With `--clearenv` and no `HOME`, `cd ~`
