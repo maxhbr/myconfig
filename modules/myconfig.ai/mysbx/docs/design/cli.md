@@ -31,6 +31,14 @@ When no sidecar exists, bare `mysbx` creates it implicitly — exactly what
 `config.toml`) — and then proceeds. The common case stays argument-free:
 `cd repo && mysbx` works on the first run. An operator who wants to review
 the generated `config.toml` first can still run `mysbx init` explicitly.
+A user who already ran the bare form (whose sidecar config therefore
+exists without approvals) can take the same trust decision after the
+fact with `mysbx init --approve-git-dirs` (review-3 item 5): it adds the
+discovered-but-unapproved git metadata directories to the existing
+config — idempotently, and never rewriting anything but the `git-dirs`
+list. Note the boundary: it is additive, not reverting — a later run
+of the flag re-approves an entry an operator had removed (it is still
+discovered); plain `init` never touches the config at all.
 
 ### D3: Verb subcommands, no nesting
 

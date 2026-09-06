@@ -79,6 +79,20 @@ pub struct Params<'a> {
     /// passes `None` and the sandbox runs `nix` with its built-in
     /// defaults.
     pub nix_conf: Option<&'a str>,
+    /// Paths of the **trusted policy files** this run was configured
+    /// from — the user config and the sidecar config, exactly as
+    /// `load_layers` read them. Empty when a layer was absent (an
+    /// absent file grants nothing and needs no protection).
+    ///
+    /// The payload must never be able to write these: the user config
+    /// is the host-wide grant layer and the sidecar is the one file a
+    /// repository's sandbox runs are steered by, and a writable policy
+    /// file turns the NEXT run into a widened one — a `git-dirs`
+    /// approval can be added by the attacker, and the `.git` pointer
+    /// rewritten to match (review-3 item 3). `rw` mount sources that
+    /// contain one are therefore refused; the check also covers the
+    /// repo bind itself, which is `rw` by definition.
+    pub policy_paths: &'a [PathBuf],
 }
 
 /// Build the complete `bwrap` argv for `cfg` / `repo` / `payload`.
@@ -100,16 +114,14 @@ pub struct Params<'a> {
 ///    worktrees and submodules are unusable without them)
 /// 5. the configured mounts, in declaration order, `--ro-bind` / `--bind`,
 ///    each `dest` defaulting to its source path (mount order is argv
-///    order; a later rw bind nested inside an earlier ro bind is a real
-///    pattern the MVP must preserve). Two layout rules are enforced:
-///    a dest that would shadow or overwrite a base path — via `..`
-///    components or as an ancestor or descendant of one — is refused
-///    (see [`check_dest`]); a later dest that would hide an
-///    earlier mount — or the implicit repo bind — is refused
-///    (see [`check_hidden_mounts`]); and a dest BELOW a writable bind
-///    is refused, because bubblewrap follows symlinks in a dest's
-///    parent components and writable content can plant them
-///    (see [`check_symlinkable_dests`], review-2 item 2).
+///    order). Two layout rules are enforced: a dest that would shadow
+///    or overwrite a base path — via `..` components or as an ancestor
+///    or descendant of one — is refused (see [`check_dest`]); a later
+///    dest that would hide an earlier mount — or the implicit repo
+///    bind — is refused (see [`check_hidden_mounts`]); and a dest
+///    BELOW a writable bind is refused, because bubblewrap follows
+///    symlinks in a dest's parent components and writable content can
+///    plant them (see [`check_symlinkable_dests`], review-2 item 2).
 /// 6. environment via `--setenv`, in this precedence: host-forwarded
 ///    variables first, then `cfg.env` (which wins by being set later),
 ///    then the infrastructure variables `HOME` and `PATH` last — set
@@ -207,6 +219,34 @@ pub fn bwrap_argv(
         bind(&mut argv, false, &git_dir.to_string_lossy(), None);
     }
 
+    // Review-3 item 3: a writable bind may never expose a trusted
+    // policy file — the user config (host-wide grants) or the sidecar
+    // config (this repo's own sandbox policy). The payload writing one
+    // steers the NEXT run: a `git-dirs` approval can be added, the
+    // `.git` pointer rewritten to match. `rw` mounts are the direct
+    // case; the repo bind and the git dirs are `rw` too, so they are
+    // checked as well — a sidecar or user config sitting inside the
+    // work tree is refused, not silently exposed. `ro` mounts do not
+    // count: the payload cannot write through them.
+    for src in cfg
+        .mounts
+        .iter()
+        .filter(|m| m.mode == Mode::Rw)
+        .map(|m| normalize(&m.path))
+        .chain(std::iter::once(normalize(&root)))
+        .chain(repo.git_dirs.iter().map(|g| normalize(&g.to_string_lossy())))
+    {
+        for policy in params.policy_paths {
+            let pol = normalize(&policy.to_string_lossy());
+            if pol.starts_with(&src) {
+                return Err(Error::PolicyFileWritable {
+                    source: src.to_string_lossy().into_owned(),
+                    policy: policy.display().to_string(),
+                });
+            }
+        }
+    }
+
     // 5. configured mounts, in declaration order; dest defaults to the
     // canonicalized source path. A `dest` may never be related to a
     // protected path in either direction: bubblewrap applies binds in
@@ -222,6 +262,9 @@ pub fn bwrap_argv(
     // The protected-dest check runs FIRST: a dest that overwrites a base
     // bind is the sharper diagnosis, and the repo-covering check would
     // otherwise mask it with a generic `would hide` for dests like `/`.
+    // (The policy-file check above is even earlier; a config violating
+    // several rules reports the policy exposure, which is the one that
+    // turns the NEXT run into a widened one.)
     for m in &cfg.mounts {
         let dest = m.dest.as_deref().unwrap_or(&m.path);
         if let Some(protected) = check_dest(dest) {
@@ -240,11 +283,28 @@ pub fn bwrap_argv(
         // The daemon is bound with `--share-net` and nowhere else
         // (section 2) — but a configured mount could still source it.
         // Its dest is irrelevant: what matters is that the socket
-        // becomes reachable at all (review-2 item 3).
-        for m in &cfg.mounts {
-            if normalize(&m.path).starts_with("/nix/var/nix") {
+        // becomes reachable at all. Both containment directions count
+        // (review-3 item 2): a source AT OR BELOW `/nix/var/nix` is one,
+        // and so is a HOST ANCESTOR — binding `/nix` or `/` read-only
+        // still exposes `/nix/var/nix/daemon-socket/socket` through
+        // the wider window. `check_dest` and `check_hidden_mounts`
+        // already refuse the in-sandbox ancestors of protected
+        // paths, so an ancestor SOURCE was the one gap.
+        const DAEMON_DIR: &str = "/nix/var/nix";
+        // Every effective source, not just the configured mounts:
+        // the implicit repo bind is checked too (review-3 item 2 said
+        // so explicitly). In practice a repo cannot sit there — `/`
+        // and the home tree are refused at discovery — but `/nix` or
+        // `/nix/var` are ordinary directories, and the rule is cheap.
+        for src in cfg
+            .mounts
+            .iter()
+            .map(|m| normalize(&m.path))
+            .chain(std::iter::once(normalize(&root)))
+        {
+            if src.starts_with(DAEMON_DIR) || Path::new(DAEMON_DIR).starts_with(&src) {
                 return Err(Error::DaemonUnderDeniedNetwork {
-                    source: m.path.clone(),
+                    source: src.to_string_lossy().into_owned(),
                 });
             }
         }
@@ -318,23 +378,36 @@ pub enum Error {
     /// specification.
     GitDirNotApproved { gitdir: PathBuf },
     /// A mount `dest` lies below a writable bind — the repo, a git
-    /// metadata directory, or an earlier `rw` mount. bubblewrap
-    /// resolves the destination path in the sandbox it has built so
-    /// far and FOLLOWS symlinks in its parent components, so a
-    /// symlink planted in that writable content redirects the bind to
-    /// any path at all (review-2 item 2).
+    /// metadata directory, an `rw` mount, or a `ro` alias of any of
+    /// those. bubblewrap resolves the destination path in the sandbox
+    /// it has built so far and FOLLOWS symlinks in its parent
+    /// components, so a symlink planted in that writable content
+    /// redirects the bind to any path at all (review-2 item 2,
+    /// review-3 item 1).
     DestBelowWritable {
         /// The refused destination.
         dest: String,
         /// The writable bind it lies below.
         writable: String,
     },
+    /// A writable bind (the repo, a git dir, or an `rw` mount) would
+    /// expose a trusted policy file — the user config or the sidecar
+    /// config — to the payload (review-3 item 3). A policy file the
+    /// sandbox can write makes the NEXT run a widened one: `git-dirs`
+    /// approvals can be added, the `.git` pointer rewritten to match.
+    PolicyFileWritable {
+        /// The mount (or repo) source the policy file lies below.
+        source: String,
+        /// The policy file that would become writable.
+        policy: String,
+    },
     /// A configured mount would carry the nix daemon into a sandbox
-    /// whose network is denied (review-2 item 3). The socket under
-    /// `/nix/var/nix` is a network service: the daemon builds
-    /// fixed-output derivations, which keep network access, so a
-    /// mount that sources it would make `network = false` a lie no
-    /// matter what its dest is.
+    /// whose network is denied (review-2 item 3, review-3 item 2). The
+    /// socket under `/nix/var/nix` is a network service: the daemon
+    /// builds fixed-output derivations, which keep network access, so
+    /// a mount that sources it — or any HOST ANCESTOR of it, like
+    /// `/nix` itself, which carries the socket along — would make
+    /// `network = false` a lie no matter what its dest is.
     DaemonUnderDeniedNetwork { source: String },
     /// The git metadata a `.git` FILE points at is related to a
     /// protected sandbox path — the bind would shadow or overwrite base
@@ -375,14 +448,20 @@ impl fmt::Display for Error {
                  bind onto any path, protected ones included; mount it \
                  outside that tree instead"
             ),
+            Error::PolicyFileWritable { source, policy } => write!(
+                f,
+                "source {source} would expose the policy file {policy} \
+                 writable — a config the sandbox can write steers the NEXT \
+                 run of itself (git-dirs approvals, .git pointers); narrow \
+                 the mount to below it, or drop it"
+            ),
             Error::DaemonUnderDeniedNetwork { source } => write!(
                 f,
-                "mount source {source} is inside the nix daemon directory \
-                 /nix/var/nix, and this sandbox denies the network — the \
-                 daemon builds fixed-output derivations, which keep network \
-                 access, so the mount would hand back exactly what \
-                 `network = false` takes away; drop the mount or share the \
-                 network"
+                "source {source} is inside or above the nix daemon directory \
+                 /nix/var/nix, and this sandbox denies the network — the daemon \
+                 builds fixed-output derivations, which keep network access, so a \
+                 bind exposing the socket would hand back exactly what \
+                 `network = false` takes away; drop the bind or share the network"
             ),
             Error::GitDirProtected { gitdir, protected } => write!(
                 f,
@@ -634,7 +713,7 @@ fn check_hidden_mounts(
 ///
 /// - the repo (always rw, D13) and the git metadata directories: the
 ///   payload writes them, and what it writes persists to the next run,
-/// - any EARLIER `rw` mount: same argument, one layer out.
+/// - any `rw` mount: same argument, one layer out.
 ///
 /// An `ro` bind whose SOURCE is ordinary host state is not in the set:
 /// the sandbox cannot change that content, so the residual risk is a
@@ -653,6 +732,18 @@ fn check_hidden_mounts(
 /// An EQUAL dest is not below anything and stays allowed: re-binding
 /// the same path resolves the path itself, not a component inside the
 /// writable content.
+///
+/// The analysis is order-INDEPENDENT (review-3 item 1) although
+/// bubblewrap applies binds in order: the symlink a payload plants
+/// persists to the NEXT run, and on that next run the declaration
+/// order is identical — a guard that depended on the order would
+/// only defend the first run against a pattern whose exploit is the
+/// second. So the writable sets are built from the mount list as a
+/// whole, in a fixed-point pass: every `rw` mount contributes its
+/// source to `writable_sources` and its dest to `writable_dests`,
+/// every `ro` mount whose source is (or comes to be) inside a
+/// writable source contributes its dest too, and contributions are
+/// propagated in BOTH directions until nothing changes.
 fn check_symlinkable_dests(
     mounts: &[Mount],
     repo_root: &str,
@@ -669,33 +760,56 @@ fn check_symlinkable_dests(
     // git dirs are bound at their host path, so they are both.
     let mut writable_dests: Vec<PathBuf> = writable_sources.clone();
 
-    for m in mounts {
-        let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
-        let src = normalize(&m.path);
-        if let Some(prefix) = writable_dests
-            .iter()
-            .find(|p| dest.starts_with(p) && &&dest != p)
-        {
-            return Err(Error::DestBelowWritable {
-                dest: dest.to_string_lossy().into_owned(),
-                writable: prefix.to_string_lossy().into_owned(),
-            });
+    // Order-independence (review-3 item 1): passes run until a
+    // fixed point, so it does not matter which alias is declared
+    // first — an `ro` parent that contains writable content
+    // anywhere below it contributes its dest, and a mount's own
+    // dest may not be below any writable dest, whenever declared.
+    loop {
+        let mut changed = false;
+        for m in mounts {
+            let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
+            let src = normalize(&m.path);
+            if let Some(prefix) = writable_dests
+                .iter()
+                .find(|p| dest.starts_with(p) && dest != **p)
+            {
+                return Err(Error::DestBelowWritable {
+                    dest: dest.to_string_lossy().into_owned(),
+                    writable: prefix.to_string_lossy().into_owned(),
+                });
+            }
+            // A mount makes its dest subtree writable-in-sandbox when
+            // it is `rw` — and also when it is `ro` but re-exposes
+            // content that is writable elsewhere in the sandbox, in
+            // EITHER direction: `ro` stops the payload from writing
+            // THROUGH this bind, not from writing the same host inode
+            // through the repo bind next door. A source INSIDE a
+            // writable subtree is the review-2 case; a source
+            // CONTAINING one (an `ro` alias of a tree holding the
+            // repo, or of a parent of an `rw` mount's source) exposes
+            // the same planted symlinks through the wider window
+            // (review-3 item 1).
+            let src_is_writable = writable_sources
+                .iter()
+                .any(|w| src.starts_with(w) || w.starts_with(&src));
+            let push_if_new = |set: &mut Vec<PathBuf>, p: PathBuf| {
+                if !set.contains(&p) {
+                    set.push(p);
+                    true
+                } else {
+                    false
+                }
+            };
+            if m.mode == Mode::Rw {
+                changed |= push_if_new(&mut writable_sources, src);
+                changed |= push_if_new(&mut writable_dests, dest);
+            } else if src_is_writable {
+                changed |= push_if_new(&mut writable_dests, dest);
+            }
         }
-        // Only AFTER its own check does a mount extend the sets: bwrap
-        // applies binds in order, so a LATER bind cannot have planted
-        // anything an EARLIER dest resolves through.
-        //
-        // A mount makes its dest subtree writable-in-sandbox when it is
-        // `rw` — and also when it is `ro` but re-exposes content that
-        // is already writable elsewhere in the sandbox: `ro` stops the
-        // payload from writing THROUGH this bind, not from writing the
-        // same host inode through the repo bind next door.
-        let src_is_writable = writable_sources.iter().any(|w| src.starts_with(w));
-        if m.mode == Mode::Rw {
-            writable_sources.push(src);
-            writable_dests.push(dest);
-        } else if src_is_writable {
-            writable_dests.push(dest);
+        if !changed {
+            break;
         }
     }
     Ok(())
@@ -820,6 +934,7 @@ mod tests {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
             nix_conf: None,
+            policy_paths: &[],
         }
     }
 

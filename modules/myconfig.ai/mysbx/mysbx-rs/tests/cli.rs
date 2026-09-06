@@ -444,10 +444,38 @@ fn verbose_bare_form_reports_and_still_executes() {
         return;
     }
     // The bare form's payload is the shell; point it at a command that
-    // exits on its own, so the test does not hang on an interactive one.
+    // exits on its own, so the test does not hang on an interactive
+    // one. `true` must be reachable INSIDE the sandbox, i.e. its real
+    // path under a base-bound directory — the same discovery
+    // `sandbox_bash()` uses, for a host whose `/usr/bin` holds only
+    // `env` (plain NixOS).
+    // NOTE: keep the ORIGINAL /nix/store/.../bin/true path, not the
+    // canonicalized one — coreutils ships `true` as a symlink to the
+    // multi-call `coreutils` binary, and canonicalize() would resolve
+    // it to a binary that no longer behaves like `true`.
+    let true_path = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            // The candidate itself must be base-bound (sandbox mounts
+            // /nix/store and /usr/bin only) — a profile symlink like
+            // /run/current-system/sw/bin/true canonicalizes INTO the
+            // store, but the profile path itself is not mounted, so
+            // profile paths must be skipped, not used. In a nix shell
+            // the PATH entry IS the store path, so `dir` qualifies.
+            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
+                return None;
+            }
+            let candidate = dir.join("true");
+            candidate.is_file().then_some(candidate)
+        })
+    });
+    let Some(true_path) = true_path else {
+        eprintln!("skipping: no sandbox-reachable true");
+        return;
+    };
+    let true_str = true_path.to_string_lossy().into_owned();
     let (inv, _, _) = fixture_user_backend("verbose-bare-exec", &["--verbose"]);
     let mut cmd = spawn(&inv);
-    cmd.env("MYSBX_SHELL", "/usr/bin/true")
+    cmd.env("MYSBX_SHELL", &true_str)
         .env("MYSBX_TOOLS_PATH", "/usr/bin");
     let out = cmd.output().expect("failed to spawn mysbx");
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -455,7 +483,7 @@ fn verbose_bare_form_reports_and_still_executes() {
     assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
     let report = report_lines(&stdout).join("\n");
     assert!(
-        report.contains("payload:        shell /usr/bin/true"),
+        report.contains(&format!("payload:        shell {true_str}")),
         "{stdout}"
     );
     assert!(report.contains("mode:           executing"), "{stdout}");
@@ -758,6 +786,88 @@ fn run_executes_payload_when_bwrap_exists() {
 }
 
 #[test]
+fn ripgrep_config_mount_is_activated_through_the_variable() {
+    // Review-3 item 6, execution-level: mounting the ripgrep config
+    // directory is inert by itself — the activation mechanism is the
+    // `RIPGREP_CONFIG_PATH` variable, which `--clearenv` kills. A run
+    // whose user layer mirrors the generated `baselineEnv` (default.nix)
+    // must hand the payload BOTH the mounted file and the variable
+    // pointing at its in-sandbox path. The payload prints the variable
+    // and the file, proving the mount and the setenv landed together.
+    // A REAL `rg` in the tools closure is not assumed (the nix build
+    // sandbox has none): reading the variable and the file is the
+    // observable contract between mysbx and whatever tool consumes it.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let base = tmpdir("ripgrep-activation");
+    let home = base.join("home");
+    let xdg = base.join("xdg");
+    let repo = base.join("repo");
+    std::fs::create_dir_all(repo.join("sub")).unwrap();
+    std::fs::create_dir_all(base.join("repo.mysbx")).unwrap();
+    std::fs::create_dir_all(home.join(".config").join("ripgrep")).unwrap();
+    std::fs::write(
+        home.join(".config").join("ripgrep").join("ripgreprc"),
+        "--max-columns-preview\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        xdg.join("mysbx").join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\n\n[[mounts]]\npath = \"~/.config/ripgrep\"\ndest = \"/mysbx-home/.config/ripgrep\"\nmode = \"ro\"\n\n[env]\nRIPGREP_CONFIG_PATH = \"/mysbx-home/.config/ripgrep/ripgreprc\"\n"
+        ),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["run"], // the real argv is passed to spawn_with_args below
+        cwd: repo,
+        home,
+        xdg,
+    };
+    // The payload bash is the same sandbox-reachable one
+    // `sandbox_bash()` discovers; it prints the variable AND the file
+    // content, so one exec proves both the setenv and the mount
+    // landed. The [env] entry below mirrors default.nix `baselineEnv`
+    // by hand — keep the two in sync (the golden test
+    // golden_ripgrep_config_path_activation pins the same shape).
+    let args = vec![
+        "run".to_owned(),
+        "--".to_owned(),
+        bash.to_string_lossy().into_owned(),
+        "-c".to_owned(),
+        // Shell builtins only (PATH inside the sandbox is the bare
+        // /usr/bin of a NixOS host): $(< file) reads the mounted file
+        // without `cat`.
+        "printf \"%s|\" \"$(< \"$RIPGREP_CONFIG_PATH\")\"; printf \"%s\" \"$RIPGREP_CONFIG_PATH\"".to_owned(),
+    ];
+    let mut cmd = spawn_with_args(&inv, &args);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "exit {:?}\nstdout: {stdout}\nstderr: {stderr}",
+        out.status.code()
+    );
+    assert!(
+        stdout.trim().ends_with("|/mysbx-home/.config/ripgrep/ripgreprc"),
+        "the variable must name the in-sandbox path: {stdout}"
+    );
+    assert!(
+        stdout.contains("--max-columns-preview"),
+        "the variable must resolve to the MOUNTED file's content: {stdout}"
+    );
+}
+
+#[test]
 fn failing_payload_propagates_exit_code() {
     if !is_bwrap_available() {
         eprintln!("skipping: bwrap not available in this environment");
@@ -1013,6 +1123,14 @@ fn make_worktree_fixture(base: &Path, name: &str) -> (PathBuf, PathBuf) {
         format!("gitdir: {}\n", gitdir.display()),
     )
     .unwrap();
+    // The sidecar sibling of the worktree, empty on purpose: repo
+    // resolution prefers the NEAREST sidecar, so this pins the
+    // resolution to the fixture instead of letting it walk up into
+    // whatever real repository the test tree happens to live in
+    // (CARGO_TARGET_TMPDIR is inside a worktree here — without this,
+    // a sidecar created at that outer repo by any earlier run would
+    // hijack every make_worktree_fixture test).
+    std::fs::create_dir_all(base.join(format!("{name}.mysbx"))).unwrap();
     (worktree, gitdir)
 }
 
@@ -1190,6 +1308,158 @@ fn the_implicit_init_approves_nothing() {
     );
 }
 
+// ---- the review-3 item 5 recovery -------------------------------------------
+
+#[test]
+fn approve_git_dirs_recovers_after_an_implicit_init() {
+    // The exact scenario review-3 item 5 describes: the user's first
+    // contact with a linked-worktree repo was the bare form, so the
+    // sidecar exists WITHOUT approvals (the implicit init never
+    // snapshots). Plain `init` would just say `exists`. The flag
+    // takes the trust decision explicitly, after the fact: the config
+    // must now carry the discovered git dir, and a following `run`
+    // must accept it.
+    let base = target_tmpdir("approve-git-dirs-recovery");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let sidecar = base.join("wt.mysbx");
+    let inv = |args: Vec<&'static str>| Invocation {
+        args,
+        cwd: worktree.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+
+    // First contact: the bare form creates the sidecar without
+    // approvals and refuses the bind (the_implicit_init_approves_nothing
+    // pins that half).
+    let (code, _, stderr) = run_binary(&inv(vec!["run", "--", "true"]));
+    assert_eq!(code, 1, "stderr: {stderr}");
+    let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert!(!written.contains("git-dirs"), "{written}");
+
+    // The recovery: explicit init with the flag.
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("approved git metadata"), "{stdout}");
+    let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert!(written.contains("git-dirs = ["), "{written}");
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "the recovery must record the discovered git dir: {written}"
+    );
+
+    // The recorded approval satisfies the next run's bind.
+    let (code, _, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn approve_git_dirs_is_idempotent_and_additive_only() {
+    // A second invocation with the flag must be a no-op (nothing
+    // missing), and an entry an operator deliberately REMOVED is not
+    // resurrected by a later `init --approve-git-dirs`... it IS
+    // rediscovered, so the flag re-approves it — that is the explicit
+    // word the flag speaks. What must hold: the rest of the file —
+    // comments, mounts, hand-written entries — survives byte-for-byte
+    // except for the added lines, and already-approved entries are
+    // never duplicated.
+    let base = target_tmpdir("approve-git-dirs-idempotent");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    // An operator-written config: a comment, a mount, a hand-approved
+    // git dir (in a `~`-free absolute spelling), one entry removed.
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "# operator notes\nbackend = \"bubblewrap\"\n\ngit-dirs = [\n  \"{}\",\n]\n\n[[mounts]]\npath = \"/etc/hosts\"\nmode = \"ro\"\n",
+            gitdir.display()
+        ),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["init", "--approve-git-dirs"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+
+    let before = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("already lists everything"),
+        "nothing was missing, so nothing may be written: {stdout}"
+    );
+    let after = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert_eq!(before, after, "the config must be untouched");
+}
+
+#[test]
+fn approve_git_dirs_splices_into_an_existing_list_without_duplicates() {
+    // The existing list names the git dir in a DIFFERENT spelling
+    // (with a redundant trailing component pattern): the resolved
+    // comparison must recognize it as approved and not duplicate it.
+    let base = target_tmpdir("approve-git-dirs-splice");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!("git-dirs = [\n  \"{}\",\n]\n# trailing comment\n", gitdir.display()),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["init", "--approve-git-dirs"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("already lists everything"),
+        "the resolved spelling must count as approved: {stdout}"
+    );
+    let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert_eq!(
+        written.matches(gitdir.display().to_string().as_str()).count(),
+        1,
+        "no duplicates: {written}"
+    );
+    assert!(written.contains("# trailing comment"), "{written}");
+}
+
+#[test]
+fn init_rejects_unknown_arguments() {
+    // The flag surface stays minimal: anything else on `init` is a
+    // usage error (exit 2).
+    let base = target_tmpdir("init-unknown-arg");
+    let (worktree, _gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["init", "--approve-git", "extra"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("unexpected argument"), "{stderr}");
+}
+
 #[test]
 fn an_unapproved_common_dir_is_refused_even_when_the_gitdir_is_approved() {
     // `commondir` is a second repo-controlled pointer: approving the
@@ -1271,4 +1541,51 @@ fn without_the_pin_no_nix_conf_is_bound() {
         "no nix.conf bind: {stdout}"
     );
     assert!(stdout.contains("## nix.conf:       (none"), "{stdout}");
+}
+
+#[test]
+fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
+    // Review-3 item 3, as a real run sees it: the sidecar config
+    // exists, and the user config grants `rw` on a directory that
+    // contains it. The run must fail with the policy-file error — a
+    // writable sidecar steers the next run (git-dirs approvals, .git
+    // rewrites) — and must NOT fall back to executing anything.
+    //
+    // The mounted tree must NOT contain the invocation's home: that
+    // is the review-3 item 4 guard, which fires first by design (a
+    // home exposure is the sharper diagnosis). The fixture therefore
+    // lays the repo+sidecar tree out beside the home, not around it.
+    let base = tmpdir("policy-writable");
+    let trees = base.join("trees");
+    let repo = trees.join("repo");
+    let sidecar = trees.join("repo.mysbx");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    let home = base.join("home");
+    let xdg = base.join("xdg");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd: repo,
+        home: home.clone(),
+        xdg: xdg.clone(),
+    };
+    let user_cfg = format!(
+        "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"rw\"\ndest = \"/all\"\n",
+        trees.canonicalize().unwrap()
+    );
+    std::fs::write(xdg.join("mysbx").join("config.toml"), user_cfg).unwrap();
+
+    let mut cmd = spawn_with_args(&inv, &[] as &[&str]);
+    cmd.env("MYSBX_BWRAP", "/nonexistent-bwrap");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("policy file"),
+        "unexpected stderr: {stderr}"
+    );
 }

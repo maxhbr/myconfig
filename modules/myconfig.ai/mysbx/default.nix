@@ -83,6 +83,41 @@ let
         ++ lib.optional config.programs.fish.enable "~/.config/fish"
       );
 
+  # `home-manager.users.mhuber` is only referenced under `mkIf cfg.enable`
+  # below (Nix is lazy), and mysbx's own config block already writes
+  # `home-manager.users.mhuber.xdg.configFile.…`, so the option path is
+  # guaranteed to exist wherever this is evaluated.
+  #
+  # NOTE: the `~/.config/ripgrep` spelling below (both the mount list and
+  # `baselineEnv`) assumes Home Manager's default `xdg.configHome`, i.e.
+  # `~/.config`. HM writes its ripgreprc to
+  # `${config.home-manager.users.mhuber.xdg.configHome}/ripgrep`; a host
+  # that rewrites `xdg.configHome` would need the mount list AND the
+  # variable adjusted together — otherwise the variable points at a
+  # missing file (a hard `rg` failure). No myconfig host rewrites it;
+  # revisit if one ever does.
+  hmRipgrep = config.home-manager.users.mhuber.programs.ripgrep;
+
+  # Baseline environment: regenerate inside the sandbox what the host
+  # module layer activates through mechanisms other than files.
+  #
+  # `RIPGREP_CONFIG_PATH` (review-3 item 6): Home Manager's
+  # `programs.ripgrep` writes `~/.config/ripgrep/ripgreprc` and points
+  # `RIPGREP_CONFIG_PATH` at it — the file is mounted above, but the
+  # VARIABLE is not in the forwarding allowlist (lib.rs), so `--clearenv`
+  # kills it and `rg` inside the sandbox silently runs with defaults.
+  # The same in-sandbox path Home Manager would compute is pinned here:
+  # `homeDest` maps `~` to `/mysbx-home`, which is where the mount puts
+  # the file. An [env] entry is the mysbx-native way to set it (config.md
+  # D6); it is part of the user layer, so a sidecar may not override it
+  # (D7) and the user may. Set exactly when Home Manager would write the
+  # file AND the variable (`enable` + non-empty `arguments`): a variable
+  # pointing at a missing file is a hard `rg` failure, and mounting the
+  # directory alone does not guarantee the file.
+  baselineEnv = lib.optionalAttrs (hmRipgrep.enable && hmRipgrep.arguments != [ ]) {
+    RIPGREP_CONFIG_PATH = homeDest "~/.config/ripgrep/ripgreprc";
+  };
+
   # `dest` is optional in the schema and there is no TOML null: a
   # `dest = null` key would be a type error in the strict parser, so it is
   # dropped instead of rendered.
@@ -233,6 +268,33 @@ in
     # indistinguishable from a real host home.
     assertions =
       let
+        # Lexically resolve `.` and `..` components of an absolute
+        # path — the same job the CLI's `normalize()` does, so a
+        # `dest` like `/x/../home/user` is seen as `/home/user`
+        # instead of slipping past a prefix check (review-3 item 4).
+        # Eval-time Nix cannot canonicalize against the host tree;
+        # lexical is the strongest available, and a `dest` with a
+        # symlink in it is the runtime layer's problem (D8: the
+        # runtime canonicalizes mount sources, and dest rules are
+        # guarded in the argv builder).
+        normalizePath =
+          path:
+          let
+            parts = lib.splitString "/" path;
+            step =
+              acc: part:
+              if part == "" || part == "." then
+                acc
+              else if part == ".." then
+                # `lib.init []` throws; "/.." and friends would abort
+                # the whole eval instead of failing the assertion, so
+                # clamp at the root (a `..` with nothing above it
+                # resolves to `/` itself).
+                if acc == [ ] then acc else lib.init acc
+              else
+                acc ++ [ part ];
+          in
+          "/" + lib.concatStringsSep "/" (builtins.foldl' step [ ] parts);
         # What the mount actually lands on inside the sandbox: the
         # `dest` when given, otherwise the host path itself — in every
         # spelling D8 allows (absolute, `~/…`, or relative to the
@@ -240,10 +302,14 @@ in
         effectiveDest = m: if m.dest != null then m.dest else m.path;
         # True when that in-sandbox path lands inside the host home,
         # however it is written: `~`/`~/…` expand there, an absolute
-        # `/home/…` is one already, and a relative path resolves
-        # against `~/.config/mysbx/`, so it is one too.
+        # `/home/…` is one already (normalized first), and a relative
+        # path resolves against `~/.config/mysbx/`, so it is one too.
         landsInHostHome =
-          d: lib.hasPrefix "/home/" d || d == "~" || lib.hasPrefix "~/" d || !(lib.hasPrefix "/" d);
+          d:
+          let
+            nd = normalizePath d;
+          in
+          lib.hasPrefix "/home/" nd || d == "~" || lib.hasPrefix "~/" d || !(lib.hasPrefix "/" d);
         offenders = builtins.filter (m: landsInHostHome (effectiveDest m)) cfg.config.mounts;
       in
       [
@@ -263,6 +329,12 @@ in
     # Baseline grants; further definitions (from per-agent modules or the
     # host config) are concatenated onto this list.
     myconfig.ai.mysbx.config.mounts = baselineMounts;
+
+    # Baseline [env] (RIPGREP_CONFIG_PATH, review-3 item 6); per-agent
+    # modules and the host config may extend it — attrset merge is by
+    # key, so a later definition of the same key REPLACES the baseline
+    # (visible in the generated file, unlike list concatenation).
+    myconfig.ai.mysbx.config.env = baselineEnv;
 
     home-manager.sharedModules = [
       { home.packages = [ cfg.package ]; }

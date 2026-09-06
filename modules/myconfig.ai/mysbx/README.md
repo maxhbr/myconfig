@@ -102,8 +102,11 @@ whenever `myconfig.ai.mysbx.enable` is set. Its baseline mounts the host tool
 config this repo manages read-only (`~/.config/git`, `~/.config/ripgrep`,
 `~/.config/bat`, and `~/.config/fish` when fish is enabled), each with an
 explicit destination under `/mysbx-home` so the tools inside the sandbox
-find it where `$HOME` points; those entries are also the grant tree a repo
-sidecar may mount below (`docs/design/config.md` D7). Per-agent modules
+find it where `$HOME` points, and `RIPGREP_CONFIG_PATH` in the generated
+`[env]` so the ripgrep mount is actually activated (the sandbox clears
+the host variable, and a mount alone is inert — review-3 item 6); those
+mount entries are also the grant tree a repo sidecar may mount below
+(`docs/design/config.md` D7). Per-agent modules
 append their own config files to `myconfig.ai.mysbx.config.mounts`.
 
 # Supported Technologies

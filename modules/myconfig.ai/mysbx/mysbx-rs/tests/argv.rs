@@ -64,6 +64,7 @@ fn params() -> Params<'static> {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
         nix_conf: None,
+        policy_paths: &[],
     }
 }
 
@@ -312,6 +313,30 @@ fn golden_env_entry() {
 }
 
 #[test]
+fn golden_ripgrep_config_path_activation() {
+    // Review-3 item 6: the file mount alone is inert — Home Manager
+    // activates `~/.config/ripgrep/ripgreprc` through
+    // `RIPGREP_CONFIG_PATH`, which `--clearenv` kills (it is not in
+    // the forwarding allowlist). The generated user layer (default.nix
+    // `baselineEnv`) therefore carries the variable as an ordinary
+    // `[env]` entry pointing at the IN-SANDBOX path the mount created.
+    // This pins what that produces: the mount at
+    // /mysbx-home/.config/ripgrep and the setenv, in section order.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/home/u/.config/ripgrep",
+        Some("/mysbx-home/.config/ripgrep"),
+        Mode::Ro,
+    ));
+    cfg.env.insert(
+        "RIPGREP_CONFIG_PATH".into(),
+        "/mysbx-home/.config/ripgrep/ripgreprc".into(),
+    );
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+    assert_golden("ripgrep-config-path.txt", &argv);
+}
+
+#[test]
 fn golden_sidecar_narrows_user_config() {
     // docs/TODOs/mvp-3-layer-merge.md end state, hand-built (a `Merged`
     // merge.rs would have produced and the argv builder alone sees): the
@@ -457,14 +482,17 @@ fn share_net_iff_network_true() {
 
 #[test]
 fn mount_order_is_preserved() {
-    // A later rw bind nested inside an earlier ro bind is a real pattern
-    // (the base table relies on it): the argv must keep declaration order.
+    // Declaration order between UNRELATED mounts must be kept in the
+    // argv. (This fixture used to nest an rw bind inside an ro bind;
+    // review-3 item 1 turns that pattern into a refusal — see
+    // `a_ro_parent_containing_an_rw_mount_is_not_a_safe_parent` — so
+    // the order is pinned on disjoint paths instead.)
     let cfg = Merged {
         backend: Some("bubblewrap".into()),
         network: true,
         mounts: vec![
             make_mount("/synth/data/outer", None, Mode::Ro),
-            make_mount("/synth/data/outer/nested", None, Mode::Rw),
+            make_mount("/synth/other", None, Mode::Rw),
         ],
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
@@ -482,14 +510,14 @@ fn mount_order_is_preserved() {
         .unwrap();
     let nested = argv
         .iter()
-        .position(|x| x.as_str() == "/synth/data/outer/nested")
+        .position(|x| x.as_str() == "/synth/other")
         .unwrap();
     assert!(
         outer < nested,
-        "ro outer bind must precede the nested rw bind"
+        "the earlier declared mount must be bound first"
     );
     assert_eq!(argv[outer - 1], "--ro-bind", "outer mount is ro");
-    assert_eq!(argv[nested - 1], "--bind", "nested mount is rw");
+    assert_eq!(argv[nested - 1], "--bind", "later mount is rw");
 }
 
 #[test]
@@ -959,6 +987,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
         nix_conf: Some("/synth/store/mysbx-nix.conf"),
+        policy_paths: &[],
     };
     let argv = bwrap_argv(
         &base(true),
@@ -1455,4 +1484,312 @@ fn a_mount_may_source_the_daemon_when_the_network_is_shared() {
         Mode::Ro,
     ));
     bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
+
+// ---- order-independent writable-alias analysis (review-3 item 1) -----------
+
+#[test]
+fn a_ro_alias_declared_before_the_rw_alias_is_caught() {
+    // Review-3 item 1, first miss: an `ro` alias is declared BEFORE
+    // the `rw` mount of a path inside it. The forward scan used to see
+    // the ro mount first, conclude "ordinary host state", and clear it
+    // as a safe parent — leaving a dest below the alias resolvable
+    // through a payload-planted symlink.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/host/tree", Some("/view"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/host/tree/writable", Some("/w"), Mode::Rw));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/view/writable/jump"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_parent_containing_the_repo_is_not_a_safe_parent() {
+    // Review-3 item 1, second miss: an `ro` mount of a tree CONTAINING
+    // the repo. The repo is always rw (D13), so the alias re-exposes
+    // writable content — a dest below `/view` is resolvable through a
+    // symlink planted in the work tree, no matter that the alias
+    // itself is `ro` and declared first.
+    let repo = synth_repo(); // root: /synth/repo
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth", Some("/view"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/view/repo/jump"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_parent_containing_an_rw_mount_is_not_a_safe_parent() {
+    // The old `mount_order_is_preserved` fixture — ro outer, rw inner —
+    // becomes a refusal (review-3 item 1): the ro alias re-exposes
+    // content the payload can write through the rw bind, so a dest
+    // below it resolves through whatever symlink the payload planted
+    // there between runs.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/data/outer", None, Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data/outer/nested", None, Mode::Rw));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_parent_containing_a_git_dir_is_not_a_safe_parent() {
+    // Same shape with the git metadata instead of the work tree: the
+    // git dirs are rw and symlink-plantable, so an ro alias above them
+    // inherits the property.
+    let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
+    cfg.mounts.push(make_mount("/synth/main", Some("/view"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/view/.git/worktrees/wt/hooks"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_chain_of_aliases_over_writable_content_is_caught() {
+    // A three-hop chain exercises more than one propagation pass of
+    // the fixed point: ro alias of an ro alias of a tree containing an
+    // rw mount. Pass 1 learns the rw source; pass 2 marks the middle
+    // alias writable; pass 3 marks the outer one — only then is the
+    // dest below the outer alias refused. A forward scan or a
+    // single-pass overlap would let it through.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/host/a/b", Some("/hop2"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/host/a", Some("/hop1"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/host/a/b/writable", Some("/w"), Mode::Rw));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/hop1/b/writable/jump"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+// ---- the daemon guard checks both directions (review-3 item 2) -------------
+
+#[test]
+fn a_read_only_ancestor_of_the_nix_daemon_dir_is_refused() {
+    // The review's exact example: binding `/nix` somewhere else still
+    // exposes `/nix/var/nix/daemon-socket/socket` through the wider
+    // window, read-only or not — the socket only needs to be
+    // connectable, not writable.
+    let mut cfg = base(false);
+    cfg.mounts.push(make_mount("/nix", Some("/host-nix"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(
+            err,
+            mysbx::bwrap::Error::DaemonUnderDeniedNetwork { .. }
+        ),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn the_whole_host_root_is_refused_under_a_denied_network() {
+    // The extreme ancestor: `path = "/"` binds everything, daemon
+    // included. (`check_dest` refuses the ROOT as a DEST on its own;
+    // the source side is this guard's job.)
+    let mut cfg = base(false);
+    cfg.mounts.push(make_mount("/", Some("/host-root"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(
+            err,
+            mysbx::bwrap::Error::DaemonUnderDeniedNetwork { .. }
+        ),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn an_unrelated_nix_store_source_stays_mountable_without_the_network() {
+    // The carve-out that keeps the guard usable: `/nix/store` itself
+    // does not contain `/nix/var/nix` (and `/nix/store` is bound by
+    // the base table regardless), so a mount of it stays allowed.
+    let mut cfg = base(false);
+    cfg.mounts
+        .push(make_mount("/nix/store/extra", Some("/opt/extra"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
+
+// ---- trusted policy files stay out of writable binds (review-3 item 3) ----
+
+#[test]
+fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
+    // The review's scenario: for repo ~/src/r the sidecar is
+    // ~/src/r.mysbx/config.toml. An `rw` mount of ~/src — relocated or
+    // not — makes that file payload-writable, and a writable sidecar
+    // steers the NEXT run: `git-dirs` approvals can be added, the
+    // `.git` pointer rewritten to match.
+    let repo = synth_repo(); // root /synth/repo, sidecar /synth/repo.mysbx
+    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth", Some("/all-src"), Mode::Rw));
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
+    // No relocation needed: an `rw` mount that sources the sidecar
+    // directory directly is the same hole, dest aside.
+    let repo = synth_repo();
+    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/repo.mysbx", Some("/policy"), Mode::Rw));
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_read_only_mount_of_the_sidecar_stays_allowed() {
+    // The carve-out: `ro` cannot write the file in place, so reviewing
+    // the sidecar from inside the sandbox stays possible. (A symlink
+    // planted in it is the accident barrier, D9 — and no dest below it
+    // is allowed anyway, by the writable-alias rule.)
+    let repo = synth_repo();
+    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/repo.mysbx", Some("/policy"), Mode::Ro));
+    bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
+}
+
+#[test]
+fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
+    // Ordinary rw grants elsewhere on the host are the feature, not
+    // the hole: only a source CONTAINING a policy file is refused.
+    let repo = synth_repo();
+    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/work", Some("/work"), Mode::Rw));
+    bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
+}
+
+#[test]
+fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
+    // The repo bind is rw too: a user config that lives inside the
+    // work tree (or a sidecar nested into it, however that happened)
+    // is refused rather than silently exposed. This covers the case
+    // the review spelled "including the implicit repo bind" for the
+    // daemon — same reasoning, different protected path.
+    let repo = synth_repo();
+    let policy = [PathBuf::from("/synth/repo/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let cfg = base(true);
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_git_dir_exposing_a_policy_file_is_refused() {
+    // Git metadata is rw as well (D13); an approved dir containing a
+    // policy file is the same widening hole.
+    let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
+    let policy = [PathBuf::from("/synth/main/.git/worktrees/wt/config.toml")];
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &policy,
+    };
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
+    // The existence filter, documented: an absent config granted
+    // nothing, so an `rw` source containing its would-be location is
+    // allowed THIS run. The guarantee is temporal, not lexical: the
+    // payload can create the file there, and the run that follows
+    // refuses the same `rw` source (the file then exists).
+    let repo = synth_repo();
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: &[], // nothing exists -> nothing protected
+    };
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth", Some("/all-src"), Mode::Rw));
+    bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
 }

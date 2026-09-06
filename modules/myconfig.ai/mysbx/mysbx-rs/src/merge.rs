@@ -115,6 +115,19 @@ pub struct Merged {
     pub git_dirs: Vec<PathBuf>,
 }
 
+/// How a mount source relates to the invoking user's home directory
+/// (review-3 item 4): `~` is not a valid mount source, and neither is
+/// any host directory that contains it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HomeRelation {
+    /// The source IS the home directory (`path = "~/"` or a symlink
+    /// resolving to it).
+    Equal,
+    /// The source CONTAINS the home directory (`path = "/home"`, or a
+    /// checkout root the home lives below).
+    Contains,
+}
+
 /// Why the two configuration layers could not be merged or loaded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
@@ -134,6 +147,17 @@ pub enum Error {
     /// A sidecar mount has no covering user-config grant. The message
     /// names the sidecar path and the missing user-config entry.
     MountNotGranted { message: String },
+    /// A mount source is — or contains — the invoking user's home
+    /// directory, which the sandbox's base design keeps out entirely
+    /// (docs/design/config.md D14: `HOME` is a fresh tmpfs, and the
+    /// report says "the host home is not mounted"). A mount that
+    /// re-exposes it would make that line false (review-3 item 4).
+    HomeExposed {
+        /// The mount source, canonicalized.
+        source: PathBuf,
+        /// How the source relates to the home directory.
+        relation: HomeRelation,
+    },
     /// A sidecar mount sits under a granted path but asks for more
     /// access (`ro` → `rw` upgrade).
     MountUpgrade { message: String },
@@ -168,6 +192,19 @@ impl fmt::Display for Error {
                 source,
             ),
             Error::MountNotGranted { message } => f.write_str(message),
+            Error::HomeExposed { source, relation } => write!(
+                f,
+                "[[mounts]] path {} {} the invoking user's home directory — \
+                 the sandbox keeps the host home out entirely (`HOME` is a \
+                 fresh tmpfs, and the report says it is not mounted, \
+                 docs/design/config.md D14); grant the specific \
+                 subdirectory instead (review-3 item 4)",
+                source.display(),
+                match relation {
+                    HomeRelation::Equal => "is",
+                    HomeRelation::Contains => "contains",
+                },
+            ),
             Error::MountUpgrade { message } => f.write_str(message),
             Error::EnvOverride { key, message } => write!(f, "{message} (key: `{key}`)"),
             Error::NetworkUpgrade { message } => f.write_str(message),
@@ -363,6 +400,37 @@ pub fn merge(
         .into_iter()
         .chain(canonicalize_git_dirs(&sidecar, sidecar_file, home)?)
         .collect::<Vec<PathBuf>>();
+
+    // Review-3 item 4: the host home is not mounted — not whole, not
+    // through an ancestor. `HOME` inside the sandbox is a fresh tmpfs
+    // and the report literally says the host home is not mounted
+    // (config.md D14); a `path = "~/"` (or a source containing the
+    // home, like `/home`) would make that claim false in either
+    // layer — this runs on BOTH layers, because a user-config entry
+    // is just as capable of breaking the report's truth as a sidecar
+    // one. The comparison must be canonicalized on BOTH sides: the
+    // caller passes the raw `$HOME` value, which may be a symlink
+    // (`/var/usrhome` → `/home/mhuber`), while a `~/` source
+    // canonicalizes to the real directory — comparing against the
+    // raw value would let a whole-home grant slip past. If `home`
+    // itself cannot be canonicalized (a stale `$HOME`), compare
+    // against the raw value: the sources are canonical either way, so
+    // only the exotic symlinked-home case narrows, never widens.
+    let home_canon = std::fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf());
+    for (canon, _m) in granted.iter().chain(sidecar_canon.iter()) {
+        if *canon == home_canon {
+            return Err(Error::HomeExposed {
+                source: canon.clone(),
+                relation: HomeRelation::Equal,
+            });
+        }
+        if home_canon.starts_with(canon) {
+            return Err(Error::HomeExposed {
+                source: canon.clone(),
+                relation: HomeRelation::Contains,
+            });
+        }
+    }
 
     // network: the sidecar may deny (false), not re-enable (D7). A layer
     // that does not mention `network` decided nothing (None) — an
@@ -1150,25 +1218,159 @@ mod tests {
         assert_eq!(merged.mounts.len(), 3);
     }
 
+    // ---- the host home is never mounted (review-3 item 4) ----------
+
+    #[test]
+    fn a_tilde_grant_of_the_whole_home_is_refused() {
+        // The review's exact case: `path = "~/"` (or an absolute or
+        // symlinked spelling of the same tree) would mount the host
+        // home while the report still says it is not. The comparison
+        // is on canonicalized paths, so every spelling is caught.
+        let base = tmpdir("home-exposed");
+        let home = dir(&base, &["home"]);
+        let u = cfg(
+            "[[mounts]]\npath = \"~/\"\nmode = \"ro\"\n",
+        );
+        let e = merge(
+            u,
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &home,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(e, Error::HomeExposed { relation: HomeRelation::Equal, .. }),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn a_grant_containing_the_home_is_refused() {
+        // `path = "/home"` — an ancestor — is the same exposure; the
+        // review's report-line claim must survive this spelling too.
+        let base = tmpdir("home-contained");
+        let home = dir(&base, &["home"]);
+        // A REAL host-`/home`-shaped ancestor: the parent of the home.
+        let parent = home.parent().unwrap().to_path_buf();
+        let u = cfg(&mount_toml(&parent, "ro"));
+        let e = merge(
+            u,
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &home,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(e, Error::HomeExposed { relation: HomeRelation::Contains, .. }),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn a_symlink_to_the_home_grant_is_caught_by_canonicalization() {
+        // D8's canonicalization is what makes the guard spelling-proof:
+        // a symlink pointing AT the home resolves to the home before
+        // the comparison — and the guard canonicalizes BOTH sides
+        // (see the `home_canon` note in `merge`), so a symlinked
+        // `$HOME` is caught too. An absolute link spelling is used
+        // here; the `~/` spelling is covered by
+        // `a_tilde_grant_of_the_whole_home_is_refused`.
+        let base = tmpdir("home-symlink");
+        let home = dir(&base, &["home"]);
+        let link = base.join("elsewhere");
+        std::os::unix::fs::symlink(&home, &link).unwrap();
+        let u = cfg(&mount_toml(&link, "ro"));
+        let e = merge(
+            u,
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &home,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(e, Error::HomeExposed { relation: HomeRelation::Equal, .. }),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn a_subdirectory_of_the_home_stays_grantable() {
+        // The carve-out D6 has always relied on: `~/.config/git` and
+        // friends grant subdirectories of the home, not the home. The
+        // guard must not refuse the baseline pattern.
+        let base = tmpdir("home-subdir");
+        let home = dir(&base, &["home"]);
+        let sub = dir(&home, &[".config", "git"]);
+        let u = cfg(&mount_toml(&sub, "ro"));
+        merge(
+            u,
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &home,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn a_symlinked_home_value_is_canonicalized_before_the_comparison() {
+        // The reviewer hole: `merge` used to compare canonicalized
+        // sources against the RAW `$HOME` value. When `$HOME` is a
+        // symlink (`/var/usrhome` -> `/home/mhuber`), a `~/` grant
+        // canonicalizes to the real directory and the equality
+        // failed — the whole-home grant slipped through. The guard
+        // now canonicalizes both sides.
+        let base = tmpdir("home-raw-symlink");
+        let real = dir(&base, &["home", "mhuber"]);
+        let alias = base.join("usrhome");
+        std::os::unix::fs::symlink(&real, &alias).unwrap();
+        let u = cfg(
+            "[[mounts]]\npath = \"~/\"\nmode = \"ro\"\n",
+        );
+        let e = merge(
+            u,
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            // `$HOME` spells the SYMLINK, not the real directory.
+            &alias,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(e, Error::HomeExposed { relation: HomeRelation::Equal, .. }),
+            "{e}"
+        );
+    }
+
     #[test]
     fn root_grant_contains_everything() {
         // A grant of "/" contains every path (there is no parent to
-        // exclude it). Pin it: a future refactor of `contains` must not
-        // silently change that, and ro-at-root means nothing can be rw.
+        // exclude it). Pin that directly on `contains`: a future
+        // refactor must not silently change it, and ro-at-root means
+        // nothing can be rw.
+        //
+        // The grant semantics can no longer be pinned through
+        // `merge` with a real `"/"` grant: review-3 item 4 refuses
+        // any source that contains the home directory — and `/`
+        // contains every absolute path, the home included, so a
+        // `path = "/"` grant is now ALWAYS refused as a home
+        // exposure (correctly: it would mount the host home along
+        // with everything else). The ro → rw half below therefore
+        // pins that the home guard fires BEFORE the upgrade check.
+        assert!(contains(Path::new("/"), Path::new("/any/path")));
+        assert!(!contains(Path::new("/a/b"), Path::new("/a/bc")));
+
+        // ro-at-root caps every mode: the deepest covering grant is
+        // the "/" one, so the rw request is an upgrade error — except
+        // that the review-3 item 4 home guard fires first here, since
+        // "/" contains the home. The assertion below pins that
+        // precedence; the upgrade itself is pinned by the dedicated
+        // upgrade tests.
         let base = tmpdir("root-grant");
         let wanted = dir(&base, &["some", "path"]);
-
-        let u = cfg(&mount_toml(Path::new("/"), "rw"));
-        let merged = merge(
-            u.clone(),
-            cfg(&mount_toml(&wanted, "ro")),
-            &user_file(),
-            &sidecar_file(),
-            &no_home(),
-        )
-        .unwrap();
-        assert_eq!(merged.mounts.len(), 2);
-
         let u = cfg(&mount_toml(Path::new("/"), "ro"));
         let e = merge(
             u,
@@ -1178,7 +1380,28 @@ mod tests {
             &no_home(),
         )
         .unwrap_err();
-        assert!(matches!(e, Error::MountUpgrade { .. }), "{e}");
+        assert!(matches!(e, Error::HomeExposed { .. }), "{e}");
+    }
+
+    #[test]
+    fn a_root_grant_is_refused_as_a_home_exposure() {
+        // Review-3 item 4 makes `path = "/"` unsatisfiable for a
+        // mount: the host home is always somewhere below it, so the
+        // whole-host grant can never pass — the report's "the host
+        // home is not mounted" stays true.
+        let u = cfg(&mount_toml(Path::new("/"), "ro"));
+        let e = merge(
+            u,
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(e, Error::HomeExposed { relation: HomeRelation::Contains, .. }),
+            "{e}"
+        );
     }
 
     // ---- path resolution (docs/design/config.md D8) -------------------

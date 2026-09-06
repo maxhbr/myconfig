@@ -90,7 +90,16 @@ Each entry carries an explicit `dest` under `/mysbx-home` (review-2
 item 6): inside the sandbox `HOME` is `/mysbx-home`, so a config bound
 at its host path would be invisible to the tools that want it. A NixOS
 assertion refuses any entry that would still land inside the host home,
-in every spelling D8 allows.
+in every spelling D8 allows. The generated `[env]` additionally carries
+`RIPGREP_CONFIG_PATH` pointing at the mounted ripgreprc (review-3 item
+6): the sandbox clears the host variable (`--clearenv`, and it is not
+in the forwarding allowlist), so the mount alone would leave ripgrep
+running with its defaults — the variable is the activation, and the
+module sets it only when Home Manager itself enables ripgrep with
+arguments, so it never points at a file that does not exist. A
+hand-written user config outside myconfig must reproduce the
+`[env]` entry itself — the mount alone is inert, and mysbx will not
+invent a variable the config never set.
 Other modules extend it by appending to `myconfig.ai.mysbx.config.mounts`.
 Outside myconfig the file stays an ordinary hand-written file; mysbx itself
 knows nothing about where it came from.
@@ -133,7 +142,14 @@ never mentioned. The rationale is that the approval is *per repo* by
 nature — every worktree points at a different metadata directory, so a
 host-wide list could only be a coarse checkout root — and that the
 sidecar is not repo-controlled: it lives outside the repo (D2) and is
-never mounted into the sandbox, so the payload cannot write it. What
+never mounted into the sandbox, so the payload cannot write it. That
+"cannot write it" is enforced, not assumed (review-3 item 3): an `rw`
+mount — or the repo bind, or a git dir — whose source contains the
+sidecar config or the user config is refused with a policy-file error,
+because a policy file the sandbox can write steers the NEXT run of
+itself: `git-dirs` approvals can be added, the `.git` pointer rewritten
+to match. Read-only mounts of the sidecar stay allowed (reviewing it
+from inside the sandbox is legitimate; `ro` cannot write it in place). What
 the exception does NOT do is let the repository approve itself: the
 `.git` pointer inside the repo grants nothing, an implicit init records
 nothing, and turning a discovered directory into an approval is an
@@ -182,22 +198,29 @@ config file to be relative to, and it is never canonicalized against the
 host.
 
 A `dest` may also not lie **below a writable bind** — the repo work
-tree, a git metadata directory, or an earlier `rw` mount (review-2
-item 2). bubblewrap resolves a destination against the sandbox it has
-built so far and follows symlinks in its parent components, so a
-symlink planted in writable content (`<repo>/jump -> /`) redirects the
-bind to any path, protected ones included. mysbx cannot see that:
-canonicalizing the dest on the host would model the wrong tree and
-would race with the payload. The whole class is refused instead.
+tree, a git metadata directory, an `rw` mount, or a `ro` alias of any of
+those (review-2 item 2). bubblewrap resolves a destination against the
+sandbox it has built so far and follows symlinks in its parent
+components, so a symlink planted in writable content
+(`<repo>/jump -> /`) redirects the bind to any path, protected ones
+included. mysbx cannot see that: canonicalizing the dest on the host
+would model the wrong tree and would race with the payload. The whole
+class is refused instead.
 
 A `ro` bind stays usable as a parent — the sandbox cannot rewrite host
 state it only reads — **unless it re-exposes content that is writable
 elsewhere in the sandbox**: `ro` stops writes through that bind, not
 writes to the same host inode through the repo bind next door, so a
 `ro` mount of a path inside the repo (or inside an `rw` mount) counts
-as writable too. The tmpfs `$HOME` stays seedable (D14): bubblewrap
-creates it empty in the same run, so nothing can have planted a
-symlink in it.
+as writable too. "Inside" holds in both directions (review-3 item 1):
+an `ro` alias of a tree that *contains* the repo, or a parent of an
+`rw` mount's source, exposes the same planted symlinks through the
+wider window. The analysis is therefore order-independent — the
+declaration order of the mounts does not matter, only the composed
+writable set does — because the symlink is exploited on the *next*
+run, when the order is identical. The tmpfs `$HOME` stays seedable
+(D14): bubblewrap creates it empty in the same run, so nothing can
+have planted a symlink in it.
 
 ### D9: A strong accident barrier, a moderate malice barrier
 
@@ -308,6 +331,17 @@ direction (a pointer at it, or at anything containing or inside it):
 binding it would hand the payload the file that decides what may be
 bound at all.
 
+The explicit-after-the-fact form of that trust decision is `mysbx init
+--approve-git-dirs` (review-3 item 5): against a config the implicit
+init already wrote, it adds the discovered-but-unapproved entries —
+idempotently, and never touching anything but the `git-dirs` list.
+It is additive, not reverting: an entry an operator deliberately
+REMOVED is rediscovered on a later run, so re-running the flag
+re-approves it — the flag is the operator's word each time it runs.
+Plain `init` (D12) never touches an existing config at all, which is
+what keeps a deliberately removed entry removed until the operator
+says otherwise.
+
 ## Non-goals
 
 - No global registry of sandboxes; the filesystem layout *is* the registry.
@@ -319,6 +353,16 @@ Inside the sandbox `HOME` is `/mysbx-home`, a fresh, empty, writable
 tmpfs created with the other base mounts. The host home directory is
 still **not** mounted, and the host's `HOME` *value* is never forwarded
 (it is not in the forwarded list, plan.md "Environment").
+
+"The host home is not mounted" is enforced, not merely claimed
+(review-3 item 4): a mount source that IS the home (`path = "~/"`, or
+a symlink resolving to it) or CONTAINS it (`path = "/home"`, or a
+checkout root the home lives below) is refused in either layer, before
+grant semantics apply — the merge compares canonicalized paths, so no
+spelling slips past. Subdirectories (`~/.config/git`) stay the
+supported shape. The NixOS assertion on the generated layer checks the
+`dest` side of the same invariant at eval time, with lexical `..`
+normalization; the runtime holds both.
 
 Rationale, in the order the constraints bite:
 
