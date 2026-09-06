@@ -16,6 +16,8 @@
 /etc/localtime
 --tmpfs
 /tmp
+--tmpfs
+/mysbx-home
 --bind
 /synth/repo
 /synth/repo
@@ -37,6 +39,9 @@ repo-nvim
 --setenv
 PROJECT
 demo
+--setenv
+HOME
+/mysbx-home
 --setenv
 PATH
 /synth/bin

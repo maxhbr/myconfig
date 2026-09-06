@@ -33,8 +33,15 @@ struct Invocation {
 }
 
 fn spawn(inv: &Invocation) -> Command {
+    spawn_with_args(inv, &inv.args)
+}
+
+/// [`spawn`] with an argument list computed at runtime (the fixture's
+/// `args` are `&'static str`, which a payload containing a discovered
+/// host path cannot be).
+fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_mysbx"));
-    cmd.args(&inv.args)
+    cmd.args(args)
         .current_dir(&inv.cwd)
         .env("HOME", &inv.home)
         .env("XDG_CONFIG_HOME", &inv.xdg)
@@ -722,4 +729,129 @@ fn failing_payload_propagates_exit_code() {
     let out = cmd.output().unwrap();
     // `env` exits 127 for a missing command — propagated unchanged (D8).
     assert_eq!(out.status.code(), Some(127), "payload code must propagate");
+}
+
+// ---- the sandbox's own $HOME (config.md D14) --------------------------------
+
+/// A `bash` that is reachable *inside* the sandbox, i.e. one whose real
+/// path lies under a base-bound directory (`/nix/store`, `/usr/bin`).
+/// `/run/current-system/sw/bin/bash` qualifies after canonicalization —
+/// `/run` itself is never mounted, but its target in the store is.
+fn sandbox_bash() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join("bash");
+        if !candidate.is_file() {
+            continue;
+        }
+        let real = std::fs::canonicalize(&candidate).ok()?;
+        if real.starts_with("/nix/store") || real.starts_with("/usr/bin") {
+            return Some(real);
+        }
+    }
+    None
+}
+
+#[test]
+fn dry_run_sets_home_to_the_sandbox_home_not_the_host_one() {
+    // config.md D14: `HOME` names the in-sandbox tmpfs. The host's HOME
+    // value is not forwarded and its directory is not mounted, so neither
+    // may appear anywhere in the argv.
+    let (inv, _, _) = fixture_user_backend("home-dry-run", &["--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let i = lines
+        .iter()
+        .position(|l| *l == "HOME")
+        .unwrap_or_else(|| panic!("no HOME in the argv:\n{stdout}"));
+    assert_eq!(lines[i - 1], "--setenv");
+    assert_eq!(lines[i + 1], mysbx::bwrap::SANDBOX_HOME);
+    // The tmpfs that backs it is there, and nothing is bound onto it.
+    assert!(
+        stdout.contains(&format!("--tmpfs\n{}\n", mysbx::bwrap::SANDBOX_HOME)),
+        "{stdout}"
+    );
+    // The host home value never leaks: neither the process HOME the test
+    // set, nor the machine's real one.
+    let host_home = inv.home.to_string_lossy().into_owned();
+    assert!(!stdout.contains(&host_home), "host HOME leaked: {stdout}");
+    assert_ne!(mysbx::bwrap::SANDBOX_HOME, host_home);
+    assert!(!stdout.contains("/home/"), "host home path: {stdout}");
+}
+
+#[test]
+fn env_home_in_the_config_does_not_win() {
+    // The last `--setenv HOME` wins in bubblewrap, and mysbx sets it
+    // after `[env]` (config.md D14) — a config that names HOME is inert.
+    let (inv, _, sidecar) = fixture_with_backend("home-env-override", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\n[env]\nHOME = \"/synth/evil-home\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let last = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| **l == "HOME")
+        .map(|(i, _)| i)
+        .next_back()
+        .unwrap();
+    assert_eq!(lines[last + 1], mysbx::bwrap::SANDBOX_HOME);
+    assert!(stdout.contains("/synth/evil-home"), "{stdout}");
+}
+
+#[test]
+fn cd_tilde_works_inside_the_sandbox() {
+    // The bug this decision fixes: without `HOME`, `cd ~` fails with
+    // `bash: cd: HOME not set`. Needs a runnable bwrap and a bash that is
+    // reachable inside the sandbox — self-skip otherwise.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let (inv, _, _) = fixture_user_backend("home-cd-tilde", &[]);
+    let args = vec![
+        "run".to_owned(),
+        "--".to_owned(),
+        bash.to_string_lossy().into_owned(),
+        "-c".to_owned(),
+        // Shell builtins only: PATH inside the sandbox is /usr/bin here,
+        // which holds `env` and nothing else on a NixOS host.
+        concat!(
+            "cd ~ && pwd && : > .probe && [ -f \"$HOME/.probe\" ] ",
+            "&& echo probe-written ",
+            "&& { [ -e \"$HOME/.ssh\" ] && echo ssh-present || echo no-ssh; }"
+        )
+        .to_owned(),
+    ];
+    let mut cmd = spawn_with_args(&inv, &args);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "exit {:?}\nstdout: {stdout}\nstderr: {stderr}",
+        out.status.code()
+    );
+    // `cd ~` landed in the sandbox home, which is writable …
+    assert!(
+        stdout.lines().any(|l| l == mysbx::bwrap::SANDBOX_HOME),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("probe-written"),
+        "home not writable: {stdout}"
+    );
+    // … and it is empty apart from what the payload just created, i.e.
+    // it is not the host home.
+    assert!(stdout.contains("no-ssh"), "host home leaked: {stdout}");
 }

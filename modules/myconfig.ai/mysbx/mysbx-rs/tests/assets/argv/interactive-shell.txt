@@ -16,9 +16,14 @@
 /etc/localtime
 --tmpfs
 /tmp
+--tmpfs
+/mysbx-home
 --bind
 /synth/repo
 /synth/repo
+--setenv
+HOME
+/mysbx-home
 --setenv
 PATH
 /synth/bin

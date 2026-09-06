@@ -210,3 +210,47 @@ it (cli.md D1).
 
 - No global registry of sandboxes; the filesystem layout *is* the registry.
 - No config-file includes or inheritance chains beyond the two layers in D1.
+
+### D14: The sandbox has its own `$HOME`, and it is infrastructure
+
+Inside the sandbox `HOME` is `/mysbx-home`, a fresh, empty, writable
+tmpfs created with the other base mounts. The host home directory is
+still **not** mounted, and the host's `HOME` *value* is never forwarded
+(it is not in the forwarded list, plan.md "Environment").
+
+Rationale, in the order the constraints bite:
+
+- **Something must be there.** With `--clearenv` and no `HOME`, `cd ~`
+  fails with `bash: cd: HOME not set`, and git, shells and editors that
+  derive paths from `$HOME` fail or write to `/`. An unset `HOME` is not
+  a confinement property, it is a broken sandbox.
+- **Not the host home.** Mounting it would hand the payload `~/.ssh`,
+  `~/.aws` and every agent credential in one bind — the exact thing the
+  base table refuses. Exposing *parts* of the host home stays what it
+  was: an explicit `[[mounts]]` grant of the user layer (D6), which the
+  sidecar may only narrow (D7). Such a mount may point its `dest` into
+  `/mysbx-home` to seed dotfiles (`~/.gitconfig`); the tmpfs is created
+  before the configured mounts, so they land on top of it.
+- **Not the repo root.** `HOME = <repo>` would make every tool that
+  writes to `~` (shell history, caches, `.gitconfig` edits, agent state)
+  pollute the checkout, and would make `~` and the work tree
+  indistinguishable to the payload.
+- **Not under `/home`.** A path such as `/home/<user>` inside the
+  sandbox would mirror a host path that is deliberately absent; a payload
+  (or a reviewer of `--dry-run`) could not tell the two apart. The
+  literal invariant "no `/home/` anywhere in the argv" is worth keeping
+  checkable, so the sandbox home is namespaced instead: `/mysbx-home`.
+- **Ephemeral.** A tmpfs dies with the sandbox. Persisting the sandbox
+  home is a phase-2 question (the sidecar has room for state, D10); it is
+  not decided here.
+
+**`HOME` and `PATH` are not configurable.** Both name paths the argv
+builder itself created — the tmpfs above and the shipped tool closure —
+so a layer that repointed them would break the sandbox rather than
+configure it. Both are therefore emitted *after* `[env]`, and bubblewrap
+lets the later `--setenv` win: an `[env] HOME` (or `PATH`) entry parses
+and appears in `--dry-run`, but never reaches the payload. `--verbose`
+marks such an entry `[config, ignored — set by mysbx]` rather than
+pretending it applies. This is not an error, on purpose: rejecting it
+would turn a harmless (often inherited) config into a hard failure of
+every run, and the report already says what happens.

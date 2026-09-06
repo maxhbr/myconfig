@@ -52,7 +52,7 @@ per-domain network policy.
 | Network | shared by default; `network = false` adds `--unshare-net` |
 | Layer merge | flags > sidecar > user config > defaults (`cli.md` D6), sidecar may narrow only (`config.md` D7) |
 | Base | the `fns/bubblewrap-app.nix` base, reused as a list of decisions (see below) |
-| Environment | `--clearenv`, forward `TERM COLORTERM LANG LC_ALL EDITOR VISUAL` when set, then `[env]` |
+| Environment | `--clearenv`, forward `TERM COLORTERM LANG LC_ALL EDITOR VISUAL` when set, then `[env]`, then `HOME` and `PATH` (infrastructure, not overridable — `config.md` D14) |
 | Payload shell | `bash` from the MVP's own closure, not the host `$SHELL` |
 | Exit codes | `0` / `1` runtime / `2` usage; payload code propagated (`cli.md` D8) |
 | Validation | golden argv tests in cargo + `--dry-run`; manual acceptance by the operator |
@@ -70,6 +70,8 @@ every knob is a decision:
 | `--proc`, `--dev` | yes | |
 | `/etc/localtime` | yes | timestamps |
 | tmpfs `/tmp` | yes | **not** the host-backed `/tmp/<name>` |
+| tmpfs `$HOME` (`/mysbx-home`) | yes | an in-sandbox home so `cd ~`, `~/.bash_history`, git & co. work; empty, writable, outside `/home` (`config.md` D14) |
+| host `$HOME` bind | **no** | the host home stays unreachable; its *value* is not forwarded either — exposing parts of it is an explicit `[[mounts]]` grant (`config.md` D6/D7) |
 | `~/tmp` rw | no | agent-session convenience, not a sandbox essential |
 | `/run` | no | D-Bus, PipeWire, the nix-daemon socket, agent sockets |
 | dev-tool closure on `PATH` | yes, as-is | git, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](./nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list) |
