@@ -34,7 +34,12 @@
 //!   deferred to the CLI/item that consumes `Merged` and must start a
 //!   real backend.
 //! - **Network**: the sidecar may set `false`; it may NOT set `true` when
-//!   the user config has already set `false`.
+//!   the user config has already set `false`. A layer that does not
+//!   mention `network` decided nothing — an omitted value never counts
+//!   as an explicit `true` (the tri-state `Option<bool>` mirrors
+//!   `backend`), so an empty/generated sidecar cannot re-enable what
+//!   the user config denied; the shared-by-default `true` of
+//!   docs/plan.md is applied only after the layers merged.
 //!
 //! A violation is a hard error naming the offending key, the sidecar path
 //! and the granting (or missing) user-config entry — never a warning.
@@ -87,6 +92,10 @@ pub struct Merged {
     /// neither layer named one (docs/design/cli.md D7: never
     /// auto-detected).
     pub backend: Option<String>,
+    /// The effective network sense, resolved once from the layers'
+    /// tri-state values — a plain `bool` on purpose: the default (shared,
+    /// docs/plan.md) is already applied, and nothing downstream of the
+    /// merge may re-decide it.
     pub network: bool,
     /// User-config mounts first (in declaration order), then the accepted
     /// sidecar mounts (in their declaration order within the sidecar
@@ -320,8 +329,13 @@ pub fn merge(
     let granted = canonicalize_layer(&user, user_file, home)?;
     let sidecar_canon = canonicalize_layer(&sidecar, sidecar_file, home)?;
 
-    // network: the sidecar may deny (false), not re-enable (D7).
-    if !user.network && sidecar.network {
+    // network: the sidecar may deny (false), not re-enable (D7). A layer
+    // that does not mention `network` decided nothing (None) — an
+    // omitted sidecar value must not re-enable what the user config
+    // denied, and an omitted user value grants nothing either, so the
+    // merge sees only EXPLICIT values here. The shared-by-default
+    // `true` of docs/plan.md is applied once, below, after the layers.
+    if user.network == Some(false) && sidecar.network == Some(true) {
         return Err(Error::NetworkUpgrade {
             message: format!(
                 "{}: network = true re-enables the network the user config {} denied with `network = false` — the sidecar may narrow, not widen (docs/design/config.md D7)",
@@ -330,7 +344,13 @@ pub fn merge(
             ),
         });
     }
-    let network = user.network && sidecar.network;
+    // Merge rule: explicit `false` in either layer denies (D7 — the
+    // sidecar may narrow); when neither denied, the default of
+    // docs/plan.md applies (shared).
+    let network = match (user.network, sidecar.network) {
+        (Some(false), _) | (_, Some(false)) => false,
+        _ => true,
+    };
 
     // env: sidecar-only keys pass through, user-set keys must not be
     // overridden — the asymmetry is deliberate (see module docs).
@@ -656,9 +676,9 @@ mod tests {
     #[test]
     fn network_upgrade_rejected() {
         let mut u = Config::default();
-        u.network = false;
+        u.network = Some(false);
         let mut s = Config::default();
-        s.network = true; // the sidecar re-enables: hard error
+        s.network = Some(true); // the sidecar re-enables: hard error
 
         let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         assert!(matches!(e, Error::NetworkUpgrade { .. }), "{e}");
@@ -669,11 +689,69 @@ mod tests {
     }
 
     #[test]
+    fn omitted_sidecar_network_is_not_an_explicit_true() {
+        // The review-1 P1 case: a user config that denies plus a sidecar
+        // that says NOTHING (absent file, or a comment-only `init`
+        // config) must merge to denied — not trip the NetworkUpgrade
+        // guard, which the old bool-with-default-true layers did.
+        let mut u = Config::default();
+        u.network = Some(false);
+        let merged = merge(
+            u.clone(),
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(!merged.network);
+
+        // Symmetric: a user config that says nothing plus an explicit
+        // sidecar deny is still a deny (D7: the sidecar may narrow).
+        let mut s = Config::default();
+        s.network = Some(false);
+        let merged = merge(
+            Config::default(),
+            s,
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(!merged.network);
+    }
+
+    #[test]
+    fn omitted_network_in_both_layers_defaults_to_shared() {
+        // Neither layer mentions `network`: the shared-by-default of
+        // docs/plan.md applies — after the merge, not inside a layer.
+        let merged = merge(
+            Config::default(),
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(merged.network);
+
+        // And the fourth combination of the explicit table: both layers
+        // say `true` — shared, with the guard silent (nothing was
+        // re-enabled; the post-merge default already is `true`).
+        let mut u = Config::default();
+        u.network = Some(true);
+        let mut s = Config::default();
+        s.network = Some(true);
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
+        assert!(merged.network);
+    }
+
+    #[test]
     fn network_false_narrowing_accepted() {
         let mut u = Config::default();
-        u.network = true;
+        u.network = Some(true);
         let mut s = Config::default();
-        s.network = false;
+        s.network = Some(false);
 
         let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert!(!merged.network);
@@ -682,9 +760,9 @@ mod tests {
     #[test]
     fn network_false_in_both_stays_false() {
         let mut u = Config::default();
-        u.network = false;
+        u.network = Some(false);
         let mut s = Config::default();
-        s.network = false;
+        s.network = Some(false);
 
         let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert!(!merged.network);
@@ -718,7 +796,7 @@ mod tests {
         // With an absent user config, env introduction and network denial
         // are NOT grants and stay allowed; only mounts need a grant.
         let mut s = Config::default();
-        s.network = false;
+        s.network = Some(false);
         let merged = merge(
             Config::default(),
             cfg("[env]\nFOO = \"1\"\n"),
@@ -893,14 +971,14 @@ mod tests {
         // error.
         let layers = load_layers(&home, None, &sd).unwrap();
         assert_eq!(layers.user.0, Config::default());
-        assert!(!layers.sidecar.0.network);
+        assert_eq!(layers.sidecar.0.network, Some(false));
 
         // An XDG_CONFIG_HOME pointing at a directory without a mysbx
         // config: also an empty user layer.
         let layers =
             load_layers(&home, Some(&home.join(".config").to_string_lossy()), &sd).unwrap();
         assert_eq!(layers.user.0, Config::default());
-        assert!(!layers.sidecar.0.network);
+        assert_eq!(layers.sidecar.0.network, Some(false));
     }
 
     #[test]

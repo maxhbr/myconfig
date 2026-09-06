@@ -70,9 +70,14 @@ pub struct Config {
     /// Sandbox technology; `None` means "not decided by this layer"
     /// (docs/design/cli.md D7: never auto-detected).
     pub backend: Option<String>,
-    /// Defaults to `true`: the network is shared; `network = false` is the
-    /// explicit deny switch.
-    pub network: bool,
+    /// Whether the network is shared. `None` means "not decided by
+    /// this layer" — like `backend`: a layer that does not mention
+    /// `network` must not count as an explicit `true` (which would
+    /// make an omitted sidecar value re-enable what the user config
+    /// denied, docs/design/config.md D7). The shared-by-default `true`
+    /// of docs/plan.md is applied AFTER the merge (see
+    /// `crate::merge::merge`), never inside a layer.
+    pub network: Option<bool>,
     pub mounts: Vec<Mount>,
     /// Environment forwarded into the sandbox.
     pub env: BTreeMap<String, String>,
@@ -82,7 +87,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             backend: None,
-            network: true,
+            network: None,
             mounts: Vec::new(),
             env: BTreeMap::new(),
         }
@@ -137,7 +142,7 @@ impl Config {
         for (key, value) in root {
             match key.as_str() {
                 "backend" => config.backend = Some(string(value, "backend")?.to_owned()),
-                "network" => config.network = boolean(value, "network")?,
+                "network" => config.network = Some(boolean(value, "network")?),
                 "mounts" => config.mounts = mounts(value)?,
                 "env" => config.env = env(table(value, "env")?)?,
                 other => return Err(unknown("top level", other)),
@@ -293,7 +298,9 @@ mod tests {
     fn empty_config_is_all_defaults() {
         let c = Config::parse("").unwrap();
         assert_eq!(c, Config::default());
-        assert!(c.network);
+        // `network` is tri-state in a layer: None means "not decided" —
+        // the shared-by-default `true` is applied after the merge.
+        assert_eq!(c.network, None);
         assert!(c.backend.is_none());
     }
 

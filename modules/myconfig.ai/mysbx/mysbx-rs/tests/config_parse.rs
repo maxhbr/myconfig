@@ -82,7 +82,9 @@ fn minimal_config_is_what_init_writes() {
     // all-defaults config.
     let c = load_ok("valid/minimal.toml");
     assert_eq!(c, Config::default());
-    assert!(c.network, "network is shared by default");
+    // No `network` key: the layer decided nothing (tri-state); the
+    // shared default is applied after the merge, not here.
+    assert_eq!(c.network, None);
     assert!(c.mounts.is_empty());
     assert!(c.env.is_empty());
 }
@@ -91,7 +93,7 @@ fn minimal_config_is_what_init_writes() {
 fn full_config() {
     let c = load_ok("valid/full.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
-    assert!(c.network);
+    assert_eq!(c.network, Some(true));
 
     assert_eq!(c.mounts.len(), 2);
     assert_eq!(c.mounts[0].path, "/home/user/.config/pi");
@@ -136,7 +138,7 @@ fn relative_and_home_paths_are_stored_verbatim() {
 fn syntax_zoo() {
     let c = load_ok("valid/syntax-zoo.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
-    assert!(!c.network);
+    assert_eq!(c.network, Some(false));
     assert_eq!(
         c.env["HASHED"], "home/user/src/pro#ject",
         "`#` inside a string must not start a comment"

@@ -483,6 +483,46 @@ fn dry_run_sidecar_widening_fails() {
 }
 
 #[test]
+fn user_network_deny_survives_a_fresh_sidecar() {
+    // Review-1 P1: an omitted sidecar `network` used to count as an
+    // explicit `true`, so a user-config deny plus a freshly `init`ed
+    // (comment-only) sidecar tripped the NetworkUpgrade hard error and
+    // made every newly initialized sandbox fail. The dry run must
+    // succeed with `--unshare-all` and WITHOUT `--share-net`.
+    let (inv, _, sidecar) = fixture("deny-fresh-sidecar", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = false\n",
+    )
+    .unwrap();
+    // Exactly what `mysbx init` writes: comments only.
+    std::fs::write(sidecar.join("config.toml"), "# mysbx sidecar config\n").unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("--unshare-all\n"), "stdout: {stdout}");
+    assert!(!stdout.contains("--share-net"), "stdout: {stdout}");
+}
+
+#[test]
+fn sidecar_network_true_still_cannot_reenable() {
+    // The guard itself is unchanged: an EXPLICIT sidecar `network = true`
+    // against a user deny stays the hard error of docs/design/config.md
+    // D7 — the tri-state only stops ABSENT values from counting as true.
+    let (inv, _, sidecar) = fixture("explicit-reenable", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = false\n",
+    )
+    .unwrap();
+    std::fs::write(sidecar.join("config.toml"), "network = true\n").unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stdout: {stdout}");
+    assert!(stderr.contains("may narrow, not widen"), "stderr: {stderr}");
+}
+
+#[test]
 fn no_backend_configured_fails() {
     // cli.md D7: the backend is explicit, never auto-detected; neither
     // layer named one, so the run is refused.
