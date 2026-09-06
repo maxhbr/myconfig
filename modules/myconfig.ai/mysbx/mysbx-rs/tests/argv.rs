@@ -313,6 +313,30 @@ fn golden_env_entry() {
 }
 
 #[test]
+fn golden_ripgrep_config_path_activation() {
+    // Review-3 item 6: the file mount alone is inert — Home Manager
+    // activates `~/.config/ripgrep/ripgreprc` through
+    // `RIPGREP_CONFIG_PATH`, which `--clearenv` kills (it is not in
+    // the forwarding allowlist). The generated user layer (default.nix
+    // `baselineEnv`) therefore carries the variable as an ordinary
+    // `[env]` entry pointing at the IN-SANDBOX path the mount created.
+    // This pins what that produces: the mount at
+    // /mysbx-home/.config/ripgrep and the setenv, in section order.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/home/u/.config/ripgrep",
+        Some("/mysbx-home/.config/ripgrep"),
+        Mode::Ro,
+    ));
+    cfg.env.insert(
+        "RIPGREP_CONFIG_PATH".into(),
+        "/mysbx-home/.config/ripgrep/ripgreprc".into(),
+    );
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+    assert_golden("ripgrep-config-path.txt", &argv);
+}
+
+#[test]
 fn golden_sidecar_narrows_user_config() {
     // docs/TODOs/mvp-3-layer-merge.md end state, hand-built (a `Merged`
     // merge.rs would have produced and the argv builder alone sees): the

@@ -22,7 +22,16 @@ Reviewed PR 77 at [`4d5ae8411`](https://github.com/maxhbr/myconfig/commit/4d5ae8
 5. **[P2] Provide a recovery path after implicit initialization.**
    The primary bare/run path creates an empty sidecar without approvals, but a later explicit `mysbx init` immediately returns when [`config.toml` already exists](https://github.com/maxhbr/myconfig/blob/4d5ae8411c25997934c290fc4e1e230284b7dd46/modules/myconfig.ai/mysbx/mysbx-rs/src/lib.rs#L464-L468). Consequently, someone who first runs the primary command cannot use `init` to snapshot the discovered Git metadata. Add an explicit idempotent approval command/flag, or stop claiming this case works without manual editing.
 
-6. **[P2] Actually activate the generated ripgrep configuration.**
-   Moving `.config/ripgrep` below `/mysbx-home` is insufficient: the pinned Home Manager module activates it through `RIPGREP_CONFIG_PATH`, while mysbx clears that variable and does not regenerate it. See the [pinned Home Manager implementation](https://github.com/nix-community/home-manager/blob/abfad3d2958c9e6300a883bd443512c55dfeb1be/modules/programs/ripgrep.nix#L40-L51) and mysbx's [forwarding allowlist](https://github.com/maxhbr/myconfig/blob/4d5ae8411c25997934c290fc4e1e230284b7dd46/modules/myconfig.ai/mysbx/mysbx-rs/src/lib.rs#L38-L44). Generate `RIPGREP_CONFIG_PATH=/mysbx-home/.config/ripgrep/ripgreprc` and add an execution-level test.
+6. **[P2] Actually activate the generated ripgrep configuration.** DONE:
+   `default.nix` `baselineEnv` sets
+   `RIPGREP_CONFIG_PATH = "/mysbx-home/.config/ripgrep/ripgreprc"` in the
+   generated user layer's `[env]`, gated on Home Manager's own condition
+   (`programs.ripgrep.enable && arguments != []`) — a variable pointing
+   at a missing file is a hard `rg` failure. Pinned twice: golden argv
+   test `golden_ripgrep_config_path_activation` (mount + setenv in
+   section order) and execution-level
+   `ripgrep_config_mount_is_activated_through_the_variable` (real bwrap:
+   the payload reads the variable and the mounted file's content through
+   it).
 
 `git diff --check` passes, and the source contains 221 tests. I could not independently execute the Rust/Nix suites because this environment has neither Cargo nor Nix.

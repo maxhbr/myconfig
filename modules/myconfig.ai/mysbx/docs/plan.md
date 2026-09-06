@@ -52,7 +52,7 @@ per-domain network policy.
 | Network | shared by default; `network = false` adds `--unshare-net` |
 | Layer merge | flags > sidecar > user config > defaults (`cli.md` D6), sidecar may narrow only (`config.md` D7) |
 | Base | the `fns/bubblewrap-app.nix` base, reused as a list of decisions (see below) |
-| Environment | `--clearenv`, forward `TERM COLORTERM LANG LC_ALL EDITOR VISUAL` when set, then `[env]`, then `HOME` and `PATH` (infrastructure, not overridable — `config.md` D14) |
+| Environment | `--clearenv`, forward `TERM COLORTERM LANG LC_ALL EDITOR VISUAL` when set, then `[env]`, then `HOME` and `PATH` (infrastructure, not overridable — `config.md` D14). The NixOS module additionally sets `RIPGREP_CONFIG_PATH` in the generated `[env]` (review-3 item 6): the `~/.config/ripgrep` mount alone is inert, the variable is the activation |
 | Payload shell | `bash` from the MVP's own closure, not the host `$SHELL` |
 | Exit codes | `0` / `1` runtime / `2` usage; payload code propagated (`cli.md` D8) |
 | Validation | golden argv tests in cargo + `--dry-run`; manual acceptance by the operator |
