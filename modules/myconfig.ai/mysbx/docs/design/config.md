@@ -160,6 +160,24 @@ sandbox's filesystem view, where there is no host home to expand and no
 config file to be relative to, and it is never canonicalized against the
 host.
 
+A `dest` may also not lie **below a writable bind** — the repo work
+tree, a git metadata directory, or an earlier `rw` mount (review-2
+item 2). bubblewrap resolves a destination against the sandbox it has
+built so far and follows symlinks in its parent components, so a
+symlink planted in writable content (`<repo>/jump -> /`) redirects the
+bind to any path, protected ones included. mysbx cannot see that:
+canonicalizing the dest on the host would model the wrong tree and
+would race with the payload. The whole class is refused instead.
+
+A `ro` bind stays usable as a parent — the sandbox cannot rewrite host
+state it only reads — **unless it re-exposes content that is writable
+elsewhere in the sandbox**: `ro` stops writes through that bind, not
+writes to the same host inode through the repo bind next door, so a
+`ro` mount of a path inside the repo (or inside an `rw` mount) counts
+as writable too. The tmpfs `$HOME` stays seedable (D14): bubblewrap
+creates it empty in the same run, so nothing can have planted a
+symlink in it.
+
 ### D9: A strong accident barrier, a moderate malice barrier
 
 The MVP's base is deliberately permissive: the network is shared by default

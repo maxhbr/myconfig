@@ -640,11 +640,37 @@ fn parent_after_child_hides_the_child_is_refused() {
 }
 
 #[test]
-fn child_after_parent_is_the_safe_direction_and_stays_allowed() {
-    // Wide rw FIRST, narrow ro SECOND: the narrow bind lands ON TOP of
-    // the wide one — the documented narrowing-by-shadowing pattern.
+fn child_after_a_writable_parent_is_refused() {
+    // Wide rw FIRST, narrow ro SECOND used to be the documented
+    // narrowing-by-shadowing pattern. Review-2 item 2 refuses it: the
+    // payload can plant `/synth/u/.ssh -> /etc` in the rw tree, and
+    // the NEXT run's dest resolves through that symlink, landing the
+    // bind wherever the symlink points.
     let mut cfg = base(true);
     cfg.mounts.push(make_mount("/synth/u", None, Mode::Rw));
+    cfg.mounts.push(make_mount("/synth/u/.ssh", None, Mode::Ro));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn child_after_a_read_only_parent_stays_allowed() {
+    // The same shape with a RO parent stays allowed: its content is
+    // host state the sandbox cannot rewrite, so no symlink can be
+    // planted there from inside (review-2 item 2 scopes the refusal to
+    // writable binds).
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/u", None, Mode::Ro));
     cfg.mounts.push(make_mount("/synth/u/.ssh", None, Mode::Ro));
     let argv = bwrap_argv(
         &cfg,
@@ -700,7 +726,7 @@ fn sibling_dests_and_untouched_rebinds_stay_allowed() {
     // fine (already covered), and a later mount BELOW an earlier one in
     // a different subtree is plain independent configuration.
     let mut cfg = base(true);
-    cfg.mounts.push(make_mount("/synth/u", None, Mode::Rw));
+    cfg.mounts.push(make_mount("/synth/u", None, Mode::Ro));
     cfg.mounts.push(make_mount("/synth/v", None, Mode::Rw));
     cfg.mounts
         .push(make_mount("/synth/w", Some("/synth/u/w"), Mode::Ro));
@@ -742,12 +768,19 @@ fn mount_exactly_on_the_repo_is_refused() {
 }
 
 #[test]
-fn mount_below_the_repo_stays_allowed() {
-    // Narrowing BELOW the repo root is the legitimate pattern.
+fn mount_below_the_repo_is_refused() {
+    // Review-2 item 2: the repo is writable and its content decides
+    // how a dest below it resolves (`<repo>/jump -> /`), so mounts may
+    // not land inside the work tree at all.
     let mut cfg = base(true);
     cfg.mounts
         .push(make_mount("/synth/data", Some("/synth/repo/sub"), Mode::Ro));
-    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
@@ -1049,4 +1082,128 @@ fn protected_related_git_dir_is_refused_even_if_listed() {
         ),
         "wrong error: {err}"
     );
+}
+
+// ---- dests below writable binds (review-2 item 2) --------------------------
+
+#[test]
+fn the_jump_symlink_scenario_is_refused_lexically() {
+    // The review's scenario, verbatim: `<repo>/jump -> /` makes a dest
+    // of `<repo>/jump/tmp` resolve to the protected `/tmp` when
+    // bubblewrap applies the bind. The builder cannot see the symlink
+    // (it is pure, and a host-side canonicalize would model the wrong
+    // tree and race anyway), so it refuses the whole class: any dest
+    // below the repo.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/synth/repo/jump/tmp"),
+        Mode::Rw,
+    ));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn dest_below_a_git_dir_is_refused() {
+    // Git metadata is bound rw too, and `git` writes there: same
+    // symlink-planting surface as the work tree.
+    let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/synth/main/.git/worktrees/wt/hooks"),
+        Mode::Ro,
+    ));
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_read_only_reexposure_of_repo_content_is_writable_too() {
+    // `ro` stops writes THROUGH the bind, not writes to the same host
+    // inode through the repo bind next door: a ro mount of a path
+    // inside the repo carries payload-planted symlinks just like the
+    // repo, so a dest below it is refused as well.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/repo/tools", Some("/opt/tools"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/opt/tools/x"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_read_only_reexposure_of_a_writable_mount_is_writable_too() {
+    // Same one layer out: the rw mount makes its SOURCE writable, and
+    // a later ro mount of a path inside that source inherits the
+    // property.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/work", Some("/work"), Mode::Rw));
+    cfg.mounts
+        .push(make_mount("/synth/work/sub", Some("/opt/sub"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/opt/sub/x"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_read_only_mount_of_ordinary_host_state_stays_a_usable_parent() {
+    // The carve-out that keeps ro nesting usable: a granted host path
+    // outside every writable tree cannot be rewritten from inside the
+    // sandbox, so a dest below it is allowed.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/etc", Some("/opt/etc"), Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/opt/etc/x"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
+
+#[test]
+fn equal_dest_on_a_writable_mount_stays_allowed() {
+    // An equal dest resolves the path itself, not a component INSIDE
+    // the writable content, so re-binding stays the documented
+    // shadowing pattern.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/a", Some("/synth/dst"), Mode::Rw));
+    cfg.mounts
+        .push(make_mount("/synth/b", Some("/synth/dst"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
+
+#[test]
+fn dest_below_the_sandbox_home_stays_allowed() {
+    // The tmpfs home is created empty by bubblewrap in this very run:
+    // nothing can have planted a symlink in it, so seeding dotfiles
+    // below it (config.md D14) stays the intended pattern.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/synth/dotfiles/gitconfig",
+        Some("/mysbx-home/.gitconfig"),
+        Mode::Ro,
+    ));
+    let argv =
+        bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+    assert!(argv.contains(&"/mysbx-home/.gitconfig".to_string()));
 }
