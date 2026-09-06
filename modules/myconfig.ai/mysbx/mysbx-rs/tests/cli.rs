@@ -1280,17 +1280,33 @@ fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
     // contains it. The run must fail with the policy-file error — a
     // writable sidecar steers the next run (git-dirs approvals, .git
     // rewrites) — and must NOT fall back to executing anything.
-    let (inv, _, sidecar) = fixture_with_backend("policy-writable", &[]);
-    // Put the sidecar config's PARENT tree under an rw grant: the base
-    // dir of the fixture contains both the repo and the sidecar.
+    //
+    // The mounted tree must NOT contain the invocation's home: that
+    // is the review-3 item 4 guard, which fires first by design (a
+    // home exposure is the sharper diagnosis). The fixture therefore
+    // lays the repo+sidecar tree out beside the home, not around it.
+    let base = tmpdir("policy-writable");
+    let trees = base.join("trees");
+    let repo = trees.join("repo");
+    let sidecar = trees.join("repo.mysbx");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    let home = base.join("home");
+    let xdg = base.join("xdg");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd: repo,
+        home: home.clone(),
+        xdg: xdg.clone(),
+    };
     let user_cfg = format!(
         "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"rw\"\ndest = \"/all\"\n",
-        inv.cwd.parent().unwrap()
+        trees.canonicalize().unwrap()
     );
-    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
-    std::fs::write(inv.xdg.join("mysbx").join("config.toml"), user_cfg).unwrap();
-    // The sidecar config must exist to count as a policy file.
-    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    std::fs::write(xdg.join("mysbx").join("config.toml"), user_cfg).unwrap();
 
     let mut cmd = spawn_with_args(&inv, &[] as &[&str]);
     cmd.env("MYSBX_BWRAP", "/nonexistent-bwrap");

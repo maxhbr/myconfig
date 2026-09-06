@@ -233,6 +233,33 @@ in
     # indistinguishable from a real host home.
     assertions =
       let
+        # Lexically resolve `.` and `..` components of an absolute
+        # path — the same job the CLI's `normalize()` does, so a
+        # `dest` like `/x/../home/user` is seen as `/home/user`
+        # instead of slipping past a prefix check (review-3 item 4).
+        # Eval-time Nix cannot canonicalize against the host tree;
+        # lexical is the strongest available, and a `dest` with a
+        # symlink in it is the runtime layer's problem (D8: the
+        # runtime canonicalizes mount sources, and dest rules are
+        # guarded in the argv builder).
+        normalizePath =
+          path:
+          let
+            parts = lib.splitString "/" path;
+            step =
+              acc: part:
+              if part == "" || part == "." then
+                acc
+              else if part == ".." then
+                # `lib.init []` throws; "/.." and friends would abort
+                # the whole eval instead of failing the assertion, so
+                # clamp at the root (a `..` with nothing above it
+                # resolves to `/` itself).
+                if acc == [ ] then acc else lib.init acc
+              else
+                acc ++ [ part ];
+          in
+          "/" + lib.concatStringsSep "/" (builtins.foldl' step [ ] parts);
         # What the mount actually lands on inside the sandbox: the
         # `dest` when given, otherwise the host path itself — in every
         # spelling D8 allows (absolute, `~/…`, or relative to the
@@ -240,10 +267,14 @@ in
         effectiveDest = m: if m.dest != null then m.dest else m.path;
         # True when that in-sandbox path lands inside the host home,
         # however it is written: `~`/`~/…` expand there, an absolute
-        # `/home/…` is one already, and a relative path resolves
-        # against `~/.config/mysbx/`, so it is one too.
+        # `/home/…` is one already (normalized first), and a relative
+        # path resolves against `~/.config/mysbx/`, so it is one too.
         landsInHostHome =
-          d: lib.hasPrefix "/home/" d || d == "~" || lib.hasPrefix "~/" d || !(lib.hasPrefix "/" d);
+          d:
+          let
+            nd = normalizePath d;
+          in
+          lib.hasPrefix "/home/" nd || d == "~" || lib.hasPrefix "~/" d || !(lib.hasPrefix "/" d);
         offenders = builtins.filter (m: landsInHostHome (effectiveDest m)) cfg.config.mounts;
       in
       [
