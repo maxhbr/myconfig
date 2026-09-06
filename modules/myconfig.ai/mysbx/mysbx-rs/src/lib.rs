@@ -513,20 +513,69 @@ fn ensure_sidecar(repo: &repo::Repo) -> Result<(), String> {
 /// and report each creation like `ensure_sidecar` does. The argv builder
 /// binds them rw at `/mysbx-home/<entry>`; bubblewrap needs an existing
 /// source, and the writes the payload makes there are exactly the state
-/// that survives the sandbox. The parser and the merge have already
-/// rejected every ambiguous entry spelling, so a plain `create_dir_all`
-/// cannot escape the sidecar.
+/// that survives the sandbox.
+///
+/// The entry SPELLING is already unambiguous (the parser rejects
+/// absolute, `~/`, `.`/`..` and empty components), but the spelling is
+/// only half of the path: the state tree is the one part of the sidecar
+/// the payload can write, so a symlink planted there would make a plain
+/// `create_dir_all` follow it OUT of the sidecar and bind whatever it
+/// points at rw into the sandbox home — a host-home path could re-enter
+/// the sandbox that way, which is exactly what D14 forbids. Every level
+/// is therefore created and verified one component at a time with
+/// [`ensure_plain_dir`]: no component of a backing path may be a
+/// symlink, so the source of a state bind is always a real directory
+/// below `<sidecar>/state/` (D15, "Trust").
 fn ensure_state_dirs(repo: &repo::Repo, state_dirs: &[String]) -> Result<(), String> {
+    if state_dirs.is_empty() {
+        return Ok(());
+    }
+    let root = repo.sidecar.join("state");
+    ensure_plain_dir(&root)?;
     for entry in state_dirs {
-        let dir = repo.sidecar.join("state").join(entry);
-        if dir.is_dir() {
-            continue;
+        let mut dir = root.clone();
+        let mut created = false;
+        // Component by component: each level's parent has been checked
+        // before the child is touched, so nothing is ever created
+        // through a symlink.
+        for component in entry.split('/') {
+            dir.push(component);
+            created |= ensure_plain_dir(&dir)?;
         }
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-        println!("## created: {}/", dir.display());
+        if created {
+            println!("## created: {}/", dir.display());
+        }
     }
     Ok(())
+}
+
+/// Make `path` an existing, real directory, creating it when missing.
+/// Returns whether it was created.
+///
+/// "Real" excludes a symlink to a directory: inside the sidecar's state
+/// tree a symlink is payload-plantable, and following it would silently
+/// move a state bind's source somewhere no configuration named (see
+/// [`ensure_state_dirs`]). Refusing is the safe direction — the run
+/// fails with the offending path named instead of binding it.
+fn ensure_plain_dir(path: &std::path::Path) -> Result<bool, String> {
+    match std::fs::symlink_metadata(path) {
+        Ok(md) if md.file_type().is_symlink() => Err(format!(
+            "state directory {} is a symlink — the state tree is writable by the sandbox, \
+             so a symlink there would redirect a state bind out of the sidecar \
+             (docs/design/config.md D15); remove it, or delete the sidecar's state/ tree",
+            path.display()
+        )),
+        Ok(md) if md.is_dir() => Ok(false),
+        Ok(_) => Err(format!(
+            "state directory {} exists and is not a directory (docs/design/config.md D15)",
+            path.display()
+        )),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir(path).map_err(|e| format!("cannot create {}: {e}", path.display()))?;
+            Ok(true)
+        }
+        Err(e) => Err(format!("cannot inspect {}: {e}", path.display())),
+    }
 }
 
 /// What [`ensure_sidecar_config`] found: writing the default config or

@@ -514,6 +514,19 @@ Runtime behavior:
   and before the backend starts — bubblewrap requires an existing
   bind source. Under `--dry-run` nothing is created; the argv shows
   the would-be sources.
+- Creation walks the entry **one component at a time** and refuses any
+  component that is not a real directory (`lib.rs::ensure_plain_dir`).
+  A symlink is the case that matters: the state tree is the only part
+  of the sidecar the payload can write, so it can plant one there
+  between two runs, and a plain `create_dir_all` would follow it —
+  creating directories outside the sidecar and binding them `rw` at
+  `/mysbx-home/<entry>`. That is a host path (the host home included)
+  re-entering the sandbox without any layer declaring it, i.e. exactly
+  what D9/D14 forbid. The entry *spelling* being unambiguous is not
+  enough: the spelling is only half of the path, the filesystem is the
+  other half. Refusing fails the run with the offending path named;
+  deleting the sidecar's `state/` tree recovers (the state is
+  disposable, D10).
 - Deleting the sidecar discards the state, on purpose (D10): the state
   is disposable, `mysbx init` (or the implicit init of the next bare
   run) recreates the tree empty.
@@ -526,7 +539,9 @@ Runtime behavior:
 Trust: a state directory is writable host state the payload can plant
 symlinks in, so it joins the writable sets of the argv guards like the
 repo does — a `[[mounts]]` `dest` below a state directory is refused
-(`DestBelowWritable`). It is NOT a policy file: the sidecar's
+(`DestBelowWritable`), and the symlink-planting is also why the backing
+stores are created symlink-free rather than with `create_dir_all` (see
+"Runtime behavior" above). It is NOT a policy file: the sidecar's
 `config.toml` stays the only steered-next-run artifact; `state/` holds
 payload data, trusted exactly as much as the work tree.
 

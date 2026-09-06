@@ -1242,6 +1242,58 @@ fn backend_failure_still_leaves_the_created_state_dirs() {
 }
 
 #[test]
+fn a_symlink_in_the_state_tree_is_refused_not_followed() {
+    // D15 ("Trust"): the state tree is the one part of the sidecar the
+    // PAYLOAD can write, so it can plant a symlink there between two
+    // runs. Following it would make the next run create directories
+    // outside the sidecar and bind them rw into the sandbox home — a
+    // host-home path re-entering the sandbox through the back door,
+    // which D14 forbids. Every level of a backing path must therefore
+    // be a real directory; a symlink is a hard error naming the path,
+    // and nothing is created through it.
+    let (inv, repo, sidecar) = fixture("state-dirs-symlink", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\".local/share/opencode\"]\n",
+    )
+    .unwrap();
+    // A first run prepares the backing tree (the backend pin is
+    // deliberately broken: state dirs are created before it runs).
+    let mut cmd = spawn_with_args(&inv, &["run", "--", "/nonexistent/mysbx-bwrap"]);
+    cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
+    assert_eq!(
+        cmd.output().expect("failed to spawn mysbx").status.code(),
+        Some(1)
+    );
+    assert!(sidecar.join("state/.local/share/opencode").is_dir());
+
+    // The payload's move: swap an intermediate level for a symlink
+    // pointing outside the sidecar (here a stand-in for the host home).
+    let outside = repo.parent().unwrap().join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::remove_dir_all(sidecar.join("state/.local")).unwrap();
+    std::os::unix::fs::symlink(&outside, sidecar.join("state/.local")).unwrap();
+
+    let mut cmd = spawn_with_args(&inv, &["run", "--", "/nonexistent/mysbx-bwrap"]);
+    cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "stdout: {stdout}");
+    assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
+    assert!(stderr.contains("is a symlink"), "stderr: {stderr}");
+    assert!(!stderr.contains("panicked"), "stderr: {stderr}");
+    // The escape did not happen: no directory was created through the
+    // symlink, and no bind of it was printed.
+    assert!(
+        !outside.join("share").exists(),
+        "created a directory through the planted symlink"
+    );
+    assert!(!stdout.contains("outside"), "stdout: {stdout}");
+}
+
+#[test]
 fn invalid_layout_is_an_error_not_a_panic() {
     // Review-2 item 4: a user-reachable invalid configuration (a mount
     // dest onto a protected path) must exit 1 with a `mysbx: `-prefixed
