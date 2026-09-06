@@ -1207,3 +1207,145 @@ fn dest_below_the_sandbox_home_stays_allowed() {
         bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
     assert!(argv.contains(&"/mysbx-home/.gitconfig".to_string()));
 }
+
+// ---- the sandbox home is infrastructure too (review-2 item 5) --------------
+
+#[test]
+fn mount_dest_on_the_sandbox_home_is_refused() {
+    // Replacing the tmpfs with a host directory would leave HOME
+    // pointing at content no layer declared, while the report still
+    // claims the fresh tmpfs exists.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some(SANDBOX_HOME), Mode::Rw));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(
+            err,
+            mysbx::bwrap::Error::ProtectedDest {
+                protected: SANDBOX_HOME,
+                ..
+            }
+        ),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_root_dest_keeps_the_sharper_root_diagnosis() {
+    // The ancestor direction matters too, but `/mysbx-home` sits
+    // directly under `/`: on component boundaries its only ancestor is
+    // the root, which the protected list already refuses. (`/mysbx` is
+    // a string prefix, not an ancestor — a different directory, like
+    // `/usr/bin2` beside `/usr/bin`; the test below keeps it usable.)
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount("/synth/data", Some("/"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(
+            err,
+            mysbx::bwrap::Error::ProtectedDest { protected: "/", .. }
+        ),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_dest_named_like_a_parent_of_the_sandbox_home_stays_allowed() {
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/mysbx"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
+
+#[test]
+fn seeding_below_the_sandbox_home_stays_allowed() {
+    // The one-directional rule: strict descendants are the documented
+    // way to seed dotfiles (config.md D14).
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/synth/dotfiles/gitconfig",
+        Some("/mysbx-home/.config/git"),
+        Mode::Ro,
+    ));
+    let argv =
+        bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+    assert!(argv.contains(&"/mysbx-home/.config/git".to_string()));
+}
+
+#[test]
+fn a_sandbox_home_lookalike_dest_stays_allowed() {
+    // Component-exact, like every other protected path: `/mysbx-homey`
+    // is a different directory.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/mysbx-homey"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
+
+#[test]
+fn the_sandbox_home_sits_directly_under_the_root() {
+    // Several claims depend on this: that the only component-wise
+    // ancestor of the sandbox home is `/` (already protected), that a
+    // dest of `/mysbx` is a lookalike rather than a parent, and that
+    // no WRITABLE bind can sit between `/` and the tmpfs. If the
+    // constant ever moves deeper, those must be revisited — so fail
+    // here rather than silently in the guards.
+    assert_eq!(
+        Path::new(SANDBOX_HOME).parent(),
+        Some(Path::new("/")),
+        "SANDBOX_HOME moved: revisit the one-directional check in check_dest"
+    );
+}
+
+#[test]
+fn redundant_spellings_of_the_sandbox_home_are_refused() {
+    // Same normalization bar as every protected path: `.` runs, `..`
+    // climbs and duplicate slashes must not spell a way onto the
+    // tmpfs.
+    for dest in [
+        "/mysbx-home/.",
+        "/mysbx-home/sub/..",
+        "//mysbx-home",
+        "/mysbx-home/./sub/../",
+    ] {
+        let mut cfg = base(true);
+        cfg.mounts
+            .push(make_mount("/synth/data", Some(dest), Mode::Rw));
+        let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+            .expect_err("must be refused");
+        assert!(
+            matches!(
+                err,
+                mysbx::bwrap::Error::ProtectedDest {
+                    protected: SANDBOX_HOME,
+                    ..
+                }
+            ),
+            "dest {dest}: wrong error: {err}"
+        );
+    }
+}
+
+#[test]
+fn a_git_dir_at_the_sandbox_home_is_refused_as_protected() {
+    // The git-dir guard runs the same check_dest, so the sandbox home
+    // is out of reach for a `.git` pointer too.
+    let repo = worktree_repo(&[SANDBOX_HOME]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from(SANDBOX_HOME)];
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(
+            err,
+            mysbx::bwrap::Error::GitDirProtected {
+                protected: SANDBOX_HOME,
+                ..
+            }
+        ),
+        "wrong error: {err}"
+    );
+}

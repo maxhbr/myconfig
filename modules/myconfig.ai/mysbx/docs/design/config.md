@@ -311,7 +311,14 @@ Rationale, in the order the constraints bite:
   was: an explicit `[[mounts]]` grant of the user layer (D6), which the
   sidecar may only narrow (D7). Such a mount may point its `dest` into
   `/mysbx-home` to seed dotfiles (`~/.gitconfig`); the tmpfs is created
-  before the configured mounts, so they land on top of it.
+  before the configured mounts, so they land on top of it. Only
+  *below* it, though: a `dest` equal to `/mysbx-home` — or an ancestor
+  of it, which on component boundaries is `/` alone — is refused
+  (review-2 item 5). Unlike every other base path, the sandbox home is
+  protected in that one direction only: its descendants are the
+  seeding path, not an attack. Such a mount would replace
+  the tmpfs while `HOME` still names it, making the report's "tmpfs;
+  the host home is not mounted" false.
 - **Not the repo root.** `HOME = <repo>` would make every tool that
   writes to `~` (shell history, caches, `.gitconfig` edits, agent state)
   pollute the checkout, and would make `~` and the work tree

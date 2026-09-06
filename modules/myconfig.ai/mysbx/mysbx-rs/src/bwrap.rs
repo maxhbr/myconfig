@@ -411,6 +411,10 @@ fn base_binds() -> Vec<String> {
 /// pointing a mount `dest` into it is the intended way to use it, and
 /// such a mount is an explicit grant of the user layer (config.md D6/D7).
 /// The tmpfs is created in section 3, so those mounts land on top of it.
+/// What IS refused for [`SANDBOX_HOME`] is a dest equal to or above it
+/// (review-2 item 5): that would replace the tmpfs itself rather than
+/// seed it, leaving `HOME` pointing at content no layer declared —
+/// see the one-directional check at the top of [`check_dest`].
 /// The resolver paths are likewise not protected: an explicit mount
 /// with dest `/etc/ssl` (say, to install a project-local CA) shadows the
 /// ro-bind-try by later-wins — intended, same grant logic as
@@ -461,6 +465,21 @@ fn check_dest(dest: &str) -> Option<&'static str> {
         if hits {
             return Some(protected);
         }
+    }
+    // [`SANDBOX_HOME`] is protected in ONE direction only (review-2
+    // item 5): a dest equal to it — or an ancestor of it — replaces
+    // or hides the tmpfs the base binds created, while the report
+    // still says `HOME=/mysbx-home` and the payload gets a home nobody
+    // declared. Strict DESCENDANTS stay allowed: seeding dotfiles into
+    // the home by pointing a `dest` there is the documented way to use
+    // it (config.md D14). On component boundaries the sandbox home's
+    // only ancestor is `/`, which the list above already refuses — so
+    // this check runs AFTER it and effectively guards the EQUAL case,
+    // keeping the sharper "would shadow `/`" answer for the root.
+    // `/mysbx` is a string prefix, not an ancestor: a different
+    // directory, and it stays mountable like `/usr/bin2`.
+    if Path::new(SANDBOX_HOME).starts_with(&path) {
+        return Some(SANDBOX_HOME);
     }
     None
 }
