@@ -541,7 +541,19 @@ symlinks in, so it joins the writable sets of the argv guards like the
 repo does — a `[[mounts]]` `dest` below a state directory is refused
 (`DestBelowWritable`), and the symlink-planting is also why the backing
 stores are created symlink-free rather than with `create_dir_all` (see
-"Runtime behavior" above). It is NOT a policy file: the sidecar's
+"Runtime behavior" above).
+
+The same argument runs in the other direction, at config time: a
+writable bind (an `rw` mount, the repo, a git dir) whose source is an
+**ancestor** of a backing store is refused (`StateTreeWritable`). The
+sidecar's `state/` directory holds no policy file, so the policy-file
+rule of D7 does not catch it — but its LAYOUT decides where the next
+run's state binds come from, which is the same "steers the next run"
+property. The backing store itself stays mountable (the payload has it
+rw already and cannot rewrite its own parent), and every `ro` view of
+the tree stays allowed. The two checks are deliberate belt and braces:
+this one names the offending configuration, `ensure_plain_dir` catches
+a symlink whatever created it. It is NOT a policy file: the sidecar's
 `config.toml` stays the only steered-next-run artifact; `state/` holds
 payload data, trusted exactly as much as the work tree.
 

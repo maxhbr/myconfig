@@ -350,6 +350,54 @@ fn a_mount_dest_below_a_state_dir_is_refused() {
 }
 
 #[test]
+fn an_rw_mount_above_a_state_dir_is_refused() {
+    // D15: the state tree decides where the next run's state binds
+    // come from. An `rw` mount of the sidecar's `state/` directory
+    // (which holds no policy file, so the policy-file guard does not
+    // catch it) lets the payload swap a component for a symlink, and
+    // the next run would bind its target rw into the sandbox home.
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    cfg.mounts.push(make_mount(
+        "/synth/repo.mysbx/state",
+        Some("/statetree"),
+        Mode::Rw,
+    ));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    ).expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::StateTreeWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn an_rw_mount_of_the_state_dir_itself_stays_allowed() {
+    // Only a writable PARENT is the problem: the backing store itself
+    // is already rw inside the sandbox by construction, and the
+    // payload cannot rewrite its own parent entry.
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    cfg.mounts.push(make_mount(
+        "/synth/repo.mysbx/state/.local/share/opencode",
+        Some("/elsewhere"),
+        Mode::Rw,
+    ));
+    bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    ).unwrap();
+}
+
+#[test]
 fn a_ro_mount_of_the_sidecar_state_tree_stays_allowed() {
     // Reviewing the state tree from inside the sandbox (an `ro` mount
     // of the sidecar's `state/` directory, like the ro sidecar mount

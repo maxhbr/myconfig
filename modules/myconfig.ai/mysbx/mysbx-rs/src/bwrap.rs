@@ -290,6 +290,28 @@ pub fn bwrap_argv(
                 });
             }
         }
+        // The same argument for the state tree (config.md D15): the
+        // sidecar's `state/` directory is not a policy FILE, but its
+        // layout decides the SOURCES of the next run's state binds. A
+        // writable bind of an ANCESTOR of a backing store lets the
+        // payload swap a component for a symlink, so the next run
+        // would bind whatever it points at rw into the sandbox home.
+        // `ensure_state_dirs` refuses to follow such a symlink, but
+        // that fails a later run with a filesystem diagnosis; the
+        // configuration that made it possible is refused here, where
+        // the operator can still read it as a config error. The
+        // backing store ITSELF stays mountable (the payload already
+        // has it rw, and it cannot rewrite its own parent), and so
+        // does any `ro` view of the tree.
+        for (state_src, _dest) in &state_binds {
+            let state_src = normalize(state_src);
+            if state_src.starts_with(&src) && state_src != src {
+                return Err(Error::StateTreeWritable {
+                    source: src.to_string_lossy().into_owned(),
+                    state_dir: state_src.to_string_lossy().into_owned(),
+                });
+            }
+        }
     }
 
     // 5. configured mounts, in declaration order; dest defaults to the
@@ -447,6 +469,20 @@ pub enum Error {
         /// The policy file that would become writable.
         policy: String,
     },
+    /// A writable bind (the repo, a git dir, or an `rw` mount) would
+    /// expose an ANCESTOR of a `state-dirs` backing store to the
+    /// payload (docs/design/config.md D15). The state tree decides
+    /// where the next run's state binds come from: with a writable
+    /// parent the payload can replace a component with a symlink, and
+    /// the next run would bind its target rw into the sandbox home.
+    /// `lib.rs::ensure_state_dirs` refuses to follow such a symlink;
+    /// this refuses the configuration that allows planting it.
+    StateTreeWritable {
+        /// The mount (or repo) source the backing store lies below.
+        source: String,
+        /// The state backing store that would become replaceable.
+        state_dir: String,
+    },
     /// A configured mount would carry the nix daemon into a sandbox
     /// whose network is denied (review-2 item 3, review-3 item 2). The
     /// socket under `/nix/var/nix` is a network service: the daemon
@@ -512,6 +548,15 @@ impl fmt::Display for Error {
                  writable — a config the sandbox can write steers the NEXT \
                  run of itself (git-dirs approvals, .git pointers); narrow \
                  the mount to below it, or drop it"
+            ),
+            Error::StateTreeWritable { source, state_dir } => write!(
+                f,
+                "source {source} would expose the state directory {state_dir} \
+                 to the payload through a writable PARENT — the sandbox could \
+                 then replace it with a symlink and redirect the next run's \
+                 state bind out of the sidecar (docs/design/config.md D15); \
+                 mount it read-only, or narrow the mount to the state \
+                 directory itself"
             ),
             Error::DaemonUnderDeniedNetwork { source } => write!(
                 f,
