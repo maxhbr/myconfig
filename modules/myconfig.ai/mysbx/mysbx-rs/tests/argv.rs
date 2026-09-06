@@ -1565,3 +1565,53 @@ fn a_ro_chain_of_aliases_over_writable_content_is_caught() {
         "wrong error: {err}"
     );
 }
+
+// ---- the daemon guard checks both directions (review-3 item 2) -------------
+
+#[test]
+fn a_read_only_ancestor_of_the_nix_daemon_dir_is_refused() {
+    // The review's exact example: binding `/nix` somewhere else still
+    // exposes `/nix/var/nix/daemon-socket/socket` through the wider
+    // window, read-only or not — the socket only needs to be
+    // connectable, not writable.
+    let mut cfg = base(false);
+    cfg.mounts.push(make_mount("/nix", Some("/host-nix"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(
+            err,
+            mysbx::bwrap::Error::DaemonUnderDeniedNetwork { .. }
+        ),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn the_whole_host_root_is_refused_under_a_denied_network() {
+    // The extreme ancestor: `path = "/"` binds everything, daemon
+    // included. (`check_dest` refuses the ROOT as a DEST on its own;
+    // the source side is this guard's job.)
+    let mut cfg = base(false);
+    cfg.mounts.push(make_mount("/", Some("/host-root"), Mode::Ro));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(
+            err,
+            mysbx::bwrap::Error::DaemonUnderDeniedNetwork { .. }
+        ),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn an_unrelated_nix_store_source_stays_mountable_without_the_network() {
+    // The carve-out that keeps the guard usable: `/nix/store` itself
+    // does not contain `/nix/var/nix` (and `/nix/store` is bound by
+    // the base table regardless), so a mount of it stays allowed.
+    let mut cfg = base(false);
+    cfg.mounts
+        .push(make_mount("/nix/store/extra", Some("/opt/extra"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
