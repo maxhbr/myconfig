@@ -422,9 +422,26 @@ fn env_or(name: &str, fallback: &str) -> String {
 /// and create its sidecar directory `<repo>.mysbx/` with a default
 /// `config.toml`.
 fn init(args: &[String]) -> i32 {
-    if !args.is_empty() {
-        eprintln!("mysbx init: unexpected argument: {}", args[0]);
-        return 2;
+    // Review-3 item 5: `--approve-git-dirs` is the recovery after an
+    // implicit init. A user who first ran the bare form (which never
+    // snapshots: the git pointer is untrusted, D3) and THEN wants the
+    // discovered git metadata approved used to be stuck — plain
+    // `init` reports `exists` and never touches an existing config,
+    // so the only way forward was hand-editing. The flag makes that
+    // a deliberate, idempotent one-command action: the same trust
+    // decision a fresh explicit `init` would have recorded, taken
+    // explicitly after the fact. Only ADDED entries are written —
+    // anything already approved (or deliberately removed, but still
+    // discovered) keeps its state; removal stays the operator's word.
+    let mut approve_git_dirs = false;
+    for arg in args {
+        if arg == "--approve-git-dirs" {
+            approve_git_dirs = true;
+        } else {
+            eprintln!("mysbx init: unexpected argument: {arg}");
+            eprintln!("try `mysbx --help`");
+            return 2;
+        }
     }
     let repo = match repo::resolve_cwd() {
         Ok(r) => r,
@@ -440,7 +457,17 @@ fn init(args: &[String]) -> i32 {
     match ensure_sidecar_config(&repo, true) {
         Ok(Outcome::Created) => {}
         Ok(Outcome::Existed) => {
-            println!("## exists: {}", repo.sidecar.join("config.toml").display());
+            // The config exists (implicit init, or an earlier init):
+            // plain `init` leaves it alone (D12). The recovery flag
+            // adds the discovered-but-unapproved git dirs to it.
+            if approve_git_dirs {
+                if let Err(msg) = approve_git_dirs_in_existing_config(&repo) {
+                    eprintln!("mysbx: {msg}");
+                    return 1;
+                }
+            } else {
+                println!("## exists: {}", repo.sidecar.join("config.toml").display());
+            }
         }
         Err(msg) => {
             eprintln!("mysbx: {msg}");
@@ -564,6 +591,182 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
     }
     println!("## created: {}", config.display());
     Ok(Outcome::Created)
+}
+
+/// The review-3 item 5 recovery: add the git metadata directories the
+/// repo still needs to an EXISTING sidecar `config.toml` (written by
+/// the implicit init of a first bare run, or an earlier `init`).
+/// Idempotent — a second call finds nothing missing and writes
+/// nothing — and additive only: entries already approved stay
+/// (whoever put them there, including by hand), and the approval of a
+/// removed-but-still-discovered entry is the operator's explicit word
+/// again (the flag says exactly that). Comment lines and formatting
+/// of the rest of the file are preserved byte-for-byte.
+fn approve_git_dirs_in_existing_config(repo: &repo::Repo) -> Result<(), String> {
+    let config = repo.sidecar.join("config.toml");
+    let text = std::fs::read_to_string(&config)
+        .map_err(|e| format!("cannot read {}: {e}", config.display()))?;
+    let parsed = crate::config::Config::parse(&text)
+        .map_err(|e| format!("{}: {e}", config.display()))?;
+    // Compare on absolute paths: `git-dirs` entries may be written in
+    // any D8 spelling (`~/…`, relative); the runtime resolves them
+    // against HOME and canonicalizes both sides anyway (review-2
+    // item 1). Raw-text matching would both miss a `~` spelling of
+    // an approved dir and duplicate it; resolved matching keeps the
+    // flag idempotent across spellings.
+    let home = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_default();
+    let resolve = |raw: &str| -> std::path::PathBuf {
+        let p = std::path::Path::new(raw);
+        if let Some(rest) = raw.strip_prefix("~/") {
+            home.join(rest)
+        } else if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            config.parent().unwrap_or(std::path::Path::new(".")).join(p)
+        }
+    };
+    let approved: std::collections::BTreeSet<std::path::PathBuf> = parsed
+        .git_dirs
+        .iter()
+        .map(|raw| {
+            std::fs::canonicalize(resolve(raw)).unwrap_or_else(|_| resolve(raw))
+        })
+        .collect();
+    // NOTE: an entry that does not EXIST cannot canonicalize and is
+    // compared in its raw spelling — a duplicate spelling of it may
+    // then be added. That is harmless: the next `run` hard-fails on
+    // the dangling entry either way (merge.rs names the file), so the
+    // broken entry is surfaced, not silently normalized.
+    let missing: Vec<std::path::PathBuf> = repo
+        .git_dirs
+        .iter()
+        .filter(|d| !approved.contains(d.as_path()))
+        .cloned()
+        .collect();
+    if missing.is_empty() {
+        println!("## git-dirs already lists everything this repo needs");
+        return Ok(());
+    }
+    // A path is bytes, not text — the create-side refusal applies
+    // here too: a non-UTF-8 or control-character path mangled through
+    // `to_string_lossy` would record a DIFFERENT path (a dangling
+    // approval) or an unparsable file. It is left out and named on
+    // stdout instead (reviewer finding: the recovery must not be
+    // weaker than the initial snapshot).
+    let missing: Vec<&std::path::PathBuf> = missing
+        .iter()
+        .filter(|d| {
+            let Some(text) = d.to_str() else {
+                println!(
+                    "## not recorded (path is not valid UTF-8, approve it by hand): {}",
+                    d.display()
+                );
+                return false;
+            };
+            if text.chars().any(|c| c.is_control()) {
+                println!(
+                    "## not recorded (path contains a control character, approve it by hand): {}",
+                    d.display()
+                );
+                return false;
+            }
+            true
+        })
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    // Append (or extend) a `git-dirs` array in place: keep every byte
+    // of the file except the array that changes.
+    let rendered: Vec<String> = missing
+        .iter()
+        .map(|d| {
+            let text = d.to_str().expect("filtered above");
+            let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+            format!("  \"{escaped}\",")
+        })
+        .collect();
+    let new_text = if let Some(start) = find_git_dirs_key(&text) {
+        // The file already has a `git-dirs` line: splice the new
+        // entries into the existing array, before its closing `]`.
+        let close = find_closing_bracket(&text, start).ok_or_else(|| {
+            format!("{}: git-dirs has no closing `]`", config.display())
+        })?;
+        let mut out = String::with_capacity(text.len() + 64);
+        out.push_str(&text[..close]);
+        for entry in &rendered {
+            out.push('\n');
+            out.push_str(entry);
+        }
+        out.push('\n');
+        out.push_str(&text[close..]);
+        out
+    } else {
+        let mut out = text.clone();
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str(
+            "\n# Added by `mysbx init --approve-git-dirs`: git metadata this\n\
+             # repository needs from outside the work tree (review-3 item 5).\n\
+             # The `.git` pointer inside the repo is untrusted content\n\
+             # (docs/design/config.md D3); remove an entry to refuse the\n\
+             # bind.\n\
+             git-dirs = [\n",
+        );
+        for entry in &rendered {
+            out.push_str(entry);
+            out.push('\n');
+        }
+        out.push_str("]\n");
+        out
+    };
+    std::fs::write(&config, new_text)
+        .map_err(|e| format!("cannot write {}: {e}", config.display()))?;
+    for d in &missing {
+        println!("## approved git metadata: {}", d.display());
+    }
+    Ok(())
+}
+
+/// Find the `git-dirs =` key line in an existing sidecar config (at
+/// the byte offset of the line start). TOML tables this schema allows
+/// keep `git-dirs` at the top level only, the parser admits no
+/// multi-line strings, and a comment line (`# git-dirs = …`) starts
+/// with `#` after trimming, so the trimmed-prefix match can only hit
+/// the real key — anything else would corrupt the file on splice
+/// (reviewer finding, ruled out here).
+fn find_git_dirs_key(text: &str) -> Option<usize> {
+    // `str::lines` discards offsets, so walk the raw bytes line by
+    // line: track the start offset of each line and match on its
+    // trimmed prefix.
+    let mut start = 0;
+    for raw_line in text.split('\n') {
+        if raw_line.trim_start().starts_with("git-dirs") {
+            return Some(start);
+        }
+        start += raw_line.len() + 1;
+    }
+    None
+}
+
+/// Find the closing `]` of the array that starts at `start` (the
+/// offset of a `git-dirs =` line), handling `#` comments.
+fn find_closing_bracket(text: &str, start: usize) -> Option<usize> {
+    let rest = &text[start..];
+    let mut in_comment = false;
+    for (i, ch) in rest.char_indices() {
+        match ch {
+            '#' if in_comment => {}
+            '#' => in_comment = true,
+            '\n' if in_comment => in_comment = false,
+            ']' if !in_comment => return Some(start + i),
+            _ => {}
+        }
+    }
+    None
 }
 
 #[cfg(test)]

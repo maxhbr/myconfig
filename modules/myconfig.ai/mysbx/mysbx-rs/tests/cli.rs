@@ -1190,6 +1190,158 @@ fn the_implicit_init_approves_nothing() {
     );
 }
 
+// ---- the review-3 item 5 recovery -------------------------------------------
+
+#[test]
+fn approve_git_dirs_recovers_after_an_implicit_init() {
+    // The exact scenario review-3 item 5 describes: the user's first
+    // contact with a linked-worktree repo was the bare form, so the
+    // sidecar exists WITHOUT approvals (the implicit init never
+    // snapshots). Plain `init` would just say `exists`. The flag
+    // takes the trust decision explicitly, after the fact: the config
+    // must now carry the discovered git dir, and a following `run`
+    // must accept it.
+    let base = target_tmpdir("approve-git-dirs-recovery");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let sidecar = base.join("wt.mysbx");
+    let inv = |args: Vec<&'static str>| Invocation {
+        args,
+        cwd: worktree.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+
+    // First contact: the bare form creates the sidecar without
+    // approvals and refuses the bind (the_implicit_init_approves_nothing
+    // pins that half).
+    let (code, _, stderr) = run_binary(&inv(vec!["run", "--", "true"]));
+    assert_eq!(code, 1, "stderr: {stderr}");
+    let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert!(!written.contains("git-dirs"), "{written}");
+
+    // The recovery: explicit init with the flag.
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("approved git metadata"), "{stdout}");
+    let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert!(written.contains("git-dirs = ["), "{written}");
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "the recovery must record the discovered git dir: {written}"
+    );
+
+    // The recorded approval satisfies the next run's bind.
+    let (code, _, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn approve_git_dirs_is_idempotent_and_additive_only() {
+    // A second invocation with the flag must be a no-op (nothing
+    // missing), and an entry an operator deliberately REMOVED is not
+    // resurrected by a later `init --approve-git-dirs`... it IS
+    // rediscovered, so the flag re-approves it — that is the explicit
+    // word the flag speaks. What must hold: the rest of the file —
+    // comments, mounts, hand-written entries — survives byte-for-byte
+    // except for the added lines, and already-approved entries are
+    // never duplicated.
+    let base = target_tmpdir("approve-git-dirs-idempotent");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    // An operator-written config: a comment, a mount, a hand-approved
+    // git dir (in a `~`-free absolute spelling), one entry removed.
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "# operator notes\nbackend = \"bubblewrap\"\n\ngit-dirs = [\n  \"{}\",\n]\n\n[[mounts]]\npath = \"/etc/hosts\"\nmode = \"ro\"\n",
+            gitdir.display()
+        ),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["init", "--approve-git-dirs"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+
+    let before = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("already lists everything"),
+        "nothing was missing, so nothing may be written: {stdout}"
+    );
+    let after = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert_eq!(before, after, "the config must be untouched");
+}
+
+#[test]
+fn approve_git_dirs_splices_into_an_existing_list_without_duplicates() {
+    // The existing list names the git dir in a DIFFERENT spelling
+    // (with a redundant trailing component pattern): the resolved
+    // comparison must recognize it as approved and not duplicate it.
+    let base = target_tmpdir("approve-git-dirs-splice");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!("git-dirs = [\n  \"{}\",\n]\n# trailing comment\n", gitdir.display()),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["init", "--approve-git-dirs"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("already lists everything"),
+        "the resolved spelling must count as approved: {stdout}"
+    );
+    let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert_eq!(
+        written.matches(gitdir.display().to_string().as_str()).count(),
+        1,
+        "no duplicates: {written}"
+    );
+    assert!(written.contains("# trailing comment"), "{written}");
+}
+
+#[test]
+fn init_rejects_unknown_arguments() {
+    // The flag surface stays minimal: anything else on `init` is a
+    // usage error (exit 2).
+    let base = target_tmpdir("init-unknown-arg");
+    let (worktree, _gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["init", "--approve-git", "extra"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("unexpected argument"), "{stderr}");
+}
+
 #[test]
 fn an_unapproved_common_dir_is_refused_even_when_the_gitdir_is_approved() {
     // `commondir` is a second repo-controlled pointer: approving the
