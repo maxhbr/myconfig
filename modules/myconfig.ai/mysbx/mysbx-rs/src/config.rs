@@ -81,6 +81,18 @@ pub struct Config {
     pub mounts: Vec<Mount>,
     /// Environment forwarded into the sandbox.
     pub env: BTreeMap<String, String>,
+    /// Host directories whose git metadata a repo's `.git` FILE may
+    /// point at — the approval list for the external git-dir binds
+    /// (review-2 item 1). Written as host paths in the same three
+    /// forms as `[[mounts]]` paths (D8): absolute, `~/…` (expanded
+    /// against the invoking user's home at run time) or relative to
+    /// the config file's directory. A repo-writable `.git` file is
+    /// untrusted content (D3): the bind happens only when the
+    /// resolved target is at or below an entry of this list in the
+    /// user config or the sidecar — `mysbx init` snapshots the
+    /// discovered directories into a fresh sidecar so the common
+    /// worktree/submodule case works out of the box.
+    pub git_dirs: Vec<String>,
 }
 
 impl Default for Config {
@@ -90,6 +102,7 @@ impl Default for Config {
             network: None,
             mounts: Vec::new(),
             env: BTreeMap::new(),
+            git_dirs: Vec::new(),
         }
     }
 }
@@ -145,6 +158,7 @@ impl Config {
                 "network" => config.network = Some(boolean(value, "network")?),
                 "mounts" => config.mounts = mounts(value)?,
                 "env" => config.env = env(table(value, "env")?)?,
+                "git-dirs" => config.git_dirs = git_dirs(value)?,
                 other => return Err(unknown("top level", other)),
             }
         }
@@ -194,6 +208,28 @@ fn mounts(value: &Value) -> Result<Vec<Mount>, Error> {
         out.push(Mount { path, dest, mode });
     }
     Ok(out)
+}
+
+/// Parse the `git-dirs` approval list: an array of host-path strings,
+/// each in one of the D8 forms (absolute, `~/…`, relative). The same
+/// `host_path` shape check as `[[mounts]]` paths applies; canonicalization
+/// happens in the merge, eagerly (D8), so a dangling approval is a hard
+/// error rather than a silent no-op.
+fn git_dirs(value: &Value) -> Result<Vec<String>, Error> {
+    let items = value.as_array().ok_or_else(|| {
+        Error::Schema(format!(
+            "git-dirs: expected an array of strings, found {}",
+            value.type_name()
+        ))
+    })?;
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let at = format!("git-dirs #{}", i + 1);
+            host_path(string(v, &at)?, &at)
+        })
+        .collect()
 }
 
 fn env(t: &Table) -> Result<BTreeMap<String, String>, Error> {

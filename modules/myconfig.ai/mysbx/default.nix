@@ -82,7 +82,8 @@ let
     mounts = map renderMount cfg.config.mounts;
     env = cfg.config.env;
   }
-  // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; };
+  // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
+  // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; };
 in
 {
   options.myconfig.ai.mysbx = with lib; {
@@ -172,6 +173,28 @@ in
             type = types.attrsOf types.str;
             default = { };
             description = "Environment variables forwarded into the sandbox.";
+          };
+          gitDirs = mkOption {
+            type = types.listOf (types.addCheck types.str (p: p != ""));
+            default = [ ];
+            example = [ "~/myconfig/myconfig/.git" ];
+            description = ''
+              Host directories approved as *external git metadata*: the
+              targets a repository's `.git` FILE may point at when the
+              repo is a linked worktree or a submodule
+              (./docs/design/config.md, review-2 item 1).
+
+              The `.git` file lives inside the repo and is therefore
+              untrusted content (D3), so it grants nothing by itself:
+              mysbx binds the metadata only when the resolved target is
+              at or below an entry approved here or in the repo's
+              sidecar — `mysbx init` records what it finds into a fresh
+              sidecar, so this host-wide list is only needed to
+              pre-approve checkout roots (e.g. `~/myconfig`).
+
+              Entries take the same three forms as mount paths (D8) and
+              must exist at run time: they are canonicalized eagerly.
+            '';
           };
         };
       };

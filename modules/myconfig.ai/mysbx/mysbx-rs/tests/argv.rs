@@ -29,6 +29,17 @@ fn synth_repo() -> Repo {
     }
 }
 
+/// A synthetic repo whose `.git` file points at `git_dirs` (worktree
+/// layout, review-2 item 1). The builder is pure, so the paths need
+/// not exist; the approval list is what gates the bind.
+fn worktree_repo(git_dirs: &[&str]) -> Repo {
+    Repo {
+        root: PathBuf::from("/synth/repo"),
+        sidecar: PathBuf::from("/synth/repo.mysbx"),
+        git_dirs: git_dirs.iter().map(PathBuf::from).collect(),
+    }
+}
+
 /// A synthetic `Merged`: bubblewrap, the given network switch, nothing else.
 fn base(network: bool) -> Merged {
     Merged {
@@ -36,6 +47,7 @@ fn base(network: bool) -> Merged {
         network,
         mounts: Vec::new(),
         env: BTreeMap::new(),
+        git_dirs: Vec::new(),
     }
 }
 
@@ -316,6 +328,7 @@ fn golden_sidecar_narrows_user_config() {
             ("EDITOR".to_string(), "user-nvim".to_string()), // user layer
             ("PROJECT".to_string(), "demo".to_string()),     // sidecar may introduce
         ]),
+        git_dirs: Vec::new(),
     };
     let argv = bwrap_argv(
         &cfg,
@@ -452,6 +465,7 @@ fn mount_order_is_preserved() {
             make_mount("/synth/data/outer/nested", None, Mode::Rw),
         ],
         env: BTreeMap::new(),
+        git_dirs: Vec::new(),
     };
     let argv = bwrap_argv(
         &cfg,
@@ -760,30 +774,25 @@ fn hidden_mounts_are_judged_after_dest_normalization() {
 fn worktree_git_dirs_are_bound_rw() {
     // Review-1 finding 4: the `.git` FILE's targets must be bound rw at
     // their real host paths, common dir BEFORE the per-worktree gitdir,
-    // right after the repo bind and before any configured mount.
-    let repo = Repo {
-        root: PathBuf::from("/synth/repo"),
-        sidecar: PathBuf::from("/synth/repo.mysbx"),
-        git_dirs: vec![
-            PathBuf::from("/synth/main/.git"),
-            PathBuf::from("/synth/main/.git/worktrees/wt"),
-        ],
-    };
+    // right after the repo bind and before any configured mount — but
+    // only when approved (review-2 item 1): the approval list of the
+    // trusted layers must cover them.
+    let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
     let argv = bwrap_argv(
-        &base(true),
+        &cfg,
         &repo,
         &Payload::Shell,
         &host_env(&[]),
         &params(),
     ).unwrap();
-    // Positions: repo bind, then common dir, then gitdir, all rw binds.
+    // Positions: repo bind first, then the approved git dir, both rw.
     let repo_bind = pos_pair(&argv, "--bind", "/synth/repo");
-    let common = pos_pair(&argv, "--bind", "/synth/main/.git");
     let gitdir = pos_pair(&argv, "--bind", "/synth/main/.git/worktrees/wt");
-    assert!(repo_bind < common, "repo before common dir");
-    assert!(common < gitdir, "common dir before gitdir");
+    assert!(repo_bind < gitdir, "repo bind comes first");
     // ro binds must not have been used for git metadata.
-    assert_eq!(pos_ro_bind(&argv, "/synth/main/.git"), None);
+    assert_eq!(pos_ro_bind(&argv, "/synth/main/.git/worktrees/wt"), None);
 }
 
 #[test]
@@ -825,13 +834,11 @@ fn mount_covering_a_git_dir_is_refused() {
     const EXPECTED: &str = "would hide a git metadata directory";
     // The git dir binds are implicit infrastructure like the repo: a
     // configured mount covering one would silently break `git status`
-    // inside the sandbox.
-    let repo = Repo {
-        root: PathBuf::from("/synth/repo"),
-        sidecar: PathBuf::from("/synth/repo.mysbx"),
-        git_dirs: vec![PathBuf::from("/synth/main/.git/worktrees/wt")],
-    };
+    // inside the sandbox. The git dir is approved (review-2 item 1),
+    // so the refusal really is the hiding check.
+    let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
     let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
     cfg.mounts
         .push(make_mount("/synth/data", Some("/synth/main"), Mode::Rw));
 
@@ -913,4 +920,133 @@ fn mount_dest_elsewhere_in_nix_stays_allowed() {
     cfg.mounts
         .push(make_mount("/synth/data", Some("/etc/nix/other.conf"), Mode::Ro));
     bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params()).unwrap();
+}
+
+// ---- git metadata approval (review-2 item 1) -------------------------------
+
+#[test]
+fn unapproved_git_dir_is_refused() {
+    // The core adversarial case: a repo-writable `.git` FILE points at
+    // an arbitrary host directory. Without approval, the builder must
+    // refuse the bind — the pointer is untrusted content (config.md D3)
+    // and grants nothing.
+    let repo = worktree_repo(&["/synth/target"]);
+    let err = bwrap_argv(
+        &base(true),
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        err.to_string().contains("not approved")
+            && matches!(err, mysbx::bwrap::Error::GitDirNotApproved { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn approved_git_dir_below_the_entry_is_bound() {
+    // Approval is by containment: an entry covers everything at or
+    // below it, like a mount grant.
+    let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
+    let argv = bwrap_argv(
+        &cfg,
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    assert!(pos_pair(&argv, "--bind", "/synth/main/.git/worktrees/wt") > 0);
+}
+
+#[test]
+fn exact_approval_is_enough() {
+    let repo = worktree_repo(&["/synth/target"]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/target")];
+    let argv = bwrap_argv(
+        &cfg,
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    assert!(pos_pair(&argv, "--bind", "/synth/target") > 0);
+}
+
+#[test]
+fn sibling_approval_does_not_cover() {
+    // Component-boundary containment: `/synth/targets` does not approve
+    // `/synth/target`.
+    let repo = worktree_repo(&["/synth/target"]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/targets")];
+    let err = bwrap_argv(
+        &cfg,
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::GitDirNotApproved { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn root_git_dir_is_refused_even_if_listed() {
+    // `gitdir: /` must never bind — even if a hostile or sloppy config
+    // lists `/` in `git-dirs`, and even though repo resolution refuses
+    // it earlier in the real pipeline. The builder is the last line.
+    let repo = worktree_repo(&["/"]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/")];
+    let err = bwrap_argv(
+        &cfg,
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::GitDirProtected { protected: "/", .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn protected_related_git_dir_is_refused_even_if_listed() {
+    // A gitdir related to a protected sandbox path (an ancestor of
+    // /nix/store here) would shadow base infrastructure exactly like
+    // a bad mount dest — refused regardless of the approval list.
+    let repo = worktree_repo(&["/nix"]);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/nix")];
+    let err = bwrap_argv(
+        &cfg,
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(
+            err,
+            mysbx::bwrap::Error::GitDirProtected {
+                protected: "/nix/store",
+                ..
+            }
+        ),
+        "wrong error: {err}"
+    );
 }

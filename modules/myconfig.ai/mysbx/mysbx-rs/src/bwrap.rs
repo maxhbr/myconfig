@@ -155,8 +155,15 @@ pub fn bwrap_argv(
     // them rw to update refs and the index. Common dir first so a
     // gitdir nested inside it stays reachable in the degenerate
     // layout (a later equal-or-ancestor bind would hide it).
+    // Review-2 item 1: the pointer lives in a repo-writable file, so
+    // it is NOT a mount specification — every target must be at or
+    // below an entry of `cfg.git_dirs`, the approval list of the
+    // trusted layers, before it is bound. `/`, the home directory and
+    // anything related to a protected sandbox path are never
+    // approvable and are refused outright.
     bind(&mut argv, false, &root, None);
     for git_dir in &repo.git_dirs {
+        check_git_dir(git_dir, &cfg.git_dirs)?;
         bind(&mut argv, false, &git_dir.to_string_lossy(), None);
     }
 
@@ -251,6 +258,19 @@ pub enum Error {
     /// A later mount's dest hides an earlier bind — an earlier mount, or
     /// an implicit one (the repo root, a git metadata directory).
     HiddenMount { message: String },
+    /// A `.git` FILE points at git metadata outside the repo that no
+    /// trusted layer approved (review-2 item 1): the bind is refused,
+    /// because a repo-writable pointer must not become a mount
+    /// specification.
+    GitDirNotApproved { gitdir: PathBuf },
+    /// The git metadata a `.git` FILE points at is related to a
+    /// protected sandbox path — the bind would shadow or overwrite base
+    /// infrastructure exactly like a bad mount dest, so no approval can
+    /// make it safe (review-2 item 1).
+    GitDirProtected {
+        gitdir: PathBuf,
+        protected: &'static str,
+    },
 }
 
 impl fmt::Display for Error {
@@ -263,6 +283,23 @@ impl fmt::Display for Error {
                  refusing to build the argv"
             ),
             Error::HiddenMount { message } => f.write_str(message),
+            Error::GitDirNotApproved { gitdir } => write!(
+                f,
+                "git metadata {} is not approved — a repo-writable .git \
+                 file must not become a mount specification \
+                 (review-2 item 1); approve the directory in \
+                 `git-dirs` in the user config or sidecar \
+                 (docs/design/config.md D8), or drop the pointer",
+                gitdir.display()
+            ),
+            Error::GitDirProtected { gitdir, protected } => write!(
+                f,
+                "git metadata {} would shadow or overwrite the protected \
+                 sandbox path {protected} (base table of docs/plan.md); \
+                 no approval can make that safe \u{2014} move the repository \
+                 out of {protected}",
+                gitdir.display()
+            ),
         }
     }
 }
@@ -477,6 +514,46 @@ fn check_hidden_mounts(
     Ok(())
 }
 
+/// Review-2 item 1: refuse to bind git metadata a repo-writable `.git`
+/// FILE points at unless a trusted layer (user config or sidecar)
+/// approved the directory. The approval list `approved` holds
+/// canonicalized host paths (D8); the target `gitdir` is canonicalized
+/// too (repo.rs), so the containment is symlink-resolved on both
+/// sides. Refusals:
+///
+/// - a target related to a protected sandbox path — `/` itself, an
+///   ancestor of `/nix/store`, anything at or below `/tmp` …: the
+///   bind would shadow or overwrite base infrastructure exactly like
+///   a configured mount dest, so no approval can make it safe
+///   ([`Error::GitDirProtected`]). The home directory is refused one
+///   step earlier, at repo resolution (`crate::repo`), which is the
+///   layer that knows `$HOME`.
+/// - a target that is at-or-below NO approved entry: the pointer is
+///   untrusted content (config.md D3) and grants nothing.
+fn check_git_dir(gitdir: &Path, approved: &[PathBuf]) -> Result<(), Error> {
+    // Protected paths (`/` among them): the bind lands at the git dir's real host path,
+    // so a gitdir related to one is as bad as a mount dest that is.
+    // `check_dest` expects the normalized in-sandbox spelling; host
+    // paths are already absolute and `..`-free after canonicalize,
+    // but normalize anyway so the comparison matches the dest rules.
+    let dest = normalize(&gitdir.to_string_lossy());
+    if let Some(protected) = check_dest(&dest.to_string_lossy()) {
+        return Err(Error::GitDirProtected {
+            gitdir: gitdir.to_owned(),
+            protected,
+        });
+    }
+    let ok = approved
+        .iter()
+        .any(|a| dest.starts_with(normalize(&a.to_string_lossy())));
+    if !ok {
+        return Err(Error::GitDirNotApproved {
+            gitdir: gitdir.to_owned(),
+        });
+    }
+    Ok(())
+}
+
 /// Lexically resolve `.` and `..` components of an absolute path —
 /// mirroring how the kernel (and therefore bubblewrap, which mounts at
 /// the path it is given after resolving it) interprets a destination
@@ -547,6 +624,7 @@ mod tests {
             network: true,
             mounts: Vec::new(),
             env: BTreeMap::new(),
+            git_dirs: Vec::new(),
         }
     }
 

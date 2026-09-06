@@ -60,6 +60,9 @@ config that can execute is config that can escape.
 - additional host paths mounted into the sandbox (`[[mounts]]`), with mode
   (each written absolute, `~/…`, or relative to the sidecar's own
   directory — see D8)
+- which external git metadata directories may be bound (`git-dirs`,
+  see D13): the approval list for the targets a repo's `.git` FILE
+  points at
 - the backend and its resource limits
 - network policy (`network = false` is the deny switch; the network is
   shared by default)
@@ -72,7 +75,9 @@ read-write (see D13).
 
 Host-wide defaults, in particular which host (agent) config files are
 exposed inside the sandbox — credentials and tool configuration that belong
-to the user, not to a repo. Keeping them here means they are declared once,
+to the user, not to a repo. It may also pre-approve external git metadata
+host-wide (`git-dirs`, D13) — e.g. a checkout root under which every
+worktree's metadata is acceptable. Keeping them here means they are declared once,
 and a per-repo sidecar cannot silently widen them (see D7).
 
 On myconfig hosts the user config is not hand-written: the NixOS module
@@ -100,6 +105,18 @@ granted mode or downgrade `rw` → `ro`, never upgrade.
 For `[env]` the rule is asymmetric: a sidecar may introduce variables the
 user config never mentions (an invented variable is a value the repo
 already controls), but may not override a variable the user config sets.
+
+`git-dirs` (D13) is the one deliberate exception to "narrow, not
+widen": a sidecar entry approves external git metadata the user config
+never mentioned. The rationale is that the approval is *per repo* by
+nature — every worktree points at a different metadata directory, so a
+host-wide list could only be a coarse checkout root — and that the
+sidecar is not repo-controlled: it lives outside the repo (D2) and is
+never mounted into the sandbox, so the payload cannot write it. What
+the exception does NOT do is let the repository approve itself: the
+`.git` pointer inside the repo grants nothing, an implicit init records
+nothing, and turning a discovered directory into an approval is an
+explicit `mysbx init` (D12) that prints every path it records.
 
 When the user config is absent it grants nothing: every sidecar
 `[[mounts]]` entry is an error telling the user to grant the path in the
@@ -212,10 +229,45 @@ it (cli.md D1).
 When the repo root carries a `.git` FILE (linked worktree, submodule),
 the git metadata that file points at is part of the repo's own data:
 the gitdir and, when a `commondir` file names one, the common dir are
-discovered with the repo, bound read-write at their real host paths
-(narrowly — only those two directories, not their parents), listed in
-the report, and are equally inexpressible in configuration: a mount
-that would cover them is refused like one that covers the repo root.
+discovered with the repo, listed in the report, and are inexpressible
+in configuration: a mount that would cover them is refused like one
+that covers the repo root.
+
+**The pointer itself grants nothing (review-2 item 1).** The `.git`
+file lives *inside* the repo, so it is content the sandbox can rewrite
+(D3) — treating it as a mount specification would let a repository
+name any host directory and have it bound read-write (`gitdir: /`,
+`gitdir: $HOME`). The metadata is therefore bound only when all of
+these hold:
+
+- the target resolves to a directory that *looks* like git metadata
+  (`HEAD` and `refs/`); anything else is ignored, and `git` inside the
+  sandbox gives the authoritative error,
+- it is neither `/`, nor the home directory, nor an ancestor of either,
+  nor a directory containing the repo root — refused at repo
+  resolution, hard, because no configuration can make those safe,
+- it is not related to a protected sandbox path (the base table of
+  `plan.md`): a git dir under `/tmp`, say, would land inside the
+  sandbox's own tmpfs,
+- and it is **approved**: at or below an entry of the `git-dirs` list
+  of a *trusted* layer — the user config or the sidecar, both of which
+  live outside the repo and are unreachable from inside the sandbox
+  (D2).
+
+An **explicit** `mysbx init` records what it discovered into the
+`git-dirs` list of the fresh sidecar config and prints every recorded
+path, so the common worktree/submodule case works without hand-editing
+while the trust decision stays an operator action, written to a file
+the repository cannot rewrite. The *implicit* init of the bare form and
+of `run` (cli.md D2) deliberately records nothing: a first run in a
+freshly cloned repository must not turn that repository's own pointer
+into an approval. A `.git` file edited *later* points somewhere
+unapproved and is refused, with the offending path named.
+
+The sidecar itself is never approvable as git metadata, in either
+direction (a pointer at it, or at anything containing or inside it):
+binding it would hand the payload the file that decides what may be
+bound at all.
 
 ## Non-goals
 

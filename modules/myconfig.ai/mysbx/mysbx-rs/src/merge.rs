@@ -105,6 +105,14 @@ pub struct Merged {
     /// sidecar-only variables (overrides were rejected before this value
     /// existed).
     pub env: BTreeMap<String, String>,
+    /// Host directories approved as git metadata targets (review-2
+    /// item 1): a repo-writable `.git` FILE may only cause a bind
+    /// when its resolved target is at or below one of these. Both
+    /// layers contribute; the union is the approval set (a sidecar
+    /// entry is trusted user policy — D5 — and a user entry is the
+    /// host-wide pre-approval). All canonicalized eagerly (D8), so a
+    /// dangling approval is a hard error at load time.
+    pub git_dirs: Vec<PathBuf>,
 }
 
 /// Why the two configuration layers could not be merged or loaded.
@@ -293,6 +301,29 @@ fn canonicalize_layer(
         .collect()
 }
 
+/// Resolve and canonicalize one layer's `git-dirs` approval entries
+/// (review-2 item 1) — same D8 treatment as `[[mounts]]` paths: `~/…`
+/// expands against `home`, relative resolves against the config file's
+/// own directory, and a path that does not resolve is a hard error
+/// naming the file that wrote it.
+fn canonicalize_git_dirs(cfg: &Config, file: &Path, home: &Path) -> Result<Vec<PathBuf>, Error> {
+    let config_dir = file.parent().unwrap_or(Path::new("."));
+    cfg.git_dirs
+        .iter()
+        .enumerate()
+        .map(|(i, raw)| {
+            let resolved = resolve_path(raw, home, config_dir);
+            std::fs::canonicalize(&resolved).map_err(|e| Error::Canonicalize {
+                file: file.to_owned(),
+                key: format!("git-dirs #{}", i + 1),
+                raw: raw.clone(),
+                path: resolved.clone(),
+                source: e.to_string(),
+            })
+        })
+        .collect()
+}
+
 /// True when `sub` is at or below `grant` on a path-component boundary:
 /// equal, or `sub` extends `grant` by whole components. `/a/bc` is NOT
 /// below `/a/b`; `/a/b/c` is. `Path::starts_with` already compares whole
@@ -328,6 +359,10 @@ pub fn merge(
     // no `~/` or `../` spelling can slip past.
     let granted = canonicalize_layer(&user, user_file, home)?;
     let sidecar_canon = canonicalize_layer(&sidecar, sidecar_file, home)?;
+    let approved_git_dirs = canonicalize_git_dirs(&user, user_file, home)?
+        .into_iter()
+        .chain(canonicalize_git_dirs(&sidecar, sidecar_file, home)?)
+        .collect::<Vec<PathBuf>>();
 
     // network: the sidecar may deny (false), not re-enable (D7). A layer
     // that does not mention `network` decided nothing (None) — an
@@ -440,6 +475,7 @@ pub fn merge(
         network,
         mounts,
         env,
+        git_dirs: approved_git_dirs,
     })
 }
 
@@ -1325,5 +1361,67 @@ mod tests {
         assert_eq!(merged.mounts.len(), 2);
         assert_eq!(merged.mounts[0].path, granted.to_string_lossy());
         assert_eq!(merged.mounts[1].path, below.to_string_lossy());
+    }
+
+    // ---- git-dirs approval list (review-2 item 1) ------------------------
+
+    #[test]
+    fn git_dirs_of_both_layers_are_canonicalized_and_unioned() {
+        // Approval may come from either trusted layer: the host-wide
+        // user config or the repo's own sidecar (which the sandboxed
+        // payload cannot write, config.md D2/D3). Both are
+        // canonicalized eagerly (D8), so the argv builder compares
+        // symlink-resolved paths on both sides.
+        let base = tmpdir("git-dirs-union");
+        let a = dir(&base, &["main", ".git"]);
+        let b = dir(&base, &["other", ".git"]);
+
+        let merged = merge(
+            cfg(&format!("git-dirs = [\"{}\"]\n", a.display())),
+            cfg(&format!("git-dirs = [\"{}\"]\n", b.display())),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.git_dirs, vec![a, b]);
+    }
+
+    #[test]
+    fn a_dangling_git_dirs_entry_is_a_hard_error() {
+        // Same D8 treatment as mount paths: an approval that does not
+        // resolve is a mistake in the file that wrote it, not a silent
+        // no-op.
+        let e = merge(
+            cfg("git-dirs = [\"/nonexistent/main/.git\"]\n"),
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(&e, Error::Canonicalize { key, .. } if key.starts_with("git-dirs")),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn git_dirs_expand_the_home_prefix() {
+        let base = tmpdir("git-dirs-home");
+        let home = base.join("home");
+        std::fs::create_dir_all(home.join("src").join(".git")).unwrap();
+        let merged = merge(
+            cfg("git-dirs = [\"~/src/.git\"]\n"),
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &home,
+        )
+        .unwrap();
+        assert_eq!(
+            merged.git_dirs,
+            vec![std::fs::canonicalize(home.join("src").join(".git")).unwrap()]
+        );
     }
 }

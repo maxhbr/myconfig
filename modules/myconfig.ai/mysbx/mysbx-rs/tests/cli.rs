@@ -983,3 +983,251 @@ fn hidden_mount_is_an_error_not_a_panic() {
     assert!(stderr.contains("would hide earlier mount"), "stderr: {stderr}");
     assert!(!stderr.contains("panicked"), "a panic leaked: {stderr}");
 }
+
+// ---- git metadata approval, end to end (review-2 item 1) -------------------
+
+/// A fixture root OUTSIDE `/tmp`. Git metadata under `/tmp` is refused
+/// on principle — `/tmp` is a protected sandbox path (the base table
+/// gives the sandbox its own tmpfs), so a git dir there could never be
+/// bound. `CARGO_TARGET_TMPDIR` lives under `target/`, which is an
+/// ordinary path, and makes these fixtures represent the real case.
+fn target_tmpdir(name: &str) -> PathBuf {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("mysbx-git-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// A linked-worktree fixture: a main checkout whose `.git` directory
+/// holds the per-worktree gitdir, and a worktree whose `.git` is a FILE
+/// pointing at it. Returns (worktree, gitdir).
+fn make_worktree_fixture(base: &Path, name: &str) -> (PathBuf, PathBuf) {
+    let gitdir = base.join("main").join(".git").join("worktrees").join(name);
+    std::fs::create_dir_all(gitdir.join("refs")).unwrap();
+    std::fs::write(gitdir.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    let worktree = base.join(name);
+    std::fs::create_dir_all(&worktree).unwrap();
+    std::fs::write(
+        worktree.join(".git"),
+        format!("gitdir: {}\n", gitdir.display()),
+    )
+    .unwrap();
+    (worktree, gitdir)
+}
+
+#[test]
+fn unapproved_worktree_git_metadata_is_refused() {
+    // The regression review-2 item 1 reports: the `.git` FILE lives in
+    // the repo and is therefore untrusted content. Without an approval
+    // in a trusted layer the bind must be refused — loudly, with the
+    // `mysbx: ` prefix and exit 1.
+    let base = target_tmpdir("gitdir-unapproved");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
+    assert!(
+        !stdout.contains(&gitdir.display().to_string()),
+        "no bind may be printed: {stdout}"
+    );
+}
+
+#[test]
+fn approved_worktree_git_metadata_is_bound_rw() {
+    // With the approval in the sidecar — where `mysbx init` records it —
+    // the same repo builds an argv that binds the git dir rw.
+    let base = target_tmpdir("gitdir-approved");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!("git-dirs = [\"{}\"]\n", gitdir.display()),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let canon = std::fs::canonicalize(&gitdir).unwrap();
+    let lines: Vec<&str> = stdout.lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| *l == canon.display().to_string())
+        .unwrap_or_else(|| panic!("git dir not bound: {stdout}"));
+    assert_eq!(lines[at - 1], "--bind", "git metadata must be bound rw");
+}
+
+#[test]
+fn init_records_the_discovered_git_metadata() {
+    // `mysbx init` snapshots what it found into the fresh sidecar: the
+    // trust decision happens once, in a file outside the repo, instead
+    // of on every run from a repo-writable pointer.
+    let base = target_tmpdir("gitdir-init-snapshot");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["init"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("created"), "stdout: {stdout}");
+    let written =
+        std::fs::read_to_string(base.join("wt.mysbx").join("config.toml")).unwrap();
+    let canon = std::fs::canonicalize(&gitdir).unwrap();
+    assert!(
+        written.contains(&format!("\"{}\"", canon.display())),
+        "the snapshot must list the discovered git dir: {written}"
+    );
+    assert!(written.contains("git-dirs = ["), "{written}");
+}
+
+#[test]
+fn a_git_pointer_edited_after_init_cannot_widen_the_snapshot() {
+    // The property the snapshot buys: the repo may rewrite its own
+    // `.git` file at any time (it is inside the sandbox, rw), but the
+    // new target is not approved, so nothing new is bound.
+    let base = target_tmpdir("gitdir-tampered");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\ngit-dirs = [\"{}\"]\n",
+            std::fs::canonicalize(&gitdir).unwrap().display()
+        ),
+    )
+    .unwrap();
+    // The repo now points its `.git` file at a DIFFERENT, git-shaped
+    // directory that nobody approved.
+    let evil = base.join("evil");
+    std::fs::create_dir_all(evil.join("refs")).unwrap();
+    std::fs::write(evil.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    std::fs::write(
+        worktree.join(".git"),
+        format!("gitdir: {}\n", evil.display()),
+    )
+    .unwrap();
+
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
+    assert!(!stdout.contains("evil"), "stdout: {stdout}");
+}
+
+#[test]
+fn the_implicit_init_approves_nothing() {
+    // Review-2 item 1, the trust boundary: a first bare run in a freshly
+    // cloned hostile worktree must NOT turn the repo's own `.git`
+    // pointer into an approval. The implicit init creates the sidecar
+    // without a `git-dirs` list, and the run refuses the bind.
+    let base = target_tmpdir("gitdir-implicit-init");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["run", "--", "true"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
+    let written =
+        std::fs::read_to_string(base.join("wt.mysbx").join("config.toml")).unwrap();
+    assert!(
+        !written.contains("git-dirs"),
+        "the implicit init must not approve: {written}"
+    );
+    assert!(
+        !written.contains(&gitdir.display().to_string()),
+        "the implicit init must not approve: {written}"
+    );
+}
+
+#[test]
+fn an_unapproved_common_dir_is_refused_even_when_the_gitdir_is_approved() {
+    // `commondir` is a second repo-controlled pointer: approving the
+    // per-worktree gitdir must not implicitly approve whatever the
+    // commondir file names.
+    let base = target_tmpdir("commondir-unapproved");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    // The common dir the gitdir names is elsewhere, git-shaped, and
+    // NOT covered by the approval below.
+    let common = base.join("elsewhere");
+    std::fs::create_dir_all(common.join("refs")).unwrap();
+    std::fs::write(common.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    std::fs::write(gitdir.join("commondir"), format!("{}\n", common.display())).unwrap();
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let sidecar = base.join("wt.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "git-dirs = [\"{}\"]\n",
+            std::fs::canonicalize(&gitdir).unwrap().display()
+        ),
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: worktree,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
+    assert!(!stdout.contains("elsewhere"), "stdout: {stdout}");
+}

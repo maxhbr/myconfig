@@ -209,3 +209,28 @@ fn missing_file_is_an_io_error() {
     let e = Config::load(&asset("valid/does-not-exist.toml")).unwrap_err();
     assert!(matches!(e, Error::Io(_)), "{e}");
 }
+
+// ---- git-dirs approval list (review-2 item 1) ------------------------------
+
+#[test]
+fn git_dirs_parses_as_a_list_of_host_paths() {
+    let cfg = Config::parse("git-dirs = [\"/abs/main/.git\", \"~/src\"]\n").unwrap();
+    assert_eq!(cfg.git_dirs, vec!["/abs/main/.git", "~/src"]);
+}
+
+#[test]
+fn git_dirs_defaults_to_empty() {
+    // Nothing approved unless said: an absent list approves nothing,
+    // like an absent user config grants nothing (config.md D7).
+    let cfg = Config::parse("backend = \"bubblewrap\"\n").unwrap();
+    assert!(cfg.git_dirs.is_empty());
+}
+
+#[test]
+fn git_dirs_rejects_non_strings_and_bad_tildes() {
+    assert!(Config::parse("git-dirs = [1]\n").is_err());
+    assert!(Config::parse("git-dirs = \"/not/an/array\"\n").is_err());
+    assert!(Config::parse("git-dirs = [\"\"]\n").is_err());
+    // `~user` is rejected for git-dirs exactly like for mount paths (D8).
+    assert!(Config::parse("git-dirs = [\"~root/x\"]\n").is_err());
+}

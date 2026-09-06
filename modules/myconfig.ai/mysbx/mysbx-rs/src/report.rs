@@ -239,6 +239,7 @@ mod tests {
                 },
             ],
             env,
+            git_dirs: Vec::new(),
         };
         let mut host = HostEnv::new();
         host.insert("TERM".to_owned(), "xterm".to_owned());
