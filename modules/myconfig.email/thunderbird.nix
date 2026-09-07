@@ -15,6 +15,14 @@ let
             "default" = {
               isDefault = true;
               withExternalGnupg = true;
+              settings = {
+                # Complements `withExternalGnupg`: without this, Thunderbird
+                # never looks into the system GnuPG public keyring, so
+                # recipient keys that only exist in ~/.gnupg are invisible and
+                # encryption to those recipients fails.  See
+                # doc/thunderbird-openpgp-external-gnupg.md.
+                "mail.openpgp.fetch_pubkeys_from_gnupg" = true;
+              };
             };
           };
         };
