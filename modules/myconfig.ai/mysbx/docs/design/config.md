@@ -391,6 +391,19 @@ Plain `init` (D12) never touches an existing config at all, which is
 what keeps a deliberately removed entry removed until the operator
 says otherwise.
 
+The edit itself is a TABLE- and STRING-aware splice (review-4 item 3,
+`toml.rs::add_git_dirs`), not an append: TOML never returns to the root
+table, so a `git-dirs` line written at the end of a config that ends in
+`[env]` would be an `env.git-dirs` key and one written after
+`[[mounts]]` a mount field — both rejected by the strict parser on the
+next run. A missing key is therefore inserted before the first table
+header (below any comment block documenting that table), an existing
+one is recognised in both its bare and its quoted spelling and only at
+the top level, and `]` or `#` inside a quoted path is read as data, not
+as structure. The rewritten document is validated with the real parser
+before it replaces anything, and the replacement is a temp-file +
+`rename(2)`, so an interruption can never leave a truncated policy.
+
 ## Non-goals
 
 - No global registry of sandboxes; the filesystem layout *is* the registry.

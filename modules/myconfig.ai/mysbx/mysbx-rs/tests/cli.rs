@@ -2112,3 +2112,233 @@ fn a_repo_root_containing_the_home_is_refused_before_anything_is_created() {
         "the guard must run before the implicit init"
     );
 }
+
+// ---- the approval is a table-aware TOML edit (review-4 item 3) ----------
+
+/// The shared shape of the approval tests: a linked-worktree repo whose
+/// sidecar carries `contents`, plus a user config naming the backend.
+/// Returns the invocation factory and the sidecar config path.
+fn approval_fixture(
+    name: &'static str,
+    contents: &str,
+) -> (
+    impl Fn(Vec<&'static str>) -> Invocation,
+    PathBuf,
+    PathBuf,
+) {
+    let base = target_tmpdir(name);
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let config = base.join("wt.mysbx").join("config.toml");
+    std::fs::write(&config, contents).unwrap();
+    let inv = move |args: Vec<&'static str>| Invocation {
+        args,
+        cwd: worktree.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    (inv, config, gitdir)
+}
+
+#[test]
+fn approving_into_a_config_ending_in_a_table_stays_top_level() {
+    // The review-4 bug: the approval appended `git-dirs` at EOF, and
+    // TOML never returns to the root table — so in a config ending in
+    // `[env]` the new key became `env.git-dirs`, which the strict
+    // parser rejects. The command reported success and left a config
+    // mysbx could not read.
+    let (inv, config, gitdir) = approval_fixture(
+        "approve-ends-in-env",
+        "backend = \"bubblewrap\"\n\n[env]\nEDITOR = \"nvim\"\n",
+    );
+
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("approved git metadata"), "{stdout}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert!(
+        written.find("git-dirs").unwrap() < written.find("[env]").unwrap(),
+        "the key must sit in the root table: {written}"
+    );
+    assert!(written.contains("EDITOR = \"nvim\""), "{written}");
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+
+    // The proof that matters: the rewritten config parses and the run
+    // it configures succeeds.
+    let (code, _, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+
+    // And it is idempotent: nothing added twice, nothing rewritten.
+    let before = std::fs::read_to_string(&config).unwrap();
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("already lists everything"), "{stdout}");
+    assert_eq!(before, std::fs::read_to_string(&config).unwrap());
+}
+
+#[test]
+fn approving_into_a_config_ending_in_an_array_of_tables_stays_top_level() {
+    // The `[[mounts]]` half of the same bug: the appended key became a
+    // field of the last mount.
+    let (inv, config, gitdir) = approval_fixture(
+        "approve-ends-in-mounts",
+        "backend = \"bubblewrap\"\n",
+    );
+    // A mount source inside the fixture: every path under /etc is
+    // either protected or (on NixOS) a symlink into /nix/store, which
+    // the dest rules refuse for unrelated reasons.
+    let base = config.parent().unwrap().parent().unwrap().to_path_buf();
+    let data = base.join("data");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(
+        &config,
+        format!(
+            "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"ro\"\ndest = \"/mysbx-home/data\"\n",
+            std::fs::canonicalize(&data).unwrap()
+        ),
+    )
+    .unwrap();
+
+    let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert!(
+        written.find("git-dirs").unwrap() < written.find("[[mounts]]").unwrap(),
+        "the key must sit in the root table: {written}"
+    );
+    assert!(written.contains("/mysbx-home/data"), "{written}");
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+
+    let (code, stdout, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("/mysbx-home/data"),
+        "the mount survives: {stdout}"
+    );
+}
+
+#[test]
+fn approving_extends_an_existing_quoted_key_without_duplicating_it() {
+    // `"git-dirs"` is the same key as `git-dirs`: a second definition
+    // would be a duplicate-key parse error. The old line-prefix
+    // locator did not recognise the quoted spelling.
+    let (inv, config, gitdir) = approval_fixture(
+        "approve-quoted-key",
+        "backend = \"bubblewrap\"\n\"git-dirs\" = [\"/nonexistent-but-unused\"]\n",
+    );
+    // The pre-existing entry must not exist on disk (it is only there
+    // to prove the quoted key is found); a dangling entry is a runtime
+    // error for `run`, so this test stops at the file.
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("approved git metadata"), "{stdout}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert_eq!(
+        written.matches("git-dirs").count(),
+        1,
+        "the quoted key must be extended, not duplicated: {written}"
+    );
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+}
+
+#[test]
+fn approving_preserves_comments_and_a_same_named_key_in_a_table() {
+    // Everything the operator wrote stays: the leading comment, the
+    // `[env]` table and its (unrelated) same-named key.
+    let (inv, config, gitdir) = approval_fixture(
+        "approve-preserves",
+        "# operator notes\nbackend = \"bubblewrap\"\n\n# about the environment\n[env]\n\"git-dirs\" = \"a value, not a path\"\n",
+    );
+
+    let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert!(written.contains("# operator notes"), "{written}");
+    assert!(written.contains("# about the environment"), "{written}");
+    assert!(
+        written.contains("\"git-dirs\" = \"a value, not a path\""),
+        "the table's own key is untouched: {written}"
+    );
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+    // The comment documenting `[env]` still sits on `[env]`.
+    assert!(
+        written.find("# about the environment").unwrap() < written.find("[env]").unwrap(),
+        "{written}"
+    );
+
+    let (code, _, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn approving_a_path_with_brackets_and_hashes_round_trips() {
+    // The old locator scanned for `]` and `#` without knowing about
+    // strings: either character in a path corrupted the edit. The
+    // fixture puts them in the REPO name, so the discovered git dir
+    // carries them.
+    let base = target_tmpdir("approve-weird-path");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt#1]x");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let config = base.join("wt#1]x.mysbx").join("config.toml");
+    std::fs::write(&config, "backend = \"bubblewrap\"\n\n[env]\nEDITOR = \"nvim\"\n").unwrap();
+    let inv = |args: Vec<&'static str>| Invocation {
+        args,
+        cwd: worktree.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+
+    let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+    // A second approval finds it already listed — the round trip
+    // through the parser recognised the escaped path.
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("already lists everything"), "{stdout}");
+
+    let (code, _, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn an_unparsable_sidecar_config_is_never_rewritten() {
+    // The edit validates with the real parser before it replaces
+    // anything — and a config that does not parse in the first place
+    // fails before that, with the file untouched.
+    let (inv, config, _gitdir) =
+        approval_fixture("approve-unparsable", "git-dirs = [\"/a\n");
+    let before = std::fs::read_to_string(&config).unwrap();
+    let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.starts_with("mysbx: "), "{stderr}");
+    assert_eq!(before, std::fs::read_to_string(&config).unwrap());
+}

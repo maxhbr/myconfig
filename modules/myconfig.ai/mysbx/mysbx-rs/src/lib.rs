@@ -866,95 +866,73 @@ fn approve_git_dirs_in_existing_config(repo: &repo::Repo) -> Result<(), String> 
     if missing.is_empty() {
         return Ok(());
     }
-    // Append (or extend) a `git-dirs` array in place: keep every byte
-    // of the file except the array that changes.
-    let rendered: Vec<String> = missing
+    // Extend (or create) the top-level `git-dirs` array in place: a
+    // table- and string-aware splice that keeps every other byte of
+    // the file (review-4 item 3). Appending at EOF is NOT an option:
+    // TOML never returns to the root table, so a file ending in
+    // `[env]` would gain an `env.git-dirs` key and one ending in
+    // `[[mounts]]` a mount field — both unparsable as a config, both
+    // silently "successful" before.
+    let entries: Vec<&str> = missing
         .iter()
-        .map(|d| {
-            let text = d.to_str().expect("filtered above");
-            let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
-            format!("  \"{escaped}\",")
-        })
+        .map(|d| d.to_str().expect("filtered above"))
         .collect();
-    let new_text = if let Some(start) = find_git_dirs_key(&text) {
-        // The file already has a `git-dirs` line: splice the new
-        // entries into the existing array, before its closing `]`.
-        let close = find_closing_bracket(&text, start).ok_or_else(|| {
-            format!("{}: git-dirs has no closing `]`", config.display())
-        })?;
-        let mut out = String::with_capacity(text.len() + 64);
-        out.push_str(&text[..close]);
-        for entry in &rendered {
-            out.push('\n');
-            out.push_str(entry);
-        }
-        out.push('\n');
-        out.push_str(&text[close..]);
-        out
-    } else {
-        let mut out = text.clone();
-        if !out.ends_with('\n') {
-            out.push('\n');
-        }
-        out.push_str(
-            "\n# Added by `mysbx init --approve-git-dirs`: git metadata this\n\
-             # repository needs from outside the work tree (review-3 item 5).\n\
-             # The `.git` pointer inside the repo is untrusted content\n\
-             # (docs/design/config.md D3); remove an entry to refuse the\n\
-             # bind.\n\
-             git-dirs = [\n",
-        );
-        for entry in &rendered {
-            out.push_str(entry);
-            out.push('\n');
-        }
-        out.push_str("]\n");
-        out
-    };
-    std::fs::write(&config, new_text)
-        .map_err(|e| format!("cannot write {}: {e}", config.display()))?;
+    let new_text = crate::toml::add_git_dirs(&text, &entries, APPROVAL_COMMENT)
+        .map_err(|e| format!("{}: {e}", config.display()))?;
+    // Validate with the REAL parser before anything is replaced: a
+    // rewrite that mysbx itself could not read on the next run must
+    // fail here, with the original file untouched, rather than be
+    // reported as a successful approval.
+    let reparsed = crate::config::Config::parse(&new_text)
+        .map_err(|e| format!("{}: refusing to write an unparsable config: {e}", config.display()))?;
+    if reparsed.git_dirs.len() < parsed.git_dirs.len() + entries.len() {
+        return Err(format!(
+            "{}: the rewritten config does not carry the new approvals — refusing to write it",
+            config.display()
+        ));
+    }
+    write_atomically(&config, &new_text)?;
     for d in &missing {
         println!("## approved git metadata: {}", d.display());
     }
     Ok(())
 }
 
-/// Find the `git-dirs =` key line in an existing sidecar config (at
-/// the byte offset of the line start). TOML tables this schema allows
-/// keep `git-dirs` at the top level only, the parser admits no
-/// multi-line strings, and a comment line (`# git-dirs = …`) starts
-/// with `#` after trimming, so the trimmed-prefix match can only hit
-/// the real key — anything else would corrupt the file on splice
-/// (reviewer finding, ruled out here).
-fn find_git_dirs_key(text: &str) -> Option<usize> {
-    // `str::lines` discards offsets, so walk the raw bytes line by
-    // line: track the start offset of each line and match on its
-    // trimmed prefix.
-    let mut start = 0;
-    for raw_line in text.split('\n') {
-        if raw_line.trim_start().starts_with("git-dirs") {
-            return Some(start);
-        }
-        start += raw_line.len() + 1;
-    }
-    None
-}
+/// The comment written above a `git-dirs` key the approval CREATES (an
+/// existing array keeps whatever documentation it already carries).
+const APPROVAL_COMMENT: &str = "# Added by `mysbx init --approve-git-dirs`: git metadata this\n\
+     # repository needs from outside the work tree (review-3 item 5).\n\
+     # The `.git` pointer inside the repo is untrusted content\n\
+     # (docs/design/config.md D3); remove an entry to refuse the\n\
+     # bind.\n";
 
-/// Find the closing `]` of the array that starts at `start` (the
-/// offset of a `git-dirs =` line), handling `#` comments.
-fn find_closing_bracket(text: &str, start: usize) -> Option<usize> {
-    let rest = &text[start..];
-    let mut in_comment = false;
-    for (i, ch) in rest.char_indices() {
-        match ch {
-            '#' if in_comment => {}
-            '#' => in_comment = true,
-            '\n' if in_comment => in_comment = false,
-            ']' if !in_comment => return Some(start + i),
-            _ => {}
-        }
+/// Replace a policy file's contents by writing a temporary file next
+/// to it and renaming it over the original (review-4 item 3): an
+/// interruption mid-write must never leave a TRUNCATED policy — that
+/// would be a config granting less than the operator wrote, or none at
+/// all, discovered only on the next run. `rename(2)` within the same
+/// directory is atomic, so the file is either the old one or the new
+/// one.
+///
+/// The temporary name carries the pid, so two concurrent approvals
+/// cannot clobber each other's staging file; the leftover is removed
+/// on failure.
+fn write_atomically(path: &std::path::Path, contents: &str) -> Result<(), String> {
+    let dir = path.parent().unwrap_or(std::path::Path::new("."));
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "config.toml".to_string());
+    let tmp = dir.join(format!(".{name}.mysbx-{}.tmp", std::process::id()));
+    if let Err(e) = std::fs::write(&tmp, contents) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("cannot write {}: {e}", tmp.display()));
     }
-    None
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("cannot replace {}: {e}", path.display()));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
