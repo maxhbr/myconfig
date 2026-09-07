@@ -33,6 +33,7 @@ in
     ./container.nlm-ingestor.nix
     ./container.open-webui.nix
     ./hermes-agent
+    ./programs.agent-of-empires
     ./programs.aichat.nix
     ./programs.alpaca.nix
     ./programs.claude-code
