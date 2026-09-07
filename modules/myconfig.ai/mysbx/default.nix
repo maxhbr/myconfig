@@ -387,11 +387,20 @@ in
     # host config) are concatenated onto this list.
     myconfig.ai.mysbx.config.mounts = baselineMounts;
 
-    # Baseline [env] (RIPGREP_CONFIG_PATH, review-3 item 6); per-agent
-    # modules and the host config may extend it — attrset merge is by
-    # key, so a later definition of the same key REPLACES the baseline
-    # (visible in the generated file, unlike list concatenation).
-    myconfig.ai.mysbx.config.env = baselineEnv;
+    # Baseline [env] (RIPGREP_CONFIG_PATH, review-3 item 6).
+    #
+    # Each baseline value is defined with `mkDefault` INDIVIDUALLY, not
+    # the attrset as a whole (review-4 item 4). `env` is an
+    # `attrsOf str`, so the module system pushes definitions down per
+    # key: with a per-key `mkDefault` a host or per-agent module that
+    # sets the SAME key simply wins (default priority loses to normal),
+    # while a definition of a DIFFERENT key merges with the baseline.
+    # Both other spellings are wrong: at normal priority two unequal
+    # definitions of one key are an evaluation CONFLICT (the comment
+    # here used to claim they override), and `mkDefault` on the whole
+    # attrset would drop the entire baseline as soon as any other
+    # module defines any key at all.
+    myconfig.ai.mysbx.config.env = lib.mapAttrs (_: lib.mkDefault) baselineEnv;
 
     home-manager.sharedModules = [
       { home.packages = [ cfg.package ]; }

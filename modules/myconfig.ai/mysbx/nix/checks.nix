@@ -7,6 +7,12 @@
 #                 ../mysbx-rs/tests/ (golden argv tests, layer merge,
 #                 repo discovery, CLI subprocess flows).
 #
+#   mysbx-generated-config-test
+#                 module-EVALUATION test of the user configuration layer
+#                 ../default.nix generates (review-4 item 4) — the cargo
+#                 suite hand-writes its `config.toml` and cannot see a
+#                 regression in the generator. See ./config-eval-test.nix.
+#
 # Wired into `nix flake check` for `x86_64-linux` in `flake.nix`, following
 # ../../myconfig.ai.gvisor-agent-sandbox/nix/checks.nix.
 #
@@ -38,6 +44,10 @@ in
 {
   # The crate itself, with `doCheck = true`: `cargo test` in the build
   # sandbox. Same pattern as the gvisor tier's `agent-gvisor-tests`.
+  # The generator, evaluated: what a host actually gets in
+  # `~/.config/mysbx/config.toml` (review-4 item 4).
+  mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
+
   mysbx-tests = crate.overrideAttrs (old: {
     doCheck = true;
     # The CLI tests drive the built binary as a subprocess with a
