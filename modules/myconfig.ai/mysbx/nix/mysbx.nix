@@ -19,15 +19,17 @@
 #                     shell")
 #   MYSBX_TOOLS_PATH  the dev-tool closure on PATH (plan.md: "The base",
 #                     row "dev-tool closure on PATH")
-#   MYSBX_WORKMUX_ENTRY
-#                     the INTERACTIVE payload of a `workmux = true`
-#                     sandbox (../docs/design/config.md D16): the
-#                     `mysbx-workmux-entry` script of
-#                     ./workmux-entry.nix, which boots the workmux tmux
-#                     session on the sandbox-internal socket. Absent on
-#                     hosts without the integration — a config that then
-#                     says `workmux = true` fails loudly instead of
-#                     silently starting a plain shell.
+#   MYSBX_MUX_ENTRY_TMUX / _WORKMUX / _HERDR / _AOE
+#                     the INTERACTIVE payload of a sandbox that selects
+#                     that multiplexer (`multiplexer = "…"`,
+#                     ../docs/design/config.md D17): the entry scripts of
+#                     ./tmux-entry.nix, ./workmux-entry.nix,
+#                     ./herdr-entry.nix and ./aoe-entry.nix, each of
+#                     which starts its multiplexer on the
+#                     sandbox-internal socket. One pin per multiplexer,
+#                     absent for the ones a host does not carry — a
+#                     config selecting an absent one fails loudly
+#                     instead of silently starting a plain shell.
 #   MYSBX_NIX_CONF    a SANITIZED nix client configuration bound at
 #                     /etc/nix/nix.conf inside the sandbox (review-2
 #                     item 3). The host's own /etc/nix/nix.conf is
@@ -68,13 +70,17 @@
   # ../../programs.pi-coding-agent. Same security note as the hardcoded
   # list below: whatever lands here is on the sandbox PATH.
   extraTools ? [ ],
-  # The workmux entry script pinned as `MYSBX_WORKMUX_ENTRY`
-  # (./workmux-entry.nix, built by ../default.nix when
-  # `myconfig.ai.mysbx.workmux.enable` is on). `null` — the default, and
-  # what an unwrapped `nix-build` of this file gets — pins nothing, so
-  # `workmux = true` is a refused run rather than a silent bare shell
-  # (../docs/design/config.md D16).
-  workmuxEntry ? null,
+  # The multiplexer entry scripts, keyed by the `multiplexer` value
+  # they are the payload of (../docs/design/config.md D17): an attrset
+  # like `{ tmux = <drv>; workmux = <drv>; }`, built by ../default.nix
+  # for the multiplexers whose package the host has. Each entry becomes
+  # the `MYSBX_MUX_ENTRY_<VALUE>` pin.
+  #
+  # The empty default — what an unwrapped `nix-build` of this file gets
+  # — pins nothing, so every `multiplexer = "…"` is a refused run
+  # rather than a silent bare shell. A `null` value is treated like an
+  # absent one, so callers may pass a gated attrset unfiltered.
+  muxEntries ? { },
 }:
 
 let
@@ -170,6 +176,16 @@ let
     substituters = https://cache.nixos.org
     trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
   '';
+  # One `--set MYSBX_MUX_ENTRY_<VALUE>` per available entry. The
+  # variable names are the ones `config.rs::Multiplexer::entry_var`
+  # reads — the mapping is `"MYSBX_MUX_ENTRY_" + uppercase(value)`, and
+  # the crate's own test asserts that shape, so a new multiplexer needs
+  # no change here beyond `muxEntries` gaining a key.
+  muxEntryPins = lib.concatStringsSep " \\\n      " (
+    lib.mapAttrsToList (
+      name: entry: "--set MYSBX_MUX_ENTRY_${lib.toUpper name} '${lib.getExe entry}'"
+    ) (lib.filterAttrs (_: entry: entry != null) muxEntries)
+  );
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -186,9 +202,7 @@ symlinkJoin {
       --set MYSBX_SHELL '${bash}/bin/bash' \
       --set MYSBX_TOOLS_PATH '${toolsEnv}/bin' \
       --set MYSBX_NIX_CONF '${sandboxNixConf}' \
-      ${lib.optionalString (
-        workmuxEntry != null
-      ) "--set MYSBX_WORKMUX_ENTRY '${lib.getExe workmuxEntry}'"}
+      ${muxEntryPins}
   '';
 
   meta = {

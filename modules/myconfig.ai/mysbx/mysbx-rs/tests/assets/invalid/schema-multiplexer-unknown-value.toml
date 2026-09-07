@@ -1,0 +1,4 @@
+# The `multiplexer` enum is closed (config.md D17): a multiplexer mysbx
+# does not carry is a schema error naming the accepted values, never a
+# silently ignored key.
+multiplexer = "zellij"

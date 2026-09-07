@@ -11,3 +11,10 @@
 #
 # [env]
 # EDITOR = "nvim"
+
+# The interactive payload: which terminal multiplexer `mysbx` starts
+# instead of a plain shell (docs/design/config.md D17).
+# One of: "tmux", "workmux", "herdr", "aoe", "none".
+# `init` records the value the user configuration layer names, so this
+# file changes nothing until it is edited — the sidecar wins.
+multiplexer = "none"

@@ -128,23 +128,80 @@ let
     }
     // lib.optionalAttrs (m.dest != null) { inherit (m) dest; };
 
-  # --- workmux integration (./docs/design/config.md D16) ---------------
+  # --- multiplexer integration (./docs/design/config.md D17) -----------
   #
-  # The pieces the sandbox needs when a workmux session is its
-  # interactive payload. Which HOSTS get this is decided elsewhere —
-  # ../myconfig.ai.workmux/mysbx.nix sets the options below, next to
-  # the other workmux tiers (`jail.nix`, `sandbox.nix`) — so this
-  # module stays independent of the workmux module's existence.
+  # One entry script per selectable multiplexer, pinned into the
+  # wrapper as `MYSBX_MUX_ENTRY_<VALUE>` (./nix/mysbx.nix). Each runs
+  # INSIDE the sandbox and starts its multiplexer on the
+  # sandbox-internal socket directory `/mysbx-home/.mysbx-tmux`;
+  # nothing about that path is configurable (D16/D17).
   #
-  # `mysbx-workmux-entry` runs INSIDE the sandbox and is pinned into
-  # the wrapper as `MYSBX_WORKMUX_ENTRY` (./nix/mysbx.nix): it boots
-  # tmux on the sandbox-internal socket `/mysbx-home/.mysbx-tmux/socket`
-  # and attaches. Nothing about that path is configurable (D16).
-  workmuxEntry =
-    if cfg.workmux.enable then
-      pkgs.callPackage ./nix/workmux-entry.nix { workmux = cfg.workmux.package; }
-    else
-      null;
+  # An entry is built exactly when its package is available on this
+  # host — that is what makes a multiplexer *selectable*: a config
+  # naming one without a pin is a refused run (D17), never a silent
+  # plain shell. `tmux` always is; the others are gated on their
+  # package option, which the host (or the tier module next door,
+  # ../myconfig.ai.workmux/mysbx.nix) sets.
+  muxEntries = {
+    tmux = pkgs.callPackage ./nix/tmux-entry.nix { tmux = cfg.tmux.package; };
+    workmux =
+      if cfg.workmux.package != null then
+        pkgs.callPackage ./nix/workmux-entry.nix {
+          workmux = cfg.workmux.package;
+          tmux = cfg.tmux.package;
+        }
+      else
+        null;
+    herdr =
+      if cfg.herdr.package != null then
+        pkgs.callPackage ./nix/herdr-entry.nix {
+          herdr = cfg.herdr.package;
+          tmux = cfg.tmux.package;
+        }
+      else
+        null;
+    aoe =
+      if cfg.aoe.package != null then
+        pkgs.callPackage ./nix/aoe-entry.nix {
+          aoe = cfg.aoe.package;
+          tmux = cfg.tmux.package;
+        }
+      else
+        null;
+  };
+
+  # The binaries the SELECTED multiplexer's panes need on the sandbox
+  # `PATH` (`extraTools`). The entry scripts carry their own closure,
+  # so this is not about starting the session — it is about a pane that
+  # runs the tool itself: `workmux set-window-status` from the sidebar,
+  # a plain `tmux` in a pane, `herdr pane …` from an agent. Only the
+  # selected one is added: an unselected multiplexer on the PATH of
+  # every sandbox would be closure (and attack surface) nobody asked
+  # for.
+  #
+  # `filter (p: p != null)`: an unavailable selection is caught by the
+  # assertion below, but the list is evaluated by the module system
+  # regardless of assertion order — a `null` package in `home.packages`
+  # would fail with a type error instead of the assertion's message.
+  selectedMuxTools = builtins.filter (p: p != null) (
+    {
+      none = [ ];
+      tmux = [ cfg.tmux.package ];
+      # tmux too: the workmux panes' dashboard/sidebar drive the same
+      # server the entry started.
+      workmux = [
+        cfg.workmux.package
+        cfg.tmux.package
+      ];
+      herdr = [ cfg.herdr.package ];
+      # `aoe` is a tmux front end, so a pane may reach for `tmux`.
+      aoe = [
+        cfg.aoe.package
+        cfg.tmux.package
+      ];
+    }
+    .${cfg.config.multiplexer}
+  );
 
   # The workmux configuration the sandbox reads. It is deliberately NOT
   # the host's `~/.config/workmux/config.yaml`: there the named agents
@@ -159,11 +216,16 @@ let
       cfg.workmux.settings;
 
   # Mounts the workmux payload needs, appended to the generated user
-  # layer like every other agent module's (../programs.opencode). All
+  # layer like every other agent module's (../programs.opencode).
+  # Gated on the PACKAGE, not on `workmux.enable`: what makes the
+  # in-sandbox configuration necessary is that a workmux session can
+  # run at all — a host may install the payload and leave the
+  # host-wide `config.multiplexer` at something else, and a repository
+  # sidecar may still select `"workmux"` (D17). All
   # `ro`, all store paths (which always exist, so the eager
   # canonicalization of D8 cannot fail), with a `dest` where the tool
   # actually looks: `HOME` is `/mysbx-home` in the sandbox (D14).
-  workmuxMounts = lib.optionals cfg.workmux.enable (
+  workmuxMounts = lib.optionals (cfg.workmux.package != null) (
     [
       {
         path = "${workmuxConfigFile}";
@@ -184,11 +246,10 @@ let
   );
 
   userConfigToml = {
-    inherit (cfg.config) network;
+    inherit (cfg.config) network multiplexer;
     mounts = map renderMount cfg.config.mounts;
     env = cfg.config.env;
   }
-  // lib.optionalAttrs cfg.config.workmux { inherit (cfg.config) workmux; }
   // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
   // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; }
   // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; };
@@ -205,9 +266,9 @@ in
       # `<package>.passthru.crate` (used by nix/checks.nix).
       default = pkgs.callPackage ./nix/mysbx.nix {
         inherit (cfg) extraTools;
-        inherit workmuxEntry;
+        inherit muxEntries;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit workmuxEntry; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -230,19 +291,77 @@ in
       '';
     };
 
+    tmux.package = mkOption {
+      type = types.package;
+      default = pkgs.tmux;
+      defaultText = literalExpression "pkgs.tmux";
+      description = ''
+        The tmux that runs *inside* the sandbox: the server of the
+        `tmux`, `workmux` and `aoe` multiplexers
+        (./docs/design/config.md D17), and the `tmux` on the sandbox
+        `PATH` when one of them is selected.
+
+        Unlike the other multiplexer packages this is never `null`:
+        `multiplexer = "tmux"` is selectable on every host that
+        installs mysbx, so its entry is always pinned.
+      '';
+    };
+
+    herdr.package = mkOption {
+      type = types.nullOr types.package;
+      default = pkgs.herdr;
+      defaultText = literalExpression "pkgs.herdr";
+      description = ''
+        The herdr package that runs *inside* the sandbox when
+        `config.multiplexer = "herdr"` (./docs/design/config.md D17) —
+        the mysbx tier of ../programs.herdr.nix, which owns the host
+        installation and the bubblewrap-jail tier of the same tool.
+
+        `null` means "this host does not carry herdr": no entry is
+        pinned, and a configuration selecting it is a refused run
+        instead of a silent plain shell.
+      '';
+    };
+
+    aoe.package = mkOption {
+      type = types.nullOr types.package;
+      # Gated on the agent-of-empires module being ENABLED, not merely
+      # present: `aoe` is a heavy from-source Rust build from a flake
+      # input (../programs.agent-of-empires/), so pulling it into every
+      # mysbx host's closure to make a selection possible would be the
+      # wrong default. `or null` keeps this module independent of that
+      # module's existence, exactly like the workmux tier wiring.
+      default =
+        if (config.myconfig.ai.agent-of-empires.enable or false) then
+          config.myconfig.ai.agent-of-empires.package
+        else
+          null;
+      defaultText = literalExpression "config.myconfig.ai.agent-of-empires.package (when that module is enabled, else null)";
+      description = ''
+        The Agent of Empires (`aoe`) package that runs *inside* the
+        sandbox when `config.multiplexer = "aoe"`
+        (./docs/design/config.md D17).
+
+        `null` means "this host does not carry aoe": no entry is
+        pinned, and a configuration selecting it is a refused run
+        instead of a silent plain shell.
+      '';
+    };
+
     workmux = {
       enable = mkOption {
         type = types.bool;
         default = false;
         description = ''
-          Make the INTERACTIVE payload of every sandbox of this user a
-          workmux tmux session instead of a plain shell
-          (./docs/design/config.md D16, ./docs/design/cli.md D11):
-          `workmux = true` in the generated user layer, `tmux` and
-          `workmux` in the sandbox tool closure, and the
-          `mysbx-workmux-entry` payload pinned into the wrapper. The
-          tmux socket lives inside the sandbox home tmpfs and is not
-          configurable, so it can never be shared with a host tmux
+          Wire the workmux integration into every sandbox of this user
+          (./docs/design/config.md D16/D17, ./docs/design/cli.md D11):
+          it fills the `workmux.package` used by the pinned
+          `mysbx-workmux-entry` payload, mounts the in-sandbox workmux
+          configuration, and makes `"workmux"` the default of
+          `config.multiplexer` — so the INTERACTIVE payload of a
+          sandbox is a workmux tmux session instead of a plain shell.
+          The tmux socket lives inside the sandbox home tmpfs and is
+          not configurable, so it can never be shared with a host tmux
           server or with another sandbox.
 
           `mysbx run -- CMD` is unaffected — a one-shot command starts
@@ -326,15 +445,47 @@ in
             default = true;
             description = "Share the host network; `false` is the deny switch.";
           };
-          workmux = mkOption {
-            type = types.bool;
-            default = false;
+          multiplexer = mkOption {
+            type = types.enum [
+              "tmux"
+              "workmux"
+              "herdr"
+              "aoe"
+              "none"
+            ];
+            # `"workmux"` where the integration is wired, the plain
+            # shell everywhere else (./docs/design/config.md D17): the
+            # behaviour-preserving default — a host that never had a
+            # session keeps getting none, and one that had the workmux
+            # session keeps it under the new spelling. A host wanting
+            # something else simply sets this option; the *sidecar* of
+            # a single repository overrides it either way (D17).
+            default = if cfg.workmux.enable then "workmux" else "none";
+            defaultText = literalExpression ''if config.myconfig.ai.mysbx.workmux.enable then "workmux" else "none"'';
             description = ''
-              Make the interactive payload a workmux tmux session
-              (./docs/design/config.md D16). Set by
-              `myconfig.ai.mysbx.workmux.enable`; only written to the
-              generated layer when true, so a host without the
-              integration keeps a byte-identical config file.
+              Which terminal multiplexer the INTERACTIVE payload of
+              every sandbox of this user is
+              (./docs/design/config.md D17, ./docs/design/cli.md D11):
+              `tmux`, `workmux`, `herdr`, `aoe`, or `none` for a plain
+              interactive shell. `mysbx run -- CMD` is unaffected — a
+              one-shot command starts no session.
+
+              This is the host-wide DEFAULT: a repository's sidecar
+              config may name another value (or `none`), and it wins
+              — both layers are trusted and the key grants no host
+              access (D7/D17).
+
+              The selected multiplexer must be available on this host,
+              i.e. its package option must be set
+              (`workmux.package`, `herdr.package`, `aoe.package`;
+              `tmux` always is). An unavailable selection is an
+              evaluation error here, and a refused run for a sidecar
+              that names one — never a silently started plain shell.
+
+              Whichever is selected, its socket and state live INSIDE
+              the sandbox (`/mysbx-home/.mysbx-tmux`, exported as
+              `TMUX_TMPDIR` after `[env]`, so no layer can repoint
+              it), never shared with the host or another sandbox.
             '';
           };
           mounts = mkOption {
@@ -528,28 +679,38 @@ in
             myconfig hosts ../myconfig.ai.workmux/mysbx.nix does that).
           '';
         }
+        {
+          # Availability of the SELECTED multiplexer, checked at eval
+          # time (D17). The runtime refuses an unpinned selection too
+          # — that is the guard for a *sidecar* naming one — but a
+          # host-wide default nobody can start is a build error: it
+          # would break the interactive form of every sandbox of this
+          # user, discovered on the first `mysbx`.
+          assertion = muxEntries.${cfg.config.multiplexer} or null != null;
+          message = ''
+            myconfig.ai.mysbx.config.multiplexer is
+            "${cfg.config.multiplexer}", but this host carries no
+            ${cfg.config.multiplexer} for the sandbox — set
+            myconfig.ai.mysbx.${cfg.config.multiplexer}.package (for
+            workmux: myconfig.ai.mysbx.workmux.enable, which
+            ../myconfig.ai.workmux/mysbx.nix does), or select another
+            multiplexer (docs/design/config.md D17).
+          '';
+        }
       ];
 
     # Baseline mounts; further definitions (from per-agent modules or the
     # host config) are concatenated onto this list.
     myconfig.ai.mysbx.config.mounts = baselineMounts ++ workmuxMounts;
 
-    # The workmux payload's own tooling, on the sandbox PATH: `workmux`
-    # (the panes' dashboard/sidebar call it, e.g. `workmux
-    # set-window-status`) and `tmux` (the entry pins its own copy, but a
-    # pane running plain `tmux` must find the same binary). The agents
-    # workmux launches come from the agent modules' own `extraTools`.
-    myconfig.ai.mysbx.extraTools = lib.optionals cfg.workmux.enable [
-      cfg.workmux.package
-      pkgs.tmux
-    ];
-
-    # The generated user layer carries the switch itself (D16): both
-    # layers may decide it, and this is the host-wide statement.
-    # `mkDefault`, so a host that installs the integration but wants the
-    # plain shell host-wide can say so without an eval conflict (a
-    # single repository says it in its sidecar instead).
-    myconfig.ai.mysbx.config.workmux = lib.mkDefault cfg.workmux.enable;
+    # The selected multiplexer's own tooling, on the sandbox PATH: the
+    # entries pin their own copies, but a PANE that runs the tool (the
+    # workmux sidebar's `workmux set-window-status`, a plain `tmux`, a
+    # `herdr pane …` from an agent) resolves it from `PATH`. The agents
+    # a multiplexer launches come from the agent modules' own
+    # `extraTools`. See `selectedMuxTools` for why only the selected
+    # one is added.
+    myconfig.ai.mysbx.extraTools = selectedMuxTools;
 
     # Baseline [env] (RIPGREP_CONFIG_PATH, review-3 item 6).
     #

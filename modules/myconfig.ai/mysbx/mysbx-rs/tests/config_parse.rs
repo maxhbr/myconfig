@@ -6,7 +6,7 @@
 //! user could write, `invalid/` files are the mistakes the strict parser
 //! must reject (docs/design/config.md).
 
-use mysbx::config::{Config, Error, Mode};
+use mysbx::config::{Config, Error, Mode, Multiplexer};
 use std::path::{Path, PathBuf};
 
 fn asset(rel: &str) -> PathBuf {
@@ -59,7 +59,9 @@ fn every_asset_is_exercised() {
         "invalid/schema-state-dirs-climbing.toml",
         "invalid/schema-tilde-user-path.toml",
         "invalid/schema-unknown-key.toml",
-        "invalid/schema-workmux-wrong-type.toml",
+        "invalid/schema-multiplexer-unknown-value.toml",
+        "invalid/schema-multiplexer-wrong-type.toml",
+        "invalid/schema-workmux-key-removed.toml",
         "invalid/schema-wrong-type.toml",
         "invalid/syntax-duplicate-key.toml",
         "invalid/syntax-missing-value.toml",
@@ -79,11 +81,17 @@ fn empty_config() {
 
 #[test]
 fn minimal_config_is_what_init_writes() {
-    // docs/design/config.md D13: the repo is implicit, so the sidecar config
-    // `mysbx init` writes declares nothing — comments only. It parses to the
-    // all-defaults config.
+    // docs/design/config.md D13: the repo is implicit, so the sidecar
+    // config `mysbx init` writes grants nothing — comments, plus the
+    // `multiplexer` key that records the user layer's own value (D17).
     let c = load_ok("valid/minimal.toml");
-    assert_eq!(c, Config::default());
+    assert_eq!(
+        c,
+        Config {
+            multiplexer: Some(Multiplexer::None),
+            ..Config::default()
+        }
+    );
     // No `network` key: the layer decided nothing (tri-state); the
     // shared default is applied after the merge, not here.
     assert_eq!(c.network, None);
@@ -96,9 +104,9 @@ fn full_config() {
     let c = load_ok("valid/full.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
     assert_eq!(c.network, Some(true));
-    // workmux (D16): tri-state like `network`; the interactive payload
-    // of this layer is a tmux session with workmux.
-    assert_eq!(c.workmux, Some(true));
+    // multiplexer (D17): tri-state like `network`; the interactive
+    // payload of this layer is a workmux session.
+    assert_eq!(c.multiplexer, Some(Multiplexer::Workmux));
 
     assert_eq!(c.mounts.len(), 2);
     assert_eq!(c.mounts[0].path, "/home/user/.config/pi");
@@ -199,8 +207,18 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         ),
         ("invalid/schema-repo-table.toml", "unknown key `repo`"),
         (
-            "invalid/schema-workmux-wrong-type.toml",
-            "workmux: expected a boolean",
+            "invalid/schema-multiplexer-wrong-type.toml",
+            "multiplexer: expected a string",
+        ),
+        (
+            "invalid/schema-multiplexer-unknown-value.toml",
+            "invalid multiplexer `zellij`",
+        ),
+        (
+            // The migration message of D17: it must name the key that
+            // replaced `workmux`, not merely reject an unknown one.
+            "invalid/schema-workmux-key-removed.toml",
+            "the `workmux` key was replaced by `multiplexer`",
         ),
         (
             "invalid/schema-env-flag-key.toml",

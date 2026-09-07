@@ -70,6 +70,9 @@ config that can execute is config that can escape.
 - network policy (`network = false` is the deny switch; the network is
   shared by default)
 - environment forwarded into the sandbox (`[env]`)
+- which terminal multiplexer the interactive payload is
+  (`multiplexer`, see D17) — the one key where the sidecar overrides
+  the user config's value outright, because it grants no host access
 
 It does not decide the repo itself: the repo is implicit and always mounted
 read-write (see D13).
@@ -601,14 +604,24 @@ opencode's `~/.local/{share,state}/opencode`).
 
 ### D16: `workmux` — the interactive payload is a tmux session, on a socket inside the sandbox
 
+**Superseded by D17.** The boolean `workmux` key is gone from the
+schema; the multiplexer is now *chosen by name*
+(`multiplexer = "workmux"`). Everything below still describes what the
+`workmux` choice does and why its socket lives where it does — D17 only
+generalizes the switch and lifts the socket rule to every multiplexer.
+The key itself is rejected with a migration message naming its
+replacement (`config.rs`), so an old hand-written sidecar fails loudly
+instead of silently losing its session.
+
 ```toml
-workmux = true
+# what this section describes; today it is spelled
+multiplexer = "workmux"
 ```
 
-`workmux = true` makes the **interactive** payload a
+Selecting workmux makes the **interactive** payload a
 [workmux](https://github.com/raine/workmux) tmux session instead of a
 bare shell: mysbx execs the entry pinned by its wrapper
-(`MYSBX_WORKMUX_ENTRY`), which boots a tmux server, bootstraps the
+(`MYSBX_MUX_ENTRY_WORKMUX`), which boots a tmux server, bootstraps the
 workmux sidebar + dashboard and attaches — the same bootstrap the
 bubblewrap-jail tier does in
 `../../myconfig.ai.workmux/jail.nix` (`agent-bubblewrap-workmux-tmux`),
@@ -653,13 +666,7 @@ That isolation is **enforced, not assumed** (`bwrap.rs::check_workmux_socket`):
   in a real run): inside the tmpfs, i.e. per sandbox, like the tmux
   socket itself.
 
-Layer semantics: **either layer may decide, and the sidecar wins when
-both do** — like `backend`, not like `network`. The key grants no host
-access: it selects a payload from mysbx's own closure and adds one
-environment variable, so neither the network's narrow-only rule nor the
-`[env]` override refusal (D7) applies. A repo that wants a plain shell
-writes `workmux = false` in its sidecar; a repo that wants a session on
-a host where the user config says nothing writes `workmux = true`.
+Layer semantics: see D17 — either layer may decide and the sidecar wins.
 
 What the session can and cannot do is a consequence of the base, not of
 this key: `workmux add` creates a git worktree in the
@@ -677,3 +684,107 @@ tool closure and the `MYSBX_WORKMUX_ENTRY` pin. The wiring that decides
 *whether* a host gets it lives with the other workmux tiers
 (`../../../myconfig.ai.workmux/mysbx.nix`), next to `jail.nix` and
 `sandbox.nix`.
+
+### D17: `multiplexer` — which terminal multiplexer the interactive payload is
+
+```toml
+multiplexer = "workmux"   # tmux | workmux | herdr | aoe | none
+```
+
+One top-level string key names the **interactive** payload of a
+sandbox. It replaces the boolean `workmux` of D16, which could only
+say "session" or "no session" while this repo runs several
+agent-oriented multiplexers side by side.
+
+| value | payload |
+| --- | --- |
+| `"tmux"` | plain tmux, one session per repo, on the in-sandbox socket |
+| `"workmux"` | the workmux session of D16 (sidebar + dashboard) |
+| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer (`../../../programs.herdr.nix`) |
+| `"aoe"` | Agent of Empires (`../../../programs.agent-of-empires/`), a tmux-based agent session manager |
+| `"none"` | a plain interactive shell — the pre-D16 behaviour |
+
+**A string enum, not a table, and not a command.** A `[multiplexer]`
+table would invite a `command = …` key, and configuration that names a
+command is configuration that executes (D4). What a layer may say is
+*which of the multiplexers this build carries* runs — the argument
+vector belongs to the entry scripts in mysbx's own closure. The value
+is validated strictly: anything outside the five names is a schema
+error naming the file, the key and the accepted values (like `mode`,
+D9/D11).
+
+**Default: `none`.** An omitted key decides nothing (tri-state in a
+layer, like `backend` and `network`), and with neither layer deciding
+the payload is the plain shell. So a host that never mentions the key
+keeps a byte-identical argv — the multiplexer is opt-in, and it is the
+generated user layer that opts in (see below).
+
+**Layering: either layer may decide, and the sidecar wins when both
+do** — like `backend`, not like `network`. Inherited verbatim from D16,
+and it is the trust model that allows it: both layers are trusted (D7,
+the sidecar lives outside the repo, D2), and the key grants no host
+access at all — it selects one of the payloads mysbx itself carries and
+adds one environment variable. Neither the narrow-only rule of
+`network` nor the `[env]` override refusal applies. The user config is
+therefore the *default* ("what my sandboxes usually start") and the
+sidecar the *decision* ("this repo wants herdr"), including
+`multiplexer = "none"` for a repo that wants a bare shell.
+
+**Availability is checked, never fallen back on.** Each choice needs an
+entry from mysbx's own closure, pinned by the wrapper as
+`MYSBX_MUX_ENTRY_TMUX`, `…_WORKMUX`, `…_HERDR`, `…_AOE`
+(`../../nix/mysbx.nix`). A selection whose entry is not pinned — an
+unwrapped build, a host that does not install that multiplexer — is a
+**refused run** (exit 1, the message naming the value and the missing
+variable), never a silent plain shell: the operator asked for a
+session, and discovering the plain shell after the work happened in it
+is the worse outcome (the D16 argument, kept). The refusal is a
+configuration error, not an exec failure: it happens while the argv is
+built, so `--dry-run` refuses it too and no `bwrap` is started.
+
+**The socket/state isolation of D16 holds for every value.**
+`/mysbx-home/.mysbx-tmux` (`bwrap.rs::MUX_SOCKET_DIR`) is exported as
+`TMUX_TMPDIR` for every non-`none` choice — emitted after `[env]`, like
+`HOME` and `PATH`, so no layer can repoint it — and the D16 guards
+(`bwrap.rs::check_mux_socket`) apply unchanged: no mount `dest` at or
+below it, no `state-dirs` entry backing it. tmux, workmux and aoe are
+tmux servers and put their socket there; herdr is its own multiplexer
+and runs monolithic (`herdr --no-session`), so its socket and state
+live in the sandbox-home tmpfs, which is per-run and per-sandbox by
+construction (D14). The variable is set for herdr too, uniformly: one
+code path, and a pane running plain `tmux` inside a herdr session lands
+on the same private socket rather than on `/tmp/tmux-<uid>`.
+
+**`run -- CMD` is unaffected** (cli.md D11): a one-shot command is
+never wrapped in a session, so its argv is byte-identical to a
+`multiplexer = "none"` one — no payload swap, no `TMUX_TMPDIR`, none of
+the socket guards.
+
+**`mysbx init` writes the key.** The template records the value the
+*user layer* currently names (`none` when it names none), with the
+enum in a comment above it. Two properties this buys: the sidecar of a
+fresh repo is self-documenting (the operator sees what to change and to
+what), and writing it changes nothing — the sidecar wins over the user
+config, so any other value would silently *downgrade* the host default
+for every newly initialized repo. `init` copies the default; it does
+not invent one.
+
+The accepted consequence: a repository initialized while the host
+default was `"workmux"` keeps workmux after the host switches to
+something else — its sidecar now says so explicitly, and per-repo is
+exactly the level at which this decision belongs. Changing it is
+editing one line (`mysbx edit`); deleting the line hands the repo back
+to the user layer. When the user layer cannot be read at all, the
+template leaves the key commented out rather than guess a value that
+would override it.
+
+On myconfig hosts the value is generated:
+`myconfig.ai.mysbx.config.multiplexer` (`../../default.nix`) writes it
+into the user layer and defaults to `"workmux"` where the workmux integration is
+wired (`myconfig.ai.mysbx.workmux.enable`, set by
+`../../../myconfig.ai.workmux/mysbx.nix`) and to `"none"` otherwise —
+the behaviour-preserving default. The module also pins the entries of
+the multiplexers whose package the host has
+(`myconfig.ai.mysbx.{workmux,herdr,aoe}.package`; tmux always) and adds
+the selected one's binaries to the sandbox `PATH` via `extraTools`, so
+the panes find the tool they are running in.

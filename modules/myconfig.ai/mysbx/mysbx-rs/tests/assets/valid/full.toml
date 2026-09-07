@@ -3,13 +3,13 @@
 backend = "bwrap"
 network = true
 
-# The workmux integration (config.md D16): the INTERACTIVE payload is a
-# tmux session with workmux instead of a plain shell (`mysbx run -- CMD`
-# is unaffected, cli.md D11). The tmux socket is not configurable: it
-# always lives at /mysbx-home/.mysbx-tmux/socket, inside the sandbox
-# home tmpfs, so it can never be shared with a host tmux server or with
-# another sandbox.
-workmux = true
+# The multiplexer (config.md D17): the INTERACTIVE payload is a session
+# of the named multiplexer instead of a plain shell (`mysbx run -- CMD`
+# is unaffected, cli.md D11). One of "tmux", "workmux", "herdr", "aoe",
+# "none". The private socket directory is not configurable: it always
+# lives at /mysbx-home/.mysbx-tmux, inside the sandbox home tmpfs, so it
+# can never be shared with a host tmux server or with another sandbox.
+multiplexer = "workmux"
 
 # State directories (config.md D15): sandbox-home-relative paths whose
 # content persists in the sidecar across runs — backed by

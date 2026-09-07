@@ -1,12 +1,13 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# `mysbx-workmux-entry` — the INTERACTIVE payload of a `workmux = true`
-# mysbx sandbox (../docs/design/config.md D16, ../docs/design/cli.md D11).
+# `mysbx-workmux-entry` — the INTERACTIVE payload of a
+# `multiplexer = "workmux"` mysbx sandbox (../docs/design/config.md D16,
+# generalized by D17, ../docs/design/cli.md D11).
 #
 # mysbx execs this script instead of the payload shell (it is pinned into
-# the wrapper as `MYSBX_WORKMUX_ENTRY`, see ./mysbx.nix). It runs INSIDE
-# the sandbox and boots the workmux tmux session there:
+# the wrapper as `MYSBX_MUX_ENTRY_WORKMUX`, see ./mysbx.nix). It runs
+# INSIDE the sandbox and boots the workmux tmux session there:
 #
 #   * on the socket `$TMUX_TMPDIR/socket`, where `TMUX_TMPDIR` is set by
 #     the argv builder to `/mysbx-home/.mysbx-tmux` — a path in the
@@ -38,6 +39,12 @@
   # `myconfig.ai.workmux.package`).
   workmux,
 }:
+let
+  # The socket validation, the session name and the pane-shell pin are
+  # the same for every multiplexer entry (./mux-entry-lib.nix); only
+  # the bootstrap below is workmux's own.
+  muxLib = import ./mux-entry-lib.nix { inherit lib; };
+in
 writeShellApplication {
   name = "mysbx-workmux-entry";
   runtimeInputs = [
@@ -47,34 +54,11 @@ writeShellApplication {
     bashInteractive
   ];
   text = ''
-    # The socket directory is mysbx infrastructure, not a choice of this
-    # script (../docs/design/config.md D16): it is set by the argv
-    # builder, after [env], so no configuration layer can repoint it.
-    if [ -z "''${TMUX_TMPDIR:-}" ]; then
-      echo "mysbx-workmux-entry: TMUX_TMPDIR is not set." >&2
-      echo "mysbx-workmux-entry: this script is the payload of a mysbx sandbox" >&2
-      echo "mysbx-workmux-entry: with \`workmux = true\`; run \`mysbx\` instead." >&2
-      exit 1
-    fi
-    socket_dir="$TMUX_TMPDIR"
+    ${muxLib.requireSocketDir "mysbx-workmux-entry"}
+    ${muxLib.sessionName "workmux"}
+    ${muxLib.pinShell (lib.getExe bashInteractive)}
+
     socket="$socket_dir/socket"
-    mkdir -p "$socket_dir"
-    chmod 0700 "$socket_dir"
-
-    # The session name: the repo basename plus a short hash of its path,
-    # so two checkouts with the same basename stay distinguishable. mysbx
-    # `--chdir`s into the repo root, so `$PWD` IS the repo — no `git
-    # rev-parse` needed (and none possible in a sandbox whose git
-    # metadata a layer did not approve).
-    repo_root="$PWD"
-    path_hash="$(printf %s "$repo_root" | sha256sum | cut -c1-4)"
-    session="workmux-$(basename "$repo_root")-$path_hash"
-
-    # tmux resolves the pane shell from /etc/passwd, which the mysbx base
-    # does not bind at all — pin a real interactive bash both via SHELL
-    # (which `default-shell` falls back to) and via the tmux options.
-    shell=${lib.escapeShellArg (lib.getExe bashInteractive)}
-    export SHELL="$shell"
 
     # Pin the private socket for every tmux call in this script.
     tmux() { command tmux -S "$socket" "$@"; }

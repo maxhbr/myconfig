@@ -304,12 +304,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // "bind the host's" — that file may carry access-tokens, and a
     // read-only bind hands them to the payload all the same.
     let nix_conf = env_opt("MYSBX_NIX_CONF");
-    // The workmux entry (docs/design/config.md D16): the interactive
-    // payload of a `workmux = true` run. No fallback either — unset
-    // means "this build has no workmux integration", and the argv
-    // builder refuses the run instead of quietly starting a plain
-    // shell where a session was asked for.
-    let workmux_entry = env_opt("MYSBX_WORKMUX_ENTRY");
+    // The multiplexer entry (docs/design/config.md D17): the
+    // interactive payload of a run that selected one. Exactly the pin
+    // of the SELECTED multiplexer is read (`entry_var`), so a host
+    // that carries workmux but not herdr cannot accidentally start
+    // the wrong payload. No fallback either — unset means "this build
+    // has no such integration", and the argv builder refuses the run
+    // instead of quietly starting a plain shell where a session was
+    // asked for.
+    let mux_entry = merged.multiplexer.entry_var().and_then(env_opt);
     // Review-3 item 3: the trusted policy files of THIS run, handed to
     // the argv builder so it can refuse any `rw` bind that would expose
     // one to the payload.
@@ -341,7 +344,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         tools_path: &tools_path,
         nix_conf: nix_conf.as_deref(),
         policy_paths: &policy_paths,
-        workmux_entry: workmux_entry.as_deref(),
+        mux_entry: mux_entry.as_deref(),
     };
     let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
         Ok(a) => a,
@@ -808,6 +811,70 @@ fn ensure_plain_dir(path: &std::path::Path) -> Result<bool, String> {
     }
 }
 
+/// The `multiplexer` block of a fresh sidecar config
+/// (docs/design/config.md D17): the enum in a comment, and the value
+/// the USER layer currently names as the recorded key.
+///
+/// Recording the user layer's own value is what makes writing the key
+/// safe: the sidecar WINS over the user config (D17), so any other
+/// value — a hardcoded `"none"`, say — would silently downgrade the
+/// host default for every newly initialized repository. `init` copies
+/// the default; it does not invent one.
+///
+/// `None` (the user layer could not be read or parsed) leaves the key
+/// commented out: writing a guessed value would be exactly the silent
+/// downgrade above, and an unparsable user layer fails every run
+/// anyway — with its own message, naming the file.
+fn multiplexer_template(user_value: Option<config::Multiplexer>) -> String {
+    let head = format!(
+        "\n# The interactive payload: which terminal multiplexer `mysbx`\n\
+         # starts instead of a plain shell (docs/design/config.md D17).\n\
+         # One of: {}.\n\
+         # `mysbx run -- CMD` is never wrapped in a session (cli.md D11).\n",
+        config::Multiplexer::NAMES
+            .iter()
+            .map(|n| format!("\"{n}\""))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    match user_value {
+        Some(m) => format!(
+            "{head}# Recorded from the host-wide user configuration layer, so this\n\
+             # file changes nothing until you edit it \u{2014} the sidecar wins.\n\
+             multiplexer = \"{m}\"\n"
+        ),
+        None => format!(
+            "{head}# Left commented out: the user configuration layer could not be\n\
+             # read, and a guessed value here would OVERRIDE it (the sidecar\n\
+             # wins). Uncomment to decide it for this repository.\n\
+             # multiplexer = \"none\"\n"
+        ),
+    }
+}
+
+/// The `multiplexer` value of the user configuration layer, for
+/// [`multiplexer_template`]: `Some(Multiplexer::None)` when the layer
+/// exists and decides nothing (which is what the merge resolves to
+/// anyway), `None` when it cannot be read or parsed.
+///
+/// Reads the same path `merge::load_layers` reads — via
+/// [`merge::user_config_path`], never a second fallback of its own.
+fn user_layer_multiplexer() -> Option<config::Multiplexer> {
+    let home = std::env::var_os("HOME").unwrap_or_default();
+    let xdg = std::env::var("XDG_CONFIG_HOME").ok();
+    let path = merge::user_config_path(std::path::Path::new(&home), xdg.as_deref());
+    if !path.exists() {
+        // An absent user layer is an EMPTY layer, not an unknown one
+        // (merge.rs `load_optional`): it decides nothing, so the
+        // effective default is the plain shell.
+        return Some(config::Multiplexer::None);
+    }
+    match config::Config::load(&path) {
+        Ok(c) => Some(c.multiplexer.unwrap_or(config::Multiplexer::None)),
+        Err(_) => None,
+    }
+}
+
 /// What [`ensure_sidecar_config`] found: writing the default config or
 /// finding an existing one. `init` reports the difference; `edit` does
 /// not care (it opens the file either way).
@@ -865,6 +932,7 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
 # [env]\n\
 # EDITOR = \"nvim\"\n";
     let mut contents = contents.to_owned();
+    contents.push_str(&multiplexer_template(user_layer_multiplexer()));
     if snapshot_git_dirs && !repo.git_dirs.is_empty() {
         contents.push_str(
             "\n# Git metadata this repository needs from outside the work tree\n\
