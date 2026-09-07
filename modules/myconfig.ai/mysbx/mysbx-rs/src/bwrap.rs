@@ -379,7 +379,11 @@ pub fn bwrap_argv(
         .filter(|m| m.mode == Mode::Rw)
         .map(|m| normalize(&m.path))
         .chain(std::iter::once(normalize(&root)))
-        .chain(repo.git_dirs.iter().map(|g| normalize(&g.to_string_lossy())))
+        .chain(
+            repo.git_dirs
+                .iter()
+                .map(|g| normalize(&g.to_string_lossy())),
+        )
     {
         for policy in params.policy_paths {
             // Every guarded path of the policy, not just its resolved
@@ -539,9 +543,7 @@ pub fn bwrap_argv(
         // so the session is what the operator's terminal is attached
         // to. `unwrap_or` cannot fall back silently — a missing pin
         // was refused above.
-        Payload::Shell if workmux => {
-            argv.push(params.workmux_entry.unwrap_or(params.shell).into())
-        }
+        Payload::Shell if workmux => argv.push(params.workmux_entry.unwrap_or(params.shell).into()),
         Payload::Shell => argv.push(params.shell.into()),
         Payload::Command(args) => argv.extend(args.iter().cloned()),
     }
@@ -1020,8 +1022,7 @@ fn check_hidden_mounts(
     // cannot be anticipated in configuration: covering it is refused in
     // EVERY form, equal dest included, because the mount would not just
     // shadow an entry — it would replace implicit infrastructure.
-    let mut implicit: Vec<(PathBuf, &str)> =
-        vec![(normalize(repo_root), "the repo working tree")];
+    let mut implicit: Vec<(PathBuf, &str)> = vec![(normalize(repo_root), "the repo working tree")];
     for g in git_dirs {
         implicit.push((normalize(&g.to_string_lossy()), "a git metadata directory"));
     }
@@ -1045,8 +1046,7 @@ fn check_hidden_mounts(
             }
         }
         for earlier in &mounts[..later_i] {
-            let earlier_dest =
-                normalize(earlier.dest.as_deref().unwrap_or(&earlier.path));
+            let earlier_dest = normalize(earlier.dest.as_deref().unwrap_or(&earlier.path));
             if later_dest == earlier_dest {
                 continue; // equal dests: shadowing re-bind, not hiding
             }
@@ -1347,8 +1347,7 @@ mod tests {
         // SPEC ORDER of the sections (spec "Watch out": a refactor must
         // not reorder sections 3-5).
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         assert_eq!(argv[0], "--clearenv");
         assert_eq!(argv[1], "--unshare-all");
         assert_eq!(argv[2], "--share-net");
@@ -1362,8 +1361,7 @@ mod tests {
     #[test]
     fn shell_payload_after_dashdash() {
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         let n = argv.len();
         assert!(n >= 2);
         assert_eq!(argv[n - 2], "--");
@@ -1374,8 +1372,7 @@ mod tests {
     fn command_payload_is_verbatim() {
         let (repo, cfg, p) = shell_repo_defaults();
         let payload = Payload::Command(vec!["ls".into(), "-x".into(), "--help".into()]);
-        let argv = bwrap_argv(&cfg, &repo, &payload, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &payload, &HostEnv::new(), &p).unwrap();
         let n = argv.len();
         assert_eq!(&argv[n - 4..], &["--", "ls", "-x", "--help"]);
         // Flag-looking arguments stay verbatim payload content (cli.md D4).
@@ -1400,8 +1397,7 @@ mod tests {
                 mode: Mode::Rw,
             },
         ];
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         // A mount without `dest` binds at its own source path; the rw
         // mount with an explicit dest uses it verbatim. The ro bind must
         // precede the rw bind (mount order is argv order).
@@ -1433,14 +1429,12 @@ mod tests {
     #[test]
     fn network_false_denies() {
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         assert!(argv.contains(&"--share-net".to_string()));
 
         let mut deny = cfg;
         deny.network = false;
-        let argv = bwrap_argv(&deny, &repo, &Payload::Shell, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&deny, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         assert!(!argv.contains(&"--share-net".to_string()));
         // But --unshare-all stays.
         assert!(argv.contains(&"--unshare-all".to_string()));
@@ -1456,8 +1450,7 @@ mod tests {
         host.insert("EDITOR".into(), "host-nvim".into());
         let repo = synth_repo();
         let p = params();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p).unwrap();
         // Every `--setenv` triple, in argv order.
         let setenvs: Vec<usize> = argv
             .iter()
@@ -1504,15 +1497,16 @@ mod tests {
     #[test]
     fn no_run_no_host_home_no_openai() {
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         let joined = argv.join(" ");
         // No WHOLESALE `/run` bind (the base table's `no` row: D-Bus,
         // the nix-daemon socket, agent sockets). The resolver exception
         // of review-1 finding 5 is narrow and ro: exactly
         // `/run/systemd/resolve`, only when the network is shared.
         assert!(
-            !argv.windows(3).any(|w| w[0] == "--ro-bind" && w[1] == "/run"),
+            !argv
+                .windows(3)
+                .any(|w| w[0] == "--ro-bind" && w[1] == "/run"),
             "no wholesale /run bind"
         );
         assert!(
@@ -1542,8 +1536,7 @@ mod tests {
         // config.md D14: `$HOME` exists inside the sandbox (so `cd ~`
         // works), is an empty tmpfs, and is not below `/home`.
         let (repo, cfg, p) = shell_repo_defaults();
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         let tmpfs: Vec<&str> = argv
             .windows(2)
             .filter(|w| w[0] == "--tmpfs")
@@ -1567,8 +1560,7 @@ mod tests {
         cfg.env.insert("HOME".into(), "/synth/evil-home".into());
         let mut host = HostEnv::new();
         host.insert("HOME".into(), "/synth/host-home".into());
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &host, &p).unwrap();
         let last = argv
             .iter()
             .enumerate()
@@ -1600,7 +1592,13 @@ mod tests {
         let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
             .expect_err("must be refused");
         assert!(
-            matches!(err, Error::ProtectedDest { protected: "/tmp", .. }),
+            matches!(
+                err,
+                Error::ProtectedDest {
+                    protected: "/tmp",
+                    ..
+                }
+            ),
             "wrong error: {err}"
         );
     }
@@ -1763,8 +1761,7 @@ mod tests {
             dest: Some("/tmp/../synth/dest".into()),
             mode: Mode::Ro,
         }];
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         let pairs: Vec<_> = argv
             .windows(3)
             .filter(|w| w[0] == "--ro-bind")
@@ -1796,15 +1793,19 @@ mod tests {
                 mode: Mode::Ro,
             },
         ];
-        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
-        .unwrap();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         let cfg_dests: Vec<&str> = argv
             .windows(3)
             .filter(|w| w[0] == "--ro-bind" || w[0] == "--bind")
             .map(|w| w[2].as_str())
             // The repo bind (a --bind of the repo itself, section 4) and
             // the base binds are not this test's subject.
-            .filter(|d| !d.starts_with("/synth/repo") && *d != "/nix/store" && *d != "/usr/bin" && *d != "/etc/localtime")
+            .filter(|d| {
+                !d.starts_with("/synth/repo")
+                    && *d != "/nix/store"
+                    && *d != "/usr/bin"
+                    && *d != "/etc/localtime"
+            })
             .collect();
         assert_eq!(cfg_dests, vec!["/usr/bin2", "/tmpx", "/nix/storex"]);
     }
@@ -1907,7 +1908,10 @@ mod tests {
         cfg.workmux = true; // nothing pinned in `p`
         let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
             .expect_err("must be refused");
-        assert!(matches!(err, Error::WorkmuxUnavailable), "wrong error: {err}");
+        assert!(
+            matches!(err, Error::WorkmuxUnavailable),
+            "wrong error: {err}"
+        );
         // A `run` payload is unaffected: it starts no session, so it
         // needs no entry.
         bwrap_argv(

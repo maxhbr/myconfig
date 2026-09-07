@@ -1169,19 +1169,16 @@ mod tests {
         // is on canonicalized paths, so every spelling is caught.
         let base = tmpdir("home-exposed");
         let home = dir(&base, &["home"]);
-        let u = cfg(
-            "[[mounts]]\npath = \"~/\"\nmode = \"ro\"\n",
-        );
-        let e = merge(
-            u,
-            cfg(""),
-            &user_file(),
-            &sidecar_file(),
-            &home,
-        )
-        .unwrap_err();
+        let u = cfg("[[mounts]]\npath = \"~/\"\nmode = \"ro\"\n");
+        let e = merge(u, cfg(""), &user_file(), &sidecar_file(), &home).unwrap_err();
         assert!(
-            matches!(e, Error::HomeExposed { relation: HomeRelation::Equal, .. }),
+            matches!(
+                e,
+                Error::HomeExposed {
+                    relation: HomeRelation::Equal,
+                    ..
+                }
+            ),
             "{e}"
         );
     }
@@ -1195,16 +1192,15 @@ mod tests {
         // A REAL host-`/home`-shaped ancestor: the parent of the home.
         let parent = home.parent().unwrap().to_path_buf();
         let u = cfg(&mount_toml(&parent, "ro"));
-        let e = merge(
-            u,
-            cfg(""),
-            &user_file(),
-            &sidecar_file(),
-            &home,
-        )
-        .unwrap_err();
+        let e = merge(u, cfg(""), &user_file(), &sidecar_file(), &home).unwrap_err();
         assert!(
-            matches!(e, Error::HomeExposed { relation: HomeRelation::Contains, .. }),
+            matches!(
+                e,
+                Error::HomeExposed {
+                    relation: HomeRelation::Contains,
+                    ..
+                }
+            ),
             "{e}"
         );
     }
@@ -1223,16 +1219,15 @@ mod tests {
         let link = base.join("elsewhere");
         std::os::unix::fs::symlink(&home, &link).unwrap();
         let u = cfg(&mount_toml(&link, "ro"));
-        let e = merge(
-            u,
-            cfg(""),
-            &user_file(),
-            &sidecar_file(),
-            &home,
-        )
-        .unwrap_err();
+        let e = merge(u, cfg(""), &user_file(), &sidecar_file(), &home).unwrap_err();
         assert!(
-            matches!(e, Error::HomeExposed { relation: HomeRelation::Equal, .. }),
+            matches!(
+                e,
+                Error::HomeExposed {
+                    relation: HomeRelation::Equal,
+                    ..
+                }
+            ),
             "{e}"
         );
     }
@@ -1246,14 +1241,7 @@ mod tests {
         let home = dir(&base, &["home"]);
         let sub = dir(&home, &[".config", "git"]);
         let u = cfg(&mount_toml(&sub, "ro"));
-        merge(
-            u,
-            cfg(""),
-            &user_file(),
-            &sidecar_file(),
-            &home,
-        )
-        .unwrap();
+        merge(u, cfg(""), &user_file(), &sidecar_file(), &home).unwrap();
     }
 
     #[test]
@@ -1268,9 +1256,7 @@ mod tests {
         let real = dir(&base, &["home", "mhuber"]);
         let alias = base.join("usrhome");
         std::os::unix::fs::symlink(&real, &alias).unwrap();
-        let u = cfg(
-            "[[mounts]]\npath = \"~/\"\nmode = \"ro\"\n",
-        );
+        let u = cfg("[[mounts]]\npath = \"~/\"\nmode = \"ro\"\n");
         let e = merge(
             u,
             cfg(""),
@@ -1281,7 +1267,13 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(e, Error::HomeExposed { relation: HomeRelation::Equal, .. }),
+            matches!(
+                e,
+                Error::HomeExposed {
+                    relation: HomeRelation::Equal,
+                    ..
+                }
+            ),
             "{e}"
         );
     }
@@ -1293,16 +1285,15 @@ mod tests {
         // whole-host grant can never pass — the report's "the host
         // home is not mounted" stays true.
         let u = cfg(&mount_toml(Path::new("/"), "ro"));
-        let e = merge(
-            u,
-            cfg(""),
-            &user_file(),
-            &sidecar_file(),
-            &no_home(),
-        )
-        .unwrap_err();
+        let e = merge(u, cfg(""), &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         assert!(
-            matches!(e, Error::HomeExposed { relation: HomeRelation::Contains, .. }),
+            matches!(
+                e,
+                Error::HomeExposed {
+                    relation: HomeRelation::Contains,
+                    ..
+                }
+            ),
             "{e}"
         );
     }
@@ -1603,7 +1594,10 @@ mod tests {
             &no_home(),
         )
         .unwrap();
-        assert_eq!(merged.state_dirs, vec![".local/share", ".local/share/opencode"]);
+        assert_eq!(
+            merged.state_dirs,
+            vec![".local/share", ".local/share/opencode"]
+        );
     }
 
     #[test]

@@ -36,7 +36,10 @@ fn commit_file(repo: &Path, file: &str) {
 /// Assert the session is COMPLETELY gone: clone, metadata, registry entry.
 fn assert_session_gone(s: &Scenario, name: &str) {
     assert!(!worktree_of(s, name).exists(), "session clone still exists");
-    assert!(!meta_dir_of(s, name).exists(), "session metadata still exists");
+    assert!(
+        !meta_dir_of(s, name).exists(),
+        "session metadata still exists"
+    );
     assert!(
         fs::symlink_metadata(s.state.join("sessions").join(name)).is_err(),
         "registry entry still exists"
@@ -49,8 +52,7 @@ fn assert_session_gone(s: &Scenario, name: &str) {
 fn clear_recordings(s: &Scenario, tool: &str) {
     for entry in fs::read_dir(&s.record).unwrap() {
         let p = entry.unwrap().path();
-        if p
-            .file_name()
+        if p.file_name()
             .unwrap()
             .to_string_lossy()
             .starts_with(&format!("{tool}-"))
@@ -78,10 +80,16 @@ fn start_on_existing_non_current_host_branch_uses_its_tip() {
 
     let wt = worktree_of(&s, "s1");
     assert_eq!(git_in(&wt, &["rev-parse", "feature"]), feature_tip);
-    assert_eq!(git_in(&wt, &["rev-parse", "--abbrev-ref", "HEAD"]), "feature");
+    assert_eq!(
+        git_in(&wt, &["rev-parse", "--abbrev-ref", "HEAD"]),
+        "feature"
+    );
     // The session branch does not track origin/<branch>: the session owns
     // it and the host repository is not its upstream.
-    assert!(!git_try_in(&wt, &["config", "--get", "branch.feature.remote"]));
+    assert!(!git_try_in(
+        &wt,
+        &["config", "--get", "branch.feature.remote"]
+    ));
 }
 
 #[test]
@@ -90,11 +98,22 @@ fn start_of_branch_absent_from_host_starts_at_requested_base() {
     commit_file(&s.repo, "second.txt"); // master: base + second
     let base = git_in(&s.repo, &["rev-parse", "HEAD~1"]);
 
-    s.run_ok(&["start", "s2", "--branch", "brand-new", "--base", &base, "--detach"]);
+    s.run_ok(&[
+        "start",
+        "s2",
+        "--branch",
+        "brand-new",
+        "--base",
+        &base,
+        "--detach",
+    ]);
 
     let wt = worktree_of(&s, "s2");
     assert_eq!(git_in(&wt, &["rev-parse", "brand-new"]), base);
-    assert_eq!(git_in(&wt, &["rev-parse", "--abbrev-ref", "HEAD"]), "brand-new");
+    assert_eq!(
+        git_in(&wt, &["rev-parse", "--abbrev-ref", "HEAD"]),
+        "brand-new"
+    );
 }
 
 #[test]
@@ -105,7 +124,13 @@ fn start_branch_name_with_slashes() {
     let tip = git_in(&s.repo, &["rev-parse", "agent/gvisor/example"]);
     git_in(&s.repo, &["checkout", "master"]);
 
-    s.run_ok(&["start", "s1", "--branch", "agent/gvisor/example", "--detach"]);
+    s.run_ok(&[
+        "start",
+        "s1",
+        "--branch",
+        "agent/gvisor/example",
+        "--detach",
+    ]);
 
     let wt = worktree_of(&s, "s1");
     assert_eq!(git_in(&wt, &["rev-parse", "agent/gvisor/example"]), tip);
@@ -239,8 +264,14 @@ fn merge_stops_when_the_transfer_is_rejected() {
         "merge must fail when the session-to-host transfer is rejected"
     );
     assert!(String::from_utf8_lossy(&out.stderr).contains("may have diverged"));
-    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/heads/feature"]), host_tip);
-    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/heads/master"]), master_tip);
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/feature"]),
+        host_tip
+    );
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/master"]),
+        master_tip
+    );
     // No merge state was created.
     assert!(!git_try_in(
         &s.repo,
@@ -281,7 +312,10 @@ fn push_stops_when_the_transfer_is_rejected() {
         "push must fail when the session-to-host transfer is rejected"
     );
     assert!(String::from_utf8_lossy(&out.stderr).contains("may have diverged"));
-    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/heads/feature"]), host_tip);
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/feature"]),
+        host_tip
+    );
     // The remote received NOTHING.
     assert_eq!(
         git_in(&bare, &["for-each-ref"]),
@@ -351,7 +385,10 @@ fn fetch_transfers_the_plus_named_branch_itself() {
         git_in(&s.repo, &["rev-parse", "refs/heads/+topic"]),
         plus_tip
     );
-    assert_ne!(git_in(&s.repo, &["rev-parse", "refs/heads/+topic"]), topic_tip);
+    assert_ne!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/+topic"]),
+        topic_tip
+    );
     // The distracter branch did not leak into the host either.
     assert!(!git_try_in(
         &s.repo,
@@ -371,7 +408,10 @@ fn fetch_transfers_the_plus_named_branch_itself() {
         "a diverged host +topic must be rejected, not force-updated"
     );
     assert!(String::from_utf8_lossy(&out.stderr).contains("may have diverged"));
-    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/heads/+topic"]), host_tip);
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/+topic"]),
+        host_tip
+    );
 }
 
 /// A short source ref is AMBIGUOUS: git's DWIM order checks
@@ -397,7 +437,10 @@ fn fetch_prefers_the_branch_over_a_same_named_tag() {
         branch_tip,
         "the BRANCH tip must be transferred, not the tag's"
     );
-    assert_ne!(git_in(&s.repo, &["rev-parse", "refs/heads/nested"]), tag_tip);
+    assert_ne!(
+        git_in(&s.repo, &["rev-parse", "refs/heads/nested"]),
+        tag_tip
+    );
 }
 
 /// `merge` must consume the EXACT fetched ref: with a host tag named
@@ -424,11 +467,17 @@ fn merge_uses_the_branch_not_a_same_named_tag() {
 
     // The session work IS merged into master …
     assert!(
-        git_try_in(&s.repo, &["cat-file", "-e", "refs/heads/master:session.txt"]),
+        git_try_in(
+            &s.repo,
+            &["cat-file", "-e", "refs/heads/master:session.txt"]
+        ),
         "the session branch commit must be merged, not the tag's"
     );
     // … the tag still points elsewhere, untouched …
-    assert_eq!(git_in(&s.repo, &["rev-parse", "refs/tags/nested"]), tag_target);
+    assert_eq!(
+        git_in(&s.repo, &["rev-parse", "refs/tags/nested"]),
+        tag_target
+    );
     // … and the temporary fetched branch is cleaned up.
     assert!(!git_try_in(
         &s.repo,
@@ -531,7 +580,12 @@ fn destroy_delete_branch_of_never_fetched_session_succeeds() {
     assert_session_gone(&s, "s1");
     assert!(!git_try_in(
         &s.repo,
-        &["show-ref", "--verify", "--quiet", "refs/heads/agent/gvisor/s1"]
+        &[
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/agent/gvisor/s1"
+        ]
     ));
 }
 
@@ -564,7 +618,12 @@ fn destroy_delete_branch_removes_a_fetched_host_branch() {
     s.run_ok(&["fetch", "s1"]);
     assert!(git_try_in(
         &s.repo,
-        &["show-ref", "--verify", "--quiet", "refs/heads/agent/gvisor/s1"]
+        &[
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/agent/gvisor/s1"
+        ]
     ));
 
     s.run_ok(&["destroy", "s1", "--delete-branch"]);
@@ -572,7 +631,12 @@ fn destroy_delete_branch_removes_a_fetched_host_branch() {
     assert_session_gone(&s, "s1");
     assert!(!git_try_in(
         &s.repo,
-        &["show-ref", "--verify", "--quiet", "refs/heads/agent/gvisor/s1"]
+        &[
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/agent/gvisor/s1"
+        ]
     ));
 }
 
@@ -587,10 +651,18 @@ fn destroy_delete_branch_succeeds_after_merge() {
     s.run_ok(&["merge", "s1"]);
 
     let log = git_in(&s.repo, &["log", "--format=%s"]);
-    assert!(log.contains("add merged.txt"), "session work not merged:\n{log}");
+    assert!(
+        log.contains("add merged.txt"),
+        "session work not merged:\n{log}"
+    );
     assert!(!git_try_in(
         &s.repo,
-        &["show-ref", "--verify", "--quiet", "refs/heads/agent/gvisor/s1"]
+        &[
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/agent/gvisor/s1"
+        ]
     ));
 
     s.run_ok(&["destroy", "s1", "--delete-branch"]);
@@ -613,8 +685,9 @@ fn destroy_reports_genuine_branch_deletion_failure_and_keeps_the_session() {
         !out.status.success(),
         "destroy must fail when the host branch cannot be deleted"
     );
-    assert!(String::from_utf8_lossy(&out.stderr)
-        .contains("could not delete branch agent/gvisor/s1"));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("could not delete branch agent/gvisor/s1")
+    );
     // The session stays RECOVERABLE: clone, metadata and registry entry
     // survive the failed destroy.
     assert!(wt.exists());
@@ -655,8 +728,9 @@ fn destroy_delete_branch_failure_runs_before_podman_cleanup() {
         !out.status.success(),
         "destroy must fail when the host branch cannot be deleted"
     );
-    assert!(String::from_utf8_lossy(&out.stderr)
-        .contains("could not delete branch agent/gvisor/s1"));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("could not delete branch agent/gvisor/s1")
+    );
 
     // NO Podman cleanup ran: no `podman rm`, and not even a
     // `volume exists` probe.
@@ -713,7 +787,10 @@ fn destroy_delete_branch_never_touches_same_named_tags_or_remotes() {
     git_in(&r2, &["commit", "-qm", "r2"]);
     git_in(&s.repo, &["remote", "add", "origin", r2.to_str().unwrap()]);
     git_in(&s.repo, &["fetch", "-q", "origin"]);
-    let r2_tip = git_in(&s.repo, &["rev-parse", "refs/remotes/origin/agent/gvisor/s1"]);
+    let r2_tip = git_in(
+        &s.repo,
+        &["rev-parse", "refs/remotes/origin/agent/gvisor/s1"],
+    );
 
     s.run_ok(&["start", "s1", "--detach"]);
     s.run_ok(&["destroy", "s1", "--delete-branch"]);
@@ -724,13 +801,21 @@ fn destroy_delete_branch_never_touches_same_named_tags_or_remotes() {
         tag_target
     );
     assert_eq!(
-        git_in(&s.repo, &["rev-parse", "refs/remotes/origin/agent/gvisor/s1"]),
+        git_in(
+            &s.repo,
+            &["rev-parse", "refs/remotes/origin/agent/gvisor/s1"]
+        ),
         r2_tip
     );
     // … and no host-local branch was created for it either.
     assert!(!git_try_in(
         &s.repo,
-        &["show-ref", "--verify", "--quiet", "refs/heads/agent/gvisor/s1"]
+        &[
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/agent/gvisor/s1"
+        ]
     ));
     assert_session_gone(&s, "s1");
 }

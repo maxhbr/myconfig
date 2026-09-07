@@ -684,11 +684,7 @@ pub fn layout(text: &str) -> Result<Layout, String> {
 ///
 /// The caller is expected to re-parse the result before replacing the
 /// file — `lib.rs` does, with the real `Config::parse`.
-pub fn add_git_dirs(
-    text: &str,
-    entries: &[&str],
-    new_key_comment: &str,
-) -> Result<String, String> {
+pub fn add_git_dirs(text: &str, entries: &[&str], new_key_comment: &str) -> Result<String, String> {
     let layout = layout(text)?;
     let rendered: Vec<String> = entries
         .iter()
@@ -1049,10 +1045,17 @@ mod edit_tests {
     #[test]
     fn a_config_ending_in_a_table_gets_a_top_level_key() {
         // The bug: appending at EOF made this an `env.git-dirs` key.
-        let (out, table) = add("backend = \"bubblewrap\"\n\n[env]\nEDITOR = \"nvim\"\n", &["/a"]);
+        let (out, table) = add(
+            "backend = \"bubblewrap\"\n\n[env]\nEDITOR = \"nvim\"\n",
+            &["/a"],
+        );
         assert_eq!(git_dirs_of(&table), vec!["/a".to_string()]);
         assert!(
-            table["env"].as_table().expect("env").get("git-dirs").is_none(),
+            table["env"]
+                .as_table()
+                .expect("env")
+                .get("git-dirs")
+                .is_none(),
             "the key landed in [env]: {out}"
         );
     }
@@ -1067,7 +1070,11 @@ mod edit_tests {
         let mounts = table["mounts"].as_array().expect("mounts");
         assert_eq!(mounts.len(), 1, "{out}");
         assert!(
-            mounts[0].as_table().expect("mount").get("git-dirs").is_none(),
+            mounts[0]
+                .as_table()
+                .expect("mount")
+                .get("git-dirs")
+                .is_none(),
             "the key landed in the mount: {out}"
         );
     }
@@ -1084,7 +1091,10 @@ mod edit_tests {
         // definition would be a parse error ("duplicate key"), so
         // recognising the quoted spelling is what keeps the edit valid.
         let (_, table) = add("\"git-dirs\" = [\"/a\"]\n", &["/b"]);
-        assert_eq!(git_dirs_of(&table), vec!["/a".to_string(), "/b".to_string()]);
+        assert_eq!(
+            git_dirs_of(&table),
+            vec!["/a".to_string(), "/b".to_string()]
+        );
     }
 
     #[test]
@@ -1102,7 +1112,10 @@ mod edit_tests {
     #[test]
     fn an_array_without_a_trailing_comma_gets_one() {
         let (_, table) = add("git-dirs = [\"/a\"]\n", &["/b"]);
-        assert_eq!(git_dirs_of(&table), vec!["/a".to_string(), "/b".to_string()]);
+        assert_eq!(
+            git_dirs_of(&table),
+            vec!["/a".to_string(), "/b".to_string()]
+        );
     }
 
     #[test]
@@ -1144,7 +1157,10 @@ mod edit_tests {
         let text = "git-dirs = [\n  \"/a\", # the main checkout\n]\n";
         let (out, table) = add(text, &["/b"]);
         assert!(out.contains("# the main checkout"), "{out}");
-        assert_eq!(git_dirs_of(&table), vec!["/a".to_string(), "/b".to_string()]);
+        assert_eq!(
+            git_dirs_of(&table),
+            vec!["/a".to_string(), "/b".to_string()]
+        );
     }
 
     #[test]

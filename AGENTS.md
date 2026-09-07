@@ -41,8 +41,10 @@ Run the full `nix flake check` only when:
   Example: `./build-pkg-for-host.sh agent-bubblewrap-pi f13`
 
 ### Formatting & Linting
-- `./nixfmtall.sh` - Format all Nix files (runs `nix fmt`)
-- `./nixfmtall.sh --check` - Check Nix formatting without making changes
+- `./nixfmtall.sh` - Format the tree (runs `nix fmt`): nixfmt-rfc-style for
+  `*.nix`, rustfmt (`--edition 2021`) for the Rust crates under `modules/`
+  (`mysbx/mysbx-rs`, `myconfig.ai.gvisor-agent-sandbox/rust`)
+- `./nixfmtall.sh --check` - Check formatting without making changes
 - For shell scripts: `shfmt -d -s -i 4 -ci <file>` - Check shell script formatting (4 space indent)
 - `shellcheck -x <file>` - Lint shell scripts
 
@@ -168,7 +170,7 @@ diverged when it does change — use the JSON snapshot to localise diffs.
 - This ensures all changes are tracked and visible via `git status`
 
 ### Before Committing
-- Run `./nixfmtall.sh` to format all Nix files
+- Run `./nixfmtall.sh` to format the tree (Nix + Rust)
 - Evaluate or build the hosts you touched, e.g.
   `nix eval --raw .#nixosConfigurations.<hostname>.config.system.build.toplevel.drvPath`
   or `nix build .#nixosConfigurations.<hostname>.config.system.build.toplevel`

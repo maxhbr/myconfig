@@ -192,10 +192,7 @@ fn invalid_schema_is_reported_with_the_offending_key() {
             "invalid/schema-tilde-user-path.toml",
             "only the `~/` prefix is supported",
         ),
-        (
-            "invalid/schema-state-dirs-climbing.toml",
-            "sandbox home",
-        ),
+        ("invalid/schema-state-dirs-climbing.toml", "sandbox home"),
         (
             "invalid/schema-missing-mount-path.toml",
             "missing required key `path`",

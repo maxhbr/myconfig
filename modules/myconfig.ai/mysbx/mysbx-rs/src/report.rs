@@ -168,11 +168,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         for entry in &r.merged.state_dirs {
             p(format!(
                 "  {SANDBOX_HOME}/{entry} <-> {}  [state]",
-                r.repo
-                    .sidecar
-                    .join("state")
-                    .join(entry)
-                    .display()
+                r.repo.sidecar.join("state").join(entry).display()
             ));
         }
     }
@@ -220,7 +216,9 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // is as much a property of the run as which shell it starts.
     p(format!(
         "nix.conf:       {}",
-        r.params.nix_conf.unwrap_or("(none — nix uses its defaults)")
+        r.params
+            .nix_conf
+            .unwrap_or("(none — nix uses its defaults)")
     ));
     // workmux (config.md D16 / cli.md D11), only when a layer asked
     // for it: what replaces the shell, where its tmux socket lives,
@@ -540,9 +538,7 @@ mod tests {
         // entry declared, the home line must also stop implying an
         // all-ephemeral tmpfs.
         let (repo, mut merged, host) = fixture_report();
-        merged
-            .state_dirs
-            .push(".local/share/opencode".to_string());
+        merged.state_dirs.push(".local/share/opencode".to_string());
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",

@@ -409,7 +409,10 @@ fn verbose_run_form_reports_the_command_payload() {
     );
     // The argv is still there, unprefixed and last, argv[0] first
     // (review-1 finding 7).
-    assert!(argv_block(&stdout).starts_with("bwrap\n--clearenv\n"), "{stdout}");
+    assert!(
+        argv_block(&stdout).starts_with("bwrap\n--clearenv\n"),
+        "{stdout}"
+    );
 }
 
 #[test]
@@ -614,7 +617,10 @@ fn backend_bubblewrap_is_accepted() {
     let (inv, _, _) = fixture_with_backend("backend-ok", &["--dry-run"]);
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(stdout.starts_with("bwrap\n--clearenv\n"), "stdout: {stdout}");
+    assert!(
+        stdout.starts_with("bwrap\n--clearenv\n"),
+        "stdout: {stdout}"
+    );
 }
 
 // ---- environment forwarding and payload handling ---------------------------
@@ -852,8 +858,7 @@ fn a_real_run_creates_the_backing_dirs_and_persists_writes() {
     let canon = repo.canonicalize().unwrap();
     let side = canon.parent().unwrap().join("repo.mysbx");
     let persisted = side.join("state/.local/share/opencode/sessions.txt");
-    let text = std::fs::read_to_string(&persisted)
-        .unwrap_or_else(|e| panic!("{persisted:?}: {e}"));
+    let text = std::fs::read_to_string(&persisted).unwrap_or_else(|e| panic!("{persisted:?}: {e}"));
     assert_eq!(text.trim(), "persisted");
 }
 
@@ -871,7 +876,10 @@ fn nested_state_dirs_fail_with_a_mysbx_error() {
     let (code, _stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 1);
     assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
-    assert!(stderr.contains("state-dirs entries nest"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("state-dirs entries nest"),
+        "stderr: {stderr}"
+    );
     assert!(!stderr.contains("panicked"), "stderr: {stderr}");
 }
 
@@ -942,7 +950,6 @@ fn init_creates_sidecar_config_and_is_idempotent() {
     let text = std::fs::read_to_string(&config).unwrap();
     assert!(text.lines().all(|l| l.trim_start().starts_with('#')));
 }
-
 
 // ---- workmux (docs/design/config.md D16, cli.md D11) -----------------------
 
@@ -1036,7 +1043,10 @@ fn workmux_without_a_pinned_entry_fails_instead_of_starting_a_shell() {
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 1, "stdout: {stdout}");
     assert!(stderr.contains("MYSBX_WORKMUX_ENTRY"), "{stderr}");
-    assert!(!stdout.contains("--clearenv"), "no argv on refusal: {stdout}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
 }
 
 #[test]
@@ -1156,10 +1166,7 @@ fn fake_editor(dir: &Path, record: &Path) -> PathBuf {
     let script = dir.join("fake-editor");
     std::fs::write(
         &script,
-        format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\n",
-            record.display()
-        ),
+        format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\n", record.display()),
     )
     .unwrap();
     let mut perms = std::fs::metadata(&script).unwrap().permissions();
@@ -1185,7 +1192,11 @@ fn edit_creates_the_sidecar_config_and_opens_it_in_the_editor() {
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(0), "stdout: {stdout} stderr: {stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stdout: {stdout} stderr: {stderr}"
+    );
     assert!(stdout.contains("## created"), "{stdout}");
     assert!(config.exists());
     // Exactly one argument: the SIDECAR config of this repo.
@@ -1204,7 +1215,10 @@ fn edit_creates_the_sidecar_config_and_opens_it_in_the_editor() {
     // The user config is NOT what was opened (on myconfig hosts it is a
     // generated store symlink).
     let opened = std::fs::read_to_string(&record).unwrap();
-    assert!(!opened.contains("xdg"), "the user config was opened: {opened}");
+    assert!(
+        !opened.contains("xdg"),
+        "the user config was opened: {opened}"
+    );
 }
 
 #[test]
@@ -1405,7 +1419,8 @@ fn ripgrep_config_mount_is_activated_through_the_variable() {
         // Shell builtins only (PATH inside the sandbox is the bare
         // /usr/bin of a NixOS host): $(< file) reads the mounted file
         // without `cat`.
-        "printf \"%s|\" \"$(< \"$RIPGREP_CONFIG_PATH\")\"; printf \"%s\" \"$RIPGREP_CONFIG_PATH\"".to_owned(),
+        "printf \"%s|\" \"$(< \"$RIPGREP_CONFIG_PATH\")\"; printf \"%s\" \"$RIPGREP_CONFIG_PATH\""
+            .to_owned(),
     ];
     let mut cmd = spawn_with_args(&inv, &args);
     cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
@@ -1418,7 +1433,9 @@ fn ripgrep_config_mount_is_activated_through_the_variable() {
         out.status.code()
     );
     assert!(
-        stdout.trim().ends_with("|/mysbx-home/.config/ripgrep/ripgreprc"),
+        stdout
+            .trim()
+            .ends_with("|/mysbx-home/.config/ripgrep/ripgreprc"),
         "the variable must name the in-sandbox path: {stdout}"
     );
     assert!(
@@ -1581,7 +1598,10 @@ fn dry_run_prints_the_pinned_backend_as_argv0() {
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     // A synthetic (never executed) store path in Nix's placeholder
     // style: 32 zero characters instead of a real hash.
-    cmd.env("MYSBX_BWRAP", "/nix/store/0000000000000000000000000000000-mysbx-bwrap/bin/bwrap");
+    cmd.env(
+        "MYSBX_BWRAP",
+        "/nix/store/0000000000000000000000000000000-mysbx-bwrap/bin/bwrap",
+    );
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(out.status.code(), Some(0));
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -1591,7 +1611,12 @@ fn dry_run_prints_the_pinned_backend_as_argv0() {
     );
     // And the rest is the ordinary argv block.
     let rest: String = stdout.lines().skip(1).map(|l| format!("{l}\n")).collect();
-    assert_eq!(rest, expected_minimal_argv(&repo).strip_prefix("bwrap\n").unwrap());
+    assert_eq!(
+        rest,
+        expected_minimal_argv(&repo)
+            .strip_prefix("bwrap\n")
+            .unwrap()
+    );
 }
 
 #[test]
@@ -1608,10 +1633,7 @@ fn backend_failure_still_leaves_the_created_state_dirs() {
         "backend = \"bubblewrap\"\nstate-dirs = [\".local/share/opencode\"]\n",
     )
     .unwrap();
-    let mut cmd = spawn_with_args(
-        &inv,
-        &["run", "--", "/nonexistent/mysbx-bwrap", "payload"],
-    );
+    let mut cmd = spawn_with_args(&inv, &["run", "--", "/nonexistent/mysbx-bwrap", "payload"]);
     cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
     let out = cmd.output().expect("failed to spawn mysbx");
     assert_eq!(out.status.code(), Some(1));
@@ -1732,7 +1754,10 @@ fn hidden_mount_is_an_error_not_a_panic() {
     let (code, _stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 1, "stderr: {stderr}");
     assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
-    assert!(stderr.contains("would hide earlier mount"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("would hide earlier mount"),
+        "stderr: {stderr}"
+    );
     assert!(!stderr.contains("panicked"), "a panic leaked: {stderr}");
 }
 
@@ -1862,8 +1887,7 @@ fn init_records_the_discovered_git_metadata() {
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     assert!(stdout.contains("created"), "stdout: {stdout}");
-    let written =
-        std::fs::read_to_string(base.join("wt.mysbx").join("config.toml")).unwrap();
+    let written = std::fs::read_to_string(base.join("wt.mysbx").join("config.toml")).unwrap();
     let canon = std::fs::canonicalize(&gitdir).unwrap();
     assert!(
         written.contains(&format!("\"{}\"", canon.display())),
@@ -1938,8 +1962,7 @@ fn the_implicit_init_approves_nothing() {
     let (code, _stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 1, "stderr: {stderr}");
     assert!(stderr.contains("not approved"), "stderr: {stderr}");
-    let written =
-        std::fs::read_to_string(base.join("wt.mysbx").join("config.toml")).unwrap();
+    let written = std::fs::read_to_string(base.join("wt.mysbx").join("config.toml")).unwrap();
     assert!(
         !written.contains("git-dirs"),
         "the implicit init must not approve: {written}"
@@ -2059,7 +2082,10 @@ fn approve_git_dirs_splices_into_an_existing_list_without_duplicates() {
     std::fs::create_dir_all(&sidecar).unwrap();
     std::fs::write(
         sidecar.join("config.toml"),
-        format!("git-dirs = [\n  \"{}\",\n]\n# trailing comment\n", gitdir.display()),
+        format!(
+            "git-dirs = [\n  \"{}\",\n]\n# trailing comment\n",
+            gitdir.display()
+        ),
     )
     .unwrap();
     let inv = Invocation {
@@ -2076,7 +2102,9 @@ fn approve_git_dirs_splices_into_an_existing_list_without_duplicates() {
     );
     let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
     assert_eq!(
-        written.matches(gitdir.display().to_string().as_str()).count(),
+        written
+            .matches(gitdir.display().to_string().as_str())
+            .count(),
         1,
         "no duplicates: {written}"
     );
@@ -2225,7 +2253,11 @@ fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     let stderr = String::from_utf8_lossy(&out.stderr);
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(out.status.code(), Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
     assert!(
         stderr.contains("mysbx: ") && stderr.contains("policy file"),
         "unexpected stderr: {stderr}"
@@ -2321,7 +2353,10 @@ fn a_writable_mount_over_the_generated_user_config_symlink_is_refused() {
     );
     // Nothing ran, so nothing could have replaced the entry.
     assert!(
-        std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+        std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
         "the policy symlink was replaced"
     );
     assert_eq!(std::fs::read_link(&link).unwrap(), target);
@@ -2363,7 +2398,10 @@ fn a_writable_mount_over_a_symlinked_sidecar_config_is_refused() {
         "unexpected stderr: {stderr}"
     );
     assert!(
-        std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+        std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
         "the sidecar policy symlink was replaced"
     );
     assert_eq!(std::fs::read_link(&link).unwrap(), target);
@@ -2383,10 +2421,7 @@ fn a_writable_mount_over_an_intermediate_symlink_component_is_refused() {
     std::os::unix::fs::symlink(&real, &link).unwrap();
     std::fs::write(
         real.join("config.toml"),
-        format!(
-            "backend = \"bubblewrap\"\n{}",
-            rw_mount_toml(&xdg, "/xdg")
-        ),
+        format!("backend = \"bubblewrap\"\n{}", rw_mount_toml(&xdg, "/xdg")),
     )
     .unwrap();
 
@@ -2403,7 +2438,10 @@ fn a_writable_mount_over_an_intermediate_symlink_component_is_refused() {
         "unexpected stderr: {stderr}"
     );
     assert!(
-        std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+        std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
         "the intermediate symlink was replaced"
     );
     assert_eq!(std::fs::read_link(&link).unwrap(), real);
@@ -2455,7 +2493,10 @@ fn a_read_only_view_of_the_policy_directory_still_runs() {
     };
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
-    assert!(stdout.contains("/policy"), "the ro mount is built: {stdout}");
+    assert!(
+        stdout.contains("/policy"),
+        "the ro mount is built: {stdout}"
+    );
 }
 
 // ---- a repo root above the home is refused end to end (review-4 item 2) ----
@@ -2504,11 +2545,7 @@ fn a_repo_root_containing_the_home_is_refused_before_anything_is_created() {
 fn approval_fixture(
     name: &'static str,
     contents: &str,
-) -> (
-    impl Fn(Vec<&'static str>) -> Invocation,
-    PathBuf,
-    PathBuf,
-) {
+) -> (impl Fn(Vec<&'static str>) -> Invocation, PathBuf, PathBuf) {
     let base = target_tmpdir(name);
     let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
     std::fs::create_dir_all(base.join("home")).unwrap();
@@ -2572,10 +2609,8 @@ fn approving_into_a_config_ending_in_a_table_stays_top_level() {
 fn approving_into_a_config_ending_in_an_array_of_tables_stays_top_level() {
     // The `[[mounts]]` half of the same bug: the appended key became a
     // field of the last mount.
-    let (inv, config, gitdir) = approval_fixture(
-        "approve-ends-in-mounts",
-        "backend = \"bubblewrap\"\n",
-    );
+    let (inv, config, gitdir) =
+        approval_fixture("approve-ends-in-mounts", "backend = \"bubblewrap\"\n");
     // A mount source inside the fixture: every path under /etc is
     // either protected or (on NixOS) a symlink into /nix/store, which
     // the dest rules refuse for unrelated reasons.
@@ -2687,7 +2722,11 @@ fn approving_a_path_with_brackets_and_hashes_round_trips() {
     )
     .unwrap();
     let config = base.join("wt#1]x.mysbx").join("config.toml");
-    std::fs::write(&config, "backend = \"bubblewrap\"\n\n[env]\nEDITOR = \"nvim\"\n").unwrap();
+    std::fs::write(
+        &config,
+        "backend = \"bubblewrap\"\n\n[env]\nEDITOR = \"nvim\"\n",
+    )
+    .unwrap();
     let inv = |args: Vec<&'static str>| Invocation {
         args,
         cwd: worktree.clone(),
@@ -2717,8 +2756,7 @@ fn an_unparsable_sidecar_config_is_never_rewritten() {
     // The edit validates with the real parser before it replaces
     // anything — and a config that does not parse in the first place
     // fails before that, with the file untouched.
-    let (inv, config, _gitdir) =
-        approval_fixture("approve-unparsable", "git-dirs = [\"/a\n");
+    let (inv, config, _gitdir) = approval_fixture("approve-unparsable", "git-dirs = [\"/a\n");
     let before = std::fs::read_to_string(&config).unwrap();
     let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
     assert_eq!(code, 1, "stderr: {stderr}");

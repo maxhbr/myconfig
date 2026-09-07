@@ -145,10 +145,7 @@ pub fn resolve(start: &Path, home: Option<&Path>) -> Result<Repo, Error> {
     while let Some(d) = dir {
         let sidecar = sibling_sidecar(d);
         if sidecar.is_dir() {
-            return guarded(
-                repo_at(d, sidecar)?,
-                home,
-            );
+            return guarded(repo_at(d, sidecar)?, home);
         }
         dir = d.parent();
     }
@@ -158,19 +155,13 @@ pub fn resolve(start: &Path, home: Option<&Path>) -> Result<Repo, Error> {
     while let Some(d) = dir {
         if d.join(".git").exists() {
             let sidecar = sibling_sidecar(d);
-            return guarded(
-                repo_at(d, sidecar)?,
-                home,
-            );
+            return guarded(repo_at(d, sidecar)?, home);
         }
         dir = d.parent();
     }
     // Step 3: no sidecar, no git — the starting directory is the repo.
     let sidecar = sibling_sidecar(start);
-    guarded(
-        repo_at(start, sidecar)?,
-        home,
-    )
+    guarded(repo_at(start, sidecar)?, home)
 }
 
 /// A `Repo` rooted at `dir`, resolving git metadata that lives OUTSIDE
@@ -600,8 +591,7 @@ mod tests {
         let main_git = main.join(".git");
         let expected = vec![
             std::fs::canonicalize(&main_git).unwrap(),
-            std::fs::canonicalize(main_git.join("worktrees").join("wt"))
-                .unwrap(),
+            std::fs::canonicalize(main_git.join("worktrees").join("wt")).unwrap(),
         ];
         assert_eq!(r.git_dirs, expected);
     }
@@ -619,8 +609,9 @@ mod tests {
         assert_eq!(r.root, worktree);
         assert_eq!(r.sidecar, sidecar);
         assert_eq!(r.git_dirs.len(), 2);
-        assert!(r.git_dirs.contains(&std::fs::canonicalize(main.join(".git"))
-            .unwrap()));
+        assert!(r
+            .git_dirs
+            .contains(&std::fs::canonicalize(main.join(".git")).unwrap()));
     }
 
     #[test]
@@ -642,8 +633,11 @@ mod tests {
         let base = tmpdir("dangling-gitdir");
         let worktree = base.join("wt");
         touch_dir(&worktree);
-        std::fs::write(worktree.join(".git"), "gitdir: /nonexistent/does-not-exist\n")
-            .unwrap();
+        std::fs::write(
+            worktree.join(".git"),
+            "gitdir: /nonexistent/does-not-exist\n",
+        )
+        .unwrap();
 
         let r = resolve(&worktree, Some(&fake_home(&base))).unwrap();
         assert_eq!(r.root, worktree);
@@ -679,10 +673,7 @@ mod tests {
         .unwrap();
 
         let r = resolve(&worktree, Some(&fake_home(&base))).unwrap();
-        assert_eq!(
-            r.git_dirs,
-            vec![std::fs::canonicalize(&gitdir).unwrap()]
-        );
+        assert_eq!(r.git_dirs, vec![std::fs::canonicalize(&gitdir).unwrap()]);
     }
 
     // ---- adversarial .git pointers (review-2 item 1) ---------------------
@@ -719,8 +710,11 @@ mod tests {
         let worktree = base.join("wt");
         touch_dir(&worktree);
         git_shape(&base);
-        std::fs::write(worktree.join(".git"), format!("gitdir: {}\n", base.display()))
-            .unwrap();
+        std::fs::write(
+            worktree.join(".git"),
+            format!("gitdir: {}\n", base.display()),
+        )
+        .unwrap();
 
         let e = resolve(&worktree, Some(&home)).unwrap_err();
         assert!(matches!(e, Error::GitDirForbidden { .. }), "{e}");
@@ -733,8 +727,11 @@ mod tests {
         let worktree = base.join("wt");
         touch_dir(&worktree);
         git_shape(&home);
-        std::fs::write(worktree.join(".git"), format!("gitdir: {}\n", home.display()))
-            .unwrap();
+        std::fs::write(
+            worktree.join(".git"),
+            format!("gitdir: {}\n", home.display()),
+        )
+        .unwrap();
 
         let e = resolve(&worktree, Some(&home)).unwrap_err();
         assert!(matches!(e, Error::GitDirForbidden { .. }), "{e}");
@@ -750,8 +747,11 @@ mod tests {
         let worktree = outer.join("wt");
         touch_dir(&worktree);
         git_shape(&outer);
-        std::fs::write(worktree.join(".git"), format!("gitdir: {}\n", outer.display()))
-            .unwrap();
+        std::fs::write(
+            worktree.join(".git"),
+            format!("gitdir: {}\n", outer.display()),
+        )
+        .unwrap();
 
         let e = resolve(&worktree, Some(&fake_home(&base))).unwrap_err();
         assert!(matches!(e, Error::GitDirForbidden { .. }), "{e}");
@@ -804,8 +804,11 @@ mod tests {
         touch_dir(&target);
         let worktree = base.join("wt");
         touch_dir(&worktree);
-        std::fs::write(worktree.join(".git"), format!("gitdir: {}\n", target.display()))
-            .unwrap();
+        std::fs::write(
+            worktree.join(".git"),
+            format!("gitdir: {}\n", target.display()),
+        )
+        .unwrap();
 
         let r = resolve(&worktree, Some(&fake_home(&base))).unwrap();
         assert!(r.git_dirs.is_empty());
@@ -823,8 +826,11 @@ mod tests {
         git_shape(&gitdir);
         let worktree = base.join("wt");
         touch_dir(&worktree);
-        std::fs::write(worktree.join(".git"), format!("gitdir: {}\n", gitdir.display()))
-            .unwrap();
+        std::fs::write(
+            worktree.join(".git"),
+            format!("gitdir: {}\n", gitdir.display()),
+        )
+        .unwrap();
 
         let r = resolve(&worktree, Some(&home)).unwrap();
         assert_eq!(r.git_dirs, vec![std::fs::canonicalize(&gitdir).unwrap()]);

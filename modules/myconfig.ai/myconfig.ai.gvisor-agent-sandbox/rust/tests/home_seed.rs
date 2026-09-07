@@ -66,15 +66,32 @@ impl SeedFixture {
 
 #[test]
 fn seed_home_copies_allowlist() {
-    let f = SeedFixture::new("seed-home-copies-allowlist", "a/b.txt c.txt missing.txt gone-link slink", None);
+    let f = SeedFixture::new(
+        "seed-home-copies-allowlist",
+        "a/b.txt c.txt missing.txt gone-link slink",
+        None,
+    );
     let home = f.home();
 
     // Copied dereferenced, contents intact, writable for the agent:
-    assert_eq!(fs::read_to_string(home.join("a/b.txt")).unwrap(), "endpoint=OLD\n");
+    assert_eq!(
+        fs::read_to_string(home.join("a/b.txt")).unwrap(),
+        "endpoint=OLD\n"
+    );
     assert_eq!(fs::read_to_string(home.join("slink")).unwrap(), "plain\n");
     assert_eq!(fs::read(home.join("c.txt")).unwrap(), b"bin\0ary OLD\n");
-    assert!(home.join("slink").is_file(), "symlink must be copied dereferenced");
-    assert!(fs::metadata(home.join("a/b.txt")).unwrap().permissions().mode() & 0o200 != 0);
+    assert!(
+        home.join("slink").is_file(),
+        "symlink must be copied dereferenced"
+    );
+    assert!(
+        fs::metadata(home.join("a/b.txt"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o200
+            != 0
+    );
     // missing.txt: absent is normal, silently skipped:
     assert!(!home.join("missing.txt").exists());
 }
@@ -87,18 +104,26 @@ fn seed_home_warnings_and_summary() {
         None,
     );
     let seed = f.seed.display().to_string();
-    let wt = f.s.root.join("repo__agent-gvisor").join("s1").display().to_string();
+    let wt =
+        f.s.root
+            .join("repo__agent-gvisor")
+            .join("s1")
+            .display()
+            .to_string();
     // (re-run to capture stderr; the fixture already started the session)
-    let out = f.s.cmd_with_env(
-        &["start", "s1", "--force", "--detach"],
-        &[
-            ("AGENT_GVISOR_HOME_SEED", seed.clone()),
-            (
-                "AGENT_GVISOR_HOME_SEED_PATHS",
-                "a/b.txt c.txt missing.txt gone-link slink".to_string(),
-            ),
-        ],
-    ).output().unwrap();
+    let out =
+        f.s.cmd_with_env(
+            &["start", "s1", "--force", "--detach"],
+            &[
+                ("AGENT_GVISOR_HOME_SEED", seed.clone()),
+                (
+                    "AGENT_GVISOR_HOME_SEED_PATHS",
+                    "a/b.txt c.txt missing.txt gone-link slink".to_string(),
+                ),
+            ],
+        )
+        .output()
+        .unwrap();
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
         format!(
@@ -117,16 +142,22 @@ fn seed_home_warnings_and_summary() {
 fn seed_home_partial_copy() {
     let f = SeedFixture::new("seed-home-partial-copy", "sub", None);
     let home = f.home();
-    assert_eq!(fs::read_to_string(home.join("sub/real.txt")).unwrap(), "real\n");
+    assert_eq!(
+        fs::read_to_string(home.join("sub/real.txt")).unwrap(),
+        "real\n"
+    );
     assert!(!home.join("sub/link").exists());
 
-    let out = f.s.cmd_with_env(
-        &["start", "s1", "--force", "--detach"],
-        &[
-            ("AGENT_GVISOR_HOME_SEED", f.seed.display().to_string()),
-            ("AGENT_GVISOR_HOME_SEED_PATHS", "sub".to_string()),
-        ],
-    ).output().unwrap();
+    let out =
+        f.s.cmd_with_env(
+            &["start", "s1", "--force", "--detach"],
+            &[
+                ("AGENT_GVISOR_HOME_SEED", f.seed.display().to_string()),
+                ("AGENT_GVISOR_HOME_SEED_PATHS", "sub".to_string()),
+            ],
+        )
+        .output()
+        .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(
         stderr.contains(&format!(
@@ -147,7 +178,11 @@ fn seed_home_partial_copy() {
 #[test]
 fn rewrite_rules() {
     // Trailing newlines collapse to exactly one (bash $(<file) + printf).
-    let f = SeedFixture::new("rewrite-rules", "a/b.txt c.txt e.txt", Some("OLD=http://127.0.0.1:8080"));
+    let f = SeedFixture::new(
+        "rewrite-rules",
+        "a/b.txt c.txt e.txt",
+        Some("OLD=http://127.0.0.1:8080"),
+    );
     let home = f.home();
     assert_eq!(
         fs::read_to_string(home.join("a/b.txt")).unwrap(),
@@ -207,7 +242,10 @@ fn seed_must_be_a_directory() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
-        format!("agent-gvisor: error: home seed is not a directory: {}\n", notdir.display())
+        format!(
+            "agent-gvisor: error: home seed is not a directory: {}\n",
+            notdir.display()
+        )
     );
 }
 

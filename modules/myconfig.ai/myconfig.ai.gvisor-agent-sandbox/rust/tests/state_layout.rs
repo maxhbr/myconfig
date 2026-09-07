@@ -68,8 +68,14 @@ fn start_creates_expected_tree() {
     );
 
     // Session dir: 0700, XDG dirs pre-created in the home.
-    assert_eq!(fs::metadata(&meta_dir).unwrap().permissions().mode() & 0o777, 0o700);
-    assert_eq!(fs::metadata(&home).unwrap().permissions().mode() & 0o777, 0o700);
+    assert_eq!(
+        fs::metadata(&meta_dir).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    assert_eq!(
+        fs::metadata(&home).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
     for d in [".cache", ".config", ".local/state"] {
         assert!(home.join(d).is_dir(), "{d} missing in session home");
     }
@@ -140,12 +146,16 @@ fn start_from_subdir_anchors_at_repo_root() {
 
     // The podman argv uses the repo root as --workdir and mount dst:
     let run = s.recorded_starting_with("podman", "run")[0].clone();
-    assert!(run.iter().any(|a| *a == format!(
-        "type=bind,src={},dst={},rw",
-        worktree.display(),
-        repo.display()
-    )));
-    let wd = run.iter().position(|a| a == "--workdir").expect("--workdir");
+    assert!(run.iter().any(|a| *a
+        == format!(
+            "type=bind,src={},dst={},rw",
+            worktree.display(),
+            repo.display()
+        )));
+    let wd = run
+        .iter()
+        .position(|a| a == "--workdir")
+        .expect("--workdir");
     assert_eq!(run[wd + 1], repo.display().to_string());
 }
 
@@ -173,7 +183,11 @@ fn mounts_and_envs_written_in_order() {
     let meta_dir = agent_root_of(&s).join("__sessions").join("s1");
     assert_eq!(
         fs::read_to_string(meta_dir.join("mounts.tsv")).unwrap(),
-        format!("{}\t/a\tro\n{}\t/b\trw\n", c1.canonicalize().unwrap().display(), c2.canonicalize().unwrap().display()),
+        format!(
+            "{}\t/a\tro\n{}\t/b\trw\n",
+            c1.canonicalize().unwrap().display(),
+            c2.canonicalize().unwrap().display()
+        ),
     );
     assert_eq!(
         fs::read_to_string(meta_dir.join("env.list")).unwrap(),
@@ -207,10 +221,30 @@ fn list_sorted_and_states() {
          {:<24} {:<12} {:<28} {:<6} {:<6} {}\n\
          {:<24} {:<12} {:<28} {:<6} {:<6} {}\n\
          {:<24} {:<12} {:<28} {:<6} {:<6} {}\n",
-        "SESSION", "STATUS", "BRANCH", "AHEAD", "DIRTY", "WORKTREE",
-        "a1", "running", "agent/gvisor/a1", "-", "0", a1.display(),
-        "b1", "running", "agent/gvisor/b1", "-", "0", b1.display(),
-        "inc", "incomplete", "-", "-", "-", s.state.join("sessions/inc").display(),
+        "SESSION",
+        "STATUS",
+        "BRANCH",
+        "AHEAD",
+        "DIRTY",
+        "WORKTREE",
+        "a1",
+        "running",
+        "agent/gvisor/a1",
+        "-",
+        "0",
+        a1.display(),
+        "b1",
+        "running",
+        "agent/gvisor/b1",
+        "-",
+        "0",
+        b1.display(),
+        "inc",
+        "incomplete",
+        "-",
+        "-",
+        "-",
+        s.state.join("sessions/inc").display(),
         "old",
         "incompatible (pre-rewrite layout)",
         "-",
@@ -236,8 +270,18 @@ fn list_git_metrics() {
     let expected = format!(
         "{:<24} {:<12} {:<28} {:<6} {:<6} {}\n\
          {:<24} {:<12} {:<28} {:<6} {:<6} {}\n",
-        "SESSION", "STATUS", "BRANCH", "AHEAD", "DIRTY", "WORKTREE",
-        "s1", "running", "agent/gvisor/s1", "3", "1", worktree.display(),
+        "SESSION",
+        "STATUS",
+        "BRANCH",
+        "AHEAD",
+        "DIRTY",
+        "WORKTREE",
+        "s1",
+        "running",
+        "agent/gvisor/s1",
+        "3",
+        "1",
+        worktree.display(),
     );
     assert_eq!(text, expected);
 
@@ -260,7 +304,12 @@ fn list_stopped_when_container_absent() {
     start_simple(&s, "s1");
     // Simulate a removed container: no record dir for the container name.
     let repo_id = expected_repo_id(&s.repo);
-    fs::remove_dir_all(s.record.join("containers").join(format!("agent-{repo_id}-s1"))).unwrap();
+    fs::remove_dir_all(
+        s.record
+            .join("containers")
+            .join(format!("agent-{repo_id}-s1")),
+    )
+    .unwrap();
 
     let out = s.run_ok(&["list"]);
     let text = String::from_utf8(out.stdout).unwrap();

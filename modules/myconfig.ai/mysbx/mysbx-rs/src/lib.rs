@@ -773,7 +773,8 @@ fn ensure_plain_dir(path: &std::path::Path) -> Result<bool, String> {
             path.display()
         )),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            std::fs::create_dir(path).map_err(|e| format!("cannot create {}: {e}", path.display()))?;
+            std::fs::create_dir(path)
+                .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
             Ok(true)
         }
         Err(e) => Err(format!("cannot inspect {}: {e}", path.display())),
@@ -901,8 +902,8 @@ fn approve_git_dirs_in_existing_config(repo: &repo::Repo) -> Result<(), String> 
     let config = repo.sidecar.join("config.toml");
     let text = std::fs::read_to_string(&config)
         .map_err(|e| format!("cannot read {}: {e}", config.display()))?;
-    let parsed = crate::config::Config::parse(&text)
-        .map_err(|e| format!("{}: {e}", config.display()))?;
+    let parsed =
+        crate::config::Config::parse(&text).map_err(|e| format!("{}: {e}", config.display()))?;
     // Compare on absolute paths: `git-dirs` entries may be written in
     // any D8 spelling (`~/…`, relative); the runtime resolves them
     // against HOME and canonicalizes both sides anyway (review-2
@@ -925,9 +926,7 @@ fn approve_git_dirs_in_existing_config(repo: &repo::Repo) -> Result<(), String> 
     let approved: std::collections::BTreeSet<std::path::PathBuf> = parsed
         .git_dirs
         .iter()
-        .map(|raw| {
-            std::fs::canonicalize(resolve(raw)).unwrap_or_else(|_| resolve(raw))
-        })
+        .map(|raw| std::fs::canonicalize(resolve(raw)).unwrap_or_else(|_| resolve(raw)))
         .collect();
     // NOTE: an entry that does not EXIST cannot canonicalize and is
     // compared in its raw spelling — a duplicate spelling of it may
@@ -990,8 +989,12 @@ fn approve_git_dirs_in_existing_config(repo: &repo::Repo) -> Result<(), String> 
     // rewrite that mysbx itself could not read on the next run must
     // fail here, with the original file untouched, rather than be
     // reported as a successful approval.
-    let reparsed = crate::config::Config::parse(&new_text)
-        .map_err(|e| format!("{}: refusing to write an unparsable config: {e}", config.display()))?;
+    let reparsed = crate::config::Config::parse(&new_text).map_err(|e| {
+        format!(
+            "{}: refusing to write an unparsable config: {e}",
+            config.display()
+        )
+    })?;
     if reparsed.git_dirs.len() < parsed.git_dirs.len() + entries.len() {
         return Err(format!(
             "{}: the rewritten config does not carry the new approvals — refusing to write it",
@@ -1154,8 +1157,8 @@ mod tests {
     /// on some systems — canonicalize so the expected entries are
     /// spelled the way the walk records them).
     fn walk_tmpdir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("mysbx-policy-walk-{}-{name}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("mysbx-policy-walk-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::canonicalize(&dir).unwrap()

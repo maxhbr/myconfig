@@ -301,10 +301,14 @@ fn state_dir_path(path: &str, at: &str) -> Result<String, Error> {
         return Err(bad("must not be empty"));
     }
     if path.starts_with('/') {
-        return Err(bad("no leading `/` — the destination is always /mysbx-home/<entry>"));
+        return Err(bad(
+            "no leading `/` — the destination is always /mysbx-home/<entry>",
+        ));
     }
     if path.starts_with('~') {
-        return Err(bad("no `~/` prefix — the sandbox home is not the host home"));
+        return Err(bad(
+            "no `~/` prefix — the sandbox home is not the host home",
+        ));
     }
     for component in path.split('/') {
         if component.is_empty() {
@@ -438,7 +442,10 @@ mod tests {
         // decides nothing — the off-by-default is applied after the
         // merge, so a layer never counts as an explicit `false`.
         assert_eq!(Config::parse("").unwrap().workmux, None);
-        assert_eq!(Config::parse("workmux = true\n").unwrap().workmux, Some(true));
+        assert_eq!(
+            Config::parse("workmux = true\n").unwrap().workmux,
+            Some(true)
+        );
         assert_eq!(
             Config::parse("workmux = false\n").unwrap().workmux,
             Some(false)
@@ -490,11 +497,13 @@ mod tests {
 
     #[test]
     fn state_dirs_parse_as_home_relative_paths() {
-        let c = Config::parse(
-            "state-dirs = [\".local/share/opencode\", \".local/state/opencode\"]\n",
-        )
-        .unwrap();
-        assert_eq!(c.state_dirs, vec![".local/share/opencode", ".local/state/opencode"]);
+        let c =
+            Config::parse("state-dirs = [\".local/share/opencode\", \".local/state/opencode\"]\n")
+                .unwrap();
+        assert_eq!(
+            c.state_dirs,
+            vec![".local/share/opencode", ".local/state/opencode"]
+        );
 
         // A single-element array and an empty array both parse; the
         // empty list is also the default.
@@ -522,15 +531,7 @@ mod tests {
         // edge (D15): absolute (a host-path confusion), `~/`, empty,
         // `//` runs, `.` and `..`.
         for p in [
-            "/abs",
-            "/",
-            "~/x",
-            "",
-            "a//b",
-            "a/./b",
-            "../x",
-            "a/../b",
-            "x/..",
+            "/abs", "/", "~/x", "", "a//b", "a/./b", "../x", "a/../b", "x/..",
         ] {
             let e = Config::parse(&format!("state-dirs = [\"{p}\"]\n")).unwrap_err();
             let msg = e.to_string();
