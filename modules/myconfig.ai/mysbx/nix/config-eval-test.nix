@@ -15,7 +15,8 @@
 # Scenarios (see `scenarios` below): Home Manager ripgrep on with
 # arguments, on without arguments, off, a host overriding the baseline
 # `RIPGREP_CONFIG_PATH`, a host adding an unrelated `[env]` key, and the
-# workmux integration on / off (../docs/design/config.md D16).
+# workmux integration on / off, and the `multiplexer` selection with
+# its availability gate (../docs/design/config.md D16/D17).
 {
   inputs,
   system,
@@ -28,7 +29,13 @@ let
   # module. Nothing here is ever built: the check reads
   # `xdg.configFile."mysbx/config.toml".source`, which is a
   # `pkgs.formats.toml` derivation of the generated attrset.
-  generated =
+  # The evaluated configuration of the smallest NixOS + Home Manager
+  # system that carries the mysbx module. `generated` reads the TOML
+  # file out of it; `assertionsOf` reads the module's own assertions,
+  # which the generated file cannot show (the availability gate of
+  # ../docs/design/config.md D17 is an eval-time refusal, not a config
+  # value).
+  evaluated =
     extraModules:
     (lib.nixosSystem {
       inherit system;
@@ -52,7 +59,16 @@ let
         }
       ]
       ++ extraModules;
-    }).config.home-manager.users.mhuber.xdg.configFile."mysbx/config.toml".source;
+    }).config;
+
+  generated =
+    extraModules:
+    (evaluated extraModules).home-manager.users.mhuber.xdg.configFile."mysbx/config.toml".source;
+
+  # The messages of the assertions that FAIL in this configuration.
+  failedAssertions =
+    extraModules:
+    map (a: a.message) (builtins.filter (a: !a.assertion) (evaluated extraModules).assertions);
 
   ripgrepOn = {
     home-manager.users.mhuber.programs.ripgrep = {
@@ -104,10 +120,48 @@ let
         };
       }
     ];
-    # And without it, the key must be ABSENT rather than `false`: a host
-    # without workmux keeps a byte-identical config file.
+    # And without it, the selection must be the plain shell: a host
+    # without any integration keeps the pre-D16 payload.
     workmuxOff = generated [ { } ];
+    # The other selectable multiplexers (D17). `herdr` is available by
+    # default (`herdr.package` defaults to `pkgs.herdr`), `aoe` is not
+    # (it is gated on ../programs.agent-of-empires/ being enabled), so
+    # the two exercise both halves of the availability gate.
+    muxHerdr = generated [
+      { myconfig.ai.mysbx.config.multiplexer = "herdr"; }
+    ];
+    muxTmux = generated [
+      { myconfig.ai.mysbx.config.multiplexer = "tmux"; }
+    ];
+    # A host-wide selection this host cannot start must fail at EVAL
+    # time, naming the option to set — not on the first `mysbx` of
+    # every sandbox.
+    muxUnavailable = failedAssertions [
+      { myconfig.ai.mysbx.config.multiplexer = "aoe"; }
+    ];
+    # ... and a selection that IS available must not produce that
+    # assertion (the gate must not fire on the happy path).
+    muxAvailableAsserts = failedAssertions [
+      { myconfig.ai.mysbx.config.multiplexer = "herdr"; }
+    ];
   };
+
+  # The eval-time results are checked HERE, while the check derivation
+  # is built: `runCommand` can only see strings and paths, and an
+  # assertion list is neither. A failure aborts the build of the check
+  # with the message below — the same visibility a shell `fail` has.
+  assertionGate =
+    let
+      unavailable = scenarios.muxUnavailable;
+      available = scenarios.muxAvailableAsserts;
+      names = builtins.concatStringsSep "\n" unavailable;
+    in
+    if !(builtins.any (m: lib.hasInfix "multiplexer" m) unavailable) then
+      throw "mysbx generated-config test: selecting the unavailable `aoe` multiplexer did not fail an assertion (failed: ${names})"
+    else if builtins.any (m: lib.hasInfix "multiplexer" m) available then
+      throw "mysbx generated-config test: the availability gate fired for an AVAILABLE multiplexer (failed: ${builtins.concatStringsSep "\n" available})"
+    else
+      "ok";
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -119,7 +173,10 @@ pkgs.runCommand "mysbx-generated-config-test"
       rgPlusExtra
       workmuxOn
       workmuxOff
+      muxHerdr
+      muxTmux
       ;
+    inherit assertionGate;
   }
   ''
     fail() {
@@ -165,16 +222,28 @@ pkgs.runCommand "mysbx-generated-config-test"
     grep -q 'RIPGREP_CONFIG_PATH = "/mysbx-home/.config/ripgrep/ripgreprc"' "$rgPlusExtra" \
       || fail "the baseline was replaced instead of merged" "$rgPlusExtra"
 
-    # 5. the workmux integration (D16): the switch, plus the
+    # 5. the workmux integration (D16/D17): the selection, plus the
     #    read-only mount of the in-sandbox workmux config below
-    #    /mysbx-home — and nothing at all when it is off.
-    grep -q '^workmux = true$' "$workmuxOn" \
-      || fail "the workmux switch is missing" "$workmuxOn"
+    #    /mysbx-home — and the plain shell when it is off.
+    grep -q '^multiplexer = "workmux"$' "$workmuxOn" \
+      || fail "the workmux selection is missing" "$workmuxOn"
     grep -q 'dest = "/mysbx-home/.config/workmux/config.yaml"' "$workmuxOn" \
       || fail "the in-sandbox workmux config is not mounted" "$workmuxOn"
+    grep -q '^multiplexer = "none"$' "$workmuxOff" \
+      || fail "the default must be the plain shell without the integration" "$workmuxOff"
     if grep -q workmux "$workmuxOff"; then
       fail "workmux must not appear without the integration" "$workmuxOff"
     fi
+
+    # 6. the other selections (D17) reach the generated layer verbatim,
+    #    and the eval-time availability gate was checked while this
+    #    derivation was instantiated ($assertionGate).
+    grep -q '^multiplexer = "herdr"$' "$muxHerdr" \
+      || fail "the herdr selection is missing" "$muxHerdr"
+    grep -q '^multiplexer = "tmux"$' "$muxTmux" \
+      || fail "the tmux selection is missing" "$muxTmux"
+    [ "$assertionGate" = ok ] \
+      || { echo "mysbx generated-config test: assertion gate: $assertionGate" >&2; exit 1; }
 
     mkdir "$out"
   ''

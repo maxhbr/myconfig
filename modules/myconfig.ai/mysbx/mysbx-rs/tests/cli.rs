@@ -11,6 +11,7 @@
 //! runnable `bwrap`; the two real-execution tests detect that and skip
 //! gracefully instead of failing.
 
+use mysbx::config::Multiplexer;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -1023,8 +1024,86 @@ fn init_template_mentions_state_dirs() {
     assert_eq!(code, 0, "stderr: {stderr}");
     let text = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
     assert!(text.contains("state-dirs"), "{text}");
-    // And it stays comment-only: init never decides policy.
-    assert!(text.lines().all(|l| l.trim_start().starts_with('#')));
+    // And it decides no POLICY: the only active line is the
+    // `multiplexer` key, which grants nothing and merely records the
+    // user layer's own value (D17, see the dedicated tests below).
+    assert_eq!(
+        active_lines(&text),
+        vec!["multiplexer = \"none\""],
+        "{text}"
+    );
+}
+
+/// The lines of a config file that are neither blank nor a comment —
+/// what a template actually DECIDES.
+fn active_lines(text: &str) -> Vec<&str> {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect()
+}
+
+#[test]
+fn init_records_the_user_layers_multiplexer_in_the_sidecar() {
+    // D17: `init` copies the effective default, it does not invent
+    // one. The sidecar WINS over the user config, so writing anything
+    // else here would silently downgrade the host default for every
+    // freshly initialized repository.
+    for mux in [
+        Multiplexer::None,
+        Multiplexer::Tmux,
+        Multiplexer::Workmux,
+        Multiplexer::Herdr,
+        Multiplexer::Aoe,
+    ] {
+        let (inv, _, sidecar) = fixture_uninited(&format!("init-mux-{mux}"), &["init"]);
+        std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+        std::fs::write(
+            inv.xdg.join("mysbx").join("config.toml"),
+            format!(
+                "backend = \"bubblewrap\"\nmultiplexer = \"{}\"\n",
+                mux.name()
+            ),
+        )
+        .unwrap();
+        let (code, _stdout, stderr) = run_binary(&inv);
+        assert_eq!(code, 0, "{mux}: stderr: {stderr}");
+        let text = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+        assert_eq!(
+            active_lines(&text),
+            vec![format!("multiplexer = \"{}\"", mux.name())],
+            "{mux}: {text}"
+        );
+        // The enum is documented next to the value, so the operator
+        // can change it without reading the design docs.
+        for name in Multiplexer::NAMES {
+            assert!(text.contains(name), "{mux}: {text} does not mention {name}");
+        }
+        // And the file mysbx just wrote parses — with exactly that
+        // value.
+        let parsed = mysbx::config::Config::parse(&text).expect("the template must parse");
+        assert_eq!(parsed.multiplexer, Some(mux), "{mux}");
+    }
+}
+
+#[test]
+fn init_leaves_the_multiplexer_commented_when_the_user_layer_is_unreadable() {
+    // A guessed value would OVERRIDE the user layer (the sidecar
+    // wins), so an unparsable user config gets a commented-out key
+    // instead. That layer fails every run on its own anyway, with its
+    // own message naming the file.
+    let (inv, _, sidecar) = fixture_uninited("init-mux-broken-user", &["init"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "multiplexer = \"screen\"\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let text = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert!(active_lines(&text).is_empty(), "{text}");
+    assert!(text.contains("# multiplexer = \"none\""), "{text}");
 }
 
 // ---- init stays what it was --------------------------------------------------
@@ -1043,113 +1122,264 @@ fn init_creates_sidecar_config_and_is_idempotent() {
     let (code, stdout, _) = run_binary(&inv);
     assert_eq!(code, 0);
     assert!(stdout.contains("## exists"), "stdout: {stdout}");
-    // The generated config is comment-only: it names no backend and no
-    // mount — init never decides policy.
+    // The generated config decides no policy: it names no backend and
+    // no mount, and its one active line is the `multiplexer` key that
+    // mirrors the user layer (D17).
     let text = std::fs::read_to_string(&config).unwrap();
-    assert!(text.lines().all(|l| l.trim_start().starts_with('#')));
+    assert_eq!(
+        active_lines(&text),
+        vec!["multiplexer = \"none\""],
+        "{text}"
+    );
 }
 
-// ---- workmux (docs/design/config.md D16, cli.md D11) -----------------------
+// ---- the multiplexer (docs/design/config.md D17, cli.md D11) ---------------
 
-/// [`fixture`] with `backend` and `workmux = true` in the USER config
-/// — the shape the generated myconfig layer has on a workmux host.
-fn fixture_workmux(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
+/// [`fixture`] with `backend` and `multiplexer = "<mux>"` in the USER
+/// config — the shape the generated myconfig layer has on a host with
+/// that multiplexer wired.
+fn fixture_mux(
+    name: &str,
+    mux: Multiplexer,
+    args: &[&'static str],
+) -> (Invocation, PathBuf, PathBuf) {
     let (inv, repo, sidecar) = fixture(name, args);
     std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
     std::fs::write(
         inv.xdg.join("mysbx").join("config.toml"),
-        "backend = \"bubblewrap\"\nworkmux = true\n",
+        format!(
+            "backend = \"bubblewrap\"\nmultiplexer = \"{}\"\n",
+            mux.name()
+        ),
     )
     .unwrap();
     (inv, repo, sidecar)
 }
 
-/// The in-sandbox tmux socket directory, spelled from the constant the
-/// argv builder uses — never hand-copied.
+/// Every multiplexer that starts a session — the set these tests run
+/// over, taken from the CLI's own enum so a new variant cannot be
+/// added without deciding what these tests say about it.
+const SESSION_MUXES: [Multiplexer; 4] = [
+    Multiplexer::Tmux,
+    Multiplexer::Workmux,
+    Multiplexer::Herdr,
+    Multiplexer::Aoe,
+];
+
+/// The wrapper pin of `mux` and a synthetic entry path for it. The pin
+/// name is read from the CLI's mapping, never hand-copied: a renamed
+/// variable turns these tests red instead of leaving them exercising a
+/// variable nothing reads.
+fn mux_pin(mux: Multiplexer) -> (&'static str, String) {
+    (
+        mux.entry_var()
+            .expect("a session-starting multiplexer has a pin"),
+        format!("/synth/bin/mysbx-{}-entry", mux.name()),
+    )
+}
+
+/// The in-sandbox private socket directory, spelled from the constant
+/// the argv builder uses — never hand-copied.
 fn socket_dir() -> &'static str {
-    mysbx::bwrap::WORKMUX_SOCKET_DIR
+    mysbx::bwrap::MUX_SOCKET_DIR
 }
 
 #[test]
-fn dry_run_bare_form_launches_the_workmux_entry_on_an_in_sandbox_socket() {
-    let (inv, _, _) = fixture_workmux("workmux-dry-run", &["--dry-run"]);
+fn dry_run_bare_form_launches_the_selected_entry_on_an_in_sandbox_socket() {
+    // D17: every selectable multiplexer replaces the interactive
+    // payload with ITS OWN pinned entry, on the private socket
+    // directory inside the sandbox home.
+    for mux in SESSION_MUXES {
+        let (var, entry) = mux_pin(mux);
+        let (inv, _, _) = fixture_mux(&format!("mux-dry-run-{mux}"), mux, &["--dry-run"]);
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env(var, &entry);
+        // The pins of the OTHER multiplexers are set too, to a path
+        // that must never be started: only the selected one's pin is
+        // read (a shared or mixed-up pin would show up here).
+        for other in SESSION_MUXES.iter().filter(|m| **m != mux) {
+            let (other_var, _) = mux_pin(*other);
+            cmd.env(other_var, "/synth/bin/WRONG-entry");
+        }
+        // A host tmux server in the calling environment must change
+        // nothing: neither variable is forwarded, and the socket path
+        // is infrastructure.
+        cmd.env("TMUX_TMPDIR", "/tmp/host-tmux");
+        cmd.env("TMUX", "/tmp/host-tmux/socket,123,0");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(out.status.code(), Some(0), "{mux}: {stdout}");
+        let lines: Vec<&str> = stdout.lines().collect();
+
+        // The payload is that multiplexer's entry, not the shell and
+        // not another multiplexer's entry.
+        assert_eq!(lines[lines.len() - 2], "--");
+        assert_eq!(lines[lines.len() - 1], entry, "{mux}: {stdout}");
+        assert!(!stdout.contains("/synth/bin/bash"), "{mux}: {stdout}");
+        assert!(!stdout.contains("WRONG-entry"), "{mux}: {stdout}");
+
+        // TMUX_TMPDIR points inside the sandbox home, and it is the
+        // LAST `--setenv` — no `[env]` layer can follow and repoint it.
+        let at = lines
+            .iter()
+            .position(|l| *l == "TMUX_TMPDIR")
+            .unwrap_or_else(|| panic!("{mux}: TMUX_TMPDIR is not set: {stdout}"));
+        assert_eq!(lines[at - 1], "--setenv");
+        assert_eq!(lines[at + 1], socket_dir());
+        assert!(
+            socket_dir().starts_with(&format!("{}/", mysbx::bwrap::SANDBOX_HOME)),
+            "the socket must live in the sandbox home"
+        );
+        // Nothing of the host's tmux world is bound or forwarded.
+        assert!(!stdout.contains("/tmp/host-tmux"), "{mux}: {stdout}");
+        assert!(!stdout.contains("/tmp/tmux-"), "{mux}: {stdout}");
+        // `/tmp` is the tmpfs of the base table, not a bind of the
+        // host's.
+        assert!(stdout.contains("--tmpfs\n/tmp\n"), "{mux}: {stdout}");
+    }
+}
+
+#[test]
+fn dry_run_run_form_is_never_a_multiplexer_session() {
+    // cli.md D11: `run -- CMD` stays a one-shot whichever multiplexer
+    // is selected — same payload, no TMUX_TMPDIR, and byte-identical
+    // to the argv the same fixture produces without the key.
+    for mux in SESSION_MUXES {
+        let (var, entry) = mux_pin(mux);
+        let args = &["run", "--dry-run", "--", "ls"];
+        let (inv, _, _) = fixture_mux(&format!("mux-run-form-{mux}"), mux, args);
+        let mut cmd = spawn_with_args(&inv, args);
+        cmd.env(var, &entry);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let with = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert_eq!(out.status.code(), Some(0), "{mux}: {with}");
+        assert!(!with.contains("TMUX_TMPDIR"), "{mux}: {with}");
+        assert!(!with.contains(&entry), "{mux}: {with}");
+        assert!(with.ends_with("--\nls\n"), "{mux}: {with}");
+
+        std::fs::write(
+            inv.xdg.join("mysbx").join("config.toml"),
+            "backend = \"bubblewrap\"\n",
+        )
+        .unwrap();
+        let (code, without, stderr) = run_binary(&inv);
+        assert_eq!(code, 0, "{mux}: stderr: {stderr}");
+        assert_eq!(
+            with, without,
+            "{mux}: the run form must not change with a multiplexer"
+        );
+    }
+}
+
+#[test]
+fn a_multiplexer_without_a_pinned_entry_fails_instead_of_starting_a_shell() {
+    // The refusal is the point (D17): a silent plain shell would be
+    // discovered only after the work happened outside the session. A
+    // config selecting a multiplexer this build does not carry is a
+    // configuration error at argv-build time — so `--dry-run` refuses
+    // it too, and no bwrap is ever started.
+    for mux in SESSION_MUXES {
+        let (var, _) = mux_pin(mux);
+        let (inv, _, _) = fixture_mux(&format!("mux-unpinned-{mux}"), mux, &["--dry-run"]);
+        let (code, stdout, stderr) = run_binary(&inv);
+        assert_eq!(code, 1, "{mux}: stdout: {stdout}");
+        // The message names the value AND the variable a host must set.
+        assert!(stderr.contains(var), "{mux}: {stderr}");
+        assert!(stderr.contains(mux.name()), "{mux}: {stderr}");
+        assert!(
+            !stdout.contains("--clearenv"),
+            "{mux}: no argv on refusal: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn an_unknown_multiplexer_is_a_config_error_naming_the_file_and_the_key() {
+    // The strict enum (D17), end to end: the message must let the
+    // operator find the offending line — file, key, accepted values.
+    let (inv, _, _) = fixture("mux-unknown", &["--dry-run"]);
+    let user_config = inv.xdg.join("mysbx").join("config.toml");
+    std::fs::create_dir_all(user_config.parent().unwrap()).unwrap();
+    std::fs::write(
+        &user_config,
+        "backend = \"bubblewrap\"\nmultiplexer = \"screen\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stdout: {stdout}");
+    assert!(
+        stderr.contains(&user_config.display().to_string()),
+        "{stderr}"
+    );
+    assert!(stderr.contains("multiplexer"), "{stderr}");
+    assert!(stderr.contains("`screen`"), "{stderr}");
+    for name in mysbx::config::Multiplexer::NAMES {
+        assert!(stderr.contains(name), "{stderr} does not list {name}");
+    }
+    assert!(!stdout.contains("--clearenv"), "no argv: {stdout}");
+}
+
+#[test]
+fn multiplexer_none_keeps_the_plain_interactive_shell() {
+    // Byte-compat: a host without any integration, or a repo that
+    // selected `none`, gets exactly the pre-existing argv — even with
+    // every entry pinned.
+    for (name, layer) in [("mux-absent", None), ("mux-none", Some(Multiplexer::None))] {
+        let (inv, repo, _) = match layer {
+            None => fixture_user_backend(name, &["--dry-run"]),
+            Some(mux) => fixture_mux(name, mux, &["--dry-run"]),
+        };
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        for mux in SESSION_MUXES {
+            let (var, entry) = mux_pin(mux);
+            cmd.env(var, entry);
+        }
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(out.status.code(), Some(0), "{name}: {stdout}");
+        assert_eq!(stdout, expected_minimal_argv(&repo), "{name}");
+    }
+}
+
+#[test]
+fn the_sidecar_wins_over_the_user_layer_for_the_multiplexer() {
+    // D17's layering rule, end to end: the repo decides. Both
+    // directions — another multiplexer, and `none` for a repo that
+    // wants a bare shell on a host whose default is a session.
+    let (inv, repo, sidecar) =
+        fixture_mux("mux-sidecar-wins", Multiplexer::Workmux, &["--dry-run"]);
+    std::fs::write(sidecar.join("config.toml"), "multiplexer = \"herdr\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_WORKMUX_ENTRY", "/synth/bin/mysbx-workmux-entry");
-    // A host tmux server in the calling environment must change
-    // nothing: neither variable is forwarded, and the socket path is
-    // infrastructure.
-    cmd.env("TMUX_TMPDIR", "/tmp/host-tmux");
-    cmd.env("TMUX", "/tmp/host-tmux/socket,123,0");
+    for mux in SESSION_MUXES {
+        let (var, entry) = mux_pin(mux);
+        cmd.env(var, entry);
+    }
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(out.status.code(), Some(0), "{stdout}");
-    let lines: Vec<&str> = stdout.lines().collect();
-
-    // The payload is the entry, not the shell.
-    assert_eq!(lines[lines.len() - 2], "--");
-    assert_eq!(lines[lines.len() - 1], "/synth/bin/mysbx-workmux-entry");
-    assert!(!stdout.contains("/synth/bin/bash"), "{stdout}");
-
-    // TMUX_TMPDIR points inside the sandbox home, and it is the LAST
-    // `--setenv` — no `[env]` layer can follow and repoint it.
-    let at = lines
-        .iter()
-        .position(|l| *l == "TMUX_TMPDIR")
-        .unwrap_or_else(|| panic!("TMUX_TMPDIR is not set: {stdout}"));
-    assert_eq!(lines[at - 1], "--setenv");
-    assert_eq!(lines[at + 1], socket_dir());
     assert!(
-        socket_dir().starts_with(&format!("{}/", mysbx::bwrap::SANDBOX_HOME)),
-        "the socket must live in the sandbox home"
+        stdout.ends_with(&format!("{}\n", mux_pin(Multiplexer::Herdr).1)),
+        "{stdout}"
     );
-    // Nothing of the host's tmux world is bound or forwarded.
-    assert!(!stdout.contains("/tmp/host-tmux"), "{stdout}");
-    assert!(!stdout.contains("/tmp/tmux-"), "{stdout}");
-    // `/tmp` is the tmpfs of the base table, not a bind of the host's.
-    assert!(stdout.contains("--tmpfs\n/tmp\n"), "{stdout}");
-}
 
-#[test]
-fn dry_run_run_form_is_not_a_workmux_session() {
-    // cli.md D11: `run -- CMD` stays a one-shot even with the key set
-    // — same payload, no TMUX_TMPDIR, and byte-identical to the argv
-    // the same fixture produces without the key.
-    let (inv, _, _) = fixture_workmux("workmux-run-form", &["run", "--dry-run", "--", "ls"]);
-    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "ls"]);
-    cmd.env("MYSBX_WORKMUX_ENTRY", "/synth/bin/mysbx-workmux-entry");
+    // `none` in the sidecar: the plain shell, byte-identical to a host
+    // that never named a multiplexer at all.
+    std::fs::write(sidecar.join("config.toml"), "multiplexer = \"none\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    for mux in SESSION_MUXES {
+        let (var, entry) = mux_pin(mux);
+        cmd.env(var, entry);
+    }
     let out = cmd.output().expect("failed to spawn the mysbx binary");
-    let with = String::from_utf8_lossy(&out.stdout).into_owned();
-    assert_eq!(out.status.code(), Some(0), "{with}");
-    assert!(!with.contains("TMUX_TMPDIR"), "{with}");
-    assert!(with.ends_with("--\nls\n"), "{with}");
-
-    std::fs::write(
-        inv.xdg.join("mysbx").join("config.toml"),
-        "backend = \"bubblewrap\"\n",
-    )
-    .unwrap();
-    let (code, without, stderr) = run_binary(&inv);
-    assert_eq!(code, 0, "stderr: {stderr}");
-    assert_eq!(with, without, "the run form must not change with workmux");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    assert_eq!(stdout, expected_minimal_argv(&repo));
 }
 
 #[test]
-fn workmux_without_a_pinned_entry_fails_instead_of_starting_a_shell() {
-    // The refusal is the point (D16): a silent plain shell would be
-    // discovered only after the work happened outside the session.
-    let (inv, _, _) = fixture_workmux("workmux-unpinned", &["--dry-run"]);
-    let (code, stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stdout: {stdout}");
-    assert!(stderr.contains("MYSBX_WORKMUX_ENTRY"), "{stderr}");
-    assert!(
-        !stdout.contains("--clearenv"),
-        "no argv on refusal: {stdout}"
-    );
-}
-
-#[test]
-fn a_mount_over_the_workmux_socket_dir_is_refused_end_to_end() {
-    let (inv, _, sidecar) = fixture_workmux("workmux-socket-mount", &["--dry-run"]);
+fn a_mount_over_the_mux_socket_dir_is_refused_end_to_end() {
+    let (inv, _, sidecar) = fixture_mux("mux-socket-mount", Multiplexer::Workmux, &["--dry-run"]);
+    let (var, entry) = mux_pin(Multiplexer::Workmux);
     std::fs::create_dir_all(inv.home.join("shared")).unwrap();
     std::fs::write(
         sidecar.join("config.toml"),
@@ -1161,35 +1391,23 @@ fn a_mount_over_the_workmux_socket_dir_is_refused_end_to_end() {
     )
     .unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_WORKMUX_ENTRY", "/synth/bin/mysbx-workmux-entry");
+    cmd.env(var, entry);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains(socket_dir()), "{stderr}");
-    assert!(stderr.contains("D16"), "{stderr}");
+    assert!(stderr.contains("D16/D17"), "{stderr}");
 }
 
 #[test]
-fn workmux_off_keeps_the_plain_interactive_shell() {
-    // Byte-compat: a host without the integration (or a repo that
-    // switched it off) gets exactly the pre-existing argv, even with
-    // the entry pinned.
-    let (inv, repo, _) = fixture_user_backend("workmux-off", &["--dry-run"]);
-    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_WORKMUX_ENTRY", "/synth/bin/mysbx-workmux-entry");
-    let out = cmd.output().expect("failed to spawn the mysbx binary");
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(out.status.code(), Some(0), "{stdout}");
-    assert_eq!(stdout, expected_minimal_argv(&repo));
-}
-
-#[test]
-fn the_workmux_entry_really_runs_with_an_in_sandbox_socket_dir() {
+fn the_selected_entry_really_runs_with_an_in_sandbox_socket_dir() {
     // The real-execution counterpart of the dry runs above: a stand-in
-    // entry script (the workmux/tmux closure is not available to the
-    // cargo suite) proves that the interactive form execs the entry
-    // INSIDE the sandbox, that `$TMUX_TMPDIR` is writable there, and
-    // that the host's own tmux socket directory is unreachable.
+    // entry script (no multiplexer closure is available to the cargo
+    // suite) proves that the interactive form execs the entry INSIDE
+    // the sandbox, that `$TMUX_TMPDIR` is writable there, and that the
+    // host's own tmux socket directory is unreachable. Run for every
+    // variant: the stand-in stands in for all of them, and what is
+    // under test is mysbx's dispatch, not the real multiplexers.
     if !is_bwrap_available() {
         eprintln!("skipping: bwrap not available in this environment");
         return;
@@ -1198,61 +1416,64 @@ fn the_workmux_entry_really_runs_with_an_in_sandbox_socket_dir() {
         eprintln!("skipping: no sandbox-reachable bash");
         return;
     };
-    let (inv, repo, _) = fixture_workmux("workmux-real", &[]);
-    // The stand-in entry lives in the repo, which is bound rw at its
-    // real path — so the host path mysbx pins is a valid in-sandbox
-    // path too.
-    let entry = repo.join("fake-workmux-entry");
-    std::fs::write(
-        &entry,
-        format!(
-            // Shell builtins only: PATH inside the sandbox is
-            // /usr/bin here, which holds `env` and nothing else on a
-            // NixOS host — so the socket DIRECTORY is not created (that
-            // is the real entry's `mkdir`), the test proves instead
-            // that its parent (the sandbox home tmpfs) is writable and
-            // that the path is inside it.
-            "#!{}\nset -eu\necho \"tmpdir=$TMUX_TMPDIR\"\n\
-             case \"$TMUX_TMPDIR\" in \"$HOME\"/*) echo tmpdir-inside-home ;; \
-             *) echo tmpdir-outside-home ;; esac\n\
-             : > \"$HOME/.probe\" && echo home-writable\n\
-             if [ -e /tmp/host-tmux ]; then echo host-socket-visible; \
-             else echo host-socket-absent; fi\n",
-            bash.display()
-        ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&entry).unwrap().permissions();
-    use std::os::unix::fs::PermissionsExt;
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&entry, perms).unwrap();
-    // A host-side directory that a leaked socket path could hit.
-    std::fs::create_dir_all("/tmp/host-tmux").ok();
+    for mux in SESSION_MUXES {
+        let (var, _) = mux_pin(mux);
+        let (inv, repo, _) = fixture_mux(&format!("mux-real-{mux}"), mux, &[]);
+        // The stand-in entry lives in the repo, which is bound rw at
+        // its real path — so the host path mysbx pins is a valid
+        // in-sandbox path too.
+        let entry = repo.join("fake-mux-entry");
+        std::fs::write(
+            &entry,
+            format!(
+                // Shell builtins only: PATH inside the sandbox is
+                // /usr/bin here, which holds `env` and nothing else on
+                // a NixOS host — so the socket DIRECTORY is not created
+                // (that is the real entry's `mkdir`), the test proves
+                // instead that its parent (the sandbox home tmpfs) is
+                // writable and that the path is inside it.
+                "#!{}\nset -eu\necho \"tmpdir=$TMUX_TMPDIR\"\n\
+                 case \"$TMUX_TMPDIR\" in \"$HOME\"/*) echo tmpdir-inside-home ;; \
+                 *) echo tmpdir-outside-home ;; esac\n\
+                 : > \"$HOME/.probe\" && echo home-writable\n\
+                 if [ -e /tmp/host-tmux ]; then echo host-socket-visible; \
+                 else echo host-socket-absent; fi\n",
+                bash.display()
+            ),
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&entry).unwrap().permissions();
+        use std::os::unix::fs::PermissionsExt;
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&entry, perms).unwrap();
+        // A host-side directory that a leaked socket path could hit.
+        std::fs::create_dir_all("/tmp/host-tmux").ok();
 
-    let mut cmd = spawn_with_args(&inv, &[] as &[&str]);
-    cmd.env("MYSBX_WORKMUX_ENTRY", &entry);
-    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
-    cmd.env("TMUX_TMPDIR", "/tmp/host-tmux");
-    let out = cmd.output().expect("failed to spawn mysbx");
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        out.status.success(),
-        "exit {:?}\nstdout: {stdout}\nstderr: {stderr}",
-        out.status.code()
-    );
-    assert!(
-        stdout.contains(&format!("tmpdir={}", socket_dir())),
-        "the entry did not see the in-sandbox socket dir: {stdout}"
-    );
-    assert!(stdout.contains("tmpdir-inside-home"), "{stdout}");
-    assert!(stdout.contains("home-writable"), "{stdout}");
-    // The host's `/tmp/host-tmux` is invisible: `/tmp` is a tmpfs.
-    assert!(
-        stdout.contains("host-socket-absent"),
-        "a host tmux socket dir is reachable: {stdout}"
-    );
-    let _ = std::fs::remove_dir_all("/tmp/host-tmux");
+        let mut cmd = spawn_with_args(&inv, &[] as &[&str]);
+        cmd.env(var, &entry);
+        cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
+        cmd.env("TMUX_TMPDIR", "/tmp/host-tmux");
+        let out = cmd.output().expect("failed to spawn mysbx");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            out.status.success(),
+            "{mux}: exit {:?}\nstdout: {stdout}\nstderr: {stderr}",
+            out.status.code()
+        );
+        assert!(
+            stdout.contains(&format!("tmpdir={}", socket_dir())),
+            "{mux}: the entry did not see the in-sandbox socket dir: {stdout}"
+        );
+        assert!(stdout.contains("tmpdir-inside-home"), "{mux}: {stdout}");
+        assert!(stdout.contains("home-writable"), "{mux}: {stdout}");
+        // The host's `/tmp/host-tmux` is invisible: `/tmp` is a tmpfs.
+        assert!(
+            stdout.contains("host-socket-absent"),
+            "{mux}: a host tmux socket dir is reachable: {stdout}"
+        );
+        let _ = std::fs::remove_dir_all("/tmp/host-tmux");
+    }
 }
 
 // ---- `mysbx edit` (docs/design/cli.md D12) --------------------------------

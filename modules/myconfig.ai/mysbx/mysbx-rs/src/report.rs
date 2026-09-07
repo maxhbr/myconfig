@@ -21,7 +21,7 @@
 //! run. Whoever can run `mysbx --verbose` can also read both config
 //! files.
 
-use crate::bwrap::{HostEnv, Params, Payload, SANDBOX_HOME, WORKMUX_SOCKET_DIR};
+use crate::bwrap::{HostEnv, Params, Payload, MUX_SOCKET_DIR, SANDBOX_HOME};
 use crate::config::Mode;
 use crate::merge::Merged;
 use crate::repo::Repo;
@@ -223,34 +223,41 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             .nix_conf
             .unwrap_or("(none — nix uses its defaults)")
     ));
-    // workmux (config.md D16 / cli.md D11), only when a layer asked
-    // for it: what replaces the shell, where its tmux socket lives,
-    // and — for the `run` form — that this run keeps the plain
+    // The multiplexer (config.md D17 / cli.md D11): which one was
+    // selected, what replaces the shell, where its private socket
+    // lives, and — for the `run` form — that this run keeps the plain
     // payload after all. Saying the socket path out loud is the point:
     // "the socket is inside the sandbox" is the isolation claim, and
     // the report is where an operator checks it against the argv.
-    if r.merged.workmux {
+    // Printed for `none` too: which payload an interactive run starts
+    // is a property of every run, and the value now has five possible
+    // answers rather than a silent "off".
+    let mux = r.merged.multiplexer;
+    if !mux.starts_a_session() {
+        p("multiplexer:    none — no session is started".to_string());
+    } else {
         match r.payload {
             Payload::Shell => {
                 p(format!(
-                    "workmux:        enabled — tmux socket {WORKMUX_SOCKET_DIR}/socket (inside the sandbox home tmpfs; no host tmux server is reachable)"
+                    "multiplexer:    {mux} — private socket dir {MUX_SOCKET_DIR} (inside the sandbox home tmpfs; no host tmux server is reachable)"
                 ));
                 p(format!(
                     "  entry:        {}",
-                    r.params.workmux_entry.unwrap_or("(none pinned — the run is refused)")
+                    r.params
+                        .mux_entry
+                        .unwrap_or("(none pinned — the run is refused)")
                 ));
             }
-            Payload::Command(_) => p(
-                "workmux:        enabled, but not applied — it replaces the INTERACTIVE payload only (cli.md D11)"
-                    .to_string(),
-            ),
+            Payload::Command(_) => p(format!(
+                "multiplexer:    {mux}, but not applied — it replaces the INTERACTIVE payload only (cli.md D11)"
+            )),
         }
     }
 
     match r.payload {
-        Payload::Shell if r.merged.workmux => p(format!(
-            "payload:        workmux session {}",
-            r.params.workmux_entry.unwrap_or("(none pinned)")
+        Payload::Shell if mux.starts_a_session() => p(format!(
+            "payload:        {mux} session {}",
+            r.params.mux_entry.unwrap_or("(none pinned)")
         )),
         Payload::Shell => p(format!("payload:        shell {}", r.params.shell)),
         // Space-joined for readability only; the exact, unambiguous
@@ -282,7 +289,7 @@ fn present(exists: bool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Mount;
+    use crate::config::{Mount, Multiplexer};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 
@@ -312,7 +319,7 @@ mod tests {
             env,
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
-            workmux: false,
+            multiplexer: Multiplexer::None,
         };
         let mut host = HostEnv::new();
         host.insert("TERM".to_owned(), "xterm".to_owned());
@@ -326,7 +333,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
-            workmux_entry: None,
+            mux_entry: None,
         };
         lines(&Report {
             repo: &repo,
@@ -423,7 +430,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
-            workmux_entry: None,
+            mux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -463,7 +470,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
-            workmux_entry: None,
+            mux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -504,7 +511,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
-            workmux_entry: None,
+            mux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -547,7 +554,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
-            workmux_entry: None,
+            mux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -587,7 +594,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
-            workmux_entry: None,
+            mux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -615,56 +622,80 @@ mod tests {
     }
 
     #[test]
-    fn workmux_is_reported_with_its_in_sandbox_socket_and_only_for_the_shell() {
+    fn the_multiplexer_is_reported_with_its_in_sandbox_socket_and_only_for_the_shell() {
         // cli.md D10/D11: the report is where an operator checks the
         // isolation claim, so the socket path is spelled out — and the
         // `run` form says out loud that the session is NOT started.
-        let (repo, mut merged, host) = fixture_report();
-        merged.workmux = true;
-        let params = Params {
-            shell: "/synth/bin/bash",
-            tools_path: "/synth/bin",
-            nix_conf: None,
-            policy_paths: &[],
-            workmux_entry: Some("/synth/bin/mysbx-workmux-entry"),
-        };
-        let report_of = |payload: &Payload| {
-            lines(&Report {
-                repo: &repo,
-                sidecar_exists: true,
-                user_config: Path::new("/synth/xdg/mysbx/config.toml"),
-                user_config_exists: true,
-                sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
-                sidecar_config_exists: false,
-                merged: &merged,
-                user_mount_count: 1,
-                host_env: &host,
-                params: &params,
-                bwrap_bin: "bwrap",
-                payload,
-                dry_run: true,
-            })
-            .join("\n")
-        };
+        for mux in [
+            Multiplexer::Tmux,
+            Multiplexer::Workmux,
+            Multiplexer::Herdr,
+            Multiplexer::Aoe,
+        ] {
+            let (repo, mut merged, host) = fixture_report();
+            merged.multiplexer = mux;
+            let params = Params {
+                shell: "/synth/bin/bash",
+                tools_path: "/synth/bin",
+                nix_conf: None,
+                policy_paths: &[],
+                mux_entry: Some("/synth/bin/mysbx-mux-entry"),
+            };
+            let report_of = |payload: &Payload| {
+                lines(&Report {
+                    repo: &repo,
+                    sidecar_exists: true,
+                    user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+                    user_config_exists: true,
+                    sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+                    sidecar_config_exists: false,
+                    merged: &merged,
+                    user_mount_count: 1,
+                    host_env: &host,
+                    params: &params,
+                    bwrap_bin: "bwrap",
+                    payload,
+                    dry_run: true,
+                })
+                .join("\n")
+            };
 
-        let shell = report_of(&Payload::Shell);
+            let shell = report_of(&Payload::Shell);
+            // The selected multiplexer is named, and so is the private
+            // socket directory it runs on.
+            assert!(
+                shell.contains(&format!("multiplexer:    {mux} —")),
+                "{shell}"
+            );
+            assert!(
+                shell.contains(&format!("private socket dir {MUX_SOCKET_DIR}")),
+                "{shell}"
+            );
+            assert!(
+                shell.contains(&format!(
+                    "payload:        {mux} session /synth/bin/mysbx-mux-entry"
+                )),
+                "{shell}"
+            );
+
+            let cmd = report_of(&Payload::Command(vec!["ls".into()]));
+            assert!(cmd.contains("but not applied"), "{cmd}");
+            assert!(cmd.contains("payload:        command ls"), "{cmd}");
+            assert!(!cmd.contains("private socket dir"), "{cmd}");
+        }
+
+        // With `none` (the shared fixture) the report says so instead
+        // of staying silent: which payload an interactive run starts
+        // has five possible answers now, so every run states it.
+        let plain = render(true, &Payload::Shell).join("\n");
         assert!(
-            shell.contains(&format!("tmux socket {WORKMUX_SOCKET_DIR}/socket")),
-            "{shell}"
+            plain.contains("multiplexer:    none — no session is started"),
+            "{plain}"
         );
+        assert!(!plain.contains("private socket dir"), "{plain}");
         assert!(
-            shell.contains("payload:        workmux session /synth/bin/mysbx-workmux-entry"),
-            "{shell}"
+            plain.contains("payload:        shell /synth/bin/bash"),
+            "{plain}"
         );
-
-        let cmd = report_of(&Payload::Command(vec!["ls".into()]));
-        assert!(cmd.contains("enabled, but not applied"), "{cmd}");
-        assert!(cmd.contains("payload:        command ls"), "{cmd}");
-        assert!(!cmd.contains("tmux socket"), "{cmd}");
-
-        // Nothing at all without the key (the shared fixture has
-        // `workmux: false`), so the report of every other run is
-        // unchanged.
-        assert!(!render(true, &Payload::Shell).join("\n").contains("workmux"));
     }
 }

@@ -40,6 +40,97 @@ impl fmt::Display for Mode {
     }
 }
 
+/// Which terminal multiplexer the **interactive** payload of a sandbox
+/// is (docs/design/config.md D17, cli.md D11) — the generalization of
+/// the boolean `workmux` key of D16.
+///
+/// A closed enum on purpose: a layer may say *which of the payloads
+/// this build carries* runs, never a command line (D4: configuration
+/// that can execute is configuration that can escape). Every non-
+/// [`Multiplexer::None`] value needs an entry pinned by the wrapper
+/// ([`Multiplexer::entry_var`]); a selection without one is a refused
+/// run, never a silent plain shell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Multiplexer {
+    /// A plain interactive shell — the pre-D16 behaviour, and what an
+    /// undecided configuration resolves to.
+    None,
+    /// Plain tmux, one session per repo, on the in-sandbox socket.
+    Tmux,
+    /// The workmux session of D16 (sidebar + dashboard).
+    Workmux,
+    /// herdr (<https://herdr.dev>), the agent multiplexer.
+    Herdr,
+    /// Agent of Empires (`aoe`), a tmux-based agent session manager.
+    Aoe,
+}
+
+impl Multiplexer {
+    /// The accepted spellings, in the order the schema error lists
+    /// them. Public so the CLI and the tests name the same set.
+    pub const NAMES: &'static [&'static str] = &["tmux", "workmux", "herdr", "aoe", "none"];
+
+    fn parse(s: &str, at: &str) -> Result<Multiplexer, Error> {
+        match s {
+            "none" => Ok(Multiplexer::None),
+            "tmux" => Ok(Multiplexer::Tmux),
+            "workmux" => Ok(Multiplexer::Workmux),
+            "herdr" => Ok(Multiplexer::Herdr),
+            "aoe" => Ok(Multiplexer::Aoe),
+            other => Err(Error::Schema(format!(
+                "{at}: invalid multiplexer `{other}`, expected one of {}",
+                Multiplexer::NAMES
+                    .iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))),
+        }
+    }
+
+    /// The value as written in the configuration — the spelling every
+    /// message and the `--verbose` report use.
+    pub fn name(self) -> &'static str {
+        match self {
+            Multiplexer::None => "none",
+            Multiplexer::Tmux => "tmux",
+            Multiplexer::Workmux => "workmux",
+            Multiplexer::Herdr => "herdr",
+            Multiplexer::Aoe => "aoe",
+        }
+    }
+
+    /// The wrapper variable pinning this multiplexer's entry script
+    /// (docs/design/config.md D17), or `None` for
+    /// [`Multiplexer::None`], which needs no payload of its own — the
+    /// plain shell is [`crate::bwrap::Params::shell`].
+    ///
+    /// The CLI reads it (`lib.rs`) and the argv builder names it in
+    /// the refusal, so the variable a host must set is never spelled
+    /// twice.
+    pub fn entry_var(self) -> Option<&'static str> {
+        match self {
+            Multiplexer::None => None,
+            Multiplexer::Tmux => Some("MYSBX_MUX_ENTRY_TMUX"),
+            Multiplexer::Workmux => Some("MYSBX_MUX_ENTRY_WORKMUX"),
+            Multiplexer::Herdr => Some("MYSBX_MUX_ENTRY_HERDR"),
+            Multiplexer::Aoe => Some("MYSBX_MUX_ENTRY_AOE"),
+        }
+    }
+
+    /// Whether this choice replaces the interactive shell with an
+    /// entry of its own.
+    pub fn starts_a_session(self) -> bool {
+        self != Multiplexer::None
+    }
+}
+
+impl fmt::Display for Multiplexer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// One additional host path exposed inside the sandbox.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount {
@@ -78,17 +169,18 @@ pub struct Config {
     /// of docs/plan.md is applied AFTER the merge (see
     /// `crate::merge::merge`), never inside a layer.
     pub network: Option<bool>,
-    /// Whether the *interactive* payload is a workmux tmux session
-    /// instead of a plain shell (docs/design/config.md D16, cli.md
-    /// D11). `None` means "not decided by this layer", like
-    /// `backend`; the off-by-default is applied after the merge.
+    /// Which multiplexer the *interactive* payload is, instead of a
+    /// plain shell (docs/design/config.md D17, cli.md D11). `None`
+    /// means "not decided by this layer", like `backend`; the
+    /// [`Multiplexer::None`] default is applied after the merge, so a
+    /// silent layer never counts as an explicit "plain shell".
     ///
     /// It is not an access grant: it selects a payload from mysbx's
-    /// own closure (the pinned `MYSBX_WORKMUX_ENTRY`) and adds one
+    /// own closure (the pinned `MYSBX_MUX_ENTRY_*`) and adds one
     /// in-sandbox environment variable, so — unlike `network` and
     /// `[env]` — either layer may decide it and the sidecar simply
     /// wins when both do (both layers are trusted, D7).
-    pub workmux: Option<bool>,
+    pub multiplexer: Option<Multiplexer>,
     pub mounts: Vec<Mount>,
     /// Environment forwarded into the sandbox.
     pub env: BTreeMap<String, String>,
@@ -123,7 +215,7 @@ impl Default for Config {
         Config {
             backend: None,
             network: None,
-            workmux: None,
+            multiplexer: None,
             mounts: Vec::new(),
             env: BTreeMap::new(),
             git_dirs: Vec::new(),
@@ -181,7 +273,28 @@ impl Config {
             match key.as_str() {
                 "backend" => config.backend = Some(string(value, "backend")?.to_owned()),
                 "network" => config.network = Some(boolean(value, "network")?),
-                "workmux" => config.workmux = Some(boolean(value, "workmux")?),
+                "multiplexer" => {
+                    config.multiplexer = Some(Multiplexer::parse(
+                        string(value, "multiplexer")?,
+                        "multiplexer",
+                    )?)
+                }
+                // The boolean key D17 replaced. It is an unknown key
+                // like any other now, but a generic "unknown key"
+                // would leave the operator guessing: a config written
+                // for the old schema must say what it became — and it
+                // must FAIL rather than be ignored, because ignoring
+                // it would silently drop the session the file asked
+                // for.
+                "workmux" => {
+                    return Err(Error::Schema(
+                        "top level: the `workmux` key was replaced by `multiplexer` \
+                         (docs/design/config.md D17): write `multiplexer = \"workmux\"` \
+                         instead of `workmux = true`, and `multiplexer = \"none\"` \
+                         instead of `workmux = false`"
+                            .to_owned(),
+                    ))
+                }
                 "mounts" => config.mounts = mounts(value)?,
                 "env" => config.env = env(table(value, "env")?)?,
                 "git-dirs" => config.git_dirs = git_dirs(value)?,
@@ -437,23 +550,80 @@ mod tests {
     }
 
     #[test]
-    fn workmux_is_a_tri_state_boolean() {
-        // docs/design/config.md D16: like `backend`, an omitted key
-        // decides nothing — the off-by-default is applied after the
-        // merge, so a layer never counts as an explicit `false`.
-        assert_eq!(Config::parse("").unwrap().workmux, None);
-        assert_eq!(
-            Config::parse("workmux = true\n").unwrap().workmux,
-            Some(true)
-        );
-        assert_eq!(
-            Config::parse("workmux = false\n").unwrap().workmux,
-            Some(false)
-        );
+    fn multiplexer_is_a_tri_state_enum() {
+        // docs/design/config.md D17: like `backend`, an omitted key
+        // decides nothing — the `none` default is applied after the
+        // merge, so a layer never counts as an explicit "plain shell".
+        assert_eq!(Config::parse("").unwrap().multiplexer, None);
+        for (text, want) in [
+            ("tmux", Multiplexer::Tmux),
+            ("workmux", Multiplexer::Workmux),
+            ("herdr", Multiplexer::Herdr),
+            ("aoe", Multiplexer::Aoe),
+            ("none", Multiplexer::None),
+        ] {
+            let c = Config::parse(&format!("multiplexer = \"{text}\"\n")).unwrap();
+            assert_eq!(c.multiplexer, Some(want), "{text}");
+            // The spelling round-trips: it is what the report and
+            // every message print.
+            assert_eq!(want.name(), text);
+        }
+        // Every accepted spelling is in NAMES, and nothing else is.
+        assert_eq!(Multiplexer::NAMES.len(), 5);
+    }
+
+    #[test]
+    fn multiplexer_rejects_unknown_values_and_wrong_types() {
+        // Strict enum (D9/D11/D17): an unknown value names the key and
+        // lists what is accepted, so a typo is fixable from the error.
+        for bad in ["screen", "zellij", "", "TMUX", "workmux "] {
+            let e = Config::parse(&format!("multiplexer = \"{bad}\"\n")).unwrap_err();
+            let msg = e.to_string();
+            assert!(matches!(e, Error::Schema(_)), "{bad:?}: {msg}");
+            assert!(msg.contains("multiplexer"), "{bad:?}: {msg}");
+            for name in Multiplexer::NAMES {
+                assert!(msg.contains(name), "{bad:?}: {msg} does not list {name}");
+            }
+        }
         // Wrong types name the key, like every other schema error.
-        let e = Config::parse("workmux = \"yes\"\n").unwrap_err();
-        assert!(e.to_string().contains("workmux"), "{e}");
+        let e = Config::parse("multiplexer = true\n").unwrap_err();
+        assert!(e.to_string().contains("multiplexer"), "{e}");
         assert!(matches!(e, Error::Schema(_)), "{e}");
+    }
+
+    #[test]
+    fn the_old_workmux_key_names_its_replacement() {
+        // D17 superseded the boolean key. A config written for the old
+        // schema must fail LOUDLY — ignoring it would drop the session
+        // it asked for — and the message must say what to write.
+        for text in ["workmux = true\n", "workmux = false\n"] {
+            let e = Config::parse(text).unwrap_err();
+            let msg = e.to_string();
+            assert!(matches!(e, Error::Schema(_)), "{msg}");
+            assert!(msg.contains("multiplexer"), "{msg}");
+            assert!(msg.contains("D17"), "{msg}");
+        }
+    }
+
+    #[test]
+    fn entry_variables_are_distinct_and_only_none_has_none() {
+        // The pins the wrapper sets (D17). One per session-starting
+        // value, all distinct: a shared variable would make one
+        // multiplexer's pin start another's payload.
+        let mut seen: Vec<&str> = Vec::new();
+        for name in Multiplexer::NAMES {
+            let m = Multiplexer::parse(name, "test").unwrap();
+            match m.entry_var() {
+                None => assert_eq!(m, Multiplexer::None),
+                Some(var) => {
+                    assert!(m.starts_a_session());
+                    assert!(var.starts_with("MYSBX_MUX_ENTRY_"), "{var}");
+                    assert!(!seen.contains(&var), "duplicate pin {var}");
+                    seen.push(var);
+                }
+            }
+        }
+        assert_eq!(seen.len(), 4);
     }
 
     #[test]

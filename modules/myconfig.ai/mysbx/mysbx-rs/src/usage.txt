@@ -9,9 +9,9 @@ Commands:
   (none)        enter an interactive sandbox shell for the current repo;
                 the repo must have been initialized with `mysbx init`
                 first — a run creates nothing;
-                with `workmux = true` in a config layer this is a tmux
-                session with workmux instead of a bare shell, on a tmux
-                socket inside the sandbox
+                with `multiplexer = "tmux"|"workmux"|"herdr"|"aoe"` in
+                a config layer this is a session of that multiplexer
+                instead of a bare shell, on a socket inside the sandbox
   run -- CMD... run one command in the sandbox; everything after `--` is
                 passed to the command verbatim; needs `mysbx init` too
   init          create the sidecar directory next to the current repo;

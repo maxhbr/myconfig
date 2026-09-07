@@ -1,0 +1,5 @@
+# The boolean `workmux` key was replaced by `multiplexer` (config.md
+# D17). A config written for the old schema must fail loudly, naming its
+# replacement — ignoring the key would silently drop the session it asks
+# for.
+workmux = true

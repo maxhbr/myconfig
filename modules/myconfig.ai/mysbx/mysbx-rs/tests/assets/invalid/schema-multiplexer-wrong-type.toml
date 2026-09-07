@@ -1,0 +1,4 @@
+# `multiplexer` is a string naming one of five multiplexers (config.md
+# D17), and the parser is strict: a boolean is a schema error, not an
+# enabled session.
+multiplexer = true

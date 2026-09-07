@@ -77,7 +77,7 @@
 //! item 4 (the argv builder) accepts. `Config` values are layer *inputs*
 //! and never leave this module's boundary as effective configuration.
 
-use crate::config::{Config, Mount};
+use crate::config::{Config, Mount, Multiplexer};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -95,13 +95,13 @@ pub struct Merged {
     /// docs/plan.md) is already applied, and nothing downstream of the
     /// merge may re-decide it.
     pub network: bool,
-    /// Whether the interactive payload is a workmux tmux session
-    /// (docs/design/config.md D16): resolved once from the layers'
+    /// Which multiplexer the interactive payload is
+    /// (docs/design/config.md D17): resolved once from the layers'
     /// tri-state values, like `network`, so nothing downstream may
     /// re-decide it. Unlike `network` there is no narrowing rule —
     /// the key grants no host access, so the sidecar simply wins when
-    /// both layers decide (D16).
-    pub workmux: bool,
+    /// both layers decide (D17).
+    pub multiplexer: Multiplexer,
     /// User-config mounts first (in declaration order), then the sidecar
     /// mounts (in their declaration order within the sidecar file).
     /// Never sorted, never deduplicated — a repeated path is a repeated
@@ -263,7 +263,13 @@ impl std::fmt::Debug for LoadedLayers {
 /// The user config path (docs/design/config.md D6): `$XDG_CONFIG_HOME` if
 /// set (a non-absolute value is treated as unset, per the XDG base-dir
 /// spec), otherwise `~/.config`.
-fn user_config_path(home: &Path, xdg_config_home: Option<&str>) -> PathBuf {
+///
+/// Public because [`load_layers`] is not the only reader: `mysbx init`
+/// copies the user layer's `multiplexer` into the sidecar template
+/// (config.md D17) and must resolve the very same path — a second,
+/// hand-written `$XDG_CONFIG_HOME` fallback would be a bug waiting to
+/// diverge.
+pub fn user_config_path(home: &Path, xdg_config_home: Option<&str>) -> PathBuf {
     match xdg_config_home {
         Some(x) if !x.is_empty() && Path::new(x).is_absolute() => {
             Path::new(x).join("mysbx").join("config.toml")
@@ -523,13 +529,16 @@ pub fn merge(
     Ok(Merged {
         backend: sidecar.backend.or(user.backend),
         network,
-        // workmux (D16): the later layer wins where it decided,
+        // multiplexer (D17): the later layer wins where it decided,
         // exactly like `backend` — the key selects the interactive
         // payload from mysbx's own closure and exposes nothing of the
         // host, so it needs neither the network's narrow-only rule nor
-        // the `[env]` override refusal. Off when neither layer said
-        // anything.
-        workmux: sidecar.workmux.or(user.workmux).unwrap_or(false),
+        // the `[env]` override refusal. The plain shell when neither
+        // layer said anything.
+        multiplexer: sidecar
+            .multiplexer
+            .or(user.multiplexer)
+            .unwrap_or(Multiplexer::None),
         mounts,
         env,
         git_dirs: approved_git_dirs,
@@ -828,28 +837,39 @@ mod tests {
     }
 
     #[test]
-    fn workmux_is_off_unless_a_layer_says_so_and_the_sidecar_wins() {
-        // docs/design/config.md D16: off by default, either layer may
-        // decide, the sidecar wins when both do (like `backend`) —
-        // there is no narrowing rule, because the key grants no host
-        // access, it only selects the interactive payload.
-        let m = |u: Option<bool>, s: Option<bool>| {
+    fn the_multiplexer_defaults_to_none_and_the_sidecar_wins() {
+        // docs/design/config.md D17: the plain shell by default,
+        // either layer may decide, the sidecar wins when both do (like
+        // `backend`) — there is no narrowing rule, because the key
+        // grants no host access, it only selects the interactive
+        // payload.
+        let m = |u: Option<Multiplexer>, s: Option<Multiplexer>| {
             let mut user = Config::default();
-            user.workmux = u;
+            user.multiplexer = u;
             let mut sidecar = Config::default();
-            sidecar.workmux = s;
+            sidecar.multiplexer = s;
             merge(user, sidecar, &user_file(), &sidecar_file(), &no_home())
                 .unwrap()
-                .workmux
+                .multiplexer
         };
-        assert!(!m(None, None));
-        assert!(m(Some(true), None));
-        assert!(m(None, Some(true)));
-        // The sidecar may switch it off for one repository, and on
-        // where the user config said nothing — both directions, no
-        // error.
-        assert!(!m(Some(true), Some(false)));
-        assert!(m(Some(false), Some(true)));
+        assert_eq!(m(None, None), Multiplexer::None);
+        assert_eq!(m(Some(Multiplexer::Workmux), None), Multiplexer::Workmux);
+        assert_eq!(m(None, Some(Multiplexer::Herdr)), Multiplexer::Herdr);
+        // The sidecar may pick another one for one repository, switch
+        // it off entirely, or ask for a session where the user config
+        // said nothing — every direction, no error.
+        assert_eq!(
+            m(Some(Multiplexer::Workmux), Some(Multiplexer::Aoe)),
+            Multiplexer::Aoe
+        );
+        assert_eq!(
+            m(Some(Multiplexer::Workmux), Some(Multiplexer::None)),
+            Multiplexer::None
+        );
+        assert_eq!(
+            m(Some(Multiplexer::None), Some(Multiplexer::Tmux)),
+            Multiplexer::Tmux
+        );
     }
 
     #[test]

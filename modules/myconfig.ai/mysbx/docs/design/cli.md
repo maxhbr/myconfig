@@ -162,35 +162,44 @@ both config files — redaction would buy no secrecy while making the report
 lie about the run. The help text says out loud that the values may be
 secrets, so nobody pastes a verbose report into a bug tracker unaware.
 
-### D11: the workmux session replaces the interactive payload only
+### D11: the multiplexer session replaces the interactive payload only
 
-With `workmux = true` in a configuration layer (config.md D16), the
-**bare form** does not start a shell: its payload is the pinned workmux
-entry (`MYSBX_WORKMUX_ENTRY`), a script from mysbx's own closure that
-boots a tmux server on the sandbox-internal socket and attaches to it.
+With `multiplexer = "tmux" | "workmux" | "herdr" | "aoe"` in a
+configuration layer (config.md D17 — the generalization of the boolean
+`workmux` of D16), the **bare form** does not start a shell: its
+payload is the entry pinned for that value
+(`MYSBX_MUX_ENTRY_<VALUE>`), a script from mysbx's own closure that
+starts the multiplexer on sandbox-internal state and attaches to it.
 Everything else about the run is unchanged — same base, same mounts,
 same `--chdir`; the payload line of the argv is the only difference,
-plus the `TMUX_TMPDIR` variable that names the socket directory.
+plus the `TMUX_TMPDIR` variable that names the private socket
+directory. `multiplexer = "none"` (and an omitted key) is the plain
+interactive shell.
 
 **`run -- CMD` is untouched, deliberately.** A one-shot command that
-was wrapped in a tmux server would write its output into a pane nobody
-attaches to, and its exit code would become tmux's, not the payload's
-(D8). So the `run` argv is *byte-identical* to the workmux-disabled one
-— no payload swap, no `TMUX_TMPDIR`, and none of the socket guards
-(they guard a session this run does not start). Tests pin the byte
-identity in both directions.
+was wrapped in a multiplexer would write its output into a pane nobody
+attaches to, and its exit code would become the multiplexer's, not the
+payload's (D8). So the `run` argv is *byte-identical* to the
+`multiplexer = "none"` one — no payload swap, no `TMUX_TMPDIR`, and
+none of the socket guards (they guard a session this run does not
+start). Tests pin the byte identity in both directions, for every
+value.
 
-**A missing pin is a refused run, not a silent shell.** `workmux = true`
-with no `MYSBX_WORKMUX_ENTRY` (an unwrapped build, a host without the
-integration) exits `1` with a `mysbx: ` message naming the variable.
-Falling back to a bare shell would be discovered only after the work
-happened outside the session it was supposed to happen in.
+**A missing pin is a refused run, not a silent shell.** A value whose
+entry this build did not pin (an unwrapped build, a host that does not
+install that multiplexer) exits `1` with a `mysbx: ` message naming the
+value and the missing variable. Falling back to a bare shell would be
+discovered only after the work happened outside the session it was
+supposed to happen in. It is refused while the argv is built, so
+`--dry-run` refuses it too — the failure is a configuration error, not
+an exec failure inside the sandbox.
 
-`--dry-run` stays side-effect-free with workmux as with everything
-else: it prints the entry as the payload and creates no socket
-directory — the entry itself is what creates it, inside the sandbox.
-`--verbose` reports the socket path and the entry, so the isolation
-claim of config.md D16 is checkable against the argv.
+`--dry-run` stays side-effect-free with a multiplexer as with
+everything else: it prints the entry as the payload and creates no
+socket directory — the entry itself is what creates it, inside the
+sandbox. `--verbose` reports the selected multiplexer, the socket path
+and the entry, so the isolation claim of config.md D17 is checkable
+against the argv.
 
 ### D12: `mysbx edit` opens the sidecar config in `$EDITOR`
 

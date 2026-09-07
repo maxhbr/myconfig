@@ -137,31 +137,48 @@ binds it rw at `/mysbx-home/<entry>`. The host home is never the source.
 Entries may not nest, no mount may cover them, and `--dry-run` creates
 nothing. See `docs/design/config.md` D15.
 
-### The workmux session (`workmux`)
+### The multiplexer session (`multiplexer`)
 
-With `workmux = true` in a configuration layer, the **interactive** form
-(`cd <repo> && mysbx`) is a [workmux](https://github.com/raine/workmux)
-tmux session instead of a bare shell: mysbx execs the pinned
-`mysbx-workmux-entry` payload, which boots a tmux server, bootstraps the
-workmux sidebar + dashboard and attaches. `mysbx run -- CMD` starts no
-session and is byte-identical to a workmux-less run
-(`docs/design/cli.md` D11).
+`multiplexer = "tmux" | "workmux" | "herdr" | "aoe" | "none"` in a
+configuration layer selects what the **interactive** form
+(`cd <repo> && mysbx`) starts instead of a bare shell:
 
-The tmux socket is **not configurable**: it always lives at
-`/mysbx-home/.mysbx-tmux/socket`, inside the sandbox home tmpfs, so it
-can never be shared with a host tmux server or with another sandbox of
-the same repository — no mount may land on it, no `state-dirs` entry may
-persist it, and `TMUX_TMPDIR` is set after `[env]` like `HOME` and
-`PATH` (`docs/design/config.md` D16).
+| value | payload |
+| --- | --- |
+| `"tmux"` | plain tmux, one session per repo |
+| `"workmux"` | a [workmux](https://github.com/raine/workmux) session (sidebar + dashboard) |
+| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer ([`../programs.herdr.nix`](../programs.herdr.nix)) |
+| `"aoe"` | Agent of Empires ([`../programs.agent-of-empires/`](../programs.agent-of-empires)) |
+| `"none"` | a plain interactive shell (the default) |
 
-On myconfig hosts this is wired by
+mysbx execs the entry its wrapper pinned for that value
+(`MYSBX_MUX_ENTRY_<VALUE>`); a value this build did not pin is a refused
+run naming the variable, never a silent bare shell. `mysbx run -- CMD`
+starts no session and is byte-identical to a `"none"` run
+(`docs/design/cli.md` D11). Either layer may decide, and the sidecar
+wins — the user config is the host-wide default, the sidecar is the
+repository's choice (`docs/design/config.md` D17).
+
+The private socket directory is **not configurable**: it always lives at
+`/mysbx-home/.mysbx-tmux`, inside the sandbox home tmpfs, so no
+multiplexer's socket can ever be shared with a host tmux server or with
+another sandbox of the same repository — no mount may land on it, no
+`state-dirs` entry may persist it, and `TMUX_TMPDIR` is set after
+`[env]` like `HOME` and `PATH` (`docs/design/config.md` D16/D17).
+
+On myconfig hosts the host-wide default is
+`myconfig.ai.mysbx.config.multiplexer`; which multiplexers are
+*available* follows from the packages the host carries
+(`myconfig.ai.mysbx.{tmux,workmux,herdr,aoe}.package`). The workmux
+value is wired by
 [`../myconfig.ai.workmux/mysbx.nix`](../myconfig.ai.workmux/mysbx.nix) —
 the mysbx sibling of the bubblewrap-jail (`jail.nix`) and microVM
 (`sandbox.nix`) workmux tiers — which switches
 `myconfig.ai.mysbx.workmux` on wherever `myconfig.ai.workmux` and
-`myconfig.ai.mysbx` are both enabled, and hands mysbx the in-sandbox
-workmux configuration (with the *plain* agent binaries: the sandbox is
-already the sandbox).
+`myconfig.ai.mysbx` are both enabled (which also makes `"workmux"` the
+default of `config.multiplexer`), and hands mysbx the in-sandbox workmux
+configuration (with the *plain* agent binaries: the sandbox is already
+the sandbox).
 
 `workmux add` creates its worktree in the `<repo>__worktrees` sibling,
 which is outside the repo mount — a sandbox that should create worktrees
