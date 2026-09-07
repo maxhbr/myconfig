@@ -45,6 +45,7 @@ in
     ./programs.opencode
     ./programs.pi-coding-agent
     ./programs.qwen-code
+    ./programs.rtk
     ./services.litellm.nix
     ./litellm.proxy.nix
     ./services.open-webui.nix
@@ -70,6 +71,12 @@ in
     # for running coding agents in the nono capability-based sandbox. Enable by
     # default whenever myconfig.ai is enabled, but allow hosts to override.
     myconfig.ai.nono-agent-sandbox.enable = lib.mkDefault true;
+    # rtk is a plain CLI proxy that shrinks command output before an agent
+    # reads it (./programs.rtk). It costs one small binary plus a handful of
+    # generated config files and benefits every coding agent on the host, so
+    # it is on by default wherever the AI tooling is; a host can still turn it
+    # off explicitly.
+    myconfig.ai.rtk.enable = lib.mkDefault true;
     home-manager.sharedModules = [
       {
         home.packages =
