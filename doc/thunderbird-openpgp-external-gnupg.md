@@ -3,6 +3,13 @@
 Status: diagnosis (2026-07), for the symptom "Thunderbird decrypts incoming
 OpenPGP mail fine, but signing and encrypting outgoing mail fails".
 
+Confirmed on host `f13`: all identities carried
+`openpgp_key_id = DFE4CD1C1843D1B27700D20F83BD958A32CA3654` and
+`is_gnupg_key_id = true`, but `~/.thunderbird/default/pubring.gpg` contained
+only foreign (colleague) keys — the own public key was absent, so check 3.
+below failed. Fixed by importing the own public key through the OpenPGP Key
+Manager; no repo change was involved in that part.
+
 ## Setup in this repo
 
 - `modules/myconfig.email/thunderbird.nix` sets
@@ -44,6 +51,9 @@ Verified against the shipped Thunderbird code
      *own* keyring (`~/.thunderbird/default/pubring.gpg`). The source comment
      is explicit: *"Even for isExternalGnuPG we require that the public key is
      available."* The system `~/.gnupg` keyring is **not** used here.
+     The lookup index holds key ids, short ids and full fingerprints
+     (`modules/keyRing.sys.mjs:1443-1445`), so a 40-hex fingerprint in
+     `openpgp_key_id` is fine — it just has to resolve to a key that is there.
   4. that public key is not revoked and not expired *in Thunderbird's copy*
      (`keyObj.getPubKeyValidity`). A stale export whose expiry was later
      extended in `gpg` counts as expired here.
