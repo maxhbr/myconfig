@@ -79,6 +79,13 @@ in
     # it is on by default wherever the AI tooling is; a host can still turn it
     # off explicitly.
     myconfig.ai.rtk.enable = lib.mkDefault true;
+    # hunk is the review-first diff viewer for agent-authored changesets
+    # (./programs.hunk). Reviewing what an agent wrote is part of every
+    # agentic coding workflow, and the cost is one small binary plus a
+    # generated config file, so it follows rtk and is on by default wherever
+    # the AI tooling is. `gitIntegration` stays off, so nothing changes for
+    # plain `git diff`. A host can still turn it off explicitly.
+    myconfig.ai.hunk.enable = lib.mkDefault true;
     home-manager.sharedModules = [
       {
         home.packages =

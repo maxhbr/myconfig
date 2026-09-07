@@ -31,9 +31,13 @@
 #     `myconfig.ai.sandboxTools.extraPackages` and, for mysbx, its
 #     `extraTools` plus a read-only mount of the config above.
 #
-# Default is OFF: hunk is an interactive reviewing tool, wanted per host
-# (workstations with a terminal), not on servers — so hosts opt in explicitly
-# with `myconfig.ai.hunk.enable = true;`.
+# Like `rtk`, this module is auto-enabled by the `myconfig.ai` umbrella
+# (`myconfig.ai.hunk.enable = lib.mkDefault true` in ../default.nix):
+# reviewing an agent's changeset is part of every agentic coding workflow and
+# the cost is one small binary plus a generated config file. The `enable`
+# option itself still defaults to false, so a host without `myconfig.ai
+# .enable` never gets hunk, and a host can opt out with
+# `myconfig.ai.hunk.enable = false;`.
 {
   config,
   lib,

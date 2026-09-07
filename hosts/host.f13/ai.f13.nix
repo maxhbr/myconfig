@@ -19,6 +19,17 @@
         codex.enable = true;
         skills.enable = true;
 
+        # `hunk` — review-first terminal diff viewer for agent-authored
+        # changesets (modules/myconfig.ai/programs.hunk). Not listed here: it
+        # is auto-enabled by the `myconfig.ai` umbrella above, like `rtk`.
+
+        # `aoe` — Agent of Empires, tmux based session manager for coding
+        # agents (modules/myconfig.ai/programs.agent-of-empires). Explicit
+        # opt-in per host (heavy from-source Rust build). `web` stays at its
+        # default (false): the plain `aoe` build without the bundled web
+        # dashboard.
+        agent-of-empires.enable = true;
+
         # Rootless Podman + gVisor agent-sandbox tier (`agent-gvisor`); see
         # modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/README.md.
         # Like `microvm` below, it is enabled explicitly per host and never
