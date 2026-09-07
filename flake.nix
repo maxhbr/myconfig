@@ -66,6 +66,13 @@
     workmux.url = "github:raine/workmux";
     workmux.inputs.nixpkgs.follows = "nixpkgs";
 
+    # agent-of-empires builds its Rust workspace with crane against its own
+    # pinned nixpkgs (nixos-unstable, plus a vendored npm frontend with a
+    # pinned npmDepsHash). No `follows` here on purpose: overriding nixpkgs
+    # would move the toolchain away from the revision upstream tests against
+    # and can invalidate the pinned hashes.
+    agent-of-empires.url = "github:agent-of-empires/agent-of-empires";
+
     # PR overrides (see flake.pkgs_from_prs.nix)
     pr531581.url = "github:NixOS/nixpkgs/pull/531581/head"; # gimp: revert __structuredAttrs (crash fix)
   };
