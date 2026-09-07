@@ -10,7 +10,11 @@
       services.gnome = {
         gnome-settings-daemon.enable = lib.mkDefault true;
       };
-      environment.systemPackages = with pkgs; [ gcr ];
+      # `gcr` was removed from nixpkgs (2026-09-03); an explicit ABI version is
+      # required now. gnome-keyring in this nixpkgs still propagates gcr_3, and
+      # only gcr_3 ships the `gcr-prompter` / `gcr-viewer` UI components
+      # (gcr_4 only provides `gcr-viewer-gtk4` and the gcr-ssh-agent).
+      environment.systemPackages = with pkgs; [ gcr_3 ];
 
       programs.dconf.enable = lib.mkDefault true;
 
