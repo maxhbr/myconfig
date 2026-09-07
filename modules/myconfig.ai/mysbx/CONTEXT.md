@@ -20,6 +20,8 @@ _Avoid_: project, checkout, workspace, CWD
 **Sidecar**:
 The directory `<repo>.mysbx/` next to the repo, holding the per-repo
 `config.toml` and disposable state. Outside the repo and outside the sandbox.
+Created only by `mysbx init` (or `mysbx edit`); a run refuses a repo
+without it (`docs/design/cli.md` D13).
 _Avoid_: state dir, `.mysbx`, project config dir
 
 **User config**:

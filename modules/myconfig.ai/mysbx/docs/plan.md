@@ -48,7 +48,7 @@ per-domain network policy.
 | Repo discovery | nearest ancestor with an existing `<dir>.mysbx` → else the git work-tree root → else the current directory |
 | Repo mount | always, `rw`, at its real host path inside the sandbox; not expressible in the config |
 | Guard | hard error when the resolved repo is `$HOME`, a directory containing `$HOME`, or `/` |
-| Sidecar | created implicitly by the bare form when missing (`init` stays idempotent) |
+| Sidecar | created only by the explicit `mysbx init` (idempotent) or `mysbx edit`; a run refuses an uninitialized repo with the init hint (`cli.md` D13) |
 | Config schema | `backend`, `network`, `workmux`, `[[mounts]]`, `[env]`, `state-dirs` — no `[repo]` table |
 | Network | shared by default; `network = false` adds `--unshare-net` |
 | Layer merge | flags > sidecar > user config > defaults (`cli.md` D6); both layers' `[[mounts]]` concatenate, user layer first (`config.md` D7) |
@@ -101,7 +101,7 @@ confinement is **data** (two TOML files) instead of Nix call sites, it is
 Ordered; each is independently reviewable.
 
 1. [`TODOs/mvp-1-schema-and-design-docs.md`](./TODOs/mvp-1-schema-and-design-docs.md) — schema change + design docs, no behaviour
-2. [`TODOs/mvp-2-repo-discovery.md`](./TODOs/mvp-2-repo-discovery.md) — repo/sidecar resolution, guard, implicit init
+2. [`TODOs/mvp-2-repo-discovery.md`](./TODOs/mvp-2-repo-discovery.md) — repo/sidecar resolution, guard, init (the implicit init it describes was later dropped: `cli.md` D13)
 3. [`TODOs/mvp-3-layer-merge.md`](./TODOs/mvp-3-layer-merge.md) — the two layers, D7, canonicalization
 4. [`TODOs/mvp-4-bwrap-argv.md`](./TODOs/mvp-4-bwrap-argv.md) — the pure argv function and its golden tests
 5. [`TODOs/mvp-5-cli-and-dry-run.md`](./TODOs/mvp-5-cli-and-dry-run.md) — the CLI surface
@@ -112,9 +112,10 @@ All six items are done; the MVP is complete.
 
 ### Definition of done
 
-- `cd <repo> && mysbx run --dry-run -- ls /` prints the bwrap executable
-  (argv[0], review-1 finding 7) followed by the argv, one argument per
-  line, on stdout, and exits `0`.
+- `cd <repo> && mysbx init && mysbx run --dry-run -- ls /` prints the
+  bwrap executable (argv[0], review-1 finding 7) followed by the argv,
+  one argument per line, on stdout, and exits `0`. Without the `init`
+  the run exits `1` and names it (`cli.md` D13).
 - The golden tests pin that argv for: minimal config, a `ro` and a `rw` mount,
   `network = false`, an `[env]` entry, and mounts from both layers at once.
 - Running in `$HOME`, in a repo whose root contains `$HOME`, or in `/`

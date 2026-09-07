@@ -53,8 +53,8 @@ pub struct Repo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     /// The resolved repository is the user's home directory. Never
-    /// overridable in the MVP: implicit init must not `rw`-bind the whole
-    /// home under a policy nobody wrote.
+    /// overridable in the MVP: no run may `rw`-bind the whole home under
+    /// a policy nobody wrote.
     HomeDir(PathBuf),
     /// The resolved repository CONTAINS the user's home directory
     /// (review-4 item 2): a `.git` marker or a stale sidecar high up
@@ -388,8 +388,8 @@ mod tests {
         let start = proj.join("sub").join("deep");
         let r = resolve(&start, Some(&fake_home(&base))).unwrap();
         assert_eq!(r.root, proj);
-        // The sidecar does not exist yet; it is where implicit init would
-        // create it.
+        // The sidecar does not exist yet; it is where `mysbx init` would
+        // create it (a run there fails with the init hint, cli.md D13).
         assert_eq!(r.sidecar, base.join("proj.mysbx"));
     }
 

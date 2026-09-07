@@ -26,19 +26,21 @@ Running `mysbx` with no arguments is the primary action: enter an
 interactive sandbox shell for the current repository. Subcommands are the
 exception, not the rule.
 
-When no sidecar exists, bare `mysbx` creates it implicitly — exactly what
-`mysbx init` would have done (D12: idempotent, never overwrites an existing
-`config.toml`) — and then proceeds. The common case stays argument-free:
-`cd repo && mysbx` works on the first run. An operator who wants to review
-the generated `config.toml` first can still run `mysbx init` explicitly.
-A user who already ran the bare form (whose sidecar config therefore
-exists without approvals) can take the same trust decision after the
-fact with `mysbx init --approve-git-dirs` (review-3 item 5): it adds the
-discovered-but-unapproved git metadata directories to the existing
-config — idempotently, and never rewriting anything but the `git-dirs`
-list. Note the boundary: it is additive, not reverting — a later run
-of the flag re-approves an entry an operator had removed (it is still
-discovered); plain `init` never touches the config at all.
+**Superseded, first half.** The bare form used to create the sidecar
+implicitly when it was missing, so that `cd repo && mysbx` worked on
+the very first run. It no longer does: initialization is explicit
+(D13). A bare `mysbx` in a repository that has no sidecar config fails
+and names `mysbx init`.
+
+A sidecar config that exists WITHOUT git-dir approvals — written by
+`mysbx edit` (D12), by hand, or by an `init` that ran before the
+checkout became a linked worktree — can take that trust decision after
+the fact with `mysbx init --approve-git-dirs` (review-3 item 5): it
+adds the discovered-but-unapproved git metadata directories to the
+existing config — idempotently, and never rewriting anything but the
+`git-dirs` list. Note the boundary: it is additive, not reverting — a
+later run of the flag re-approves an entry an operator had removed (it
+is still discovered); plain `init` never touches the config at all.
 
 ### D3: Verb subcommands, no nesting
 
@@ -88,8 +90,16 @@ Rationale: a silently downgraded isolation level is a security bug.
 ### D8: Exit codes
 
 - `0` success
-- `1` runtime failure (cannot create the sidecar, backend failed to start)
+- `1` runtime failure (cannot create the sidecar, backend failed to
+  start, the repository is not initialized — D13, the resolved repo is
+  `$HOME`, a config is unparsable, no backend configured)
 - `2` usage error (unknown command, bad flag, unexpected argument)
+
+The boundary between `1` and `2` is *what is wrong*: `2` means the
+command line is wrong, `1` means the command line was fine but the
+world it named is not. "No sidecar yet", "no backend configured" and
+"this directory is `$HOME`" are all the latter — the argv is exactly
+what the operator meant.
 
 When `mysbx` runs a payload command, the payload's exit code is propagated
 unchanged; `mysbx`'s own failures are reported on stderr with a `mysbx: `
@@ -186,10 +196,10 @@ claim of config.md D16 is checkable against the argv.
 
 `mysbx edit` opens `<repo>.mysbx/config.toml` in the editor named by
 `$EDITOR` (or `$VISUAL`, when `EDITOR` is unset or empty) and takes no
-arguments. It creates the file first when it is missing — exactly what
-the implicit init of the bare form would have done (D2/D12: the
-commented template, no git-dir approvals) — so the operator always
-edits a documented file instead of writing one from memory.
+arguments. It creates the file first when it is missing — the same
+commented template `init` writes, without the git-dir approvals
+(D12/config.md D13) — so the operator always edits a documented file
+instead of writing one from memory.
 
 **Why the sidecar and not the user config.** The sidecar is the file a
 person is expected to edit by hand: it is the per-repo policy, it lives
@@ -200,6 +210,11 @@ replaces the symlink and silently detaches the layer from Home Manager.
 Editing that layer means editing `myconfig.ai.mysbx.config` and
 rebuilding. A `--user` flag would have to know the difference between
 those two worlds; the verb stays about the file mysbx itself owns.
+
+`edit` is, next to `init`, the second command that may create the
+sidecar config — deliberately: writing that file is its whole purpose,
+and it is an explicit command (D13). It approves no git dirs, unlike
+`init` on a fresh config (config.md D13).
 
 **No editor guess.** With neither variable set the command fails
 (exit `1`, `mysbx: ` message naming both). Falling back to `vi` would
@@ -218,6 +233,65 @@ propagates unchanged (D8). It is resolved *before* the sidecar is
 created: a run that cannot edit must not leave a sidecar behind as its
 only effect. The global flags are not valid with `edit` (there is
 nothing to dry-run and no run to report on).
+
+### D13: Initialization is explicit — a run never creates the sidecar
+
+Supersedes the second half of D2. A sandbox run — bare `mysbx`,
+`mysbx run -- CMD`, with or without `--dry-run` — requires the sidecar
+config `<repo>.mysbx/config.toml` to exist already. When it does not,
+the run fails (exit `1`, D8) with a `mysbx: ` message naming the
+missing path and the command that creates it:
+
+```text
+mysbx: this repository has no sandbox yet:
+  /path/to/the/repo.mysbx/config.toml does not exist — run `mysbx init`
+  in /path/to/the/repo to create it
+```
+
+`mysbx init` (D12/config.md D12) is unchanged and stays the way to
+create it; `mysbx edit` creates it too, because writing that file is
+what it is for. Both are explicit commands the operator typed for that
+purpose.
+
+**Why the implicit init went away.**
+
+- *No silent writes from a command that reads like a read-only-ish
+  one.* Bare `mysbx` is what a user types to look at a repository
+  inside a sandbox. Creating a host directory and a policy file as a
+  side effect of that is a surprise, and it happens in the place the
+  user is least likely to be looking: **outside** the repository, next
+  to it (config.md D2).
+- *Discoverability of the sidecar.* An implicit init made the sidecar
+  appear without ever being mentioned. Operators learned about
+  `<repo>.mysbx/` when they noticed the sibling directory in `git
+  status`' parent, or not at all. `mysbx init` printing `## created:`
+  lines is the moment the concept is introduced — and the refusal
+  names the path, so even the failure teaches the layout.
+- *`--dry-run` honesty.* `--dry-run` promised side-effect-freeness, so
+  it could not do the implicit init — which made the *dry* run
+  configured differently from the real one it claimed to preview: a
+  missing sidecar counted as an empty layer for the dry run and as a
+  freshly created one for the real run. With explicit init both forms
+  see the same two layers, and `--dry-run` fails in exactly the cases
+  the real run would. (This is a deliberate change of the earlier
+  documented dry-run behaviour "missing sidecar = empty layer, never
+  created": the user config alone no longer defines a run.)
+- *One decision per file.* The sidecar config is policy. Policy that
+  appears by itself is policy nobody chose — and the trust decisions
+  it carries (git-dir approvals, config.md D13) were already refused to
+  the implicit init for the same reason.
+
+**What is required is the config FILE, not the directory.** A bare
+`<repo>.mysbx/` (a leftover `state/` tree, a hand-made directory) is
+not a policy; running with an empty layer instead would hide the fact
+that nothing was configured. `lib.rs::require_initialized_sidecar` is
+the single gate of both run forms.
+
+**Ordering.** The repo guard (mvp-2: `$HOME`, a directory containing
+`$HOME`, `/`) runs *before* this check, so a run inside the home
+directory is still diagnosed as the home exposure it is and never
+invites the operator to `mysbx init` a tree that must not be bound at
+all.
 
 ## Non-goals
 

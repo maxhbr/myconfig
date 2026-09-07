@@ -12,8 +12,9 @@
 //! ```
 //!
 //! The bare form is the primary action (cli.md D2): it resolves the repo,
-//! creates the sidecar implicitly when missing (D12) and execs the
-//! backend's argv. `--dry-run` and `--verbose` are *global* flags (before
+//! requires an already initialized sidecar (D13: `mysbx init` is the only
+//! command that creates one) and execs the backend's argv. `--dry-run`
+//! and `--verbose` are *global* flags (before
 //! the subcommand, in any order): `--dry-run` runs the whole pipeline —
 //! resolve, guards, load, merge, backend check, argv build — and stops
 //! immediately before `exec`, printing the backend executable followed
@@ -180,9 +181,12 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
 }
 
 /// The shared pipeline of the bare form and `run`: resolve the repo, run
-/// the guards, (implicitly) init the sidecar, load and merge both layers,
+/// the guards, require an initialized sidecar, load and merge both layers,
 /// check the backend, build the argv — then print it (`--dry-run`) or exec
 /// it.
+///
+/// Nothing here creates the sidecar (cli.md D13): a run that finds no
+/// sidecar config fails with the `mysbx init` hint.
 fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     let dry_run = flags.dry_run;
     // 1. repo resolution and guards (docs/TODOs/mvp-2-repo-discovery.md).
@@ -196,25 +200,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         }
     };
 
-    // The report shows the state BEFORE the implicit init, so an operator
-    // sees what the run found, not what it just created.
-    let sidecar_existed = repo.sidecar.is_dir();
-
-    // 2. implicit init (cli.md D2) — except under `--dry-run`, which is
-    // side-effect-free: a missing sidecar config is an empty layer there.
-    if !dry_run {
-        if let Err(msg) = ensure_sidecar(&repo) {
-            eprintln!("mysbx: {msg}");
-            return 1;
-        }
-        // `false`: the implicit init must not approve anything —
-        // review-2 item 1 (the approval is an operator decision, taken
-        // by `mysbx init`).
-        if let Err(msg) = ensure_sidecar_config(&repo, false) {
-            eprintln!("mysbx: {msg}");
-            return 1;
-        }
+    // 2. the sidecar must already exist (cli.md D13). A run — real or
+    // dry — creates nothing: `mysbx init` is the one command that
+    // writes to the host filesystem here. The check runs for
+    // `--dry-run` too, so the argv a dry run prints is always the argv
+    // of a run that could actually happen.
+    if let Err(msg) = require_initialized_sidecar(&repo) {
+        eprintln!("mysbx: {msg}");
+        return 1;
     }
+    // Always true past the check; kept as the value the report shows so
+    // the report keeps describing what the run FOUND.
+    let sidecar_existed = repo.sidecar.is_dir();
 
     // 3. both layers, merged (docs/TODOs/mvp-3-layer-merge.md). Merge
     // errors (broken paths, unparseable files, an `[env]` override) are
@@ -543,11 +540,12 @@ fn env_or(name: &str, fallback: &str) -> String {
 /// and create its sidecar directory `<repo>.mysbx/` with a default
 /// `config.toml`.
 fn init(args: &[String]) -> i32 {
-    // Review-3 item 5: `--approve-git-dirs` is the recovery after an
-    // implicit init. A user who first ran the bare form (which never
-    // snapshots: the git pointer is untrusted, D3) and THEN wants the
-    // discovered git metadata approved used to be stuck — plain
-    // `init` reports `exists` and never touches an existing config,
+    // Review-3 item 5: `--approve-git-dirs` is the recovery for a
+    // sidecar config that already exists WITHOUT approvals — one
+    // created by `mysbx edit`, written by hand, or `init`ed before the
+    // checkout became a linked worktree. Wanting the discovered git
+    // metadata approved afterwards used to leave the operator stuck —
+    // plain `init` reports `exists` and never touches an existing config,
     // so the only way forward was hand-editing. The flag makes that
     // a deliberate, idempotent one-command action: the same trust
     // decision a fresh explicit `init` would have recorded, taken
@@ -578,8 +576,8 @@ fn init(args: &[String]) -> i32 {
     match ensure_sidecar_config(&repo, true) {
         Ok(Outcome::Created) => {}
         Ok(Outcome::Existed) => {
-            // The config exists (implicit init, or an earlier init):
-            // plain `init` leaves it alone (D12). The recovery flag
+            // The config exists (an earlier `init`, an `edit`, or a
+            // hand-written one): plain `init` leaves it alone (D12). The recovery flag
             // adds the discovered-but-unapproved git dirs to it.
             if approve_git_dirs {
                 if let Err(msg) = approve_git_dirs_in_existing_config(&repo) {
@@ -610,10 +608,13 @@ fn init(args: &[String]) -> i32 {
 /// silently detaches the layer from Home Manager. Editing that layer
 /// means editing `myconfig.ai.mysbx.config` and rebuilding.
 ///
-/// The file is created first when missing — exactly what the bare form's
-/// implicit init would have done (D2/D12, no git-dir approvals): an
+/// The file is created first when missing — the same commented template
+/// `mysbx init` writes, without the git-dir approvals (D12/D13): an
 /// editor opening a nonexistent path would leave the operator writing a
-/// config from memory instead of editing the commented template.
+/// config from memory instead of editing the commented template. `edit`
+/// is therefore, next to `init`, the second way to initialize a repo —
+/// deliberately: it is an explicit command whose whole purpose is to
+/// write that file.
 fn edit(args: &[String]) -> i32 {
     if let Some(arg) = args.first() {
         eprintln!("mysbx edit: unexpected argument: {arg}");
@@ -640,8 +641,8 @@ fn edit(args: &[String]) -> i32 {
         eprintln!("mysbx: {msg}");
         return 1;
     }
-    // `false`: like the implicit init, editing approves nothing — the
-    // git-dir approval stays the explicit `mysbx init` (config.md D13).
+    // `false`: editing approves nothing — the git-dir approval stays
+    // the explicit `mysbx init` (config.md D13).
     // The operator can of course write approvals in the editor that is
     // about to open, which is the point.
     if let Err(msg) = ensure_sidecar_config(&repo, false) {
@@ -696,10 +697,36 @@ fn editor_command() -> Result<Vec<String>, String> {
     Ok(argv)
 }
 
+/// The sidecar config of `repo`, or the error that tells the operator to
+/// create it (docs/design/cli.md D13).
+///
+/// This is the single load-or-fail gate of the bare form and of `run`:
+/// initialization is explicit, so a run never writes to the host
+/// filesystem on its own. Naming the missing path is the point of the
+/// message — the sidecar lives *outside* the repo (config.md D2), so a
+/// user who has not seen it before cannot guess where it would be.
+///
+/// The *config file* is what is required, not merely the directory: it
+/// is what `mysbx init` writes, what the merge reads and what the
+/// operator edits. A bare `<repo>.mysbx/` directory (a leftover
+/// `state/` tree, say) would otherwise silently run with an empty
+/// policy layer.
+fn require_initialized_sidecar(repo: &repo::Repo) -> Result<(), String> {
+    let config = repo.sidecar.join("config.toml");
+    if config.exists() {
+        return Ok(());
+    }
+    Err(format!(
+        "this repository has no sandbox yet: {} does not exist \
+         \u{2014} run `mysbx init` in {} to create it",
+        config.display(),
+        repo.root.display()
+    ))
+}
+
 /// Create the sidecar directory if it is missing and report it (idempotent:
-/// docs/design/config.md D12). Shared by `init` and the implicit init of
-/// the bare form (cli.md D2: the bare form does exactly what `init` would
-/// have done, no more, no less).
+/// docs/design/config.md D12). Shared by `init` and `edit` — the only two
+/// commands that create anything (cli.md D13).
 fn ensure_sidecar(repo: &repo::Repo) -> Result<(), String> {
     if repo.sidecar.is_dir() {
         return Ok(());
@@ -782,20 +809,18 @@ fn ensure_plain_dir(path: &std::path::Path) -> Result<bool, String> {
 }
 
 /// What [`ensure_sidecar_config`] found: writing the default config or
-/// finding an existing one. `init` reports the difference; the implicit
-/// init of the bare form does not care (cli.md D2: it does exactly what
-/// `init` would have done — including not re-writing an operator-edited
-/// config — but stays silent about it).
+/// finding an existing one. `init` reports the difference; `edit` does
+/// not care (it opens the file either way).
 enum Outcome {
     Created,
     Existed,
 }
 
 /// Write the default sidecar `config.toml` if it is missing and report
-/// it. Also shared by `init` and the implicit init: a sidecar without a
-/// config file would make `load_layers` treat the layer as empty — the
-/// same outcome, but the operator could no longer *see* the file they
-/// are expected to review and edit.
+/// it. Shared by `init` and `edit`: a sidecar without a config file is
+/// not an initialized repository at all
+/// ([`require_initialized_sidecar`]), and the operator could not *see*
+/// the file they are expected to review and edit.
 ///
 /// `snapshot_git_dirs` records the discovered git metadata directories
 /// into the fresh config as a `git-dirs` approval list (review-2
@@ -891,7 +916,7 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
 
 /// The review-3 item 5 recovery: add the git metadata directories the
 /// repo still needs to an EXISTING sidecar `config.toml` (written by
-/// the implicit init of a first bare run, or an earlier `init`).
+/// `mysbx edit`, by hand, or by an earlier `init`).
 /// Idempotent — a second call finds nothing missing and writes
 /// nothing — and additive only: entries already approved stay
 /// (whoever put them there, including by hand), and the approval of a
@@ -1096,8 +1121,9 @@ mod tests {
     }
 
     // The guard-ordering property of the bare form (docs/TODOs/
-    // mvp-2-repo-discovery.md): resolve-and-guard BEFORE ensure_sidecar, so
-    // a `$HOME`-resolved bare run must never create a sidecar on disk.
+    // mvp-2-repo-discovery.md): resolve-and-guard BEFORE anything
+    // touches the filesystem, so a `$HOME`-resolved run never creates a
+    // sidecar (`init`/`edit`) nor even reports a missing one (D13).
     // `run()` uses the real CWD and `$HOME`, so run it *from* a temp dir by
     // spawning a subprocess of the test binary — no: cheaper and still
     // faithful, call the pieces directly.
@@ -1112,8 +1138,8 @@ mod tests {
         let e = repo::resolve(&home, Some(&home)).unwrap_err();
         assert!(matches!(e, repo::Error::HomeDir(_)), "{e}");
 
-        // And the sidecar that implicit init WOULD have created does not
-        // exist, i.e. nothing ran past the guard.
+        // And the sidecar `mysbx init` would create does not exist,
+        // i.e. nothing ran past the guard.
         let sidecar = {
             let mut name = home.as_os_str().to_owned();
             name.push(".mysbx");
@@ -1122,6 +1148,43 @@ mod tests {
         assert!(!sidecar.exists());
 
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    // The explicit-init gate (cli.md D13): the message must name the
+    // missing sidecar config (it lives outside the repo, so it cannot
+    // be guessed) and the command that creates it. The CLI tests pin
+    // the behaviour end to end; this pins the wording next to the
+    // decision.
+    #[test]
+    fn the_uninitialized_error_names_the_path_and_the_command() {
+        let base = std::env::temp_dir().join(format!("mysbx-lib-test-init-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let root = base.join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let sidecar = base.join("repo.mysbx");
+        let repo = repo::Repo {
+            root: root.clone(),
+            sidecar: sidecar.clone(),
+            git_dirs: Vec::new(),
+        };
+
+        let msg = require_initialized_sidecar(&repo).unwrap_err();
+        assert!(
+            msg.contains(&sidecar.join("config.toml").display().to_string()),
+            "{msg}"
+        );
+        assert!(msg.contains("mysbx init"), "{msg}");
+        // Nothing was created by asking.
+        assert!(!sidecar.exists());
+
+        // A sidecar DIRECTORY alone is not an initialized repo; the
+        // config file is.
+        std::fs::create_dir_all(&sidecar).unwrap();
+        assert!(require_initialized_sidecar(&repo).is_err());
+        std::fs::write(sidecar.join("config.toml"), "").unwrap();
+        assert!(require_initialized_sidecar(&repo).is_ok());
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     // Usage pairing (cli.md D5): there is no derive macro keeping the

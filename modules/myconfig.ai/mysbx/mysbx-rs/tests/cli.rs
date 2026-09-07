@@ -92,6 +92,15 @@ fn make_repo(base: &Path, name: &str) -> (PathBuf, PathBuf) {
     (repo, sidecar)
 }
 
+/// Mark a sidecar as INITIALIZED, i.e. put the file `mysbx init` would
+/// have written there (cli.md D13: a run refuses a repo without it).
+/// Empty on purpose — the real template is comment-only, so an empty
+/// file is the same empty policy layer with less noise. Callers that
+/// test a policy overwrite it.
+fn init_sidecar(sidecar: &Path) {
+    std::fs::write(sidecar.join("config.toml"), "").unwrap();
+}
+
 /// The minimal golden fixture (tests/assets/argv/minimal.txt) with the
 /// synthetic repo path substituted — the expected `--dry-run` output of
 /// the smallest real invocation. argv[0] (the backend executable,
@@ -105,9 +114,19 @@ fn expected_minimal_argv(repo: &Path) -> String {
     format!("bwrap\n{argv}")
 }
 
-/// A standard fixture: a repo with sidecar at `base/repo`, empty home and
-/// XDG dirs, `args` to run from inside the repo.
+/// A standard fixture: an INITIALIZED repo with sidecar at `base/repo`,
+/// empty home and XDG dirs, `args` to run from inside the repo. Every
+/// sandbox-running test needs the sidecar config to exist (cli.md D13);
+/// use [`fixture_uninited`] for the tests that pin the refusal.
 fn fixture(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
+    let (inv, repo, sidecar) = fixture_uninited(name, args);
+    init_sidecar(&sidecar);
+    (inv, repo, sidecar)
+}
+
+/// [`fixture`] without the sidecar `config.toml`: the sidecar DIRECTORY
+/// exists, the repo is not initialized.
+fn fixture_uninited(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
     let base = tmpdir(name);
     let (repo, sidecar) = make_repo(&base, "repo");
     std::fs::create_dir_all(base.join("home")).unwrap();
@@ -122,7 +141,7 @@ fn fixture(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) 
 }
 
 /// [`fixture`] with `backend = "bubblewrap"` in the *user* config, so the
-/// sidecar directory stays absent and the pipeline still reaches the argv
+/// sidecar config stays empty and the pipeline still reaches the argv
 /// stage (D7: whichever layer names the backend decides).
 fn fixture_user_backend(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
     let (inv, repo, sidecar) = fixture(name, args);
@@ -163,14 +182,14 @@ fn dry_run_bare_form_matches_the_minimal_golden() {
     assert_eq!(code, 0, "stderr: {stderr}");
     assert_eq!(stdout, expected_minimal_argv(&repo));
     assert!(stderr.is_empty(), "stderr: {stderr}");
-    // Dry run is side-effect-free: no implicit init — the sidecar stays
-    // without a config.toml (the directory itself comes from the fixture).
-    assert!(!inv
-        .cwd
-        .parent()
-        .unwrap()
-        .join("repo.mysbx/config.toml")
-        .exists());
+    // Side-effect-free, and nothing beyond the fixture's own
+    // `config.toml` appeared in the sidecar (no state tree, no rewrite).
+    let sidecar = inv.cwd.parent().unwrap().join("repo.mysbx");
+    assert!(!sidecar.join("state").exists());
+    assert_eq!(
+        std::fs::read_to_string(sidecar.join("config.toml")).unwrap(),
+        ""
+    );
 }
 
 #[test]
@@ -199,21 +218,68 @@ fn dry_run_command_form_differs_only_in_the_payload() {
     assert_eq!(&actual_lines[n - 2..], &["--", "echo", "hi"]);
 }
 
+// ---- initialization is explicit (cli.md D13) -------------------------------
+
+/// The three run forms, all of which must refuse an uninitialized repo.
+const RUN_FORMS: &[&[&str]] = &[
+    &[],
+    &["run", "--", "true"],
+    &["--dry-run"],
+    &["run", "--dry-run", "--", "true"],
+];
+
 #[test]
-fn dry_run_without_sidecar_config_creates_nothing() {
-    // --dry-run must be side-effect-free: a missing sidecar is NOT created
-    // (an empty sidecar layer is used instead) and the run still succeeds.
-    let base = tmpdir("dry-run-no-sidecar");
-    let repo = base.join("repo");
-    std::fs::create_dir_all(&repo).unwrap();
-    std::fs::create_dir_all(base.join("home")).unwrap();
-    std::fs::create_dir_all(base.join("xdg")).unwrap();
-    let inv = Invocation {
-        args: vec!["--dry-run"],
-        cwd: repo.clone(),
-        home: base.join("home"),
-        xdg: base.join("xdg"),
-    };
+fn a_run_in_an_uninitialized_repo_fails_with_the_init_hint() {
+    // cli.md D13: a run never creates the sidecar. Every run form —
+    // bare, `run --`, and both under `--dry-run` — exits nonzero with a
+    // `mysbx: ` message naming the missing config path and telling the
+    // operator to run `mysbx init`. Nothing is written: not the
+    // sidecar directory, not the config.
+    for (i, args) in RUN_FORMS.iter().enumerate() {
+        let base = tmpdir(&format!("uninited-{i}"));
+        let repo = base.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(base.join("home")).unwrap();
+        std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+        // A user config that names the backend: the refusal must not
+        // depend on a half-configured host.
+        std::fs::write(
+            base.join("xdg").join("mysbx").join("config.toml"),
+            "backend = \"bubblewrap\"\n",
+        )
+        .unwrap();
+        let inv = Invocation {
+            args: Vec::new(),
+            cwd: repo,
+            home: base.join("home"),
+            xdg: base.join("xdg"),
+        };
+        let (code, stdout, stderr) = run_binary_with(&inv, args);
+        assert_ne!(code, 0, "args {args:?}: stdout: {stdout}");
+        assert!(stderr.starts_with("mysbx: "), "args {args:?}: {stderr}");
+        assert!(stderr.contains("mysbx init"), "args {args:?}: {stderr}");
+        let sidecar = base.join("repo.mysbx");
+        assert!(
+            stderr.contains(&sidecar.join("config.toml").display().to_string()),
+            "the message must name the missing sidecar config: {stderr}"
+        );
+        // No argv, no report, no creation.
+        assert!(!stdout.contains("--clearenv"), "args {args:?}: {stdout}");
+        assert!(
+            !sidecar.exists(),
+            "args {args:?}: a run created {}",
+            sidecar.display()
+        );
+    }
+}
+
+#[test]
+fn a_run_with_a_sidecar_directory_but_no_config_still_fails() {
+    // The *config file* is what initialization means: a bare
+    // `<repo>.mysbx/` directory (a leftover state tree, a hand-made
+    // directory) is not a policy, and running with an empty layer
+    // instead would hide that.
+    let (inv, _, sidecar) = fixture_uninited("uninited-dir-only", &["--dry-run"]);
     std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
     std::fs::write(
         inv.xdg.join("mysbx").join("config.toml"),
@@ -221,10 +287,37 @@ fn dry_run_without_sidecar_config_creates_nothing() {
     )
     .unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stdout: {stdout}");
+    assert!(stderr.contains("mysbx init"), "{stderr}");
+    assert!(!sidecar.join("config.toml").exists());
+}
+
+#[test]
+fn init_then_the_bare_form_works() {
+    // The full first-contact sequence: the bare form fails, `mysbx
+    // init` initializes, and the very same invocation now builds an
+    // argv. The user config names the backend (`init` writes a
+    // comment-only sidecar, which decides no policy).
+    let (inv, repo, sidecar) = fixture_uninited("init-then-run", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.contains("mysbx init"), "{stderr}");
+
+    let (code, stdout, stderr) = run_binary_with(&inv, &["init"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("## created"), "stdout: {stdout}");
+    assert!(sidecar.join("config.toml").exists());
+
+    let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     assert_eq!(stdout, expected_minimal_argv(&repo));
-    let sidecar = base.join("repo.mysbx");
-    assert!(!sidecar.exists(), "--dry-run must not create the sidecar");
 }
 
 #[test]
@@ -236,7 +329,7 @@ fn dry_run_after_dashdash_is_payload() {
     let (inv, _, _) = fixture_user_backend("dry-run-after-dd", &["run", "--", "--dry-run"]);
     let (code, stdout, _stderr) = run_binary(&inv);
     assert_ne!(code, 0);
-    // The implicit-init chatter is fine; the bwrap argv must not appear.
+    // The bwrap argv must not appear: it was never a flag.
     assert!(!stdout.contains("--clearenv"), "argv printed: {stdout}");
 }
 
@@ -733,6 +826,11 @@ fn bare_plain_directory_falls_back_to_cwd() {
     let base = tmpdir("plain-dir");
     let dir = base.join("plain");
     std::fs::create_dir_all(&dir).unwrap();
+    // Initialized (cli.md D13), so the only thing under test is the
+    // discovery fallback, not the init refusal.
+    let sidecar = base.join("plain.mysbx");
+    std::fs::create_dir_all(&sidecar).unwrap();
+    init_sidecar(&sidecar);
     std::fs::create_dir_all(base.join("xdg")).unwrap();
     let home = base.join("home");
     std::fs::create_dir_all(&home).unwrap();
@@ -920,7 +1018,7 @@ fn init_template_mentions_state_dirs() {
     // The init template documents every schema key; `state-dirs` must
     // appear in it (commented), or a new operator would never learn the
     // feature exists.
-    let (inv, _, sidecar) = fixture("state-dirs-init", &["init"]);
+    let (inv, _, sidecar) = fixture_uninited("state-dirs-init", &["init"]);
     let (code, _stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     let text = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
@@ -933,7 +1031,7 @@ fn init_template_mentions_state_dirs() {
 
 #[test]
 fn init_creates_sidecar_config_and_is_idempotent() {
-    let (inv, _, sidecar) = fixture("init", &["init"]);
+    let (inv, _, sidecar) = fixture_uninited("init", &["init"]);
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     assert!(stdout.contains("## created"), "stdout: {stdout}");
@@ -1178,7 +1276,7 @@ fn fake_editor(dir: &Path, record: &Path) -> PathBuf {
 
 #[test]
 fn edit_creates_the_sidecar_config_and_opens_it_in_the_editor() {
-    let (inv, _, sidecar) = fixture("edit", &["edit"]);
+    let (inv, _, sidecar) = fixture_uninited("edit", &["edit"]);
     // A fresh repo: the sidecar directory exists (the fixture makes it)
     // but the config does not — `edit` must create the commented
     // template first, so the operator edits a file, not a void.
@@ -1385,6 +1483,7 @@ fn ripgrep_config_mount_is_activated_through_the_variable() {
     let repo = base.join("repo");
     std::fs::create_dir_all(repo.join("sub")).unwrap();
     std::fs::create_dir_all(base.join("repo.mysbx")).unwrap();
+    init_sidecar(&base.join("repo.mysbx"));
     std::fs::create_dir_all(home.join(".config").join("ripgrep")).unwrap();
     std::fs::write(
         home.join(".config").join("ripgrep").join("ripgreprc"),
@@ -1809,6 +1908,9 @@ fn unapproved_worktree_git_metadata_is_refused() {
     // `mysbx: ` prefix and exit 1.
     let base = target_tmpdir("gitdir-unapproved");
     let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    // Initialized, but with an empty policy: the refusal under test is
+    // the missing approval, not the missing sidecar (cli.md D13).
+    init_sidecar(&base.join("wt.mysbx"));
     std::fs::create_dir_all(base.join("home")).unwrap();
     std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
     std::fs::write(
@@ -1939,12 +2041,14 @@ fn a_git_pointer_edited_after_init_cannot_widen_the_snapshot() {
 }
 
 #[test]
-fn the_implicit_init_approves_nothing() {
-    // Review-2 item 1, the trust boundary: a first bare run in a freshly
-    // cloned hostile worktree must NOT turn the repo's own `.git`
-    // pointer into an approval. The implicit init creates the sidecar
-    // without a `git-dirs` list, and the run refuses the bind.
-    let base = target_tmpdir("gitdir-implicit-init");
+fn a_run_in_an_uninitialized_worktree_creates_no_approval() {
+    // Review-2 item 1, the trust boundary, under the explicit-init
+    // rule (cli.md D13): a first run in a freshly cloned hostile
+    // worktree must not turn the repo's own `.git` pointer into an
+    // approval — and now it writes nothing at all. The run is refused
+    // with the init hint, and no sidecar config exists afterwards that
+    // could carry an approval.
+    let base = target_tmpdir("gitdir-uninited");
     let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
     std::fs::create_dir_all(base.join("home")).unwrap();
     std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
@@ -1961,29 +2065,74 @@ fn the_implicit_init_approves_nothing() {
     };
     let (code, _stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 1, "stderr: {stderr}");
-    assert!(stderr.contains("not approved"), "stderr: {stderr}");
-    let written = std::fs::read_to_string(base.join("wt.mysbx").join("config.toml")).unwrap();
+    assert!(stderr.contains("mysbx init"), "stderr: {stderr}");
+    assert!(
+        !base.join("wt.mysbx").join("config.toml").exists(),
+        "a run must not create the sidecar config"
+    );
+    assert!(
+        !stderr.contains(&gitdir.display().to_string()),
+        "nothing about the untrusted pointer is acted on: {stderr}"
+    );
+}
+
+#[test]
+fn edit_creating_the_sidecar_approves_nothing() {
+    // `mysbx edit` is the other command that creates the sidecar
+    // config (cli.md D12/D13) — it writes the template WITHOUT
+    // approvals, so the trust decision stays the explicit `mysbx init`
+    // (config.md D13, review-2 item 1). A run afterwards refuses the
+    // git bind.
+    let base = target_tmpdir("gitdir-edit-init");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let home = base.join("home");
+    let record = home.join("opened");
+    let editor = fake_editor(&home, &record);
+    let inv = Invocation {
+        args: vec!["edit"],
+        cwd: worktree,
+        home: home.clone(),
+        xdg: base.join("xdg"),
+    };
+    let mut cmd = spawn(&inv);
+    cmd.env("EDITOR", &editor);
+    assert!(cmd.output().unwrap().status.success());
+
+    let config = base.join("wt.mysbx").join("config.toml");
+    let written = std::fs::read_to_string(&config).unwrap();
     assert!(
         !written.contains("git-dirs"),
-        "the implicit init must not approve: {written}"
+        "`edit` must not approve: {written}"
     );
     assert!(
         !written.contains(&gitdir.display().to_string()),
-        "the implicit init must not approve: {written}"
+        "`edit` must not approve: {written}"
     );
+    // The repo is initialized now, so the run gets past D13 and fails
+    // on the missing approval instead.
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["run", "--", "true"]);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
 }
 
 // ---- the review-3 item 5 recovery -------------------------------------------
 
 #[test]
-fn approve_git_dirs_recovers_after_an_implicit_init() {
-    // The exact scenario review-3 item 5 describes: the user's first
-    // contact with a linked-worktree repo was the bare form, so the
-    // sidecar exists WITHOUT approvals (the implicit init never
-    // snapshots). Plain `init` would just say `exists`. The flag
-    // takes the trust decision explicitly, after the fact: the config
-    // must now carry the discovered git dir, and a following `run`
-    // must accept it.
+fn approve_git_dirs_recovers_an_unapproved_sidecar() {
+    // The scenario review-3 item 5 describes, in its explicit-init
+    // shape: the sidecar config exists WITHOUT approvals — written by
+    // `mysbx edit`, by hand, or by an `init` that ran before the
+    // checkout became a linked worktree. Plain `init` would just say
+    // `exists`. The flag takes the trust decision explicitly, after
+    // the fact: the config must now carry the discovered git dir, and
+    // a following `run` must accept it.
     let base = target_tmpdir("approve-git-dirs-recovery");
     let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
     std::fs::create_dir_all(base.join("home")).unwrap();
@@ -2001,11 +2150,18 @@ fn approve_git_dirs_recovers_after_an_implicit_init() {
         xdg: base.join("xdg"),
     };
 
-    // First contact: the bare form creates the sidecar without
-    // approvals and refuses the bind (the_implicit_init_approves_nothing
-    // pins that half).
+    // The starting point: an approval-free sidecar config, and a run
+    // that refuses the git bind because of it
+    // (edit_creating_the_sidecar_approves_nothing pins the other half:
+    // that creating it approves nothing).
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "# written before this checkout became a linked worktree\n",
+    )
+    .unwrap();
     let (code, _, stderr) = run_binary(&inv(vec!["run", "--", "true"]));
     assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.contains("not approved"), "stderr: {stderr}");
     let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
     assert!(!written.contains("git-dirs"), "{written}");
 
@@ -2507,8 +2663,8 @@ fn a_repo_root_containing_the_home_is_refused_before_anything_is_created() {
     // `<base>/tree`: discovery used to accept `<base>/tree` as the repo
     // (only EQUALITY with the home was refused) and the implicit rw
     // repo bind then exposed the whole subtree — home, `.ssh` and all.
-    // The guard runs before the implicit init, so no sidecar may
-    // appear either.
+    // The guard runs before the sidecar check, so nothing is created
+    // and the message is about the home, not about `mysbx init`.
     let base = tmpdir("repo-root-above-home");
     let tree = base.join("tree");
     let home = tree.join("users").join("alice");
@@ -2531,10 +2687,11 @@ fn a_repo_root_containing_the_home_is_refused_before_anything_is_created() {
         stderr.contains("mysbx: ") && stderr.contains("contains the home directory"),
         "unexpected stderr: {stderr}"
     );
-    assert!(
-        !base.join("tree.mysbx").exists(),
-        "the guard must run before the implicit init"
-    );
+    // The guard runs before the sidecar check, so the diagnosis is the
+    // exposed home — not "run mysbx init", which would invite the
+    // operator to initialize exactly the tree that must never be bound.
+    assert!(!stderr.contains("mysbx init"), "unexpected hint: {stderr}");
+    assert!(!base.join("tree.mysbx").exists(), "a sidecar was created");
 }
 
 // ---- the approval is a table-aware TOML edit (review-4 item 3) ----------
