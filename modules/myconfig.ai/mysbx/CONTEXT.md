@@ -53,3 +53,10 @@ One declared host path exposed inside the sandbox, `ro` or `rw`, at the same
 path or at an explicit destination. The repo mount is implicit, not a mount
 entry.
 _Avoid_: bind, share, volume
+
+**State dir**:
+A sandbox-home-relative path declared in `state-dirs` (config.md D15):
+mysbx backs it with `<sidecar>/state/<entry>` and binds it rw at
+`/mysbx-home/<entry>`, so the payload's writes there persist across runs.
+The host home is never the source — the sidecar is, by design.
+_Avoid_: state directory mount, persistent volume, cache dir

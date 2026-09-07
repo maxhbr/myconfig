@@ -88,6 +88,62 @@ let
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
 
+  # --- mysbx integration (../mysbx) -------------------------------------
+  #
+  # opencode is wired into the `mysbx` sandbox tier the same way pi is
+  # (../programs.pi-coding-agent/default.nix):
+  #
+  #   1. the `opencode` binary on the sandbox PATH -> `myconfig.ai.mysbx.extraTools`
+  #   2. opencode's *configuration* visible inside the sandbox -> read-only
+  #      mounts in the generated user config layer (`…mysbx.config.mounts`).
+  #   3. opencode's *state* persists across runs -> `state-dirs` entries
+  #      (`…mysbx.config.stateDirs`, ../mysbx/docs/design/config.md D15)
+  #      backed by `<repo>.mysbx/state/` in the sidecar — never the host
+  #      `~/.local`, which stays out of the sandbox entirely.
+  #
+  # Only home-manager-managed paths are mounted: mysbx canonicalizes every
+  # mount path eagerly and a missing path is a hard error on EVERY run
+  # (../mysbx/docs/design/config.md D8), so each entry must be created by
+  # the very condition that adds it. The host's own
+  # `~/.local/{share,state}/opencode` and the auth files are deliberately
+  # NOT mounted: a sandboxed session starts unauthenticated (it talks to
+  # the local LiteLLM / llama.cpp providers, which need no credentials)
+  # and writes its state to the sidecar instead.
+  #
+  # Every entry carries a `dest` under `/mysbx-home` because `HOME` is
+  # `/mysbx-home` in the sandbox (D14) and opencode looks for its config
+  # below `$XDG_CONFIG_HOME` (i.e. `$HOME/.config`).
+  mysbxHomeMount = path: {
+    path = "~/${path}";
+    dest = "/mysbx-home/${path}";
+    mode = "ro";
+  };
+
+  # Home Manager writes `~/.config/mcp/mcp.json` only when at least one
+  # MCP server is configured (upstream `modules/programs/mcp.nix`:
+  # `xdg.configFile = mkIf (cfg.servers != { })`), and with no file there
+  # is no `~/.config/mcp` DIRECTORY either. Since a missing mount source
+  # is a hard error on every mysbx run of the host (D8) — not just for
+  # opencode — the mount is gated on the same condition, read from the
+  # user whose config layer mysbx generates. Same pattern (and the same
+  # laziness argument) as `hmRipgrep` in ../mysbx/default.nix.
+  hmMcpServers = config.home-manager.users.mhuber.programs.mcp.servers or { };
+
+  mysbxOpencodeMounts = map mysbxHomeMount (
+    [
+      # The generated config (providers, permission rules, agents,
+      # commands, skills — everything the `programs.opencode` block below
+      # writes below `~/.config/opencode`) — always present because the
+      # `settings` set below is non-empty, so Home Manager writes at
+      # least `opencode/opencode.json`.
+      ".config/opencode"
+    ]
+    # MCP server definitions, activated by `enableMcpIntegration` below.
+    # The whole `mcp` directory rather than the single file: one mount
+    # covers whatever Home Manager writes there.
+    ++ lib.optional (hmMcpServers != { }) ".config/mcp"
+  );
+
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   contextWindowLookup = lib.listToAttrs (
     lib.concatMap (
@@ -126,6 +182,24 @@ in
     myconfig.ai.skills.playwright.enable = lib.mkDefault true;
     myconfig.ai.workmux.agents.opencode = opencodeWorktree.agent;
     myconfig.ai.workmux.agents.agent-bubblewrap-opencode = agentBubblewrapOpencodeWorktree.agent;
+
+    # mysbx tier integration (see `mysbxOpencodeMounts` above). Gated on
+    # mysbx being enabled too: the two features are independent, and the
+    # mounts would otherwise be generated for a host that has no mysbx
+    # config file to carry them. The state dirs replace what the
+    # bubblewrap jail tiers bind rw (`userDataDirs`): opencode's session
+    # and TUI state persist per repository in the sidecar
+    # (../mysbx/docs/design/config.md D15) instead of dying with the
+    # tmpfs home.
+    myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
+      extraTools = [ pkgs.opencode ];
+      config.mounts = mysbxOpencodeMounts;
+      config.stateDirs = [
+        ".local/share/opencode"
+        ".local/state/opencode"
+      ];
+    };
+
     home-manager.sharedModules = [
       (
         {

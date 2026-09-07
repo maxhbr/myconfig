@@ -56,6 +56,7 @@ fn every_asset_is_exercised() {
         "invalid/schema-missing-mount-path.toml",
         "invalid/schema-relative-dest.toml",
         "invalid/schema-repo-table.toml",
+        "invalid/schema-state-dirs-climbing.toml",
         "invalid/schema-tilde-user-path.toml",
         "invalid/schema-unknown-key.toml",
         "invalid/schema-wrong-type.toml",
@@ -106,6 +107,13 @@ fn full_config() {
     assert_eq!(c.env.len(), 2);
     assert_eq!(c.env["TERM"], "xterm-256color");
     assert_eq!(c.env["LANG"], "C.UTF-8");
+
+    // state-dirs (D15): home-relative entries, stored verbatim — the
+    // host backing store is synthesized from the sidecar at run time.
+    assert_eq!(
+        c.state_dirs,
+        vec![".local/share/opencode", ".local/state/opencode"]
+    );
 }
 
 #[test]
@@ -179,6 +187,10 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         (
             "invalid/schema-tilde-user-path.toml",
             "only the `~/` prefix is supported",
+        ),
+        (
+            "invalid/schema-state-dirs-climbing.toml",
+            "sandbox home",
         ),
         (
             "invalid/schema-missing-mount-path.toml",

@@ -108,7 +108,17 @@ the host variable, and a mount alone is inert — review-3 item 6). A
 repo sidecar declares its own mounts independently — both
 configuration files are trusted (`docs/design/config.md` D7). Per-agent
 modules
-append their own config files to `myconfig.ai.mysbx.config.mounts`.
+append their own config files to `myconfig.ai.mysbx.config.mounts` and
+their per-repo state directories to `myconfig.ai.mysbx.config.stateDirs`.
+
+### State directories (`state-dirs`)
+
+An entry names a path *relative to the sandbox home* whose content
+should survive the sandbox: mysbx synthesizes the host backing store
+`<repo>.mysbx/state/<entry>`, creates it before the backend starts and
+binds it rw at `/mysbx-home/<entry>`. The host home is never the source.
+Entries may not nest, no mount may cover them, and `--dry-run` creates
+nothing. See `docs/design/config.md` D15.
 
 ## Integrated coding agents
 `pi` ([`programs.pi-coding-agent`](../programs.pi-coding-agent/default.nix)) is
@@ -116,7 +126,23 @@ the first coding agent integrated with mysbx: on hosts where both features are
 enabled it adds its binary to the sandbox `PATH` via
 `myconfig.ai.mysbx.extraTools` and mounts its home-manager-managed
 configuration (`~/.pi/agent/{extensions,agents,prompts,themes,keybindings.json}`
-and `~/.agents/skills`) read-only below `/mysbx-home`.
+and `~/.agents/skills`) read-only below `/mysbx-home`. Its state
+directory `~/.pi` is neither mounted nor persisted: it dies with the
+tmpfs home on purpose — it holds sessions *and* credentials in one
+tree, so persisting it per repository would need the two split apart
+first. Until then a sandboxed `pi` starts fresh every run.
+`opencode` ([`programs.opencode`](../programs.opencode/default.nix)) is wired
+in the same way: its binary goes on the sandbox `PATH` and its generated
+configuration (`~/.config/opencode` plus `~/.config/mcp`) is mounted
+read-only below `/mysbx-home`. Its writable state
+(`~/.local/{share,state}/opencode`) is *not* mounted from the host — instead
+it is declared as mysbx `state-dirs` (config.md D15) and persists per
+repository in `<repo>.mysbx/state/`. The host's own opencode state and
+auth files stay out of the sandbox, so a sandboxed session starts
+unauthenticated and talks to the local LiteLLM / llama.cpp providers.
+That is the difference to `pi` above: opencode keeps its sessions and
+its credentials in separate paths, so the session state can be
+persisted without the credentials following it.
 
 # Supported Technologies
 ## Already Implemented:

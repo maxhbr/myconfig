@@ -755,6 +755,160 @@ fn home_directory_is_refused_exit_1() {
     assert!(stderr.contains("mysbx: "), "stderr: {stderr}");
 }
 
+// ---- state dirs (docs/design/config.md D15) -------------------------------
+
+#[test]
+fn dry_run_binds_state_dirs_from_both_layers() {
+    // The argv shows one rw bind per declared entry — sidecar-backed
+    // source, sandbox-home dest — after the repo bind, before any
+    // configured mount. `--dry-run` must not create the backing dirs.
+    let (inv, repo, sidecar) = fixture("state-dirs-dry-run", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\".local/share/opencode\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "state-dirs = [\".local/state/opencode\"]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let canon = repo.canonicalize().unwrap();
+    let side = canon.parent().unwrap().join("repo.mysbx");
+    assert!(
+        stdout.contains(&format!(
+            "--bind\n{}/state/.local/share/opencode\n/mysbx-home/.local/share/opencode\n",
+            side.display()
+        )),
+        "user layer bind missing: {stdout}"
+    );
+    assert!(
+        stdout.contains(&format!(
+            "--bind\n{}/state/.local/state/opencode\n/mysbx-home/.local/state/opencode\n",
+            side.display()
+        )),
+        "sidecar layer bind missing: {stdout}"
+    );
+    // Side-effect-free: neither backing directory was created.
+    assert!(!side.join("state").exists(), "dry run created state dirs");
+}
+
+#[test]
+fn a_real_run_creates_the_backing_dirs_and_persists_writes() {
+    // The end-to-end property (D15): the payload writes into the sandbox
+    // home below a declared state entry; after the run the file is in
+    // `<sidecar>/state/<entry>` — the state survives the sandbox.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let (inv, repo, sidecar) = fixture("state-dirs-persist", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\".local/share/opencode\"]\n",
+    )
+    .unwrap();
+    std::fs::write(sidecar.join("config.toml"), "").unwrap();
+    let args = vec![
+        "run".to_owned(),
+        "--".to_owned(),
+        bash.to_string_lossy().into_owned(),
+        "-c".to_owned(),
+        // No `mkdir -p`: the payload PATH is the tools dir only, and
+        // bubblewrap (0.11) creates missing dest parents itself, so
+        // the redirect below can land directly in the bound dir.
+        "echo persisted > \"$HOME/.local/share/opencode/sessions.txt\"".to_owned(),
+    ];
+    let mut cmd = spawn_with_args(&inv, &args);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "exit {:?}\nstdout: {stdout}\nstderr: {stderr}",
+        out.status.code()
+    );
+    let canon = repo.canonicalize().unwrap();
+    let side = canon.parent().unwrap().join("repo.mysbx");
+    let persisted = side.join("state/.local/share/opencode/sessions.txt");
+    let text = std::fs::read_to_string(&persisted)
+        .unwrap_or_else(|e| panic!("{persisted:?}: {e}"));
+    assert_eq!(text.trim(), "persisted");
+}
+
+#[test]
+fn nested_state_dirs_fail_with_a_mysbx_error() {
+    // D15's nesting refusal, through the real CLI: exit 1, `mysbx: `
+    // prefix, never a panic.
+    let (inv, _, _sidecar) = fixture("state-dirs-nested", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\".local/share\", \".local/share/opencode\"]\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1);
+    assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
+    assert!(stderr.contains("state-dirs entries nest"), "stderr: {stderr}");
+    assert!(!stderr.contains("panicked"), "stderr: {stderr}");
+}
+
+#[test]
+fn verbose_report_lists_state_dirs() {
+    let (inv, repo, _) = fixture("state-dirs-verbose", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\".local/share/opencode\"]\n",
+    )
+    .unwrap();
+    let inv = Invocation {
+        args: vec!["--verbose", "--dry-run"],
+        ..inv
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    let side = repo
+        .canonicalize()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("repo.mysbx");
+    assert!(report.contains("state dirs:     1"), "{report}");
+    assert!(
+        report.contains(&format!(
+            "  /mysbx-home/.local/share/opencode <-> {}/state/.local/share/opencode  [state]",
+            side.display()
+        )),
+        "{report}"
+    );
+}
+
+#[test]
+fn init_template_mentions_state_dirs() {
+    // The init template documents every schema key; `state-dirs` must
+    // appear in it (commented), or a new operator would never learn the
+    // feature exists.
+    let (inv, _, sidecar) = fixture("state-dirs-init", &["init"]);
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let text = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    assert!(text.contains("state-dirs"), "{text}");
+    // And it stays comment-only: init never decides policy.
+    assert!(text.lines().all(|l| l.trim_start().starts_with('#')));
+}
+
 // ---- init stays what it was --------------------------------------------------
 
 #[test]
@@ -1055,6 +1209,88 @@ fn dry_run_prints_the_pinned_backend_as_argv0() {
     // And the rest is the ordinary argv block.
     let rest: String = stdout.lines().skip(1).map(|l| format!("{l}\n")).collect();
     assert_eq!(rest, expected_minimal_argv(&repo).strip_prefix("bwrap\n").unwrap());
+}
+
+#[test]
+fn backend_failure_still_leaves_the_created_state_dirs() {
+    // D15 ordering: the backing dirs are created BEFORE the backend
+    // starts, so a run whose bwrap fails (bad pin, missing binary)
+    // exits 1 but the sidecar's state tree exists — the next run's
+    // bind sources are ready, and nothing about the failure undoes
+    // the preparation.
+    let (inv, repo, _) = fixture("state-dirs-backend-fail", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\".local/share/opencode\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(
+        &inv,
+        &["run", "--", "/nonexistent/mysbx-bwrap", "payload"],
+    );
+    cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    assert_eq!(out.status.code(), Some(1));
+    let side = repo
+        .canonicalize()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("repo.mysbx");
+    assert!(side.join("state/.local/share/opencode").exists());
+}
+
+#[test]
+fn a_symlink_in_the_state_tree_is_refused_not_followed() {
+    // D15 ("Trust"): the state tree is the one part of the sidecar the
+    // PAYLOAD can write, so it can plant a symlink there between two
+    // runs. Following it would make the next run create directories
+    // outside the sidecar and bind them rw into the sandbox home — a
+    // host-home path re-entering the sandbox through the back door,
+    // which D14 forbids. Every level of a backing path must therefore
+    // be a real directory; a symlink is a hard error naming the path,
+    // and nothing is created through it.
+    let (inv, repo, sidecar) = fixture("state-dirs-symlink", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\".local/share/opencode\"]\n",
+    )
+    .unwrap();
+    // A first run prepares the backing tree (the backend pin is
+    // deliberately broken: state dirs are created before it runs).
+    let mut cmd = spawn_with_args(&inv, &["run", "--", "/nonexistent/mysbx-bwrap"]);
+    cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
+    assert_eq!(
+        cmd.output().expect("failed to spawn mysbx").status.code(),
+        Some(1)
+    );
+    assert!(sidecar.join("state/.local/share/opencode").is_dir());
+
+    // The payload's move: swap an intermediate level for a symlink
+    // pointing outside the sidecar (here a stand-in for the host home).
+    let outside = repo.parent().unwrap().join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::remove_dir_all(sidecar.join("state/.local")).unwrap();
+    std::os::unix::fs::symlink(&outside, sidecar.join("state/.local")).unwrap();
+
+    let mut cmd = spawn_with_args(&inv, &["run", "--", "/nonexistent/mysbx-bwrap"]);
+    cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "stdout: {stdout}");
+    assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
+    assert!(stderr.contains("is a symlink"), "stderr: {stderr}");
+    assert!(!stderr.contains("panicked"), "stderr: {stderr}");
+    // The escape did not happen: no directory was created through the
+    // symlink, and no bind of it was printed.
+    assert!(
+        !outside.join("share").exists(),
+        "created a directory through the planted symlink"
+    );
+    assert!(!stdout.contains("outside"), "stdout: {stdout}");
 }
 
 #[test]

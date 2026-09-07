@@ -63,6 +63,9 @@ config that can execute is config that can escape.
 - which external git metadata directories may be bound (`git-dirs`,
   see D13): the approval list for the targets a repo's `.git` FILE
   points at
+- which sandbox-home subdirectories persist across runs
+  (`state-dirs`, see D15): entries backed by the sidecar's `state/`
+  tree
 - the backend and its resource limits
 - network policy (`network = false` is the deny switch; the network is
   shared by default)
@@ -277,7 +280,8 @@ not write down, and that the base table itself (tmpfs `/tmp`, no
 Beside `config.toml`, the sidecar has room for backend state, caches and
 mounts standing in for host directories (e.g. `~/.local/share`). State is
 disposable: deleting the sidecar and re-running `mysbx init` must yield a
-working setup again.
+working setup again. `state-dirs` (D15) is the schema's way to ask for
+exactly that: each entry's backing store lives at `<sidecar>/state/`.
 
 ### D11: Strict parsing, hand-rolled TOML subset
 
@@ -433,9 +437,11 @@ Rationale, in the order the constraints bite:
   sidecar can still write such a `dest`, and mysbx accepts it — the
   invariant is a property of what myconfig generates, not something the
   CLI enforces.
-- **Ephemeral.** A tmpfs dies with the sandbox. Persisting the sandbox
-  home is a phase-2 question (the sidecar has room for state, D10); it is
-  not decided here.
+- **Ephemeral, except what is declared.** A tmpfs dies with the
+  sandbox. Persisting the *whole* home stays refused (it would be a
+  host home in disguise); the decided middle ground is `state-dirs`
+  (D15): explicitly declared subdirectories are backed by the sidecar
+  (D10), the rest of the home stays ephemeral.
 
 **`HOME` and `PATH` are not configurable.** Both name paths the argv
 builder itself created — the tmpfs above and the shipped tool closure —
@@ -447,3 +453,111 @@ marks such an entry `[config, ignored — set by mysbx]` rather than
 pretending it applies. This is not an error, on purpose: rejecting it
 would turn a harmless (often inherited) config into a hard failure of
 every run, and the report already says what happens.
+
+### D15: `state-dirs` — persisted sandbox-home subdirectories, backed by the sidecar
+
+`state-dirs` is a list of paths **relative to the sandbox home** whose
+content should persist across runs:
+
+```toml
+state-dirs = [".local/share/opencode", ".local/state/opencode"]
+```
+
+For each entry mysbx synthesizes a **host backing store** under the
+sidecar (`<repo>.mysbx/state/<entry>`), creates it before the backend
+starts and binds it `rw` at `/mysbx-home/<entry>`, next to the repo and
+git-metadata binds of D13. The result: a sandboxed agent keeps its
+sessions, caches and auth-free state per repository — the state
+survives the sandbox, the sandbox still never sees a host-home path.
+
+Why a separate key instead of `[[mounts]]`:
+
+- **The host path is not configuration.** A mount entry names a host
+  path a trusted layer approves; a state entry names a *shape* below
+  the sandbox home, and mysbx derives the host side from the sidecar
+  (D2/D10). The sidecar is where per-repo disposable state lives by
+  design — `state/` is exactly the "room for state" D10 reserved.
+- **No host-home path can enter the sandbox through it.** The entry
+  grammar is deliberately tiny: relative, no `/`, no `~/`, no `.`,
+  no `..` (the parser rejects them at the schema edge). Mount paths get
+  the D8 forms because they name host trees; a state entry must be
+  joinable into TWO trees (the sidecar's `state/` on the host, the
+  tmpfs home in the sandbox), and any ambiguous spelling would let one
+  of the two joins escape its anchor.
+- **The mount guards would fight it.** `check_symlinkable_dests`
+  (review-2 item 2) refuses a `dest` below a writable bind; a state
+  directory IS a writable bind at `/mysbx-home/<entry>`, so a mount
+  dest below it is refused like a dest below the repo — correct, and
+  exactly why the state binds are emitted as *implicit infrastructure*
+  between the git binds and the configured mounts, not as mounts:
+  a `[[mounts]]` entry may never cover or hide them
+  (`check_hidden_mounts` treats them like the repo bind).
+
+Layer semantics:
+
+- Both trusted layers declare (`state-dirs` in the user config is the
+  host-wide set — the agent state dirs of every sandbox of this user —
+  and a sidecar adds per-repo ones). The lists concatenate, user layer
+  first; duplicates are dropped (first occurrence wins), unlike mounts,
+  because two binds of the same entry would target the same backing
+  directory and the later could only "win" by pointing somewhere the
+  schema forbids anyway.
+- **Entries may not nest** (`.local/share` and `.local/share/opencode`
+  together are refused, `bwrap.rs::check_state_dirs`): the inner bind
+  would land on `<sidecar>/state/.local/share/opencode` — a path that
+  exists only as the outer entry's own backing store — making the
+  layout ambiguous. Declare only the narrowest entries.
+
+Runtime behavior:
+
+- The backing directories are created (idempotently) after the merge
+  and before the backend starts — bubblewrap requires an existing
+  bind source. Under `--dry-run` nothing is created; the argv shows
+  the would-be sources.
+- Creation walks the entry **one component at a time** and refuses any
+  component that is not a real directory (`lib.rs::ensure_plain_dir`).
+  A symlink is the case that matters: the state tree is the only part
+  of the sidecar the payload can write, so it can plant one there
+  between two runs, and a plain `create_dir_all` would follow it —
+  creating directories outside the sidecar and binding them `rw` at
+  `/mysbx-home/<entry>`. That is a host path (the host home included)
+  re-entering the sandbox without any layer declaring it, i.e. exactly
+  what D9/D14 forbid. The entry *spelling* being unambiguous is not
+  enough: the spelling is only half of the path, the filesystem is the
+  other half. Refusing fails the run with the offending path named;
+  deleting the sidecar's `state/` tree recovers (the state is
+  disposable, D10).
+- Deleting the sidecar discards the state, on purpose (D10): the state
+  is disposable, `mysbx init` (or the implicit init of the next bare
+  run) recreates the tree empty.
+- The report lists every entry with its backing store
+  (`state dirs: …`, one `<entry> <-> <sidecar>/state/<entry>` line
+  each), and the `home:` line says when part of the tmpfs home is
+  sidecar-backed, so "the host home is not mounted" never becomes a
+  lie by omission.
+
+Trust: a state directory is writable host state the payload can plant
+symlinks in, so it joins the writable sets of the argv guards like the
+repo does — a `[[mounts]]` `dest` below a state directory is refused
+(`DestBelowWritable`), and the symlink-planting is also why the backing
+stores are created symlink-free rather than with `create_dir_all` (see
+"Runtime behavior" above).
+
+The same argument runs in the other direction, at config time: a
+writable bind (an `rw` mount, the repo, a git dir) whose source is an
+**ancestor** of a backing store is refused (`StateTreeWritable`). The
+sidecar's `state/` directory holds no policy file, so the policy-file
+rule of D7 does not catch it — but its LAYOUT decides where the next
+run's state binds come from, which is the same "steers the next run"
+property. The backing store itself stays mountable (the payload has it
+rw already and cannot rewrite its own parent), and every `ro` view of
+the tree stays allowed. The two checks are deliberate belt and braces:
+this one names the offending configuration, `ensure_plain_dir` catches
+a symlink whatever created it. It is NOT a policy file: the sidecar's
+`config.toml` stays the only steered-next-run artifact; `state/` holds
+payload data, trusted exactly as much as the work tree.
+
+On myconfig hosts the NixOS module (`../../default.nix`) writes
+`myconfig.ai.mysbx.config.stateDirs` into the generated user layer —
+per-agent modules append the state directories of their tool (today
+opencode's `~/.local/{share,state}/opencode`).
