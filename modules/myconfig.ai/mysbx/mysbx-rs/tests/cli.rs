@@ -1848,3 +1848,229 @@ fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
         "unexpected stderr: {stderr}"
     );
 }
+
+// ---- the policy PATHNAME is protected end to end (review-4 item 1) ----
+
+/// Run the bare form with a backend that cannot be executed: the guard
+/// must refuse BEFORE the payload starts, so the missing binary is
+/// never reached. Returns (exit code, stdout, stderr).
+fn run_refusing_launch(inv: &Invocation) -> (Option<i32>, String, String) {
+    let mut cmd = spawn_with_args(inv, &[] as &[&str]);
+    cmd.env("MYSBX_BWRAP", "/nonexistent-bwrap");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    (
+        out.status.code(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// The Home-Manager shape of the user config: `<xdg>/mysbx/config.toml`
+/// is a SYMLINK to an immutable store-like file holding `contents`.
+/// Returns the symlink path and its target.
+fn hm_style_user_config(base: &Path, xdg: &Path, contents: &str) -> (PathBuf, PathBuf) {
+    let store = base.join("store");
+    std::fs::create_dir_all(&store).unwrap();
+    let target = store.join("mysbx-config.toml");
+    std::fs::write(&target, contents).unwrap();
+    let dir = xdg.join("mysbx");
+    std::fs::create_dir_all(&dir).unwrap();
+    let link = dir.join("config.toml");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    (link, target)
+}
+
+/// The layout every test in this section shares: `base/home` (HOME,
+/// deliberately NOT inside the mounted tree — the review-3 item 4 home
+/// guard would fire first), `base/xdg` (XDG_CONFIG_HOME), and
+/// `base/trees/repo` + its sidecar.
+fn policy_pathname_fixture(name: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf, PathBuf) {
+    let base = tmpdir(name);
+    let trees = base.join("trees");
+    let repo = trees.join("repo");
+    let sidecar = trees.join("repo.mysbx");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&sidecar).unwrap();
+    let home = base.join("home");
+    let xdg = base.join("xdg");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&xdg).unwrap();
+    (base, repo, sidecar, home, xdg)
+}
+
+fn rw_mount_toml(path: &Path, dest: &str) -> String {
+    format!(
+        "\n[[mounts]]\npath = {:?}\nmode = \"rw\"\ndest = {dest:?}\n",
+        std::fs::canonicalize(path).unwrap()
+    )
+}
+
+#[test]
+fn a_writable_mount_over_the_generated_user_config_symlink_is_refused() {
+    // Review-4 item 1, the exact exploit: the user config is a
+    // Home-Manager symlink into the store, so the RESOLVED target is
+    // unwritable — but an rw mount of the directory holding the
+    // symlink lets the payload unlink it and drop its own policy
+    // there, which the NEXT run would trust. The run must be refused
+    // before anything executes, and the symlink must be untouched.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-user");
+    std::fs::write(sidecar.join("config.toml"), "# sidecar\n").unwrap();
+    // The mount source must exist to be canonicalized (D8), and it is
+    // the directory the symlink will live in.
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    let contents = format!(
+        "backend = \"bubblewrap\"\n{}",
+        rw_mount_toml(&xdg.join("mysbx"), "/policy")
+    );
+    let (link, target) = hm_style_user_config(&base, &xdg, &contents);
+
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_refusing_launch(&inv);
+    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("policy file"),
+        "unexpected stderr: {stderr}"
+    );
+    // Nothing ran, so nothing could have replaced the entry.
+    assert!(
+        std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+        "the policy symlink was replaced"
+    );
+    assert_eq!(std::fs::read_link(&link).unwrap(), target);
+}
+
+#[test]
+fn a_writable_mount_over_a_symlinked_sidecar_config_is_refused() {
+    // Same shape for the sidecar layer: its `config.toml` is a symlink
+    // to a file elsewhere, and an rw mount of the sidecar directory
+    // would let the payload replace the entry.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-sidecar");
+    let store = base.join("sidecar-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let target = store.join("config.toml");
+    std::fs::write(&target, "# sidecar policy\n").unwrap();
+    let link = sidecar.join("config.toml");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        xdg.join("mysbx").join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\n{}",
+            rw_mount_toml(&sidecar, "/policy")
+        ),
+    )
+    .unwrap();
+
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_refusing_launch(&inv);
+    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("policy file"),
+        "unexpected stderr: {stderr}"
+    );
+    assert!(
+        std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+        "the sidecar policy symlink was replaced"
+    );
+    assert_eq!(std::fs::read_link(&link).unwrap(), target);
+}
+
+#[test]
+fn a_writable_mount_over_an_intermediate_symlink_component_is_refused() {
+    // The symlink need not be the final entry: `<xdg>/mysbx` itself is
+    // a link to a directory elsewhere, and an rw mount of `<xdg>`
+    // makes THAT entry replaceable — the next run's `config.toml`
+    // would then be looked up in a directory the payload chose.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-intermediate");
+    std::fs::write(sidecar.join("config.toml"), "# sidecar\n").unwrap();
+    let real = base.join("real-mysbx");
+    std::fs::create_dir_all(&real).unwrap();
+    let link = xdg.join("mysbx");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    std::fs::write(
+        real.join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\n{}",
+            rw_mount_toml(&xdg, "/xdg")
+        ),
+    )
+    .unwrap();
+
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_refusing_launch(&inv);
+    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("policy file"),
+        "unexpected stderr: {stderr}"
+    );
+    assert!(
+        std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+        "the intermediate symlink was replaced"
+    );
+    assert_eq!(std::fs::read_link(&link).unwrap(), real);
+}
+
+#[test]
+fn an_unrelated_writable_mount_still_runs_with_a_symlinked_user_config() {
+    // The guard must not swallow ordinary rw grants: a source that
+    // touches neither the pathname chain nor the target is fine.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-unrelated");
+    std::fs::write(sidecar.join("config.toml"), "# sidecar\n").unwrap();
+    let work = base.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let contents = format!(
+        "backend = \"bubblewrap\"\n{}",
+        rw_mount_toml(&work, "/work")
+    );
+    hm_style_user_config(&base, &xdg, &contents);
+
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(stdout.contains("/work"), "the mount is built: {stdout}");
+}
+
+#[test]
+fn a_read_only_view_of_the_policy_directory_still_runs() {
+    // `ro` cannot replace a directory entry, so reviewing the
+    // generated config from inside the sandbox stays possible.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-ro");
+    std::fs::write(sidecar.join("config.toml"), "# sidecar\n").unwrap();
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    let contents = format!(
+        "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"ro\"\ndest = \"/policy\"\n",
+        std::fs::canonicalize(xdg.join("mysbx")).unwrap()
+    );
+    hm_style_user_config(&base, &xdg, &contents);
+
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(stdout.contains("/policy"), "the ro mount is built: {stdout}");
+}

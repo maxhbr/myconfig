@@ -1848,7 +1848,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
     // steers the NEXT run: `git-dirs` approvals can be added, the
     // `.git` pointer rewritten to match.
     let repo = synth_repo(); // root /synth/repo, sidecar /synth/repo.mysbx
-    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let policy = [mysbx::bwrap::PolicyPath::lexical("/synth/repo.mysbx/config.toml")];
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
@@ -1870,7 +1870,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
     // No relocation needed: an `rw` mount that sources the sidecar
     // directory directly is the same hole, dest aside.
     let repo = synth_repo();
-    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let policy = [mysbx::bwrap::PolicyPath::lexical("/synth/repo.mysbx/config.toml")];
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
@@ -1895,7 +1895,7 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
     // planted in it is the accident barrier, D9 — and no dest below it
     // is allowed anyway, by the writable-alias rule.)
     let repo = synth_repo();
-    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let policy = [mysbx::bwrap::PolicyPath::lexical("/synth/repo.mysbx/config.toml")];
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
@@ -1913,7 +1913,7 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
     // Ordinary rw grants elsewhere on the host are the feature, not
     // the hole: only a source CONTAINING a policy file is refused.
     let repo = synth_repo();
-    let policy = [PathBuf::from("/synth/repo.mysbx/config.toml")];
+    let policy = [mysbx::bwrap::PolicyPath::lexical("/synth/repo.mysbx/config.toml")];
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
@@ -1933,7 +1933,7 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
     // the review spelled "including the implicit repo bind" for the
     // daemon — same reasoning, different protected path.
     let repo = synth_repo();
-    let policy = [PathBuf::from("/synth/repo/config.toml")];
+    let policy = [mysbx::bwrap::PolicyPath::lexical("/synth/repo/config.toml")];
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
@@ -1954,7 +1954,7 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
     // Git metadata is rw as well (D13); an approved dir containing a
     // policy file is the same widening hole.
     let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
-    let policy = [PathBuf::from("/synth/main/.git/worktrees/wt/config.toml")];
+    let policy = [mysbx::bwrap::PolicyPath::lexical("/synth/main/.git/worktrees/wt/config.toml")];
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
@@ -1988,4 +1988,159 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
     let mut cfg = base(true);
     cfg.mounts.push(make_mount("/synth", Some("/all-src"), Mode::Rw));
     bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
+}
+
+// ---- the policy PATHNAME is protected too (review-4 item 1) ----------
+
+/// A policy file the way Home Manager writes it: the pathname
+/// `<dir>/config.toml` is a symlink whose target lives in the
+/// immutable store. Both halves are guarded — that is exactly what
+/// `mysbx::trusted_policy` produces for such a file.
+fn hm_style_policy(pathname: &str, target: &str) -> mysbx::bwrap::PolicyPath {
+    mysbx::bwrap::PolicyPath {
+        path: PathBuf::from(pathname),
+        guarded: vec![PathBuf::from(pathname), PathBuf::from(target)],
+    }
+}
+
+fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
+    Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        nix_conf: None,
+        policy_paths: policy,
+    }
+}
+
+#[test]
+fn a_writable_mount_over_a_policy_symlink_is_refused_although_the_target_is_elsewhere() {
+    // The review-4 exploit: the resolved target sits in /nix/store and
+    // no writable bind can touch it — but the SYMLINK that names it is
+    // in an ordinary directory, and an rw mount of that directory lets
+    // the payload replace it. The next run would then read the
+    // attacker's policy.
+    let policy = [hm_style_policy(
+        "/synth/home/.config/mysbx/config.toml",
+        "/nix/store/aaaa-mysbx-config.toml",
+    )];
+    let params = params_with(&policy);
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/home/.config/mysbx", Some("/policy"), Mode::Rw));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_writable_mount_over_a_traversed_directory_is_refused() {
+    // Not only the final entry: a writable bind of any directory on
+    // the pathname can rename it out of the way and put a new chain in
+    // its place.
+    let policy = [hm_style_policy(
+        "/synth/home/.config/mysbx/config.toml",
+        "/nix/store/aaaa-mysbx-config.toml",
+    )];
+    let params = params_with(&policy);
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/home/.config", Some("/cfg"), Mode::Rw));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn the_resolved_target_stays_protected_as_well() {
+    // The original (review-3) check is kept, not replaced: an rw
+    // source containing the TARGET is refused even when the pathname
+    // is untouched.
+    let policy = [hm_style_policy(
+        "/synth/home/.config/mysbx/config.toml",
+        "/synth/generated/mysbx-config.toml",
+    )];
+    let params = params_with(&policy);
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/generated", Some("/gen"), Mode::Rw));
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn the_repo_bind_covering_a_policy_pathname_is_refused() {
+    // The implicit repo bind is rw by definition (D13): a policy
+    // pathname inside the work tree is refused there too, target
+    // elsewhere or not.
+    let policy = [hm_style_policy(
+        "/synth/repo/.mysbx-config.toml",
+        "/nix/store/aaaa-mysbx-config.toml",
+    )];
+    let params = params_with(&policy);
+    let cfg = base(true);
+    let err = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_git_dir_covering_a_policy_pathname_is_refused() {
+    // Approved git metadata is bound rw as well (review-1 finding 4).
+    let repo = worktree_repo(&["/synth/main/.git/worktrees/wt"]);
+    let policy = [hm_style_policy(
+        "/synth/main/.git/worktrees/wt/config.toml",
+        "/nix/store/aaaa-mysbx-config.toml",
+    )];
+    let params = params_with(&policy);
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn an_unrelated_writable_mount_stays_allowed_with_a_symlinked_policy() {
+    // The guard stays narrow: neither the pathname chain nor the
+    // target lies below this source, so it is an ordinary rw grant.
+    let policy = [hm_style_policy(
+        "/synth/home/.config/mysbx/config.toml",
+        "/nix/store/aaaa-mysbx-config.toml",
+    )];
+    let params = params_with(&policy);
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/work", Some("/work"), Mode::Rw));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params).unwrap();
+}
+
+#[test]
+fn a_read_only_mount_of_a_policy_pathname_stays_allowed() {
+    // `ro` cannot replace a directory entry either: reviewing the
+    // generated user config from inside the sandbox stays possible.
+    let policy = [hm_style_policy(
+        "/synth/home/.config/mysbx/config.toml",
+        "/nix/store/aaaa-mysbx-config.toml",
+    )];
+    let params = params_with(&policy);
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/home/.config/mysbx", Some("/policy"), Mode::Ro));
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params).unwrap();
 }

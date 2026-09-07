@@ -79,10 +79,12 @@ pub struct Params<'a> {
     /// passes `None` and the sandbox runs `nix` with its built-in
     /// defaults.
     pub nix_conf: Option<&'a str>,
-    /// Paths of the **trusted policy files** this run was configured
-    /// from — the user config and the sidecar config, exactly as
-    /// `load_layers` read them. Empty when a layer was absent (an
-    /// absent file grants nothing and needs no protection).
+    /// The **trusted policy files** this run was configured from — the
+    /// user config and the sidecar config, exactly as `load_layers`
+    /// read them, each with the host paths that must stay unwritable
+    /// for it to STAY trusted (see [`PolicyPath`]). Empty when a layer
+    /// was absent (an absent file grants nothing and needs no
+    /// protection).
     ///
     /// The payload must never be able to write these: the user config
     /// is the host-wide grant layer and the sidecar is the one file a
@@ -92,7 +94,56 @@ pub struct Params<'a> {
     /// rewritten to match (review-3 item 3). `rw` mount sources that
     /// contain one are therefore refused; the check also covers the
     /// repo bind itself, which is `rw` by definition.
-    pub policy_paths: &'a [PathBuf],
+    pub policy_paths: &'a [PolicyPath],
+}
+
+/// A trusted policy file, represented by everything the payload must
+/// not be able to write for the file to still be the policy on the
+/// NEXT run (review-4 item 1).
+///
+/// Protecting only the fully resolved target is not enough. mysbx does
+/// not find its policy by inode — it walks a PATHNAME, and every
+/// directory entry on that walk decides which file the next run reads.
+/// Home Manager writes `~/.config/mysbx/config.toml` as a SYMLINK into
+/// the Nix store: the resolved target lives in the immutable
+/// `/nix/store`, but the symlink itself sits in an ordinary,
+/// replaceable directory. A writable bind covering that directory lets
+/// the payload unlink the symlink and drop a policy of its own in its
+/// place — the next run then reads the attacker's file while the
+/// target-only check saw nothing but `/nix/store/…`.
+///
+/// [`guarded`](Self::guarded) therefore holds BOTH: every directory
+/// entry traversed to reach the file (with the parents of each entry
+/// already resolved, so intermediate symlinks are listed as the
+/// entries they are, not only as what they point at) AND the final
+/// resolved target. A writable source that contains any of them is
+/// refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PolicyPath {
+    /// The pathname mysbx used, for the diagnosis (the spelling the
+    /// operator recognises).
+    pub path: PathBuf,
+    /// Host paths that must stay unwritable: the traversed directory
+    /// entries — including intermediate and final symlinks — and the
+    /// resolved target. Built by `crate::trusted_policy`, which walks
+    /// the pathname on the host filesystem; the argv builder itself
+    /// stays pure and only compares.
+    pub guarded: Vec<PathBuf>,
+}
+
+impl PolicyPath {
+    /// A policy path guarded by its pathname alone — no host
+    /// filesystem is consulted. For synthetic paths (tests) and as the
+    /// fallback when the walk cannot resolve anything: the pathname is
+    /// always part of the guarded set, so this is a narrowing of the
+    /// protection, never a widening.
+    pub fn lexical(path: impl Into<PathBuf>) -> Self {
+        let path = path.into();
+        Self {
+            guarded: vec![path.clone()],
+            path,
+        }
+    }
 }
 
 /// Build the complete `bwrap` argv for `cfg` / `repo` / `payload`.
@@ -282,12 +333,20 @@ pub fn bwrap_argv(
         .chain(repo.git_dirs.iter().map(|g| normalize(&g.to_string_lossy())))
     {
         for policy in params.policy_paths {
-            let pol = normalize(&policy.to_string_lossy());
-            if pol.starts_with(&src) {
-                return Err(Error::PolicyFileWritable {
-                    source: src.to_string_lossy().into_owned(),
-                    policy: policy.display().to_string(),
-                });
+            // Every guarded path of the policy, not just its resolved
+            // target (review-4 item 1): the directory entries the next
+            // run traverses decide WHICH file it reads, so a writable
+            // source covering one of them is as good as a writable
+            // policy file.
+            for guarded in &policy.guarded {
+                let pol = normalize(&guarded.to_string_lossy());
+                if pol.starts_with(&src) {
+                    return Err(Error::PolicyFileWritable {
+                        source: src.to_string_lossy().into_owned(),
+                        policy: policy.path.display().to_string(),
+                        exposed: guarded.display().to_string(),
+                    });
+                }
             }
         }
         // The same argument for the state tree (config.md D15): the
@@ -468,6 +527,11 @@ pub enum Error {
         source: String,
         /// The policy file that would become writable.
         policy: String,
+        /// The guarded path actually exposed: the policy file's
+        /// resolved target, or one of the directory entries the next
+        /// run traverses to find it (review-4 item 1) — the two are
+        /// the same path only when no symlink is involved.
+        exposed: String,
     },
     /// A writable bind (the repo, a git dir, or an `rw` mount) would
     /// expose an ANCESTOR of a `state-dirs` backing store to the
@@ -542,10 +606,15 @@ impl fmt::Display for Error {
                  bind onto any path, protected ones included; mount it \
                  outside that tree instead"
             ),
-            Error::PolicyFileWritable { source, policy } => write!(
+            Error::PolicyFileWritable {
+                source,
+                policy,
+                exposed,
+            } => write!(
                 f,
                 "source {source} would expose the policy file {policy} \
-                 writable — a config the sandbox can write steers the NEXT \
+                 writable (through {exposed}) — a config the sandbox can \
+                 write, or whose pathname it can re-point, steers the NEXT \
                  run of itself (git-dirs approvals, .git pointers); narrow \
                  the mount to below it, or drop it"
             ),

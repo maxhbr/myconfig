@@ -181,6 +181,18 @@ file the sandbox can write steers the NEXT run of itself:
 match. Read-only mounts of the sidecar stay allowed (reviewing it
 from inside the sandbox is legitimate; `ro` cannot write it in place).
 
+What counts as "contains the config" is the whole PATHNAME, not only
+the file the pathname currently resolves to (review-4 item 1). mysbx
+finds its policy by walking a path, so every directory entry on that
+walk decides which file the next run reads — including the final entry
+and any symlink in between. Home Manager generates
+`~/.config/mysbx/config.toml` as a symlink into the immutable
+`/nix/store`: a writable bind of the directory holding that symlink
+cannot touch the store target, but it can unlink the symlink and put a
+policy of the payload's own there. Both halves are therefore guarded —
+the resolved target *and* every traversed directory entry — and a
+writable source covering either is refused.
+
 Protection that is independent of the config layers and keeps holding:
 no mount `dest` may overwrite a protected sandbox path (`/`,
 `/nix/store`, `/usr/bin`, `/proc`, `/dev`, `/etc/localtime`, `/tmp`,
