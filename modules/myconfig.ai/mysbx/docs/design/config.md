@@ -170,9 +170,9 @@ question.
 `git-dirs` (D13) works the same way as mounts: an entry in either layer
 approves external git metadata. What that does NOT do is let the
 repository approve itself: the `.git` pointer inside the repo grants
-nothing, an implicit init records nothing, and turning a discovered
-directory into an approval is an explicit `mysbx init` (D12) that
-prints every path it records. That "cannot write the policy" is
+nothing, a run records nothing (it creates nothing at all — cli.md
+D13), and turning a discovered directory into an approval is an
+explicit `mysbx init` (D12) that prints every path it records. That "cannot write the policy" is
 enforced, not assumed (review-3 item 3): an `rw` mount — or the repo
 bind, or a git dir — whose source contains the sidecar config or the
 user config is refused with a policy-file error, because a policy
@@ -320,6 +320,11 @@ what must be rejected.
 `init` creates the sidecar and a default `config.toml`. Re-running it never
 overwrites an existing `config.toml`; it reports what already exists.
 
+It is also the *only* way a repository becomes usable: a sandbox run
+creates nothing and refuses an uninitialized repository (cli.md D13).
+The one other command that writes this file is `mysbx edit` (cli.md
+D12), whose purpose is exactly that file.
+
 ### D13: The repo is implicit
 
 The repo is the repo the sidecar belongs to. It is always mounted
@@ -369,11 +374,13 @@ An **explicit** `mysbx init` records what it discovered into the
 `git-dirs` list of the fresh sidecar config and prints every recorded
 path, so the common worktree/submodule case works without hand-editing
 while the trust decision stays an operator action, written to a file
-the repository cannot rewrite. The *implicit* init of the bare form and
-of `run` (cli.md D2) deliberately records nothing: a first run in a
-freshly cloned repository must not turn that repository's own pointer
-into an approval. A `.git` file edited *later* points somewhere
-unapproved and is refused, with the offending path named.
+the repository cannot rewrite. A run itself records nothing, because it
+creates nothing: an uninitialized repository is refused with the
+`mysbx init` hint (cli.md D13), and `mysbx edit` writes the template
+without approvals. A first contact with a freshly cloned repository can
+therefore never turn that repository's own pointer into an approval. A
+`.git` file edited *later* points somewhere unapproved and is refused,
+with the offending path named.
 
 The sidecar itself is never approvable as git metadata, in either
 direction (a pointer at it, or at anything containing or inside it):
@@ -381,8 +388,10 @@ binding it would hand the payload the file that decides what may be
 bound at all.
 
 The explicit-after-the-fact form of that trust decision is `mysbx init
---approve-git-dirs` (review-3 item 5): against a config the implicit
-init already wrote, it adds the discovered-but-unapproved entries —
+--approve-git-dirs` (review-3 item 5): against a config that exists
+without approvals — written by `mysbx edit`, by hand, or by an `init`
+that ran before the checkout became a linked worktree — it adds the
+discovered-but-unapproved entries —
 idempotently, and never touching anything but the `git-dirs` list.
 It is additive, not reverting: an entry an operator deliberately
 REMOVED is rediscovered on a later run, so re-running the flag
@@ -555,8 +564,9 @@ Runtime behavior:
   deleting the sidecar's `state/` tree recovers (the state is
   disposable, D10).
 - Deleting the sidecar discards the state, on purpose (D10): the state
-  is disposable, `mysbx init` (or the implicit init of the next bare
-  run) recreates the tree empty.
+  is disposable, and the next `mysbx init` (a run after that recreates
+  the `state/` tree empty; a run *without* a sidecar config is refused,
+  cli.md D13) starts over.
 - The report lists every entry with its backing store
   (`state dirs: …`, one `<entry> <-> <sidecar>/state/<entry>` line
   each), and the `home:` line says when part of the tmpfs home is

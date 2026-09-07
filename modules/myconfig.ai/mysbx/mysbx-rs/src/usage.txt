@@ -6,23 +6,26 @@ Usage:
   mysbx [COMMAND]
 
 Commands:
-  (none)        enter an interactive sandbox shell for the current repo
-                (creates the sidecar implicitly when it is missing);
+  (none)        enter an interactive sandbox shell for the current repo;
+                the repo must have been initialized with `mysbx init`
+                first — a run creates nothing;
                 with `workmux = true` in a config layer this is a tmux
                 session with workmux instead of a bare shell, on a tmux
                 socket inside the sandbox
   run -- CMD... run one command in the sandbox; everything after `--` is
-                passed to the command verbatim
+                passed to the command verbatim; needs `mysbx init` too
   init          create the sidecar directory next to the current repo;
-                idempotent: an existing config.toml is never rewritten
+                the only command that initializes a repo; idempotent:
+                an existing config.toml is never rewritten
   init --approve-git-dirs
                 additionally approve the git metadata directories the
                 repo still needs in an EXISTING config.toml — the
-                recovery after an implicit first-run init (which never
-                approves anything); adds only missing entries
+                recovery for a config created without approvals (by
+                `mysbx edit`, by hand, or before the checkout became a
+                linked worktree); adds only missing entries
   edit          open the sidecar config.toml of the current repo in
                 $EDITOR (or $VISUAL); creates it first when missing,
-                like the bare form would. The host-wide user config is
+                like `init` would. The host-wide user config is
                 not what this edits
   version       print the version
   help          print this help
@@ -30,8 +33,10 @@ Commands:
 Options:
   --dry-run     print the exact bwrap invocation — the executable
                 (argv[0]) first, then the sandbox argv, one argument
-                per line — and exit; must precede the command, runs no
-                sidecar and no command
+                per line — and exit; must precede the command, creates
+                nothing and runs no command. An uninitialized repo is
+                refused here too: the sidecar is part of the run it
+                would print
   --verbose     print the run configuration (repo, config files, backend,
                 network, mounts, environment, payload) to stdout with a
                 `## ` prefix before running; must precede the command.

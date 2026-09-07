@@ -31,8 +31,11 @@ use std::path::Path;
 /// and cannot drift from the values the pipeline actually uses.
 pub struct Report<'a> {
     pub repo: &'a Repo,
-    /// Whether the sidecar directory exists *now* (before an implicit
-    /// init would create it). The report cannot say *how* the repo was
+    /// Whether the sidecar directory exists. On a sandbox run this is
+    /// always true (cli.md D13: an uninitialized repo is refused before
+    /// the report is built); the flag stays because the renderer is
+    /// used by tests with synthetic reports too.
+    /// The report cannot say *how* the repo was
     /// resolved — `repo::resolve` does not return that — so it says what
     /// it does know: the two paths and whether the sidecar is there.
     pub sidecar_exists: bool,

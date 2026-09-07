@@ -25,12 +25,20 @@ overview; design decisions, TODOs and any other long text belong in `docs/`:
 ```
 $ pwd
 /path/to/the/repo
+$ mysbx
+mysbx: this repository has no sandbox yet: /path/to/the/repo.mysbx/config.toml
+  does not exist — run `mysbx init` in /path/to/the/repo to create it
 $ mysbx init
 # init...
 ## created: /path/to/the/repo.mysbx/
 ## created: /path/to/the/repo.mysbx/config.toml
 $ mysbx
 ```
+
+`mysbx init` is the one step that creates something on the host:
+initialization is explicit, and no run (`mysbx`, `mysbx run -- CMD`,
+with or without `--dry-run`) ever writes the sidecar for you
+([`docs/design/cli.md`](./docs/design/cli.md) D13).
 
 `mysbx run -- CMD...` runs one command in the sandbox;
 `mysbx run --dry-run -- CMD...` prints the exact `bwrap` invocation it
@@ -40,7 +48,8 @@ the acceptance surface described in
 [`docs/design/cli.md`](./docs/design/cli.md).
 
 `mysbx edit` opens the repo's sidecar `config.toml` in `$EDITOR` (or
-`$VISUAL`), creating the commented template first when it is missing —
+`$VISUAL`), creating the commented template first when it is missing
+(the second, equally explicit way to initialize a repo) —
 the quickest way from "this sandbox needs one more directory" to the
 file that says so (`docs/design/cli.md` D12). It edits the *sidecar*,
 never the host-wide user config: on myconfig hosts that one is
@@ -55,9 +64,9 @@ with `--dry-run` and stripped again with `grep -v '^## '`:
 $ mysbx --verbose --dry-run
 ## mysbx 0.1.0 — run configuration
 ## repo root:      /path/to/the/repo
-## sidecar:        /path/to/the/repo.mysbx (missing)
+## sidecar:        /path/to/the/repo.mysbx (exists)
 ## user config:    /home/user/.config/mysbx/config.toml (loaded)
-## sidecar config: /path/to/the/repo.mysbx/config.toml (absent — empty layer)
+## sidecar config: /path/to/the/repo.mysbx/config.toml (loaded)
 ## backend:        bubblewrap
 ## network:        shared (--share-net)
 ## mounts:         2 (in declaration order)
