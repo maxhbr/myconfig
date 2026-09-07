@@ -151,6 +151,36 @@ both config files — redaction would buy no secrecy while making the report
 lie about the run. The help text says out loud that the values may be
 secrets, so nobody pastes a verbose report into a bug tracker unaware.
 
+### D11: the workmux session replaces the interactive payload only
+
+With `workmux = true` in a configuration layer (config.md D16), the
+**bare form** does not start a shell: its payload is the pinned workmux
+entry (`MYSBX_WORKMUX_ENTRY`), a script from mysbx's own closure that
+boots a tmux server on the sandbox-internal socket and attaches to it.
+Everything else about the run is unchanged — same base, same mounts,
+same `--chdir`; the payload line of the argv is the only difference,
+plus the `TMUX_TMPDIR` variable that names the socket directory.
+
+**`run -- CMD` is untouched, deliberately.** A one-shot command that
+was wrapped in a tmux server would write its output into a pane nobody
+attaches to, and its exit code would become tmux's, not the payload's
+(D8). So the `run` argv is *byte-identical* to the workmux-disabled one
+— no payload swap, no `TMUX_TMPDIR`, and none of the socket guards
+(they guard a session this run does not start). Tests pin the byte
+identity in both directions.
+
+**A missing pin is a refused run, not a silent shell.** `workmux = true`
+with no `MYSBX_WORKMUX_ENTRY` (an unwrapped build, a host without the
+integration) exits `1` with a `mysbx: ` message naming the variable.
+Falling back to a bare shell would be discovered only after the work
+happened outside the session it was supposed to happen in.
+
+`--dry-run` stays side-effect-free with workmux as with everything
+else: it prints the entry as the payload and creates no socket
+directory — the entry itself is what creates it, inside the sandbox.
+`--verbose` reports the socket path and the entry, so the isolation
+claim of config.md D16 is checkable against the argv.
+
 ## Non-goals
 
 - No daemon, no background state beyond the sidecar directory.

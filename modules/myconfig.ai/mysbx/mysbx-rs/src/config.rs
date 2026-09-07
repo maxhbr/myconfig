@@ -78,6 +78,17 @@ pub struct Config {
     /// of docs/plan.md is applied AFTER the merge (see
     /// `crate::merge::merge`), never inside a layer.
     pub network: Option<bool>,
+    /// Whether the *interactive* payload is a workmux tmux session
+    /// instead of a plain shell (docs/design/config.md D16, cli.md
+    /// D11). `None` means "not decided by this layer", like
+    /// `backend`; the off-by-default is applied after the merge.
+    ///
+    /// It is not an access grant: it selects a payload from mysbx's
+    /// own closure (the pinned `MYSBX_WORKMUX_ENTRY`) and adds one
+    /// in-sandbox environment variable, so — unlike `network` and
+    /// `[env]` — either layer may decide it and the sidecar simply
+    /// wins when both do (both layers are trusted, D7).
+    pub workmux: Option<bool>,
     pub mounts: Vec<Mount>,
     /// Environment forwarded into the sandbox.
     pub env: BTreeMap<String, String>,
@@ -112,6 +123,7 @@ impl Default for Config {
         Config {
             backend: None,
             network: None,
+            workmux: None,
             mounts: Vec::new(),
             env: BTreeMap::new(),
             git_dirs: Vec::new(),
@@ -169,6 +181,7 @@ impl Config {
             match key.as_str() {
                 "backend" => config.backend = Some(string(value, "backend")?.to_owned()),
                 "network" => config.network = Some(boolean(value, "network")?),
+                "workmux" => config.workmux = Some(boolean(value, "workmux")?),
                 "mounts" => config.mounts = mounts(value)?,
                 "env" => config.env = env(table(value, "env")?)?,
                 "git-dirs" => config.git_dirs = git_dirs(value)?,
@@ -417,6 +430,23 @@ mod tests {
         let c = Config::parse("[[mounts]]\npath = \"/etc/hosts\"\n").unwrap();
         assert_eq!(c.mounts[0].mode, Mode::Ro);
         assert_eq!(c.mounts[0].dest, None);
+    }
+
+    #[test]
+    fn workmux_is_a_tri_state_boolean() {
+        // docs/design/config.md D16: like `backend`, an omitted key
+        // decides nothing — the off-by-default is applied after the
+        // merge, so a layer never counts as an explicit `false`.
+        assert_eq!(Config::parse("").unwrap().workmux, None);
+        assert_eq!(Config::parse("workmux = true\n").unwrap().workmux, Some(true));
+        assert_eq!(
+            Config::parse("workmux = false\n").unwrap().workmux,
+            Some(false)
+        );
+        // Wrong types name the key, like every other schema error.
+        let e = Config::parse("workmux = \"yes\"\n").unwrap_err();
+        assert!(e.to_string().contains("workmux"), "{e}");
+        assert!(matches!(e, Error::Schema(_)), "{e}");
     }
 
     #[test]

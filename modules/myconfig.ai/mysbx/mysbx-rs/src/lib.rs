@@ -305,6 +305,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // "bind the host's" — that file may carry access-tokens, and a
     // read-only bind hands them to the payload all the same.
     let nix_conf = env_opt("MYSBX_NIX_CONF");
+    // The workmux entry (docs/design/config.md D16): the interactive
+    // payload of a `workmux = true` run. No fallback either — unset
+    // means "this build has no workmux integration", and the argv
+    // builder refuses the run instead of quietly starting a plain
+    // shell where a session was asked for.
+    let workmux_entry = env_opt("MYSBX_WORKMUX_ENTRY");
     // Review-3 item 3: the trusted policy files of THIS run, handed to
     // the argv builder so it can refuse any `rw` bind that would expose
     // one to the payload.
@@ -336,6 +342,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         tools_path: &tools_path,
         nix_conf: nix_conf.as_deref(),
         policy_paths: &policy_paths,
+        workmux_entry: workmux_entry.as_deref(),
     };
     let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
         Ok(a) => a,

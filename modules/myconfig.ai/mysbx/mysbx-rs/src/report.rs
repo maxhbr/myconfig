@@ -21,7 +21,7 @@
 //! run. Whoever can run `mysbx --verbose` can also read both config
 //! files.
 
-use crate::bwrap::{HostEnv, Params, Payload, SANDBOX_HOME};
+use crate::bwrap::{HostEnv, Params, Payload, SANDBOX_HOME, WORKMUX_SOCKET_DIR};
 use crate::config::Mode;
 use crate::merge::Merged;
 use crate::repo::Repo;
@@ -222,7 +222,35 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         "nix.conf:       {}",
         r.params.nix_conf.unwrap_or("(none — nix uses its defaults)")
     ));
+    // workmux (config.md D16 / cli.md D11), only when a layer asked
+    // for it: what replaces the shell, where its tmux socket lives,
+    // and — for the `run` form — that this run keeps the plain
+    // payload after all. Saying the socket path out loud is the point:
+    // "the socket is inside the sandbox" is the isolation claim, and
+    // the report is where an operator checks it against the argv.
+    if r.merged.workmux {
+        match r.payload {
+            Payload::Shell => {
+                p(format!(
+                    "workmux:        enabled — tmux socket {WORKMUX_SOCKET_DIR}/socket (inside the sandbox home tmpfs; no host tmux server is reachable)"
+                ));
+                p(format!(
+                    "  entry:        {}",
+                    r.params.workmux_entry.unwrap_or("(none pinned — the run is refused)")
+                ));
+            }
+            Payload::Command(_) => p(
+                "workmux:        enabled, but not applied — it replaces the INTERACTIVE payload only (cli.md D11)"
+                    .to_string(),
+            ),
+        }
+    }
+
     match r.payload {
+        Payload::Shell if r.merged.workmux => p(format!(
+            "payload:        workmux session {}",
+            r.params.workmux_entry.unwrap_or("(none pinned)")
+        )),
         Payload::Shell => p(format!("payload:        shell {}", r.params.shell)),
         // Space-joined for readability only; the exact, unambiguous
         // argument vector is what `--dry-run` prints.
@@ -283,6 +311,7 @@ mod tests {
             env,
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
+            workmux: false,
         };
         let mut host = HostEnv::new();
         host.insert("TERM".to_owned(), "xterm".to_owned());
@@ -296,6 +325,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
+            workmux_entry: None,
         };
         lines(&Report {
             repo: &repo,
@@ -392,6 +422,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
+            workmux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -431,6 +462,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
+            workmux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -471,6 +503,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
+            workmux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -515,6 +548,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
+            workmux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -554,6 +588,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
+            workmux_entry: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -578,5 +613,59 @@ mod tests {
             "{joined}"
         );
         assert!(!joined.contains("state dirs:"), "{joined}");
+    }
+
+    #[test]
+    fn workmux_is_reported_with_its_in_sandbox_socket_and_only_for_the_shell() {
+        // cli.md D10/D11: the report is where an operator checks the
+        // isolation claim, so the socket path is spelled out — and the
+        // `run` form says out loud that the session is NOT started.
+        let (repo, mut merged, host) = fixture_report();
+        merged.workmux = true;
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            nix_conf: None,
+            policy_paths: &[],
+            workmux_entry: Some("/synth/bin/mysbx-workmux-entry"),
+        };
+        let report_of = |payload: &Payload| {
+            lines(&Report {
+                repo: &repo,
+                sidecar_exists: true,
+                user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+                user_config_exists: true,
+                sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+                sidecar_config_exists: false,
+                merged: &merged,
+                user_mount_count: 1,
+                host_env: &host,
+                params: &params,
+                bwrap_bin: "bwrap",
+                payload,
+                dry_run: true,
+            })
+            .join("\n")
+        };
+
+        let shell = report_of(&Payload::Shell);
+        assert!(
+            shell.contains(&format!("tmux socket {WORKMUX_SOCKET_DIR}/socket")),
+            "{shell}"
+        );
+        assert!(
+            shell.contains("payload:        workmux session /synth/bin/mysbx-workmux-entry"),
+            "{shell}"
+        );
+
+        let cmd = report_of(&Payload::Command(vec!["ls".into()]));
+        assert!(cmd.contains("enabled, but not applied"), "{cmd}");
+        assert!(cmd.contains("payload:        command ls"), "{cmd}");
+        assert!(!cmd.contains("tmux socket"), "{cmd}");
+
+        // Nothing at all without the key (the shared fixture has
+        // `workmux: false`), so the report of every other run is
+        // unchanged.
+        assert!(!render(true, &Payload::Shell).join("\n").contains("workmux"));
     }
 }

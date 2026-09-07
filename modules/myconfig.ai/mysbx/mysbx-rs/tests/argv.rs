@@ -49,6 +49,7 @@ fn base(network: bool) -> Merged {
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
+        workmux: false,
     }
 }
 
@@ -66,6 +67,7 @@ fn params() -> Params<'static> {
         tools_path: "/synth/bin",
         nix_conf: None,
         policy_paths: &[],
+        workmux_entry: None,
     }
 }
 
@@ -551,6 +553,7 @@ fn golden_both_layers_contribute_mounts() {
         ]),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
+        workmux: false,
     };
     let argv = bwrap_argv(
         &cfg,
@@ -573,6 +576,60 @@ fn golden_interactive_payload() {
         &host_env(&[]),
         &params(),
     ).unwrap();
+    assert_golden("interactive-shell.txt", &argv);
+}
+
+#[test]
+fn golden_workmux_interactive_session() {
+    // docs/design/config.md D16: a `workmux = true` INTERACTIVE run
+    // swaps the shell for the pinned entry and exports `TMUX_TMPDIR`
+    // after HOME/PATH — the argv is the auditable form of "the tmux
+    // socket lives inside the sandbox".
+    let mut cfg = base(true);
+    cfg.workmux = true;
+    let mut p = params();
+    p.workmux_entry = Some("/synth/bin/mysbx-workmux-entry");
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
+    assert_golden("workmux-shell.txt", &argv);
+
+    // The socket directory is below the sandbox home and no bind puts
+    // anything there — the regression guard for "never host-shared".
+    let keys = setenv_keys(&argv);
+    assert_eq!(keys, vec!["HOME", "PATH", "TMUX_TMPDIR"]);
+    let i = argv.iter().position(|a| a == "TMUX_TMPDIR").unwrap();
+    assert_eq!(argv[i + 1], format!("{SANDBOX_HOME}/.mysbx-tmux"));
+    for (src, dest) in bind_pairs(&argv) {
+        assert!(!dest.starts_with(&argv[i + 1]), "bind into the socket dir: {src} -> {dest}");
+        // The host's tmux socket locations: `$TMUX_TMPDIR` defaults to
+        // /tmp (a tmpfs here) and tmux servers of the desktop session
+        // live under /run — neither is bound.
+        assert!(!src.starts_with("/tmp/") && src != "/run", "host tmux location bound: {src}");
+    }
+    assert!(!bind_sources(&argv).contains(&"/tmp"));
+}
+
+#[test]
+fn workmux_run_form_is_byte_identical_to_workmux_off() {
+    // cli.md D11: the integration is interactive-only, so a one-shot
+    // `run` argv must not change at all when the key is set.
+    let payload = Payload::Command(vec!["ls".into(), "-x".into()]);
+    let mut p = params();
+    p.workmux_entry = Some("/synth/bin/mysbx-workmux-entry");
+    let mut on = base(true);
+    on.workmux = true;
+    let with = bwrap_argv(&on, &synth_repo(), &payload, &host_env(&[]), &p).unwrap();
+    let without = bwrap_argv(&base(true), &synth_repo(), &payload, &host_env(&[]), &p).unwrap();
+    assert_eq!(rendered(&with), rendered(&without));
+}
+
+#[test]
+fn workmux_off_keeps_the_interactive_argv_unchanged() {
+    // The other half of the byte-compat contract: with the key absent
+    // (every host without the workmux integration) the interactive
+    // argv is the pre-existing golden, entry pinned or not.
+    let mut p = params();
+    p.workmux_entry = Some("/synth/bin/mysbx-workmux-entry");
+    let argv = bwrap_argv(&base(true), &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
     assert_golden("interactive-shell.txt", &argv);
 }
 
@@ -692,6 +749,7 @@ fn mount_order_is_preserved() {
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
+        workmux: false,
     };
     let argv = bwrap_argv(
         &cfg,
@@ -1184,6 +1242,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         tools_path: "/synth/bin",
         nix_conf: Some("/synth/store/mysbx-nix.conf"),
         policy_paths: &[],
+        workmux_entry: None,
     };
     let argv = bwrap_argv(
         &base(true),
@@ -1854,6 +1913,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
         tools_path: "/synth/bin",
         nix_conf: None,
         policy_paths: &policy,
+        workmux_entry: None,
     };
     let mut cfg = base(true);
     cfg.mounts.push(make_mount("/synth", Some("/all-src"), Mode::Rw));
@@ -1876,6 +1936,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
         tools_path: "/synth/bin",
         nix_conf: None,
         policy_paths: &policy,
+        workmux_entry: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -1901,6 +1962,7 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
         tools_path: "/synth/bin",
         nix_conf: None,
         policy_paths: &policy,
+        workmux_entry: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -1919,6 +1981,7 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
         tools_path: "/synth/bin",
         nix_conf: None,
         policy_paths: &policy,
+        workmux_entry: None,
     };
     let mut cfg = base(true);
     cfg.mounts.push(make_mount("/synth/work", Some("/work"), Mode::Rw));
@@ -1939,6 +2002,7 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
         tools_path: "/synth/bin",
         nix_conf: None,
         policy_paths: &policy,
+        workmux_entry: None,
     };
     let cfg = base(true);
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
@@ -1960,6 +2024,7 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
         tools_path: "/synth/bin",
         nix_conf: None,
         policy_paths: &policy,
+        workmux_entry: None,
     };
     let mut cfg = base(true);
     cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
@@ -1984,6 +2049,7 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
         tools_path: "/synth/bin",
         nix_conf: None,
         policy_paths: &[], // nothing exists -> nothing protected
+        workmux_entry: None,
     };
     let mut cfg = base(true);
     cfg.mounts.push(make_mount("/synth", Some("/all-src"), Mode::Rw));
@@ -2009,6 +2075,7 @@ fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
         tools_path: "/synth/bin",
         nix_conf: None,
         policy_paths: policy,
+        workmux_entry: None,
     }
 }
 

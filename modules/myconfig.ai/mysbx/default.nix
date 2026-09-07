@@ -128,11 +128,67 @@ let
     }
     // lib.optionalAttrs (m.dest != null) { inherit (m) dest; };
 
+  # --- workmux integration (./docs/design/config.md D16) ---------------
+  #
+  # The pieces the sandbox needs when a workmux session is its
+  # interactive payload. Which HOSTS get this is decided elsewhere —
+  # ../myconfig.ai.workmux/mysbx.nix sets the options below, next to
+  # the other workmux tiers (`jail.nix`, `sandbox.nix`) — so this
+  # module stays independent of the workmux module's existence.
+  #
+  # `mysbx-workmux-entry` runs INSIDE the sandbox and is pinned into
+  # the wrapper as `MYSBX_WORKMUX_ENTRY` (./nix/mysbx.nix): it boots
+  # tmux on the sandbox-internal socket `/mysbx-home/.mysbx-tmux/socket`
+  # and attaches. Nothing about that path is configurable (D16).
+  workmuxEntry =
+    if cfg.workmux.enable then
+      pkgs.callPackage ./nix/workmux-entry.nix { workmux = cfg.workmux.package; }
+    else
+      null;
+
+  # The workmux configuration the sandbox reads. It is deliberately NOT
+  # the host's `~/.config/workmux/config.yaml`: there the named agents
+  # point at the jailed launchers (`pi-workmux-launch` → `pi-bwrap`),
+  # and running one inside this sandbox would start a NESTED sandbox
+  # with its own tmpfs home — losing the agent's configuration exactly
+  # as it does in the jail tier (../myconfig.ai.workmux/jail.nix). The
+  # in-sandbox agents are therefore the plain binaries, chosen by the
+  # module that fills `workmux.settings`.
+  workmuxConfigFile =
+    (pkgs.formats.yaml { }).generate "mysbx-workmux-config.yaml"
+      cfg.workmux.settings;
+
+  # Mounts the workmux payload needs, appended to the generated user
+  # layer like every other agent module's (../programs.opencode). All
+  # `ro`, all store paths (which always exist, so the eager
+  # canonicalization of D8 cannot fail), with a `dest` where the tool
+  # actually looks: `HOME` is `/mysbx-home` in the sandbox (D14).
+  workmuxMounts = lib.optionals cfg.workmux.enable (
+    [
+      {
+        path = "${workmuxConfigFile}";
+        dest = "/mysbx-home/.config/workmux/config.yaml";
+        mode = "ro";
+      }
+    ]
+    # The host's tmux configuration (`programs.tmux` writes
+    # `/etc/tmux.conf`), so the in-sandbox server has the same
+    # keybindings and theme. The SOURCE is the store path, not
+    # `/etc/tmux.conf`: the base binds no `/etc` beyond `localtime`,
+    # and a store path cannot go missing between two runs.
+    ++ lib.optional (cfg.workmux.tmuxConf != null) {
+      path = "${cfg.workmux.tmuxConf}";
+      dest = "/etc/tmux.conf";
+      mode = "ro";
+    }
+  );
+
   userConfigToml = {
     inherit (cfg.config) network;
     mounts = map renderMount cfg.config.mounts;
     env = cfg.config.env;
   }
+  // lib.optionalAttrs cfg.config.workmux { inherit (cfg.config) workmux; }
   // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
   // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; }
   // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; };
@@ -147,8 +203,11 @@ in
       # MYSBX_BWRAP / MYSBX_SHELL / MYSBX_TOOLS_PATH pinned to store paths.
       # The unwrapped crate build stays reachable as
       # `<package>.passthru.crate` (used by nix/checks.nix).
-      default = pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; }";
+      default = pkgs.callPackage ./nix/mysbx.nix {
+        inherit (cfg) extraTools;
+        inherit workmuxEntry;
+      };
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit workmuxEntry; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -169,6 +228,71 @@ in
         the same "security-relevant list, not packaging detail" rule as
         for the baseline closure applies.
       '';
+    };
+
+    workmux = {
+      enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Make the INTERACTIVE payload of every sandbox of this user a
+          workmux tmux session instead of a plain shell
+          (./docs/design/config.md D16, ./docs/design/cli.md D11):
+          `workmux = true` in the generated user layer, `tmux` and
+          `workmux` in the sandbox tool closure, and the
+          `mysbx-workmux-entry` payload pinned into the wrapper. The
+          tmux socket lives inside the sandbox home tmpfs and is not
+          configurable, so it can never be shared with a host tmux
+          server or with another sandbox.
+
+          `mysbx run -- CMD` is unaffected — a one-shot command starts
+          no session.
+
+          Off here by default: the wiring that turns it on where the
+          host runs workmux lives with the other workmux tiers,
+          ../myconfig.ai.workmux/mysbx.nix (next to `jail.nix` and
+          `sandbox.nix`), which also fills `settings` and `tmuxConf`.
+        '';
+      };
+
+      package = mkOption {
+        type = types.nullOr types.package;
+        default = null;
+        example = literalExpression "config.myconfig.ai.workmux.package";
+        description = ''
+          The workmux package that runs *inside* the sandbox (it lands
+          on the sandbox `PATH` and in the entry script's closure).
+          Required when `enable` is set.
+        '';
+      };
+
+      settings = mkOption {
+        type = (pkgs.formats.yaml { }).type;
+        default = { };
+        description = ''
+          The workmux configuration mounted read-only at
+          `/mysbx-home/.config/workmux/config.yaml` — what the
+          in-sandbox workmux reads instead of the host's
+          `~/.config/workmux/config.yaml`.
+
+          It must name the *plain* agent binaries: the sandbox is
+          already the sandbox, and a jailed launcher started in a pane
+          would open a nested sandbox with its own tmpfs home, losing
+          the agent's configuration (the same rule the bubblewrap jail
+          tier follows, ../myconfig.ai.workmux/jail.nix).
+        '';
+      };
+
+      tmuxConf = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        example = literalExpression ''config.environment.etc."tmux.conf".source'';
+        description = ''
+          A tmux configuration bound read-only at `/etc/tmux.conf`, so
+          the in-sandbox tmux server shares the host's keybindings and
+          theme. `null` leaves the sandbox with tmux defaults.
+        '';
+      };
     };
 
     config = mkOption {
@@ -201,6 +325,17 @@ in
             type = types.bool;
             default = true;
             description = "Share the host network; `false` is the deny switch.";
+          };
+          workmux = mkOption {
+            type = types.bool;
+            default = false;
+            description = ''
+              Make the interactive payload a workmux tmux session
+              (./docs/design/config.md D16). Set by
+              `myconfig.ai.mysbx.workmux.enable`; only written to the
+              generated layer when true, so a host without the
+              integration keeps a byte-identical config file.
+            '';
           };
           mounts = mkOption {
             description = ''
@@ -381,11 +516,40 @@ in
             Give each of them an explicit `dest` below `/mysbx-home`.
           '';
         }
+        {
+          # The entry script and the sandbox PATH both need the real
+          # package; without it the sandbox would ask for a session it
+          # cannot start (a run-time refusal, D16 — better caught here).
+          assertion = cfg.workmux.enable -> cfg.workmux.package != null;
+          message = ''
+            myconfig.ai.mysbx.workmux.enable is on but
+            myconfig.ai.mysbx.workmux.package is null — set it to the
+            workmux package that should run inside the sandbox (on
+            myconfig hosts ../myconfig.ai.workmux/mysbx.nix does that).
+          '';
+        }
       ];
 
     # Baseline mounts; further definitions (from per-agent modules or the
     # host config) are concatenated onto this list.
-    myconfig.ai.mysbx.config.mounts = baselineMounts;
+    myconfig.ai.mysbx.config.mounts = baselineMounts ++ workmuxMounts;
+
+    # The workmux payload's own tooling, on the sandbox PATH: `workmux`
+    # (the panes' dashboard/sidebar call it, e.g. `workmux
+    # set-window-status`) and `tmux` (the entry pins its own copy, but a
+    # pane running plain `tmux` must find the same binary). The agents
+    # workmux launches come from the agent modules' own `extraTools`.
+    myconfig.ai.mysbx.extraTools = lib.optionals cfg.workmux.enable [
+      cfg.workmux.package
+      pkgs.tmux
+    ];
+
+    # The generated user layer carries the switch itself (D16): both
+    # layers may decide it, and this is the host-wide statement.
+    # `mkDefault`, so a host that installs the integration but wants the
+    # plain shell host-wide can say so without an eval conflict (a
+    # single repository says it in its sidecar instead).
+    myconfig.ai.mysbx.config.workmux = lib.mkDefault cfg.workmux.enable;
 
     # Baseline [env] (RIPGREP_CONFIG_PATH, review-3 item 6).
     #

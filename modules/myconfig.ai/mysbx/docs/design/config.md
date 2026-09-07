@@ -588,3 +588,82 @@ On myconfig hosts the NixOS module (`../../default.nix`) writes
 `myconfig.ai.mysbx.config.stateDirs` into the generated user layer —
 per-agent modules append the state directories of their tool (today
 opencode's `~/.local/{share,state}/opencode`).
+
+### D16: `workmux` — the interactive payload is a tmux session, on a socket inside the sandbox
+
+```toml
+workmux = true
+```
+
+`workmux = true` makes the **interactive** payload a
+[workmux](https://github.com/raine/workmux) tmux session instead of a
+bare shell: mysbx execs the entry pinned by its wrapper
+(`MYSBX_WORKMUX_ENTRY`), which boots a tmux server, bootstraps the
+workmux sidebar + dashboard and attaches — the same bootstrap the
+bubblewrap-jail tier does in
+`../../myconfig.ai.workmux/jail.nix` (`agent-bubblewrap-workmux-tmux`),
+expressed here as *configuration* instead of a Nix call site.
+`mysbx run -- CMD` is unaffected (cli.md D11).
+
+**The tmux socket lives inside the sandbox, and that is not
+configurable.** It is always `/mysbx-home/.mysbx-tmux/socket`: a path
+in the sandbox home tmpfs (D14), created by the entry inside the
+sandbox, exported as `TMUX_TMPDIR` so a bare `tmux` in any pane finds
+the same server, and gone when the run ends.
+
+Why not the jail tier's repo-local socket (`<repo>__worktrees/.agent-bubblewrap/socket`)?
+Because that is a HOST path, and under mysbx it would be reachable from
+every other sandbox of the same repository (and from a tmux client
+outside the sandbox, if the directory were ever bound elsewhere). A
+tmux server is a command-execution service: whoever reaches its socket
+runs processes in the session's namespace. Keeping the socket in the
+tmpfs makes "one sandbox, one tmux server" a property of the
+filesystem layout rather than of a naming convention.
+
+That isolation is **enforced, not assumed** (`bwrap.rs::check_workmux_socket`):
+
+- `TMUX_TMPDIR` is emitted after `[env]`, like `HOME` and `PATH`
+  (D14), so no layer can repoint it at `/tmp/tmux-1000` or at a bound
+  host directory — such an entry parses, shows up in `--dry-run` and
+  never reaches the payload;
+- no mount `dest` may be the socket directory or lie below it (a dest
+  AT it would put host content under the socket, a dest below it would
+  land inside the directory the tmux server owns); component
+  look-alikes (`/mysbx-home/.mysbx-tmux2`) stay mountable, like
+  `/usr/bin2` for the base paths;
+- no `state-dirs` entry may back it with a sidecar directory (D15) —
+  that would turn the socket into a host path shared by every sandbox
+  of the repository, so the socket is deliberately not persistable;
+- the base table binds no `/run` and gives `/tmp` a fresh tmpfs
+  (plan.md), so the host's own default socket directory
+  (`/tmp/tmux-<uid>`) does not exist inside the sandbox at all — which
+  also covers workmux's *own* sidebar socket, which it derives from the
+  tmux socket path and puts in `/tmp`
+  (`/tmp/workmux-sidebar--mysbx-home-.mysbx-tmux-socket.sock`, observed
+  in a real run): inside the tmpfs, i.e. per sandbox, like the tmux
+  socket itself.
+
+Layer semantics: **either layer may decide, and the sidecar wins when
+both do** — like `backend`, not like `network`. The key grants no host
+access: it selects a payload from mysbx's own closure and adds one
+environment variable, so neither the network's narrow-only rule nor the
+`[env]` override refusal (D7) applies. A repo that wants a plain shell
+writes `workmux = false` in its sidecar; a repo that wants a session on
+a host where the user config says nothing writes `workmux = true`.
+
+What the session can and cannot do is a consequence of the base, not of
+this key: `workmux add` creates a git worktree in the
+`<repo>__worktrees` sibling, which is **outside** the repo bind (D13),
+so a sandbox that should create worktrees must declare that directory
+`rw` in its sidecar `[[mounts]]`. Without it the dashboard, the sidebar
+and every pane still work, and `workmux add` fails with a filesystem
+error naming the path — the honest outcome, since no layer declared it.
+
+On myconfig hosts none of this is hand-written: `myconfig.ai.mysbx.workmux`
+(`../../default.nix`) generates `workmux = true`, the in-sandbox
+`~/.config/workmux/config.yaml` (with the *plain* agent binaries, since
+the sandbox is already the sandbox), the `tmux`/`workmux` entries of the
+tool closure and the `MYSBX_WORKMUX_ENTRY` pin. The wiring that decides
+*whether* a host gets it lives with the other workmux tiers
+(`../../../myconfig.ai.workmux/mysbx.nix`), next to `jail.nix` and
+`sandbox.nix`.

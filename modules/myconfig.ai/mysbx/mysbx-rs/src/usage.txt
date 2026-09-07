@@ -7,7 +7,10 @@ Usage:
 
 Commands:
   (none)        enter an interactive sandbox shell for the current repo
-                (creates the sidecar implicitly when it is missing)
+                (creates the sidecar implicitly when it is missing);
+                with `workmux = true` in a config layer this is a tmux
+                session with workmux instead of a bare shell, on a tmux
+                socket inside the sandbox
   run -- CMD... run one command in the sandbox; everything after `--` is
                 passed to the command verbatim
   init          create the sidecar directory next to the current repo;

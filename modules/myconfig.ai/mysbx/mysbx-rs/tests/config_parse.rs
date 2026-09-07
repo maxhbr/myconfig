@@ -59,6 +59,7 @@ fn every_asset_is_exercised() {
         "invalid/schema-state-dirs-climbing.toml",
         "invalid/schema-tilde-user-path.toml",
         "invalid/schema-unknown-key.toml",
+        "invalid/schema-workmux-wrong-type.toml",
         "invalid/schema-wrong-type.toml",
         "invalid/syntax-duplicate-key.toml",
         "invalid/syntax-missing-value.toml",
@@ -95,6 +96,9 @@ fn full_config() {
     let c = load_ok("valid/full.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
     assert_eq!(c.network, Some(true));
+    // workmux (D16): tri-state like `network`; the interactive payload
+    // of this layer is a tmux session with workmux.
+    assert_eq!(c.workmux, Some(true));
 
     assert_eq!(c.mounts.len(), 2);
     assert_eq!(c.mounts[0].path, "/home/user/.config/pi");
@@ -197,6 +201,10 @@ fn invalid_schema_is_reported_with_the_offending_key() {
             "missing required key `path`",
         ),
         ("invalid/schema-repo-table.toml", "unknown key `repo`"),
+        (
+            "invalid/schema-workmux-wrong-type.toml",
+            "workmux: expected a boolean",
+        ),
         (
             "invalid/schema-env-flag-key.toml",
             "is not a usable variable name",

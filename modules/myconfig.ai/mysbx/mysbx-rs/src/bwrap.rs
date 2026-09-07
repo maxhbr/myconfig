@@ -57,6 +57,22 @@ pub type HostEnv = BTreeMap<String, String>;
 /// in the host home.
 pub const SANDBOX_HOME: &str = "/mysbx-home";
 
+/// The directory holding the tmux socket of a workmux payload
+/// (docs/design/config.md D16), exported as `TMUX_TMPDIR` and used by
+/// the entry script as `tmux -S $TMUX_TMPDIR/socket`.
+///
+/// It is a path **inside** the sandbox home tmpfs and nothing else:
+/// no host path is bound at or below it, and no configuration may
+/// make one land there (see [`check_workmux_socket`]). The socket is
+/// therefore reachable only from this one sandbox — never from
+/// another mysbx sandbox of the same repository, never from a tmux
+/// server on the host, and it dies with the tmpfs. That is the whole
+/// isolation claim of the workmux integration, and it rests on the
+/// path being infrastructure: `TMUX_TMPDIR` is emitted after `[env]`,
+/// like `HOME` and `PATH`, so no layer can repoint it at
+/// `/tmp/tmux-1000` or at a bound host directory.
+pub const WORKMUX_SOCKET_DIR: &str = "/mysbx-home/.mysbx-tmux";
+
 /// Common parameters of every invocation that do not come from a
 /// configuration layer: the shell binary and the dev-tool `PATH` closure
 /// root, both host paths the MVP carries in its own closure
@@ -95,6 +111,21 @@ pub struct Params<'a> {
     /// contain one are therefore refused; the check also covers the
     /// repo bind itself, which is `rw` by definition.
     pub policy_paths: &'a [PolicyPath],
+    /// The **workmux entry** the interactive payload is replaced by
+    /// when the merged configuration asks for workmux
+    /// (docs/design/config.md D16, cli.md D11), or `None` when this
+    /// build pinned none.
+    ///
+    /// Like [`Params::shell`] this is a host path from mysbx's own
+    /// closure, pinned by the Nix wrapper (`MYSBX_WORKMUX_ENTRY`);
+    /// the script it names boots a tmux server on the in-sandbox
+    /// socket of [`WORKMUX_SOCKET_DIR`] and attaches to it. There is
+    /// no fallback on purpose: `workmux = true` with nothing pinned is
+    /// a refused run ([`Error::WorkmuxUnavailable`]), never a silent
+    /// plain shell — the operator asked for a session, and getting a
+    /// bare shell instead would be discovered only after the work was
+    /// done in the wrong place.
+    pub workmux_entry: Option<&'a str>,
 }
 
 /// A trusted policy file, represented by everything the payload must
@@ -179,9 +210,13 @@ impl PolicyPath {
 ///    variables first, then `cfg.env` (which wins by being set later),
 ///    then the infrastructure variables `HOME` and `PATH` last — set
 ///    after `cfg.env` on purpose, so neither layer can point them
-///    somewhere else (config.md D14)
+///    somewhere else (config.md D14) — plus `TMUX_TMPDIR`
+///    ([`WORKMUX_SOCKET_DIR`]) for a workmux run, which is
+///    infrastructure for the same reason (config.md D16)
 /// 7. `--chdir` into the repo root
-/// 8. `--` and the payload, verbatim
+/// 8. `--` and the payload, verbatim — except that a `workmux = true`
+///    *interactive* payload is the pinned workmux entry instead of the
+///    shell (config.md D16, cli.md D11); `run -- CMD` is untouched
 ///
 /// Deliberately absent (see the base table's "no" rows): `/run`, `~/tmp`,
 /// a host-backed `/tmp/<name>`, the host home directory (only the empty
@@ -198,6 +233,20 @@ pub fn bwrap_argv(
     params: &Params<'_>,
 ) -> Result<Vec<String>, Error> {
     let root = repo.root.to_string_lossy().into_owned();
+    // The workmux integration applies to the INTERACTIVE payload only
+    // (cli.md D11): `mysbx run -- CMD` is a one-shot, and wrapping it
+    // in a tmux server would leave the command's output in a pane
+    // nobody attaches to. So a `run` argv is byte-identical to the
+    // workmux-disabled one — no payload swap, no `TMUX_TMPDIR`, and
+    // none of the socket guards below (they guard the socket of a
+    // session this run does not start).
+    let workmux = cfg.workmux && *payload == Payload::Shell;
+    if workmux {
+        check_workmux_socket(&cfg.mounts, &cfg.state_dirs)?;
+        if params.workmux_entry.is_none() {
+            return Err(Error::WorkmuxUnavailable);
+        }
+    }
     let mut argv: Vec<String> = vec!["--clearenv".into(), "--unshare-all".into()];
     if cfg.network {
         argv.push("--share-net".into());
@@ -465,6 +514,18 @@ pub fn bwrap_argv(
     argv.push("--setenv".into());
     argv.push("PATH".into());
     argv.push(params.tools_path.into());
+    // `TMUX_TMPDIR` is infrastructure for the same reason (D16): it
+    // names a path inside the tmpfs home this builder created, and it
+    // is what keeps the tmux socket out of every host-shared location
+    // (`/tmp/tmux-<uid>` on the host, another sandbox's sidecar). Set
+    // after `[env]`, so a layer that spells it out parses and shows up
+    // in `--dry-run` but never reaches the payload — exactly the
+    // treatment `HOME` and `PATH` get.
+    if workmux {
+        argv.push("--setenv".into());
+        argv.push("TMUX_TMPDIR".into());
+        argv.push(WORKMUX_SOCKET_DIR.into());
+    }
 
     // 7. work in the repo.
     argv.push("--chdir".into());
@@ -473,6 +534,14 @@ pub fn bwrap_argv(
     // 8. the payload, verbatim.
     argv.push("--".into());
     match payload {
+        // The workmux entry REPLACES the shell (cli.md D11): it is the
+        // interactive payload, and it execs `tmux attach` in the end,
+        // so the session is what the operator's terminal is attached
+        // to. `unwrap_or` cannot fall back silently — a missing pin
+        // was refused above.
+        Payload::Shell if workmux => {
+            argv.push(params.workmux_entry.unwrap_or(params.shell).into())
+        }
         Payload::Shell => argv.push(params.shell.into()),
         Payload::Command(args) => argv.extend(args.iter().cloned()),
     }
@@ -575,6 +644,26 @@ pub enum Error {
         /// The entry declared later (the descendant) that would nest.
         inner: String,
     },
+    /// The configuration asks for a workmux session (`workmux = true`,
+    /// docs/design/config.md D16) but this build pinned no entry
+    /// (`MYSBX_WORKMUX_ENTRY`). Falling back to a plain shell is not an
+    /// option: the operator asked for the session, and a silent bare
+    /// shell would be noticed only after the work happened in the
+    /// wrong place.
+    WorkmuxUnavailable,
+    /// A mount `dest` is related to [`WORKMUX_SOCKET_DIR`] (docs/design/
+    /// config.md D16): the tmux socket of a workmux payload must live
+    /// in the sandbox home tmpfs and nowhere else. A dest AT the
+    /// directory would put a host directory under the socket — making
+    /// it reachable from the host and from every other sandbox binding
+    /// the same path — and a dest BELOW it would land inside the very
+    /// directory the tmux server owns.
+    WorkmuxSocketDest { dest: String },
+    /// A `state-dirs` entry would make [`WORKMUX_SOCKET_DIR`]
+    /// sidecar-backed (docs/design/config.md D16): the socket would
+    /// then be a path on the HOST, shared by every mysbx sandbox of
+    /// this repository, instead of a path that dies with the tmpfs.
+    WorkmuxSocketPersisted { entry: String },
 }
 
 impl fmt::Display for Error {
@@ -642,6 +731,32 @@ impl fmt::Display for Error {
                  no approval can make that safe \u{2014} move the repository \
                  out of {protected}",
                 gitdir.display()
+            ),
+            Error::WorkmuxUnavailable => write!(
+                f,
+                "workmux = true, but this build pinned no workmux entry \
+                 (MYSBX_WORKMUX_ENTRY) \u{2014} the interactive payload would be a \
+                 plain shell instead of the session that was asked for \
+                 (docs/design/config.md D16); install mysbx with the workmux \
+                 integration enabled (myconfig.ai.mysbx.workmux.enable), or \
+                 drop `workmux = true`"
+            ),
+            Error::WorkmuxSocketDest { dest } => write!(
+                f,
+                "mount dest {dest} is related to the workmux tmux socket \
+                 directory {WORKMUX_SOCKET_DIR}, which mysbx keeps inside the \
+                 sandbox home tmpfs so the socket can never be shared with \
+                 the host or with another sandbox (docs/design/config.md \
+                 D16); mount it elsewhere below {SANDBOX_HOME}"
+            ),
+            Error::WorkmuxSocketPersisted { entry } => write!(
+                f,
+                "state-dirs entry `{entry}` would back the workmux tmux socket \
+                 directory {WORKMUX_SOCKET_DIR} with a sidecar directory \u{2014} the \
+                 socket would become a HOST path shared by every sandbox of \
+                 this repository instead of dying with the tmpfs home \
+                 (docs/design/config.md D16); the socket is deliberately not \
+                 persistable, so drop the entry"
             ),
             Error::StateDirNesting { outer, inner } => write!(
                 f,
@@ -845,6 +960,48 @@ fn check_state_dirs(state_dirs: &[String]) -> Result<(), Error> {
                     inner: inner.clone(),
                 });
             }
+        }
+    }
+    Ok(())
+}
+
+/// The socket isolation of the workmux integration (docs/design/
+/// config.md D16), enforced instead of assumed: nothing a
+/// configuration can say may move [`WORKMUX_SOCKET_DIR`] out of the
+/// sandbox home tmpfs.
+///
+/// Two ways a config could:
+///
+/// - a mount `dest` at the socket directory would bind a HOST
+///   directory there, so the socket would live on the host — visible
+///   to a tmux client outside the sandbox and to every other sandbox
+///   binding the same path; a dest BELOW it would drop foreign content
+///   into the directory the tmux server owns. Both directions are
+///   refused (`/mysbx-home/.mysbx-tmux2` is a different directory and
+///   stays mountable, like `/usr/bin2` for the base paths).
+/// - a `state-dirs` entry naming the socket directory (or something
+///   inside it) would make it sidecar-backed — a host path again,
+///   shared by every sandbox of this repository and surviving the run.
+///
+/// Only reached for a workmux run: with `workmux = false` (or the
+/// `run` form) there is no socket, and `/mysbx-home/.mysbx-tmux` is an
+/// ordinary home path a config may use for anything.
+fn check_workmux_socket(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error> {
+    let socket = Path::new(WORKMUX_SOCKET_DIR);
+    for m in mounts {
+        let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
+        if dest.starts_with(socket) || socket.starts_with(&dest) {
+            return Err(Error::WorkmuxSocketDest {
+                dest: dest.to_string_lossy().into_owned(),
+            });
+        }
+    }
+    for entry in state_dirs {
+        let dest = normalize(&format!("{SANDBOX_HOME}/{entry}"));
+        if dest.starts_with(socket) || socket.starts_with(&dest) {
+            return Err(Error::WorkmuxSocketPersisted {
+                entry: entry.clone(),
+            });
         }
     }
     Ok(())
@@ -1159,6 +1316,7 @@ mod tests {
             env: BTreeMap::new(),
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
+            workmux: false,
         }
     }
 
@@ -1168,6 +1326,7 @@ mod tests {
             tools_path: "/synth/bin",
             nix_conf: None,
             policy_paths: &[],
+            workmux_entry: None,
         }
     }
 
@@ -1671,5 +1830,162 @@ mod tests {
             matches!(err, Error::DestBelowWritable { .. }),
             "wrong error: {err}"
         );
+    }
+
+    // ---- workmux (docs/design/config.md D16, cli.md D11) ---------------
+
+    /// The defaults with `workmux = true` and an entry pinned.
+    fn workmux_defaults() -> (Repo, Merged, Params<'static>) {
+        let (repo, mut cfg, mut p) = shell_repo_defaults();
+        cfg.workmux = true;
+        p.workmux_entry = Some("/synth/bin/mysbx-workmux-entry");
+        (repo, cfg, p)
+    }
+
+    #[test]
+    fn workmux_replaces_the_interactive_shell_and_pins_the_socket_dir() {
+        let (repo, cfg, p) = workmux_defaults();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let n = argv.len();
+        assert_eq!(argv[n - 2], "--");
+        assert_eq!(argv[n - 1], "/synth/bin/mysbx-workmux-entry");
+        // The socket directory is exported, and it is INSIDE the
+        // sandbox home tmpfs — the whole isolation claim of D16.
+        let i = pos(&argv, "TMUX_TMPDIR");
+        assert_eq!(argv[i + 1], WORKMUX_SOCKET_DIR);
+        assert!(
+            WORKMUX_SOCKET_DIR.starts_with(&format!("{SANDBOX_HOME}/")),
+            "the socket dir must live below the sandbox home"
+        );
+        // Infrastructure, like HOME and PATH: emitted after `[env]`, so
+        // no layer can repoint it.
+        assert!(pos(&argv, "PATH") < i);
+    }
+
+    #[test]
+    fn workmux_socket_dir_is_never_a_host_path() {
+        // No bind may put host content at or below the socket
+        // directory, and the host's own tmux socket directories are not
+        // bound at all (there is no `/run` and `/tmp` is a tmpfs).
+        let (repo, cfg, p) = workmux_defaults();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        for w in argv.windows(3) {
+            if w[0] == "--bind" || w[0] == "--ro-bind" || w[0] == "--ro-bind-try" {
+                assert!(
+                    !w[2].starts_with(WORKMUX_SOCKET_DIR),
+                    "a bind lands in the socket dir: {w:?}"
+                );
+                assert!(
+                    !w[1].starts_with("/tmp/tmux-") && w[1] != "/run",
+                    "a host tmux socket location is bound: {w:?}"
+                );
+            }
+        }
+        // `/tmp` is a tmpfs, not a bind — so the host's default
+        // `/tmp/tmux-<uid>` cannot be reached even by accident.
+        let i = pos(&argv, "--tmpfs");
+        assert_eq!(argv[i + 1], "/tmp");
+    }
+
+    #[test]
+    fn workmux_does_not_touch_the_run_form() {
+        // cli.md D11: `run -- CMD` is a one-shot; the argv must be
+        // byte-identical to the workmux-disabled one.
+        let (repo, cfg, p) = workmux_defaults();
+        let payload = Payload::Command(vec!["ls".into()]);
+        let with = bwrap_argv(&cfg, &repo, &payload, &HostEnv::new(), &p).unwrap();
+        let mut off = cfg.clone();
+        off.workmux = false;
+        let without = bwrap_argv(&off, &repo, &payload, &HostEnv::new(), &p).unwrap();
+        assert_eq!(with, without);
+        assert!(!with.contains(&"TMUX_TMPDIR".to_string()));
+    }
+
+    #[test]
+    fn workmux_without_a_pinned_entry_is_refused() {
+        let (repo, mut cfg, p) = shell_repo_defaults();
+        cfg.workmux = true; // nothing pinned in `p`
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(matches!(err, Error::WorkmuxUnavailable), "wrong error: {err}");
+        // A `run` payload is unaffected: it starts no session, so it
+        // needs no entry.
+        bwrap_argv(
+            &cfg,
+            &repo,
+            &Payload::Command(vec!["ls".into()]),
+            &HostEnv::new(),
+            &p,
+        )
+        .expect("the run form does not need the entry");
+    }
+
+    #[test]
+    fn a_mount_may_not_land_on_the_workmux_socket_dir() {
+        for dest in [
+            WORKMUX_SOCKET_DIR,
+            &format!("{WORKMUX_SOCKET_DIR}/socket"),
+            &format!("{WORKMUX_SOCKET_DIR}/../.mysbx-tmux"),
+        ] {
+            let (repo, mut cfg, p) = workmux_defaults();
+            cfg.mounts = vec![Mount {
+                path: "/synth/data".into(),
+                dest: Some(dest.to_string()),
+                mode: Mode::Ro,
+            }];
+            let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+                .expect_err("must be refused");
+            assert!(
+                matches!(err, Error::WorkmuxSocketDest { .. }),
+                "{dest}: wrong error: {err}"
+            );
+        }
+        // A component look-alike is a different directory and stays
+        // mountable (same rule as `/usr/bin2` for the base paths).
+        let (repo, mut cfg, p) = workmux_defaults();
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some(format!("{WORKMUX_SOCKET_DIR}2")),
+            mode: Mode::Ro,
+        }];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+    }
+
+    #[test]
+    fn the_workmux_socket_dir_cannot_be_persisted_in_the_sidecar() {
+        for entry in [".mysbx-tmux", ".mysbx-tmux/sub"] {
+            let (repo, mut cfg, p) = workmux_defaults();
+            cfg.state_dirs = vec![entry.to_string()];
+            let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+                .expect_err("must be refused");
+            assert!(
+                matches!(err, Error::WorkmuxSocketPersisted { .. }),
+                "{entry}: wrong error: {err}"
+            );
+        }
+        // An unrelated state dir stays fine.
+        let (repo, mut cfg, p) = workmux_defaults();
+        cfg.state_dirs = vec![".local/share/opencode".to_string()];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+    }
+
+    #[test]
+    fn workmux_disabled_leaves_the_socket_dir_an_ordinary_home_path() {
+        // The guards exist for a run that starts a session; without
+        // one, `/mysbx-home/.mysbx-tmux` is just a path below the home
+        // and a config may use it (D16: nothing is reserved globally).
+        let (repo, mut cfg, p) = shell_repo_defaults();
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some(WORKMUX_SOCKET_DIR.to_string()),
+            mode: Mode::Ro,
+        }];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        // Same for a state dir of that name (declared alone: the
+        // pre-existing rule that a mount may not cover a state bind is
+        // a different guard).
+        let (repo, mut cfg, p) = shell_repo_defaults();
+        cfg.state_dirs = vec![".mysbx-tmux".to_string()];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
     }
 }

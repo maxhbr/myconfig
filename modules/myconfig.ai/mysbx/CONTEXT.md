@@ -39,7 +39,8 @@ _Avoid_: driver, engine, runtime
 
 **Payload**:
 The process `mysbx` starts inside the sandbox — an interactive shell for the
-bare form, or the command after `--`. Its exit code is propagated unchanged.
+bare form (a workmux session with `workmux = true`, `docs/design/config.md`
+D16), or the command after `--`. Its exit code is propagated unchanged.
 _Avoid_: inner command, guest command, job
 
 **Base**:
