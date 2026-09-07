@@ -62,6 +62,7 @@
   fd,
   jq,
   git,
+  tig,
   nix,
   python3,
   curl,
@@ -91,7 +92,11 @@ let
   # This is the MVP's hardcoded dev-tool closure, mirroring
   # ../../fns/bubblewrap-app.nix `devTools` minus the package-management
   # and linting extras (`wget`, `unzip`, `diffutils`, `tar`/`gzip`,
-  # `shfmt`, `shellcheck`), plus `hostname`: agents fetch those extras
+  # `shfmt`, `shellcheck`), plus `hostname` and `tig` (the git TUI: the
+  # payload is always a git worktree, and reviewing it is the one
+  # interactive job a sandboxed agent session hands back to the human —
+  # a tiny closure next to the `git` that is already shipped): agents
+  # fetch those extras
   # per project via nix/flake, not from the sandbox base. Per plan.md
   # phase 2d, `mysbx` should
   # eventually join the shared `myconfig.ai.sandboxTools` option instead
@@ -119,6 +124,7 @@ let
       fd
       jq
       git
+      tig
       nix
       python3
       curl

@@ -30,6 +30,7 @@
   ripgrep,
   shadow,
   socat,
+  tig,
   util-linux,
   which,
 
@@ -74,6 +75,7 @@ let
     ripgrep
     shadow # getent, id helpers
     socat # in-sandbox loopback relays, see ./agent-gvisor-init.sh
+    tig # git TUI next to `git`: reviewing the sandboxed checkout
     util-linux
     which
   ];

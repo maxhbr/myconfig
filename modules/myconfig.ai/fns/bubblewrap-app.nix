@@ -78,9 +78,15 @@
   # andersonjoseph/jailed-agents' commonPkgs plus a few extras (fd, ripgrep,
   # less, wget, curl, jq, nix) we use everywhere. Override to replace; use
   # `extraDevTools` to append.
+  #
+  # `tig` rides along with `git`: the jailed payload is always a git
+  # checkout, and reviewing it is the interactive job handed back to the
+  # human (see `../mysbx/nix/mysbx.nix` `toolsEnv`, which ships the same
+  # pair).
   devTools ? [
     pkgs.bashInteractive
     pkgs.git
+    pkgs.tig
     pkgs.coreutils
     pkgs.findutils
     pkgs.gnugrep

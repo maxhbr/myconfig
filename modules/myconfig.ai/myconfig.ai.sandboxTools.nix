@@ -25,7 +25,8 @@
 #   * gVisor sandbox image — `myconfig.ai.gvisor-agent-sandbox` appends the
 #     packages to its `extraImagePackages` default.
 #
-# Deliberately EMPTY by default: the sandbox tiers are minimal by design
+# Deliberately EMPTY by default *from the host's side*: the sandbox tiers are
+# minimal by design
 # (headless, no GUI closures), so heavy tooling — a browser behind
 # `playwright-cli`, for example — is opt-in per host:
 #
@@ -34,6 +35,11 @@
 #     chromium
 #   ];
 #   myconfig.ai.sandboxTools.extraEnv.PLAYWRIGHT_MCP_BROWSER = "chromium";
+#
+# Feature modules may add to the list too, gated behind their own enable
+# option, when their tool is wanted in every tier and belongs to no single
+# one: ../programs.hunk appends `pkgs.hunk` this way, so the reviewing tool
+# exists wherever an agent produces a changeset.
 { lib, ... }:
 {
   options.myconfig.ai.sandboxTools = with lib; {
@@ -44,7 +50,9 @@
         Extra packages added to EVERY agent sandbox tier (bubblewrap `agent-bubblewrap-*`
         wrappers, `myconfig.ai.microvm` guests, the `sandboxed-*` microVM
         runners and the gVisor sandbox image), in addition to each tier's own
-        default toolset. Default: none — the sandboxes stay minimal.
+        default toolset. Default: none from the host — the sandboxes stay
+        minimal; enabled feature modules (e.g. `myconfig.ai.hunk`) may append
+        their own tool.
       '';
     };
 

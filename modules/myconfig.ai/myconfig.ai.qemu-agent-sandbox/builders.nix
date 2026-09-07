@@ -290,6 +290,7 @@ let
                   procps
                   ripgrep
                   rsync
+                  tig
                   tree
                   unzip
                   which

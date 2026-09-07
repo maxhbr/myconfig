@@ -89,7 +89,7 @@ pub struct Params<'a> {
     /// Path of the shell used for [`Payload::Shell`].
     pub shell: &'a str,
     /// The dev-tool closure's `bin` directory, set as `PATH` inside the
-    /// sandbox (git, ripgrep, fd, jq, nix, python3, coreutils, …).
+    /// sandbox (git, tig, ripgrep, fd, jq, nix, python3, coreutils, …).
     pub tools_path: &'a str,
     /// A **sanitized** `nix.conf` to bind at `/etc/nix/nix.conf`, or
     /// `None` for no nix configuration at all (review-2 item 3).

@@ -27,6 +27,9 @@
 #     (`$out/share/skills/hunk/hunk-review`), registered in the handcrafted
 #     skill registry of ../skills so every enabled agent harness learns how to
 #     drive a live hunk review session.
+#   * the binary on the PATH of every sandbox tier — via the shared
+#     `myconfig.ai.sandboxTools.extraPackages` and, for mysbx, its
+#     `extraTools` plus a read-only mount of the config above.
 #
 # Default is OFF: hunk is an interactive reviewing tool, wanted per host
 # (workstations with a terminal), not on servers — so hosts opt in explicitly
@@ -95,6 +98,35 @@ in
       # Show agent annotations next to the code — the whole point of using
       # hunk together with the coding agents configured in this tree.
       agent_notes = true;
+    };
+
+    # Sandbox tiers: hunk is what the human (and the `hunk-review` skill
+    # above) uses to review an agent's changeset, so it has to exist where
+    # the changeset is produced — inside the sandboxes, not only on the
+    # host. Unlike `tig` (unconditional in every tier's baseline toolset),
+    # hunk follows this module's enable gate, the same way the agent CLIs
+    # are gated: a host without hunk keeps its sandbox closures unchanged.
+    #
+    # `myconfig.ai.sandboxTools.extraPackages` reaches every tier that
+    # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
+    # `myconfig.ai.microvm` guests, the `sandboxed-*` qemu runners and the
+    # gVisor image); mysbx has its own `extraTools` extension point (see
+    # ../programs.rtk/default.nix for the same pair of hooks).
+    myconfig.ai.sandboxTools.extraPackages = [ cfg.package ];
+
+    myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
+      extraTools = [ cfg.package ];
+      config.mounts = [
+        {
+          # Always present while this module is enabled: `settings` above is
+          # non-empty, so home-manager always writes the config file (a
+          # missing mount source is a hard error on every mysbx run).
+          # hunk needs nothing else — no auth, no state, no `init` run.
+          path = "~/.config/hunk";
+          dest = "/mysbx-home/.config/hunk";
+          mode = "ro";
+        }
+      ];
     };
 
     home-manager.sharedModules = [

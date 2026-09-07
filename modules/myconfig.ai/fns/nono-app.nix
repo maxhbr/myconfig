@@ -76,9 +76,12 @@
   # the jail-app.nix commonPkgs plus extras (fd, ripgrep, less, wget,
   # curl, jq, nix) we use everywhere. Override to replace; use
   # `extraDevTools` to append.
+  # `tig` rides along with `git`, like in ./bubblewrap-app.nix and
+  # ../mysbx/nix/mysbx.nix.
   devTools ? [
     pkgs.bashInteractive
     pkgs.git
+    pkgs.tig
     pkgs.coreutils
     pkgs.findutils
     pkgs.gnugrep
