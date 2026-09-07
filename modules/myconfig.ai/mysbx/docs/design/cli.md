@@ -42,13 +42,14 @@ discovered); plain `init` never touches the config at all.
 
 ### D3: Verb subcommands, no nesting
 
-Subcommands are single verbs (`init`, `run`, `version`, `help`). No nested
-command trees. Rationale: the surface is small and stays memorable; nesting
-would only pay off with many more commands.
+Subcommands are single verbs (`init`, `run`, `edit`, `version`, `help`). No
+nested command trees. Rationale: the surface is small and stays memorable;
+nesting would only pay off with many more commands.
 
-Currently implemented: `init`, `version`, `help`, the bare form (entering
-the sandbox, see D2) and `run -- COMMAND` for non-interactive use, plus the
-global flags `--dry-run` (D9) and `--verbose` (D10).
+Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
+form (entering the sandbox, see D2) and `run -- COMMAND` for
+non-interactive use, plus the global flags `--dry-run` (D9) and
+`--verbose` (D10).
 
 ### D4: `--` separates sandbox args from the payload command
 
@@ -180,6 +181,43 @@ else: it prints the entry as the payload and creates no socket
 directory — the entry itself is what creates it, inside the sandbox.
 `--verbose` reports the socket path and the entry, so the isolation
 claim of config.md D16 is checkable against the argv.
+
+### D12: `mysbx edit` opens the sidecar config in `$EDITOR`
+
+`mysbx edit` opens `<repo>.mysbx/config.toml` in the editor named by
+`$EDITOR` (or `$VISUAL`, when `EDITOR` is unset or empty) and takes no
+arguments. It creates the file first when it is missing — exactly what
+the implicit init of the bare form would have done (D2/D12: the
+commented template, no git-dir approvals) — so the operator always
+edits a documented file instead of writing one from memory.
+
+**Why the sidecar and not the user config.** The sidecar is the file a
+person is expected to edit by hand: it is the per-repo policy, it lives
+outside the repo (config.md D2) and the sandbox cannot write it. The
+host-wide user config is generated on myconfig hosts — a symlink into
+the immutable `/nix/store` — so an editor pointed at it either fails or
+replaces the symlink and silently detaches the layer from Home Manager.
+Editing that layer means editing `myconfig.ai.mysbx.config` and
+rebuilding. A `--user` flag would have to know the difference between
+those two worlds; the verb stays about the file mysbx itself owns.
+
+**No editor guess.** With neither variable set the command fails
+(exit `1`, `mysbx: ` message naming both). Falling back to `vi` would
+open an editor the operator did not choose on a policy file, with no
+hint that the variable is unset.
+
+**The value is split on whitespace, not shell-evaluated.**
+`EDITOR="code --wait"` and `EDITOR="nvim -u NONE"` work; quoting and
+shell metacharacters do not. Running the value through a shell would
+make `$EDITOR` a code-execution surface of every `mysbx edit` — the
+same reason configuration carries no hooks (config.md D4). A value that
+needs more than an argument list can be a wrapper script.
+
+The editor is `exec`d, so it owns the terminal and its exit code
+propagates unchanged (D8). It is resolved *before* the sidecar is
+created: a run that cannot edit must not leave a sidecar behind as its
+only effect. The global flags are not valid with `edit` (there is
+nothing to dry-run and no run to report on).
 
 ## Non-goals
 

@@ -59,6 +59,18 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
     cmd
 }
 
+/// [`run_binary`] with an argument list that overrides the fixture's.
+fn run_binary_with(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
+    let out = spawn_with_args(inv, args)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
 fn run_binary(inv: &Invocation) -> (i32, String, String) {
     let out = spawn(inv)
         .output()
@@ -1133,6 +1145,173 @@ fn the_workmux_entry_really_runs_with_an_in_sandbox_socket_dir() {
         "a host tmux socket dir is reachable: {stdout}"
     );
     let _ = std::fs::remove_dir_all("/tmp/host-tmux");
+}
+
+// ---- `mysbx edit` (docs/design/cli.md D12) --------------------------------
+
+/// A stand-in `$EDITOR`: a shell script that appends its whole argument
+/// vector to `record` and exits 0. Proves both WHICH file mysbx opens
+/// and how it split the variable — without any editor in the closure.
+fn fake_editor(dir: &Path, record: &Path) -> PathBuf {
+    let script = dir.join("fake-editor");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\n",
+            record.display()
+        ),
+    )
+    .unwrap();
+    let mut perms = std::fs::metadata(&script).unwrap().permissions();
+    use std::os::unix::fs::PermissionsExt;
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&script, perms).unwrap();
+    script
+}
+
+#[test]
+fn edit_creates_the_sidecar_config_and_opens_it_in_the_editor() {
+    let (inv, _, sidecar) = fixture("edit", &["edit"]);
+    // A fresh repo: the sidecar directory exists (the fixture makes it)
+    // but the config does not — `edit` must create the commented
+    // template first, so the operator edits a file, not a void.
+    let config = sidecar.join("config.toml");
+    assert!(!config.exists());
+    let record = inv.home.join("opened");
+    let editor = fake_editor(&inv.home, &record);
+
+    let mut cmd = spawn(&inv);
+    cmd.env("EDITOR", &editor);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stdout: {stdout} stderr: {stderr}");
+    assert!(stdout.contains("## created"), "{stdout}");
+    assert!(config.exists());
+    // Exactly one argument: the SIDECAR config of this repo.
+    assert_eq!(
+        std::fs::read_to_string(&record).unwrap(),
+        format!("{}\n", config.display())
+    );
+
+    // Idempotent in the D12 sense: a second `edit` opens the same file
+    // and does not rewrite it.
+    let before = std::fs::read_to_string(&config).unwrap();
+    let mut cmd = spawn(&inv);
+    cmd.env("EDITOR", &editor);
+    assert!(cmd.output().unwrap().status.success());
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), before);
+    // The user config is NOT what was opened (on myconfig hosts it is a
+    // generated store symlink).
+    let opened = std::fs::read_to_string(&record).unwrap();
+    assert!(!opened.contains("xdg"), "the user config was opened: {opened}");
+}
+
+#[test]
+fn edit_splits_the_editor_variable_into_arguments() {
+    // `EDITOR="code --wait"` is the common shape; the flags must reach
+    // the editor as arguments, before the file.
+    let (inv, _, sidecar) = fixture("edit-args", &["edit"]);
+    let record = inv.home.join("opened");
+    let editor = fake_editor(&inv.home, &record);
+    let mut cmd = spawn(&inv);
+    cmd.env("EDITOR", format!("{} --wait -x", editor.display()));
+    assert!(cmd.output().unwrap().status.success());
+    assert_eq!(
+        std::fs::read_to_string(&record).unwrap(),
+        format!("--wait\n-x\n{}\n", sidecar.join("config.toml").display())
+    );
+}
+
+#[test]
+fn edit_falls_back_to_visual_and_fails_without_either() {
+    let (inv, _, sidecar) = fixture("edit-visual", &["edit"]);
+    let record = inv.home.join("opened");
+    let editor = fake_editor(&inv.home, &record);
+
+    // No $EDITOR, but $VISUAL: used.
+    let mut cmd = spawn(&inv);
+    cmd.env("VISUAL", &editor);
+    assert!(cmd.output().unwrap().status.success());
+    assert_eq!(
+        std::fs::read_to_string(&record).unwrap(),
+        format!("{}\n", sidecar.join("config.toml").display())
+    );
+
+    // Neither: a runtime failure (exit 1) naming both variables — never
+    // a guessed `vi` on a policy file.
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stdout: {stdout}");
+    assert!(stderr.starts_with("mysbx: "), "{stderr}");
+    assert!(stderr.contains("$EDITOR"), "{stderr}");
+    assert!(stderr.contains("$VISUAL"), "{stderr}");
+}
+
+#[test]
+fn edit_without_an_editor_creates_no_sidecar() {
+    // The editor is resolved before anything is created: a run that
+    // cannot edit must not leave a sidecar as its only effect.
+    let base = tmpdir("edit-no-editor");
+    let repo = base.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["edit"],
+        cwd: repo,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(!base.join("repo.mysbx").exists(), "a sidecar was created");
+}
+
+#[test]
+fn edit_propagates_the_editor_exit_code() {
+    // `exec` replaces the process, so the editor's own exit code is
+    // mysbx's (D8) — a failed editor must not look like a success.
+    let (inv, _, _) = fixture("edit-exit", &["edit"]);
+    let script = inv.home.join("failing-editor");
+    std::fs::write(&script, "#!/bin/sh\nexit 3\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(&script).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&script, perms).unwrap();
+    let mut cmd = spawn(&inv);
+    cmd.env("EDITOR", &script);
+    assert_eq!(cmd.output().unwrap().status.code(), Some(3));
+}
+
+#[test]
+fn edit_in_the_home_directory_is_refused() {
+    // The repo guard runs before the editor and before any creation:
+    // `$HOME` is not a repo (plan.md, repo.rs).
+    let base = tmpdir("edit-home");
+    let home = base.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let record = base.join("opened");
+    let editor = fake_editor(&base, &record);
+    let inv = Invocation {
+        args: vec!["edit"],
+        cwd: home.clone(),
+        home,
+        xdg: base.join("xdg"),
+    };
+    let mut cmd = spawn(&inv);
+    cmd.env("EDITOR", &editor);
+    let out = cmd.output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(!record.exists(), "the editor ran anyway");
+}
+
+#[test]
+fn edit_rejects_arguments() {
+    let (inv, _, _) = fixture("edit-args-rejected", &["edit"]);
+    let (code, _, stderr) = run_binary_with(&inv, &["edit", "--user"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("unexpected argument"), "{stderr}");
 }
 
 // ---- the real execution (skipped without a runnable bwrap) -------------------

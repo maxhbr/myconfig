@@ -39,6 +39,14 @@ Nix) first, then one argument per line — and exits without running it;
 the acceptance surface described in
 [`docs/design/cli.md`](./docs/design/cli.md).
 
+`mysbx edit` opens the repo's sidecar `config.toml` in `$EDITOR` (or
+`$VISUAL`), creating the commented template first when it is missing —
+the quickest way from "this sandbox needs one more directory" to the
+file that says so (`docs/design/cli.md` D12). It edits the *sidecar*,
+never the host-wide user config: on myconfig hosts that one is
+generated (a `/nix/store` symlink) and is changed through
+`myconfig.ai.mysbx.config` instead.
+
 `--verbose` prints what the run is configured to do before it happens
 (cli.md D10) — on stdout, every line prefixed `## `, so it can be combined
 with `--dry-run` and stripped again with `grep -v '^## '`:

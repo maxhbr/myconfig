@@ -43,7 +43,7 @@ per-domain network policy.
 
 | Aspect | Decision |
 | --- | --- |
-| Commands | bare `mysbx` (interactive shell), `mysbx run -- CMD`, `mysbx init`, `version`, `help` |
+| Commands | bare `mysbx` (interactive shell), `mysbx run -- CMD`, `mysbx init`, `mysbx edit` (the sidecar config in `$EDITOR`, `cli.md` D12), `version`, `help` |
 | Backend | bubblewrap only; `backend` must say so explicitly (`cli.md` D7) |
 | Repo discovery | nearest ancestor with an existing `<dir>.mysbx` → else the git work-tree root → else the current directory |
 | Repo mount | always, `rw`, at its real host path inside the sandbox; not expressible in the config |

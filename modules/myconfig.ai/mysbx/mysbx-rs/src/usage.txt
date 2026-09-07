@@ -20,6 +20,10 @@ Commands:
                 repo still needs in an EXISTING config.toml — the
                 recovery after an implicit first-run init (which never
                 approves anything); adds only missing entries
+  edit          open the sidecar config.toml of the current repo in
+                $EDITOR (or $VISUAL); creates it first when missing,
+                like the bare form would. The host-wide user config is
+                not what this edits
   version       print the version
   help          print this help
 
