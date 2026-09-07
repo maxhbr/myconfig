@@ -7,6 +7,7 @@
 //! mysbx [FLAGS]                     enter an interactive sandbox shell
 //! mysbx run [FLAGS] -- CMD...       run one command in the sandbox
 //! mysbx init                        create the sidecar (idempotent)
+//! mysbx edit                        edit the sidecar config in $EDITOR
 //! mysbx version | help
 //! ```
 //!
@@ -79,6 +80,7 @@ pub fn run(args: Vec<String>) -> i32 {
             0
         }
         Some("init") => init(&rest[1..]),
+        Some("edit") => edit(&rest[1..]),
         Some(other) => {
             eprintln!("mysbx: unknown command: {other}");
             eprintln!("try `mysbx --help`");
@@ -305,6 +307,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // "bind the host's" — that file may carry access-tokens, and a
     // read-only bind hands them to the payload all the same.
     let nix_conf = env_opt("MYSBX_NIX_CONF");
+    // The workmux entry (docs/design/config.md D16): the interactive
+    // payload of a `workmux = true` run. No fallback either — unset
+    // means "this build has no workmux integration", and the argv
+    // builder refuses the run instead of quietly starting a plain
+    // shell where a session was asked for.
+    let workmux_entry = env_opt("MYSBX_WORKMUX_ENTRY");
     // Review-3 item 3: the trusted policy files of THIS run, handed to
     // the argv builder so it can refuse any `rw` bind that would expose
     // one to the payload.
@@ -336,6 +344,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         tools_path: &tools_path,
         nix_conf: nix_conf.as_deref(),
         policy_paths: &policy_paths,
+        workmux_entry: workmux_entry.as_deref(),
     };
     let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
         Ok(a) => a,
@@ -589,6 +598,104 @@ fn init(args: &[String]) -> i32 {
     0
 }
 
+/// `mysbx edit` — open the repo's **sidecar** `config.toml` in the
+/// editor named by the environment (docs/design/cli.md D12).
+///
+/// The sidecar config is the one file a person is expected to edit by
+/// hand: it is the per-repo policy, it lives outside the repo (D2) and
+/// the sandbox cannot write it. The host-wide user config is
+/// deliberately NOT what this opens — on myconfig hosts it is a
+/// generated symlink into the immutable `/nix/store`, so an editor
+/// pointed at it either fails or (worse) replaces the symlink and
+/// silently detaches the layer from Home Manager. Editing that layer
+/// means editing `myconfig.ai.mysbx.config` and rebuilding.
+///
+/// The file is created first when missing — exactly what the bare form's
+/// implicit init would have done (D2/D12, no git-dir approvals): an
+/// editor opening a nonexistent path would leave the operator writing a
+/// config from memory instead of editing the commented template.
+fn edit(args: &[String]) -> i32 {
+    if let Some(arg) = args.first() {
+        eprintln!("mysbx edit: unexpected argument: {arg}");
+        eprintln!("usage: mysbx edit");
+        return 2;
+    }
+    let repo = match repo::resolve_cwd() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return 1;
+        }
+    };
+    // Resolve the editor BEFORE creating anything: a run that cannot
+    // edit must not leave a sidecar behind as its only effect.
+    let editor = match editor_command() {
+        Ok(e) => e,
+        Err(msg) => {
+            eprintln!("mysbx: {msg}");
+            return 1;
+        }
+    };
+    if let Err(msg) = ensure_sidecar(&repo) {
+        eprintln!("mysbx: {msg}");
+        return 1;
+    }
+    // `false`: like the implicit init, editing approves nothing — the
+    // git-dir approval stays the explicit `mysbx init` (config.md D13).
+    // The operator can of course write approvals in the editor that is
+    // about to open, which is the point.
+    if let Err(msg) = ensure_sidecar_config(&repo, false) {
+        eprintln!("mysbx: {msg}");
+        return 1;
+    }
+    let config = repo.sidecar.join("config.toml");
+    let (bin, editor_args) = editor.split_first().expect("non-empty, see editor_command");
+    let mut cmd = std::process::Command::new(bin);
+    cmd.args(editor_args).arg(&config);
+    // `exec` like the sandbox path: the editor replaces this process, so
+    // it owns the terminal and its exit code propagates unchanged (D8).
+    use std::os::unix::process::CommandExt;
+    let e = cmd.exec();
+    eprintln!("mysbx: cannot exec {bin}: {e}");
+    1
+}
+
+/// The editor to run, as a command vector: `$EDITOR` when set,
+/// otherwise `$VISUAL` (docs/design/cli.md D12).
+///
+/// Two deliberate limits:
+///
+/// - **No built-in default.** Guessing `vi` would open an editor the
+///   operator did not choose, on a policy file, with no hint that the
+///   variable is unset. Unset is a runtime failure naming both
+///   variables instead.
+/// - **Whitespace splitting, not shell evaluation.** `EDITOR="code
+///   --wait"` and `EDITOR="nvim -u NONE"` are the common shapes and
+///   they work; quoting and shell metacharacters do not, because
+///   running the value through a shell would make `$EDITOR` a code
+///   execution surface of every `mysbx edit` (config.md D4 refuses that
+///   for configuration; the same argument holds here). A value whose
+///   argument list cannot be written this way can always be a wrapper
+///   script.
+fn editor_command() -> Result<Vec<String>, String> {
+    let value = env_opt("EDITOR")
+        .or_else(|| env_opt("VISUAL"))
+        .ok_or_else(|| {
+            "no editor configured \u{2014} set $EDITOR (or $VISUAL) to the editor \
+             `mysbx edit` should run"
+                .to_string()
+        })?;
+    let argv: Vec<String> = value.split_whitespace().map(str::to_owned).collect();
+    if argv.is_empty() {
+        // Whitespace only: set, but naming no program.
+        return Err(format!(
+            "the configured editor is blank ({value:?}) \u{2014} set $EDITOR (or \
+             $VISUAL) to the editor `mysbx edit` should run"
+        ));
+    }
+    Ok(argv)
+}
+
 /// Create the sidecar directory if it is missing and report it (idempotent:
 /// docs/design/config.md D12). Shared by `init` and the implicit init of
 /// the bare form (cli.md D2: the bare form does exactly what `init` would
@@ -666,7 +773,8 @@ fn ensure_plain_dir(path: &std::path::Path) -> Result<bool, String> {
             path.display()
         )),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            std::fs::create_dir(path).map_err(|e| format!("cannot create {}: {e}", path.display()))?;
+            std::fs::create_dir(path)
+                .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
             Ok(true)
         }
         Err(e) => Err(format!("cannot inspect {}: {e}", path.display())),
@@ -794,8 +902,8 @@ fn approve_git_dirs_in_existing_config(repo: &repo::Repo) -> Result<(), String> 
     let config = repo.sidecar.join("config.toml");
     let text = std::fs::read_to_string(&config)
         .map_err(|e| format!("cannot read {}: {e}", config.display()))?;
-    let parsed = crate::config::Config::parse(&text)
-        .map_err(|e| format!("{}: {e}", config.display()))?;
+    let parsed =
+        crate::config::Config::parse(&text).map_err(|e| format!("{}: {e}", config.display()))?;
     // Compare on absolute paths: `git-dirs` entries may be written in
     // any D8 spelling (`~/…`, relative); the runtime resolves them
     // against HOME and canonicalizes both sides anyway (review-2
@@ -818,9 +926,7 @@ fn approve_git_dirs_in_existing_config(repo: &repo::Repo) -> Result<(), String> 
     let approved: std::collections::BTreeSet<std::path::PathBuf> = parsed
         .git_dirs
         .iter()
-        .map(|raw| {
-            std::fs::canonicalize(resolve(raw)).unwrap_or_else(|_| resolve(raw))
-        })
+        .map(|raw| std::fs::canonicalize(resolve(raw)).unwrap_or_else(|_| resolve(raw)))
         .collect();
     // NOTE: an entry that does not EXIST cannot canonicalize and is
     // compared in its raw spelling — a duplicate spelling of it may
@@ -883,8 +989,12 @@ fn approve_git_dirs_in_existing_config(repo: &repo::Repo) -> Result<(), String> 
     // rewrite that mysbx itself could not read on the next run must
     // fail here, with the original file untouched, rather than be
     // reported as a successful approval.
-    let reparsed = crate::config::Config::parse(&new_text)
-        .map_err(|e| format!("{}: refusing to write an unparsable config: {e}", config.display()))?;
+    let reparsed = crate::config::Config::parse(&new_text).map_err(|e| {
+        format!(
+            "{}: refusing to write an unparsable config: {e}",
+            config.display()
+        )
+    })?;
     if reparsed.git_dirs.len() < parsed.git_dirs.len() + entries.len() {
         return Err(format!(
             "{}: the rewritten config does not carry the new approvals — refusing to write it",
@@ -1023,6 +1133,7 @@ mod tests {
         for token in [
             "run",
             "init",
+            "edit",
             "version",
             "help",
             "--dry-run",
@@ -1046,8 +1157,8 @@ mod tests {
     /// on some systems — canonicalize so the expected entries are
     /// spelled the way the walk records them).
     fn walk_tmpdir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("mysbx-policy-walk-{}-{name}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("mysbx-policy-walk-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::canonicalize(&dir).unwrap()
@@ -1140,6 +1251,57 @@ mod tests {
         assert!(!p.guarded.contains(&base.join("other")), "{:?}", p.guarded);
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn edit_rejects_arguments_and_the_global_flags() {
+        // D12: `edit` takes nothing. The checks that need no repo run
+        // first, so this is safe from the test's real CWD.
+        assert_eq!(run(vec!["edit".into(), "--user".into()]), 2);
+        assert_eq!(run(vec!["edit".into(), "/some/path".into()]), 2);
+        // The global flags are not valid with `edit` either (there is
+        // no run to report on, and nothing to dry-run).
+        assert_eq!(run(vec!["--dry-run".into(), "edit".into()]), 2);
+        assert_eq!(run(vec!["--verbose".into(), "edit".into()]), 2);
+    }
+
+    #[test]
+    fn editor_command_splits_arguments_and_refuses_a_blank_value() {
+        // The env is process-global: this test owns both variables for
+        // its duration and restores nothing else.
+        let restore = |k: &str, v: Option<String>| match v {
+            Some(v) => unsafe { std::env::set_var(k, v) },
+            None => unsafe { std::env::remove_var(k) },
+        };
+        let old_editor = std::env::var("EDITOR").ok();
+        let old_visual = std::env::var("VISUAL").ok();
+
+        unsafe { std::env::set_var("EDITOR", "code --wait") };
+        unsafe { std::env::remove_var("VISUAL") };
+        assert_eq!(editor_command().unwrap(), vec!["code", "--wait"]);
+
+        // `$EDITOR` wins over `$VISUAL`; an empty value counts as
+        // unset, like every other variable mysbx reads.
+        unsafe { std::env::set_var("VISUAL", "gvim") };
+        assert_eq!(editor_command().unwrap(), vec!["code", "--wait"]);
+        unsafe { std::env::set_var("EDITOR", "") };
+        assert_eq!(editor_command().unwrap(), vec!["gvim"]);
+
+        // Neither set: a runtime failure naming both, never a guessed
+        // `vi` on a policy file.
+        unsafe { std::env::remove_var("EDITOR") };
+        unsafe { std::env::remove_var("VISUAL") };
+        let e = editor_command().unwrap_err();
+        assert!(e.contains("$EDITOR"), "{e}");
+        assert!(e.contains("$VISUAL"), "{e}");
+
+        // Whitespace only: set, but naming no program.
+        unsafe { std::env::set_var("EDITOR", "   ") };
+        let e = editor_command().unwrap_err();
+        assert!(e.contains("blank"), "{e}");
+
+        restore("EDITOR", old_editor);
+        restore("VISUAL", old_visual);
     }
 
     // `run` without `--` and without a command is a usage error (`2`),

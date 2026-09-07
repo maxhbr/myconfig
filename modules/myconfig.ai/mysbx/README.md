@@ -39,6 +39,14 @@ Nix) first, then one argument per line — and exits without running it;
 the acceptance surface described in
 [`docs/design/cli.md`](./docs/design/cli.md).
 
+`mysbx edit` opens the repo's sidecar `config.toml` in `$EDITOR` (or
+`$VISUAL`), creating the commented template first when it is missing —
+the quickest way from "this sandbox needs one more directory" to the
+file that says so (`docs/design/cli.md` D12). It edits the *sidecar*,
+never the host-wide user config: on myconfig hosts that one is
+generated (a `/nix/store` symlink) and is changed through
+`myconfig.ai.mysbx.config` instead.
+
 `--verbose` prints what the run is configured to do before it happens
 (cli.md D10) — on stdout, every line prefixed `## `, so it can be combined
 with `--dry-run` and stripped again with `grep -v '^## '`:
@@ -119,6 +127,36 @@ should survive the sandbox: mysbx synthesizes the host backing store
 binds it rw at `/mysbx-home/<entry>`. The host home is never the source.
 Entries may not nest, no mount may cover them, and `--dry-run` creates
 nothing. See `docs/design/config.md` D15.
+
+### The workmux session (`workmux`)
+
+With `workmux = true` in a configuration layer, the **interactive** form
+(`cd <repo> && mysbx`) is a [workmux](https://github.com/raine/workmux)
+tmux session instead of a bare shell: mysbx execs the pinned
+`mysbx-workmux-entry` payload, which boots a tmux server, bootstraps the
+workmux sidebar + dashboard and attaches. `mysbx run -- CMD` starts no
+session and is byte-identical to a workmux-less run
+(`docs/design/cli.md` D11).
+
+The tmux socket is **not configurable**: it always lives at
+`/mysbx-home/.mysbx-tmux/socket`, inside the sandbox home tmpfs, so it
+can never be shared with a host tmux server or with another sandbox of
+the same repository — no mount may land on it, no `state-dirs` entry may
+persist it, and `TMUX_TMPDIR` is set after `[env]` like `HOME` and
+`PATH` (`docs/design/config.md` D16).
+
+On myconfig hosts this is wired by
+[`../myconfig.ai.workmux/mysbx.nix`](../myconfig.ai.workmux/mysbx.nix) —
+the mysbx sibling of the bubblewrap-jail (`jail.nix`) and microVM
+(`sandbox.nix`) workmux tiers — which switches
+`myconfig.ai.mysbx.workmux` on wherever `myconfig.ai.workmux` and
+`myconfig.ai.mysbx` are both enabled, and hands mysbx the in-sandbox
+workmux configuration (with the *plain* agent binaries: the sandbox is
+already the sandbox).
+
+`workmux add` creates its worktree in the `<repo>__worktrees` sibling,
+which is outside the repo mount — a sandbox that should create worktrees
+declares that directory `rw` in its sidecar `[[mounts]]`.
 
 ## Integrated coding agents
 `pi` ([`programs.pi-coding-agent`](../programs.pi-coding-agent/default.nix)) is

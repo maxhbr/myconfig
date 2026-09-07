@@ -152,6 +152,7 @@ in
 {
   imports = [
     ./jail.nix
+    ./mysbx.nix
     ./sandbox.nix
   ];
 

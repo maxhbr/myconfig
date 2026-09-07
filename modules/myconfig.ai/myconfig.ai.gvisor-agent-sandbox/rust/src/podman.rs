@@ -207,10 +207,7 @@ pub fn build_run_args(
             "AGENT_GVISOR_NIX=1".to_string(),
         ]);
         if let Some(nix_config) = &env.nix_config {
-            cmd.extend([
-                "--env".to_string(),
-                format!("NIX_CONFIG={nix_config}"),
-            ]);
+            cmd.extend(["--env".to_string(), format!("NIX_CONFIG={nix_config}")]);
         }
     }
 

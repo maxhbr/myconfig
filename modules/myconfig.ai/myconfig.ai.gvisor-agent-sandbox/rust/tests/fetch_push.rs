@@ -185,7 +185,10 @@ fn push_defaults_to_origin() {
         "refs/heads/agent/gvisor/s1:refs/heads/agent/gvisor/s1".to_string(),
     ]
     .to_vec();
-    let push_pos = calls.iter().position(|c| *c == push).expect("push recorded");
+    let push_pos = calls
+        .iter()
+        .position(|c| *c == push)
+        .expect("push recorded");
     assert!(fetch_pos < push_pos, "the implicit fetch must run first");
 }
 
@@ -216,7 +219,13 @@ fn push_repo_override_and_remote() {
     // Run from OUTSIDE any Git work tree; --repo points at the target and
     // the remote is positional after the NAME.
     let repo = s.repo.canonicalize().unwrap().display().to_string();
-    let mut c = s.cmd(&["push", "s1", "--repo", &s.repo.display().to_string(), "review"]);
+    let mut c = s.cmd(&[
+        "push",
+        "s1",
+        "--repo",
+        &s.repo.display().to_string(),
+        "review",
+    ]);
     c.current_dir(&s.home);
     let out = c.output().expect("spawn agent-gvisor");
     assert!(

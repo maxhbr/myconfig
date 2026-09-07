@@ -395,8 +395,7 @@ pub fn try_load_session(env: &Env, name: &str) -> Result<Session, String> {
     {
         return Err(pre_rewrite_message(name, &reg));
     }
-    let meta_dir = std::fs::canonicalize(&reg)
-        .map_err(|_| format!("unknown session: {name}"))?;
+    let meta_dir = std::fs::canonicalize(&reg).map_err(|_| format!("unknown session: {name}"))?;
     let meta_path = meta_dir.join("meta");
     if !meta_path.is_file() {
         if meta_dir.is_dir() {

@@ -1,0 +1,3 @@
+# `workmux` is a boolean (config.md D16), and the parser is strict: a
+# truthy-looking string is a schema error, not an enabled session.
+workmux = "yes"

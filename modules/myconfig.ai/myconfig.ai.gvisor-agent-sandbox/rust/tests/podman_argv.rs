@@ -78,12 +78,18 @@ fn build_run_args_nix() {
 
     // The store volume mount directly follows the 2 fixed binds.
     let home_mount = format!("type=bind,src={},dst=/home/agent,rw", meta.home);
-    let pos = args.iter().position(|a| a == &home_mount).expect("home bind");
+    let pos = args
+        .iter()
+        .position(|a| a == &home_mount)
+        .expect("home bind");
     assert_eq!(
         &args[pos + 1..pos + 3],
         &[
             "--mount".to_string(),
-            format!("type=volume,src={},dst=/nix/store,U", agent_gvisor::podman::nix_volume_name(&meta)),
+            format!(
+                "type=volume,src={},dst=/nix/store,U",
+                agent_gvisor::podman::nix_volume_name(&meta)
+            ),
         ]
     );
     // The Nix env block directly follows the fixed envs (no loopback forward
@@ -110,7 +116,10 @@ fn build_run_args_nix() {
     assert_eq!(args.iter().filter(|a| *a == "--env").count(), 12);
     // The init wrapper is the payload (no loopback forward), before the
     // default /bin/bash.
-    assert_eq!(&args[args.len() - 2..args.len() - 1], &["/bin/agent-gvisor-init".to_string()]);
+    assert_eq!(
+        &args[args.len() - 2..args.len() - 1],
+        &["/bin/agent-gvisor-init".to_string()]
+    );
     assert_eq!(args.last().unwrap(), "/bin/bash");
 
     // An old-session meta (empty `nix` — pre-dating the field) gains NO
@@ -133,7 +142,10 @@ fn start_nix_records_volume_and_destroy_removes_it() {
     let meta_dir = repo
         .parent()
         .unwrap()
-        .join(format!("{}__agent-gvisor", repo.file_name().unwrap().to_string_lossy()))
+        .join(format!(
+            "{}__agent-gvisor",
+            repo.file_name().unwrap().to_string_lossy()
+        ))
         .join("__sessions")
         .join("s1");
 
@@ -268,7 +280,9 @@ fn build_run_args_rootful_limits() {
     assert!(args.contains(&"--detach".to_string()));
     assert!(!args.contains(&"--interactive".to_string()));
     // No loopback env and no init wrapper:
-    assert!(!args.iter().any(|a| a.starts_with("AGENT_GVISOR_LOOPBACK_FORWARD")));
+    assert!(!args
+        .iter()
+        .any(|a| a.starts_with("AGENT_GVISOR_LOOPBACK_FORWARD")));
     assert!(!args.contains(&"/bin/agent-gvisor-init".to_string()));
     // Limits directly follow the fixed --env block:
     let wt = args
@@ -305,7 +319,10 @@ fn build_run_args_default_command() {
     let meta = test_meta();
     let (meta_dir, _keep) = meta_dir_with("\n", "\n");
     let args = build_run_args(&env, &meta, &meta_dir, true, &[]);
-    assert_eq!(&args[args.len() - 2..], &["herder".to_string(), "--flag".to_string()]);
+    assert_eq!(
+        &args[args.len() - 2..],
+        &["herder".to_string(), "--flag".to_string()]
+    );
 
     // An empty default command falls back to /bin/bash (bash `read -a`
     // yields zero words -> default_cmd=(/bin/bash)).
@@ -379,7 +396,11 @@ fn start_records_exact_podman_argv() {
         "--workdir".into(),
         repo.display().to_string(),
         "--mount".into(),
-        format!("type=bind,src={},dst={},rw", worktree.display(), repo.display()),
+        format!(
+            "type=bind,src={},dst={},rw",
+            worktree.display(),
+            repo.display()
+        ),
         "--mount".into(),
         format!("type=bind,src={},dst=/home/agent,rw", home.display()),
         "--env".into(),
@@ -412,8 +433,13 @@ fn start_records_exact_podman_argv() {
 
     // last-command is the %q-quoted argv with a trailing space before the
     // newline (bash `printf '%q ' "${cmd[@]}"`).
-    let last_command =
-        fs::read_to_string(agent_root.join("__sessions").join("s1").join("last-command")).unwrap();
+    let last_command = fs::read_to_string(
+        agent_root
+            .join("__sessions")
+            .join("s1")
+            .join("last-command"),
+    )
+    .unwrap();
     let expected_last: String = runs[0]
         .iter()
         .map(|a| quote(a))

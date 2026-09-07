@@ -55,7 +55,9 @@ pub fn resolve_home_files() -> Option<PathBuf> {
         sh.join("home-manager/gcroots/current-home"),
         PathBuf::from(format!("/nix/var/nix/gcroots/per-user/{user}/current-home")),
         sh.join("nix/profiles/home-manager"),
-        PathBuf::from(format!("/nix/var/nix/profiles/per-user/{user}/home-manager")),
+        PathBuf::from(format!(
+            "/nix/var/nix/profiles/per-user/{user}/home-manager"
+        )),
     ];
     for base in &bases {
         let files = base.join("home-files");

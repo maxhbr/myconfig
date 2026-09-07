@@ -19,6 +19,15 @@
 #                     shell")
 #   MYSBX_TOOLS_PATH  the dev-tool closure on PATH (plan.md: "The base",
 #                     row "dev-tool closure on PATH")
+#   MYSBX_WORKMUX_ENTRY
+#                     the INTERACTIVE payload of a `workmux = true`
+#                     sandbox (../docs/design/config.md D16): the
+#                     `mysbx-workmux-entry` script of
+#                     ./workmux-entry.nix, which boots the workmux tmux
+#                     session on the sandbox-internal socket. Absent on
+#                     hosts without the integration — a config that then
+#                     says `workmux = true` fails loudly instead of
+#                     silently starting a plain shell.
 #   MYSBX_NIX_CONF    a SANITIZED nix client configuration bound at
 #                     /etc/nix/nix.conf inside the sandbox (review-2
 #                     item 3). The host's own /etc/nix/nix.conf is
@@ -59,6 +68,13 @@
   # ../../programs.pi-coding-agent. Same security note as the hardcoded
   # list below: whatever lands here is on the sandbox PATH.
   extraTools ? [ ],
+  # The workmux entry script pinned as `MYSBX_WORKMUX_ENTRY`
+  # (./workmux-entry.nix, built by ../default.nix when
+  # `myconfig.ai.mysbx.workmux.enable` is on). `null` — the default, and
+  # what an unwrapped `nix-build` of this file gets — pins nothing, so
+  # `workmux = true` is a refused run rather than a silent bare shell
+  # (../docs/design/config.md D16).
+  workmuxEntry ? null,
 }:
 
 let
@@ -169,7 +185,10 @@ symlinkJoin {
       --set MYSBX_BWRAP '${bubblewrap}/bin/bwrap' \
       --set MYSBX_SHELL '${bash}/bin/bash' \
       --set MYSBX_TOOLS_PATH '${toolsEnv}/bin' \
-      --set MYSBX_NIX_CONF '${sandboxNixConf}'
+      --set MYSBX_NIX_CONF '${sandboxNixConf}' \
+      ${lib.optionalString (
+        workmuxEntry != null
+      ) "--set MYSBX_WORKMUX_ENTRY '${lib.getExe workmuxEntry}'"}
   '';
 
   meta = {

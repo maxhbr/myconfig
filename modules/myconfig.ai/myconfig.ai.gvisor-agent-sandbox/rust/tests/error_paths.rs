@@ -66,15 +66,35 @@ fn session_name_required() {
         1,
         "agent-gvisor: error: session name is required (NAME or --name)\n",
     );
-    s.run_fail(&["status"], 1, "agent-gvisor: error: session name required\n");
+    s.run_fail(
+        &["status"],
+        1,
+        "agent-gvisor: error: session name required\n",
+    );
     s.run_fail(&["run"], 1, "agent-gvisor: error: session name required\n");
     s.run_fail(&["logs"], 1, "agent-gvisor: error: session name required\n");
-    s.run_fail(&["shell"], 1, "agent-gvisor: error: session name required\n");
+    s.run_fail(
+        &["shell"],
+        1,
+        "agent-gvisor: error: session name required\n",
+    );
     s.run_fail(&["stop"], 1, "agent-gvisor: error: session name required\n");
-    s.run_fail(&["merge"], 1, "agent-gvisor: error: session name required\n");
-    s.run_fail(&["fetch"], 1, "agent-gvisor: error: session name required\n");
+    s.run_fail(
+        &["merge"],
+        1,
+        "agent-gvisor: error: session name required\n",
+    );
+    s.run_fail(
+        &["fetch"],
+        1,
+        "agent-gvisor: error: session name required\n",
+    );
     s.run_fail(&["push"], 1, "agent-gvisor: error: session name required\n");
-    s.run_fail(&["destroy"], 1, "agent-gvisor: error: session name required\n");
+    s.run_fail(
+        &["destroy"],
+        1,
+        "agent-gvisor: error: session name required\n",
+    );
 }
 
 #[test]
@@ -90,7 +110,11 @@ fn session_name_given_twice() {
 #[test]
 fn unknown_subcommand_and_option() {
     let s = Scenario::new("unknown-subcommand-and-option");
-    s.run_fail(&["--bad"], 1, "agent-gvisor: error: unknown subcommand: --bad\n");
+    s.run_fail(
+        &["--bad"],
+        1,
+        "agent-gvisor: error: unknown subcommand: --bad\n",
+    );
     // The positional-NAME shorthand still validates the name:
     s.run_fail(
         &["frob!nicate"],
@@ -171,7 +195,12 @@ fn mount_parsing_errors() {
         "agent-gvisor: error: mount source does not exist: relative\n",
     );
     s.run_fail(
-        &["start", "s1", "--mount", &format!("{}:relative", existing.display())],
+        &[
+            "start",
+            "s1",
+            "--mount",
+            &format!("{}:relative", existing.display()),
+        ],
         1,
         "agent-gvisor: error: container mount destination must be absolute: relative\n",
     );
@@ -191,21 +220,33 @@ fn missing_paths_and_repos() {
     s.run_fail(
         &["start", "s1", "--repo", &missing.display().to_string()],
         1,
-        &format!("realpath: {}: No such file or directory\n", missing.display()),
+        &format!(
+            "realpath: {}: No such file or directory\n",
+            missing.display()
+        ),
     );
     s.run_fail(
         &["start", "s1", "--env-file", &missing.display().to_string()],
         1,
-        &format!("realpath: {}: No such file or directory\n", missing.display()),
+        &format!(
+            "realpath: {}: No such file or directory\n",
+            missing.display()
+        ),
     );
     s.run_fail(
         &["start", "s1", "--home-seed", &missing.display().to_string()],
         1,
-        &format!("realpath: {}: No such file or directory\n", missing.display()),
+        &format!(
+            "realpath: {}: No such file or directory\n",
+            missing.display()
+        ),
     );
 
     // A plain directory that is not a Git work tree:
-    s.marker("not-git", &s.repo.canonicalize().unwrap().display().to_string());
+    s.marker(
+        "not-git",
+        &s.repo.canonicalize().unwrap().display().to_string(),
+    );
     s.run_fail(
         &["start", "s1", "--repo", &s.repo.display().to_string()],
         1,
@@ -236,7 +277,10 @@ fn image_and_runtime_checks() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
-        format!("agent-gvisor: error: OCI runtime is not executable: {}\n", nope.display())
+        format!(
+            "agent-gvisor: error: OCI runtime is not executable: {}\n",
+            nope.display()
+        )
     );
 
     // A named runtime podman does not know:
@@ -270,8 +314,14 @@ fn existing_session_without_force() {
 #[test]
 fn unknown_session() {
     let s = Scenario::new("unknown-session");
-    for sub in ["status", "run", "logs", "shell", "stop", "merge", "fetch", "push", "destroy"] {
-        s.run_fail(&[sub, "nope"], 1, "agent-gvisor: error: unknown session: nope\n");
+    for sub in [
+        "status", "run", "logs", "shell", "stop", "merge", "fetch", "push", "destroy",
+    ] {
+        s.run_fail(
+            &[sub, "nope"],
+            1,
+            "agent-gvisor: error: unknown session: nope\n",
+        );
     }
 }
 
@@ -289,7 +339,9 @@ fn pre_rewrite_registry_entries() {
          rm -rf {}\n",
         old.display()
     );
-    for sub in ["status", "run", "logs", "shell", "stop", "merge", "fetch", "push", "destroy"] {
+    for sub in [
+        "status", "run", "logs", "shell", "stop", "merge", "fetch", "push", "destroy",
+    ] {
         s.run_fail(&[sub, "old"], 1, &msg);
     }
     // start refuses it too (like any existing session)...
@@ -323,7 +375,12 @@ fn logs_and_shell_on_absent_container() {
     let s = Scenario::new("logs-and-shell-on-absent-container");
     started(&s);
     let repo_id = common::expected_repo_id(&s.repo);
-    fs::remove_dir_all(s.record.join("containers").join(format!("agent-{repo_id}-s1"))).unwrap();
+    fs::remove_dir_all(
+        s.record
+            .join("containers")
+            .join(format!("agent-{repo_id}-s1")),
+    )
+    .unwrap();
 
     s.run_fail(
         &["logs", "s1"],
@@ -368,7 +425,10 @@ fn merge_guards() {
     s.run_fail(
         &["merge", "s1", "--repo", &plain.display().to_string()],
         1,
-        &format!("agent-gvisor: error: --repo: not a Git work tree: {}\n", plain.display()),
+        &format!(
+            "agent-gvisor: error: --repo: not a Git work tree: {}\n",
+            plain.display()
+        ),
     );
 }
 

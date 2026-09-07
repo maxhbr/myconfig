@@ -90,7 +90,10 @@ impl Scenario {
     pub fn new_real_git(test_name: &str) -> Scenario {
         let s = Scenario::init(test_name, false);
         git_in(&s.repo, &["init", "-q", "-b", "master"]);
-        git_in(&s.repo, &["config", "user.email", "agent-gvisor@example.com"]);
+        git_in(
+            &s.repo,
+            &["config", "user.email", "agent-gvisor@example.com"],
+        );
         git_in(&s.repo, &["config", "user.name", "agent-gvisor tests"]);
         fs::write(s.repo.join("base.txt"), "base\n").unwrap();
         git_in(&s.repo, &["add", "."]);
@@ -180,7 +183,11 @@ impl Scenario {
         ] {
             c.env_remove(var);
         }
-        let path = format!("{}:{}", self.stub_bin.display(), std::env::var("PATH").unwrap_or_default());
+        let path = format!(
+            "{}:{}",
+            self.stub_bin.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
         c.env("PATH", &path)
             .env("HOME", &self.home)
             .env("RECORD", &self.record)
@@ -242,16 +249,16 @@ impl Scenario {
         for entry in fs::read_dir(&self.record).unwrap() {
             let p = entry.unwrap().path();
             let name = p.file_name().unwrap().to_string_lossy().to_string();
-            if let Some(n) = name.strip_prefix(&format!("{tool}-")).and_then(|s| s.strip_suffix(".argv")) {
+            if let Some(n) = name
+                .strip_prefix(&format!("{tool}-"))
+                .and_then(|s| s.strip_suffix(".argv"))
+            {
                 let n: u64 = n.parse().unwrap();
                 calls.push((n, p));
             }
         }
         calls.sort();
-        calls
-            .into_iter()
-            .map(|(_, p)| read_argv(&p))
-            .collect()
+        calls.into_iter().map(|(_, p)| read_argv(&p)).collect()
     }
 
     /// Only the recorded calls of `tool` whose first argument equals `head`.
@@ -322,7 +329,6 @@ pub fn git_try_in(repo: &std::path::Path, args: &[&str]) -> bool {
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
-
 
 /// Normalize recorded podman argv: strip argv[0] (`podman`) and the global
 /// `--runtime=*` / `--cgroup-manager=*` / `--runtime-flag=*` arguments.

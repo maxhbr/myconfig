@@ -213,10 +213,14 @@ pub fn try_parse_mount(spec: &str, default_mode: &str) -> Result<MountSpec, Stri
     // bash `read` gives the 4th var the remainder RE-JOINED with ':'; only
     // an empty remainder passes, which the next() already guarantees.
     if host.is_empty() || dest.is_empty() || !extra.is_empty() {
-        return Err(format!("invalid mount '{spec}'; expected HOST:DEST[:ro|rw]"));
+        return Err(format!(
+            "invalid mount '{spec}'; expected HOST:DEST[:ro|rw]"
+        ));
     }
     if !dest.starts_with('/') {
-        return Err(format!("container mount destination must be absolute: {dest}"));
+        return Err(format!(
+            "container mount destination must be absolute: {dest}"
+        ));
     }
     let mode = if mode.is_empty() { default_mode } else { mode };
     if mode != "ro" && mode != "rw" {
@@ -225,8 +229,7 @@ pub fn try_parse_mount(spec: &str, default_mode: &str) -> Result<MountSpec, Stri
     // NOTE: the bash CLI loses the host in this message (the failed
     // `host=$(realpath …)` assignment clobbers the variable); this rewrite
     // deliberately keeps the original host (docs/spec.md §14.3).
-    let host = realpath_e(host)
-        .map_err(|_| format!("mount source does not exist: {host}"))?;
+    let host = realpath_e(host).map_err(|_| format!("mount source does not exist: {host}"))?;
     Ok(MountSpec {
         host,
         dest: dest.to_string(),

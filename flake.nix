@@ -542,8 +542,35 @@
             hostName = "iso";
           } [ ];
 
+          # `nix fmt` / `./nixfmtall.sh` — nixfmt for Nix, rustfmt for the
+          # hand-written Rust crates in `modules/` (`mysbx/mysbx-rs`, the
+          # `myconfig.ai.gvisor-agent-sandbox/rust` rewrite). `nixfmt-tree`
+          # is a treefmt wrapper that ships the nixfmt entry; the override
+          # adds the formatter binary and its treefmt entry.
+          #
+          # `rustfmt` is invoked directly instead of `cargo fmt`: treefmt
+          # hands a formatter the FILES it should format, and neither crate
+          # is a member of a root workspace (each is its own Cargo project,
+          # built by its own `nix/*.nix`), so there is no single manifest
+          # `cargo fmt` could be pointed at. `--edition` must then be given
+          # explicitly — without a manifest rustfmt falls back to its own
+          # default edition and misparses edition-specific syntax. Both
+          # crates are `edition = "2021"`; a crate on another edition needs
+          # its own entry (or a `rustfmt.toml` next to it), not a change of
+          # this one.
           formatter = nixpkgs.legacyPackages.${system}.nixfmt-tree.override {
-            settings.excludes = formatterExcludeGlobs;
+            runtimeInputs = [ nixpkgs.legacyPackages.${system}.rustfmt ];
+            settings = {
+              excludes = formatterExcludeGlobs;
+              formatter.rustfmt = {
+                command = "rustfmt";
+                options = [
+                  "--edition"
+                  "2021"
+                ];
+                includes = [ "*.rs" ];
+              };
+            };
           };
 
           checks = {
@@ -654,6 +681,10 @@
                 age
                 shfmt
                 shellcheck
+                # The formatter of the Rust crates in `modules/`, so
+                # `rustfmt`/`cargo fmt` in the dev shell matches what
+                # `nix fmt` applies (see `formatter` above).
+                rustfmt
               ];
 
               # TODO: building the CONF_DIR with content from /etc/... makes this require --impure flag

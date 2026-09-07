@@ -14,7 +14,8 @@
 #
 # Scenarios (see `scenarios` below): Home Manager ripgrep on with
 # arguments, on without arguments, off, a host overriding the baseline
-# `RIPGREP_CONFIG_PATH`, and a host adding an unrelated `[env]` key.
+# `RIPGREP_CONFIG_PATH`, a host adding an unrelated `[env]` key, and the
+# workmux integration on / off (../docs/design/config.md D16).
 {
   inputs,
   system,
@@ -85,6 +86,27 @@ let
       ripgrepOn
       { myconfig.ai.mysbx.config.env.MYSBX_EVAL_TEST = "extra-value"; }
     ];
+    # The workmux integration (D16): the switch and the in-sandbox
+    # workmux config mount must appear in the generated layer. The
+    # `package` is a stand-in here — this scenario only reads the
+    # generated `config.toml`, never the sandbox PATH or the entry
+    # script, and pulling the real workmux flake input into a check
+    # that asserts on TOML bytes would buy nothing.
+    workmuxOn = generated [
+      {
+        myconfig.ai.mysbx.workmux = {
+          enable = true;
+          package = pkgs.hello;
+          settings.agents.pi = {
+            type = "pi";
+            command = "pi";
+          };
+        };
+      }
+    ];
+    # And without it, the key must be ABSENT rather than `false`: a host
+    # without workmux keeps a byte-identical config file.
+    workmuxOff = generated [ { } ];
   };
 in
 pkgs.runCommand "mysbx-generated-config-test"
@@ -95,6 +117,8 @@ pkgs.runCommand "mysbx-generated-config-test"
       rgOff
       rgOverridden
       rgPlusExtra
+      workmuxOn
+      workmuxOff
       ;
   }
   ''
@@ -140,6 +164,17 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the extra [env] key is missing" "$rgPlusExtra"
     grep -q 'RIPGREP_CONFIG_PATH = "/mysbx-home/.config/ripgrep/ripgreprc"' "$rgPlusExtra" \
       || fail "the baseline was replaced instead of merged" "$rgPlusExtra"
+
+    # 5. the workmux integration (D16): the switch, plus the
+    #    read-only mount of the in-sandbox workmux config below
+    #    /mysbx-home — and nothing at all when it is off.
+    grep -q '^workmux = true$' "$workmuxOn" \
+      || fail "the workmux switch is missing" "$workmuxOn"
+    grep -q 'dest = "/mysbx-home/.config/workmux/config.yaml"' "$workmuxOn" \
+      || fail "the in-sandbox workmux config is not mounted" "$workmuxOn"
+    if grep -q workmux "$workmuxOff"; then
+      fail "workmux must not appear without the integration" "$workmuxOff"
+    fi
 
     mkdir "$out"
   ''

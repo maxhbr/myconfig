@@ -43,18 +43,18 @@ per-domain network policy.
 
 | Aspect | Decision |
 | --- | --- |
-| Commands | bare `mysbx` (interactive shell), `mysbx run -- CMD`, `mysbx init`, `version`, `help` |
+| Commands | bare `mysbx` (interactive shell), `mysbx run -- CMD`, `mysbx init`, `mysbx edit` (the sidecar config in `$EDITOR`, `cli.md` D12), `version`, `help` |
 | Backend | bubblewrap only; `backend` must say so explicitly (`cli.md` D7) |
 | Repo discovery | nearest ancestor with an existing `<dir>.mysbx` → else the git work-tree root → else the current directory |
 | Repo mount | always, `rw`, at its real host path inside the sandbox; not expressible in the config |
 | Guard | hard error when the resolved repo is `$HOME`, a directory containing `$HOME`, or `/` |
 | Sidecar | created implicitly by the bare form when missing (`init` stays idempotent) |
-| Config schema | `backend`, `network`, `[[mounts]]`, `[env]`, `state-dirs` — no `[repo]` table |
+| Config schema | `backend`, `network`, `workmux`, `[[mounts]]`, `[env]`, `state-dirs` — no `[repo]` table |
 | Network | shared by default; `network = false` adds `--unshare-net` |
 | Layer merge | flags > sidecar > user config > defaults (`cli.md` D6); both layers' `[[mounts]]` concatenate, user layer first (`config.md` D7) |
 | Base | the `fns/bubblewrap-app.nix` base, reused as a list of decisions (see below) |
-| Environment | `--clearenv`, forward `TERM COLORTERM LANG LC_ALL EDITOR VISUAL` when set, then `[env]`, then `HOME` and `PATH` (infrastructure, not overridable — `config.md` D14). The NixOS module additionally sets `RIPGREP_CONFIG_PATH` in the generated `[env]` (review-3 item 6): the `~/.config/ripgrep` mount alone is inert, the variable is the activation |
-| Payload shell | `bash` from the MVP's own closure, not the host `$SHELL` |
+| Environment | `--clearenv`, forward `TERM COLORTERM LANG LC_ALL EDITOR VISUAL` when set, then `[env]`, then `HOME` and `PATH` (infrastructure, not overridable — `config.md` D14) — plus `TMUX_TMPDIR` on a `workmux = true` interactive run, infrastructure for the same reason (`config.md` D16). The NixOS module additionally sets `RIPGREP_CONFIG_PATH` in the generated `[env]` (review-3 item 6): the `~/.config/ripgrep` mount alone is inert, the variable is the activation |
+| Payload shell | `bash` from the MVP's own closure, not the host `$SHELL` — replaced by the pinned workmux entry when `workmux = true`, interactive form only (`cli.md` D11) |
 | Exit codes | `0` / `1` runtime / `2` usage; payload code propagated (`cli.md` D8) |
 | Validation | golden argv tests in cargo + `--dry-run`; manual acceptance by the operator |
 
@@ -76,6 +76,7 @@ every knob is a decision:
 | `/etc/localtime` | yes | timestamps |
 | tmpfs `/tmp` | yes | **not** the host-backed `/tmp/<name>` |
 | tmpfs `$HOME` (`/mysbx-home`) | yes | an in-sandbox home so `cd ~`, `~/.bash_history`, git & co. work; empty, writable, outside `/home` (`config.md` D14) |
+| tmux socket dir (`/mysbx-home/.mysbx-tmux`) | only on a `workmux = true` interactive run, and only as `TMUX_TMPDIR` | no bind and no tmpfs of its own: the workmux entry creates it inside the home tmpfs, so the tmux server is reachable from this sandbox alone — never from the host's `/tmp/tmux-<uid>` (`/tmp` is a fresh tmpfs) and never from another sandbox (nothing may bind or persist the path, `config.md` D16) |
 | host `$HOME` bind | **no** | the host home stays unreachable; its *value* is not forwarded either — exposing parts of it is an explicit `[[mounts]]` entry of a trusted layer (`config.md` D6/D7) |
 | `~/tmp` rw | no | agent-session convenience, not a sandbox essential |
 | `/run` | no | D-Bus, PipeWire, agent sockets; the nix-daemon socket arrives via the `/nix/var/nix` row above (and only with a shared network); the resolver exception is the only `/run` path bound |

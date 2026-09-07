@@ -61,7 +61,11 @@ fn git_stdout(args: &[String]) -> Option<String> {
         .output()
         .ok()?;
     if out.status.success() {
-        Some(String::from_utf8_lossy(&out.stdout).trim_end_matches('\n').to_string())
+        Some(
+            String::from_utf8_lossy(&out.stdout)
+                .trim_end_matches('\n')
+                .to_string(),
+        )
     } else {
         None
     }
@@ -282,10 +286,12 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
 
     // Without --repo, start from the current directory, which is what the
     // shorthand `agent-gvisor NAME` is for.
-    let repo_arg = parsed
-        .repo
-        .clone()
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().display().to_string());
+    let repo_arg = parsed.repo.clone().unwrap_or_else(|| {
+        std::env::current_dir()
+            .unwrap_or_default()
+            .display()
+            .to_string()
+    });
     need("git");
     need("podman");
     need("sha256sum");
@@ -297,9 +303,9 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     // A failing `realpath -e` dies RAW (no `die` prefix).
     let repo = match fs::canonicalize(&repo_arg) {
         Ok(p) => p,
-        Err(_) => crate::error::fail_raw(&format!(
-            "realpath: {repo_arg}: No such file or directory"
-        )),
+        Err(_) => {
+            crate::error::fail_raw(&format!("realpath: {repo_arg}: No such file or directory"))
+        }
     };
     if !git_ok(&[
         "-C".to_string(),
@@ -385,8 +391,9 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
                              'agent-gvisor destroy {name} --force --delete-branch')"
                         ));
                     }
-                    destroy_session(&env, &old, true, true)
-                        .unwrap_or_else(|_| die(&format!("could not destroy the existing session: {name}")));
+                    destroy_session(&env, &old, true, true).unwrap_or_else(|_| {
+                        die(&format!("could not destroy the existing session: {name}"))
+                    });
                 }
                 // Pre-rewrite (or otherwise unloadable) entry: keep the
                 // exact bash outcome for both force and non-force.
@@ -403,7 +410,8 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
         }
     }
     if let Some(parent) = worktree.parent() {
-        fs::create_dir_all(parent).unwrap_or_else(|e| die(&format!("cannot create worktree parent: {e}")));
+        fs::create_dir_all(parent)
+            .unwrap_or_else(|e| die(&format!("cannot create worktree parent: {e}")));
     }
     fs::create_dir_all(&meta_dir).unwrap();
     fs::create_dir_all(&home).unwrap();
@@ -433,7 +441,10 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     }
 
     if worktree.exists() {
-        die(&format!("worktree path already exists: {}", worktree.display()));
+        die(&format!(
+            "worktree path already exists: {}",
+            worktree.display()
+        ));
     }
     // A fully isolated clone per session (docs/spec.md §9): `--no-hardlinks`
     // is REQUIRED — hardlinked object files would let the session write
@@ -456,14 +467,7 @@ pub fn cmd_start(env: Env, args: &[String]) -> ! {
     checkout_session_branch(&worktree, &branch, &base_commit);
 
     let meta = meta_from_start(
-        &name,
-        &repo,
-        &repo_id,
-        &worktree,
-        &home,
-        &container,
-        &branch,
-        &parsed,
+        &name, &repo, &repo_id, &worktree, &home, &container, &branch, &parsed,
     );
     fs::write(meta_dir.join("meta"), meta.to_text()).unwrap();
     // `printf '%s\n' "${a[@]}"`: an EMPTY array still writes one newline.
@@ -784,7 +788,10 @@ pub fn cmd_stop(env: &Env, name: &str) -> ! {
 /// §9): `--repo PATH` when given (realpath'd; realpath's own
 /// RAW diagnostic, then the `--repo` `die` message), else `fallback`. The
 /// target must contain `.git`.
-fn resolve_target_repo(repo_override: &Option<String>, fallback: impl FnOnce() -> String) -> String {
+fn resolve_target_repo(
+    repo_override: &Option<String>,
+    fallback: impl FnOnce() -> String,
+) -> String {
     // The fallback is a CLOSURE on purpose (the bash `${REPO:-$(…)}` was
     // lazy): with `--repo` given, the current directory does NOT have to
     // be inside a Git work tree.
@@ -957,11 +964,7 @@ pub fn cmd_merge(env: Env, args: &[String]) -> ! {
         "merging {} into {current_branch} of {target_repo}",
         meta.branch
     ));
-    let mut merge_cmd = vec![
-        "-C".to_string(),
-        target_repo.clone(),
-        "merge".to_string(),
-    ];
+    let mut merge_cmd = vec!["-C".to_string(), target_repo.clone(), "merge".to_string()];
     merge_cmd.extend(merge_args.iter().cloned());
     // The EXACT fetched ref, not the bare name: `git merge <name>` would
     // be ambiguous against a same-named tag (git's DWIM order checks
@@ -1069,7 +1072,10 @@ pub fn cmd_push(env: Env, args: &[String]) -> ! {
     try_fetch_branch_from_worktree(&target_repo, &meta.worktree, &meta.branch)
         .unwrap_or_else(|m| die(&m));
     let remote = remote.unwrap_or_else(|| "origin".to_string());
-    log(&format!("pushing {} to {remote} of {target_repo}", meta.branch));
+    log(&format!(
+        "pushing {} to {remote} of {target_repo}",
+        meta.branch
+    ));
     // An explicit, NON-FORCED refspec with BOTH sides qualified: a bare
     // `git push <remote> <branch>` would parse a branch literally named
     // `+topic` as `+topic` — a FORCE marker plus the branch `topic` — and
@@ -1111,9 +1117,7 @@ pub fn destroy_session(
         ])
         .unwrap_or_default();
         if !porcelain.is_empty() {
-            return Err(
-                "worktree has uncommitted changes; commit them or use --force".to_string(),
-            );
+            return Err("worktree has uncommitted changes; commit them or use --force".to_string());
         }
     }
 
@@ -1149,19 +1153,11 @@ pub fn destroy_session(
     // never have materialized when the container never actually started.
     if meta.nix == "true" {
         let vol = podman::nix_volume_name(meta);
-        if pod.ok(&[
-            "volume".to_string(),
-            "exists".to_string(),
-            vol.clone(),
-        ]) {
+        if pod.ok(&["volume".to_string(), "exists".to_string(), vol.clone()]) {
             // No --force: the container is gone, so the volume cannot be
             // in use, and the flag's availability varies across podman
             // versions.
-            let st = pod.run(&[
-                "volume".to_string(),
-                "rm".to_string(),
-                vol,
-            ]);
+            let st = pod.run(&["volume".to_string(), "rm".to_string(), vol]);
             if !st.success() {
                 std::process::exit(st.code().unwrap_or(1));
             }
@@ -1228,7 +1224,9 @@ pub fn cmd_doctor(env: Env) -> ! {
         "state:           {} (session name registry)",
         env.state_root.display()
     );
-    println!("sessions:        <repo>__agent-gvisor/{{__sessions}} and session clones next to each repo");
+    println!(
+        "sessions:        <repo>__agent-gvisor/{{__sessions}} and session clones next to each repo"
+    );
     println!(
         "network:         {}",
         if env.network.is_empty() {
@@ -1239,11 +1237,15 @@ pub fn cmd_doctor(env: Env) -> ! {
     );
     println!(
         "model endpoint:  {}",
-        env.model_endpoint.clone().unwrap_or_else(|| "<unset>".to_string())
+        env.model_endpoint
+            .clone()
+            .unwrap_or_else(|| "<unset>".to_string())
     );
     println!(
         "loopback fwd:    {}",
-        env.loopback_forward.clone().unwrap_or_else(|| "<none>".to_string())
+        env.loopback_forward
+            .clone()
+            .unwrap_or_else(|| "<none>".to_string())
     );
     println!(
         "nix:             {}",
@@ -1278,7 +1280,9 @@ pub fn cmd_doctor(env: Env) -> ! {
     // silently; probe the endpoint from inside a sandbox, which is the only
     // place where the answer is meaningful (docs/spec.md §10).
     if let Some(endpoint) = env.model_endpoint.clone() {
-        log(&format!("checking model endpoint {endpoint} from inside a sandbox"));
+        log(&format!(
+            "checking model endpoint {endpoint} from inside a sandbox"
+        ));
         if pod.run(&doctor::endpoint_probe_args(&env)).success() {
             log("model endpoint reachable from the sandbox");
         } else {
@@ -1288,7 +1292,9 @@ pub fn cmd_doctor(env: Env) -> ! {
         // answers 404 on / can still serve an empty (or unauthorised) model
         // list, which fails only later inside an agent. Smoke-test it.
         let models = doctor::models_url(&endpoint);
-        log(&format!("checking model list {models} from inside a sandbox"));
+        log(&format!(
+            "checking model list {models} from inside a sandbox"
+        ));
         if pod.run(&doctor::models_probe_args(&env)).success() {
             log("model list is non-empty");
         } else {
@@ -1305,7 +1311,9 @@ pub fn cmd_doctor(env: Env) -> ! {
                 continue;
             }
             let lport = rule.split(':').next().unwrap_or_default();
-            log(&format!("checking in-sandbox relay 127.0.0.1:{lport} ({rule})"));
+            log(&format!(
+                "checking in-sandbox relay 127.0.0.1:{lport} ({rule})"
+            ));
             if pod.run(&doctor::relay_probe_args(&env, &rule)).success() {
                 log(&format!("127.0.0.1:{lport} is served inside the sandbox"));
             } else {

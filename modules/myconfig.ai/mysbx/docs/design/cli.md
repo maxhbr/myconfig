@@ -42,13 +42,14 @@ discovered); plain `init` never touches the config at all.
 
 ### D3: Verb subcommands, no nesting
 
-Subcommands are single verbs (`init`, `run`, `version`, `help`). No nested
-command trees. Rationale: the surface is small and stays memorable; nesting
-would only pay off with many more commands.
+Subcommands are single verbs (`init`, `run`, `edit`, `version`, `help`). No
+nested command trees. Rationale: the surface is small and stays memorable;
+nesting would only pay off with many more commands.
 
-Currently implemented: `init`, `version`, `help`, the bare form (entering
-the sandbox, see D2) and `run -- COMMAND` for non-interactive use, plus the
-global flags `--dry-run` (D9) and `--verbose` (D10).
+Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
+form (entering the sandbox, see D2) and `run -- COMMAND` for
+non-interactive use, plus the global flags `--dry-run` (D9) and
+`--verbose` (D10).
 
 ### D4: `--` separates sandbox args from the payload command
 
@@ -150,6 +151,73 @@ verbatim rather than redacted. `--dry-run` already prints them as
 both config files — redaction would buy no secrecy while making the report
 lie about the run. The help text says out loud that the values may be
 secrets, so nobody pastes a verbose report into a bug tracker unaware.
+
+### D11: the workmux session replaces the interactive payload only
+
+With `workmux = true` in a configuration layer (config.md D16), the
+**bare form** does not start a shell: its payload is the pinned workmux
+entry (`MYSBX_WORKMUX_ENTRY`), a script from mysbx's own closure that
+boots a tmux server on the sandbox-internal socket and attaches to it.
+Everything else about the run is unchanged — same base, same mounts,
+same `--chdir`; the payload line of the argv is the only difference,
+plus the `TMUX_TMPDIR` variable that names the socket directory.
+
+**`run -- CMD` is untouched, deliberately.** A one-shot command that
+was wrapped in a tmux server would write its output into a pane nobody
+attaches to, and its exit code would become tmux's, not the payload's
+(D8). So the `run` argv is *byte-identical* to the workmux-disabled one
+— no payload swap, no `TMUX_TMPDIR`, and none of the socket guards
+(they guard a session this run does not start). Tests pin the byte
+identity in both directions.
+
+**A missing pin is a refused run, not a silent shell.** `workmux = true`
+with no `MYSBX_WORKMUX_ENTRY` (an unwrapped build, a host without the
+integration) exits `1` with a `mysbx: ` message naming the variable.
+Falling back to a bare shell would be discovered only after the work
+happened outside the session it was supposed to happen in.
+
+`--dry-run` stays side-effect-free with workmux as with everything
+else: it prints the entry as the payload and creates no socket
+directory — the entry itself is what creates it, inside the sandbox.
+`--verbose` reports the socket path and the entry, so the isolation
+claim of config.md D16 is checkable against the argv.
+
+### D12: `mysbx edit` opens the sidecar config in `$EDITOR`
+
+`mysbx edit` opens `<repo>.mysbx/config.toml` in the editor named by
+`$EDITOR` (or `$VISUAL`, when `EDITOR` is unset or empty) and takes no
+arguments. It creates the file first when it is missing — exactly what
+the implicit init of the bare form would have done (D2/D12: the
+commented template, no git-dir approvals) — so the operator always
+edits a documented file instead of writing one from memory.
+
+**Why the sidecar and not the user config.** The sidecar is the file a
+person is expected to edit by hand: it is the per-repo policy, it lives
+outside the repo (config.md D2) and the sandbox cannot write it. The
+host-wide user config is generated on myconfig hosts — a symlink into
+the immutable `/nix/store` — so an editor pointed at it either fails or
+replaces the symlink and silently detaches the layer from Home Manager.
+Editing that layer means editing `myconfig.ai.mysbx.config` and
+rebuilding. A `--user` flag would have to know the difference between
+those two worlds; the verb stays about the file mysbx itself owns.
+
+**No editor guess.** With neither variable set the command fails
+(exit `1`, `mysbx: ` message naming both). Falling back to `vi` would
+open an editor the operator did not choose on a policy file, with no
+hint that the variable is unset.
+
+**The value is split on whitespace, not shell-evaluated.**
+`EDITOR="code --wait"` and `EDITOR="nvim -u NONE"` work; quoting and
+shell metacharacters do not. Running the value through a shell would
+make `$EDITOR` a code-execution surface of every `mysbx edit` — the
+same reason configuration carries no hooks (config.md D4). A value that
+needs more than an argument list can be a wrapper script.
+
+The editor is `exec`d, so it owns the terminal and its exit code
+propagates unchanged (D8). It is resolved *before* the sidecar is
+created: a run that cannot edit must not leave a sidecar behind as its
+only effect. The global flags are not valid with `edit` (there is
+nothing to dry-run and no run to report on).
 
 ## Non-goals
 
