@@ -281,6 +281,11 @@ let
   #   less                                     git's default pager
   #   openssh                                  interactive control channel
   #                                            (`enableSsh`)
+  #   tig                                      git TUI for reviewing the
+  #                                            workspace clone over that
+  #                                            channel — only useful with a
+  #                                            TTY, hence `enableSsh`-gated
+  #                                            like openssh itself
   #   procps, util-linux                       the deliberately small
   #                                            troubleshooting set (ps, findmnt,
   #                                            mount, lsblk) needed to
@@ -306,7 +311,10 @@ let
       ripgrep
       util-linux
     ]
-    ++ lib.optional cfg.enableSsh openssh;
+    ++ lib.optionals cfg.enableSsh [
+      openssh
+      tig
+    ];
 
   # --- the per-slot SHARE LIST (lightweight plan phase 4) ----------------
   # Everything the guest may WRITE lives in ONE per-session tree

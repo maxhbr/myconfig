@@ -208,6 +208,14 @@ That is the difference to `pi` above: opencode keeps its sessions and
 its credentials in separate paths, so the session state can be
 persisted without the credentials following it.
 
+`hunk` ([`programs.hunk`](../programs.hunk/default.nix)) follows the same
+pattern for the *reviewing* side: on hosts with `myconfig.ai.hunk.enable`
+its binary goes on the sandbox `PATH` and `~/.config/hunk` is mounted
+read-only below `/mysbx-home`. It needs nothing else — no auth, no state,
+no `init` run. Its unconditional companion `tig` is part of the baseline
+dev-tool closure in [`nix/mysbx.nix`](./nix/mysbx.nix) instead, next to
+`git`.
+
 # Supported Technologies
 ## Already Implemented:
 - the NixOS module ships the `mysbx` package **and** the generated user
