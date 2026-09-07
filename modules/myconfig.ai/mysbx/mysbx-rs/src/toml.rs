@@ -578,6 +578,376 @@ fn is_bare_key_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_' || c == '-'
 }
 
+// ---- span editing (review-4 item 3) ---------------------------------
+//
+// `mysbx init --approve-git-dirs` edits an EXISTING sidecar config in
+// place: the operator's comments and formatting must survive, so the
+// document is not re-rendered from the parsed table but spliced at byte
+// offsets. Doing that needs the same lexical rules the parser above
+// implements — a `]` or a `#` inside a quoted path is data, not
+// structure, and a key is only the top-level `git-dirs` when it appears
+// BEFORE the first table header (TOML never returns to the root table,
+// so an edit appended at EOF would land in `[env]` or in the last
+// `[[mounts]]`).
+//
+// The scanner below walks the document once, byte by byte. It only ever
+// matches ASCII delimiters, so every offset it reports is a UTF-8
+// boundary and the splices are safe.
+
+/// Where a top-level `git-dirs` approval may be written
+/// (see [`add_git_dirs`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Layout {
+    /// Byte offsets of the top-level `git-dirs` array, when the key
+    /// exists: the `[` that opens it and the `]` that closes it.
+    pub git_dirs: Option<(usize, usize)>,
+    /// Byte offset at which a new TOP-LEVEL key may be inserted: the
+    /// start of the first table header's line (minus the comment lines
+    /// directly above it, which document that table), or the end of
+    /// the document when it has no table headers at all.
+    pub insert_at: usize,
+}
+
+/// Scan `text` for the [`Layout`] of a `git-dirs` approval edit.
+///
+/// The document is expected to have parsed with [`parse`] already; the
+/// scan is deliberately lenient about everything it does not need, but
+/// it never guesses: an unterminated string, an unterminated array or a
+/// key without a `=` is an error, so an edit is refused rather than
+/// written blind.
+pub fn layout(text: &str) -> Result<Layout, String> {
+    let b = text.as_bytes();
+    let mut i = 0usize;
+    let mut in_root = true;
+    let mut insert_at = text.len();
+    let mut git_dirs = None;
+    while i < b.len() {
+        match b[i] {
+            b' ' | b'\t' | b'\r' | b'\n' => {
+                i += 1;
+                continue;
+            }
+            b'#' => {
+                while i < b.len() && b[i] != b'\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            // At this position a `[` can only open a table header: a
+            // `[` that opens an ARRAY is consumed as part of a value by
+            // `skip_value` below, never seen here.
+            b'[' => {
+                if in_root {
+                    insert_at = insertion_point(text, i);
+                    in_root = false;
+                }
+                i = skip_line(text, i)?;
+                continue;
+            }
+            _ => {}
+        }
+        let key_start = i;
+        let (key, after_key) = read_key_path(text, i)?;
+        i = skip_blanks(b, after_key);
+        if i >= b.len() || b[i] != b'=' {
+            return Err(format!(
+                "cannot edit this config: no `=` after the key at byte {key_start}"
+            ));
+        }
+        i = skip_blanks(b, i + 1);
+        let value_start = i;
+        let value_end = skip_value(text, i)?;
+        if in_root && key.len() == 1 && key[0] == "git-dirs" {
+            if b[value_start] != b'[' {
+                return Err("cannot edit this config: `git-dirs` is not an array".into());
+            }
+            // `skip_value` stops one past the closing `]`.
+            git_dirs = Some((value_start, value_end - 1));
+        }
+        i = value_end;
+    }
+    Ok(Layout {
+        git_dirs,
+        insert_at,
+    })
+}
+
+/// `text` with `entries` added to the top-level `git-dirs` array,
+/// creating the key when it is missing. Everything else is preserved
+/// byte for byte: this is a splice, not a re-render.
+///
+/// `entries` are raw host paths; the escaping into TOML basic strings
+/// happens here, in one place, so a path containing `"`, `\`, `]` or
+/// `#` round-trips through [`parse`] unchanged. `new_key_comment` is
+/// written above a NEWLY created key only (an existing array keeps its
+/// own documentation).
+///
+/// The caller is expected to re-parse the result before replacing the
+/// file — `lib.rs` does, with the real `Config::parse`.
+pub fn add_git_dirs(
+    text: &str,
+    entries: &[&str],
+    new_key_comment: &str,
+) -> Result<String, String> {
+    let layout = layout(text)?;
+    let rendered: Vec<String> = entries
+        .iter()
+        .map(|e| format!("  \"{}\",", escape_basic(e)))
+        .collect();
+    let Some((open, close)) = layout.git_dirs else {
+        // No top-level key: write one BEFORE the first table header —
+        // TOML has no way back to the root table, so appending at EOF
+        // would silently make the key a field of `[env]` or of the
+        // last `[[mounts]]` entry (review-4 item 3).
+        let at = layout.insert_at;
+        let mut out = String::with_capacity(text.len() + 128);
+        out.push_str(&text[..at]);
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        if !out.is_empty() && !out.ends_with("\n\n") {
+            out.push('\n');
+        }
+        out.push_str(new_key_comment);
+        out.push_str("git-dirs = [\n");
+        for entry in &rendered {
+            out.push_str(entry);
+            out.push('\n');
+        }
+        out.push_str("]\n");
+        let rest = &text[at..];
+        if !rest.is_empty() {
+            out.push('\n');
+            out.push_str(rest);
+        }
+        return Ok(out);
+    };
+    // The key exists: splice the new entries in before the closing
+    // `]`, adding the separator the last existing element may be
+    // missing (`git-dirs = ["a"]` has no trailing comma).
+    let (last_significant, needs_comma) = array_tail(text, open, close);
+    let comma_at = last_significant.map_or(close, |x| x + 1);
+    let mut out = String::with_capacity(text.len() + 64 * rendered.len());
+    out.push_str(&text[..comma_at]);
+    if needs_comma {
+        out.push(',');
+    }
+    out.push_str(&text[comma_at..close]);
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    for entry in &rendered {
+        out.push_str(entry);
+        out.push('\n');
+    }
+    out.push_str(&text[close..]);
+    Ok(out)
+}
+
+/// TOML basic-string escaping of a raw path: a path may legally contain
+/// `"` or `\`, and an unescaped one would make the file mysbx just
+/// wrote unparsable on the next run. `]` and `#` need no escape — they
+/// are ordinary characters INSIDE a string; what they must not do is
+/// confuse the scanner, and it reads strings as strings.
+fn escape_basic(raw: &str) -> String {
+    raw.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn skip_blanks(b: &[u8], mut i: usize) -> usize {
+    while i < b.len() && (b[i] == b' ' || b[i] == b'\t') {
+        i += 1;
+    }
+    i
+}
+
+/// The offset at which a new top-level key is written when the first
+/// table header sits at `header`: the start of that header's line, but
+/// above the contiguous comment lines directly preceding it — those
+/// document the table and must keep sitting on it.
+fn insertion_point(text: &str, header: usize) -> usize {
+    let mut at = line_start(text, header);
+    loop {
+        if at == 0 {
+            return at;
+        }
+        let prev = line_start(text, at - 1);
+        let line = text[prev..at].trim();
+        if line.starts_with('#') {
+            at = prev;
+        } else {
+            return at;
+        }
+    }
+}
+
+/// The offset of the first byte of the line `at` lies on.
+fn line_start(text: &str, at: usize) -> usize {
+    text[..at].rfind('\n').map_or(0, |n| n + 1)
+}
+
+/// Skip to just past the end of the line starting at `i`, ignoring
+/// newlines inside quoted strings (a table header may carry a quoted
+/// key containing anything at all).
+fn skip_line(text: &str, mut i: usize) -> Result<usize, String> {
+    let b = text.as_bytes();
+    while i < b.len() {
+        match b[i] {
+            b'"' | b'\'' => i = skip_string(text, i)?,
+            b'\n' => return Ok(i + 1),
+            _ => i += 1,
+        }
+    }
+    Ok(i)
+}
+
+/// Read the key at `i` — bare, quoted, or dotted — and return its
+/// segments plus the offset just past it. A dotted key yields more than
+/// one segment, which is how `[env]`-style `a.b = 1` at the root is
+/// told apart from the top-level `git-dirs` this edit touches.
+fn read_key_path(text: &str, mut i: usize) -> Result<(Vec<String>, usize), String> {
+    let b = text.as_bytes();
+    let mut segments = Vec::new();
+    loop {
+        i = skip_blanks(b, i);
+        if i >= b.len() {
+            return Err("cannot edit this config: truncated key".into());
+        }
+        match b[i] {
+            b'"' | b'\'' => {
+                let end = skip_string(text, i)?;
+                // The scanner only needs to COMPARE the key, so the
+                // raw inner text is enough for the bare spellings this
+                // schema uses; an escaped quoted key simply never
+                // equals `git-dirs`.
+                segments.push(text[i + 1..end - 1].to_string());
+                i = end;
+            }
+            _ => {
+                let start = i;
+                while i < b.len() && is_bare_key_char(b[i] as char) {
+                    i += 1;
+                }
+                if i == start {
+                    return Err(format!(
+                        "cannot edit this config: unexpected `{}` at byte {start}",
+                        &text[start..start + 1]
+                    ));
+                }
+                segments.push(text[start..i].to_string());
+            }
+        }
+        let after = skip_blanks(b, i);
+        if after < b.len() && b[after] == b'.' {
+            i = after + 1;
+            continue;
+        }
+        return Ok((segments, i));
+    }
+}
+
+/// Skip the string starting at `i` (`"` basic with escapes, or `'`
+/// literal without) and return the offset just past its closing quote.
+fn skip_string(text: &str, i: usize) -> Result<usize, String> {
+    let b = text.as_bytes();
+    let quote = b[i];
+    let mut j = i + 1;
+    while j < b.len() {
+        if quote == b'"' && b[j] == b'\\' {
+            j += 2;
+            continue;
+        }
+        if b[j] == quote {
+            return Ok(j + 1);
+        }
+        j += 1;
+    }
+    Err(format!(
+        "cannot edit this config: unterminated string at byte {i}"
+    ))
+}
+
+/// Skip the value starting at `i` and return the offset just past it.
+/// Arrays and inline tables are skipped with their nesting, strings as
+/// strings and comments as comments — so a `]` or `#` inside a quoted
+/// path cannot end the value early.
+fn skip_value(text: &str, i: usize) -> Result<usize, String> {
+    let b = text.as_bytes();
+    match b.get(i) {
+        None => Err("cannot edit this config: missing value".into()),
+        Some(b'"') | Some(b'\'') => skip_string(text, i),
+        Some(b'[') | Some(b'{') => {
+            let mut depth = 0usize;
+            let mut j = i;
+            while j < b.len() {
+                match b[j] {
+                    b'"' | b'\'' => {
+                        j = skip_string(text, j)?;
+                        continue;
+                    }
+                    b'#' => {
+                        while j < b.len() && b[j] != b'\n' {
+                            j += 1;
+                        }
+                        continue;
+                    }
+                    b'[' | b'{' => depth += 1,
+                    b']' | b'}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return Ok(j + 1);
+                        }
+                    }
+                    _ => {}
+                }
+                j += 1;
+            }
+            Err(format!(
+                "cannot edit this config: unterminated array or inline table at byte {i}"
+            ))
+        }
+        // A scalar runs to the end of its line or to a comment.
+        Some(_) => {
+            let mut j = i;
+            while j < b.len() && b[j] != b'\n' && b[j] != b'#' {
+                j += 1;
+            }
+            Ok(j)
+        }
+    }
+}
+
+/// The tail of the array `text[open..=close]`: the offset of its last
+/// significant byte (outside strings and comments), and whether a
+/// separating comma must be added before another element is appended.
+fn array_tail(text: &str, open: usize, close: usize) -> (Option<usize>, bool) {
+    let b = text.as_bytes();
+    let mut j = open + 1;
+    let mut last: Option<usize> = None;
+    while j < close {
+        match b[j] {
+            b'"' | b'\'' => {
+                // An unterminated string cannot occur here: `layout`
+                // already scanned the array successfully.
+                let end = skip_string(text, j).unwrap_or(close);
+                last = Some(end - 1);
+                j = end;
+                continue;
+            }
+            b'#' => {
+                while j < close && b[j] != b'\n' {
+                    j += 1;
+                }
+                continue;
+            }
+            b' ' | b'\t' | b'\r' | b'\n' => {}
+            _ => last = Some(j),
+        }
+        j += 1;
+    }
+    let needs_comma = last.is_some_and(|x| b[x] != b',');
+    (last, needs_comma)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -649,5 +1019,145 @@ c = "\u0041"
         assert!(e.message.contains("datetimes"), "{e}");
         let e = parse("a = \"\"\"x\"\"\"\n").unwrap_err();
         assert!(e.message.contains("multi-line"), "{e}");
+    }
+}
+
+#[cfg(test)]
+mod edit_tests {
+    use super::*;
+
+    const COMMENT: &str = "# approved\n";
+
+    /// The edit, re-parsed: every test asserts on the VALUE the parser
+    /// sees, not on the bytes alone — the point of the exercise is that
+    /// the rewritten document still means what it says.
+    fn add(text: &str, entries: &[&str]) -> (String, Table) {
+        let out = add_git_dirs(text, entries, COMMENT).expect("edit succeeds");
+        let table = parse(&out).unwrap_or_else(|e| panic!("re-parse failed: {e}\n---\n{out}"));
+        (out, table)
+    }
+
+    fn git_dirs_of(table: &Table) -> Vec<String> {
+        table["git-dirs"]
+            .as_array()
+            .expect("git-dirs is an array")
+            .iter()
+            .map(|v| v.as_str().expect("string").to_string())
+            .collect()
+    }
+
+    #[test]
+    fn a_config_ending_in_a_table_gets_a_top_level_key() {
+        // The bug: appending at EOF made this an `env.git-dirs` key.
+        let (out, table) = add("backend = \"bubblewrap\"\n\n[env]\nEDITOR = \"nvim\"\n", &["/a"]);
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string()]);
+        assert!(
+            table["env"].as_table().expect("env").get("git-dirs").is_none(),
+            "the key landed in [env]: {out}"
+        );
+    }
+
+    #[test]
+    fn a_config_ending_in_an_array_of_tables_gets_a_top_level_key() {
+        let (out, table) = add(
+            "backend = \"bubblewrap\"\n\n[[mounts]]\npath = \"/x\"\nmode = \"ro\"\n",
+            &["/a"],
+        );
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string()]);
+        let mounts = table["mounts"].as_array().expect("mounts");
+        assert_eq!(mounts.len(), 1, "{out}");
+        assert!(
+            mounts[0].as_table().expect("mount").get("git-dirs").is_none(),
+            "the key landed in the mount: {out}"
+        );
+    }
+
+    #[test]
+    fn a_document_without_tables_keeps_the_key_at_the_end() {
+        let (_, table) = add("backend = \"bubblewrap\"\n", &["/a"]);
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string()]);
+    }
+
+    #[test]
+    fn an_existing_quoted_key_is_extended_not_duplicated() {
+        // `"git-dirs"` is the same key as `git-dirs`; a second
+        // definition would be a parse error ("duplicate key"), so
+        // recognising the quoted spelling is what keeps the edit valid.
+        let (_, table) = add("\"git-dirs\" = [\"/a\"]\n", &["/b"]);
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string(), "/b".to_string()]);
+    }
+
+    #[test]
+    fn a_same_named_key_in_another_table_is_not_touched() {
+        let text = "backend = \"bubblewrap\"\n\n[env]\n\"git-dirs\" = \"not a path\"\n";
+        let (out, table) = add(text, &["/a"]);
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string()]);
+        assert_eq!(
+            table["env"].as_table().expect("env")["git-dirs"],
+            Value::String("not a path".into()),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn an_array_without_a_trailing_comma_gets_one() {
+        let (_, table) = add("git-dirs = [\"/a\"]\n", &["/b"]);
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string(), "/b".to_string()]);
+    }
+
+    #[test]
+    fn an_empty_array_is_filled() {
+        let (_, table) = add("git-dirs = []\n", &["/a"]);
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string()]);
+    }
+
+    #[test]
+    fn brackets_hashes_quotes_and_backslashes_in_paths_round_trip() {
+        // The old locator scanned for `]` and `#` without knowing
+        // about strings, so either character inside a path ended the
+        // edit in the middle of the array.
+        let weird = ["/sq[uare]", "/ha#sh", "/qu\"ote", "/back\\slash"];
+        let (out, table) = add("git-dirs = [\"/keep]\"] # trailing ] comment\n", &weird);
+        let mut expected = vec!["/keep]".to_string()];
+        expected.extend(weird.iter().map(|s| (*s).to_string()));
+        assert_eq!(git_dirs_of(&table), expected, "{out}");
+    }
+
+    #[test]
+    fn unrelated_comments_and_sections_survive() {
+        let text = "# top comment\nbackend = \"bubblewrap\"\n\n# about the mounts\n[[mounts]]\npath = \"/x\"\nmode = \"ro\"\n";
+        let (out, table) = add(text, &["/a"]);
+        assert!(out.contains("# top comment"), "{out}");
+        // The comment documenting the table stays ON the table.
+        let mounts_at = out.find("[[mounts]]").expect("mounts header");
+        let about_at = out.find("# about the mounts").expect("mount comment");
+        assert!(about_at < mounts_at, "{out}");
+        assert!(
+            out.find("git-dirs").expect("key") < about_at,
+            "the new key must be top-level: {out}"
+        );
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string()]);
+    }
+
+    #[test]
+    fn comments_inside_the_array_survive() {
+        let text = "git-dirs = [\n  \"/a\", # the main checkout\n]\n";
+        let (out, table) = add(text, &["/b"]);
+        assert!(out.contains("# the main checkout"), "{out}");
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string(), "/b".to_string()]);
+    }
+
+    #[test]
+    fn a_dotted_root_key_is_not_the_top_level_key() {
+        // `env.git-dirs` at the root is a field of `env`, not the key
+        // the approval edits.
+        let (_, table) = add("env.\"git-dirs\" = \"x\"\n", &["/a"]);
+        assert_eq!(git_dirs_of(&table), vec!["/a".to_string()]);
+    }
+
+    #[test]
+    fn a_broken_document_is_refused_instead_of_spliced() {
+        // Unterminated string: no offsets can be trusted, so no edit.
+        assert!(add_git_dirs("git-dirs = [\"/a\n", &["/b"], COMMENT).is_err());
     }
 }

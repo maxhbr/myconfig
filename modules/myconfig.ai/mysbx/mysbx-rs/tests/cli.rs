@@ -1848,3 +1848,497 @@ fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
         "unexpected stderr: {stderr}"
     );
 }
+
+// ---- the policy PATHNAME is protected end to end (review-4 item 1) ----
+
+/// Run the bare form with a backend that cannot be executed: the guard
+/// must refuse BEFORE the payload starts, so the missing binary is
+/// never reached. Returns (exit code, stdout, stderr).
+fn run_refusing_launch(inv: &Invocation) -> (Option<i32>, String, String) {
+    let mut cmd = spawn_with_args(inv, &[] as &[&str]);
+    cmd.env("MYSBX_BWRAP", "/nonexistent-bwrap");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    (
+        out.status.code(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// The Home-Manager shape of the user config: `<xdg>/mysbx/config.toml`
+/// is a SYMLINK to an immutable store-like file holding `contents`.
+/// Returns the symlink path and its target.
+fn hm_style_user_config(base: &Path, xdg: &Path, contents: &str) -> (PathBuf, PathBuf) {
+    let store = base.join("store");
+    std::fs::create_dir_all(&store).unwrap();
+    let target = store.join("mysbx-config.toml");
+    std::fs::write(&target, contents).unwrap();
+    let dir = xdg.join("mysbx");
+    std::fs::create_dir_all(&dir).unwrap();
+    let link = dir.join("config.toml");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    (link, target)
+}
+
+/// The layout every test in this section shares: `base/home` (HOME,
+/// deliberately NOT inside the mounted tree — the review-3 item 4 home
+/// guard would fire first), `base/xdg` (XDG_CONFIG_HOME), and
+/// `base/trees/repo` + its sidecar.
+fn policy_pathname_fixture(name: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf, PathBuf) {
+    let base = tmpdir(name);
+    let trees = base.join("trees");
+    let repo = trees.join("repo");
+    let sidecar = trees.join("repo.mysbx");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&sidecar).unwrap();
+    let home = base.join("home");
+    let xdg = base.join("xdg");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&xdg).unwrap();
+    (base, repo, sidecar, home, xdg)
+}
+
+fn rw_mount_toml(path: &Path, dest: &str) -> String {
+    format!(
+        "\n[[mounts]]\npath = {:?}\nmode = \"rw\"\ndest = {dest:?}\n",
+        std::fs::canonicalize(path).unwrap()
+    )
+}
+
+#[test]
+fn a_writable_mount_over_the_generated_user_config_symlink_is_refused() {
+    // Review-4 item 1, the exact exploit: the user config is a
+    // Home-Manager symlink into the store, so the RESOLVED target is
+    // unwritable — but an rw mount of the directory holding the
+    // symlink lets the payload unlink it and drop its own policy
+    // there, which the NEXT run would trust. The run must be refused
+    // before anything executes, and the symlink must be untouched.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-user");
+    std::fs::write(sidecar.join("config.toml"), "# sidecar\n").unwrap();
+    // The mount source must exist to be canonicalized (D8), and it is
+    // the directory the symlink will live in.
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    let contents = format!(
+        "backend = \"bubblewrap\"\n{}",
+        rw_mount_toml(&xdg.join("mysbx"), "/policy")
+    );
+    let (link, target) = hm_style_user_config(&base, &xdg, &contents);
+
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_refusing_launch(&inv);
+    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("policy file"),
+        "unexpected stderr: {stderr}"
+    );
+    // Nothing ran, so nothing could have replaced the entry.
+    assert!(
+        std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+        "the policy symlink was replaced"
+    );
+    assert_eq!(std::fs::read_link(&link).unwrap(), target);
+}
+
+#[test]
+fn a_writable_mount_over_a_symlinked_sidecar_config_is_refused() {
+    // Same shape for the sidecar layer: its `config.toml` is a symlink
+    // to a file elsewhere, and an rw mount of the sidecar directory
+    // would let the payload replace the entry.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-sidecar");
+    let store = base.join("sidecar-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let target = store.join("config.toml");
+    std::fs::write(&target, "# sidecar policy\n").unwrap();
+    let link = sidecar.join("config.toml");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        xdg.join("mysbx").join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\n{}",
+            rw_mount_toml(&sidecar, "/policy")
+        ),
+    )
+    .unwrap();
+
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_refusing_launch(&inv);
+    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("policy file"),
+        "unexpected stderr: {stderr}"
+    );
+    assert!(
+        std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+        "the sidecar policy symlink was replaced"
+    );
+    assert_eq!(std::fs::read_link(&link).unwrap(), target);
+}
+
+#[test]
+fn a_writable_mount_over_an_intermediate_symlink_component_is_refused() {
+    // The symlink need not be the final entry: `<xdg>/mysbx` itself is
+    // a link to a directory elsewhere, and an rw mount of `<xdg>`
+    // makes THAT entry replaceable — the next run's `config.toml`
+    // would then be looked up in a directory the payload chose.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-intermediate");
+    std::fs::write(sidecar.join("config.toml"), "# sidecar\n").unwrap();
+    let real = base.join("real-mysbx");
+    std::fs::create_dir_all(&real).unwrap();
+    let link = xdg.join("mysbx");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    std::fs::write(
+        real.join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\n{}",
+            rw_mount_toml(&xdg, "/xdg")
+        ),
+    )
+    .unwrap();
+
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_refusing_launch(&inv);
+    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("policy file"),
+        "unexpected stderr: {stderr}"
+    );
+    assert!(
+        std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+        "the intermediate symlink was replaced"
+    );
+    assert_eq!(std::fs::read_link(&link).unwrap(), real);
+}
+
+#[test]
+fn an_unrelated_writable_mount_still_runs_with_a_symlinked_user_config() {
+    // The guard must not swallow ordinary rw grants: a source that
+    // touches neither the pathname chain nor the target is fine.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-unrelated");
+    std::fs::write(sidecar.join("config.toml"), "# sidecar\n").unwrap();
+    let work = base.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let contents = format!(
+        "backend = \"bubblewrap\"\n{}",
+        rw_mount_toml(&work, "/work")
+    );
+    hm_style_user_config(&base, &xdg, &contents);
+
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(stdout.contains("/work"), "the mount is built: {stdout}");
+}
+
+#[test]
+fn a_read_only_view_of_the_policy_directory_still_runs() {
+    // `ro` cannot replace a directory entry, so reviewing the
+    // generated config from inside the sandbox stays possible.
+    let (base, repo, sidecar, home, xdg) = policy_pathname_fixture("policy-symlink-ro");
+    std::fs::write(sidecar.join("config.toml"), "# sidecar\n").unwrap();
+    std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+    let contents = format!(
+        "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"ro\"\ndest = \"/policy\"\n",
+        std::fs::canonicalize(xdg.join("mysbx")).unwrap()
+    );
+    hm_style_user_config(&base, &xdg, &contents);
+
+    let inv = Invocation {
+        args: vec!["--dry-run"],
+        cwd: repo,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(stdout.contains("/policy"), "the ro mount is built: {stdout}");
+}
+
+// ---- a repo root above the home is refused end to end (review-4 item 2) ----
+
+#[test]
+fn a_repo_root_containing_the_home_is_refused_before_anything_is_created() {
+    // `HOME=<base>/tree/users/alice` below a `.git` marker at
+    // `<base>/tree`: discovery used to accept `<base>/tree` as the repo
+    // (only EQUALITY with the home was refused) and the implicit rw
+    // repo bind then exposed the whole subtree — home, `.ssh` and all.
+    // The guard runs before the implicit init, so no sidecar may
+    // appear either.
+    let base = tmpdir("repo-root-above-home");
+    let tree = base.join("tree");
+    let home = tree.join("users").join("alice");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(tree.join(".git")).unwrap();
+    let cwd = home.join("project").join("sub");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let xdg = base.join("xdg");
+    std::fs::create_dir_all(&xdg).unwrap();
+
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_refusing_launch(&inv);
+    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("contains the home directory"),
+        "unexpected stderr: {stderr}"
+    );
+    assert!(
+        !base.join("tree.mysbx").exists(),
+        "the guard must run before the implicit init"
+    );
+}
+
+// ---- the approval is a table-aware TOML edit (review-4 item 3) ----------
+
+/// The shared shape of the approval tests: a linked-worktree repo whose
+/// sidecar carries `contents`, plus a user config naming the backend.
+/// Returns the invocation factory and the sidecar config path.
+fn approval_fixture(
+    name: &'static str,
+    contents: &str,
+) -> (
+    impl Fn(Vec<&'static str>) -> Invocation,
+    PathBuf,
+    PathBuf,
+) {
+    let base = target_tmpdir(name);
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let config = base.join("wt.mysbx").join("config.toml");
+    std::fs::write(&config, contents).unwrap();
+    let inv = move |args: Vec<&'static str>| Invocation {
+        args,
+        cwd: worktree.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    (inv, config, gitdir)
+}
+
+#[test]
+fn approving_into_a_config_ending_in_a_table_stays_top_level() {
+    // The review-4 bug: the approval appended `git-dirs` at EOF, and
+    // TOML never returns to the root table — so in a config ending in
+    // `[env]` the new key became `env.git-dirs`, which the strict
+    // parser rejects. The command reported success and left a config
+    // mysbx could not read.
+    let (inv, config, gitdir) = approval_fixture(
+        "approve-ends-in-env",
+        "backend = \"bubblewrap\"\n\n[env]\nEDITOR = \"nvim\"\n",
+    );
+
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("approved git metadata"), "{stdout}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert!(
+        written.find("git-dirs").unwrap() < written.find("[env]").unwrap(),
+        "the key must sit in the root table: {written}"
+    );
+    assert!(written.contains("EDITOR = \"nvim\""), "{written}");
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+
+    // The proof that matters: the rewritten config parses and the run
+    // it configures succeeds.
+    let (code, _, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+
+    // And it is idempotent: nothing added twice, nothing rewritten.
+    let before = std::fs::read_to_string(&config).unwrap();
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("already lists everything"), "{stdout}");
+    assert_eq!(before, std::fs::read_to_string(&config).unwrap());
+}
+
+#[test]
+fn approving_into_a_config_ending_in_an_array_of_tables_stays_top_level() {
+    // The `[[mounts]]` half of the same bug: the appended key became a
+    // field of the last mount.
+    let (inv, config, gitdir) = approval_fixture(
+        "approve-ends-in-mounts",
+        "backend = \"bubblewrap\"\n",
+    );
+    // A mount source inside the fixture: every path under /etc is
+    // either protected or (on NixOS) a symlink into /nix/store, which
+    // the dest rules refuse for unrelated reasons.
+    let base = config.parent().unwrap().parent().unwrap().to_path_buf();
+    let data = base.join("data");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(
+        &config,
+        format!(
+            "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"ro\"\ndest = \"/mysbx-home/data\"\n",
+            std::fs::canonicalize(&data).unwrap()
+        ),
+    )
+    .unwrap();
+
+    let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert!(
+        written.find("git-dirs").unwrap() < written.find("[[mounts]]").unwrap(),
+        "the key must sit in the root table: {written}"
+    );
+    assert!(written.contains("/mysbx-home/data"), "{written}");
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+
+    let (code, stdout, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("/mysbx-home/data"),
+        "the mount survives: {stdout}"
+    );
+}
+
+#[test]
+fn approving_extends_an_existing_quoted_key_without_duplicating_it() {
+    // `"git-dirs"` is the same key as `git-dirs`: a second definition
+    // would be a duplicate-key parse error. The old line-prefix
+    // locator did not recognise the quoted spelling.
+    let (inv, config, gitdir) = approval_fixture(
+        "approve-quoted-key",
+        "backend = \"bubblewrap\"\n\"git-dirs\" = [\"/nonexistent-but-unused\"]\n",
+    );
+    // The pre-existing entry must not exist on disk (it is only there
+    // to prove the quoted key is found); a dangling entry is a runtime
+    // error for `run`, so this test stops at the file.
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("approved git metadata"), "{stdout}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert_eq!(
+        written.matches("git-dirs").count(),
+        1,
+        "the quoted key must be extended, not duplicated: {written}"
+    );
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+}
+
+#[test]
+fn approving_preserves_comments_and_a_same_named_key_in_a_table() {
+    // Everything the operator wrote stays: the leading comment, the
+    // `[env]` table and its (unrelated) same-named key.
+    let (inv, config, gitdir) = approval_fixture(
+        "approve-preserves",
+        "# operator notes\nbackend = \"bubblewrap\"\n\n# about the environment\n[env]\n\"git-dirs\" = \"a value, not a path\"\n",
+    );
+
+    let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert!(written.contains("# operator notes"), "{written}");
+    assert!(written.contains("# about the environment"), "{written}");
+    assert!(
+        written.contains("\"git-dirs\" = \"a value, not a path\""),
+        "the table's own key is untouched: {written}"
+    );
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+    // The comment documenting `[env]` still sits on `[env]`.
+    assert!(
+        written.find("# about the environment").unwrap() < written.find("[env]").unwrap(),
+        "{written}"
+    );
+
+    let (code, _, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn approving_a_path_with_brackets_and_hashes_round_trips() {
+    // The old locator scanned for `]` and `#` without knowing about
+    // strings: either character in a path corrupted the edit. The
+    // fixture puts them in the REPO name, so the discovered git dir
+    // carries them.
+    let base = target_tmpdir("approve-weird-path");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt#1]x");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    std::fs::write(
+        base.join("xdg").join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let config = base.join("wt#1]x.mysbx").join("config.toml");
+    std::fs::write(&config, "backend = \"bubblewrap\"\n\n[env]\nEDITOR = \"nvim\"\n").unwrap();
+    let inv = |args: Vec<&'static str>| Invocation {
+        args,
+        cwd: worktree.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+
+    let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let written = std::fs::read_to_string(&config).unwrap();
+    assert!(
+        written.contains(&format!("\"{}\"", gitdir.display())),
+        "{written}"
+    );
+    // A second approval finds it already listed — the round trip
+    // through the parser recognised the escaped path.
+    let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("already lists everything"), "{stdout}");
+
+    let (code, _, stderr) = run_binary(&inv(vec!["--dry-run", "run", "--", "true"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn an_unparsable_sidecar_config_is_never_rewritten() {
+    // The edit validates with the real parser before it replaces
+    // anything — and a config that does not parse in the first place
+    // fails before that, with the file untouched.
+    let (inv, config, _gitdir) =
+        approval_fixture("approve-unparsable", "git-dirs = [\"/a\n");
+    let before = std::fs::read_to_string(&config).unwrap();
+    let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
+    assert_eq!(code, 1, "stderr: {stderr}");
+    assert!(stderr.starts_with("mysbx: "), "{stderr}");
+    assert_eq!(before, std::fs::read_to_string(&config).unwrap());
+}

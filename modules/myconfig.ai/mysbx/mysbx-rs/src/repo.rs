@@ -56,6 +56,20 @@ pub enum Error {
     /// overridable in the MVP: implicit init must not `rw`-bind the whole
     /// home under a policy nobody wrote.
     HomeDir(PathBuf),
+    /// The resolved repository CONTAINS the user's home directory
+    /// (review-4 item 2): a `.git` marker or a stale sidecar high up
+    /// the tree (`/srv/tree/.git` with `HOME=/srv/tree/users/alice`)
+    /// would otherwise make the whole subtree the repo — and the repo
+    /// is bound read-write, so the home, `.ssh` and every other
+    /// user's files ride along. Exactly as unoverridable as
+    /// [`Error::HomeDir`]: the equality check was only ever the
+    /// degenerate case of this one.
+    HomeAncestorDir {
+        /// The discovered repository root, canonicalized.
+        root: PathBuf,
+        /// The home directory it contains, canonicalized.
+        home: PathBuf,
+    },
     /// The resolved repository is the filesystem root.
     RootDir,
     /// The filesystem could not be queried.
@@ -82,6 +96,15 @@ impl fmt::Display for Error {
                     p.display()
                 )
             }
+            Error::HomeAncestorDir { root, home } => write!(
+                f,
+                "refusing to use {} as a repo: it contains the home directory {} \
+                 — the repo is bound read-write, so the whole home would be \
+                 exposed to the sandbox; move the .git marker or the sidecar, \
+                 or run from a repository below the home",
+                root.display(),
+                home.display()
+            ),
             Error::RootDir => f.write_str("refusing to use / as a repo"),
             Error::Io(m) => f.write_str(m),
             Error::GitDirForbidden { gitdir } => write!(
@@ -250,7 +273,8 @@ fn sibling_sidecar(dir: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// The guard: never operate on `$HOME` or `/`
+/// The guard: never operate on `$HOME`, on a directory CONTAINING
+/// `$HOME` (review-4 item 2) or on `/`
 /// (docs/TODOs/mvp-2-repo-discovery.md). Canonicalize before comparing,
 /// otherwise a symlinked home slips past. Also guards the git metadata
 /// targets a repo-writable `.git` FILE points at (review-2 item 1):
@@ -266,8 +290,19 @@ fn guarded(repo: Repo, home: Option<&Path>) -> Result<Repo, Error> {
     if let Some(home) = home {
         let home = std::fs::canonicalize(home)
             .map_err(|e| Error::Io(format!("cannot canonicalize home {}: {e}", home.display())))?;
-        if root == home {
-            return Err(Error::HomeDir(home));
+        // Equal OR an ancestor (review-4 item 2). `Path::starts_with`
+        // compares whole COMPONENTS on the two canonical paths, so
+        // `/srv/tree` catches `/srv/tree/users/alice` while the
+        // lookalike `/srv/treehouse` stays a perfectly ordinary repo
+        // root — a string-prefix test would confuse the two. A repo
+        // BELOW the home (the normal `~/src/project`) is untouched:
+        // the home does not start with it.
+        if home.starts_with(&root) {
+            return Err(if root == home {
+                Error::HomeDir(home)
+            } else {
+                Error::HomeAncestorDir { root, home }
+            });
         }
         for gitdir in &repo.git_dirs {
             // The git dir AT or BELOW home is the normal approved
@@ -396,6 +431,89 @@ mod tests {
 
         let e = resolve(&link, Some(&home)).unwrap_err();
         assert!(matches!(e, Error::HomeDir(_)), "{e}");
+    }
+
+    // ---- a repo root ABOVE the home is refused (review-4 item 2) -------
+
+    #[test]
+    fn a_git_root_containing_the_home_is_rejected() {
+        // The review's shape: `<base>/tree/.git` with
+        // `HOME=<base>/tree/users/alice`. The equality check passed and
+        // the implicit rw repo bind then exposed the entire subtree,
+        // home and `.ssh` included.
+        let base = tmpdir("git-root-above-home");
+        let tree = base.join("tree");
+        let home = tree.join("users").join("alice");
+        touch_dir(&home);
+        touch_dir(&tree.join(".git"));
+        let start = home.join("project").join("subdir");
+        touch_dir(&start);
+
+        let e = resolve(&start, Some(&home)).unwrap_err();
+        assert!(matches!(e, Error::HomeAncestorDir { .. }), "{e}");
+    }
+
+    #[test]
+    fn a_sidecar_root_containing_the_home_is_rejected() {
+        // The same invariant for step 1: an EXISTING sidecar high up
+        // the tree must not buy a repo root that contains the home.
+        let base = tmpdir("sidecar-root-above-home");
+        let tree = base.join("tree");
+        let home = tree.join("users").join("alice");
+        touch_dir(&home);
+        touch_dir(&base.join("tree.mysbx"));
+        let start = home.join("project").join("subdir");
+        touch_dir(&start);
+
+        let e = resolve(&start, Some(&home)).unwrap_err();
+        assert!(matches!(e, Error::HomeAncestorDir { .. }), "{e}");
+    }
+
+    #[test]
+    fn a_symlinked_home_spelling_cannot_slip_past_the_ancestor_guard() {
+        // The comparison is on CANONICAL paths: `$HOME` handed in
+        // through a symlink must not make the containment invisible.
+        let base = tmpdir("symlinked-home-above");
+        let tree = base.join("tree");
+        let home = tree.join("users").join("alice");
+        touch_dir(&home);
+        touch_dir(&tree.join(".git"));
+        let link = base.join("link-to-home");
+        std::os::unix::fs::symlink(&home, &link).unwrap();
+        let start = home.join("project");
+        touch_dir(&start);
+
+        let e = resolve(&start, Some(&link)).unwrap_err();
+        assert!(matches!(e, Error::HomeAncestorDir { .. }), "{e}");
+    }
+
+    #[test]
+    fn a_repository_below_the_home_stays_allowed() {
+        // The normal case must not become collateral damage: a repo
+        // INSIDE the home is the everyday layout.
+        let base = tmpdir("repo-below-home");
+        let home = fake_home(&base);
+        let proj = home.join("src").join("project");
+        touch_dir(&proj.join(".git"));
+        let start = proj.join("sub");
+        touch_dir(&start);
+
+        let r = resolve(&start, Some(&home)).unwrap();
+        assert_eq!(r.root, proj);
+    }
+
+    #[test]
+    fn a_lookalike_sibling_of_the_home_stays_allowed() {
+        // Component-aware containment, not string prefixes:
+        // `<base>/fake-home-2` merely SPELLS like a prefix of
+        // `<base>/fake-home`, and is an ordinary repo root.
+        let base = tmpdir("lookalike-home");
+        let home = fake_home(&base);
+        let sibling = base.join(format!("{FAKE_HOME_SUB}-2"));
+        touch_dir(&sibling.join(".git"));
+
+        let r = resolve(&sibling, Some(&home)).unwrap();
+        assert_eq!(r.root, sibling);
     }
 
     #[test]

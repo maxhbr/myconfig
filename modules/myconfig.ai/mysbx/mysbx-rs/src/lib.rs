@@ -317,21 +317,19 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // run requires the next run to launch with the policy writable —
     // and that is exactly what this guard forbids.
     //
-    // Both paths are CANONICALIZED: every `rw` source they are compared
-    // against is (D8, repo.rs), and a symlinked `$HOME` or
-    // `$XDG_CONFIG_HOME` would otherwise alias the user config out of
-    // the comparison. A file that exists always canonicalizes; the
-    // normalize fallback is belt-and-braces for a race between the
-    // existence check above and this call.
-    let policy_paths: Vec<std::path::PathBuf> = [
+    // Each path is walked, not merely canonicalized (review-4 item 1):
+    // the resolved target AND every directory entry the next run
+    // traverses to find it are protected — see [`trusted_policy`] and
+    // [`bwrap::PolicyPath`]. Canonicalizing alone would protect the
+    // Nix-store target of a Home-Manager-generated user config while
+    // leaving the symlink that names it replaceable.
+    let policy_paths: Vec<bwrap::PolicyPath> = [
         (user_config_exists, &user_config_path),
         (sidecar_config_exists, &sidecar_config_path),
     ]
     .into_iter()
     .filter(|(exists, _)| *exists)
-    .map(|(_, path)| {
-        std::fs::canonicalize(path).unwrap_or_else(|_| path.clone())
-    })
+    .map(|(_, path)| trusted_policy(path))
     .collect();
     let params = bwrap::Params {
         shell: &shell,
@@ -404,6 +402,103 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     eprintln!("mysbx: cannot exec {bwrap_bin}: {e}");
     1
 }
+
+/// Everything that must stay unwritable for `path` to still be THIS
+/// policy file on the next run (review-4 item 1): the pathname is
+/// walked component by component on the host filesystem, and every
+/// directory entry it traverses is recorded — with the parents of that
+/// entry already resolved, so an intermediate symlink is recorded as
+/// the entry it is *and* followed — followed by the fully resolved
+/// target.
+///
+/// Why the entries and not only the target: mysbx finds its policy by
+/// PATHNAME. Home Manager writes `~/.config/mysbx/config.toml` as a
+/// symlink into the immutable `/nix/store`; a payload that can write
+/// `~/.config/mysbx` cannot touch the target, but it can unlink the
+/// symlink and put its own `config.toml` there — and the next run
+/// reads that one. The same holds for every directory above it (a
+/// writable parent can rename the directory out of the way) and for
+/// symlinks in intermediate components.
+///
+/// Fail-closed by construction: a component that cannot be read as a
+/// symlink is treated as a plain entry, and a symlink chain longer
+/// than [`SYMLINK_BUDGET`] stops being followed — in both cases the
+/// entries collected so far stay protected, so an error can only
+/// remove the FOLLOWING of a link, never the protection of the
+/// pathname the run actually used.
+fn trusted_policy(path: &std::path::Path) -> bwrap::PolicyPath {
+    use std::collections::VecDeque;
+    use std::ffi::OsString;
+
+    // A relative path can only come from a caller that built it from
+    // the CWD; resolve it the same way the rest of the pipeline would,
+    // so the guarded set is absolute like every `rw` source it is
+    // compared against.
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        match std::env::current_dir() {
+            Ok(cwd) => cwd.join(path),
+            Err(_) => return bwrap::PolicyPath::lexical(path),
+        }
+    };
+    let mut pending: VecDeque<OsString> = absolute
+        .components()
+        .map(|c| c.as_os_str().to_owned())
+        .collect();
+    let mut guarded: Vec<std::path::PathBuf> = Vec::new();
+    let mut cur = std::path::PathBuf::from("/");
+    let mut budget = SYMLINK_BUDGET;
+    while let Some(component) = pending.pop_front() {
+        if component == *std::ffi::OsStr::new("/") {
+            cur = std::path::PathBuf::from("/");
+            continue;
+        }
+        if component == *std::ffi::OsStr::new(".") {
+            continue;
+        }
+        if component == *std::ffi::OsStr::new("..") {
+            cur.pop();
+            continue;
+        }
+        let entry = cur.join(&component);
+        if !guarded.contains(&entry) {
+            guarded.push(entry.clone());
+        }
+        match std::fs::read_link(&entry) {
+            // A symlink: the ENTRY stays protected (it is what the next
+            // run traverses) and the walk continues through its target,
+            // relative ones against the directory the link lives in —
+            // exactly how the kernel resolves it.
+            Ok(target) if budget > 0 => {
+                budget -= 1;
+                for c in target
+                    .components()
+                    .map(|c| c.as_os_str().to_owned())
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                {
+                    pending.push_front(c);
+                }
+            }
+            _ => cur = entry,
+        }
+    }
+    if !guarded.contains(&cur) {
+        guarded.push(cur);
+    }
+    bwrap::PolicyPath {
+        path: absolute,
+        guarded,
+    }
+}
+
+/// How many symlinks [`trusted_policy`] follows before it stops — the
+/// usual kernel limit (`ELOOP` at 40). A loop or a deeper chain leaves
+/// the entries collected so far protected; nothing is silently
+/// unprotected.
+const SYMLINK_BUDGET: usize = 40;
 
 /// The forwarded host environment (docs/plan.md, "Environment"): exactly
 /// [`FORWARDED_ENV_VARS`], each only when actually set. This is the one
@@ -771,95 +866,73 @@ fn approve_git_dirs_in_existing_config(repo: &repo::Repo) -> Result<(), String> 
     if missing.is_empty() {
         return Ok(());
     }
-    // Append (or extend) a `git-dirs` array in place: keep every byte
-    // of the file except the array that changes.
-    let rendered: Vec<String> = missing
+    // Extend (or create) the top-level `git-dirs` array in place: a
+    // table- and string-aware splice that keeps every other byte of
+    // the file (review-4 item 3). Appending at EOF is NOT an option:
+    // TOML never returns to the root table, so a file ending in
+    // `[env]` would gain an `env.git-dirs` key and one ending in
+    // `[[mounts]]` a mount field — both unparsable as a config, both
+    // silently "successful" before.
+    let entries: Vec<&str> = missing
         .iter()
-        .map(|d| {
-            let text = d.to_str().expect("filtered above");
-            let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
-            format!("  \"{escaped}\",")
-        })
+        .map(|d| d.to_str().expect("filtered above"))
         .collect();
-    let new_text = if let Some(start) = find_git_dirs_key(&text) {
-        // The file already has a `git-dirs` line: splice the new
-        // entries into the existing array, before its closing `]`.
-        let close = find_closing_bracket(&text, start).ok_or_else(|| {
-            format!("{}: git-dirs has no closing `]`", config.display())
-        })?;
-        let mut out = String::with_capacity(text.len() + 64);
-        out.push_str(&text[..close]);
-        for entry in &rendered {
-            out.push('\n');
-            out.push_str(entry);
-        }
-        out.push('\n');
-        out.push_str(&text[close..]);
-        out
-    } else {
-        let mut out = text.clone();
-        if !out.ends_with('\n') {
-            out.push('\n');
-        }
-        out.push_str(
-            "\n# Added by `mysbx init --approve-git-dirs`: git metadata this\n\
-             # repository needs from outside the work tree (review-3 item 5).\n\
-             # The `.git` pointer inside the repo is untrusted content\n\
-             # (docs/design/config.md D3); remove an entry to refuse the\n\
-             # bind.\n\
-             git-dirs = [\n",
-        );
-        for entry in &rendered {
-            out.push_str(entry);
-            out.push('\n');
-        }
-        out.push_str("]\n");
-        out
-    };
-    std::fs::write(&config, new_text)
-        .map_err(|e| format!("cannot write {}: {e}", config.display()))?;
+    let new_text = crate::toml::add_git_dirs(&text, &entries, APPROVAL_COMMENT)
+        .map_err(|e| format!("{}: {e}", config.display()))?;
+    // Validate with the REAL parser before anything is replaced: a
+    // rewrite that mysbx itself could not read on the next run must
+    // fail here, with the original file untouched, rather than be
+    // reported as a successful approval.
+    let reparsed = crate::config::Config::parse(&new_text)
+        .map_err(|e| format!("{}: refusing to write an unparsable config: {e}", config.display()))?;
+    if reparsed.git_dirs.len() < parsed.git_dirs.len() + entries.len() {
+        return Err(format!(
+            "{}: the rewritten config does not carry the new approvals — refusing to write it",
+            config.display()
+        ));
+    }
+    write_atomically(&config, &new_text)?;
     for d in &missing {
         println!("## approved git metadata: {}", d.display());
     }
     Ok(())
 }
 
-/// Find the `git-dirs =` key line in an existing sidecar config (at
-/// the byte offset of the line start). TOML tables this schema allows
-/// keep `git-dirs` at the top level only, the parser admits no
-/// multi-line strings, and a comment line (`# git-dirs = …`) starts
-/// with `#` after trimming, so the trimmed-prefix match can only hit
-/// the real key — anything else would corrupt the file on splice
-/// (reviewer finding, ruled out here).
-fn find_git_dirs_key(text: &str) -> Option<usize> {
-    // `str::lines` discards offsets, so walk the raw bytes line by
-    // line: track the start offset of each line and match on its
-    // trimmed prefix.
-    let mut start = 0;
-    for raw_line in text.split('\n') {
-        if raw_line.trim_start().starts_with("git-dirs") {
-            return Some(start);
-        }
-        start += raw_line.len() + 1;
-    }
-    None
-}
+/// The comment written above a `git-dirs` key the approval CREATES (an
+/// existing array keeps whatever documentation it already carries).
+const APPROVAL_COMMENT: &str = "# Added by `mysbx init --approve-git-dirs`: git metadata this\n\
+     # repository needs from outside the work tree (review-3 item 5).\n\
+     # The `.git` pointer inside the repo is untrusted content\n\
+     # (docs/design/config.md D3); remove an entry to refuse the\n\
+     # bind.\n";
 
-/// Find the closing `]` of the array that starts at `start` (the
-/// offset of a `git-dirs =` line), handling `#` comments.
-fn find_closing_bracket(text: &str, start: usize) -> Option<usize> {
-    let rest = &text[start..];
-    let mut in_comment = false;
-    for (i, ch) in rest.char_indices() {
-        match ch {
-            '#' if in_comment => {}
-            '#' => in_comment = true,
-            '\n' if in_comment => in_comment = false,
-            ']' if !in_comment => return Some(start + i),
-            _ => {}
-        }
+/// Replace a policy file's contents by writing a temporary file next
+/// to it and renaming it over the original (review-4 item 3): an
+/// interruption mid-write must never leave a TRUNCATED policy — that
+/// would be a config granting less than the operator wrote, or none at
+/// all, discovered only on the next run. `rename(2)` within the same
+/// directory is atomic, so the file is either the old one or the new
+/// one.
+///
+/// The temporary name carries the pid, so two concurrent approvals
+/// cannot clobber each other's staging file; the leftover is removed
+/// on failure.
+fn write_atomically(path: &std::path::Path, contents: &str) -> Result<(), String> {
+    let dir = path.parent().unwrap_or(std::path::Path::new("."));
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "config.toml".to_string());
+    let tmp = dir.join(format!(".{name}.mysbx-{}.tmp", std::process::id()));
+    if let Err(e) = std::fs::write(&tmp, contents) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("cannot write {}: {e}", tmp.display()));
     }
-    None
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("cannot replace {}: {e}", path.display()));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -964,6 +1037,109 @@ mod tests {
                 "usage.txt does not mention `{token}`"
             );
         }
+    }
+
+    // ---- trusted policy pathnames (review-4 item 1) --------------------
+
+    /// A canonical temporary directory for the walker tests (the
+    /// crate has no dependencies, and `/tmp` itself may be a symlink
+    /// on some systems — canonicalize so the expected entries are
+    /// spelled the way the walk records them).
+    fn walk_tmpdir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir()
+            .join(format!("mysbx-policy-walk-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::canonicalize(&dir).unwrap()
+    }
+
+    #[test]
+    fn trusted_policy_guards_the_symlink_entry_and_its_target() {
+        // The Home-Manager shape: `<dir>/config.toml` is a symlink to
+        // an immutable store-like file. BOTH must be guarded — the
+        // target because it is the policy, the entry because whoever
+        // can replace it decides what the NEXT run reads.
+        let base = walk_tmpdir("hm-symlink");
+        let store = base.join("store");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::write(store.join("config.toml"), "").unwrap();
+        let dir = base.join("cfg");
+        std::fs::create_dir_all(&dir).unwrap();
+        let link = dir.join("config.toml");
+        std::os::unix::fs::symlink(store.join("config.toml"), &link).unwrap();
+
+        let p = trusted_policy(&link);
+        assert_eq!(p.path, link);
+        assert!(p.guarded.contains(&link), "{:?}", p.guarded);
+        assert!(
+            p.guarded.contains(&store.join("config.toml")),
+            "{:?}",
+            p.guarded
+        );
+        // The containing directory entry too: a writable parent can
+        // rename it out of the way and put a new one in its place.
+        assert!(p.guarded.contains(&dir), "{:?}", p.guarded);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn trusted_policy_guards_intermediate_symlinks() {
+        // `<base>/link/config.toml` where `link -> real`: the
+        // intermediate entry is recorded as the entry it is, and the
+        // walk continues through its target.
+        let base = walk_tmpdir("intermediate");
+        let real = base.join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        std::fs::write(real.join("config.toml"), "").unwrap();
+        let link = base.join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let p = trusted_policy(&link.join("config.toml"));
+        assert!(p.guarded.contains(&link), "{:?}", p.guarded);
+        assert!(
+            p.guarded.contains(&real.join("config.toml")),
+            "{:?}",
+            p.guarded
+        );
+        // The final entry is spelled with its parents resolved — the
+        // directory entry that actually exists on disk.
+        assert!(p.guarded.contains(&real), "{:?}", p.guarded);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn trusted_policy_survives_a_symlink_loop() {
+        // Fail-closed: a loop stops the FOLLOWING, never the
+        // protection of the entries already walked.
+        let base = walk_tmpdir("loop");
+        let a = base.join("a");
+        let b = base.join("b");
+        std::os::unix::fs::symlink(&b, &a).unwrap();
+        std::os::unix::fs::symlink(&a, &b).unwrap();
+
+        let p = trusted_policy(&a);
+        assert!(p.guarded.contains(&a), "{:?}", p.guarded);
+        assert!(p.guarded.contains(&b), "{:?}", p.guarded);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn trusted_policy_of_a_plain_file_is_its_own_chain() {
+        let base = walk_tmpdir("plain");
+        let file = base.join("config.toml");
+        std::fs::write(&file, "").unwrap();
+
+        let p = trusted_policy(&file);
+        assert!(p.guarded.contains(&file), "{:?}", p.guarded);
+        assert!(p.guarded.contains(&base), "{:?}", p.guarded);
+        // An unrelated sibling is NOT guarded: the protection stays
+        // the pathname chain, not the whole filesystem.
+        assert!(!p.guarded.contains(&base.join("other")), "{:?}", p.guarded);
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     // `run` without `--` and without a command is a usage error (`2`),

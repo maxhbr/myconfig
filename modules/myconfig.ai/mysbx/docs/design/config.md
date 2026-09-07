@@ -181,12 +181,26 @@ file the sandbox can write steers the NEXT run of itself:
 match. Read-only mounts of the sidecar stay allowed (reviewing it
 from inside the sandbox is legitimate; `ro` cannot write it in place).
 
+What counts as "contains the config" is the whole PATHNAME, not only
+the file the pathname currently resolves to (review-4 item 1). mysbx
+finds its policy by walking a path, so every directory entry on that
+walk decides which file the next run reads — including the final entry
+and any symlink in between. Home Manager generates
+`~/.config/mysbx/config.toml` as a symlink into the immutable
+`/nix/store`: a writable bind of the directory holding that symlink
+cannot touch the store target, but it can unlink the symlink and put a
+policy of the payload's own there. Both halves are therefore guarded —
+the resolved target *and* every traversed directory entry — and a
+writable source covering either is refused.
+
 Protection that is independent of the config layers and keeps holding:
 no mount `dest` may overwrite a protected sandbox path (`/`,
 `/nix/store`, `/usr/bin`, `/proc`, `/dev`, `/etc/localtime`, `/tmp`,
 `/run` — see D8 and `bwrap.rs`), no `dest` may hide an earlier mount or
 resolve through writable content, and the repo root itself may not be
-`$HOME` or `/` (`repo.rs`).
+`$HOME`, a directory CONTAINING `$HOME` (review-4 item 2 — the repo is
+bound `rw`, so a marker above the home would expose the whole home) or
+`/` (`repo.rs`).
 
 ### D8: Paths are resolved eagerly, to absolute paths
 
@@ -376,6 +390,19 @@ re-approves it — the flag is the operator's word each time it runs.
 Plain `init` (D12) never touches an existing config at all, which is
 what keeps a deliberately removed entry removed until the operator
 says otherwise.
+
+The edit itself is a TABLE- and STRING-aware splice (review-4 item 3,
+`toml.rs::add_git_dirs`), not an append: TOML never returns to the root
+table, so a `git-dirs` line written at the end of a config that ends in
+`[env]` would be an `env.git-dirs` key and one written after
+`[[mounts]]` a mount field — both rejected by the strict parser on the
+next run. A missing key is therefore inserted before the first table
+header (below any comment block documenting that table), an existing
+one is recognised in both its bare and its quoted spelling and only at
+the top level, and `]` or `#` inside a quoted path is read as data, not
+as structure. The rewritten document is validated with the real parser
+before it replaces anything, and the replacement is a temp-file +
+`rename(2)`, so an interruption can never leave a truncated policy.
 
 ## Non-goals
 
