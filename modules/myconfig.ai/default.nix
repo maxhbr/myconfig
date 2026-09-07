@@ -39,6 +39,7 @@ in
     ./programs.codex
     ./programs.github-copilot-cli
     ./programs.herdr.nix
+    ./programs.hunk
     ./programs.llm.nix
     ./programs.lmstudio.nix
     ./programs.mcp.servers.nix
