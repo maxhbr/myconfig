@@ -47,7 +47,7 @@ per-domain network policy.
 | Backend | bubblewrap only; `backend` must say so explicitly (`cli.md` D7) |
 | Repo discovery | nearest ancestor with an existing `<dir>.mysbx` → else the git work-tree root → else the current directory |
 | Repo mount | always, `rw`, at its real host path inside the sandbox; not expressible in the config |
-| Guard | hard error when the resolved repo is `$HOME` or `/` |
+| Guard | hard error when the resolved repo is `$HOME`, a directory containing `$HOME`, or `/` |
 | Sidecar | created implicitly by the bare form when missing (`init` stays idempotent) |
 | Config schema | `backend`, `network`, `[[mounts]]`, `[env]`, `state-dirs` — no `[repo]` table |
 | Network | shared by default; `network = false` adds `--unshare-net` |
@@ -116,7 +116,8 @@ All six items are done; the MVP is complete.
   line, on stdout, and exits `0`.
 - The golden tests pin that argv for: minimal config, a `ro` and a `rw` mount,
   `network = false`, an `[env]` entry, and mounts from both layers at once.
-- Running in `$HOME` or `/` fails with exit `1` and a `mysbx: ` message.
+- Running in `$HOME`, in a repo whose root contains `$HOME`, or in `/`
+  fails with exit `1` and a `mysbx: ` message.
 - A sidecar that re-enables the network or overrides a user-set `[env]`
   variable fails with exit `1`; a sidecar `[[mounts]]` entry needs no
   user-config counterpart (`config.md` D7).

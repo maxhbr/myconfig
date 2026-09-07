@@ -2074,3 +2074,41 @@ fn a_read_only_view_of_the_policy_directory_still_runs() {
     assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
     assert!(stdout.contains("/policy"), "the ro mount is built: {stdout}");
 }
+
+// ---- a repo root above the home is refused end to end (review-4 item 2) ----
+
+#[test]
+fn a_repo_root_containing_the_home_is_refused_before_anything_is_created() {
+    // `HOME=<base>/tree/users/alice` below a `.git` marker at
+    // `<base>/tree`: discovery used to accept `<base>/tree` as the repo
+    // (only EQUALITY with the home was refused) and the implicit rw
+    // repo bind then exposed the whole subtree — home, `.ssh` and all.
+    // The guard runs before the implicit init, so no sidecar may
+    // appear either.
+    let base = tmpdir("repo-root-above-home");
+    let tree = base.join("tree");
+    let home = tree.join("users").join("alice");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(tree.join(".git")).unwrap();
+    let cwd = home.join("project").join("sub");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let xdg = base.join("xdg");
+    std::fs::create_dir_all(&xdg).unwrap();
+
+    let inv = Invocation {
+        args: Vec::new(),
+        cwd,
+        home,
+        xdg,
+    };
+    let (code, stdout, stderr) = run_refusing_launch(&inv);
+    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("contains the home directory"),
+        "unexpected stderr: {stderr}"
+    );
+    assert!(
+        !base.join("tree.mysbx").exists(),
+        "the guard must run before the implicit init"
+    );
+}

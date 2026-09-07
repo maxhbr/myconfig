@@ -198,7 +198,9 @@ no mount `dest` may overwrite a protected sandbox path (`/`,
 `/nix/store`, `/usr/bin`, `/proc`, `/dev`, `/etc/localtime`, `/tmp`,
 `/run` — see D8 and `bwrap.rs`), no `dest` may hide an earlier mount or
 resolve through writable content, and the repo root itself may not be
-`$HOME` or `/` (`repo.rs`).
+`$HOME`, a directory CONTAINING `$HOME` (review-4 item 2 — the repo is
+bound `rw`, so a marker above the home would expose the whole home) or
+`/` (`repo.rs`).
 
 ### D8: Paths are resolved eagerly, to absolute paths
 
