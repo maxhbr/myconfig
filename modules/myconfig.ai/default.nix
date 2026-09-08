@@ -38,6 +38,7 @@ in
     ./programs.aichat.nix
     ./programs.alpaca.nix
     ./programs.beads
+    ./programs.ccusage
     ./programs.claude-code
     ./programs.codex
     ./programs.github-copilot-cli
@@ -100,6 +101,12 @@ in
     # default wherever the AI tooling is. A host can still turn it off
     # explicitly.
     myconfig.ai.agent-browser.enable = lib.mkDefault true;
+    # ccusage provides token usage and cost analysis for Claude Code
+    # sessions (./programs.ccusage). Analyzing agent token usage is part of
+    # every agentic coding workflow, and the cost is one small binary, so
+    # it follows rtk, hunk and beads and is on by default wherever the AI
+    # tooling is. A host can still turn it off explicitly.
+    myconfig.ai.ccusage.enable = lib.mkDefault true;
     home-manager.sharedModules = [
       {
         home.packages =
