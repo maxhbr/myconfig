@@ -12,6 +12,7 @@ in
     enable = mkEnableOption "myconfig.dev";
     core.enable = mkEnableOption "myconfig.dev.core, implies myconfig.dev.enable";
     compliance.enable = mkEnableOption "myconfig.dev.compliance";
+    difftastic.enable = mkEnableOption "myconfig.dev.difftastic";
     elixir.enable = mkEnableOption "myconfig.dev.elixir";
     embedded.enable = mkEnableOption "myconfig.dev.embedded";
     go.enable = mkEnableOption "myconfig.dev.go";
@@ -26,6 +27,7 @@ in
 
   imports = [
     ./dev.core
+    ./dev.difftastic.nix
     ./dev.elixir.nix
     ./dev.embedded.nix
     ./dev.go.nix
@@ -40,6 +42,7 @@ in
   config = {
     myconfig.dev.enable =
       cfg.core.enable
+      || cfg.difftastic.enable
       || cfg.elixir.enable
       || cfg.embedded.enable
       || cfg.haskell.enable
