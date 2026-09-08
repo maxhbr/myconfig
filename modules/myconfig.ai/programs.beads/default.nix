@@ -8,14 +8,19 @@
 #
 # beads needs no account, no auth token and no `init` run: it works out of
 # the box against the current repository, and a missing
-# `~/.config/beads/config.toml` simply means "all defaults". Nothing in this
-# module ever executes `beads`; every artefact is a plain home-manager file:
+# `~/.config/beads/config.toml` simply means "all defaults".
 #
-#   * `~/.config/beads/config.toml` — the user config, rendered from `settings`
-#     (see https://github.com/gastownhall/beads#configuration).
-#   * the binary on the PATH of every sandbox tier — via the shared
-#     `myconfig.ai.sandboxTools.extraPackages` and, for mysbx, its
-#     `extraTools` plus a read-only mount of the config above.
+# The agent skill (bd's `beads` skill: when to use bd, `bd prime` as the
+# workflow SSOT, claim/close/dependency etiquette) is generated at build
+# time from the installed binary — same idiom as the herdr skill in
+# ../programs.herdr.nix — by running `bd setup codex` in a scratch git repo
+# and copying out `.agents/skills/beads/`. This keeps the skill in sync
+# with the CLI version instead of being a stale vendored copy. It ships
+# upstream alongside an `agents/openai.yaml` interface manifest, which is
+# preserved. Registered in `myconfig.ai.skills.handcrafted`, which
+# ../skills/default.nix deploys to every enabled agent harness (opencode,
+# claude-code, codex, pi via the shared `~/.agents/skills/`); implicitly
+# enabled by this module — there is no separate enable flag.
 #
 # Like `rtk` and `hunk`, this module is auto-enabled by the `myconfig.ai`
 # umbrella (`myconfig.ai.beads.enable = lib.mkDefault true` in ../default.nix):
@@ -57,6 +62,30 @@ let
         --set-default BD_DISABLE_METRICS 1
     '';
   });
+
+  # The `beads` agent skill, generated at build time from the wrapped binary
+  # (see the header comment): `bd setup codex` is the only code path that
+  # materialises the skill; it writes `.agents/skills/beads/` into its
+  # working directory, so run it in a throwaway git repo and copy the
+  # result out. `--non-interactive`/TTY-less is irrelevant here — setup does
+  # not prompt — but `$HOME` is pinned so the build cannot read or write
+  # the builder user's real `~/.claude`/`~/.codex`.
+  beadsSkillSrc =
+    pkgs.runCommand "beads-skill"
+      {
+        nativeBuildInputs = [
+          package
+          pkgs.gitMinimal
+        ];
+        HOME = "/build/home";
+      }
+      ''
+        mkdir -p $HOME $out
+        cd "$(mktemp -d)"
+        git init -q .
+        bd setup codex >/dev/null
+        cp -r .agents/skills/beads/. $out/
+      '';
 in
 {
   options.myconfig = with lib; {
@@ -86,6 +115,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Install the beads skill for every enabled agent harness; string form
+    # (the derivation's outPath), same convention as the herdr skill
+    # registration in ../programs.herdr.nix.
+    myconfig.ai.skills.handcrafted.beads = "${beadsSkillSrc}";
+
     myconfig.ai.beads.settings = {
       # Default configuration for beads. Users can override these in their
       # own config files or via per-repository settings.
