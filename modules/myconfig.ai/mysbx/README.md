@@ -159,6 +159,12 @@ starts no session and is byte-identical to a `"none"` run
 wins — the user config is the host-wide default, the sidecar is the
 repository's choice (`docs/design/config.md` D17).
 
+For one invocation the choice can be overridden without touching any
+file: `mysbx --multiplexer <mux>` (bare form only) starts that value's
+payload for this run — including `none` for a bare shell on a host that
+configured a session — and the next run uses the configuration again
+(`docs/design/cli.md` D14).
+
 The private socket directory is **not configurable**: it always lives at
 `/mysbx-home/.mysbx-tmux`, inside the sandbox home tmpfs, so no
 multiplexer's socket can ever be shared with a host tmux server or with

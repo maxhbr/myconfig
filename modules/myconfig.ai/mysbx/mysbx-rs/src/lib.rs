@@ -19,7 +19,10 @@
 //! resolve, guards, load, merge, backend check, argv build — and stops
 //! immediately before `exec`, printing the backend executable followed
 //! by the argv, one argument per line, on stdout; `--verbose` prints the
-//! `## `-prefixed run report before that (cli.md D10).
+//! `## `-prefixed run report before that (cli.md D10). `--multiplexer
+//! <mux>` (cli.md D14) is a global flag of the bare form only: it
+//! overrides the merged `multiplexer` of the layers for THIS run —
+//! per D6's precedence, a flag wins over the configuration.
 
 pub mod bwrap;
 pub mod config;
@@ -62,8 +65,22 @@ pub fn run(args: Vec<String>) -> i32 {
         // Bare `mysbx` is the primary action (docs/design/cli.md D2): enter
         // the sandbox for the current repository.
         None => sandbox(flags, bwrap::Payload::Shell),
+        // `--multiplexer` is rejected with the same words (D14): it names
+        // the interactive payload of a run, and no verb has one to choose
+        // — not even `run`, which never starts a session (D11). The
+        // guard sits BEFORE the verb arms so it holds for every verb,
+        // `run` included: a `--multiplexer` that reached `run` would be
+        // a flag the dispatcher and the runner each parse half of.
+        Some(other)
+            if flags.multiplexer.is_some()
+                && matches!(other, "run" | "init" | "edit" | "version" | "help") =>
+        {
+            eprintln!("mysbx: --multiplexer is not valid with `{other}`");
+            eprintln!("try `mysbx --help`");
+            2
+        }
         Some("run") => run_command(flags, &rest[1..]),
-        // The global flags are only meaningful for the bare form and
+        // The run-scoped flags are only meaningful for the bare form and
         // `run`: on `init` `--dry-run` would promise side-effect-freeness
         // while files are still created, and there is no run to report on
         // for `help`/`version` — reject them instead (usage error, D8).
@@ -90,11 +107,16 @@ pub fn run(args: Vec<String>) -> i32 {
     }
 }
 
-/// The global flags of a sandbox run (cli.md D9, D10).
+/// The global flags of a sandbox run (cli.md D9, D10, D14).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Flags {
     pub dry_run: bool,
     pub verbose: bool,
+    /// The `--multiplexer <name>` override (cli.md D14, config.md
+    /// D17): the multiplexer of THIS interactive run, replacing the
+    /// merged `multiplexer` of the configuration layers. `None` means
+    /// the flag was not given and the configuration decides.
+    pub multiplexer: Option<config::Multiplexer>,
 }
 
 impl Flags {
@@ -104,7 +126,9 @@ impl Flags {
 
     /// The flag named in the "not valid with `<verb>`" usage error —
     /// whichever was set, `--dry-run` first (it is the older, more
-    /// dangerous-sounding promise).
+    /// dangerous-sounding promise). `--multiplexer` is not listed:
+    /// it is run-scoped, not a promise about the output, and the
+    /// refusal names the flags that are.
     fn first_name(self) -> &'static str {
         if self.dry_run {
             "--dry-run"
@@ -119,21 +143,69 @@ impl Flags {
 /// intensifier, and staying strict keeps the surface honest (D5: the
 /// parser is hand-written, so every accepted spelling is a deliberate
 /// one). Returns the exit code of the usage error on rejection.
+///
+/// `--multiplexer` takes its value from the following argument and is
+/// accepted here only BEFORE the subcommand — the same position rule
+/// as `--dry-run`/`--verbose` (D10), so one rule governs all three
+/// (D14). An unknown multiplexer spelling is a usage error (`2`, D8):
+/// the command line is wrong, not the world it names.
 fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
     let mut flags = Flags::default();
     let mut rest = args;
     while let Some((first, tail)) = rest.split_first() {
-        let slot = match first.as_str() {
-            "--dry-run" => &mut flags.dry_run,
-            "--verbose" => &mut flags.verbose,
+        match first.as_str() {
+            "--dry-run" => {
+                if flags.dry_run {
+                    eprintln!("mysbx: repeated flag: --dry-run");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                flags.dry_run = true;
+            }
+            "--verbose" => {
+                if flags.verbose {
+                    eprintln!("mysbx: repeated flag: --verbose");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                flags.verbose = true;
+            }
+            "--multiplexer" => {
+                if flags.multiplexer.is_some() {
+                    eprintln!("mysbx: repeated flag: --multiplexer");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                let value = match tail.split_first() {
+                    Some((v, _)) => v,
+                    None => {
+                        eprintln!("mysbx: --multiplexer requires a value");
+                        eprintln!(
+                            "  one of: {}",
+                            config::Multiplexer::NAMES
+                                .iter()
+                                .map(|n| format!("`{n}`"))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        );
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                };
+                flags.multiplexer = Some(match config::Multiplexer::parse_cli(value) {
+                    Ok(m) => m,
+                    Err(msg) => {
+                        eprintln!("mysbx: {msg}");
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                });
+                // The value argument is consumed with the flag.
+                rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
+                continue;
+            }
             _ => break,
-        };
-        if *slot {
-            eprintln!("mysbx: repeated flag: {first}");
-            eprintln!("try `mysbx --help`");
-            return Err(2);
         }
-        *slot = true;
         rest = tail;
     }
     Ok((flags, rest))
@@ -160,13 +232,25 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                 flags.verbose = true;
                 idx += 1;
             }
+            "--multiplexer" => {
+                // cli.md D11/D14: `run -- CMD` never starts a session, so
+                // there is no interactive payload for the flag to select —
+                // accept-and-ignore would let an operator believe the
+                // one-shot ran inside a session it did not.
+                eprintln!("mysbx run: --multiplexer is not valid with `run`");
+                eprintln!("  it selects the interactive payload only: `mysbx --multiplexer <mux>` starts the session");
+                eprintln!("usage: mysbx run [--dry-run] [--verbose] -- COMMAND...");
+                return 2;
+            }
             "--" => {
                 idx += 1;
                 break;
             }
             other => {
                 eprintln!("mysbx run: unexpected argument: {other}");
-                eprintln!("usage: mysbx run [--dry-run] [--verbose] -- COMMAND...");
+                eprintln!(
+                    "usage: mysbx run [--dry-run] [--verbose] [--multiplexer <mux>] -- COMMAND..."
+                );
                 return 2;
             }
         }
@@ -189,6 +273,19 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
 /// sidecar config fails with the `mysbx init` hint.
 fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     let dry_run = flags.dry_run;
+    // The `--multiplexer` override (cli.md D14): the run flag wins over
+    // the merged `multiplexer` of the layers, per the precedence of D6
+    // (flags > sidecar > user > defaults). Applied AFTER the merge so
+    // the report and the argv below see one effective value — and only
+    // for the interactive payload it can select (D11): a `run -- CMD`
+    // never starts a session, and the dispatcher already refuses the
+    // combination for `run`, so the guard here is structural, not a
+    // second parser.
+    let cli_mux = if let bwrap::Payload::Shell = payload {
+        flags.multiplexer
+    } else {
+        None
+    };
     // 1. repo resolution and guards (docs/TODOs/mvp-2-repo-discovery.md).
     // The guard runs BEFORE anything is created, so a `$HOME`-resolved run
     // never even creates a sidecar on disk.
@@ -239,7 +336,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // `home` is also what `~/…` mount paths expand against (config.md
     // D8) — on the HOST, before bwrap runs, so the sandbox's own
     // (cleared) environment never enters the resolution.
-    let merged = match merge::merge(
+    let mut merged = match merge::merge(
         layers.user.0,
         layers.sidecar.0,
         &layers.user.1,
@@ -252,6 +349,17 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
             return 1;
         }
     };
+
+    // 3a. the `--multiplexer` override (cli.md D14): the flag wins over
+    // the merged `multiplexer` of both layers, the same precedence every
+    // flag has (D6: flags > sidecar > user > defaults). The layers stay
+    // untouched — the override lives for THIS run only, and the next
+    // `mysbx` starts whatever the configuration says again. The value
+    // was validated by the parser (one of `Multiplexer::NAMES`), so it
+    // can be assigned directly.
+    if let Some(mux) = cli_mux {
+        merged.multiplexer = mux;
+    }
 
     // 3b. the state-dir backing stores (docs/design/config.md D15):
     // one directory per merged `state-dirs` entry under
@@ -1167,7 +1275,8 @@ mod tests {
             flags,
             Flags {
                 dry_run: true,
-                verbose: true
+                verbose: true,
+                multiplexer: None
             }
         );
         assert_eq!(rest, &s(&["run"])[..]);
@@ -1186,6 +1295,68 @@ mod tests {
         // Repeats are usage errors, per flag.
         assert_eq!(split_global_flags(&s(&["--verbose", "--verbose"])), Err(2));
         assert_eq!(split_global_flags(&s(&["--dry-run", "--dry-run"])), Err(2));
+    }
+
+    // The `--multiplexer` flag (cli.md D14): it parses with the same
+    // position rule as the other global flags, its value is validated
+    // against the closed set of the config key, and a repeat or a
+    // missing value is the same usage error a repeated `--verbose` is.
+    #[test]
+    fn multiplexer_flag_parses_overrides_and_rejects_bad_values() {
+        let s = |v: &[&str]| -> Vec<String> { v.iter().map(|x| (*x).to_string()).collect() };
+
+        // Every accepted spelling parses, including `none`.
+        for (text, want) in [
+            ("tmux", config::Multiplexer::Tmux),
+            ("workmux", config::Multiplexer::Workmux),
+            ("herdr", config::Multiplexer::Herdr),
+            ("aoe", config::Multiplexer::Aoe),
+            ("none", config::Multiplexer::None),
+        ] {
+            let args = s(&["--multiplexer", text, "--dry-run"]);
+            let (flags, rest) = split_global_flags(&args).unwrap();
+            assert_eq!(flags.multiplexer, Some(want), "`{text}`");
+            assert!(flags.dry_run);
+            assert!(rest.is_empty(), "`{text}`");
+        }
+
+        // An unknown spelling is a usage error, with the set named.
+        let code = split_global_flags(&s(&["--multiplexer", "screen"])).unwrap_err();
+        assert_eq!(code, 2);
+
+        // A missing value is a usage error, not a `Multiplexer::None`.
+        assert_eq!(split_global_flags(&s(&["--multiplexer"])), Err(2));
+
+        // Repeats are usage errors, like the other flags.
+        assert_eq!(
+            split_global_flags(&s(&["--multiplexer", "tmux", "--multiplexer", "tmux"])),
+            Err(2)
+        );
+
+        // The flag does not make an unknown verb acceptable, and never
+        // applies to one (D14: bare form and nothing else).
+        assert_eq!(
+            run(vec!["--multiplexer".into(), "tmux".into(), "nope".into()]),
+            2
+        );
+        assert_eq!(
+            run(vec!["--multiplexer".into(), "tmux".into(), "init".into()]),
+            2
+        );
+        assert_eq!(
+            run(vec!["--multiplexer".into(), "tmux".into(), "edit".into()]),
+            2
+        );
+        assert_eq!(
+            run(vec!["--multiplexer".into(), "tmux".into(), "help".into()]),
+            2
+        );
+        // And `run` never starts a session (D11), so it rejects the
+        // combination instead of silently ignoring the flag.
+        assert_eq!(
+            run(vec!["run".into(), "--multiplexer".into(), "tmux".into()]),
+            2
+        );
     }
 
     // The guard-ordering property of the bare form (docs/TODOs/
@@ -1269,6 +1440,7 @@ mod tests {
             "help",
             "--dry-run",
             "--verbose",
+            "--multiplexer",
             "--help",
             "--version",
             "-h",

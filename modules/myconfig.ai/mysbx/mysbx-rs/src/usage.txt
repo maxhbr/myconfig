@@ -1,7 +1,7 @@
 mysbx - my sandboxing tool
 
 Usage:
-  mysbx [--dry-run] [--verbose]
+  mysbx [--dry-run] [--verbose] [--multiplexer <mux>]
   mysbx run [--dry-run] [--verbose] -- COMMAND...
   mysbx [COMMAND]
 
@@ -41,5 +41,15 @@ Options:
                 network, mounts, environment, payload) to stdout with a
                 `## ` prefix before running; must precede the command.
                 Note: [env] values are printed verbatim and may be secrets
+  --multiplexer <mux>
+                the multiplexer of THIS interactive run, overriding the
+                `multiplexer` of the config layers for one invocation —
+                the next run uses the configuration again. <mux> is one
+                of: tmux, workmux, herdr, aoe, none (the same closed set
+                as the config key); `none` forces the plain shell. Bare
+                form only: a `run -- CMD` never starts a session, and
+                every other verb rejects the flag. A value this build
+                pinned no entry for is a refused run, like a config
+                layer selecting it
   -h, --help    print this help
   -V, --version print the version

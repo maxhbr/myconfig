@@ -50,8 +50,8 @@ nesting would only pay off with many more commands.
 
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2) and `run -- COMMAND` for
-non-interactive use, plus the global flags `--dry-run` (D9) and
-`--verbose` (D10).
+non-interactive use, plus the global flags `--dry-run` (D9),
+`--verbose` (D10) and `--multiplexer` (D14).
 
 ### D4: `--` separates sandbox args from the payload command
 
@@ -301,6 +301,43 @@ the single gate of both run forms.
 directory is still diagnosed as the home exposure it is and never
 invites the operator to `mysbx init` a tree that must not be bound at
 all.
+
+### D14: `--multiplexer <mux>` overrides the configured multiplexer for one run
+
+The bare form accepts `--multiplexer <mux>` with the same position rule
+as the other global flags (D10: before the verb; here there is no verb —
+the flag belongs to the bare form alone). The value is the same closed
+enum as the config key (D17): `tmux` | `workmux` | `herdr` | `aoe` |
+`none`. It wins over the merged `multiplexer` of both layers for THIS
+invocation only, per the precedence of D6 (flags > sidecar > user >
+defaults) — nothing is written, and the next `mysbx` runs whatever the
+configuration says again.
+
+**Why a flag at all.** The multiplexer of a host is a declarative
+default (the module option generates the user layer); the exception is
+an operator decision — "this one run wants herdr instead of the
+configured workmux", or "this one run wants a bare shell" — and an
+exception that must not edit a file to happen. Editing the sidecar to
+flip one run would leave the repo's *policy* changed for every later
+run, and editing the user layer would change every *repo* of the host.
+
+**`none` is a real value.** `--multiplexer none` forces the plain
+interactive shell on a host that configured a session — the payload
+swap is skipped entirely, no `TMUX_TMPDIR`, none of the socket guards.
+
+**The same refusal, not a weaker one.** A value this build pinned no
+entry for is refused exactly like a config layer selecting it (D11/D17):
+exit `1` with the `mysbx: ` message naming the value and the missing
+variable — never a silent plain shell. The flag grants no access a
+configuration would not have: it selects a payload from mysbx's own
+closure either way.
+
+**No verb accepts it.** `run -- CMD` never starts a session (D11), so
+`--multiplexer` is a usage error there — accept-and-ignore would let an
+operator believe the one-shot ran inside a session it did not. `init`,
+`edit`, `version` and `help` reject it with the same words. A repeated
+flag, a missing value or an unknown spelling is a usage error (`2`,
+D5/D8), and the error names the accepted set.
 
 ## Non-goals
 
