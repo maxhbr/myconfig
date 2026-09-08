@@ -36,6 +36,7 @@ in
     ./programs.agent-of-empires
     ./programs.aichat.nix
     ./programs.alpaca.nix
+    ./programs.beads
     ./programs.claude-code
     ./programs.codex
     ./programs.github-copilot-cli
@@ -86,6 +87,12 @@ in
     # the AI tooling is. `gitIntegration` stays off, so nothing changes for
     # plain `git diff`. A host can still turn it off explicitly.
     myconfig.ai.hunk.enable = lib.mkDefault true;
+    # beads is the memory system for AI coding agents with graph-based issue
+    # tracking (./programs.beads). Memory and issue tracking for agent
+    # workflows is part of every agentic coding workflow, and the cost is one
+    # small binary, so it follows rtk and hunk and is on by default wherever
+    # the AI tooling is. A host can still turn it off explicitly.
+    myconfig.ai.beads.enable = lib.mkDefault true;
     home-manager.sharedModules = [
       {
         home.packages =
