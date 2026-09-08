@@ -953,12 +953,32 @@ let
   #      (../mysbx/mysbx-rs/src/lib.rs `FORWARDED_ENV_VARS`), so the
   #      extension would see no marker and misclassify the session.
   #
+  #   4. pi's *sessions* survive the sandbox -> a `state-dirs` entry
+  #      (`…mysbx.config.stateDirs`, ../mysbx/docs/design/config.md D15).
+  #      pi keeps every runtime artefact below `$HOME/.pi/agent` (its
+  #      `getAgentDir()`: `sessions/`, `settings.json`, `trust.json`,
+  #      `auth.json`, `models.json` — no XDG directories), and `HOME` is
+  #      the throwaway tmpfs `/mysbx-home` inside the sandbox, so without
+  #      this entry every session died with its sandbox and `pi -c`/`-r`
+  #      inside mysbx found nothing — the gap this closes. Only
+  #      `sessions/` is persisted, exactly like opencode persists its
+  #      session store: `settings.json`/`auth.json`/`trust.json` are
+  #      per-repo sandbox ephemera (credentials deliberately never reach
+  #      the sidecar, and a state entry is always a directory, so the
+  #      files could not be persisted this way anyway).
+  #
   # Only home-manager-managed paths are mounted: mysbx canonicalizes every
   # mount path eagerly and a missing path is a hard error on EVERY run
   # (../mysbx/docs/design/config.md D8), so each entry must be created by
   # the very condition that adds it. `~/.pi` itself is deliberately NOT
   # mounted — it is pi's writable state directory (sessions, settings,
-  # credentials); inside the sandbox that stays the throwaway tmpfs home.
+  # credentials); inside the sandbox it stays the throwaway tmpfs home
+  # except for the persisted `sessions/` subtree. Persisting a WIDER
+  # state entry (`.pi` or `.pi/agent`) is not an option: the read-only
+  # config mounts below would land inside a writable state dest, which
+  # `check_symlinkable_dests` refuses
+  # (../mysbx/mysbx-rs/src/bwrap.rs) — payload-writable content must
+  # never sit above a mount point.
   #
   # Every entry carries a `dest` under `/mysbx-home` because `HOME` is
   # `/mysbx-home` in the sandbox (D14) and pi looks for its config below
@@ -1015,6 +1035,10 @@ in
       extraTools = [ pi-coding-agent-pkg ];
       config.mounts = mysbxPiMounts;
       config.env.PI_JAIL_MARKER = "1";
+      # pi's session store, backed by `<repo>.mysbx/state/.pi/agent/sessions`
+      # (D15). No nesting conflict with the opencode/rtk entries
+      # (`.local/...`) — `check_state_dirs` enforces that pairwise anyway.
+      config.stateDirs = [ ".pi/agent/sessions" ];
     };
 
     home-manager.sharedModules = [
