@@ -341,6 +341,30 @@ fn report_lines(stdout: &str) -> Vec<&str> {
     stdout.lines().filter(|l| l.starts_with("## ")).collect()
 }
 
+#[test]
+fn the_verbose_report_shows_the_flag_overridden_multiplexer() {
+    // cli.md D10/D14: the report describes the run that is about to
+    // happen, so with `--multiplexer` it names the flag's choice — the
+    // effective one — not the configuration's. A report repeating the
+    // configured value while the argv starts another entry would lie
+    // about the very thing the isolation claim rests on.
+    let (inv, _, _) = fixture_mux(
+        "verbose-mux-flag",
+        Multiplexer::Workmux,
+        &["--verbose", "--dry-run"],
+    );
+    let mut cmd = spawn_with_args(&inv, &["--multiplexer", "tmux", "--verbose", "--dry-run"]);
+    all_mux_pins(&mut cmd);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(report.contains("multiplexer:    tmux"), "{report}");
+    assert!(!report.contains("multiplexer:    workmux"), "{report}");
+    assert!(stdout.contains(&mux_pin(Multiplexer::Tmux).1), "{stdout}");
+}
+
 /// Everything that is NOT a report line, i.e. the `--dry-run` argv block,
 /// reassembled with its trailing newline.
 fn argv_block(stdout: &str) -> String {
@@ -1374,6 +1398,147 @@ fn the_sidecar_wins_over_the_user_layer_for_the_multiplexer() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(out.status.code(), Some(0), "{stdout}");
     assert_eq!(stdout, expected_minimal_argv(&repo));
+}
+
+/// Every pin of [`SESSION_MUXES`], set on `cmd` (the `--multiplexer`
+/// tests run with all of them, so the flag selects the entry and never
+/// the order in which the pins happen to be read).
+fn all_mux_pins(cmd: &mut Command) {
+    for mux in SESSION_MUXES {
+        let (var, entry) = mux_pin(mux);
+        cmd.env(var, entry);
+    }
+}
+
+#[test]
+fn the_multiplexer_flag_overrides_the_configuration_for_one_invocation() {
+    // cli.md D14: `--multiplexer <mux>` wins over BOTH layers for THIS
+    // run — a different session than the configured one, a session on
+    // a `none` configuration, and `none` on a session configuration.
+    let (inv, _, _) = fixture_mux("mux-flag-override", Multiplexer::Workmux, &["--dry-run"]);
+    let mut cmd = spawn_with_args(&inv, &["--multiplexer", "herdr", "--dry-run"]);
+    all_mux_pins(&mut cmd);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stderr: {stderr}");
+    assert!(
+        stdout.ends_with(&format!("{}\n", mux_pin(Multiplexer::Herdr).1)),
+        "{stdout}"
+    );
+    assert!(
+        !stdout.contains(&mux_pin(Multiplexer::Workmux).1),
+        "{stdout}"
+    );
+    assert!(stdout.contains("TMUX_TMPDIR"), "{stdout}");
+
+    // `none` forces the plain shell on a host that configured a
+    // session — the payload is the shell, with no socket variable.
+    let mut cmd = spawn_with_args(&inv, &["--multiplexer", "none", "--dry-run"]);
+    all_mux_pins(&mut cmd);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stderr: {stderr}");
+    assert!(!stdout.contains("TMUX_TMPDIR"), "{stdout}");
+    assert!(stdout.ends_with("/synth/bin/bash\n"), "{stdout}");
+
+    // And the override is per-invocation: without the flag the very
+    // same fixture starts the configured workmux session again.
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    all_mux_pins(&mut cmd);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    assert!(
+        stdout.ends_with(&format!("{}\n", mux_pin(Multiplexer::Workmux).1)),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn the_multiplexer_flag_selects_a_session_on_a_none_configuration() {
+    // The other direction: a host whose layers say `none` (or say
+    // nothing) can still start a session for one invocation — with
+    // every pin set, the flag alone decides which entry runs, and the
+    // pins of the OTHER multiplexers point at paths that must never
+    // be started.
+    let (inv, _, _) = fixture_user_backend("mux-flag-from-none", &["--dry-run"]);
+    for mux in SESSION_MUXES {
+        let (var, entry) = mux_pin(mux);
+        let mut cmd = spawn_with_args(&inv, &["--multiplexer", mux.name(), "--dry-run"]);
+        for other in SESSION_MUXES.iter().filter(|m| **m != mux) {
+            let (other_var, _) = mux_pin(*other);
+            cmd.env(other_var, "/synth/bin/WRONG-entry");
+        }
+        cmd.env(var, &entry);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(out.status.code(), Some(0), "{mux}: {stdout}");
+        assert!(stdout.ends_with(&format!("{entry}\n")), "{mux}: {stdout}");
+        assert!(!stdout.contains("WRONG-entry"), "{mux}: {stdout}");
+        assert!(stdout.contains("TMUX_TMPDIR"), "{mux}: {stdout}");
+    }
+}
+
+#[test]
+fn the_multiplexer_flag_without_a_pinned_entry_fails_like_the_config() {
+    // The refusal is the same one D17 gives a config layer selecting an
+    // unpinned multiplexer: never a silent plain shell. `--dry-run`
+    // refuses too, so no bwrap is started. (The fixture's user layer
+    // says `none`, so the refusal can only come from the flag.)
+    let (inv, _, _) = fixture_mux("mux-flag-unpinned", Multiplexer::None, &["--dry-run"]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--multiplexer", "herdr", "--dry-run"]);
+    assert_eq!(code, 1, "stdout: {stdout}");
+    assert!(stderr.contains(mux_pin(Multiplexer::Herdr).0), "{stderr}");
+    assert!(stderr.contains("herdr"), "{stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn an_unknown_multiplexer_flag_value_is_a_usage_error_naming_the_set() {
+    // cli.md D14/D8: a bad value is a command-line error (`2`), not a
+    // runtime one — and the message names every accepted spelling.
+    let (inv, _, _) = fixture("mux-flag-bad", &["--dry-run"]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--multiplexer", "screen", "--dry-run"]);
+    assert_eq!(code, 2, "stdout: {stdout}");
+    assert!(stderr.contains("--multiplexer"), "{stderr}");
+    assert!(stderr.contains("`screen`"), "{stderr}");
+    for name in mysbx::config::Multiplexer::NAMES {
+        assert!(stderr.contains(name), "{stderr} does not list {name}");
+    }
+    assert!(!stdout.contains("--clearenv"), "no argv: {stdout}");
+
+    // A missing value is the same usage error, never a `none`.
+    let (code, _, stderr) = run_binary_with(&inv, &["--multiplexer"]);
+    assert_eq!(code, 2, "{stderr}");
+}
+
+#[test]
+fn the_multiplexer_flag_is_rejected_by_every_verb() {
+    // cli.md D14: the flag selects the INTERACTIVE payload, so no verb
+    // accepts it — `run` because a one-shot starts no session (D11),
+    // the others because they have no run at all.
+    for (args, name) in [
+        (vec!["--multiplexer", "tmux", "run", "--", "ls"], "run"),
+        (vec!["--multiplexer", "tmux", "init"], "init"),
+        (vec!["--multiplexer", "tmux", "edit"], "edit"),
+        (vec!["--multiplexer", "tmux", "version"], "version"),
+        (vec!["--multiplexer", "tmux", "help"], "help"),
+        (
+            vec!["run", "--multiplexer", "tmux", "--", "ls"],
+            "run (after the verb)",
+        ),
+    ] {
+        let (inv, _, _) = fixture(&format!("mux-flag-verb-{name}"), &[]);
+        let (code, stdout, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{name}: stdout: {stdout}");
+        assert!(stderr.contains("--multiplexer"), "{name}: {stderr}");
+        assert!(!stdout.contains("--clearenv"), "{name}: no argv: {stdout}");
+    }
 }
 
 #[test]

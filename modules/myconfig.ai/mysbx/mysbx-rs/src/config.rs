@@ -88,6 +88,16 @@ impl Multiplexer {
         }
     }
 
+    /// The CLI spelling of the same choice (`--multiplexer <name>`,
+    /// cli.md D14): the same closed set as the configuration key
+    /// (D4/D17: a layer — or a command line — may say *which of the
+    /// payloads this build carries* runs, never a command), with the
+    /// usage-error wording of the command line instead of the
+    /// schema-error wording of a config file.
+    pub fn parse_cli(s: &str) -> Result<Multiplexer, String> {
+        Self::parse(s, "--multiplexer").map_err(|e| e.to_string())
+    }
+
     /// The value as written in the configuration — the spelling every
     /// message and the `--verbose` report use.
     pub fn name(self) -> &'static str {
