@@ -2,36 +2,44 @@
 # SPDX-License-Identifier: MIT
 #
 # agent-browser (https://github.com/vercel-labs/agent-browser) — headless
-# browser automation CLI for AI agents. The package is available in nixpkgs
-# (`pkgs.by-name/ag/agent-browser/package.nix`), so no extra flake input is
-# needed: this module just consumes `pkgs.agent-browser`.
+# browser automation CLI for AI agents: Chrome/Chromium via CDP with
+# accessibility-tree snapshots, no Playwright/Puppeteer dependency. The
+# package is in nixpkgs (`pkgs/by-name/ag/agent-browser/package.nix`), so no
+# extra flake input is needed: this module just consumes `pkgs.agent-browser`.
 #
-# agent-browser provides browser automation capabilities to AI agents,
-# enabling them to interact with web pages, fill forms, click buttons, and
-# extract information. It requires a browser runtime (chromium by default).
+# Runtime browser discovery: agent-browser probes the PATH with its own
+# pinned `which` for `google-chrome`, `chromium-browser`, `chromium`,
+# `brave-browser`, ... (nixpkgs substitutes the probe with an absolute
+# store path), or takes an explicit executable via
+# `AGENT_BROWSER_EXECUTABLE_PATH`. On desktop hosts the home-manager
+# chromium is on the PATH and found automatically, so this module pins NO
+# executable by default — a literal `${pkgs.chromium}/bin/chromium` default
+# would drag the whole chromium closure into every `myconfig.ai` host,
+# headless ones included.
 #
-# The module follows the same pattern as `programs.hunk`: it auto-enables
-# wherever `myconfig.ai.enable` is true, because browser automation is a
-# core capability for agentic coding workflows.
+# agent-browser supports the chrome family only (plus the `lightpanda`
+# engine); there is no firefox support, hence there is no browser-name
+# option. The engine defaults to `chrome`.
 #
-# Browser runtime in sandboxes: agent-browser needs a browser at runtime.
-# For sandbox environments (bubblewrap jails, microvm guests, gVisor, mysbx),
-# the browser must be explicitly added to the sandbox closure. This module
-# adds agent-browser itself to all sandbox tiers via
-# `myconfig.ai.sandboxTools.extraPackages`, but NOT the browser — that
-# remains an explicit per-host opt-in (closure size, security surface).
-# Hosts that want browser automation in sandboxes should add:
+# Sandboxes: the CLI itself is added to every sandbox tier via
+# `myconfig.ai.sandboxTools.extraPackages` and mysbx's `extraTools`, but NOT
+# the browser — that stays an explicit per-host opt-in (closure size,
+# security surface). Inside a sandbox an agent can either run
+# `agent-browser install` (downloads a pinned Chrome into `~/.agent-browser`,
+# needs network and a writable home) or the host opts in:
 #
-#   myconfig.ai.sandboxTools.extraPackages = with pkgs; [
-#     chromium  # or firefox
-#   ];
+#   myconfig.ai.sandboxTools.extraPackages = [ pkgs.chromium ];
 #   myconfig.ai.sandboxTools.extraEnv.AGENT_BROWSER_EXECUTABLE_PATH =
 #     "${pkgs.chromium}/bin/chromium";
-#   myconfig.ai.mysbx.extraTools = with pkgs; [ chromium ];
+#   myconfig.ai.mysbx.extraTools = [ pkgs.chromium ];
 #
-# Upstream ships skills and skill-data alongside the binary; these are
-# copied to `$out/skills` and `$out/skill-data` in the package and deployed
-# to agent harnesses via the handcrafted skill registry.
+# Upstream ships skill content next to the binary: `$out/skills` holds the
+# discovery stub (a directory `agent-browser/` with the `SKILL.md` deployed
+# to the agent harnesses via the handcrafted skill registry), and
+# `$out/skill-data` holds the runtime skill content served by
+# `agent-browser skills get <name>` — always matching the installed CLI
+# version, resolved by the CLI relative to its own executable, so it needs
+# no extra wiring here.
 {
   config,
   lib,
@@ -40,10 +48,6 @@
 }:
 let
   cfg = config.myconfig.ai.agent-browser;
-
-  # Default browser configuration for agent-browser
-  # agent-browser uses `which` to find browser executables at runtime
-  browserExecutable = "${config.programs.chromium.package or pkgs.chromium}/bin/chromium";
 in
 {
   options.myconfig = with lib; {
@@ -52,25 +56,32 @@ in
 
       package = mkPackageOption pkgs "agent-browser" { };
 
-      browserName = mkOption {
+      engine = mkOption {
         type = types.enum [
-          "chromium"
-          "firefox"
+          "chrome"
+          "lightpanda"
         ];
-        default = "chromium";
+        default = "chrome";
         description = ''
-          The browser to use for agent-browser. agent-browser uses `which`
-          to locate the browser executable at runtime.
+          Browser engine agent-browser launches, exported as
+          `AGENT_BROWSER_ENGINE`. `chrome` covers Chrome, Chromium, Brave and
+          other CDP-compatible browsers; `lightpanda` is the lightweight
+          engine for basic automation.
         '';
       };
 
       browserExecutablePath = mkOption {
-        type = types.str;
-        default = browserExecutable;
+        type = types.nullOr types.str;
+        default = null;
         example = literalExpression ''"\${pkgs.chromium}/bin/chromium"'';
         description = ''
-          Absolute path to the browser executable. This is set based on
-          `browserName` but can be overridden manually.
+          Absolute path to the chrome-family executable agent-browser should
+          launch, exported as `AGENT_BROWSER_EXECUTABLE_PATH`. `null`
+          (default) lets agent-browser discover a browser on the PATH
+          (`google-chrome`, `chromium`, `brave-browser`, ...), which finds the
+          home-manager chromium on desktop hosts. Set this only to pin a
+          browser that is not on the PATH — and remember the package then
+          becomes part of the host closure.
         '';
       };
     };
@@ -79,40 +90,41 @@ in
   config = lib.mkIf cfg.enable {
     # Register the agent-browser skill source (NixOS-level);
     # `skills/default.nix` applies it to every enabled agent harness via
-    # the `handcrafted` registry.
-    myconfig.ai.skills.handcrafted.agent-browser = "${cfg.package}/skills";
+    # the `handcrafted` registry. The entry must point at the directory
+    # that directly contains the SKILL.md (see playwright-cli.nix), which
+    # is `$out/skills/agent-browser` — NOT `$out/skills`, whose entries
+    # are nested one level deeper.
+    myconfig.ai.skills.handcrafted.agent-browser = "${cfg.package}/skills/agent-browser";
 
-    # Set environment variables for agent-browser to find the browser
     home-manager.sharedModules = [
       {
         home.packages = [ cfg.package ];
 
         home.sessionVariables = {
-          AGENT_BROWSER_BROWSER = cfg.browserName;
+          AGENT_BROWSER_ENGINE = cfg.engine;
+        }
+        // lib.optionalAttrs (cfg.browserExecutablePath != null) {
           AGENT_BROWSER_EXECUTABLE_PATH = cfg.browserExecutablePath;
         };
       }
     ];
 
     # Sandbox tiers: agent-browser needs to exist where agents run — inside
-    # the sandboxes, not only on the host. Browser automation is a core
-    # capability for agentic coding workflows.
+    # the sandboxes, not only on the host.
     #
     # `myconfig.ai.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
     # `myconfig.ai.microvm` guests, the `sandboxed-*` qemu runners and the
-    # gVisor image); mysbx has its own `extraTools` extension point.
+    # gVisor image); mysbx has its own `extraTools` extension point (see
+    # ../programs.hunk and ../programs.rtk for the same pair of hooks).
     #
     # NOTE: agent-browser requires a browser at runtime. Hosts that want
-    # browser automation in sandboxes must also add chromium (or another
-    # browser) to `myconfig.ai.sandboxTools.extraPackages` and set the
-    # appropriate environment variable in `myconfig.ai.sandboxTools.extraEnv`.
+    # browser automation in sandboxes must also add chromium to the sandbox
+    # closures — see the opt-in snippet in the header comment above.
     myconfig.ai.sandboxTools.extraPackages = [ cfg.package ];
 
-    # mysbx integration: add agent-browser to the sandbox tool closure
     myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
       extraTools = [ cfg.package ];
     };
-
   };
 }
