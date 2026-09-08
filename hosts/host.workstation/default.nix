@@ -97,6 +97,7 @@
       # virtualisation.gpuPassthroughHost.enable = true;
       dev = {
         compliance.enable = true;
+        difftastic.enable = true;
         # haskell.enable = true;
         # network.enable = true;
       };

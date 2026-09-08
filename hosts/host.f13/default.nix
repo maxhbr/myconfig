@@ -362,6 +362,7 @@ in
       virtualisation.enable = true;
       dev = {
         # compliance.enable = true;
+        difftastic.enable = true;
         # go.enable = false;
         haskell.enable = true;
         # nodejs.enable = true;

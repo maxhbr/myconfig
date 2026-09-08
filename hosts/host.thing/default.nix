@@ -181,7 +181,10 @@
         };
       };
       containers.n8n.enable = true;
-      dev.core.enable = true;
+      dev = {
+        core.enable = true;
+        difftastic.enable = true;
+      };
       virtualisation.enable = true;
     };
 
