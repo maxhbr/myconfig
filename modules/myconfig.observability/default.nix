@@ -19,6 +19,7 @@ in
     ./host.scrape-health.nix
     ./host.victoriametrics.nix
     ./host.litellm.nix
+    ./host.ccusage.nix
     ./host.power.nix
     ./host.co2.nix
     ./host.weather.nix
