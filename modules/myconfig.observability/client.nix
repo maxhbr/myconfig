@@ -50,6 +50,7 @@ in
     ./client.weather-exporter.nix
     ./client.llama-server.nix
     ./client.llama-swap-metrics.nix
+    ./client.ccusage-exporter.nix
   ];
 
   config = lib.mkIf clientCfg.enable {
