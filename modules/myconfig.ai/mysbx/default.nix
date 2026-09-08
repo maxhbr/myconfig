@@ -261,14 +261,16 @@ in
     package = mkOption {
       type = types.package;
       # The wrapped package from ./nix/mysbx.nix: the crate's binary with
-      # MYSBX_BWRAP / MYSBX_SHELL / MYSBX_TOOLS_PATH pinned to store paths.
+      # MYSBX_BWRAP / MYSBX_SHELL / MYSBX_TOOLS_PATH / MYSBX_TERMINAL
+      # pinned to store paths.
       # The unwrapped crate build stays reachable as
       # `<package>.passthru.crate` (used by nix/checks.nix).
       default = pkgs.callPackage ./nix/mysbx.nix {
         inherit (cfg) extraTools;
         inherit muxEntries;
+        alacritty = cfg.terminal.package;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -346,6 +348,34 @@ in
         pinned, and a configuration selecting it is a refused run
         instead of a silent plain shell.
       '';
+    };
+
+    terminal = {
+      package = mkOption {
+        type = types.nullOr types.package;
+        # Gated on the desktop the same way the aoe package is gated on
+        # its module: `mysbx gui` opens a terminal window
+        # (./docs/design/cli.md D15), which needs a graphical session —
+        # a headless host carries no alacritty in its closure, and its
+        # `mysbx gui` should fail at runtime over the PATH fallback
+        # rather than pull a GUI stack into every headless rebuild.
+        default = if (config.myconfig.desktop.enable or false) then pkgs.alacritty else null;
+        defaultText = literalExpression "pkgs.alacritty (when myconfig.desktop.enable, else null)";
+        description = ''
+          The terminal emulator `mysbx gui` starts on the HOST
+          (./docs/design/cli.md D15) — the window that runs the inner
+          `mysbx`, pinned into the wrapper as `MYSBX_TERMINAL`.
+
+          Unlike the multiplexer packages this runs OUTSIDE the
+          sandbox, in the graphical session the command was typed in,
+          so it is deliberately absent from the dev-tool closure and
+          the sandbox argv.
+
+          `null` (the default on hosts without `myconfig.desktop`)
+          pins nothing: the unwrapped crate's plain `alacritty` PATH
+          lookup applies instead.
+        '';
+      };
     };
 
     workmux = {

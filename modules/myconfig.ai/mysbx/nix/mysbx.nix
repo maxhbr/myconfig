@@ -47,6 +47,14 @@
   writeText,
   bubblewrap,
   bash,
+  # The terminal emulator of `mysbx gui` (docs/design/cli.md D15): the
+  # window that runs the inner mysbx, on the HOST (in the graphical
+  # session the command was typed in) — deliberately NOT part of the
+  # dev-tool closure or the sandbox argv. Optional: a headless host
+  # passes nothing, no `MYSBX_TERMINAL` pin is set, and `mysbx gui`
+  # falls back to the plain `alacritty` PATH lookup of the unwrapped
+  # crate.
+  alacritty ? null,
   # the dev-tool closure baked into the sandbox PATH (see the comment at
   # `toolsEnv` below for why these entries and no others)
   coreutils,
@@ -192,6 +200,11 @@ let
       name: entry: "--set MYSBX_MUX_ENTRY_${lib.toUpper name} '${lib.getExe entry}'"
     ) (lib.filterAttrs (_: entry: entry != null) muxEntries)
   );
+  # The `mysbx gui` terminal pin (docs/design/cli.md D15): an absolute
+  # store path, the same wrapper idiom as MYSBX_BWRAP. Empty when the
+  # caller passes no alacritty — the fallback PATH lookup of the
+  # unwrapped crate applies then.
+  terminalPin = if alacritty != null then "--set MYSBX_TERMINAL '${lib.getExe alacritty}'" else "";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -208,7 +221,8 @@ symlinkJoin {
       --set MYSBX_SHELL '${bash}/bin/bash' \
       --set MYSBX_TOOLS_PATH '${toolsEnv}/bin' \
       --set MYSBX_NIX_CONF '${sandboxNixConf}' \
-      ${muxEntryPins}
+      ${muxEntryPins} \
+      ${terminalPin}
   '';
 
   meta = {

@@ -49,9 +49,9 @@ nested command trees. Rationale: the surface is small and stays memorable;
 nesting would only pay off with many more commands.
 
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
-form (entering the sandbox, see D2) and `run -- COMMAND` for
-non-interactive use, plus the global flags `--dry-run` (D9),
-`--verbose` (D10) and `--multiplexer` (D14).
+form (entering the sandbox, see D2), `run -- COMMAND` for
+non-interactive use, `gui [ARG...]` (D15), plus the global flags
+`--dry-run` (D9), `--verbose` (D10) and `--multiplexer` (D14).
 
 ### D4: `--` separates sandbox args from the payload command
 
@@ -338,6 +338,48 @@ operator believe the one-shot ran inside a session it did not. `init`,
 `edit`, `version` and `help` reject it with the same words. A repeated
 flag, a missing value or an unknown spelling is a usage error (`2`,
 D5/D8), and the error names the accepted set.
+
+### D15: `mysbx gui` opens a terminal window with an interactive run in it
+
+`mysbx gui ARG...` starts the terminal emulator (alacritty, pinned by the
+Nix wrapper as `MYSBX_TERMINAL` from `myconfig.ai.mysbx.terminal.package`)
+with `--working-directory` on the current directory and `--command` on
+this same `mysbx` — by absolute path, `current_exe`, never a PATH lookup —
+with the whole argument tail passed through verbatim. `mysbx gui ARG1
+ARG2` therefore becomes `mysbx ARG1 ARG2` in the window.
+
+**`gui` is not a run.** Nothing of the sandbox pipeline happens in the
+outer invocation: no repo resolution, no sidecar guard, no merge, no
+backend check. The inner `mysbx` is the run — it reports its own errors
+(`no sandbox yet, run mysbx init`, a refused multiplexer) in the window
+it opens, which is where an operator wants them. Consequence: `gui` also
+works in a repo that has no sidecar, and creates nothing (D13 holds for
+the outer form; the inner run is what a D13 refusal would hit).
+
+**The tail is never parsed.** Everything after the verb is the inner
+invocation's command line (the same rule `--` gives `run`, D4) — flags
+the inner `mysbx` understands (`mysbx gui --multiplexer herdr`),
+subcommands (`mysbx gui run -- ls`), anything. Only the inner process
+parses it, so only it can reject it.
+
+**No global flag before the verb.** The argv the outer invocation builds
+is the terminal's, not the sandbox's: `--dry-run` before `gui` has
+nothing to print, `--verbose` no run to report on, and `--multiplexer`
+would be a flag the dispatcher parsed half of (D14). All three are usage
+errors (`2`) — after the verb they belong to the inner run and pass
+through.
+
+**The terminal is pinned, not looked up.** `MYSBX_TERMINAL` is an
+absolute store path under Nix (the same wrapper idiom as `MYSBX_BWRAP`);
+the `alacritty` fallback serves a plain `cargo run`, like `bwrap` does.
+`--working-directory` and `--command` are alacritty's own options — the
+one place the crate knowingly names another program's command line. A
+terminal that cannot be started is a runtime failure (`1`) naming it.
+
+**The exit code is the terminal's, not the payload's.** The outer process
+waits for the terminal to exit — for alacritty, when its window closes —
+not for the sandbox. `gui` never propagates the payload's exit status:
+the inner run's status dies with the window.
 
 ## Non-goals
 

@@ -56,7 +56,8 @@ pub const FORWARDED_ENV_VARS: &[&str] =
 pub fn run(args: Vec<String>) -> i32 {
     // The global flags are accepted only BEFORE the subcommand / bare
     // form; anything after `--` is payload and never parsed (cli.md D4,
-    // D5, D10).
+    // D5, D10). `gui` takes no `--`: its whole argument tail is the
+    // payload of the inner `mysbx` (D15) and passes through verbatim.
     let (flags, rest) = match split_global_flags(&args) {
         Ok(x) => x,
         Err(code) => return code,
@@ -73,13 +74,28 @@ pub fn run(args: Vec<String>) -> i32 {
         // a flag the dispatcher and the runner each parse half of.
         Some(other)
             if flags.multiplexer.is_some()
-                && matches!(other, "run" | "init" | "edit" | "version" | "help") =>
+                && matches!(other, "run" | "gui" | "init" | "edit" | "version" | "help") =>
         {
             eprintln!("mysbx: --multiplexer is not valid with `{other}`");
             eprintln!("try `mysbx --help`");
             2
         }
         Some("run") => run_command(flags, &rest[1..]),
+        Some("gui") => {
+            // cli.md D15: `mysbx gui ARG...` re-invokes `mysbx` — the SAME
+            // executable, by absolute path, so a PATH lookup cannot find
+            // a different one — inside a terminal window, from the current
+            // directory, with the whole argument tail passed verbatim. It
+            // is NOT a sandbox run itself: nothing of `sandbox` runs here,
+            // the inner `mysbx` is the run and reports its own errors in
+            // the window it opens. That is also why the global flags are
+            // rejected with the verb in the arms below: `--dry-run` would
+            // have nothing to print — the argv this form builds is the
+            // terminal's, not the sandbox's — and `--multiplexer` belongs
+            // to the INNER invocation (`mysbx gui --multiplexer herdr`
+            // passes it through verbatim).
+            gui(flags, &rest[1..])
+        }
         // The run-scoped flags are only meaningful for the bare form and
         // `run`: on `init` `--dry-run` would promise side-effect-freeness
         // while files are still created, and there is no run to report on
@@ -262,6 +278,89 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
         return 2;
     }
     sandbox(flags, bwrap::Payload::Command(cmd.to_vec()))
+}
+
+/// `mysbx gui ARG...` — start the terminal emulator and run `mysbx`
+/// (the same executable) inside it, from the current directory, with
+/// `ARG...` passed verbatim (cli.md D15).
+///
+/// The argv built here is the TERMINAL's, not the sandbox's: the inner
+/// `mysbx` builds the sandbox argv itself, so the outer invocation takes
+/// no global flags — a `--dry-run` before `gui` is rejected by the
+/// dispatcher, and everything after the verb is passed through
+/// unparsed (the same rule `--` gives `run`, D4 — including flags the
+/// inner invocation understands, like `--multiplexer`).
+///
+/// The terminal is pinned by the Nix wrapper as `MYSBX_TERMINAL`
+/// (the `alacritty` of `myconfig.ai.mysbx.terminal.package`); the
+/// `alacritty` fallback keeps a plain `cargo run` working unwrapped,
+/// like `MYSBX_BWRAP`'s `bwrap` fallback. `--working-directory` and
+/// `--command` are alacritty's own options — the terminal is a GUI
+/// program, so this is one place the crate knowingly names another
+/// program's command line rather than re-exec'ing itself.
+///
+/// The `gui` form never waits for the sandbox: alacritty runs the
+/// inner mysbx as its child, and the outer process exits with the
+/// terminal's status (0 once the window opened), not the payload's.
+fn gui(flags: Flags, args: &[String]) -> i32 {
+    // The dispatcher's `gui` arm sits BEFORE the generic `flags.any()`
+    // arm on purpose: `gui` owns its refusal message, because unlike
+    // `init`/`edit` there IS a position where the flags are valid —
+    // after the verb, passed to the inner invocation. The hint says
+    // so instead of the generic "not valid with `gui`" wording.
+    if flags.any() {
+        eprintln!(
+            "mysbx gui: {} is not valid before `gui`",
+            flags.first_name()
+        );
+        eprintln!("  pass flags after the verb instead: `mysbx gui --dry-run`");
+        eprintln!("usage: mysbx gui [ARG...] — start mysbx in a terminal window");
+        return 2;
+    }
+    let terminal = env_or("MYSBX_TERMINAL", "alacritty");
+    // The inner mysbx is THIS mysbx: `current_exe` (never argv[0], which
+    // a wrapper or symlink can change to name something else) resolves
+    // the real binary — under Nix, the wrapped store path with its
+    // `MYSBX_*` pins, so the sandbox the window opens is the one the
+    // operator configured.
+    let self_exe = match std::env::current_exe() {
+        Ok(p) => p.to_string_lossy().into_owned(),
+        Err(e) => {
+            eprintln!("mysbx gui: cannot locate my own executable: {e}");
+            return 1;
+        }
+    };
+    let cwd = match std::env::current_dir() {
+        Ok(d) => d.to_string_lossy().into_owned(),
+        Err(e) => {
+            eprintln!("mysbx gui: cannot determine current directory: {e}");
+            return 1;
+        }
+    };
+    let mut cmd = std::process::Command::new(&terminal);
+    cmd.arg("--working-directory")
+        .arg(&cwd)
+        .arg("--command")
+        .arg(&self_exe)
+        .args(args)
+        // Detached from THIS terminal: the window opens on the desktop,
+        // not as a child of the shell the command was typed in. The
+        // inner mysbx is alacritty's child, and inherits its env — which
+        // is what passes the wrapper's `MYSBX_*` pins through.
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    match cmd.status() {
+        Ok(status) if status.success() => 0,
+        Ok(status) => {
+            eprintln!("mysbx gui: {terminal} exited with {status}");
+            1
+        }
+        Err(e) => {
+            eprintln!("mysbx gui: cannot start {terminal}: {e}");
+            1
+        }
+    }
 }
 
 /// The shared pipeline of the bare form and `run`: resolve the repo, run
@@ -1434,6 +1533,7 @@ mod tests {
     fn usage_documents_every_accepted_flag_and_verb() {
         for token in [
             "run",
+            "gui",
             "init",
             "edit",
             "version",
@@ -1566,6 +1666,29 @@ mod tests {
         // no run to report on, and nothing to dry-run).
         assert_eq!(run(vec!["--dry-run".into(), "edit".into()]), 2);
         assert_eq!(run(vec!["--verbose".into(), "edit".into()]), 2);
+    }
+
+    #[test]
+    fn gui_rejects_the_global_flags_but_keeps_the_tail_verbatim() {
+        // cli.md D15: `gui` builds the TERMINAL's argv, not the
+        // sandbox's, so a `--dry-run` before the verb has nothing to
+        // print and is a usage error — the inner mysbx is where flags
+        // belong (`mysbx gui --dry-run` passes the tail verbatim and
+        // the INNER invocation refuses it as the bare form's flag,
+        // which is the honest error in the window).
+        assert_eq!(run(vec!["--dry-run".into(), "gui".into()]), 2);
+        assert_eq!(run(vec!["--verbose".into(), "gui".into()]), 2);
+        // `--multiplexer` before the verb is the same refusal as every
+        // other verb (D14): a flag the dispatcher parsed half of.
+        // AFTER the verb it is the inner run's flag and passes through.
+        assert_eq!(
+            run(vec!["--multiplexer".into(), "tmux".into(), "gui".into()]),
+            2
+        );
+        // The tail is NOT parsed (D4): flags, a `--`, a `run` — anything
+        // can sit after `gui`. That acceptance lives in the cli.rs
+        // subprocess suite with a pinned MYSBX_TERMINAL, because only a
+        // spawned terminal (a stub, here) can show the tail reached it.
     }
 
     #[test]

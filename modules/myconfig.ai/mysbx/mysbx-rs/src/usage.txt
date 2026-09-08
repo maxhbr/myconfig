@@ -3,6 +3,7 @@ mysbx - my sandboxing tool
 Usage:
   mysbx [--dry-run] [--verbose] [--multiplexer <mux>]
   mysbx run [--dry-run] [--verbose] -- COMMAND...
+  mysbx gui [ARG...]
   mysbx [COMMAND]
 
 Commands:
@@ -14,6 +15,15 @@ Commands:
                 instead of a bare shell, on a socket inside the sandbox
   run -- CMD... run one command in the sandbox; everything after `--` is
                 passed to the command verbatim; needs `mysbx init` too
+  gui [ARG...]  open an alacritty terminal in the current directory
+                and run `mysbx ARG...` in it; everything after the
+                verb is passed to that inner mysbx verbatim — so
+                `mysbx gui --multiplexer herdr` starts the session in
+                a window. No sandbox is started by `gui` itself: the
+                inner invocation is the run and reports its own
+                errors in the window. This form needs a graphical
+                session (Wayland/X11) and exits when the window
+                opens, not when the sandbox ends
   init          create the sidecar directory next to the current repo;
                 the only command that initializes a repo; idempotent:
                 an existing config.toml is never rewritten

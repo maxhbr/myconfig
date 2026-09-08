@@ -3306,3 +3306,180 @@ fn an_unparsable_sidecar_config_is_never_rewritten() {
     assert!(stderr.starts_with("mysbx: "), "{stderr}");
     assert_eq!(before, std::fs::read_to_string(&config).unwrap());
 }
+
+// ---- `mysbx gui` (docs/design/cli.md D15) ------------------------------------
+
+/// A fake `MYSBX_TERMINAL`: a shell script that writes its own argv (one
+/// per line, then a CWD line) to the file named by `$MYSBX_GUI_STUB_OUT`
+/// and exits 0 — everything `gui` promises can be asserted on those bytes
+/// without a graphical session. Written with the mode bits of a script
+/// because `gui` execs it directly.
+fn terminal_stub(base: &Path) -> (PathBuf, PathBuf) {
+    let out = base.join("stub-out.txt");
+    let stub = base.join("terminal-stub");
+    std::fs::write(
+        &stub,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MYSBX_GUI_STUB_OUT\"\npwd >> \"$MYSBX_GUI_STUB_OUT\"\n"
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    (stub, out)
+}
+
+#[test]
+fn gui_passes_the_tail_verbatim_to_a_mysbx_in_the_cwd() {
+    // D15: `mysbx gui ARG1 ARG2` must run the same mysbx (by absolute
+    // path) inside the terminal, from the current directory, with the
+    // tail passed through verbatim — including things that look like
+    // flags and a `--` the outer form never parses.
+    let base = tmpdir("gui-verbatim");
+    let (repo, _) = make_repo(&base, "repo");
+    let (stub, out) = terminal_stub(&base);
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["gui", "--multiplexer", "herdr", "--", "run"],
+        cwd: repo.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let mut cmd = spawn(&inv);
+    cmd.env("MYSBX_TERMINAL", &stub)
+        .env("MYSBX_GUI_STUB_OUT", &out);
+    let status = cmd.status().expect("failed to spawn the mysbx binary");
+    assert_eq!(status.code(), Some(0));
+    let recorded = std::fs::read_to_string(&out).unwrap();
+    let mut lines = recorded.lines();
+    assert_eq!(
+        lines.next(),
+        Some("--working-directory"),
+        "the stub's argv is the terminal's: {recorded}"
+    );
+    assert_eq!(lines.next(), Some(repo.to_str().unwrap()));
+    assert_eq!(lines.next(), Some("--command"));
+    let inner = lines.next().unwrap();
+    // The inner mysbx is THIS mysbx: the wrapped binary the test drives,
+    // not a PATH lookup — `current_exe` of the spawned process.
+    assert!(
+        inner.ends_with("mysbx"),
+        "the inner invocation must be the mysbx binary itself: {inner}"
+    );
+    // And the tail, verbatim and unparsed by the outer form — the
+    // stub's LAST line is the `pwd` it appends after the argv.
+    let recorded_tail: Vec<&str> = lines.collect();
+    assert_eq!(
+        &recorded_tail[..recorded_tail.len() - 1],
+        &["--multiplexer", "herdr", "--", "run"],
+        "{recorded}"
+    );
+    // Nothing of the sandbox pipeline ran: `make_repo` pre-creates the
+    // sidecar DIRECTORY, but `gui` never reaches the stage that would
+    // create anything in it — and the inner "run" was the stub, so no
+    // `config.toml` can have appeared (D13/D15: `gui` creates nothing,
+    // the inner run is the one that would).
+    assert!(!repo
+        .parent()
+        .unwrap()
+        .join("repo.mysbx")
+        .join("config.toml")
+        .exists());
+}
+
+#[test]
+fn gui_does_not_parse_the_tail_and_needs_no_sidecar() {
+    // A repo WITHOUT a sidecar, with a tail that is a usage error for
+    // every other verb: `gui` still starts the terminal (D15: the
+    // inner invocation reports its own errors, in the window). The
+    // tail here even contains `--dry-run` — rejected BEFORE the verb,
+    // passed through AFTER it.
+    let base = tmpdir("gui-no-sidecar");
+    let (repo, _) = make_repo(&base, "repo");
+    let (stub, out) = terminal_stub(&base);
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec![],
+        cwd: repo.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let result = spawn_with_args(&inv, &["gui", "nope", "--dry-run"])
+        .env("MYSBX_TERMINAL", &stub)
+        .env("MYSBX_GUI_STUB_OUT", &out)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    assert_eq!(result.status.code(), Some(0), "gui must not parse the tail");
+    let recorded = std::fs::read_to_string(&out).unwrap();
+    assert!(
+        recorded.contains("nope\n") && recorded.contains("--dry-run"),
+        "the tail reached the terminal unparsed: {recorded}"
+    );
+}
+
+#[test]
+fn gui_rejects_global_flags_before_the_verb() {
+    // D15: the flags before `gui` have no meaning for the terminal's
+    // argv — a `--dry-run` before the verb is a usage error (`2`), the
+    // same refusal every verb without a run reports. After the verb
+    // they are the INNER invocation's, and passed through instead.
+    let base = tmpdir("gui-global-flags");
+    let (repo, _) = make_repo(&base, "repo");
+    let (stub, out) = terminal_stub(&base);
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec![],
+        cwd: repo.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    for args in [
+        vec!["--dry-run", "gui"],
+        vec!["--verbose", "gui"],
+        vec!["--multiplexer", "tmux", "gui"],
+    ] {
+        let result = spawn_with_args(&inv, &args)
+            .env("MYSBX_TERMINAL", &stub)
+            .env("MYSBX_GUI_STUB_OUT", &out)
+            .output()
+            .expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            result.status.code(),
+            Some(2),
+            "{args:?}: the stub must not have run"
+        );
+        assert!(
+            !out.exists(),
+            "{args:?}: no terminal was started: the flags are refused before the verb"
+        );
+    }
+}
+
+#[test]
+fn gui_names_the_terminal_it_cannot_start() {
+    // The MYSBX_TERMINAL fallback contract, the same shape as
+    // `MYSBX_BWRAP`: a binary that cannot be spawned is a runtime
+    // failure (`1`) that names the terminal, never a panic.
+    let base = tmpdir("gui-broken-terminal");
+    let (repo, _) = make_repo(&base, "repo");
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["gui"],
+        cwd: repo,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let mut cmd = spawn(&inv);
+    cmd.env("MYSBX_TERMINAL", "/nonexistent/terminal");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("/nonexistent/terminal"),
+        "the error names the terminal: {stderr}"
+    );
+}

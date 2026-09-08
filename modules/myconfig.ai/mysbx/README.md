@@ -47,6 +47,14 @@ Nix) first, then one argument per line — and exits without running it;
 the acceptance surface described in
 [`docs/design/cli.md`](./docs/design/cli.md).
 
+`mysbx gui [ARG...]` opens an alacritty window in the current directory
+and runs `mysbx ARG...` in it: `mysbx gui --multiplexer herdr` starts the
+herdr session in a window, `mysbx gui run -- ls` a one-shot. Everything
+after the verb is passed to that inner invocation verbatim
+([`docs/design/cli.md`](./docs/design/cli.md) D15) — the inner run
+reports its own errors in the window, so `gui` itself needs no
+initialized repo and starts no sandbox.
+
 `mysbx edit` opens the repo's sidecar `config.toml` in `$EDITOR` (or
 `$VISUAL`), creating the commented template first when it is missing
 (the second, equally explicit way to initialize a repo) —
