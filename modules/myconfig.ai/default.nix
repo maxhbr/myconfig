@@ -33,6 +33,7 @@ in
     ./container.nlm-ingestor.nix
     ./container.open-webui.nix
     ./hermes-agent
+    ./programs.agent-browser
     ./programs.agent-of-empires
     ./programs.aichat.nix
     ./programs.alpaca.nix
@@ -93,6 +94,12 @@ in
     # small binary, so it follows rtk and hunk and is on by default wherever
     # the AI tooling is. A host can still turn it off explicitly.
     myconfig.ai.beads.enable = lib.mkDefault true;
+    # agent-browser provides browser automation capabilities to AI agents
+    # (./programs.agent-browser). Browser automation is a core capability
+    # for agentic coding workflows, so it follows rtk and hunk and is on by
+    # default wherever the AI tooling is. A host can still turn it off
+    # explicitly.
+    myconfig.ai.agent-browser.enable = lib.mkDefault true;
     home-manager.sharedModules = [
       {
         home.packages =
