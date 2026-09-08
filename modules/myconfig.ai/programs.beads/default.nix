@@ -34,6 +34,29 @@ let
   cfg = config.myconfig.ai.beads;
 
   tomlFormat = pkgs.formats.toml { };
+
+  # bd phones home anonymous usage metrics (command names + version + OS,
+  # keyed by a machine-derived HMAC ID) to gastownhall-eventsapi.com by
+  # default (`bd metrics off` only writes per-machine state in
+  # `~/.config/bd/config.yaml`, which sandboxes and fresh hosts don't
+  # inherit). `BD_DISABLE_METRICS=1` is bd's hard kill switch: it wins
+  # over that per-machine config, so baking it into the wrapper makes the
+  # opt-out declarative and identical on every host and in every sandbox
+  # tier below — the same store path flows into all of them.
+  # Two things to note about the nixpkgs expression
+  # (pkgs/by-name/be/beads/package.nix):
+  #   * it already wraps `$out/bin/bd` with `wrapProgram` (adding dolt to
+  #     PATH), so `postInstall` is the right hook to extend;
+  #   * `postInstall` is a plain string there, so string-concatenating a
+  #     second `wrapProgram` call appends a new wrapper variable without
+  #     touching the existing one (`--set-default` keeps a user-set
+  #     `BD_DISABLE_METRICS=0` from the interactive shell working).
+  package = cfg.package.overrideAttrs (prev: {
+    postInstall = (prev.postInstall or "") + ''
+      wrapProgram $out/bin/bd \
+        --set-default BD_DISABLE_METRICS 1
+    '';
+  });
 in
 {
   options.myconfig = with lib; {
@@ -80,10 +103,10 @@ in
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
     # `myconfig.ai.microvm` guests, the `sandboxed-*` qemu runners and the
     # gVisor image); mysbx has its own `extraTools` extension point.
-    myconfig.ai.sandboxTools.extraPackages = [ cfg.package ];
+    myconfig.ai.sandboxTools.extraPackages = [ package ];
 
     myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
-      extraTools = [ cfg.package ];
+      extraTools = [ package ];
       config.mounts = [
         {
           # Always present while this module is enabled: `settings` above is
@@ -99,7 +122,7 @@ in
 
     home-manager.sharedModules = [
       {
-        home.packages = [ cfg.package ];
+        home.packages = [ package ];
 
         xdg.configFile."beads/config.toml".source = tomlFormat.generate "beads-config.toml" cfg.settings;
       }
