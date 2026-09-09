@@ -22,7 +22,7 @@ let
         osconfig
         ;
     };
-  jail-app = callJailLib ../../../myconfig.ai/fns/bubblewrap-app.nix;
+  jail-app = callJailLib ../../fns/bubblewrap-app.nix;
 
   # Jail library handle + the jail-to-host channel combinator. The combinator
   # exposes a program *inside* the jail that forwards its single argument over
@@ -655,7 +655,7 @@ let
   # `myconfig-*` extensions above which only use type-only imports.
   handoffExtension = "${pi-coding-agent-pkg}/lib/node_modules/pi-monorepo/examples/extensions/handoff.ts";
 
-  piBwrap = callLib ../../../myconfig.ai/fns/bubblewrap-simple-app.nix {
+  piBwrap = callLib ../../fns/bubblewrap-simple-app.nix {
     name = "pi";
     pkg = pkgs.nixos-unstable.pi-coding-agent;
     extraRuntimeInputs = [
@@ -669,13 +669,13 @@ let
     ];
     # Read-only bind of `~/.agents/skills/`, where `myconfig.ai.skills`
     # deploys handcrafted skills for pi (which has no `programs.pi.skills`
-    # option). See `modules/myconfig.ai/skills/default.nix`.
+    # option). See `modules/myconfig.ai.dev/skills/default.nix`.
     readOnlyConfigDirs = [ ".agents" ];
   };
 
   # `agent-bubblewrap-pi` is an alternative to `piBwrap` that uses the jail.nix library
   # (vendored at ./vendor/alexdavid-jail.nix) instead of a hand-rolled
-  # bubblewrap wrapper. See `../fns/bubblewrap-app.nix` for the shared defaults.
+  # bubblewrap wrapper. See `../../fns/bubblewrap-app.nix` for the shared defaults.
   #
   # `~/.pi` is rw-bound because the agent picks up the auto-generated
   # provider extension installed by home-manager
@@ -754,7 +754,7 @@ let
   # resolves the shared git dir, exports PI_WORKTREE_* and execs
   # `agent-bubblewrap-pi-worktree-inner`) and the user-facing `agent-bubblewrap-pi-worktree`
   # wrapper (which requires tmux and calls `workmux add --agent agent-bubblewrap-pi`).
-  mkWorkmuxWorktree = callLib ../../../myconfig.ai/fns/workmux-worktree.nix;
+  mkWorkmuxWorktree = callLib ../../fns/workmux-worktree.nix;
   agentBubblewrapPiWorktree = mkWorkmuxWorktree {
     name = "agent-bubblewrap-pi-worktree";
     agentName = "agent-bubblewrap-pi";
@@ -907,7 +907,7 @@ let
       # anything into the store and never copying credential files (keys keep
       # flowing over the SSH environment above). See
       # ../../myconfig.ai.qemu-agent-sandbox/builders.nix (`mkSeedScript`) and
-      # ../fns/seed-agent-config.nix. Run it BEFORE the interactive session
+      # ../../fns/seed-agent-config.nix. Run it BEFORE the interactive session
       # so the agent starts already configured.
       if [ -x "$runner/bin/seed-agent-config" ]; then
         echo "agent-qemu-pi: seeding guest agent config from host" >&2

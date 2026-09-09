@@ -109,7 +109,7 @@ let
   # union of the tools' bins, so `toolsPath` stays one absolute path.
   #
   # This is the MVP's hardcoded dev-tool closure, mirroring
-  # ../../fns/bubblewrap-app.nix `devTools` minus the package-management
+  # ../../myconfig.ai.dev/fns/bubblewrap-app.nix `devTools` minus the package-management
   # and linting extras (`wget`, `unzip`, `diffutils`, `tar`/`gzip`,
   # `shfmt`, `shellcheck`), plus `hostname` and `tig` (the git TUI: the
   # payload is always a git worktree, and reviewing it is the one

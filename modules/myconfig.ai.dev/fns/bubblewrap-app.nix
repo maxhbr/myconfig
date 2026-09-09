@@ -32,7 +32,7 @@
   pkgs,
   jail,
   # The NixOS `config`, used to read the shared `myconfig.ai.jail.fwdEnvs`
-  # option (see `../myconfig.ai.jail.nix`) so every `jail-app` wrapper picks
+  # option (see `../myconfig.ai/myconfig.ai.jail.nix`) so every `jail-app` wrapper picks
   # up the global forwarded-env list without each call site having to pass
   # it explicitly. Defaults to `{}` so the library still works standalone
   # (e.g. in `nix repl`); in that case `globalFwdEnvs` reduces to just the

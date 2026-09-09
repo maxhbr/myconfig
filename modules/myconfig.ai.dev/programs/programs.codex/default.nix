@@ -16,13 +16,13 @@ let
   # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
   # a worktree pane) whenever workmux is enabled.
   workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
-  codexBwrap = callLib ../../../myconfig.ai/fns/bubblewrap-simple-app.nix {
+  codexBwrap = callLib ../../fns/bubblewrap-simple-app.nix {
     name = "codex";
     pkg = pkgs.codex;
     writableDirs = [ ".config/codex" ];
     extraRuntimeInputs = workmuxDevTools;
   };
-  mkWorkmuxWorktree = callLib ../../../myconfig.ai/fns/workmux-worktree.nix;
+  mkWorkmuxWorktree = callLib ../../fns/workmux-worktree.nix;
   # `codex-worktree` is now a thin workmux wrapper: it requires tmux and runs
   # `workmux add --agent codex`, which launches the codex sandbox in the new
   # worktree pane (the launcher exposes the worktree's shared git dir to the

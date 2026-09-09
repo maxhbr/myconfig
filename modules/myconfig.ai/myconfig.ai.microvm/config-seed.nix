@@ -172,7 +172,7 @@ let
   # most notably the `trustedtokens-provider` pi extension ("TrustedTokens" is
   # a TNG inference-service trademark; the directory contains only TypeScript
   # source + metadata, no API key). Kept in sync with the sandboxed-* seeder
-  # (../fns/seed-agent-config.nix `denyOverrides`).
+  # (../myconfig.ai.dev/fns/seed-agent-config.nix `denyOverrides`).
   #
   # Overrides are PREFIXES, so an override exempts everything UNDER it. Each
   # override is STILL subject to the eval-time `pathWellFormed` check and to

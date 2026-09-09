@@ -27,9 +27,9 @@ comes from (e.g. `cli.md D2`), so drift between design and code stays visible.
 | Key | Tier | Module / entry point | Generated commands |
 | --- | --- | --- | --- |
 | `agentUsers` | 1 | [`myconfig.agentUsers.nix`](../../../myconfig.agentUsers.nix) | `<name>-tmux`, `<name>-alacritty-tmux` |
-| `bwrap-jail` | 2 | [`fns/bubblewrap-app.nix`](../../fns/bubblewrap-app.nix) + [`myconfig.ai.jail.nix`](../../myconfig.ai.jail.nix) | `agent-bubblewrap-pi`, `-opencode`, `-claude`, `…-tmp`, `…-worktree` |
-| `bwrap-simple` | 2 | [`fns/bubblewrap-simple-app.nix`](../../fns/bubblewrap-simple-app.nix) | `<name>-bwrap` (`pi-bwrap`, `codex-bwrap`, `fish-bwrap`, …) |
-| `nono` | 2 | [`myconfig.ai.nono-agent-sandbox.nix`](../../myconfig.ai.nono-agent-sandbox.nix) + [`fns/nono-app.nix`](../../fns/nono-app.nix) | `agent-nono-pi`, `-opencode`, `-claude`, `-codex` |
+| `bwrap-jail` | 2 | [`fns/bubblewrap-app.nix`](../../myconfig.ai.dev/fns/bubblewrap-app.nix) + [`myconfig.ai.jail.nix`](../../myconfig.ai.jail.nix) | `agent-bubblewrap-pi`, `-opencode`, `-claude`, `…-tmp`, `…-worktree` |
+| `bwrap-simple` | 2 | [`fns/bubblewrap-simple-app.nix`](../../myconfig.ai.dev/fns/bubblewrap-simple-app.nix) | `<name>-bwrap` (`pi-bwrap`, `codex-bwrap`, `fish-bwrap`, …) |
+| `nono` | 2 | [`myconfig.ai.nono-agent-sandbox.nix`](../../myconfig.ai.nono-agent-sandbox.nix) + [`fns/nono-app.nix`](../../myconfig.ai.dev/fns/nono-app.nix) | `agent-nono-pi`, `-opencode`, `-claude`, `-codex` |
 | `qemu` | 3 | [`myconfig.ai.qemu-agent-sandbox/`](../../myconfig.ai.qemu-agent-sandbox) | `agent-qemu-pi`, `agent-qemu-herdr`, `agent-qemu-workmux-tmux` |
 | `gvisor` | 3.5 | [`myconfig.ai.gvisor-agent-sandbox/`](../../myconfig.ai.gvisor-agent-sandbox) | `agent-gvisor` |
 | `microvm` | 4 | [`myconfig.ai.microvm/`](../../myconfig.ai.microvm) | `agent-microvm`, `microvm-<agent>` workmux panes |
@@ -62,8 +62,8 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 `../../myconfig.ai.gvisor-agent-sandbox/rust/src/usage.txt`,
 `../../myconfig.ai.microvm/launcher.nix` (the `usage()` heredoc),
 `../../myconfig.ai.microvm/docs/agent-microvm-howto.md` (exit codes),
-`../../fns/bubblewrap-app.nix`, `../../fns/bubblewrap-simple-app.nix`,
-`../../fns/nono-app.nix`,
+`../../myconfig.ai.dev/fns/bubblewrap-app.nix`, `../../myconfig.ai.dev/fns/bubblewrap-simple-app.nix`,
+`../../myconfig.ai.dev/fns/nono-app.nix`,
 `../../myconfig.ai.qemu-agent-sandbox/builders.nix`.
 
 ## 3. Sandboxing features
@@ -80,7 +80,7 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Network default | on (`network` combinator: resolv.conf + CA bundle) | on (`shareNet = true`) | off unless `--allow-domain` / `--allow-connect-port` / `--listen-port` | SLiRP user-mode NAT, outbound only + one loopback SSH port | rootless podman default, `--network`/`AGENT_GVISOR_NETWORK` (pasta spec), in-sandbox loopback forwarders | private bridge `agentbr0` with per-TAP L2 isolation, `networkProfile` (default `proxy-only`) | on, shared; `network = false` is the deny switch (`config.md` D5, D9) |
 | Env forwarding | `try-fwd-env` list + `myconfig.ai.jail.fwdEnvs`, always `OPENAI_API_KEY` | `envVars` attrset | same shape via `myconfig.ai.nono.fwdEnvs` | pushed over the SSH session env at launch | `--env` / `--env-file` | none needed for model access | `[env]` table |
 | Model credentials | real host key inside the sandbox | n/a | real host key inside the sandbox | real key, over SSH env | seeded config, endpoints rewritten to a sandbox-reachable proxy | **never reaches the guest** — host LiteLLM via bridge-only forwarder | **open question** — not decided in `config.md` |
-| Agent-config seeding | `try-ro-bind` of `configDirs`, rw `userDataDirs` | `readOnlyConfigDirs` | `--read` of config dirs, `--allow` of state dirs | [`fns/seed-agent-config.nix`](../../fns/seed-agent-config.nix), rsync over SSH | `home.seedPaths` + `AGENT_GVISOR_HOME_SEED_REWRITE` | root-owned staged copy via `config-seed.nix` | user config decides which host config is exposed (`config.md` D6) |
+| Agent-config seeding | `try-ro-bind` of `configDirs`, rw `userDataDirs` | `readOnlyConfigDirs` | `--read` of config dirs, `--allow` of state dirs | [`fns/seed-agent-config.nix`](../../myconfig.ai.dev/fns/seed-agent-config.nix), rsync over SSH | `home.seedPaths` + `AGENT_GVISOR_HOME_SEED_REWRITE` | root-owned staged copy via `config-seed.nix` | user config decides which host config is exposed (`config.md` D6) |
 | Per-repo state dir | none | none | none | throwaway runtime dir | `<repo>__agent-gvisor/` + registry | root-owned task→clone index under `runtimeRoot` | sidecar `<repo>.mysbx/`, outside repo *and* sandbox (`config.md` D2, D10) |
 | Agent state persists across runs | rw `userDataDirs` bind the *host* state | same host dirs read-only | `--allow` of state dirs | no (throwaway) | yes, container volume | yes, clone-side | yes, but never through host-home paths: `state-dirs` entries are backed by the sidecar (`config.md` D15) |
 | Repo-local config trusted? | n/a | n/a | n/a | n/a | n/a | n/a | no from *inside* the repo (`config.md` D3); yes for the sidecar beside it, which the payload cannot write (`config.md` D7) |
@@ -90,8 +90,8 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Result handoff | edits are live in `$PWD` | live | live | live | `merge` / `fetch` / `push` subcommands | import the branch from the clone | live (planned) |
 | Startup cost | ~none | ~none | ~none | seconds (boot) | ~a second (container) | prebuilt slot + host config | ~none (planned) |
 
-Sources: `../../fns/bubblewrap-app.nix`, `../../fns/bubblewrap-simple-app.nix`,
-`../../fns/nono-app.nix`, `../../myconfig.ai.jail.nix`, `../../myconfig.ai.nono.nix`,
+Sources: `../../myconfig.ai.dev/fns/bubblewrap-app.nix`, `../../myconfig.ai.dev/fns/bubblewrap-simple-app.nix`,
+`../../myconfig.ai.dev/fns/nono-app.nix`, `../../myconfig.ai.jail.nix`, `../../myconfig.ai.nono.nix`,
 `../../myconfig.ai.qemu-agent-sandbox/builders.nix`,
 `../../myconfig.ai.gvisor-agent-sandbox/README.md` and its `docs/spec.md`,
 `../../myconfig.ai.microvm/docs/agent-microvm-security-model.md`,

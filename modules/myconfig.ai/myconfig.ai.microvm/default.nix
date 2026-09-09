@@ -461,7 +461,7 @@ in
         `<workspaceRoot>/<task>`. `<repoSlug>` is a filesystem-safe slug of the
         cloned repository's git toplevel basename with the literal suffix
         `__agent-microvm` appended, mirroring the `<basename>__worktrees`
-        convention used by workmux (../fns/workmux-worktree.nix). Two
+        convention used by workmux (../myconfig.ai.dev/fns/workmux-worktree.nix). Two
         repositories therefore never share a clone directory, and one
         repository's tasks sit next to each other.
 

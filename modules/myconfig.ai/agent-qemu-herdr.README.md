@@ -107,7 +107,7 @@ user-space qemu tier (no privileged host daemon: staging + transfer happen
 entirely in the launcher, over the already-established SSH channel).
 
 The seeded agent set is the union of the per-agent `configPaths` for every
-registered agent (from `modules/myconfig.ai/fns/seed-agent-config.nix`, whose
+registered agent (from `modules/myconfig.ai.dev/fns/seed-agent-config.nix`, whose
 path lists **mirror** the tier-4 registry `myconfig.ai.microvm/agents.nix` for
 every agent that registry knows — including `herdr` itself):
 

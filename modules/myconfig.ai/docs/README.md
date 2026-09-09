@@ -102,11 +102,11 @@ other agents — not the host.
 
 The cheapest tier. `pi` runs as **your user on your kernel**, confined by
 bubblewrap namespaces via the vendored
-[`jail.nix`](../fns/jail-app.nix) library (`vendor/alexdavid-jail.nix`).
+[`bubblewrap-app.nix`](../myconfig.ai.dev/fns/bubblewrap-app.nix) library (`vendor/alexdavid-jail.nix`).
 
 **Implementation**
 
-- `modules/myconfig.ai/fns/jail-app.nix` — the reusable wrapper factory
+- `modules/myconfig.ai.dev/fns/jail-app.nix` — the reusable wrapper factory
   (`jail-app { name; pkg; userDataDirs; ... }`). Every jailed agent wrapper in
   the repo is one call to it.
 - `modules/myconfig.ai/programs.pi-coding-agent/default.nix` — the `agent-bubblewrap-pi`,
@@ -314,7 +314,7 @@ Condensed:
 | Execution modes | interactive only | interactive **and** unattended batch (batch not available for herdr itself) |
 
 **Overlap**: both reuse the same config-seeding allowlist/denylist library
-(`../fns/seed-agent-config.nix`) and near-identical "why herdr" rationale text
+(`../myconfig.ai.dev/fns/seed-agent-config.nix`) and near-identical "why herdr" rationale text
 (kept manually in sync between `../agent-qemu-herdr.README.md` and
 `../myconfig.ai.microvm/docs/agent-microvm.md`). `agent-microvm`'s herdr guest
 is a strict security superset of `agent-qemu-herdr`'s on every shared axis

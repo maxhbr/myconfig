@@ -11,7 +11,7 @@
 #       unconditionally so its `microvm.*` options always exist, but it is
 #       neutralized with `microvm.host.enable = lib.mkDefault false` — exactly
 #       the load-bearing gating pattern used by
-#       `modules/myconfig.ai/hermes-agent/microvm.nix`. Only when
+#       `modules/myconfig.ai.dev/hermes-agent/microvm.nix`. Only when
 #       `myconfig.ai.microvm.enable` is true do we flip it to `true`, so a
 #       disabled feature has zero config side effects (no tap/vhost_net
 #       modules, no KSM, no `microvm` user).

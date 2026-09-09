@@ -21,9 +21,10 @@ let
 in
 {
   imports = [
-    # dev tooling — sandbox tiers, mysbx, skills, workmux and hermes-agent
-    # still live under ../myconfig.ai/ and are moved by myconfig-e4j.3–.5;
-    # the agent CLI programs were moved here by myconfig-e4j.2
+    # dev tooling — sandbox tiers, mysbx and workmux
+    # still live under ../myconfig.ai/ and are moved by myconfig-e4j.3/.4;
+    # the agent CLI programs were moved here by myconfig-e4j.2, and
+    # skills/, fns/ and hermes-agent by myconfig-e4j.5
     ../myconfig.ai/myconfig.ai.jail.nix
     ../myconfig.ai/myconfig.ai.nono.nix
     ../myconfig.ai/myconfig.ai.nono-agent-sandbox.nix
@@ -32,7 +33,7 @@ in
     ../myconfig.ai/myconfig.ai.microvm
     ../myconfig.ai/myconfig.ai.gvisor-agent-sandbox
     ../myconfig.ai/mysbx
-    ../myconfig.ai/hermes-agent
+    ./hermes-agent
     ./programs/programs.agent-browser
     ./programs/programs.agent-of-empires
     ./programs/programs.aichat.nix
@@ -51,7 +52,7 @@ in
     ./programs/programs.pi-coding-agent
     ./programs/programs.qwen-code
     ./programs/programs.rtk
-    ../myconfig.ai/skills
+    ./skills
     ../myconfig.ai/myconfig.ai.workmux
   ];
   config = lib.mkIf config.myconfig.ai.enable {
@@ -103,11 +104,11 @@ in
         home.packages =
           with pkgs;
           [
-            (callLib ../myconfig.ai/fns/bubblewrap-simple-app.nix {
+            (callLib ./fns/bubblewrap-simple-app.nix {
               name = "fish";
               pkg = fish;
             })
-            (callLib ../myconfig.ai/fns/bubblewrap-simple-app.nix {
+            (callLib ./fns/bubblewrap-simple-app.nix {
               name = "bash";
               pkg = bash;
             })

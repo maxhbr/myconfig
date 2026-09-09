@@ -83,7 +83,7 @@ shares the host store closure and reaches the network via the host"
 | Agent home/state | ephemeral guest `/home/agent`, **seeded once at launch** from an SSH-copied allowlist of every registered agent's `configPaths` (`agent-qemu-herdr.README.md`, "Agent-configuration seeding") | ephemeral guest `/home/agent` by default, seeded from a **root-owned read-only virtiofs share** staged before boot with the same allowlist/denylist model; **opt-in, task-scoped persistence** for agents that declare `persistentState.directories` (only `hermes` today) |
 
 Both tiers use the *same* seeding vocabulary
-(`modules/myconfig.ai/fns/seed-agent-config.nix`), so the credential denylist
+(`modules/myconfig.ai.dev/fns/seed-agent-config.nix`), so the credential denylist
 and allowlist syntax are identical; the transport differs (live SSH copy after
 boot vs. a pre-boot root-owned share).
 
@@ -158,7 +158,7 @@ The two are **not** a superset/subset pair — they overlap in *feature* (herdr
 inside a VM) but diverge in *mechanism and guarantees*:
 
 - Both reuse the identical config-seeding vocabulary
-  (`modules/myconfig.ai/fns/seed-agent-config.nix`) and the identical
+  (`modules/myconfig.ai.dev/fns/seed-agent-config.nix`) and the identical
   documented rationale for "why herdr" (compare
   `agent-qemu-herdr.README.md`'s "Why" with `agent-microvm.md`'s "herdr
   specifics" section — near-verbatim phrasing, deliberately kept in sync per

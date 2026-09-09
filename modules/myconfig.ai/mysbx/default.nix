@@ -51,7 +51,7 @@ let
   #   - `.config/ripgrep` ← ../../shell.programs.ripgrep.nix
   #   - `.config/bat`     ← ../../shell.programs.bat.nix
   #   - `.config/fish`    ← ../../programs.fish (only when fish is on)
-  # Same list as the `configDirs` default of ../fns/bubblewrap-app.nix.
+  # Same list as the `configDirs` default of ../myconfig.ai.dev/fns/bubblewrap-app.nix.
   # Each entry also carries a `dest` under the sandbox home (review-2
   # item 6). Without one, the mount lands at its host path
   # (`/home/mhuber/.config/git`) — a path that exists nowhere in the

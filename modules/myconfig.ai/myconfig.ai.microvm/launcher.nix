@@ -30,7 +30,7 @@
 #        verifies git-dir + git-common-dir resolve INSIDE the workspace and
 #        that the clone borrows no objects (no `objects/info/alternates`).
 #        The per-repo `<repoSlug>__agent-microvm/` group mirrors the
-#        `<basename>__worktrees` convention (../fns/workmux-worktree.nix), so
+#        `<basename>__worktrees` convention (../myconfig.ai.dev/fns/workmux-worktree.nix), so
 #        one repository's tasks land next to each other and never share a
 #        directory with another repo's.
 #   §26  Bind-mount lifecycle: mkdir `stateRoot/<slot>/workspace`,
@@ -1589,7 +1589,7 @@ let
       # `<parent>/<task>` (the `<parent>` is chosen by WORKSPACE_LAYOUT; see
       # `workspace_group`). The `__agent-microvm` suffix mirrors the
       # existing `<basename>__worktrees` convention (see
-      # modules/myconfig.ai/fns/workmux-worktree.nix and
+      # modules/myconfig.ai.dev/fns/workmux-worktree.nix and
       # modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix), so a human listing the workspace root can
       # tell a per-repo agent-microvm group from a workmux worktree group at a
       # glance. Two different repositories never share a clone directory, and

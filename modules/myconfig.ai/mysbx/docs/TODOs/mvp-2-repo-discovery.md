@@ -30,7 +30,7 @@ The sidecar is always `<repo>.mysbx`; repo and sidecar determine each other.
 - [ ] Hard error (exit `1`, `mysbx: ` prefix) when the resolved repo is
       `$HOME` or `/`. Not overridable in the MVP. This is the guard the
       existing wrappers call `rejectHomeCwd`
-      (`../../../fns/bubblewrap-app.nix`); under implicit init it prevents a
+      (`../../../myconfig.ai.dev/fns/bubblewrap-app.nix`); under implicit init it prevents a
       `rw` bind of the whole home under a policy nobody wrote.
 - [ ] Make `init` use the resolved repo instead of the raw CWD, and keep it
       idempotent (`config.md` D12).

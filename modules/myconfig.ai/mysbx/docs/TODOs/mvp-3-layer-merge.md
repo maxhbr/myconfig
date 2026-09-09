@@ -63,7 +63,7 @@ the granting (or missing) user-config entry. Never a warning.
   error.
 - Do not sort or deduplicate mounts silently: mount order is argv order, and a
   later `rw` bind nested inside an earlier `ro` bind is a real pattern
-  (`../../../fns/bubblewrap-app.nix` relies on it).
+  (`../../../myconfig.ai.dev/fns/bubblewrap-app.nix` relies on it).
 
 ## Done when
 

@@ -47,7 +47,7 @@ let
         osconfig
         ;
     };
-  jail-app = callJailLib ../fns/bubblewrap-app.nix;
+  jail-app = callJailLib ../../myconfig.ai.dev/fns/bubblewrap-app.nix;
 
   # Shell prelude that makes the GUI launcher detach from the calling shell.
   detachedGuiLauncher = import ../../../lib/detached-gui-launcher.nix { inherit lib pkgs; };

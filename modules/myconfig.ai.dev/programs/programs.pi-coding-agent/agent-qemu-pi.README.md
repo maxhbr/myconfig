@@ -65,7 +65,7 @@ for the user-space qemu tier (no privileged host daemon: staging + transfer
 happen entirely in the launcher, over the already-established SSH channel).
 
 What is seeded (the `pi` allowlist, from
-`modules/myconfig.ai/fns/seed-agent-config.nix`, mirroring
+`modules/myconfig.ai.dev/fns/seed-agent-config.nix`, mirroring
 `myconfig.ai.microvm/agents.nix`):
 
 - `.pi/agent/agents` — sample subagent definitions.

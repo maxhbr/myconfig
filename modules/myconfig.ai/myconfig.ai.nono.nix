@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # Shared options for the `nono` sandbox wrappers (`agent-nono-pi`,
-# `agent-nono-opencode`, `agent-nono-claude`, ...). See `./fns/nono-app.nix` for the
+# `agent-nono-opencode`, `agent-nono-claude`, ...). See `../myconfig.ai.dev/fns/nono-app.nix` for the
 # wrapper library and the matching `extraAllowDirs` / `extraReadOnlyDirs` arguments.
 { config, lib, ... }:
 {
@@ -21,7 +21,7 @@
         addition to the per-wrapper defaults (`TERM`, `COLORTERM`, `LANG`,
         `LC_ALL`, `EDITOR`, `VISUAL`) baked into `nono-app.nix`.
 
-        See `modules/myconfig.ai/fns/nono-app.nix` (`extraFwdEnv`) for the
+        See `modules/myconfig.ai.dev/fns/nono-app.nix` (`extraFwdEnv`) for the
         implementation.
       '';
     };

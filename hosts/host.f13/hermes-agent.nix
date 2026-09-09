@@ -22,7 +22,7 @@
   };
 
   # NOTE (microvm host wiring): the microvm.nix *host* module is imported and
-  # gated inside modules/myconfig.ai/hermes-agent/microvm.nix
+  # gated inside modules/myconfig.ai.dev/hermes-agent/microvm.nix
   # (`microvm.host.enable`: mkDefault false, flipped true here). Do NOT add a
   # separate hosts/host.f13/agent-sandbox.nix that also imports
   # `inputs.microvm.nixosModules.host` and blanket-enables
