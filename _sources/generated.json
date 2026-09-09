@@ -43,7 +43,7 @@
     },
     "litellm-grafana-dashboard": {
         "cargoLock": null,
-        "date": "2026-08-29",
+        "date": "2026-09-05",
         "extract": null,
         "name": "litellm-grafana-dashboard",
         "passthru": null,
@@ -52,13 +52,13 @@
             "name": "litellm-grafana-dashboard.json",
             "sha256": "sha256-EteGQo3xd5GvvkjKre7wqOZ6Hr/Yty78VZe6le55Zcw=",
             "type": "url",
-            "url": "https://raw.githubusercontent.com/BerriAI/litellm/10631eb834c7802aa61611e807474170b8a4d425/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
+            "url": "https://raw.githubusercontent.com/BerriAI/litellm/eeb7732fc11fd47762ca84cc3fb7cc74235d7097/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
         },
-        "version": "10631eb834c7802aa61611e807474170b8a4d425"
+        "version": "eeb7732fc11fd47762ca84cc3fb7cc74235d7097"
     },
     "simple-english": {
         "cargoLock": null,
-        "date": "2026-08-21",
+        "date": "2026-09-06",
         "extract": null,
         "name": "simple-english",
         "passthru": null,
@@ -70,11 +70,11 @@
             "name": null,
             "owner": "AminBlg",
             "repo": "SimpleEnglish",
-            "rev": "8e8a008a13e4b478f9ccc20ca16e79aef66c0739",
-            "sha256": "sha256-vOnXjdzdo+EtWB7wjjCeou53Y43I+1CvuDmen4tLYFo=",
+            "rev": "9ce426c79b1736c28af7e91f1b730e7a7cc3f468",
+            "sha256": "sha256-6R0efQpuAo9SgZSUIKXDUHFNj/AQOyLwbkp2ZMCVYGM=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "8e8a008a13e4b478f9ccc20ca16e79aef66c0739"
+        "version": "9ce426c79b1736c28af7e91f1b730e7a7cc3f468"
     }
 }
