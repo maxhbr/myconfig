@@ -6,7 +6,7 @@
 # wrapper library and the matching `extraAllowDirs` / `extraReadOnlyDirs` arguments.
 { config, lib, ... }:
 {
-  options.myconfig.ai.nono = with lib; {
+  options.myconfig.ai.dev.nono = with lib; {
     fwdEnvs = mkOption {
       type = types.listOf types.str;
       default = [ ];

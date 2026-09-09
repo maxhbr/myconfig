@@ -12,7 +12,7 @@
 # into each harness' skills directory). Hence the small `runCommand` below
 # that extracts just `SKILL.md` into its own directory.
 #
-# The skill is registered in the central `myconfig.ai.skills.handcrafted`
+# The skill is registered in the central `myconfig.ai.dev.skills.handcrafted`
 # registry; `skills/default.nix` deploys it to every enabled agent harness
 # (opencode, claude-code, codex, and pi-coding-agent). It is additionally
 # registered as a pi prompt template so `/bro` is typable in pi.
@@ -23,7 +23,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.skills.bro;
+  cfg = config.myconfig.ai.dev.skills.bro;
   # `rev`+`hash` pin lives in the nvfetcher-generated `_sources/generated.nix`
   # (bumped by `nix run nixpkgs#nvfetcher` / a scheduled CI job), not in
   # flake.lock. See ../../../nvfetcher.toml.
@@ -47,21 +47,21 @@ let
   '';
 in
 {
-  options.myconfig.ai.skills.bro = with lib; {
-    enable = mkEnableOption "myconfig.ai.skills.bro";
+  options.myconfig.ai.dev.skills.bro = with lib; {
+    enable = mkEnableOption "myconfig.ai.dev.skills.bro";
   };
 
   config = lib.mkMerge [
     # Enabled by default wherever the skills framework is in use; a host can
-    # opt out with `myconfig.ai.skills.bro.enable = false;`.
-    { myconfig.ai.skills.bro.enable = lib.mkDefault true; }
+    # opt out with `myconfig.ai.dev.skills.bro.enable = false;`.
+    { myconfig.ai.dev.skills.bro.enable = lib.mkDefault true; }
     (lib.mkIf cfg.enable {
       # Register the skill source; `skills/default.nix` applies it to every
       # enabled agent harness via the `handcrafted` registry.
-      myconfig.ai.skills.handcrafted.bro = skillDir;
+      myconfig.ai.dev.skills.handcrafted.bro = skillDir;
       # Also expose it as a pi prompt template (`/bro`), deployed to
       # `~/.pi/agent/prompts/bro.md` by `skills/default.nix`.
-      myconfig.ai.skills.handcraftedPrompts.bro = promptFile;
+      myconfig.ai.dev.skills.handcraftedPrompts.bro = promptFile;
     })
   ];
 }

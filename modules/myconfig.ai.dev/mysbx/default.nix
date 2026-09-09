@@ -1,11 +1,11 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.mysbx — the `mysbx` sandboxing CLI (see ./README.md).
+# myconfig.ai.dev.mysbx — the `mysbx` sandboxing CLI (see ./README.md).
 #
 # `mysbx` is the successor experiment to the other sandboxing tiers in this
-# repo (`myconfig.ai.jail`, `myconfig.ai.nono-agent-sandbox`,
-# `myconfig.ai.gvisor-agent-sandbox`, `myconfig.ai.microvm`): a single CLI
+# repo (`myconfig.ai.dev.jail`, `myconfig.ai.dev.nono-agent-sandbox`,
+# `myconfig.ai.dev.gvisor-agent-sandbox`, `myconfig.ai.dev.microvm`): a single CLI
 # that owns the sidecar directory next to a repository and drives the
 # underlying backend (bubblewrap first, containers/microvm later).
 #
@@ -15,10 +15,10 @@
 #
 # The module also generates the *user* configuration layer
 # (`~/.config/mysbx/config.toml`, see ./docs/design/config.md D6) from
-# `myconfig.ai.mysbx.config`: the host-wide layer, mounted into every
+# `myconfig.ai.dev.mysbx.config`: the host-wide layer, mounted into every
 # sandbox of this user. Per-agent modules (e.g.
 # ../programs/programs.pi-coding-agent/) are expected to extend
-# `myconfig.ai.mysbx.config.mounts` with their own agent config files.
+# `myconfig.ai.dev.mysbx.config.mounts` with their own agent config files.
 {
   config,
   lib,
@@ -26,7 +26,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.mysbx;
+  cfg = config.myconfig.ai.dev.mysbx;
 
   # Nix has no `builtins.toToml` (only `builtins.fromTOML`), so the
   # nixpkgs TOML generator is the equivalent: it renders `[[mounts]]`
@@ -65,7 +65,7 @@ let
     if lib.hasPrefix "~/" p then
       "/mysbx-home/" + lib.removePrefix "~/" p
     else
-      throw "myconfig.ai.mysbx: homeDest expects a `~/…` path, got `${p}`";
+      throw "myconfig.ai.dev.mysbx: homeDest expects a `~/…` path, got `${p}`";
 
   baselineMounts =
     map
@@ -255,8 +255,8 @@ let
   // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; };
 in
 {
-  options.myconfig.ai.mysbx = with lib; {
-    enable = mkEnableOption "myconfig.ai.mysbx";
+  options.myconfig.ai.dev.mysbx = with lib; {
+    enable = mkEnableOption "myconfig.ai.dev.mysbx";
 
     package = mkOption {
       type = types.package;
@@ -334,11 +334,11 @@ in
       # wrong default. `or null` keeps this module independent of that
       # module's existence, exactly like the workmux tier wiring.
       default =
-        if (config.myconfig.ai.agent-of-empires.enable or false) then
-          config.myconfig.ai.agent-of-empires.package
+        if (config.myconfig.ai.dev.agent-of-empires.enable or false) then
+          config.myconfig.ai.dev.agent-of-empires.package
         else
           null;
-      defaultText = literalExpression "config.myconfig.ai.agent-of-empires.package (when that module is enabled, else null)";
+      defaultText = literalExpression "config.myconfig.ai.dev.agent-of-empires.package (when that module is enabled, else null)";
       description = ''
         The Agent of Empires (`aoe`) package that runs *inside* the
         sandbox when `config.multiplexer = "aoe"`
@@ -407,7 +407,7 @@ in
       package = mkOption {
         type = types.nullOr types.package;
         default = null;
-        example = literalExpression "config.myconfig.ai.workmux.package";
+        example = literalExpression "config.myconfig.ai.dev.workmux.package";
         description = ''
           The workmux package that runs *inside* the sandbox (it lands
           on the sandbox `PATH` and in the entry script's closure).
@@ -491,7 +491,7 @@ in
             # something else simply sets this option; the *sidecar* of
             # a single repository overrides it either way (D17).
             default = if cfg.workmux.enable then "workmux" else "none";
-            defaultText = literalExpression ''if config.myconfig.ai.mysbx.workmux.enable then "workmux" else "none"'';
+            defaultText = literalExpression ''if config.myconfig.ai.dev.mysbx.workmux.enable then "workmux" else "none"'';
             description = ''
               Which terminal multiplexer the INTERACTIVE payload of
               every sandbox of this user is
@@ -689,7 +689,7 @@ in
         {
           assertion = offenders == [ ];
           message = ''
-            myconfig.ai.mysbx.config.mounts: these entries end up at an
+            myconfig.ai.dev.mysbx.config.mounts: these entries end up at an
             in-sandbox path inside the host home, which the sandbox
             deliberately does not have — `HOME` is `/mysbx-home`
             (docs/design/config.md D14), so nothing looks for them there:
@@ -703,8 +703,8 @@ in
           # cannot start (a run-time refusal, D16 — better caught here).
           assertion = cfg.workmux.enable -> cfg.workmux.package != null;
           message = ''
-            myconfig.ai.mysbx.workmux.enable is on but
-            myconfig.ai.mysbx.workmux.package is null — set it to the
+            myconfig.ai.dev.mysbx.workmux.enable is on but
+            myconfig.ai.dev.mysbx.workmux.package is null — set it to the
             workmux package that should run inside the sandbox (on
             myconfig hosts ../myconfig.ai.workmux/mysbx.nix does that).
           '';
@@ -718,11 +718,11 @@ in
           # user, discovered on the first `mysbx`.
           assertion = muxEntries.${cfg.config.multiplexer} or null != null;
           message = ''
-            myconfig.ai.mysbx.config.multiplexer is
+            myconfig.ai.dev.mysbx.config.multiplexer is
             "${cfg.config.multiplexer}", but this host carries no
             ${cfg.config.multiplexer} for the sandbox — set
-            myconfig.ai.mysbx.${cfg.config.multiplexer}.package (for
-            workmux: myconfig.ai.mysbx.workmux.enable, which
+            myconfig.ai.dev.mysbx.${cfg.config.multiplexer}.package (for
+            workmux: myconfig.ai.dev.mysbx.workmux.enable, which
             ../myconfig.ai.workmux/mysbx.nix does), or select another
             multiplexer (docs/design/config.md D17).
           '';
@@ -731,7 +731,7 @@ in
 
     # Baseline mounts; further definitions (from per-agent modules or the
     # host config) are concatenated onto this list.
-    myconfig.ai.mysbx.config.mounts = baselineMounts ++ workmuxMounts;
+    myconfig.ai.dev.mysbx.config.mounts = baselineMounts ++ workmuxMounts;
 
     # The selected multiplexer's own tooling, on the sandbox PATH: the
     # entries pin their own copies, but a PANE that runs the tool (the
@@ -740,7 +740,7 @@ in
     # a multiplexer launches come from the agent modules' own
     # `extraTools`. See `selectedMuxTools` for why only the selected
     # one is added.
-    myconfig.ai.mysbx.extraTools = selectedMuxTools;
+    myconfig.ai.dev.mysbx.extraTools = selectedMuxTools;
 
     # Baseline [env] (RIPGREP_CONFIG_PATH, review-3 item 6).
     #
@@ -755,7 +755,7 @@ in
     # here used to claim they override), and `mkDefault` on the whole
     # attrset would drop the entire baseline as soon as any other
     # module defines any key at all.
-    myconfig.ai.mysbx.config.env = lib.mapAttrs (_: lib.mkDefault) baselineEnv;
+    myconfig.ai.dev.mysbx.config.env = lib.mapAttrs (_: lib.mkDefault) baselineEnv;
 
     home-manager.sharedModules = [
       { home.packages = [ cfg.package ]; }

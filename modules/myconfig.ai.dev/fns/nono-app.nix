@@ -18,10 +18,10 @@
 #
 # All "default" lists (configDirs, devTools, fwdEnv, userDataDirs) can be
 # either replaced wholesale or extended via the matching `extra*` argument.
-# In addition, every wrapper inherits `myconfig.ai.nono.fwdEnvs` from the
+# In addition, every wrapper inherits `myconfig.ai.dev.nono.fwdEnvs` from the
 # NixOS config passed in as `osconfig` — see `globalFwdEnvs` below. This
 # extends the always-forwarded `OPENAI_API_KEY`. The shared sandbox tool
-# option `myconfig.ai.sandboxTools` (packages + env) is inherited the
+# option `myconfig.ai.dev.sandboxTools` (packages + env) is inherited the
 # same way — see `sharedTools`/`sharedEnv` below.
 #
 # The resulting derivation is a shell script that wraps the command in
@@ -30,7 +30,7 @@
 {
   lib,
   pkgs,
-  # The NixOS `config`, used to read the shared `myconfig.ai.nono.fwdEnvs`
+  # The NixOS `config`, used to read the shared `myconfig.ai.dev.nono.fwdEnvs`
   # option (see `../sandboxes/myconfig.ai.nono.nix`) so every `nono-app` wrapper picks
   # up the global forwarded-env list without each call site having to
   # pass it explicitly. Defaults to `{}` so the library still works standalone
@@ -117,7 +117,7 @@
   ],
   extraFwdEnv ? [ ],
   # NOTE: in addition to `fwdEnv` + `extraFwdEnv`, every wrapper inherits the
-  # shared `myconfig.ai.nono.fwdEnvs` list (read from `osconfig`); see
+  # shared `myconfig.ai.dev.nono.fwdEnvs` list (read from `osconfig`); see
   # `globalFwdEnvs` in the `let` below. Use `extraFwdEnv` only for
   # wrapper-specific variables.
 
@@ -168,10 +168,10 @@
 let
   # Environment variables forwarded from the host into *every* nono-app
   # wrapper. `OPENAI_API_KEY` is always forwarded; the shared
-  # `myconfig.ai.nono.fwdEnvs` option extends this base list so that
+  # `myconfig.ai.dev.nono.fwdEnvs` option extends this base list so that
   # adding a new wrapper requires no per-call wiring. `or [ ]` makes this
   # safe when `osconfig` is `{}` (standalone library use).
-  globalFwdEnvs = [ "OPENAI_API_KEY" ] ++ (osconfig.myconfig.ai.nono.fwdEnvs or [ ]);
+  globalFwdEnvs = [ "OPENAI_API_KEY" ] ++ (osconfig.myconfig.ai.dev.nono.fwdEnvs or [ ]);
 
   allFwdEnvs = fwdEnv ++ extraFwdEnv ++ globalFwdEnvs;
 
@@ -179,8 +179,8 @@ let
   # appended to the tool set below for EVERY `nono-app` wrapper, and env
   # vars set unconditionally. Wrapper-specific `extraRuntimeEnv` wins over
   # `sharedEnv` on a name clash.
-  sharedTools = osconfig.myconfig.ai.sandboxTools.extraPackages or [ ];
-  sharedEnv = osconfig.myconfig.ai.sandboxTools.extraEnv or { };
+  sharedTools = osconfig.myconfig.ai.dev.sandboxTools.extraPackages or [ ];
+  sharedEnv = osconfig.myconfig.ai.dev.sandboxTools.extraEnv or { };
 
   allRuntimeEnv = sharedEnv // extraRuntimeEnv;
 

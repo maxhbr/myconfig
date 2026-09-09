@@ -34,8 +34,8 @@ in
   ];
   options.myconfig.ai.enable = lib.mkEnableOption "myconfig.ai";
   config = lib.mkIf config.myconfig.ai.enable {
-    myconfig.ai.aichat.enable = true;
-    myconfig.ai.llm.enable = true;
+    myconfig.ai.dev.aichat.enable = true;
+    myconfig.ai.dev.llm.enable = true;
     services.udev.extraRules = ''
       SUBSYSTEM=="accel", GROUP="render", MODE="0660"
     '';

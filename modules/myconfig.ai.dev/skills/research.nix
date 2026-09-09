@@ -9,7 +9,7 @@
 # structured report for handoff. Unlike the upstream sample agents (whose
 # `model:` line is stripped), this handcrafted agent keeps its `model:`
 # frontmatter so research sub-agents run on a fast/cheap model. Registered
-# in the `myconfig.ai.skills.handcraftedAgents` and `handcraftedPrompts`
+# in the `myconfig.ai.dev.skills.handcraftedAgents` and `handcraftedPrompts`
 # registries; `skills/default.nix` deploys both on every host with
 # pi-coding-agent enabled.
 {
@@ -18,20 +18,20 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.skills.research;
+  cfg = config.myconfig.ai.dev.skills.research;
 in
 {
-  options.myconfig.ai.skills.research = with lib; {
-    enable = mkEnableOption "myconfig.ai.skills.research";
+  options.myconfig.ai.dev.skills.research = with lib; {
+    enable = mkEnableOption "myconfig.ai.dev.skills.research";
   };
 
   config = lib.mkMerge [
-    { myconfig.ai.skills.research.enable = lib.mkDefault true; }
+    { myconfig.ai.dev.skills.research.enable = lib.mkDefault true; }
     (lib.mkIf cfg.enable {
-      myconfig.ai.skills.handcraftedAgents.research = ./research/agent.md;
+      myconfig.ai.dev.skills.handcraftedAgents.research = ./research/agent.md;
       # Expose the workflow as a pi prompt template (`/research`), deployed
       # to `~/.pi/agent/prompts/research.md` by `skills/default.nix`.
-      myconfig.ai.skills.handcraftedPrompts.research = ./research/prompt.md;
+      myconfig.ai.dev.skills.handcraftedPrompts.research = ./research/prompt.md;
     })
   ];
 }

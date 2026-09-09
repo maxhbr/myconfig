@@ -14,7 +14,7 @@
 #
 # All host-specific values (user, group, model, baseUrl, port, HASS URL,
 # extraPackages, stateDir, secretsDir, toolsets, telegram) are read from
-# `config.myconfig.ai.hermes.*` options declared in service.nix. Override
+# `config.myconfig.ai.dev.hermes.*` options declared in service.nix. Override
 # them per-host; the defaults live in the option declarations.
 #
 # NOTE: `hermesServiceCfg.settings` declares `compression` twice (once with
@@ -33,7 +33,7 @@
 }:
 let
   hostConfig = config;
-  cfg = config.myconfig.ai.hermes;
+  cfg = config.myconfig.ai.dev.hermes;
 
   stateDir = cfg.stateDir;
   secretsDir = cfg.secretsDir;

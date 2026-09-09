@@ -14,7 +14,7 @@
 }:
 {
   config = {
-    myconfig.ai.hermes = {
+    myconfig.ai.dev.hermes = {
       enable = true;
       hassUrl = "http://hass.nuc.wg0.maxhbr.local";
       telegram = {

@@ -17,18 +17,18 @@
 # and copying out `.agents/skills/beads/`. This keeps the skill in sync
 # with the CLI version instead of being a stale vendored copy. It ships
 # upstream alongside an `agents/openai.yaml` interface manifest, which is
-# preserved. Registered in `myconfig.ai.skills.handcrafted`, which
+# preserved. Registered in `myconfig.ai.dev.skills.handcrafted`, which
 # ../skills/default.nix deploys to every enabled agent harness (opencode,
 # claude-code, codex, pi via the shared `~/.agents/skills/`); implicitly
 # enabled by this module — there is no separate enable flag.
 #
 # Like `rtk` and `hunk`, this module is auto-enabled by the `myconfig.ai`
-# umbrella (`myconfig.ai.beads.enable = lib.mkDefault true` in ../default.nix):
+# umbrella (`myconfig.ai.dev.beads.enable = lib.mkDefault true` in ../default.nix):
 # persistent memory and issue tracking is part of every agentic coding
 # workflow and the cost is one small binary plus a generated config file.
 # The `enable` option itself still defaults to false, so a host without
 # `myconfig.ai.enable` never gets beads, and a host can opt out with
-# `myconfig.ai.beads.enable = false;`.
+# `myconfig.ai.dev.beads.enable = false;`.
 {
   config,
   lib,
@@ -36,7 +36,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.beads;
+  cfg = config.myconfig.ai.dev.beads;
 
   tomlFormat = pkgs.formats.toml { };
 
@@ -89,8 +89,8 @@ let
 in
 {
   options.myconfig = with lib; {
-    ai.beads = {
-      enable = mkEnableOption "myconfig.ai.beads";
+    ai.dev.beads = {
+      enable = mkEnableOption "myconfig.ai.dev.beads";
 
       package = mkPackageOption pkgs "beads" { };
 
@@ -118,9 +118,9 @@ in
     # Install the beads skill for every enabled agent harness; string form
     # (the derivation's outPath), same convention as the herdr skill
     # registration in ../programs.herdr.nix.
-    myconfig.ai.skills.handcrafted.beads = "${beadsSkillSrc}";
+    myconfig.ai.dev.skills.handcrafted.beads = "${beadsSkillSrc}";
 
-    myconfig.ai.beads.settings = {
+    myconfig.ai.dev.beads.settings = {
       # Default configuration for beads. Users can override these in their
       # own config files or via per-repository settings.
       graph_dir = ".beads";
@@ -133,13 +133,13 @@ in
     # beads follows this module's enable gate, the same way the agent CLIs
     # are gated: a host without beads keeps its sandbox closures unchanged.
     #
-    # `myconfig.ai.sandboxTools.extraPackages` reaches every tier that
+    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `myconfig.ai.microvm` guests, the `sandboxed-*` qemu runners and the
+    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners and the
     # gVisor image); mysbx has its own `extraTools` extension point.
-    myconfig.ai.sandboxTools.extraPackages = [ package ];
+    myconfig.ai.dev.sandboxTools.extraPackages = [ package ];
 
-    myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
+    myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ package ];
       config.mounts = [
         {

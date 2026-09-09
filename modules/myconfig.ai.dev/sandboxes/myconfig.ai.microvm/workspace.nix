@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — the AUTHORITY over where a task's standalone clone
+# myconfig.ai.dev.microvm — the AUTHORITY over where a task's standalone clone
 # lives and how it is found again (see ./docs/workspace-layout.md).
 #
 # Two things are decided here, and nowhere else:
@@ -27,7 +27,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
 
   paths = rec {
     # Storage root of the `central` layout. Under `beside-repo` nothing is

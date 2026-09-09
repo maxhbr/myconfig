@@ -8,7 +8,7 @@
 # `_sources/generated.nix`); only the `skills/simple-english` subdirectory of
 # the upstream repo is registered.
 #
-# The skill is registered in the central `myconfig.ai.skills.handcrafted`
+# The skill is registered in the central `myconfig.ai.dev.skills.handcrafted`
 # registry; `skills/default.nix` deploys it to every enabled agent harness
 # (opencode, claude-code, codex, and pi-coding-agent).
 {
@@ -18,7 +18,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.skills.simple-english;
+  cfg = config.myconfig.ai.dev.skills.simple-english;
   # `rev`+`hash` pin lives in the nvfetcher-generated `_sources/generated.nix`
   # (bumped by `nix run nixpkgs#nvfetcher` / a scheduled CI job), not in
   # flake.lock. See ../../../nvfetcher.toml.
@@ -26,18 +26,18 @@ let
   skillDir = "${simple-english}/skills/simple-english";
 in
 {
-  options.myconfig.ai.skills.simple-english = with lib; {
-    enable = mkEnableOption "myconfig.ai.skills.simple-english";
+  options.myconfig.ai.dev.skills.simple-english = with lib; {
+    enable = mkEnableOption "myconfig.ai.dev.skills.simple-english";
   };
 
   config = lib.mkMerge [
     # Enabled by default wherever the skills framework is in use; a host can
-    # opt out with `myconfig.ai.skills.simple-english.enable = false;`.
-    { myconfig.ai.skills.simple-english.enable = lib.mkDefault true; }
+    # opt out with `myconfig.ai.dev.skills.simple-english.enable = false;`.
+    { myconfig.ai.dev.skills.simple-english.enable = lib.mkDefault true; }
     (lib.mkIf cfg.enable {
       # Register the skill source; `skills/default.nix` applies it to every
       # enabled agent harness via the `handcrafted` registry.
-      myconfig.ai.skills.handcrafted.simple-english = skillDir;
+      myconfig.ai.dev.skills.handcrafted.simple-english = skillDir;
     })
   ];
 }

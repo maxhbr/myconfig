@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.workmux.jail — run the *whole* workmux/tmux session inside a
+# myconfig.ai.dev.workmux.jail — run the *whole* workmux/tmux session inside a
 # single bubblewrap jail and pop it up in a dedicated Alacritty window.
 #
 # Unlike the per-agent jails (`agent-bubblewrap-pi`, ...) which sandbox one agent binary
@@ -32,9 +32,9 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.workmux.jail;
-  wmCfg = config.myconfig.ai.workmux;
-  aiCfg = config.myconfig.ai;
+  cfg = config.myconfig.ai.dev.workmux.jail;
+  wmCfg = config.myconfig.ai.dev.workmux;
+  aiCfg = config.myconfig.ai.dev;
   osconfig = config;
 
   callJailLib =
@@ -79,7 +79,7 @@ let
   # the "No models available / No API key" breakage. The jail is already the
   # sandbox, so here the `pi` agent must be the *plain* pi binary. Everything
   # else (nerdfont, the `<agent>` pane layout, the default `agent`) is inherited
-  # verbatim from `myconfig.ai.workmux.settings`.
+  # verbatim from `myconfig.ai.dev.workmux.settings`.
   jailWorkmuxConfig = {
     agents = lib.optionalAttrs aiCfg.pi-coding-agent.enable {
       pi = {
@@ -268,17 +268,17 @@ let
   };
 in
 {
-  options.myconfig.ai.workmux.jail = with lib; {
+  options.myconfig.ai.dev.workmux.jail = with lib; {
     enable = mkOption {
       type = types.bool;
       default = wmCfg.enable;
-      defaultText = literalExpression "config.myconfig.ai.workmux.enable";
+      defaultText = literalExpression "config.myconfig.ai.dev.workmux.enable";
       description = ''
         Provide `agent-bubblewrap-alacritty-workmux-tmux` (and the underlying
         `agent-bubblewrap-workmux-tmux` jail): run the whole workmux/tmux session — main
         repo, worktrees, agents — inside a single bubblewrap jail on a private
         tmux socket, opened in a dedicated Alacritty window. Defaults to on
-        wherever `myconfig.ai.workmux` is enabled.
+        wherever `myconfig.ai.dev.workmux` is enabled.
       '';
     };
   };

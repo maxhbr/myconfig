@@ -5,6 +5,9 @@
   ...
 }:
 let
+  # `myconfig.ai.localModels` is NOT a dev-tooling option (it stays under
+  # `myconfig.ai`, see ../../myconfig.ai/myconfig.localModels.nix), so this
+  # binding intentionally reads the umbrella attrset.
   cfg = config.myconfig.ai;
   generateModelConfig =
     model:
@@ -28,12 +31,12 @@ let
 in
 {
   options.myconfig = with lib; {
-    ai.llm = {
-      enable = mkEnableOption "myconfig.ai.llm";
+    ai.dev.llm = {
+      enable = mkEnableOption "myconfig.ai.dev.llm";
     };
   };
 
-  config = lib.mkIf config.myconfig.ai.llm.enable {
+  config = lib.mkIf config.myconfig.ai.dev.llm.enable {
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [

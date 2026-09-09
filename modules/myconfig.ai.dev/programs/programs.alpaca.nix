@@ -6,11 +6,11 @@
 }:
 {
   options.myconfig = with lib; {
-    ai.alpaca = {
-      enable = mkEnableOption "myconfig.ai.alpaca";
+    ai.dev.alpaca = {
+      enable = mkEnableOption "myconfig.ai.dev.alpaca";
     };
   };
-  config = lib.mkIf config.myconfig.ai.alpaca.enable {
+  config = lib.mkIf config.myconfig.ai.dev.alpaca.enable {
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [ alpaca ];

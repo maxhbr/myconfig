@@ -24,12 +24,12 @@
 # user's own choice. Nothing in this module ever executes `ccusage`.
 #
 # Like `rtk`, `hunk` and `beads`, this module is auto-enabled by the
-# `myconfig.ai` umbrella (`myconfig.ai.ccusage.enable = lib.mkDefault true`
+# `myconfig.ai` umbrella (`myconfig.ai.dev.ccusage.enable = lib.mkDefault true`
 # in ../default.nix): analyzing agent token usage and cost is part of every
 # agentic coding workflow and the cost is one small binary. The `enable`
 # option itself still defaults to false, so a host without
 # `myconfig.ai.enable` never gets ccusage, and a host can opt out with
-# `myconfig.ai.ccusage.enable = false;`.
+# `myconfig.ai.dev.ccusage.enable = false;`.
 {
   config,
   lib,
@@ -37,12 +37,12 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.ccusage;
+  cfg = config.myconfig.ai.dev.ccusage;
 in
 {
   options.myconfig = with lib; {
-    ai.ccusage = {
-      enable = mkEnableOption "myconfig.ai.ccusage";
+    ai.dev.ccusage = {
+      enable = mkEnableOption "myconfig.ai.dev.ccusage";
 
       package = mkPackageOption pkgs "ccusage" { };
     };
@@ -56,14 +56,14 @@ in
     # gate, the same way the agent CLIs are gated: a host without ccusage
     # keeps its sandbox closures unchanged.
     #
-    # `myconfig.ai.sandboxTools.extraPackages` reaches every tier that
+    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `myconfig.ai.microvm` guests, the `sandboxed-*` qemu runners and the
+    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners and the
     # gVisor image); mysbx has its own `extraTools` extension point (see
     # ../programs.hunk and ../programs.rtk for the same pair of hooks).
-    myconfig.ai.sandboxTools.extraPackages = [ cfg.package ];
+    myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
 
-    myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
+    myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ cfg.package ];
     };
 

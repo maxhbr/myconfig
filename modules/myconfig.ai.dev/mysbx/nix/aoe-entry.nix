@@ -23,8 +23,8 @@
   bashInteractive,
   tmux,
   # The agent-of-empires package that runs inside the sandbox
-  # (`myconfig.ai.mysbx.aoe.package`, normally
-  # `myconfig.ai.agent-of-empires.package`).
+  # (`myconfig.ai.dev.mysbx.aoe.package`, normally
+  # `myconfig.ai.dev.agent-of-empires.package`).
   aoe,
 }:
 let

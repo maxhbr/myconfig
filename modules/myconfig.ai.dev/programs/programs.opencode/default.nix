@@ -25,7 +25,7 @@ let
   # Make the `workmux` binary available inside the sandboxes (for the
   # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
   # a worktree pane) whenever workmux is enabled.
-  workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
+  workmuxDevTools = lib.optional osconfig.myconfig.ai.dev.workmux.enable osconfig.myconfig.ai.dev.workmux.package;
 
   # home-manager uses `useGlobalPkgs`, so `pkgs.opencode` is the same package
   # `programs.opencode.package` defaults to. Building the wrappers at the
@@ -74,7 +74,7 @@ let
     agentName = "opencode";
     agentType = "opencode";
     innerPkg = opencodeBwrap;
-    workmuxPkg = osconfig.myconfig.ai.workmux.package;
+    workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
@@ -83,7 +83,7 @@ let
     agentName = "agent-bubblewrap-opencode";
     agentType = "opencode";
     innerPkg = agent-bubblewrap-opencode-worktree-inner;
-    workmuxPkg = osconfig.myconfig.ai.workmux.package;
+    workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
@@ -93,7 +93,7 @@ let
   # opencode is wired into the `mysbx` sandbox tier the same way pi is
   # (../programs.pi-coding-agent/default.nix):
   #
-  #   1. the `opencode` binary on the sandbox PATH -> `myconfig.ai.mysbx.extraTools`
+  #   1. the `opencode` binary on the sandbox PATH -> `myconfig.ai.dev.mysbx.extraTools`
   #   2. opencode's *configuration* visible inside the sandbox -> read-only
   #      mounts in the generated user config layer (`…mysbx.config.mounts`).
   #   3. opencode's *state* persists across runs -> `state-dirs` entries
@@ -174,14 +174,14 @@ let
 in
 {
   options.myconfig = with lib; {
-    ai.opencode = {
-      enable = mkEnableOption "myconfig.ai.opencode";
+    ai.dev.opencode = {
+      enable = mkEnableOption "myconfig.ai.dev.opencode";
     };
   };
-  config = lib.mkIf config.myconfig.ai.opencode.enable {
-    myconfig.ai.skills.playwright.enable = lib.mkDefault true;
-    myconfig.ai.workmux.agents.opencode = opencodeWorktree.agent;
-    myconfig.ai.workmux.agents.agent-bubblewrap-opencode = agentBubblewrapOpencodeWorktree.agent;
+  config = lib.mkIf config.myconfig.ai.dev.opencode.enable {
+    myconfig.ai.dev.skills.playwright.enable = lib.mkDefault true;
+    myconfig.ai.dev.workmux.agents.opencode = opencodeWorktree.agent;
+    myconfig.ai.dev.workmux.agents.agent-bubblewrap-opencode = agentBubblewrapOpencodeWorktree.agent;
 
     # mysbx tier integration (see `mysbxOpencodeMounts` above). Gated on
     # mysbx being enabled too: the two features are independent, and the
@@ -191,7 +191,7 @@ in
     # and TUI state persist per repository in the sidecar
     # (../mysbx/docs/design/config.md D15) instead of dying with the
     # tmpfs home.
-    myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
+    myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pkgs.opencode ];
       config.mounts = mysbxOpencodeMounts;
       config.stateDirs = [

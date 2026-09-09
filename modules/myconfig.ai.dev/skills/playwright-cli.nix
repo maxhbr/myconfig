@@ -5,12 +5,12 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.skills.playwright;
+  cfg = config.myconfig.ai.dev.skills.playwright;
   playwright-cli = pkgs.playwright-cli;
 in
 {
-  options.myconfig.ai.skills.playwright = with lib; {
-    enable = mkEnableOption "myconfig.ai.skills.playwright";
+  options.myconfig.ai.dev.skills.playwright = with lib; {
+    enable = mkEnableOption "myconfig.ai.dev.skills.playwright";
     browserName = mkOption {
       type = types.enum [
         "chromium"
@@ -23,7 +23,7 @@ in
   config = lib.mkIf cfg.enable {
     # Register the skill source (NixOS-level); `skills/default.nix` applies
     # it to every enabled agent harness via the `handcrafted` registry.
-    myconfig.ai.skills.handcrafted.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
+    myconfig.ai.dev.skills.handcrafted.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
 
     home-manager.sharedModules = [
       (

@@ -1,9 +1,9 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.hermes — NixOS declarative container backend.
+# myconfig.ai.dev.hermes — NixOS declarative container backend.
 #
-# When `myconfig.ai.hermes.enable` and `myconfig.ai.hermes.container.enable`
+# When `myconfig.ai.dev.hermes.enable` and `myconfig.ai.dev.hermes.container.enable`
 # are both true, runs the hermes-agent gateway inside an isolated NixOS
 # declarative container (`containers.hermes`) instead of as a host-level
 # systemd service (see service.nix). The container reuses the same
@@ -37,7 +37,7 @@ let
     secretsDir
     hostConfig
     ;
-  cfg = config.myconfig.ai.hermes;
+  cfg = config.myconfig.ai.dev.hermes;
 in
 {
   config = lib.mkIf (cfg.enable && cfg.container.enable) {

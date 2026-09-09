@@ -1,10 +1,10 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — Workmux agent registrations (plan §29).
+# myconfig.ai.dev.microvm — Workmux agent registrations (plan §29).
 #
 # Register the microvm-claude / microvm-pi / microvm-codex / microvm-opencode
-# agents into the EXISTING `myconfig.ai.workmux.agents` registry (the same
+# agents into the EXISTING `myconfig.ai.dev.workmux.agents` registry (the same
 # registry the pi / claude-code / codex / opencode modules use). We do NOT
 # modify the workmux module or invent a parallel mechanism — an agent is just
 # a `{ type; command; }` entry that workmux renders into
@@ -31,7 +31,7 @@
 #
 #     workmux add --agent microvm-claude feature-name
 #
-# Everything is gated on BOTH `cfg.enable` and `config.myconfig.ai.workmux.enable`,
+# Everything is gated on BOTH `cfg.enable` and `config.myconfig.ai.dev.workmux.enable`,
 # so a disabled feature — or a host without workmux — produces zero side
 # effects. NOTE: this BOTH-gate is deliberately STRICTER than the existing
 # agents (e.g. programs.claude-code registers gated only on its own
@@ -53,8 +53,8 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
-  workmuxCfg = config.myconfig.ai.workmux;
+  cfg = config.myconfig.ai.dev.microvm;
+  workmuxCfg = config.myconfig.ai.dev.workmux;
 
   # Fixed agent set (§29), GENERATED from the AUTHORITATIVE registry in
   # ./agents.nix: each entry's `workmuxName` becomes the `agents.<name>` key,
@@ -77,7 +77,7 @@ let
   # inherited/ambient PATH rather than `runtimeInputs` — post-`sudo`,
   # `agent-microvm` resolves via sudoers `secure_path` ->
   # /run/current-system/sw/bin (where launcher.nix installs it). Whether the
-  # pane prompts for a password depends on `myconfig.ai.microvm`
+  # pane prompts for a password depends on `myconfig.ai.dev.microvm`
   # `.passwordlessControl`: when true (opt-in), launcher.nix grants the
   # operator a scoped NOPASSWD+SETENV rule for exactly `agent-microvm`, so
   # these panes launch without a prompt AND the `--preserve-env` below is
@@ -149,7 +149,7 @@ in
   # Register only when the feature is enabled AND workmux is active on this
   # host (the existing agents guard their registration the same way).
   config = lib.mkIf (cfg.enable && workmuxCfg.enable && agentCapabilities.interactive) {
-    myconfig.ai.workmux.agents = lib.mapAttrs' (
+    myconfig.ai.dev.workmux.agents = lib.mapAttrs' (
       _: spec: lib.nameValuePair spec.workmuxName (mkAgent spec)
     ) agentRegistry.agents;
   };

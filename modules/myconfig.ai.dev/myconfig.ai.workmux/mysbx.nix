@@ -1,9 +1,9 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.workmux.mysbx — the `mysbx` counterpart of
-# `myconfig.ai.workmux.jail` (bubblewrap, `agent-bubblewrap-workmux-tmux`)
-# and `myconfig.ai.workmux.sandbox` (microVM, `agent-qemu-workmux-tmux`).
+# myconfig.ai.dev.workmux.mysbx — the `mysbx` counterpart of
+# `myconfig.ai.dev.workmux.jail` (bubblewrap, `agent-bubblewrap-workmux-tmux`)
+# and `myconfig.ai.dev.workmux.sandbox` (microVM, `agent-qemu-workmux-tmux`).
 #
 # Same model as those two — one sandbox owns the whole tmux/workmux
 # session, and the agents workmux launches run *inside* it, un-jailed —
@@ -33,9 +33,9 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.workmux.mysbx;
-  wmCfg = config.myconfig.ai.workmux;
-  aiCfg = config.myconfig.ai;
+  cfg = config.myconfig.ai.dev.workmux.mysbx;
+  wmCfg = config.myconfig.ai.dev.workmux;
+  aiCfg = config.myconfig.ai.dev;
 
   # The workmux configuration used *inside* the mysbx sandbox. Like the
   # jail tier's `jailWorkmuxConfig` (./jail.nix), the `pi` named agent
@@ -44,7 +44,7 @@ let
   # fresh tmpfs home, losing pi's configuration and credentials.
   #
   # The command is the bare name, resolved from the sandbox `PATH`:
-  # ../programs/programs.pi-coding-agent adds pi to `myconfig.ai.mysbx.extraTools`
+  # ../programs/programs.pi-coding-agent adds pi to `myconfig.ai.dev.mysbx.extraTools`
   # under the same condition, so the binary the sandbox has is the
   # binary this config names.
   sandboxAgents = lib.optionalAttrs aiCfg.pi-coding-agent.enable {
@@ -55,23 +55,23 @@ let
   };
 in
 {
-  options.myconfig.ai.workmux.mysbx = with lib; {
+  options.myconfig.ai.dev.workmux.mysbx = with lib; {
     enable = mkOption {
       type = types.bool;
       default = wmCfg.enable;
-      defaultText = literalExpression "config.myconfig.ai.workmux.enable";
+      defaultText = literalExpression "config.myconfig.ai.dev.workmux.enable";
       description = ''
         Make the interactive payload of every `mysbx` sandbox a workmux
         tmux session (on a socket inside the sandbox — see
         ../mysbx/docs/design/config.md D16). Defaults to on wherever
-        `myconfig.ai.workmux` is enabled; it only takes effect on hosts
-        that also enable `myconfig.ai.mysbx`.
+        `myconfig.ai.dev.workmux` is enabled; it only takes effect on hosts
+        that also enable `myconfig.ai.dev.mysbx`.
       '';
     };
   };
 
   config = lib.mkIf (wmCfg.enable && cfg.enable && aiCfg.mysbx.enable) {
-    myconfig.ai.mysbx.workmux = {
+    myconfig.ai.dev.mysbx.workmux = {
       enable = true;
       inherit (wmCfg) package;
       # Everything but the agents is inherited verbatim from the host

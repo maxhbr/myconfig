@@ -10,7 +10,7 @@
 #   * `mkSandboxedRunner`         — generic parameterized qemu runner builder.
 #     * `mkSeedScript`         — builds the `seed-agent-config` host-side
 #                                 seeder for a given config-path allowlist
-#                                 (see modules/myconfig.ai/fns/seed-agent-config.nix).
+#                                 (see modules/myconfig.ai.dev/fns/seed-agent-config.nix).
 #   * `mkAgentQemuPiRunner`       — thin wrapper: one workspace + `pi`.
 #                                   Backs `agent-qemu-pi` (agent-bubblewrap-pi analogue).
 #   * `mkAgentQemuHerdrRunner`    — thin wrapper: one workspace + `herdr` and
@@ -23,8 +23,8 @@
 #                                   (agent-bubblewrap-alacritty-workmux-tmux analogue).
 #
 # The host-side wrappers (see
-# `modules/myconfig.ai/programs.pi-coding-agent/default.nix` and
-# `modules/myconfig.ai/myconfig.ai.workmux/sandbox.nix`) evaluate these per
+# `modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix` and
+# `modules/myconfig.ai.dev/myconfig.ai.workmux/sandbox.nix`) evaluate these per
 # invocation via a standalone impure Nix expression, passing the current working directory
 # as the workspace. This is the "wrapper that evaluates a parameterized flake
 # output" execution model — the guest system closure is cached; only a tiny
@@ -61,7 +61,7 @@
 # RELEVANT, ALLOWLISTED host configuration into the guest `/home/agent` over
 # the SSH channel at launch (after the VM boots, before the agent is exec'd) —
 # see `mkSeedScript` below and
-# modules/myconfig.ai/fns/seed-agent-config.nix. Only non-sensitive
+# modules/myconfig.ai.dev/fns/seed-agent-config.nix. Only non-sensitive
 # configuration (settings, extensions, themes, skills) is copied; credential
 # files are excluded by a denylist applied to every path component AND the
 # resolved target, so secrets never touch the Nix store (they keep flowing
@@ -75,7 +75,7 @@
 }:
 let
   # The shared host→guest agent-config seeder library
-  # (modules/myconfig.ai/fns/seed-agent-config.nix). Imported once so every
+  # (modules/myconfig.ai.dev/fns/seed-agent-config.nix). Imported once so every
   # runner factory shares the same allowlist/denylist vocabulary. Resolved
   # against x86_64-linux (the only sandboxed-* host platform); the library is
   # platform-independent (it only uses lib + writeShellApplication).
@@ -89,7 +89,7 @@ let
   # `bin/` so the host wrapper can invoke it as
   #   $runner/bin/seed-agent-config <ssh-port> <identity> <host> <user>
   # after the VM boots. The allowlist + denylist are baked in; the script takes
-  # no policy argument. See modules/myconfig.ai/fns/seed-agent-config.nix.
+  # no policy argument. See modules/myconfig.ai.dev/fns/seed-agent-config.nix.
   mkSeedScript =
     { system, configPaths }:
     if configPaths == [ ] then
@@ -144,7 +144,7 @@ let
       hostUid ? null,
       hostGid ? null,
       # The host→guest config-seed allowlist (a union of per-agent
-      # `configPaths`, see modules/myconfig.ai/fns/seed-agent-config.nix).
+      # `configPaths`, see modules/myconfig.ai.dev/fns/seed-agent-config.nix).
       # When non-empty, a `bin/seed-agent-config` seeder script is built into
       # the runner output so the host wrapper can copy the allowlisted host
       # configuration into the guest home over SSH at launch. When empty
@@ -153,7 +153,7 @@ let
       seedConfigPaths ? [ ],
 
       # Shared sandbox tooling (see
-      # modules/myconfig.ai/myconfig.ai.sandboxTools.nix): store-path strings
+      # modules/myconfig.ai.dev/sandboxes/myconfig.ai.sandboxTools.nix): store-path strings
       # baked into a `SANDBOXED_*_EXTRA_PACKAGES` JSON env var by the host-side
       # wrapper (same pattern as `AGENT_QEMU_HERDR_AGENT_PACKAGES`) and passed
       # through by `runner.nix`. Folded into ONE
@@ -472,7 +472,7 @@ in
   # the guest gets `herdr` (the agent multiplexer the user is dropped into)
   # plus whichever coding-agent CLIs `herdr` is expected to start from inside
   # the VM — the same set the gVisor sandbox image bakes in (see
-  # modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix,
+  # modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/default.nix,
   # `agentPackagesByFlag`). The host wrapper execs `herdr` (not `pi`) over SSH;
   # from within that `herdr` session the user starts `pi` / `opencode` / etc.
   mkAgentQemuHerdrRunner =

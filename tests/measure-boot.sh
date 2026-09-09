@@ -2,7 +2,7 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# REAL-KVM measurement harness for the `myconfig.ai.microvm` agent-sandbox tier
+# REAL-KVM measurement harness for the `myconfig.ai.dev.microvm` agent-sandbox tier
 # (lightweight plan phase 0, "add a repeatable benchmark script", and the phase-6
 # acceptance measurements).
 #
@@ -116,8 +116,8 @@ static_json() {
         host = \"${HOST_ATTR}\";
         network_profile = net.profile;
         model_transport = net.transport;
-        capabilities = cfg.myconfig.ai.microvm.capabilities;
-        enabled_agents = cfg.myconfig.ai.microvm.enabledAgents;
+        capabilities = cfg.myconfig.ai.dev.microvm.capabilities;
+        enabled_agents = cfg.myconfig.ai.dev.microvm.enabledAgents;
         slots = lib.genAttrs vmNames per;
       }
     "

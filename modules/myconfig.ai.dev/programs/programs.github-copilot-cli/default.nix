@@ -9,11 +9,11 @@
 
 {
   options.myconfig = with lib; {
-    ai.github-copilot-cli = {
-      enable = mkEnableOption "myconfig.ai.github-copilot-cli";
+    ai.dev.github-copilot-cli = {
+      enable = mkEnableOption "myconfig.ai.dev.github-copilot-cli";
     };
   };
-  config = lib.mkIf config.myconfig.ai.github-copilot-cli.enable {
+  config = lib.mkIf config.myconfig.ai.dev.github-copilot-cli.enable {
     home-manager.sharedModules = [
       (
         {

@@ -7,7 +7,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.skills.grafana-core;
+  cfg = config.myconfig.ai.dev.skills.grafana-core;
   # `rev`+`hash` pin lives in the nvfetcher-generated `_sources/generated.nix`
   # (bumped by `nix run nixpkgs#nvfetcher` / a scheduled CI job), not in
   # flake.lock. See ../../../nvfetcher.toml.
@@ -30,12 +30,12 @@ let
   );
 in
 {
-  options.myconfig.ai.skills.grafana-core = with lib; {
-    enable = mkEnableOption "myconfig.ai.skills.grafana-core";
+  options.myconfig.ai.dev.skills.grafana-core = with lib; {
+    enable = mkEnableOption "myconfig.ai.dev.skills.grafana-core";
   };
   config = lib.mkIf cfg.enable {
     # Register the skill sources; `skills/default.nix` applies them to every
     # enabled agent harness via the `handcrafted` registry.
-    myconfig.ai.skills.handcrafted = skillsAttrs;
+    myconfig.ai.dev.skills.handcrafted = skillsAttrs;
   };
 }

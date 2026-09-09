@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — private bridge, firewall policy & bridge-only
+# myconfig.ai.dev.microvm — private bridge, firewall policy & bridge-only
 # LiteLLM forwarder (PHASE: plan §12–§16, §31 proxy-only profile, §33 DNS).
 #
 # Everything in this file is gated behind `lib.mkIf cfg.enable`, so a
@@ -20,7 +20,7 @@
 #        inter-VM (TAP-to-TAP) traffic and the general internet.
 #
 #        Since improvement ticket 3 C the policy is selected by the NAMED
-#        profile `myconfig.ai.microvm.networkProfile`
+#        profile `myconfig.ai.dev.microvm.networkProfile`
 #        (offline / proxy-only / package-access / internet) rather than by
 #        three independent booleans. The capability table lives in
 #        ./network-profiles.nix and is resolved ONCE in default.nix
@@ -64,7 +64,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
 
   # Shared, deterministic slot table (§4) — imported rather than re-derived
   # so the TAP interface names we hand to NetworkManager's unmanaged list
@@ -190,7 +190,7 @@ let
   # the invariants below are unconditional, and only the marked ACCEPT blocks
   # are profile-dependent. Effective profile: ${profile}.
   firewallExtraCommands = ''
-            # ==== myconfig.ai.microvm: dedicated agent-sandbox chains ============
+            # ==== myconfig.ai.dev.microvm: dedicated agent-sandbox chains ============
             # network profile: ${profile}
             # Idempotently (re)create the chains: on a fresh run -N succeeds; on a
             # reload where extraStopCommands did not run, -F clears stale rules.
@@ -465,7 +465,7 @@ let
 
   # --- firewall teardown (must mirror the setup above) --------------------
   firewallExtraStopCommands = ''
-        # ==== myconfig.ai.microvm: remove dedicated agent-sandbox chains =====
+        # ==== myconfig.ai.dev.microvm: remove dedicated agent-sandbox chains =====
         iptables -D INPUT -i ${bridge} -j AGENT_MICROVM_INPUT 2>/dev/null || true
         iptables -D FORWARD -i ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null || true
         iptables -D FORWARD -o ${bridge} -j AGENT_MICROVM_FORWARD 2>/dev/null || true

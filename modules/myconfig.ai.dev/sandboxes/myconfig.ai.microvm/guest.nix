@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — host microvm.nix integration, the fixed VM slot pool,
+# myconfig.ai.dev.microvm — host microvm.nix integration, the fixed VM slot pool,
 # and the minimal Cloud Hypervisor NixOS guest module.
 #
 # PHASE 2 (plan §2, §4, §5, §6):
@@ -12,7 +12,7 @@
 #       neutralized with `microvm.host.enable = lib.mkDefault false` — exactly
 #       the load-bearing gating pattern used by
 #       `modules/myconfig.ai.dev/hermes-agent/microvm.nix`. Only when
-#       `myconfig.ai.microvm.enable` is true do we flip it to `true`, so a
+#       `myconfig.ai.dev.microvm.enable` is true do we flip it to `true`, so a
 #       disabled feature has zero config side effects (no tap/vhost_net
 #       modules, no KSM, no `microvm` user).
 #
@@ -107,7 +107,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
 
   # Deterministic fixed slot pool — the single source of truth lives in
   # slots.nix and is shared with default.nix (which asserts uniqueness and
@@ -123,8 +123,8 @@ let
   # HERE in the HOST config and threaded into the guest modules below as
   # plain values, because the guest evaluation does not carry the host's
   # `myconfig.*` options.
-  sharedSandboxPackages = config.myconfig.ai.sandboxTools.extraPackages;
-  sharedSandboxEnv = config.myconfig.ai.sandboxTools.extraEnv;
+  sharedSandboxPackages = config.myconfig.ai.dev.sandboxTools.extraPackages;
+  sharedSandboxEnv = config.myconfig.ai.dev.sandboxTools.extraEnv;
 
   # The ONE transport decision (lightweight plan phase 6), resolved in
   # default.nix from ./network-profiles.nix. `netTransport.guestInterface` is
@@ -241,7 +241,7 @@ let
       esac
     '';
     meta = with lib; {
-      description = "Guest-side agent entry point for myconfig.ai.microvm sandboxes";
+      description = "Guest-side agent entry point for myconfig.ai.dev.microvm sandboxes";
       platforms = platforms.linux;
     };
   };
@@ -897,7 +897,7 @@ in
           {
             assertion = inside roTree (agentHostKeys.slotDir slot.name);
             message = ''
-              myconfig.ai.microvm: the per-slot SSH host-key directory
+              myconfig.ai.dev.microvm: the per-slot SSH host-key directory
               (${agentHostKeys.slotDir slot.name}) must live in the READ-ONLY
               session tree (${roTree}), never in the writable one
               (${writableTree}). The private host key is the slot's identity;
@@ -907,7 +907,7 @@ in
           {
             assertion = !(inside writableTree (agentConfigSeed.hostPayloadDir slot.name));
             message = ''
-              myconfig.ai.microvm: the staged host agent configuration
+              myconfig.ai.dev.microvm: the staged host agent configuration
               (${agentConfigSeed.hostPayloadDir slot.name}) must not live in the
               WRITABLE session tree (${writableTree}) — it is host-decided input
               and is exposed through the READ-ONLY share only (invariant 7).
@@ -920,7 +920,7 @@ in
               lib.length (lib.filter (s: !(s.readOnly or false)) shares) == 1
               && lib.length (lib.filter (s: s.readOnly or false) shares) <= 1;
             message = ''
-              myconfig.ai.microvm: a guest must declare
+              myconfig.ai.dev.microvm: a guest must declare
               EXACTLY ONE writable virtiofs share and at most ONE read-only
               share; slot ${slot.name} declares ${
                 toString (map (s: "${s.tag}${lib.optionalString (s.readOnly or false) " (ro)"}") shares)

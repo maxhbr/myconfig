@@ -35,8 +35,8 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.rtk;
-  aiCfg = config.myconfig.ai;
+  cfg = config.myconfig.ai.dev.rtk;
+  aiCfg = config.myconfig.ai.dev;
 
   tomlFormat = pkgs.formats.toml { };
 
@@ -55,8 +55,8 @@ let
 in
 {
   options.myconfig = with lib; {
-    ai.rtk = {
-      enable = mkEnableOption "myconfig.ai.rtk";
+    ai.dev.rtk = {
+      enable = mkEnableOption "myconfig.ai.dev.rtk";
 
       package = mkPackageOption pkgs "rtk" { };
 
@@ -90,9 +90,9 @@ in
     # `rtk discover`, `rtk proxy`) — the declarative counterpart of the
     # `RTK.md` awareness file `rtk init` would append to CLAUDE.md/AGENTS.md.
     # `../../skills/default.nix` deploys the registry to each enabled harness.
-    myconfig.ai.skills.handcrafted.rtk = ./skills/rtk;
+    myconfig.ai.dev.skills.handcrafted.rtk = ./skills/rtk;
 
-    myconfig.ai.rtk.settings = {
+    myconfig.ai.dev.rtk.settings = {
       # Opt out of upstream telemetry explicitly instead of relying on the
       # compiled-in default. `enabled` is the only required field of the
       # `[telemetry]` table; the consent fields default to unset.
@@ -112,7 +112,7 @@ in
     # `/mysbx-home` there), and give rtk a per-repository state directory so
     # its tracking database survives the tmpfs home without any host
     # `~/.local` path entering the sandbox.
-    myconfig.ai.mysbx = lib.mkIf aiCfg.mysbx.enable {
+    myconfig.ai.dev.mysbx = lib.mkIf aiCfg.mysbx.enable {
       extraTools = [ cfg.package ];
       config.mounts = [
         {

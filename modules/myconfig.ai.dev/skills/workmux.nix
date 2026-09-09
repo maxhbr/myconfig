@@ -12,11 +12,11 @@
 #   /worktree    — delegate tasks to parallel worktree agents
 #   /coordinator — orchestrate multiple agents with full lifecycle control
 #
-# Each skill is registered in the central `myconfig.ai.skills.handcrafted`
+# Each skill is registered in the central `myconfig.ai.dev.skills.handcrafted`
 # registry; `skills/default.nix` then deploys it to every enabled agent
 # harness (opencode, claude-code, codex, and pi-coding-agent). Installation
 # only makes sense alongside the workmux CLI, so it is gated on
-# `myconfig.ai.workmux.enable` and defaults to on there.
+# `myconfig.ai.dev.workmux.enable` and defaults to on there.
 {
   config,
   lib,
@@ -24,7 +24,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.skills.workmux;
+  cfg = config.myconfig.ai.dev.skills.workmux;
   workmuxSrc = inputs.workmux;
   # The subset of upstream workmux skills we install. `open-pr` is
   # intentionally omitted (this setup does not use the PR-page workflow).
@@ -37,15 +37,15 @@ let
   ];
 in
 {
-  options.myconfig.ai.skills.workmux = with lib; {
+  options.myconfig.ai.dev.skills.workmux = with lib; {
     enable = mkOption {
       type = types.bool;
-      default = config.myconfig.ai.workmux.enable;
-      defaultText = literalExpression "config.myconfig.ai.workmux.enable";
+      default = config.myconfig.ai.dev.workmux.enable;
+      defaultText = literalExpression "config.myconfig.ai.dev.workmux.enable";
       description = ''
         Install workmux's own agent skills (`/workmux`, `/merge`, `/rebase`,
         `/worktree`, `/coordinator`) from the workmux flake input into every
-        enabled agent harness. Defaults to on wherever `myconfig.ai.workmux`
+        enabled agent harness. Defaults to on wherever `myconfig.ai.dev.workmux`
         is enabled; set to `false` to opt out.
       '';
     };
@@ -55,6 +55,6 @@ in
     # Register each upstream skill directory (the dir containing its SKILL.md);
     # `skills/default.nix` applies the whole `handcrafted` registry to every
     # enabled agent harness.
-    myconfig.ai.skills.handcrafted = lib.genAttrs skillNames (name: "${workmuxSrc}/skills/${name}");
+    myconfig.ai.dev.skills.handcrafted = lib.genAttrs skillNames (name: "${workmuxSrc}/skills/${name}");
   };
 }

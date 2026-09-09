@@ -22,16 +22,16 @@
 # option. The engine defaults to `chrome`.
 #
 # Sandboxes: the CLI itself is added to every sandbox tier via
-# `myconfig.ai.sandboxTools.extraPackages` and mysbx's `extraTools`, but NOT
+# `myconfig.ai.dev.sandboxTools.extraPackages` and mysbx's `extraTools`, but NOT
 # the browser — that stays an explicit per-host opt-in (closure size,
 # security surface). Inside a sandbox an agent can either run
 # `agent-browser install` (downloads a pinned Chrome into `~/.agent-browser`,
 # needs network and a writable home) or the host opts in:
 #
-#   myconfig.ai.sandboxTools.extraPackages = [ pkgs.chromium ];
-#   myconfig.ai.sandboxTools.extraEnv.AGENT_BROWSER_EXECUTABLE_PATH =
+#   myconfig.ai.dev.sandboxTools.extraPackages = [ pkgs.chromium ];
+#   myconfig.ai.dev.sandboxTools.extraEnv.AGENT_BROWSER_EXECUTABLE_PATH =
 #     "${pkgs.chromium}/bin/chromium";
-#   myconfig.ai.mysbx.extraTools = [ pkgs.chromium ];
+#   myconfig.ai.dev.mysbx.extraTools = [ pkgs.chromium ];
 #
 # Upstream ships skill content next to the binary: `$out/skills` holds the
 # discovery stub (a directory `agent-browser/` with the `SKILL.md` deployed
@@ -47,12 +47,12 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.agent-browser;
+  cfg = config.myconfig.ai.dev.agent-browser;
 in
 {
   options.myconfig = with lib; {
-    ai.agent-browser = {
-      enable = mkEnableOption "myconfig.ai.agent-browser";
+    ai.dev.agent-browser = {
+      enable = mkEnableOption "myconfig.ai.dev.agent-browser";
 
       package = mkPackageOption pkgs "agent-browser" { };
 
@@ -94,7 +94,7 @@ in
     # that directly contains the SKILL.md (see playwright-cli.nix), which
     # is `$out/skills/agent-browser` — NOT `$out/skills`, whose entries
     # are nested one level deeper.
-    myconfig.ai.skills.handcrafted.agent-browser = "${cfg.package}/skills/agent-browser";
+    myconfig.ai.dev.skills.handcrafted.agent-browser = "${cfg.package}/skills/agent-browser";
 
     home-manager.sharedModules = [
       {
@@ -112,18 +112,18 @@ in
     # Sandbox tiers: agent-browser needs to exist where agents run — inside
     # the sandboxes, not only on the host.
     #
-    # `myconfig.ai.sandboxTools.extraPackages` reaches every tier that
+    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `myconfig.ai.microvm` guests, the `sandboxed-*` qemu runners and the
+    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners and the
     # gVisor image); mysbx has its own `extraTools` extension point (see
     # ../programs.hunk and ../programs.rtk for the same pair of hooks).
     #
     # NOTE: agent-browser requires a browser at runtime. Hosts that want
     # browser automation in sandboxes must also add chromium to the sandbox
     # closures — see the opt-in snippet in the header comment above.
-    myconfig.ai.sandboxTools.extraPackages = [ cfg.package ];
+    myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
 
-    myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
+    myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ cfg.package ];
     };
   };

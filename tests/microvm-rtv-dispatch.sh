@@ -399,7 +399,7 @@ for s in boot net l2 creds lifecycle malrepo forgery; do
 done
 
 printf '\n=== 8. a batch-only host: the interactive sections are SKIPPED, not passed ===\n'
-# `myconfig.ai.microvm.capabilities = [ "batch" ]` (lightweight plan phase 5):
+# `myconfig.ai.dev.microvm.capabilities = [ "batch" ]` (lightweight plan phase 5):
 # seven of the eight sections drive the guest over ssh, which such a host has
 # not got. They must be SKIPPED with the capability as the reason — running them
 # would report vacuous passes for every "the guest must NOT be able to ..." check.

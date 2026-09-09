@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — THE AUTHORITATIVE supported-agent registry.
+# myconfig.ai.dev.microvm — THE AUTHORITATIVE supported-agent registry.
 #
 # This file is the SINGLE SOURCE OF TRUTH for which coding agents a microVM
 # sandbox supports. Everything agent-shaped in this module tree is derived
@@ -13,7 +13,7 @@
 #                  of the untrusted `agent-job-worker` (ticket 4/7).
 #   launcher.nix — `--agent` validation (`validate_agent_name`) and the
 #                  `agent-microvm --help` output.
-#   workmux.nix  — the `myconfig.ai.workmux.agents.microvm-*` registrations
+#   workmux.nix  — the `myconfig.ai.dev.workmux.agents.microvm-*` registrations
 #                  (§29) and their per-agent pane launchers.
 #   default.nix  — assertions that every registry entry is well-formed.
 #   tests/microvm.nix — the shellcheck-gate list of workmux launchers.
@@ -45,7 +45,7 @@
 #                    instead of substituting `%PROMPT%` (for CLIs that read
 #                    instructions from stdin). Defaults to `false`.
 #   configPaths      the agent's ALLOWLIST of host configuration paths, relative
-#                    to `myconfig.ai.microvm.configSeed.hostHome`, staged into
+#                    to `myconfig.ai.dev.microvm.configSeed.hostHome`, staged into
 #                    the disposable guest home at LAUNCH time (lightweight plan
 #                    phase 3, see ./config-seed.nix). EXACT files and EXACT
 #                    directories only — never a whole agent configuration root,
@@ -83,15 +83,15 @@
   lib,
   pkgs,
   inputs,
-  # Guest-visible loopback LiteLLM port (`myconfig.ai.microvm.litellmPort`).
+  # Guest-visible loopback LiteLLM port (`myconfig.ai.dev.microvm.litellmPort`).
   # The guest-side socket proxy forwards 127.0.0.1:<port> to the host bridge
   # endpoint, which is the ONLY model-API peer a guest can reach (§17).
   litellmPort,
   # Model name for agents that cannot discover one themselves
-  # (`config.myconfig.ai.hermes.model.default`, a LiteLLM route).
+  # (`config.myconfig.ai.dev.hermes.model.default`, a LiteLLM route).
   hermesModel,
   # SELECTED agents (lightweight plan phase 2), resolved ONCE in default.nix
-  # from `myconfig.ai.microvm.enabledAgents` and the profile's own default.
+  # from `myconfig.ai.dev.microvm.enabledAgents` and the profile's own default.
   # `null` means "every agent this registry declares" — the historical
   # behaviour. Everything agent-shaped downstream (guest closure + guest env,
   # `agent-run` dispatch, batch dispatch, launcher validation/help, workmux
@@ -197,7 +197,7 @@ let
       ];
     };
     # `herdr` — the agent MULTIPLEXER (https://herdr.dev, `pkgs.herdr`), the
-    # SAME package the host `myconfig.ai.programs.herdr` and the tier-3
+    # SAME package the host `myconfig.ai.dev.programs.herdr` and the tier-3
     # `agent-qemu-herdr` runner install. Unlike the other registry entries it is
     # not itself a coding agent: it is a terminal TUI that launches the OTHER
     # agents (pi, opencode, claude, codex, hermes) in its panes. Inside a guest
@@ -209,7 +209,7 @@ let
     # baked into the guest closure and on PATH.
     #
     # OPT-IN like every other agent: it reaches a guest ONLY when `herdr` is in
-    # `myconfig.ai.microvm.enabledAgents` (or the `null` "all declared agents"
+    # `myconfig.ai.dev.microvm.enabledAgents` (or the `null` "all declared agents"
     # default), so a host that does not select it carries neither the package
     # nor a `microvm-herdr` workmux pane.
     herdr = {
@@ -233,7 +233,7 @@ let
       configPaths = [ ".config/herdr/config.toml" ];
     };
     # Hermes Agent (NousResearch). The SAME flake input + package attr the
-    # host `myconfig.ai.hermes` backends use, so the guest runs the identical
+    # host `myconfig.ai.dev.hermes` backends use, so the guest runs the identical
     # build — baked into the immutable guest closure, never installed at
     # runtime through the upstream `curl | bash` installer, pip or npm (§8).
     # The package wraps its own PATH with nodejs/ripgrep/git, so it needs no
@@ -247,7 +247,7 @@ let
       workmuxType = "hermes";
       # Hermes has no model auto-discovery: with no provider configured it
       # drops into `hermes setup`. Pin the LiteLLM route explicitly (the same
-      # model name the host `myconfig.ai.hermes` backends use) in BOTH modes.
+      # model name the host `myconfig.ai.dev.hermes` backends use) in BOTH modes.
       interactiveArgs = hermesModelArgs;
       batchArgs = hermesModelArgs ++ [
         "--oneshot"
@@ -326,37 +326,37 @@ let
     a:
     lib.optional (
       !(a ? package) || a.package == null
-    ) "myconfig.ai.microvm: agent '${a.name}' has no package."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' has no package."
     ++ lib.optional (
       !lib.isString a.executable || a.executable == ""
-    ) "myconfig.ai.microvm: agent '${a.name}' has an empty/non-string executable."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' has an empty/non-string executable."
     ++ lib.optional (
       !lib.isString a.workmuxName || a.workmuxName == ""
-    ) "myconfig.ai.microvm: agent '${a.name}' has an empty/non-string workmuxName."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' has an empty/non-string workmuxName."
     ++ lib.optional (
       !lib.isString a.workmuxType || a.workmuxType == ""
-    ) "myconfig.ai.microvm: agent '${a.name}' has an empty/non-string workmuxType."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' has an empty/non-string workmuxType."
     ++ lib.optional (
       !lib.isList a.interactiveArgs
-    ) "myconfig.ai.microvm: agent '${a.name}' interactiveArgs must be a list."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' interactiveArgs must be a list."
     ++ lib.optional (
       a.batchArgs != null && !lib.isList a.batchArgs
-    ) "myconfig.ai.microvm: agent '${a.name}' batchArgs must be a list or null."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' batchArgs must be a list or null."
     ++ lib.optional (
       a.batchArgs != null && !lib.all lib.isString a.batchArgs
-    ) "myconfig.ai.microvm: agent '${a.name}' batchArgs must contain only strings."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' batchArgs must contain only strings."
     ++ lib.optional (
       a.batchStdin && a.batchArgs == null
-    ) "myconfig.ai.microvm: agent '${a.name}' sets batchStdin but has no batchArgs."
-    ++ lib.optional (
-      a.batchStdin && lib.elem "%PROMPT%" (a.batchArgs or [ ])
-    ) "myconfig.ai.microvm: agent '${a.name}' cannot combine batchStdin with the %PROMPT% placeholder."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' sets batchStdin but has no batchArgs."
+    ++
+      lib.optional (a.batchStdin && lib.elem "%PROMPT%" (a.batchArgs or [ ]))
+        "myconfig.ai.dev.microvm: agent '${a.name}' cannot combine batchStdin with the %PROMPT% placeholder."
     ++ lib.optional (
       a.batchArgs != null && !a.batchStdin && !lib.elem "%PROMPT%" a.batchArgs
-    ) "myconfig.ai.microvm: agent '${a.name}' batchArgs must contain %PROMPT% (or set batchStdin)."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' batchArgs must contain %PROMPT% (or set batchStdin)."
     ++ lib.optional (
       !lib.isList a.configPaths
-    ) "myconfig.ai.microvm: agent '${a.name}' configPaths must be a list."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' configPaths must be a list."
     ++
       lib.optional
         (
@@ -370,22 +370,22 @@ let
             && !lib.hasInfix ".." p
           ) a.configPaths
         )
-        "myconfig.ai.microvm: agent '${a.name}' configPaths must be non-empty, relative, '..'-free paths that neither start with '-'/'/' nor end with '/' (they are joined onto the host home and re-checked by ./config-seed.nix, which also applies the credential denylist)."
+        "myconfig.ai.dev.microvm: agent '${a.name}' configPaths must be non-empty, relative, '..'-free paths that neither start with '-'/'/' nor end with '/' (they are joined onto the host home and re-checked by ./config-seed.nix, which also applies the credential denylist)."
     ++ lib.optional (
       !lib.isList a.extraPackages
-    ) "myconfig.ai.microvm: agent '${a.name}' extraPackages must be a list."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' extraPackages must be a list."
     ++ lib.optional (
       !lib.isAttrs a.guestEnvironment
-    ) "myconfig.ai.microvm: agent '${a.name}' guestEnvironment must be an attrset."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' guestEnvironment must be an attrset."
     ++ lib.optional (
       !lib.all lib.isString (lib.attrValues a.guestEnvironment)
-    ) "myconfig.ai.microvm: agent '${a.name}' guestEnvironment values must be strings."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' guestEnvironment values must be strings."
     ++ lib.optional (
       !lib.isBool a.persistentState.enabledByDefault
-    ) "myconfig.ai.microvm: agent '${a.name}' persistentState.enabledByDefault must be a bool."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' persistentState.enabledByDefault must be a bool."
     ++ lib.optional (
       !lib.isList a.persistentState.directories
-    ) "myconfig.ai.microvm: agent '${a.name}' persistentState.directories must be a list."
+    ) "myconfig.ai.dev.microvm: agent '${a.name}' persistentState.directories must be a list."
     ++
       lib.optional
         (
@@ -393,10 +393,10 @@ let
             d: lib.isString d && d != "" && !lib.hasPrefix "/" d && !lib.hasInfix ".." d
           ) a.persistentState.directories
         )
-        "myconfig.ai.microvm: agent '${a.name}' persistentState.directories must be non-empty, relative, '..'-free paths."
+        "myconfig.ai.dev.microvm: agent '${a.name}' persistentState.directories must be non-empty, relative, '..'-free paths."
     ++
       lib.optional (builtins.match "[a-z][a-z0-9-]{0,32}" a.name == null)
-        "myconfig.ai.microvm: agent name '${a.name}' must match [a-z][a-z0-9-]{0,32} (it crosses the host→guest control channel and is re-validated by the batch result verifier, which bounds it to 33 characters).";
+        "myconfig.ai.dev.microvm: agent name '${a.name}' must match [a-z][a-z0-9-]{0,32} (it crosses the host→guest control channel and is re-validated by the batch result verifier, which bounds it to 33 characters).";
 in
 rec {
   inherit agents;
@@ -447,7 +447,7 @@ rec {
     a:
     lib.mapAttrsToList (
       k: _:
-      "myconfig.ai.microvm: agent '${a.name}' guestEnvironment.${k} conflicts with another agent's value."
+      "myconfig.ai.dev.microvm: agent '${a.name}' guestEnvironment.${k} conflicts with another agent's value."
     ) (lib.filterAttrs (k: v: guestEnvironment.${k} != v) a.guestEnvironment)
   ) agentList;
 

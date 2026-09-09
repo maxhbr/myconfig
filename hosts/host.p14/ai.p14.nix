@@ -17,15 +17,17 @@
     myconfig = {
       ai = {
         enable = true;
-        opencode.enable = true;
-        pi-coding-agent.enable = true;
+        dev = {
+          opencode.enable = true;
+          pi-coding-agent.enable = true;
 
-        # The `mysbx` sandboxing CLI (modules/myconfig.ai.dev/mysbx/README.md).
-        # Like the other sandbox tiers it is enabled EXPLICITLY per host and
-        # never implicitly through the broad `myconfig.ai.enable`; it only
-        # puts the CLI on PATH.
-        mysbx.enable = true;
+          # The `mysbx` sandboxing CLI (modules/myconfig.ai.dev/mysbx/README.md).
+          # Like the other sandbox tiers it is enabled EXPLICITLY per host and
+          # never implicitly through the broad `myconfig.ai.enable`; it only
+          # puts the CLI on PATH.
+          mysbx.enable = true;
 
+        };
         # searx.enable = true;
         inference-cpp = {
           enable = true;

@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.workmux — workmux, "parallel development in tmux with git
+# myconfig.ai.dev.workmux — workmux, "parallel development in tmux with git
 # worktrees" (https://github.com/raine/workmux). It is a terminal-native
 # companion to agentic coding harnesses, so it is enabled by default whenever
 # the AI tooling, the dev profile, and tmux are all active on the host. The
@@ -11,7 +11,7 @@
 # In addition to installing the binary, this module owns the *global* workmux
 # configuration (`~/.config/workmux/config.yaml`). Coding-agent modules (pi,
 # claude-code, opencode, ...) register "named agents" here via
-# `myconfig.ai.workmux.agents.<name>` — typically a jailed/sandboxed launcher
+# `myconfig.ai.dev.workmux.agents.<name>` — typically a jailed/sandboxed launcher
 # produced by `fns/workmux-worktree.nix`. A thin `<agent>-worktree` wrapper
 # then runs `workmux add --agent <name>`, and workmux launches the launcher in
 # the worktree pane. `workmux merge` / `workmux remove` handle cleanup, so no
@@ -24,8 +24,8 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.workmux;
-  aiCfg = config.myconfig.ai;
+  cfg = config.myconfig.ai.dev.workmux;
+  aiCfg = config.myconfig.ai.dev;
   workmuxPkg = inputs.workmux.packages.${pkgs.system}.default;
   # The workmux flake input also provides its source tree, from which the
   # per-agent status-tracking extensions/plugins are deployed verbatim (the
@@ -45,7 +45,7 @@ let
     if builtins.pathExists p then
       p
     else
-      throw "myconfig.ai.workmux: ${rel} is missing from the workmux source (${workmuxSrc}); upstream probably moved it — check the `workmux setup` resources.";
+      throw "myconfig.ai.dev.workmux: ${rel} is missing from the workmux source (${workmuxSrc}); upstream probably moved it — check the `workmux setup` resources.";
 
   yamlFormat = pkgs.formats.yaml { };
 
@@ -156,7 +156,7 @@ in
     ./sandbox.nix
   ];
 
-  options.myconfig.ai.workmux = {
+  options.myconfig.ai.dev.workmux = {
     enable = lib.mkEnableOption "workmux, parallel development in tmux with git worktrees";
 
     statusTracking.enable = lib.mkOption {

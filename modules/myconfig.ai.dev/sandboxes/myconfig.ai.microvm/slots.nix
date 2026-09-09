@@ -1,11 +1,11 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — the SINGLE source of truth for the deterministic
+# myconfig.ai.dev.microvm — the SINGLE source of truth for the deterministic
 # fixed VM slot pool.
 #
 # Since improvement ticket 5 the pool is grouped into fixed RESOURCE CLASSES
-# (`myconfig.ai.microvm.resourceClasses`), each with its own vCPU/RAM sizing and
+# (`myconfig.ai.dev.microvm.resourceClasses`), each with its own vCPU/RAM sizing and
 # its own fixed number of prebuilt slots:
 #
 #   agent-normal-0  02:00:00:83:00:10  192.168.83.10  vm-normal-0  cid 8300

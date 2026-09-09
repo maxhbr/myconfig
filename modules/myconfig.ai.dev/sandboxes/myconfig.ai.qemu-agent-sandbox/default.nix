@@ -42,11 +42,11 @@ let
   '';
 in
 {
-  options.myconfig.ai.qemu-agent-sandbox.runnerExpression = lib.mkOption {
+  options.myconfig.ai.dev.qemu-agent-sandbox.runnerExpression = lib.mkOption {
     type = lib.types.path;
     readOnly = true;
     description = "Standalone impure Nix expression used to build disposable QEMU agent runners.";
   };
 
-  config.myconfig.ai.qemu-agent-sandbox.runnerExpression = runnerExpression;
+  config.myconfig.ai.dev.qemu-agent-sandbox.runnerExpression = runnerExpression;
 }

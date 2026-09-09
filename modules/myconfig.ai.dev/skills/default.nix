@@ -8,9 +8,9 @@
 # are enabled on this host via home-manager.
 #
 # The upstream home-manager module exposes `programs.agent-skills.*`; this
-# wrapper provides a `myconfig.ai.skills.*` surface with sensible defaults
+# wrapper provides a `myconfig.ai.dev.skills.*` surface with sensible defaults
 # while still allowing full pass-through configuration. Anything set in
-# `myconfig.ai.skills.{sources,skills,targets,excludePatterns}` is merged on
+# `myconfig.ai.dev.skills.{sources,skills,targets,excludePatterns}` is merged on
 # top of the defaults, so hosts can add sources, narrow the skill selection,
 # or retarget individual harnesses without touching this file.
 {
@@ -20,7 +20,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.skills;
+  cfg = config.myconfig.ai.dev.skills;
 
   # The upstream home-manager module. It is a function of `{ inputs, lib }`
   # (captured here with nixpkgs `lib` and the flake `inputs`) returning the
@@ -36,32 +36,32 @@ let
   # harnesses get a target here; the rest keep the upstream opt-in default of
   # `enable = false`. Using `mkOverride 900` keeps these below plain user
   # overrides (priority 100) but above the upstream `mkDefault` (1000), so a
-  # host can still force a target on/off via `myconfig.ai.skills.targets`.
+  # host can still force a target on/off via `myconfig.ai.dev.skills.targets`.
   harnessTargetDefaults =
     let
       when = cond: name: lib.optionalAttrs cond { ${name}.enable = lib.mkOverride 900 true; };
     in
-    lib.optionalAttrs (config.myconfig.ai ? opencode) (
-      when (config.myconfig.ai.opencode.enable or false) "opencode"
+    lib.optionalAttrs (config.myconfig.ai.dev ? opencode) (
+      when (config.myconfig.ai.dev.opencode.enable or false) "opencode"
     )
-    // lib.optionalAttrs (config.myconfig.ai ? codex) (
-      when (config.myconfig.ai.codex.enable or false) "codex"
+    // lib.optionalAttrs (config.myconfig.ai.dev ? codex) (
+      when (config.myconfig.ai.dev.codex.enable or false) "codex"
     )
-    // lib.optionalAttrs (config.myconfig.ai ? claude-code) (
-      when (config.myconfig.ai.claude-code.enable or false) "claude"
+    // lib.optionalAttrs (config.myconfig.ai.dev ? claude-code) (
+      when (config.myconfig.ai.dev.claude-code.enable or false) "claude"
     )
-    // lib.optionalAttrs (config.myconfig.ai ? pi-coding-agent) (
-      when (config.myconfig.ai.pi-coding-agent.enable or false) "pi"
+    // lib.optionalAttrs (config.myconfig.ai.dev ? pi-coding-agent) (
+      when (config.myconfig.ai.dev.pi-coding-agent.enable or false) "pi"
     );
 
   # Whether each agent harness is enabled on this host. Used to gate the
   # handcrafted-skill apply block below so a host without, say, pi-coding-agent
   # does not get `~/.agents/skills/` entries it will never load.
   harnessEnabled = {
-    opencode = config.myconfig.ai.opencode.enable or false;
-    claude-code = config.myconfig.ai.claude-code.enable or false;
-    codex = config.myconfig.ai.codex.enable or false;
-    pi = config.myconfig.ai.pi-coding-agent.enable or false;
+    opencode = config.myconfig.ai.dev.opencode.enable or false;
+    claude-code = config.myconfig.ai.dev.claude-code.enable or false;
+    codex = config.myconfig.ai.dev.codex.enable or false;
+    pi = config.myconfig.ai.dev.pi-coding-agent.enable or false;
   };
 
   # Registry of locally-defined ("handcrafted") skills, populated by the
@@ -69,13 +69,13 @@ let
   # entry maps a skill name to its source directory (the dir containing
   # `SKILL.md`). The apply block below deploys every entry to each enabled
   # agent harness — independently of the agent-skills sync framework, which
-  # is opt-in via `myconfig.ai.skills.enable`.
-  handcrafted = config.myconfig.ai.skills.handcrafted;
+  # is opt-in via `myconfig.ai.dev.skills.enable`.
+  handcrafted = config.myconfig.ai.dev.skills.handcrafted;
   # Registry of locally-defined pi prompt templates, populated by individual
   # skill modules when a workflow should also be reachable as a `/`-command
   # prompt template. Deployed to `~/.pi/agent/prompts/<name>.md` for every host
   # with pi-coding-agent enabled.
-  handcraftedPrompts = config.myconfig.ai.skills.handcraftedPrompts;
+  handcraftedPrompts = config.myconfig.ai.dev.skills.handcraftedPrompts;
   # Registry of locally-defined pi sub-agent definitions, populated by
   # individual skill modules (research). Each entry maps an agent name to its
   # source `.md` file. Deployed to `~/.pi/agent/agents/<name>.md`, where the
@@ -84,7 +84,7 @@ let
   # deployed verbatim — preserving `model:` frontmatter so a handcrafted
   # agent can pin a fast/cheap model for its sub-agents. Only applied on
   # hosts with pi-coding-agent enabled.
-  handcraftedAgents = config.myconfig.ai.skills.handcraftedAgents;
+  handcraftedAgents = config.myconfig.ai.dev.skills.handcraftedAgents;
 in
 {
   imports = [
@@ -100,7 +100,7 @@ in
     ./workmux.nix
   ];
 
-  options.myconfig.ai.skills = with lib; {
+  options.myconfig.ai.dev.skills = with lib; {
     enable = mkEnableOption "agent skills management via home-manager (vendor/agent-skills-nix)";
 
     sources = mkOption {
@@ -111,7 +111,7 @@ in
         source. Each entry follows the upstream `sourceType` shape, e.g.:
 
         ```nix
-        myconfig.ai.skills.sources.anthropic = {
+        myconfig.ai.dev.skills.sources.anthropic = {
           input = "anthropic-skills"; # flake input name
           subdir = "skills";
         };
@@ -135,7 +135,7 @@ in
         mattpocock skills:
 
         ```nix
-        myconfig.ai.skills.skills = {
+        myconfig.ai.dev.skills.skills = {
           enableAll = lib.mkForce false;
           enable = [ "engineering/triage" ];
         };
@@ -222,7 +222,7 @@ in
       # which the agent-skills sync framework does not manage by default, so
       # this does not collide with the framework's `--delete` rsync on hosts
       # that opt into it below). This block runs whenever a skill is enabled,
-      # independent of the sync framework (`myconfig.ai.skills.enable`).
+      # independent of the sync framework (`myconfig.ai.dev.skills.enable`).
       home-manager.sharedModules = [
         {
           programs.opencode.skills = lib.mkIf harnessEnabled.opencode handcrafted;

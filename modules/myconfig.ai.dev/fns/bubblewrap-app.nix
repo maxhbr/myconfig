@@ -19,10 +19,10 @@
 #
 # All "default" lists (configDirs, devTools, fwdEnv, userDataDirs) can be
 # either replaced wholesale or extended via the matching `extra*` argument.
-# In addition, every wrapper inherits `myconfig.ai.jail.fwdEnvs` from the
+# In addition, every wrapper inherits `myconfig.ai.dev.jail.fwdEnvs` from the
 # NixOS config passed in as `osconfig` — see `globalFwdEnvs` below. This
 # extends the always-forwarded `OPENAI_API_KEY`. The shared sandbox tool
-# option `myconfig.ai.sandboxTools` (packages + env) is inherited the same
+# option `myconfig.ai.dev.sandboxTools` (packages + env) is inherited the same
 # way — see `sharedTools`/`sharedEnv` below.
 #
 # The resulting derivation is a `jail` permission bundle. See
@@ -31,7 +31,7 @@
   lib,
   pkgs,
   jail,
-  # The NixOS `config`, used to read the shared `myconfig.ai.jail.fwdEnvs`
+  # The NixOS `config`, used to read the shared `myconfig.ai.dev.jail.fwdEnvs`
   # option (see `../sandboxes/myconfig.ai.jail.nix`) so every `jail-app` wrapper picks
   # up the global forwarded-env list without each call site having to pass
   # it explicitly. Defaults to `{}` so the library still works standalone
@@ -120,7 +120,7 @@
   ],
   extraFwdEnv ? [ ],
   # NOTE: in addition to `fwdEnv` + `extraFwdEnv`, every wrapper inherits the
-  # shared `myconfig.ai.jail.fwdEnvs` list (read from `osconfig`); see
+  # shared `myconfig.ai.dev.jail.fwdEnvs` list (read from `osconfig`); see
   # `globalFwdEnvs` in the `let` below. Use `extraFwdEnv` only for
   # wrapper-specific variables.
 
@@ -232,10 +232,10 @@ let
 
   # Environment variables forwarded from the host into *every* jail-app
   # wrapper. `OPENAI_API_KEY` is always forwarded; the shared
-  # `myconfig.ai.jail.fwdEnvs` option extends this base list so that
+  # `myconfig.ai.dev.jail.fwdEnvs` option extends this base list so that
   # adding a new wrapper requires no per-call wiring. `or [ ]` makes this
   # safe when `osconfig` is `{}` (standalone library use).
-  globalFwdEnvs = [ "OPENAI_API_KEY" ] ++ (osconfig.myconfig.ai.jail.fwdEnvs or [ ]);
+  globalFwdEnvs = [ "OPENAI_API_KEY" ] ++ (osconfig.myconfig.ai.dev.jail.fwdEnvs or [ ]);
 
   fwdEnvPerms = lib.map try-fwd-env (fwdEnv ++ extraFwdEnv ++ globalFwdEnvs);
 
@@ -243,8 +243,8 @@ let
   # appended to the tool set below for EVERY `jail-app` wrapper, and env
   # vars set unconditionally via `set-env`. Wrapper-specific
   # `extraRuntimeEnv` wins over `sharedEnv` on a name clash.
-  sharedTools = osconfig.myconfig.ai.sandboxTools.extraPackages or [ ];
-  sharedEnv = osconfig.myconfig.ai.sandboxTools.extraEnv or { };
+  sharedTools = osconfig.myconfig.ai.dev.sandboxTools.extraPackages or [ ];
+  sharedEnv = osconfig.myconfig.ai.dev.sandboxTools.extraEnv or { };
 
   runtimeEnvPerms = lib.mapAttrsToList (name: value: set-env name value) (
     sharedEnv // extraRuntimeEnv

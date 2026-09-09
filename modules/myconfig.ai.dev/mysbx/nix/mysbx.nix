@@ -95,7 +95,7 @@
   gzip,
   unzip,
   # Extra packages appended to the dev-tool closure by feature modules
-  # (`myconfig.ai.mysbx.extraTools`), e.g. the `pi` coding agent from
+  # (`myconfig.ai.dev.mysbx.extraTools`), e.g. the `pi` coding agent from
   # ../../programs/programs.pi-coding-agent. Same security note as the hardcoded
   # list below: whatever lands here is on the sandbox PATH.
   extraTools ? [ ],
@@ -130,7 +130,7 @@ let
   # basic dev tools, and their absence broke sandbox payloads on the
   # first `diff`/`tar`. Per plan.md
   # phase 2d, `mysbx` should
-  # eventually join the shared `myconfig.ai.sandboxTools` option instead
+  # eventually join the shared `myconfig.ai.dev.sandboxTools` option instead
   # of growing this parallel list — until then the list lives HERE, next
   # to the code that consumes it, because (per mvp-6) "it is a
   # security-relevant list, not packaging detail".

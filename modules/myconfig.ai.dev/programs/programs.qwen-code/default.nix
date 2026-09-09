@@ -10,11 +10,11 @@ let
 in
 {
   options.myconfig = with lib; {
-    ai.qwen-code = {
-      enable = mkEnableOption "myconfig.ai.qwen-code";
+    ai.dev.qwen-code = {
+      enable = mkEnableOption "myconfig.ai.dev.qwen-code";
     };
   };
-  config = lib.mkIf config.myconfig.ai.qwen-code.enable {
+  config = lib.mkIf config.myconfig.ai.dev.qwen-code.enable {
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [

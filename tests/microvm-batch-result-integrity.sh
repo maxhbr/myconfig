@@ -2,7 +2,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# EXECUTED regression harness for the myconfig.ai.microvm batch RESULT CHANNEL
+# EXECUTED regression harness for the myconfig.ai.dev.microvm batch RESULT CHANNEL
 # (improvement ticket 7). Run from the `microvm-batch-result-integrity` check in
 # tests/microvm.nix, inside `fakeroot` so that fixtures can carry the ownership
 # the real job share has (root-owned input/controller, agent-owned worker).

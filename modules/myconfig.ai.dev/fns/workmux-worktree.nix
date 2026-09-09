@@ -28,7 +28,7 @@
 #                   through to workmux.
 #
 #   * `agent`     — `{ type; command; }` to be merged into
-#                   `myconfig.ai.workmux.agents.<agentName>`, which the workmux
+#                   `myconfig.ai.dev.workmux.agents.<agentName>`, which the workmux
 #                   module renders into `~/.config/workmux/config.yaml`.
 #
 # The worktree's shared git directory is exposed to the inner wrapper via two
@@ -46,7 +46,7 @@
   name,
 
   # workmux named-agent key selected via `workmux add --agent <agentName>`.
-  # Also the key under `myconfig.ai.workmux.agents`.
+  # Also the key under `myconfig.ai.dev.workmux.agents`.
   agentName,
 
   # workmux built-in agent behaviour used for prompt injection / resume flags

@@ -35,8 +35,8 @@
   bashInteractive,
   tmux,
   # The workmux package that runs inside the sandbox
-  # (`myconfig.ai.mysbx.workmux.package`, normally
-  # `myconfig.ai.workmux.package`).
+  # (`myconfig.ai.dev.mysbx.workmux.package`, normally
+  # `myconfig.ai.dev.workmux.package`).
   workmux,
 }:
 let

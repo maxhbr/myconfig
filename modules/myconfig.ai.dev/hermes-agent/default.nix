@@ -1,7 +1,7 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.hermes — hermes-agent gateway integration.
+# myconfig.ai.dev.hermes — hermes-agent gateway integration.
 #
 # This file is just glue. The actual configuration lives in:
 #
@@ -9,7 +9,7 @@
 #                         URLs) consumed by both backends; a plain
 #                         function, not a NixOS module.
 #   service.nix          — host-level (native) hermes-agent service:
-#                         declares the `myconfig.ai.hermes.*` options,
+#                         declares the `myconfig.ai.dev.hermes.*` options,
 #                         imports the upstream `inputs.hermes-agent`
 #                         NixOS module and wires up `services.hermes-agent`
 #                         in native mode.

@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — host launcher, slot allocator, task/repo validation,
+# myconfig.ai.dev.microvm — host launcher, slot allocator, task/repo validation,
 # standalone-clone creation and bind-mount lifecycle (plan §20–§28, §34–§35).
 #
 # This phase builds the `agent-microvm` host command
@@ -99,7 +99,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
 
   # The slot pool of the effective resource classes (ticket 5 A). The class
   # table comes from default.nix (`_module.args.agentResourceClasses`), so every
@@ -421,7 +421,7 @@ let
   capabilityConfig = mkFragment topIndent ''
     # ---- the capability set (lightweight plan phase 5) ------------------
     # WHICH execution capabilities this host's guests carry
-    # (`myconfig.ai.microvm.capabilities`). Rendered on EVERY host, including
+    # (`myconfig.ai.dev.microvm.capabilities`). Rendered on EVERY host, including
     # one that selects everything, so `agent-microvm capabilities` can always
     # answer the question and no consumer has to infer the answer from an
     # error message.
@@ -459,7 +459,7 @@ let
           case " $SELECTED_CAPABILITIES " in
               *" $2 "*) return 0 ;;
           esac
-          die "'$1' needs the '$2' capability, which this host does not select (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ]); add \"$2\" to that list and rebuild to enable it"
+          die "'$1' needs the '$2' capability, which this host does not select (myconfig.ai.dev.microvm.capabilities = [ $SELECTED_CAPABILITIES ]); add \"$2\" to that list and rebuild to enable it"
       }
       # The `ssh` control channel is usable over the TAP (`interactive`) OR
       # over VSOCK (`vsock`, lightweight plan phase 6). `ssh` is refused only
@@ -472,7 +472,7 @@ let
                   *" $cap "*) return 0 ;;
               esac
           done
-          die "'$cmd' needs one of these capabilities, which this host does not select (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ]); add one of: $*"
+          die "'$cmd' needs one of these capabilities, which this host does not select (myconfig.ai.dev.microvm.capabilities = [ $SELECTED_CAPABILITIES ]); add one of: $*"
       }''
   );
   # One splice per subcommand, at the TOP of its function body.
@@ -507,7 +507,7 @@ let
             fail "$missing slot(s) lack a host-key directory (systemctl restart agent-microvm-hostkeys.service)"
         fi''
     else
-      ''ok "no per-slot SSH host keys are expected: this host selects neither the \"interactive\" nor the \"vsock\" capability (myconfig.ai.microvm.capabilities = [ $SELECTED_CAPABILITIES ])"''
+      ''ok "no per-slot SSH host keys are expected: this host selects neither the \"interactive\" nor the \"vsock\" capability (myconfig.ai.dev.microvm.capabilities = [ $SELECTED_CAPABILITIES ])"''
   );
   # --- the TAP-ONLY configuration constants (lightweight plan phase 6) -----
   # The bridge, the gateway address and the guest subnet only EXIST under the
@@ -773,7 +773,7 @@ let
 
     # Remove every top-level entry of a tree the layout table does NOT declare
     # for this host. Two things produce such entries: a generation that selected
-    # a capability this one does not (`myconfig.ai.microvm.capabilities`,
+    # a capability this one does not (`myconfig.ai.dev.microvm.capabilities`,
     # lightweight plan phase 5 — nothing sweeps the batch subdirectories at boot,
     # so an unclean shutdown followed by a narrowing rebuild leaves them behind),
     # and an operator who put something into the tree by hand. Either way they
@@ -987,7 +987,7 @@ let
         printf '  job data:      %s (%s)\n' "$JOBS_ROOT" "$(human "$(session_job_data_bytes)")"
         printf '  job results:   %s (%s)\n' "$RESULTS_DIR" "$(human "$(dir_bytes "$RESULTS_DIR")")"''
     else
-      ''printf '  job data:      none: this host does not select the "batch" capability (myconfig.ai.microvm.capabilities = [ %s ])\n' "$SELECTED_CAPABILITIES"''
+      ''printf '  job data:      none: this host does not select the "batch" capability (myconfig.ai.dev.microvm.capabilities = [ %s ])\n' "$SELECTED_CAPABILITIES"''
   );
 
   # ... and one in the teardown, so nothing staged survives the session.
@@ -1590,7 +1590,7 @@ let
       # `workspace_group`). The `__agent-microvm` suffix mirrors the
       # existing `<basename>__worktrees` convention (see
       # modules/myconfig.ai.dev/fns/workmux-worktree.nix and
-      # modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix), so a human listing the workspace root can
+      # modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix), so a human listing the workspace root can
       # tell a per-repo agent-microvm group from a workmux worktree group at a
       # glance. Two different repositories never share a clone directory, and
       # the same repository's tasks land next to each other.
@@ -4141,7 +4141,7 @@ let
     '';
 
     meta = with lib; {
-      description = "Host launcher / slot allocator for myconfig.ai.microvm agent sandboxes";
+      description = "Host launcher / slot allocator for myconfig.ai.dev.microvm agent sandboxes";
       maintainers = [ ];
       platforms = platforms.linux;
     };

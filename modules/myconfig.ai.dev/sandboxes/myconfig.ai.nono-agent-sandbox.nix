@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.nono-agent-sandbox — run coding agents inside the nono
+# myconfig.ai.dev.nono-agent-sandbox — run coding agents inside the nono
 # capability-based sandbox (https://nono.sh/docs).
 #
 # This module generates `agent-nono-*` wrapper commands for the enabled
@@ -42,7 +42,7 @@ let
   # Make the `workmux` binary available inside the sandboxes (for the
   # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
   # a worktree pane) whenever workmux is enabled.
-  workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
+  workmuxDevTools = lib.optional osconfig.myconfig.ai.dev.workmux.enable osconfig.myconfig.ai.dev.workmux.package;
 
   # Helper to build a nono-sandboxed agent wrapper with sensible defaults.
   mkNonoAgent =
@@ -55,7 +55,7 @@ let
     nono-app {
       inherit name pkg userDataDirs;
       extraDevTools = extraDevTools ++ workmuxDevTools;
-      # Forward the shared myconfig.ai.nono.fwdEnvs plus standard vars.
+      # Forward the shared myconfig.ai.dev.nono.fwdEnvs plus standard vars.
       extraFwdEnv = [ ];
       # Refuse to run from $HOME (same as jail-app.nix).
       rejectHomeCwd = true;
@@ -112,7 +112,7 @@ let
   ];
 in
 {
-  options.myconfig.ai.nono-agent-sandbox = with lib; {
+  options.myconfig.ai.dev.nono-agent-sandbox = with lib; {
     enable = mkOption {
       type = types.bool;
       default = false;
@@ -130,7 +130,7 @@ in
     };
   };
 
-  config = lib.mkIf config.myconfig.ai.nono-agent-sandbox.enable {
+  config = lib.mkIf config.myconfig.ai.dev.nono-agent-sandbox.enable {
     home-manager.sharedModules = [
       {
         home.packages = nonoWrappers;

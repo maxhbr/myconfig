@@ -28,16 +28,16 @@
 #     skill registry of ../../skills so every enabled agent harness learns how to
 #     drive a live hunk review session.
 #   * the binary on the PATH of every sandbox tier — via the shared
-#     `myconfig.ai.sandboxTools.extraPackages` and, for mysbx, its
+#     `myconfig.ai.dev.sandboxTools.extraPackages` and, for mysbx, its
 #     `extraTools` plus a read-only mount of the config above.
 #
 # Like `rtk`, this module is auto-enabled by the `myconfig.ai` umbrella
-# (`myconfig.ai.hunk.enable = lib.mkDefault true` in ../default.nix):
+# (`myconfig.ai.dev.hunk.enable = lib.mkDefault true` in ../default.nix):
 # reviewing an agent's changeset is part of every agentic coding workflow and
 # the cost is one small binary plus a generated config file. The `enable`
 # option itself still defaults to false, so a host without `myconfig.ai
 # .enable` never gets hunk, and a host can opt out with
-# `myconfig.ai.hunk.enable = false;`.
+# `myconfig.ai.dev.hunk.enable = false;`.
 {
   config,
   lib,
@@ -45,14 +45,14 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.hunk;
+  cfg = config.myconfig.ai.dev.hunk;
 
   tomlFormat = pkgs.formats.toml { };
 in
 {
   options.myconfig = with lib; {
-    ai.hunk = {
-      enable = mkEnableOption "myconfig.ai.hunk";
+    ai.dev.hunk = {
+      enable = mkEnableOption "myconfig.ai.dev.hunk";
 
       package = mkPackageOption pkgs "hunk" { };
 
@@ -92,9 +92,9 @@ in
     # The agent-facing half of hunk: the skill upstream tells the user to add
     # via `hunk skill path`. ../../skills/default.nix deploys every handcrafted
     # entry to the agent harnesses enabled on this host.
-    myconfig.ai.skills.handcrafted.hunk-review = "${cfg.package}/share/skills/hunk/hunk-review";
+    myconfig.ai.dev.skills.handcrafted.hunk-review = "${cfg.package}/share/skills/hunk/hunk-review";
 
-    myconfig.ai.hunk.settings = {
+    myconfig.ai.dev.hunk.settings = {
       # Follow the terminal instead of pinning a palette, and let hunk pick
       # split/stack from the terminal width.
       theme = "auto";
@@ -111,14 +111,14 @@ in
     # hunk follows this module's enable gate, the same way the agent CLIs
     # are gated: a host without hunk keeps its sandbox closures unchanged.
     #
-    # `myconfig.ai.sandboxTools.extraPackages` reaches every tier that
+    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `myconfig.ai.microvm` guests, the `sandboxed-*` qemu runners and the
+    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners and the
     # gVisor image); mysbx has its own `extraTools` extension point (see
     # ../programs.rtk/default.nix for the same pair of hooks).
-    myconfig.ai.sandboxTools.extraPackages = [ cfg.package ];
+    myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
 
-    myconfig.ai.mysbx = lib.mkIf config.myconfig.ai.mysbx.enable {
+    myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ cfg.package ];
       config.mounts = [
         {

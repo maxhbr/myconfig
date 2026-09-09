@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.gvisor-agent-sandbox — sandbox-reachable LiteLLM endpoint.
+# myconfig.ai.dev.gvisor-agent-sandbox — sandbox-reachable LiteLLM endpoint.
 #
 # The host LiteLLM proxy is loopback-only on purpose
 # (`services.litellm.host = mkForce "127.0.0.1"` in ../services.litellm.nix),
@@ -95,7 +95,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.gvisor-agent-sandbox;
+  cfg = config.myconfig.ai.dev.gvisor-agent-sandbox;
   lcfg = cfg.litellm;
 
   address = lcfg.address;
@@ -105,7 +105,7 @@ let
   enabled = cfg.enable && lcfg.enable;
 in
 {
-  options.myconfig.ai.gvisor-agent-sandbox.litellm = with lib; {
+  options.myconfig.ai.dev.gvisor-agent-sandbox.litellm = with lib; {
     enable = mkOption {
       type = types.bool;
       default = config.services.litellm.enable;
@@ -155,7 +155,7 @@ in
         default-route interface). It does NOT need to be assigned to any host
         interface — it is a pure translation target — but it must be stable,
         non-loopback, and not collide with a network the sandbox routes for
-        real: not `myconfig.ai.microvm.subnet`, nor the host LAN or WireGuard
+        real: not `myconfig.ai.dev.microvm.subnet`, nor the host LAN or WireGuard
         ranges.
 
         Unlike the old `--map-host-loopback` (which translated this address to
@@ -206,7 +206,7 @@ in
       {
         assertion = config.services.litellm.enable;
         message = ''
-          myconfig.ai.gvisor-agent-sandbox.litellm.enable is on, but
+          myconfig.ai.dev.gvisor-agent-sandbox.litellm.enable is on, but
           services.litellm is not enabled — the forwarder would proxy to
           127.0.0.1:${port}, where nothing listens.
         '';
@@ -214,7 +214,7 @@ in
       {
         assertion = lcfg.forwardPort != lcfg.port;
         message = ''
-          myconfig.ai.gvisor-agent-sandbox.litellm.forwardPort must differ from
+          myconfig.ai.dev.gvisor-agent-sandbox.litellm.forwardPort must differ from
           port: the forwarder binds to 0.0.0.0:${forwardPort}, which would
           collide with LiteLLM's own 127.0.0.1:${port} listener if they were
           equal.

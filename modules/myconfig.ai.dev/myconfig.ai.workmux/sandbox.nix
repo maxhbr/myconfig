@@ -1,8 +1,8 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.workmux.sandbox — the microVM counterpart of
-# `myconfig.ai.workmux.jail` (`agent-bubblewrap-alacritty-workmux-tmux` / `agent-bubblewrap-workmux-tmux`).
+# myconfig.ai.dev.workmux.sandbox — the microVM counterpart of
+# `myconfig.ai.dev.workmux.jail` (`agent-bubblewrap-alacritty-workmux-tmux` / `agent-bubblewrap-workmux-tmux`).
 #
 # `agent-qemu-workmux-tmux` runs the *whole* workmux/tmux session — main git
 # checkout, its `<basename>__worktrees` sibling, tmux, workmux and the agents
@@ -33,9 +33,9 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.workmux.sandbox;
-  wmCfg = config.myconfig.ai.workmux;
-  aiCfg = config.myconfig.ai;
+  cfg = config.myconfig.ai.dev.workmux.sandbox;
+  wmCfg = config.myconfig.ai.dev.workmux;
+  aiCfg = config.myconfig.ai.dev;
 
   yamlFormat = pkgs.formats.yaml { };
 
@@ -46,7 +46,7 @@ let
   # (myconfig.ai.workmux/jail.nix), the `pi` named agent must be the *plain*
   # pi binary, not the bubblewrap-wrapped one — the VM is already the sandbox,
   # so a nested bwrap would lose pi's configuration/credentials. Everything
-  # else is inherited verbatim from `myconfig.ai.workmux.settings`.
+  # else is inherited verbatim from `myconfig.ai.dev.workmux.settings`.
   sandboxWorkmuxConfig = {
     agents = lib.optionalAttrs aiCfg.pi-coding-agent.enable {
       pi = {
@@ -58,13 +58,13 @@ let
   // wmCfg.settings;
   sandboxWorkmuxConfigFile = yamlFormat.generate "workmux-sandbox-config.yaml" sandboxWorkmuxConfig;
 
-  # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
+  # Shared sandbox tools (myconfig.ai.dev.sandboxTools) as a JSON array of store
   # paths, baked into the `agent-qemu-alacritty-workmux-tmux` wrapper and read
   # (via SANDBOXED_WORKMUX_EXTRA_PACKAGES) by the impure runner expression that
   # builds the per-invocation VM runner. Same pattern as
   # AGENT_QEMU_HERDR_AGENT_PACKAGES in ../../programs/programs.herdr.nix.
   sandboxToolsJson = builtins.toJSON (
-    map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages
+    map (p: p.outPath) config.myconfig.ai.dev.sandboxTools.extraPackages
   );
 
   # Host tmux configuration, exposed read-only inside the guest so the in-VM
@@ -139,7 +139,7 @@ let
       export SANDBOXED_WORKMUX_CONFIG=${lib.escapeShellArg "${sandboxWorkmuxConfigFile}"}
       export SANDBOXED_WORKMUX_TMUXCONF=${lib.escapeShellArg (toString tmuxConf)}
       export SANDBOXED_WORKMUX_NETWORK=1
-      # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
+      # Shared sandbox tools (myconfig.ai.dev.sandboxTools), baked in at build
       # time as a JSON array of store paths; read by the impure
       # standalone qemu-agent-sandbox runner expression.
       export SANDBOXED_WORKMUX_EXTRA_PACKAGES='${sandboxToolsJson}'
@@ -149,7 +149,7 @@ let
       # required for the transient repository, worktrees, port, key, and
       # generated configuration paths.
       runner=$(nix build --impure --no-link --print-out-paths \
-        --file ${config.myconfig.ai.qemu-agent-sandbox.runnerExpression})
+        --file ${config.myconfig.ai.dev.qemu-agent-sandbox.runnerExpression})
 
       # Start the rootless virtiofsd daemon(s) + qemu via the runner's
       # combined `sandboxed-launch` entry point, from $runtime_dir so the
@@ -241,7 +241,7 @@ let
   };
 in
 {
-  options.myconfig.ai.workmux.sandbox = with lib; {
+  options.myconfig.ai.dev.workmux.sandbox = with lib; {
     enable = mkOption {
       type = types.bool;
       default = false;
@@ -250,7 +250,7 @@ in
         `agent-qemu-alacritty-workmux-tmux` (Alacritty popup): run the whole
         workmux/tmux session — main repo, worktrees, agents — inside a single
         microvm.nix VM (its own kernel, ephemeral root, unprivileged `agent`
-        user). This is the microVM counterpart of `myconfig.ai.workmux.jail`
+        user). This is the microVM counterpart of `myconfig.ai.dev.workmux.jail`
         (`agent-bubblewrap-alacritty-workmux-tmux` / `agent-bubblewrap-workmux-tmux`): `agent-qemu-workmux-tmux`
         is the in-terminal entry point (like `agent-bubblewrap-workmux-tmux`) and
         `agent-qemu-alacritty-workmux-tmux` opens it in a dedicated Alacritty

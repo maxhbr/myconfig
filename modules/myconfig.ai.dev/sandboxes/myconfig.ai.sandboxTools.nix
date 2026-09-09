@@ -9,11 +9,11 @@
 # available everywhere with one option instead of one edit per tier:
 #
 #   * bubblewrap jails — `fns/bubblewrap-app.nix` reads this via the same
-#     `osconfig` mechanism as `myconfig.ai.jail.fwdEnvs` and appends the
+#     `osconfig` mechanism as `myconfig.ai.dev.jail.fwdEnvs` and appends the
 #     packages to its `add-pkg-deps` permission (and sets the env via
 #     `set-env`) for every `agent-bubblewrap-*` wrapper (`agent-bubblewrap-pi`, `agent-bubblewrap-claude`,
 #     `agent-bubblewrap-opencode`, ...).
-#   * `myconfig.ai.microvm` guests — `myconfig.ai.microvm/guest.nix` appends
+#   * `myconfig.ai.dev.microvm` guests — `myconfig.ai.microvm/guest.nix` appends
 #     the packages to the guest's `environment.systemPackages` (§7) and the
 #     env to `environment.variables`.
 #   * `agent-qemu-pi` / `agent-qemu-workmux-tmux` / `agent-qemu-herdr` impure
@@ -23,7 +23,7 @@
 #     passes it through to `mkSandboxedRunner`
 #     (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`),
 #     which folds it into the guest package set.
-#   * gVisor sandbox image — `myconfig.ai.gvisor-agent-sandbox` appends the
+#   * gVisor sandbox image — `myconfig.ai.dev.gvisor-agent-sandbox` appends the
 #     packages to its `extraImagePackages` default.
 #
 # Deliberately EMPTY by default *from the host's side*: the sandbox tiers are
@@ -31,11 +31,11 @@
 # (headless, no GUI closures), so heavy tooling — a browser behind
 # `playwright-cli`, for example — is opt-in per host:
 #
-#   myconfig.ai.sandboxTools.extraPackages = with pkgs; [
+#   myconfig.ai.dev.sandboxTools.extraPackages = with pkgs; [
 #     playwright-cli
 #     chromium
 #   ];
-#   myconfig.ai.sandboxTools.extraEnv.PLAYWRIGHT_MCP_BROWSER = "chromium";
+#   myconfig.ai.dev.sandboxTools.extraEnv.PLAYWRIGHT_MCP_BROWSER = "chromium";
 #
 # Feature modules may add to the list too, gated behind their own enable
 # option, when their tool is wanted in every tier and belongs to no single
@@ -43,16 +43,16 @@
 # exists wherever an agent produces a changeset.
 { lib, ... }:
 {
-  options.myconfig.ai.sandboxTools = with lib; {
+  options.myconfig.ai.dev.sandboxTools = with lib; {
     extraPackages = mkOption {
       type = types.listOf types.package;
       default = [ ];
       description = ''
         Extra packages added to EVERY agent sandbox tier (bubblewrap `agent-bubblewrap-*`
-        wrappers, `myconfig.ai.microvm` guests, the `sandboxed-*` microVM
+        wrappers, `myconfig.ai.dev.microvm` guests, the `sandboxed-*` microVM
         runners and the gVisor sandbox image), in addition to each tier's own
         default toolset. Default: none from the host — the sandboxes stay
-        minimal; enabled feature modules (e.g. `myconfig.ai.hunk`) may append
+        minimal; enabled feature modules (e.g. `myconfig.ai.dev.hunk`) may append
         their own tool.
       '';
     };
@@ -68,8 +68,8 @@
         interpolated as usual, e.g.:
 
         ```nix
-        myconfig.ai.sandboxTools.extraEnv.PLAYWRIGHT_MCP_BROWSER = "chromium";
-        myconfig.ai.sandboxTools.extraEnv.PLAYWRIGHT_MCP_EXECUTABLE_PATH =
+        myconfig.ai.dev.sandboxTools.extraEnv.PLAYWRIGHT_MCP_BROWSER = "chromium";
+        myconfig.ai.dev.sandboxTools.extraEnv.PLAYWRIGHT_MCP_EXECUTABLE_PATH =
           "\${pkgs.chromium}/bin/chromium";
         ```
       '';

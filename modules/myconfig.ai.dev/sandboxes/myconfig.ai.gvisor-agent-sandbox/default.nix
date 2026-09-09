@@ -1,11 +1,11 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.gvisor-agent-sandbox — rootless Podman + gVisor agent sandboxes.
+# myconfig.ai.dev.gvisor-agent-sandbox — rootless Podman + gVisor agent sandboxes.
 #
 # A container-based isolation tier for coding agents, sitting between the
-# bubblewrap `jail-app` wrappers (`myconfig.ai.jail`) and the Cloud Hypervisor
-# microVM tier (`myconfig.ai.microvm`). Each session runs in a rootless Podman
+# bubblewrap `jail-app` wrappers (`myconfig.ai.dev.jail`) and the Cloud Hypervisor
+# microVM tier (`myconfig.ai.dev.microvm`). Each session runs in a rootless Podman
 # container with gVisor (`runsc`) as OCI runtime, on a Nix-built sandbox image,
 # and gets its own fully isolated git clone of the repository.
 {
@@ -16,7 +16,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.gvisor-agent-sandbox;
+  cfg = config.myconfig.ai.dev.gvisor-agent-sandbox;
 
   # The coding-agent CLIs this repo can install on the host, mapped from their
   # `myconfig.ai.<name>.enable` flag to the very package attribute the matching
@@ -44,7 +44,7 @@ let
   litellmBase = "http://${cfg.litellm.address}:${toString cfg.litellm.forwardPort}";
 
   enabledAgentPackages = lib.attrValues (
-    lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentPackagesByFlag
+    lib.filterAttrs (name: _: config.myconfig.ai.dev.${name}.enable or false) agentPackagesByFlag
   );
 
   # `herdr` is the agent multiplexer that lives in the terminal. On the host it
@@ -164,8 +164,8 @@ in
 {
   imports = [ ./litellm-endpoint.nix ];
 
-  options.myconfig.ai.gvisor-agent-sandbox = with lib; {
-    enable = mkEnableOption "myconfig.ai.gvisor-agent-sandbox";
+  options.myconfig.ai.dev.gvisor-agent-sandbox = with lib; {
+    enable = mkEnableOption "myconfig.ai.dev.gvisor-agent-sandbox";
 
     package = mkOption {
       type = types.package;
@@ -191,7 +191,7 @@ in
         enabledAgentPackages
         ++ lib.optional herdrEnabled pkgs.herdr
         # Shared sandbox tooling (see ../myconfig.ai.sandboxTools.nix).
-        ++ config.myconfig.ai.sandboxTools.extraPackages
+        ++ config.myconfig.ai.dev.sandboxTools.extraPackages
         # Nix for in-session builds, when enabled below
         # (myconfig.ai.gvisor-agent-sandbox.nix).
         ++ lib.optionals cfg.nix.enable [ cfg.nix.package ];
@@ -199,7 +199,7 @@ in
         the packages of the coding agents enabled on this host, i.e. one entry
         per set `myconfig.ai.<pi-coding-agent|opencode|claude-code|codex|github-copilot-cli|qwen-code>.enable`,
         plus `pkgs.herdr` when any of them is enabled,
-        plus `myconfig.ai.sandboxTools.extraPackages`,
+        plus `myconfig.ai.dev.sandboxTools.extraPackages`,
         plus `nix.package` when `myconfig.ai.gvisor-agent-sandbox.nix.enable`
       '';
       example = literalExpression "[ pkgs.claude-code ]";
@@ -270,7 +270,7 @@ in
         ];
         defaultText = literalExpression ''
           rules pointing the host's loopback LiteLLM URLs at
-          `myconfig.ai.gvisor-agent-sandbox.litellm.address`
+          `myconfig.ai.dev.gvisor-agent-sandbox.litellm.address`
         '';
         example = [ "http://127.0.0.1:8080=http://192.168.84.1:8080" ];
         description = ''
@@ -392,7 +392,7 @@ in
       {
         assertion = lib.all (p: p != "" && !lib.hasPrefix "/" p && !lib.hasInfix ".." p) cfg.home.seedPaths;
         message = ''
-          myconfig.ai.gvisor-agent-sandbox.home.seedPaths must contain only
+          myconfig.ai.dev.gvisor-agent-sandbox.home.seedPaths must contain only
           non-empty, relative paths without "..":
           ${lib.concatStringsSep ", " cfg.home.seedPaths}
         '';

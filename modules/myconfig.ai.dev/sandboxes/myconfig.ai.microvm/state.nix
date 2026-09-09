@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — OPT-IN, TASK-SCOPED agent state (improvement ticket 5
+# myconfig.ai.dev.microvm — OPT-IN, TASK-SCOPED agent state (improvement ticket 5
 # part B).
 #
 # The guest home is a tmpfs and DISPOSABLE by default: every sandbox starts with
@@ -55,7 +55,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
   session = agentSession;
 
   # Union of every agent's declared state directories (relative to the guest
@@ -135,7 +135,7 @@ let
       ${lib.concatMapStringsSep "\n" (d: "      link_one ${lib.escapeShellArg d}") declaredDirs}
     '';
     meta = with lib; {
-      description = "Link task-scoped agent state into the guest home (myconfig.ai.microvm)";
+      description = "Link task-scoped agent state into the guest home (myconfig.ai.dev.microvm)";
       platforms = platforms.linux;
     };
   };

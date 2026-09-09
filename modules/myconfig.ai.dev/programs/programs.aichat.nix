@@ -6,11 +6,11 @@
 }:
 {
   options.myconfig = with lib; {
-    ai.aichat = {
-      enable = mkEnableOption "myconfig.ai.aichat";
+    ai.dev.aichat = {
+      enable = mkEnableOption "myconfig.ai.dev.aichat";
     };
   };
-  config = lib.mkIf config.myconfig.ai.aichat.enable {
+  config = lib.mkIf config.myconfig.ai.dev.aichat.enable {
     home-manager.sharedModules = [
       {
         programs.aichat = {

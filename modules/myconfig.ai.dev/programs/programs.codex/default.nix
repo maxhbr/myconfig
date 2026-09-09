@@ -11,11 +11,11 @@ let
   # Built at the NixOS scope (home-manager uses `useGlobalPkgs`, so
   # `pkgs.codex` is the same package `programs.codex.package` defaults to) so
   # the workmux launcher and its named-agent registration can be assembled
-  # here and merged into `myconfig.ai.workmux.agents`.
+  # here and merged into `myconfig.ai.dev.workmux.agents`.
   # Make the `workmux` binary available inside the sandbox (for the
   # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
   # a worktree pane) whenever workmux is enabled.
-  workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
+  workmuxDevTools = lib.optional osconfig.myconfig.ai.dev.workmux.enable osconfig.myconfig.ai.dev.workmux.package;
   codexBwrap = callLib ../../fns/bubblewrap-simple-app.nix {
     name = "codex";
     pkg = pkgs.codex;
@@ -32,19 +32,19 @@ let
     agentName = "codex";
     agentType = "codex";
     innerPkg = codexBwrap;
-    workmuxPkg = osconfig.myconfig.ai.workmux.package;
+    workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
 in
 {
   options.myconfig = with lib; {
-    ai.codex = {
-      enable = mkEnableOption "myconfig.ai.codex";
+    ai.dev.codex = {
+      enable = mkEnableOption "myconfig.ai.dev.codex";
     };
   };
-  config = lib.mkIf config.myconfig.ai.codex.enable {
-    myconfig.ai.workmux.agents.codex = codexWorktree.agent;
+  config = lib.mkIf config.myconfig.ai.dev.codex.enable {
+    myconfig.ai.dev.workmux.agents.codex = codexWorktree.agent;
     home-manager.sharedModules = [
       {
         programs.codex = {

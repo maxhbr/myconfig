@@ -601,7 +601,7 @@
                 pkgs = inputs.nixpkgs.legacyPackages."${system}";
                 files = pkgs.lib.concatStringsSep " " [
                   "switch.sh"
-                  # The EXECUTED myconfig.ai.microvm batch-job harnesses and the
+                  # The EXECUTED myconfig.ai.dev.microvm batch-job harnesses and the
                   # real-KVM validation suite. They are plain scripts (not
                   # writeShellApplication), so nothing else gates them.
                   "tests/microvm-batch-result-integrity.sh"
@@ -651,7 +651,7 @@
                 '';
               };
           }
-          # Automated EVAL / BUILD test suite for the myconfig.ai.microvm
+          # Automated EVAL / BUILD test suite for the myconfig.ai.dev.microvm
           # Cloud Hypervisor agent-sandbox tier (plan §38, wired per §39).
           # Kept in a dedicated file to avoid bloating flake.nix. Only wired
           # in for x86_64-linux, the system the enabled reference host

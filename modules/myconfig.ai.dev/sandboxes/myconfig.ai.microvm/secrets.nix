@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — dedicated agent-VM SSH private-key secret stub.
+# myconfig.ai.dev.microvm — dedicated agent-VM SSH private-key secret stub.
 #
 # The guest `agent` user authorises exactly one dedicated public key
 # (`sshPublicKeyFile`, committed in-repo). The MATCHING PRIVATE key is not in
@@ -38,7 +38,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
 in
 {
   config = lib.mkIf (cfg.enable && cfg.enableSsh) {

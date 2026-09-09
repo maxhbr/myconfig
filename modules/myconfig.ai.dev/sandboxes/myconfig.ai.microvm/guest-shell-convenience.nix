@@ -1,7 +1,7 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — OPT-IN guest shell convenience (fish + neovim).
+# myconfig.ai.dev.microvm — OPT-IN guest shell convenience (fish + neovim).
 #
 # This is the mechanism recommended in place of "run home-manager in the
 # guest" or "stage the host primary user's rendered dotfiles": it bakes a
@@ -42,7 +42,7 @@
 # the per-class guest closure. The closure is PREBUILT per resource class, so
 # enabling this on a host bakes it into every slot of every class. It is
 # therefore OFF by default, exactly like the microvm tier itself: a host opts
-# in with `myconfig.ai.microvm.guestShellConvenience.enable = true`. Hosts
+# in with `myconfig.ai.dev.microvm.guestShellConvenience.enable = true`. Hosts
 # that do not enable it are byte-for-byte unchanged (guest.nix guards every
 # addition on `agentShellConvenience.enable`, which is false then).
 #
@@ -68,7 +68,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
   convCfg = cfg.guestShellConvenience;
 
   # The vendored neovim config (a plain copy of the host's
@@ -260,7 +260,7 @@ let
       ''}
     '';
     meta = with lib; {
-      description = "Copy the guest-built fish + neovim config into the disposable agent home (myconfig.ai.microvm)";
+      description = "Copy the guest-built fish + neovim config into the disposable agent home (myconfig.ai.dev.microvm)";
       platforms = platforms.linux;
     };
   };
@@ -328,7 +328,7 @@ let
   };
 in
 {
-  options.myconfig.ai.microvm.guestShellConvenience = with lib; {
+  options.myconfig.ai.dev.microvm.guestShellConvenience = with lib; {
     enable = mkOption {
       type = types.bool;
       default = false;
@@ -343,7 +343,7 @@ in
         Default OFF: it adds a non-trivial amount to every prebuilt guest
         closure (fish + neovim + treesitter parsers + the plugin/runtime
         deps the host config assumes). Enable it per host with
-        `myconfig.ai.microvm.guestShellConvenience.enable = true`.
+        `myconfig.ai.dev.microvm.guestShellConvenience.enable = true`.
 
         Invariants preserved: the guest store stays a build-time EROFS image
         (no host store share, no host nix daemon), the guest home stays

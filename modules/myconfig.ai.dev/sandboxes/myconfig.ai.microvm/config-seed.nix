@@ -1,7 +1,7 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — RUNTIME, ALLOWLISTED AGENT-CONFIGURATION STAGING
+# myconfig.ai.dev.microvm — RUNTIME, ALLOWLISTED AGENT-CONFIGURATION STAGING
 # (lightweight plan phase 3), the ONLY way a guest home is provisioned.
 #
 # Problem
@@ -117,7 +117,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
   seedCfg = cfg.configSeed;
   session = agentSession;
 
@@ -708,7 +708,7 @@ let
       log "staged $(jq -s length "$staged_ndjson") allowlisted entr(y|ies) for slot $slot ($total_files file(s), $total_bytes bytes) -> $PAYLOAD"
     '';
     meta = with lib; {
-      description = "Stage allowlisted host agent configuration for a myconfig.ai.microvm slot";
+      description = "Stage allowlisted host agent configuration for a myconfig.ai.dev.microvm slot";
       platforms = platforms.linux;
     };
   };
@@ -761,7 +761,7 @@ let
       log "seeded $HOME_DIR from $PAYLOAD"
     '';
     meta = with lib; {
-      description = "Copy the staged host agent configuration into the disposable guest home (myconfig.ai.microvm)";
+      description = "Copy the staged host agent configuration into the disposable guest home (myconfig.ai.dev.microvm)";
       platforms = platforms.linux;
     };
   };
@@ -816,7 +816,7 @@ let
   };
 in
 {
-  options.myconfig.ai.microvm.configSeed = with lib; {
+  options.myconfig.ai.dev.microvm.configSeed = with lib; {
     hostHome = mkOption {
       type = types.str;
       default = config.users.users.${myconfig.user}.home;
@@ -867,14 +867,14 @@ in
       assertions = [
         {
           assertion = lib.hasPrefix "/" seedCfg.hostHome;
-          message = "myconfig.ai.microvm.configSeed.hostHome must be an absolute path.";
+          message = "myconfig.ai.dev.microvm.configSeed.hostHome must be an absolute path.";
         }
         {
           # A malformed entry would be joined onto both the host home and the
           # guest home; reject it at EVAL rather than skipping it at runtime.
           assertion = malformedPaths == [ ];
           message = ''
-            myconfig.ai.microvm.configSeed: the staging allowlist contains
+            myconfig.ai.dev.microvm.configSeed: the staging allowlist contains
             path(s) that are not plain, relative, `..`-free paths:
             ${lib.concatStringsSep ", " (map (p: "'${p}'") malformedPaths)}.
             A staged path must be relative to `configSeed.hostHome` (so it can
@@ -889,7 +889,7 @@ in
           # skipped by the runtime denylist.
           assertion = deniedPaths == [ ];
           message = ''
-            myconfig.ai.microvm.configSeed: the staging allowlist contains
+            myconfig.ai.dev.microvm.configSeed: the staging allowlist contains
             path(s) that look like CREDENTIAL material and must never be staged
             into a guest: ${lib.concatStringsSep ", " (map (p: "'${p}'") deniedPaths)}.
             Model-provider credentials stay in the host LiteLLM proxy; stage
@@ -903,7 +903,7 @@ in
           # staged directory and persistence would silently not happen.
           assertion = stateCollisions == [ ];
           message = ''
-            myconfig.ai.microvm.configSeed: the staging allowlist overlaps the
+            myconfig.ai.dev.microvm.configSeed: the staging allowlist overlaps the
             persisted agent-state directories
             (${lib.concatStringsSep ", " (map (p: "'${p}'") stateCollisions)}).
             The seeding oneshot copies the staged tree into the guest home
@@ -924,7 +924,7 @@ in
           # launch. Both are one rename away; fail the build instead.
           assertion = paths.homeSubdir != "" && paths.homeSubdir != session.roSubdirs.hostkeys;
           message = ''
-            myconfig.ai.microvm.configSeed: the staged payload subdirectory
+            myconfig.ai.dev.microvm.configSeed: the staged payload subdirectory
             ('${paths.homeSubdir}') must be a non-empty name that differs from
             the read-only tree's host-key subdirectory
             ('${session.roSubdirs.hostkeys}'). The launcher clears the payload

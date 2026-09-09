@@ -1,9 +1,9 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.hermes — host-level (native) hermes-agent gateway backend.
+# myconfig.ai.dev.hermes — host-level (native) hermes-agent gateway backend.
 #
-# Declares the `myconfig.ai.hermes.*` options, imports the upstream
+# Declares the `myconfig.ai.dev.hermes.*` options, imports the upstream
 # `inputs.hermes-agent` NixOS module, and (when `enable = true` and the
 # container/microvm backend is disabled) runs `services.hermes-agent`
 # natively on the host. The containerized backends live in
@@ -57,10 +57,10 @@ let
       ;
   };
   inherit (shared) hermesServiceCfg;
-  cfg = config.myconfig.ai.hermes;
+  cfg = config.myconfig.ai.dev.hermes;
 in
 {
-  options.myconfig.ai.hermes = with lib; {
+  options.myconfig.ai.dev.hermes = with lib; {
     enable = mkEnableOption "Hermes agent configuration";
 
     user = mkOption {
@@ -143,7 +143,7 @@ in
     apiServerHost = mkOption {
       type = types.nullOr types.str;
       default =
-        if config.myconfig.ai.hermes.container.enable then
+        if config.myconfig.ai.dev.hermes.container.enable then
           config.containers.hermes.localAddress
         else
           "localhost";

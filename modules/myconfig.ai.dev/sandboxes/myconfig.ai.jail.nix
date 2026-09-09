@@ -6,7 +6,7 @@
 # wrapper library and the matching `extraFwdEnv` / `extraRuntimeEnv` arguments.
 { config, lib, ... }:
 {
-  options.myconfig.ai.jail = with lib; {
+  options.myconfig.ai.dev.jail = with lib; {
     fwdEnvs = mkOption {
       type = types.listOf types.str;
       default = [ ];

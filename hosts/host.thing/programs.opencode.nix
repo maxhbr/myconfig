@@ -9,7 +9,7 @@
 }:
 {
   config = {
-    myconfig.ai.opencode.enable = true;
+    myconfig.ai.dev.opencode.enable = true;
     home-manager.sharedModules = [
       {
         programs.opencode.settings = {

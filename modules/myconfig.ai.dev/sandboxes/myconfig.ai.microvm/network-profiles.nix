@@ -1,10 +1,10 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — THE network-profile capability table (improvement
+# myconfig.ai.dev.microvm — THE network-profile capability table (improvement
 # ticket 3 C).
 #
-# `myconfig.ai.microvm.networkProfile` replaces the three ambiguous booleans
+# `myconfig.ai.dev.microvm.networkProfile` replaces the three ambiguous booleans
 # (allowPublicInternet / allowPrivateNetworks / allowInterVmTraffic) with four
 # NAMED, coherent profiles. This file is the single source of truth for what
 # each profile means; network.nix renders the firewall from it and guest.nix

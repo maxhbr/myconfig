@@ -1,7 +1,7 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.agent-of-empires — Agent of Empires (`aoe`), a tmux based
+# myconfig.ai.dev.agent-of-empires — Agent of Empires (`aoe`), a tmux based
 # terminal session manager for AI coding agents
 # (https://github.com/agent-of-empires/agent-of-empires).
 #
@@ -27,13 +27,13 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.agent-of-empires;
+  cfg = config.myconfig.ai.dev.agent-of-empires;
   aoePkgs = inputs.agent-of-empires.packages.${pkgs.system};
 in
 {
   options.myconfig = with lib; {
-    ai.agent-of-empires = {
-      enable = mkEnableOption "myconfig.ai.agent-of-empires";
+    ai.dev.agent-of-empires = {
+      enable = mkEnableOption "myconfig.ai.dev.agent-of-empires";
 
       web = mkOption {
         type = types.bool;

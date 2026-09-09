@@ -8,8 +8,8 @@
 # node_exporter textfile collector.
 #
 # This module only makes sense when ccusage is actually part of the
-# system, so its default follows `myconfig.ai.ccusage.enable` (which in
-# turn is auto-enabled wherever `myconfig.ai.enable` is set):
+# system, so its default follows `myconfig.ai.dev.ccusage.enable` (which in
+# turn is auto-enabled wherever `myconfig.ai.dev.enable` is set):
 #
 #   * client.enable && ccusageExporter.enable(default: ai.ccusage.enable)
 #
@@ -74,7 +74,7 @@ let
     name = "myconfig-ccusage-refresh";
     runtimeInputs = with pkgs; [
       bash
-      ccusage # the package from myconfig.ai.ccusage, so both stay in sync
+      ccusage # the package from myconfig.ai.dev.ccusage, so both stay in sync
       coreutils # mktemp, chmod, date, timeout
       jq
     ];
@@ -88,14 +88,14 @@ in
     enable = mkOption {
       type = types.bool;
       # Default follows the ccusage module: when the host ships ccusage
-      # (auto-enabled by the myconfig.ai umbrella), its usage metrics are
+      # (auto-enabled by the myconfig.ai.dev umbrella), its usage metrics are
       # exported too. A host can still opt out explicitly.
-      default = config.myconfig.ai.ccusage.enable;
-      defaultText = lib.literalExpression "config.myconfig.ai.ccusage.enable";
+      default = config.myconfig.ai.dev.ccusage.enable;
+      defaultText = lib.literalExpression "config.myconfig.ai.dev.ccusage.enable";
       description = ''
         Expose coding-agent token/cost usage from `ccusage --json` as
         Prometheus metrics via the node_exporter textfile collector.
-        Only meaningful when `myconfig.ai.ccusage` is enabled (the
+        Only meaningful when `myconfig.ai.dev.ccusage` is enabled (the
         default mirrors it).
       '';
     };

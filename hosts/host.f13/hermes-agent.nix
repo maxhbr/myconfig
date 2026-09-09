@@ -13,7 +13,7 @@
 }:
 {
   config = {
-    myconfig.ai.hermes = {
+    myconfig.ai.dev.hermes = {
       microvm = {
         enable = true;
         autostart = true;

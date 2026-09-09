@@ -1,9 +1,9 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.hermes — microvm.nix backend.
+# myconfig.ai.dev.hermes — microvm.nix backend.
 #
-# When `myconfig.ai.hermes.enable` and `myconfig.ai.hermes.microvm.enable`
+# When `myconfig.ai.dev.hermes.enable` and `myconfig.ai.dev.hermes.microvm.enable`
 # are both true, runs the hermes-agent gateway inside a microvm.nix
 # MicroVM (a real VM with its own kernel, managed as a systemd service on
 # the host). This gives stronger isolation than the NixOS-container backend
@@ -20,7 +20,7 @@
 # `microvm.host.enable = lib.mkDefault false` so that merely importing this
 # module does *not* load tap/vhost_net modules, enable KSM or create the
 # `microvm` user on hosts that don't use the backend. Hosts that opt in set
-# `myconfig.ai.hermes.microvm.enable = true`, which flips
+# `myconfig.ai.dev.hermes.microvm.enable = true`, which flips
 # `microvm.host.enable` to `true`.  (Upstream microvm.nix defaults
 # `microvm.host.enable = true` — see nixos-modules/host/options.nix — so this
 # neutralization is load-bearing, not a no-op.)
@@ -59,7 +59,7 @@ let
     secretsDir
     hostConfig
     ;
-  cfg = config.myconfig.ai.hermes;
+  cfg = config.myconfig.ai.dev.hermes;
 
   # The hermes CLI binary (same package the native backend installs).
   hermesPkg = inputs.hermes-agent.packages.${pkgs.system}.default;
@@ -79,7 +79,7 @@ let
       if ! /run/current-system/sw/bin/systemctl is-active --quiet microvm@hermes.service; then
         echo "The hermes microvm is not running." >&2
         echo "Start it with:  sudo systemctl start microvm@hermes" >&2
-        echo "(autostart is controlled by myconfig.ai.hermes.microvm.autostart)" >&2
+        echo "(autostart is controlled by myconfig.ai.dev.hermes.microvm.autostart)" >&2
         exit 1
       fi
 

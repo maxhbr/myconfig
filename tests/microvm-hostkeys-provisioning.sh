@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 #
 # EXECUTED regression harness for the SELF-HEALING per-slot SSH host identity
-# (myconfig.ai.microvm), run from the `microvm-host-identity-self-healing` check
+# (myconfig.ai.dev.microvm), run from the `microvm-host-identity-self-healing` check
 # in tests/microvm.nix.
 #
 # It runs the REAL, unmodified provisioner

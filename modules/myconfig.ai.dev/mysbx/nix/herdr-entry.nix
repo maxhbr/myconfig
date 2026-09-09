@@ -41,7 +41,7 @@
   # when the startup workspace is relocated below.
   jq,
   # The herdr package that runs inside the sandbox
-  # (`myconfig.ai.mysbx.herdr.package`).
+  # (`myconfig.ai.dev.mysbx.herdr.package`).
   herdr,
 }:
 let

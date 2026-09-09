@@ -42,12 +42,12 @@ let
   };
 
   agenticCodingEnabled =
-    (config.myconfig.ai.claude-code.enable or false)
-    || (config.myconfig.ai.codex.enable or false)
-    || (config.myconfig.ai.opencode.enable or false)
-    || (config.myconfig.ai.pi-coding-agent.enable or false)
-    || (config.myconfig.ai.qwen-code.enable or false)
-    || (config.myconfig.ai.github-copilot-cli.enable or false);
+    (config.myconfig.ai.dev.claude-code.enable or false)
+    || (config.myconfig.ai.dev.codex.enable or false)
+    || (config.myconfig.ai.dev.opencode.enable or false)
+    || (config.myconfig.ai.dev.pi-coding-agent.enable or false)
+    || (config.myconfig.ai.dev.qwen-code.enable or false)
+    || (config.myconfig.ai.dev.github-copilot-cli.enable or false);
 
   # `herdr` (the multiplexer) plus the skill generated from it.
   herdr = pkgs.herdr;
@@ -56,7 +56,7 @@ let
   # `herdr --skill` prints the frontmatter + body matching exactly this
   # version, so the skill stays in sync with the CLI instead of being a
   # stale vendored copy. Registered in the
-  # `myconfig.ai.skills.handcrafted` registry, which
+  # `myconfig.ai.dev.skills.handcrafted` registry, which
   # ../../skills/default.nix deploys to every enabled agent harness. Implicitly
   # enabled by herdr — there is no separate enable flag.
   herdrSkillSrc = pkgs.runCommand "herdr-skill" { nativeBuildInputs = [ herdr ]; } ''
@@ -558,7 +558,7 @@ let
 
   agentUserDataDirs = lib.concatLists (
     lib.attrValues (
-      lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentUserDataDirsByFlag
+      lib.filterAttrs (name: _: config.myconfig.ai.dev.${name}.enable or false) agentUserDataDirsByFlag
     )
   );
 
@@ -567,7 +567,7 @@ let
     pkg = herdr-jail-entry;
     userDataDirs = agentUserDataDirs;
     # claude-code keeps its account/session index in a single home file.
-    userDataFiles = lib.optional (config.myconfig.ai.claude-code.enable or false) ".claude.json";
+    userDataFiles = lib.optional (config.myconfig.ai.dev.claude-code.enable or false) ".claude.json";
     # ~/.agents/skills (handcrafted skills, incl. the herdr skill) read-only.
     # `.config/herdr` is deliberately NOT bound: the entrypoint writes the
     # session config into the jail's tmpfs $HOME instead.
@@ -658,7 +658,7 @@ let
   # baked in (never credentials); this matches `agent-qemu-pi`, which bakes the
   # `piPackage` store path into its runner the same way.
   enabledAgentPackages = lib.attrValues (
-    lib.filterAttrs (name: _: config.myconfig.ai.${name}.enable or false) agentPackagesByFlag
+    lib.filterAttrs (name: _: config.myconfig.ai.dev.${name}.enable or false) agentPackagesByFlag
   );
 
   agentPackagesJson = builtins.toJSON (map (p: p.outPath) enabledAgentPackages);
@@ -755,7 +755,7 @@ let
       # Evaluate the module-owned expression directly. Impure evaluation is
       # required for the transient workspace, port, key, and uid/gid values.
       runner=$(nix build --impure --no-link --print-out-paths \
-        --file ${config.myconfig.ai.qemu-agent-sandbox.runnerExpression})
+        --file ${config.myconfig.ai.dev.qemu-agent-sandbox.runnerExpression})
 
       # microvm.nix's qemu runner connects to the virtiofs daemons over
       # RELATIVE unix socket paths; the runner's `bin/sandboxed-launch`
@@ -834,12 +834,12 @@ let
     '';
   };
 
-  # Shared sandbox tools (myconfig.ai.sandboxTools) as a JSON array of store
+  # Shared sandbox tools (myconfig.ai.dev.sandboxTools) as a JSON array of store
   # paths, baked into the `agent-qemu-herdr` wrapper and read (via
   # AGENT_QEMU_HERDR_EXTRA_PACKAGES) by the impure runner expression that builds
   # the per-invocation VM runner. Same pattern as `agentPackagesJson` above.
   sandboxToolsJson = builtins.toJSON (
-    map (p: p.outPath) config.myconfig.ai.sandboxTools.extraPackages
+    map (p: p.outPath) config.myconfig.ai.dev.sandboxTools.extraPackages
   );
 in
 {
@@ -847,7 +847,7 @@ in
     # Install the herdr skill for every enabled agent harness (see
     # ../../skills/default.nix); string form (the derivation's outPath), same
     # convention as the workmux and simple-english skill registrations.
-    myconfig.ai.skills.handcrafted.herdr = "${herdrSkillSrc}";
+    myconfig.ai.dev.skills.handcrafted.herdr = "${herdrSkillSrc}";
 
     home-manager.sharedModules = [
       {

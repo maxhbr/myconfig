@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — guest-side, BOOT-TIME model discovery.
+# myconfig.ai.dev.microvm — guest-side, BOOT-TIME model discovery.
 #
 # Problem
 # -------
@@ -60,7 +60,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
   mc = cfg.guestModelConfig;
 
   # The guest-visible model endpoint: the loopback forwarder, i.e. the exact
@@ -217,7 +217,7 @@ let
       )
       pi_tmp=$(mktemp "$pi_dir/.zz-microvm-models.ts.XXXXXX")
       cat >"$pi_tmp" <<EOF
-      // Auto-generated at guest boot by agent-model-config (myconfig.ai.microvm).
+      // Auto-generated at guest boot by agent-model-config (myconfig.ai.dev.microvm).
       // Runtime model list of the host LiteLLM proxy; overrides the build-time
       // myconfig-providers.ts registration of the same provider key.
       import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -234,7 +234,7 @@ let
       log "wrote $PI_OUT"
     '';
     meta = with lib; {
-      description = "Render guest agent model configs from the live LiteLLM model list (myconfig.ai.microvm)";
+      description = "Render guest agent model configs from the live LiteLLM model list (myconfig.ai.dev.microvm)";
       platforms = platforms.linux;
     };
   };
@@ -285,7 +285,7 @@ let
   };
 in
 {
-  options.myconfig.ai.microvm.guestModelConfig = with lib; {
+  options.myconfig.ai.dev.microvm.guestModelConfig = with lib; {
     enable = mkOption {
       type = types.bool;
       default = true;

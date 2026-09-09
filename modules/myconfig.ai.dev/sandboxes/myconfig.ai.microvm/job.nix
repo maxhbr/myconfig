@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — UNATTENDED BATCH JOBS: the versioned job format, the
+# myconfig.ai.dev.microvm — UNATTENDED BATCH JOBS: the versioned job format, the
 # host-side job directories, the TRUSTED guest-side job CONTROLLER, the
 # UNTRUSTED guest-side WORKER and the host-side result VERIFIER.
 #
@@ -116,7 +116,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
   jobCfg = cfg.job;
   session = agentSession;
 
@@ -426,7 +426,7 @@ let
       exit 0
     '';
     meta = with lib; {
-      description = "Assert the effective permissions of the myconfig.ai.microvm job share";
+      description = "Assert the effective permissions of the myconfig.ai.dev.microvm job share";
       platforms = platforms.linux;
     };
   };
@@ -498,7 +498,7 @@ let
       esac
     '';
     meta = with lib; {
-      description = "Untrusted guest-side batch worker for myconfig.ai.microvm sandboxes";
+      description = "Untrusted guest-side batch worker for myconfig.ai.dev.microvm sandboxes";
       platforms = platforms.linux;
     };
   };
@@ -992,7 +992,7 @@ let
       exit 0
     '';
     meta = with lib; {
-      description = "Trusted guest-side batch job controller for myconfig.ai.microvm sandboxes";
+      description = "Trusted guest-side batch job controller for myconfig.ai.dev.microvm sandboxes";
       platforms = platforms.linux;
     };
   };
@@ -1217,7 +1217,7 @@ let
       jq -c . <<< "$doc"
     '';
     meta = with lib; {
-      description = "Validate a myconfig.ai.microvm batch result against the active allocation";
+      description = "Validate a myconfig.ai.dev.microvm batch result against the active allocation";
       platforms = platforms.linux;
     };
   };
@@ -1252,7 +1252,7 @@ let
 
     # ---- TRUSTED controller (guest root) --------------------------------
     systemd.services.agent-job-controller = {
-      description = "Trusted unattended agent batch job controller (myconfig.ai.microvm)";
+      description = "Trusted unattended agent batch job controller (myconfig.ai.dev.microvm)";
       wantedBy = [ "multi-user.target" ];
       # Only run when the host actually placed a job in the share. Without a
       # spec the unit is skipped entirely, so an interactive slot is unaffected.
@@ -1414,7 +1414,7 @@ let
   };
 in
 {
-  options.myconfig.ai.microvm.job = with lib; {
+  options.myconfig.ai.dev.microvm.job = with lib; {
     defaultTimeoutSeconds = mkOption {
       type = types.ints.positive;
       default = 3600;
@@ -1485,12 +1485,12 @@ in
       assertions = [
         {
           assertion = cfg.job.defaultTimeoutSeconds <= cfg.job.maxTimeoutSeconds;
-          message = "myconfig.ai.microvm.job.defaultTimeoutSeconds must be <= job.maxTimeoutSeconds.";
+          message = "myconfig.ai.dev.microvm.job.defaultTimeoutSeconds must be <= job.maxTimeoutSeconds.";
         }
         {
           # The whole trust split collapses if the worker is root.
           assertion = paths.workerUid != 0;
-          message = "myconfig.ai.microvm: the batch worker uid (guestAgentUid) must never be 0.";
+          message = "myconfig.ai.dev.microvm: the batch worker uid (guestAgentUid) must never be 0.";
         }
       ];
 

@@ -1,7 +1,7 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — THE CONSOLIDATED PER-SESSION TREE (lightweight plan
+# myconfig.ai.dev.microvm — THE CONSOLIDATED PER-SESSION TREE (lightweight plan
 # phase 4), i.e. the single source of truth for every path, owner and mode of
 # the ONE writable virtiofs share (plus the ONE read-only share) every guest
 # gets.
@@ -37,7 +37,7 @@
 # PER-CAPABILITY ENTRIES (lightweight plan phase 5)
 # ------------------------------------------------
 # Each entry of the tables below declares WHICH capabilities
-# (`myconfig.ai.microvm.capabilities`) need it, and only the selected entries
+# (`myconfig.ai.dev.microvm.capabilities`) need it, and only the selected entries
 # are created, verified and swept. The SHAPE is unchanged — still one writable
 # and one read-only share, still the same paths and modes — a narrowed host
 # simply has fewer subdirectories in them:
@@ -127,7 +127,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
 
   slots = (import ./slots.nix { inherit lib; }).mkSlots agentResourceClasses;
 
@@ -448,12 +448,12 @@ let
       rel:
       (lib.findFirst (
         e: e.rel == rel
-      ) (throw "myconfig.ai.microvm.session: no layout entry '${rel}'") fullLayout).mode;
+      ) (throw "myconfig.ai.dev.microvm.session: no layout entry '${rel}'") fullLayout).mode;
     roModeOf =
       rel:
       (lib.findFirst (
         e: e.rel == rel
-      ) (throw "myconfig.ai.microvm.session: no read-only layout entry '${rel}'") fullRoLayout).mode;
+      ) (throw "myconfig.ai.dev.microvm.session: no read-only layout entry '${rel}'") fullRoLayout).mode;
 
     # ---- guest side (identical for every slot — the share hides the slot) --
     guestTag = "session";
@@ -625,7 +625,7 @@ let
       # --- NOTHING the table does not declare may be in either tree ---------
       # The per-directory checks above verify every declared entry, which alone
       # says nothing about UNDECLARED ones. That gap is not theoretical: a host
-      # that narrows `myconfig.ai.microvm.capabilities` (lightweight plan phase 5)
+      # that narrows `myconfig.ai.dev.microvm.capabilities` (lightweight plan phase 5)
       # stops creating — and stops verifying — the other capability's
       # subdirectories, while the ones a previous generation created are still
       # there after an unclean shutdown (nothing sweeps them at boot). A leftover
@@ -643,7 +643,7 @@ let
               for allowed in "$@"; do
                   [[ "$name" == "$allowed" ]] && known=1
               done
-              (( known )) || die "$label contains '$name', which the session layout table does not declare for this host (a stale entry from a previous myconfig.ai.microvm.capabilities selection, or an operator leftover): $dir/$name"
+              (( known )) || die "$label contains '$name', which the session layout table does not declare for this host (a stale entry from a previous myconfig.ai.dev.microvm.capabilities selection, or an operator leftover): $dir/$name"
           done < <(find "$dir" -mindepth 1 -maxdepth 1 -printf '%f\n')
       }
 
@@ -689,7 +689,7 @@ let
       printf '%s: slot %s: session tree ownership/modes verified\n' "$PROG" "$slot" >&2
     '';
     meta = with lib; {
-      description = "Verify the ownership and modes of a myconfig.ai.microvm session tree before launch";
+      description = "Verify the ownership and modes of a myconfig.ai.dev.microvm session tree before launch";
       platforms = platforms.linux;
     };
   };
@@ -765,7 +765,7 @@ in
               configSeedDir = paths.hostConfigSeedDir (lib.head slots).name;
             } == [ ];
           message = ''
-            myconfig.ai.microvm.session: the session layout violates the trust
+            myconfig.ai.dev.microvm.session: the session layout violates the trust
             boundary:
             ${lib.concatStringsSep "\n" (
               map (v: "  - ${v}") (violationsOf {
@@ -785,7 +785,7 @@ in
           # its trust-relevant owner/mode) from EVERY host.
           assertion = malformedCapabilityEntries == [ ];
           message = ''
-            myconfig.ai.microvm.session: malformed `capabilities` in the layout
+            myconfig.ai.dev.microvm.session: malformed `capabilities` in the layout
             table (use `null` for "every host", or a non-empty list of declared
             capabilities — ${lib.concatStringsSep ", " agentCapabilities.declared}):
             ${lib.concatStringsSep "\n" (

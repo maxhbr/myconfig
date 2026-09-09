@@ -55,7 +55,7 @@ let
             home = "/home/mhuber";
           };
           home-manager.users.mhuber.home.stateVersion = "24.05";
-          myconfig.ai.mysbx.enable = true;
+          myconfig.ai.dev.mysbx.enable = true;
         }
       ]
       ++ extraModules;
@@ -94,13 +94,13 @@ let
     # with `mkDefault`.
     rgOverridden = generated [
       ripgrepOn
-      { myconfig.ai.mysbx.config.env.RIPGREP_CONFIG_PATH = "/mysbx-home/custom/ripgreprc"; }
+      { myconfig.ai.dev.mysbx.config.env.RIPGREP_CONFIG_PATH = "/mysbx-home/custom/ripgreprc"; }
     ];
     # An unrelated key merges with the baseline instead of replacing it
     # (which a whole-attrset `mkDefault` would do).
     rgPlusExtra = generated [
       ripgrepOn
-      { myconfig.ai.mysbx.config.env.MYSBX_EVAL_TEST = "extra-value"; }
+      { myconfig.ai.dev.mysbx.config.env.MYSBX_EVAL_TEST = "extra-value"; }
     ];
     # The workmux integration (D16): the switch and the in-sandbox
     # workmux config mount must appear in the generated layer. The
@@ -110,7 +110,7 @@ let
     # that asserts on TOML bytes would buy nothing.
     workmuxOn = generated [
       {
-        myconfig.ai.mysbx.workmux = {
+        myconfig.ai.dev.mysbx.workmux = {
           enable = true;
           package = pkgs.hello;
           settings.agents.pi = {
@@ -128,21 +128,21 @@ let
     # (it is gated on ../../programs/programs.agent-of-empires/ being enabled), so
     # the two exercise both halves of the availability gate.
     muxHerdr = generated [
-      { myconfig.ai.mysbx.config.multiplexer = "herdr"; }
+      { myconfig.ai.dev.mysbx.config.multiplexer = "herdr"; }
     ];
     muxTmux = generated [
-      { myconfig.ai.mysbx.config.multiplexer = "tmux"; }
+      { myconfig.ai.dev.mysbx.config.multiplexer = "tmux"; }
     ];
     # A host-wide selection this host cannot start must fail at EVAL
     # time, naming the option to set — not on the first `mysbx` of
     # every sandbox.
     muxUnavailable = failedAssertions [
-      { myconfig.ai.mysbx.config.multiplexer = "aoe"; }
+      { myconfig.ai.dev.mysbx.config.multiplexer = "aoe"; }
     ];
     # ... and a selection that IS available must not produce that
     # assertion (the gate must not fire on the happy path).
     muxAvailableAsserts = failedAssertions [
-      { myconfig.ai.mysbx.config.multiplexer = "herdr"; }
+      { myconfig.ai.dev.mysbx.config.multiplexer = "herdr"; }
     ];
   };
 

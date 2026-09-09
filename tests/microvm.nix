@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Automated EVAL / BUILD test suite for the `myconfig.ai.microvm` Cloud
+# Automated EVAL / BUILD test suite for the `myconfig.ai.dev.microvm` Cloud
 # Hypervisor agent-sandbox tier (plan §38, wired per §39).
 #
 # IMPORTANT — these are EVAL / BUILD checks ONLY. They prove that the module
@@ -81,10 +81,10 @@ let
   # attributable purely to the feature toggle, not to a different host.
   disabledCfg =
     (self.nixosConfigurations.test-f13.extendModules {
-      modules = [ { myconfig.ai.microvm.enable = lib.mkForce false; } ];
+      modules = [ { myconfig.ai.dev.microvm.enable = lib.mkForce false; } ];
     }).config;
 
-  microvmOpts = enabledCfg.myconfig.ai.microvm;
+  microvmOpts = enabledCfg.myconfig.ai.dev.microvm;
   # The deterministic slot table of the ENABLED reference host, from the same
   # generator the module uses.
   enabledSlots =
@@ -376,7 +376,7 @@ let
     self.nixosConfigurations.test-workstation.extendModules {
       modules = [
         {
-          myconfig.ai.microvm = {
+          myconfig.ai.dev.microvm = {
             enable = true;
             # Keeps the variant key-free; the checks that need sshd use the
             # reference host, which has the control channel.
@@ -410,7 +410,7 @@ let
   # THE reference variant of the SELECTION checks: one agent only (the plan's
   # reference agent), which is what a host that wants the smallest guest closure
   # would configure.
-  codexHost = variantHostWith [ { myconfig.ai.microvm.enabledAgents = [ "codex" ]; } ];
+  codexHost = variantHostWith [ { myconfig.ai.dev.microvm.enabledAgents = [ "codex" ]; } ];
 
   # --- lightweight plan phase 5: the NARROWED capability variants ----------
   # ONE agent keeps these cheap to BUILD (the capability check builds their
@@ -422,7 +422,7 @@ let
     caps: extra:
     variantHostWith [
       {
-        myconfig.ai.microvm = {
+        myconfig.ai.dev.microvm = {
           capabilities = caps;
           enabledAgents = [ "codex" ];
         }
@@ -512,9 +512,9 @@ let
           enabledCfg
         else
           (self.nixosConfigurations.test-f13.extendModules {
-            modules = [ { myconfig.ai.microvm.workspaceLayout = lib.mkForce layout; } ];
+            modules = [ { myconfig.ai.dev.microvm.workspaceLayout = lib.mkForce layout; } ];
           }).config;
-      opts = cfgForLayout.myconfig.ai.microvm;
+      opts = cfgForLayout.myconfig.ai.dev.microvm;
       hostLauncher = findPkg cfgForLayout.environment.systemPackages "agent-microvm";
     in
     pkgs.runCommand name
@@ -613,7 +613,7 @@ in
   # ---------------------------------------------------------------------- #
   microvm-eval-disabled = mkEvalCheck "microvm-eval-disabled" [
     {
-      assertion = disabledCfg.myconfig.ai.microvm.enable == false;
+      assertion = disabledCfg.myconfig.ai.dev.microvm.enable == false;
       message = "feature should be disabled but enable != false";
     }
     {
@@ -660,7 +660,7 @@ in
     mkEvalCheck "microvm-eval-enabled" (
       [
         {
-          assertion = enabledCfg.myconfig.ai.microvm.enable == true;
+          assertion = enabledCfg.myconfig.ai.dev.microvm.enable == true;
           message = "test-f13 should have the feature enabled";
         }
         {
@@ -871,7 +871,7 @@ in
         # login shell.
         assertion =
           let
-            conv = enabledCfg.myconfig.ai.microvm.guestShellConvenience;
+            conv = enabledCfg.myconfig.ai.dev.microvm.guestShellConvenience;
             wantsFish = conv.enable && conv.shell == "fish";
           in
           if wantsFish then
@@ -958,7 +958,7 @@ in
         lib.attrValues agentRegistry.agents
       );
       codexWorkmux = builtins.filter (lib.hasPrefix "microvm-") (
-        builtins.attrNames codexHost.config.myconfig.ai.workmux.agents
+        builtins.attrNames codexHost.config.myconfig.ai.dev.workmux.agents
       );
     in
     mkEvalCheck "microvm-eval-enabled-agents" (
@@ -1021,7 +1021,7 @@ in
                 builtins.filter (a: !a.assertion)
                   (variantHostWith [
                     {
-                      myconfig.ai.microvm.enabledAgents = [
+                      myconfig.ai.dev.microvm.enabledAgents = [
                         "codex"
                         "nope"
                       ];
@@ -1038,7 +1038,7 @@ in
             let
               msgs = map (a: a.message) (
                 builtins.filter (a: !a.assertion)
-                  (variantHostWith [ { myconfig.ai.microvm.enabledAgents = [ ]; } ]).config.assertions
+                  (variantHostWith [ { myconfig.ai.dev.microvm.enabledAgents = [ ]; } ]).config.assertions
               );
             in
             builtins.any (m: lib.hasInfix "selects no agent" m) msgs;
@@ -1272,7 +1272,7 @@ in
             codexSeed.allowedPaths == lib.unique (
               lib.sort (a: b: a < b) (
                 (lib.head (lib.attrValues codexReg.agents)).configPaths
-                ++ codexHost.config.myconfig.ai.microvm.configSeed.extraPaths
+                ++ codexHost.config.myconfig.ai.dev.microvm.configSeed.extraPaths
               )
             );
           message = "a codex-only host must stage only codex's configPaths plus extraPaths, got ${toString codexSeed.allowedPaths}";
@@ -1308,43 +1308,43 @@ in
         # --- NEGATIVE: invalid allowlist entries are rejected at EVAL -------
         {
           assertion = seedRejects "not plain, relative" [
-            { myconfig.ai.microvm.configSeed.extraPaths = [ "../../etc/shadow" ]; }
+            { myconfig.ai.dev.microvm.configSeed.extraPaths = [ "../../etc/shadow" ]; }
           ];
           message = "a `..` escape in the staging allowlist must be rejected at eval";
         }
         {
           assertion = seedRejects "not plain, relative" [
-            { myconfig.ai.microvm.configSeed.extraPaths = [ "/etc/passwd" ]; }
+            { myconfig.ai.dev.microvm.configSeed.extraPaths = [ "/etc/passwd" ]; }
           ];
           message = "an absolute path in the staging allowlist must be rejected at eval";
         }
         {
           assertion = seedRejects "not plain, relative" [
-            { myconfig.ai.microvm.configSeed.extraPaths = [ ".config/../../root" ]; }
+            { myconfig.ai.dev.microvm.configSeed.extraPaths = [ ".config/../../root" ]; }
           ];
           message = "a nested `..` escape in the staging allowlist must be rejected at eval";
         }
         {
           assertion = seedRejects "CREDENTIAL material" [
-            { myconfig.ai.microvm.configSeed.extraPaths = [ ".codex/auth.json" ]; }
+            { myconfig.ai.dev.microvm.configSeed.extraPaths = [ ".codex/auth.json" ]; }
           ];
           message = "a credential-shaped allowlist entry must be rejected at eval";
         }
         {
           assertion = seedRejects "CREDENTIAL material" [
-            { myconfig.ai.microvm.configSeed.extraPaths = [ ".ssh/config" ]; }
+            { myconfig.ai.dev.microvm.configSeed.extraPaths = [ ".ssh/config" ]; }
           ];
           message = "an allowlist entry under ~/.ssh must be rejected at eval";
         }
         {
           assertion = seedRejects "CREDENTIAL material" [
-            { myconfig.ai.microvm.configSeed.extraPaths = [ ".config/agent/api-token.txt" ]; }
+            { myconfig.ai.dev.microvm.configSeed.extraPaths = [ ".config/agent/api-token.txt" ]; }
           ];
           message = "an allowlist entry whose name contains a credential word must be rejected at eval";
         }
         {
           assertion = seedRejects "absolute path" [
-            { myconfig.ai.microvm.configSeed.hostHome = "relative/home"; }
+            { myconfig.ai.dev.microvm.configSeed.hostHome = "relative/home"; }
           ];
           message = "a relative configSeed.hostHome must be rejected at eval";
         }
@@ -1354,7 +1354,7 @@ in
           # i.e. persistence silently off.
           assertion = seedRejects "overlaps the" [
             {
-              myconfig.ai.microvm = {
+              myconfig.ai.dev.microvm = {
                 enabledAgents = [
                   "codex"
                   "hermes"
@@ -1371,7 +1371,7 @@ in
           assertion = builtins.elem ".hermes" (
             (variantHostWith [
               {
-                myconfig.ai.microvm.enabledAgents = [
+                myconfig.ai.dev.microvm.enabledAgents = [
                   "codex"
                   "hermes"
                 ];
@@ -1922,7 +1922,9 @@ in
           # `guestAgentUid = 0` is rejected by the option TYPE (positive
           # integer) before the assertion can even run, so `tryEval` counts as
           # a rejection here exactly as in `rejectsWith` above.
-          assertion = rejectsWith [ { myconfig.ai.microvm.guestAgentUid = lib.mkForce 0; } ] "unprivileged";
+          assertion = rejectsWith [
+            { myconfig.ai.dev.microvm.guestAgentUid = lib.mkForce 0; }
+          ] "unprivileged";
           message = "a privileged guest agent uid must be rejected at eval";
         }
       ];
@@ -2094,7 +2096,7 @@ in
       defaultGuestPkgNames = pkgNamesOf guest0Cfg.environment.systemPackages;
       hostRules = enabledCfg.systemd.tmpfiles.rules;
       hostServiceNames = builtins.attrNames enabledCfg.systemd.services;
-      workmuxNames = builtins.attrNames enabledCfg.myconfig.ai.workmux.agents;
+      workmuxNames = builtins.attrNames enabledCfg.myconfig.ai.dev.workmux.agents;
 
       controllerService = lib.removeSuffix ".service" jobs.controllerUnit;
       workerService = jobs.workerUnitTemplate;
@@ -2153,8 +2155,8 @@ in
       # make an `acceptsWithout` cell fail for the wrong reason.
       capabilityCell = caps: [
         {
-          myconfig.ai.microvm.capabilities = lib.mkForce caps;
-          myconfig.ai.microvm.enableSsh = lib.mkForce (lib.elem "interactive" caps);
+          myconfig.ai.dev.microvm.capabilities = lib.mkForce caps;
+          myconfig.ai.dev.microvm.enableSsh = lib.mkForce (lib.elem "interactive" caps);
         }
       ];
       noWorkloadNeedle = "no WORKLOAD capability";
@@ -2318,7 +2320,7 @@ in
         {
           assertion =
             !(lib.any (n: lib.hasPrefix "microvm-" n) (
-              builtins.attrNames batchOnlyHost.config.myconfig.ai.workmux.agents
+              builtins.attrNames batchOnlyHost.config.myconfig.ai.dev.workmux.agents
             ));
           message = "a batch-only host must register no interactive workmux pane";
         }
@@ -2364,7 +2366,7 @@ in
         }
         {
           assertion = rejectsWith [
-            { myconfig.ai.microvm.capabilities = lib.mkForce [ ]; }
+            { myconfig.ai.dev.microvm.capabilities = lib.mkForce [ ]; }
           ] "selects no capability";
           message = "an EMPTY capability set must be rejected";
         }
@@ -2422,7 +2424,7 @@ in
           # leaves `enableSsh` on (where the reconciliation assertion also
           # fires): the two guards are independent.
           assertion = rejectsWith [
-            { myconfig.ai.microvm.capabilities = lib.mkForce [ "vsock" ]; }
+            { myconfig.ai.dev.microvm.capabilities = lib.mkForce [ "vsock" ]; }
           ] noWorkloadNeedle;
           message = "[ vsock ] must be rejected for the missing WORKLOAD capability regardless of enableSsh";
         }
@@ -2477,7 +2479,7 @@ in
 
         {
           assertion = rejectsWith [
-            { myconfig.ai.microvm.capabilities = lib.mkForce [ "interactve" ]; }
+            { myconfig.ai.dev.microvm.capabilities = lib.mkForce [ "interactve" ]; }
           ] "unknown capability";
           message = "an UNKNOWN capability token must be rejected";
         }
@@ -2486,7 +2488,7 @@ in
           # MEANINGLESS without the interactive capability and is rejected
           # rather than silently ignored.
           assertion = rejectsWith [
-            { myconfig.ai.microvm.capabilities = lib.mkForce [ "batch" ]; }
+            { myconfig.ai.dev.microvm.capabilities = lib.mkForce [ "batch" ]; }
           ] "has no meaning without the";
           message = "enableSsh without the `interactive` capability must be rejected";
         }
@@ -2507,7 +2509,7 @@ in
           assertion = acceptsWithout [
             {
               _module.args.agentRegistry = lib.mkForce (agentRegistry // { batchNames = [ ]; });
-              myconfig.ai.microvm.capabilities = lib.mkForce [ "interactive" ];
+              myconfig.ai.dev.microvm.capabilities = lib.mkForce [ "interactive" ];
             }
           ] "selects no agent that can run";
           message = "the batch-capable-agent assertion must NOT fire on an interactive-only host";
@@ -2612,12 +2614,12 @@ in
         {
           assertion = rejectsWith [
             {
-              myconfig.ai.microvm.capabilities = lib.mkForce [
+              myconfig.ai.dev.microvm.capabilities = lib.mkForce [
                 "batch"
                 "vsock"
               ];
-              myconfig.ai.microvm.enableSsh = lib.mkForce false;
-              myconfig.ai.microvm.sshPublicKeyFile = lib.mkForce null;
+              myconfig.ai.dev.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.dev.microvm.sshPublicKeyFile = lib.mkForce null;
             }
           ] "an SSH control channel";
           message = "vsock without an sshPublicKeyFile must be rejected (the VSOCK sshd needs an authorising key)";
@@ -2625,13 +2627,13 @@ in
         {
           assertion = rejectsWith [
             {
-              myconfig.ai.microvm.capabilities = lib.mkForce [
+              myconfig.ai.dev.microvm.capabilities = lib.mkForce [
                 "batch"
                 "vsock"
               ];
-              myconfig.ai.microvm.enableSsh = lib.mkForce false;
-              myconfig.ai.microvm.networkProfile = lib.mkForce "internet";
-              myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
+              myconfig.ai.dev.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.dev.microvm.networkProfile = lib.mkForce "internet";
+              myconfig.ai.dev.microvm.acknowledgeInsecureNetwork = true;
             }
           ] "closed network profiles";
           message = "vsock with networkProfile = \"internet\" must be rejected";
@@ -2639,14 +2641,14 @@ in
         {
           assertion = rejectsWith [
             {
-              myconfig.ai.microvm.capabilities = lib.mkForce [
+              myconfig.ai.dev.microvm.capabilities = lib.mkForce [
                 "batch"
                 "vsock"
               ];
-              myconfig.ai.microvm.enableSsh = lib.mkForce false;
-              myconfig.ai.microvm.networkProfile = lib.mkForce "package-access";
-              myconfig.ai.microvm.packageProxyPort = 3128;
-              myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
+              myconfig.ai.dev.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.dev.microvm.networkProfile = lib.mkForce "package-access";
+              myconfig.ai.dev.microvm.packageProxyPort = 3128;
+              myconfig.ai.dev.microvm.acknowledgeInsecureNetwork = true;
             }
           ] "closed network profiles";
           message = "vsock with networkProfile = \"package-access\" must be rejected";
@@ -2660,12 +2662,12 @@ in
           # pinned message, not at runtime with an opaque DNS-resolution error.
           assertion = rejectsWith [
             {
-              myconfig.ai.microvm.capabilities = lib.mkForce [
+              myconfig.ai.dev.microvm.capabilities = lib.mkForce [
                 "batch"
                 "vsock"
               ];
-              myconfig.ai.microvm.enableSsh = lib.mkForce false;
-              myconfig.ai.microvm.sshPublicKeyFile = lib.mkForce ../hosts/host.f13/dedicated-agent-vm-key.pub;
+              myconfig.ai.dev.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.dev.microvm.sshPublicKeyFile = lib.mkForce ../hosts/host.f13/dedicated-agent-vm-key.pub;
               programs.ssh.systemd-ssh-proxy.enable = lib.mkForce false;
             }
           ] "systemd-ssh-proxy";
@@ -2680,7 +2682,7 @@ in
           # `/var/lib/microvms`) by overriding ONLY `stateRoot`.
           assertion = rejectsWith [
             {
-              myconfig.ai.microvm.stateRoot = lib.mkForce "/var/lib/microvms-other";
+              myconfig.ai.dev.microvm.stateRoot = lib.mkForce "/var/lib/microvms-other";
             }
           ] "must equal";
           message = "a stateRoot that differs from microvm.stateDir must be rejected (the VSOCK ssh target / known_hosts key would not resolve to the socket microvm created)";
@@ -2760,7 +2762,7 @@ in
         fi
         # The refusal names the OPTION to change, not just "unsupported".
         for l in "$interactiveLauncher" "$batchLauncher"; do
-          grep -qF -- 'myconfig.ai.microvm.capabilities' "$l" \
+          grep -qF -- 'myconfig.ai.dev.microvm.capabilities' "$l" \
             || { echo "a narrowed launcher's refusal does not name the option" >&2; exit 1; }
         done
         # POSITIVE control: the DEFAULT launcher carries no REFUSAL at all (a
@@ -3217,7 +3219,7 @@ in
           # but NO interface, so the TCP sshd could never be reached: it is
           # masked and the VSOCK `sshd-vsock@` is the ONE control channel.
           assertion =
-            ivHost.config.myconfig.ai.microvm.enableSsh
+            ivHost.config.myconfig.ai.dev.microvm.enableSsh
             && !ivHost._module.args.agentNetwork.tapSshUsable
             && !(ivGuest.systemd.services.sshd.enable or true)
             && ivGuest.systemd.sockets ? "sshd-vsock"
@@ -3244,7 +3246,7 @@ in
         }
         {
           assertion =
-            enabledCfg.myconfig.ai.microvm.enableSsh
+            enabledCfg.myconfig.ai.dev.microvm.enableSsh
             && tapNet.tapSshUsable
             && (guest0Cfg.systemd.services.sshd.enable or true)
             && guest0Cfg.services.openssh.openFirewall;
@@ -3262,12 +3264,12 @@ in
           # it \u2014 the two would fight over the same Unix socket path.
           assertion = rejectsWith [
             {
-              myconfig.ai.microvm.capabilities = lib.mkForce [
+              myconfig.ai.dev.microvm.capabilities = lib.mkForce [
                 "batch"
                 "vsock"
               ];
-              myconfig.ai.microvm.enableSsh = lib.mkForce false;
-              myconfig.ai.microvm.litellmPort = lib.mkForce 8888;
+              myconfig.ai.dev.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.dev.microvm.litellmPort = lib.mkForce 8888;
               services.litellm.port = lib.mkForce 8888;
             }
           ] "must not be 8888";
@@ -3279,11 +3281,11 @@ in
           # so a host without it builds a model path that ends nowhere.
           assertion = rejectsWith [
             {
-              myconfig.ai.microvm.capabilities = lib.mkForce [
+              myconfig.ai.dev.microvm.capabilities = lib.mkForce [
                 "batch"
                 "vsock"
               ];
-              myconfig.ai.microvm.enableSsh = lib.mkForce false;
+              myconfig.ai.dev.microvm.enableSsh = lib.mkForce false;
               services.litellm.enable = lib.mkForce false;
             }
           ] "lets guests reach the model API";
@@ -3465,7 +3467,7 @@ in
       # strictly stronger guard than any assertion.
       assertion = rejectsWith [
         {
-          myconfig.ai.microvm.resourceClasses = lib.mkForce {
+          myconfig.ai.dev.microvm.resourceClasses = lib.mkForce {
             normal.count = 0;
             normal.vcpu = 2;
             normal.memoryMiB = 1024;
@@ -3477,7 +3479,7 @@ in
     {
       assertion = rejectsWith [
         {
-          myconfig.ai.microvm.resourceClasses = lib.mkForce {
+          myconfig.ai.dev.microvm.resourceClasses = lib.mkForce {
             normal.count = slotLib.maxSlotCount + 1;
             normal.vcpu = 2;
             normal.memoryMiB = 1024;
@@ -3490,7 +3492,7 @@ in
       # A class name long enough to overflow the 15-char interface-name limit.
       assertion = rejectsWith [
         {
-          myconfig.ai.microvm.resourceClasses = lib.mkForce {
+          myconfig.ai.dev.microvm.resourceClasses = lib.mkForce {
             "ludicrously-large".count = 1;
             "ludicrously-large".vcpu = 2;
             "ludicrously-large".memoryMiB = 1024;
@@ -3502,7 +3504,7 @@ in
     {
       assertion = rejectsWith [
         {
-          myconfig.ai.microvm.resourceClasses = lib.mkForce {
+          myconfig.ai.dev.microvm.resourceClasses = lib.mkForce {
             "Bad_Name".count = 1;
             "Bad_Name".vcpu = 2;
             "Bad_Name".memoryMiB = 1024;
@@ -3526,8 +3528,8 @@ in
     {
       assertion = rejectsWith [
         {
-          myconfig.ai.microvm.enableSsh = lib.mkForce true;
-          myconfig.ai.microvm.sshPublicKeyFile = lib.mkForce null;
+          myconfig.ai.dev.microvm.enableSsh = lib.mkForce true;
+          myconfig.ai.dev.microvm.sshPublicKeyFile = lib.mkForce null;
         }
       ] "an SSH control channel";
       message = "enableSsh without sshPublicKeyFile must be rejected";
@@ -3535,8 +3537,8 @@ in
     {
       assertion = rejectsWith [
         {
-          myconfig.ai.microvm.networkProfile = "internet";
-          myconfig.ai.microvm.acknowledgeInsecureNetwork = lib.mkForce false;
+          myconfig.ai.dev.microvm.networkProfile = "internet";
+          myconfig.ai.dev.microvm.acknowledgeInsecureNetwork = lib.mkForce false;
         }
       ] "is an\nINSECURE profile";
       message = "networkProfile = internet without acknowledgeInsecureNetwork must be rejected";
@@ -3544,9 +3546,9 @@ in
     {
       assertion = rejectsWith [
         {
-          myconfig.ai.microvm.networkProfile = "package-access";
-          myconfig.ai.microvm.packageProxyPort = 3128;
-          myconfig.ai.microvm.acknowledgeInsecureNetwork = lib.mkForce false;
+          myconfig.ai.dev.microvm.networkProfile = "package-access";
+          myconfig.ai.dev.microvm.packageProxyPort = 3128;
+          myconfig.ai.dev.microvm.acknowledgeInsecureNetwork = lib.mkForce false;
         }
       ] "is an\nINSECURE profile";
       message = "networkProfile = package-access without acknowledgeInsecureNetwork must be rejected";
@@ -3554,8 +3556,8 @@ in
     {
       assertion = rejectsWith [
         {
-          myconfig.ai.microvm.networkProfile = "package-access";
-          myconfig.ai.microvm.acknowledgeInsecureNetwork = true;
+          myconfig.ai.dev.microvm.networkProfile = "package-access";
+          myconfig.ai.dev.microvm.acknowledgeInsecureNetwork = true;
         }
       ] "requires\n`packageProxyPort`";
       message = "networkProfile = package-access without packageProxyPort must be rejected";
@@ -3575,7 +3577,7 @@ in
   microvm-agent-registry =
     let
       registryAgents = lib.attrValues agentRegistry.agents;
-      workmuxAgents = enabledCfg.myconfig.ai.workmux.agents;
+      workmuxAgents = enabledCfg.myconfig.ai.dev.workmux.agents;
       guestPkgPaths = map (p: p.outPath) guest0Cfg.environment.systemPackages;
       hostLauncher = findPkg enabledCfg.environment.systemPackages "agent-microvm";
       guestAgentRun = findPkg guest0Cfg.environment.systemPackages "agent-run";
@@ -4667,7 +4669,7 @@ in
       variant =
         layout:
         self.nixosConfigurations.test-f13.extendModules {
-          modules = [ { myconfig.ai.microvm.workspaceLayout = lib.mkForce layout; } ];
+          modules = [ { myconfig.ai.dev.microvm.workspaceLayout = lib.mkForce layout; } ];
         };
       centralSys = variant "central";
       besideSys = variant "beside-repo";
@@ -4684,7 +4686,8 @@ in
       {
         # A guest-writable tree beside a user's repository must stay OPT-IN.
         assertion =
-          self.nixosConfigurations.test-f13.options.myconfig.ai.microvm.workspaceLayout.default == "central";
+          self.nixosConfigurations.test-f13.options.myconfig.ai.dev.microvm.workspaceLayout.default
+          == "central";
         message = "the DEFAULT workspace layout must stay `central` (beside-repo puts a guest-writable tree next to the user's repository, so it is opt-in)";
       }
       {
@@ -4996,7 +4999,7 @@ in
         (self.nixosConfigurations.test-f13.extendModules {
           modules = [
             {
-              myconfig.ai.microvm = {
+              myconfig.ai.dev.microvm = {
                 networkProfile = lib.mkForce profile;
                 acknowledgeInsecureNetwork = true;
                 packageProxyPort = 3128;
@@ -5357,8 +5360,8 @@ in
           # vsock NOT selected), so its trigger must still be satisfied by the
           # SSH_ENABLED half alone.
           assertion =
-            enabledCfg.myconfig.ai.microvm.enableSsh
-            && !(lib.elem "vsock" enabledCfg.myconfig.ai.microvm.capabilities);
+            enabledCfg.myconfig.ai.dev.microvm.enableSsh
+            && !(lib.elem "vsock" enabledCfg.myconfig.ai.dev.microvm.capabilities);
           message = "the default reference host must be the TAP shape (enableSsh, no vsock) for the negative control below";
         }
         {
@@ -5677,7 +5680,7 @@ in
       # The workmux agent `command`s are `lib.getExe <launcher>` strings whose
       # string context references the launcher derivation, so building against
       # them pulls the writeShellApplication (and its shellcheck) in.
-      workmuxAgents = enabledCfg.myconfig.ai.workmux.agents;
+      workmuxAgents = enabledCfg.myconfig.ai.dev.workmux.agents;
       workmuxLauncherCmds = map (a: workmuxAgents.${a.workmuxName}.command) (
         lib.attrValues agentRegistry.agents
       );

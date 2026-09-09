@@ -1,7 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.microvm — deterministic PER-SLOT SSH host identities and the
+# myconfig.ai.dev.microvm — deterministic PER-SLOT SSH host identities and the
 # host-side known_hosts file (improvement ticket 3 B).
 #
 # Problem
@@ -75,7 +75,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.microvm;
+  cfg = config.myconfig.ai.dev.microvm;
   session = agentSession;
 
   # The slot pool of the effective resource classes (ticket 5 A). The class
@@ -335,7 +335,7 @@ let
       trap - EXIT
     '';
     meta = with lib; {
-      description = "Provision per-slot SSH host keys + known_hosts for myconfig.ai.microvm";
+      description = "Provision per-slot SSH host keys + known_hosts for myconfig.ai.dev.microvm";
       platforms = platforms.linux;
     };
   };

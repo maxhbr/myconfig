@@ -55,7 +55,7 @@ let
   # Make the `workmux` binary available inside the sandboxes (for the
   # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
   # a worktree pane) whenever workmux is enabled.
-  workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
+  workmuxDevTools = lib.optional osconfig.myconfig.ai.dev.workmux.enable osconfig.myconfig.ai.dev.workmux.package;
 
   # home-manager uses `useGlobalPkgs`, so `pkgs.claude-code` is the same
   # package `programs.claude-code.package` defaults to. Building the wrappers
@@ -117,7 +117,7 @@ let
     agentName = "claude";
     agentType = "claude";
     innerPkg = claudeCodeBwrap;
-    workmuxPkg = osconfig.myconfig.ai.workmux.package;
+    workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
@@ -126,23 +126,23 @@ let
     agentName = "agent-bubblewrap-claude";
     agentType = "claude";
     innerPkg = agent-bubblewrap-claude-worktree-inner;
-    workmuxPkg = osconfig.myconfig.ai.workmux.package;
+    workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
 in
 {
   options.myconfig = with lib; {
-    ai.claude-code = {
-      enable = mkEnableOption "myconfig.ai.claude-code";
+    ai.dev.claude-code = {
+      enable = mkEnableOption "myconfig.ai.dev.claude-code";
     };
   };
-  config = lib.mkIf config.myconfig.ai.claude-code.enable {
-    myconfig.ai.skills.playwright.enable = lib.mkDefault true;
+  config = lib.mkIf config.myconfig.ai.dev.claude-code.enable {
+    myconfig.ai.dev.skills.playwright.enable = lib.mkDefault true;
     # The default `claude-code-worktree` maps to the `claude` named agent; the
     # jailed variant registers its own `agent-bubblewrap-claude` agent.
-    myconfig.ai.workmux.agents.claude = claudeCodeWorktree.agent;
-    myconfig.ai.workmux.agents.agent-bubblewrap-claude = agentBubblewrapClaudeWorktree.agent;
+    myconfig.ai.dev.workmux.agents.claude = claudeCodeWorktree.agent;
+    myconfig.ai.dev.workmux.agents.agent-bubblewrap-claude = agentBubblewrapClaudeWorktree.agent;
     home-manager.sharedModules = [
       {
         myconfig.persistence.directories = [ ".claude" ];
