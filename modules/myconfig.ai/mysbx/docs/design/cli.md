@@ -136,9 +136,10 @@ git metadata directories its `.git` file points at (config.md D13), then
 the configured mounts with mode, source, in-sandbox destination and the
 layer that contributed it — the forwarded host variables and the `[env]`
 variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH` /
-`MYSBX_NIX_CONF` (the sanitized nix configuration, or `(none)`)
-values after their fallbacks, the payload, and whether the run will exec
-or stop at the argv.
+`MYSBX_NIX_CONF` (the sanitized nix configuration, or `(none)`) /
+`MYSBX_BINSH` (the sandbox's `/bin/sh`, or `(none)`) values after
+their fallbacks, the payload, and whether the run will exec or stop at
+the argv.
 
 The report cannot say *how* the repo was resolved (sidecar ancestor / git
 root / cwd): `repo::resolve` does not return that, and restructuring it

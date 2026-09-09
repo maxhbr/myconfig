@@ -520,6 +520,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // instead of quietly starting a plain shell where a session was
     // asked for.
     let mux_entry = merged.multiplexer.entry_var().and_then(env_opt);
+    // `/bin/sh` for the sandbox (see [`bwrap::Params::bin_sh`]):
+    // a pin like `MYSBX_NIX_CONF` — unset means "no `/bin/sh` bind",
+    // never "the host's" (a host `/bin/sh` is outside mysbx's own
+    // closure, so what it resolves to is not reproducible). The Nix
+    // wrapper pins bash's `bin/sh`; an unwrapped build runs without
+    // the bind, and tmux `run-shell` jobs & co. then fail like they
+    // did before the pin existed.
+    let bin_sh = env_opt("MYSBX_BINSH");
     // Review-3 item 3: the trusted policy files of THIS run, handed to
     // the argv builder so it can refuse any `rw` bind that would expose
     // one to the payload.
@@ -549,6 +557,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     let params = bwrap::Params {
         shell: &shell,
         tools_path: &tools_path,
+        bin_sh: bin_sh.as_deref(),
         nix_conf: nix_conf.as_deref(),
         policy_paths: &policy_paths,
         mux_entry: mux_entry.as_deref(),

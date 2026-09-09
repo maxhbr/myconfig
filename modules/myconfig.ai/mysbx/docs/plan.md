@@ -72,6 +72,7 @@ every knob is a decision:
 | host `/etc/nix/nix.conf` | **no** | it may hold `access-tokens` (GitHub/GitLab credentials) and `netrc-file` pointers; a read-only bind hands them to the payload all the same (review-2 item 3) |
 | generated `nix.conf` ro | yes, when the wrapper pins one (`MYSBX_NIX_CONF`) | a minimal *sanitized* client config from `nix/mysbx.nix` — flake CLI plus the public cache, no credentials, nothing copied from the host — bound at `/etc/nix/nix.conf`. Unwrapped builds pin nothing and run `nix` with its built-in defaults |
 | `/usr/bin` ro | yes | `/usr/bin/env` shebangs |
+| `/bin/sh` ro | yes, when the wrapper pins one (`MYSBX_BINSH`) | a de-facto ABI of the Unix userland: tmux runs every `run-shell`/`if-shell`/`#()` job through `execl("/bin/sh", …)` (tmux ≥ 3.5a hardcodes `_PATH_BSHELL` for jobs — `default-shell` covers panes and popups only), and `#!/bin/sh` shebangs need it. The minimal root has no `/bin` at all, so without the bind every such job dies with `execl failed` — on the workmux sidebar this surfaced as `'kill -USR1 $(tmux show-option …)' returned 1` popups and sidebars that never appear. The pin is bash's own `bin/sh` from the wrapper's closure (the same bind `vendor/alexdavid-jail.nix`'s base combinator makes for the jail tier); the dest is protected like every base-bind root. Unwrapped builds pin nothing and run without `/bin/sh` |
 | `--proc`, `--dev` | yes | |
 | `/etc/localtime` | yes | timestamps |
 | tmpfs `/tmp` | yes | **not** the host-backed `/tmp/<name>` |

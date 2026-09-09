@@ -65,6 +65,7 @@ fn params() -> Params<'static> {
     Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: None,
         policy_paths: &[],
         mux_entry: None,
@@ -1381,6 +1382,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: Some("/synth/store/mysbx-nix.conf"),
         policy_paths: &[],
         mux_entry: None,
@@ -1404,6 +1406,103 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
     let localtime = pos_pair(&argv, "--ro-bind", "/etc/localtime");
     let repo_bind = pos_pair(&argv, "--bind", "/synth/repo");
     assert!(localtime < at && at < repo_bind, "after the base binds");
+}
+
+#[test]
+fn a_pinned_bin_sh_is_bound_read_only_into_the_empty_root() {
+    // tmux runs every run-shell/if-shell/#() job through
+    // `execl("/bin/sh", ...)` — tmux >= 3.5a hardcodes _PATH_BSHELL
+    // for jobs (default-shell covers panes and popups only) — and the
+    // minimal root has no /bin at all. The pin turns that ABI back
+    // on; the bind sits with the base binds, before the repo bind.
+    let params = Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        bin_sh: Some("/synth/bin/sh"),
+        nix_conf: None,
+        policy_paths: &[],
+        mux_entry: None,
+    };
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let at = argv
+        .windows(3)
+        .position(|w| w[0] == "--ro-bind" && w[1] == "/synth/bin/sh" && w[2] == "/bin/sh")
+        .expect("the pinned /bin/sh is bound");
+    let localtime = pos_pair(&argv, "--ro-bind", "/etc/localtime");
+    let repo_bind = pos_pair(&argv, "--bind", "/synth/repo");
+    assert!(localtime < at && at < repo_bind, "after the base binds");
+}
+
+#[test]
+fn without_the_bin_sh_pin_no_bin_sh_is_bound() {
+    // Unset means "no /bin/sh", never "the host's": like the nix.conf
+    // pin, the state an unwrapped build gets is the absence itself.
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    assert!(!argv.contains(&"/bin/sh".to_owned()), "argv: {argv:?}");
+}
+
+#[test]
+fn a_mount_dest_onto_bin_sh_is_refused() {
+    // /bin/sh is a base-bind root: a configured mount may not shadow
+    // the shell every job-spawning tool in the sandbox agrees on —
+    // neither when the pin bound one (that is the shadow case) nor
+    // when it did not (the dest is refused regardless, exactly like
+    // /etc/nix/nix.conf below a wrapper that pins no nix.conf).
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/other-shell", Some("/bin/sh"), Mode::Rw));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::ProtectedDest { protected, .. }
+            if protected == "/bin/sh"),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_mount_dest_of_bin_itself_is_refused_as_the_shadows_ancestor() {
+    // `/bin` is not a protected root itself, but it is an ANCESTOR of
+    // the protected `/bin/sh`: a mount over `/bin` would hide the
+    // pinned shell and let a sidecar replace it with its own — the
+    // two-direction `check_dest` rule refuses it, the same way `/nix`
+    // is refused over protected `/nix/store`.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/bin2", Some("/bin"), Mode::Ro));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::ProtectedDest { protected, .. }
+            if protected == "/bin/sh"),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
@@ -2190,6 +2289,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: None,
         policy_paths: &policy,
         mux_entry: None,
@@ -2216,6 +2316,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: None,
         policy_paths: &policy,
         mux_entry: None,
@@ -2244,6 +2345,7 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: None,
         policy_paths: &policy,
         mux_entry: None,
@@ -2265,6 +2367,7 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: None,
         policy_paths: &policy,
         mux_entry: None,
@@ -2287,6 +2390,7 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: None,
         policy_paths: &policy,
         mux_entry: None,
@@ -2311,6 +2415,7 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: None,
         policy_paths: &policy,
         mux_entry: None,
@@ -2336,6 +2441,7 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
     let params = Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: None,
         policy_paths: &[], // nothing exists -> nothing protected
         mux_entry: None,
@@ -2363,6 +2469,7 @@ fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
     Params {
         shell: "/synth/bin/bash",
         tools_path: "/synth/bin",
+        bin_sh: None,
         nix_conf: None,
         policy_paths: policy,
         mux_entry: None,

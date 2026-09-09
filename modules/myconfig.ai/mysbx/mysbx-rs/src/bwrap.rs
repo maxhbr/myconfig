@@ -91,6 +91,27 @@ pub struct Params<'a> {
     /// The dev-tool closure's `bin` directory, set as `PATH` inside the
     /// sandbox (git, tig, ripgrep, fd, jq, nix, python3, coreutils, …).
     pub tools_path: &'a str,
+    /// A shell to bind read-only at `/bin/sh` inside the sandbox, or
+    /// `None` for no `/bin/sh` at all.
+    ///
+    /// The sandbox root is not a FHS root: `/bin` exists nowhere in
+    /// the base table (docs/plan.md "The base"), only `/nix/store` and
+    /// `/usr/bin` (itself holding just `env` on plain NixOS). But
+    /// `/bin/sh` is a de-facto ABI of the Unix userland — tmux runs
+    /// EVERY `run-shell`/`if-shell`/`#()` job through `execl("/bin/sh",
+    /// …)` (tmux ≥ 3.5a reverted to hardcoding `_PATH_BSHELL` for jobs;
+    /// `default-shell` applies to panes and popups only), `posix_spawn`
+    /// of several tools falls back to it, and a plain `#!/bin/sh`
+    /// shebang needs it. Without the bind every such job dies with
+    /// `execl failed` before the payload command even starts — on the
+    /// workmux sidebar this surfaced as `'kill -USR1 $(tmux show-option
+    /// …)' returned 1` popups and sidebars that never appear. The Nix
+    /// wrapper pins `bash`'s own `bin/sh` symlink here (the same bash
+    /// closure [`Params::shell`] comes from — the vendored
+    /// `vendor/alexdavid-jail.nix` base combinator binds exactly this);
+    /// an unwrapped build passes `None` and the sandbox runs without a
+    /// `/bin/sh`, like it runs without a pinned nix.conf.
+    pub bin_sh: Option<&'a str>,
     /// A **sanitized** `nix.conf` to bind at `/etc/nix/nix.conf`, or
     /// `None` for no nix configuration at all (review-2 item 3).
     ///
@@ -308,6 +329,19 @@ pub fn bwrap_argv(
     // configuration when the wrapper pinned one (review-2 item 3 — the
     // host's own nix.conf stays out, it may hold access-tokens).
     argv.extend(base_binds());
+    // `/bin/sh` for the sandbox (see [`Params::bin_sh`] for why the
+    // minimal root must grow one). Bound with the section's own
+    // base-bind idiom, `--ro-bind`, not `-try`: the pin is a store
+    // path from mysbx's own closure, so a missing one is a packaging
+    // bug that must fail loudly — the same reasoning as the nix.conf
+    // pin below. The dest is a base-bind root and therefore protected
+    // ([`PROTECTED_DESTS`]): no configured mount may shadow the shell
+    // every job-spawning tool in the sandbox agrees on.
+    if let Some(bin_sh) = params.bin_sh {
+        argv.push("--ro-bind".into());
+        argv.push(bin_sh.into());
+        argv.push("/bin/sh".into());
+    }
     if let Some(nix_conf) = params.nix_conf {
         // `--ro-bind`, not `-try`: the pin is a store path the wrapper
         // just built, so a missing one is a packaging bug that must
@@ -849,7 +883,8 @@ fn base_binds() -> Vec<String> {
 
 /// Sandbox paths a mount `dest` may never shadow or overwrite — the
 /// roots the base binds create (`/nix/store`, `/nix/var/nix`,
-/// `/etc/nix/nix.conf`, `/usr/bin`, `/proc`, `/dev`, `/etc/localtime`,
+/// `/etc/nix/nix.conf`, `/bin/sh`, `/usr/bin`, `/proc`, `/dev`,
+/// `/etc/localtime`,
 /// `/tmp`) plus `/run` (no wholesale `/run`
 /// bind exists — the only `/run` path mounted is the resolver
 /// exception [`RESOLVER_PATHS`], ro and narrow — so dests related to
@@ -881,6 +916,7 @@ static PROTECTED_DESTS: &[&str] = &[
     "/nix/store",
     "/nix/var/nix",
     "/etc/nix/nix.conf",
+    "/bin/sh",
     "/usr/bin",
     "/proc",
     "/dev",
@@ -1350,6 +1386,7 @@ mod tests {
         Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            bin_sh: None,
             nix_conf: None,
             policy_paths: &[],
             mux_entry: None,

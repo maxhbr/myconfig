@@ -2756,6 +2756,44 @@ fn without_the_pin_no_nix_conf_is_bound() {
 }
 
 #[test]
+fn the_pinned_bin_sh_reaches_the_argv_and_the_report() {
+    // MYSBX_BINSH is a pin like MYSBX_NIX_CONF: end-to-end, a set value
+    // must appear as the source of the /bin/sh bind, and the report
+    // must say which shell the sandbox's /bin/sh is.
+    let (inv, _, _) = fixture_user_backend("binsh-pin", &["--verbose", "--dry-run"]);
+    let sh = inv.home.join("bin-sh");
+    std::fs::write(&sh, "#!/bin/sh\nexit 0\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+    cmd.env("MYSBX_BINSH", &sh);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| *l == sh.display().to_string())
+        .unwrap_or_else(|| panic!("the pinned /bin/sh is not bound: {stdout}"));
+    assert_eq!(lines[at - 1], "--ro-bind");
+    assert_eq!(lines[at + 1], "/bin/sh");
+    assert!(
+        stdout.contains(&format!("## /bin/sh:        {}", sh.display())),
+        "the report must name it: {stdout}"
+    );
+}
+
+#[test]
+fn without_the_bin_sh_pin_no_bin_sh_is_bound() {
+    // Unset means "no /bin/sh", never "the host's" (a host /bin/sh is
+    // outside mysbx's own closure): the argv gains no bind and the
+    // report says the absence out loud.
+    let (inv, _, _) = fixture_user_backend("binsh-unset", &["--verbose", "--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(!stdout.contains("/bin/sh"), "no /bin/sh bind: {stdout}");
+    assert!(stdout.contains("## /bin/sh:        (none"), "{stdout}");
+}
+
+#[test]
 fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
     // Review-3 item 3, as a real run sees it: the sidecar config
     // exists, and the user config grants `rw` on a directory that

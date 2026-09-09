@@ -15,8 +15,19 @@
 #
 #   MYSBX_BWRAP       the bubblewrap backend binary (plan.md: "The base")
 #   MYSBX_SHELL       the payload shell — bash from *this wrapper's*
-#                     closure, never the host `$SHELL` (plan.md: "Payload
-#                     shell")
+#                     closure, never the host `$SHELL` (plan.md:
+#                     "Payload shell")
+#   MYSBX_BINSH       a shell for the sandbox's `/bin/sh` — bash's own
+#                     `bin/sh` from the same closure. tmux runs EVERY
+#                     `run-shell`/`if-shell`/`#()` job through
+#                     `execl("/bin/sh", …)` (tmux ≥ 3.5a hardcodes
+#                     `_PATH_BSHELL` for jobs; `default-shell` covers
+#                     panes and popups only), and the minimal sandbox
+#                     root has no `/bin` at all — without this pin those
+#                     jobs die with `execl failed` and tmux surfaces
+#                     `'<hook command>' returned 1` popups (the workmux
+#                     sidebar hooks hit exactly that). Unwrapped builds
+#                     get no `/bin/sh`, like they get no pinned nix.conf.
 #   MYSBX_TOOLS_PATH  the dev-tool closure on PATH (plan.md: "The base",
 #                     row "dev-tool closure on PATH")
 #   MYSBX_MUX_ENTRY_TMUX / _WORKMUX / _HERDR / _AOE
@@ -37,7 +48,7 @@
 #                     other credentials, which a read-only bind hands
 #                     to the payload just the same.
 #
-# All four are absolute store paths — nothing is left to host lookup.
+# All these pins are absolute store paths — nothing is left to host lookup.
 {
   lib,
   rustPlatform,
@@ -219,6 +230,7 @@ symlinkJoin {
     wrapProgram "$out/bin/mysbx" \
       --set MYSBX_BWRAP '${bubblewrap}/bin/bwrap' \
       --set MYSBX_SHELL '${bash}/bin/bash' \
+      --set MYSBX_BINSH '${bash}/bin/sh' \
       --set MYSBX_TOOLS_PATH '${toolsEnv}/bin' \
       --set MYSBX_NIX_CONF '${sandboxNixConf}' \
       ${muxEntryPins} \

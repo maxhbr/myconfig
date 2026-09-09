@@ -223,6 +223,18 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             .nix_conf
             .unwrap_or("(none — nix uses its defaults)")
     ));
+    // The `/bin/sh` state belongs in the report for the same reason
+    // as the nix.conf line above: whether tmux `run-shell` jobs and
+    // `#!/bin/sh` shebangs can run at all inside this sandbox is a
+    // property of the run, not packaging detail — an unwrapped build
+    // (or a host that pins nothing) gets a sandbox without `/bin/sh`,
+    // and the failing hooks that follow are diagnosable from here.
+    p(format!(
+        "/bin/sh:        {}",
+        r.params
+            .bin_sh
+            .unwrap_or("(none — no /bin/sh inside the sandbox)")
+    ));
     // The multiplexer (config.md D17 / cli.md D11): which one was
     // selected, what replaces the shell, where its private socket
     // lives, and — for the `run` form — that this run keeps the plain
@@ -331,6 +343,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            bin_sh: None,
             nix_conf: None,
             policy_paths: &[],
             mux_entry: None,
@@ -428,6 +441,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            bin_sh: None,
             nix_conf: None,
             policy_paths: &[],
             mux_entry: None,
@@ -468,6 +482,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            bin_sh: None,
             nix_conf: None,
             policy_paths: &[],
             mux_entry: None,
@@ -509,6 +524,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            bin_sh: None,
             nix_conf: None,
             policy_paths: &[],
             mux_entry: None,
@@ -552,6 +568,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            bin_sh: None,
             nix_conf: None,
             policy_paths: &[],
             mux_entry: None,
@@ -592,6 +609,7 @@ mod tests {
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
+            bin_sh: None,
             nix_conf: None,
             policy_paths: &[],
             mux_entry: None,
@@ -637,6 +655,7 @@ mod tests {
             let params = Params {
                 shell: "/synth/bin/bash",
                 tools_path: "/synth/bin",
+                bin_sh: None,
                 nix_conf: None,
                 policy_paths: &[],
                 mux_entry: Some("/synth/bin/mysbx-mux-entry"),
