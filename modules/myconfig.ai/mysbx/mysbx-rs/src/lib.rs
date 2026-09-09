@@ -299,9 +299,12 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
 /// program, so this is one place the crate knowingly names another
 /// program's command line rather than re-exec'ing itself.
 ///
-/// The `gui` form never waits for the sandbox: alacritty runs the
-/// inner mysbx as its child, and the outer process exits with the
-/// terminal's status (0 once the window opened), not the payload's.
+/// The `gui` form waits for neither the sandbox nor the terminal: it
+/// forks ([`gui_detached`]) and the parent returns as soon as the
+/// window was started — detached like `mysbx gui & disown`. Only a
+/// terminal that cannot be started at all is reported synchronously
+/// (`1`), naming it; one that starts and fails afterwards is as silent
+/// as the `& disown` form.
 fn gui(flags: Flags, args: &[String]) -> i32 {
     // The dispatcher's `gui` arm sits BEFORE the generic `flags.any()`
     // arm on purpose: `gui` owns its refusal message, because unlike
@@ -350,17 +353,182 @@ fn gui(flags: Flags, args: &[String]) -> i32 {
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
-    match cmd.status() {
-        Ok(status) if status.success() => 0,
-        Ok(status) => {
-            eprintln!("mysbx gui: {terminal} exited with {status}");
+    gui_detached(cmd, &terminal)
+}
+
+/// The one-byte verdicts [`gui_detached_child`] sends its parent through
+/// the report pipe: the terminal was started, or a failure whose message
+/// follows the byte until EOF.
+const GUI_STARTED: u8 = 0;
+const GUI_FAILED: u8 = 1;
+
+/// The detach half of `mysbx gui` (cli.md D15): fork the terminal off the
+/// invoking shell, exactly what `mysbx gui & disown` would give.
+///
+/// The parent half returns as soon as it knows whether the terminal was
+/// STARTED — the shell gets its prompt back with the window open, not
+/// when the window closes. The forked half ([`gui_detached_child`])
+/// becomes a session leader (`setsid`, so no controlling terminal is
+/// inherited), ignores `SIGHUP` (a terminal closing under the old session
+/// cannot take the window with it), points its stdin/stdout/stderr at
+/// `/dev/null` (the descriptors of the invoking terminal are released)
+/// and then waits for the terminal the way the foreground process did
+/// before the detach — the background job the shell never has to reap.
+///
+/// The pipe carries the launch outcome to the parent, because that one
+/// failure must stay synchronous: a `$MYSBX_TERMINAL` that cannot be
+/// executed is a runtime failure (`1`) naming it, reported on the
+/// invoking shell's stderr. A terminal that STARTS and fails afterwards
+/// (no Wayland socket, say) is silent — nobody waits for its status,
+/// the same as the `& disown` form.
+fn gui_detached(cmd: std::process::Command, terminal: &str) -> i32 {
+    use std::io::Read;
+    use std::os::unix::net::UnixStream;
+
+    // Both opened BEFORE the fork, so the child needs nothing from the
+    // allocator until its process context is reorganized — the standard
+    // daemonization discipline.
+    let (mut parent_end, child_end) = match UnixStream::pair() {
+        Ok(pair) => pair,
+        Err(e) => {
+            eprintln!("mysbx gui: cannot detach: {e}");
+            return 1;
+        }
+    };
+    let null = match std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/null")
+    {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("mysbx gui: cannot open /dev/null: {e}");
+            return 1;
+        }
+    };
+    match unsafe { libc_fork() } {
+        0 => unsafe { gui_detached_child(cmd, terminal, child_end, null) },
+        -1 => {
+            eprintln!("mysbx gui: cannot fork to detach");
             1
         }
-        Err(e) => {
-            eprintln!("mysbx gui: cannot start {terminal}: {e}");
-            1
+        _ => {
+            // The shell's half: NOT waiting for the child is the point —
+            // it is orphaned here and reaped by init when the window
+            // closes. Close OUR copy of the child's end first, so the
+            // message read below sees EOF as soon as the child is done.
+            drop(child_end);
+            let mut status = [0u8; 1];
+            match parent_end.read(&mut status) {
+                Ok(1) if status[0] == GUI_STARTED => 0,
+                Ok(1) => {
+                    let mut msg = String::new();
+                    let _ = parent_end.read_to_string(&mut msg);
+                    eprintln!("mysbx gui: {}", msg.trim_end());
+                    1
+                }
+                // The child writes exactly one byte before anything
+                // else; a clean EOF means it died before it could
+                // report, i.e. the terminal was never started.
+                Ok(_) => {
+                    eprintln!(
+                        "mysbx gui: the detached starter died before the terminal was started"
+                    );
+                    1
+                }
+                Err(e) => {
+                    eprintln!("mysbx gui: cannot detach: {e}");
+                    1
+                }
+            }
         }
     }
+}
+
+/// The detached half of [`gui_detached`], running in the forked child.
+/// Never returns: it reports the launch outcome through `report`, waits
+/// for the terminal (the window's lifetime is the starter's) and exits —
+/// its status is observed by nobody, which is the detach.
+unsafe fn gui_detached_child(
+    mut cmd: std::process::Command,
+    terminal: &str,
+    mut report: std::os::unix::net::UnixStream,
+    null: std::fs::File,
+) -> ! {
+    use std::io::Write;
+    use std::os::unix::io::AsRawFd;
+
+    // A new session drops the controlling terminal. `setsid` only
+    // fails for a process group leader, which a fresh fork never is;
+    // the SIGHUP ignore below is the second line of defense anyway.
+    libc_setsid();
+    // Survive the closing of the terminal the command was typed in.
+    libc_signal_ignore(SIGHUP);
+    // The report write below must not kill us if the parent is gone
+    // already (the default action on a broken pipe would).
+    libc_signal_ignore(SIGPIPE);
+    // Release the invoking terminal's descriptors: the starter holds
+    // no fd of the shell's terminal open, and the wait below can never
+    // block on an interactive stream.
+    let null_fd = null.as_raw_fd();
+    libc_dup2(null_fd, 0);
+    libc_dup2(null_fd, 1);
+    libc_dup2(null_fd, 2);
+    match cmd.spawn() {
+        Ok(mut child) => {
+            // The window is up: tell the parent, then keep waiting —
+            // reaping the terminal is this process's one job, and it
+            // makes the starter live exactly as long as the window,
+            // the process `& disown` would have backgrounded.
+            let _ = report.write_all(&[GUI_STARTED]);
+            drop(report);
+            let _ = child.wait();
+            std::process::exit(0);
+        }
+        Err(e) => {
+            let _ = report.write_all(&[GUI_FAILED]);
+            let _ = report.write_all(format!("cannot start {terminal}: {e}").as_bytes());
+            std::process::exit(1);
+        }
+    }
+}
+
+// The four libc calls of the `gui` detach, as raw externs in the
+// zero-dependency style of main.rs's `signal(2)`: the crate is
+// dependency-free by design (Cargo.toml), and none of these needs a
+// type beyond plain integers. The signal numbers are the usual Linux
+// ones (the crate targets NixOS/Linux only).
+const SIGHUP: i32 = 1;
+const SIGPIPE: i32 = 13;
+const SIG_IGN: usize = 1;
+
+unsafe fn libc_fork() -> i32 {
+    extern "C" {
+        fn fork() -> i32;
+    }
+    fork()
+}
+
+unsafe fn libc_setsid() -> i32 {
+    extern "C" {
+        fn setsid() -> i32;
+    }
+    setsid()
+}
+
+unsafe fn libc_signal_ignore(signum: i32) {
+    #[allow(non_snake_case)]
+    extern "C" {
+        fn signal(signum: i32, handler: usize) -> usize;
+    }
+    signal(signum, SIG_IGN);
+}
+
+unsafe fn libc_dup2(from: i32, to: i32) {
+    extern "C" {
+        fn dup2(oldfd: i32, newfd: i32) -> i32;
+    }
+    dup2(from, to);
 }
 
 /// The shared pipeline of the bare form and `run`: resolve the repo, run

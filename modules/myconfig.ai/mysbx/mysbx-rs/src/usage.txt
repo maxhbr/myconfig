@@ -22,8 +22,10 @@ Commands:
                 a window. No sandbox is started by `gui` itself: the
                 inner invocation is the run and reports its own
                 errors in the window. This form needs a graphical
-                session (Wayland/X11) and exits when the window
-                opens, not when the sandbox ends
+                session (Wayland/X11) and returns as soon as the window
+                opens — detached like `mysbx gui & disown`, so the shell
+                prompt comes back immediately and the window survives
+                the terminal it was typed in
   init          create the sidecar directory next to the current repo;
                 the only command that initializes a repo; idempotent:
                 an existing config.toml is never rewritten

@@ -53,7 +53,10 @@ herdr session in a window, `mysbx gui run -- ls` a one-shot. Everything
 after the verb is passed to that inner invocation verbatim
 ([`docs/design/cli.md`](./docs/design/cli.md) D15) — the inner run
 reports its own errors in the window, so `gui` itself needs no
-initialized repo and starts no sandbox.
+initialized repo and starts no sandbox. The command returns as soon as
+the window opens — detached like `mysbx gui & disown` — so the shell
+prompt comes back immediately and the window survives the terminal it
+was typed in.
 
 `mysbx edit` opens the repo's sidecar `config.toml` in `$EDITOR` (or
 `$VISUAL`), creating the commented template first when it is missing

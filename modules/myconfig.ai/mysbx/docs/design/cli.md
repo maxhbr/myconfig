@@ -377,10 +377,19 @@ the `alacritty` fallback serves a plain `cargo run`, like `bwrap` does.
 one place the crate knowingly names another program's command line. A
 terminal that cannot be started is a runtime failure (`1`) naming it.
 
-**The exit code is the terminal's, not the payload's.** The outer process
-waits for the terminal to exit — for alacritty, when its window closes —
-not for the sandbox. `gui` never propagates the payload's exit status:
-the inner run's status dies with the window.
+**The outer invocation does not stay around.** `mysbx gui` detaches
+itself: it forks, the half that started the window becomes a session
+leader (`setsid`, so it holds no controlling terminal), ignores `SIGHUP`
+(so closing the terminal the command was typed in does not take the
+window with it), points its stdin/stdout/stderr at `/dev/null` and waits
+for the terminal — the exact lifetime and insulation `mysbx gui &
+disown` gives, without the operator having to type it. The parent
+returns as soon as the window was started, so the shell prompt comes
+back immediately. Exactly one failure stays synchronous: a terminal
+that cannot be started at all is a runtime failure (`1`) naming it.
+One that starts and fails afterwards (no Wayland socket, say) is
+silent — nobody waits for its status, the same as the `& disown`
+form.
 
 ## Non-goals
 

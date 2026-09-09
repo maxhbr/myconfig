@@ -3352,6 +3352,10 @@ fn an_unparsable_sidecar_config_is_never_rewritten() {
 /// and exits 0 — everything `gui` promises can be asserted on those bytes
 /// without a graphical session. Written with the mode bits of a script
 /// because `gui` execs it directly.
+///
+/// The record file is written by the stub AT RUNTIME, and `gui` returns
+/// before the stub has written it (D15: it detaches, like `& disown`) —
+/// so a test reads it through [`wait_for_file`], never directly.
 fn terminal_stub(base: &Path) -> (PathBuf, PathBuf) {
     let out = base.join("stub-out.txt");
     let stub = base.join("terminal-stub");
@@ -3365,6 +3369,26 @@ fn terminal_stub(base: &Path) -> (PathBuf, PathBuf) {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
     (stub, out)
+}
+
+/// Wait for `path` to come into existence, then read it — the polling
+/// counterpart of the detach: `mysbx gui` returns while the terminal it
+/// started is still running, so the bytes the stub writes arrive AFTER
+/// the mysbx process the test drove has exited. Polls for up to 10s
+/// (generous; the stub writes within milliseconds) and panics with the
+/// timeout otherwise.
+fn wait_for_file(path: &Path) -> String {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !path.exists() {
+        if std::time::Instant::now() > deadline {
+            panic!(
+                "the terminal stub never wrote its record: {}",
+                path.display()
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    std::fs::read_to_string(path).unwrap()
 }
 
 #[test]
@@ -3389,7 +3413,7 @@ fn gui_passes_the_tail_verbatim_to_a_mysbx_in_the_cwd() {
         .env("MYSBX_GUI_STUB_OUT", &out);
     let status = cmd.status().expect("failed to spawn the mysbx binary");
     assert_eq!(status.code(), Some(0));
-    let recorded = std::fs::read_to_string(&out).unwrap();
+    let recorded = wait_for_file(&out);
     let mut lines = recorded.lines();
     assert_eq!(
         lines.next(),
@@ -3450,7 +3474,7 @@ fn gui_does_not_parse_the_tail_and_needs_no_sidecar() {
         .output()
         .expect("failed to spawn the mysbx binary");
     assert_eq!(result.status.code(), Some(0), "gui must not parse the tail");
-    let recorded = std::fs::read_to_string(&out).unwrap();
+    let recorded = wait_for_file(&out);
     assert!(
         recorded.contains("nope\n") && recorded.contains("--dry-run"),
         "the tail reached the terminal unparsed: {recorded}"
@@ -3519,5 +3543,68 @@ fn gui_names_the_terminal_it_cannot_start() {
     assert!(
         stderr.contains("/nonexistent/terminal"),
         "the error names the terminal: {stderr}"
+    );
+}
+
+#[test]
+fn gui_detaches_and_returns_before_the_terminal_exits() {
+    // D15, the detach half: `mysbx gui` must behave like `mysbx gui &
+    // disown` — the mysbx process itself returns as soon as the window
+    // was STARTED, long before the terminal stub exits, and the
+    // starter survives the invoking shell. The stub here sleeps BEFORE
+    // it writes its record, so both halves are pinned: the elapsed time
+    // (well under the sleep) proves mysbx did not wait for the window,
+    // and the record arriving afterwards proves the detached starter
+    // outlived the mysbx process the test drove.
+    let base = tmpdir("gui-detach");
+    let (repo, _) = make_repo(&base, "repo");
+    let (_, out) = terminal_stub(&base);
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    // Slow the stub down: 2s is far beyond any legitimate startup wait
+    // and well under the cargo test timeout.
+    let slow = base.join("terminal-slow-stub");
+    std::fs::write(
+        &slow,
+        "#!/bin/sh\nsleep 2\nprintf '%s\\n' \"$@\" > \"$MYSBX_GUI_STUB_OUT\"\npwd >> \"$MYSBX_GUI_STUB_OUT\"\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&slow, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let inv = Invocation {
+        args: vec![],
+        cwd: repo,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let started = std::time::Instant::now();
+    let result = spawn_with_args(&inv, &["gui"])
+        .env("MYSBX_TERMINAL", &slow)
+        .env("MYSBX_GUI_STUB_OUT", &out)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    let elapsed = started.elapsed();
+    assert_eq!(
+        result.status.code(),
+        Some(0),
+        "mysbx gui itself must succeed: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(
+        elapsed < std::time::Duration::from_secs(2),
+        "mysbx gui returned after {elapsed:?} — it must not wait for the terminal"
+    );
+    // At return time the stub is still sleeping: the record is written
+    // only after the sleep, so its absence is the detach made visible.
+    assert!(
+        !out.exists(),
+        "mysbx gui returned while the terminal was still running"
+    );
+    // And the detached starter outlived mysbx to reap it: the record
+    // does arrive, with the D15 window content — the stub's argv.
+    let recorded = wait_for_file(&out);
+    assert!(
+        recorded.contains("--command") && recorded.contains("mysbx"),
+        "the terminal ran the same mysbx: {recorded}"
     );
 }
