@@ -2785,11 +2785,23 @@ fn the_pinned_bin_sh_reaches_the_argv_and_the_report() {
 fn without_the_bin_sh_pin_no_bin_sh_is_bound() {
     // Unset means "no /bin/sh", never "the host's" (a host /bin/sh is
     // outside mysbx's own closure): the argv gains no bind and the
-    // report says the absence out loud.
+    // report says the absence out loud. The `--verbose` report itself
+    // names "/bin/sh" in its `(none …)` line, so the no-bind assertion
+    // checks the ARGV block: a bind would show up as a `--ro-bind`/`
+    // /bin/sh` pair there, and the report line below asserts the
+    // intended absence instead.
     let (inv, _, _) = fixture_user_backend("binsh-unset", &["--verbose", "--dry-run"]);
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(!stdout.contains("/bin/sh"), "no /bin/sh bind: {stdout}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let argv = lines
+        .iter()
+        .position(|l| *l == "bwrap")
+        .unwrap_or_else(|| panic!("no argv block in the dry run: {stdout}"));
+    assert!(
+        !lines[argv..].contains(&"/bin/sh"),
+        "no /bin/sh bind in the argv: {stdout}"
+    );
     assert!(stdout.contains("## /bin/sh:        (none"), "{stdout}");
 }
 
