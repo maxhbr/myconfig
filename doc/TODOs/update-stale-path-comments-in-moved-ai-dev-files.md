@@ -11,18 +11,20 @@ must keep the moved files byte-identical to preserve snapshot-verified
 - `modules/myconfig.ai.dev/fns/seed-agent-config.nix`
   - lines ~9, 56, 73, 136, 547: comments say `../myconfig.ai.microvm/...`
     and `../programs.herdr.nix`; correct paths are now
-    `../myconfig.ai/myconfig.ai.microvm/...` and
+    `../myconfig.ai.dev/sandboxes/myconfig.ai.microvm/...` and
     `../programs/programs.herdr.nix`.
   - This file is interpolated into
-    `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/default.nix:37`
-    (`seedAgentConfig = ${../../myconfig.ai.dev/fns/seed-agent-config.nix};`)
+    `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/default.nix`
+    (`seedAgentConfig = ${../../fns/seed-agent-config.nix};`)
     and copied into the store verbatim, so its content hash feeds directly
     into the `agent-qemu-pi` / `agent-qemu-herdr` runner derivation paths.
 - `modules/myconfig.ai.dev/fns/bubblewrap-app.nix`
-  - line ~35: comment says `../myconfig.ai.jail.nix`; correct path is
-    `../myconfig.ai/myconfig.ai.jail.nix`.
-  - This file is imported (not interpolated) by `myconfig.ai.jail.nix`,
-    `myconfig.ai.workmux/jail.nix`, and `myconfig.ai.nono-agent-sandbox.nix`,
+  - line ~35: comment says `../myconfig.ai.jail.nix`; correct path is now
+    `../sandboxes/myconfig.ai.jail.nix`.
+  - This file is imported (not interpolated) by
+    `myconfig.ai.dev/sandboxes/myconfig.ai.jail.nix`,
+    `myconfig.ai.workmux/jail.nix`, and
+    `myconfig.ai.dev/sandboxes/myconfig.ai.nono-agent-sandbox.nix`,
     so the comment is harmless at eval time, but it was left stale to keep
     the moved file byte-identical to its pre-move original.
 
@@ -82,7 +84,7 @@ must keep the moved files byte-identical to preserve snapshot-verified
 
 ## Related
 
-- `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`
+- `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`
   intentionally still references `modules/myconfig.ai/fns/seed-agent-config.nix`
   in comments: that file lives in a directory copied wholesale into the store
   (`import ${./.}/runner.nix` in `default.nix`), so even comment edits there

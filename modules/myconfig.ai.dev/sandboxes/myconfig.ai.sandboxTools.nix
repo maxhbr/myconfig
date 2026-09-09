@@ -20,7 +20,8 @@
 #     runners — the host-side wrappers bake the package store paths into a
 #     `SANDBOXED_*_EXTRA_PACKAGES` JSON env var (same pattern as
 #     `AGENT_QEMU_HERDR_AGENT_PACKAGES`); the standalone runner expression
-#     passes it through to `mkSandboxedRunner` (`modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`),
+#     passes it through to `mkSandboxedRunner`
+#     (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`),
 #     which folds it into the guest package set.
 #   * gVisor sandbox image — `myconfig.ai.gvisor-agent-sandbox` appends the
 #     packages to its `extraImagePackages` default.

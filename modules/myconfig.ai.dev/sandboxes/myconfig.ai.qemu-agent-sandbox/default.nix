@@ -34,7 +34,7 @@ let
       inherit nixpkgs nixosSystem;
       system = "${system}";
       microvmModule = import ${inputs.microvm}/nixos-modules/microvm;
-      seedAgentConfig = ${../../myconfig.ai.dev/fns/seed-agent-config.nix};
+      seedAgentConfig = ${../../fns/seed-agent-config.nix};
       piPackage = ${inputs.nixos-unstable.legacyPackages.${system}.pi-coding-agent};
       herdrPackage = ${pkgs.herdr};
       workmuxPackage = ${inputs.workmux.packages.${system}.default};

@@ -661,7 +661,7 @@
           // lib.optionalAttrs (system == "x86_64-linux") (
             # Rust agent-gvisor parity suite + CLI harness
             # (modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox).
-            import ./modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix {
+            import ./modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix {
               inherit self inputs system;
             }
           )

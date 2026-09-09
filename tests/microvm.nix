@@ -88,7 +88,7 @@ let
   # The deterministic slot table of the ENABLED reference host, from the same
   # generator the module uses.
   enabledSlots =
-    (import ../modules/myconfig.ai/myconfig.ai.microvm/slots.nix { inherit lib; }).mkSlots
+    (import ../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/slots.nix { inherit lib; }).mkSlots
       resourceClasses;
   # The EFFECTIVE resource-class table of the reference host (ticket 5 A).
   resourceClasses = self.nixosConfigurations.test-f13._module.args.agentResourceClasses;
@@ -134,7 +134,9 @@ let
   # --- (c) pure-eval slot-pool generator ---------------------------------
   # Import the SAME slots.nix the module uses, so this test encodes §37's
   # duplicate-IP/MAC detection against the real generator.
-  slotLib = import ../modules/myconfig.ai/myconfig.ai.microvm/slots.nix { inherit lib; };
+  slotLib = import ../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/slots.nix {
+    inherit lib;
+  };
 
   # The SAME authoritative agent registry INSTANCE the module uses (built once
   # in default.nix and handed around via `_module.args.agentRegistry`), so the
@@ -413,7 +415,7 @@ let
   # --- lightweight plan phase 5: the NARROWED capability variants ----------
   # ONE agent keeps these cheap to BUILD (the capability check builds their
   # closures, not only their drvPaths), and `codex` is stdin-driven, so the
-  # batch variant also exercises ../modules/myconfig.ai/myconfig.ai.microvm/
+  # batch variant also exercises ../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/
   # job.nix's `promptUnusedSuppression` — the exact shape whose SC2034 broke the
   # lite guest BUILD in phase 4 while every eval-depth check stayed green.
   capabilityHostWith =
@@ -824,7 +826,7 @@ in
     let
       guestPkgPaths = map (p: p.outPath) guest0Cfg.environment.systemPackages;
       # A guest of a host that does NOT opt into the guest shell convenience
-      # (../modules/myconfig.ai/myconfig.ai.microvm/guest-shell-convenience.nix).
+      # (../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/guest-shell-convenience.nix).
       # The reference host f13 DOES opt in, so the "no fish anywhere" part of
       # the lightweight shape has to be asserted on the default-shaped variant
       # guest instead — the opt-in is checked separately below.
@@ -3384,7 +3386,7 @@ in
 
   # ---------------------------------------------------------------------- #
   # The launcher is RENDERED from Nix fragments spliced into one indented    #
-  # string (../modules/myconfig.ai/myconfig.ai.microvm/launcher.nix          #
+  # string (../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/launcher.nix          #
   # `mkFragment`/`indentFragment`). The indent argument is the column in the  #
   # GENERATED script, which is NOT the column the `${...}` has in the Nix     #
   # file (Nix strips the string's common indentation first), so passing the   #
@@ -4842,7 +4844,7 @@ in
         # — the re-parsing side of the transport, so the stub is not a guess
         # about which shell runs. Read off the evaluated guest, so it follows a
         # change of the guest login shell instead of pinning one.
-        SUITE = ../modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh;
+        SUITE = ../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/runtime-validation.sh;
         # `getExe`, not `<store>/bin/bash`: the guest login shell is bash by
         # default but fish when the host opts into `guestShellConvenience`
         # with `shell = "fish"` (the reference host does), and the point of
@@ -4892,7 +4894,7 @@ in
           pkgs.bash
         ];
         harness = ./microvm-rtv-dispatch.sh;
-        SUITE = ../modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh;
+        SUITE = ../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/runtime-validation.sh;
       }
       ''
         mkdir -p work && cd work

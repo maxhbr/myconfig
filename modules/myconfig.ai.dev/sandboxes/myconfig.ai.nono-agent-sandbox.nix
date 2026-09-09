@@ -37,7 +37,7 @@ let
         osconfig
         ;
     };
-  nono-app = callNonoLib ../myconfig.ai.dev/fns/nono-app.nix;
+  nono-app = callNonoLib ../fns/nono-app.nix;
 
   # Make the `workmux` binary available inside the sandboxes (for the
   # `workmux set-window-status` status hooks and `workmux merge`/`remove` from

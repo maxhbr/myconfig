@@ -21,17 +21,17 @@ let
 in
 {
   imports = [
-    # dev tooling — sandbox tiers still live under ../myconfig.ai/ and
-    # are moved by myconfig-e4j.3; the agent CLI programs were moved here
-    # by myconfig-e4j.2, skills/, fns/ and hermes-agent by myconfig-e4j.5,
-    # and mysbx + workmux by myconfig-e4j.4
-    ../myconfig.ai/myconfig.ai.jail.nix
-    ../myconfig.ai/myconfig.ai.nono.nix
-    ../myconfig.ai/myconfig.ai.nono-agent-sandbox.nix
-    ../myconfig.ai/myconfig.ai.sandboxTools.nix
-    ../myconfig.ai/myconfig.ai.qemu-agent-sandbox
-    ../myconfig.ai/myconfig.ai.microvm
-    ../myconfig.ai/myconfig.ai.gvisor-agent-sandbox
+    # dev tooling — the sandbox tiers were moved here by myconfig-e4j.3
+    # (./sandboxes/); mysbx and workmux were moved here by myconfig-e4j.4.
+    # The agent CLI programs were moved here by myconfig-e4j.2, and
+    # skills/, fns/ and hermes-agent by myconfig-e4j.5
+    ./sandboxes/myconfig.ai.jail.nix
+    ./sandboxes/myconfig.ai.nono.nix
+    ./sandboxes/myconfig.ai.nono-agent-sandbox.nix
+    ./sandboxes/myconfig.ai.sandboxTools.nix
+    ./sandboxes/myconfig.ai.qemu-agent-sandbox
+    ./sandboxes/myconfig.ai.microvm
+    ./sandboxes/myconfig.ai.gvisor-agent-sandbox
     ./mysbx
     ./hermes-agent
     ./programs/programs.agent-browser
