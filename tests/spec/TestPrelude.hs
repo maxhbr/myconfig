@@ -36,7 +36,7 @@ import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Data.String.Conversions
 import Data.String.Interpolate (i)
-import GHC.IO.Exception (ExitCode)
+import GHC.IO.Exception (ExitCode (..))
 import GHC.IO.Handle (Handle)
 import System.Environment (lookupEnv)
 import System.FilePath ((</>))
@@ -122,11 +122,25 @@ mkNixDrvProccess nixDrvExpr = do
         Process.std_err = Process.CreatePipe
       }
 
-runNixDrv :: String -> TestM String
-runNixDrv = liftIO . flip Process.readCreateProcess "" <=< mkNixDrvProccess
-
 runNixDrvWithExitCode :: String -> TestM (ExitCode, String, String)
 runNixDrvWithExitCode = liftIO . flip Process.readCreateProcessWithExitCode "" <=< mkNixDrvProccess
+
+runNixDrv :: String -> TestM String
+runNixDrv s = do
+  (status, stdout, stderr) <- runNixDrvWithExitCode s
+  case status of
+    ExitSuccess -> pure stdout
+    ExitFailure code -> do
+      liftIO $
+        expectationFailure
+          [i| Nix DRV exited with code #{code}:
+            Stdout:
+            #{stdout}
+
+            Stderr:
+            #{stderr}
+          |]
+      undefined
 
 spawnNixDrv :: String -> TestM (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
 spawnNixDrv = liftIO . createProcess <=< mkNixDrvProccess
