@@ -97,13 +97,13 @@ let
   #   2. opencode's *configuration* visible inside the sandbox -> read-only
   #      mounts in the generated user config layer (`…mysbx.config.mounts`).
   #   3. opencode's *state* persists across runs -> `state-dirs` entries
-  #      (`…mysbx.config.stateDirs`, ../mysbx/docs/design/config.md D15)
+  #      (`…mysbx.config.stateDirs`, ../../mysbx/docs/design/config.md D15)
   #      backed by `<repo>.mysbx/state/` in the sidecar — never the host
   #      `~/.local`, which stays out of the sandbox entirely.
   #
   # Only home-manager-managed paths are mounted: mysbx canonicalizes every
   # mount path eagerly and a missing path is a hard error on EVERY run
-  # (../mysbx/docs/design/config.md D8), so each entry must be created by
+  # (../../mysbx/docs/design/config.md D8), so each entry must be created by
   # the very condition that adds it. The host's own
   # `~/.local/{share,state}/opencode` and the auth files are deliberately
   # NOT mounted: a sandboxed session starts unauthenticated (it talks to
@@ -126,7 +126,7 @@ let
   # is a hard error on every mysbx run of the host (D8) — not just for
   # opencode — the mount is gated on the same condition, read from the
   # user whose config layer mysbx generates. Same pattern (and the same
-  # laziness argument) as `hmRipgrep` in ../mysbx/default.nix.
+  # laziness argument) as `hmRipgrep` in ../../mysbx/default.nix.
   hmMcpServers = config.home-manager.users.mhuber.programs.mcp.servers or { };
 
   mysbxOpencodeMounts = map mysbxHomeMount (

@@ -6,7 +6,7 @@ Owner module: [`programs.herdr.nix`](./programs.herdr.nix).
 
 `prefix+shift+g` ("new worktree") creates the checkout next to the original
 repository, exactly where `workmux` and `git branch-to-worktree`
-([`../shell.git/bin/git-branch-to-worktree.sh`](../shell.git/bin/git-branch-to-worktree.sh))
+([`../../../modules/shell.git/bin/git-branch-to-worktree.sh`](../../../modules/shell.git/bin/git-branch-to-worktree.sh))
 put theirs:
 
 ```
@@ -61,14 +61,14 @@ Flows that do **not** pass an explicit `--path` — for example a bare
 socket API — still use the global `[worktrees] directory`
 (`~/.herdr/worktrees/<repo>/<branch-slug>`). That is a herdr limitation, not a
 configuration choice here; see
-[`../../doc/TODOs/herdr-per-repo-worktree-directory.md`](../../doc/TODOs/herdr-per-repo-worktree-directory.md).
+[`../../../doc/TODOs/herdr-per-repo-worktree-directory.md`](../../../doc/TODOs/herdr-per-repo-worktree-directory.md).
 
 ## `agent-bubblewrap-herdr`: the sandbox closes that gap
 
 A jail session has exactly **one** repository, so there the global option can
 be made repository-local. `agent-bubblewrap-herdr` (same module) is the
 bubblewrap analogue of `agent-qemu-herdr` and the workmux jail
-([`myconfig.ai.workmux/jail.nix`](./myconfig.ai.workmux/jail.nix)):
+([`../myconfig.ai.workmux/jail.nix`](../myconfig.ai.workmux/jail.nix)):
 
 1. The wrapper resolves the repository root from the working directory,
    **creates** `<parent-of-repo>/<repo>__worktrees` and binds it read-write
@@ -162,10 +162,10 @@ described above: it opens an Alacritty window whose command is
 was invoked from (which is what the jail binds read-write and what herdr's
 first workspace is relocated to). It is the herdr analogue of
 `agent-bubblewrap-alacritty-workmux-tmux`
-([`myconfig.ai.workmux/jail.nix`](./myconfig.ai.workmux/jail.nix)).
+([`../myconfig.ai.workmux/jail.nix`](../myconfig.ai.workmux/jail.nix)).
 
 * It detaches from the calling shell via
-  [`lib/detached-gui-launcher.nix`](../../lib/detached-gui-launcher.nix), so
+  [`lib/detached-gui-launcher.nix`](../../../lib/detached-gui-launcher.nix), so
   the terminal is free again immediately (`--foreground` or
   `MYCONFIG_GUI_LAUNCHER_FOREGROUND=1` keeps the old blocking behaviour).
 * The `$PWD == $HOME` refusal and the "not a git repository" note are printed

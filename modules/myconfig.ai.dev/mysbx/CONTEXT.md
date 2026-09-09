@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT
 
 The sandboxing CLI of this repo: one command that confines a process to a
 declared set of host resources for the repository you are standing in. It is
-the intended successor of the other sandboxing tiers in `modules/myconfig.ai/`
+the intended successor of the other sandboxing tiers in `modules/myconfig.ai.dev/sandboxes/`
 (see [`docs/feature-comparison.md`](./docs/feature-comparison.md)).
 
 ## Language

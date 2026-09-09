@@ -541,7 +541,7 @@
         in
         eachDefaultSystem (system: {
           # Per-invocation QEMU agent runners are evaluated directly from
-          # modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/runner.nix.
+          # modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/runner.nix.
           # They are intentionally not exported as flake packages.
           # might be overwritten in priv
           packages.myconfig-iso = self.mkMyconfigISO {
@@ -550,8 +550,10 @@
           } [ ];
 
           # `nix fmt` / `./nixfmtall.sh` — nixfmt for Nix, rustfmt for the
-          # hand-written Rust crates in `modules/` (`mysbx/mysbx-rs`, the
-          # `myconfig.ai.gvisor-agent-sandbox/rust` rewrite). `nixfmt-tree`
+          # hand-written Rust crates in `modules/`
+          # (`myconfig.ai.dev/mysbx/mysbx-rs`, the
+          # `myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/rust`
+          # rewrite). `nixfmt-tree`
           # is a treefmt wrapper that ships the nixfmt entry; the override
           # adds the formatter binary and its treefmt entry.
           #
@@ -614,7 +616,7 @@
                   # + the phase-6 acceptance measurements): also a plain script,
                   # also executed by a human on a KVM host.
                   "tests/measure-boot.sh"
-                  "modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh"
+                  "modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/runtime-validation.sh"
                   # Qwen3.8-27B gfx1151 benchmark + tool-call fixtures (run by a
                   # human on the gfx1151 hardware).
                   "tests/qwen38-toolcall-fixture.sh"
@@ -627,9 +629,9 @@
                   # POSIX-sh git/podman recording stubs shared by the cargo
                   # tests (include_str!) and the harness. Executed via bash /
                   # the tested binary, so nothing else gates them.
-                  "modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/tests/agent-gvisor-cli-harness.sh"
-                  "modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/rust/tests/stubs/git.sh"
-                  "modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/rust/tests/stubs/podman.sh"
+                  "modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/tests/agent-gvisor-cli-harness.sh"
+                  "modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/rust/tests/stubs/git.sh"
+                  "modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/rust/tests/stubs/podman.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {
@@ -660,7 +662,7 @@
           )
           // lib.optionalAttrs (system == "x86_64-linux") (
             # Rust agent-gvisor parity suite + CLI harness
-            # (modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox).
+            # (modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox).
             import ./modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix {
               inherit self inputs system;
             }

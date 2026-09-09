@@ -54,7 +54,7 @@ the package only ever wraps a finished CLI.
       x86_64-linux only, like the microvm and gvisor check sets).
 - [x] `mysbx run --dry-run -- ls /` from a real checkout shows the wrapped
       `bwrap` store path as argv[0].
-- [x] `git diff --stat` touches nothing outside `modules/myconfig.ai/mysbx/`.
+- [x] `git diff --stat` touches nothing outside `modules/myconfig.ai.dev/mysbx/`.
       Exception, blessed by the reviewer: one six-line hunk in `flake.nix`
       imports this item's check set — the exact pattern the gvisor tier's
       checks.nix commit already established.

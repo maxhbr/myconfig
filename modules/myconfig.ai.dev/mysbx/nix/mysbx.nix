@@ -10,7 +10,7 @@
 # `mysbx-0.1.0`) so `./build-pkg-for-host.sh mysbx-0.1.0 <host>` keeps
 # finding it in `home.packages`. It symlinks the crate's `bin/` mirror and
 # re-wraps the binary (same `makeBinaryWrapper` idiom as
-# ../myconfig.ai.gvisor-agent-sandbox/nix/agent-gvisor.nix) with the three
+# ../../sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/agent-gvisor.nix) with the three
 # `MYSBX_*` pin variables the Rust CLI reads (src/lib.rs `env_or` calls):
 #
 #   MYSBX_BWRAP       the bubblewrap backend binary (plan.md: "The base")
@@ -87,7 +87,7 @@
   curl,
   # Extra packages appended to the dev-tool closure by feature modules
   # (`myconfig.ai.mysbx.extraTools`), e.g. the `pi` coding agent from
-  # ../../programs.pi-coding-agent. Same security note as the hardcoded
+  # ../../programs/programs.pi-coding-agent. Same security note as the hardcoded
   # list below: whatever lands here is on the sandbox PATH.
   extraTools ? [ ],
   # The multiplexer entry scripts, keyed by the `multiplexer` value
@@ -109,7 +109,7 @@ let
   # union of the tools' bins, so `toolsPath` stays one absolute path.
   #
   # This is the MVP's hardcoded dev-tool closure, mirroring
-  # ../../myconfig.ai.dev/fns/bubblewrap-app.nix `devTools` minus the package-management
+  # ../fns/bubblewrap-app.nix `devTools` minus the package-management
   # and linting extras (`wget`, `unzip`, `diffutils`, `tar`/`gzip`,
   # `shfmt`, `shellcheck`), plus `hostname` and `tig` (the git TUI: the
   # payload is always a git worktree, and reviewing it is the one
@@ -125,7 +125,7 @@ let
   #
   # `extraTools` is the ONE extension point on top of that list: the
   # agent modules that integrate with mysbx (today only
-  # ../../programs.pi-coding-agent) add their own binary there instead
+  # ../../programs/programs.pi-coding-agent) add their own binary there instead
   # of editing this list.
   toolsEnv = buildEnv {
     name = "mysbx-tools";

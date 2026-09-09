@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT
 
 # `myconfig.ai.skills` — layout conventions
 
-`modules/myconfig.ai/skills/` hosts the handcrafted skills, agents and prompt
+`modules/myconfig.ai.dev/skills/` hosts the handcrafted skills, agents and prompt
 templates this repo deploys to the enabled agent harnesses, next to the
 `*.nix` files that register them (`skills/default.nix` is the module; each
 `<name>.nix` registers one artefact in the central
@@ -49,7 +49,7 @@ namespace also covers skills whose *sources* come from elsewhere and only the
   directory and additionally derives a pi prompt template from it;
 - `herdr` — skill generated at build time from the installed binary's
   `herdr --skill` output (a derivation, not a local directory); registered
-  in `../programs.herdr.nix` and implicitly enabled by the herdr CLI, so
+  in `../programs/programs.herdr.nix` and implicitly enabled by the herdr CLI, so
   there is no glue file under `skills/`;
 - `playwright-cli.nix` — registers a package-provided skill;
 - `default.nix` — the module itself: discovers skills from flake-pinned

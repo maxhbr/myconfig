@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 #
 # EXECUTED smoke test for the TRUSTED guest-side batch job controller
-# (`agent-job-controller`, see modules/myconfig.ai/myconfig.ai.microvm/job.nix).
+# (`agent-job-controller`, see modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/job.nix).
 # Run from the `microvm-batch-controller-smoke` check in tests/microvm.nix.
 #
 # It runs the REAL, unmodified controller script:

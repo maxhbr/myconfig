@@ -7,7 +7,7 @@
 #
 # Agent of Empires (`aoe`) is a tmux-based terminal session manager for
 # AI coding agents; the host installation lives in
-# ../../programs.agent-of-empires/. Because it drives tmux, the
+# ../../programs/programs.agent-of-empires/. Because it drives tmux, the
 # `TMUX_TMPDIR` the argv builder exports is what keeps its server on
 # the private, in-sandbox socket (D16/D17) — the same mechanism as for
 # plain tmux and workmux, and the reason `aoe` needed no per-tool

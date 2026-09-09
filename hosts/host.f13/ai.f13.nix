@@ -20,18 +20,18 @@
         skills.enable = true;
 
         # `hunk` — review-first terminal diff viewer for agent-authored
-        # changesets (modules/myconfig.ai/programs.hunk). Not listed here: it
+        # changesets (modules/myconfig.ai.dev/programs/programs.hunk). Not listed here: it
         # is auto-enabled by the `myconfig.ai` umbrella above, like `rtk`.
 
         # `aoe` — Agent of Empires, tmux based session manager for coding
-        # agents (modules/myconfig.ai/programs.agent-of-empires). Explicit
+        # agents (modules/myconfig.ai.dev/programs/programs.agent-of-empires). Explicit
         # opt-in per host (heavy from-source Rust build). `web` stays at its
         # default (false): the plain `aoe` build without the bundled web
         # dashboard.
         agent-of-empires.enable = true;
 
         # Rootless Podman + gVisor agent-sandbox tier (`agent-gvisor`); see
-        # modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/README.md.
+        # modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/README.md.
         # Like `microvm` below, it is enabled explicitly per host and never
         # implicitly through the broad `myconfig.ai.enable`.
         # The sandbox image gets the agent CLIs enabled above
@@ -42,13 +42,13 @@
           nix.enable = true;
         };
 
-        # The `mysbx` sandboxing CLI (modules/myconfig.ai/mysbx/README.md),
+        # The `mysbx` sandboxing CLI (modules/myconfig.ai.dev/mysbx/README.md),
         # the WIP successor of the sandbox tiers above. Enabled explicitly
         # per host like the other tiers; it only puts the CLI on PATH.
         mysbx.enable = true;
 
         # Cloud Hypervisor agent-sandbox tier
-        # (see modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md).
+        # (see modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/agent-microvm.md).
         # Explicitly enabled here — NOT via the broad `myconfig.ai.enable`
         # — because it is a much stronger (and more resource-heavy) isolation
         # tier that must never switch on implicitly with the other AI tools.
@@ -74,8 +74,8 @@
           # guest closure: EVERY listed agent's runtime is baked into BOTH slot
           # images. Trimming this list is the cheapest way to shrink the guest,
           # and it is deliberately an operator decision, not a default.
-          # `herdr` is the agent MULTIPLEXER (../../modules/myconfig.ai/
-          # programs.herdr.nix). Selecting it bakes `pkgs.herdr` into the guest
+          # `herdr` is the agent MULTIPLEXER
+          # (../../modules/myconfig.ai.dev/programs/programs.herdr.nix). Selecting it bakes `pkgs.herdr` into the guest
           # closure and registers a `microvm-herdr` workmux pane, so a guest can
           # run `herdr` (via `agent-microvm run --agent herdr` / the pane) and,
           # from inside its TUI, launch the OTHER agents selected below (they
@@ -115,7 +115,7 @@
           # is chowned to the guest agent uid = mhuber). The task -> clone
           # index that keeps `workspace-remove`/`usage`/`dashboard` working
           # stays root-owned under runtimeRoot. See
-          # ../../modules/myconfig.ai/myconfig.ai.microvm/docs/workspace-layout.md.
+          # ../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/workspace-layout.md.
           workspaceLayout = "beside-repo";
           # Named network profile (the secure default): the guest's only egress
           # is the bridge-only host LiteLLM endpoint. Guest-to-guest traffic,
@@ -136,8 +136,8 @@
           # `AGENT_MICROVM_SSH_KEY=/path/to/private-key agent-microvm ssh …`.
           sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
 
-          # OPT-IN shell convenience (modules/myconfig.ai/myconfig.ai.microvm/
-          # guest-shell-convenience.nix): bake fish + neovim (built from the
+          # OPT-IN shell convenience (modules/myconfig.ai.dev/sandboxes/
+          # myconfig.ai.microvm/guest-shell-convenience.nix): bake fish + neovim (built from the
           # GUEST's own pkgs, so they land in the immutable EROFS store) into
           # every guest closure and render the host's *config source* for them
           # into the disposable home. An operator who SSHes into a sandbox

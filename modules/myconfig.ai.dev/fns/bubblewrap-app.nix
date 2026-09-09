@@ -32,7 +32,7 @@
   pkgs,
   jail,
   # The NixOS `config`, used to read the shared `myconfig.ai.jail.fwdEnvs`
-  # option (see `../myconfig.ai/myconfig.ai.jail.nix`) so every `jail-app` wrapper picks
+  # option (see `../sandboxes/myconfig.ai.jail.nix`) so every `jail-app` wrapper picks
   # up the global forwarded-env list without each call site having to pass
   # it explicitly. Defaults to `{}` so the library still works standalone
   # (e.g. in `nix repl`); in that case `globalFwdEnvs` reduces to just the
@@ -239,7 +239,7 @@ let
 
   fwdEnvPerms = lib.map try-fwd-env (fwdEnv ++ extraFwdEnv ++ globalFwdEnvs);
 
-  # Shared sandbox tooling (see ../myconfig.ai.sandboxTools.nix): packages
+  # Shared sandbox tooling (see ../sandboxes/myconfig.ai.sandboxTools.nix): packages
   # appended to the tool set below for EVERY `jail-app` wrapper, and env
   # vars set unconditionally via `set-env`. Wrapper-specific
   # `extraRuntimeEnv` wins over `sharedEnv` on a name clash.

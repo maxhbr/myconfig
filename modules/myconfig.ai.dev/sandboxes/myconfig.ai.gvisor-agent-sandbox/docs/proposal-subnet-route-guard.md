@@ -74,7 +74,7 @@ profile instead and drop this proposal.
 ## Option B: make pasta configure the tap itself
 
 Bake an explicit address and gateway into the podman network spec, in
-`modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix`:
+`modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/default.nix`:
 
 ```nix
 AGENT_GVISOR_NETWORK = "pasta:--map-guest-addr,${addr},-a,<ns-addr>,-g,<gw>";

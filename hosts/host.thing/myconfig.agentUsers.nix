@@ -10,7 +10,7 @@
 # board. Everything else (ephemeral home, no secrets, nix
 # allowed-but-untrusted) is inherited from the shared agent model.
 # Flashing works from this user because it shares the host kernel —
-# see modules/myconfig.ai/docs/README.md for why the VM sandbox tiers
+# see modules/myconfig.ai.dev/docs/agent-sandboxing-tiers.README.md for why the VM sandbox tiers
 # cannot pass USB/serial devices through.
 {
   config,

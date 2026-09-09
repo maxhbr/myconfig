@@ -8,7 +8,7 @@ SPDX-License-Identifier: MIT
 Both wrappers put the `herdr` agent multiplexer inside a microVM instead of
 running it directly on the host. They are **not** the same feature under two
 names: they belong to two different tiers of the repo's documented sandboxing
-ladder (`modules/myconfig.ai/docs/README.md`, "Agent sandboxing
+ladder (`modules/myconfig.ai.dev/docs/agent-sandboxing-tiers.README.md`, "Agent sandboxing
   tiers" — tiers 3 and 4) and solve different problems. This document
   compares them side by side and gives a concrete recommendation.
 
@@ -33,23 +33,23 @@ ladder (`modules/myconfig.ai/docs/README.md`, "Agent sandboxing
 ## Purpose / intended use case
 
 - **`agent-qemu-herdr`** (the `agent-qemu-herdr` wrapper in
-  `modules/myconfig.ai/programs.herdr.nix`) is the herdr-flavoured sibling of
+  `modules/myconfig.ai.dev/programs/programs.herdr.nix`) is the herdr-flavoured sibling of
   `agent-qemu-pi`: run it from a project
   subdirectory to get "the same loop as `agent-bubblewrap-pi`, but with a
-  kernel boundary" (`modules/myconfig.ai/docs/README.md`, section
+  kernel boundary" (`modules/myconfig.ai.dev/docs/agent-sandboxing-tiers.README.md`, section
   "3. `agent-qemu-pi` — QEMU/SLiRP microVM"), except instead of
   dropping straight into `pi` it drops into a `herdr` multiplexer session so
   several agents/shells can run side by side in the one VM
-  (`modules/myconfig.ai/agent-qemu-herdr.README.md`, "Why"). It is a *disposable,
+  (`modules/myconfig.ai.dev/docs/agent-qemu-herdr.README.md`, "Why"). It is a *disposable,
   one-shot* command a developer types ad hoc.
-- **`agent-microvm`** (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md`, opening
+- **`agent-microvm`** (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/agent-microvm.md`, opening
   bullets)
   is "a second, stronger isolation tier", the only one "designed for
   unattended, autonomous agent runs"
-  (`modules/myconfig.ai/docs/README.md`, section "4. `agent-microvm` —
+  (`modules/myconfig.ai.dev/docs/agent-sandboxing-tiers.README.md`, section "4. `agent-microvm` —
   Cloud Hypervisor microVM fleet"). `herdr` is just one of the
   registry's selectable agents there
-  (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md`,
+  (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/agent-microvm.md`,
   "herdr specifics") — a way to get a multi-agent pane session *inside* one of
   the fleet's slots, mirroring what tier 3 does, not the tier's reason to
   exist.
@@ -58,9 +58,9 @@ ladder (`modules/myconfig.ai/docs/README.md`, "Agent sandboxing
 
 | Aspect | `agent-qemu-herdr` | `agent-microvm` (`--agent herdr`) |
 | --- | --- | --- |
-| Hypervisor | QEMU, SLiRP (`mkSandboxedRunner` in `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`) | Cloud Hypervisor (`modules/myconfig.ai/myconfig.ai.microvm/docs/agent-microvm.md`, guest shape table) |
+| Hypervisor | QEMU, SLiRP (`mkSandboxedRunner` in `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`) | Cloud Hypervisor (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/agent-microvm.md`, guest shape table) |
 | Kernel | own guest kernel | own guest kernel |
-| Guest store | host `/nix/store` shared **read-only** via virtiofs (the read-only `nix-store` share in `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`) — the guest closure is the *host's* store | self-contained EROFS store disk built into the guest image; host store not reachable from the guest at all (`agent-microvm.md`, opening bullets) |
+| Guest store | host `/nix/store` shared **read-only** via virtiofs (the read-only `nix-store` share in `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`) — the guest closure is the *host's* store | self-contained EROFS store disk built into the guest image; host store not reachable from the guest at all (`agent-microvm.md`, opening bullets) |
 | Network boundary | SLiRP NAT (outbound only) + one loopback-forwarded SSH port; no host bridge/firewall (`agent-qemu-herdr.README.md`, "Networking") | dedicated bridge `agentbr0`, per-TAP L2 isolation, nftables `AGENT_MICROVM_*` chains, named `networkProfile`s (`offline`/`proxy-only`/`package-access`/`internet`), and — with the `vsock` capability — literally **no network interface at all** (`agent-microvm.md`, "VSOCK versus TAP transport") |
 | Credential exposure to guest | real `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/etc. land in the guest process environment via SSH `SetEnv` (the credential-forwarding `SetEnv` loop in `programs.herdr.nix`) | upstream keys **never** reach the guest; only a bridge-/VSOCK-restricted forwarding endpoint to the host LiteLLM proxy is visible (`agent-microvm.md`, opening bullets — "model-API access restricted to the host LiteLLM proxy") |
 | What one compromised guest can attack | the host store is read-only, so a guest exploit cannot corrupt it, but it *can read* the entire host store contents (world-readable anyway) and reach outbound network via SLiRP | no store to read, egress is default-deny beyond the proxy port, guest-to-guest traffic is dropped at L2 and L3, and the workspace is a throwaway clone, not the real checkout |
@@ -69,7 +69,7 @@ Net: `agent-microvm`'s boundary is **strictly more defensive** on every axis
 the two share (store exposure, network egress, credential exposure). Tier 3's
 own docs concede this: "the host store is visible read-only; the guest still
 shares the host store closure and reaches the network via the host"
-(`modules/myconfig.ai/docs/README.md`, the tier-3 "**Limits**" note).
+(`modules/myconfig.ai.dev/docs/agent-sandboxing-tiers.README.md`, the tier-3 "**Limits**" note).
 
 ## What is shared with the host
 
@@ -93,7 +93,7 @@ boot vs. a pre-boot root-owned share).
   `nix build --impure` for a small per-invocation wrapper derivation (the
   cached guest system closure is reused; only the workspace-path-specific
   derivation rebuilds, in less than a second — per the module comment in
-  `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`), then
+  `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`), then
   boots a disposable QEMU VM and polls SSH for up to 120s before failing (the
   SSH-ready polling loop in `programs.herdr.nix`). No host
   services, bridges or pools exist between invocations — zero idle overhead,
@@ -107,7 +107,7 @@ boot vs. a pre-boot root-owned share).
   authoritative launch-to-ready latency numbers exist yet: the reference doc
   explicitly marks "launch-to-ready latency, idle RSS per slot, ... warm build
   time" as **"STILL PENDING a real-KVM run (deliberately NOT estimated)"**
-  (`modules/myconfig.ai/myconfig.ai.microvm/docs/myconfig-ai-microvm-lightweight-plan.md`,
+  (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/myconfig-ai-microvm-lightweight-plan.md`,
   "Implementation status", phase 0 row).
   Uncertainty flagged: this document cannot state whether tier 4 is faster or
   slower to reach an interactive prompt than tier 3's boot+SSH loop — only
@@ -126,9 +126,9 @@ writing.
 
 | | `agent-qemu-herdr` | `agent-microvm` |
 | --- | --- | --- |
-| Option path | none — it is unconditionally installed whenever any agent flag is enabled (`agenticCodingEnabled`, `modules/myconfig.ai/programs.herdr.nix`) | `myconfig.ai.microvm.*` (`enable`, `enabledAgents`, `resourceClasses`, `networkProfile`, `capabilities`, …), all under `modules/myconfig.ai/myconfig.ai.microvm/default.nix` |
-| Entry point | `agent-qemu-herdr` shell wrapper (the `agent-qemu-herdr` `writeShellApplication` in `programs.herdr.nix`), installed via `home.packages` (same file) | `agent-microvm run\|submit\|ssh\|...` launcher (`modules/myconfig.ai/myconfig.ai.microvm/launcher.nix`), plus `microvm-<agent>` workmux panes when `interactive` is selected |
-| Guest builder | `mkAgentQemuHerdrRunner` in `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`, a thin wrapper over the shared `mkSandboxedRunner` (same factory `mkAgentQemuPiRunner` uses) | the module's own guest NixOS system (`guest.nix`), driven by the agent registry `agents.nix` |
+| Option path | none — it is unconditionally installed whenever any agent flag is enabled (`agenticCodingEnabled`, `modules/myconfig.ai.dev/programs/programs.herdr.nix`) | `myconfig.ai.microvm.*` (`enable`, `enabledAgents`, `resourceClasses`, `networkProfile`, `capabilities`, …), all under `modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/default.nix` |
+| Entry point | `agent-qemu-herdr` shell wrapper (the `agent-qemu-herdr` `writeShellApplication` in `programs.herdr.nix`), installed via `home.packages` (same file) | `agent-microvm run\|submit\|ssh\|...` launcher (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/launcher.nix`), plus `microvm-<agent>` workmux panes when `interactive` is selected |
+| Guest builder | `mkAgentQemuHerdrRunner` in `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`, a thin wrapper over the shared `mkSandboxedRunner` (same factory `mkAgentQemuPiRunner` uses) | the module's own guest NixOS system (`guest.nix`), driven by the agent registry `agents.nix` |
 | Impure evaluation seam | module-owned `myconfig.ai.qemu-agent-sandbox.runnerExpression`, built directly with `nix build --impure --file` from `AGENT_QEMU_HERDR_*` env vars set by the wrapper (workspace path never lands in a tracked file) | none needed — slots are declared statically per host and prebuilt at system-build time |
 | herdr's role in the config | hard-coded as the guest's SSH-exec target; not configurable per invocation | one entry in the agent registry (`../agents.nix`), selected via `enabledAgents` like any other agent |
 
@@ -196,7 +196,7 @@ inside a VM) but diverge in *mechanism and guarantees*:
   (currently f13 only).
 - **Do not unify or deprecate either.** They intentionally sit at different
   rungs of the documented sandboxing ladder
-  (`modules/myconfig.ai/docs/README.md`, "Agent sandboxing tiers"):
+  (`modules/myconfig.ai.dev/docs/agent-sandboxing-tiers.README.md`, "Agent sandboxing tiers"):
   `agent-qemu-herdr` trades
   security depth for zero-config, always-available convenience; `agent-microvm`
   trades convenience (explicit per-host opt-in, a bridge, a prebuilt pool) for
@@ -205,7 +205,7 @@ inside a VM) but diverge in *mechanism and guarantees*:
   firewall chains, resource classes) just to get a disposable interactive
   shell, or weaken `agent-microvm`'s no-credentials-in-guest / no-shared-store
   guarantees down to tier 3's level. Both are explicitly against the repo's own
-  "ladder" design (`modules/myconfig.ai/docs/README.md`, "Agent sandboxing tiers" —
+  "ladder" design (`modules/myconfig.ai.dev/docs/agent-sandboxing-tiers.README.md`, "Agent sandboxing tiers" —
   "the tiers are largely orthogonal and compose").
 - **Do** deduplicate the *incidental* overlap: the herdr-rationale prose is
   copy-pasted across `agent-qemu-herdr.README.md` and `agent-microvm.md`, and

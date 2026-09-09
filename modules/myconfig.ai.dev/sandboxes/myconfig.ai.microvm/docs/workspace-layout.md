@@ -1,7 +1,7 @@
 # Workspace layout: `central` vs `beside-repo`
 
 Status: implemented.
-Owner: `modules/myconfig.ai/myconfig.ai.microvm/workspace.nix` (paths),
+Owner: `modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/workspace.nix` (paths),
 `launcher.nix` (behaviour), `default.nix` (options).
 
 ## Problem

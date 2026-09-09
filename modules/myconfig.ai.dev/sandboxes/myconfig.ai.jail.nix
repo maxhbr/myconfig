@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # Shared options for the `jail-app` wrappers (`agent-bubblewrap-pi`,
-# `agent-bubblewrap-opencode`, `agent-bubblewrap-claude`, ...). See `../../fns/bubblewrap-app.nix` for the
+# `agent-bubblewrap-opencode`, `agent-bubblewrap-claude`, ...). See `../fns/bubblewrap-app.nix` for the
 # wrapper library and the matching `extraFwdEnv` / `extraRuntimeEnv` arguments.
 { config, lib, ... }:
 {

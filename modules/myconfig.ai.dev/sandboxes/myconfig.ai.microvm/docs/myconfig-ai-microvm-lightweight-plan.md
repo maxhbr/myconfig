@@ -698,7 +698,7 @@ was never used).
 
 ## Objective
 
-Refactor `modules/myconfig.ai/myconfig.ai.microvm` into a lighter-weight execution environment for untrusted coding agents while preserving the important security properties of the current design:
+Refactor `modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm` into a lighter-weight execution environment for untrusted coding agents while preserving the important security properties of the current design:
 
 - separate guest kernel through Cloud Hypervisor/KVM;
 - disposable guest root and home;

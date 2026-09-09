@@ -44,7 +44,7 @@ let
   # fresh tmpfs home, losing pi's configuration and credentials.
   #
   # The command is the bare name, resolved from the sandbox `PATH`:
-  # ../programs.pi-coding-agent adds pi to `myconfig.ai.mysbx.extraTools`
+  # ../programs/programs.pi-coding-agent adds pi to `myconfig.ai.mysbx.extraTools`
   # under the same condition, so the binary the sandbox has is the
   # binary this config names.
   sandboxAgents = lib.optionalAttrs aiCfg.pi-coding-agent.enable {

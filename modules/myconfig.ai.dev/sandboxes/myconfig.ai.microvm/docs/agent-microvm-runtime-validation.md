@@ -39,7 +39,7 @@ git init /tmp/rtv-src && (cd /tmp/rtv-src && echo hi > a && git add . &&
 ## Running the suite
 
 ```bash
-sudo ./modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh \
+sudo ./modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/runtime-validation.sh \
      --repository /tmp/rtv-src | tee /tmp/rtv-$(date +%F).log
 ```
 

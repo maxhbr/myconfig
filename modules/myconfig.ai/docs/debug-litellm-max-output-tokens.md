@@ -125,7 +125,7 @@ applies.
 
 ### Hop 0 — the client (pi), i.e. the actual culprit
 
-`modules/myconfig.ai/programs.pi-coding-agent/default.nix` generates
+`modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix` generates
 `~/.pi/agent/extensions/myconfig-providers.ts` and registered **every**
 model with a hard-coded:
 
@@ -266,7 +266,7 @@ the request that produced it.
 ## Root cause
 
 **The cap is client-side, not proxy-side.**
-`modules/myconfig.ai/programs.pi-coding-agent/default.nix` registered
+`modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix` registered
 every model of every generated provider with a hard-coded
 `maxTokens = 4096`. pi sends that verbatim as the OpenAI `max_tokens`
 request field, so every completion longer than 4096 tokens — trivially
@@ -283,13 +283,13 @@ Contributing factors:
   pi falls back to the module's `defaultContextWindow = 131072` even
   though the backend really offers 262144.
 * The same hard-coded `4096` existed in the microVM guest generator
-  (`modules/myconfig.ai/myconfig.ai.microvm/guest-model-config.nix`).
+  (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/guest-model-config.nix`).
 
 ## Fix
 
 Implemented in this branch:
 
-1. `modules/myconfig.ai/programs.pi-coding-agent/default.nix`
+1. `modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix`
    * new `maxOutputTokensLookup`, built from the LiteLLM `model_list`
      (`litellm_params.max_tokens`, falling back to
      `model_info.max_output_tokens`) — the mirror image of the existing
@@ -300,7 +300,7 @@ Implemented in this branch:
    * `maxTokens = maxOutputTokensLookup.${modelId} or (deriveMaxOutputTokens contextWindow)`
      instead of the constant `4096`.
 
-2. `modules/myconfig.ai/myconfig.ai.microvm/guest-model-config.nix`
+2. `modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/guest-model-config.nix`
    * `guestModelConfig.maxTokens = 4096` → `guestModelConfig.maxTokensCap = 65536`;
    * the generated pi extension now reports
      `min(contextWindow / 4, maxTokensCap)` per model.

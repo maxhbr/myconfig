@@ -60,7 +60,7 @@ agent on the host automatically makes it available inside the sandbox; the
 host-side chat front-ends `aichat` / `llm` are deliberately excluded.
 
 Whenever at least one of those agents is enabled, `pkgs.herdr` (the terminal
-agent multiplexer) is added too — the same condition `../programs.herdr.nix`
+agent multiplexer) is added too — the same condition `../../programs/programs.herdr.nix`
 uses on the host — and becomes the session's default command via
 `defaultCommand`. A bare `agent-gvisor x` (shorthand for
 `start --name x --repo .`) therefore

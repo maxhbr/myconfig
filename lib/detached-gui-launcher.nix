@@ -14,8 +14,8 @@
 # stdout/stderr appended to a log file, and returns immediately.
 #
 # Behaviour / escape hatches (documented in
-# modules/myconfig.ai/myconfig.ai.workmux/README.md and
-# modules/myconfig.ai/docs/README.md):
+# modules/myconfig.ai.dev/myconfig.ai.workmux/README.md and
+# modules/myconfig.ai.dev/docs/agent-sandboxing-tiers.README.md):
 #   * detach only when stdout is a TTY (i.e. called from an interactive shell);
 #     non-interactive callers (scripts, .desktop files, pipes) keep the old
 #     foreground/`exec` semantics

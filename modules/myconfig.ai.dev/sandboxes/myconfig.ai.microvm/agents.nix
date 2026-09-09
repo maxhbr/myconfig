@@ -204,7 +204,7 @@ let
     # `agent-run herdr` therefore drops the operator into a herdr session from
     # which those agents can be started — mirroring how the tier-3
     # `agent-qemu-herdr` variant execs `herdr` over SSH in its QEMU microVM
-    # (../programs.herdr.nix). The agents herdr can launch are exactly the ones
+    # (../../programs/programs.herdr.nix). The agents herdr can launch are exactly the ones
     # this host also SELECTS via `enabledAgents`, because they are the ones
     # baked into the guest closure and on PATH.
     #
@@ -226,7 +226,7 @@ let
       # interactive-only (the `--attach` / workmux path), which is the only mode
       # a TUI multiplexer has.
       #
-      # Stage ONLY the rendered keybinding config (../programs.herdr.nix writes
+      # Stage ONLY the rendered keybinding config (../../programs/programs.herdr.nix writes
       # exactly `~/.config/herdr/config.toml`, no credentials), so a herdr guest
       # gets the same ctrl+b prefix / pane-focus bindings the host uses. The
       # EXACT file, never the `.config/herdr` directory, per the allowlist rule.

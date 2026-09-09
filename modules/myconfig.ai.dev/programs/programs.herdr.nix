@@ -5,7 +5,7 @@
 # (https://herdr.dev, nixpkgs `legacyPackages.x86_64-linux.herdr`). It is a
 # companion to the agentic coding harnesses, so it is installed whenever at
 # least one agentic coding agent is enabled on this host. The harness set
-# mirrors `../skills/default.nix` (opencode, codex, claude-code,
+# mirrors `../../skills/default.nix` (opencode, codex, claude-code,
 # pi-coding-agent) and is extended with the remaining agentic terminal coding
 # agents (`qwen-code`, `github-copilot-cli`).
 #
@@ -29,7 +29,7 @@ let
   osconfig = config;
 
   # Shell prelude that makes the GUI launcher detach from the calling shell
-  # (see ./myconfig.ai.workmux/jail.nix for the other user of it).
+  # (see ../myconfig.ai.workmux/jail.nix for the other user of it).
   detachedGuiLauncher = import ../../../lib/detached-gui-launcher.nix { inherit lib pkgs; };
 
   jail-app = import ../fns/bubblewrap-app.nix {
@@ -57,7 +57,7 @@ let
   # version, so the skill stays in sync with the CLI instead of being a
   # stale vendored copy. Registered in the
   # `myconfig.ai.skills.handcrafted` registry, which
-  # ../skills/default.nix deploys to every enabled agent harness. Implicitly
+  # ../../skills/default.nix deploys to every enabled agent harness. Implicitly
   # enabled by herdr — there is no separate enable flag.
   herdrSkillSrc = pkgs.runCommand "herdr-skill" { nativeBuildInputs = [ herdr ]; } ''
     mkdir -p $out
@@ -81,7 +81,7 @@ let
   # herdr. See ../../doc/TODOs/herdr-per-repo-worktree-directory.md.
   #
   # The handle slugification is deliberately identical to
-  # ../shell.git/bin/git-branch-to-worktree.sh (which mirrors workmux's
+  # ../../../shell.git/bin/git-branch-to-worktree.sh (which mirrors workmux's
   # `derive_handle`), so all three tools agree on the path for a branch.
   herdr-worktree-sibling = pkgs.writeShellApplication {
     name = "herdr-worktree-sibling";
@@ -90,7 +90,7 @@ let
       git
       coreutils
       # `awk` parses `git worktree list --porcelain` below. Declared
-      # explicitly (like ../shell.git/default.nix does for
+      # explicitly (like ../../../shell.git/default.nix does for
       # `git-branch-to-worktree`) so the script does not depend on an ambient
       # host installation: without it the pipeline dies with status 127
       # *before* `die` can keep the popup open.
@@ -534,7 +534,7 @@ let
   '';
 
   # Writable home state of the agents that run *inside* this jail. The jail is
-  # the sandbox here (like ./myconfig.ai.workmux/jail.nix), so the panes run
+  # the sandbox here (like ../myconfig.ai.workmux/jail.nix), so the panes run
   # the PLAIN agent binaries, which need their real state directories.
   agentUserDataDirsByFlag = {
     pi-coding-agent = [ ".pi" ];
@@ -587,7 +587,7 @@ let
   # The GUI counterpart of `agent-bubblewrap-herdr`: the identical jail, but
   # opened in its own Alacritty window instead of taking over the calling
   # terminal. Same relationship as `agent-bubblewrap-alacritty-workmux-tmux`
-  # to `agent-bubblewrap-workmux-tmux` (./myconfig.ai.workmux/jail.nix).
+  # to `agent-bubblewrap-workmux-tmux` (../myconfig.ai.workmux/jail.nix).
   #
   # The window inherits the invocation directory (`--working-directory`), which
   # is what the jail binds read-write (`mount-cwd`) and what the entrypoint
@@ -638,7 +638,7 @@ let
   # The coding-agent CLIs this repo can install on the host, mapped from
   # their `myconfig.ai.<name>.enable` flag to the package attribute the
   # matching host wrapper uses. Mirrors the `agentPackagesByFlag` set in
-  # modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix so the
+  # modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/default.nix so the
   # `agent-qemu-herdr` guest carries exactly the same agents the host (and
   # the gVisor sandbox image) offers.
   agentPackagesByFlag = {
@@ -678,8 +678,9 @@ let
   #
   # Workspace handling, credential forwarding and the refuse-$HOME guard are
   # identical to `agent-qemu-pi`. See
-  # ./myconfig.ai.qemu-agent-sandbox/builders.nix (`mkAgentQemuHerdrRunner`) and
-  # ./agent-qemu-herdr.README.md.
+  # ../../sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix
+  # (`mkAgentQemuHerdrRunner`) and
+  # ../../docs/agent-qemu-herdr.README.md.
   agent-qemu-herdr = pkgs.writeShellApplication {
     name = "agent-qemu-herdr";
     runtimeInputs = with pkgs; [
@@ -844,7 +845,7 @@ in
 {
   config = lib.mkIf agenticCodingEnabled {
     # Install the herdr skill for every enabled agent harness (see
-    # ../skills/default.nix); string form (the derivation's outPath), same
+    # ../../skills/default.nix); string form (the derivation's outPath), same
     # convention as the workmux and simple-english skill registrations.
     myconfig.ai.skills.handcrafted.herdr = "${herdrSkillSrc}";
 

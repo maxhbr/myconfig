@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # ccusage metrics exporter: runs `ccusage --json` (see
-# ../myconfig.ai/programs.ccusage) against the monitored user's local
+# ../myconfig.ai.dev/programs/programs.ccusage) against the monitored user's local
 # coding-agent session files (Claude Code, Codex, OpenCode, pi, ...) and
 # emits the daily token/cost breakdowns as Prometheus metrics via the
 # node_exporter textfile collector.

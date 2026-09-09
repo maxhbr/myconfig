@@ -682,7 +682,7 @@ On myconfig hosts none of this is hand-written: `myconfig.ai.mysbx.workmux`
 the sandbox is already the sandbox), the `tmux`/`workmux` entries of the
 tool closure and the `MYSBX_WORKMUX_ENTRY` pin. The wiring that decides
 *whether* a host gets it lives with the other workmux tiers
-(`../../../myconfig.ai.workmux/mysbx.nix`), next to `jail.nix` and
+(../../myconfig.ai.workmux/mysbx.nix), next to `jail.nix` and
 `sandbox.nix`.
 
 ### D17: `multiplexer` — which terminal multiplexer the interactive payload is
@@ -700,8 +700,8 @@ agent-oriented multiplexers side by side.
 | --- | --- |
 | `"tmux"` | plain tmux, one session per repo, on the in-sandbox socket |
 | `"workmux"` | the workmux session of D16 (sidebar + dashboard) |
-| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer (`../../../programs.herdr.nix`) |
-| `"aoe"` | Agent of Empires (`../../../programs.agent-of-empires/`), a tmux-based agent session manager |
+| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer (`../../../../programs/programs.herdr.nix`) |
+| `"aoe"` | Agent of Empires (`../../../../programs/programs.agent-of-empires/`), a tmux-based agent session manager |
 | `"none"` | a plain interactive shell — the pre-D16 behaviour |
 
 **A string enum, not a table, and not a command.** A `[multiplexer]`
@@ -782,7 +782,7 @@ On myconfig hosts the value is generated:
 `myconfig.ai.mysbx.config.multiplexer` (`../../default.nix`) writes it
 into the user layer and defaults to `"workmux"` where the workmux integration is
 wired (`myconfig.ai.mysbx.workmux.enable`, set by
-`../../../myconfig.ai.workmux/mysbx.nix`) and to `"none"` otherwise —
+`../../myconfig.ai.workmux/mysbx.nix`) and to `"none"` otherwise —
 the behaviour-preserving default. The module also pins the entries of
 the multiplexers whose package the host has
 (`myconfig.ai.mysbx.{workmux,herdr,aoe}.package`; tmux always) and adds

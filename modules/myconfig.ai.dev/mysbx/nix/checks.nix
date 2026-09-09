@@ -14,7 +14,7 @@
 #                 regression in the generator. See ./config-eval-test.nix.
 #
 # Wired into `nix flake check` for `x86_64-linux` in `flake.nix`, following
-# ../../myconfig.ai.gvisor-agent-sandbox/nix/checks.nix.
+# ../../sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix.
 #
 # Deliberately NOT a check here (mvp-6, "Explicitly not in this item"):
 # bubblewrap is not on the test PATH. The two real-execution tests in

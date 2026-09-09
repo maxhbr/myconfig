@@ -17,7 +17,7 @@
 # (`~/.config/mysbx/config.toml`, see ./docs/design/config.md D6) from
 # `myconfig.ai.mysbx.config`: the host-wide layer, mounted into every
 # sandbox of this user. Per-agent modules (e.g.
-# ./../programs.pi-coding-agent/) are expected to extend
+# ../programs/programs.pi-coding-agent/) are expected to extend
 # `myconfig.ai.mysbx.config.mounts` with their own agent config files.
 {
   config,
@@ -47,11 +47,11 @@ let
   # eagerly and a missing path is a hard error on *every* run
   # (./docs/design/config.md D8). Only directories this repo itself always
   # manages via home-manager are listed:
-  #   - `.config/git`     ← ../../shell.git (unconditional `programs.git`)
-  #   - `.config/ripgrep` ← ../../shell.programs.ripgrep.nix
-  #   - `.config/bat`     ← ../../shell.programs.bat.nix
-  #   - `.config/fish`    ← ../../programs.fish (only when fish is on)
-  # Same list as the `configDirs` default of ../myconfig.ai.dev/fns/bubblewrap-app.nix.
+  #   - `.config/git`     ← ../../../shell.git (unconditional `programs.git`)
+  #   - `.config/ripgrep` ← ../../../shell.programs.ripgrep.nix
+  #   - `.config/bat`     ← ../../../shell.programs.bat.nix
+  #   - `.config/fish`    ← ../../../programs.fish (only when fish is on)
+  # Same list as the `configDirs` default of ../fns/bubblewrap-app.nix.
   # Each entry also carries a `dest` under the sandbox home (review-2
   # item 6). Without one, the mount lands at its host path
   # (`/home/mhuber/.config/git`) — a path that exists nowhere in the

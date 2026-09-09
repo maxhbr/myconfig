@@ -9,8 +9,8 @@
 #
 # This is a plain function (not a NixOS module): it is called with the host
 # module arguments and returns an attrset of values. The same
-# `import ./file { inherit ...; }` pattern is used by modules/myconfig.ai/fns/
-# and programs.pi-coding-agent.
+# `import ./file { inherit ...; }` pattern is used by modules/myconfig.ai.dev/fns/
+# and programs/programs.pi-coding-agent.
 #
 # All host-specific values (user, group, model, baseUrl, port, HASS URL,
 # extraPackages, stateDir, secretsDir, toolsets, telegram) are read from

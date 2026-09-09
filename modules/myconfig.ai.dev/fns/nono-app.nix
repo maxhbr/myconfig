@@ -31,7 +31,7 @@
   lib,
   pkgs,
   # The NixOS `config`, used to read the shared `myconfig.ai.nono.fwdEnvs`
-  # option (see `../myconfig.ai.nono.nix`) so every `nono-app` wrapper picks
+  # option (see `../sandboxes/myconfig.ai.nono.nix`) so every `nono-app` wrapper picks
   # up the global forwarded-env list without each call site having to
   # pass it explicitly. Defaults to `{}` so the library still works standalone
   # (e.g. in `nix repl`); in that case `globalFwdEnvs` reduces to just the
@@ -175,7 +175,7 @@ let
 
   allFwdEnvs = fwdEnv ++ extraFwdEnv ++ globalFwdEnvs;
 
-  # Shared sandbox tooling (see ../myconfig.ai.sandboxTools.nix): packages
+  # Shared sandbox tooling (see ../sandboxes/myconfig.ai.sandboxTools.nix): packages
   # appended to the tool set below for EVERY `nono-app` wrapper, and env
   # vars set unconditionally. Wrapper-specific `extraRuntimeEnv` wins over
   # `sharedEnv` on a name clash.

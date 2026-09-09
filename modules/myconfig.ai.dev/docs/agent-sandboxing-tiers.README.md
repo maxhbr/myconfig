@@ -102,16 +102,16 @@ other agents — not the host.
 
 The cheapest tier. `pi` runs as **your user on your kernel**, confined by
 bubblewrap namespaces via the vendored
-[`bubblewrap-app.nix`](../myconfig.ai.dev/fns/bubblewrap-app.nix) library (`vendor/alexdavid-jail.nix`).
+[`bubblewrap-app.nix`](../fns/bubblewrap-app.nix) library (`vendor/alexdavid-jail.nix`).
 
 **Implementation**
 
 - `modules/myconfig.ai.dev/fns/jail-app.nix` — the reusable wrapper factory
   (`jail-app { name; pkg; userDataDirs; ... }`). Every jailed agent wrapper in
   the repo is one call to it.
-- `modules/myconfig.ai/programs.pi-coding-agent/default.nix` — the `agent-bubblewrap-pi`,
+- `modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix` — the `agent-bubblewrap-pi`,
   `agent-bubblewrap-pi-tmp` and `agent-bubblewrap-pi-worktree` instantiations.
-- `modules/myconfig.ai/myconfig.ai.jail.nix` — the shared
+- `modules/myconfig.ai.dev/sandboxes/myconfig.ai.jail.nix` — the shared
   `myconfig.ai.jail.fwdEnvs` option (host env vars forwarded into *every*
   wrapper, on top of the always-forwarded `OPENAI_API_KEY`).
 
@@ -159,15 +159,15 @@ unprivileged `agent` user with an ephemeral root filesystem.
 
 **Implementation**
 
-- `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` — `mkAgentQemuPiRunner` builds a one-shot
+- `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix` — `mkAgentQemuPiRunner` builds a one-shot
   [microvm.nix](https://github.com/microvm-nix/microvm.nix) QEMU runner (guest
   NixOS system + kernel + virtiofsd + run script).
 - `myconfig.ai.qemu-agent-sandbox.runnerExpression` evaluates that builder
   **impurely** from `AGENT_QEMU_PI_*` env vars, so the workspace path never
   lands in a tracked file or flake output. It is not a flake package.
 - The host wrapper `agent-qemu-pi` lives in
-  `modules/myconfig.ai/programs.pi-coding-agent/default.nix`.
-- Full write-up: [`../programs.pi-coding-agent/agent-qemu-pi.README.md`](../programs.pi-coding-agent/agent-qemu-pi.README.md).
+  `modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix`.
+- Full write-up: [`../programs/programs.pi-coding-agent/agent-qemu-pi.README.md`](../programs/programs.pi-coding-agent/agent-qemu-pi.README.md).
 
 **Launch sequence**: validate CWD (refuses `$HOME`) → generate a throwaway
 ed25519 keypair → pick a random `127.0.0.1` port → `nix build --impure` the
@@ -205,8 +205,8 @@ the coding-agent CLIs enabled on the host so the user can start `pi` /
 the same `mkSandboxedRunner` factory (no parallel guest builder) and shares
 `agent-qemu-pi`'s workspace handling, credential forwarding and refuse-`$HOME`
 guard. See
-[`../programs.herdr.nix`](../programs.herdr.nix) (wrapper) and
-[`../agent-qemu-herdr.README.md`](../agent-qemu-herdr.README.md).
+[`../programs/programs.herdr.nix`](../programs/programs.herdr.nix) (wrapper) and
+[`agent-qemu-herdr.README.md`](./agent-qemu-herdr.README.md).
 
 **Limits**: the host store is visible read-only; the guest still shares the
 host store closure and reaches the network via the host. See the status note
@@ -220,22 +220,22 @@ The strongest tier, and the only one designed for **unattended, autonomous**
 agent runs. Each session gets a **Cloud Hypervisor** microVM from a pool of
 prebuilt slots.
 
-**Implementation**: `modules/myconfig.ai/myconfig.ai.microvm/` (module split
+**Implementation**: `modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/` (module split
 across `guest.nix`, `network.nix`, `session.nix`, `job.nix`, `launcher.nix`,
 `state.nix`, `agents.nix`, `hostkeys.nix`, `workmux.nix`, …).
 Documentation set:
 
 | Document | Contents |
 | --- | --- |
-| [How-to](../myconfig.ai.microvm/docs/agent-microvm-howto.md) | **start here** — one linear journey: `doctor`, `run`, `submit`, import, cleanup |
-| [Reference](../myconfig.ai.microvm/docs/agent-microvm.md) | activation, options, agent registry, network profiles, batch job format, limitations |
-| [Architecture](../myconfig.ai.microvm/docs/agent-microvm-architecture.md) | module map, slot pool, workspace indirection, credential boundary |
-| [Operator guide](../myconfig.ai.microvm/docs/agent-microvm-operator-guide.md) | exact start/submit/status/attach/cancel/collect/recover procedures |
-| [Workspace layout](../myconfig.ai.microvm/docs/workspace-layout.md) | `central` vs `beside-repo` task clones and the task -> clone index |
-| [Security model](../myconfig.ai.microvm/docs/agent-microvm-security-model.md) | trusted vs untrusted, mitigated attacks, residual risks |
-| [Runtime validation](../myconfig.ai.microvm/docs/agent-microvm-runtime-validation.md) | the real-KVM measurement procedure |
-| [Lightweight plan](../myconfig.ai.microvm/docs/myconfig-ai-microvm-lightweight-plan.md) | historical phased implementation plan, kept for its per-phase implementation-status record |
-| [Per-resource-class network plan](../myconfig.ai.microvm/docs/plan-per-resource-class-network.md) | historical planning artifact; per-class network profiles were **not** implemented, superseded by the single `networkProfile` option |
+| [How-to](../sandboxes/myconfig.ai.microvm/docs/agent-microvm-howto.md) | **start here** — one linear journey: `doctor`, `run`, `submit`, import, cleanup |
+| [Reference](../sandboxes/myconfig.ai.microvm/docs/agent-microvm.md) | activation, options, agent registry, network profiles, batch job format, limitations |
+| [Architecture](../sandboxes/myconfig.ai.microvm/docs/agent-microvm-architecture.md) | module map, slot pool, workspace indirection, credential boundary |
+| [Operator guide](../sandboxes/myconfig.ai.microvm/docs/agent-microvm-operator-guide.md) | exact start/submit/status/attach/cancel/collect/recover procedures |
+| [Workspace layout](../sandboxes/myconfig.ai.microvm/docs/workspace-layout.md) | `central` vs `beside-repo` task clones and the task -> clone index |
+| [Security model](../sandboxes/myconfig.ai.microvm/docs/agent-microvm-security-model.md) | trusted vs untrusted, mitigated attacks, residual risks |
+| [Runtime validation](../sandboxes/myconfig.ai.microvm/docs/agent-microvm-runtime-validation.md) | the real-KVM measurement procedure |
+| [Lightweight plan](../sandboxes/myconfig.ai.microvm/docs/myconfig-ai-microvm-lightweight-plan.md) | historical phased implementation plan, kept for its per-phase implementation-status record |
+| [Per-resource-class network plan](../sandboxes/myconfig.ai.microvm/docs/plan-per-resource-class-network.md) | historical planning artifact; per-class network profiles were **not** implemented, superseded by the single `networkProfile` option |
 
 **Boundary**
 
@@ -314,9 +314,9 @@ Condensed:
 | Execution modes | interactive only | interactive **and** unattended batch (batch not available for herdr itself) |
 
 **Overlap**: both reuse the same config-seeding allowlist/denylist library
-(`../myconfig.ai.dev/fns/seed-agent-config.nix`) and near-identical "why herdr" rationale text
-(kept manually in sync between `../agent-qemu-herdr.README.md` and
-`../myconfig.ai.microvm/docs/agent-microvm.md`). `agent-microvm`'s herdr guest
+(`../fns/seed-agent-config.nix`) and near-identical "why herdr" rationale text
+(kept manually in sync between `./agent-qemu-herdr.README.md` and
+`../../sandboxes/myconfig.ai.microvm/docs/agent-microvm.md`). `agent-microvm`'s herdr guest
 is a strict security superset of `agent-qemu-herdr`'s on every shared axis
 (store exposure, credential exposure, network egress, workspace isolation),
 but `agent-qemu-herdr` is not redundant: it needs zero host configuration and
@@ -329,8 +329,8 @@ ad hoc case; use `agent-microvm` when the task is untrusted enough to keep
 the model key off the guest, needs a throwaway workspace, or is unattended.
 The only worthwhile cleanup is deduplicating the copy-pasted rationale text
 and the thrice-repeated "which coding-agent CLIs to bake in" logic
-(`../programs.herdr.nix`, `../myconfig.ai.microvm/agents.nix`,
-`../myconfig.ai.gvisor-agent-sandbox/default.nix`'s `agentPackagesByFlag`) —
+(`../../programs/programs.herdr.nix`, `../../sandboxes/myconfig.ai.microvm/agents.nix`,
+`../../sandboxes/myconfig.ai.gvisor-agent-sandbox/default.nix`'s `agentPackagesByFlag`) —
 a documentation/DRY change, not a behavior change.
 
 ## Choosing a tier
@@ -351,7 +351,7 @@ When in doubt, compose: run `agent-bubblewrap-pi` *inside* an `agent-tmux` sessi
 Hosts that declare `myconfig.ai.llama-cpp` models also render a Markdown
 overview of every declared model (devices, params, aliases, variants) to
 `/run/myconfig/docs/models.md` at activation time — generated by
-[`../myconfig.ai.llama-cpp/docs.nix`](../myconfig.ai.llama-cpp/docs.nix)
+[`../../myconfig.ai/myconfig.ai.llama-cpp/docs.nix`](../../myconfig.ai/myconfig.ai.llama-cpp/docs.nix)
 from the same model definitions that build the servers, so it doubles as a
 quick reference for which models a host serves.
 
@@ -359,7 +359,7 @@ quick reference for which models a host serves.
 
 A fifth, container-based tier — rootless Podman with the **gVisor** runtime
 (`agent-gvisor`) — lives in
-[`../myconfig.ai.gvisor-agent-sandbox/`](../myconfig.ai.gvisor-agent-sandbox/)
+[`../sandboxes/myconfig.ai.gvisor-agent-sandbox/`](../sandboxes/myconfig.ai.gvisor-agent-sandbox/)
 and enabled per host (`myconfig.ai.gvisor-agent-sandbox.enable`). In isolation
 strength it sits between the bubblewrap jail (tier 2) and the QEMU microVM
 (tier 3): like the jail it runs on the host kernel (no full VM), but `runsc`

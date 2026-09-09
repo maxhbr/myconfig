@@ -16,7 +16,7 @@
 # real VMs, mounts filesystems and sends packets).
 #
 # Usage:
-#   sudo ./modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh \
+#   sudo ./modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/runtime-validation.sh \
 #        --repository /home/mhuber/some-git-repo \
 #        [--section all|boot|net|l2|creds|lifecycle|malrepo|forgery|seed]
 #

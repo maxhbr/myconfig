@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 #
 # EXECUTED harness for the GUEST COMMAND TRANSPORT of
-# modules/myconfig.ai/myconfig.ai.microvm/runtime-validation.sh, run from the
+# modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/runtime-validation.sh, run from the
 # `microvm-rtv-transport` check in tests/microvm.nix.
 #
 # WHY THIS EXISTS

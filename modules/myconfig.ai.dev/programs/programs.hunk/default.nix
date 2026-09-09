@@ -25,7 +25,7 @@
 #     `git diff`/`git show`, which is too invasive to opt in silently).
 #   * the `hunk-review` agent skill shipped in the package
 #     (`$out/share/skills/hunk/hunk-review`), registered in the handcrafted
-#     skill registry of ../skills so every enabled agent harness learns how to
+#     skill registry of ../../skills so every enabled agent harness learns how to
 #     drive a live hunk review session.
 #   * the binary on the PATH of every sandbox tier — via the shared
 #     `myconfig.ai.sandboxTools.extraPackages` and, for mysbx, its
@@ -90,7 +90,7 @@ in
 
   config = lib.mkIf cfg.enable {
     # The agent-facing half of hunk: the skill upstream tells the user to add
-    # via `hunk skill path`. ../skills/default.nix deploys every handcrafted
+    # via `hunk skill path`. ../../skills/default.nix deploys every handcrafted
     # entry to the agent harnesses enabled on this host.
     myconfig.ai.skills.handcrafted.hunk-review = "${cfg.package}/share/skills/hunk/hunk-review";
 

@@ -158,8 +158,8 @@ configuration layer selects what the **interactive** form
 | --- | --- |
 | `"tmux"` | plain tmux, one session per repo |
 | `"workmux"` | a [workmux](https://github.com/raine/workmux) session (sidebar + dashboard) |
-| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer ([`../programs.herdr.nix`](../programs.herdr.nix)) |
-| `"aoe"` | Agent of Empires ([`../programs.agent-of-empires/`](../programs.agent-of-empires)) |
+| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer ([`../../programs/programs.herdr.nix`](../../programs/programs.herdr.nix)) |
+| `"aoe"` | Agent of Empires ([`../../programs/programs.agent-of-empires/`](../../programs/programs.agent-of-empires)) |
 | `"none"` | a plain interactive shell (the default) |
 
 mysbx execs the entry its wrapper pinned for that value
@@ -202,7 +202,7 @@ which is outside the repo mount — a sandbox that should create worktrees
 declares that directory `rw` in its sidecar `[[mounts]]`.
 
 ## Integrated coding agents
-`pi` ([`programs.pi-coding-agent`](../programs.pi-coding-agent/default.nix)) is
+`pi` ([`programs.pi-coding-agent`](../../programs/programs.pi-coding-agent/default.nix)) is
 the first coding agent integrated with mysbx: on hosts where both features are
 enabled it adds its binary to the sandbox `PATH` via
 `myconfig.ai.mysbx.extraTools` and mounts its home-manager-managed
@@ -212,7 +212,7 @@ directory `~/.pi` is neither mounted nor persisted: it dies with the
 tmpfs home on purpose — it holds sessions *and* credentials in one
 tree, so persisting it per repository would need the two split apart
 first. Until then a sandboxed `pi` starts fresh every run.
-`opencode` ([`programs.opencode`](../programs.opencode/default.nix)) is wired
+`opencode` ([`programs.opencode`](../../programs/programs.opencode/default.nix)) is wired
 in the same way: its binary goes on the sandbox `PATH` and its generated
 configuration (`~/.config/opencode` plus `~/.config/mcp`) is mounted
 read-only below `/mysbx-home`. Its writable state
@@ -225,7 +225,7 @@ That is the difference to `pi` above: opencode keeps its sessions and
 its credentials in separate paths, so the session state can be
 persisted without the credentials following it.
 
-`hunk` ([`programs.hunk`](../programs.hunk/default.nix)) follows the same
+`hunk` ([`programs.hunk`](../../programs/programs.hunk/default.nix)) follows the same
 pattern for the *reviewing* side: on hosts with `myconfig.ai.hunk.enable`
 its binary goes on the sandbox `PATH` and `~/.config/hunk` is mounted
 read-only below `/mysbx-home`. It needs nothing else — no auth, no state,

@@ -39,7 +39,7 @@
 #
 # Feature modules may add to the list too, gated behind their own enable
 # option, when their tool is wanted in every tier and belongs to no single
-# one: ../programs.hunk appends `pkgs.hunk` this way, so the reviewing tool
+# one: ../../programs/programs.hunk appends `pkgs.hunk` this way, so the reviewing tool
 # exists wherever an agent produces a changeset.
 { lib, ... }:
 {

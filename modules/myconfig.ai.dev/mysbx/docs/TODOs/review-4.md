@@ -12,9 +12,9 @@ All four findings below still apply at the review baseline. Items 1 and 2 are se
 
 Relevant code:
 
-- `modules/myconfig.ai/mysbx/mysbx-rs/src/lib.rs`, where `policy_paths` is assembled and each path is fully canonicalized.
-- `modules/myconfig.ai/mysbx/mysbx-rs/src/bwrap.rs`, where writable repo, Git-directory, and explicit-mount sources are compared with `policy_paths`.
-- `modules/myconfig.ai/mysbx/default.nix`, where Home Manager generates `~/.config/mysbx/config.toml` as a symlink to a Nix-store file.
+- `modules/myconfig.ai.dev/mysbx/mysbx-rs/src/lib.rs`, where `policy_paths` is assembled and each path is fully canonicalized.
+- `modules/myconfig.ai.dev/mysbx/mysbx-rs/src/bwrap.rs`, where writable repo, Git-directory, and explicit-mount sources are compared with `policy_paths`.
+- `modules/myconfig.ai.dev/mysbx/default.nix`, where Home Manager generates `~/.config/mysbx/config.toml` as a symlink to a Nix-store file.
 
 ### Problem
 
@@ -65,8 +65,8 @@ Add execution-level tests, not just unit tests of path comparison:
 
 Relevant code:
 
-- `modules/myconfig.ai/mysbx/mysbx-rs/src/repo.rs`, especially `guard_repo_root()`.
-- `modules/myconfig.ai/mysbx/mysbx-rs/src/bwrap.rs`, where the discovered repository is bound RW.
+- `modules/myconfig.ai.dev/mysbx/mysbx-rs/src/repo.rs`, especially `guard_repo_root()`.
+- `modules/myconfig.ai.dev/mysbx/mysbx-rs/src/bwrap.rs`, where the discovered repository is bound RW.
 
 ### Problem
 
@@ -101,8 +101,8 @@ Apply this invariant consistently regardless of whether discovery selected the r
 
 Relevant code:
 
-- `modules/myconfig.ai/mysbx/mysbx-rs/src/lib.rs`, especially the approval rewrite, `find_git_dirs_key()`, and `find_closing_bracket()`.
-- `modules/myconfig.ai/mysbx/mysbx-rs/src/toml.rs`, whose parser correctly keeps the last table active.
+- `modules/myconfig.ai.dev/mysbx/mysbx-rs/src/lib.rs`, especially the approval rewrite, `find_git_dirs_key()`, and `find_closing_bracket()`.
+- `modules/myconfig.ai.dev/mysbx/mysbx-rs/src/toml.rs`, whose parser correctly keeps the last table active.
 
 ### Problem
 
@@ -148,8 +148,8 @@ Cover at least:
 
 Relevant code:
 
-- `modules/myconfig.ai/mysbx/default.nix`, especially `baselineEnv`, `userConfigToml`, and the Home Manager `xdg.configFile."mysbx/config.toml"` source.
-- `modules/myconfig.ai/mysbx/mysbx-rs/tests/argv.rs` and `tests/cli.rs`.
+- `modules/myconfig.ai.dev/mysbx/default.nix`, especially `baselineEnv`, `userConfigToml`, and the Home Manager `xdg.configFile."mysbx/config.toml"` source.
+- `modules/myconfig.ai.dev/mysbx/mysbx-rs/tests/argv.rs` and `tests/cli.rs`.
 
 ### Current status
 
@@ -178,7 +178,7 @@ Integrate the Nix test into the repository's normal check structure rather than 
 Run the narrow tests during development and report every command and result. At minimum:
 
 ```sh
-cd modules/myconfig.ai/mysbx/mysbx-rs
+cd modules/myconfig.ai.dev/mysbx/mysbx-rs
 cargo test
 ```
 

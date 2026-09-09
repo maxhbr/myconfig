@@ -20,7 +20,7 @@ the upstream flake input `inputs.workmux.packages.${system}.default`.
 
 The reusable helper that turns a jailed agent wrapper into a workmux
 "named agent" lives one level up in
-[`../myconfig.ai.dev/fns/workmux-worktree.nix`](../myconfig.ai.dev/fns/workmux-worktree.nix); the coding-agent
+[`../fns/workmux-worktree.nix`](../fns/workmux-worktree.nix); the coding-agent
 modules (`programs.pi-coding-agent`, `programs.claude-code`, `programs.codex`,
 `programs.opencode`) call it to register
 themselves under `myconfig.ai.workmux.agents.<name>`.
@@ -81,7 +81,7 @@ dashboard once (tracked via the `@workmux_bootstrapped` session option), then
 status hooks the dashboard/sidebar rely on are installed declaratively, so
 there is no runtime `workmux setup` step.
 
-### `<agent>-worktree` wrappers (from `../myconfig.ai.dev/fns/workmux-worktree.nix`)
+### `<agent>-worktree` wrappers (from `../fns/workmux-worktree.nix`)
 
 Thin per-agent commands (e.g. `agent-bubblewrap-pi-worktree`) registered by the
 coding-agent modules. Each:
@@ -144,7 +144,7 @@ Both `agent-*-alacritty-*` launchers detach from the calling shell — see
 [Detached GUI launchers](#detached-gui-launchers) below.
 
 Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
-[`../../../modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`](../../../modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix)). The
+[`../../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`](../../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix)). The
 in-terminal sandbox is the reusable entry point; the Alacritty variant is a
 thin popup around it so the two wrappers stay byte-identical in everything but
 the window.

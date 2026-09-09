@@ -21,9 +21,9 @@ as a value of that option.
 ## Workaround in this repo
 
 Introduced by commit `5724757a21` on branch `herdr-worktree-location` (see
-`git log --follow modules/myconfig.ai/programs.herdr.nix`).
+`git log --follow modules/myconfig.ai.dev/programs/programs.herdr.nix`).
 
-- `modules/myconfig.ai/programs.herdr.nix`
+- `modules/myconfig.ai.dev/programs/programs.herdr.nix`
   - `herdr-worktree-sibling` (a `writeShellApplication`): resolves the main
     working tree of the focused pane's repo, slugifies the branch like
     workmux, and calls
@@ -33,13 +33,13 @@ Introduced by commit `5724757a21` on branch `herdr-worktree-location` (see
     `prefix+shift+g` to the script as a popup.
   - `[worktrees] directory` is pinned to herdr's default and only acts as a
     fallback for flows that pass no explicit `--path`.
-- `modules/myconfig.ai/programs.herdr.README.md` documents the resulting
+- `modules/myconfig.ai.dev/programs/programs.herdr.README.md` documents the resulting
   behaviour.
 
 Sandboxed sessions do not need the script, because a jail has exactly one
 repository and can therefore make the global option repository-local:
 
-- `modules/myconfig.ai/programs.herdr.nix` — `agent-bubblewrap-herdr`:
+- `modules/myconfig.ai.dev/programs/programs.herdr.nix` — `agent-bubblewrap-herdr`:
   `worktreesSiblingPerm` creates `<parent-of-repo>/<repo>__worktrees` and binds
   it read-write at the identical path, and `herdr-jail-entry` writes a session
   `~/.config/herdr/config.toml` (from `herdrJailConfigCommonFile`) whose
@@ -47,7 +47,7 @@ repository and can therefore make the global option repository-local:
   `keys.new_worktree`, and execs `herdr --no-session`. Checkouts land in
   `<parent-of-repo>/<repo>__worktrees/<repo>/<branch-slug>` — the extra
   `<repo>` level is herdr's fixed `<repo-name>/<branch-slug>` suffix.
-- `modules/myconfig.ai/programs.pi-coding-agent/default.nix` —
+- `modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix` —
   `worktreesSiblingPerm` `mkdir -p`s the sibling directory instead of skipping
   the bind when it does not exist yet.
 
@@ -66,7 +66,7 @@ curl -fsSL 'https://raw.githubusercontent.com/herdrdev/herdr/v<VERSION>/docs/nex
 Then:
 
 1. Set `[worktrees] directory` (or the new option) to the workmux layout in
-   `modules/myconfig.ai/programs.herdr.nix`.
+   `modules/myconfig.ai.dev/programs/programs.herdr.nix`.
 2. Delete the `herdr-worktree-sibling` derivation, its entry in
    `home.packages`, and the `[[keys.command]]` block; restore
    `keys.new_worktree = "prefix+shift+g"` (or drop the key to take the
@@ -76,7 +76,7 @@ Then:
    ordinary host config, and fold `herdrConfigCommon` back into `herdrConfig`.
    Keep `worktreesSiblingPerm` — the directory still has to exist and be
    bound before bubblewrap starts.
-4. Update `modules/myconfig.ai/programs.herdr.README.md` and delete this note.
+4. Update `modules/myconfig.ai.dev/programs/programs.herdr.README.md` and delete this note.
 5. Verify: `nix build .#nixosConfigurations.f13.config.system.build.toplevel`,
    then in a running herdr press `prefix+shift+g` inside a repository and
    check that the checkout appears at

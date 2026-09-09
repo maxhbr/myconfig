@@ -20,7 +20,7 @@ let
 
   # The coding-agent CLIs this repo can install on the host, mapped from their
   # `myconfig.ai.<name>.enable` flag to the very package attribute the matching
-  # host wrapper uses (see modules/myconfig.ai/programs.<name>). Whatever the
+  # host wrapper uses (see modules/myconfig.ai.dev/programs/programs.<name>). Whatever the
   # host has enabled is baked into the sandbox image by default, so the
   # sandbox offers the same agents as the host without any per-host list.
   # Deliberately NOT included: `aichat` / `llm`, which are host-side chat
@@ -49,7 +49,7 @@ let
 
   # `herdr` is the agent multiplexer that lives in the terminal. On the host it
   # is installed whenever at least one agentic coding agent is enabled (see
-  # ../programs.herdr.nix, which uses exactly the flags of
+  # ../../programs/programs.herdr.nix, which uses exactly the flags of
   # `agentPackagesByFlag`), so mirror that condition here: if the sandbox
   # carries any agent, it also carries the multiplexer that drives them, and
   # `herdr` becomes the default command of a session.

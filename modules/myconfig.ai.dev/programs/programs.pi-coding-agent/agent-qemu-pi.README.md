@@ -60,7 +60,7 @@ with empty/default configuration. To avoid that, `agent-qemu-pi` copies the
 relevant, allowlisted host `~/.pi` configuration into the guest `/home/agent`
 over the SSH channel **at launch**, after the VM boots and before `pi` is
 exec'd. This mirrors the heavyweight `myconfig.ai.microvm` config-seed
-mechanism (`modules/myconfig.ai/myconfig.ai.microvm/config-seed.nix`), adapted
+mechanism (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/config-seed.nix`), adapted
 for the user-space qemu tier (no privileged host daemon: staging + transfer
 happen entirely in the launcher, over the already-established SSH channel).
 
@@ -102,7 +102,7 @@ output and invoked by the host wrapper as
 
 ## How it works
 
-- `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` exports `mkAgentQemuPiRunner`, which builds a qemu
+- `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix` exports `mkAgentQemuPiRunner`, which builds a qemu
   microvm.nix runner for one session (guest NixOS system + kernel + virtiofsd
   + run script).
 - `myconfig.ai.qemu-agent-sandbox.runnerExpression` evaluates that builder
@@ -140,11 +140,11 @@ the counterpart of `agent-bubblewrap-alacritty-workmux-tmux` (the bubblewrap
 `myconfig.ai.workmux.jail`). `agent-qemu-alacritty-workmux-tmux` runs the main
 checkout, its `<basename>__worktrees` sibling, tmux, workmux and the agents it
 launches inside one VM, popped up in an Alacritty window. It is defined in
-`modules/myconfig.ai/myconfig.ai.workmux/sandbox.nix` and gated behind
+`modules/myconfig.ai.dev/myconfig.ai.workmux/sandbox.nix` and gated behind
 `myconfig.ai.workmux.sandbox.enable` (off by default). The main checkout is
 shared read-write at `/workspace` and the worktrees sibling at
 `/workspace__worktrees`, so workmux's sibling-directory convention resolves
-inside the guest. See `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` (`mkSandboxedWorkmuxRunner`).
+inside the guest. See `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix` (`mkSandboxedWorkmuxRunner`).
 
 ## Requirements
 

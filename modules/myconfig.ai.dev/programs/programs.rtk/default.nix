@@ -48,7 +48,7 @@ let
     cp -r ${cfg.package.src}/hooks $out
   '';
 
-  # Harness gates, mirroring `../skills/default.nix`.
+  # Harness gates, mirroring `../../skills/default.nix`.
   piEnabled = aiCfg.pi-coding-agent.enable or false;
   opencodeEnabled = aiCfg.opencode.enable or false;
   claudeEnabled = aiCfg.claude-code.enable or false;
@@ -89,7 +89,7 @@ in
     # Teach every enabled harness about rtk's meta commands (`rtk gain`,
     # `rtk discover`, `rtk proxy`) — the declarative counterpart of the
     # `RTK.md` awareness file `rtk init` would append to CLAUDE.md/AGENTS.md.
-    # `../skills/default.nix` deploys the registry to each enabled harness.
+    # `../../skills/default.nix` deploys the registry to each enabled harness.
     myconfig.ai.skills.handcrafted.rtk = ./skills/rtk;
 
     myconfig.ai.rtk.settings = {
@@ -105,7 +105,7 @@ in
       };
     };
 
-    # mysbx tier integration (../mysbx), following the pattern of
+    # mysbx tier integration (../../mysbx), following the pattern of
     # ../programs.opencode/default.nix: put `rtk` on the sandbox PATH so the
     # agents' rewritten commands resolve inside the sandbox too, mount the
     # generated config read-only under the sandbox home (`HOME` is

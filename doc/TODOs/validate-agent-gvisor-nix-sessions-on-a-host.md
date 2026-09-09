@@ -7,7 +7,7 @@ chowned by the `U` mount option to the `keep-id`-mapped user, under the
 `runsc` runtime — has never been *validated* on real hardware: no outcome
 is recorded in `docs/nix-in-sandbox.md` §7, and §7 still tells every
 reader to keep `nix.enable` off until V1–V5 have been run. Only static
-checks exist (`modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/
+checks exist (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/
 checks.nix`: argv tests, the cli/init-wrapper harnesses, completions;
 plus per-host eval in `flake.nix`).
 
@@ -42,19 +42,19 @@ available there — the checklist itself could not be run):
 
 ## Relevant code
 
-- `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix` —
+- `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/default.nix` —
   option `nix.enable` (plus `nix.package`, `nix.substituters`,
   `nix.trustedPublicKeys`, `nix.extraConfig`).
-- `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/agent-gvisor-init.sh`
+- `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/agent-gvisor-init.sh`
   — the in-container preflight (`AGENT_GVISOR_NIX` branch): creates the
   Nix state dirs and probes `NIX_STORE_DIR` for writability, aborting the
   session with exit 1 otherwise.
-- `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/rust/src/podman.rs`
+- `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/rust/src/podman.rs`
   — the `--mount type=volume,src=<container>-nix,dst=/nix/store,U` argv
   (the `U` chowns the copy-up to the session user; without it the volume
   lands root-owned and unwritable under `keep-id` — the failure the first
   real-host run hit) and the `NIX_*` env for the session.
-- `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/docs/nix-in-sandbox.md`
+- `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/docs/nix-in-sandbox.md`
   §7 — the host verification checklist V1–V6.
 
 ## What to do

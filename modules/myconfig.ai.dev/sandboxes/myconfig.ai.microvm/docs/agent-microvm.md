@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT
 # Agent microVM sandboxes (`myconfig.ai.microvm`)
 
 A second, stronger isolation tier for autonomous coding agents, alongside the
-QEMU/SLiRP `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` tier and the process-jail /
+QEMU/SLiRP `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix` tier and the process-jail /
 dedicated-host-user tiers. Each agent session runs inside a **Cloud Hypervisor
 microVM** (via the `microvm.nix` flake input) with:
 
@@ -1103,7 +1103,7 @@ private key into the priv repo, stages the public key here, and refuses to
 overwrite an existing private key):
 
 ```bash
-./modules/myconfig.ai/myconfig.ai.microvm/mk-dedicated-agent-vm-key.sh [<hostname>]
+./modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/mk-dedicated-agent-vm-key.sh [<hostname>]
 # hostname defaults to the current machine's hostname; override the priv repo
 # location with PRIV_ROOT (default: ~/myconfig/priv). Result:
 #   private -> $PRIV_ROOT/hosts/host.<hostname>/secrets/dedicated-agent-vm-key

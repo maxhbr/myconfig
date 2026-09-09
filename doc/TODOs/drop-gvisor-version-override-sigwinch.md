@@ -6,7 +6,7 @@ Introduced by commit `8c960494ea` ("gvisor-agent-sandbox: bump gVisor to
 ## What to remove
 
 The `version` / `src` / `vendorHash` / `patches = [ ]` override in
-`modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/overlay.nix`
+`modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/overlay.nix`
 pins gVisor `20260817.0` (`b1b561450fc2f05b9626b7e269c08fbc9f5029ff`,
 "Merge release-20260817.0-38-ged1b001b8 (automated)" on the synthetic
 `go` branch) ahead of nixpkgs, which still ships `20260406.0`
@@ -16,7 +16,7 @@ pins gVisor `20260817.0` (`b1b561450fc2f05b9626b7e269c08fbc9f5029ff`,
 When removing the override:
 
 - Keep the `gvisor-remove-p2p-addresses.patch` patch (it is not upstream,
-  see `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/docs/debug-runsc-tun0-netns.md`
+  see `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/docs/debug-runsc-tun0-netns.md`
   and `doc/TODOs/` — it must continue to apply; verify hunks still match).
 - Drop the `patches = [ ];` reset only if nixpkgs' `fix-go-mod-tidy.diff`
   still applies to whatever gVisor revision nixpkgs ships at that point
@@ -53,7 +53,7 @@ grep -E 'version =|rev =|patches' "$(./get_input.sh nixpkgs)/pkgs/by-name/gv/gvi
    of the pinned source (the upstream fix adds exactly one).
 2. Rebuild and restart the sandbox, then inside a herdr pane run the
    in-guest reproduction from
-   `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/docs/` (or a
+   `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/docs/` (or a
    simple `python3` openpty test): `TIOCSWINSZ` on the master must
    deliver `SIGWINCH` to the foreground process group.
 3. End-to-end: resize the host foot window and confirm the TUI inside
@@ -66,7 +66,7 @@ Still blocked — do not touch the overlay yet.
 Verified:
 
 - Override is still present and unchanged in
-  `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/nix/overlay.nix`
+  `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/overlay.nix`
   (pins `20260817.0` / `b1b561450fc2f05b9626b7e269c08fbc9f5029ff`, resets
   `patches`, re-adds `./patches/gvisor-remove-p2p-addresses.patch`, which
   still exists).

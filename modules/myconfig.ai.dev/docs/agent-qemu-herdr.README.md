@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT -->
 
 `agent-qemu-herdr` is the `herdr`-driven counterpart of `agent-qemu-pi`. It reuses
 **the same** microVM/runner machinery (`mkSandboxedRunner` from
-`modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix`) — it does **not** fork a parallel guest builder. The
+`modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`) — it does **not** fork a parallel guest builder. The
 only difference is what runs at the end of the SSH session: instead of exec'ing
 `pi`, it exec's `herdr`, the agent multiplexer. From inside that `herdr`
 session the user starts `pi` / `opencode` / `claude-code` / … as panes — all
@@ -59,7 +59,7 @@ On the guest `PATH`:
 - `herdr` (the agent multiplexer the user is dropped into).
 - The coding-agent CLIs that are enabled on the **building** host — the same
   set the gVisor sandbox image bakes in (see
-  `modules/myconfig.ai/myconfig.ai.gvisor-agent-sandbox/default.nix`,
+  `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/default.nix`,
   `agentPackagesByFlag`): `pi-coding-agent`, `opencode`, `claude-code`,
   `codex`, `github-copilot-cli`, `qwen-code`. Only agents whose
   `myconfig.ai.<name>.enable` flag is true on the host are included, so the
@@ -102,7 +102,7 @@ can launch would start with empty/default configuration. To avoid that,
 **every** registered agent into the guest `/home/agent` over the SSH channel
 **at launch**, after the VM boots and before `herdr` is exec'd. This mirrors
 the heavyweight `myconfig.ai.microvm` config-seed mechanism
-(`modules/myconfig.ai/myconfig.ai.microvm/config-seed.nix`), adapted for the
+(`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/config-seed.nix`), adapted for the
 user-space qemu tier (no privileged host daemon: staging + transfer happen
 entirely in the launcher, over the already-established SSH channel).
 
@@ -141,7 +141,7 @@ host wrapper as `seed-agent-config <ssh-port> <identity> 127.0.0.1 agent`.
 
 ## How it works
 
-- `modules/myconfig.ai/myconfig.ai.qemu-agent-sandbox/builders.nix` exports `mkAgentQemuHerdrRunner`, a thin wrapper
+- `modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix` exports `mkAgentQemuHerdrRunner`, a thin wrapper
   around the shared `mkSandboxedRunner` that provisions one workspace share
   plus `herdr` and the enabled coding-agent CLIs as guest packages. This is
   the same factory `mkAgentQemuPiRunner` uses; the guest system, kernel,
@@ -151,7 +151,7 @@ host wrapper as `seed-agent-config <ssh-port> <identity> 127.0.0.1 agent`.
   workspace path never lands in a tracked file or flake output. The runner is
   not exported as a flake package.
 - The host wrapper `agent-qemu-herdr` lives in
-  `modules/myconfig.ai/programs.herdr.nix`. It validates the working directory
+  `modules/myconfig.ai.dev/programs/programs.herdr.nix`. It validates the working directory
   (refuses `$HOME`), generates a throwaway SSH keypair, picks a random
   `127.0.0.1` port, `nix build --impure`s the runner for the current
   directory, starts the VM, waits for guest SSH, forwards credentials over the

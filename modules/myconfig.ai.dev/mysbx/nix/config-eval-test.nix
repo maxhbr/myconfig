@@ -125,7 +125,7 @@ let
     workmuxOff = generated [ { } ];
     # The other selectable multiplexers (D17). `herdr` is available by
     # default (`herdr.package` defaults to `pkgs.herdr`), `aoe` is not
-    # (it is gated on ../programs.agent-of-empires/ being enabled), so
+    # (it is gated on ../../programs/programs.agent-of-empires/ being enabled), so
     # the two exercise both halves of the availability gate.
     muxHerdr = generated [
       { myconfig.ai.mysbx.config.multiplexer = "herdr"; }
