@@ -85,6 +85,15 @@
   nix,
   python3,
   curl,
+  # The basic archive/patch dev tools added back to the closure (bd
+  # myconfig-en7): `diff`/`cmp` (diffutils), `tar` and `gzip`/`unzip` are
+  # coreutils-adjacent basics every coding-agent payload reaches for
+  # (`diff` for reviewing changes, `tar`/`gzip` for handoffs and
+  # tarballs); their absence broke sandbox sessions on the first `diff`.
+  diffutils,
+  gnutar,
+  gzip,
+  unzip,
   # Extra packages appended to the dev-tool closure by feature modules
   # (`myconfig.ai.mysbx.extraTools`), e.g. the `pi` coding agent from
   # ../../programs/programs.pi-coding-agent. Same security note as the hardcoded
@@ -110,13 +119,16 @@ let
   #
   # This is the MVP's hardcoded dev-tool closure, mirroring
   # ../fns/bubblewrap-app.nix `devTools` minus the package-management
-  # and linting extras (`wget`, `unzip`, `diffutils`, `tar`/`gzip`,
-  # `shfmt`, `shellcheck`), plus `hostname` and `tig` (the git TUI: the
-  # payload is always a git worktree, and reviewing it is the one
-  # interactive job a sandboxed agent session hands back to the human —
-  # a tiny closure next to the `git` that is already shipped): agents
-  # fetch those extras
-  # per project via nix/flake, not from the sandbox base. Per plan.md
+  # and linting extras (`wget`, `shfmt`, `shellcheck` — `curl` already
+  # covers fetching, and linting tools are per-project taste agents
+  # fetch via nix/flake, not from the sandbox base), plus `hostname`
+  # and `tig` (the git TUI: the payload is always a git worktree, and
+  # reviewing it is the one interactive job a sandboxed agent session
+  # hands back to the human — a tiny closure next to the `git` that is
+  # already shipped). `diffutils`, `gnutar`, `gzip` and `unzip` are
+  # back in (bd myconfig-en7): they are not package management but
+  # basic dev tools, and their absence broke sandbox payloads on the
+  # first `diff`/`tar`. Per plan.md
   # phase 2d, `mysbx` should
   # eventually join the shared `myconfig.ai.sandboxTools` option instead
   # of growing this parallel list — until then the list lives HERE, next
@@ -147,6 +159,10 @@ let
       nix
       python3
       curl
+      diffutils
+      gnutar
+      gzip
+      unzip
       bash
     ]
     ++ extraTools;
