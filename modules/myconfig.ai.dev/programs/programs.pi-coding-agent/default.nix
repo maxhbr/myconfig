@@ -22,7 +22,7 @@ let
         osconfig
         ;
     };
-  jail-app = callJailLib ../fns/bubblewrap-app.nix;
+  jail-app = callJailLib ../../../myconfig.ai/fns/bubblewrap-app.nix;
 
   # Jail library handle + the jail-to-host channel combinator. The combinator
   # exposes a program *inside* the jail that forwards its single argument over
@@ -655,7 +655,7 @@ let
   # `myconfig-*` extensions above which only use type-only imports.
   handoffExtension = "${pi-coding-agent-pkg}/lib/node_modules/pi-monorepo/examples/extensions/handoff.ts";
 
-  piBwrap = callLib ../fns/bubblewrap-simple-app.nix {
+  piBwrap = callLib ../../../myconfig.ai/fns/bubblewrap-simple-app.nix {
     name = "pi";
     pkg = pkgs.nixos-unstable.pi-coding-agent;
     extraRuntimeInputs = [
@@ -754,7 +754,7 @@ let
   # resolves the shared git dir, exports PI_WORKTREE_* and execs
   # `agent-bubblewrap-pi-worktree-inner`) and the user-facing `agent-bubblewrap-pi-worktree`
   # wrapper (which requires tmux and calls `workmux add --agent agent-bubblewrap-pi`).
-  mkWorkmuxWorktree = callLib ../fns/workmux-worktree.nix;
+  mkWorkmuxWorktree = callLib ../../../myconfig.ai/fns/workmux-worktree.nix;
   agentBubblewrapPiWorktree = mkWorkmuxWorktree {
     name = "agent-bubblewrap-pi-worktree";
     agentName = "agent-bubblewrap-pi";

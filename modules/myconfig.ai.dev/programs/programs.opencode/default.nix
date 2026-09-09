@@ -19,8 +19,8 @@ let
         osconfig
         ;
     };
-  jail-app = callJailLib ../fns/bubblewrap-app.nix;
-  mkWorkmuxWorktree = callLib ../fns/workmux-worktree.nix;
+  jail-app = callJailLib ../../../myconfig.ai/fns/bubblewrap-app.nix;
+  mkWorkmuxWorktree = callLib ../../../myconfig.ai/fns/workmux-worktree.nix;
 
   # Make the `workmux` binary available inside the sandboxes (for the
   # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
@@ -30,7 +30,7 @@ let
   # home-manager uses `useGlobalPkgs`, so `pkgs.opencode` is the same package
   # `programs.opencode.package` defaults to. Building the wrappers at the
   # NixOS scope lets us register the workmux named agents from here.
-  opencodeBwrap = callLib ../fns/bubblewrap-simple-app.nix {
+  opencodeBwrap = callLib ../../../myconfig.ai/fns/bubblewrap-simple-app.nix {
     name = "opencode";
     pkg = pkgs.opencode;
     writableDirs = [

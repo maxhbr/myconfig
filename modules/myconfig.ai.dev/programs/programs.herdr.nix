@@ -30,9 +30,10 @@ let
 
   # Shell prelude that makes the GUI launcher detach from the calling shell
   # (see ./myconfig.ai.workmux/jail.nix for the other user of it).
-  detachedGuiLauncher = import ../../lib/detached-gui-launcher.nix { inherit lib pkgs; };
+  detachedGuiLauncher = import ../../../lib/detached-gui-launcher.nix { inherit lib pkgs; };
 
-  jail-app = import ./fns/bubblewrap-app.nix {
+  # fns/ still lives in ../myconfig.ai/ until it is moved by myconfig-e4j.5
+  jail-app = import ../../myconfig.ai/fns/bubblewrap-app.nix {
     inherit
       lib
       pkgs
