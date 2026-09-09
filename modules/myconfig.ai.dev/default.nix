@@ -21,10 +21,10 @@ let
 in
 {
   imports = [
-    # dev tooling — sandbox tiers, mysbx and workmux
-    # still live under ../myconfig.ai/ and are moved by myconfig-e4j.3/.4;
-    # the agent CLI programs were moved here by myconfig-e4j.2, and
-    # skills/, fns/ and hermes-agent by myconfig-e4j.5
+    # dev tooling — sandbox tiers still live under ../myconfig.ai/ and
+    # are moved by myconfig-e4j.3; the agent CLI programs were moved here
+    # by myconfig-e4j.2, skills/, fns/ and hermes-agent by myconfig-e4j.5,
+    # and mysbx + workmux by myconfig-e4j.4
     ../myconfig.ai/myconfig.ai.jail.nix
     ../myconfig.ai/myconfig.ai.nono.nix
     ../myconfig.ai/myconfig.ai.nono-agent-sandbox.nix
@@ -32,7 +32,7 @@ in
     ../myconfig.ai/myconfig.ai.qemu-agent-sandbox
     ../myconfig.ai/myconfig.ai.microvm
     ../myconfig.ai/myconfig.ai.gvisor-agent-sandbox
-    ../myconfig.ai/mysbx
+    ./mysbx
     ./hermes-agent
     ./programs/programs.agent-browser
     ./programs/programs.agent-of-empires
@@ -53,7 +53,7 @@ in
     ./programs/programs.qwen-code
     ./programs/programs.rtk
     ./skills
-    ../myconfig.ai/myconfig.ai.workmux
+    ./myconfig.ai.workmux
   ];
   config = lib.mkIf config.myconfig.ai.enable {
     myconfig.dev.python.enable = true;
