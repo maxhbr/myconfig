@@ -45,10 +45,26 @@ let
   # myconfig.ai.localModels[].models, so the shared model list
   # (hosts/shared.localModels.litellm.models.nix) can be consumed by both
   # this module and hosts/shared.localModels.litellm.nix unchanged.
+  #
+  # Provider handling: `openai` (the default) forwards to
+  # `upstreamApiBase` with `apiKey` as the OpenAI-style bearer. Any other
+  # provider (e.g. `anthropic`) is *env-var driven*: no `api_base`/`api_key`
+  # is emitted, so litellm resolves credentials from the unit environment
+  # (see `anthropicBaseUrl` / `anthropicAuthEnvironmentFile` below).
   mkForwardEntry =
     m:
     let
       spec = if lib.isString m then { name = m; } else m;
+      isOpenai = !(spec ? provider) || spec.provider == "openai";
+      # Per-entry override of the API base; falls back to the upstream
+      # LiteLLM base for the default openai provider. Null-aware because
+      # the submodule fills `apiBase = null` into entries that did not
+      # set it (and string specs never set it).
+      apiBase =
+        if (spec.apiBase or null) != null then
+          spec.apiBase
+        else
+          lib.optionalString isOpenai cfg.upstreamApiBase;
       # Drop unset (null) fields so the string form and metadata-less
       # attrsets produce byte-identical output to the previous behavior.
       modelInfo = lib.filterAttrs (_: v: v != null) {
@@ -59,11 +75,11 @@ let
     {
       model_name = spec.name;
       litellm_params = {
-        model = "openai/${spec.name}";
-        api_base = cfg.upstreamApiBase;
-        api_key = cfg.apiKey;
+        model = "${spec.provider or "openai"}/${spec.name}";
         request.allowPrivateNetwork = true;
-      };
+      }
+      // lib.optionalAttrs (apiBase != "") { api_base = apiBase; }
+      // lib.optionalAttrs isOpenai { api_key = cfg.apiKey; };
     }
     // lib.optionalAttrs (modelInfo != { }) { model_info = modelInfo; };
 in
@@ -89,7 +105,35 @@ in
             options = {
               name = lib.mkOption {
                 type = str;
-                description = "Model name to forward (becomes `openai/<name>`).";
+                description = "Model name to forward (becomes `<provider>/<name>`).";
+              };
+              provider = lib.mkOption {
+                type = str;
+                default = "openai";
+                description = ''
+                  LiteLLM provider prefix for the upstream call. The
+                  default `"openai"` forwards to `upstreamApiBase`
+                  with `apiKey`. Set `"anthropic"` to forward via
+                  an Anthropic-compatible API resolved from the
+                  service environment (`anthropicBaseUrl` /
+                  `anthropicAuthEnvironmentFile`): the entry becomes
+                  `anthropic/<name>` with no `api_base`/`api_key`,
+                  so litellm reads `ANTHROPIC_BASE_URL` and
+                  `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_API_KEY` from
+                  the unit environment. Other providers are passed
+                  through as `<provider>/<name>` env-var driven
+                  likewise.
+                '';
+              };
+              apiBase = lib.mkOption {
+                type = nullOr str;
+                default = null;
+                description = ''
+                  Per-entry override of the upstream API base. When
+                  null (the default), openai entries use
+                  `upstreamApiBase` and other providers use no
+                  `api_base` at all (env-var driven).
+                '';
               };
               contextWindow = lib.mkOption {
                 type = nullOr int;
@@ -114,9 +158,40 @@ in
       default = [ ];
       description = ''
         Models to forward. Each entry is either a bare model-name string
-        or an attrset `{ name; contextWindow?; maxOutputTokens?; }`.
-        Each becomes an `openai/<name>` entry pointing at the upstream
-        API base; the optional fields add a `model_info` block.
+        or an attrset
+        `{ name; provider?; apiBase?; contextWindow?; maxOutputTokens?; }`.
+        Each becomes a `<provider>/<name>` entry (default provider
+        `openai`) pointing at the upstream API base; the optional fields
+        add a `model_info` block.
+      '';
+    };
+
+    anthropicBaseUrl = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        Base URL of an Anthropic-compatible upstream API (e.g. another
+        LiteLLM proxy). Wired into the litellm unit environment as
+        `ANTHROPIC_BASE_URL` so `anthropic/*` model entries (see
+        `models`) resolve their upstream from it. Not a secret; leave
+        null to not set the variable (litellm then falls back to
+        `https://api.anthropic.com`).
+      '';
+    };
+
+    anthropicAuthEnvironmentFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Environment file (systemd `EnvironmentFile=`) carrying the
+        Anthropic credentials for `anthropic/*` model entries, e.g. a
+        line `ANTHROPIC_AUTH_TOKEN=<bearer>` (litellm sends it as
+        `Authorization: Bearer`; `ANTHROPIC_API_KEY=<key>` would use
+        the `x-api-key` header instead). The file must not live in the
+        Nix store: secrets are provisioned via the separate `priv/`
+        repository, e.g. through `myconfig.secrets` (agenix), whose
+        decrypted `/run/agenix/<name>` file can be referenced here.
+        Leave null to not load any file.
       '';
     };
 
@@ -131,10 +206,37 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    services.litellm = {
-      enable = true;
-      settings.model_list = map mkForwardEntry cfg.models;
-    };
-  };
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable {
+      services.litellm = {
+        enable = true;
+        settings.model_list = map mkForwardEntry cfg.models;
+      };
+    })
+
+    # Plain (non-secret) environment. Each block is a *top-level* mkIf so
+    # that nothing is defined when the option is null: a definition that
+    # exists but is discharged by a nested `mkIf false` would still count
+    # as a definition of `services.litellm.environment` and silently
+    # discard the nixpkgs module's option defaults.
+    #
+    # Once ANY definition of `services.litellm.environment` exists, the
+    # nixpkgs module's option default (the telemetry-disabling vars
+    # SCARF_NO_ANALYTICS / DO_NOT_TRACK / ANONYMIZED_TELEMETRY) is
+    # discarded entirely, so this block re-asserts them with `mkDefault`
+    # (a host can still override them with a plain `=`).
+    (lib.mkIf (cfg.enable && cfg.anthropicBaseUrl != null) {
+      services.litellm.environment = {
+        SCARF_NO_ANALYTICS = lib.mkDefault "True";
+        DO_NOT_TRACK = lib.mkDefault "True";
+        ANONYMIZED_TELEMETRY = lib.mkDefault "False";
+        ANTHROPIC_BASE_URL = cfg.anthropicBaseUrl;
+      };
+    })
+
+    # Secret-safe credential injection via systemd `EnvironmentFile=`.
+    (lib.mkIf (cfg.enable && cfg.anthropicAuthEnvironmentFile != null) {
+      services.litellm.environmentFile = cfg.anthropicAuthEnvironmentFile;
+    })
+  ];
 }
