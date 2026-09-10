@@ -23,15 +23,19 @@
 # `mkForce` (priority 50) would silently discard those contributors.
 #
 # ON TOP of the declared `models`, this module can additionally forward
-# Anthropic models: when the host's private repo provisions the
-# `myconfig.secrets` entry named by `anthropicAuthSecretName` (default
-# `litellm-anthropic-env`) with an env-format source carrying
-# `ANTHROPIC_AUTH_TOKEN=` (and optionally `ANTHROPIC_BASE_URL=`), the
-# module appends two wildcard routes (`claude-*` for Claude Code's
+# Anthropic models: when the host provides Anthropic credentials in
+# EITHER of two ways —
+#   * an explicit `anthropicAuthEnvironmentFile` (e.g. a priv-repo
+#     `writeText` env file), or
+#   * a provisioned `myconfig.secrets` entry named by
+#     `anthropicAuthSecretName` (default `litellm-anthropic-env`) whose
+#     env-format source carries `ANTHROPIC_AUTH_TOKEN=` (and optionally
+#     `ANTHROPIC_BASE_URL=`) —
+# the module appends two wildcard routes (`claude-*` for Claude Code's
 # bare slugs on /v1/messages, `anthropic/*` for litellm-convention
 # prefixed names) and wires the decrypted secret file into the litellm
-# unit as `EnvironmentFile=`. Provisioning the secret is the entire
-# per-host opt-in: hosts without it evaluate exactly as before.
+# unit as `EnvironmentFile=`. Providing credentials is the entire
+# per-host opt-in: hosts without them evaluate exactly as before.
 {
   config,
   lib,
@@ -40,15 +44,23 @@
 let
   cfg = config.myconfig.ai.litellm.proxy;
 
-  # Whether the priv repo has provisioned the Anthropic credential
-  # secret (a `myconfig.secrets` entry with `source = ...`). Entries
-  # without `source` are filtered out before they reach `age.secrets`
-  # (see modules/myconfig.secrets.nix), so this probe is only true on a
-  # host whose private repo actually provides the env-format file —
-  # the per-host opt-in. Public/CI builds and hosts that do not
-  # provision the secret keep the exact previous behavior.
-  haveAnthropicSecret =
-    config.myconfig.ai.litellm.proxy.enable && (config.age.secrets ? "${cfg.anthropicAuthSecretName}");
+  # Whether the host has provisioned Anthropic credentials — and thus
+  # gets the wildcard forwarding entries — in EITHER of two ways:
+  #   * an explicitly provided `anthropicAuthEnvironmentFile` (e.g. a
+  #     priv-repo `writeText` env file), or
+  #   * the priv repo provisioning the `myconfig.secrets` entry named by
+  #     `anthropicAuthSecretName` (a `myconfig.secrets` entry with
+  #     `source = ...`). Entries without `source` are filtered out
+  #     before they reach `age.secrets` (see modules/myconfig.secrets.nix),
+  #     so the probe is only true on a host whose private repo actually
+  #     provides the env-format file.
+  # Public/CI builds and hosts that provide neither keep the exact
+  # previous behavior.
+  haveAnthropicCredentials =
+    config.myconfig.ai.litellm.proxy.enable
+    && (
+      cfg.anthropicAuthEnvironmentFile != null || (config.age.secrets ? "${cfg.anthropicAuthSecretName}")
+    );
 
   # A model spec is either a bare string (the model name, no metadata) or
   # an attrset { name; contextWindow?; maxOutputTokens?; }. The attrset
@@ -242,10 +254,9 @@ in
         `config.myconfig.secrets."litellm-anthropic-env".dest` here.
         Leave null to not load any file.
 
-        Note: when the secret named by `anthropicAuthSecretName` is
-        provisioned, this module wires the environment file (and the
-        anthropic wildcard model entries) automatically; this option
-        exists for explicitly-provided environment files.
+        When this option is set, the module AUTOMATICALLY adds the
+        anthropic wildcard model entries (see `anthropicAuthSecretName`)
+        on top of `models` — no separate `models` entries are needed.
       '';
     };
 
@@ -273,10 +284,11 @@ in
           * wires `services.litellm.environmentFile` to the secret's
             decrypted path.
 
-        A host that does not provision the secret gets no anthropic
-        forwarding at all: no entries, no environment file, and the
-        evaluation is identical to before. Provisioning the secret in
-        the private repo is therefore the entire per-host opt-in.
+        A host that provides neither this secret nor an explicit
+        `anthropicAuthEnvironmentFile` gets no anthropic forwarding at
+        all: no entries, no environment file, and the evaluation is
+        identical to before. Provisioning credentials is therefore the
+        entire per-host opt-in.
       '';
     };
 
@@ -296,13 +308,15 @@ in
       services.litellm = {
         enable = true;
         # The declared models, PLUS the anthropic wildcard entries once
-        # the credential secret is provisioned (priv repo opt-in).
+        # credentials are provisioned (priv repo secret or explicit
+        # `anthropicAuthEnvironmentFile` — see
+        # `haveAnthropicCredentials`).
         # `lib.optionals` keeps the list byte-identical for hosts
         # without the secret. Exact `model_name` matches always win over
         # the wildcards, so existing entries are unaffected.
         settings.model_list = map mkForwardEntry (
           cfg.models
-          ++ lib.optionals haveAnthropicSecret [
+          ++ lib.optionals haveAnthropicCredentials [
             {
               # Claude Code sends bare slugs (`claude-sonnet-4-5`, …)
               # in the `model` field of `/v1/messages`; route them
@@ -355,8 +369,15 @@ in
     # decrypted destination (`myconfig.secrets` default:
     # `/run/agenix/<name>`); systemd reads the file as root when the
     # service starts, before dropping to the dynamic user.
-    (lib.mkIf (cfg.enable && cfg.anthropicAuthEnvironmentFile == null && haveAnthropicSecret) {
-      services.litellm.environmentFile = config.age.secrets."${cfg.anthropicAuthSecretName}".path;
-    })
+    (lib.mkIf
+      (
+        cfg.enable
+        && cfg.anthropicAuthEnvironmentFile == null
+        && (config.age.secrets ? "${cfg.anthropicAuthSecretName}")
+      )
+      {
+        services.litellm.environmentFile = config.age.secrets."${cfg.anthropicAuthSecretName}".path;
+      }
+    )
   ];
 }
