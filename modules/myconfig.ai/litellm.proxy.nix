@@ -73,7 +73,7 @@ let
       };
     in
     {
-      model_name = spec.name;
+      model_name = if (spec.modelName or null) != null then spec.modelName else spec.name;
       litellm_params = {
         model = "${spec.provider or "openai"}/${spec.name}";
         request.allowPrivateNetwork = true;
@@ -123,6 +123,27 @@ in
                   the unit environment. Other providers are passed
                   through as `<provider>/<name>` env-var driven
                   likewise.
+
+                  A `*` in `name` makes the entry a LiteLLM wildcard
+                  route (PatternMatchRouter): e.g.
+                  `{ name = "claude-*"; provider = "anthropic"; }`
+                  serves every `claude-<slug>` request as an
+                  `anthropic/<slug>` upstream call, without enumerating
+                  model slugs. Exact `model_name` matches always win
+                  over wildcards.
+                '';
+              };
+              modelName = lib.mkOption {
+                type = nullOr str;
+                default = null;
+                description = ''
+                  Client-facing name on the proxy (`model_name`,
+                  what clients request). Defaults to `name`. Only
+                  needed for wildcard entries whose request pattern
+                  differs from the upstream model pattern, e.g.
+                  `{ name = "*"; modelName = "anthropic/*"; provider = "anthropic"; }`
+                  serves litellm-convention `anthropic/<model>`
+                  requests as `anthropic/<model>` upstream calls.
                 '';
               };
               apiBase = lib.mkOption {
@@ -159,10 +180,11 @@ in
       description = ''
         Models to forward. Each entry is either a bare model-name string
         or an attrset
-        `{ name; provider?; apiBase?; contextWindow?; maxOutputTokens?; }`.
+        `{ name; provider?; modelName?; apiBase?; contextWindow?; maxOutputTokens?; }`.
         Each becomes a `<provider>/<name>` entry (default provider
         `openai`) pointing at the upstream API base; the optional fields
-        add a `model_info` block.
+        add a `model_info` block. A `*` in `name` creates a LiteLLM
+        wildcard route (see the `provider` option description).
       '';
     };
 
@@ -175,7 +197,8 @@ in
         `ANTHROPIC_BASE_URL` so `anthropic/*` model entries (see
         `models`) resolve their upstream from it. Not a secret; leave
         null to not set the variable (litellm then falls back to
-        `https://api.anthropic.com`).
+        `https://api.anthropic.com`, or the same variable from
+        `anthropicAuthEnvironmentFile` when provided).
       '';
     };
 
@@ -189,8 +212,13 @@ in
         `Authorization: Bearer`; `ANTHROPIC_API_KEY=<key>` would use
         the `x-api-key` header instead). The file must not live in the
         Nix store: secrets are provisioned via the separate `priv/`
-        repository, e.g. through `myconfig.secrets` (agenix), whose
-        decrypted `/run/agenix/<name>` file can be referenced here.
+        repository. The intended shape is a `myconfig.secrets` (agenix)
+        entry whose decrypted env-format file is referenced here —
+        declare the stub in the public repo
+        (`myconfig.secrets."litellm-anthropic-env".dest =
+        "/run/agenix/litellm-anthropic-env";`) with `source = ...` set
+        in priv, and reference
+        `config.myconfig.secrets."litellm-anthropic-env".dest` here.
         Leave null to not load any file.
       '';
     };
