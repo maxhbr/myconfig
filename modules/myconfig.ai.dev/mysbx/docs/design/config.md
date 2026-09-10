@@ -280,9 +280,11 @@ What does hold in every backend, without exception: **nothing from the host
 filesystem is available unless it is declared** — the repo itself (D13),
 the git metadata directories its `.git` file points at when the repo is a
 linked worktree or submodule (D13: they are part of the repo's own git
-data, discovered with it and shown in the report), and the explicit
-`[[mounts]]` entries. New backends must uphold this even when the
-backend's own default is permissive.
+data, discovered with it and shown in the report), the `<repo>__worktrees`
+sibling when it exists (D13: operator state beside the repo, like the
+sidecar — a run never creates it, so its existence is the operator's
+declaration), and the explicit `[[mounts]]` entries. New backends must
+uphold this even when the backend's own default is permissive.
 
 "Declared" means: written in one of the two **trusted** configuration
 files (D7) — the user config and the repo's sidecar, both outside the
@@ -351,6 +353,17 @@ the gitdir and, when a `commondir` file names one, the common dir are
 discovered with the repo, listed in the report, and are inexpressible
 in configuration: a mount that would cover them is refused like one
 that covers the repo root.
+
+The workmux `<repo>__worktrees` sibling is bound rw the same way —
+when it exists. Like the sidecar (D2), it is operator state beside the
+repo: a run never creates it, so its existence is the operator's
+declaration (a host-side `workmux add`, `git worktree add`, or any of
+the other sandboxing tiers, which all use the same convention). An
+absent sibling keeps the sandbox narrow; `workmux add` inside it fails
+with a filesystem error naming the path. The bind is guarded exactly
+like the repo's: a mount covering it is refused, a dest below it is
+refused, and a sibling that contains the home directory is refused at
+resolution.
 
 **The pointer itself grants nothing (review-2 item 1).** The `.git`
 file lives *inside* the repo, so it is content the sandbox can rewrite
@@ -668,13 +681,19 @@ That isolation is **enforced, not assumed** (`bwrap.rs::check_workmux_socket`):
 
 Layer semantics: see D17 — either layer may decide and the sidecar wins.
 
-What the session can and cannot do is a consequence of the base, not of
-this key: `workmux add` creates a git worktree in the
-`<repo>__worktrees` sibling, which is **outside** the repo bind (D13),
-so a sandbox that should create worktrees must declare that directory
-`rw` in its sidecar `[[mounts]]`. Without it the dashboard, the sidebar
-and every pane still work, and `workmux add` fails with a filesystem
-error naming the path — the honest outcome, since no layer declared it.
+What the session can and cannot do is partly a consequence of the base,
+not of this key: `workmux add` creates a git worktree in the
+`<repo>__worktrees` sibling, which is **outside** the repo bind (D13).
+When that sibling EXISTS, `repo::resolve` records it and the argv
+builder binds it rw implicitly, like the repo itself and the git
+metadata directories — implicit infrastructure, discovered per run,
+never created by a run: its existence is operator state, the same
+trust decision as the sidecar's (D2). A checkout WITHOUT it stays
+narrow: the dashboard, the sidebar and every pane still work, and
+`workmux add` fails with a filesystem error naming the path — the
+honest outcome, since no layer declared it. A sidecar `[[mounts]]`
+entry remains the way to bind a worktrees directory that lives at a
+different path.
 
 On myconfig hosts none of this is hand-written: `myconfig.ai.mysbx.workmux`
 (`../../default.nix`) generates `workmux = true`, the in-sandbox

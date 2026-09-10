@@ -26,6 +26,7 @@ fn synth_repo() -> Repo {
         root: PathBuf::from("/synth/repo"),
         sidecar: PathBuf::from("/synth/repo.mysbx"),
         git_dirs: Vec::new(),
+        worktrees: None,
     }
 }
 
@@ -37,6 +38,7 @@ fn worktree_repo(git_dirs: &[&str]) -> Repo {
         root: PathBuf::from("/synth/repo"),
         sidecar: PathBuf::from("/synth/repo.mysbx"),
         git_dirs: git_dirs.iter().map(PathBuf::from).collect(),
+        worktrees: None,
     }
 }
 
@@ -1267,6 +1269,80 @@ fn plain_repo_adds_no_git_binds() {
         argv.windows(3).filter(|w| w[0] == "--bind").count(),
         1,
         "only the repo bind"
+    );
+}
+
+#[test]
+fn existing_worktrees_sibling_is_bound_rw() {
+    // The workmux `<repo>__worktrees` sibling is implicit
+    // infrastructure like the repo bind (D13): rw, at its real host
+    // path, after the git metadata binds and before every configured
+    // mount — but only when the operator already created it (a run
+    // never does), which is why `Repo::worktrees` is an `Option`.
+    let mut repo = synth_repo();
+    repo.worktrees = Some(PathBuf::from("/synth/repo__worktrees"));
+    let argv = bwrap_argv(
+        &base(true),
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    let repo_bind = pos_pair(&argv, "--bind", "/synth/repo");
+    let worktrees = pos_pair(&argv, "--bind", "/synth/repo__worktrees");
+    assert!(repo_bind < worktrees, "the worktrees bind follows the repo");
+    assert_eq!(
+        pos_ro_bind(&argv, "/synth/repo__worktrees"),
+        None,
+        "the worktrees bind is rw"
+    );
+}
+
+#[test]
+fn mount_covering_the_worktrees_sibling_is_refused() {
+    // The worktrees bind is implicit infrastructure like the repo: a
+    // configured mount whose dest covers it would replace the subtree
+    // wholesale and silently kill `workmux add`'s workspace.
+    let mut repo = synth_repo();
+    repo.worktrees = Some(PathBuf::from("/synth/repo__worktrees"));
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/synth/repo__worktrees"),
+        Mode::Rw,
+    ));
+
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        err.to_string()
+            .contains("would hide the worktrees directory")
+            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn dest_below_the_worktrees_sibling_is_refused() {
+    // The worktrees directory is writable host content (the sandbox
+    // creates git worktrees in it), so the review-2 item 2 rule
+    // applies to it exactly as to the repo: a dest below it resolves
+    // through content the payload can plant symlinks in.
+    let mut repo = synth_repo();
+    repo.worktrees = Some(PathBuf::from("/synth/repo__worktrees"));
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/synth/repo__worktrees/sub"),
+        Mode::Rw,
+    ));
+
+    let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
     );
 }
 

@@ -512,6 +512,70 @@ fn verbose_report_covers_the_run_configuration() {
     assert!(report.contains("dry run"), "{report}");
 }
 
+// ---- the implicit worktrees sibling bind ---------------------------------
+
+#[test]
+fn an_existing_worktrees_sibling_is_bound_implicitly() {
+    // A repo whose workmux `<repo>__worktrees` sibling exists gets it
+    // bound rw implicitly, after the repo bind and before every
+    // configured mount — visible in `--dry-run` and named in the
+    // `--verbose` report. No sidecar `[[mounts]]` entry is needed.
+    let (inv, repo, _) = fixture_with_backend("worktrees-implicit", &["--dry-run"]);
+    let worktrees = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::create_dir_all(&worktrees).unwrap();
+
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains(&format!(
+            "--bind\n{}\n{}\n",
+            worktrees.display(),
+            worktrees.display()
+        )),
+        "missing the implicit rw worktrees bind:\n{stdout}"
+    );
+}
+
+#[test]
+fn an_absent_worktrees_sibling_adds_no_bind() {
+    // The counterpart: without the sibling the argv is byte-identical
+    // to the minimal golden — a run never creates the directory, so
+    // absence keeps the sandbox narrow.
+    let (inv, repo, _) = fixture_with_backend("worktrees-absent", &["--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert_eq!(argv_block(&stdout), expected_minimal_argv(&repo));
+    assert!(!stdout.contains("__worktrees"), "{stdout}");
+}
+
+#[test]
+fn the_report_names_the_implicit_worktrees_bind() {
+    // cli.md D10: every bind that reaches the argv belongs in the
+    // report — with its provenance, so an operator sees WHY a
+    // directory they never declared is mounted.
+    let (inv, repo, _) = fixture_with_backend("worktrees-report", &["--verbose", "--dry-run"]);
+    let worktrees = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::create_dir_all(&worktrees).unwrap();
+
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains(&format!(
+            "  rw {} -> {}  [worktrees, implicit]",
+            worktrees.display(),
+            worktrees.display()
+        )),
+        "{report}"
+    );
+}
+
 #[test]
 fn verbose_run_form_reports_the_command_payload() {
     let (inv, _, _) = fixture_user_backend(

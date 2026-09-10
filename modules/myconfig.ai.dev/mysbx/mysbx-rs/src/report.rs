@@ -80,6 +80,16 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     for g in &r.repo.git_dirs {
         p(format!("git metadata:   {} (bound rw)", g.display()));
     }
+    // The worktrees sibling is an implicit rw bind too, discovered per
+    // run (see [`crate::repo::Repo::worktrees`]): what the report must
+    // say is THAT it is bound and WHY the operator never wrote a
+    // `[[mounts]]` entry for it.
+    if let Some(worktrees) = &r.repo.worktrees {
+        p(format!(
+            "worktrees:      {} (bound rw, implicit — exists next to the repo)",
+            worktrees.display()
+        ));
+    }
     p(format!(
         "sidecar:        {} ({})",
         r.repo.sidecar.display(),
@@ -113,16 +123,24 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     ));
 
     // Mounts, in argv order: the implicit repo bind first (config.md
-    // D13), then the configured mounts in declaration order.
+    // D13), then the worktrees sibling (implicit, when it exists),
+    // then the configured mounts in declaration order.
     p(format!(
         "mounts:         {} (in declaration order)",
-        r.merged.mounts.len() + 1
+        r.merged.mounts.len() + 1 + r.repo.worktrees.iter().count()
     ));
     p(format!(
         "  rw {} -> {}  [repo, implicit]",
         r.repo.root.display(),
         r.repo.root.display()
     ));
+    if let Some(worktrees) = &r.repo.worktrees {
+        p(format!(
+            "  rw {} -> {}  [worktrees, implicit]",
+            worktrees.display(),
+            worktrees.display()
+        ));
+    }
     for (i, m) in r.merged.mounts.iter().enumerate() {
         let layer = if i < r.user_mount_count {
             "user config"
@@ -310,6 +328,7 @@ mod tests {
             root: PathBuf::from("/synth/repo"),
             sidecar: PathBuf::from("/synth/repo.mysbx"),
             git_dirs: Vec::new(),
+            worktrees: None,
         };
         let mut env = BTreeMap::new();
         env.insert("EDITOR".to_owned(), "nvim".to_owned());

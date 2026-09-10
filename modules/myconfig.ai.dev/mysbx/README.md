@@ -197,9 +197,13 @@ default of `config.multiplexer`), and hands mysbx the in-sandbox workmux
 configuration (with the *plain* agent binaries: the sandbox is already
 the sandbox).
 
-`workmux add` creates its worktree in the `<repo>__worktrees` sibling,
-which is outside the repo mount — a sandbox that should create worktrees
-declares that directory `rw` in its sidecar `[[mounts]]`.
+`workmux add` creates its worktree in the `<repo>__worktrees` sibling.
+When that directory exists next to the repo, mysbx binds it rw
+implicitly (discovered per run, like the repo and git metadata binds —
+never created by a run); a checkout without it keeps the narrow
+sandbox, and `workmux add` inside it fails with a filesystem error
+naming the path. A sidecar `[[mounts]]` entry is therefore only
+needed to bind a worktrees directory that lives somewhere else.
 
 ## Integrated coding agents
 `pi` ([`programs.pi-coding-agent`](../../programs/programs.pi-coding-agent/default.nix)) is

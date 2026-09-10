@@ -368,6 +368,18 @@ pub fn bwrap_argv(
         check_git_dir(git_dir, &cfg.git_dirs)?;
         bind(&mut argv, false, &git_dir.to_string_lossy(), None);
     }
+    // 4a. the workmux worktrees sibling, rw, at its real host path —
+    // implicit infrastructure like the repo bind (D13), discovered
+    // per run and therefore inexpressible in configuration, exactly
+    // like the git metadata above. Bound ONLY when it exists (see
+    // [`Repo::worktrees`]): a run never creates it, so existence is
+    // the operator's trust decision; an absent sibling keeps the
+    // sandbox narrow, and `workmux add` inside it fails with a
+    // filesystem error naming the path — the honest outcome for a
+    // directory no layer declared.
+    if let Some(worktrees) = &repo.worktrees {
+        bind(&mut argv, false, &worktrees.to_string_lossy(), None);
+    }
 
     // 4b. the `state-dirs` binds (docs/design/config.md D15): one rw
     // bind per declared entry — the host source synthesized from the
@@ -419,19 +431,28 @@ pub fn bwrap_argv(
     // `.git` pointer rewritten to match. `rw` mounts are the direct
     // case; the repo bind and the git dirs are `rw` too, so they are
     // checked as well — a sidecar or user config sitting inside the
-    // work tree is refused, not silently exposed. `ro` mounts do not
-    // count: the payload cannot write through them.
-    for src in cfg
-        .mounts
-        .iter()
-        .filter(|m| m.mode == Mode::Rw)
-        .map(|m| normalize(&m.path))
-        .chain(std::iter::once(normalize(&root)))
+    // work tree is refused, not silently exposed. The worktrees
+    // sibling is an rw implicit bind as well and joins the set for the
+    // same reason. `ro` mounts do not count: the payload cannot write
+    // through them.
+    let implicit_rw_sources = std::iter::once(normalize(&root))
         .chain(
             repo.git_dirs
                 .iter()
                 .map(|g| normalize(&g.to_string_lossy())),
         )
+        .chain(
+            repo.worktrees
+                .as_deref()
+                .map(|w| normalize(&w.to_string_lossy()))
+                .into_iter(),
+        );
+    for src in cfg
+        .mounts
+        .iter()
+        .filter(|m| m.mode == Mode::Rw)
+        .map(|m| normalize(&m.path))
+        .chain(implicit_rw_sources)
     {
         for policy in params.policy_paths {
             // Every guarded path of the policy, not just its resolved
@@ -537,8 +558,20 @@ pub fn bwrap_argv(
             }
         }
     }
-    check_hidden_mounts(&cfg.mounts, &root, &repo.git_dirs, &state_binds)?;
-    check_symlinkable_dests(&cfg.mounts, &root, &repo.git_dirs, &state_binds)?;
+    check_hidden_mounts(
+        &cfg.mounts,
+        &root,
+        &repo.git_dirs,
+        repo.worktrees.as_deref(),
+        &state_binds,
+    )?;
+    check_symlinkable_dests(
+        &cfg.mounts,
+        &root,
+        &repo.git_dirs,
+        repo.worktrees.as_deref(),
+        &state_binds,
+    )?;
     for m in &cfg.mounts {
         bind(&mut argv, m.mode == Mode::Ro, &m.path, m.dest.as_deref());
     }
@@ -1075,18 +1108,26 @@ fn check_hidden_mounts(
     mounts: &[Mount],
     repo_root: &str,
     git_dirs: &[PathBuf],
+    worktrees: Option<&Path>,
     state_binds: &[(String, String)],
 ) -> Result<(), Error> {
-    // Implicit binds come before every configured mount: the repo root
-    // and the git metadata directories a `.git` file points at. A
-    // configured mount whose dest covers any of them replaces that
-    // subtree wholesale. The implicit set is discovered per run, so it
-    // cannot be anticipated in configuration: covering it is refused in
-    // EVERY form, equal dest included, because the mount would not just
+    // Implicit binds come before every configured mount: the repo root,
+    // the git metadata directories a `.git` file points at, and the
+    // workmux worktrees sibling when it exists. A configured mount
+    // whose dest covers any of them replaces that subtree wholesale.
+    // The implicit set is discovered per run, so it cannot be
+    // anticipated in configuration: covering it is refused in EVERY
+    // form, equal dest included, because the mount would not just
     // shadow an entry — it would replace implicit infrastructure.
     let mut implicit: Vec<(PathBuf, &str)> = vec![(normalize(repo_root), "the repo working tree")];
     for g in git_dirs {
         implicit.push((normalize(&g.to_string_lossy()), "a git metadata directory"));
+    }
+    if let Some(worktrees) = worktrees {
+        implicit.push((
+            normalize(&worktrees.to_string_lossy()),
+            "the worktrees directory",
+        ));
     }
     for (_src, dest) in state_binds {
         implicit.push((normalize(dest), "a state directory"));
@@ -1179,14 +1220,21 @@ fn check_symlinkable_dests(
     mounts: &[Mount],
     repo_root: &str,
     git_dirs: &[PathBuf],
+    worktrees: Option<&Path>,
     state_binds: &[(String, String)],
 ) -> Result<(), Error> {
     // HOST paths whose content the sandbox can write. The repo (rw by
-    // D13) and the git metadata directories start the set; an `rw`
-    // mount adds its source, because the payload writes the host path
-    // through it.
+    // D13), the git metadata directories and the worktrees sibling
+    // (rw when it exists) start the set; an `rw` mount adds its
+    // source, because the payload writes the host path through it.
     let mut writable_sources: Vec<PathBuf> = vec![normalize(repo_root)];
     writable_sources.extend(git_dirs.iter().map(|g| normalize(&g.to_string_lossy())));
+    if let Some(worktrees) = worktrees {
+        let w = normalize(&worktrees.to_string_lossy());
+        if !writable_sources.contains(&w) {
+            writable_sources.push(w);
+        }
+    }
     // IN-SANDBOX paths below which a dest may not land, because their
     // content is one of the writable sources above. The repo and the
     // git dirs are bound at their host path, so they are both.
@@ -1367,6 +1415,7 @@ mod tests {
             root: PathBuf::from("/synth/repo"),
             sidecar: PathBuf::from("/synth/repo.mysbx"),
             git_dirs: Vec::new(),
+            worktrees: None,
         }
     }
 

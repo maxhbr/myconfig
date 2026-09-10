@@ -23,6 +23,13 @@
 //! them (review-1 finding 4). A `.git` DIRECTORY contributes nothing —
 //! it is inside the root and mounted with it.
 //!
+//! [`Repo::worktrees`]: the workmux `<repo>__worktrees` sibling is
+//! recorded — and bound rw by the argv builder — only WHEN IT EXISTS.
+//! A run never creates it, so its existence is operator state, the same
+//! trust decision as the sidecar's (docs/design/config.md D2); a
+//! checkout without it stays narrow (a run then cannot create it,
+//! which is the honest outcome for a path no layer declared).
+//!
 //! The resolution is a pure function over the starting path and the home
 //! directory, so the tests run against a temporary directory tree without
 //! touching the real environment. `resolve_cwd` is the thin wrapper that
@@ -47,6 +54,17 @@ pub struct Repo {
     /// status` and friends fail inside the sandbox, because the `.git`
     /// file's pointer leaves the worktree (review-1 finding 4).
     pub git_dirs: Vec<PathBuf>,
+    /// The workmux worktrees sibling
+    /// `<parent>/<basename>__worktrees`, bound rw implicitly — but
+    /// ONLY when it exists at resolution time, hence `Option`. The
+    /// workmux payload (docs/design/config.md D16) creates git
+    /// worktrees there; without the bind `workmux add` fails with a
+    /// filesystem error naming the path. Binding it when present
+    /// spares every repo that already follows the convention a
+    /// sidecar `[[mounts]]` entry, while a run never creates it:
+    /// existence is the operator's trust decision, exactly like the
+    /// sidecar's (D2) — an absent sibling never widens a run.
+    pub worktrees: Option<PathBuf>,
 }
 
 /// Why a repository could not be resolved.
@@ -190,6 +208,11 @@ fn repo_at(dir: &Path, sidecar: PathBuf) -> Result<Repo, Error> {
         root: dir.to_owned(),
         sidecar,
         git_dirs,
+        // The workmux worktrees sibling, when the operator already
+        // created it — see [`Repo::worktrees`]. `is_dir`, not `exists`:
+        // a stray FILE of that name is not a worktrees directory, and
+        // binding a file where a directory belongs fails the bind.
+        worktrees: sibling_worktrees(dir).filter(|p| p.is_dir()),
     })
 }
 
@@ -264,6 +287,18 @@ fn sibling_sidecar(dir: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// `<parent>/<basename>__worktrees` — the workmux worktrees sibling
+/// (see [`Repo::worktrees`]): the same sibling spelling workmux itself
+/// uses (`dirname(top)/<basename>__worktrees`), so the path the
+/// sandbox binds is the path `workmux add` computes inside it.
+fn sibling_worktrees(dir: &Path) -> Option<PathBuf> {
+    let name = dir.file_name()?;
+    let parent = dir.parent()?;
+    let mut sibling = name.to_owned();
+    sibling.push("__worktrees");
+    Some(parent.join(sibling))
+}
+
 /// The guard: never operate on `$HOME`, on a directory CONTAINING
 /// `$HOME` (review-4 item 2) or on `/`
 /// (docs/TODOs/mvp-2-repo-discovery.md). Canonicalize before comparing,
@@ -303,6 +338,23 @@ fn guarded(repo: Repo, home: Option<&Path>) -> Result<Repo, Error> {
             if home.starts_with(gitdir) {
                 return Err(Error::GitDirForbidden {
                     gitdir: gitdir.to_owned(),
+                });
+            }
+        }
+        // The worktrees sibling is rw-bound when it exists (see
+        // [`Repo::worktrees`]); the same home containment the repo
+        // root itself is refused for applies. This can only fire on a
+        // hand-made layout (`HOME=<...>/repo__worktrees/users/alice`),
+        // but the refusal is cheap and the guard invariant stays
+        // uniform: no rw bind of a directory that contains the home.
+        if let Some(worktrees) = &repo.worktrees {
+            let canonical = std::fs::canonicalize(worktrees).map_err(|e| {
+                Error::Io(format!("cannot canonicalize {}: {e}", worktrees.display()))
+            })?;
+            if home.starts_with(&canonical) {
+                return Err(Error::HomeAncestorDir {
+                    root: canonical,
+                    home,
                 });
             }
         }
@@ -852,5 +904,71 @@ mod tests {
         let r = resolve(&sub, Some(&fake_home(&base))).unwrap();
         assert_eq!(r.root, sub);
         assert_eq!(r.git_dirs, vec![std::fs::canonicalize(&gitdir).unwrap()]);
+    }
+
+    // ---- the workmux worktrees sibling (see [`Repo::worktrees`]) ----
+
+    #[test]
+    fn an_existing_worktrees_sibling_is_recorded() {
+        // The workmux convention: `<parent>/<basename>__worktrees`,
+        // beside the repo. When the operator already created it, the
+        // argv builder binds it rw implicitly.
+        let base = tmpdir("worktrees-present");
+        let repo = base.join("repo");
+        touch_dir(&repo.join(".git"));
+        touch_dir(&repo.join("sub"));
+        let worktrees = base.join("repo__worktrees");
+        touch_dir(&worktrees);
+
+        let r = resolve(&repo.join("sub"), Some(&fake_home(&base))).unwrap();
+        assert_eq!(r.worktrees, Some(worktrees));
+    }
+
+    #[test]
+    fn an_absent_worktrees_sibling_stays_none() {
+        // A run never creates the sibling: absence is the honest
+        // narrow sandbox, and `workmux add` inside it gives the
+        // authoritative error.
+        let base = tmpdir("worktrees-absent");
+        let repo = base.join("repo");
+        touch_dir(&repo.join(".git"));
+        touch_dir(&repo.join("sub"));
+
+        let r = resolve(&repo.join("sub"), Some(&fake_home(&base))).unwrap();
+        assert_eq!(r.worktrees, None);
+    }
+
+    #[test]
+    fn a_worktrees_file_of_that_name_is_ignored() {
+        // `is_dir`, not `exists`: a stray FILE is not a worktrees
+        // directory, and binding a file where a directory belongs
+        // would fail the bind.
+        let base = tmpdir("worktrees-file");
+        let repo = base.join("repo");
+        touch_dir(&repo.join(".git"));
+        touch_dir(&repo.join("sub"));
+        std::fs::write(base.join("repo__worktrees"), "not a directory\n").unwrap();
+
+        let r = resolve(&repo.join("sub"), Some(&fake_home(&base))).unwrap();
+        assert_eq!(r.worktrees, None);
+    }
+
+    #[test]
+    fn a_worktrees_sibling_containing_the_home_is_refused() {
+        // The same uniform guard as the repo root: the sibling is
+        // rw-bound when it exists, so one CONTAINING the home would
+        // expose the whole home. Only a hand-made layout reaches this
+        // (`HOME=<...>/repo__worktrees/users/alice`), but the invariant
+        // is cheap to keep uniform.
+        let base = tmpdir("worktrees-home");
+        let repo = base.join("repo");
+        touch_dir(&repo.join(".git"));
+        touch_dir(&repo.join("sub"));
+        let worktrees = base.join("repo__worktrees");
+        let home = worktrees.join("users").join("alice");
+        touch_dir(&home);
+
+        let e = resolve(&repo.join("sub"), Some(&home)).unwrap_err();
+        assert!(matches!(e, Error::HomeAncestorDir { .. }), "{e}");
     }
 }

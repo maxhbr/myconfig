@@ -1681,6 +1681,7 @@ mod tests {
             root: root.clone(),
             sidecar: sidecar.clone(),
             git_dirs: Vec::new(),
+            worktrees: None,
         };
 
         let msg = require_initialized_sidecar(&repo).unwrap_err();

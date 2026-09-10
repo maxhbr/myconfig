@@ -22,9 +22,9 @@
 #     command-execution service — see D16, which also lists the guards
 #     that keep it unshareable.
 #   * `workmux add` needs the `<repo>__worktrees` sibling, which is
-#     outside the mysbx repo mount: a sandbox that should create
-#     worktrees declares that directory `rw` in its sidecar
-#     `[[mounts]]`. Everything else (dashboard, sidebar, panes) works
+#     outside the mysbx repo mount: when it exists, mysbx binds it `rw`
+#     implicitly (it never creates it); a checkout without it gets the
+#     narrow sandbox. Everything else (dashboard, sidebar, panes) works
 #     without it.
 {
   config,
