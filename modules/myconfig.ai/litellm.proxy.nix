@@ -21,6 +21,17 @@
 # importantly the skainet/ and trustedtokens/ entries registered by
 # the tng.nix flake modules (which also use a plain `=`). Using
 # `mkForce` (priority 50) would silently discard those contributors.
+#
+# ON TOP of the declared `models`, this module can additionally forward
+# Anthropic models: when the host's private repo provisions the
+# `myconfig.secrets` entry named by `anthropicAuthSecretName` (default
+# `litellm-anthropic-env`) with an env-format source carrying
+# `ANTHROPIC_AUTH_TOKEN=` (and optionally `ANTHROPIC_BASE_URL=`), the
+# module appends two wildcard routes (`claude-*` for Claude Code's
+# bare slugs on /v1/messages, `anthropic/*` for litellm-convention
+# prefixed names) and wires the decrypted secret file into the litellm
+# unit as `EnvironmentFile=`. Provisioning the secret is the entire
+# per-host opt-in: hosts without it evaluate exactly as before.
 {
   config,
   lib,
@@ -28,6 +39,16 @@
 }:
 let
   cfg = config.myconfig.ai.litellm.proxy;
+
+  # Whether the priv repo has provisioned the Anthropic credential
+  # secret (a `myconfig.secrets` entry with `source = ...`). Entries
+  # without `source` are filtered out before they reach `age.secrets`
+  # (see modules/myconfig.secrets.nix), so this probe is only true on a
+  # host whose private repo actually provides the env-format file —
+  # the per-host opt-in. Public/CI builds and hosts that do not
+  # provision the secret keep the exact previous behavior.
+  haveAnthropicSecret =
+    config.myconfig.ai.litellm.proxy.enable && (config.age.secrets ? "${cfg.anthropicAuthSecretName}");
 
   # A model spec is either a bare string (the model name, no metadata) or
   # an attrset { name; contextWindow?; maxOutputTokens?; }. The attrset
@@ -220,6 +241,42 @@ in
         in priv, and reference
         `config.myconfig.secrets."litellm-anthropic-env".dest` here.
         Leave null to not load any file.
+
+        Note: when the secret named by `anthropicAuthSecretName` is
+        provisioned, this module wires the environment file (and the
+        anthropic wildcard model entries) automatically; this option
+        exists for explicitly-provided environment files.
+      '';
+    };
+
+    anthropicAuthSecretName = lib.mkOption {
+      type = lib.types.str;
+      default = "litellm-anthropic-env";
+      description = ''
+        Name of the `myconfig.secrets` (agenix) entry whose decrypted
+        env-format file carries the Anthropic credentials
+        (`ANTHROPIC_AUTH_TOKEN=<bearer>`, optionally
+        `ANTHROPIC_BASE_URL=<upstream>`; litellm sends the token as
+        `Authorization: Bearer`).
+
+        When a secret with this name is provisioned — i.e. the host's
+        private repo sets `myconfig.secrets."<name>".source = ...` —
+        this module AUTOMATICALLY, additively on top of `models`:
+
+          * appends the wildcard model entries `claude-*` (what Claude
+            Code sends in the `model` field of `/v1/messages`) and
+            `anthropic/*` (litellm-convention prefixed names), both
+            routed upstream as env-var-driven `anthropic/<slug>` calls
+            (no `api_base`/`api_key`, so litellm resolves
+            `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` from the
+            unit environment);
+          * wires `services.litellm.environmentFile` to the secret's
+            decrypted path.
+
+        A host that does not provision the secret gets no anthropic
+        forwarding at all: no entries, no environment file, and the
+        evaluation is identical to before. Provisioning the secret in
+        the private repo is therefore the entire per-host opt-in.
       '';
     };
 
@@ -238,7 +295,31 @@ in
     (lib.mkIf cfg.enable {
       services.litellm = {
         enable = true;
-        settings.model_list = map mkForwardEntry cfg.models;
+        # The declared models, PLUS the anthropic wildcard entries once
+        # the credential secret is provisioned (priv repo opt-in).
+        # `lib.optionals` keeps the list byte-identical for hosts
+        # without the secret. Exact `model_name` matches always win over
+        # the wildcards, so existing entries are unaffected.
+        settings.model_list = map mkForwardEntry (
+          cfg.models
+          ++ lib.optionals haveAnthropicSecret [
+            {
+              # Claude Code sends bare slugs (`claude-sonnet-4-5`, …)
+              # in the `model` field of `/v1/messages`; route them
+              # upstream as `anthropic/<slug>`.
+              name = "claude-*";
+              provider = "anthropic";
+            }
+            {
+              # litellm-convention prefixed names for OpenAI-spec
+              # clients: request `anthropic/<model>` -> upstream
+              # `anthropic/<model>`.
+              name = "*";
+              modelName = "anthropic/*";
+              provider = "anthropic";
+            }
+          ]
+        );
       };
     })
 
@@ -263,8 +344,19 @@ in
     })
 
     # Secret-safe credential injection via systemd `EnvironmentFile=`.
+    # Explicit option first (plain priority).
     (lib.mkIf (cfg.enable && cfg.anthropicAuthEnvironmentFile != null) {
       services.litellm.environmentFile = cfg.anthropicAuthEnvironmentFile;
+    })
+
+    # Automatic credential injection when the priv-provisioned secret
+    # exists (see `anthropicAuthSecretName`). Mutually exclusive with
+    # the block above by construction. `age.secrets.<name>.path` is the
+    # decrypted destination (`myconfig.secrets` default:
+    # `/run/agenix/<name>`); systemd reads the file as root when the
+    # service starts, before dropping to the dynamic user.
+    (lib.mkIf (cfg.enable && cfg.anthropicAuthEnvironmentFile == null && haveAnthropicSecret) {
+      services.litellm.environmentFile = config.age.secrets."${cfg.anthropicAuthSecretName}".path;
     })
   ];
 }
