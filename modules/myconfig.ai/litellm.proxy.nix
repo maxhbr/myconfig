@@ -21,6 +21,17 @@
 # importantly the skainet/ and trustedtokens/ entries registered by
 # the tng.nix flake modules (which also use a plain `=`). Using
 # `mkForce` (priority 50) would silently discard those contributors.
+#
+# ON TOP of the declared `models`, this module can additionally forward
+# Anthropic models: when the host's private repo provisions the
+# `myconfig.secrets` entry named by `anthropicAuthSecretName` (default
+# `litellm-anthropic-env`) with an env-format source carrying
+# `ANTHROPIC_AUTH_TOKEN=` (and optionally `ANTHROPIC_BASE_URL=`), the
+# module appends two wildcard routes (`claude-*` for Claude Code's
+# bare slugs on /v1/messages, `anthropic/*` for litellm-convention
+# prefixed names) and wires the decrypted secret file into the litellm
+# unit as `EnvironmentFile=`. Provisioning the secret is the entire
+# per-host opt-in: hosts without it evaluate exactly as before.
 {
   config,
   lib,
@@ -28,6 +39,16 @@
 }:
 let
   cfg = config.myconfig.ai.litellm.proxy;
+
+  # Whether the priv repo has provisioned the Anthropic credential
+  # secret (a `myconfig.secrets` entry with `source = ...`). Entries
+  # without `source` are filtered out before they reach `age.secrets`
+  # (see modules/myconfig.secrets.nix), so this probe is only true on a
+  # host whose private repo actually provides the env-format file —
+  # the per-host opt-in. Public/CI builds and hosts that do not
+  # provision the secret keep the exact previous behavior.
+  haveAnthropicSecret =
+    config.myconfig.ai.litellm.proxy.enable && (config.age.secrets ? "${cfg.anthropicAuthSecretName}");
 
   # A model spec is either a bare string (the model name, no metadata) or
   # an attrset { name; contextWindow?; maxOutputTokens?; }. The attrset
@@ -45,10 +66,26 @@ let
   # myconfig.ai.localModels[].models, so the shared model list
   # (hosts/shared.localModels.litellm.models.nix) can be consumed by both
   # this module and hosts/shared.localModels.litellm.nix unchanged.
+  #
+  # Provider handling: `openai` (the default) forwards to
+  # `upstreamApiBase` with `apiKey` as the OpenAI-style bearer. Any other
+  # provider (e.g. `anthropic`) is *env-var driven*: no `api_base`/`api_key`
+  # is emitted, so litellm resolves credentials from the unit environment
+  # (see `anthropicBaseUrl` / `anthropicAuthEnvironmentFile` below).
   mkForwardEntry =
     m:
     let
       spec = if lib.isString m then { name = m; } else m;
+      isOpenai = !(spec ? provider) || spec.provider == "openai";
+      # Per-entry override of the API base; falls back to the upstream
+      # LiteLLM base for the default openai provider. Null-aware because
+      # the submodule fills `apiBase = null` into entries that did not
+      # set it (and string specs never set it).
+      apiBase =
+        if (spec.apiBase or null) != null then
+          spec.apiBase
+        else
+          lib.optionalString isOpenai cfg.upstreamApiBase;
       # Drop unset (null) fields so the string form and metadata-less
       # attrsets produce byte-identical output to the previous behavior.
       modelInfo = lib.filterAttrs (_: v: v != null) {
@@ -57,13 +94,13 @@ let
       };
     in
     {
-      model_name = spec.name;
+      model_name = if (spec.modelName or null) != null then spec.modelName else spec.name;
       litellm_params = {
-        model = "openai/${spec.name}";
-        api_base = cfg.upstreamApiBase;
-        api_key = cfg.apiKey;
+        model = "${spec.provider or "openai"}/${spec.name}";
         request.allowPrivateNetwork = true;
-      };
+      }
+      // lib.optionalAttrs (apiBase != "") { api_base = apiBase; }
+      // lib.optionalAttrs isOpenai { api_key = cfg.apiKey; };
     }
     // lib.optionalAttrs (modelInfo != { }) { model_info = modelInfo; };
 in
@@ -89,7 +126,56 @@ in
             options = {
               name = lib.mkOption {
                 type = str;
-                description = "Model name to forward (becomes `openai/<name>`).";
+                description = "Model name to forward (becomes `<provider>/<name>`).";
+              };
+              provider = lib.mkOption {
+                type = str;
+                default = "openai";
+                description = ''
+                  LiteLLM provider prefix for the upstream call. The
+                  default `"openai"` forwards to `upstreamApiBase`
+                  with `apiKey`. Set `"anthropic"` to forward via
+                  an Anthropic-compatible API resolved from the
+                  service environment (`anthropicBaseUrl` /
+                  `anthropicAuthEnvironmentFile`): the entry becomes
+                  `anthropic/<name>` with no `api_base`/`api_key`,
+                  so litellm reads `ANTHROPIC_BASE_URL` and
+                  `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_API_KEY` from
+                  the unit environment. Other providers are passed
+                  through as `<provider>/<name>` env-var driven
+                  likewise.
+
+                  A `*` in `name` makes the entry a LiteLLM wildcard
+                  route (PatternMatchRouter): e.g.
+                  `{ name = "claude-*"; provider = "anthropic"; }`
+                  serves every `claude-<slug>` request as an
+                  `anthropic/<slug>` upstream call, without enumerating
+                  model slugs. Exact `model_name` matches always win
+                  over wildcards.
+                '';
+              };
+              modelName = lib.mkOption {
+                type = nullOr str;
+                default = null;
+                description = ''
+                  Client-facing name on the proxy (`model_name`,
+                  what clients request). Defaults to `name`. Only
+                  needed for wildcard entries whose request pattern
+                  differs from the upstream model pattern, e.g.
+                  `{ name = "*"; modelName = "anthropic/*"; provider = "anthropic"; }`
+                  serves litellm-convention `anthropic/<model>`
+                  requests as `anthropic/<model>` upstream calls.
+                '';
+              };
+              apiBase = lib.mkOption {
+                type = nullOr str;
+                default = null;
+                description = ''
+                  Per-entry override of the upstream API base. When
+                  null (the default), openai entries use
+                  `upstreamApiBase` and other providers use no
+                  `api_base` at all (env-var driven).
+                '';
               };
               contextWindow = lib.mkOption {
                 type = nullOr int;
@@ -114,9 +200,83 @@ in
       default = [ ];
       description = ''
         Models to forward. Each entry is either a bare model-name string
-        or an attrset `{ name; contextWindow?; maxOutputTokens?; }`.
-        Each becomes an `openai/<name>` entry pointing at the upstream
-        API base; the optional fields add a `model_info` block.
+        or an attrset
+        `{ name; provider?; modelName?; apiBase?; contextWindow?; maxOutputTokens?; }`.
+        Each becomes a `<provider>/<name>` entry (default provider
+        `openai`) pointing at the upstream API base; the optional fields
+        add a `model_info` block. A `*` in `name` creates a LiteLLM
+        wildcard route (see the `provider` option description).
+      '';
+    };
+
+    anthropicBaseUrl = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        Base URL of an Anthropic-compatible upstream API (e.g. another
+        LiteLLM proxy). Wired into the litellm unit environment as
+        `ANTHROPIC_BASE_URL` so `anthropic/*` model entries (see
+        `models`) resolve their upstream from it. Not a secret; leave
+        null to not set the variable (litellm then falls back to
+        `https://api.anthropic.com`, or the same variable from
+        `anthropicAuthEnvironmentFile` when provided).
+      '';
+    };
+
+    anthropicAuthEnvironmentFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Environment file (systemd `EnvironmentFile=`) carrying the
+        Anthropic credentials for `anthropic/*` model entries, e.g. a
+        line `ANTHROPIC_AUTH_TOKEN=<bearer>` (litellm sends it as
+        `Authorization: Bearer`; `ANTHROPIC_API_KEY=<key>` would use
+        the `x-api-key` header instead). The file must not live in the
+        Nix store: secrets are provisioned via the separate `priv/`
+        repository. The intended shape is a `myconfig.secrets` (agenix)
+        entry whose decrypted env-format file is referenced here —
+        declare the stub in the public repo
+        (`myconfig.secrets."litellm-anthropic-env".dest =
+        "/run/agenix/litellm-anthropic-env";`) with `source = ...` set
+        in priv, and reference
+        `config.myconfig.secrets."litellm-anthropic-env".dest` here.
+        Leave null to not load any file.
+
+        Note: when the secret named by `anthropicAuthSecretName` is
+        provisioned, this module wires the environment file (and the
+        anthropic wildcard model entries) automatically; this option
+        exists for explicitly-provided environment files.
+      '';
+    };
+
+    anthropicAuthSecretName = lib.mkOption {
+      type = lib.types.str;
+      default = "litellm-anthropic-env";
+      description = ''
+        Name of the `myconfig.secrets` (agenix) entry whose decrypted
+        env-format file carries the Anthropic credentials
+        (`ANTHROPIC_AUTH_TOKEN=<bearer>`, optionally
+        `ANTHROPIC_BASE_URL=<upstream>`; litellm sends the token as
+        `Authorization: Bearer`).
+
+        When a secret with this name is provisioned — i.e. the host's
+        private repo sets `myconfig.secrets."<name>".source = ...` —
+        this module AUTOMATICALLY, additively on top of `models`:
+
+          * appends the wildcard model entries `claude-*` (what Claude
+            Code sends in the `model` field of `/v1/messages`) and
+            `anthropic/*` (litellm-convention prefixed names), both
+            routed upstream as env-var-driven `anthropic/<slug>` calls
+            (no `api_base`/`api_key`, so litellm resolves
+            `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` from the
+            unit environment);
+          * wires `services.litellm.environmentFile` to the secret's
+            decrypted path.
+
+        A host that does not provision the secret gets no anthropic
+        forwarding at all: no entries, no environment file, and the
+        evaluation is identical to before. Provisioning the secret in
+        the private repo is therefore the entire per-host opt-in.
       '';
     };
 
@@ -131,10 +291,72 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    services.litellm = {
-      enable = true;
-      settings.model_list = map mkForwardEntry cfg.models;
-    };
-  };
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable {
+      services.litellm = {
+        enable = true;
+        # The declared models, PLUS the anthropic wildcard entries once
+        # the credential secret is provisioned (priv repo opt-in).
+        # `lib.optionals` keeps the list byte-identical for hosts
+        # without the secret. Exact `model_name` matches always win over
+        # the wildcards, so existing entries are unaffected.
+        settings.model_list = map mkForwardEntry (
+          cfg.models
+          ++ lib.optionals haveAnthropicSecret [
+            {
+              # Claude Code sends bare slugs (`claude-sonnet-4-5`, …)
+              # in the `model` field of `/v1/messages`; route them
+              # upstream as `anthropic/<slug>`.
+              name = "claude-*";
+              provider = "anthropic";
+            }
+            {
+              # litellm-convention prefixed names for OpenAI-spec
+              # clients: request `anthropic/<model>` -> upstream
+              # `anthropic/<model>`.
+              name = "*";
+              modelName = "anthropic/*";
+              provider = "anthropic";
+            }
+          ]
+        );
+      };
+    })
+
+    # Plain (non-secret) environment. Each block is a *top-level* mkIf so
+    # that nothing is defined when the option is null: a definition that
+    # exists but is discharged by a nested `mkIf false` would still count
+    # as a definition of `services.litellm.environment` and silently
+    # discard the nixpkgs module's option defaults.
+    #
+    # Once ANY definition of `services.litellm.environment` exists, the
+    # nixpkgs module's option default (the telemetry-disabling vars
+    # SCARF_NO_ANALYTICS / DO_NOT_TRACK / ANONYMIZED_TELEMETRY) is
+    # discarded entirely, so this block re-asserts them with `mkDefault`
+    # (a host can still override them with a plain `=`).
+    (lib.mkIf (cfg.enable && cfg.anthropicBaseUrl != null) {
+      services.litellm.environment = {
+        SCARF_NO_ANALYTICS = lib.mkDefault "True";
+        DO_NOT_TRACK = lib.mkDefault "True";
+        ANONYMIZED_TELEMETRY = lib.mkDefault "False";
+        ANTHROPIC_BASE_URL = cfg.anthropicBaseUrl;
+      };
+    })
+
+    # Secret-safe credential injection via systemd `EnvironmentFile=`.
+    # Explicit option first (plain priority).
+    (lib.mkIf (cfg.enable && cfg.anthropicAuthEnvironmentFile != null) {
+      services.litellm.environmentFile = cfg.anthropicAuthEnvironmentFile;
+    })
+
+    # Automatic credential injection when the priv-provisioned secret
+    # exists (see `anthropicAuthSecretName`). Mutually exclusive with
+    # the block above by construction. `age.secrets.<name>.path` is the
+    # decrypted destination (`myconfig.secrets` default:
+    # `/run/agenix/<name>`); systemd reads the file as root when the
+    # service starts, before dropping to the dynamic user.
+    (lib.mkIf (cfg.enable && cfg.anthropicAuthEnvironmentFile == null && haveAnthropicSecret) {
+      services.litellm.environmentFile = config.age.secrets."${cfg.anthropicAuthSecretName}".path;
+    })
+  ];
 }
