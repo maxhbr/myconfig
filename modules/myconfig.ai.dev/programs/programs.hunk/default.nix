@@ -28,8 +28,8 @@
 #     skill registry of ../../skills so every enabled agent harness learns how to
 #     drive a live hunk review session.
 #   * the binary on the PATH of every sandbox tier — via the shared
-#     `myconfig.ai.dev.sandboxTools.extraPackages` and, for mysbx, its
-#     `extraTools` plus a read-only mount of the config above.
+#     `myconfig.ai.dev.sandboxTools.extraPackages` (mysbx consumes the
+#     same hook), plus for mysbx a read-only mount of the config above.
 #
 # Like `rtk`, this module is auto-enabled by the `myconfig.ai` umbrella
 # (`myconfig.ai.dev.hunk.enable = lib.mkDefault true` in ../default.nix):
@@ -113,13 +113,11 @@ in
     #
     # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners and the
-    # gVisor image); mysbx has its own `extraTools` extension point (see
-    # ../programs.rtk/default.nix for the same pair of hooks).
+    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners,
+    # the gVisor image and mysbx).
     myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
 
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
-      extraTools = [ cfg.package ];
       config.mounts = [
         {
           # Always present while this module is enabled: `settings` above is

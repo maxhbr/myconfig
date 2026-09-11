@@ -58,14 +58,9 @@ in
     #
     # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners and the
-    # gVisor image); mysbx has its own `extraTools` extension point (see
-    # ../programs.hunk and ../programs.rtk for the same pair of hooks).
+    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners,
+    # the gVisor image and mysbx).
     myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
-
-    myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
-      extraTools = [ cfg.package ];
-    };
 
     home-manager.sharedModules = [
       {

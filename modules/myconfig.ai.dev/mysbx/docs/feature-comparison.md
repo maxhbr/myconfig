@@ -86,7 +86,7 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Repo-local config trusted? | n/a | n/a | n/a | n/a | n/a | n/a | no from *inside* the repo (`config.md` D3); yes for the sidecar beside it, which the payload cannot write (`config.md` D7) |
 | Resource limits | none | none | none | VM `vcpu`/`mem` | `--memory --cpus --pids-limit` | prebuilt `resourceClasses` (vcpu/mem/slots) | `backend` limits foreseen (`config.md` D5), not implemented |
 | Refuses `$HOME` as CWD | yes (`rejectHomeCwd`) | — | yes (`rejectHomeCwd`) | yes | n/a (clone-based) | n/a (clone-based) | not implemented |
-| `myconfig.ai.sandboxTools` hook | yes | no | yes | yes | yes | yes | no |
+| `myconfig.ai.sandboxTools` hook | yes | no | yes | yes | yes | yes | yes (phase 2d: `extraPackages` → dev-tool closure, `extraEnv` → `[env]`) |
 | Result handoff | edits are live in `$PWD` | live | live | live | `merge` / `fetch` / `push` subcommands | import the branch from the clone | live (planned) |
 | Startup cost | ~none | ~none | ~none | seconds (boot) | ~a second (container) | prebuilt slot + host config | ~none (planned) |
 
@@ -135,8 +135,10 @@ Everything below exists in at least one tier above and has no counterpart in
   question.
 - **Refusing `$HOME` as CWD** — a cheap guardrail that both bubblewrap and
   nono wrappers already have.
-- **`myconfig.ai.sandboxTools` participation** — the cross-tier hook for
-  shared sandbox packages/env that five of six tiers honour.
+- ~~**`myconfig.ai.sandboxTools` participation** — the cross-tier hook for
+  shared sandbox packages/env that five of six tiers honour.~~ DONE (bd
+  myconfig-9mw): `mysbx` consumes the hook like the other tiers;
+  `mysbx.extraTools` stays as the mysbx-specific extension on top of it.
 - **Flag layer.** `cli.md` D6 defines flags > sidecar > user config >
   defaults, but no flag beyond `--help`/`--version` exists.
 
@@ -155,6 +157,8 @@ Everything below exists in at least one tier above and has no counterpart in
   almost 1:1 to the `[[mounts]]` table, so the flag layer can reuse it.
 - **Cross-tier hook**: honour `myconfig.ai.sandboxTools.extraPackages` /
   `.extraEnv` from the start; it is how the other tiers stay consistent.
+  DONE (bd myconfig-9mw) — `mysbx` consumes both halves of the hook;
+  `mysbx.extraTools` remains the mysbx-specific extension on top of it.
 
 ## Updating this document
 

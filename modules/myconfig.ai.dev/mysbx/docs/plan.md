@@ -81,7 +81,7 @@ every knob is a decision:
 | host `$HOME` bind | **no** | the host home stays unreachable; its *value* is not forwarded either — exposing parts of it is an explicit `[[mounts]]` entry of a trusted layer (`config.md` D6/D7) |
 | `~/tmp` rw | no | agent-session convenience, not a sandbox essential |
 | `/run` | no | D-Bus, PipeWire, agent sockets; the nix-daemon socket arrives via the `/nix/var/nix` row above (and only with a shared network); the resolver exception is the only `/run` path bound |
-| dev-tool closure on `PATH` | yes, as-is | git, tig, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](./nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list), plus whatever a feature module appends via `myconfig.ai.mysbx.extraTools` (today: `pi`, `opencode`, `rtk`, `hunk`) |
+| dev-tool closure on `PATH` | yes, as-is | git, tig, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](./nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list), plus the shared `myconfig.ai.dev.sandboxTools.extraPackages` (phase 2d) and whatever belongs in mysbx alone via `myconfig.ai.mysbx.extraTools` (today: `pi`, `opencode`, `rtk`, the selected multiplexer) |
 | `OPENAI_API_KEY` auto-forward | **no** | under `mysbx` a key is an ordinary user-config `[env]` entry (`config.md` D6) |
 
 ### Honest security claim
@@ -150,10 +150,15 @@ switch — `nono`'s `--allow-domain` / `--allow-connect-port` model is the
 closest existing precedent, and it is what makes "the sandbox may reach the
 model proxy and nothing else" expressible.
 
-**2d — the toolchain and `myconfig.ai.sandboxTools`.** The MVP hardcodes a
-dev-tool closure. Five of the six existing tiers honour
-`myconfig.ai.sandboxTools.extraPackages` / `.extraEnv`; `mysbx` should join
-them rather than grow a parallel list.
+**2d — the toolchain and `myconfig.ai.sandboxTools`.** DONE (bd
+myconfig-9mw): `mysbx` consumes
+`myconfig.ai.dev.sandboxTools.extraPackages` / `.extraEnv` like every
+other tier — the packages concatenate onto the dev-tool closure via
+`extraTools`, the env lands in the generated `[env]` table.
+`myconfig.ai.dev.mysbx.extraTools` stays as the mysbx-specific
+extension ON TOP of the hook (selected-multiplexer payload, per-agent
+CLIs like `pi`), never as a parallel copy of it: tooling wanted in
+EVERY tier goes through the hook exactly once.
 
 **2e — the workspace model.** `bwrap`/`nono`/`qemu` edit the live repo;
 `gvisor` and `microvm` use an isolated clone plus an explicit handoff
