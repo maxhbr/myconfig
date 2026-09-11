@@ -424,18 +424,7 @@ pub fn merge(
     // only the exotic symlinked-home case narrows, never widens.
     let home_canon = std::fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf());
     for (canon, _m) in user_canon.iter().chain(sidecar_canon.iter()) {
-        if *canon == home_canon {
-            return Err(Error::HomeExposed {
-                source: canon.clone(),
-                relation: HomeRelation::Equal,
-            });
-        }
-        if home_canon.starts_with(canon) {
-            return Err(Error::HomeExposed {
-                source: canon.clone(),
-                relation: HomeRelation::Contains,
-            });
-        }
+        check_home_exposure(canon, &home_canon)?;
     }
 
     // network: the sidecar may deny (false), not re-enable (D7). A layer
@@ -544,6 +533,57 @@ pub fn merge(
         git_dirs: approved_git_dirs,
         state_dirs,
     })
+}
+
+/// Resolve, canonicalize and validate one host path of a run flag
+/// (`--ro <path>` / `--rw <path>`, cli.md D16): the same D8 treatment
+/// a `[[mounts]]` path gets — `~/…` expands against `home`, a relative
+/// path resolves against `cwd` (the directory the operator typed
+/// the command in; a config file resolves against its own directory,
+/// and the command line's "own directory" is the cwd), and the result
+/// must exist and canonicalize. `key` is the flag spelling used in
+/// the error message.
+/// The home-exposure refusal (review-3 item 4) applies to the command
+/// line exactly as it applies to either config layer: a flag that
+/// re-exposes the host home would falsify the same report line.
+pub fn resolve_cli_path(raw: &str, flag: &str, home: &Path, cwd: &Path) -> Result<PathBuf, Error> {
+    let resolved = if let Some(rest) = raw.strip_prefix("~/") {
+        home.join(rest)
+    } else if Path::new(raw).is_absolute() {
+        PathBuf::from(raw)
+    } else {
+        cwd.join(raw)
+    };
+    let canon = std::fs::canonicalize(&resolved).map_err(|e| Error::Canonicalize {
+        file: cwd.to_owned(),
+        key: flag.to_owned(),
+        raw: raw.to_owned(),
+        path: resolved.clone(),
+        source: e.to_string(),
+    })?;
+    let home_canon = std::fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf());
+    check_home_exposure(&canon, &home_canon)?;
+    Ok(canon)
+}
+
+/// The home-exposure refusal shared by the merge and [`resolve_cli_path`]:
+/// a mount source may neither be the invoking user's home directory nor
+/// contain it (review-3 item 4, config.md D14). `home_canon` must be
+/// canonicalized (or the raw value when that failed — see `merge`).
+fn check_home_exposure(source: &Path, home_canon: &Path) -> Result<(), Error> {
+    if source == home_canon {
+        return Err(Error::HomeExposed {
+            source: source.to_path_buf(),
+            relation: HomeRelation::Equal,
+        });
+    }
+    if home_canon.starts_with(source) {
+        return Err(Error::HomeExposed {
+            source: source.to_path_buf(),
+            relation: HomeRelation::Contains,
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1633,5 +1673,96 @@ mod tests {
         )
         .unwrap();
         assert!(merged.state_dirs.is_empty());
+    }
+
+    // ---- resolve_cli_path (the --ro/--rw additions, cli.md D16) ------
+
+    #[test]
+    fn a_flag_path_resolves_the_three_spellings_like_a_mount_path() {
+        // D8, for the flags: `~/…` expands against $HOME, an absolute
+        // path is itself, a relative one resolves against the CWD — the
+        // directory the operator typed in, not the sidecar's.
+        let base = tmpdir("cli-path");
+        let home = dir(&base, &["home"]);
+        let cwd = dir(&base, &["cwd"]);
+        let under_home = dir(&home, &["granted"]);
+        let abs = dir(&base, &["abs"]);
+        let rel = dir(&cwd, &["rel"]);
+        // absolute
+        assert_eq!(
+            resolve_cli_path(&abs.to_string_lossy(), "--ro", &home, &cwd).unwrap(),
+            abs
+        );
+        // ~
+        assert_eq!(
+            resolve_cli_path("~/granted", "--ro", &home, &cwd).unwrap(),
+            under_home
+        );
+        // relative: resolved against the cwd, NOT against home or base
+        assert_eq!(resolve_cli_path("rel", "--ro", &home, &cwd).unwrap(), rel);
+    }
+
+    #[test]
+    fn a_missing_flag_path_is_a_canonicalize_error_naming_the_flag() {
+        // The run that names the exact spelling is the honest
+        // diagnosis: the error names the flag and the raw value.
+        let base = tmpdir("cli-missing");
+        let home = dir(&base, &["home"]);
+        let cwd = dir(&base, &["cwd"]);
+        let err = resolve_cli_path("does-not-exist", "--ro", &home, &cwd).unwrap_err();
+        match &err {
+            Error::Canonicalize { key, raw, .. } => {
+                assert_eq!(key, "--ro");
+                assert_eq!(raw, "does-not-exist");
+            }
+            other => panic!("wrong error: {other}"),
+        }
+        // The message names the flag spelling.
+        let msg = err.to_string();
+        assert!(msg.contains("`--ro`"), "{msg}");
+        assert!(msg.contains("does-not-exist"), "{msg}");
+    }
+
+    #[test]
+    fn a_flag_path_may_not_expose_the_home() {
+        // Review-3 item 4, for the command line: Equal (the home
+        // itself) and Contains (an ancestor of it) are both refused —
+        // the flags may not re-expose the host home any more than a
+        // layer entry may.
+        let base = tmpdir("cli-home");
+        let home = dir(&base, &["home"]);
+        let cwd = dir(&base, &["cwd"]);
+        // Equal: the home itself.
+        let err = resolve_cli_path(&home.to_string_lossy(), "--rw", &home, &cwd).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                Error::HomeExposed {
+                    relation: HomeRelation::Equal,
+                    ..
+                }
+            ),
+            "{err}"
+        );
+        // Contains: the base holds the home.
+        let err = resolve_cli_path(&base.to_string_lossy(), "--rw", &home, &cwd).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                Error::HomeExposed {
+                    relation: HomeRelation::Contains,
+                    ..
+                }
+            ),
+            "{err}"
+        );
+        // A directory UNDER the home is fine — the guard is about the
+        // whole home, not its children (grant the specific
+        // subdirectory instead).
+        let under = dir(&home, &["specific"]);
+        assert_eq!(
+            resolve_cli_path("~/specific", "--ro", &home, &cwd).unwrap(),
+            under
+        );
     }
 }

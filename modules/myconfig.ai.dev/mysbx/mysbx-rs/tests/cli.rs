@@ -3684,3 +3684,547 @@ fn gui_detaches_and_returns_before_the_terminal_exits() {
         "the terminal ran the same mysbx: {recorded}"
     );
 }
+
+// ---- --ro / --rw additions (cli.md D16) ------------------------------------
+
+/// A scratch root for fixtures the flags BIND AT THEIR OWN HOST PATH:
+/// the temp dir works unless it lies at or below a protected sandbox
+/// dest (`/tmp`, `/run`, `/nix/store` — the tmpfs, the run tree and
+/// the store of the base table, which no configured mount may shadow),
+/// which is the case on a dev host (TMPDIR unset → `/tmp`) but not in
+/// the nix build sandbox (TMPDIR = the build top). The real `$HOME` —
+/// a plain writable directory on every host that can run the suite —
+/// is the fallback. `None` when no candidate is writable: the caller
+/// skips, the same graceful-degradation the bwrap-availability tests
+/// use; the flags' behavior is pinned by the argv content assertions
+/// regardless of where the fixture lives.
+fn bindable_scratch(name: &str) -> Option<(PathBuf, PathBuf)> {
+    let probe = |base: PathBuf| -> Option<(PathBuf, PathBuf)> {
+        let protected = ["/tmp", "/run", "/nix/store"]
+            .iter()
+            .any(|p| base.starts_with(p));
+        if protected {
+            return None;
+        }
+        let dir = base.join(format!("mysbx-cli-bindable-{name}",));
+        std::fs::create_dir_all(&dir).ok()?;
+        Some((base, dir))
+    };
+    probe(std::env::temp_dir())
+        .or_else(|| std::env::var_os("HOME").map(PathBuf::from).and_then(probe))
+}
+
+/// [`bindable_scratch`] for the granted paths, panicking when no
+/// candidate exists (the tests that need it cannot assert anything
+/// without one).
+fn granted_scratch(name: &str) -> (PathBuf, PathBuf) {
+    bindable_scratch(name).unwrap_or_else(|| {
+        panic!("no writable scratch root outside the protected dests for `{name}`")
+    })
+}
+
+/// A granted directory and a granted file in `root`, as `PathBuf`s —
+/// created so the flags' canonicalization succeeds.
+fn granted_paths(root: &Path) -> (PathBuf, PathBuf) {
+    let dir = root.join("granted");
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    let file = root.join("granted-file.txt");
+    std::fs::write(&file, "content\n").unwrap();
+    (dir, file)
+}
+
+#[test]
+fn ro_flag_binds_the_path_read_only_for_this_run() {
+    // cli.md D16: `--ro <path>` adds one read-only bind for THIS run,
+    // after every configured mount, dest = the canonicalized source.
+    let (inv, _, _) = fixture_with_backend("ro-flag", &["--dry-run"]);
+    let (base, _) = granted_scratch("ro-flag");
+    let (dir, file) = granted_paths(&base);
+    let dir_c = dir.canonicalize().unwrap();
+    let file_c = file.canonicalize().unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--ro"]);
+    cmd.arg(&dir);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    assert!(
+        stdout.contains(&format!(
+            "--ro-bind\n{}\n{}\n",
+            dir_c.display(),
+            dir_c.display()
+        )),
+        "the ro bind is missing: {stdout}"
+    );
+    // A file binds just like a directory.
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--ro"]);
+    cmd.arg(&file);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    assert!(
+        stdout.contains(&format!(
+            "--ro-bind\n{}\n{}\n",
+            file_c.display(),
+            file_c.display()
+        )),
+        "the file ro bind is missing: {stdout}"
+    );
+}
+
+#[test]
+fn rw_flag_binds_the_path_read_write_for_this_run() {
+    // The same, `--bind` instead of `--ro-bind`.
+    let (inv, _, _) = fixture_with_backend("rw-flag", &["--dry-run"]);
+    let (base, _) = granted_scratch("rw-flag");
+    let (dir, _) = granted_paths(&base);
+    let dir_c = dir.canonicalize().unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--rw"]);
+    cmd.arg(&dir);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    assert!(
+        stdout.contains(&format!(
+            "--bind\n{}\n{}\n",
+            dir_c.display(),
+            dir_c.display()
+        )),
+        "the rw bind is missing: {stdout}"
+    );
+}
+
+#[test]
+fn ro_rw_flags_are_repeatable_and_ordered() {
+    // Repeatable: one bind per flag value, every `--ro` addition
+    // before every `--rw` one (so `--rw` wins a same-path tie no
+    // matter the typing order — the one predictable rule), the values
+    // of each flag in the order they were given.
+    let (inv, _, _) = fixture_with_backend("ro-rw-repeat", &["--dry-run"]);
+    let (base, _) = granted_scratch("ro-rw-repeat");
+    let (dir, file) = granted_paths(&base);
+    let dir_c = dir.canonicalize().unwrap().to_string_lossy().into_owned();
+    let file_c = file.canonicalize().unwrap().to_string_lossy().into_owned();
+    let args = vec![
+        "--dry-run".to_owned(),
+        "--rw".to_owned(),
+        file.to_string_lossy().into_owned(),
+        "--ro".to_owned(),
+        dir.to_string_lossy().into_owned(),
+        "--ro".to_owned(),
+        dir.to_string_lossy().into_owned(),
+    ];
+    let out = spawn_with_args(&inv, &args)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    // The additions, identified by their SOURCE path (the base
+    // table's own binds share the --ro-bind/--bind tokens, so the
+    // token alone is ambiguous). Each is `<flag> <src> <dest>` with
+    // dest == src.
+    let find = |flag: &str, src: &str, from: usize| {
+        (from..lines.len().saturating_sub(2))
+            .find(|&i| lines[i] == flag && lines[i + 1] == src && lines[i + 2] == src)
+            .unwrap_or_else(|| panic!("`{flag} {src}` is missing: {stdout}"))
+    };
+    // both --ro additions, in typing order, before the --rw one
+    let ro0 = find("--ro-bind", &dir_c, 0);
+    let ro1 = find("--ro-bind", &dir_c, ro0 + 1);
+    let rw = find("--bind", &file_c, ro1 + 1);
+    assert!(
+        ro0 < ro1 && ro1 < rw,
+        "the additions must be grouped: {stdout}"
+    );
+    // ... and nothing else was added.
+    let count = |flag: &str, src: &str| {
+        lines
+            .windows(3)
+            .filter(|w| w[0] == flag && w[1] == src)
+            .count()
+    };
+    assert_eq!(count("--ro-bind", &dir_c), 2, "{stdout}");
+    assert_eq!(count("--bind", &file_c), 1, "{stdout}");
+}
+
+#[test]
+fn flag_additions_come_after_the_configured_mounts() {
+    // D6 precedence: the flags apply ON TOP of the layers, and argv
+    // order is later-wins — so the additions are the LAST binds before
+    // the `--setenv` section, after the repo and every configured
+    // mount.
+    let (inv, repo, sidecar) = fixture("ro-flag-order", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\n[[mounts]]\npath = \"{}/sub\"\ndest = \"/data\"\nmode = \"ro\"\n",
+            repo.display()
+        ),
+    )
+    .unwrap();
+    let (base, _) = granted_scratch("flags");
+    let (granted, _) = granted_paths(&base);
+    let granted_c = granted
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--ro"]);
+    cmd.arg(&granted);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let configured = lines
+        .iter()
+        .position(|l| *l == "/data")
+        .expect("the configured mount is bound");
+    let flag_bind = lines
+        .iter()
+        .position(|l| *l == granted_c.as_str())
+        .expect("the flag addition is bound");
+    assert!(
+        configured < flag_bind,
+        "the flag bind must come after the configured mount: {stdout}"
+    );
+    // ... and before the environment section.
+    let setenv = lines.iter().position(|l| *l == "--setenv").unwrap();
+    assert!(
+        flag_bind < setenv,
+        "the flag bind must precede --setenv: {stdout}"
+    );
+}
+
+#[test]
+fn a_missing_flag_path_is_a_runtime_failure() {
+    // D8 for the flags: the path must exist and resolve; a typo is an
+    // ordinary runtime failure (exit 1) that names the spelling.
+    let (inv, _, _) = fixture_with_backend("ro-flag-missing", &["--dry-run"]);
+    let base = inv.cwd.parent().unwrap();
+    let missing = base.join("does-not-exist");
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--ro"]);
+    cmd.arg(&missing);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("mysbx: "), "{stderr}");
+    assert!(
+        stderr.contains("--ro"),
+        "the error must name the flag: {stderr}"
+    );
+    // No argv is printed for a failed run.
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!stdout.contains("--clearenv"), "{stdout}");
+}
+
+#[test]
+fn a_flag_path_exposing_the_home_is_refused() {
+    // The review-3 item 4 refusal holds for the command line exactly as
+    // it holds for either config layer: no flag may bind the host home
+    // (or an ancestor of it).
+    let (inv, _, _) = fixture_with_backend("ro-flag-home", &["--dry-run"]);
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--ro"]);
+    cmd.arg(&inv.home);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("home directory"),
+        "the refusal must name the home-exposure rule: {stderr}"
+    );
+}
+
+#[test]
+fn a_tilde_flag_path_expands_against_home() {
+    // The same three-path spellings as a `[[mounts]]` path (D8): `~/…`
+    // expands against $HOME — canonicalized, so the bind names the
+    // real directory. HOME lives in the bindable scratch root: the
+    // granted path binds at its own host path, which must not fall at
+    // or below a protected sandbox dest (the temp root may be /tmp).
+    let (base, _) = granted_scratch("tilde");
+    let inv = Invocation {
+        args: vec![],
+        cwd: base.join("repo"),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (repo, sidecar) = make_repo(&base, "repo");
+    init_sidecar(&sidecar);
+    std::fs::create_dir_all(&inv.home).unwrap();
+    std::fs::create_dir_all(&inv.xdg).unwrap();
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    assert_eq!(repo, inv.cwd);
+    let home = inv.home.canonicalize().unwrap();
+    let secret = home.join("granted-under-home");
+    std::fs::create_dir_all(&secret).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--ro"]);
+    cmd.arg("~/granted-under-home");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    assert!(
+        stdout.contains(&format!(
+            "--ro-bind\n{}\n{}\n",
+            secret.display(),
+            secret.display()
+        )),
+        "the tilde bind is missing: {stdout}"
+    );
+}
+
+#[test]
+fn a_relative_flag_path_resolves_against_the_cwd() {
+    // A config file resolves a relative path against its own
+    // directory; the command line's "own directory" is the cwd it was
+    // typed in. The repo lives in the bindable scratch root for the
+    // same protected-dest reason as the tilde test above.
+    let (base, _) = granted_scratch("relative");
+    let inv = Invocation {
+        args: vec![],
+        cwd: base.join("repo"),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (repo, sidecar) = make_repo(&base, "repo");
+    init_sidecar(&sidecar);
+    std::fs::create_dir_all(&inv.home).unwrap();
+    std::fs::create_dir_all(&inv.xdg).unwrap();
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    // The granted path is OUTSIDE the repo, reached by a RELATIVE
+    // spelling from the cwd: `../granted`. A path below the repo tree
+    // itself could not bind at its own dest — the repo content is
+    // writable in the sandbox, and a dest below a writable tree is the
+    // symlink-redirect guard's hard error — which is a different
+    // refusal than the one under test.
+    let granted = base.join("granted");
+    std::fs::create_dir_all(&granted).unwrap();
+    let args = vec![
+        "--dry-run".to_owned(),
+        "--ro".to_owned(),
+        "../granted".to_owned(),
+    ];
+    let out = spawn_with_args(&inv, &args)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let granted_c = granted.canonicalize().unwrap();
+    assert!(
+        stdout.contains(&format!(
+            "--ro-bind\n{}\n{}\n",
+            granted_c.display(),
+            granted_c.display()
+        )),
+        "the relative bind is missing: {stdout}"
+    );
+}
+
+#[test]
+fn the_flags_work_with_the_run_form_too() {
+    // cli.md D16: the additions are run flags, valid before the verb
+    // and after it for `run` — the same one pipeline runs both forms.
+    // `--dry-run` suffices: what is pinned is the PARSING (both
+    // positions accepted) and the resulting argv, not the exec.
+    let (inv, _, _) = fixture_with_backend("ro-flag-run", &[]);
+    let (base, _) = granted_scratch("flags");
+    let (granted, _) = granted_paths(&base);
+    let granted_c = granted.canonicalize().unwrap();
+    let expected = format!("--bind\n{}\n{}\n", granted_c.display(), granted_c.display());
+    // after the verb
+    let args = vec![
+        "run".to_owned(),
+        "--dry-run".to_owned(),
+        "--rw".to_owned(),
+        granted.to_string_lossy().into_owned(),
+        "--".to_owned(),
+        "true".to_owned(),
+    ];
+    let out = spawn_with_args(&inv, &args)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(
+        stdout.contains(&expected),
+        "the run-form rw bind is missing: {stdout}"
+    );
+    // before the verb
+    let args = vec![
+        "--rw".to_owned(),
+        granted.to_string_lossy().into_owned(),
+        "run".to_owned(),
+        "--dry-run".to_owned(),
+        "--".to_owned(),
+        "true".to_owned(),
+    ];
+    let out = spawn_with_args(&inv, &args)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(
+        stdout.contains(&expected),
+        "the before-verb rw bind is missing: {stdout}"
+    );
+}
+
+#[test]
+fn flag_binds_and_a_policy_file_rw_exposure() {
+    // Review-3 item 3, for the flags: an `--rw` of a directory that
+    // contains a trusted policy file must be refused — the payload
+    // writing it steers the next run, exactly like a config entry
+    // would be. The user config must live somewhere the fixture can
+    // bind the parent of, so it is placed in the bindable scratch
+    // root (the default temp root may lie under the protected /tmp,
+    // and the guard would fire for the wrong reason).
+    let (base, _) = granted_scratch("policy");
+    let inv = Invocation {
+        args: vec![],
+        cwd: base.join("repo"),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let (repo, sidecar) = make_repo(&base, "repo");
+    init_sidecar(&sidecar);
+    assert_eq!(repo, inv.cwd);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    // --rw of the XDG directory itself: it covers the policy file's
+    // guarded pathname entries (the file AND its parent directories).
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--rw"]);
+    cmd.arg(inv.xdg.join("mysbx"));
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("policy"),
+        "the refusal must name the policy exposure: {stderr}"
+    );
+}
+
+#[test]
+fn flag_binds_may_not_shadow_protected_dests() {
+    // A flag path that IS a protected sandbox path is refused by the
+    // argv builder's protected-dest check — the same refusal a config
+    // dest gets, reached through a source spelling.
+    let (inv, _, _) = fixture_with_backend("ro-flag-protected", &["--dry-run"]);
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--ro"]);
+    cmd.arg("/proc");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("protected"),
+        "the refusal must name the protected path: {stderr}"
+    );
+}
+
+#[test]
+fn the_flags_are_refused_for_the_verbs() {
+    // D16 position rule: valid before the verb and after it for `run`,
+    // refused for every other verb — the same words as `--multiplexer`.
+    for (i, (flag, verb)) in [
+        ("--ro", "init"),
+        ("--rw", "init"),
+        ("--ro", "edit"),
+        ("--rw", "edit"),
+        ("--ro", "gui"),
+        ("--rw", "gui"),
+        ("--ro", "help"),
+        ("--rw", "help"),
+        ("--ro", "version"),
+        ("--rw", "version"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let (inv, _, _) = fixture_user_backend(&format!("flag-verb-{i}"), &[]);
+        let args = vec![flag.to_string(), "/tmp".to_owned(), verb.to_string()];
+        let out = spawn_with_args(&inv, &args)
+            .output()
+            .expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(2), "{flag} {verb}: {stderr}");
+        assert!(
+            stderr.contains(&format!("is not valid with `{verb}`")),
+            "{flag} {verb}: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn a_missing_flag_value_is_a_usage_error() {
+    // `mysbx --ro` with nothing after it: exit 2, like a `--multiplexer`
+    // without a value.
+    let (inv, _, _) = fixture_user_backend("flag-no-value", &[]);
+    for flag in ["--ro", "--rw"] {
+        let out = spawn_with_args(&inv, &[flag])
+            .output()
+            .expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(2), "{flag}: {stderr}");
+        assert!(stderr.contains("requires a path"), "{flag}: {stderr}");
+    }
+}
+
+#[test]
+fn the_report_attributes_flag_mounts_to_the_command_line() {
+    // cli.md D10: every bind that reaches the argv belongs in the
+    // report, with its provenance — the flag additions are labeled
+    // `command line`, after the layers.
+    let (inv, _, sidecar) = fixture("ro-flag-report", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    let (base, _) = granted_scratch("flags");
+    let (granted, _) = granted_paths(&base);
+    let granted_c = granted.canonicalize().unwrap();
+    let args = vec![
+        "--verbose".to_owned(),
+        "--dry-run".to_owned(),
+        "--ro".to_owned(),
+        granted.to_string_lossy().into_owned(),
+    ];
+    let out = spawn_with_args(&inv, &args)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains(&format!(
+            "  ro {} -> {}  [command line]",
+            granted_c.display(),
+            granted_c.display()
+        )),
+        "the report must attribute the flag mount to the command line: {report}"
+    );
+}
+
+#[test]
+fn a_run_without_the_flags_is_byte_identical() {
+    // The compatibility promise of D16: a run without `--ro`/`--rw` is
+    // exactly what it was — the minimal golden, byte for byte.
+    let (inv, repo, _) = fixture_with_backend("flag-absent", &["--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert_eq!(stdout, expected_minimal_argv(&repo));
+}
+
+#[test]
+fn help_documents_the_ro_and_rw_flags() {
+    // The usage pairing guard of cli.md D5, end to end: `mysbx --help`
+    // mentions both flags.
+    let (inv, _, _) = fixture("flag-help", &["--help"]);
+    let (code, stdout, _stderr) = run_binary(&inv);
+    assert_eq!(code, 0);
+    for token in ["--ro", "--rw"] {
+        assert!(stdout.contains(token), "help does not mention {token}");
+    }
+}

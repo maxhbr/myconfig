@@ -391,6 +391,55 @@ One that starts and fails afterwards (no Wayland socket, say) is
 silent — nobody waits for its status, the same as the `& disown`
 form.
 
+### D16: `--ro <path>` / `--rw <path>` grant one host path for one run
+
+`mysbx --ro <path>... --rw <path>...` (and the same flags after `run`)
+binds each named host path into THIS run's sandbox — `--ro` read-only,
+`--rw` read-write — at its own canonicalized host path, on top of every
+configured mount. The flags are the interactive answer to "the sandbox
+needs one more directory": no `mysbx edit`, no config file round trip,
+no commit, and nothing persists — the next `mysbx` starts from the
+configuration alone.
+
+**Repeatable, run-scoped, position-typed.** Both flags take a value and
+may be given any number of times, before the verb (the bare form) and
+after it for `run` — the same position rule as `--multiplexer` (D14),
+and the same refusal for every other verb (`2`, `is not valid with
+...`). `gui` passes its tail verbatim (D15), so `mysbx gui --ro /data`
+reaches the inner run. A missing value is a usage error (`2`); an empty
+string or a lone `~` is refused at parse time for the same reason.
+
+**One value, three spellings, resolved eagerly.** Each value gets the
+exact D8 treatment a `[[mounts]]` path gets: `~/…` expands against
+`$HOME`, a relative path resolves against the **cwd** (a config file
+resolves against its own directory; the command line's "own directory"
+is the one it was typed in), and the result is canonicalized on the
+spot. A path that does not exist is a runtime failure (`1`) naming the
+flag and the spelling — the run that named it is the honest diagnosis,
+and bwrap would refuse it later anyway.
+
+**The guards a config entry answers to apply unchanged.** The addition
+is a `Mount` appended to the merged list, so the argv builder's own
+checks fire for it: the protected-dest table (`/tmp`, `/run`,
+`/nix/store`, ...), the writable-tree symlink-redirect refusal, the
+policy-file-writable refusal (an `--rw` of a directory that covers a
+trusted policy file steers the next run, exactly like a config entry
+would), and the home-exposure refusal (review-3 item 4): no flag may
+re-expose the host home, Equal or Contains.
+
+**Applied last, grouped, `--rw` wins a tie.** The additions are appended
+AFTER every configured mount, every `--ro` addition before every `--rw`
+one, the values of each flag in the order they were given. Mount order
+is argv order and a later bind wins, so the flags apply on top of
+everything — the same precedence D6 gives every flag (flags > sidecar >
+user > defaults) — and `--rw` beats `--ro` for the same path no matter
+the typing order, the one predictable rule.
+
+**The report says so.** The mounts of the command line are attributed
+`[command line]` in the `--verbose` report (D10), a provenance distinct
+from both config layers, so the report never claims a grant came from a
+file the operator never edited.
+
 ## Non-goals
 
 - No daemon, no background state beyond the sidecar directory.

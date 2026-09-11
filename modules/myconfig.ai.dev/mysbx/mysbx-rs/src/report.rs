@@ -52,6 +52,12 @@ pub struct Report<'a> {
     /// accepted sidecar mounts — so this single number attributes every
     /// mount to its layer without re-deriving the merge.
     pub user_mount_count: usize,
+    /// How many of `merged.mounts` came after both config layers —
+    /// the `--ro`/`--rw` additions of the command line (cli.md D16),
+    /// appended by the pipeline after the merge. The last
+    /// `cli_mount_count` mounts are attributed to the command line,
+    /// the ones before them split at `user_mount_count`.
+    pub cli_mount_count: usize,
     /// The forwarded host variables (already filtered to the ones that
     /// were actually set).
     pub host_env: &'a HostEnv,
@@ -144,6 +150,8 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     for (i, m) in r.merged.mounts.iter().enumerate() {
         let layer = if i < r.user_mount_count {
             "user config"
+        } else if i + r.cli_mount_count >= r.merged.mounts.len() {
+            "command line"
         } else {
             "sidecar config"
         };
@@ -376,6 +384,7 @@ mod tests {
             sidecar_config_exists: false,
             merged: &merged,
             user_mount_count: 1,
+            cli_mount_count: 0,
             host_env: &host,
             params: &params,
             bwrap_bin: "/synth/bin/bwrap",
@@ -474,6 +483,7 @@ mod tests {
             sidecar_config_exists: true,
             merged: &merged,
             user_mount_count: 1,
+            cli_mount_count: 0,
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
@@ -515,6 +525,7 @@ mod tests {
             sidecar_config_exists: true,
             merged: &merged,
             user_mount_count: 1,
+            cli_mount_count: 0,
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
@@ -557,6 +568,7 @@ mod tests {
             sidecar_config_exists: true,
             merged: &merged,
             user_mount_count: 2,
+            cli_mount_count: 0,
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
@@ -601,6 +613,7 @@ mod tests {
             sidecar_config_exists: true,
             merged: &merged,
             user_mount_count: 2,
+            cli_mount_count: 0,
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
@@ -642,6 +655,7 @@ mod tests {
             sidecar_config_exists: true,
             merged: &merged,
             user_mount_count: 2,
+            cli_mount_count: 0,
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
@@ -689,6 +703,7 @@ mod tests {
                     sidecar_config_exists: false,
                     merged: &merged,
                     user_mount_count: 1,
+                    cli_mount_count: 0,
                     host_env: &host,
                     params: &params,
                     bwrap_bin: "bwrap",
@@ -734,6 +749,59 @@ mod tests {
         assert!(
             plain.contains("payload:        shell /synth/bin/bash"),
             "{plain}"
+        );
+    }
+
+    #[test]
+    fn the_report_attributes_cli_additions_to_the_command_line() {
+        // cli.md D16/D10: the `--ro`/`--rw` additions are the LAST
+        // mounts of the merged list, so the last `cli_mount_count`
+        // ones are labeled `command line` — a distinct provenance from
+        // both config layers, so the report never claims a grant came
+        // from a file the operator never edited.
+        let (repo, mut merged, host) = fixture_report();
+        merged.mounts.push(Mount {
+            path: "/synth/granted".into(),
+            dest: None,
+            mode: Mode::Ro,
+        });
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            bin_sh: None,
+            nix_conf: None,
+            policy_paths: &[],
+            mux_entry: None,
+        };
+        let payload = Payload::Shell;
+        let out = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: false,
+            merged: &merged,
+            user_mount_count: 1,
+            cli_mount_count: 1,
+            host_env: &host,
+            params: &params,
+            bwrap_bin: "/synth/bin/bwrap",
+            payload: &payload,
+            dry_run: true,
+        });
+        assert!(
+            out.contains(&"##   ro /synth/granted -> /synth/granted  [command line]".to_owned()),
+            "{out:?}"
+        );
+        // The layers keep their labels.
+        assert!(
+            out.contains(&"##   rw /synth/shared -> /synth/shared  [user config]".to_owned()),
+            "{out:?}"
+        );
+        assert!(
+            out.contains(&"##   ro /synth/shared/sub -> /inside  [sidecar config]".to_owned()),
+            "{out:?}"
         );
     }
 }
