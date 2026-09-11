@@ -506,12 +506,19 @@ Rationale, in the order the constraints bite:
   (D15): explicitly declared subdirectories are backed by the sidecar
   (D10), the rest of the home stays ephemeral.
 
-**`HOME` and `PATH` are not configurable.** Both name paths the argv
+**`HOME`, `PATH`, and the TLS trust-anchor variables are not
+configurable.** `HOME` and `PATH` name paths the argv
 builder itself created — the tmpfs above and the shipped tool closure —
 so a layer that repointed them would break the sandbox rather than
-configure it. Both are therefore emitted *after* `[env]`, and bubblewrap
-lets the later `--setenv` win: an `[env] HOME` (or `PATH`) entry parses
-and appears in `--dry-run`, but never reaches the payload. `--verbose`
+configure it. `SSL_CERT_FILE`, `GIT_SSL_CAINFO` and
+`NIX_SSL_CERT_FILE` are the same kind of infrastructure when the
+wrapper pinned a CA bundle (bd myconfig-938): the bundle is a store
+path from mysbx's own closure, and a layer that repointed the
+variables at host content would widen the sandbox's trust anchors to
+whatever the host has there. All are therefore emitted *after* `[env]`,
+and bubblewrap lets the later `--setenv` win: an `[env] HOME` (or
+`PATH`, or `SSL_CERT_FILE`) entry parses and appears in `--dry-run`,
+but never reaches the payload. `--verbose`
 marks such an entry `[config, ignored — set by mysbx]` rather than
 pretending it applies. This is not an error, on purpose: rejecting it
 would turn a harmless (often inherited) config into a hard failure of

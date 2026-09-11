@@ -2897,6 +2897,51 @@ fn without_the_bin_sh_pin_no_bin_sh_is_bound() {
 }
 
 #[test]
+fn the_pinned_ca_bundle_reaches_the_argv_and_the_report() {
+    // MYSBX_CA_BUNDLE is a pin like MYSBX_NIX_CONF (bd myconfig-938):
+    // end-to-end, a set value must appear as the value of the three
+    // TLS env variables — AFTER any [env] entry of the same name, so
+    // the pin wins — and the report must name the bundle.
+    let (inv, _, _) = fixture_user_backend("ca-bundle-pin", &["--verbose", "--dry-run"]);
+    let bundle = inv.home.join("ca-bundle.crt");
+    std::fs::write(&bundle, "# a bundle\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+    cmd.env("MYSBX_CA_BUNDLE", &bundle);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
+        let lines: Vec<&str> = stdout.lines().collect();
+        let at = lines
+            .iter()
+            .position(|l| *l == key)
+            .unwrap_or_else(|| panic!("{key} is not set: {stdout}"));
+        assert_eq!(lines[at - 1], "--setenv");
+        assert_eq!(lines[at + 1], bundle.display().to_string());
+    }
+    assert!(
+        stdout.contains(&format!("## ca-bundle:      {}", bundle.display())),
+        "the report must name it: {stdout}"
+    );
+}
+
+#[test]
+fn without_the_ca_bundle_pin_no_tls_env_is_set() {
+    // Unset means "no TLS env variables", never "invent a path": the
+    // run relies on the /etc/ssl + /etc/static resolver binds alone.
+    let (inv, _, _) = fixture_user_backend("ca-bundle-unset", &["--verbose", "--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
+        assert!(!stdout.contains(key), "no {key} without a pin: {stdout}");
+    }
+    assert!(
+        stdout.contains("## ca-bundle:      (none"),
+        "the report must say the absence out loud: {stdout}"
+    );
+}
+
+#[test]
 fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
     // Review-3 item 3, as a real run sees it: the sidecar config
     // exists, and the user config grants `rw` on a directory that

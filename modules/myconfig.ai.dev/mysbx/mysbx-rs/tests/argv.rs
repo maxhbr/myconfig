@@ -69,6 +69,7 @@ fn params() -> Params<'static> {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
     }
@@ -454,18 +455,96 @@ fn golden_network_false() {
     // Review-1 finding 5: a denied network binds NO resolver paths
     // either — the resolver set belongs to the share, not the base.
     assert!(
-        !argv
-            .iter()
-            .any(|a| a.contains("resolv") || a.contains("/etc/hosts")),
+        !argv.iter().any(|a| a.contains("resolv")
+            || a.contains("/etc/hosts")
+            || a.contains("/etc/ssl")
+            || a.contains("/etc/static")),
         "no resolver binds when the network is denied: {argv:?}"
     );
     assert!(!argv.contains(&"/run/systemd/resolve".to_string()));
 }
 
 #[test]
+fn the_pinned_ca_bundle_sets_the_tls_env_after_config_env() {
+    // bd myconfig-938, step 2: a pinned `MYSBX_CA_BUNDLE` sets
+    // `SSL_CERT_FILE`/`GIT_SSL_CAINFO`/`NIX_SSL_CERT_FILE` AFTER the
+    // `[env]` block — infrastructure like `HOME` and `PATH`, so a
+    // layer that names them never reaches the payload — and BEFORE
+    // `--chdir`: section order is semantic, so the position is part
+    // of the pinned behavior.
+    let params = Params {
+        ca_bundle: Some("/nix/store/aaaa-nss-cacert-bundle/etc/ssl/certs/ca-bundle.crt"),
+        ..params()
+    };
+    let mut cfg = base(true);
+    cfg.env
+        .insert("SSL_CERT_FILE".into(), "/attacker-controlled".into());
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let bundle = "/nix/store/aaaa-nss-cacert-bundle/etc/ssl/certs/ca-bundle.crt";
+    for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
+        let at = argv
+            .windows(3)
+            .filter(|w| w[0] == "--setenv" && w[1] == key)
+            .last()
+            .unwrap_or_else(|| panic!("{key} is not set: {argv:?}"));
+        assert_eq!(at[2], bundle, "{key} must name the pinned bundle");
+    }
+    // The later --setenv wins in bubblewrap, so the infrastructure
+    // entries must come AFTER the [env] one — the pinned value wins.
+    let set_env_positions: Vec<usize> = argv
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| *a == "--setenv")
+        .map(|(i, _)| i)
+        .collect();
+    let cfg_ssl = argv
+        .windows(3)
+        .position(|w| {
+            w[0] == "--setenv" && w[1] == "SSL_CERT_FILE" && w[2] == "/attacker-controlled"
+        })
+        .expect("the [env] entry must still be in the argv (it shows up in --dry-run)");
+    let pinned_ssl = argv
+        .windows(3)
+        .position(|w| w[0] == "--setenv" && w[1] == "SSL_CERT_FILE" && w[2] == bundle)
+        .expect("the pinned entry must be in the argv");
+    assert!(cfg_ssl < pinned_ssl, "the pin must win: {argv:?}");
+    // And both come before the chdir: environment is section 6.
+    assert!(pinned_ssl < argv.iter().position(|a| a == "--chdir").unwrap());
+    let _ = set_env_positions;
+}
+
+#[test]
+fn without_a_pinned_ca_bundle_no_tls_env_is_set() {
+    // Unset means "no env variables", never "invent a path": pointing
+    // `SSL_CERT_FILE` at a nonexistent file would break every tool that
+    // honors it, worse than the resolver binds alone.
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
+        assert!(
+            !argv.contains(&key.to_string()),
+            "{key} must not be set without a pin: {argv:?}"
+        );
+    }
+}
+
+#[test]
 fn network_share_binds_the_resolver_set() {
     // Review-1 finding 5: sharing the namespace alone gives no DNS/TLS.
-    // The five resolver paths are bound ro, --ro-bind-try (they are
+    // The six resolver paths are bound ro, --ro-bind-try (they are
     // setup-dependent), right after --share-net and BEFORE the base
     // binds — so the golden files show them at a fixed position.
     let argv = bwrap_argv(
@@ -486,7 +565,7 @@ fn network_share_binds_the_resolver_set() {
         .windows(3)
         .filter(|w| w[0] == "--ro-bind-try")
         .map(|w| w[1].as_str())
-        .take(5)
+        .take(6)
         .collect();
     assert_eq!(
         resolver_binds,
@@ -495,6 +574,7 @@ fn network_share_binds_the_resolver_set() {
             "/etc/nsswitch.conf",
             "/etc/resolv.conf",
             "/etc/ssl",
+            "/etc/static",
             "/run/systemd/resolve",
         ]
     );
@@ -502,7 +582,7 @@ fn network_share_binds_the_resolver_set() {
     // daemon socket, which rides with the network switch (review-2
     // item 3). No sanitized nix.conf is pinned in these tests, so
     // nothing else follows.
-    let after_resolver = &argv[3 + 3 * 5..];
+    let after_resolver = &argv[3 + 3 * 6..];
     let base_try: Vec<&str> = after_resolver
         .windows(3)
         .filter(|w| w[0] == "--ro-bind-try")
@@ -557,6 +637,27 @@ fn golden_ripgrep_config_path_activation() {
     )
     .unwrap();
     assert_golden("ripgrep-config-path.txt", &argv);
+}
+
+#[test]
+fn golden_ca_bundle_pin() {
+    // bd myconfig-938, step 2: the pinned CA bundle becomes three
+    // infrastructure setenvs after `HOME`/`PATH`, before `--chdir`.
+    // The golden file pins the whole argv so the position — and the
+    // absence of any other change — is part of the contract.
+    let params = Params {
+        ca_bundle: Some("/nix/store/aaaa-nss-cacert/etc/ssl/certs/ca-bundle.crt"),
+        ..params()
+    };
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_golden("ca-bundle-pin.txt", &argv);
 }
 
 #[test]
@@ -1494,6 +1595,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: Some("/synth/store/mysbx-nix.conf"),
+        ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
     };
@@ -1530,6 +1632,7 @@ fn a_pinned_bin_sh_is_bound_read_only_into_the_empty_root() {
         tools_path: "/synth/bin",
         bin_sh: Some("/synth/bin/sh"),
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
     };
@@ -2401,6 +2504,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
     };
@@ -2428,6 +2532,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
     };
@@ -2457,6 +2562,7 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
     };
@@ -2479,6 +2585,7 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
     };
@@ -2502,6 +2609,7 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
     };
@@ -2527,6 +2635,7 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
     };
@@ -2553,6 +2662,7 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: &[], // nothing exists -> nothing protected
         mux_entry: None,
     };
@@ -2581,6 +2691,7 @@ fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
         tools_path: "/synth/bin",
         bin_sh: None,
         nix_conf: None,
+        ca_bundle: None,
         policy_paths: policy,
         mux_entry: None,
     }

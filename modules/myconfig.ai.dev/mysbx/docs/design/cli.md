@@ -137,7 +137,9 @@ the configured mounts with mode, source, in-sandbox destination and the
 layer that contributed it — the forwarded host variables and the `[env]`
 variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH` /
 `MYSBX_NIX_CONF` (the sanitized nix configuration, or `(none)`) /
-`MYSBX_BINSH` (the sandbox's `/bin/sh`, or `(none)`) values after
+`MYSBX_BINSH` (the sandbox's `/bin/sh`, or `(none)`) /
+`MYSBX_CA_BUNDLE` (the pinned CA bundle the TLS env variables point
+at, or `(none)`) values after
 their fallbacks, the payload, and whether the run will exec or stop at
 the argv.
 

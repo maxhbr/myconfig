@@ -47,6 +47,19 @@
 #                     never bound: it may hold `access-tokens` and
 #                     other credentials, which a read-only bind hands
 #                     to the payload just the same.
+#   MYSBX_CA_BUNDLE   a CA bundle (`ca-bundle.crt` of the `cacert`
+#                     package — nss-cacert — from THIS wrapper's
+#                     closure) whose store path the argv sets as
+#                     `SSL_CERT_FILE` / `GIT_SSL_CAINFO` /
+#                     `NIX_SSL_CERT_FILE` inside the sandbox, after
+#                     `[env]` like `HOME`/`PATH` (bd myconfig-938).
+#                     Belt and suspenders on top of the resolver binds
+#                     of `/etc/ssl` + `/etc/static`: the pinned bundle
+#                     works whatever the host's /etc layout is, and
+#                     is reproducible with the rest of the closure.
+#                     The same mechanism the gvisor agent image uses
+#                     (agent-image.nix sets the three variables at its
+#                     pinned bundle).
 #
 # All these pins are absolute store paths — nothing is left to host lookup.
 {
@@ -58,6 +71,15 @@
   writeText,
   bubblewrap,
   bash,
+  # The CA bundle pinned as `MYSBX_CA_BUNDLE` (bd myconfig-938): the
+  # `cacert` package (nss-cacert), carrying
+  # `etc/ssl/certs/ca-bundle.crt` at the path the argv sets the TLS
+  # env variables to. Injected by `callPackage` like every other
+  # closure input, so callers never spell it out and checks pin the
+  # same derivation the host closure uses. A parameter (not a hard
+  # `pkgs.` reference) keeps this file evaluable against any nixpkgs
+  # revision the caller brings.
+  cacert,
   # The terminal emulator of `mysbx gui` (docs/design/cli.md D15): the
   # window that runs the inner mysbx, on the HOST (in the graphical
   # session the command was typed in) — deliberately NOT part of the
@@ -233,6 +255,13 @@ let
   # caller passes no alacritty — the fallback PATH lookup of the
   # unwrapped crate applies then.
   terminalPin = if alacritty != null then "--set MYSBX_TERMINAL '${lib.getExe alacritty}'" else "";
+  # The pinned CA bundle (bd myconfig-938): the `cacert` package's
+  # (nss-cacert's) own `ca-bundle.crt`, at the in-package path the argv
+  # sets the three TLS env variables to. An absolute store path from
+  # THIS closure, like every other pin — the sandbox's TLS trust
+  # anchors are therefore reproducible and independent of the host's
+  # /etc layout.
+  caBundle = "${cacert}/etc/ssl/certs/ca-bundle.crt";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -250,6 +279,7 @@ symlinkJoin {
       --set MYSBX_BINSH '${bash}/bin/sh' \
       --set MYSBX_TOOLS_PATH '${toolsEnv}/bin' \
       --set MYSBX_NIX_CONF '${sandboxNixConf}' \
+      --set MYSBX_CA_BUNDLE '${caBundle}' \
       ${muxEntryPins} \
       ${terminalPin}
   '';
@@ -262,5 +292,6 @@ symlinkJoin {
 
   passthru = {
     inherit crate toolsEnv sandboxNixConf;
+    caBundle = caBundle;
   };
 }

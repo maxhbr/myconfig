@@ -234,6 +234,20 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     }
     p(format!("  HOME={SANDBOX_HOME}  [sandbox home]"));
     p(format!("  PATH={}  [tools]", r.params.tools_path));
+    // The pinned CA bundle belongs in the report for the same reason
+    // as the nix.conf and `/bin/sh` lines below: which trust anchors
+    // the sandbox's TLS tools use — the wrapper's own `nss-cacert`, or
+    // whatever the host `/etc` layout serves via the resolver binds —
+    // is a property of the run (bd myconfig-938).
+    for (k, v) in [
+        ("SSL_CERT_FILE", r.params.ca_bundle),
+        ("GIT_SSL_CAINFO", r.params.ca_bundle),
+        ("NIX_SSL_CERT_FILE", r.params.ca_bundle),
+    ] {
+        if let Some(b) = v {
+            p(format!("  {k}={b}  [pinned CA bundle]"));
+        }
+    }
 
     p(format!("bwrap:          {}", r.bwrap_bin));
     p(format!("shell:          {}", r.params.shell));
@@ -260,6 +274,16 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         r.params
             .bin_sh
             .unwrap_or("(none — no /bin/sh inside the sandbox)")
+    ));
+    // The CA bundle is a pin like `MYSBX_NIX_CONF`: named in the
+    // report both ways — the pinned store path when the wrapper set
+    // one, the honest absence when it did not (the run then relies on
+    // the resolver binds of `/etc/ssl` + `/etc/static` alone).
+    p(format!(
+        "ca-bundle:      {}",
+        r.params
+            .ca_bundle
+            .unwrap_or("(none — TLS trust anchors come from the /etc/ssl bind)")
     ));
     // The multiplexer (config.md D17 / cli.md D11): which one was
     // selected, what replaces the shell, where its private socket
@@ -313,7 +337,15 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
 /// The variables `bwrap_argv` sets last and no layer can override
 /// (config.md D14).
 fn infrastructure(key: &str) -> bool {
-    key == "HOME" || key == "PATH"
+    // `SSL_CERT_FILE`/`GIT_SSL_CAINFO`/`NIX_SSL_CERT_FILE` are set after
+    // `[env]` when a bundle is pinned (bd myconfig-938), so a layer that
+    // names them never reaches the payload — the same treatment
+    // `HOME` and `PATH` get.
+    key == "HOME"
+        || key == "PATH"
+        || key == "SSL_CERT_FILE"
+        || key == "GIT_SSL_CAINFO"
+        || key == "NIX_SSL_CERT_FILE"
 }
 
 fn present(exists: bool) -> &'static str {
@@ -372,6 +404,7 @@ mod tests {
             tools_path: "/synth/bin",
             bin_sh: None,
             nix_conf: None,
+            ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
         };
@@ -471,6 +504,7 @@ mod tests {
             tools_path: "/synth/bin",
             bin_sh: None,
             nix_conf: None,
+            ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
         };
@@ -513,6 +547,7 @@ mod tests {
             tools_path: "/synth/bin",
             bin_sh: None,
             nix_conf: None,
+            ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
         };
@@ -556,6 +591,7 @@ mod tests {
             tools_path: "/synth/bin",
             bin_sh: None,
             nix_conf: None,
+            ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
         };
@@ -601,6 +637,7 @@ mod tests {
             tools_path: "/synth/bin",
             bin_sh: None,
             nix_conf: None,
+            ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
         };
@@ -643,6 +680,7 @@ mod tests {
             tools_path: "/synth/bin",
             bin_sh: None,
             nix_conf: None,
+            ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
         };
@@ -690,6 +728,7 @@ mod tests {
                 tools_path: "/synth/bin",
                 bin_sh: None,
                 nix_conf: None,
+                ca_bundle: None,
                 policy_paths: &[],
                 mux_entry: Some("/synth/bin/mysbx-mux-entry"),
             };
@@ -770,6 +809,7 @@ mod tests {
             tools_path: "/synth/bin",
             bin_sh: None,
             nix_conf: None,
+            ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
         };
