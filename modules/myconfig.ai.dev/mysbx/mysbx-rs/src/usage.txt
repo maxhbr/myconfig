@@ -1,8 +1,8 @@
 mysbx - my sandboxing tool
 
 Usage:
-  mysbx [--dry-run] [--verbose] [--multiplexer <mux>]
-  mysbx run [--dry-run] [--verbose] -- COMMAND...
+  mysbx [--dry-run] [--verbose] [--multiplexer <mux>] [--ro <path>]... [--rw <path>]...
+  mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
   mysbx [COMMAND]
 
@@ -63,5 +63,23 @@ Options:
                 every other verb rejects the flag. A value this build
                 pinned no entry for is a refused run, like a config
                 layer selecting it
+  --ro <path>   bind one more host file or directory into the sandbox
+                of THIS run, read-only — on top of every `[[mounts]]`
+                entry of the config layers, in addition to them, never
+                replacing anything. <path> is a host path in the same
+                three forms a `[[mounts]]` path accepts (absolute,
+                `~/…` expanded against $HOME, or relative to the
+                current directory) and must exist. Repeatable: one
+                bind per value, every --ro before every --rw (so --rw
+                wins a same-path tie no matter the typing order), the
+                values of each flag in the order given. Valid before the
+                verb and after it for `run`; every other verb rejects
+                it. A path that is — or contains — the host home is
+                refused, exactly like a config entry naming it. The
+                next run uses the configuration again
+  --rw <path>   the same, read-write: the payload may write the host
+                path through the bind. The next run uses the
+                configuration again — for a persistent grant, put a
+                `[[mounts]]` entry in the sidecar config (`mysbx edit`)
   -h, --help    print this help
   -V, --version print the version
