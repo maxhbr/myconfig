@@ -88,6 +88,26 @@ let
     };
   };
 
+  difftasticExternal = {
+    home-manager.users.mhuber.programs.difftastic = {
+      enable = true;
+      git = {
+        enable = true;
+        mode = "external";
+      };
+    };
+  };
+
+  difftasticDifftoolOnly = {
+    home-manager.users.mhuber.programs.difftastic = {
+      enable = true;
+      git = {
+        enable = true;
+        mode = "difftool";
+      };
+    };
+  };
+
   scenarios = {
     # Ripgrep active: the file Home Manager writes exists, so both the
     # read-only mount and the variable pointing at its in-sandbox copy
@@ -112,6 +132,24 @@ let
     rgPlusExtra = generated [
       ripgrepOn
       { myconfig.ai.dev.mysbx.config.env.MYSBX_EVAL_TEST = "extra-value"; }
+    ];
+    # `GIT_EXTERNAL_DIFF` (bd myconfig-kvo): set exactly when Home
+    # Manager activates difftastic's `diff.external` — the override
+    # that restores the default unified diff inside the sandbox.
+    dftExternal = generated [ difftasticExternal ];
+    # `git.mode = "difftool"` leaves `git diff` untouched (only
+    # `git difftool` goes through difftastic), so no override is
+    # needed and none may be generated.
+    dftDifftool = generated [ difftasticDifftoolOnly ];
+    # Without difftastic the mounted `~/.config/git` carries no
+    # `diff.external`, and the baseline must not rewrite the host's
+    # (already default) diff behavior either.
+    dftOff = generated [ { } ];
+    # A host (or per-agent module) setting the SAME key wins, per the
+    # per-key `mkDefault` of the baseline.
+    dftOverridden = generated [
+      difftasticExternal
+      { myconfig.ai.dev.mysbx.config.env.GIT_EXTERNAL_DIFF = "/nix/store/0000custom-diff"; }
     ];
     # The workmux integration (D16): the switch and the in-sandbox
     # workmux config mount must appear in the generated layer. The
@@ -198,6 +236,10 @@ pkgs.runCommand "mysbx-generated-config-test"
       rgOff
       rgOverridden
       rgPlusExtra
+      dftExternal
+      dftDifftool
+      dftOff
+      dftOverridden
       workmuxOn
       workmuxOff
       muxHerdr
@@ -250,6 +292,23 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the extra [env] key is missing" "$rgPlusExtra"
     grep -q 'RIPGREP_CONFIG_PATH = "/mysbx-home/.config/ripgrep/ripgreprc"' "$rgPlusExtra" \
       || fail "the baseline was replaced instead of merged" "$rgPlusExtra"
+
+    # 4a. GIT_EXTERNAL_DIFF (bd myconfig-kvo): present exactly when Home
+    #     Manager activates difftastic's diff.external, pointing at the
+    #     mysbx-git-default-diff wrapper of the package closure.
+    grep -q '^GIT_EXTERNAL_DIFF = "/nix/store/.*-mysbx-git-default-diff/bin/mysbx-git-default-diff"$' "$dftExternal" \
+      || fail "GIT_EXTERNAL_DIFF is missing or not the wrapper" "$dftExternal"
+    if grep -q GIT_EXTERNAL_DIFF "$dftDifftool"; then
+      fail "GIT_EXTERNAL_DIFF must not be set when only the difftool mode is active" "$dftDifftool"
+    fi
+    if grep -q GIT_EXTERNAL_DIFF "$dftOff"; then
+      fail "GIT_EXTERNAL_DIFF must not be set without difftastic" "$dftOff"
+    fi
+    grep -q '^GIT_EXTERNAL_DIFF = "/nix/store/0000custom-diff"$' "$dftOverridden" \
+      || fail "the host override of GIT_EXTERNAL_DIFF did not win" "$dftOverridden"
+    if grep -q 'mysbx-git-default-diff' "$dftOverridden"; then
+      fail "the baseline GIT_EXTERNAL_DIFF survived the override" "$dftOverridden"
+    fi
 
     # 5. the workmux integration (D16/D17): the selection, plus the
     #    read-only mount of the in-sandbox workmux config below

@@ -560,6 +560,36 @@ fn golden_ripgrep_config_path_activation() {
 }
 
 #[test]
+fn golden_git_external_diff_activation() {
+    // bd myconfig-kvo: on a difftastic host the generated user layer
+    // (default.nix `baselineEnv`) carries `GIT_EXTERNAL_DIFF` pinned at
+    // the mysbx-git-default-diff wrapper, because the mounted
+    // `~/.config/git` sets `diff.external` and `GIT_EXTERNAL_DIFF` is
+    // the override that restores the default unified diff. This pins
+    // what that produces: the mount at /mysbx-home/.config/git and the
+    // setenv, in section order.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/home/u/.config/git",
+        Some("/mysbx-home/.config/git"),
+        Mode::Ro,
+    ));
+    cfg.env.insert(
+        "GIT_EXTERNAL_DIFF".into(),
+        "/nix/store/0000mysbx-git-default-diff/bin/mysbx-git-default-diff".into(),
+    );
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    assert_golden("git-external-diff.txt", &argv);
+}
+
+#[test]
 fn golden_both_layers_contribute_mounts() {
     // docs/TODOs/mvp-3-layer-merge.md end state, hand-built (a `Merged`
     // merge.rs would have produced and the argv builder alone sees): the
@@ -749,8 +779,12 @@ fn golden_command_payload_with_flag_looking_args() {
 fn no_run_no_host_home_beyond_declared_mounts() {
     // The "no" rows of the base table (docs/plan.md): `/run` is never
     // mounted, the HOST home directory is never reachable except through
-    // a mount that declares it, and there is no automatic
-    // `OPENAI_API_KEY` forward. The `$HOME` row is a different claim:
+    // a mount that declares it, and the BUILDER forwards nothing on its
+    // own — no variable appears that the caller did not hand in via
+    // `host_env` (`OPENAI_API_KEY` here stands in for the credential
+    // block; the CLI's collection step does forward it when the host
+    // sets it, bd myconfig-20j, but this test passes an empty host_env).
+    // The `$HOME` row is a different claim:
     // `$HOME` inside the sandbox is a tmpfs (config.md D14), backed by
     // nothing on the host — see `sandbox_home_is_a_tmpfs_outside_home`.
     let mut cfg = base(true);
@@ -803,7 +837,7 @@ fn no_run_no_host_home_beyond_declared_mounts() {
     assert!(!text.contains("$HOME"), "no literal $HOME: {text}");
     assert!(
         !text.contains("OPENAI_API_KEY"),
-        "no auto key forward: {text}"
+        "the builder must not invent forwards: {text}"
     );
     assert!(!argv.iter().any(|x| x == "~/tmp"), "no ~/tmp bind");
 }

@@ -40,8 +40,10 @@ pub enum Payload {
 
 /// Host environment values the operator chose to forward, keyed by
 /// variable name. The builder is pure, so it cannot read `std::env`
-/// itself; item 5 collects the forwarded host variables (`TERM COLORTERM
-/// LANG LC_ALL EDITOR VISUAL`, each only when set) into this map.
+/// itself; item 5 collects the forwarded host variables
+/// (`FORWARDED_ENV_VARS`, lib.rs — the terminal/locale block plus the
+/// model-credential block of bd myconfig-20j, each only when set) into
+/// this map.
 pub type HostEnv = BTreeMap<String, String>;
 
 /// The sandbox's own home directory (docs/design/config.md D14, the
@@ -250,12 +252,16 @@ impl PolicyPath {
 ///    `run -- CMD` is untouched
 ///
 /// Deliberately absent (see the base table's "no" rows): `/run`, `~/tmp`,
-/// a host-backed `/tmp/<name>`, the host home directory (only the empty
-/// tmpfs [`SANDBOX_HOME`] serves as `$HOME`), and any automatic
-/// `OPENAI_API_KEY` —
-/// under `mysbx` a key is an ordinary user-config `[env]` entry
-/// (docs/design/config.md D6). Nothing is forwarded implicitly: only the
-/// variables the caller put in `host_env` reach the sandbox.
+/// a host-backed `/tmp/<name>`, and the host home directory (only the
+/// empty tmpfs [`SANDBOX_HOME`] serves as `$HOME`). The builder itself
+/// still forwards NOTHING implicitly — only the variables the caller put
+/// in `host_env` reach the sandbox — but the CLI's collection step now
+/// DOES include the model-credential block (`OPENAI_*`, `ANTHROPIC_*`,
+/// `OPENROUTER_*`) in its allowlist (bd myconfig-20j, mirroring the
+/// jail/nono tiers): a credential lives only in the host environment, so
+/// an `[env]` entry cannot forward it, and a sandboxed agent without it
+/// cannot reach its model endpoint. See `FORWARDED_ENV_VARS` (lib.rs)
+/// and docs/plan.md "Environment".
 pub fn bwrap_argv(
     cfg: &Merged,
     repo: &Repo,

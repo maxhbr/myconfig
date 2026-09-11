@@ -105,7 +105,18 @@ module sets it only when Home Manager itself enables ripgrep with
 arguments, so it never points at a file that does not exist. A
 hand-written user config outside myconfig must reproduce the
 `[env]` entry itself — the mount alone is inert, and mysbx will not
-invent a variable the config never set.
+invent a variable the config never set. The generated `[env]` carries
+one further baseline entry, `GIT_EXTERNAL_DIFF` (bd myconfig-kvo): the
+mounted `~/.config/git` includes the host's `diff.external` — on a
+difftastic host that sends every `git diff` through the structural diff
+renderer, whose output agent payloads cannot parse (and whose binary
+is only reachable by its host store path). The baseline pins
+`GIT_EXTERNAL_DIFF` — which overrides `diff.external` — at a wrapper
+from the mysbx package closure that renders the DEFAULT unified diff,
+so `git diff` inside the sandbox behaves like a stock git. It is set
+exactly when Home Manager activates difftastic's `diff.external`
+(`programs.difftastic.enable` + `git.enable` with the `external`/`both`
+mode), so a host whose git already uses the default diff gets no entry.
 Other modules extend it by appending to `myconfig.ai.mysbx.config.mounts`.
 Outside myconfig the file stays an ordinary hand-written file; mysbx itself
 knows nothing about where it came from.

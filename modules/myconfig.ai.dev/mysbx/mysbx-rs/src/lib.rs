@@ -45,8 +45,30 @@ pub fn usage() {
 /// (docs/plan.md, "Environment"). Nothing else is forwarded implicitly.
 /// Public so the integration tests assert against the same list the
 /// pipeline reads, not a hand-copied one.
-pub const FORWARDED_ENV_VARS: &[&str] =
-    &["TERM", "COLORTERM", "LANG", "LC_ALL", "EDITOR", "VISUAL"];
+///
+/// The model-credential block (`OPENAI_*`, `ANTHROPIC_*`, `OPENROUTER_*`)
+/// mirrors the jail/nono tiers (`fns/bubblewrap-app.nix`,
+/// `fns/nono-app.nix`: always-`OPENAI_API_KEY` plus the claude-code
+/// module's `anthropicFwdEnv`): a credential lives only in the host
+/// environment — never in a store path — so an `[env]` entry cannot
+/// forward it, and a sandboxed agent without it cannot reach its model
+/// endpoint at all (bd myconfig-20j). Each name still forwards only
+/// when set, so a host without a proxy loses nothing.
+pub const FORWARDED_ENV_VARS: &[&str] = &[
+    "TERM",
+    "COLORTERM",
+    "LANG",
+    "LC_ALL",
+    "EDITOR",
+    "VISUAL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_BASE_URL",
+];
 
 /// Dispatch on the argument list (without argv[0]); returns the exit code.
 ///
