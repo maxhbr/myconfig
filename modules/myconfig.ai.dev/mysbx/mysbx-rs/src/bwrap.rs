@@ -125,6 +125,27 @@ pub struct Params<'a> {
     /// passes `None` and the sandbox runs `nix` with its built-in
     /// defaults.
     pub nix_conf: Option<&'a str>,
+    /// The **CA bundle** pinned from mysbx's own closure (`nss-cacert`'s
+    /// `ca-bundle.crt`), or `None` when this build pinned none (bd
+    /// myconfig-938).
+    ///
+    /// The resolver-set bind of `/etc/ssl` + `/etc/static` makes TLS work
+    /// on a NixOS host with its standard layout, but the argv promises
+    /// more than "works here": a host whose `/etc` layout differs, whose
+    /// ca-bundle is stale, or a payload tool that looks no further than
+    /// `SSL_CERT_FILE` should not be the reason a sandboxed agent cannot
+    /// reach its model endpoint. The gvisor agent-image tier pins the
+    /// same bundle for the same reason (agent-image.nix sets
+    /// `SSL_CERT_FILE`/`GIT_SSL_CAINFO`/`NIX_SSL_CERT_FILE` in the image
+    /// env). This pin is that mechanism's bubblewrap equivalent: the
+    /// wrapper pins a bundle from its OWN closure — reproducible, no
+    /// host state — and the argv sets the three env variables to it
+    /// AFTER `[env]`, like `HOME` and `PATH`, because they are
+    /// infrastructure for the same reason: a layer that repointed them
+    /// at a host path would widen the sandbox's view of the host `/etc`,
+    /// not configure the run. (An unwrapped build passes `None` and the
+    /// run relies on the resolver binds alone.)
+    pub ca_bundle: Option<&'a str>,
     /// The **trusted policy files** this run was configured from — the
     /// user config and the sidecar config, exactly as `load_layers`
     /// read them, each with the host paths that must stay unwritable
@@ -242,7 +263,10 @@ impl PolicyPath {
 ///    variables first, then `cfg.env` (which wins by being set later),
 ///    then the infrastructure variables `HOME` and `PATH` last — set
 ///    after `cfg.env` on purpose, so neither layer can point them
-///    somewhere else (config.md D14) — plus `TMUX_TMPDIR`
+///    somewhere else (config.md D14) — plus the CA-bundle variables
+///    `SSL_CERT_FILE`/`GIT_SSL_CAINFO`/`NIX_SSL_CERT_FILE` when the
+///    wrapper pinned a bundle (infrastructure for the same reason,
+///    bd myconfig-938), plus `TMUX_TMPDIR`
 ///    ([`MUX_SOCKET_DIR`]) for a run with a multiplexer, which is
 ///    infrastructure for the same reason (config.md D16/D17)
 /// 7. `--chdir` into the repo root
@@ -295,20 +319,32 @@ pub fn bwrap_argv(
         // root DNS or TLS: `/etc/resolv.conf` and friends live on the
         // host and are not part of the base table. Bind the resolver
         // set — the same path SET the `network` combinator of
-        // `fns/bubblewrap-app.nix` binds (its mechanism differs:
-        // runtime-deep-ro-bind walks entries and re-binds symlink
-        // targets; a plain `--ro-bind-try` is enough here because
-        // bwrap resolves a symlinked source at mount time, and on
-        // NixOS `/etc/ssl` resolves through `/etc/static` into
-        // `/nix/store`, which is a base bind — `/etc/static` and
-        // `/etc/ca-certificates` of the simpler wrapper serve other
-        // distros' layouts). `--ro-bind-try`: every entry is
+        // `fns/bubblewrap-app.nix` binds, plus `/etc/static`, which
+        // the simpler wrapper `fns/bubblewrap-simple-app.nix` taught
+        // us about: bwrap DOES resolve a symlinked SOURCE at mount
+        // time, but it does NOT follow the symlinks INSIDE the bound
+        // tree at lookup time — on NixOS `/etc/ssl/certs/ca-bundle.crt`
+        // and `/etc/ssl/trust-source` are themselves symlinks pointing
+        // at `/etc/static/ssl/...`, and for a long time the comment
+        // here claimed bwrap "resolves the chain into `/nix/store`,
+        // which is a base bind". It does not (bd myconfig-938,
+        // observed live: the targets dangled and every TLS tool
+        // inside the sandbox failed with `unable to get local issuer
+        // certificate`). `/etc/static` is therefore bound like its
+        // siblings, `--ro-bind-try`, so the symlink farm resolves;
+        // the simpler wrapper walks exactly the same set with
+        // runtime-deep-ro-bind, which re-binds symlink targets
+        // individually — a plain `--ro-bind-try` of the whole tree is
+        // enough here because bwrap mounts the directory itself, and
+        // every entry under it then follows in the sandbox like on
+        // the host). `--ro-bind-try`: every entry is
         // setup-dependent — a static `/etc/resolv.conf` needs only the
         // file, systemd-resolved symlinks it into
         // `/run/systemd/resolve` (bound as a directory, mirroring the
         // reference), `/etc/nsswitch.conf` may be unnecessary when
-        // glibc defaults suffice; a dangling symlink silently drops
-        // that one bind, like the reference's try-readonly.
+        // glibc defaults suffice, and `/etc/static` is a NixOS-ism
+        // other distros do not carry; a dangling symlink silently
+        // drops that one bind, like the reference's try-readonly.
         // `network = false` shares nothing and binds none of them
         // (review-1 finding 5).
         for path in RESOLVER_PATHS {
@@ -605,6 +641,29 @@ pub fn bwrap_argv(
     argv.push("--setenv".into());
     argv.push("PATH".into());
     argv.push(params.tools_path.into());
+    // The CA-bundle variables are infrastructure for the same reason as
+    // `HOME` and `PATH` (bd myconfig-938): they name a path THIS WRAPPER
+    // pinned from its own closure — a store path, no host state — so a
+    // layer that repointed them at, say, a host-mounted `/etc` would
+    // widen the sandbox's trust anchors to whatever the host has there,
+    // not configure the run. Set after `[env]`, so an entry spelling
+    // them out shows up in `--dry-run` but never reaches the payload.
+    // Only set when a bundle is pinned: an unwrapped build has no
+    // closure pin, and inventing a path here would point every
+    // `SSL_CERT_FILE`-honoring tool at a nonexistent file — worse than
+    // the resolver binds alone, which the `/etc/ssl` row already gives
+    // the run.
+    if let Some(ca_bundle) = params.ca_bundle {
+        for (key, value) in [
+            ("SSL_CERT_FILE", ca_bundle),
+            ("GIT_SSL_CAINFO", ca_bundle),
+            ("NIX_SSL_CERT_FILE", ca_bundle),
+        ] {
+            argv.push("--setenv".into());
+            argv.push(key.into());
+            argv.push(value.into());
+        }
+    }
     // `TMUX_TMPDIR` is infrastructure for the same reason (D16/D17): it
     // names a path inside the tmpfs home this builder created, and it
     // is what keeps the tmux socket out of every host-shared location
@@ -871,14 +930,20 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 /// The resolver and TLS paths bound read-only when the network is
-/// shared (review-1 finding 5) — the same path SET as the `network`
-/// combinator of `fns/bubblewrap-app.nix` (see the call site for why
-/// the mechanism can be a plain `--ro-bind-try` here).
+/// shared (review-1 finding 5) — the resolver path set of
+/// `fns/bubblewrap-app.nix`'s `network` combinator, plus `/etc/static`:
+/// on NixOS `/etc/ssl` is a symlink farm whose entries point at
+/// `/etc/static/ssl/...`, and bwrap resolves only the SOURCE path of a
+/// bind, not the symlinks inside it — without the `/etc/static` bind
+/// the CA bundle dangles inside the sandbox and TLS is broken (bd
+/// myconfig-938; see the call site for the full reasoning and why the
+/// mechanism can be a plain `--ro-bind-try` here).
 static RESOLVER_PATHS: &[&str] = &[
     "/etc/hosts",
     "/etc/nsswitch.conf",
     "/etc/resolv.conf",
     "/etc/ssl",
+    "/etc/static",
     "/run/systemd/resolve",
 ];
 
@@ -949,7 +1014,15 @@ fn base_binds() -> Vec<String> {
 /// with dest `/etc/ssl` (say, to install a project-local CA) shadows the
 /// ro-bind-try by later-wins — intended, same reasoning as
 /// [`SANDBOX_HOME`]; a dest of `/etc/resolv.conf` does NOT reach
-/// `/etc/localtime` or `/run` and so is not refused either.
+/// `/etc/localtime` or `/run` and so is not refused either. `/etc/static`
+/// gets the same treatment (bd myconfig-938): it is a resolver path, and
+/// a configured mount whose dest covers it — or lies under it — is
+/// allowed to shadow it, exactly like `/etc/ssl`. The deliberate
+/// asymmetry with the base binds above is the whole point: a resolver
+/// bind is a convenience the host layout decides, not sandbox
+/// infrastructure the argv promises in its report, so a layer that
+/// mounts its own CA bundle over `/etc/ssl` or `/etc/static` is a
+/// configuration choice, not an escape from a base-table guarantee.
 static PROTECTED_DESTS: &[&str] = &[
     "/",
     "/nix/store",
@@ -1443,6 +1516,7 @@ mod tests {
             tools_path: "/synth/bin",
             bin_sh: None,
             nix_conf: None,
+            ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
         }

@@ -295,6 +295,7 @@ in
       type = types.package;
       # The wrapped package from ./nix/mysbx.nix: the crate's binary with
       # MYSBX_BWRAP / MYSBX_SHELL / MYSBX_TOOLS_PATH / MYSBX_TERMINAL
+      # / MYSBX_CA_BUNDLE
       # pinned to store paths.
       # The unwrapped crate build stays reachable as
       # `<package>.passthru.crate` (used by nix/checks.nix).

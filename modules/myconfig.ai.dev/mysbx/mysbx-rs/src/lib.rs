@@ -868,6 +868,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // the bind, and tmux `run-shell` jobs & co. then fail like they
     // did before the pin existed.
     let bin_sh = env_opt("MYSBX_BINSH");
+    // The pinned CA bundle (bd myconfig-938), a pin like
+    // `MYSBX_NIX_CONF`: unset means "no env variables are set", never
+    // "point at the host's" — the resolver binds of `/etc/ssl` +
+    // `/etc/static` carry the host's bundle already, and inventing a
+    // path here would point every `SSL_CERT_FILE`-honoring tool at a
+    // nonexistent file. The Nix wrapper pins `nss-cacert`'s
+    // `ca-bundle.crt` from mysbx's own closure, so the sandbox's TLS
+    // trust anchors are reproducible and independent of the host's
+    // `/etc` layout.
+    let ca_bundle = env_opt("MYSBX_CA_BUNDLE");
     // Review-3 item 3: the trusted policy files of THIS run, handed to
     // the argv builder so it can refuse any `rw` bind that would expose
     // one to the payload.
@@ -899,6 +909,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         tools_path: &tools_path,
         bin_sh: bin_sh.as_deref(),
         nix_conf: nix_conf.as_deref(),
+        ca_bundle: ca_bundle.as_deref(),
         policy_paths: &policy_paths,
         mux_entry: mux_entry.as_deref(),
     };
