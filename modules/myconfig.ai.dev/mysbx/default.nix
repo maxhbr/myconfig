@@ -98,6 +98,28 @@ let
   # revisit if one ever does.
   hmRipgrep = config.home-manager.users.mhuber.programs.ripgrep;
 
+  # Home Manager's difftastic integration (bd myconfig-kvo): when it
+  # activates `diff.external` (the `external`/`both` git modes), every
+  # `git diff` on the host runs through the structural diff renderer —
+  # and the mounted `~/.config/git` carries that setting into the
+  # sandbox, where its output is useless to agent payloads that parse
+  # `git diff` (see ./nix/git-default-diff.nix for the full rationale
+  # and the call contract).
+  hmDifftastic = config.home-manager.users.mhuber.programs.difftastic;
+  hmDifftasticExternal =
+    hmDifftastic.enable
+    && hmDifftastic.git.enable
+    && builtins.elem hmDifftastic.git.mode [
+      "external"
+      "both"
+    ];
+
+  # The wrapper the baseline `[env]` below pins: renders the DEFAULT
+  # unified diff (git's own machinery minus `diff.external`), self-
+  # contained in its closure — its store path is reachable inside the
+  # sandbox through the ro `/nix/store` bind.
+  gitDefaultDiff = pkgs.callPackage ./nix/git-default-diff.nix { };
+
   # Baseline environment: regenerate inside the sandbox what the host
   # module layer activates through mechanisms other than files.
   #
@@ -114,9 +136,20 @@ let
   # file AND the variable (`enable` + non-empty `arguments`): a variable
   # pointing at a missing file is a hard `rg` failure, and mounting the
   # directory alone does not guarantee the file.
-  baselineEnv = lib.optionalAttrs (hmRipgrep.enable && hmRipgrep.arguments != [ ]) {
-    RIPGREP_CONFIG_PATH = homeDest "~/.config/ripgrep/ripgreprc";
-  };
+  #
+  # `GIT_EXTERNAL_DIFF` (bd myconfig-kvo): `GIT_EXTERNAL_DIFF` overrides
+  # the mounted `diff.external`, and pointing it at `gitDefaultDiff`
+  # makes `git diff` render the default unified diff again. Gated on
+  # `hmDifftasticExternal`, so a host whose git already uses the default
+  # diff gets no entry — the override is the REPAIR for the difftastic
+  # activation, not a blanket rewrite of every host's git behavior.
+  baselineEnv =
+    (lib.optionalAttrs (hmRipgrep.enable && hmRipgrep.arguments != [ ]) {
+      RIPGREP_CONFIG_PATH = homeDest "~/.config/ripgrep/ripgreprc";
+    })
+    // (lib.optionalAttrs hmDifftasticExternal {
+      GIT_EXTERNAL_DIFF = lib.getExe gitDefaultDiff;
+    });
 
   # `dest` is optional in the schema and there is no TOML null: a
   # `dest = null` key would be a type error in the strict parser, so it is
@@ -742,7 +775,8 @@ in
     # one is added.
     myconfig.ai.dev.mysbx.extraTools = selectedMuxTools;
 
-    # Baseline [env] (RIPGREP_CONFIG_PATH, review-3 item 6).
+    # Baseline [env] (RIPGREP_CONFIG_PATH — review-3 item 6 — and
+    # GIT_EXTERNAL_DIFF — bd myconfig-kvo).
     #
     # Each baseline value is defined with `mkDefault` INDIVIDUALLY, not
     # the attrset as a whole (review-4 item 4). `env` is an

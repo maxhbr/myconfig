@@ -132,8 +132,19 @@ config this repo manages read-only (`~/.config/git`, `~/.config/ripgrep`,
 explicit destination under `/mysbx-home` so the tools inside the sandbox
 find it where `$HOME` points, and `RIPGREP_CONFIG_PATH` in the generated
 `[env]` so the ripgrep mount is actually activated (the sandbox clears
-the host variable, and a mount alone is inert — review-3 item 6). A
-repo sidecar declares its own mounts independently — both
+the host variable, and a mount alone is inert — review-3 item 6). On a
+difftastic host the generated `[env]` additionally pins
+`GIT_EXTERNAL_DIFF` at a wrapper that renders the default unified diff:
+the mounted `~/.config/git` would otherwise send every `git diff`
+through the host's structural diff renderer, whose output agent
+payloads cannot parse (bd myconfig-kvo). Model credentials
+(`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`,
+`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `OPENROUTER_API_KEY`,
+`OPENROUTER_BASE_URL`) are forwarded from the host when set — the fixed
+allowlist of [`FORWARDED_ENV_VARS`](./mysbx-rs/src/lib.rs) (bd
+myconfig-20j), mirroring the always-`OPENAI_API_KEY` of the
+jail/nono tiers: a credential lives only in the host environment, so an
+`[env]` entry cannot forward it. A repo sidecar declares its own mounts independently — both
 configuration files are trusted (`docs/design/config.md` D7). Per-agent
 modules
 append their own config files to `myconfig.ai.mysbx.config.mounts` and

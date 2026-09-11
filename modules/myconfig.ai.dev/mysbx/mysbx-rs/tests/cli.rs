@@ -809,28 +809,55 @@ fn backend_bubblewrap_is_accepted() {
 
 #[test]
 fn only_set_host_variables_are_forwarded() {
-    // docs/plan.md "Environment": exactly TERM COLORTERM LANG LC_ALL
-    // EDITOR VISUAL, each only when actually set.
+    // docs/plan.md "Environment": exactly the allowlist of lib.rs
+    // (`FORWARDED_ENV_VARS`) — the terminal/locale block, the
+    // model-credential block of bd myconfig-20j (OPENAI_*, ANTHROPIC_*,
+    // OPENROUTER_*, mirroring the jail/nono tiers) — each only when
+    // actually set.
     let (inv, _, _) = fixture_user_backend("forward-env", &["--dry-run"]);
     let mut cmd = spawn(&inv);
-    cmd.env("TERM", "xterm-test").env("VISUAL", "nvim-test");
+    cmd.env("TERM", "xterm-test")
+        .env("VISUAL", "nvim-test")
+        .env("ANTHROPIC_AUTH_TOKEN", "secret-token")
+        .env("ANTHROPIC_BASE_URL", "https://example.internal");
     let out = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(out.status.code(), Some(0), "{stdout}");
     let lines: Vec<&str> = stdout.lines().collect();
 
-    // TERM and VISUAL are set; the other four are not.
+    // TERM, VISUAL and the two Anthropic credentials are set; the rest
+    // of the allowlist is not.
     let term = lines.iter().position(|x| *x == "TERM").unwrap();
     let visual = lines.iter().position(|x| *x == "VISUAL").unwrap();
+    let token = lines
+        .iter()
+        .position(|x| *x == "ANTHROPIC_AUTH_TOKEN")
+        .unwrap();
+    let base = lines
+        .iter()
+        .position(|x| *x == "ANTHROPIC_BASE_URL")
+        .unwrap();
     assert_eq!(lines[term + 1], "xterm-test");
     assert_eq!(lines[visual + 1], "nvim-test");
-    for absent in ["COLORTERM", "LANG", "LC_ALL", "EDITOR"] {
+    assert_eq!(lines[token + 1], "secret-token");
+    assert_eq!(lines[base + 1], "https://example.internal");
+    for absent in [
+        "COLORTERM",
+        "LANG",
+        "LC_ALL",
+        "EDITOR",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_BASE_URL",
+    ] {
         assert!(!lines.contains(&absent), "{absent} must not be forwarded");
     }
     // Forwarded variables precede PATH, which is always last of the
     // --setenv section.
     let path = lines.iter().position(|x| *x == "PATH").unwrap();
-    assert!(term < path && visual < path);
+    assert!(term < path && visual < path && token < path && base < path);
 }
 
 #[test]
