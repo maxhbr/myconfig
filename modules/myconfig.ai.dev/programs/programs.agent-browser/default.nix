@@ -22,16 +22,16 @@
 # option. The engine defaults to `chrome`.
 #
 # Sandboxes: the CLI itself is added to every sandbox tier via
-# `myconfig.ai.dev.sandboxTools.extraPackages` and mysbx's `extraTools`, but NOT
-# the browser — that stays an explicit per-host opt-in (closure size,
-# security surface). Inside a sandbox an agent can either run
-# `agent-browser install` (downloads a pinned Chrome into `~/.agent-browser`,
-# needs network and a writable home) or the host opts in:
+# `myconfig.ai.dev.sandboxTools.extraPackages` (mysbx consumes the same
+# hook), but NOT the browser — that stays an explicit per-host opt-in
+# (closure size, security surface). Inside a sandbox an agent can either
+# run `agent-browser install` (downloads a pinned Chrome into
+# `~/.agent-browser`, needs network and a writable home) or the host opts
+# in:
 #
 #   myconfig.ai.dev.sandboxTools.extraPackages = [ pkgs.chromium ];
 #   myconfig.ai.dev.sandboxTools.extraEnv.AGENT_BROWSER_EXECUTABLE_PATH =
 #     "${pkgs.chromium}/bin/chromium";
-#   myconfig.ai.dev.mysbx.extraTools = [ pkgs.chromium ];
 #
 # Upstream ships skill content next to the binary: `$out/skills` holds the
 # discovery stub (a directory `agent-browser/` with the `SKILL.md` deployed
@@ -114,17 +114,12 @@ in
     #
     # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners and the
-    # gVisor image); mysbx has its own `extraTools` extension point (see
-    # ../programs.hunk and ../programs.rtk for the same pair of hooks).
+    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners,
+    # the gVisor image and mysbx).
     #
     # NOTE: agent-browser requires a browser at runtime. Hosts that want
     # browser automation in sandboxes must also add chromium to the sandbox
     # closures — see the opt-in snippet in the header comment above.
     myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
-
-    myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
-      extraTools = [ cfg.package ];
-    };
   };
 }

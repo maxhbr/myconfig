@@ -209,7 +209,9 @@ needed to bind a worktrees directory that lives somewhere else.
 `pi` ([`programs.pi-coding-agent`](../../programs/programs.pi-coding-agent/default.nix)) is
 the first coding agent integrated with mysbx: on hosts where both features are
 enabled it adds its binary to the sandbox `PATH` via
-`myconfig.ai.mysbx.extraTools` and mounts its home-manager-managed
+`myconfig.ai.mysbx.extraTools` — on top of the shared
+`myconfig.ai.dev.sandboxTools.extraPackages` hook, which mysbx honours
+like every other tier — and mounts its home-manager-managed
 configuration (`~/.pi/agent/{extensions,agents,prompts,themes,keybindings.json}`
 and `~/.agents/skills`) read-only below `/mysbx-home`. Its state
 directory `~/.pi` is neither mounted nor persisted: it dies with the
@@ -249,7 +251,8 @@ dev-tool closure in [`nix/mysbx.nix`](./nix/mysbx.nix) instead, next to
 ### next:
 - the packaged bubblewrap tier is expected to evolve per phase 2 in
   [`docs/plan.md`](./docs/plan.md) (generated user config, credentials,
-  network policy, `sandboxTools` integration, further backends)
+  network policy, further backends — the `sandboxTools` integration of
+  phase 2d is done)
 ## after that:
 - container (via podman), with gvisor for additional layer of security
 - nono
