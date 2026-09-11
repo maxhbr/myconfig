@@ -127,13 +127,13 @@
       };
       ai = {
         enable = true;
-        pi-coding-agent.enable = true;
+        dev.pi-coding-agent.enable = true;
 
         # The `mysbx` sandboxing CLI (modules/myconfig.ai.dev/mysbx/README.md).
         # Like the other sandbox tiers it is enabled EXPLICITLY per host and
         # never implicitly through the broad `myconfig.ai.enable`; it only
         # puts the CLI on PATH.
-        mysbx.enable = true;
+        dev.mysbx.enable = true;
 
         pull_models = {
           enable = true;
@@ -151,13 +151,10 @@
         inference-cpp = {
           enable = true;
         };
-        lmstudio = {
+        dev.lmstudio = {
           enable = true;
         };
-        alpaca = {
-          enable = false;
-        };
-        hermes = {
+        dev.hermes = {
           enable = true;
           microvm = {
             enable = true;
