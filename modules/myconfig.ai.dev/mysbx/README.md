@@ -58,6 +58,20 @@ the window opens — detached like `mysbx gui & disown` — so the shell
 prompt comes back immediately and the window survives the terminal it
 was typed in.
 
+`mysbx --ro <path>` / `mysbx --rw <path>` (repeatable, and the same
+after `run`) grants one host path to the run it is typed in — read-only
+or read-write, bound at its own canonicalized path, on top of every
+configured mount, without touching any config file
+([`docs/design/cli.md`](./docs/design/cli.md) D16). The value is
+resolved like a `[[mounts]]` path (`~/…` against `$HOME`, a relative
+path against the cwd, canonicalized on the spot — a path that does not
+exist is an error naming the spelling), and every guard a config entry
+answers to applies to it unchanged: protected sandbox paths, the
+policy-file-writable refusal, and the home-exposure refusal (grant the
+specific subdirectory instead). Nothing persists — the next `mysbx`
+starts from the configuration alone — and the `--verbose` report
+attributes the grant to the `[command line]`, never to a file.
+
 `mysbx edit` opens the repo's sidecar `config.toml` in `$EDITOR` (or
 `$VISUAL`), creating the commented template first when it is missing
 (the second, equally explicit way to initialize a repo) —
@@ -220,7 +234,9 @@ needed to bind a worktrees directory that lives somewhere else.
 `pi` ([`programs.pi-coding-agent`](../../programs/programs.pi-coding-agent/default.nix)) is
 the first coding agent integrated with mysbx: on hosts where both features are
 enabled it adds its binary to the sandbox `PATH` via
-`myconfig.ai.mysbx.extraTools` and mounts its home-manager-managed
+`myconfig.ai.mysbx.extraTools` — on top of the shared
+`myconfig.ai.dev.sandboxTools.extraPackages` hook, which mysbx honours
+like every other tier — and mounts its home-manager-managed
 configuration (`~/.pi/agent/{extensions,agents,prompts,themes,keybindings.json}`
 and `~/.agents/skills`) read-only below `/mysbx-home`. Its state
 directory `~/.pi` is neither mounted nor persisted: it dies with the
@@ -260,7 +276,8 @@ dev-tool closure in [`nix/mysbx.nix`](./nix/mysbx.nix) instead, next to
 ### next:
 - the packaged bubblewrap tier is expected to evolve per phase 2 in
   [`docs/plan.md`](./docs/plan.md) (generated user config, credentials,
-  network policy, `sandboxTools` integration, further backends)
+  network policy, further backends — the `sandboxTools` integration of
+  phase 2d is done)
 ## after that:
 - container (via podman), with gvisor for additional layer of security
 - nono

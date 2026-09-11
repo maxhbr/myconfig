@@ -14,9 +14,13 @@
 #
 # Scenarios (see `scenarios` below): Home Manager ripgrep on with
 # arguments, on without arguments, off, a host overriding the baseline
-# `RIPGREP_CONFIG_PATH`, a host adding an unrelated `[env]` key, and the
-# workmux integration on / off, and the `multiplexer` selection with
-# its availability gate (../docs/design/config.md D16/D17).
+# `RIPGREP_CONFIG_PATH`, a host adding an unrelated `[env]` key, the
+# workmux integration on / off, the `multiplexer` selection with its
+# availability gate (../docs/design/config.md D16/D17), and the shared
+# `myconfig.ai.dev.sandboxTools` hook (phase 2d): its env must reach
+# the generated `[env]` table (its packages flow through
+# `extraTools`, which the module merges — they are not visible in this
+# TOML).
 {
   inputs,
   system,
@@ -29,6 +33,12 @@ let
   # module. Nothing here is ever built: the check reads
   # `xdg.configFile."mysbx/config.toml".source`, which is a
   # `pkgs.formats.toml` derivation of the generated attrset.
+  #
+  # `myconfig.ai.dev.sandboxTools`
+  # (../../sandboxes/myconfig.ai.sandboxTools.nix) is imported next to
+  # mysbx because mysbx consumes the hook (plan.md phase 2d): on real
+  # hosts the `myconfig.ai.dev` umbrella imports both, so the minimal
+  # evaluation here must do it by hand.
   # The evaluated configuration of the smallest NixOS + Home Manager
   # system that carries the mysbx module. `generated` reads the TOML
   # file out of it; `assertionsOf` reads the module's own assertions,
@@ -41,6 +51,7 @@ let
       inherit system;
       modules = [
         inputs.home.nixosModules.home-manager
+        ../../sandboxes/myconfig.ai.sandboxTools.nix
         ../default.nix
         {
           nixpkgs.hostPlatform = system;
@@ -161,6 +172,22 @@ let
     # And without it, the selection must be the plain shell: a host
     # without any integration keeps the pre-D16 payload.
     workmuxOff = generated [ { } ];
+    # The shared sandbox-tools hook (phase 2d): an `extraEnv` entry of
+    # the hook must appear in the generated `[env]` table like any
+    # baseline value, and a tier baseline key (RIPGREP_CONFIG_PATH) set
+    # by the hook too must resolve to the TIER's value (the `//` in
+    # ../default.nix) while the hook's other keys still arrive.
+    sandboxToolsEnv = generated [
+      ripgrepOn
+      {
+        myconfig.ai.dev.sandboxTools.extraEnv = {
+          MYSBX_HOOK_TEST = "hook-value";
+          RIPGREP_CONFIG_PATH = "/hook/clash-must-lose";
+        };
+      }
+    ];
+    # ... and without the hook, its key must not appear at all.
+    sandboxToolsEnvOff = generated [ ripgrepOn ];
     # The other selectable multiplexers (D17). `herdr` is available by
     # default (`herdr.package` defaults to `pkgs.herdr`), `aoe` is not
     # (it is gated on ../../programs/programs.agent-of-empires/ being enabled), so
@@ -217,6 +244,8 @@ pkgs.runCommand "mysbx-generated-config-test"
       workmuxOff
       muxHerdr
       muxTmux
+      sandboxToolsEnv
+      sandboxToolsEnvOff
       ;
     inherit assertionGate;
   }
@@ -301,6 +330,18 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the herdr selection is missing" "$muxHerdr"
     grep -q '^multiplexer = "tmux"$' "$muxTmux" \
       || fail "the tmux selection is missing" "$muxTmux"
+
+    # 7. the shared sandbox-tools hook (phase 2d): its env entries reach
+    #    the generated [env] table, a hook/baseline clash resolves to
+    #    the tier's value, and without the hook nothing leaks in.
+    grep -q 'MYSBX_HOOK_TEST = "hook-value"' "$sandboxToolsEnv" \
+      || fail "the sandboxTools.extraEnv key is missing from [env]" "$sandboxToolsEnv"
+    grep -q 'RIPGREP_CONFIG_PATH = "/mysbx-home/.config/ripgrep/ripgreprc"' "$sandboxToolsEnv" \
+      || fail "the tier baseline lost the clash against sandboxTools.extraEnv" "$sandboxToolsEnv"
+    if grep -q 'MYSBX_HOOK_TEST' "$sandboxToolsEnvOff"; then
+      fail "a sandboxTools.extraEnv key appeared without the hook" "$sandboxToolsEnvOff"
+    fi
+
     [ "$assertionGate" = ok ] \
       || { echo "mysbx generated-config test: assertion gate: $assertionGate" >&2; exit 1; }
 

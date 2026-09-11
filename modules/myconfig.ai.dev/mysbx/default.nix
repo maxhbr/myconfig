@@ -314,11 +314,19 @@ in
       default = [ ];
       example = literalExpression "[ pkgs.pi-coding-agent ]";
       description = ''
-        Extra packages appended to the dev-tool closure that is baked
-        into the sandbox `PATH` (`toolsEnv` in ./nix/mysbx.nix). This is
-        the extension point for the agent modules that integrate with
-        mysbx — ../programs.pi-coding-agent adds the `pi` binary here so
-        it is callable inside every sandbox of this host.
+        mysbx-specific packages appended on top of the dev-tool closure
+        that is baked into the sandbox `PATH` (`toolsEnv` in
+        ./nix/mysbx.nix) — the extension point for tooling that belongs
+        in mysbx ALONE and in no other tier: the selected
+        multiplexer's payload (set by this module itself) and
+        per-agent CLIs whose tier wiring is not the shared hook.
+
+        Shared tooling that EVERY sandbox tier should carry does NOT
+        belong here: it goes through
+        `myconfig.ai.dev.sandboxTools.extraPackages`
+        (../../sandboxes/myconfig.ai.sandboxTools.nix), which this
+        module consumes as well — the two lists concatenate in the
+        dev-tool closure.
 
         Anything listed here is on the PATH of every mysbx payload, so
         the same "security-relevant list, not packaging detail" rule as
@@ -773,23 +781,44 @@ in
     # a multiplexer launches come from the agent modules' own
     # `extraTools`. See `selectedMuxTools` for why only the selected
     # one is added.
-    myconfig.ai.dev.mysbx.extraTools = selectedMuxTools;
+    #
+    # Shared sandbox tooling (../../sandboxes/myconfig.ai.sandboxTools.nix),
+    # phase 2d: mysbx honours the cross-tier hook like the other
+    # tiers. The hook's packages land on the sandbox PATH here, via
+    # the same `extraTools` the agent modules append to — one `listOf`
+    # definition, so all three simply concatenate in `toolsEnv`.
+    #
+    # The phase-2d decision: `extraTools` STAYS as the mysbx-specific
+    # extension ON TOP of this hook (for the selected multiplexer's
+    # payload and per-tier agent CLIs), never as a parallel copy of
+    # it — a tool wanted in every tier goes through the hook, exactly
+    # once.
+    myconfig.ai.dev.mysbx.extraTools =
+      selectedMuxTools ++ config.myconfig.ai.dev.sandboxTools.extraPackages;
 
     # Baseline [env] (RIPGREP_CONFIG_PATH — review-3 item 6 — and
-    # GIT_EXTERNAL_DIFF — bd myconfig-kvo).
+    # GIT_EXTERNAL_DIFF — bd myconfig-kvo), merged with the shared
+    # sandbox-tool env from the hook. The `//` keeps
+    # that merge INSIDE one definition — on a key clash the tier's own
+    # baseline wins over the hook, the same precedence the bubblewrap
+    # tier gives its wrapper-specific `extraRuntimeEnv` over
+    # `sharedEnv` — and the per-key `mkDefault` below then lets a host
+    # or per-agent module win over both.
     #
-    # Each baseline value is defined with `mkDefault` INDIVIDUALLY, not
-    # the attrset as a whole (review-4 item 4). `env` is an
-    # `attrsOf str`, so the module system pushes definitions down per
-    # key: with a per-key `mkDefault` a host or per-agent module that
-    # sets the SAME key simply wins (default priority loses to normal),
+    # Each value is defined with `mkDefault` INDIVIDUALLY, not the
+    # attrset as a whole (review-4 item 4). `env` is an `attrsOf
+    # str`, so the module system pushes definitions down per key:
+    # with a per-key `mkDefault` a host or per-agent module that sets
+    # the SAME key simply wins (default priority loses to normal),
     # while a definition of a DIFFERENT key merges with the baseline.
     # Both other spellings are wrong: at normal priority two unequal
     # definitions of one key are an evaluation CONFLICT (the comment
     # here used to claim they override), and `mkDefault` on the whole
     # attrset would drop the entire baseline as soon as any other
     # module defines any key at all.
-    myconfig.ai.dev.mysbx.config.env = lib.mapAttrs (_: lib.mkDefault) baselineEnv;
+    myconfig.ai.dev.mysbx.config.env = lib.mapAttrs (_: lib.mkDefault) (
+      config.myconfig.ai.dev.sandboxTools.extraEnv // baselineEnv
+    );
 
     home-manager.sharedModules = [
       { home.packages = [ cfg.package ]; }

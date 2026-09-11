@@ -25,6 +25,11 @@
 #     which folds it into the guest package set.
 #   * gVisor sandbox image — `myconfig.ai.dev.gvisor-agent-sandbox` appends the
 #     packages to its `extraImagePackages` default.
+#   * `mysbx` — `myconfig.ai.dev.mysbx` folds the packages into its
+#     `extraTools` (the dev-tool closure on the sandbox `PATH`,
+#     `toolsEnv` in `mysbx/nix/mysbx.nix`) and the env into the generated
+#     user-layer `[env]` table (`mysbx/default.nix`; tier-baseline keys
+#     like `RIPGREP_CONFIG_PATH` win over hook keys on a clash).
 #
 # Deliberately EMPTY by default *from the host's side*: the sandbox tiers are
 # minimal by design
@@ -39,8 +44,9 @@
 #
 # Feature modules may add to the list too, gated behind their own enable
 # option, when their tool is wanted in every tier and belongs to no single
-# one: ../../programs/programs.hunk appends `pkgs.hunk` this way, so the reviewing tool
-# exists wherever an agent produces a changeset.
+# one: ../../programs/programs.hunk and ../../programs/programs.agent-browser
+# append their package this way, so the reviewing tool exists wherever an
+# agent produces a changeset.
 { lib, ... }:
 {
   options.myconfig.ai.dev.sandboxTools = with lib; {
@@ -50,10 +56,10 @@
       description = ''
         Extra packages added to EVERY agent sandbox tier (bubblewrap `agent-bubblewrap-*`
         wrappers, `myconfig.ai.dev.microvm` guests, the `sandboxed-*` microVM
-        runners and the gVisor sandbox image), in addition to each tier's own
-        default toolset. Default: none from the host — the sandboxes stay
-        minimal; enabled feature modules (e.g. `myconfig.ai.dev.hunk`) may append
-        their own tool.
+        runners, the gVisor sandbox image and the `mysbx` dev-tool closure), in
+        addition to each tier's own default toolset. Default: none from the
+        host — the sandboxes stay minimal; enabled feature modules (e.g.
+        `myconfig.ai.dev.hunk`) may append their own tool.
       '';
     };
 
@@ -64,8 +70,10 @@
         Extra environment variables set inside EVERY agent sandbox tier. In
         the bubblewrap jails these are applied unconditionally via `set-env`
         (not forwarded from the host); in the VM guests they land in the
-        guest's `environment.variables`. Package references can be
-        interpolated as usual, e.g.:
+        guest's `environment.variables`; in mysbx they are merged into the
+        generated user-layer `[env]` table (tier-baseline keys like
+        `RIPGREP_CONFIG_PATH` win over hook keys on a clash). Package
+        references can be interpolated as usual, e.g.:
 
         ```nix
         myconfig.ai.dev.sandboxTools.extraEnv.PLAYWRIGHT_MCP_BROWSER = "chromium";

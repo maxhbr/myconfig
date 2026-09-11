@@ -128,17 +128,18 @@ let
   # already shipped). `diffutils`, `gnutar`, `gzip` and `unzip` are
   # back in (bd myconfig-en7): they are not package management but
   # basic dev tools, and their absence broke sandbox payloads on the
-  # first `diff`/`tar`. Per plan.md
-  # phase 2d, `mysbx` should
-  # eventually join the shared `myconfig.ai.dev.sandboxTools` option instead
-  # of growing this parallel list — until then the list lives HERE, next
-  # to the code that consumes it, because (per mvp-6) "it is a
-  # security-relevant list, not packaging detail".
+  # first `diff`/`tar`. Per plan.md phase 2d, `mysbx` consumes the
+  # shared `myconfig.ai.dev.sandboxTools` hook like every other tier
+  # — the hook's packages arrive in `extraTools` via ../default.nix.
+  # The baseline list lives HERE, next to the code that consumes it,
+  # because (per mvp-6) "it is a security-relevant list, not packaging
+  # detail".
   #
-  # `extraTools` is the ONE extension point on top of that list: the
-  # agent modules that integrate with mysbx (today only
-  # ../../programs/programs.pi-coding-agent) add their own binary there instead
-  # of editing this list.
+  # `extraTools` is the ONE extension point on top of that list — the
+  # shared sandbox-tool packages of the hook plus mysbx-specific
+  # additions (the selected multiplexer's payload, per-agent CLIs like
+  # the `pi` of ../../programs/programs.pi-coding-agent) — instead of
+  # editing this list.
   toolsEnv = buildEnv {
     name = "mysbx-tools";
     paths = [

@@ -88,17 +88,25 @@ pub fn run(args: Vec<String>) -> i32 {
         // Bare `mysbx` is the primary action (docs/design/cli.md D2): enter
         // the sandbox for the current repository.
         None => sandbox(flags, bwrap::Payload::Shell),
-        // `--multiplexer` is rejected with the same words (D14): it names
-        // the interactive payload of a run, and no verb has one to choose
-        // — not even `run`, which never starts a session (D11). The
-        // guard sits BEFORE the verb arms so it holds for every verb,
-        // `run` included: a `--multiplexer` that reached `run` would be
-        // a flag the dispatcher and the runner each parse half of.
+        // The run-scoped flags are refused with the verb before any
+        // verb arm runs (D14 for `--multiplexer`, D16 for
+        // `--ro`/`--rw`): they name the mounts or the interactive
+        // payload of a run, and no OTHER verb has one to choose or
+        // add. `--multiplexer` is refused for `run` too (D11: a
+        // one-shot never starts a session), while `--ro`/`--rw` are
+        // accepted before `run` exactly like `--dry-run` is (D10:
+        // one position rule for all global flags) — `run_command`
+        // appends to the same lists, so both spellings are the same
+        // run.
         Some(other)
-            if flags.multiplexer.is_some()
+            if (flags.multiplexer.is_some()
+                || ((!flags.ro.is_empty() || !flags.rw.is_empty()) && other != "run"))
                 && matches!(other, "run" | "gui" | "init" | "edit" | "version" | "help") =>
         {
-            eprintln!("mysbx: --multiplexer is not valid with `{other}`");
+            eprintln!(
+                "mysbx: {} is not valid with `{other}`",
+                flags.first_run_scoped_name()
+            );
             eprintln!("try `mysbx --help`");
             2
         }
@@ -145,8 +153,8 @@ pub fn run(args: Vec<String>) -> i32 {
     }
 }
 
-/// The global flags of a sandbox run (cli.md D9, D10, D14).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// The global flags of a sandbox run (cli.md D9, D10, D14, D16).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Flags {
     pub dry_run: bool,
     pub verbose: bool,
@@ -155,23 +163,49 @@ pub struct Flags {
     /// merged `multiplexer` of the configuration layers. `None` means
     /// the flag was not given and the configuration decides.
     pub multiplexer: Option<config::Multiplexer>,
+    /// The `--ro <path>` additions (cli.md D16): host paths bound
+    /// read-only into THIS run's sandbox, on top of the merged
+    /// mounts. The raw spellings as typed; the pipeline resolves and
+    /// canonicalizes them like a `[[mounts]]` path (D8), a relative
+    /// one against the cwd.
+    pub ro: Vec<String>,
+    /// The `--rw <path>` additions (cli.md D16): the same, read-write.
+    pub rw: Vec<String>,
 }
 
 impl Flags {
-    fn any(self) -> bool {
-        self.dry_run || self.verbose
+    fn any(&self) -> bool {
+        self.dry_run || self.verbose || !self.ro.is_empty() || !self.rw.is_empty()
     }
 
     /// The flag named in the "not valid with `<verb>`" usage error —
     /// whichever was set, `--dry-run` first (it is the older, more
-    /// dangerous-sounding promise). `--multiplexer` is not listed:
+    /// dangerous-sounding promise), then `--verbose`, then the run-
+    /// scoped `--ro`/`--rw`. `--multiplexer` is not listed:
     /// it is run-scoped, not a promise about the output, and the
     /// refusal names the flags that are.
-    fn first_name(self) -> &'static str {
+    fn first_name(&self) -> &'static str {
         if self.dry_run {
             "--dry-run"
-        } else {
+        } else if self.verbose {
             "--verbose"
+        } else if !self.ro.is_empty() {
+            "--ro"
+        } else {
+            "--rw"
+        }
+    }
+
+    /// The run-scoped flag named in the dispatcher's verb refusal —
+    /// `--multiplexer` first (it is the older flag), then the first
+    /// `--ro`/`--rw` addition.
+    fn first_run_scoped_name(&self) -> &'static str {
+        if self.multiplexer.is_some() {
+            "--multiplexer"
+        } else if !self.ro.is_empty() {
+            "--ro"
+        } else {
+            "--rw"
         }
     }
 }
@@ -242,6 +276,44 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                 rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
                 continue;
             }
+            "--ro" | "--rw" => {
+                // cli.md D16: a value-taking, REPEATABLE run flag. The
+                // same three-path spellings as a `[[mounts]]` path
+                // (D8) are accepted — absolute, `~/…` and relative
+                // (resolved against the cwd later, by the pipeline
+                // that knows it). A `~` that is not the `~/` prefix
+                // cannot be resolved by anything, so it is the
+                // parser's own refusal like it is the config
+                // parser's; everything else is resolved — and
+                // existence-checked — by `resolve_cli_path`.
+                let flag = first.as_str();
+                let value = match tail.split_first() {
+                    Some((v, _)) => v,
+                    None => {
+                        eprintln!("mysbx: {flag} requires a path");
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                };
+                if value.is_empty() {
+                    eprintln!("mysbx: {flag} must not be empty");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                if value.starts_with('~') && !value.starts_with("~/") {
+                    eprintln!("mysbx: {flag}: only the `~/` prefix is supported, not `~` alone or `~user`: `{value}`");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                if flag == "--ro" {
+                    flags.ro.push(value.clone());
+                } else {
+                    flags.rw.push(value.clone());
+                }
+                // The value argument is consumed with the flag.
+                rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
+                continue;
+            }
             _ => break,
         }
         rest = tail;
@@ -280,6 +352,33 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                 eprintln!("usage: mysbx run [--dry-run] [--verbose] -- COMMAND...");
                 return 2;
             }
+            "--ro" => {
+                // cli.md D16: the additions are run flags, so `run`
+                // accepts them too — the same one pipeline runs both
+                // forms. Repeatable, like the bare form.
+                let value = match args.get(idx + 1) {
+                    Some(v) => v.clone(),
+                    None => {
+                        eprintln!("mysbx run: --ro requires a path");
+                        eprintln!("usage: mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND...");
+                        return 2;
+                    }
+                };
+                flags.ro.push(value);
+                idx += 2;
+            }
+            "--rw" => {
+                let value = match args.get(idx + 1) {
+                    Some(v) => v.clone(),
+                    None => {
+                        eprintln!("mysbx run: --rw requires a path");
+                        eprintln!("usage: mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND...");
+                        return 2;
+                    }
+                };
+                flags.rw.push(value);
+                idx += 2;
+            }
             "--" => {
                 idx += 1;
                 break;
@@ -287,7 +386,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
             other => {
                 eprintln!("mysbx run: unexpected argument: {other}");
                 eprintln!(
-                    "usage: mysbx run [--dry-run] [--verbose] [--multiplexer <mux>] -- COMMAND..."
+                    "usage: mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND..."
                 );
                 return 2;
             }
@@ -296,7 +395,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
     let cmd = &args[idx..];
     if cmd.is_empty() {
         eprintln!("mysbx run: no command given after `--`");
-        eprintln!("usage: mysbx run [--dry-run] [--verbose] -- COMMAND...");
+        eprintln!("usage: mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND...");
         return 2;
     }
     sandbox(flags, bwrap::Payload::Command(cmd.to_vec()))
@@ -650,6 +749,57 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         merged.multiplexer = mux;
     }
 
+    // 3aa. the `--ro`/`--rw` additions (cli.md D16): appended to the
+    // merged mounts, after every configured entry — every `--ro`
+    // addition before every `--rw` one, the values of each flag in
+    // the order they were given, so `--rw` wins a same-path tie no
+    // matter the typing order. Mount order is
+    // argv order and a later bind wins inside the sandbox, so the
+    // flags that override nothing a layer decided and apply on top
+    // of everything are the LAST binds — the same precedence D6
+    // gives every flag (flags > sidecar > user > defaults). Like a
+    // `[[mounts]]` path each value is resolved and canonicalized
+    // eagerly (D8): `~/…` against `$HOME`, a relative path against
+    // the cwd (a config file resolves against its own directory; the
+    // command line's "own directory" is the one it was typed in),
+    // and a path that does not exist is a runtime failure — bwrap
+    // would refuse it anyway, and the run that names the exact
+    // spelling is the honest diagnosis. The home-exposure refusal
+    // (review-3 item 4) applies too: the flags may not re-expose the
+    // host home any more than a layer entry may.
+    if !flags.ro.is_empty() || !flags.rw.is_empty() {
+        let cwd = match std::env::current_dir() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("mysbx: cannot determine the current directory: {e}");
+                return 1;
+            }
+        };
+        for (flag, values, mode) in [
+            ("--ro", &flags.ro, config::Mode::Ro),
+            ("--rw", &flags.rw, config::Mode::Rw),
+        ] {
+            for raw in values {
+                let canon =
+                    match merge::resolve_cli_path(raw, flag, std::path::Path::new(&home), &cwd) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            eprintln!("mysbx: {e}");
+                            return 1;
+                        }
+                    };
+                merged.mounts.push(config::Mount {
+                    path: canon.to_string_lossy().into_owned(),
+                    dest: None,
+                    mode,
+                });
+            }
+        }
+    }
+    // How many of the merged mounts came from the command line — the
+    // report's provenance cut, one past the last configured entry.
+    let cli_mount_count = flags.ro.len() + flags.rw.len();
+
     // 3b. the state-dir backing stores (docs/design/config.md D15):
     // one directory per merged `state-dirs` entry under
     // `<sidecar>/state/`, so the rw binds of the argv have an existing
@@ -780,6 +930,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
             sidecar_config_exists,
             merged: &merged,
             user_mount_count,
+            cli_mount_count,
             host_env: &host_env,
             params: &params,
             bwrap_bin: &bwrap_bin,
@@ -1574,7 +1725,9 @@ mod tests {
             Flags {
                 dry_run: true,
                 verbose: true,
-                multiplexer: None
+                multiplexer: None,
+                ro: Vec::new(),
+                rw: Vec::new(),
             }
         );
         assert_eq!(rest, &s(&["run"])[..]);
@@ -1655,6 +1808,47 @@ mod tests {
             run(vec!["run".into(), "--multiplexer".into(), "tmux".into()]),
             2
         );
+    }
+
+    // The `--ro`/`--rw` additions (cli.md D16): value-taking, repeatable,
+    // stored raw (the pipeline resolves them against `$HOME` and the
+    // cwd), and refused with every verb but `run`.
+    #[test]
+    fn ro_rw_flags_parse_repeat_and_are_verb_scoped() {
+        let s = |v: &[&str]| -> Vec<String> { v.iter().map(|x| (*x).to_string()).collect() };
+
+        // Repeatable, in order, both flags interleaved with the others.
+        let args = s(&["--ro", "/a", "--verbose", "--rw", "/b", "--ro", "/c"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert_eq!(flags.ro, s(&["/a", "/c"]));
+        assert_eq!(flags.rw, s(&["/b"]));
+        assert!(flags.verbose);
+        assert!(rest.is_empty());
+
+        // A missing value is a usage error.
+        assert_eq!(split_global_flags(&s(&["--ro"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--rw"])), Err(2));
+
+        // An empty or bare-`~` value is the parser's own refusal (the
+        // same spellings the config parser rejects).
+        assert_eq!(split_global_flags(&s(&["--ro", ""])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--rw", "~"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--ro", "~user/x"])), Err(2));
+
+        // Relative and `~/…` spellings parse — the pipeline resolves
+        // them, so the parser must not reject what D8 defines.
+        let (flags, _) = split_global_flags(&s(&["--ro", "rel/sub", "--rw", "~/cache"])).unwrap();
+        assert_eq!(flags.ro, s(&["rel/sub"]));
+        assert_eq!(flags.rw, s(&["~/cache"]));
+
+        // Every verb but `run` refuses them.
+        assert_eq!(run(vec!["--ro".into(), "/a".into(), "init".into()]), 2);
+        assert_eq!(run(vec!["--rw".into(), "/a".into(), "edit".into()]), 2);
+        assert_eq!(run(vec!["--ro".into(), "/a".into(), "gui".into()]), 2);
+        assert_eq!(run(vec!["--ro".into(), "/a".into(), "help".into()]), 2);
+        assert_eq!(run(vec!["--ro".into(), "/a".into(), "version".into()]), 2);
+        // `run` accepts them after the verb; whether the run succeeds
+        // depends on the repo (pinned end-to-end by the CLI tests).
     }
 
     // The guard-ordering property of the bare form (docs/TODOs/
@@ -1741,6 +1935,8 @@ mod tests {
             "--dry-run",
             "--verbose",
             "--multiplexer",
+            "--ro",
+            "--rw",
             "--help",
             "--version",
             "-h",
