@@ -261,7 +261,16 @@ in
               };
             }
           ];
-          conditions = [ ];
+          # Only turn the Schreibtisch on for morning motion
+          # (07:00–10:00); outside that window the automation must
+          # not fire.
+          conditions = [
+            {
+              condition = "time";
+              after = "07:00:00";
+              before = "10:00:00";
+            }
+          ];
           actions = [
             {
               type = "turn_on";
