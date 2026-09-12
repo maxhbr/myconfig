@@ -988,6 +988,18 @@
     contextWindow = 400000;
   }
   {
+    name = "trustedtokens/deepseek-ai/DeepSeek-V4-Pro-0813";
+    contextWindow = 200000;
+  }
+  {
+    name = "trustedtokens/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B";
+    contextWindow = 1048576;
+  }
+  {
+    name = "trustedtokens/Qwen/Qwen3.8-27B";
+    contextWindow = 1000000;
+  }
+  {
     name = "trustedtokens/google/gemma-4-31B-it";
     contextWindow = 121984;
   }
@@ -1002,5 +1014,121 @@
   {
     name = "trustedtokens/zai-org/GLM-5.2";
     contextWindow = 230000;
+  }
+  {
+    # Catalog context_length = 1048576
+    # (../tng.nix/TNG-tng.nix/modules/trustedtokens/models.json). Entry
+    # added by hand while thing's LiteLLM was unreachable; the next
+    # ./hosts/shared.localModels.update.sh run reproduces it once the
+    # upstream /model/info reports model_info.max_input_tokens for it
+    # (see the tng.nix metadata patch referenced in
+    # doc/TODOs/forward-model-metadata-through-litellm.md).
+    name = "trustedtokens/zai-org/GLM-5.3";
+    contextWindow = 1048576;
+  }
+  {
+    name = "trustedtokens/zai-org/GLM-5.3-Flash";
+    contextWindow = 1048576;
+  }
+  {
+    # tng.nix pool names (modules/litellm.nix `pools`): a pool's context
+    # is the min across its member deployments — trustedtokens and
+    # skainet both serve GLM-5.3 at 1048576, so the pool matches.
+    name = "GLM-5.3";
+    contextWindow = 1048576;
+  }
+  {
+    name = "GLM-5.3-Flash";
+    contextWindow = 1048576;
+  }
+  {
+    # Skainet deployments (tng.nix modules/skainet, catalog field
+    # `max_total_tokens`). Added by hand together with the trustedtokens
+    # GLM-5.3 entries above; see the note there.
+    name = "skainet/Qwen/Qwen3.5-397B-A17B-FP8";
+    contextWindow = 131072;
+  }
+  {
+    name = "skainet/Qwen/Qwen3.6-35B-A3B-FP8";
+    contextWindow = 262144;
+  }
+  {
+    name = "skainet/Qwen/Qwen3.8-27B";
+    contextWindow = 1000000;
+  }
+  {
+    name = "skainet/Qwen/Qwen3Guard-Gen-8B";
+    contextWindow = 32768;
+  }
+  {
+    name = "skainet/deepseek-ai/DeepSeek-V4-Flash-0731";
+    contextWindow = 400000;
+  }
+  {
+    name = "skainet/deepseek-ai/DeepSeek-V4-Pro-0813";
+    contextWindow = 200000;
+  }
+  {
+    name = "skainet/google/gemma-4-31B-it";
+    contextWindow = 121984;
+  }
+  {
+    name = "skainet/mistralai/Mistral-Small-3.2-24B-Instruct-2506";
+    contextWindow = 30001;
+  }
+  {
+    name = "skainet/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B";
+    contextWindow = 1048576;
+  }
+  {
+    name = "skainet/openai/gpt-oss-120b";
+    contextWindow = 131072;
+  }
+  {
+    name = "skainet/tngtech/DeepSeek-TNG-R1T2-Chimera";
+    contextWindow = 163840;
+  }
+  {
+    name = "skainet/tngtech/DeepSeek-TNG-R1T2-Chimera-guarded";
+    contextWindow = 163840;
+  }
+  {
+    name = "skainet/tngtech/TNG-GLM-5-Chimera";
+    contextWindow = 202752;
+  }
+  {
+    name = "skainet/tngtech/TNG-GLM-5-Chimera-X";
+    contextWindow = 202752;
+  }
+  {
+    name = "skainet/tngtech/olmocr-7B-faithful";
+    contextWindow = 8192;
+  }
+  {
+    name = "skainet/zai-org/GLM-5.2";
+    contextWindow = 230000;
+  }
+  {
+    name = "skainet/zai-org/GLM-5.2-long-context";
+    contextWindow = 1048576;
+  }
+  {
+    name = "skainet/zai-org/GLM-5.3";
+    contextWindow = 1048576;
+  }
+  {
+    name = "skainet/zai-org/GLM-5.3-Flash";
+    contextWindow = 1048576;
+  }
+  {
+    # Note the double slash: the skainet catalog entry is
+    # "/tngtech/tng-codepilot-v2" and the upstream id keeps the leading
+    # slash. `openai//tngtech/...` is what thing's LiteLLM publishes.
+    name = "skainet//tngtech/tng-codepilot-v2";
+    contextWindow = 29001;
+  }
+  {
+    name = "skainet-external/moonshotai/Kimi-K3";
+    contextWindow = 1048576;
   }
 ]

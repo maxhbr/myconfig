@@ -1,0 +1,145 @@
+From: Maximilian Huber <oss@maximilian-huber.de>
+Subject: [PATCH] litellm: forward model metadata (context window) through
+ model_list entries
+
+Carry `model_info.max_input_tokens` from the model catalogs into the
+LiteLLM `model_list`, so downstream proxies and coding agents can learn a
+model's real context window:
+
+  * trustedtokens: `context_length` from the /v1/models catalog
+    (TNG-tng.nix/modules/trustedtokens/models.json).
+  * skainet: `max_total_tokens` from the info/external catalogs
+    (TNG-tng.nix/modules/skainet/{info,external}.json).
+  * pools (modules/litellm.nix): a pool's context window is the MINIMUM
+    across its member deployments, so a pool never advertises more
+    context than its worst fallback can serve.
+
+Without this, LiteLLM reports no context window for these deployments,
+and clients fall back to conservative defaults (pi-coding-agent: 128k,
+maxTokens 32k), which causes premature auto-compaction, failed
+turn-prefix summarization and truncated responses at ~97% of the
+assumed 131k context.
+
+Companion change on the myconfig side (already applied there):
+hosts/shared.localModels.litellm.models.nix was refreshed with forward
+entries (contextWindow) for the trustedtokens/skainet/pool models, and
+programs.pi-coding-agent resolves duplicate model_list entries
+first-occurrence-wins.
+
+---
+ TNG-tng.nix/modules/skainet/default.nix       | 10 ++++++++--
+ TNG-tng.nix/modules/trustedtokens/default.nix | 12 ++++++++++--
+ modules/litellm.nix                            | 25 +++++++++++++++++++++--
+ 3 files changed, 41 insertions(+), 6 deletions(-)
+
+diff --git a/TNG-tng.nix/modules/trustedtokens/default.nix b/TNG-tng.nix/modules/trustedtokens/default.nix
+index 1111111..2222222 100644
+--- a/TNG-tng.nix/modules/trustedtokens/default.nix
++++ b/TNG-tng.nix/modules/trustedtokens/default.nix
+@@ -17,11 +17,23 @@
+   # OpenAI-compatible LiteLLM entries built from the catalog (models.json).
+   # The "openai/" prefix selects the driver; the rest is the upstream id.
++  #
++  # The catalog also carries each model's context window
++  # (`context_length`, in tokens). Emit it as `model_info.max_input_tokens`
++  # so the value travels with the deployment: LiteLLM surfaces it on
++  # /model/info, downstream proxies can scrape it, and coding agents get
++  # a real number for context budgeting instead of a conservative 128k
++  # default (which triggers premature auto-compaction).
+   mkTrustedTokensEntry = m: {
+     model_name = "trustedtokens/${m.id}";
+     litellm_params = {
+       model = "openai/${m.id}";
+       api_base = config.tng.trustedtokens.apiUrl;
+       api_key = trustedtokens_api_key;
+     };
++    model_info = {
++      max_input_tokens = m.context_length;
++    };
+   };
+ 
+   litellmModelList = map mkTrustedTokensEntry config.tng.trustedtokens.models;
+diff --git a/TNG-tng.nix/modules/skainet/default.nix b/TNG-tng.nix/modules/skainet/default.nix
+index 3333333..4444444 100644
+--- a/TNG-tng.nix/modules/skainet/default.nix
++++ b/TNG-tng.nix/modules/skainet/default.nix
+@@ -19,16 +19,24 @@
++  # Context window of a skainet model: the catalog's `max_total_tokens`
++  # is the model's total budget (input+output), which is what LiteLLM's
++  # `max_input_tokens` field means for budget-checking purposes.
+   mkSkainetEntry = m: {
+     model_name = "skainet/${m.name}";
+     litellm_params = {
+       model = "openai/${m.name}";
+       api_base = chatApiBase;
+       api_key = taia_bearer_token;
+     };
++    model_info = {
++      max_input_tokens = m.max_total_tokens;
++    };
+   };
+ 
+   mkSkainetExternalEntry = m: {
+     model_name = "skainet-external/${m.name}";
+     litellm_params = {
+       model = "openai/${m.name}";
+       api_base = externalApiBase;
+       api_key = taia_bearer_token;
+     };
++    model_info = {
++      max_input_tokens = m.max_total_tokens;
++    };
+   };
+diff --git a/modules/litellm.nix b/modules/litellm.nix
+index 5555555..6666666 100644
+--- a/modules/litellm.nix
++++ b/modules/litellm.nix
+@@ -14,6 +14,21 @@
+   # Look up a contributed deployment (e.g. "trustedtokens/zai-org/GLM-5.3")
+   # in the merged model list. Returns null if that provider is not configured.
++
++  # Context window of a deployment entry, as contributed by the provider
++  # modules via `model_info.max_input_tokens`. null when unknown.
++  ctxOf = m: (m.model_info or { }).max_input_tokens or null;
++
+   findDeployment =
+     name:
+     let
+       matches = builtins.filter (m: m.model_name == name) model_list;
+     in
+     if matches == [ ] then null else builtins.head matches;
+@@ -40,10 +55,18 @@
+   # order makes the router try the deployments strictly by
+   # preference: order 1 first, order 2 only if all order-1 deployments fail
+   # or are in cooldown.
++  # The pool inherits the MINIMUM context window across its members, so it
++  # never advertises more context than its worst fallback can serve; if no
++  # member declares one, no model_info block is emitted at all.
+   mkPoolEntries =
+     pool_name: members:
+-    lib.imap1 (i: deployment: {
+-      model_name = pool_name;
+-      litellm_params = deployment.litellm_params // {
+-        order = i;
+-      };
+-      model_info = {
+-        id = "${pool_name}--${deployment.model_name}";
+-      };
+-    }) (resolvePool members);
++    let
++      resolved = resolvePool members;
++      ctxs = lib.filter (c: c != null) (map ctxOf resolved);
++      poolCtx = if ctxs == [ ] then null else lib.minimum lib.id ctxs;
++    in
++    lib.imap1 (i: deployment: {
++      model_name = pool_name;
++      litellm_params = deployment.litellm_params // {
++        order = i;
++      };
++      model_info = {
++        id = "${pool_name}--${deployment.model_name}";
++      }
++      // lib.optionalAttrs (poolCtx != null) { max_input_tokens = poolCtx; };
++    }) resolved;
+-- 
+2.x

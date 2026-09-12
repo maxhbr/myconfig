@@ -219,7 +219,19 @@ let
         }
       ) (osconfig.services.litellm.settings.model_list or [ ]);
     in
-    lib.listToAttrs (fromLocalModels ++ fromLitellm);
+    # NOTE: `lib.listToAttrs` would keep the LAST entry for duplicate
+    # names, silently discarding whichever contributor came first.
+    # Duplicates DO occur: a LiteLLM model group can have several
+    # deployments with the same `model_name` — e.g. the tng.nix pool
+    # "GLM-5.3" resolves to two member deployments, and only some of
+    # the contributions to a merged model_list carry metadata. Merge
+    # FIRST-OCCURRENCE-WINS with `lib.foldl` so a metadata-bearing entry
+    # is never shadowed by a later metadata-less one (and vice versa the
+    # first defined value survives, giving stable, deterministic
+    # results regardless of module merge order).
+    lib.foldl' (
+      acc: e@{ name, value }: if acc ? "${name}" then acc else acc // { "${name}" = value; }
+    ) { } (fromLocalModels ++ fromLitellm);
 
   # Build a lookup: model name -> max OUTPUT tokens, i.e. the value pi
   # puts into `maxTokens` and therefore sends as the request's
@@ -247,19 +259,25 @@ let
         in
         if fromLp != null then fromLp else fromMi;
     in
-    lib.listToAttrs (
-      lib.concatMap (
-        e:
-        let
-          mt = fromEntry e;
-          name = e.model_name or null;
-        in
-        lib.optional (name != null && mt != null) {
-          inherit name;
-          value = mt;
-        }
-      ) (osconfig.services.litellm.settings.model_list or [ ])
-    );
+    # Same first-occurrence-wins merge as `contextWindowLookup` (see the
+    # NOTE there): a model group with multiple deployments (e.g. a
+    # tng.nix pool) contributes several entries under one `model_name`,
+    # and the first one carrying the field must win deterministically.
+    lib.foldl' (acc: e@{ name, value }: if acc ? "${name}" then acc else acc // { "${name}" = value; })
+      { }
+      (
+        lib.concatMap (
+          e:
+          let
+            mt = fromEntry e;
+            name = e.model_name or null;
+          in
+          lib.optional (name != null && mt != null) {
+            inherit name;
+            value = mt;
+          }
+        ) (osconfig.services.litellm.settings.model_list or [ ])
+      );
 
   # Fallback output budget for models that declare none: a quarter of the
   # context window, capped at 64k. This is the SAME formula
@@ -365,7 +383,12 @@ let
     key = "${osconfig.networking.hostName}-litellm";
     name = "LiteLLM (${osconfig.networking.hostName})";
     baseUrl = "http://${litellmHost}:${toString osconfig.services.litellm.port}/v1";
-    models = lib.map (m: m.model_name) osconfig.services.litellm.settings.model_list;
+    # `model_list` contains one entry per DEPLOYMENT; a model group
+    # with several deployments (e.g. a tng.nix pool like "GLM-5.3"
+    # served by trustedtokens + skainet, or a plain alias emitted twice
+    # by modules/myconfig.ai/services.litellm.nix) repeats the same
+    # `model_name`. Deduplicate so pi registers each model once.
+    models = lib.unique (lib.map (m: m.model_name) osconfig.services.litellm.settings.model_list);
     inherit contextWindowLookup;
   });
 
