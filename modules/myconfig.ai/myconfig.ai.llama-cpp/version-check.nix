@@ -10,12 +10,12 @@
 # devices.llamaServerFor) select `pkgs.llama-cpp-vulkan` / `pkgs.llama-cpp-rocm`
 # directly, NOT the host's `services.llama-cpp.package`. A host overlay that
 # only overrides `pkgs.llama-cpp` would therefore have to reach those
-# attributes via `overrideAttrs`+`override` composition. This was verified to
-# compose (see hosts/host.thing/nixpkgs.overlays.llama-cpp.nix); this module
-# keeps that property detectable.
+# attributes via `overrideAttrs`+`override` composition (verified to
+# compose with nixpkgs's makeDerivationExtensible); this module keeps
+# that property detectable.
 #
-# A per-model fork package (e.g. the Nathanw1014 strix-halo-vulkan build used
-# by the DFlash2 candidate) is intentionally NOT covered here — it is a
+# A per-model fork package (e.g. a strix-halo-vulkan fork build used by
+# a DFlash2-style candidate) is intentionally NOT covered here — it is a
 # separate derivation with its own version, surfaced via each candidate's
 # `serverPackage`.
 {
@@ -113,7 +113,6 @@ in
         llama-swap launchers (which select pkgs.llama-cpp-vulkan /
         pkgs.llama-cpp-rocm directly) would run a different engine than the
         one the overlay intended. See
-        hosts/host.thing/nixpkgs.overlays.llama-cpp.nix and
         modules/myconfig.ai/myconfig.ai.llama-cpp/version-check.nix.
       '';
     }

@@ -55,16 +55,6 @@
         ];
       }
     )
-    ./nixpkgs.overlays.llama-cpp.nix
-    # 2026-09-12: PR-27742 (qwen4exp / Qwen3.8-Flash-Next) was merged
-    # upstream 2026-08-27 and is in the stable release v0.4.0 that nixpkgs
-    # ships — the overlay was dropped, Flash-Next now uses the stock
-    # llama-cpp (see doc/TODOs/drop-patched-llama-cpp-pr-27742.md).
-    # 2026-09-12: PR-27754 (glm5next / GLM-5.3-Flash) is still open
-    # upstream; the overlay AND the GLM-5.3-Flash models were dropped
-    # (see doc/TODOs/drop-patched-llama-cpp-pr-27754.md).
-    # ./nixpkgs.overlays.llama-cpp-pr-27742.nix
-    # ./nixpkgs.overlays.llama-cpp-pr-27754.nix
     ./myconfig.ai.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix
     ./myconfig.ai.vllm
