@@ -102,6 +102,19 @@
       settings.general_settings = {
         disable_spend_logs = true;
         request_timeout = 3600; # 60 minutes, upstream default is 600s (10 min)
+        # GET /health sends a *real* chat completion ("test from litellm")
+        # to every deployment, with unbounded parallelism by default
+        # (asyncio.gather over the whole model_list). For on-demand local
+        # backends (llama-swap / llama-server router) a single /health
+        # call therefore starts many multi-GB models at once, which
+        # OOM'd thing (Strix Halo unified memory) at boot. Together with
+        # the per-deployment `disable_background_health_check` flags set
+        # below, this makes /health skip the auto-generated local
+        # deployments entirely; the concurrency bound keeps any
+        # remaining (e.g. externally added) deployments from firing
+        # more than a handful of probes in parallel either.
+        health_check_skip_disabled_background_models = true;
+        health_check_concurrency = 4;
       };
       settings.litellm_settings = lib.mkIf config.myconfig.observability.client.enable {
         callbacks = [ "prometheus" ];
@@ -173,15 +186,29 @@
                   max_input_tokens = modelContextWindow;
                   max_tokens = lib.min (modelContextWindow / 4) 65536;
                 };
+                # `model_info.disable_background_health_check` keeps these
+                # deployments out of litellm health checks (both the
+                # background loop and targeted GET /health runs, once
+                # `health_check_skip_disabled_background_models` is set).
+                # The backends here are on-demand (llama-swap swaps models
+                # in on first request; the llama-server router loads them
+                # per `models-max`), so a health probe would actually
+                # *start* models — see the general_settings comment
+                # above for why that must not happen.
+                modelInfo = {
+                  disable_background_health_check = true;
+                };
                 entry = {
                   model_name = "${providerName}:${modelName}";
                   litellm_params = litellmParams;
+                  model_info = modelInfo;
                 };
               in
               [ entry ]
               ++ lib.optional (modelKind == "alias") {
                 model_name = modelName;
                 litellm_params = litellmParams;
+                model_info = modelInfo;
               }
             ) modelNames
           ) config.myconfig.ai.localModels

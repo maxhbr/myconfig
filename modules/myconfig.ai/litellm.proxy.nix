@@ -99,11 +99,22 @@ let
         else
           lib.optionalString isOpenai cfg.upstreamApiBase;
       # Drop unset (null) fields so the string form and metadata-less
-      # attrsets produce byte-identical output to the previous behavior.
-      modelInfo = lib.filterAttrs (_: v: v != null) {
-        max_input_tokens = spec.contextWindow or null;
-        max_output_tokens = spec.maxOutputTokens or null;
-      };
+      # attrsets produce byte-identical output to the previous behavior
+      # (except for the always-set health-check flag below).
+      modelInfo =
+        (lib.filterAttrs (_: v: v != null) {
+          max_input_tokens = spec.contextWindow or null;
+          max_output_tokens = spec.maxOutputTokens or null;
+        })
+        // {
+          # Forwarded entries target on-demand local backends behind the
+          # upstream LiteLLM (llama-swap / llama-server router): a health
+          # probe would send a real completion upstream and *start* models
+          # there (this OOM'd thing at boot). Keep them out of health
+          # checks, in combination with the upstream-side flags set in
+          # modules/myconfig.ai/services.litellm.nix.
+          disable_background_health_check = true;
+        };
     in
     {
       model_name = if (spec.modelName or null) != null then spec.modelName else spec.name;
@@ -114,7 +125,9 @@ let
       // lib.optionalAttrs (apiBase != "") { api_base = apiBase; }
       // lib.optionalAttrs isOpenai { api_key = cfg.apiKey; };
     }
-    // lib.optionalAttrs (modelInfo != { }) { model_info = modelInfo; };
+    // {
+      model_info = modelInfo;
+    };
 in
 {
   options.myconfig.ai.litellm.proxy = {
