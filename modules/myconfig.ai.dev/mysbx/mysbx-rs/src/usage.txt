@@ -2,7 +2,7 @@ mysbx - my sandboxing tool
 
 Usage:
   mysbx [--dry-run] [--verbose] [--multiplexer <mux>] [--ro <path>]... [--rw <path>]...
-  mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND...
+  mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
   mysbx [COMMAND]
 
@@ -14,7 +14,15 @@ Commands:
                 a config layer this is a session of that multiplexer
                 instead of a bare shell, on a socket inside the sandbox
   run -- CMD... run one command in the sandbox; everything after `--` is
-                passed to the command verbatim; needs `mysbx init` too
+                passed to the command verbatim; needs `mysbx init` too.
+                With `--result` the run does not exec the payload: it
+                waits for it, writes its outcome to
+                `<repo>.mysbx/result.json` and exits by the interpreted
+                contract (`0` completed, `1` failed, `124` timed out,
+                `130`/`143` cancelled, `70` infrastructure error) —
+                `--timeout <seconds>` bounds it; without `--result`
+                the payload's own exit code propagates unchanged and
+                no result file is written
   gui [ARG...]  open an alacritty terminal in the current directory
                 and run `mysbx ARG...` in it; everything after the
                 verb is passed to that inner mysbx verbatim — so
@@ -81,5 +89,40 @@ Options:
                 path through the bind. The next run uses the
                 configuration again — for a persistent grant, put a
                 `[[mounts]]` entry in the sidecar config (`mysbx edit`)
+  --result      with `run -- CMD`: wait for the payload and record its
+                outcome in `<repo>.mysbx/result.json` (state, exit
+                code, payload exit code or signal, timestamps, the
+                timeout budget) instead of exec'ing it — the exit code
+                is mysbx's interpreted one, the payload's stdout is
+                untouched and the file's path is printed to stderr.
+                Valid before the verb and after it for `run`; every
+                other invocation rejects it — an interactive shell has
+                no consumable outcome
+  --timeout <seconds>
+                the budget of a `--result` run: when the payload
+                outlives it, the whole sandbox process group is
+                killed and the run is recorded as `timed-out`, exiting
+                `124`. Requires `--result` — a plain run ends in an
+                exec, and no budget can apply to a process that is
+                no longer mysbx. A positive whole number of seconds
   -h, --help    print this help
   -V, --version print the version
+
+Exit codes (cli.md D8):
+  0             success — the payload exited 0 (a `--result` run:
+                state `completed`)
+  1             the payload failed — its own non-zero exit code under
+                the exec passthrough, or the `failed` state of a
+                `--result` run (a payload killed by a signal records
+                the signal in the result file)
+  2             usage error — the command line is wrong
+  70            infrastructure error — mysbx's own runtime failure:
+                the command line was fine but the run it named could
+                not happen (no sidecar, unparsable config, no backend,
+                the backend could not be started). `70`, not `1`, so a
+                payload's own `1` can never be mistaken for the
+                tool's failure
+  124           a `--result` run exhausted its `--timeout` budget
+  130 / 143     a `--result` run was cancelled — SIGINT / SIGTERM
+                arrived while mysbx waited; the sandbox was killed and
+                the state is `cancelled` (the shell's 128 + signum)

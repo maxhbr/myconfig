@@ -45,7 +45,14 @@ with or without `--dry-run`) ever writes the sidecar for you
 would execute — argv[0] (the backend binary, the wrapped store path under
 Nix) first, then one argument per line — and exits without running it;
 the acceptance surface described in
-[`docs/design/cli.md`](./docs/design/cli.md).
+[`docs/design/cli.md`](./docs/design/cli.md). `mysbx run --result
+[--timeout <seconds>] -- CMD...` instead WAITS for the run, records its
+outcome in `<repo>.mysbx/result.json` (state, exit code, payload exit
+code or signal, timestamps) and exits by the interpreted contract —
+`0` completed, `1` failed, `124` timed out, `130`/`143` cancelled,
+`70` infrastructure error — so a batch driver can consume a finished
+payload run programmatically ([`docs/design/cli.md`](./docs/design/cli.md)
+D8, D17).
 
 `mysbx gui [ARG...]` opens an alacritty window in the current directory
 and runs `mysbx ARG...` in it: `mysbx gui --multiplexer herdr` starts the

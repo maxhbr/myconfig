@@ -50,8 +50,10 @@ nesting would only pay off with many more commands.
 
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2), `run -- COMMAND` for
-non-interactive use, `gui [ARG...]` (D15), plus the global flags
-`--dry-run` (D9), `--verbose` (D10) and `--multiplexer` (D14).
+non-interactive use, `run --result -- COMMAND` (D17) for the
+machine-readable-outcome form, `gui [ARG...]` (D15), plus the global
+flags `--dry-run` (D9), `--verbose` (D10), `--result`/`--timeout`
+(D17) and `--multiplexer` (D14).
 
 ### D4: `--` separates sandbox args from the payload command
 
@@ -89,27 +91,48 @@ Rationale: a silently downgraded isolation level is a security bug.
 
 ### D8: Exit codes
 
-- `0` success
-- `1` runtime failure (cannot create the sidecar, backend failed to
-  start, the repository is not initialized — D13, the resolved repo is
-  `$HOME`, a config is unparsable, no backend configured)
-- `2` usage error (unknown command, bad flag, unexpected argument)
+**Extended (bd myconfig-0ql) — the full set, per the
+agent-microvm precedent (`0/1/124/130/70` + JSON result), recorded
+here before the unattended mode lands rather than after**
+(feature-comparison.md §6):
 
-The boundary between `1` and `2` is *what is wrong*: `2` means the
-command line is wrong, `1` means the command line was fine but the
+| code | meaning |
+| --- | --- |
+| `0` | success — the payload exited `0` (a `--result` run: state `completed`) |
+| `1` | the payload failed — its own non-zero exit code under the exec passthrough, or the `failed` state of a `--result` run |
+| `2` | usage error — the command line is wrong |
+| `70` | **infrastructure error** — mysbx's own runtime failure: the command line was fine but the run it named could not happen (no sidecar, unparsable config, no backend, backend cannot be started) |
+| `124` | a `--result` run exhausted its `--timeout` budget (state `timed-out`) |
+| `130`/`143` | a `--result` run was cancelled — SIGINT/SIGTERM arrived while mysbx waited (state `cancelled`; the shell's `128 + signum`) |
+
+The boundary between `2` and `70` is *what is wrong*: `2` means the
+command line is wrong, `70` means the command line was fine but the
 world it named is not. "No sidecar yet", "no backend configured" and
 "this directory is `$HOME`" are all the latter — the argv is exactly
 what the operator meant.
 
+**Why `70` and not the old `1`.** `1` is the one code a payload
+owns — it is the `failed` state of a `--result` run, and under the exec
+passthrough a payload's own `1` lands on the terminal
+indistinguishable from the tool's. A batch driver (and an operator)
+must be able to tell "the payload failed" from "the tool failed
+before the payload could": `70` is agent-microvm's
+`infrastructure-error`, adopted verbatim for the same reason.
+
 When `mysbx` runs a payload command, the payload's exit code is propagated
-unchanged; `mysbx`'s own failures are reported on stderr with a `mysbx: `
-prefix so they are distinguishable from payload output.
+unchanged — the run ends in an `exec` that replaces this process, so
+mysbx cannot get in the way even if it wanted to; `mysbx`'s own failures
+are reported on stderr with a `mysbx: ` prefix so they are distinguishable from payload output. The one exception is
+`run --result` (D17), which waits instead of exec'ing and therefore
+interprets.
 
 ### D9: Output conventions
 
 Diagnostics go to stderr and are prefixed `mysbx: `. Progress/result lines
 for `init` go to stdout and are prefixed `## ` (see the README transcript).
-Nothing else is written to stdout, so the tool stays pipe-friendly.
+Nothing else is written to stdout, so the tool stays pipe-friendly — the
+`--result` pointer line (`mysbx: result: <path>`, D17) goes to stderr for
+exactly that reason.
 
 The one deliberate exception is the `--dry-run` argv: it is printed to
 stdout **unprefixed, one argument per line**, the backend executable
@@ -156,7 +179,10 @@ argv block: with `--verbose --dry-run` the report comes first and the argv
 follows, so `mysbx --verbose --dry-run | grep -v '^## '` is byte-identical
 to a plain `mysbx --dry-run`. Tests pin that. The report is also printed
 before `exec` in a real run, so the operator sees the configuration even
-when the payload takes over the terminal.
+when the payload takes over the terminal — and before the WAIT of a
+`--result` run (D17), whose `mode:` line says "waiting for the payload,
+the outcome is recorded in result.json" instead of "executing", so the
+report never claims a handoff mode the run does not use.
 
 **What is hidden: nothing.** In particular, `[env]` values are printed
 verbatim rather than redacted. `--dry-run` already prints them as
@@ -190,7 +216,7 @@ value.
 
 **A missing pin is a refused run, not a silent shell.** A value whose
 entry this build did not pin (an unwrapped build, a host that does not
-install that multiplexer) exits `1` with a `mysbx: ` message naming the
+install that multiplexer) exits `70` with a `mysbx: ` message naming the
 value and the missing variable. Falling back to a bare shell would be
 discovered only after the work happened outside the session it was
 supposed to happen in. It is refused while the argv is built, so
@@ -229,7 +255,7 @@ and it is an explicit command (D13). It approves no git dirs, unlike
 `init` on a fresh config (config.md D13).
 
 **No editor guess.** With neither variable set the command fails
-(exit `1`, `mysbx: ` message naming both). Falling back to `vi` would
+(exit `70`, `mysbx: ` message naming both). Falling back to `vi` would
 open an editor the operator did not choose on a policy file, with no
 hint that the variable is unset.
 
@@ -251,7 +277,7 @@ nothing to dry-run and no run to report on).
 Supersedes the second half of D2. A sandbox run — bare `mysbx`,
 `mysbx run -- CMD`, with or without `--dry-run` — requires the sidecar
 config `<repo>.mysbx/config.toml` to exist already. When it does not,
-the run fails (exit `1`, D8) with a `mysbx: ` message naming the
+the run fails (exit `70`, D8) with a `mysbx: ` message naming the
 missing path and the command that creates it:
 
 ```text
@@ -330,7 +356,7 @@ swap is skipped entirely, no `TMUX_TMPDIR`, none of the socket guards.
 
 **The same refusal, not a weaker one.** A value this build pinned no
 entry for is refused exactly like a config layer selecting it (D11/D17):
-exit `1` with the `mysbx: ` message naming the value and the missing
+exit `70` with the `mysbx: ` message naming the value and the missing
 variable — never a silent plain shell. The flag grants no access a
 configuration would not have: it selects a payload from mysbx's own
 closure either way.
@@ -441,6 +467,62 @@ the typing order, the one predictable rule.
 `[command line]` in the `--verbose` report (D10), a provenance distinct
 from both config layers, so the report never claims a grant came from a
 file the operator never edited.
+
+### D17: `run --result -- CMD` records a machine-readable outcome
+
+A one-shot run can be asked to *wait* instead of exec: `mysbx run
+--result [--timeout <seconds>] -- CMD...` spawns the backend as a
+child, waits for its outcome — bounded by the budget when given —
+writes that outcome to `<repo>.mysbx/result.json` and exits by the
+interpreted contract of D8 (`0` completed, `1` failed, `124`
+timed out, `130`/`143` cancelled, `70` infrastructure error) instead
+of passing the payload's own code through. Both flags follow the one
+position rule of D10/D16 (before the verb and after it, `run` only);
+`--timeout` without `--result` is a usage error — a plain run ends in
+an exec, and no budget can apply to a process that is no longer
+mysbx.
+
+**Why a file in the sidecar and not JSON on stdout.** stdout is the
+payload's (D9): a driver capturing the run's stdout must find exactly
+what the payload printed — interleaving a result object into it would
+either corrupt the payload's output contract or force the payload's
+own stdout into the file with it. The sidecar is also the one place
+the payload cannot write (config.md D7): a `result.json` found there
+is a result mysbx wrote, which is what makes the file trustworthy
+enough to drive automation. The pointer to it goes to stderr
+(`mysbx: result: <path>`), where the `mysbx: ` diagnostics live.
+
+**The file.** One `result.json` per repository, atomically REPLACED
+by each waited run — the sidecar does not grow without bound and the
+file always names the LATEST run; a driver wanting history copies it
+after each run. Fields: `version` (schema number, `1`), `state`
+(`completed`/`failed`/`timed-out`/`cancelled`/`infrastructure-error`),
+`exitCode` (the run's own status — always the state's code, the two
+cannot disagree), `repo`, `sidecar`, `payload` (the command vector),
+`startedAt`/`finishedAt` (ISO-8601 UTC), `durationMs`, and per state:
+`payloadExitCode` (or `payloadSignal`, `SIG…` — never both) for a run
+that ended on its own, `timeoutSec` when a budget was given,
+`cancelledBy` (`SIGINT`/`SIGTERM`) for a cancellation, `error` for an
+infrastructure failure. A killed run records NO payload fate: its
+outcome is mysbx's kill, not the payload's own.
+
+**Cancellation and timeout are mysbx's own answers, not the
+payload's.** SIGINT/SIGTERM to a waiting mysbx kill the whole process
+group (the backend and everything it spawned inside the sandbox),
+the run is recorded as `cancelled` with the signal named, and the
+exit code is the shell's `128 + signum`. The `--timeout` budget does
+the same through `alarm(2)`, recorded as `timed-out`. Anything a
+plain run does NOT record (a Ctrl-C mid-exec simply kills it) stays
+unrecorded in a `--result` run too, for any signal other than
+SIGINT/SIGTERM/SIGALRM.
+
+**Earlier refusals write no file.** A run that fails BEFORE the
+backend starts — no sidecar, a broken config, an argv that cannot be
+laid out — writes nothing: there was no run to record, and the
+`mysbx: ` diagnosis on stderr (with exit `70`) is the outcome. Only
+a failure of the exec/wait boundary itself is recorded, as
+`infrastructure-error` — the run happened, it failed at the edge, and
+the driver polling the file learns of it there.
 
 ## Non-goals
 

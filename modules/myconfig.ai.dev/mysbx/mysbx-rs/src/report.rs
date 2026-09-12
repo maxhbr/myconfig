@@ -69,6 +69,10 @@ pub struct Report<'a> {
     /// Whether this run stops before `exec` — said out loud, so the
     /// report never claims a command ran that did not.
     pub dry_run: bool,
+    /// Whether this run waits and records a result (cli.md D17, bd
+    /// myconfig-0ql) instead of exec'ing — the `mode:` line must not
+    /// say "executing" for a run whose outcome is interpreted.
+    pub result: bool,
 }
 
 /// Render the report as `## `-prefixed stdout lines, without trailing
@@ -328,6 +332,9 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     }
     p(if r.dry_run {
         "mode:           dry run — the argv follows, nothing is executed".into()
+    } else if r.result {
+        "mode:           waiting for the payload, the outcome is recorded in result.json"
+            .to_string()
     } else {
         "mode:           executing".to_string()
     });
@@ -423,6 +430,7 @@ mod tests {
             bwrap_bin: "/synth/bin/bwrap",
             payload,
             dry_run,
+            result: false,
         })
     }
 
@@ -523,6 +531,7 @@ mod tests {
             bwrap_bin: "bwrap",
             payload: &Payload::Shell,
             dry_run: true,
+            result: false,
         })
         .join("\n");
         assert!(
@@ -566,6 +575,7 @@ mod tests {
             bwrap_bin: "bwrap",
             payload: &Payload::Shell,
             dry_run: true,
+            result: false,
         })
         .join("\n");
         assert!(
@@ -610,6 +620,7 @@ mod tests {
             bwrap_bin: "bwrap",
             payload: &Payload::Shell,
             dry_run: false,
+            result: false,
         })
         .join("\n");
         assert!(joined.contains("network:        shared"), "{joined}");
@@ -656,6 +667,7 @@ mod tests {
             bwrap_bin: "bwrap",
             payload: &Payload::Shell,
             dry_run: true,
+            result: false,
         })
         .join("\n");
         assert!(
@@ -699,6 +711,7 @@ mod tests {
             bwrap_bin: "bwrap",
             payload: &Payload::Shell,
             dry_run: true,
+            result: false,
         })
         .join("\n");
         assert!(
@@ -748,6 +761,7 @@ mod tests {
                     bwrap_bin: "bwrap",
                     payload,
                     dry_run: true,
+                    result: false,
                 })
                 .join("\n")
             };
@@ -829,6 +843,7 @@ mod tests {
             bwrap_bin: "/synth/bin/bwrap",
             payload: &payload,
             dry_run: true,
+            result: false,
         });
         assert!(
             out.contains(&"##   ro /synth/granted -> /synth/granted  [command line]".to_owned()),
@@ -843,5 +858,46 @@ mod tests {
             out.contains(&"##   ro /synth/shared/sub -> /inside  [sidecar config]".to_owned()),
             "{out:?}"
         );
+    }
+
+    #[test]
+    fn a_result_run_names_its_mode_instead_of_claiming_an_exec() {
+        // cli.md D17: a `--result` run WAITS for the payload — the
+        // `mode:` line must say so. Claiming "executing" would be the
+        // same lie as a dry run claiming it: the exit code of a waited
+        // run is interpreted, not passed through.
+        let (repo, merged, host) = fixture_report();
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            bin_sh: None,
+            nix_conf: None,
+            ca_bundle: None,
+            policy_paths: &[],
+            mux_entry: None,
+        };
+        let joined = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: true,
+            merged: &merged,
+            user_mount_count: 1,
+            cli_mount_count: 0,
+            host_env: &host,
+            params: &params,
+            bwrap_bin: "bwrap",
+            payload: &Payload::Command(vec!["ls".into()]),
+            dry_run: false,
+            result: true,
+        })
+        .join("\n");
+        assert!(
+            joined.contains("mode:           waiting for the payload"),
+            "{joined}"
+        );
+        assert!(!joined.contains("executing"), "{joined}");
     }
 }

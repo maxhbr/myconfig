@@ -5,8 +5,9 @@ SPDX-License-Identifier: MIT
 
 # Feature comparison: `mysbx` vs. the existing sandboxing tiers
 
-Status: snapshot. Point of analysis: commit `cedb47d3b3`
-(`cedb47d3b34d4c7b9745ebab843b5a6f9e65d0ed`, 2026-09-05).
+Status: snapshot. Point of analysis: commit `07c22d201e`
+(`07c22d201e…`, 2026-09-11), re-checked for the exit-code/result
+contract (bd myconfig-0ql).
 
 `mysbx` is **not implemented yet** — today the binary knows `help`, `version`
 and `init` and confines nothing (`../mysbx-rs/src/lib.rs`). This document is
@@ -49,12 +50,12 @@ to replace it.
 | Own flags | none (args → agent) | none (args → app) | none (args → agent) | none (args → agent) | `--repo --base --branch --image --config --mount --env --env-file --network --memory --cpus --pids-limit --nix --force --home-seed …` | `--name --repository --agent --branch --resource-class --wait --attach --timeout --prompt-file --persist-agent-state --no-preflight` | `-h/--help`, `-V/--version` |
 | `--` payload separator | n/a | n/a | n/a | n/a | yes (`-- COMMAND…`) | yes (`ssh <slot> -- cmd…`) | yes (planned, `cli.md` D4) |
 | Unit of work | the CWD | the CWD | the CWD | the CWD | a *named session* per repo | a *named task* per repo | the repository = the CWD (`cli.md` D1) |
-| Unattended/batch mode | no | no | no | no | `run --detach` | `submit` (job spec + prompt file, structured result) | no |
+| Unattended/batch mode | no | no | no | no | `run --detach` | `submit` (job spec + prompt file, structured result) | one-shot structured result (`run --result`, `result.json` in the sidecar — `cli.md` D17); detached/queued mode not yet |
 | Backend choice | fixed (bubblewrap) | fixed (bubblewrap) | fixed (nono) | fixed (QEMU) | fixed (podman+runsc), runtime overridable via `AGENT_GVISOR_PODMAN_RUNTIME` | fixed (Cloud Hypervisor) | explicit config/flag, never auto-detected (`cli.md` D7, `config.backend`) |
 | Configuration input | NixOS options at build time | Nix call site | NixOS options at build time | `AGENT_QEMU_PI_*` env vars | flags + `AGENT_GVISOR_*` env + `--env-file` | NixOS options + flags | TOML: user config + sidecar (`config.md` D1) |
 | Implementation | `writeShellApplication` | `writeShellApplication` | `writeShellApplication` | shell + impure `nix build` | Rust, zero deps | large generated bash | Rust, zero deps, hand-rolled parser (`cli.md` D5) |
-| Exit-code contract | none stated | none stated | none stated | none stated | non-zero on failure; `doctor` non-zero when broken | `0/1/124/130/70` documented | `0/1/2` + payload passthrough (`cli.md` D8) |
-| Output convention | none stated | none stated | none stated | none stated | podman/git output passthrough | tables, JSON result for `submit` | stderr `mysbx: `, stdout `## ` (`cli.md` D9) |
+| Exit-code contract | none stated | none stated | none stated | none stated | non-zero on failure; `doctor` non-zero when broken | `0/1/124/130/70` documented | `0/1/2/70/124/130/143` — payload passthrough, interpreted for `--result` (`cli.md` D8, D17) |
+| Output convention | none stated | none stated | none stated | none stated | podman/git output passthrough | tables, JSON result for `submit` | stderr `mysbx: `, stdout `## ` (`cli.md` D9); `result.json` in the sidecar for `--result` (`cli.md` D17) |
 | Shell completion | n/a | n/a | n/a | n/a | fish completion, sync-checked | none | none |
 
 Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
@@ -149,7 +150,10 @@ Everything below exists in at least one tier above and has no counterpart in
   (spec, then tests, then code) is the one to copy for `mysbx`.
 - **Exit codes and machine-readable results**: `agent-microvm`
   (`0/1/124/130/70`, JSON result). `cli.md` D8 is a subset; extend it before
-  the first backend lands rather than after.
+  the first backend lands rather than after. **DONE** (bd myconfig-0ql):
+  `cli.md` D8 now carries the full set (`0/1/2/70/124/130/143`) and D17
+  defines `run --result` with `result.json` in the sidecar — the batch
+  contract exists before the unattended mode that will consume it.
 - **Isolation defaults**: `microvm`'s "no key in the guest, egress only to a
   local proxy" is the target for a future network-policy item; the MVP
   shares the network and is honest about it (`config.md` D9).

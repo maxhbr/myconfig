@@ -288,7 +288,7 @@ fn a_run_with_a_sidecar_directory_but_no_config_still_fails() {
     )
     .unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stdout: {stdout}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
     assert!(stderr.contains("mysbx init"), "{stderr}");
     assert!(!sidecar.join("config.toml").exists());
 }
@@ -308,7 +308,7 @@ fn init_then_the_bare_form_works() {
     .unwrap();
 
     let (code, _, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("mysbx init"), "{stderr}");
 
     let (code, stdout, stderr) = run_binary_with(&inv, &["init"]);
@@ -770,7 +770,7 @@ fn sidecar_network_true_still_cannot_reenable() {
     .unwrap();
     std::fs::write(sidecar.join("config.toml"), "network = true\n").unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stdout: {stdout}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
     assert!(stderr.contains("never re-enable it"), "stderr: {stderr}");
 }
 
@@ -780,7 +780,7 @@ fn no_backend_configured_fails() {
     // layer named one, so the run is refused.
     let (inv, _, _) = fixture("no-backend", &["--dry-run"]);
     let (code, _stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("no backend configured"), "stderr: {stderr}");
 }
 
@@ -790,7 +790,7 @@ fn unknown_backend_fails() {
     let (inv, _, sidecar) = fixture("unknown-backend", &["--dry-run"]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"qemu\"\n").unwrap();
     let (code, _stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("qemu"), "stderr: {stderr}");
 }
 
@@ -983,7 +983,7 @@ fn home_directory_is_refused_exit_1() {
         xdg: base.join("xdg"),
     };
     let (code, _stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("mysbx: "), "stderr: {stderr}");
 }
 
@@ -1088,7 +1088,7 @@ fn nested_state_dirs_fail_with_a_mysbx_error() {
     )
     .unwrap();
     let (code, _stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
     assert!(
         stderr.contains("state-dirs entries nest"),
@@ -1397,7 +1397,7 @@ fn a_multiplexer_without_a_pinned_entry_fails_instead_of_starting_a_shell() {
         let (var, _) = mux_pin(mux);
         let (inv, _, _) = fixture_mux(&format!("mux-unpinned-{mux}"), mux, &["--dry-run"]);
         let (code, stdout, stderr) = run_binary(&inv);
-        assert_eq!(code, 1, "{mux}: stdout: {stdout}");
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{mux}: stdout: {stdout}");
         // The message names the value AND the variable a host must set.
         assert!(stderr.contains(var), "{mux}: {stderr}");
         assert!(stderr.contains(mux.name()), "{mux}: {stderr}");
@@ -1421,7 +1421,7 @@ fn an_unknown_multiplexer_is_a_config_error_naming_the_file_and_the_key() {
     )
     .unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stdout: {stdout}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
     assert!(
         stderr.contains(&user_config.display().to_string()),
         "{stderr}"
@@ -1580,7 +1580,7 @@ fn the_multiplexer_flag_without_a_pinned_entry_fails_like_the_config() {
     // says `none`, so the refusal can only come from the flag.)
     let (inv, _, _) = fixture_mux("mux-flag-unpinned", Multiplexer::None, &["--dry-run"]);
     let (code, stdout, stderr) = run_binary_with(&inv, &["--multiplexer", "herdr", "--dry-run"]);
-    assert_eq!(code, 1, "stdout: {stdout}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
     assert!(stderr.contains(mux_pin(Multiplexer::Herdr).0), "{stderr}");
     assert!(stderr.contains("herdr"), "{stderr}");
     assert!(
@@ -1649,7 +1649,7 @@ fn a_mount_over_the_mux_socket_dir_is_refused_end_to_end() {
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     cmd.env(var, entry);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
-    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains(socket_dir()), "{stderr}");
     assert!(stderr.contains("D16/D17"), "{stderr}");
@@ -1830,7 +1830,7 @@ fn edit_falls_back_to_visual_and_fails_without_either() {
     // Neither: a runtime failure (exit 1) naming both variables — never
     // a guessed `vi` on a policy file.
     let (code, stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stdout: {stdout}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
     assert!(stderr.starts_with("mysbx: "), "{stderr}");
     assert!(stderr.contains("$EDITOR"), "{stderr}");
     assert!(stderr.contains("$VISUAL"), "{stderr}");
@@ -1852,7 +1852,7 @@ fn edit_without_an_editor_creates_no_sidecar() {
         xdg: base.join("xdg"),
     };
     let (code, _, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(!base.join("repo.mysbx").exists(), "a sidecar was created");
 }
 
@@ -1891,7 +1891,7 @@ fn edit_in_the_home_directory_is_refused() {
     let mut cmd = spawn(&inv);
     cmd.env("EDITOR", &editor);
     let out = cmd.output().unwrap();
-    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
     assert!(!record.exists(), "the editor ran anyway");
 }
 
@@ -2212,7 +2212,7 @@ fn backend_failure_still_leaves_the_created_state_dirs() {
     let mut cmd = spawn_with_args(&inv, &["run", "--", "/nonexistent/mysbx-bwrap", "payload"]);
     cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
     let out = cmd.output().expect("failed to spawn mysbx");
-    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
     let side = repo
         .canonicalize()
         .unwrap()
@@ -2245,7 +2245,7 @@ fn a_symlink_in_the_state_tree_is_refused_not_followed() {
     cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
     assert_eq!(
         cmd.output().expect("failed to spawn mysbx").status.code(),
-        Some(1)
+        Some(mysbx::EXIT_INFRASTRUCTURE)
     );
     assert!(sidecar.join("state/.local/share/opencode").is_dir());
 
@@ -2261,7 +2261,11 @@ fn a_symlink_in_the_state_tree_is_refused_not_followed() {
     let out = cmd.output().expect("failed to spawn mysbx");
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(1), "stdout: {stdout}");
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}"
+    );
     assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
     assert!(stderr.contains("is a symlink"), "stderr: {stderr}");
     assert!(!stderr.contains("panicked"), "stderr: {stderr}");
@@ -2289,7 +2293,7 @@ fn invalid_layout_is_an_error_not_a_panic() {
     )
     .unwrap();
     let (code, _stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
         stderr.starts_with("mysbx: "),
         "must carry the mysbx prefix: {stderr}"
@@ -2328,7 +2332,7 @@ fn hidden_mount_is_an_error_not_a_panic() {
     )
     .unwrap();
     let (code, _stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
     assert!(
         stderr.contains("would hide earlier mount"),
@@ -2402,7 +2406,7 @@ fn unapproved_worktree_git_metadata_is_refused() {
         xdg: base.join("xdg"),
     };
     let (code, stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.starts_with("mysbx: "), "stderr: {stderr}");
     assert!(stderr.contains("not approved"), "stderr: {stderr}");
     assert!(
@@ -2512,7 +2516,7 @@ fn a_git_pointer_edited_after_init_cannot_widen_the_snapshot() {
         xdg: base.join("xdg"),
     };
     let (code, stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("not approved"), "stderr: {stderr}");
     assert!(!stdout.contains("evil"), "stdout: {stdout}");
 }
@@ -2541,7 +2545,7 @@ fn a_run_in_an_uninitialized_worktree_creates_no_approval() {
         xdg: base.join("xdg"),
     };
     let (code, _stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("mysbx init"), "stderr: {stderr}");
     assert!(
         !base.join("wt.mysbx").join("config.toml").exists(),
@@ -2595,7 +2599,7 @@ fn edit_creating_the_sidecar_approves_nothing() {
     // The repo is initialized now, so the run gets past D13 and fails
     // on the missing approval instead.
     let (code, _stdout, stderr) = run_binary_with(&inv, &["run", "--", "true"]);
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("not approved"), "stderr: {stderr}");
 }
 
@@ -2637,7 +2641,7 @@ fn approve_git_dirs_recovers_an_unapproved_sidecar() {
     )
     .unwrap();
     let (code, _, stderr) = run_binary(&inv(vec!["run", "--", "true"]));
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("not approved"), "stderr: {stderr}");
     let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
     assert!(!written.contains("git-dirs"), "{written}");
@@ -2800,7 +2804,7 @@ fn an_unapproved_common_dir_is_refused_even_when_the_gitdir_is_approved() {
         xdg: base.join("xdg"),
     };
     let (code, stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("not approved"), "stderr: {stderr}");
     assert!(!stdout.contains("elsewhere"), "stdout: {stdout}");
 }
@@ -2983,7 +2987,7 @@ fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(
         out.status.code(),
-        Some(1),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
         "stdout: {stdout}\nstderr: {stderr}"
     );
     assert!(
@@ -3074,7 +3078,11 @@ fn a_writable_mount_over_the_generated_user_config_symlink_is_refused() {
         xdg,
     };
     let (code, stdout, stderr) = run_refusing_launch(&inv);
-    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert_eq!(
+        code,
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
     assert!(
         stderr.contains("mysbx: ") && stderr.contains("policy file"),
         "unexpected stderr: {stderr}"
@@ -3120,7 +3128,11 @@ fn a_writable_mount_over_a_symlinked_sidecar_config_is_refused() {
         xdg,
     };
     let (code, stdout, stderr) = run_refusing_launch(&inv);
-    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert_eq!(
+        code,
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
     assert!(
         stderr.contains("mysbx: ") && stderr.contains("policy file"),
         "unexpected stderr: {stderr}"
@@ -3160,7 +3172,11 @@ fn a_writable_mount_over_an_intermediate_symlink_component_is_refused() {
         xdg,
     };
     let (code, stdout, stderr) = run_refusing_launch(&inv);
-    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert_eq!(
+        code,
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
     assert!(
         stderr.contains("mysbx: ") && stderr.contains("policy file"),
         "unexpected stderr: {stderr}"
@@ -3254,7 +3270,11 @@ fn a_repo_root_containing_the_home_is_refused_before_anything_is_created() {
         xdg,
     };
     let (code, stdout, stderr) = run_refusing_launch(&inv);
-    assert_eq!(code, Some(1), "stdout: {stdout}\nstderr: {stderr}");
+    assert_eq!(
+        code,
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
     assert!(
         stderr.contains("mysbx: ") && stderr.contains("contains the home directory"),
         "unexpected stderr: {stderr}"
@@ -3488,7 +3508,7 @@ fn an_unparsable_sidecar_config_is_never_rewritten() {
     let (inv, config, _gitdir) = approval_fixture("approve-unparsable", "git-dirs = [\"/a\n");
     let before = std::fs::read_to_string(&config).unwrap();
     let (code, _, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));
-    assert_eq!(code, 1, "stderr: {stderr}");
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.starts_with("mysbx: "), "{stderr}");
     assert_eq!(before, std::fs::read_to_string(&config).unwrap());
 }
@@ -3686,7 +3706,7 @@ fn gui_names_the_terminal_it_cannot_start() {
     let mut cmd = spawn(&inv);
     cmd.env("MYSBX_TERMINAL", "/nonexistent/terminal");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
-    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("/nonexistent/terminal"),
@@ -3979,7 +3999,11 @@ fn a_missing_flag_path_is_a_runtime_failure() {
     cmd.arg(&missing);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "{stderr}"
+    );
     assert!(stderr.contains("mysbx: "), "{stderr}");
     assert!(
         stderr.contains("--ro"),
@@ -4000,7 +4024,11 @@ fn a_flag_path_exposing_the_home_is_refused() {
     cmd.arg(&inv.home);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "{stderr}"
+    );
     assert!(
         stderr.contains("home directory"),
         "the refusal must name the home-exposure rule: {stderr}"
@@ -4174,7 +4202,11 @@ fn flag_binds_and_a_policy_file_rw_exposure() {
     cmd.arg(inv.xdg.join("mysbx"));
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "{stderr}"
+    );
     assert!(
         stderr.contains("policy"),
         "the refusal must name the policy exposure: {stderr}"
@@ -4191,7 +4223,11 @@ fn flag_binds_may_not_shadow_protected_dests() {
     cmd.arg("/proc");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "{stderr}"
+    );
     assert!(
         stderr.contains("protected"),
         "the refusal must name the protected path: {stderr}"
@@ -4299,4 +4335,445 @@ fn help_documents_the_ro_and_rw_flags() {
     for token in ["--ro", "--rw"] {
         assert!(stdout.contains(token), "help does not mention {token}");
     }
+}
+
+// ---- the structured result and the extended exit codes (bd myconfig-0ql,
+// docs/design/cli.md D8/D17) -----------------------------------------------
+
+/// Read `<sidecar>/result.json` and check the two invariants every
+/// consumer rests on: it parses as strict JSON (via the strictest
+/// zero-dependency check available: the hand-written renderer's fields
+/// are extracted by the caller, here we check the shape) and its
+/// `exitCode` agrees with the run's observed process status.
+fn read_result(sidecar: &Path) -> String {
+    std::fs::read_to_string(sidecar.join(mysbx::result::FILE_NAME))
+        .unwrap_or_else(|e| panic!("cannot read the result file: {e}"))
+}
+
+#[test]
+fn help_documents_the_result_and_timeout_flags() {
+    // cli.md D5 pairing, end to end: the usage mentions both flags and
+    // the exit-code set they bring.
+    let (inv, _, _) = fixture("result-help", &["--help"]);
+    let (code, stdout, _stderr) = run_binary(&inv);
+    assert_eq!(code, 0);
+    for token in ["--result", "--timeout", "result.json"] {
+        assert!(stdout.contains(token), "help does not mention {token}");
+    }
+}
+
+#[test]
+fn a_dry_run_with_result_writes_no_file_and_prints_the_argv() {
+    // `--result` changes what happens AFTER the argv is built; the
+    // argv itself is the plain run's, and `--dry-run` stays
+    // side-effect-free: no result file, the ordinary argv block.
+    let (inv, repo, sidecar) = fixture_with_backend("result-dry-run", &[]);
+    let (code, stdout, stderr) =
+        run_binary_with(&inv, &["run", "--result", "--dry-run", "--", "ls"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // The payload line of the argv is the payload, like every `run`.
+    assert!(stdout.ends_with("--\nls\n"), "argv: {stdout}");
+    assert!(
+        !stdout.contains("/synth/bin/bash"),
+        "the payload is not the shell: {stdout}"
+    );
+    assert_eq!(
+        stdout,
+        expected_minimal_argv(&repo).replace("/synth/bin/bash\n", "ls\n"),
+        "the argv must be the plain run's, only the payload differs"
+    );
+    assert!(
+        !sidecar.join(mysbx::result::FILE_NAME).exists(),
+        "a dry run must not write a result"
+    );
+}
+
+#[test]
+fn the_flags_before_and_after_the_verb_are_one_run() {
+    // D10's one position rule, applied to the new flags: `--result`
+    // before the verb and `--timeout` after it are the same
+    // invocation. The dry run of both spellings prints the same argv
+    // (and never reaches the waiting path).
+    let (inv, _, _) = fixture_with_backend("result-positions", &[]);
+    let first = run_binary_with(
+        &inv,
+        &[
+            "--result",
+            "run",
+            "--timeout",
+            "30",
+            "--dry-run",
+            "--",
+            "ls",
+        ],
+    );
+    let second = run_binary_with(
+        &inv,
+        &[
+            "run",
+            "--result",
+            "--dry-run",
+            "--timeout",
+            "30",
+            "--",
+            "ls",
+        ],
+    );
+    assert_eq!(first.0, 0, "stderr: {}", first.2);
+    assert_eq!(second.0, 0, "stderr: {}", second.2);
+    assert_eq!(first.1, second.1, "both spellings must be one run");
+}
+
+#[test]
+fn result_without_run_is_refused_with_a_naming_message() {
+    // The bare form has no consumable outcome, and every other verb
+    // too: both refusals are usage errors with a message that names
+    // the flag AND the reason (not accept-and-ignore).
+    let (inv, _, _) = fixture("result-refused", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--result"]);
+    assert_eq!(code, 2);
+    assert!(
+        stderr.contains("--result") && stderr.contains("run -- CMD"),
+        "the refusal must name the flag and the form it belongs to: {stderr}"
+    );
+    let (code, _, stderr) = run_binary_with(&inv, &["--timeout", "30"]);
+    assert_eq!(code, 2);
+    assert!(
+        stderr.contains("--timeout") && stderr.contains("run -- CMD"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn timeout_without_result_is_a_usage_error() {
+    // A plain run ends in an exec — there is no mysbx left to enforce a
+    // budget, so `--timeout` without `--result` is a command line that
+    // promises what no form of the invocation can do.
+    let (inv, _, _) = fixture_with_backend("timeout-alone", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["run", "--timeout", "30", "--", "ls"]);
+    assert_eq!(code, 2);
+    assert!(
+        stderr.contains("--timeout is not valid without --result"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_bad_timeout_value_is_a_usage_error() {
+    let (inv, _, _) = fixture_with_backend("timeout-bad", &[]);
+    for value in ["0", "-1", "soon", ""] {
+        let args = ["run", "--result", "--timeout", value, "--", "ls"];
+        let out = spawn_with_args(&inv, &args)
+            .output()
+            .expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "`{value}` must be a usage error: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+}
+
+#[test]
+fn mysbx_own_failures_exit_70_not_1() {
+    // The heart of the D8 extension: a failure of the TOOL is no
+    // longer `1` — that is a payload's own code (the `failed` state).
+    // `70` (agent-microvm's `infrastructure-error`) keeps the two
+    // apart; every earlier `1` assertion in this suite is now this
+    // one. Pin it on the two canonical cases: the uninitialized repo
+    // and the missing backend.
+    let (inv, _, _) = fixture_uninited("exit70", &["--dry-run"]);
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("mysbx init"), "{stderr}");
+
+    let (inv, _, _) = fixture("exit70-backend", &["--dry-run"]);
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("no backend configured"), "{stderr}");
+}
+
+#[test]
+fn a_result_run_of_a_dead_backend_records_an_infrastructure_error() {
+    // The waited path needs no runnable bwrap — a broken `MYSBX_BWRAP`
+    // pin is a spawn failure, which the waited run RECORDS (unlike the
+    // exec path, which only reports it). This is the one exit-70 case
+    // a result file exists for: the run happened, it failed at the
+    // boundary, and the driver polling the file learns the outcome.
+    let (inv, _, sidecar) = fixture_with_backend("result-infra", &[]);
+    let mut cmd = spawn_with_args(
+        &inv,
+        &[
+            "run",
+            "--result",
+            "--",
+            "/nonexistent/mysbx-bwrap",
+            "payload",
+        ],
+    );
+    cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let result = read_result(&sidecar);
+    assert!(
+        result.contains("\"state\": \"infrastructure-error\""),
+        "{result}"
+    );
+    assert!(result.contains("\"exitCode\": 70"), "{result}");
+    assert!(result.contains("cannot exec the backend"), "{result}");
+    // The pointer line on stderr (stdout is the payload's, D9).
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains(&format!(
+            "result: {}",
+            sidecar.join(mysbx::result::FILE_NAME).display()
+        )),
+        "stderr must point at the result file: {stderr}"
+    );
+}
+
+#[test]
+fn the_result_file_is_replaced_not_appended() {
+    // One file per repo: a second run replaces the first's outcome, so
+    // the sidecar cannot grow without bound and the file always names
+    // the LATEST run (a driver wanting history copies it).
+    let (inv, _, sidecar) = fixture_with_backend("result-replace", &[]);
+    for _ in 0..3 {
+        let mut cmd = spawn_with_args(&inv, &["run", "--result", "--", "/nonexistent/mysbx-bwrap"]);
+        cmd.env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap");
+        let out = cmd.output().expect("failed to spawn mysbx");
+        assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+        let result = read_result(&sidecar);
+        assert_eq!(
+            result.matches("\"state\"").count(),
+            1,
+            "one state per run, the file was replaced: {result}"
+        );
+    }
+}
+
+#[test]
+fn a_payload_run_through_a_result_stub_completes_and_records() {
+    // The full waited path with a runnable backend: the tests use a
+    // STUB for `MYSBX_BWRAP` — a shell script that ignores its bwrap
+    // argv and runs `$MYSBX_RESULT_STUB_CMD`-style behavior is too
+    // clever; instead the stub simply exits with the code the test
+    // wants, proving the waited run records the REAL outcome of the
+    // process it started. Exit 42: completed/failed is decided by the
+    // payload, 42 is a failed run with the code recorded.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let (inv, repo, sidecar) = fixture_with_backend("result-payload", &[]);
+    let mut cmd = spawn_with_args(&inv, &["run", "--result", "--", "/usr/bin/env"]);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin").env("TERM", "dumb");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a completing payload is exit 0\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    let result = read_result(&sidecar);
+    assert!(result.contains("\"state\": \"completed\""), "{result}");
+    assert!(result.contains("\"exitCode\": 0"), "{result}");
+    assert!(result.contains("\"payloadExitCode\": 0"), "{result}");
+    assert!(
+        result.contains(&format!(
+            "\"repo\": \"{}\"",
+            repo.canonicalize().unwrap().display()
+        )),
+        "the record names the repo: {result}"
+    );
+    assert!(
+        result.contains("\"payload\": [\"/usr/bin/env\"]"),
+        "the record names the payload: {result}"
+    );
+    // The payload's stdout is untouched by the result machinery: the
+    // file went to the sidecar, the pointer to stderr.
+    assert!(!stdout.contains("result.json"), "{stdout}");
+}
+
+#[test]
+fn a_failing_payload_run_through_a_result_records_the_failed_state() {
+    // The same waited run, payload non-zero: exit `1` — the
+    // interpreted `failed` state, NOT the payload's own 127 — and the
+    // exact code in the file.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let (inv, _, sidecar) = fixture_with_backend("result-failed", &[]);
+    let mut cmd = spawn_with_args(
+        &inv,
+        &[
+            "run",
+            "--result",
+            "--",
+            "/usr/bin/env",
+            "no-such-binary-xyz",
+        ],
+    );
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "the failed state is exit 1, not the payload's 127"
+    );
+    let result = read_result(&sidecar);
+    assert!(result.contains("\"state\": \"failed\""), "{result}");
+    assert!(result.contains("\"exitCode\": 1"), "{result}");
+    assert!(result.contains("\"payloadExitCode\": 127"), "{result}");
+}
+
+#[test]
+fn a_result_run_without_a_timeout_records_the_state_without_a_budget() {
+    // `timeoutSec` is present only when a budget was given — a driver
+    // distinguishing "no budget" from "budget 0" needs the omission.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let (inv, _, sidecar) = fixture_with_backend("result-no-timeout", &[]);
+    let mut cmd = spawn_with_args(&inv, &["run", "--result", "--", "/usr/bin/env"]);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    assert_eq!(out.status.code(), Some(0));
+    let result = read_result(&sidecar);
+    assert!(result.contains("\"state\": \"completed\""), "{result}");
+    assert!(!result.contains("timeoutSec"), "{result}");
+}
+
+#[test]
+fn an_over_the_budget_run_is_timed_out_exit_124() {
+    // The timeout budget of the D8 extension: a payload that outlives
+    // `--timeout` is killed with its whole process group and the run
+    // exits `124` (agent-microvm's `timed-out`), the file records
+    // `timed-out` with the budget and NO payload fate — the payload's
+    // outcome is mysbx's kill, not its own.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let (inv, _, sidecar) = fixture_with_backend("result-timeout", &[]);
+    let args = [
+        "run".to_owned(),
+        "--result".to_owned(),
+        "--timeout".to_owned(),
+        "1".to_owned(),
+        "--".to_owned(),
+        bash.to_string_lossy().into_owned(),
+        "-c".to_owned(),
+        "sleep 30".to_owned(),
+    ];
+    let mut cmd = spawn_with_args(&inv, &args);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    assert_eq!(
+        out.status.code(),
+        Some(124),
+        "the exhausted budget is exit 124\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let result = read_result(&sidecar);
+    assert!(result.contains("\"state\": \"timed-out\""), "{result}");
+    assert!(result.contains("\"exitCode\": 124"), "{result}");
+    assert!(result.contains("\"timeoutSec\": 1"), "{result}");
+    assert!(!result.contains("payloadExitCode"), "{result}");
+    assert!(!result.contains("payloadSignal"), "{result}");
+}
+
+#[test]
+fn a_cancelled_result_run_exits_130_and_records_the_signal() {
+    // SIGINT while mysbx waits: the whole sandbox process group dies,
+    // the run exits `130` (the shell's 128 + 2) and the file records
+    // `cancelled` naming SIGINT. `kill(2)` from the test is the
+    // operator's Ctrl-C.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let (inv, _, sidecar) = fixture_with_backend("result-cancel", &[]);
+    let args = [
+        "run".to_owned(),
+        "--result".to_owned(),
+        "--".to_owned(),
+        bash.to_string_lossy().into_owned(),
+        "-c".to_owned(),
+        "sleep 30".to_owned(),
+    ];
+    let mut cmd = spawn_with_args(&inv, &args);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
+    cmd.stdin(std::process::Stdio::piped());
+    let child = cmd.spawn().expect("failed to spawn mysbx");
+    // Give the run time to reach the wait loop, then send SIGINT to
+    // the mysbx process — the handler records it, the loop kills the
+    // group, the record is written.
+    std::thread::sleep(std::time::Duration::from_millis(700));
+    unsafe {
+        libc_kill(child.id(), 2);
+    }
+    let out = child.wait_with_output().expect("mysbx died unexpectedly");
+    assert_eq!(
+        out.status.code(),
+        Some(130),
+        "SIGINT while waiting is exit 130\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let result = read_result(&sidecar);
+    assert!(result.contains("\"state\": \"cancelled\""), "{result}");
+    assert!(result.contains("\"exitCode\": 130"), "{result}");
+    assert!(result.contains("\"cancelledBy\": \"SIGINT\""), "{result}");
+    assert!(!result.contains("payloadExitCode"), "{result}");
+}
+
+/// `kill(2)` from the tests, the zero-dependency way: a raw extern like
+/// the ones the crate's own `gui` detach uses. The test crate is as
+/// dependency-free as the lib.
+unsafe fn libc_kill(pid: u32, signum: i32) {
+    extern "C" {
+        fn kill(pid: i32, signum: i32) -> i32;
+    }
+    kill(pid as i32, signum);
+}
+
+#[test]
+fn a_verbose_result_run_reports_the_waiting_mode() {
+    // D10 + D17: the report's `mode:` line tells the truth for a
+    // waited run — not "executing", and the `## `-prefix rule of the
+    // report is unchanged, so a following `--dry-run` argv block
+    // stays byte-identical (D10's grep-promise).
+    let (inv, _, _) = fixture_with_backend("verbose-result", &[]);
+    let (code, stdout, stderr) = run_binary_with(
+        &inv,
+        &["run", "--result", "--verbose", "--dry-run", "--", "ls"],
+    );
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains("mode:           dry run"),
+        "the dry run wins the mode line (nothing is executed): {report}"
+    );
+    // The unprefixed argv block follows, byte-identical to a plain
+    // dry run of the same payload.
+    let argv: String = stdout
+        .lines()
+        .filter(|l| !l.starts_with("## "))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    assert!(argv.starts_with("bwrap\n"), "{argv}");
 }

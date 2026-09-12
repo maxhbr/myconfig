@@ -117,13 +117,13 @@ All six items are done; the MVP is complete.
 - `cd <repo> && mysbx init && mysbx run --dry-run -- ls /` prints the
   bwrap executable (argv[0], review-1 finding 7) followed by the argv,
   one argument per line, on stdout, and exits `0`. Without the `init`
-  the run exits `1` and names it (`cli.md` D13).
+  the run exits `70` and names it (`cli.md` D13, D8).
 - The golden tests pin that argv for: minimal config, a `ro` and a `rw` mount,
   `network = false`, an `[env]` entry, and mounts from both layers at once.
 - Running in `$HOME`, in a repo whose root contains `$HOME`, or in `/`
-  fails with exit `1` and a `mysbx: ` message.
+  fails with exit `70` and a `mysbx: ` message (`cli.md` D8).
 - A sidecar that re-enables the network or overrides a user-set `[env]`
-  variable fails with exit `1`; a sidecar `[[mounts]]` entry needs no
+  variable fails with exit `70`; a sidecar `[[mounts]]` entry needs no
   user-config counterpart (`config.md` D7).
 - No `myconfig.ai` module outside `mysbx/` changes.
 - Manual acceptance (operator, not CI): the sandbox shows only the declared

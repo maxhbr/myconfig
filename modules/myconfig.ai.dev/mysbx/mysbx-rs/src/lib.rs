@@ -29,11 +29,26 @@ pub mod config;
 pub mod merge;
 pub mod repo;
 pub mod report;
+pub mod result;
 pub mod toml;
 
 /// The usage text.
 pub const USAGE: &str = include_str!("usage.txt");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The exit code of mysbx's own runtime failure (cli.md D8, bd
+/// myconfig-0ql): the command line was fine, but the run it named
+/// could not happen — the repo could not be resolved, the sidecar is
+/// missing, a configuration cannot be parsed or laid out, the backend
+/// cannot be started or waited for.
+///
+/// `70` (agent-microvm's `infrastructure-error`), not `1`: `1` is a
+/// PAYLOAD's own failure — under the passthrough of a plain run and
+/// as the `failed` state of a `--result` run — and a tool that runs
+/// payloads must not be able to forge its own infrastructure failures
+/// into that code. Public so the tests assert the contract, not a
+/// hand-copied number.
+pub const EXIT_INFRASTRUCTURE: i32 = 70;
 
 /// Print the usage to stdout.
 pub fn usage() {
@@ -72,9 +87,14 @@ pub const FORWARDED_ENV_VARS: &[&str] = &[
 
 /// Dispatch on the argument list (without argv[0]); returns the exit code.
 ///
-/// Exit codes (cli.md D8): `0` success, `1` runtime failure, `2` usage
-/// error. A payload's own exit code propagates unchanged, because the real
-/// run ends in an `exec` that replaces this process.
+/// Exit codes (cli.md D8, extended by bd myconfig-0ql): `0` success,
+/// `2` usage error, `70` mysbx's own runtime failure — the old `1`,
+/// renumbered (agent-microvm's `infrastructure-error`) so a payload's
+/// own `1` can never be mistaken for the tool's failure — plus `124`
+/// timed out and `130`/`143` cancelled for a `--result` run, whose
+/// `failed` state is `1`. A payload's own exit code propagates
+/// unchanged in a plain run — the exec replaces this process — while
+/// a `--result` run waits and interprets instead (cli.md D17).
 pub fn run(args: Vec<String>) -> i32 {
     // The global flags are accepted only BEFORE the subcommand / bare
     // form; anything after `--` is payload and never parsed (cli.md D4,
@@ -86,12 +106,28 @@ pub fn run(args: Vec<String>) -> i32 {
     };
     match rest.first().map(String::as_str) {
         // Bare `mysbx` is the primary action (docs/design/cli.md D2): enter
+        // the sandbox for the current repository. The one-shot flags
+        // of the D8/D17 extension are refused here too (bd
+        // myconfig-0ql): `--result`/`--timeout` name the outcome of a
+        // payload run, and an interactive shell has no consumable one —
+        // the usage error teaches the flag belongs to `run -- CMD`
+        // instead of silently ignoring it.
+        None if flags.result || flags.timeout.is_some() => {
+            eprintln!(
+                "mysbx: {} names the outcome of a payload run — use it with `run -- CMD`",
+                flags.first_run_scoped_name()
+            );
+            eprintln!("try `mysbx --help`");
+            2
+        }
+        // Bare `mysbx` is the primary action (docs/design/cli.md D2): enter
         // the sandbox for the current repository.
-        None => sandbox(flags, bwrap::Payload::Shell),
+        None => sandbox(flags, bwrap::Payload::Shell, RunMode::Exec),
         // The run-scoped flags are refused with the verb before any
         // verb arm runs (D14 for `--multiplexer`, D16 for
-        // `--ro`/`--rw`): they name the mounts or the interactive
-        // payload of a run, and no OTHER verb has one to choose or
+        // `--ro`/`--rw`, the D8/D17 extension for `--result`/
+        // `--timeout`): they name the mounts, the payload or the
+        // outcome of a run, and no OTHER verb has one to choose or
         // add. `--multiplexer` is refused for `run` too (D11: a
         // one-shot never starts a session), while `--ro`/`--rw` are
         // accepted before `run` exactly like `--dry-run` is (D10:
@@ -100,6 +136,7 @@ pub fn run(args: Vec<String>) -> i32 {
         // run.
         Some(other)
             if (flags.multiplexer.is_some()
+                || ((flags.result || flags.timeout.is_some()) && other != "run")
                 || ((!flags.ro.is_empty() || !flags.rw.is_empty()) && other != "run"))
                 && matches!(other, "run" | "gui" | "init" | "edit" | "version" | "help") =>
         {
@@ -171,6 +208,21 @@ pub struct Flags {
     pub ro: Vec<String>,
     /// The `--rw <path>` additions (cli.md D16): the same, read-write.
     pub rw: Vec<String>,
+    /// The `--timeout <seconds>` budget of a `--result` run (bd
+    /// myconfig-0ql, the D8 extension): when set, a run whose backend
+    /// outlives it is killed and recorded as `timed-out`. `None`
+    /// means no budget — the run may wait forever. Accepted before
+    /// the verb (for `run`) and after it, the same position rule as
+    /// every run-scoped flag (D10/D16); `run_command` merges the two
+    /// spellings.
+    pub timeout: Option<u64>,
+    /// The `--result` mode of a run (bd myconfig-0ql, the D8/D17
+    /// extension): wait for the backend and record the outcome in
+    /// the sidecar's `result.json` instead of exec'ing. Accepted
+    /// before the verb and after `run` like `--timeout`; refused
+    /// for every other verb by the dispatcher — only a one-shot has
+    /// a consumable outcome.
+    pub result: bool,
 }
 
 impl Flags {
@@ -198,14 +250,22 @@ impl Flags {
 
     /// The run-scoped flag named in the dispatcher's verb refusal —
     /// `--multiplexer` first (it is the older flag), then the first
-    /// `--ro`/`--rw` addition.
+    /// `--ro`/`--rw` addition, then `--timeout`/`--result`. `--timeout`
+    /// and `--result` are parsed here so they follow the one position
+    /// rule of D10 (before the verb and after it, for `run` only), and
+    /// the dispatcher names whichever was set when another verb is
+    /// typed with them.
     fn first_run_scoped_name(&self) -> &'static str {
         if self.multiplexer.is_some() {
             "--multiplexer"
         } else if !self.ro.is_empty() {
             "--ro"
-        } else {
+        } else if !self.rw.is_empty() {
             "--rw"
+        } else if self.timeout.is_some() {
+            "--timeout"
+        } else {
+            "--result"
         }
     }
 }
@@ -314,6 +374,49 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                 rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
                 continue;
             }
+            "--result" => {
+                // bd myconfig-0ql (the D8/D17 extension): the run mode
+                // itself, so it follows the one position rule of D10 —
+                // before the verb and after it for `run`, refused for
+                // every other verb by the dispatcher.
+                if flags.result {
+                    eprintln!("mysbx: repeated flag: --result");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                flags.result = true;
+            }
+            "--timeout" => {
+                // The budget of a `--result` run, the same position
+                // rule as `--result` (bd myconfig-0ql). A repeated
+                // flag is a typo (D5), a bad value is a usage error —
+                // the command line is wrong, not the world it names
+                // (D8).
+                if flags.timeout.is_some() {
+                    eprintln!("mysbx: repeated flag: --timeout");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                let value = match tail.split_first() {
+                    Some((v, _)) => v,
+                    None => {
+                        eprintln!("mysbx: --timeout requires a positive whole number of seconds");
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                };
+                flags.timeout = Some(match value.parse::<u64>() {
+                    Ok(secs) if secs > 0 => secs,
+                    _ => {
+                        eprintln!("mysbx: --timeout requires a positive whole number of seconds, got `{value}`");
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                });
+                // The value argument is consumed with the flag.
+                rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
+                continue;
+            }
             _ => break,
         }
         rest = tail;
@@ -331,6 +434,15 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
 /// not an empty sandbox.
 fn run_command(global: Flags, args: &[String]) -> i32 {
     let mut flags = global;
+    // The structured-result mode (bd myconfig-0ql, the D8/D17
+    // extension): `--result` asks for a waited run that records its
+    // outcome in the sidecar's `result.json`, `--timeout <seconds>`
+    // bounds it. Both are `run`-only — the bare form is interactive,
+    // nobody consumes its result — so they are parsed here too, in the
+    // same position rule as the flags D10 already accepts after the
+    // verb, and refused everywhere else by the dispatcher (never
+    // accept-and-ignore: an operator typing `mysbx --result` must
+    // learn the flag does not do that for a shell).
     let mut idx = 0;
     while let Some(arg) = args.get(idx) {
         match arg.as_str() {
@@ -342,6 +454,39 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                 flags.verbose = true;
                 idx += 1;
             }
+            "--result" => {
+                if flags.result {
+                    eprintln!("mysbx run: repeated flag: --result");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                flags.result = true;
+                idx += 1;
+            }
+            "--timeout" => {
+                if flags.timeout.is_some() {
+                    eprintln!("mysbx run: repeated flag: --timeout");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                let value = match args.get(idx + 1) {
+                    Some(v) => v.clone(),
+                    None => {
+                        eprintln!("mysbx run: --timeout requires a number of seconds");
+                        eprintln!("usage: {RUN_USAGE}");
+                        return 2;
+                    }
+                };
+                flags.timeout = Some(match value.parse::<u64>() {
+                    Ok(secs) if secs > 0 => secs,
+                    _ => {
+                        eprintln!("mysbx run: --timeout requires a positive whole number of seconds, got `{value}`");
+                        eprintln!("usage: {RUN_USAGE}");
+                        return 2;
+                    }
+                });
+                idx += 2;
+            }
             "--multiplexer" => {
                 // cli.md D11/D14: `run -- CMD` never starts a session, so
                 // there is no interactive payload for the flag to select —
@@ -349,7 +494,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                 // one-shot ran inside a session it did not.
                 eprintln!("mysbx run: --multiplexer is not valid with `run`");
                 eprintln!("  it selects the interactive payload only: `mysbx --multiplexer <mux>` starts the session");
-                eprintln!("usage: mysbx run [--dry-run] [--verbose] -- COMMAND...");
+                eprintln!("usage: {RUN_USAGE}");
                 return 2;
             }
             "--ro" => {
@@ -360,7 +505,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                     Some(v) => v.clone(),
                     None => {
                         eprintln!("mysbx run: --ro requires a path");
-                        eprintln!("usage: mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND...");
+                        eprintln!("usage: {RUN_USAGE}");
                         return 2;
                     }
                 };
@@ -372,7 +517,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                     Some(v) => v.clone(),
                     None => {
                         eprintln!("mysbx run: --rw requires a path");
-                        eprintln!("usage: mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND...");
+                        eprintln!("usage: {RUN_USAGE}");
                         return 2;
                     }
                 };
@@ -385,9 +530,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
             }
             other => {
                 eprintln!("mysbx run: unexpected argument: {other}");
-                eprintln!(
-                    "usage: mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND..."
-                );
+                eprintln!("usage: {RUN_USAGE}");
                 return 2;
             }
         }
@@ -395,10 +538,48 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
     let cmd = &args[idx..];
     if cmd.is_empty() {
         eprintln!("mysbx run: no command given after `--`");
-        eprintln!("usage: mysbx run [--dry-run] [--verbose] [--ro <path>]... [--rw <path>]... -- COMMAND...");
+        eprintln!("usage: {RUN_USAGE}");
         return 2;
     }
-    sandbox(flags, bwrap::Payload::Command(cmd.to_vec()))
+    // A timeout without the result mode is the one combination the
+    // flags allow syntactically but cannot act on: a plain run ends
+    // in an `exec`, there is no mysbx left to enforce a budget. It
+    // is a usage error (the command line promises a behaviour no
+    // form of this invocation has), not a runtime failure.
+    if flags.timeout.is_some() && !flags.result {
+        eprintln!("mysbx run: --timeout is not valid without --result");
+        eprintln!(
+            "  a plain run ends in an exec — the payload's code propagates and no budget can apply"
+        );
+        eprintln!("usage: {RUN_USAGE}");
+        return 2;
+    }
+    let mode = if flags.result {
+        RunMode::Result
+    } else {
+        RunMode::Exec
+    };
+    sandbox(flags, bwrap::Payload::Command(cmd.to_vec()), mode)
+}
+
+/// The usage line every `run` error prints — the run flags of D8's
+/// extension included, so an operator reading a refusal sees the full
+/// accepted set without opening the help (the same pairing rule
+/// usage.txt follows, D5).
+const RUN_USAGE: &str =
+    "mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--ro <path>]... [--rw <path>]... -- COMMAND...";
+
+/// How a sandbox run hands the terminal — and the exit code — over
+/// (cli.md D8/D17): exec, or wait-and-record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunMode {
+    /// The default: `exec` the backend argv, the payload's own exit
+    /// code propagates unchanged.
+    Exec,
+    /// `run --result`: spawn the backend, wait (bounded by
+    /// `Flags::timeout`), record the outcome in the sidecar's
+    /// `result.json` and exit by the interpreted contract.
+    Result,
 }
 
 /// `mysbx gui ARG...` — start the terminal emulator and run `mysbx`
@@ -451,14 +632,14 @@ fn gui(flags: Flags, args: &[String]) -> i32 {
         Ok(p) => p.to_string_lossy().into_owned(),
         Err(e) => {
             eprintln!("mysbx gui: cannot locate my own executable: {e}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
     let cwd = match std::env::current_dir() {
         Ok(d) => d.to_string_lossy().into_owned(),
         Err(e) => {
             eprintln!("mysbx gui: cannot determine current directory: {e}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
     let mut cmd = std::process::Command::new(&terminal);
@@ -513,7 +694,7 @@ fn gui_detached(cmd: std::process::Command, terminal: &str) -> i32 {
         Ok(pair) => pair,
         Err(e) => {
             eprintln!("mysbx gui: cannot detach: {e}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
     let null = match std::fs::OpenOptions::new()
@@ -524,14 +705,14 @@ fn gui_detached(cmd: std::process::Command, terminal: &str) -> i32 {
         Ok(f) => f,
         Err(e) => {
             eprintln!("mysbx gui: cannot open /dev/null: {e}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
     match unsafe { libc_fork() } {
         0 => unsafe { gui_detached_child(cmd, terminal, child_end, null) },
         -1 => {
             eprintln!("mysbx gui: cannot fork to detach");
-            1
+            EXIT_INFRASTRUCTURE
         }
         _ => {
             // The shell's half: NOT waiting for the child is the point —
@@ -546,7 +727,7 @@ fn gui_detached(cmd: std::process::Command, terminal: &str) -> i32 {
                     let mut msg = String::new();
                     let _ = parent_end.read_to_string(&mut msg);
                     eprintln!("mysbx gui: {}", msg.trim_end());
-                    1
+                    EXIT_INFRASTRUCTURE
                 }
                 // The child writes exactly one byte before anything
                 // else; a clean EOF means it died before it could
@@ -555,11 +736,11 @@ fn gui_detached(cmd: std::process::Command, terminal: &str) -> i32 {
                     eprintln!(
                         "mysbx gui: the detached starter died before the terminal was started"
                     );
-                    1
+                    EXIT_INFRASTRUCTURE
                 }
                 Err(e) => {
                     eprintln!("mysbx gui: cannot detach: {e}");
-                    1
+                    EXIT_INFRASTRUCTURE
                 }
             }
         }
@@ -659,7 +840,7 @@ unsafe fn libc_dup2(from: i32, to: i32) {
 ///
 /// Nothing here creates the sidecar (cli.md D13): a run that finds no
 /// sidecar config fails with the `mysbx init` hint.
-fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
+fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     let dry_run = flags.dry_run;
     // The `--multiplexer` override (cli.md D14): the run flag wins over
     // the merged `multiplexer` of the layers, per the precedence of D6
@@ -681,7 +862,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         Ok(r) => r,
         Err(e) => {
             eprintln!("mysbx: {e}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
 
@@ -692,7 +873,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     // of a run that could actually happen.
     if let Err(msg) = require_initialized_sidecar(&repo) {
         eprintln!("mysbx: {msg}");
-        return 1;
+        return EXIT_INFRASTRUCTURE;
     }
     // Always true past the check; kept as the value the report shows so
     // the report keeps describing what the run FOUND.
@@ -709,7 +890,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
             Ok(l) => l,
             Err(e) => {
                 eprintln!("mysbx: {e}");
-                return 1;
+                return EXIT_INFRASTRUCTURE;
             }
         };
     // Kept for the report before the configs are consumed by the merge:
@@ -734,7 +915,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         Ok(m) => m,
         Err(e) => {
             eprintln!("mysbx: {e}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
 
@@ -772,7 +953,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("mysbx: cannot determine the current directory: {e}");
-                return 1;
+                return EXIT_INFRASTRUCTURE;
             }
         };
         for (flag, values, mode) in [
@@ -785,7 +966,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
                         Ok(p) => p,
                         Err(e) => {
                             eprintln!("mysbx: {e}");
-                            return 1;
+                            return EXIT_INFRASTRUCTURE;
                         }
                     };
                 merged.mounts.push(config::Mount {
@@ -813,7 +994,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
     if !dry_run {
         if let Err(msg) = ensure_state_dirs(&repo, &merged.state_dirs) {
             eprintln!("mysbx: {msg}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     }
 
@@ -826,13 +1007,13 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
             eprintln!(
                 "mysbx: unsupported backend `{other}` — the MVP implements only `bubblewrap`"
             );
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
         None => {
             eprintln!(
                 "mysbx: no backend configured — set `backend = \"bubblewrap\"` in the user or sidecar config"
             );
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     }
 
@@ -920,7 +1101,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
         // the merge errors above, never a Rust panic.
         Err(e) => {
             eprintln!("mysbx: {e}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
     // The Nix wrapper (item 6) pins the binary via MYSBX_BWRAP; the
@@ -947,6 +1128,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
             bwrap_bin: &bwrap_bin,
             payload: &payload,
             dry_run,
+            result: mode == RunMode::Result,
         }) {
             println!("{line}");
         }
@@ -971,15 +1153,299 @@ fn sandbox(flags: Flags, payload: bwrap::Payload) -> i32 {
 
     let mut cmd = std::process::Command::new(&bwrap_bin);
     cmd.args(&argv);
-    // `exec` replaces this process on success, so the payload's exit code
-    // propagates unchanged (cli.md D8); the call only returns on failure,
-    // with the error as its return value.
-    use std::os::unix::process::CommandExt;
-    let e = cmd.exec();
-    eprintln!("mysbx: cannot exec {bwrap_bin}: {e}");
-    1
+    match mode {
+        RunMode::Exec => {
+            // `exec` replaces this process on success, so the payload's
+            // exit code propagates unchanged (cli.md D8); the call only
+            // returns on failure, with the error as its return value.
+            use std::os::unix::process::CommandExt;
+            let e = cmd.exec();
+            eprintln!("mysbx: cannot exec {bwrap_bin}: {e}");
+            EXIT_INFRASTRUCTURE
+        }
+        RunMode::Result => run_with_result(cmd, &repo, &payload, flags.timeout),
+    }
 }
 
+/// The waited half of a `--result` run (cli.md D8/D17, bd
+/// myconfig-0ql): start the backend as a child, wait for its outcome
+/// — bounded by `timeout_secs` when given — record that outcome in
+/// the sidecar's `result.json` and exit by the interpreted
+/// contract. The backend inherits mysbx's stdin/stdout/stderr, so a
+/// payload's own output and its terminal stay exactly what a plain
+/// run gives it; only WHO outlives the payload differs.
+///
+/// Cancellation (SIGINT/SIGTERM) is mysbx's own answer to Ctrl-C
+/// while a run is being waited for: the signal goes to the process
+/// GROUP — the backend is in it, a shell payload's children too — so
+/// everything dies, the outcome is recorded as `cancelled` with the
+/// signal named, and the exit code is the shell's `128 + signum`
+/// (130 for SIGINT, 143 for SIGTERM). The record distinguishes the
+/// signals a terminal sends (a cancellation) from everything else:
+/// anything else is NOT recorded — mysbx dies with the default
+/// action and no file is written, exactly like a plain run that is
+/// killed mid-exec.
+fn run_with_result(
+    mut cmd: std::process::Command,
+    repo: &repo::Repo,
+    payload: &bwrap::Payload,
+    timeout_secs: Option<u64>,
+) -> i32 {
+    let payload_vec = match payload {
+        bwrap::Payload::Command(args) => args.clone(),
+        // Unreachable: the dispatcher refuses `--result` for the bare
+        // form (D8/D17), so a waited run always has a command payload.
+        bwrap::Payload::Shell => Vec::new(),
+    };
+    let started = std::time::Instant::now();
+    let started_at = result::epoch_secs(std::time::SystemTime::now());
+
+    // The signal dance: SIGINT/SIGTERM/SIGALRM are caught with one
+    // flag-setting handler — everything else about the outcome is the
+    // wait loop's business. `alarm(2)` delivers the timeout budget as
+    // SIGALRM, zero dependencies, so raw libc symbols it is (the same
+    // idiom main.rs and the `gui` detach use).
+    CANCELLED.store(0, std::sync::atomic::Ordering::SeqCst);
+    unsafe {
+        libc_signal_catch(SIGINT);
+        libc_signal_catch(SIGTERM);
+        libc_signal_catch(SIGALRM);
+        if let Some(secs) = timeout_secs {
+            libc_alarm(secs);
+        }
+    }
+    let spawn_failed = |e: std::io::Error| {
+        // A backend that never started is an infrastructure error —
+        // but it is still recorded: the run DID happen, it failed at
+        // the boundary, and a batch driver polling `result.json` for
+        // THIS run needs the outcome to exist.
+        let record = result::Record {
+            state: result::State::InfrastructureError,
+            repo: repo.root.to_string_lossy().into_owned(),
+            sidecar: repo.sidecar.to_string_lossy().into_owned(),
+            payload: payload_vec.clone(),
+            started_at,
+            finished_at: result::epoch_secs(std::time::SystemTime::now()),
+            duration_ms: started.elapsed().as_millis() as u64,
+            timeout: timeout_secs,
+            payload_exit: None,
+            payload_signal: None,
+            error: Some(format!("cannot exec the backend: {e}")),
+        };
+        record_result(&record, repo);
+        eprintln!("mysbx: cannot exec the backend: {e}");
+        EXIT_INFRASTRUCTURE
+    };
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            // The flags must not fire on the NEXT command — a leftover
+            // alarm or handler is not its budget.
+            unsafe {
+                libc_alarm(0);
+                libc_signal_restore();
+            }
+            return spawn_failed(e);
+        }
+    };
+
+    // The wait loop: poll the child, watch the cancellation flag.
+    // SIGALRM (the exhausted budget) sets the flag like a
+    // cancellation; the loop cannot tell them apart by flag alone, so
+    // the handler records WHICH signal arrived and the state comes
+    // from that: SIGALRM → timed-out, SIGINT/SIGTERM → cancelled.
+    let mut waited: Option<std::process::ExitStatus> = None;
+    let mut signum: i32;
+    loop {
+        signum = CANCELLED.load(std::sync::atomic::Ordering::SeqCst);
+        if signum != 0 {
+            break;
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                waited = Some(status);
+                break;
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+            Err(e) => {
+                unsafe {
+                    libc_alarm(0);
+                    libc_signal_restore();
+                }
+                return spawn_failed(e);
+            }
+        }
+    }
+    // The payload's own fate — threaded as data, not statics: the
+    // backend IS the payload process (it execs it inside the
+    // sandbox), so its exit status is the record's `payloadExitCode`
+    // (or `payloadSignal` when it died by one). Only a run that
+    // reached an end on its own has one; a killed run does not — its
+    // outcome is mysbx's kill, not the payload's.
+    let ended = if signum != 0 {
+        // Cancelled or timed out: kill the whole process group — the
+        // backend is in it, a shell payload's children too — then
+        // reap it, so no sandbox process outlives the budget. KILL,
+        // not TERM: a graceful escalation would need a second wait
+        // loop with its own budget, and the operator asked for THIS
+        // run to end now. The child is reaped BEFORE the state is
+        // derived, so the record is final when it is written.
+        unsafe {
+            libc_kill(-libc_getpgrp(), SIGKILL);
+        }
+        let _ = child.wait();
+        if signum == SIGALRM {
+            result::State::TimedOut
+        } else {
+            result::State::Cancelled { signum }
+        }
+    } else {
+        outcome_of(waited.expect("the loop only exits with a status")).0
+    };
+    let (payload_exit, payload_signal) = if signum != 0 {
+        (None, None)
+    } else {
+        let (_, exit, signal) = outcome_of(waited.expect("the loop only exits with a status"));
+        (exit, signal)
+    };
+    unsafe {
+        libc_alarm(0);
+        libc_signal_restore();
+    }
+    let record = result::Record {
+        state: ended.clone(),
+        repo: repo.root.to_string_lossy().into_owned(),
+        sidecar: repo.sidecar.to_string_lossy().into_owned(),
+        payload: payload_vec,
+        started_at,
+        finished_at: result::epoch_secs(std::time::SystemTime::now()),
+        duration_ms: started.elapsed().as_millis() as u64,
+        timeout: timeout_secs,
+        payload_exit,
+        payload_signal,
+        error: None,
+    };
+    record_result(&record, repo);
+    ended.exit_code()
+}
+
+/// Interpret the backend's final [`ExitStatus`](std::process::ExitStatus)
+/// as the record's state plus the payload's own fate: exited `0` →
+/// completed, exited non-zero → failed, died by a signal → failed with
+/// the signal recorded (a payload killed by its own crash is a FAILED
+/// run, not a cancellation — nothing cancelled it).
+fn outcome_of(status: std::process::ExitStatus) -> (result::State, Option<i32>, Option<String>) {
+    use std::os::unix::process::ExitStatusExt;
+    if let Some(code) = status.code() {
+        if code == 0 {
+            (result::State::Completed, Some(0), None)
+        } else {
+            (result::State::Failed, Some(code), None)
+        }
+    } else if let Some(signum) = status.signal() {
+        (
+            result::State::Failed,
+            None,
+            Some(result::signal_name(signum)),
+        )
+    } else {
+        // Neither a code nor a signal — the stop of a traced process,
+        // which a plain run would not stop for either. A failed run
+        // with no payload fate: the file stays honest by omission.
+        (result::State::Failed, None, None)
+    }
+}
+
+/// Write `r` to `<sidecar>/result.json` — atomically, via the same
+/// [`write_atomically`] the config writer uses, so a batch driver
+/// never reads a half-written file — and point the operator at it on
+/// stderr (stdout is the payload's, cli.md D9).
+///
+/// A failure to WRITE the result does not change the run's outcome:
+/// the payload ran, its state is what it is, and the exit code comes
+/// from the record — the operator just also learns that the outcome
+/// was not recorded, from the `mysbx: ` diagnosis. Silent data loss
+/// it must not be; a wrong exit code it must not cause either.
+fn record_result(r: &result::Record, repo: &repo::Repo) {
+    let path = repo.sidecar.join(result::FILE_NAME);
+    if let Err(e) = write_atomically(&path, &result::render(r)) {
+        eprintln!("mysbx: cannot write {}: {e}", path.display());
+    } else {
+        eprintln!("mysbx: result: {}", path.display());
+    }
+}
+
+/// The flag the SIGINT/SIGTERM/SIGALRM handlers set: `0` no signal,
+/// otherwise the number of the signal that arrived. A plain atomic
+/// store is all a handler may do (no allocation, no locks — async
+/// signal safety); the wait loop loads it with `SeqCst` and derives
+/// everything else.
+static CANCELLED: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+// The signal numbers (the usual Linux ones — the crate targets
+// NixOS/Linux only, the same list main.rs and the `gui` detach use).
+const SIGINT: i32 = 2;
+const SIGALRM: i32 = 14;
+const SIGTERM: i32 = 15;
+const SIGKILL: i32 = 9;
+
+/// The one handler for all three caught signals: record the number,
+/// return. Everything else is the wait loop's business.
+unsafe extern "C" fn on_signal(signum: i32) {
+    CANCELLED.store(signum, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Install [`on_signal`] for the given signal — `signal(2)` via the
+/// raw libc symbol, the zero-dependency idiom of main.rs.
+unsafe fn libc_signal_catch(signum: i32) {
+    #[allow(non_snake_case)]
+    extern "C" {
+        fn signal(signum: i32, handler: usize) -> usize;
+    }
+    signal(signum, on_signal as unsafe extern "C" fn(i32) as usize);
+}
+
+/// Restore the default action for the three caught signals — a
+/// leftover handler would eat the NEXT command's Ctrl-C (the same
+/// reason [`run_with_result`] clears the alarm).
+unsafe fn libc_signal_restore() {
+    #[allow(non_snake_case)]
+    extern "C" {
+        fn signal(signum: i32, handler: usize) -> usize;
+    }
+    const SIG_DFL: usize = 0;
+    signal(SIGINT, SIG_DFL);
+    signal(SIGALRM, SIG_DFL);
+    signal(SIGTERM, SIG_DFL);
+}
+
+/// `alarm(2)`: deliver SIGALRM after `secs` seconds — the timeout
+/// budget, zero dependencies. `alarm(0)` cancels a pending one.
+unsafe fn libc_alarm(secs: u64) {
+    extern "C" {
+        fn alarm(secs: std::os::raw::c_uint) -> std::os::raw::c_uint;
+    }
+    alarm(secs as std::os::raw::c_uint);
+}
+
+/// `kill(2)` on a process group (negative pid). Raw libc, as above.
+unsafe fn libc_kill(pgrp: i32, signum: i32) {
+    extern "C" {
+        fn kill(pid: i32, signum: i32) -> i32;
+    }
+    kill(pgrp, signum);
+}
+
+/// `getpgrp(2)` — the group the kill above aims at. The backend is
+/// in mysbx's group (a spawned child stays there unless it calls
+/// `setpgid` itself, which bwrap does not), so killing the group
+/// reaches the backend AND every process it spawned.
+unsafe fn libc_getpgrp() -> i32 {
+    extern "C" {
+        fn getpgrp() -> i32;
+    }
+    getpgrp()
+}
 /// Everything that must stay unwritable for `path` to still be THIS
 /// policy file on the next run (review-4 item 1): the pathname is
 /// walked component by component on the host filesystem, and every
@@ -1137,12 +1603,12 @@ fn init(args: &[String]) -> i32 {
         Ok(r) => r,
         Err(e) => {
             eprintln!("mysbx: {e}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
     if let Err(msg) = ensure_sidecar(&repo) {
         eprintln!("mysbx: {msg}");
-        return 1;
+        return EXIT_INFRASTRUCTURE;
     }
     match ensure_sidecar_config(&repo, true) {
         Ok(Outcome::Created) => {}
@@ -1153,7 +1619,7 @@ fn init(args: &[String]) -> i32 {
             if approve_git_dirs {
                 if let Err(msg) = approve_git_dirs_in_existing_config(&repo) {
                     eprintln!("mysbx: {msg}");
-                    return 1;
+                    return EXIT_INFRASTRUCTURE;
                 }
             } else {
                 println!("## exists: {}", repo.sidecar.join("config.toml").display());
@@ -1161,7 +1627,7 @@ fn init(args: &[String]) -> i32 {
         }
         Err(msg) => {
             eprintln!("mysbx: {msg}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     }
     0
@@ -1196,7 +1662,7 @@ fn edit(args: &[String]) -> i32 {
         Ok(r) => r,
         Err(e) => {
             eprintln!("mysbx: {e}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
     // Resolve the editor BEFORE creating anything: a run that cannot
@@ -1205,12 +1671,12 @@ fn edit(args: &[String]) -> i32 {
         Ok(e) => e,
         Err(msg) => {
             eprintln!("mysbx: {msg}");
-            return 1;
+            return EXIT_INFRASTRUCTURE;
         }
     };
     if let Err(msg) = ensure_sidecar(&repo) {
         eprintln!("mysbx: {msg}");
-        return 1;
+        return EXIT_INFRASTRUCTURE;
     }
     // `false`: editing approves nothing — the git-dir approval stays
     // the explicit `mysbx init` (config.md D13).
@@ -1218,7 +1684,7 @@ fn edit(args: &[String]) -> i32 {
     // about to open, which is the point.
     if let Err(msg) = ensure_sidecar_config(&repo, false) {
         eprintln!("mysbx: {msg}");
-        return 1;
+        return EXIT_INFRASTRUCTURE;
     }
     let config = repo.sidecar.join("config.toml");
     let (bin, editor_args) = editor.split_first().expect("non-empty, see editor_command");
@@ -1229,7 +1695,7 @@ fn edit(args: &[String]) -> i32 {
     use std::os::unix::process::CommandExt;
     let e = cmd.exec();
     eprintln!("mysbx: cannot exec {bin}: {e}");
-    1
+    EXIT_INFRASTRUCTURE
 }
 
 /// The editor to run, as a command vector: `$EDITOR` when set,
@@ -1739,6 +2205,8 @@ mod tests {
                 multiplexer: None,
                 ro: Vec::new(),
                 rw: Vec::new(),
+                timeout: None,
+                result: false,
             }
         );
         assert_eq!(rest, &s(&["run"])[..]);
@@ -1817,6 +2285,76 @@ mod tests {
         // combination instead of silently ignoring the flag.
         assert_eq!(
             run(vec!["run".into(), "--multiplexer".into(), "tmux".into()]),
+            2
+        );
+    }
+
+    // The `--result`/`--timeout` flags (bd myconfig-0ql, the D8/D17
+    // extension): parsed before the verb and after it for `run`, kept
+    // in `Flags` like every other run-scoped flag, refused for every
+    // other verb and for the bare form.
+    #[test]
+    fn result_and_timeout_flags_parse_and_are_run_scoped() {
+        let s = |v: &[&str]| -> Vec<String> { v.iter().map(|x| (*x).to_string()).collect() };
+
+        // Before the verb...
+        let args = s(&["--result", "run"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert!(flags.result);
+        assert_eq!(rest, &s(&["run"])[..]);
+        // ...and after it, both spellings one run.
+        let args = s(&["--timeout", "30", "run"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert_eq!(flags.timeout, Some(30));
+        assert_eq!(rest, &s(&["run"])[..]);
+
+        // Repeats are usage errors, a typo like every other flag (D5).
+        assert_eq!(split_global_flags(&s(&["--result", "--result"])), Err(2));
+        assert_eq!(
+            split_global_flags(&s(&["--timeout", "30", "--timeout", "30"])),
+            Err(2)
+        );
+
+        // A missing value and a non-positive or non-numeric one are
+        // usage errors (D8: the command line is wrong).
+        assert_eq!(split_global_flags(&s(&["--timeout"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--timeout", "0"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--timeout", "-5"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--timeout", "soon"])), Err(2));
+
+        // Every verb but `run` refuses both, and the bare form (an
+        // interactive shell) has no consumable outcome either.
+        for args in [
+            vec!["--result", "init"],
+            vec!["--result", "edit"],
+            vec!["--result", "gui"],
+            vec!["--result", "version"],
+            vec!["--result", "help"],
+            vec!["--timeout", "30", "init"],
+            vec!["--timeout", "30", "help"],
+        ] {
+            assert_eq!(run(s(&args)), 2, "{args:?}");
+        }
+        // The bare form too — with its own message naming the flags
+        // as payload-run flags, not the generic verb refusal (there is
+        // no verb to name).
+        assert_eq!(run(s(&["--result"])), 2);
+        assert_eq!(run(s(&["--timeout", "30"])), 2);
+
+        // `--timeout` without `--result` is a usage error even WITH
+        // `run`: a plain run ends in an exec, no budget can apply.
+        assert_eq!(run(vec!["run".into(), "--timeout".into(), "30".into()]), 2);
+        // ...and with a payload too — the refusal fires after the
+        // command parses, so it is not shadowed by the missing-`--`
+        // error.
+        assert_eq!(
+            run(vec![
+                "run".into(),
+                "--timeout".into(),
+                "30".into(),
+                "--".into(),
+                "true".into()
+            ]),
             2
         );
     }
@@ -1948,6 +2486,8 @@ mod tests {
             "--multiplexer",
             "--ro",
             "--rw",
+            "--result",
+            "--timeout",
             "--help",
             "--version",
             "-h",
