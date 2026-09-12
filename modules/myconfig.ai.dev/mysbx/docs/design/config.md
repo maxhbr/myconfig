@@ -772,7 +772,7 @@ entry from mysbx's own closure, pinned by the wrapper as
 `MYSBX_MUX_ENTRY_TMUX`, `…_WORKMUX`, `…_HERDR`, `…_AOE`
 (`../../nix/mysbx.nix`). A selection whose entry is not pinned — an
 unwrapped build, a host that does not install that multiplexer — is a
-**refused run** (exit 1, the message naming the value and the missing
+**refused run** (exit `70`, the message naming the value and the missing
 variable), never a silent plain shell: the operator asked for a
 session, and discovering the plain shell after the work happened in it
 is the worse outcome (the D16 argument, kept). The refusal is a
