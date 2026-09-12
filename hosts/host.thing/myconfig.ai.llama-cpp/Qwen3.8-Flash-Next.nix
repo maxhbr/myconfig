@@ -10,9 +10,13 @@
 # downloads all shards — same pattern as `qwen3.5-122B-A10B-Q5_K_M` in
 # default.nix and `Qwen3.8-27B-BF16-split` in Qwen3.8-27B.nix.
 # https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF
+#
+# 2026-09-12: the `serverPackage` parameter was dropped — the qwen4exp
+# architecture (PR #27742) is merged upstream and part of the stable
+# v0.4.0 release nixpkgs ships, so the models run on the common
+# llama-cpp build (see doc/TODOs/drop-patched-llama-cpp-pr-27742.md).
 {
   modelsPullDir,
-  serverPackage,
 }:
 let
   # `sequential` variant — serve a single request at a time.
@@ -43,12 +47,9 @@ let
 in
 {
   # Served by the `llama-cpp-33657` container (llama-swap on
-  # Vulkan0/ROCm0) on the PR-27742-patched llama-cpp
-  # (see nixpkgs.overlays.llama-cpp-pr-27742.nix). The per-model
-  # `serverPackage` option also routes the ad-hoc host Vulkan1 script
-  # wrappers from `scriptOnlyModels` (and the :mmproj variants) to the
-  # patched build — everything that serves THIS model runs PR-27742,
-  # while the rest of the host keeps the stock build.
+  # Vulkan0/ROCm0) on the stock nixpkgs llama-cpp (since 2026-09-12;
+  # previously the PR-27742-patched build via the `serverPackage`
+  # option — the merge is in v0.4.0, which nixpkgs ships).
   #
   # Multimodal: the repo ships `mmproj-F16.gguf` / `mmproj-BF16.gguf`
   # sidecars (the VLM projector). Both are 16-bit, so the download size
@@ -75,7 +76,6 @@ in
   amdModels = [
     {
       name = "Qwen3.8-Flash-Next-UD-IQ4_XS";
-      inherit serverPackage;
       path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00003.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -98,7 +98,6 @@ in
     }
     {
       name = "Qwen3.8-Flash-Next-UD-Q4_K_XL";
-      inherit serverPackage;
       path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf";
       pull-models = {
         target_directory = modelsPullDir;

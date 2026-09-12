@@ -122,3 +122,24 @@ Verified against upstream (GitHub API, network available) and the tree:
 **Not actionable yet**: the architecture is only in prerelease tags, and
 bumping the pin is gated on a stable tag plus the gfx1151 hardware test.
 Re-triage once a stable tag ≥ `b10660` is published.
+
+## Resolution 2026-09-12
+
+**Done — the overlay was removed.** Steps 1–5 (minus the release-tag
+bump of step 6) were executed in the worktree branch
+`review-thing-llama-cpp-builds`:
+
+- deleted `hosts/host.thing/nixpkgs.overlays.llama-cpp-pr-27742.nix`
+  and its import from `hosts/host.thing/default.nix`;
+- removed `patched-llama-cpp-pkg` and the `serverPackage` plumbing for
+  the Flash-Next models (`Qwen3.8-Flash-Next.nix` now takes only
+  `modelsPullDir`); the generic `serverPackage` option in the module
+  stays (step 5, "keep" variant).
+- the pin overlay `hosts/host.thing/nixpkgs.overlays.llama-cpp.nix`
+  (b10549) was disabled in the same change because nixpkgs now ships
+  llama.cpp **v0.4.0**, a stable release that contains the merged
+  PR #27742 (qwen4exp) — so Flash-Next models run on the stock
+  nixpkgs build and no pin is needed to stay ahead.
+- verified: `test-thing` evaluates, all three backends
+  (base/vulkan/rocm) resolve to `llama-cpp-0.4.0`, Flash-Next models
+  carry no `serverPackage`, host-level model list unchanged.

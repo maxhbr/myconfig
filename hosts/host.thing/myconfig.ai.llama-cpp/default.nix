@@ -19,20 +19,29 @@ let
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix { inherit modelsPullDir; };
   ornith = import ./Ornith-1.0-35B.nix { inherit modelsPullDir; };
   qwen3_235B = import ./Qwen3-235B-A22B.nix { inherit modelsPullDir; };
+  # 2026-09-12: `forkPkg` (pkgs.llama-cpp-strix-halo) is no longer passed:
+  # the DFlash2 candidate that used it is commented out in
+  # Qwen3.8-27B.nix and the fork derivation is not built anymore (see
+  # nixpkgs.overlays.llama-cpp.nix). Keep the commented parameter to make
+  # re-enabling the candidate a one-line change.
   qwen3_8_27B = import ./Qwen3.8-27B.nix {
     inherit modelsPullDir;
     sharpTemplate = ../../../modules/myconfig.ai/myconfig.ai.llama-cpp/templates/sharp.jinja;
-    forkPkg = pkgs.llama-cpp-strix-halo;
+    # forkPkg = pkgs.llama-cpp-strix-halo;
   };
   hy3 = import ./Hy3-Q2_K_L.nix { inherit modelsPullDir; };
+  # 2026-09-12: Flash-Next no longer needs a patched build — PR #27742
+  # (qwen4exp) was merged 2026-08-27 and is in the stable release v0.4.0
+  # that nixpkgs ships; the models now run on the common llama-cpp
+  # (see doc/TODOs/drop-patched-llama-cpp-pr-27742.md).
   qwen38_flash_next = import ./Qwen3.8-Flash-Next.nix {
     inherit modelsPullDir;
-    serverPackage = patched-llama-cpp-pkg;
   };
-  glm53_flash = import ./GLM-5.3-Flash.nix {
-    inherit modelsPullDir;
-    serverPackage = patched-llama-cpp-pr-27754-pkg;
-  };
+  # 2026-09-12: GLM-5.3-Flash dropped — PR #27754 (glm5next) is still
+  # open upstream and the host no longer carries the patched build or
+  # the model. Re-add via `import ./GLM-5.3-Flash.nix { inherit
+  # modelsPullDir; }` once glm5next is in a release the host runs (see
+  # doc/TODOs/drop-patched-llama-cpp-pr-27754.md).
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -89,7 +98,6 @@ let
     ++ qwen3_235B.amdModels
     ++ qwen3_8_27B.amdModels
     ++ qwen38_flash_next.amdModels
-    ++ glm53_flash.amdModels
     ++ hy3.amdModels
   );
   fromRtxModels =
@@ -161,33 +169,11 @@ let
   # host's GPU variants).  Used by the container override below.
   host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
 
-  # PR-27742 patched build for qwen4exp (Qwen3.8-Flash-Next) support.
-  # Only the Flash-Next models need this — it is set per-model via the
-  # `serverPackage` option so the rest of the host (RTX llama-server,
-  # other ad-hoc wrappers) keeps the stock nixpkgs build.  The
-  # Flash-Next models run on Vulkan0/ROCm0 (container llama-swap) and
-  # Vulkan1 (host scriptOnlyModels), never on CUDA, so ROCm+Vulkan
-  # suffices.
-  patched-llama-cpp-pkg = pkgs.llama-cpp-pr-27742.override {
-    rocmSupport = true;
-    vulkanSupport = true;
-    cudaSupport = false;
-    blasSupport = false;
-  };
-
-  # PR-27754 patched build for glm5next (GLM-5.3-Flash) support.
-  # Only the GLM-5.3-Flash models need this — it is set per-model via
-  # the `serverPackage` option so the rest of the host (RTX
-  # llama-server, other ad-hoc wrappers) keeps the stock nixpkgs build.
-  # The GLM-5.3-Flash models run on Vulkan0/ROCm0 (container
-  # llama-swap) and Vulkan1 (host scriptOnlyModels), never on CUDA, so
-  # ROCm+Vulkan suffices.
-  patched-llama-cpp-pr-27754-pkg = pkgs.llama-cpp-pr-27754.override {
-    rocmSupport = true;
-    vulkanSupport = true;
-    cudaSupport = false;
-    blasSupport = false;
-  };
+  # 2026-09-12: the patched builds were dropped —
+  # `patched-llama-cpp-pkg` (PR #27742 / qwen4exp) because the PR is
+  # merged and shipped in the stable v0.4.0 release nixpkgs carries,
+  # `patched-llama-cpp-pr-27754-pkg` (glm5next) together with the
+  # GLM-5.3-Flash models because the PR is still open upstream.
 
   gfx-llama-cpp-config = {
     serviceVariant = "llama-swap";
@@ -294,7 +280,6 @@ in
           ++ hy3-multiGpu
           ++ qwen3_8_27B.candidateModels
           ++ qwen38_flash_next.amdModels
-          ++ glm53_flash.amdModels
         )
       )
     );

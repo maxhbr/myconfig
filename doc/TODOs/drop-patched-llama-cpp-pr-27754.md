@@ -124,3 +124,25 @@ Related but separate: sibling PR #27742 (qwen4exp,
  2026-08-27 (commit `6c84c7d5d`); that note should be triaged on its
   own — a release bump for #27742 may also change the base the #27754
   overlay builds on.
+
+## Update 2026-09-12
+
+**The workaround was removed together with the models.** Since PR #27754
+remains open (still `mergeable_state: dirty`, `glm5next` absent from
+master and from every release tag including v0.4.0), the patched build
+is no longer worth carrying:
+
+- deleted `hosts/host.thing/nixpkgs.overlays.llama-cpp-pr-27754.nix`
+  and its import from `hosts/host.thing/default.nix`;
+- deleted `hosts/host.thing/myconfig.ai.llama-cpp/GLM-5.3-Flash.nix`
+  and all `glm53_flash` references in
+  `hosts/host.thing/myconfig.ai.llama-cpp/default.nix` — the
+  GLM-5.3-Flash models are gone from the llama-swap container and the
+  pull-models list (unsloth/GLM-5.3-Flash-GGUF shards + mmprojs).
+
+**To re-add GLM-5.3-Flash once glm5next is merged**, either wait for a
+nixpkgs llama-cpp release containing it (preferred — no overlay
+needed), or restore this overlay from git history (commit removing it)
+and re-fetch `rev`/`hash` from the then-current PR head (the old pin
+`f30bed88` is stale; the PR head was at `949f7efb` on 2026-09-03 and
+keeps moving).
