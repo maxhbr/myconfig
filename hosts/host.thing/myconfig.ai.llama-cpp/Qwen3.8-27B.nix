@@ -1,11 +1,6 @@
 {
   modelsPullDir,
   sharpTemplate,
-  # 2026-09-12: `forkPkg` (llama-cpp-strix-halo) is no longer passed —
-  # the DFlash2 candidate that used it is commented out below and the
-  # fork derivation is disabled in nixpkgs.overlays.llama-cpp.nix.
-  # Re-enable together with the candidate: pass
-  # `forkPkg = pkgs.llama-cpp-strix-halo;` from default.nix.
   # forkPkg,
 }:
 let
@@ -126,20 +121,14 @@ in
   # the startup banner for provenance but NOT verified at runtime.
   candidateModels = [
     # --- Vulkan DFlash2 candidate (task item 4) ---------------------------
-    # DISABLED 2026-09-12: the only consumer of the Nathanw1014
-    # strix-halo-vulkan fork (`llama-cpp-strix-halo`), which is no
-    # longer built (see nixpkgs.overlays.llama-cpp.nix). Also blocked by
-    # an upstream scheduler bug (op-NONE pre-allocated draft tensor
-    # abort — the abort happens on EVERY build, fork and upstream
-    # alike; see doc/TODOs/fix-dflash2-fork-abort-draft-output-weight.md).
-    # The entry is kept commented for re-evaluation once a fix for the
-    # op-NONE abort lands upstream or the fork is re-validated.
-    #
     # Approximates PieBru's balanced/coding configuration: Vulkan-only,
     # Nathanw1014 strix-halo-vulkan fork, Q6_K_XL target + DFlash2 Q8_0
     # draft, draft-dflash speculation (n-max 6), f16 KV, 131k context,
     # 4096/4096 batch, -t 16 -tb 32, mmap+mlock (noMmap=false, tested
     # against the repo's current --no-mmap), sharp.jinja tool template.
+    # Blocked by an upstream scheduler bug (op-NONE pre-allocated draft
+    # tensor abort — happens on every build, fork and upstream alike; see
+    # doc/TODOs/fix-dflash2-fork-abort-draft-output-weight.md).
     #
     # {
     #   name = "Qwen3.8-27B-DFlash2-Q6_K_XL";
@@ -203,9 +192,7 @@ in
     #   ];
     # }
     # --- ROCm MTP/ngram candidate (task item 5) ----------------------------
-    # Based on KyaniteLabs' final profile: ROCm-only, upstream llama.cpp
-    # (b10549 at authoring time; the stock nixpkgs build — v0.4.0 as of
-    # 2026-09-12 — carries all required speculative functionality),
+    # Based on KyaniteLabs' final profile: ROCm-only, upstream llama.cpp,
     # Q4_K_XL target + mtp-Q8_0 draft, draft-mtp+ngram-mod speculation
     # (n-max 12, ngram n-min 24 / n-max 12), q4_0 KV, 1 slot, 262k context,
     # -t 16, flash-attn+jinja. Candidate-only HSA_ENABLE_SDMA=0 + HSA_XNACK=1
