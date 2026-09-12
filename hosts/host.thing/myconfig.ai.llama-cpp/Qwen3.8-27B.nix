@@ -1,7 +1,7 @@
 {
   modelsPullDir,
   sharpTemplate,
-  forkPkg,
+  # forkPkg,
 }:
 let
   # Best-practice sampling parameters from the unsloth Qwen3.8-27B GGUF
@@ -126,69 +126,73 @@ in
     # draft, draft-dflash speculation (n-max 6), f16 KV, 131k context,
     # 4096/4096 batch, -t 16 -tb 32, mmap+mlock (noMmap=false, tested
     # against the repo's current --no-mmap), sharp.jinja tool template.
-    {
-      name = "Qwen3.8-27B-DFlash2-Q6_K_XL";
-      path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q6_K_XL.gguf";
-      devices = [ "Vulkan0" ];
-      serverPackage = forkPkg;
-      noMmap = false; # mmap+mlock (test against current --no-mmap)
-      cacheType = "f16";
-      ctxSize = 131072;
-      parallel = 1;
-      group = "Qwen3.8-27B";
-      ttl = 1800;
-      tags = [
-        "candidate"
-        "vulkan"
-        "dflash2"
-        "Q6_K_XL"
-        "f16"
-        "ctx131072"
-        "fork-strix-halo"
-      ];
-      sha256 = "701d8fa9ed214ab21bfc130cd2a7df19ca89bbef7713e2dfb19f3c63696aa917";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [
-          "unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q6_K_XL.gguf"
-          "z-lab/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q8_0.gguf"
-        ];
-      };
-      params = [
-        "--spec-type"
-        "draft-dflash"
-        "--spec-draft-model"
-        "/models/z-lab-Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q8_0.gguf"
-        "--spec-draft-n-max"
-        "6"
-        # Workaround for a fork bug: creating the DFlash2 draft context
-        # aborts with `pre-allocated tensor (output.weight) in a buffer
-        # (Vulkan*) that cannot run the operation (NONE)` (draft lm_head
-        # is pre-allocated on the GPU but unused by the draft-dflash
-        # graph). Keep the draft's output.weight off the Vulkan weights
-        # buffer AND disable the op-offload / fused-op resolution path
-        # that trips over it. See
-        # doc/TODOs/fix-dflash2-fork-abort-draft-output-weight.md.
-        # TODO(prune): once confirmed on the gfx1151 hardware, reduce to
-        # the minimal working subset of these two flags.
-        "--override-tensor-draft"
-        "output.weight=CPU"
-        "--no-op-offload"
-        "--batch-size"
-        "4096"
-        "--ubatch-size"
-        "4096"
-        "-t"
-        "16"
-        "-tb"
-        "32"
-        "--jinja"
-        "--chat-template"
-        "${sharpTemplate}"
-      ];
-    }
+    # Blocked by an upstream scheduler bug (op-NONE pre-allocated draft
+    # tensor abort — happens on every build, fork and upstream alike; see
+    # doc/TODOs/fix-dflash2-fork-abort-draft-output-weight.md).
+    #
+    # {
+    #   name = "Qwen3.8-27B-DFlash2-Q6_K_XL";
+    #   path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q6_K_XL.gguf";
+    #   devices = [ "Vulkan0" ];
+    #   serverPackage = forkPkg;
+    #   noMmap = false; # mmap+mlock (test against current --no-mmap)
+    #   cacheType = "f16";
+    #   ctxSize = 131072;
+    #   parallel = 1;
+    #   group = "Qwen3.8-27B";
+    #   ttl = 1800;
+    #   tags = [
+    #     "candidate"
+    #     "vulkan"
+    #     "dflash2"
+    #     "Q6_K_XL"
+    #     "f16"
+    #     "ctx131072"
+    #     "fork-strix-halo"
+    #   ];
+    #   sha256 = "701d8fa9ed214ab21bfc130cd2a7df19ca89bbef7713e2dfb19f3c63696aa917";
+    #   pull-models = {
+    #     target_directory = modelsPullDir;
+    #     hf_spec = [
+    #       "unsloth/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q6_K_XL.gguf"
+    #       "z-lab/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q8_0.gguf"
+    #     ];
+    #   };
+    #   params = [
+    #     "--spec-type"
+    #     "draft-dflash"
+    #     "--spec-draft-model"
+    #     "/models/z-lab-Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q8_0.gguf"
+    #     "--spec-draft-n-max"
+    #     "6"
+    #     # Workaround for an upstream scheduler bug: creating the DFlash2
+    #     # draft context aborts with `pre-allocated tensor (output.weight)
+    #     # in a buffer (Vulkan*) that cannot run the operation (NONE)`
+    #     # (draft lm_head is pre-allocated on the GPU but unused by the
+    #     # draft-dflash graph). Keep the draft's output.weight off the
+    #     # Vulkan weights buffer AND disable the op-offload / fused-op
+    #     # resolution path that trips over it. See
+    #     # doc/TODOs/fix-dflash2-fork-abort-draft-output-weight.md.
+    #     # TODO(prune): once confirmed on the gfx1151 hardware, reduce to
+    #     # the minimal working subset of these two flags.
+    #     "--override-tensor-draft"
+    #     "output.weight=CPU"
+    #     "--no-op-offload"
+    #     "--batch-size"
+    #     "4096"
+    #     "--ubatch-size"
+    #     "4096"
+    #     "-t"
+    #     "16"
+    #     "-tb"
+    #     "32"
+    #     "--jinja"
+    #     "--chat-template"
+    #     "${sharpTemplate}"
+    #   ];
+    # }
     # --- ROCm MTP/ngram candidate (task item 5) ----------------------------
-    # Based on KyaniteLabs' final profile: ROCm-only, upstream b10549,
+    # Based on KyaniteLabs' final profile: ROCm-only, upstream llama.cpp,
     # Q4_K_XL target + mtp-Q8_0 draft, draft-mtp+ngram-mod speculation
     # (n-max 12, ngram n-min 24 / n-max 12), q4_0 KV, 1 slot, 262k context,
     # -t 16, flash-attn+jinja. Candidate-only HSA_ENABLE_SDMA=0 + HSA_XNACK=1
