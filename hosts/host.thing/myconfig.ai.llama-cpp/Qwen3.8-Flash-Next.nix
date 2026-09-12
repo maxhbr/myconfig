@@ -13,9 +13,16 @@
 {
   modelsPullDir,
   serverPackage,
+  # PR-28243 build (qwen4exp MTP graph + cross-model tensor borrowing)
+  # used by the `-MTP` entries below. A stock build — and the PR-27742
+  # `serverPackage` above — has no MTP graph for `qwen4exp` and cannot
+  # use the draft heads at all; see
+  # nixpkgs.overlays.llama-cpp-pr-28243.nix and the requirements section
+  # of the unsloth MTP README.
+  mtpServerPackage,
 }:
 let
-  # `sequential` variant — serve a single request at a time.
+  # `sequential` — serve a single request at a time.
   #
   # Why this exists: with more than one slot, concurrent Flash-Next
   # requests share the gfx1151 GPU and the KV pool, each request gets
@@ -33,12 +40,62 @@ let
   # modules/myconfig.ai/myconfig.ai.llama-cpp/options.nix). The explicit
   # `--parallel 1` in `params` is what pins the slot count to 1; the same
   # pattern as `Qwen3.8-27B-MTP-ngram-Q4_K_XL` in Qwen3.8-27B.nix.
+  sequential_params = [
+    "--parallel"
+    "1"
+  ];
   sequential_variant = {
     parallel = 1;
-    params = [
-      "--parallel"
-      "1"
+    params = sequential_params;
+  };
+
+  # Base shards + MTP draft head of one quantisation. See the per-model
+  # comments below for the head choice; this factory only carries what
+  # the two `-MTP` entries share.
+  #
+  # Pairing per the unsloth MTP README
+  # (https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/blob/main/MTP/README.md):
+  # the head is a STANDALONE draft file from the repo's `MTP/` subfolder
+  # (base weights NOT included), loaded via `--spec-draft-model` (`-md`)
+  # with `--spec-type draft-mtp`. The heads live in a subfolder that
+  # sidecar auto-discovery does not search, so `-md` must be passed
+  # explicitly — `--spec-type draft-mtp` alone finds nothing and
+  # silently serves without speculation.
+  #
+  # `--spec-draft-n-max 2` is the README's recommended default ("a good
+  # default; higher drafts more but each guess is accepted less often").
+  # The README also warns MTP is a single-stream win (1.34x–1.67x
+  # measured, greedy) and a net LOSS at concurrency 8 — hence the
+  # serialised `parallel = 1` + explicit `--parallel 1` (same reason as
+  # `sequential_variant` above).
+  #
+  # Same standalone-entry shape as the `Qwen3.8-27B-MTP-*` models in
+  # Qwen3.8-27B.nix: the entry re-declares the base shard spec in its own
+  # self-contained `pull-models` (the merged list in default.nix is
+  # de-duplicated, so nothing is downloaded twice).
+  mk_mtp_model = quant: mtpFile: {
+    name = "Qwen3.8-Flash-Next-UD-${quant}-MTP";
+    serverPackage = mtpServerPackage;
+    path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-${quant}/Qwen3.8-Flash-Next-UD-${quant}-00001-of-0000${
+      if quant == "IQ4_XS" then "3" else "4"
+    }.gguf";
+    pull-models = {
+      target_directory = modelsPullDir;
+      hf_spec = [
+        "unsloth/Qwen3.8-Flash-Next-GGUF/UD-${quant}" # all LLM shards
+        "unsloth/Qwen3.8-Flash-Next-GGUF/MTP/${mtpFile}"
+      ];
+    };
+    parallel = 1;
+    params = sequential_params ++ [
+      "--spec-type"
+      "draft-mtp"
+      "--spec-draft-model"
+      "/models/unsloth-Qwen3.8-Flash-Next-GGUF/MTP/${mtpFile}"
+      "--spec-draft-n-max"
+      "2"
     ];
+    ttl = 1800;
   };
 in
 {
@@ -116,5 +173,22 @@ in
       };
       ttl = 1800;
     }
+    # MTP speculative decoding of the same two shards.
+    #
+    # Head choice per the README's "Which file" table: the
+    # `shared-Q4_K_M` head is the recommended small pairing (1.78 GB,
+    # ~2 points less acceptance than shared-Q8_0's 66.1%); it borrows
+    # the token embedding and output projection from the target model.
+    # For the UD-IQ4_XS main the *self-contained* Q4_K_M head (2.60 GB)
+    # is used instead, so the two entries exercise both flavours the
+    # repo ships at Q4_K_M. A `shared-` head logs one harmless error
+    # line at startup (the automatic memory fit sizes the draft in
+    # isolation, so the borrowing measurement fails and the fit
+    # proceeds without the draft's memory); the 124 GiB GTT/TTM pool of
+    # the gfx1151 host has ample headroom for the uncounted ~1.8 GB.
+    # No deliberate `ctxSize` / `cacheType` retuning: same GGUF defaults
+    # as the non-MTP entries.
+    (mk_mtp_model "IQ4_XS" "mtp-Qwen3.8-Flash-Next-Q4_K_M.gguf")
+    (mk_mtp_model "Q4_K_XL" "mtp-Qwen3.8-Flash-Next-shared-Q4_K_M.gguf")
   ];
 }
