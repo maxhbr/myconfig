@@ -182,15 +182,22 @@ let
             echo "[pull] model file not found at ${lib.escapeShellArg model.path}; pulling from HuggingFace into '$target_dir'..." >&2
             pull_model() {
               local target_dir="$1" spec="$2"
-              local slash_count repo_id path_in_repo local_dir
+              local slash_count org rest repo_id path_in_repo local_dir
               slash_count=$(tr -cd '/' <<<"$spec" | wc -c)
               if [[ "$slash_count" -eq 1 ]]; then
                 # "org/repo" -> full repo download into "<dir>/org-repo"
                 local_dir="$target_dir/''${spec//\//-}"
                 hf download "$spec" --include "*" --local-dir "$local_dir"
               else
-                repo_id="''${spec%/*}"
-                path_in_repo="''${spec##*/}"
+                # "org/repo[/path/in/repo]" — repo_id is always the
+                # first two segments; the in-repo path may itself contain
+                # slashes (e.g. "org/repo/MTP/mtp-…​.gguf"). `hf download
+                # --include <path> --local-dir` preserves the repo-internal
+                # layout, so a nested file lands at "$local_dir/MTP/…​".
+                org="''${spec%%/*}"
+                rest="''${spec#"$org"/}"
+                repo_id="$org/''${rest%%/*}"
+                path_in_repo="''${rest#*/}"
                 local_dir="$target_dir/''${repo_id//\//-}"
                 if [[ "$path_in_repo" == *.* ]]; then
                   hf download "$repo_id" --include "$path_in_repo" --local-dir "$local_dir"

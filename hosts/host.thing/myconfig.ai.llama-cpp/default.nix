@@ -28,7 +28,9 @@ let
   qwen38_flash_next = import ./Qwen3.8-Flash-Next.nix {
     inherit modelsPullDir;
     serverPackage = patched-llama-cpp-pkg;
+    mtpServerPackage = patched-llama-cpp-pr-28243-pkg;
   };
+  nex_n25_mini = import ./Nex-N2.5-mini.nix { inherit modelsPullDir; };
   glm53_flash = import ./GLM-5.3-Flash.nix {
     inherit modelsPullDir;
     serverPackage = patched-llama-cpp-pr-27754-pkg;
@@ -89,6 +91,7 @@ let
     ++ qwen3_235B.amdModels
     ++ qwen3_8_27B.amdModels
     ++ qwen38_flash_next.amdModels
+    ++ nex_n25_mini.amdModels
     ++ glm53_flash.amdModels
     ++ hy3.amdModels
   );
@@ -183,6 +186,19 @@ let
   # llama-swap) and Vulkan1 (host scriptOnlyModels), never on CUDA, so
   # ROCm+Vulkan suffices.
   patched-llama-cpp-pr-27754-pkg = pkgs.llama-cpp-pr-27754.override {
+    rocmSupport = true;
+    vulkanSupport = true;
+    cudaSupport = false;
+    blasSupport = false;
+  };
+
+  # PR-28243 patched build for qwen4exp MTP (Qwen3.8-Flash-Next
+  # speculative decoding). Only the `-MTP` Flash-Next entries need
+  # this — it is set per-model via the `serverPackage` option so the
+  # rest of the host keeps the builds pinned above. The MTP entries
+  # run on Vulkan0/ROCm0 (container llama-swap) and Vulkan1 (host
+  # scriptOnlyModels), never on CUDA, so ROCm+Vulkan suffices.
+  patched-llama-cpp-pr-28243-pkg = pkgs.llama-cpp-pr-28243.override {
     rocmSupport = true;
     vulkanSupport = true;
     cudaSupport = false;
@@ -294,6 +310,7 @@ in
           ++ hy3-multiGpu
           ++ qwen3_8_27B.candidateModels
           ++ qwen38_flash_next.amdModels
+          ++ nex_n25_mini.amdModels
           ++ glm53_flash.amdModels
         )
       )

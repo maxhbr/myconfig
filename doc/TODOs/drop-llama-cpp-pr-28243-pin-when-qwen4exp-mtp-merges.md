@@ -1,0 +1,45 @@
+# Drop the `llama-cpp-pr-28243` pin once upstream merges qwen4exp MTP
+
+Upstream PR <https://github.com/ggml-org/llama.cpp/pull/28243> ("models:
+Qwen3.8-Flash-Next MTP") adds the MTP graph for the `qwen4exp`
+architecture, cross-model tensor borrowing (for the `shared-` draft
+heads), and the `--spec-type draft-mtp` wiring for it. It is still
+UNMERGED (`mergeable_state: unstable` as of 2026-09-11).
+
+## What to remove once llama.cpp mainline ships qwen4exp MTP
+
+- `hosts/host.thing/nixpkgs.overlays.llama-cpp-pr-28243.nix` — the whole
+  overlay file (rev `a9e9c3c5fed8a0bb5cc617532d0d16b8f59c13e0`,
+  unslothai `mtp/qwen4exp-nextn`, i.e. upstream b10786 + the PR).
+- Its import in `hosts/host.thing/default.nix` (line next to the other
+  `nixpkgs.overlays.llama-cpp-pr-*` imports).
+- `patched-llama-cpp-pr-28243-pkg` in
+  `hosts/host.thing/myconfig.ai.llama-cpp/default.nix` and the
+  `mtpServerPackage` argument threading into
+  `hosts/host.thing/myconfig.ai.llama-cpp/Qwen3.8-Flash-Next.nix`
+  (`mk_mtp_model` + the two `Qwen3.8-Flash-Next-UD-*-MTP` entries).
+  At that point the MTP entries can drop `serverPackage` entirely and
+  run on the host-wide pinned `llama-cpp` — move the pin in
+  `nixpkgs.overlays.llama-cpp.nix` forward to the first stable tag that
+  contains the merge instead.
+
+## Verification that mainline is ready
+
+- `src/models/qwen4exp.cpp` on the tag contains `graph_mtp` /
+  `LLM_GRAPH_TYPE_DECODER_MTP` and the `mtp_flags = !ml.load_mtp`
+  tensor gating (they are absent from the PR-27742
+  `qwen4exp/qwen3.8-flash-next` build, which is exactly why the third
+  pin exists).
+- `src/llama-model-loader.cpp` contains `borrow_shared_tensor` (needed
+  by the `mtp-Qwen3.8-Flash-Next-shared-*` heads).
+- Serve `Qwen3.8-Flash-Next-UD-Q4_K_XL-MTP` and check the log for the
+  `draft acceptance = …` line (per the unsloth MTP README, its absence
+  means the build silently serves without speculation).
+
+## Reference
+
+Introduced by the "provision new models on hosts/host.thing" task
+(thing-models worktree). See also the sibling pins
+`nixpkgs.overlays.llama-cpp-pr-27742.nix` (qwen4exp trunk) and
+`nixpkgs.overlays.llama-cpp-pr-27754.nix` (glm5next) for the same
+follow-up pattern.
