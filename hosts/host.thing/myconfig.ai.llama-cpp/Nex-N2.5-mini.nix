@@ -24,14 +24,13 @@
 # /api/.../tree/main?blobs=true endpoint). They are logged in the
 # startup banner for provenance but NOT verified at runtime.
 #
-# Served on gfx1151 (Vulkan0/ROCm0, container llama-cpp). The three
-# quants are single-file GGUFs: Q4_K_M 21.2 GB, Q5_K_M 24.7 GB,
-# Q6_K 28.5 GB — all fit the 124 GiB GTT/TTM pool alongside the KV
-# cache even at full 262k context. No deliberate `cacheType` retuning:
-# leave the GGUF defaults, retune for gfx1151 headroom after the first
-# serving test.
+# Served on gfx1151 (Vulkan0/ROCm0, container llama-cpp) and on the RTX
+# backend (CUDA0/Vulkan0). The three quants are single-file GGUFs: Q4_K_M
+# 21.2 GB, Q5_K_M 24.7 GB, Q6_K 28.5 GB. No deliberate `cacheType`
+# retuning: leave the GGUF defaults and retune for the target GPU after
+# the first serving test.
 { modelsPullDir }:
-{
+let
   amdModels = [
     {
       name = "Nex-N2.5-mini-Q4_K_M";
@@ -64,4 +63,8 @@
       ttl = 1800;
     }
   ];
+in
+{
+  amdModels = amdModels;
+  rtxModels = amdModels;
 }

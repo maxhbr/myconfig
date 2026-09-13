@@ -64,6 +64,7 @@ let
   ++ gemma4.rtxModels
   ++ thedrummerSkyfall31B.rtxModels
   ++ agentsA1.rtxModels
+  ++ withGroup "MoE" nex_n25_mini.rtxModels
   ++ withGroup "dense" qwen3_8_27B.rtxModels;
 
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
