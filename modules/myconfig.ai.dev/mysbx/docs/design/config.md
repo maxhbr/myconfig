@@ -844,8 +844,10 @@ the panes find the tool they are running in.
 
 **`orca` is the one value whose payload is not a terminal.** The
 entry (`../../nix/orca-entry.nix`) starts the Orca runtime server
-(`orca serve`) inside the sandbox — the Electron desktop window has no
-headless form and no way to attach to a mysbx sandbox — and the
+(`orca serve`) inside the sandbox — not the desktop window (`orca
+open`): both run headless, but a window inside a mysbx sandbox is
+invisible (no display is attached) while the `serve` pairing endpoint
+is reachable from outside — and the
 operator drives the session from the Orca desktop or mobile client
 over the WebSocket pairing endpoint the server prints on readiness
 (the headless-server mode of the upstream guide). Three consequences
@@ -856,14 +858,18 @@ an operator must know:
   session unreachable — tmux, workmux, herdr and aoe are driven through
   the terminal mysbx already attaches and do not care, but `orca` is
   the first multiplexer whose control surface is a network endpoint.
-  A loopback-scoped pairing (`--pairing-address 127.0.0.1`) works
-  wherever the client runs on the same host; a remote client needs the
-  host's routing, exactly like the host-side `orca-serve` service of
-  `../../../../services.orca.nix`.
+  A loopback-advertised pairing works wherever the client runs on the
+  same host; a remote client needs the host's routing and an
+  advertised address it can reach, exactly like the host-side
+  `orca-serve` service of `../../../../services.orca.nix`.
 * **The display is sandbox-internal**: mysbx forwards nothing display
   related, so `$DISPLAY` is never set and Orca's bundled Xvfb
   auto-start (display `:99`) always applies — no host display is
   plumbed in.
-* **Orca's port is not pinned**: the upstream server picks a fallback
-  port when the default `6768` is taken, and the readiness block on the
-  sandbox's stdout is the source of truth for the bound endpoint.
+* **The endpoint is configurable through `[env]`, not pinned**: the
+  entry passes `ORCA_PORT`/`ORCA_PAIRING_ADDRESS` to `serve`'s
+  `--port`/`--pairing-address` (see the entry script for when to set
+  them — pin the port when the host itself runs `orca-serve`, since
+  the sandbox shares the host loopback). Unset, the upstream server
+  binds 6768 or a fallback, and the readiness block on the sandbox's
+  stdout is the source of truth for the bound endpoint.
