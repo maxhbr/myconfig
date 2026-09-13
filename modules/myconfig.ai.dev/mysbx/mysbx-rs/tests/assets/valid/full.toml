@@ -5,10 +5,11 @@ network = true
 
 # The multiplexer (config.md D17): the INTERACTIVE payload is a session
 # of the named multiplexer instead of a plain shell (`mysbx run -- CMD`
-# is unaffected, cli.md D11). One of "tmux", "workmux", "herdr", "aoe",
-# "none". The private socket directory is not configurable: it always
-# lives at /mysbx-home/.mysbx-tmux, inside the sandbox home tmpfs, so it
-# can never be shared with a host tmux server or with another sandbox.
+# is unaffected, cli.md D11). One of "tmux", "workmux", "herdr",
+# "aoe", "orca", "none". The private socket directory is not
+# configurable: it always lives at /mysbx-home/.mysbx-tmux, inside the
+# sandbox home tmpfs, so it can never be shared with a host tmux server
+# or with another sandbox.
 multiplexer = "workmux"
 
 # State directories (config.md D15): sandbox-home-relative paths whose

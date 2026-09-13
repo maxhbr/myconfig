@@ -52,6 +52,25 @@ let
       modules = [
         inputs.home.nixosModules.home-manager
         ../../sandboxes/myconfig.ai.sandboxTools.nix
+        # ... and the orca module, which `myconfig.ai.dev`'s own
+        # import list carries on real hosts but a minimal eval does
+        # not — the `muxOrca` scenario below needs
+        # `myconfig.ai.orca.package` to exist, which lives there
+        # (bd myconfig-1os). The module's desktop-app half is gated
+        # on `myconfig.desktop.enable`, which this minimal system
+        # does not define — so declare the umbrella options OFF and
+        # let the orca service half be what the scenario exercises.
+        ../../services.orca.nix
+        {
+          options.myconfig.ai.enable = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+          };
+          options.myconfig.desktop.enable = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+          };
+        }
         ../default.nix
         {
           nixpkgs.hostPlatform = system;
@@ -190,19 +209,30 @@ let
     sandboxToolsEnvOff = generated [ ripgrepOn ];
     # The other selectable multiplexers (D17). `herdr` is available by
     # default (`herdr.package` defaults to `pkgs.herdr`), `aoe` is not
-    # (it is gated on ../../programs/programs.agent-of-empires/ being enabled), so
-    # the two exercise both halves of the availability gate.
+    # (it is gated on ../../programs/programs.agent-of-empires/ being enabled) and
+    # `orca` is not (gated on ../../services.orca.nix being enabled),
+    # so the two exercise both halves of the availability gate.
     muxHerdr = generated [
       { myconfig.ai.dev.mysbx.config.multiplexer = "herdr"; }
     ];
     muxTmux = generated [
       { myconfig.ai.dev.mysbx.config.multiplexer = "tmux"; }
     ];
+    # ... and `orca` too (bd myconfig-1os): available when the orca
+    # module is enabled (the package gate picks up
+    # `myconfig.ai.orca.package`), a refused EVAL otherwise.
+    muxOrca = generated [
+      { myconfig.ai.orca.enable = true; }
+      { myconfig.ai.dev.mysbx.config.multiplexer = "orca"; }
+    ];
     # A host-wide selection this host cannot start must fail at EVAL
     # time, naming the option to set — not on the first `mysbx` of
     # every sandbox.
     muxUnavailable = failedAssertions [
       { myconfig.ai.dev.mysbx.config.multiplexer = "aoe"; }
+    ];
+    muxOrcaUnavailable = failedAssertions [
+      { myconfig.ai.dev.mysbx.config.multiplexer = "orca"; }
     ];
     # ... and a selection that IS available must not produce that
     # assertion (the gate must not fire on the happy path).
@@ -218,11 +248,15 @@ let
   assertionGate =
     let
       unavailable = scenarios.muxUnavailable;
+      orcaUnavailable = scenarios.muxOrcaUnavailable;
       available = scenarios.muxAvailableAsserts;
       names = builtins.concatStringsSep "\n" unavailable;
+      orcaNames = builtins.concatStringsSep "\n" orcaUnavailable;
     in
     if !(builtins.any (m: lib.hasInfix "multiplexer" m) unavailable) then
       throw "mysbx generated-config test: selecting the unavailable `aoe` multiplexer did not fail an assertion (failed: ${names})"
+    else if !(builtins.any (m: lib.hasInfix "multiplexer" m) orcaUnavailable) then
+      throw "mysbx generated-config test: selecting the unavailable `orca` multiplexer did not fail an assertion (failed: ${orcaNames})"
     else if builtins.any (m: lib.hasInfix "multiplexer" m) available then
       throw "mysbx generated-config test: the availability gate fired for an AVAILABLE multiplexer (failed: ${builtins.concatStringsSep "\n" available})"
     else
@@ -244,6 +278,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       workmuxOff
       muxHerdr
       muxTmux
+      muxOrca
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
@@ -330,6 +365,11 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the herdr selection is missing" "$muxHerdr"
     grep -q '^multiplexer = "tmux"$' "$muxTmux" \
       || fail "the tmux selection is missing" "$muxTmux"
+    # ... `orca` with the orca module enabled (bd myconfig-1os): the
+    # selection reaches the layer, and the package gate found the
+    # AppImage via `myconfig.ai.orca.package`.
+    grep -q '^multiplexer = "orca"$' "$muxOrca" \
+      || fail "the orca selection is missing" "$muxOrca"
 
     # 7. the shared sandbox-tools hook (phase 2d): its env entries reach
     #    the generated [env] table, a hook/baseline clash resolves to

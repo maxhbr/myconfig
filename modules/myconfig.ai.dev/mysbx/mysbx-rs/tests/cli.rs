@@ -1181,6 +1181,7 @@ fn init_records_the_user_layers_multiplexer_in_the_sidecar() {
         Multiplexer::Workmux,
         Multiplexer::Herdr,
         Multiplexer::Aoe,
+        Multiplexer::Orca,
     ] {
         let (inv, _, sidecar) = fixture_uninited(&format!("init-mux-{mux}"), &["init"]);
         std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
@@ -1285,11 +1286,12 @@ fn fixture_mux(
 /// Every multiplexer that starts a session — the set these tests run
 /// over, taken from the CLI's own enum so a new variant cannot be
 /// added without deciding what these tests say about it.
-const SESSION_MUXES: [Multiplexer; 4] = [
+const SESSION_MUXES: [Multiplexer; 5] = [
     Multiplexer::Tmux,
     Multiplexer::Workmux,
     Multiplexer::Herdr,
     Multiplexer::Aoe,
+    Multiplexer::Orca,
 ];
 
 /// The wrapper pin of `mux` and a synthetic entry path for it. The pin

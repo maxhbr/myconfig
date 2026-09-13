@@ -201,6 +201,18 @@ let
         }
       else
         null;
+    # `orca` (bd myconfig-1os): the payload is the Orca runtime
+    # server (`orca serve`), not the desktop window — see
+    # ./nix/orca-entry.nix for the display/network/state decisions.
+    # No tmux: orca is not a tmux front end.
+    orca =
+      if cfg.orca.package != null then
+        pkgs.callPackage ./nix/orca-entry.nix {
+          inherit (pkgs) appimage-run xvfb;
+          orca = cfg.orca.package;
+        }
+      else
+        null;
   };
 
   # The binaries the SELECTED multiplexer's panes need on the sandbox
@@ -232,6 +244,13 @@ let
         cfg.aoe.package
         cfg.tmux.package
       ];
+      # Nothing: the Orca AppImage is not directly PATH-usable
+      # (it is an AppImage named `orca-<version>.AppImage`, and no
+      # `appimage-run` sits on the pane PATH to run it) — the runtime
+      # the panes talk to is the server the entry of
+      # ./nix/orca-entry.nix already started. The key must exist or the
+      # `.${cfg.config.multiplexer}` lookup below would throw.
+      orca = [ ];
     }
     .${cfg.config.multiplexer}
   );
@@ -341,8 +360,9 @@ in
       defaultText = literalExpression "pkgs.tmux";
       description = ''
         The tmux that runs *inside* the sandbox: the server of the
-        `tmux`, `workmux` and `aoe` multiplexers
-        (./docs/design/config.md D17), and the `tmux` on the sandbox
+        `tmux`, `workmux` and `aoe` multiplexers — `orca` is not one
+        of them, its payload is the Orca runtime server (see
+        ./nix/orca-entry.nix) — and the `tmux` on the sandbox
         `PATH` when one of them is selected.
 
         Unlike the other multiplexer packages this is never `null`:
@@ -387,6 +407,29 @@ in
         (./docs/design/config.md D17).
 
         `null` means "this host does not carry aoe": no entry is
+        pinned, and a configuration selecting it is a refused run
+        instead of a silent plain shell.
+      '';
+    };
+
+    orca.package = mkOption {
+      type = types.nullOr types.package;
+      # Gated on the orca module being ENABLED, not merely present:
+      # the AppImage is a heavy download, so pulling it into every
+      # mysbx host's closure to make a selection possible would be
+      # the wrong default — the same reasoning as `aoe.package`.
+      default =
+        if (config.myconfig.ai.orca.enable or false) then config.myconfig.ai.orca.package else null;
+      defaultText = literalExpression "config.myconfig.ai.orca.package (when that module is enabled, else null)";
+      description = ''
+        The Orca AppImage package (../../services.orca.nix) that runs
+        *inside* the sandbox when `config.multiplexer = "orca"`
+        (./docs/design/config.md D17): the payload is the Orca
+        runtime server (`orca serve`), reached from the Orca
+        desktop/mobile client over the pairing endpoint — see
+        ./nix/orca-entry.nix for the display/network/state decisions.
+
+        `null` means "this host does not carry orca": no entry is
         pinned, and a configuration selecting it is a refused run
         instead of a silent plain shell.
       '';
@@ -523,6 +566,7 @@ in
               "workmux"
               "herdr"
               "aoe"
+              "orca"
               "none"
             ];
             # `"workmux"` where the integration is wired, the plain
@@ -538,7 +582,7 @@ in
               Which terminal multiplexer the INTERACTIVE payload of
               every sandbox of this user is
               (./docs/design/config.md D17, ./docs/design/cli.md D11):
-              `tmux`, `workmux`, `herdr`, `aoe`, or `none` for a plain
+              `tmux`, `workmux`, `herdr`, `aoe`, `orca`, or `none` for a plain
               interactive shell. `mysbx run -- CMD` is unaffected — a
               one-shot command starts no session.
 
@@ -549,10 +593,11 @@ in
 
               The selected multiplexer must be available on this host,
               i.e. its package option must be set
-              (`workmux.package`, `herdr.package`, `aoe.package`;
-              `tmux` always is). An unavailable selection is an
-              evaluation error here, and a refused run for a sidecar
-              that names one — never a silently started plain shell.
+              (`workmux.package`, `herdr.package`, `aoe.package`,
+              `orca.package`; `tmux` always is). An unavailable
+              selection is an evaluation error here, and a refused run
+              for a sidecar that names one — never a silently started
+              plain shell.
 
               Whichever is selected, its socket and state live INSIDE
               the sandbox (`/mysbx-home/.mysbx-tmux`, exported as

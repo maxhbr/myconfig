@@ -753,13 +753,14 @@ fn golden_interactive_payload() {
 /// The synthetic entry of one multiplexer, and the golden it produces.
 /// One golden per variant: the payload line is the only thing that
 /// differs, and pinning each one separately makes an accidental swap
-/// (herdr's entry started for `aoe`, say) a visible diff.
+/// (herdr's entry started for `orca`, say) a visible diff.
 fn mux_case(mux: Multiplexer) -> (&'static str, &'static str) {
     match mux {
         Multiplexer::Tmux => ("/synth/bin/mysbx-tmux-entry", "mux-tmux-shell.txt"),
         Multiplexer::Workmux => ("/synth/bin/mysbx-workmux-entry", "mux-workmux-shell.txt"),
         Multiplexer::Herdr => ("/synth/bin/mysbx-herdr-entry", "mux-herdr-shell.txt"),
         Multiplexer::Aoe => ("/synth/bin/mysbx-aoe-entry", "mux-aoe-shell.txt"),
+        Multiplexer::Orca => ("/synth/bin/mysbx-orca-entry", "mux-orca-shell.txt"),
         Multiplexer::None => panic!("`none` starts no session and has no entry"),
     }
 }
@@ -771,12 +772,13 @@ fn golden_multiplexer_interactive_sessions() {
     // exports `TMUX_TMPDIR` after HOME/PATH — the argv is the
     // auditable form of "the socket lives inside the sandbox". The
     // isolation is identical for every variant, which is the point of
-    // running the same assertions over all four.
+    // running the same assertions over all five.
     for mux in [
         Multiplexer::Tmux,
         Multiplexer::Workmux,
         Multiplexer::Herdr,
         Multiplexer::Aoe,
+        Multiplexer::Orca,
     ] {
         let (entry, golden) = mux_case(mux);
         let mut cfg = base(true);
@@ -831,6 +833,7 @@ fn the_run_form_is_byte_identical_for_every_multiplexer() {
         Multiplexer::Workmux,
         Multiplexer::Herdr,
         Multiplexer::Aoe,
+        Multiplexer::Orca,
     ] {
         let (entry, _) = mux_case(mux);
         let mut p = params();

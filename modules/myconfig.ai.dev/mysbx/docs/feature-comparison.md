@@ -90,6 +90,7 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | `myconfig.ai.sandboxTools` hook | yes | no | yes | yes | yes | yes | yes (phase 2d: `extraPackages` → dev-tool closure, `extraEnv` → `[env]`) |
 | Result handoff | edits are live in `$PWD` | live | live | live | `merge` / `fetch` / `push` subcommands | import the branch from the clone | `live` runs: live in the work tree; clone sessions: host-side `fetch` / `merge` / `push` / `diff` verbs onto branch `agent/mysbx/NAME` (`workspace.md` D6, decided — gvisor mechanics) |
 | Startup cost | ~none | ~none | ~none | seconds (boot) | ~a second (container) | prebuilt slot + host config | ~none (planned) |
+| Interactive agent UI inside the sandbox | terminal jail wrapper only | n/a | CLI | SSH terminal | terminal exec / webview | web console via bridge | the **interactive payload** is per-user selectable (`config.md` D17, bd myconfig-1os): `tmux`/`workmux`/`aoe` (tmux server on a sandbox-private socket), `herdr` (own state in the tmpfs `HOME`), **`orca`** — the Orca runtime server (`orca serve`) reached from the Orca desktop/mobile client over the shared network, the one payload whose control surface is a listen endpoint rather than a terminal; `none` = plain shell |
 
 Sources: `../../myconfig.ai.dev/fns/bubblewrap-app.nix`, `../../myconfig.ai.dev/fns/bubblewrap-simple-app.nix`,
 `../../myconfig.ai.dev/fns/nono-app.nix`, `../../myconfig.ai.jail.nix`, `../../myconfig.ai.nono.nix`,
