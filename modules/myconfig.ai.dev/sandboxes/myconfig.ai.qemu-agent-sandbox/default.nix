@@ -14,6 +14,15 @@
 }:
 let
   system = pkgs.stdenv.hostPlatform.system;
+  # The workmux package as consumed everywhere else: the upstream flake
+  # input's package with the check-phase tmux override (see
+  # myconfig.ai.workmux/default.nix). Embeding the raw
+  # `inputs.workmux.packages...default` here would reintroduce the unpatched
+  # derivation into the closure (its `cargo test` run fails on remote
+  # builders), so the runner must pin the same store path.
+  workmuxPackage = inputs.workmux.packages.${system}.default.overrideAttrs (old: {
+    nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ pkgs.tmux ];
+  });
   runnerExpression = pkgs.writeText "qemu-agent-sandbox-runner.nix" ''
     let
       nixpkgsPath = ${inputs.nixpkgs};
@@ -37,7 +46,7 @@ let
       seedAgentConfig = ${../../fns/seed-agent-config.nix};
       piPackage = ${inputs.nixos-unstable.legacyPackages.${system}.pi-coding-agent};
       herdrPackage = ${pkgs.herdr};
-      workmuxPackage = ${inputs.workmux.packages.${system}.default};
+      workmuxPackage = ${workmuxPackage};
     }
   '';
 in
