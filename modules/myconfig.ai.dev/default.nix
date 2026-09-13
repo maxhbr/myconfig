@@ -35,6 +35,10 @@ in
     ./sandboxes/myconfig.ai.qemu-agent-sandbox
     ./sandboxes/myconfig.ai.microvm
     ./sandboxes/myconfig.ai.gvisor-agent-sandbox
+
+    # orca runtime server / desktop app (moved here from
+    # ../myconfig.ai/ by bd: myconfig-zl0) — consumed by the dev side
+    ./services.orca.nix
     ./mysbx
     ./hermes-agent
     ./programs/programs.agent-browser

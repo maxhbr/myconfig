@@ -28,7 +28,6 @@ in
     ./services.litellm.nix
     ./litellm.proxy.nix
     ./services.open-webui.nix
-    ./services.orca.nix
     ./services.searxng.nix
     ./services.tabby.nix
   ];
