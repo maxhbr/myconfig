@@ -5,6 +5,7 @@ Usage:
   mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
   mysbx fetch | merge | push | diff NAME [verb-arguments...]
+  mysbx session list | session destroy NAME [--force]
   mysbx [COMMAND]
 
 Commands:
@@ -84,6 +85,33 @@ Commands:
                 HEAD...refs/heads/agent/mysbx/NAME` — not the host's
                 own drift. git's own exit code and diagnostics pass
                 through
+  session list  the sessions of the current repo, one line per
+                `clones/` entry — the directory is the registry —
+                with the name, the session branch
+                `agent/mysbx/NAME`, and the ahead-count (the commits
+                in the session branch that the host repo does not
+                have; `-` when no honest number can be computed). An
+                entry without `.git` is debris of an interrupted
+                creation and is marked as such. Starts no sandbox;
+                with --dry-run the exact git probe commands are
+                printed instead
+  session destroy NAME [--force]
+                remove the named session's clone — a guarded removal
+                (intrinsic properties, not location trust): the
+                resolved path must be strictly inside
+                `<repo>.mysbx/clones/`, its basename must equal NAME,
+                never the sidecar root, never `/`. REFUSES while the
+                session branch holds commits the host repo does not
+                have (unmerged work) unless --force is given — the
+                refusal names the branch and the merge to run
+                instead. The clone is plain `rm -rf`'d (it is
+                standalone, no worktree bookkeeping), the per-session
+                result file `clones/NAME.json` goes with it, the
+                host repo is untouched and a host-local
+                `agent/mysbx/NAME` branch left by a fetch is kept —
+                it is the operator's imported copy. With --dry-run
+                the exact probe and removal commands are printed
+                instead, and nothing is removed
   version       print the version
   help          print this help
 
@@ -98,7 +126,9 @@ Options:
                 the argv when this is the session's first run. With the
                 handoff verbs (fetch/merge/push/diff), the exact git
                 commands of the handoff are printed in the same format
-                instead of run
+                instead of run; with the session verbs (session list,
+                session destroy) the exact probe and removal commands
+                are printed the same way
   --verbose     print the run configuration (repo, config files, backend,
                 network, mounts, environment, payload) to stdout with a
                 `## ` prefix before running; must precede the command.

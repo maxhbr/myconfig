@@ -32,6 +32,7 @@ pub mod repo;
 pub mod report;
 pub mod result;
 pub mod session;
+pub mod sessionverbs;
 pub mod toml;
 
 /// The usage text.
@@ -155,6 +156,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "merge"
                         | "push"
                         | "diff"
+                        | "session"
                 ) =>
         {
             eprintln!(
@@ -193,6 +195,33 @@ pub fn run(args: Vec<String>) -> i32 {
         Some("merge") if flags.verbose => reject_verbose("merge"),
         Some("push") if flags.verbose => reject_verbose("push"),
         Some("diff") if flags.verbose => reject_verbose("diff"),
+        // The session noun group (workspace.md D7) — the one CLOSED
+        // nested-verb exception to cli.md D3, two verbs, not an open
+        // tree. Host-side like the handoff verbs: no sandbox is
+        // started, the repo is the one the cwd resolves to, `--dry-run`
+        // prints the exact commands (cli.md D9) and `--verbose` is
+        // refused — there is no run to report on.
+        Some("session") if flags.verbose => reject_verbose("session"),
+        Some("session") => {
+            match rest.get(1).map(String::as_str) {
+                Some("list") => sessionverbs::list(&rest[2..], flags.dry_run),
+                Some("destroy") => sessionverbs::destroy(&rest[2..], flags.dry_run),
+                // The group is closed: a third verb is a decision,
+                // not a given — unknown members are usage errors
+                // naming the two that exist (D7).
+                Some(other) => {
+                    eprintln!("mysbx session: unknown session verb: {other}");
+                    eprintln!("  the session group is closed: list, destroy (workspace.md D7)");
+                    eprintln!("try `mysbx --help`");
+                    2
+                }
+                None => {
+                    eprintln!("mysbx session: a verb is required: list or destroy");
+                    eprintln!("try `mysbx --help`");
+                    2
+                }
+            }
+        }
         Some("fetch") => handoff::verb(&rest[1..], handoff::Kind::Fetch, flags.dry_run),
         Some("merge") => handoff::verb(&rest[1..], handoff::Kind::Merge, flags.dry_run),
         Some("push") => handoff::verb(&rest[1..], handoff::Kind::Push, flags.dry_run),
@@ -509,7 +538,11 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
 /// verb named like every other flag/verb refusal.
 fn reject_verbose(verb: &str) -> i32 {
     eprintln!("mysbx: --verbose is not valid with `{verb}`");
-    eprintln!("  it reports a run's configuration — a handoff starts no sandbox");
+    if verb == "session" {
+        eprintln!("  it reports a run's configuration — the session verbs start no sandbox");
+    } else {
+        eprintln!("  it reports a run's configuration — a handoff starts no sandbox");
+    }
     eprintln!("try `mysbx --help`");
     2
 }
