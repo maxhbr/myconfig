@@ -55,10 +55,15 @@ and the session group is the one place a noun carries its own meaning
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2), `run -- COMMAND` for
 non-interactive use, `run --result -- COMMAND` (D17) for the
-machine-readable-outcome form, `gui [ARG...]` (D15), the global flag
-`--session <name>` ([workspace.md](./workspace.md) D1-D5 — the clone
-run mode), plus the global flags `--dry-run` (D9), `--verbose`
-(D10), `--result`/`--timeout` (D17) and `--multiplexer` (D14).
+machine-readable-outcome form, `gui [ARG...]` (D15), the handoff verbs
+`fetch NAME` / `merge NAME` / `push NAME [REMOTE]` / `diff NAME`
+([workspace.md](./workspace.md) D6 — the host-side git plumbing between
+the host repo and a session's clone; no sandbox is started, the session
+is the one positional and `--dry-run` prints the git commands), the
+global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
+the clone run mode), plus the global flags `--dry-run` (D9),
+`--verbose` (D10), `--result`/`--timeout` (D17) and `--multiplexer`
+(D14).
 
 ### D4: `--` separates sandbox args from the payload command
 

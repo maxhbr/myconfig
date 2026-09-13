@@ -5131,3 +5131,556 @@ fn a_session_run_report_marks_the_clone_workspace() {
     // The argv block still follows, unprefixed.
     assert!(stdout.contains("bwrap\n"), "{stdout}");
 }
+
+// ---- the handoff verbs of the workspace model (workspace.md D6) ------------
+
+/// The git closure of [`handoff_fixture`], for the tests that need
+/// to drive git themselves.
+fn git_in(dir: &Path, args: &[&str]) -> bool {
+    Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_AUTHOR_NAME", "mysbx-tests")
+        .env("GIT_AUTHOR_EMAIL", "mysbx-tests@invalid")
+        .env("GIT_COMMITTER_NAME", "mysbx-tests")
+        .env("GIT_COMMITTER_EMAIL", "mysbx-tests@invalid")
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// A full handoff fixture: a real host git repo (one commit on
+/// `main`), an initialized sidecar, and a REAL session clone created
+/// the way the first `--session` run creates it (`git clone --origin
+/// origin --no-hardlinks`, branch `agent/mysbx/NAME` at HEAD) — the
+/// state every handoff verb operates on. Returns `None` when no
+/// runnable `git` is on PATH, the same skip the creation tests make.
+///
+/// `commit` is a closure over the clone so a test can advance the
+/// session branch the way a session does.
+fn handoff_fixture(
+    name: &str,
+    f: impl FnOnce(&Path),
+) -> Option<(Invocation, PathBuf, PathBuf, PathBuf)> {
+    let (inv, repo, sidecar) = git_session_fixture(name, &[])?;
+    let clone = sidecar.join("clones").join("fix-1");
+    if !git_in(
+        &repo,
+        &[
+            "clone",
+            "--origin",
+            "origin",
+            "--no-hardlinks",
+            &repo.to_string_lossy(),
+            &clone.to_string_lossy(),
+        ],
+    ) {
+        return None;
+    }
+    if !git_in(&clone, &["checkout", "-b", "agent/mysbx/fix-1"]) {
+        return None;
+    }
+    f(&clone);
+    Some((inv, repo, sidecar, clone))
+}
+
+#[test]
+fn fetch_briges_the_session_branch_into_the_host_repo() {
+    // D6, end to end: after a commit on the session branch, `fetch`
+    // creates the host-local agent/mysbx/fix-1 at exactly the
+    // session tip — fast-forward, no remote configured, exit 0.
+    let Some((inv, repo, sidecar, clone)) = handoff_fixture("handoff-fetch", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    }) else {
+        return;
+    };
+    let mut inv = inv;
+    inv.args = vec!["fetch", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // The exact tip: the host-local branch IS the session tip.
+    let tip = Command::new("git")
+        .arg("-C")
+        .arg(&clone)
+        .args(["rev-parse", "refs/heads/agent/mysbx/fix-1"])
+        .output()
+        .unwrap();
+    let tip = String::from_utf8_lossy(&tip.stdout).trim().to_string();
+    let host = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["rev-parse", "refs/heads/agent/mysbx/fix-1"])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&host.stdout).trim(), tip);
+    // No remote was configured — the host repo learned nothing
+    // permanent about the clone.
+    let remotes = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["remote"])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&remotes.stdout).trim(), "");
+    // The session's result file and clones/ are untouched.
+    assert!(sidecar.is_dir());
+}
+
+#[test]
+fn a_fetch_of_a_diverged_host_branch_is_rejected_without_touching_it() {
+    // D6: the fetch is fast-forward-only — a host-local branch that
+    // advanced independently is REJECTED, never force-updated, and
+    // its tip is untouched.
+    let Some((inv, repo, _, clone)) = handoff_fixture("handoff-ff-only", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    }) else {
+        return;
+    };
+    // Fetch once — then advance the HOST branch independently.
+    let mut inv0 = inv;
+    inv0.args = vec!["fetch", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv0);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let inv = inv0;
+    let host_tip = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["rev-parse", "refs/heads/agent/mysbx/fix-1"])
+        .output()
+        .unwrap();
+    let host_tip = String::from_utf8_lossy(&host_tip.stdout).trim().to_string();
+    assert!(git_in(&repo, &["checkout", "agent/mysbx/fix-1"]));
+    std::fs::write(repo.join("host.txt"), "host work").unwrap();
+    assert!(git_in(&repo, &["add", "host.txt"]));
+    assert!(git_in(&repo, &["commit", "-m", "host work"]));
+    assert!(git_in(&repo, &["checkout", "main"]));
+    let host_tip2 = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["rev-parse", "refs/heads/agent/mysbx/fix-1"])
+        .output()
+        .unwrap();
+    let host_tip2 = String::from_utf8_lossy(&host_tip2.stdout)
+        .trim()
+        .to_string();
+    assert_ne!(host_tip, host_tip2);
+    // The session advances too — now the two branches diverged.
+    std::fs::write(clone.join("session2.txt"), "more work").unwrap();
+    assert!(git_in(&clone, &["add", "session2.txt"]));
+    assert!(git_in(&clone, &["commit", "-m", "more session work"]));
+    let mut inv = inv;
+    inv.args = vec!["fetch", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("diverged"), "{stderr}");
+    // And the host tip is untouched.
+    let host_tip3 = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["rev-parse", "refs/heads/agent/mysbx/fix-1"])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&host_tip3.stdout).trim(), host_tip2);
+}
+
+#[test]
+fn merge_consumes_the_exact_ref_and_deletes_the_ferry_copy() {
+    // D6: the merge consumes refs/heads/agent/mysbx/NAME (never the
+    // bare name), lands in the current branch with a --no-ff merge
+    // commit by default, and deletes the fetched host-local ref on
+    // success — a recreated session then starts at HEAD again.
+    let Some((inv, repo, _, _)) = handoff_fixture("handoff-merge", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    }) else {
+        return;
+    };
+    let mut inv = inv;
+    inv.args = vec!["merge", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // The work IS in the current branch, via a merge commit (--no-ff).
+    let merged = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["log", "--merges", "--oneline", "main"])
+        .output()
+        .unwrap();
+    assert!(merged.status.success());
+    assert!(!merged.stdout.is_empty(), "a --no-ff merge commit exists");
+    assert!(repo.join("session.txt").exists());
+    // The ferry ref is gone.
+    let ferry = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args([
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/agent/mysbx/fix-1",
+        ])
+        .status()
+        .unwrap();
+    assert!(!ferry.success(), "the fetched ref was deleted on success");
+}
+
+#[test]
+fn merge_refuses_a_dirty_host_tree_and_a_detached_head() {
+    // D6: the merge's own refusals run BEFORE any git does — a dirty
+    // tree would mix the session's merge with uncommitted operator
+    // work, a detached HEAD names no branch to land in.
+    let Some((inv, repo, _, _)) = handoff_fixture("handoff-merge-dirty", |_| {}) else {
+        return;
+    };
+    std::fs::write(repo.join("dirty.txt"), "uncommitted").unwrap();
+    let mut inv = inv;
+    inv.args = vec!["merge", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("dirty"), "{stderr}");
+    // Nothing was fetched either: the refusal ran first.
+    let ferry = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args([
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/agent/mysbx/fix-1",
+        ])
+        .status()
+        .unwrap();
+    assert!(!ferry.success(), "no fetch happened");
+    std::fs::remove_file(repo.join("dirty.txt")).unwrap();
+    // A detached HEAD is refused the same way.
+    assert!(git_in(&repo, &["checkout", "--detach", "HEAD"]));
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("detached HEAD"), "{stderr}");
+}
+
+#[test]
+fn merge_passes_the_strategy_through() {
+    // D6: `--squash` (and `--ff`, and git-merge args after `--`) pass
+    // through to the merge.
+    let Some((inv, repo, _, _)) = handoff_fixture("handoff-merge-squash", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    }) else {
+        return;
+    };
+    let mut inv = inv;
+    inv.args = vec!["merge", "fix-1", "--squash"];
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // A squashed merge leaves no merge commit but the changes are in.
+    let merged = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["log", "--merges", "--oneline", "main"])
+        .output()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&merged.stdout).trim().is_empty());
+    assert!(repo.join("session.txt").exists());
+    // git-merge args after `--` ride along: a custom message.
+    let (inv2, repo2, _, clone2) = handoff_fixture("handoff-merge-msg", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    })
+    .unwrap();
+    let mut inv2 = inv2;
+    inv2.args = vec!["merge", "fix-1", "--", "-m", "the session work"];
+    let (code, _, stderr) = run_binary(&inv2);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let msg = Command::new("git")
+        .arg("-C")
+        .arg(&repo2)
+        .args(["log", "-1", "--pretty=%s"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&msg.stdout).trim(),
+        "the session work"
+    );
+    let _ = clone2;
+}
+
+#[test]
+fn push_goes_through_the_host_repos_own_origin() {
+    // D6: the push goes through the HOST REPO's own remotes — a
+    // second repository as `origin`, not the clone. The implicit
+    // fetch runs first, so the pushed ref is current.
+    let Some((inv, repo, base, clone)) = handoff_fixture("handoff-push", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    }) else {
+        return;
+    };
+    // The host repo's origin: a bare upstream repository.
+    let upstream = base.join("upstream");
+    assert!(
+        git_in(&repo, &["init", "--bare", &upstream.display().to_string()]) || {
+            Command::new("git")
+                .args(["init", "--bare"])
+                .arg(&upstream)
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        }
+    );
+    assert!(git_in(
+        &repo,
+        &["remote", "add", "origin", &upstream.display().to_string()]
+    ));
+    assert!(git_in(
+        &repo,
+        &["push", "origin", "refs/heads/main:refs/heads/main"]
+    ));
+    let mut inv = inv;
+    inv.args = vec!["push", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // The upstream now has the session branch at the session tip.
+    let tip = Command::new("git")
+        .arg("-C")
+        .arg(&clone)
+        .args(["rev-parse", "refs/heads/agent/mysbx/fix-1"])
+        .output()
+        .unwrap();
+    let tip = String::from_utf8_lossy(&tip.stdout).trim().to_string();
+    let pushed = Command::new("git")
+        .arg("-C")
+        .arg(&upstream)
+        .args(["rev-parse", "refs/heads/agent/mysbx/fix-1"])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&pushed.stdout).trim(), tip);
+    // An explicit remote passes through.
+    assert!(git_in(
+        &repo,
+        &["remote", "add", "backup", &upstream.display().to_string()]
+    ));
+    inv.args = vec!["push", "fix-1", "backup"];
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn diff_reports_the_session_changes_since_the_divergence() {
+    // D6: the three-dot diff — the changes on the session branch
+    // since it diverged from the host's HEAD, not the host's own
+    // drift. With a host-side commit the session does not know, a
+    // two-dot diff would report it as a removal; the three-dot form
+    // reports only the session's own work.
+    let Some((inv, repo, _, clone)) = handoff_fixture("handoff-diff", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    }) else {
+        return;
+    };
+    // The host advances independently — the session's drift.
+    std::fs::write(repo.join("host.txt"), "host work").unwrap();
+    assert!(git_in(&repo, &["add", "host.txt"]));
+    assert!(git_in(&repo, &["commit", "-m", "host work"]));
+    let mut inv = inv;
+    inv.args = vec!["diff", "fix-1"];
+    let (code, stdout, stderr) = run_binary(&inv);
+    // git diff's own exit code propagates — 0 for a plain diff whose
+    // output IS the answer (differences do not make it fail).
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("session.txt"), "{stdout}");
+    assert!(
+        !stdout.contains("host.txt"),
+        "the host's own drift is not reported: {stdout}"
+    );
+    let _ = clone;
+}
+
+#[test]
+fn a_handoff_dry_run_prints_the_git_commands_and_runs_nothing() {
+    // cli.md D9: `--dry-run` prints the exact git commands of the
+    // handoff — one argument per line, the executable first — and
+    // runs nothing: no fetch happens, the host repo keeps no
+    // agent/mysbx/NAME branch.
+    let Some((inv, repo, _, _)) = handoff_fixture("handoff-dry", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    }) else {
+        return;
+    };
+    for (args, verb_line) in [
+        (vec!["--dry-run", "fetch", "fix-1"], "fetch"),
+        (vec!["--dry-run", "merge", "fix-1"], "merge"),
+        (vec!["--dry-run", "push", "fix-1"], "push"),
+        (vec!["--dry-run", "diff", "fix-1"], "diff"),
+    ] {
+        let (code, stdout, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 0, "{args:?}: stderr: {stderr}");
+        let lines: Vec<&str> = stdout.lines().collect();
+        // The fetch command: `git -C <repo> fetch --no-tags <clone>
+        // <refspec>` — the exact D6 mechanics.
+        assert_eq!(lines[0], "git", "{stdout}");
+        assert_eq!(lines[1], "-C", "{stdout}");
+        assert_eq!(lines[2], repo.to_string_lossy(), "{stdout}");
+        assert_eq!(lines[3], "fetch", "{stdout}");
+        assert_eq!(lines[4], "--no-tags", "{stdout}");
+        assert_eq!(
+            lines[5],
+            format!("{}/clones/fix-1", repo.to_string_lossy() + ".mysbx"),
+            "{stdout}"
+        );
+        assert_eq!(
+            lines[6], "refs/heads/agent/mysbx/fix-1:refs/heads/agent/mysbx/fix-1",
+            "{stdout}"
+        );
+        // The verb's own command follows the fetch (for `fetch`
+        // itself the fetch IS the command), and nothing runs.
+        if verb_line != "fetch" {
+            assert!(lines[7..].contains(&verb_line), "{stdout}");
+        }
+        let ferry = Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args([
+                "show-ref",
+                "--verify",
+                "--quiet",
+                "refs/heads/agent/mysbx/fix-1",
+            ])
+            .status()
+            .unwrap();
+        assert!(!ferry.success(), "{args:?}: nothing was fetched");
+    }
+}
+
+#[test]
+fn the_merge_dry_run_shows_the_ff_default_and_the_ferry_deletion() {
+    // The merge's dry run: the fetch, then `merge --no-ff
+    // refs/heads/…` (the D6 default), then the `branch -D` of the
+    // ferry copy — the complete plan, nothing run.
+    let Some((inv, repo, _, _)) = handoff_fixture("handoff-merge-dry", |_| {}) else {
+        return;
+    };
+    let mut inv = inv;
+    inv.args = vec!["--dry-run", "merge", "fix-1"];
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    // The merge block: `git -C <repo> merge --no-ff refs/heads/…`.
+    let merge_at = lines
+        .iter()
+        .position(|l| *l == "merge")
+        .expect("the merge command");
+    assert_eq!(lines[merge_at - 3], "git", "{stdout}");
+    assert_eq!(lines[merge_at - 1], repo.to_string_lossy(), "{stdout}");
+    assert_eq!(lines[merge_at + 1], "--no-ff", "{stdout}");
+    assert_eq!(
+        lines[merge_at + 2],
+        "refs/heads/agent/mysbx/fix-1",
+        "{stdout}"
+    );
+    // The ferry deletion: `git -C <repo> branch -D agent/mysbx/fix-1`.
+    let del_at = lines
+        .iter()
+        .position(|l| *l == "branch")
+        .expect("the ferry deletion");
+    assert_eq!(lines[del_at - 3], "git", "{stdout}");
+    assert_eq!(lines[del_at - 1], repo.to_string_lossy(), "{stdout}");
+    assert_eq!(lines[del_at + 1], "-D", "{stdout}");
+    assert_eq!(lines[del_at + 2], "agent/mysbx/fix-1", "{stdout}");
+}
+
+#[test]
+fn handoff_usage_errors_exit_2() {
+    // workspace.md D2 + cli.md D8: the NAME grammar at parse time,
+    // the missing NAME, the unexpected tail of fetch/diff, a second
+    // push remote, an unknown push flag, a repeated merge strategy.
+    let (inv, _, _) = fixture_user_backend("handoff-usage", &[]);
+    for args in [
+        vec!["fetch"],
+        vec!["merge"],
+        vec!["push"],
+        vec!["diff"],
+        vec!["fetch", "a/b"],
+        vec!["fetch", ""],
+        vec!["fetch", ".."],
+        vec!["diff", "fix-1", "extra"],
+        vec!["fetch", "fix-1", "extra"],
+        vec!["push", "fix-1", "origin", "backup"],
+        vec!["push", "fix-1", "--repo", "/tmp"],
+        vec!["push", "fix-1", "--"],
+        vec!["merge", "fix-1", "--ff", "--squash"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+    }
+}
+
+#[test]
+fn handoff_refuses_unknown_sessions_and_run_scoped_flags() {
+    // The registry of D2: no clone directory ⇒ no session ⇒ the
+    // unknown-session refusal (exit 70, the command line was fine),
+    // naming the session and how to start one. The run-scoped global
+    // flags are usage errors with the verbs (2): a handoff is not a
+    // run — there is no workspace to choose and no payload.
+    let (inv, _, _) = fixture_user_backend("handoff-unknown", &[]);
+    for args in [
+        vec!["fetch", "fix-1"],
+        vec!["merge", "fix-1"],
+        vec!["push", "fix-1"],
+        vec!["diff", "fix-1"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 70, "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("unknown session: fix-1"),
+            "{args:?}: {stderr}"
+        );
+        assert!(
+            stderr.contains("mysbx run --session fix-1"),
+            "{args:?}: {stderr}"
+        );
+    }
+    for args in [
+        vec!["--session", "fix-1", "fetch", "fix-1"],
+        vec!["--verbose", "fetch", "fix-1"],
+        vec!["--ro", "/tmp", "diff", "fix-1"],
+        vec!["--result", "merge", "fix-1"],
+        vec!["--timeout", "5", "push", "fix-1"],
+        vec!["--multiplexer", "tmux", "fetch", "fix-1"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+        assert!(stderr.contains("is not valid with"), "{args:?}: {stderr}");
+    }
+}
+
+#[test]
+fn a_handoff_started_inside_a_session_clone_is_refused() {
+    // workspace.md D9, the handoff side: the verbs belong to the
+    // HOST side of a session; started inside the clone, the resolver
+    // refuses with the error naming the owning repo and the session.
+    let (mut inv, _, sidecar) = fixture_user_backend("handoff-inside-clone", &["fetch", "fix-1"]);
+    let clone = sidecar.join("clones").join("fix-1");
+    std::fs::create_dir_all(&clone).unwrap();
+    inv.cwd = clone.clone();
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(
+        stderr.contains("refusing to run inside the clone of session fix-1"),
+        "{stderr}"
+    );
+}
