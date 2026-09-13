@@ -3535,13 +3535,21 @@ fn an_unparsable_sidecar_config_is_never_rewritten() {
 /// The record file is written by the stub AT RUNTIME, and `gui` returns
 /// before the stub has written it (D15: it detaches, like `& disown`) —
 /// so a test reads it through [`wait_for_file`], never directly.
+///
+/// The stub assembles the record in a sibling `.tmp` file and `mv`s it
+/// into place at the end: `mv` within the same directory is a `rename(2)`,
+/// which is ATOMIC, so the record file never exists in a half-written
+/// state (the argv lines without the trailing `pwd` line yet). Without
+/// that, a test polling for the file's existence can read the record
+/// between the stub's two writes — a race that was nearly deterministic
+/// on the loaded remote nix builder and invisible on an idle dev host.
 fn terminal_stub(base: &Path) -> (PathBuf, PathBuf) {
     let out = base.join("stub-out.txt");
     let stub = base.join("terminal-stub");
     std::fs::write(
         &stub,
         format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MYSBX_GUI_STUB_OUT\"\npwd >> \"$MYSBX_GUI_STUB_OUT\"\n"
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MYSBX_GUI_STUB_OUT.tmp\"\npwd >> \"$MYSBX_GUI_STUB_OUT.tmp\"\nmv -f \"$MYSBX_GUI_STUB_OUT.tmp\" \"$MYSBX_GUI_STUB_OUT\"\n"
         ),
     )
     .unwrap();
@@ -3553,7 +3561,10 @@ fn terminal_stub(base: &Path) -> (PathBuf, PathBuf) {
 /// Wait for `path` to come into existence, then read it — the polling
 /// counterpart of the detach: `mysbx gui` returns while the terminal it
 /// started is still running, so the bytes the stub writes arrive AFTER
-/// the mysbx process the test drove has exited. Polls for up to 10s
+/// the mysbx process the test drove has exited. The stub publishes its
+/// record with an atomic `rename(2)` (see [`terminal_stub`]), so the
+/// existence check below is also a completeness guarantee: what the
+/// read returns is always the FULL record. Polls for up to 10s
 /// (generous; the stub writes within milliseconds) and panics with the
 /// timeout otherwise.
 fn wait_for_file(path: &Path) -> String {
@@ -3745,7 +3756,7 @@ fn gui_detaches_and_returns_before_the_terminal_exits() {
     let slow = base.join("terminal-slow-stub");
     std::fs::write(
         &slow,
-        "#!/bin/sh\nsleep 2\nprintf '%s\\n' \"$@\" > \"$MYSBX_GUI_STUB_OUT\"\npwd >> \"$MYSBX_GUI_STUB_OUT\"\n",
+        "#!/bin/sh\nsleep 2\nprintf '%s\\n' \"$@\" > \"$MYSBX_GUI_STUB_OUT.tmp\"\npwd >> \"$MYSBX_GUI_STUB_OUT.tmp\"\nmv -f \"$MYSBX_GUI_STUB_OUT.tmp\" \"$MYSBX_GUI_STUB_OUT\"\n",
     )
     .unwrap();
     use std::os::unix::fs::PermissionsExt;
@@ -3819,11 +3830,20 @@ fn bindable_scratch(name: &str) -> Option<(PathBuf, PathBuf)> {
 
 /// [`bindable_scratch`] for the granted paths, panicking when no
 /// candidate exists (the tests that need it cannot assert anything
-/// without one).
-fn granted_scratch(name: &str) -> (PathBuf, PathBuf) {
-    bindable_scratch(name).unwrap_or_else(|| {
-        panic!("no writable scratch root outside the protected dests for `{name}`")
-    })
+/// without one). Returns the UNIQUE per-call directory (not the
+/// shared root): the flag tests create their `repo`, `home`, `xdg`
+/// and `granted` fixtures IN the scratch root, and the tests run in
+/// parallel in one process — a shared root made concurrent tests
+/// write the SAME `repo`/`repo.mysbx/config.toml`/`xdg` paths and
+/// race each other (observed as intermittent exit-70 failures of
+/// `a_relative_flag_path_resolves_against_the_cwd` on the loaded
+/// remote nix builder, bd myconfig-319).
+fn granted_scratch(name: &str) -> PathBuf {
+    bindable_scratch(name)
+        .unwrap_or_else(|| {
+            panic!("no writable scratch root outside the protected dests for `{name}`")
+        })
+        .1
 }
 
 /// A granted directory and a granted file in `root`, as `PathBuf`s —
@@ -3841,7 +3861,7 @@ fn ro_flag_binds_the_path_read_only_for_this_run() {
     // cli.md D16: `--ro <path>` adds one read-only bind for THIS run,
     // after every configured mount, dest = the canonicalized source.
     let (inv, _, _) = fixture_with_backend("ro-flag", &["--dry-run"]);
-    let (base, _) = granted_scratch("ro-flag");
+    let base = granted_scratch("ro-flag");
     let (dir, file) = granted_paths(&base);
     let dir_c = dir.canonicalize().unwrap();
     let file_c = file.canonicalize().unwrap();
@@ -3878,7 +3898,7 @@ fn ro_flag_binds_the_path_read_only_for_this_run() {
 fn rw_flag_binds_the_path_read_write_for_this_run() {
     // The same, `--bind` instead of `--ro-bind`.
     let (inv, _, _) = fixture_with_backend("rw-flag", &["--dry-run"]);
-    let (base, _) = granted_scratch("rw-flag");
+    let base = granted_scratch("rw-flag");
     let (dir, _) = granted_paths(&base);
     let dir_c = dir.canonicalize().unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run", "--rw"]);
@@ -3903,7 +3923,7 @@ fn ro_rw_flags_are_repeatable_and_ordered() {
     // matter the typing order — the one predictable rule), the values
     // of each flag in the order they were given.
     let (inv, _, _) = fixture_with_backend("ro-rw-repeat", &["--dry-run"]);
-    let (base, _) = granted_scratch("ro-rw-repeat");
+    let base = granted_scratch("ro-rw-repeat");
     let (dir, file) = granted_paths(&base);
     let dir_c = dir.canonicalize().unwrap().to_string_lossy().into_owned();
     let file_c = file.canonicalize().unwrap().to_string_lossy().into_owned();
@@ -3966,7 +3986,7 @@ fn flag_additions_come_after_the_configured_mounts() {
         ),
     )
     .unwrap();
-    let (base, _) = granted_scratch("flags");
+    let base = granted_scratch("flags");
     let (granted, _) = granted_paths(&base);
     let granted_c = granted
         .canonicalize()
@@ -4053,7 +4073,7 @@ fn a_tilde_flag_path_expands_against_home() {
     // real directory. HOME lives in the bindable scratch root: the
     // granted path binds at its own host path, which must not fall at
     // or below a protected sandbox dest (the temp root may be /tmp).
-    let (base, _) = granted_scratch("tilde");
+    let base = granted_scratch("tilde");
     let inv = Invocation {
         args: vec![],
         cwd: base.join("repo"),
@@ -4090,7 +4110,7 @@ fn a_relative_flag_path_resolves_against_the_cwd() {
     // directory; the command line's "own directory" is the cwd it was
     // typed in. The repo lives in the bindable scratch root for the
     // same protected-dest reason as the tilde test above.
-    let (base, _) = granted_scratch("relative");
+    let base = granted_scratch("relative");
     let inv = Invocation {
         args: vec![],
         cwd: base.join("repo"),
@@ -4138,7 +4158,7 @@ fn the_flags_work_with_the_run_form_too() {
     // `--dry-run` suffices: what is pinned is the PARSING (both
     // positions accepted) and the resulting argv, not the exec.
     let (inv, _, _) = fixture_with_backend("ro-flag-run", &[]);
-    let (base, _) = granted_scratch("flags");
+    let base = granted_scratch("flags");
     let (granted, _) = granted_paths(&base);
     let granted_c = granted.canonicalize().unwrap();
     let expected = format!("--bind\n{}\n{}\n", granted_c.display(), granted_c.display());
@@ -4191,7 +4211,7 @@ fn flag_binds_and_a_policy_file_rw_exposure() {
     // bind the parent of, so it is placed in the bindable scratch
     // root (the default temp root may lie under the protected /tmp,
     // and the guard would fire for the wrong reason).
-    let (base, _) = granted_scratch("policy");
+    let base = granted_scratch("policy");
     let inv = Invocation {
         args: vec![],
         cwd: base.join("repo"),
@@ -4301,7 +4321,7 @@ fn the_report_attributes_flag_mounts_to_the_command_line() {
     let (inv, _, sidecar) = fixture("ro-flag-report", &[]);
     std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
     std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
-    let (base, _) = granted_scratch("flags");
+    let base = granted_scratch("flags");
     let (granted, _) = granted_paths(&base);
     let granted_c = granted.canonicalize().unwrap();
     let args = vec![
