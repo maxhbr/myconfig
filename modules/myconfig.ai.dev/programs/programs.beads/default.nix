@@ -29,6 +29,15 @@
 # The `enable` option itself still defaults to false, so a host without
 # `myconfig.ai.enable` never gets beads, and a host can opt out with
 # `myconfig.ai.dev.beads.enable = false;`.
+#
+# Besides the `bd` binary this module ships `bd-export` (writeShellApplication
+# wrapping ./bd-export.sh): a companion that dumps the complete beads state
+# of the current repository (README.md index + one issues/<id>.md per issue,
+# source of truth `bd export --all`) as human- and AI-readable markdown, so
+# agents and humans can read the issue landscape without running bd or
+# touching the Dolt DB. The bd-generated `beads` skill does not mention it
+# (it is generated from the CLI), so the agent-facing docs live in the
+# script's header comment.
 {
   config,
   lib,
@@ -86,6 +95,23 @@ let
         bd setup codex >/dev/null
         cp -r .agents/skills/beads/. $out/
       '';
+
+  # `bd-export`: markdown snapshot of the full beads state (see the module
+  # header and ./bd-export.sh). bd itself is resolved from PATH at runtime —
+  # the wrapped bd package ships right next to this wrapper in
+  # home.packages, and bd-export runs wherever beads is installed. jq does
+  # the JSONL -> markdown transform (kept out of the bd call so a bd version
+  # bump does not force a rebuild of the transform logic).
+  bdExport =
+    with pkgs;
+    writeShellApplication {
+      name = "bd-export";
+      runtimeInputs = [
+        jq
+        gawk
+      ];
+      text = builtins.readFile ./bd-export.sh;
+    };
 in
 {
   options.myconfig = with lib; {
@@ -155,7 +181,10 @@ in
 
     home-manager.sharedModules = [
       {
-        home.packages = [ package ];
+        home.packages = [
+          package
+          bdExport
+        ];
 
         xdg.configFile."beads/config.toml".source = tomlFormat.generate "beads-config.toml" cfg.settings;
       }
