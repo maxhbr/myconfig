@@ -30,8 +30,7 @@
 # the first serving test.
 { modelsPullDir }:
 let
-  amdModels = [
-    {
+  q4 = {
       name = "Nex-N2.5-mini-Q4_K_L";
       path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q4_K_L.gguf";
       pull-models = {
@@ -40,8 +39,8 @@ let
       };
       sha256 = "9b5785e2beeb6d4be24b3dd802d8d14e8cb5bd4f26bae244387a1b2ea064fb5d";
       ttl = 1800;
-    }
-    {
+    };
+  q5 = {
       name = "Nex-N2.5-mini-Q5_K_M";
       path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q5_K_M.gguf";
       pull-models = {
@@ -50,18 +49,18 @@ let
       };
       sha256 = "d38e48485769a18f2a73d712f5083f1b4cdd60a8000131149387d55e3cc60153";
       ttl = 1800;
-    }
-    {
-      name = "Nex-N2.5-mini-Q6_K";
-      path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf" ];
-      };
-      sha256 = "37299c1ccf386db35144a2cc86eca7c5598a94e62af3fe797d593bd601f47103";
-      ttl = 1800;
-    }
-    {
+    };
+   # q6 = {
+   #    name = "Nex-N2.5-mini-Q6_K";
+   #    path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf";
+   #    pull-models = {
+   #      target_directory = modelsPullDir;
+   #      hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf" ];
+   #    };
+   #    sha256 = "37299c1ccf386db35144a2cc86eca7c5598a94e62af3fe797d593bd601f47103";
+   #    ttl = 1800;
+   #  };
+   q6 = {
       name = "Nex-N2.5-mini-Q6_K_L";
       path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K_L.gguf";
       pull-models = {
@@ -70,12 +69,9 @@ let
       };
       sha256 = "2e4a79d68c4ea5b863b1d71e4004d78332673cb58489065940ff8eb356cbda76";
       ttl = 1800;
-    }
-  ];
+    };
 in
 {
-  amdModels = amdModels;
-  rtxModels = builtins.filter (
-    model: model.name == "Nex-N2.5-mini-Q4_K_L" || model.name == "Nex-N2.5-mini-Q5_K_M"
-  ) amdModels;
+  amdModels = [q6];
+  rtxModels = [q4 q5];
 }
