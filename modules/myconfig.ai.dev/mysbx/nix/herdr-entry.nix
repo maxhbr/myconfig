@@ -14,13 +14,14 @@
 # Differences from the other entries, all consequences of herdr not
 # being a tmux server:
 #
-#   * `--no-session` (monolithic, no server/client split), so the
-#     session cannot attach to a differently-configured server and dies
-#     with the sandbox. Same choice as the jail tier's entrypoint.
-#   * its own socket and state live under the sandbox `HOME`
-#     (`/mysbx-home`, a tmpfs, ../docs/design/config.md D14), so they
-#     are per-sandbox and per-run by construction — the D16/D17 socket
-#     isolation holds without herdr having to be told anything.
+#   * herdr's socket, server state and session config live under the
+#     sandbox `HOME` (`/mysbx-home`, a tmpfs, ../docs/design/config.md
+#     D14) — `~/.config/herdr/herdr.sock` and friends — so they are
+#     per-sandbox and per-run by construction: the D16/D17 socket
+#     isolation holds without herdr having to be told anything. (Older
+#     herdr versions had a `--no-session` "monolithic" mode for this;
+#     current ones removed it, and the tmpfs `HOME` makes it
+#     unnecessary.)
 #   * `TMUX_TMPDIR` is still exported by mysbx and still validated here:
 #     it is how a pane that runs plain `tmux` inside the herdr session
 #     lands on the private socket instead of `/tmp/tmux-<uid>`.
@@ -84,8 +85,7 @@ writeShellApplication {
     # there is no CLI flag for the initial one. Inside the sandbox
     # `$HOME` is the tmpfs (D14), so this would drop the operator into
     # an empty directory instead of the repository mysbx `--chdir`ed
-    # into. Fix it up over the socket API (which `--no-session` also
-    # serves): once herdr is up, create a workspace rooted at the repo,
+    # into. Fix it up over the socket API: once herdr is up, create a workspace rooted at the repo,
     # focus it, and close the one that existed before. Runs in the
     # background because the API only answers after herdr has started,
     # and discards all output because the TUI owns the terminal from
@@ -120,9 +120,7 @@ writeShellApplication {
         done
     ) >/dev/null 2>&1 &
 
-    # Monolithic: no server/client split, so the session cannot attach
-    # to a differently-configured server and dies with the sandbox.
-    exec herdr --no-session "$@"
+    exec herdr "$@"
   '';
 
   meta = {

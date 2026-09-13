@@ -298,8 +298,9 @@ let
   # level deeper than workmux, but inside the same sibling directory.
   #
   # Because the root is correct, the jail restores herdr's BUILT-IN
-  # `prefix+shift+g` instead of the host's `[[keys.command]]` popup: it needs
-  # no socket round-trip, which matters with `--no-session` below.
+  # `prefix+shift+g` instead of the host's `[[keys.command]]` popup: it
+  # needs no socket round-trip, which matters because the session dies
+  # with the jail (see the entrypoint below).
   #
   # The session starts in the directory the wrapper was INVOKED from, not in
   # the jail's `$HOME` - which takes both a working `bwrap` cwd (`mount-cwd`)
@@ -412,11 +413,11 @@ let
       # policy only applies to workspaces created later, and there is no CLI
       # flag for the initial one. Inside the jail $HOME is a tmpfs, so this
       # would drop the user into an empty directory instead of the project.
-      # Fix it up over the socket API (which `--no-session` also serves): once
-      # herdr is up, create a workspace rooted at the invocation directory,
-      # focus it, and close the workspace(s) that existed before. Runs in the
-      # background because the API only answers after herdr has started, and
-      # discards all output because the TUI owns the terminal from here on.
+      # Fix it up over the socket API: once herdr is up, create a workspace
+      # rooted at the invocation directory, focus it, and close the
+      # workspace(s) that existed before. Runs in the background because
+      # the API only answers after herdr has started, and discards all
+      # output because the TUI owns the terminal from here on.
       # `new_cwd = "follow"` is deliberately kept (rather than "current"): new
       # tabs/panes must inherit the focused workspace's directory, which for a
       # worktree workspace is the worktree and not the invocation directory.
@@ -448,9 +449,10 @@ let
           done
       ) >/dev/null 2>&1 &
 
-      # Monolithic: no server/client split, so the session cannot attach to a
-      # differently-configured server and dies with the jail.
-      exec herdr --no-session "$@"
+      # The socket, server state and session config live under the jail's
+      # tmpfs $HOME (`~/.config/herdr`), so they die with the jail: no
+      # differently-configured server can ever be attached to.
+      exec herdr "$@"
     '';
   };
 

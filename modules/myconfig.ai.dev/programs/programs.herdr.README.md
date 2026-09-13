@@ -83,9 +83,11 @@ bubblewrap analogue of `agent-qemu-herdr` and the workmux jail
    herdr's **built-in** `prefix+shift+g` (plus `prefix+shift+o` /
    `prefix+shift+x` for open/remove) instead of the host's popup command; no
    socket round-trip is involved.
-4. herdr runs as `herdr --no-session` (monolithic): no server/client split, so
-   a session can never attach to a differently-configured server, and it dies
-   with the jail.
+4. herdr's socket, server state and session config live under the jail's
+   tmpfs `$HOME` (`~/.config/herdr`): they die with the jail, and a session
+   can never attach to a differently-configured server. (Older herdr
+   versions had a `--no-session` "monolithic" mode for this; current ones
+   removed it, and the tmpfs `$HOME` makes it unnecessary.)
 
 herdr still appends `<repo-name>/<branch-slug>` to its root, so inside the
 sandbox checkouts land one level deeper than on the host:
@@ -109,7 +111,7 @@ The session comes up in the directory the wrapper was **invoked from**, not in
 * herdr's **first** workspace is nevertheless always rooted at `$HOME` — the
   `[terminal] new_cwd` policy only applies to workspaces created *later*, and
   there is no CLI flag for the initial one. The entrypoint therefore waits for
-  the socket API (which `--no-session` serves too), creates a workspace with
+  the socket API, creates a workspace with
   `herdr workspace create --cwd <invocation directory> --focus`, and closes the
   `~` workspace that herdr made itself. If the API never answers, herdr is left
   alone rather than ending up with two workspaces.
