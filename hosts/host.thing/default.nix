@@ -152,7 +152,7 @@
           enable = true;
         };
         dev.hermes = {
-          enable = true;
+          enable = false;
           microvm = {
             enable = true;
             autostart = true;
