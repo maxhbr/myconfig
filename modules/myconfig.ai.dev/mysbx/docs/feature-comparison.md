@@ -46,11 +46,11 @@ to replace it.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Shape | one wrapper per agent | one wrapper per app | one wrapper per agent | one wrapper per agent | one binary, verb subcommands | one binary, verb subcommands | one binary, verb subcommands (`cli.md` D3) |
 | Bare invocation | starts the agent in `$PWD` | starts the app in `$PWD` | starts the agent in `$PWD` | boots a VM, execs the agent | `agent-gvisor NAME` = `start NAME` | usage, exit `2` | prints usage today; **enter a sandbox shell** (planned, `cli.md` D2) |
-| Subcommands | none | none | none | none | `start list status run shell logs stop merge fetch push destroy doctor` | `run stop destroy status doctor capabilities list dashboard ssh console submit cancel recover usage workspace-remove` | `init version help`; `run COMMAND` planned (`cli.md` D3) |
+| Subcommands | none | none | none | none | `start list status run shell logs stop merge fetch push destroy doctor` | `run stop destroy status doctor capabilities list dashboard ssh console submit cancel recover usage workspace-remove` | `init version help`; planned (`cli.md` D3): `run COMMAND`, plus the workspace verbs `fetch NAME`, `merge NAME`, `push NAME`, `diff NAME`, `session list`, `session destroy` (`workspace.md` D6/D7) |
 | Own flags | none (args → agent) | none (args → app) | none (args → agent) | none (args → agent) | `--repo --base --branch --image --config --mount --env --env-file --network --memory --cpus --pids-limit --nix --force --home-seed …` | `--name --repository --agent --branch --resource-class --wait --attach --timeout --prompt-file --persist-agent-state --no-preflight` | `-h/--help`, `-V/--version` |
 | `--` payload separator | n/a | n/a | n/a | n/a | yes (`-- COMMAND…`) | yes (`ssh <slot> -- cmd…`) | yes (planned, `cli.md` D4) |
-| Unit of work | the CWD | the CWD | the CWD | the CWD | a *named session* per repo | a *named task* per repo | the repository = the CWD (`cli.md` D1) |
-| Unattended/batch mode | no | no | no | no | `run --detach` | `submit` (job spec + prompt file, structured result) | one-shot structured result (`run --result`, `result.json` in the sidecar — `cli.md` D17); detached/queued mode not yet |
+| Unit of work | the CWD | the CWD | the CWD | the CWD | a *named session* per repo | a *named task* per repo | the repository = the CWD (`cli.md` D1); a named clone session per repo in clone mode (`--session NAME`, `workspace.md` D1) |
+| Unattended/batch mode | no | no | no | no | `run --detach` | `submit` (job spec + prompt file, structured result) | one-shot structured result (`run --result`, `result.json` in the sidecar — `cli.md` D17); detached/queued mode not yet — it will require a clone session (`workspace.md` D8) |
 | Backend choice | fixed (bubblewrap) | fixed (bubblewrap) | fixed (nono) | fixed (QEMU) | fixed (podman+runsc), runtime overridable via `AGENT_GVISOR_PODMAN_RUNTIME` | fixed (Cloud Hypervisor) | explicit config/flag, never auto-detected (`cli.md` D7, `config.backend`) |
 | Configuration input | NixOS options at build time | Nix call site | NixOS options at build time | `AGENT_QEMU_PI_*` env vars | flags + `AGENT_GVISOR_*` env + `--env-file` | NixOS options + flags | TOML: user config + sidecar (`config.md` D1) |
 | Implementation | `writeShellApplication` | `writeShellApplication` | `writeShellApplication` | shell + impure `nix build` | Rust, zero deps | large generated bash | Rust, zero deps, hand-rolled parser (`cli.md` D5) |
@@ -75,7 +75,7 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Kernel boundary | no | no | no | yes | user-space kernel | yes | none yet |
 | Runs as | your uid | your uid | your uid | guest `agent` user | container user | guest `agent` user | your uid (planned) |
 | Filesystem policy | curated allow-list of binds, env cleared (`--clearenv`) | ro config dirs + writable XDG dirs | `--allow` / `--read` / `--allow-cwd` | virtiofs shares only | image + explicit `--mount` | virtiofs shares only | nothing from the host filesystem unless declared: repo (+ its git metadata dirs, only when approved in `git-dirs` — D13) + explicit `[[mounts]]` (`config.md` D9, D13) |
-| Workspace | `$PWD` rw (+ `__worktrees` sibling) | `$PWD` rw | `$PWD` rw (`--allow-cwd`) | `$PWD` rw at `/workspace` | isolated git clone at `<repo>__agent-gvisor/NAME`, mounted at the host path — host checkout never bind-mounted | standalone clone, `workspaceLayout = central\|beside-repo` | the sidecar's repo, implicit, always rw at its real path (`config.md` D13) + the `<repo>__worktrees` sibling rw when it exists (implicit, never created by a run) |
+| Workspace | `$PWD` rw (+ `__worktrees` sibling) | `$PWD` rw | `$PWD` rw (`--allow-cwd`) | `$PWD` rw at `/workspace` | isolated git clone at `<repo>__agent-gvisor/NAME`, mounted at the host path — host checkout never bind-mounted | standalone clone, `workspaceLayout = central\|beside-repo` | `live` default: the sidecar's repo, implicit, always rw at its real path (`config.md` D13) + the `<repo>__worktrees` sibling rw when it exists (implicit, never created by a run); opt-in clone sessions: `--session NAME` = isolated clone at `<repo>.mysbx/clones/NAME` bound rw at the repo's own path, host repo not mounted (`workspace.md` D1–D3, decided) |
 | Extra mounts | `extraReadOnly/ReadWriteEnvPaths`, `JAIL_EXTRA_*_PATHS` | `readOnlyConfigDirs`, `writableDirs` | `extraAllowDirs`, `extraReadOnlyDirs`, `--allow-unix-socket` | fixed (CWD + store) | `--mount`/`--config HOST:DEST[:ro\|rw]` | fixed share set | `[[mounts]] path/dest/mode`, `ro`/`rw` only (`../mysbx-rs/src/config.rs`) |
 | Host `/nix/store` | bound read-only (`bindFullNixStore`) | via the app closure | via the app closure | read-only virtiofs | not shared; optional writable store volume (`--nix`) | not shared — own EROFS guest store | undecided |
 | Network default | on (`network` combinator: resolv.conf + CA bundle) | on (`shareNet = true`) | off unless `--allow-domain` / `--allow-connect-port` / `--listen-port` | SLiRP user-mode NAT, outbound only + one loopback SSH port | rootless podman default, `--network`/`AGENT_GVISOR_NETWORK` (pasta spec), in-sandbox loopback forwarders | private bridge `agentbr0` with per-TAP L2 isolation, `networkProfile` (default `proxy-only`) | on, shared; `network = false` is the deny switch (`config.md` D5, D9) |
@@ -88,7 +88,7 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Resource limits | none | none | none | VM `vcpu`/`mem` | `--memory --cpus --pids-limit` | prebuilt `resourceClasses` (vcpu/mem/slots) | `backend` limits foreseen (`config.md` D5), not implemented |
 | Refuses `$HOME` as CWD | yes (`rejectHomeCwd`) | — | yes (`rejectHomeCwd`) | yes | n/a (clone-based) | n/a (clone-based) | not implemented |
 | `myconfig.ai.sandboxTools` hook | yes | no | yes | yes | yes | yes | yes (phase 2d: `extraPackages` → dev-tool closure, `extraEnv` → `[env]`) |
-| Result handoff | edits are live in `$PWD` | live | live | live | `merge` / `fetch` / `push` subcommands | import the branch from the clone | live (planned) |
+| Result handoff | edits are live in `$PWD` | live | live | live | `merge` / `fetch` / `push` subcommands | import the branch from the clone | `live` runs: live in the work tree; clone sessions: host-side `fetch` / `merge` / `push` / `diff` verbs onto branch `agent/mysbx/NAME` (`workspace.md` D6, decided — gvisor mechanics) |
 | Startup cost | ~none | ~none | ~none | seconds (boot) | ~a second (container) | prebuilt slot + host config | ~none (planned) |
 
 Sources: `../../myconfig.ai.dev/fns/bubblewrap-app.nix`, `../../myconfig.ai.dev/fns/bubblewrap-simple-app.nix`,
@@ -129,11 +129,14 @@ Everything below exists in at least one tier above and has no counterpart in
   answer it differently (host key in the env vs. SSH `SetEnv` vs. proxy-only
   with no key in the guest). `config.md` leaves it open; the `microvm` answer
   is the strongest and the most expensive.
-- **A workspace model.** `bwrap`/`nono`/`qemu` use the live CWD, `gvisor` and
-  `microvm` use an isolated clone plus a handoff (`merge`/`fetch`/`push`,
-  branch import). `mysbx` fixes the repo implicitly — always rw, not
-  expressible (`design/config.md` D13) — and defers the clone/worktree
-  question.
+- **A workspace model.** DECIDED (bd myconfig-o6z):
+  [`design/workspace.md`](./design/workspace.md) — `live` stays the
+  default (config.md D13 unchanged), clone sessions are `--session NAME`
+  (CLI-only, no TOML surface), the clone lives at
+  `<repo>.mysbx/clones/NAME` on branch `agent/mysbx/NAME`, the handoff
+  is `fetch` / `merge` / `push` / `diff` plus `session list` /
+  `session destroy`, and unattended runs will force clone mode. What
+  remains is implementation, filed as follow-up beads.
 - **Refusing `$HOME` as CWD** — a cheap guardrail that both bubblewrap and
   nono wrappers already have.
 - ~~**`myconfig.ai.sandboxTools` participation** — the cross-tier hook for

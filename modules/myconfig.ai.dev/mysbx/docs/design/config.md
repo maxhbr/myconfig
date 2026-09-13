@@ -349,6 +349,15 @@ expressible in configuration: the schema has no repository table (a
 `repo` key at top level is an unknown key and therefore a schema error,
 D11).
 
+**This is the default workspace mode, `live`.** A named **clone
+session** exists beside it as the opt-in alternative (`--session NAME`:
+an isolated clone under `<sidecar>/clones/NAME`, bound rw at the repo's
+own path while the host repo is not mounted at all) — decided in
+[workspace.md](./workspace.md), which owns the session lifecycle, the
+mount rules of a clone run and the `fetch` / `merge` / `push` / `diff`
+handoff. The live mode above is unchanged by that decision and stays
+the default.
+
 Rationale: the sidecar is named after the repo (`<repo>.mysbx/`, D2), so
 the repo path is already fixed by where the sidecar sits. A config that
 could name a different repo would create a contradiction class between the

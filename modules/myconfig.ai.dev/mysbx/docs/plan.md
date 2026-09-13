@@ -161,10 +161,19 @@ extension ON TOP of the hook (selected-multiplexer payload, per-agent
 CLIs like `pi`), never as a parallel copy of it: tooling wanted in
 EVERY tier goes through the hook exactly once.
 
-**2e — the workspace model.** `bwrap`/`nono`/`qemu` edit the live repo;
+**2e — the workspace model.** DECIDED (bd myconfig-o6z):
+[`design/workspace.md`](./design/workspace.md) — `live` stays the
+default and unchanged (config.md D13); clone sessions are opt-in per
+run via `--session NAME` (isolated clone at
+`<repo>.mysbx/clones/NAME`, per-session branch `agent/mysbx/NAME`,
+every other mount forced `ro`, no `__worktrees` bind, no state binds,
+per-session result file), with host-side `fetch` / `merge` / `push` /
+`diff` handoff and `session list` / `session destroy` verbs; unattended
+runs will force clone mode. The implementation is filed as follow-up
+beads. Historical sketch: `bwrap`/`nono`/`qemu` edit the live repo;
 `gvisor` and `microvm` use an isolated clone plus an explicit handoff
-(`merge` / `fetch` / `push`, branch import). The MVP edits the live repo. A
-clone mode is the prerequisite for unattended runs.
+(`merge` / `fetch` / `push`, branch import). The MVP edits the live repo.
+A clone mode is the prerequisite for unattended runs.
 
 **2f — further backends.** `README.md` names podman+gVisor and `nono` next,
 qemu and microvm long-term. The MVP's `bwrap_argv` boundary is the seam: a
