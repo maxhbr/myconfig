@@ -5,8 +5,9 @@
 # worktrees" (https://github.com/raine/workmux). It is a terminal-native
 # companion to agentic coding harnesses, so it is enabled by default whenever
 # the AI tooling, the dev profile, and tmux are all active on the host. The
-# package is consumed directly from the upstream flake input
-# (inputs.workmux.packages.${system}.default).
+# package is consumed from the upstream flake input
+# (inputs.workmux.packages.${system}.default), with the test-env override
+# below (`workmuxPkg`).
 #
 # In addition to installing the binary, this module owns the *global* workmux
 # configuration (`~/.config/workmux/config.yaml`). Coding-agent modules (pi,
@@ -26,7 +27,22 @@
 let
   cfg = config.myconfig.ai.dev.workmux;
   aiCfg = config.myconfig.ai.dev;
-  workmuxPkg = inputs.workmux.packages.${pkgs.system}.default;
+  # Upstream builds with `doCheck = true` but its nativeBuildInputs only
+  # carry `git` (plus installShellFiles). Since upstream commit eb2867f
+  # ("fix dashboard removal across projects", pulled in by the 2026-09-13
+  # flake.lock update) the test `workflow::remove::tests::remove_uses_context_
+  # repository_not_process_cwd` reaches `TmuxBackend::is_running()` →
+  # `tmux has-session`, and exec(2) fails with ENOENT when no tmux is on the
+  # build sandbox's PATH — the `cargo test` run of the package build fails on
+  # every remote/CI builder (it only passed on interactive dev machines where
+  # tmux happens to be in the ambient PATH). Put tmux into the *check* phase
+  # environment (`nativeCheckInputs` is only added to PATH while doCheck),
+  # matching upstream's CONTRIBUTING.md ("tmux (required for tests)").
+  # TODO (doc/TODOs/drop-workmux-tmux-nativecheckinputs-override.md): remove
+  # once upstream adds tmux to the check inputs itself.
+  workmuxPkg = inputs.workmux.packages.${pkgs.system}.default.overrideAttrs (old: {
+    nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ pkgs.tmux ];
+  });
   # The workmux flake input also provides its source tree, from which the
   # per-agent status-tracking extensions/plugins are deployed verbatim (the
   # same files `workmux setup` would copy).
