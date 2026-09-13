@@ -122,8 +122,17 @@ let
               continue
           fi
 
-          repo_id="''${model%/*}"
-          path_in_repo="''${model##*/}"
+          # "org/repo[/path/in/repo]" — repo_id is always the first two
+          # segments (org + repo name); everything after it is the
+          # in-repo path, which may itself contain slashes (e.g.
+          # "org/repo/MTP/mtp-…​.gguf" for a file in a subfolder). `hf
+          # download --include <path> --local-dir` preserves the
+          # repo-internal layout, so a nested file lands at
+          # "$local_dir/MTP/mtp-…​.gguf".
+          _org="''${model%%/*}"
+          _rest="''${model#"$_org"/}"
+          repo_id="$_org/''${_rest%%/*}"
+          path_in_repo="''${_rest#*/}"
           # Keep org in path: "org/repo" → "org-repo"
           local_dir="$dir/''${repo_id//\//-}"
 
