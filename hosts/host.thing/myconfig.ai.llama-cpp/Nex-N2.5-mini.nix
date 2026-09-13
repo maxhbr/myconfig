@@ -1,8 +1,8 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Nex-N2.5-mini GGUFs (abenzerps quantisation of nex-agi/Nex-N2.5-mini):
-# https://huggingface.co/abenzerps/Nex-N2.5-mini-GGUF
+# Nex-N2.5-mini GGUFs (bartowski quantisation of nex-agi/Nex-N2.5-mini):
+# https://huggingface.co/bartowski/nex-agi_Nex-N2.5-mini-GGUF
 #
 # Nex-N2.5-mini is a long-context agentic model for coding, tool use,
 # computer use and multimodal workloads (qwen3_5_moe architecture —
@@ -11,11 +11,10 @@
 # with 6B activated, 256 experts (8 active), hybrid linear-attention /
 # full-attention layers (interval 4), native 262144-token context.
 #
-# The GGUF repo ships an optional `mmproj-Nex-N2.5-mini-F16.gguf`
-# vision projector (899 MB, F16) and embeds the upstream chat template;
-# `chat_template.jinja` is provided for runtimes that need a separate
-# template file. Only the three K-quant files requested for this host
-# are pulled (the repo also ships IQ/TQ ladders and Q8_0).
+# The GGUF repo ships optional `mmproj-nex-agi_Nex-N2.5-mini-f16.gguf`
+# and `mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf` vision projectors and
+# embeds the upstream chat template. Four K-quant files are pulled for
+# this host; the repository also ships lower-precision and Q8 variants.
 #
 # Recommended sampling parameters (model card): temperature 0.7,
 # top_p 0.95, top_k 40.
@@ -25,46 +24,58 @@
 # startup banner for provenance but NOT verified at runtime.
 #
 # Served on gfx1151 (Vulkan0/ROCm0, container llama-cpp) and on the RTX
-# backend (CUDA0/Vulkan0). The three quants are single-file GGUFs: Q4_K_M
-# 21.2 GB, Q5_K_M 24.7 GB, Q6_K 28.5 GB. No deliberate `cacheType`
+# backend (CUDA0/Vulkan0). Q4_K_L and Q5_K_M are available on both
+# backends; Q6_K and Q6_K_L are AMD-only. No deliberate `cacheType`
 # retuning: leave the GGUF defaults and retune for the target GPU after
 # the first serving test.
 { modelsPullDir }:
 let
   amdModels = [
     {
-      name = "Nex-N2.5-mini-Q4_K_M";
-      path = "/models/abenzerps-Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q4_K_M.gguf";
+      name = "Nex-N2.5-mini-Q4_K_L";
+      path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q4_K_L.gguf";
       pull-models = {
         target_directory = modelsPullDir;
-        hf_spec = [ "abenzerps/Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q4_K_M.gguf" ];
+        hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q4_K_L.gguf" ];
       };
-      sha256 = "dd296f683c798a3e4058fb1ef8c462e6a4cc8b89cd196742a8e5a3da4057fbb3";
+      sha256 = "9b5785e2beeb6d4be24b3dd802d8d14e8cb5bd4f26bae244387a1b2ea064fb5d";
       ttl = 1800;
     }
     {
       name = "Nex-N2.5-mini-Q5_K_M";
-      path = "/models/abenzerps-Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q5_K_M.gguf";
+      path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q5_K_M.gguf";
       pull-models = {
         target_directory = modelsPullDir;
-        hf_spec = [ "abenzerps/Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q5_K_M.gguf" ];
+        hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q5_K_M.gguf" ];
       };
-      sha256 = "f60514ff680b9561318129f22dddd9da59878bda211c178662f3d50938f0c9d4";
+      sha256 = "d38e48485769a18f2a73d712f5083f1b4cdd60a8000131149387d55e3cc60153";
       ttl = 1800;
     }
     {
       name = "Nex-N2.5-mini-Q6_K";
-      path = "/models/abenzerps-Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf";
+      path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf";
       pull-models = {
         target_directory = modelsPullDir;
-        hf_spec = [ "abenzerps/Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf" ];
+        hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf" ];
       };
-      sha256 = "9d21c304e8fcb78c204e1e95ce12ac2bee8b9c09bbcff5a229d5b638c1bda72e";
+      sha256 = "37299c1ccf386db35144a2cc86eca7c5598a94e62af3fe797d593bd601f47103";
+      ttl = 1800;
+    }
+    {
+      name = "Nex-N2.5-mini-Q6_K_L";
+      path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K_L.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K_L.gguf" ];
+      };
+      sha256 = "2e4a79d68c4ea5b863b1d71e4004d78332673cb58489065940ff8eb356cbda76";
       ttl = 1800;
     }
   ];
 in
 {
   amdModels = amdModels;
-  rtxModels = amdModels;
+  rtxModels = builtins.filter (
+    model: model.name == "Nex-N2.5-mini-Q4_K_L" || model.name == "Nex-N2.5-mini-Q5_K_M"
+  ) amdModels;
 }
