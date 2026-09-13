@@ -13,8 +13,13 @@
 #
 # The GGUF repo ships optional `mmproj-nex-agi_Nex-N2.5-mini-f16.gguf`
 # and `mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf` vision projectors and
-# embeds the upstream chat template. Four K-quant files are pulled for
-# this host; the repository also ships lower-precision and Q8 variants.
+# embeds the upstream chat template. Three quantised files are pulled
+# for this host (Q4_K_L and Q5_K_M on both backends, Q6_K_L on AMD
+# only); the repository also ships lower-precision and Q8 variants.
+# The bf16 projector is pulled alongside every quantisation and each
+# entry gets a `:mmproj` variant (auto-generated, see lib/variants.nix)
+# serving the same GGUF plus
+# `--mmproj mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf`.
 #
 # Recommended sampling parameters (model card): temperature 0.7,
 # top_p 0.95, top_k 40.
@@ -25,57 +30,82 @@
 #
 # Served on gfx1151 (Vulkan0/ROCm0, container llama-cpp) and on the RTX
 # backend (CUDA0/Vulkan0). Q4_K_L and Q5_K_M are available on both
-# backends; Q6_K and Q6_K_L are AMD-only. No deliberate `cacheType`
+# backends; Q6_K_L is AMD-only. No deliberate `cacheType`
 # retuning: leave the GGUF defaults and retune for the target GPU after
 # the first serving test.
 { modelsPullDir }:
 let
-  amdModels = [
-    {
-      name = "Nex-N2.5-mini-Q4_K_L";
-      path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q4_K_L.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q4_K_L.gguf" ];
-      };
-      sha256 = "9b5785e2beeb6d4be24b3dd802d8d14e8cb5bd4f26bae244387a1b2ea064fb5d";
-      ttl = 1800;
-    }
-    {
-      name = "Nex-N2.5-mini-Q5_K_M";
-      path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q5_K_M.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q5_K_M.gguf" ];
-      };
-      sha256 = "d38e48485769a18f2a73d712f5083f1b4cdd60a8000131149387d55e3cc60153";
-      ttl = 1800;
-    }
-    {
-      name = "Nex-N2.5-mini-Q6_K";
-      path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K.gguf" ];
-      };
-      sha256 = "37299c1ccf386db35144a2cc86eca7c5598a94e62af3fe797d593bd601f47103";
-      ttl = 1800;
-    }
-    {
-      name = "Nex-N2.5-mini-Q6_K_L";
-      path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K_L.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/Nex-N2.5-mini-Q6_K_L.gguf" ];
-      };
-      sha256 = "2e4a79d68c4ea5b863b1d71e4004d78332673cb58489065940ff8eb356cbda76";
-      ttl = 1800;
-    }
-  ];
+  # Shared `:mmproj` variant (auto-generated, see lib/variants.nix):
+  # serves the base GGUF plus the bf16 vision projector. The projector
+  # is quantisation-independent, so all three entries share this one
+  # file; each entry lists it in `hf_spec` so `pull-models` fetches it
+  # wherever the base model is pulled.
+  mmprojVariant = {
+    mmproj = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf";
+  };
+  q4 = {
+    name = "Nex-N2.5-mini-Q4_K_L";
+    path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q4_K_L.gguf";
+    pull-models = {
+      target_directory = modelsPullDir;
+      hf_spec = [
+        "bartowski/nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q4_K_L.gguf"
+        "bartowski/nex-agi_Nex-N2.5-mini-GGUF/mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf"
+      ];
+    };
+    sha256 = "dda88fc54a5814fa54aa9603461f55f90f7e5718";
+    variants = {
+      mmproj = mmprojVariant;
+    };
+    ttl = 1800;
+  };
+  q5 = {
+    name = "Nex-N2.5-mini-Q5_K_M";
+    path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q5_K_M.gguf";
+    pull-models = {
+      target_directory = modelsPullDir;
+      hf_spec = [
+        "bartowski/nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q5_K_M.gguf"
+        "bartowski/nex-agi_Nex-N2.5-mini-GGUF/mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf"
+      ];
+    };
+    sha256 = "2c1d8f13ceeb010cce801b733138559c4964475b";
+    variants = {
+      mmproj = mmprojVariant;
+    };
+    ttl = 1800;
+  };
+  # q6 = {
+  #    name = "Nex-N2.5-mini-Q6_K";
+  #    path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q6_K.gguf";
+  #    pull-models = {
+  #      target_directory = modelsPullDir;
+  #      hf_spec = [ "bartowski/nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q6_K.gguf" ];
+  #    };
+  #    sha256 = "e58bfb38aba55f156dd91db82b025997f244cf5a";
+  #    ttl = 1800;
+  #  };
+  q6 = {
+    name = "Nex-N2.5-mini-Q6_K_L";
+    path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q6_K_L.gguf";
+    pull-models = {
+      target_directory = modelsPullDir;
+      hf_spec = [
+        "bartowski/nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q6_K_L.gguf"
+        "bartowski/nex-agi_Nex-N2.5-mini-GGUF/mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf"
+      ];
+    };
+    sha256 = "11d19f0faf9a9d07ecc7d5caf773d4675e1e47aa";
+    variants = {
+      mmproj = mmprojVariant;
+    };
+    ttl = 1800;
+  };
 in
 {
-  amdModels = amdModels;
-  rtxModels = builtins.filter (
-    model: model.name == "Nex-N2.5-mini-Q4_K_L" || model.name == "Nex-N2.5-mini-Q5_K_M"
-  ) amdModels;
+  amdModels = [ q6 ];
+  rtxModels = [
+    q4
+    q5
+  ];
 }
