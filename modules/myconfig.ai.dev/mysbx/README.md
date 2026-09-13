@@ -72,6 +72,25 @@ session's changes since it diverged from the host HEAD (the
 three-dot form). `--dry-run` prints the exact git commands instead
 of running them.
 
+The **session noun group**
+([`docs/design/workspace.md`](./docs/design/workspace.md) D7) is the
+one closed exception to cli.md D3's single-verb rule —
+`mysbx session list` and `mysbx session destroy NAME [--force]`, two
+verbs, not an open tree. `list` prints one line per `clones/` entry
+with the name, the session branch and the ahead-count — the commits
+in the session branch that the host repo does not have — and marks
+entries without `.git` as debris of an interrupted creation.
+`destroy` is a guarded removal (intrinsic properties, not location
+trust: the resolved path must be strictly inside
+`<repo>.mysbx/clones/`, its basename must equal NAME, never the
+sidecar root, never `/`), refuses while the session branch holds
+commits the host repo does not have — fetch or merge them first —
+unless `--force` is given, then plain-`rm -rf`s the standalone clone
+(and its per-session result file) without touching the host repo or
+the host-local `agent/mysbx/NAME` branch a `fetch` left behind. Both
+verbs start no sandbox; `--dry-run` prints the exact probe and
+removal commands instead of running them.
+
 `mysbx run -- CMD...` runs one command in the sandbox;
 `mysbx run --dry-run -- CMD...` prints the exact `bwrap` invocation it
 would execute — argv[0] (the backend binary, the wrapped store path under

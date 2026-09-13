@@ -33,6 +33,17 @@ struct Invocation {
     xdg: PathBuf,
 }
 
+impl Clone for Invocation {
+    fn clone(&self) -> Self {
+        Self {
+            args: self.args.clone(),
+            cwd: self.cwd.clone(),
+            home: self.home.clone(),
+            xdg: self.xdg.clone(),
+        }
+    }
+}
+
 fn spawn(inv: &Invocation) -> Command {
     spawn_with_args(inv, &inv.args)
 }
@@ -4820,8 +4831,9 @@ fn git_session_fixture(
     name: &str,
     args: &[&'static str],
 ) -> Option<(Invocation, PathBuf, PathBuf)> {
-    let (inv, repo, sidecar) = fixture_user_backend(name, args);
+    let (inv, _, sidecar) = fixture_user_backend(name, args);
     git_repo(inv.cwd.parent().unwrap(), "repo")?;
+    let repo = inv.cwd.clone();
     Some((inv, repo, sidecar))
 }
 
@@ -5683,4 +5695,363 @@ fn a_handoff_started_inside_a_session_clone_is_refused() {
         stderr.contains("refusing to run inside the clone of session fix-1"),
         "{stderr}"
     );
+}
+
+// ---- the session noun group of the workspace model (workspace.md D7) ----
+
+/// A session-verbs fixture: the same real host repo + real session
+/// clone as [`handoff_fixture`], but without committing on the
+/// session branch — the tests advance the clone themselves — and
+/// named per test, so several sessions can coexist in one registry.
+fn session_fixture(name: &str, sessions: &[&str]) -> Option<(Invocation, PathBuf, PathBuf)> {
+    let (inv, repo, sidecar) = git_session_fixture(name, &[])?;
+    for session in sessions {
+        let clone = sidecar.join("clones").join(session);
+        if !git_in(
+            &repo,
+            &[
+                "clone",
+                "--origin",
+                "origin",
+                "--no-hardlinks",
+                &repo.to_string_lossy(),
+                &clone.to_string_lossy(),
+            ],
+        ) || !git_in(
+            &clone,
+            &["checkout", "-b", &format!("agent/mysbx/{session}")],
+        ) {
+            return None;
+        }
+    }
+    Some((inv, repo, sidecar))
+}
+
+#[test]
+fn session_list_prints_name_branch_and_ahead_count() {
+    // D7: one line per clones/ entry — the name, the session branch
+    // and the ahead-count (commits in the session branch that the
+    // host repo does not have). Two sessions, one with two commits,
+    // one fresh (ahead 0: its tip is the host HEAD).
+    let Some((inv, repo, sidecar)) = session_fixture("session-list", &["fix-1", "other"]) else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    for (file, msg) in [("s1.txt", "first"), ("s2.txt", "second")] {
+        std::fs::write(fix.join(file), "work").unwrap();
+        assert!(git_in(&fix, &["add", file]));
+        assert!(git_in(&fix, &["commit", "-m", msg]));
+    }
+    let (code, stdout, stderr) = run_binary_with(&inv, &["session", "list"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    // The header, then one line per entry, sorted.
+    assert_eq!(
+        lines[0],
+        format!("{:<24} {:<28} {}", "SESSION", "BRANCH", "AHEAD"),
+        "{stdout}"
+    );
+    assert!(lines.len() == 3, "one row per session: {stdout}");
+    assert!(
+        lines[1].starts_with(&format!("fix-1{}", " ".repeat(24 - 5))),
+        "{stdout}"
+    );
+    assert!(lines[1].contains("agent/mysbx/fix-1"), "{stdout}");
+    assert!(lines[1].trim_end().ends_with('2'), "ahead 2: {stdout}");
+    assert!(lines[2].contains("other"), "{stdout}");
+    assert!(lines[2].contains("agent/mysbx/other"), "{stdout}");
+    assert!(lines[2].trim_end().ends_with('0'), "ahead 0: {stdout}");
+    let _ = repo;
+}
+
+#[test]
+fn session_list_marks_debris_and_skips_result_files() {
+    // D7: an entry without .git is debris of an interrupted creation
+    // and is marked as such (the gvisor incomplete-inventory
+    // precedent); the per-session NAME.json result files of D5 are
+    // files, not registry entries, and list no rows for them.
+    let Some((inv, _, sidecar)) = session_fixture("session-list-debris", &["fix-1"]) else {
+        return;
+    };
+    let clones = sidecar.join("clones");
+    std::fs::create_dir_all(clones.join("broken")).unwrap();
+    std::fs::write(clones.join("fix-1.json"), "{}").unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["session", "list"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert!(lines.len() == 3, "two rows: {stdout}");
+    let broken = lines.iter().find(|l| l.starts_with("broken")).unwrap();
+    assert!(broken.contains("debris"), "{stdout}");
+    assert!(broken.contains("interrupted creation"), "{stdout}");
+    // The result file produced no row of its own.
+    assert!(
+        !stdout.contains("fix-1.json"),
+        "the result file is not a session: {stdout}"
+    );
+}
+
+#[test]
+fn session_list_after_fetch_and_merge_counts_zero() {
+    // The ahead-count follows "the host repo does not have them"
+    // literally: after a fetch the work is IN the host repo (the
+    // ferry branch), after a merge it is in the host history — the
+    // count drops to 0 at the fetch already.
+    let Some((inv, repo, sidecar)) = session_fixture("session-list-merged", &["fix-1"]) else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    std::fs::write(fix.join("s1.txt"), "work").unwrap();
+    assert!(git_in(&fix, &["add", "s1.txt"]));
+    assert!(git_in(&fix, &["commit", "-m", "session work"]));
+    let mut inv_fetch = inv.clone();
+    inv_fetch.args = vec!["fetch", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv_fetch);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let mut inv = inv;
+    inv.args = vec!["session", "list"];
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let row = stdout
+        .lines()
+        .find(|l| l.starts_with("fix-1"))
+        .expect("the session is listed");
+    assert!(
+        row.trim_end().ends_with('0'),
+        "ahead 0 after fetch: {stdout}"
+    );
+    // …and after the merge, with the ferry ref deleted, still 0.
+    let mut inv_merge = inv.clone();
+    inv_merge.args = vec!["merge", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv_merge);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let row = stdout
+        .lines()
+        .find(|l| l.starts_with("fix-1"))
+        .expect("the session is listed");
+    assert!(
+        row.trim_end().ends_with('0'),
+        "ahead 0 after merge: {stdout}"
+    );
+    let _ = repo;
+}
+
+#[test]
+fn session_destroy_refuses_unmerged_work_then_succeeds_after_merge() {
+    // D7's refusal, end to end: while the session branch holds
+    // commits the host repo does not have, destroy refuses (70)
+    // naming the branch and the merge to run instead; after the
+    // merge the clone is gone — plain rm -rf, host repo untouched —
+    // and the exit is 0.
+    let Some((inv, repo, sidecar)) = session_fixture("session-destroy", &["fix-1"]) else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    std::fs::write(fix.join("s1.txt"), "work").unwrap();
+    assert!(git_in(&fix, &["add", "s1.txt"]));
+    assert!(git_in(&fix, &["commit", "-m", "session work"]));
+    let mut inv = inv;
+    inv.args = vec!["session", "destroy", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("refusing to destroy"), "{stderr}");
+    assert!(stderr.contains("agent/mysbx/fix-1"), "{stderr}");
+    assert!(stderr.contains("mysbx merge fix-1"), "{stderr}");
+    assert!(fix.join(".git").is_dir(), "nothing was removed");
+    // The merge hands the work over; then the destroy succeeds.
+    let mut inv_merge = inv.clone();
+    inv_merge.args = vec!["merge", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv_merge);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(!fix.exists(), "the clone is gone");
+    assert!(stdout.contains("## destroyed:"), "{stdout}");
+    assert!(
+        repo.join("s1.txt").is_file(),
+        "the work is in the host repo"
+    );
+    // The registry shows nothing left.
+    let mut inv_list = inv;
+    inv_list.args = vec!["session", "list"];
+    let (code, stdout, stderr) = run_binary(&inv_list);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(!stdout.contains("fix-1"), "{stdout}");
+}
+
+#[test]
+fn session_destroy_force_discards_and_keeps_the_ferry_branch() {
+    // `--force` overrides ONLY the unmerged-work refusal: the work is
+    // discarded (the message says so), while a host-local
+    // agent/mysbx/NAME branch a fetch left is KEPT — it is the
+    // operator's imported copy, and deleting it silently would
+    // contradict the unmerged-work guard (D7).
+    let Some((inv, repo, sidecar)) = session_fixture("session-destroy-force", &["fix-1"]) else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    std::fs::write(fix.join("s1.txt"), "work").unwrap();
+    assert!(git_in(&fix, &["add", "s1.txt"]));
+    assert!(git_in(&fix, &["commit", "-m", "session work"]));
+    let mut inv_fetch = inv;
+    inv_fetch.args = vec!["fetch", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv_fetch);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let mut inv = inv_fetch;
+    inv.args = vec!["session", "destroy", "fix-1", "--force"];
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(!fix.exists(), "the clone is gone");
+    assert!(stdout.contains("## destroyed:"), "{stdout}");
+    let ferry = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args([
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/agent/mysbx/fix-1",
+        ])
+        .status()
+        .unwrap();
+    assert!(ferry.success(), "the ferry branch was kept");
+    // The per-session result file went with the session.
+    assert!(!sidecar.join("clones").join("fix-1.json").exists());
+}
+
+#[test]
+fn session_destroy_removes_debris() {
+    // D2/D7: an entry without .git is debris of an interrupted
+    // creation — destroy is the verb that names it and removes it;
+    // no work can be lost, so no --force is needed.
+    let (inv, _, sidecar) = fixture_user_backend("session-destroy-debris", &[]);
+    let debris = sidecar.join("clones").join("half-made");
+    std::fs::create_dir_all(&debris).unwrap();
+    std::fs::write(debris.join("partial.txt"), "interrupted").unwrap();
+    let mut inv = inv;
+    inv.args = vec!["session", "destroy", "half-made"];
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(!debris.exists(), "the debris is gone");
+    assert!(stdout.contains("debris"), "{stdout}");
+}
+
+#[test]
+fn session_destroy_refuses_unknown_sessions_and_usage_errors() {
+    // The registry of D2 (a missing clone is the unknown-session
+    // refusal, 70, the same words the handoff verbs use) and the
+    // parse-time grammar of the NAME (2, cli.md D8): the missing
+    // NAME, a bad NAME, a second positional, an unknown flag, a
+    // repeated --force, an unknown group verb, a bare `session`.
+    let (inv, _, _) = fixture_user_backend("session-destroy-errors", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["session", "destroy", "fix-1"]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("unknown session: fix-1"), "{stderr}");
+    for args in [
+        vec!["session", "destroy"],
+        vec!["session", "destroy", "a/b"],
+        vec!["session", "destroy", "fix-1", "extra"],
+        vec!["session", "destroy", "-x", "fix-1"],
+        vec!["session", "destroy", "fix-1", "--force", "--force"],
+        vec!["session"],
+        vec!["session", "bogus"],
+        vec!["session", "list", "extra"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+    }
+}
+
+#[test]
+fn session_verbs_refuse_run_scoped_flags_and_verbose() {
+    // Like the handoff verbs (D6): no sandbox is started, so the
+    // run-scoped flags are usage errors (2) and --verbose has no run
+    // to report on.
+    let (inv, _, _) = fixture_user_backend("session-flags", &[]);
+    for args in [
+        vec!["--session", "fix-1", "session", "list"],
+        vec!["--ro", "/tmp", "session", "list"],
+        vec!["--result", "session", "list"],
+        vec!["--timeout", "5", "session", "destroy", "fix-1"],
+        vec!["--multiplexer", "tmux", "session", "list"],
+        vec!["--verbose", "session", "list"],
+        vec!["--verbose", "session", "destroy", "fix-1"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("is not valid with") || stderr.contains("--verbose"),
+            "{args:?}: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn a_session_verb_started_inside_a_session_clone_is_refused() {
+    // workspace.md D9, the session-verb side: the verbs belong to the
+    // HOST side of a session; started inside the clone, the resolver
+    // refuses with the error naming the owning repo and the session.
+    let (mut inv, _, sidecar) = fixture_user_backend("session-inside-clone", &[]);
+    inv.args = vec!["session", "list"];
+    let clone = sidecar.join("clones").join("fix-1");
+    std::fs::create_dir_all(&clone).unwrap();
+    inv.cwd = clone.clone();
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(
+        stderr.contains("refusing to run inside the clone of session fix-1"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_session_dry_run_prints_the_commands_and_removes_nothing() {
+    // cli.md D9 for the session verbs: the exact probe and removal
+    // commands, one argument per line, the executable first — and
+    // nothing runs: no clone is removed, no listing is printed.
+    let Some((inv, repo, sidecar)) = session_fixture("session-dry", &["fix-1"]) else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    std::fs::write(fix.join("s1.txt"), "work").unwrap();
+    assert!(git_in(&fix, &["add", "s1.txt"]));
+    assert!(git_in(&fix, &["commit", "-m", "session work"]));
+    // destroy --dry-run: the refusals fire first (the work is
+    // unmerged), so the dry run of a REFUSED destroy is the refusal.
+    let mut inv = inv;
+    inv.args = vec!["session", "destroy", "fix-1"];
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run", "session", "destroy", "fix-1"]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("refusing to destroy"), "{stderr}");
+    assert!(fix.exists(), "nothing was removed");
+    // …of a merged session it is the plan: the probe command, then
+    // the removal (rm, the same format).
+    let mut inv_merge = inv.clone();
+    inv_merge.args = vec!["merge", "fix-1"];
+    let (code, _, stderr) = run_binary(&inv_merge);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let (code, stdout, stderr) =
+        run_binary_with(&inv, &["--dry-run", "session", "destroy", "fix-1"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert!(lines.contains(&"git"), "the probe command: {stdout}");
+    assert!(stdout.contains("for-each-ref"), "{stdout}");
+    let rm_at = lines
+        .iter()
+        .position(|l| *l == "rm")
+        .expect("the removal command");
+    assert_eq!(lines[rm_at + 1], "-rf", "{stdout}");
+    assert_eq!(
+        lines[rm_at + 2],
+        sidecar.join("clones").join("fix-1").to_string_lossy(),
+        "{stdout}"
+    );
+    assert!(fix.exists(), "a dry run removes nothing");
+    // list --dry-run: the probe commands of the registry, no table.
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run", "session", "list"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("git"), "{stdout}");
+    assert!(!stdout.contains("SESSION"), "no listing: {stdout}");
+    let _ = repo;
 }
