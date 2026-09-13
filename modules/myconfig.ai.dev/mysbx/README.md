@@ -42,6 +42,20 @@ initialization is explicit, and no run (`mysbx`, `mysbx run -- CMD`,
 with or without `--dry-run`) ever writes the sidecar for you
 ([`docs/design/cli.md`](./docs/design/cli.md) D13).
 
+`mysbx --session <name>` (global flag, run forms only) switches the
+run to the CLONE session of that name
+([`docs/design/workspace.md`](./docs/design/workspace.md) D1-D5): the
+first run creates `<repo>.mysbx/clones/<name>` from the host repo
+(`git clone --origin origin --no-hardlinks`, branch
+`agent/mysbx/<name>` at the host HEAD, or at the upstream tip of that
+branch when it exists), subsequent runs reuse it; the clone is bound
+rw at the repo's own path and NOTHING of the host repo is mounted in
+— no git metadata directories, no `__worktrees` sibling, no
+state-dir persistence, every configured mount downgraded to
+read-only, `--rw` refused. `run --result --session <name> -- CMD...`
+writes the outcome to the per-session file
+`<repo>.mysbx/clones/<name>.json` instead of `result.json`.
+
 `mysbx run -- CMD...` runs one command in the sandbox;
 `mysbx run --dry-run -- CMD...` prints the exact `bwrap` invocation it
 would execute — argv[0] (the backend binary, the wrapped store path under

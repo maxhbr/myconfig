@@ -30,6 +30,7 @@ pub mod merge;
 pub mod repo;
 pub mod report;
 pub mod result;
+pub mod session;
 pub mod toml;
 
 /// The usage text.
@@ -136,6 +137,7 @@ pub fn run(args: Vec<String>) -> i32 {
         // run.
         Some(other)
             if (flags.multiplexer.is_some()
+                || (flags.session.is_some() && other != "run")
                 || ((flags.result || flags.timeout.is_some()) && other != "run")
                 || ((!flags.ro.is_empty() || !flags.rw.is_empty()) && other != "run"))
                 && matches!(other, "run" | "gui" | "init" | "edit" | "version" | "help") =>
@@ -223,6 +225,13 @@ pub struct Flags {
     /// for every other verb by the dispatcher — only a one-shot has
     /// a consumable outcome.
     pub result: bool,
+    /// The `--session NAME` flag (workspace.md D1): select clone mode
+    /// — the named session's clone at `<repo>.mysbx/clones/NAME` is
+    /// the workspace of this run, bound rw at the repo's own path
+    /// while the host repo is not mounted at all (D3). `None` means
+    /// the live mode, the default — and there is NO TOML surface for
+    /// it (D1): the flag is the whole switch.
+    pub session: Option<String>,
 }
 
 impl Flags {
@@ -258,6 +267,8 @@ impl Flags {
     fn first_run_scoped_name(&self) -> &'static str {
         if self.multiplexer.is_some() {
             "--multiplexer"
+        } else if self.session.is_some() {
+            "--session"
         } else if !self.ro.is_empty() {
             "--ro"
         } else if !self.rw.is_empty() {
@@ -370,6 +381,42 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                 } else {
                     flags.rw.push(value.clone());
                 }
+                // The value argument is consumed with the flag.
+                rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
+                continue;
+            }
+            "--session" => {
+                // workspace.md D1/D2: `--session NAME` selects clone
+                // mode for this run. The value is validated HERE, at
+                // parse time — a bad NAME grammar is a usage error
+                // (D2: "anything else is a usage error at parse
+                // time, cli.md D8, like every schema edge") — so no
+                // run form can reach the pipeline with a name that
+                // could ever become a path component. Not
+                // repeatable: a repeated flag is a typo (D5), and
+                // two sessions in one run is not a thing — the flag
+                // names THE workspace of the run.
+                if flags.session.is_some() {
+                    eprintln!("mysbx: repeated flag: --session");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                let value = match tail.split_first() {
+                    Some((v, _)) => v,
+                    None => {
+                        eprintln!("mysbx: --session requires a name");
+                        eprintln!("  the grammar is [A-Za-z0-9][A-Za-z0-9._-]{{0,63}} — no slashes, no leading dot");
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                };
+                if !session::valid_name(value) {
+                    eprintln!("mysbx: --session: invalid session name `{value}`");
+                    eprintln!("  the grammar is [A-Za-z0-9][A-Za-z0-9._-]{{0,63}} — no slashes, no leading dot");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                flags.session = Some(value.clone());
                 // The value argument is consumed with the flag.
                 rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
                 continue;
@@ -524,6 +571,35 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                 flags.rw.push(value);
                 idx += 2;
             }
+            "--session" => {
+                // workspace.md D1: the same flag after the verb, the
+                // same position rule as `--ro`/`--rw` (D10/D16) — one
+                // rule for every run-scoped flag, both spellings one
+                // run. The grammar refusal is identical to the one
+                // before the verb.
+                if flags.session.is_some() {
+                    eprintln!("mysbx run: repeated flag: --session");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                let value = match args.get(idx + 1) {
+                    Some(v) => v.clone(),
+                    None => {
+                        eprintln!("mysbx run: --session requires a name");
+                        eprintln!("  the grammar is [A-Za-z0-9][A-Za-z0-9._-]{{0,63}} — no slashes, no leading dot");
+                        eprintln!("usage: {RUN_USAGE}");
+                        return 2;
+                    }
+                };
+                if !session::valid_name(&value) {
+                    eprintln!("mysbx run: --session: invalid session name `{value}`");
+                    eprintln!("  the grammar is [A-Za-z0-9][A-Za-z0-9._-]{{0,63}} — no slashes, no leading dot");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                flags.session = Some(value);
+                idx += 2;
+            }
             "--" => {
                 idx += 1;
                 break;
@@ -567,7 +643,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
 /// accepted set without opening the help (the same pairing rule
 /// usage.txt follows, D5).
 const RUN_USAGE: &str =
-    "mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--ro <path>]... [--rw <path>]... -- COMMAND...";
+    "mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...";
 
 /// How a sandbox run hands the terminal — and the exit code — over
 /// (cli.md D8/D17): exec, or wait-and-record.
@@ -842,6 +918,20 @@ unsafe fn libc_dup2(from: i32, to: i32) {
 /// sidecar config fails with the `mysbx init` hint.
 fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     let dry_run = flags.dry_run;
+    // workspace.md D4: `--rw` in a clone run is a REFUSED run (exit
+    // `70`, cli.md D8) naming the flag and the mode — never a silent
+    // downgrade: an operator who believes a directory is writable
+    // while the payload meets `EROFS` is the worse failure. The
+    // refusal fires before anything else of the pipeline: the flag
+    // combination is wrong as a unit, no matter what the layers or
+    // the filesystem say. `--ro` behaves as usual.
+    if flags.session.is_some() && !flags.rw.is_empty() {
+        eprintln!(
+            "mysbx: --rw is refused in a clone run (workspace.md D4): every mount is forced read-only, the session clone is the only writable bind"
+        );
+        eprintln!("  use --ro instead, or run without --session for the live repo");
+        return EXIT_INFRASTRUCTURE;
+    }
     // The `--multiplexer` override (cli.md D14): the run flag wins over
     // the merged `multiplexer` of the layers, per the precedence of D6
     // (flags > sidecar > user > defaults). Applied AFTER the merge so
@@ -865,6 +955,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             return EXIT_INFRASTRUCTURE;
         }
     };
+    // 1a. the session of a clone run (workspace.md D1/D2): the named
+    // clone and its derived paths, from the resolved repo. A run
+    // without `--session` never constructs one and stays in the
+    // live mode — the default that D1 leaves untouched.
+    let session = flags
+        .session
+        .as_deref()
+        .map(|name| session::Session::new(&repo, name));
 
     // 2. the sidecar must already exist (cli.md D13). A run — real or
     // dry — creates nothing: `mysbx init` is the one command that
@@ -991,7 +1089,13 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // side-effect-free and prints the argv with the would-be sources.
     // Creation is idempotent; a failure is a runtime error like the
     // sidecar creation above.
-    if !dry_run {
+    //
+    // In a CLONE run the `state-dirs` are NOT handled at all
+    // (workspace.md D4): no backing store is created, nothing is
+    // bound — per-session versus shared agent state is deliberately
+    // deferred to a follow-up bead. Scratch space stays the tmpfs
+    // home and `/tmp`, as in any run.
+    if !dry_run && session.is_none() {
         if let Err(msg) = ensure_state_dirs(&repo, &merged.state_dirs) {
             eprintln!("mysbx: {msg}");
             return EXIT_INFRASTRUCTURE;
@@ -1014,6 +1118,50 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 "mysbx: no backend configured — set `backend = \"bubblewrap\"` in the user or sidecar config"
             );
             return EXIT_INFRASTRUCTURE;
+        }
+    }
+
+    // 4a. the session clone (workspace.md D2): the FIRST `--session`
+    // run creates it — the one deliberate exception to "a run creates
+    // nothing" (cli.md D13), because `--session NAME` is an explicit
+    // operator decision that names the thing to be created, like
+    // `init` names the sidecar. It creates exactly one thing, at a
+    // derived path, reported before the run starts. The refusals
+    // name the offending fact (D2): an empty host repo has nothing
+    // to clone; a host branch literally named `agent` collides with
+    // the reserved `refs/heads/agent/mysbx/*` namespace.
+    //
+    // `--dry-run` prints the exact `git` commands instead — side
+    // effect-free like everything else it prints (cli.md D9), in the
+    // same one-argument-per-line format, before the bwrap argv — so
+    // the dry run of a first session audits the creation too.
+    // Checked AFTER the merge and the backend check, so a broken
+    // configuration creates nothing.
+    if let Some(session) = &session {
+        match session.plan(&repo) {
+            session::Plan::Exists => {}
+            session::Plan::Create(steps) => {
+                if dry_run {
+                    session::print_steps(&steps);
+                } else if let Err(msg) = session::execute(session, &steps) {
+                    eprintln!("mysbx: {msg}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            }
+            session::Plan::EmptyHostRepo => {
+                eprintln!(
+                    "mysbx: cannot create the session clone: {} has no commits — there is nothing to clone (workspace.md D2)",
+                    repo.root.display()
+                );
+                return EXIT_INFRASTRUCTURE;
+            }
+            session::Plan::AgentBranch => {
+                eprintln!(
+                    "mysbx: cannot create the session clone: {} has a branch named `agent`, which collides with the reserved agent/mysbx/* namespace of the session branches (workspace.md D2)",
+                    repo.root.display()
+                );
+                return EXIT_INFRASTRUCTURE;
+            }
         }
     }
 
@@ -1093,6 +1241,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         ca_bundle: ca_bundle.as_deref(),
         policy_paths: &policy_paths,
         mux_entry: mux_entry.as_deref(),
+        // The workspace of this run (workspace.md D1): the live repo
+        // — the default — or the session's clone (D3/D4). The argv
+        // builder branches on it; a run without `--session` passes
+        // `Live` and gets today's argv, byte for byte.
+        workspace: match &session {
+            Some(s) => bwrap::Workspace::Clone { clone: &s.clone },
+            None => bwrap::Workspace::Live,
+        },
     };
     let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
         Ok(a) => a,
@@ -1163,7 +1319,17 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             eprintln!("mysbx: cannot exec {bwrap_bin}: {e}");
             EXIT_INFRASTRUCTURE
         }
-        RunMode::Result => run_with_result(cmd, &repo, &payload, flags.timeout),
+        RunMode::Result => run_with_result(
+            cmd,
+            &repo,
+            &payload,
+            flags.timeout,
+            // workspace.md D5: a `--result` clone run writes its
+            // outcome to the per-session `clones/NAME.json`, so
+            // parallel sessions cannot overwrite each other's
+            // results; a live run keeps `<sidecar>/result.json`.
+            session.as_ref().map(|s| s.result.clone()),
+        ),
     }
 }
 
@@ -1190,6 +1356,9 @@ fn run_with_result(
     repo: &repo::Repo,
     payload: &bwrap::Payload,
     timeout_secs: Option<u64>,
+    // The per-session result file of a clone run (workspace.md D5),
+    // or `None` for the live `<sidecar>/result.json` (cli.md D17).
+    result_path: Option<std::path::PathBuf>,
 ) -> i32 {
     let payload_vec = match payload {
         bwrap::Payload::Command(args) => args.clone(),
@@ -1232,7 +1401,7 @@ fn run_with_result(
             payload_signal: None,
             error: Some(format!("cannot exec the backend: {e}")),
         };
-        record_result(&record, repo);
+        record_result(&record, repo, result_path.as_deref());
         eprintln!("mysbx: cannot exec the backend: {e}");
         EXIT_INFRASTRUCTURE
     };
@@ -1325,7 +1494,7 @@ fn run_with_result(
         payload_signal,
         error: None,
     };
-    record_result(&record, repo);
+    record_result(&record, repo, result_path.as_deref());
     ended.exit_code()
 }
 
@@ -1356,18 +1525,23 @@ fn outcome_of(status: std::process::ExitStatus) -> (result::State, Option<i32>, 
     }
 }
 
-/// Write `r` to `<sidecar>/result.json` — atomically, via the same
-/// [`write_atomically`] the config writer uses, so a batch driver
-/// never reads a half-written file — and point the operator at it on
-/// stderr (stdout is the payload's, cli.md D9).
+/// Write `r` to `<sidecar>/result.json` — or, for a clone run, to the
+/// per-session `<sidecar>/clones/NAME.json` (workspace.md D5) handed in
+/// as `session_result` — atomically, via the same [`write_atomically`]
+/// the config writer uses, so a batch driver never reads a half-written
+/// file — and point the operator at it on stderr (stdout is the
+/// payload's, cli.md D9). The pointer line goes to stderr in both
+/// cases (D5).
 ///
 /// A failure to WRITE the result does not change the run's outcome:
 /// the payload ran, its state is what it is, and the exit code comes
 /// from the record — the operator just also learns that the outcome
 /// was not recorded, from the `mysbx: ` diagnosis. Silent data loss
 /// it must not be; a wrong exit code it must not cause either.
-fn record_result(r: &result::Record, repo: &repo::Repo) {
-    let path = repo.sidecar.join(result::FILE_NAME);
+fn record_result(r: &result::Record, repo: &repo::Repo, session_result: Option<&std::path::Path>) {
+    let path = session_result
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| repo.sidecar.join(result::FILE_NAME));
     if let Err(e) = write_atomically(&path, &result::render(r)) {
         eprintln!("mysbx: cannot write {}: {e}", path.display());
     } else {
@@ -2207,6 +2381,7 @@ mod tests {
                 rw: Vec::new(),
                 timeout: None,
                 result: false,
+                session: None,
             }
         );
         assert_eq!(rest, &s(&["run"])[..]);
@@ -2287,6 +2462,128 @@ mod tests {
             run(vec!["run".into(), "--multiplexer".into(), "tmux".into()]),
             2
         );
+    }
+
+    // The `--session` flag (workspace.md D1/D2): parsed in both
+    // positions (before the verb and after `run`), the NAME grammar
+    // validated at parse time, refused for every other verb — and
+    // `--rw` in a clone run is a refused RUN (exit `70`, D4), not a
+    // usage error: the command line is fine, the run it names
+    // cannot happen.
+    #[test]
+    fn session_flag_parses_positions_grammar_and_verb_scoping() {
+        let s = |v: &[&str]| -> Vec<String> { v.iter().map(|x| (*x).to_string()).collect() };
+
+        // Before the verb, bare form and `run` alike...
+        let args = s(&["--session", "fix-1", "run"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert_eq!(flags.session.as_deref(), Some("fix-1"));
+        assert_eq!(rest, &s(&["run"])[..]);
+        let args = s(&["--session", "fix-1"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert_eq!(flags.session.as_deref(), Some("fix-1"));
+        assert!(rest.is_empty());
+        // ...and in any order with the other global flags.
+        let (flags, _rest) =
+            split_global_flags(&s(&["--dry-run", "--session", "fix-1", "--verbose"])).unwrap();
+        assert_eq!(flags.session.as_deref(), Some("fix-1"));
+        assert!(flags.dry_run && flags.verbose);
+
+        // The grammar of D2, refused at parse time (exit `2`): the
+        // NAME becomes a path component under the sidecar, so no
+        // spelling that could ever escape `clones/` is accepted.
+        for bad in [
+            "",
+            ".",
+            "..",
+            "-x",
+            "_x",
+            "a/b",
+            "../evil",
+            "a b",
+            "ä",
+            "a\n",
+            "012345678901234567890123456789012345678901234567890123456789012345",
+        ] {
+            assert_eq!(
+                split_global_flags(&s(&["--session", bad])),
+                Err(2),
+                "`{bad}` should be a usage error"
+            );
+        }
+        // The longest valid name parses.
+        let args = s(&["--session", &"a".repeat(64)]);
+        let (flags, _) = split_global_flags(&args).unwrap();
+        assert!(flags.session.is_some());
+
+        // A missing value and a repeat are usage errors (D5/D8).
+        assert_eq!(split_global_flags(&s(&["--session"])), Err(2));
+        assert_eq!(
+            split_global_flags(&s(&["--session", "a", "--session", "a"])),
+            Err(2)
+        );
+
+        // After the verb, `run` accepts it too (one position rule,
+        // D10/D16) — the whole run form goes through `run()` here:
+        // with a bad grammar the usage error fires before anything
+        // else, and with a good one the run proceeds into the
+        // pipeline (which fails later in this synthetic environment,
+        // never at the parser).
+        assert_eq!(run(s(&["run", "--session", "a/b", "--", "true"])), 2);
+        assert_eq!(run(s(&["run", "--session"])), 2);
+        assert_eq!(run(s(&["run", "--session", "a", "--session", "a"])), 2);
+
+        // Every other verb refuses it, like every run-scoped flag.
+        for args in [
+            vec!["--session", "fix-1", "init"],
+            vec!["--session", "fix-1", "edit"],
+            vec!["--session", "fix-1", "gui"],
+            vec!["--session", "fix-1", "version"],
+            vec!["--session", "fix-1", "help"],
+        ] {
+            assert_eq!(run(s(&args)), 2, "{args:?}");
+        }
+
+        // The FULL first-verb spelling of D1 — `mysbx --session NAME
+        // run ...` — is accepted: the dispatcher must not refuse a
+        // session before `run` (a regression the e2e walk caught:
+        // the run-scoped refusal arm matched `run` itself). With a
+        // valid name the run proceeds into the pipeline, which fails
+        // later in this synthetic environment — never with the
+        // `is not valid with \`run\`` usage error.
+        let code = run(s(&["--session", "fix-1", "run", "--", "true"]));
+        assert_ne!(code, 2, "the before-verb spelling must reach the run");
+    }
+
+    // workspace.md D4: `--rw` in a clone run is a refused RUN — exit
+    // `70`, naming the flag and the mode — never a silent downgrade.
+    // The refusal fires at the top of the pipeline, before the repo
+    // is even resolved, so the test needs no fixture.
+    #[test]
+    fn rw_is_refused_in_a_clone_run() {
+        let s = |v: &[&str]| -> Vec<String> { v.iter().map(|x| (*x).to_string()).collect() };
+        // Both positions of both flags — the refusal is about the
+        // combination, not the spelling.
+        assert_eq!(run(s(&["--session", "fix-1", "--rw", "/tmp"])), 70);
+        assert_eq!(
+            run(s(&[
+                "run",
+                "--session",
+                "fix-1",
+                "--rw",
+                "/tmp",
+                "--",
+                "true"
+            ])),
+            70
+        );
+        assert_eq!(run(s(&["--rw", "/tmp", "--session", "fix-1"])), 70);
+        // `--ro` behaves as usual (D4): the run proceeds into the
+        // pipeline (and fails there — this synthetic invocation has
+        // no repo — with the infrastructure error, not a refusal of
+        // the flags).
+        let code = run(s(&["--session", "fix-1", "--ro", "/tmp"]));
+        assert_ne!(code, 2, "--ro must not be a usage error in a clone run");
     }
 
     // The `--result`/`--timeout` flags (bd myconfig-0ql, the D8/D17

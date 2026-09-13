@@ -96,12 +96,29 @@ pub enum Error {
     /// git metadata (review-2 item 1): the filesystem root, an
     /// ancestor of the home directory, an ancestor of (or equal to)
     /// the repo root, or the home directory itself. Unlike a merely
-    /// unapproved target — which the argv builder refuses against the
-    /// `git-dirs` approval list — these are refused at resolution
+    /// unapproved target — which the argv builder refuses against
+    /// the `git-dirs` approval list — these are refused at resolution
     /// time, hard: binding any of them would re-expose exactly what
     /// the base table and the home guard keep out, and no
     /// configuration can make them safe.
     GitDirForbidden { gitdir: PathBuf },
+    /// The run was started INSIDE a session clone,
+    /// `<repo>.mysbx/clones/NAME` (workspace.md D9): the sidecar is
+    /// not a checkout, and a sandbox of the clone would be a sandbox
+    /// with no defined workspace — the clone run's whole point is
+    /// that the clone is bound at the OWNING repo's path, which a
+    /// start inside the clone cannot name. The error names the
+    /// owning repo and the session, the two facts the operator needs
+    /// to stand somewhere defined.
+    InsideClone {
+        /// The sidecar whose `clones/` subtree the run started in.
+        sidecar: PathBuf,
+        /// The owning host repo, derived from the sidecar's name —
+        /// where the operator stands to run the session.
+        repo: PathBuf,
+        /// The session whose clone the run started in.
+        session: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -129,6 +146,19 @@ impl fmt::Display for Error {
                 f,
                 "refusing to bind git metadata {}: a .git file must never point at the filesystem root, the home directory, an ancestor of either, or a directory containing the repo (review-2 item 1)",
                 gitdir.display()
+            ),
+            Error::InsideClone {
+                sidecar,
+                repo,
+                session,
+            } => write!(
+                f,
+                "refusing to run inside the clone of session {session}: this directory is \
+                 part of the sidecar {sidecar} — the sidecar is not a checkout; run mysbx in \
+                 {repo} (with `--session {session}` for the clone run) instead \
+                 (workspace.md D9)",
+                sidecar = sidecar.display(),
+                repo = repo.display(),
             ),
         }
     }
@@ -158,6 +188,17 @@ pub fn resolve_cwd() -> Result<Repo, Error> {
 /// from tests; `resolve_cwd` treats a missing `$HOME` as an error so the
 /// guard can never silently disappear.
 pub fn resolve(start: &Path, home: Option<&Path>) -> Result<Repo, Error> {
+    // Step 0 (workspace.md D9): a start inside `<repo>.mysbx/clones/*`
+    // is a start inside a SIDECAR — the clones live there, beside
+    // `config.toml`, and the sidecar is not a checkout. The
+    // sidecar-ancestor walk below would walk PAST the sidecar (the
+    // host repo is a SIBLING of it, not an ancestor) and fall through
+    // to the clone's own `.git`, running a live sandbox of the CLONE
+    // — a sandbox with no defined workspace. Refused instead, naming
+    // the owning repo and the session.
+    if let Some(err) = inside_a_clone(start) {
+        return Err(err);
+    }
     // Step 1: an existing sidecar wins, nearest first.
     let mut dir = Some(start);
     while let Some(d) = dir {
@@ -180,6 +221,68 @@ pub fn resolve(start: &Path, home: Option<&Path>) -> Result<Repo, Error> {
     // Step 3: no sidecar, no git — the starting directory is the repo.
     let sidecar = sibling_sidecar(start);
     guarded(repo_at(start, sidecar)?, home)
+}
+
+/// workspace.md D9: whether `start` sits inside a session clone —
+/// `<repo>.mysbx/clones/NAME`, any depth — and the refusal error if
+/// so. The check walks the ancestors of `start` for a directory that
+/// IS a sidecar (`<something>.mysbx`, the same spelling the
+/// sidecar-ancestor walk probes siblings for) whose `clones/` subtree
+/// contains `start`. The owning repo is derived from the LAYOUT
+/// (the `.mysbx` suffix stripped), exactly like the sidecar derives
+/// from the repo — so the refusal also fires for a sidecar whose
+/// repo has since moved or vanished, which is the honest answer for
+/// a directory that is not a checkout in the first place.
+///
+/// The comparison is on canonicalized paths, so a symlinked spelling
+/// of the clone cannot slip past — the same discipline as the home
+/// guard.
+fn inside_a_clone(start: &Path) -> Option<Error> {
+    // The canonicalized start is what the process actually stands in
+    // — walking ITS ancestors is what makes a symlinked spelling of
+    // a clone unable to slip past (the same discipline as the home
+    // guard). An uncanonicalizable start (nonexistent, broken
+    // symlink) resolves nowhere and is nobody's clone.
+    let start_canon = std::fs::canonicalize(start).ok()?;
+    let mut dir = Some(start_canon.as_path());
+    while let Some(d) = dir {
+        let name = d.file_name()?.to_string_lossy().into_owned();
+        let Some(bare) = name.strip_suffix(".mysbx") else {
+            dir = d.parent();
+            continue;
+        };
+        // A `*.mysbx` directory: the sidecar spelling. Only its
+        // `clones/` subtree is refused here — the rest of a sidecar
+        // keeps today's behaviour (the walk continues past it).
+        let clones = d.join(crate::session::CLONES_DIR);
+        let Some(clones_canon) = std::fs::canonicalize(&clones).ok() else {
+            dir = d.parent();
+            continue;
+        };
+        if start_canon.starts_with(&clones_canon) {
+            // The session name is the component right below `clones/`
+            // — the directory IS the registry (D2), so the name comes
+            // from the layout, exactly like the sidecar's repo does.
+            let session = start_canon
+                .strip_prefix(&clones_canon)
+                .ok()
+                .and_then(|rest| rest.components().next())
+                .and_then(|c| c.as_os_str().to_str())
+                .unwrap_or("(unknown)")
+                .to_string();
+            let repo = d
+                .parent()
+                .map(|p| p.join(bare))
+                .unwrap_or_else(|| d.to_path_buf());
+            return Some(Error::InsideClone {
+                sidecar: d.to_path_buf(),
+                repo,
+                session,
+            });
+        }
+        dir = d.parent();
+    }
+    None
 }
 
 /// A `Repo` rooted at `dir`, resolving git metadata that lives OUTSIDE
@@ -970,5 +1073,101 @@ mod tests {
 
         let e = resolve(&repo.join("sub"), Some(&home)).unwrap_err();
         assert!(matches!(e, Error::HomeAncestorDir { .. }), "{e}");
+    }
+
+    // ---- a run inside a clone is refused (workspace.md D9) ------------------
+
+    #[test]
+    fn a_run_inside_a_session_clone_is_refused() {
+        // The sidecar is not a checkout: `<repo>.mysbx/clones/NAME` is
+        // session workspace, and a start there must not silently run
+        // a live sandbox of the CLONE (whose `.git` the step-2 walk
+        // would find). The refusal names the owning repo and the
+        // session.
+        let base = tmpdir("inside-clone");
+        let repo = base.join("repo");
+        touch_dir(&repo);
+        touch_dir(&base.join("repo.mysbx").join("clones").join("fix-1"));
+
+        let e = resolve(
+            &base.join("repo.mysbx").join("clones").join("fix-1"),
+            Some(&fake_home(&base)),
+        )
+        .unwrap_err();
+        match &e {
+            Error::InsideClone {
+                sidecar,
+                repo: owner,
+                session,
+            } => {
+                assert_eq!(sidecar, &base.join("repo.mysbx"));
+                assert_eq!(owner, &repo);
+                assert_eq!(session, "fix-1");
+            }
+            other => panic!("wrong error: {other:?}"),
+        }
+        // The message names the owning repo and the session, so the
+        // operator knows where to stand instead.
+        let msg = e.to_string();
+        assert!(msg.contains("fix-1"), "{msg}");
+        assert!(msg.contains(repo.display().to_string().as_str()), "{msg}");
+    }
+
+    #[test]
+    fn a_run_deep_inside_a_session_clone_is_refused() {
+        // Any depth below the clone — the payload may have made
+        // subdirectories.
+        let base = tmpdir("inside-clone-deep");
+        touch_dir(&base.join("repo"));
+        let deep = base
+            .join("repo.mysbx")
+            .join("clones")
+            .join("fix-1")
+            .join("sub")
+            .join("dir");
+        touch_dir(&deep);
+
+        let e = resolve(&deep, Some(&fake_home(&base))).unwrap_err();
+        assert!(matches!(e, Error::InsideClone { .. }), "{e}");
+    }
+
+    #[test]
+    fn a_symlinked_spelling_of_a_clone_cannot_slip_past() {
+        // Canonicalized comparison, like the home guard: entering the
+        // clone through a symlink still refuses.
+        let base = tmpdir("inside-clone-symlink");
+        touch_dir(&base.join("repo"));
+        let clone = base.join("repo.mysbx").join("clones").join("fix-1");
+        touch_dir(&clone);
+        let link = base.join("link-to-clone");
+        std::os::unix::fs::symlink(&clone, &link).unwrap();
+
+        let e = resolve(&link, Some(&fake_home(&base))).unwrap_err();
+        assert!(matches!(e, Error::InsideClone { .. }), "{e}");
+    }
+
+    #[test]
+    fn a_result_file_next_to_the_clones_is_not_a_session() {
+        // `clones/fix-1.json` is a FILE (the D5 result file), and a run
+        // can never start inside a file — but the CHECK must not trip
+        // on the sidecar either: only the `clones/` SUBTREE is
+        // refused, the rest of the sidecar keeps today's resolution
+        // (the walk continues past it and finds the repo above).
+        let base = tmpdir("clones-adjacent");
+        let repo = base.join("repo");
+        touch_dir(&repo.join(".git"));
+        let sidecar = base.join("repo.mysbx");
+        touch_dir(&sidecar.join("clones"));
+        std::fs::write(sidecar.join("clones").join("fix-1.json"), "{}").unwrap();
+
+        // Inside the sidecar, OUTSIDE clones/: the clones/ subtree is
+        // the only refused part — the bare sidecar keeps today's
+        // resolution (no `.git` above it, no sidecar-of-sidecar, so
+        // the fallback of step 3 applies and the sidecar directory
+        // itself resolves as the repo). Pre-existing behaviour, not
+        // a clone — pinned here so the clones-only scoping of the
+        // D9 check stays narrow.
+        let r = resolve(&sidecar, Some(&fake_home(&base))).unwrap();
+        assert_eq!(r.root, sidecar);
     }
 }

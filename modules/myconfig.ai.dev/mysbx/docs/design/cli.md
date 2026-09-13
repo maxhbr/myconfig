@@ -55,9 +55,10 @@ and the session group is the one place a noun carries its own meaning
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2), `run -- COMMAND` for
 non-interactive use, `run --result -- COMMAND` (D17) for the
-machine-readable-outcome form, `gui [ARG...]` (D15), plus the global
-flags `--dry-run` (D9), `--verbose` (D10), `--result`/`--timeout`
-(D17) and `--multiplexer` (D14).
+machine-readable-outcome form, `gui [ARG...]` (D15), the global flag
+`--session <name>` ([workspace.md](./workspace.md) D1-D5 — the clone
+run mode), plus the global flags `--dry-run` (D9), `--verbose`
+(D10), `--result`/`--timeout` (D17) and `--multiplexer` (D14).
 
 ### D4: `--` separates sandbox args from the payload command
 
@@ -499,7 +500,10 @@ enough to drive automation. The pointer to it goes to stderr
 **The file.** One `result.json` per repository, atomically REPLACED
 by each waited run — the sidecar does not grow without bound and the
 file always names the LATEST run; a driver wanting history copies it
-after each run. Fields: `version` (schema number, `1`), `state`
+after each run. A session run (workspace.md D5) writes
+`<repo>.mysbx/clones/<name>.json` instead — one file per session, so
+parallel sessions cannot overwrite each other's outcomes; the live
+`result.json` is untouched by a session run. Fields: `version` (schema number, `1`), `state`
 (`completed`/`failed`/`timed-out`/`cancelled`/`infrastructure-error`),
 `exitCode` (the run's own status — always the state's code, the two
 cannot disagree), `repo`, `sidecar`, `payload` (the command vector),
