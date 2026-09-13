@@ -205,7 +205,7 @@ secrets, so nobody pastes a verbose report into a bug tracker unaware.
 
 ### D11: the multiplexer session replaces the interactive payload only
 
-With `multiplexer = "tmux" | "workmux" | "herdr" | "aoe"` in a
+With `multiplexer = "tmux" | "workmux" | "herdr" | "aoe" | "orca"` in a
 configuration layer (config.md D17 — the generalization of the boolean
 `workmux` of D16), the **bare form** does not start a shell: its
 payload is the entry pinned for that value
@@ -349,7 +349,7 @@ The bare form accepts `--multiplexer <mux>` with the same position rule
 as the other global flags (D10: before the verb; here there is no verb —
 the flag belongs to the bare form alone). The value is the same closed
 enum as the config key (D17): `tmux` | `workmux` | `herdr` | `aoe` |
-`none`. It wins over the merged `multiplexer` of both layers for THIS
+`orca` | `none`. It wins over the merged `multiplexer` of both layers for THIS
 invocation only, per the precedence of D6 (flags > sidecar > user >
 defaults) — nothing is written, and the next `mysbx` runs whatever the
 configuration says again.

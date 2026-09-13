@@ -42,7 +42,7 @@ _Avoid_: driver, engine, runtime
 **Payload**:
 The process `mysbx` starts inside the sandbox — an interactive shell for the
 bare form (a multiplexer session with `multiplexer = "tmux" | "workmux" |
-"herdr" | "aoe"`, `docs/design/config.md` D17), or the command after `--`.
+"herdr" | "aoe" | "orca"`, `docs/design/config.md` D17), or the command after `--`.
 Its exit code is propagated unchanged.
 _Avoid_: inner command, guest command, job
 

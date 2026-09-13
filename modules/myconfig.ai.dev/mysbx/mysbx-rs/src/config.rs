@@ -63,12 +63,22 @@ pub enum Multiplexer {
     Herdr,
     /// Agent of Empires (`aoe`), a tmux-based agent session manager.
     Aoe,
+    /// Orca (<https://onorca.dev>), the agent orchestrator desktop
+    /// app / runtime server (../../services.orca.nix). Unlike the
+    /// other four this payload is not a terminal multiplexer at all:
+    /// its interactive surface is the Orca runtime server
+    /// (`orca serve`) started INSIDE the sandbox, whose pairing
+    /// endpoint the operator reaches with the Orca desktop/mobile
+    /// client — the headless-server form of the upstream guide
+    /// (stablyai/orca `docs/reference/headless-linux-server.md`), see
+    /// the entry script `../../nix/orca-entry.nix`.
+    Orca,
 }
 
 impl Multiplexer {
     /// The accepted spellings, in the order the schema error lists
     /// them. Public so the CLI and the tests name the same set.
-    pub const NAMES: &'static [&'static str] = &["tmux", "workmux", "herdr", "aoe", "none"];
+    pub const NAMES: &'static [&'static str] = &["tmux", "workmux", "herdr", "aoe", "orca", "none"];
 
     fn parse(s: &str, at: &str) -> Result<Multiplexer, Error> {
         match s {
@@ -77,6 +87,7 @@ impl Multiplexer {
             "workmux" => Ok(Multiplexer::Workmux),
             "herdr" => Ok(Multiplexer::Herdr),
             "aoe" => Ok(Multiplexer::Aoe),
+            "orca" => Ok(Multiplexer::Orca),
             other => Err(Error::Schema(format!(
                 "{at}: invalid multiplexer `{other}`, expected one of {}",
                 Multiplexer::NAMES
@@ -107,6 +118,7 @@ impl Multiplexer {
             Multiplexer::Workmux => "workmux",
             Multiplexer::Herdr => "herdr",
             Multiplexer::Aoe => "aoe",
+            Multiplexer::Orca => "orca",
         }
     }
 
@@ -125,6 +137,7 @@ impl Multiplexer {
             Multiplexer::Workmux => Some("MYSBX_MUX_ENTRY_WORKMUX"),
             Multiplexer::Herdr => Some("MYSBX_MUX_ENTRY_HERDR"),
             Multiplexer::Aoe => Some("MYSBX_MUX_ENTRY_AOE"),
+            Multiplexer::Orca => Some("MYSBX_MUX_ENTRY_ORCA"),
         }
     }
 
@@ -570,6 +583,7 @@ mod tests {
             ("workmux", Multiplexer::Workmux),
             ("herdr", Multiplexer::Herdr),
             ("aoe", Multiplexer::Aoe),
+            ("orca", Multiplexer::Orca),
             ("none", Multiplexer::None),
         ] {
             let c = Config::parse(&format!("multiplexer = \"{text}\"\n")).unwrap();
@@ -579,7 +593,7 @@ mod tests {
             assert_eq!(want.name(), text);
         }
         // Every accepted spelling is in NAMES, and nothing else is.
-        assert_eq!(Multiplexer::NAMES.len(), 5);
+        assert_eq!(Multiplexer::NAMES.len(), 6);
     }
 
     #[test]
@@ -633,7 +647,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen.len(), 4);
+        assert_eq!(seen.len(), 5);
     }
 
     #[test]

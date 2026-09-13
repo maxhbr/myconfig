@@ -27,7 +27,9 @@
   # Validates `TMUX_TMPDIR` and creates `$socket_dir`. The socket FILE
   # inside it is named by the tmux-based entries themselves
   # (`$socket_dir/socket`) — herdr keeps its own socket under the
-  # tmpfs `HOME` instead, so this fragment stops at the directory.
+  # tmpfs `HOME` instead, and orca keeps its state under
+  # `$HOME/.config/{orca,Orca}` (see ./orca-entry.nix), so this
+  # fragment stops at the directory.
   # `self` is the script's own name, for the diagnostics.
   requireSocketDir = self: ''
     # The socket directory is mysbx infrastructure, not a choice of this

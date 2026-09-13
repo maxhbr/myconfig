@@ -734,7 +734,7 @@ tool closure and the `MYSBX_WORKMUX_ENTRY` pin. The wiring that decides
 ### D17: `multiplexer` — which terminal multiplexer the interactive payload is
 
 ```toml
-multiplexer = "workmux"   # tmux | workmux | herdr | aoe | none
+multiplexer = "workmux"   # tmux | workmux | herdr | aoe | orca | none
 ```
 
 One top-level string key names the **interactive** payload of a
@@ -748,6 +748,7 @@ agent-oriented multiplexers side by side.
 | `"workmux"` | the workmux session of D16 (sidebar + dashboard) |
 | `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer (`../../../../programs/programs.herdr.nix`) |
 | `"aoe"` | Agent of Empires (`../../../../programs/programs.agent-of-empires/`), a tmux-based agent session manager |
+| `"orca"` | [Orca](https://onorca.dev) (`../../../../services.orca.nix`), the agent orchestrator — its payload is the Orca **runtime server** (`orca serve`) started inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint (the headless-server form of the upstream guide); see the entry script `../../../../nix/orca-entry.nix` for the display/network/state decisions |
 | `"none"` | a plain interactive shell — the pre-D16 behaviour |
 
 **A string enum, not a table, and not a command.** A `[multiplexer]`
@@ -755,7 +756,7 @@ table would invite a `command = …` key, and configuration that names a
 command is configuration that executes (D4). What a layer may say is
 *which of the multiplexers this build carries* runs — the argument
 vector belongs to the entry scripts in mysbx's own closure. The value
-is validated strictly: anything outside the five names is a schema
+is validated strictly: anything outside the six names is a schema
 error naming the file, the key and the accepted values (like `mode`,
 D9/D11).
 
@@ -778,7 +779,7 @@ sidecar the *decision* ("this repo wants herdr"), including
 
 **Availability is checked, never fallen back on.** Each choice needs an
 entry from mysbx's own closure, pinned by the wrapper as
-`MYSBX_MUX_ENTRY_TMUX`, `…_WORKMUX`, `…_HERDR`, `…_AOE`
+`MYSBX_MUX_ENTRY_TMUX`, `…_WORKMUX`, `…_HERDR`, `…_AOE`, `…_ORCA`
 (`../../nix/mysbx.nix`). A selection whose entry is not pinned — an
 unwrapped build, a host that does not install that multiplexer — is a
 **refused run** (exit `70`, the message naming the value and the missing
@@ -799,9 +800,12 @@ and keeps its own socket and state in the sandbox-home tmpfs
 (`~/.config/herdr` inside the sandbox), which is per-run and
 per-sandbox by construction (D14). (Older herdr versions ran
 monolithic via a `--no-session` flag for exactly this reason; current
-ones removed it, and the tmpfs `HOME` makes it unnecessary.) The
-variable is set for herdr too, uniformly: one code path, and a pane
-running plain `tmux` inside a herdr session lands
+ones removed it, and the tmpfs `HOME` makes it unnecessary.) Orca
+keeps its profile in `$HOME/.config/{orca,Orca}` — the same per-run,
+per-sandbox tmpfs isolation, persistable with a `state-dirs` entry —
+and needs no terminal socket at all. The variable is set for herdr
+and orca too, uniformly: one code path, and a pane running plain
+`tmux` inside a herdr or orca session lands
 on the same private socket rather than on `/tmp/tmux-<uid>`.
 
 **`run -- CMD` is unaffected** (cli.md D11): a one-shot command is
@@ -834,6 +838,32 @@ wired (`myconfig.ai.mysbx.workmux.enable`, set by
 `../../myconfig.ai.workmux/mysbx.nix`) and to `"none"` otherwise —
 the behaviour-preserving default. The module also pins the entries of
 the multiplexers whose package the host has
-(`myconfig.ai.mysbx.{workmux,herdr,aoe}.package`; tmux always) and adds
+(`myconfig.ai.mysbx.{workmux,herdr,aoe,orca}.package`; tmux always) and adds
 the selected one's binaries to the sandbox `PATH` via `extraTools`, so
 the panes find the tool they are running in.
+
+**`orca` is the one value whose payload is not a terminal.** The
+entry (`../../nix/orca-entry.nix`) starts the Orca runtime server
+(`orca serve`) inside the sandbox — the Electron desktop window has no
+headless form and no way to attach to a mysbx sandbox — and the
+operator drives the session from the Orca desktop or mobile client
+over the WebSocket pairing endpoint the server prints on readiness
+(the headless-server mode of the upstream guide). Three consequences
+an operator must know:
+
+* **It needs the shared network** (D5/D9): the pairing client connects
+  to the sandboxed server from outside, so `network = false` leaves the
+  session unreachable — tmux, workmux, herdr and aoe are driven through
+  the terminal mysbx already attaches and do not care, but `orca` is
+  the first multiplexer whose control surface is a network endpoint.
+  A loopback-scoped pairing (`--pairing-address 127.0.0.1`) works
+  wherever the client runs on the same host; a remote client needs the
+  host's routing, exactly like the host-side `orca-serve` service of
+  `../../../../services.orca.nix`.
+* **The display is sandbox-internal**: mysbx forwards nothing display
+  related, so `$DISPLAY` is never set and Orca's bundled Xvfb
+  auto-start (display `:99`) always applies — no host display is
+  plumbed in.
+* **Orca's port is not pinned**: the upstream server picks a fallback
+  port when the default `6768` is taken, and the readiness block on the
+  sandbox's stdout is the source of truth for the bound endpoint.

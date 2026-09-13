@@ -358,7 +358,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // "the socket is inside the sandbox" is the isolation claim, and
     // the report is where an operator checks it against the argv.
     // Printed for `none` too: which payload an interactive run starts
-    // is a property of every run, and the value now has five possible
+    // is a property of every run, and the value now has six possible
     // answers rather than a silent "off".
     let mux = r.merged.multiplexer;
     if !mux.starts_a_session() {
@@ -801,6 +801,7 @@ mod tests {
             Multiplexer::Workmux,
             Multiplexer::Herdr,
             Multiplexer::Aoe,
+            Multiplexer::Orca,
         ] {
             let (repo, mut merged, host) = fixture_report();
             merged.multiplexer = mux;

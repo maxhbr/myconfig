@@ -30,12 +30,13 @@
 #                     get no `/bin/sh`, like they get no pinned nix.conf.
 #   MYSBX_TOOLS_PATH  the dev-tool closure on PATH (plan.md: "The base",
 #                     row "dev-tool closure on PATH")
-#   MYSBX_MUX_ENTRY_TMUX / _WORKMUX / _HERDR / _AOE
+#   MYSBX_MUX_ENTRY_TMUX / _WORKMUX / _HERDR / _AOE / _ORCA
 #                     the INTERACTIVE payload of a sandbox that selects
 #                     that multiplexer (`multiplexer = "…"`,
 #                     ../docs/design/config.md D17): the entry scripts of
 #                     ./tmux-entry.nix, ./workmux-entry.nix,
-#                     ./herdr-entry.nix and ./aoe-entry.nix, each of
+#                     ./herdr-entry.nix, ./aoe-entry.nix and
+#                     ./orca-entry.nix, each of
 #                     which starts its multiplexer on the
 #                     sandbox-internal socket. One pin per multiplexer,
 #                     absent for the ones a host does not carry — a
@@ -123,7 +124,7 @@
   extraTools ? [ ],
   # The multiplexer entry scripts, keyed by the `multiplexer` value
   # they are the payload of (../docs/design/config.md D17): an attrset
-  # like `{ tmux = <drv>; workmux = <drv>; }`, built by ../default.nix
+  # like `{ tmux = <drv>; workmux = <drv>; orca = <drv>; }`, built by ../default.nix
   # for the multiplexers whose package the host has. Each entry becomes
   # the `MYSBX_MUX_ENTRY_<VALUE>` pin.
   #

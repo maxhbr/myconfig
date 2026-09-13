@@ -2492,6 +2492,7 @@ mod tests {
             ("workmux", config::Multiplexer::Workmux),
             ("herdr", config::Multiplexer::Herdr),
             ("aoe", config::Multiplexer::Aoe),
+            ("orca", config::Multiplexer::Orca),
             ("none", config::Multiplexer::None),
         ] {
             let args = s(&["--multiplexer", text, "--dry-run"]);

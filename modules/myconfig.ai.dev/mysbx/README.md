@@ -240,7 +240,7 @@ nothing. See `docs/design/config.md` D15.
 
 ### The multiplexer session (`multiplexer`)
 
-`multiplexer = "tmux" | "workmux" | "herdr" | "aoe" | "none"` in a
+`multiplexer = "tmux" | "workmux" | "herdr" | "aoe" | "orca" | "none"` in a
 configuration layer selects what the **interactive** form
 (`cd <repo> && mysbx`) starts instead of a bare shell:
 
@@ -250,6 +250,7 @@ configuration layer selects what the **interactive** form
 | `"workmux"` | a [workmux](https://github.com/raine/workmux) session (sidebar + dashboard) |
 | `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer ([`../../programs/programs.herdr.nix`](../../programs/programs.herdr.nix)) |
 | `"aoe"` | Agent of Empires ([`../../programs/programs.agent-of-empires/`](../../programs/programs.agent-of-empires)) |
+| `"orca"` | [Orca](https://onorca.dev) ([`../services.orca.nix`](../services.orca.nix)) — the runtime server (`orca serve`) inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint; needs the shared network |
 | `"none"` | a plain interactive shell (the default) |
 
 mysbx execs the entry its wrapper pinned for that value
@@ -276,7 +277,7 @@ another sandbox of the same repository — no mount may land on it, no
 On myconfig hosts the host-wide default is
 `myconfig.ai.mysbx.config.multiplexer`; which multiplexers are
 *available* follows from the packages the host carries
-(`myconfig.ai.mysbx.{tmux,workmux,herdr,aoe}.package`). The workmux
+(`myconfig.ai.mysbx.{tmux,workmux,herdr,aoe,orca}.package`). The workmux
 value is wired by
 [`../myconfig.ai.workmux/mysbx.nix`](../myconfig.ai.workmux/mysbx.nix) —
 the mysbx sibling of the bubblewrap-jail (`jail.nix`) and microVM

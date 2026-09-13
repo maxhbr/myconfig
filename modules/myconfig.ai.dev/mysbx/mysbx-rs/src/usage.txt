@@ -12,7 +12,7 @@ Commands:
   (none)        enter an interactive sandbox shell for the current repo;
                 the repo must have been initialized with `mysbx init`
                 first — a run creates nothing;
-                with `multiplexer = "tmux"|"workmux"|"herdr"|"aoe"` in
+                with `multiplexer = "tmux"|"workmux"|"herdr"|"aoe"|"orca"` in
                 a config layer this is a session of that multiplexer
                 instead of a bare shell, on a socket inside the sandbox
   run -- CMD... run one command in the sandbox; everything after `--` is
@@ -137,7 +137,7 @@ Options:
                 the multiplexer of THIS interactive run, overriding the
                 `multiplexer` of the config layers for one invocation —
                 the next run uses the configuration again. <mux> is one
-                of: tmux, workmux, herdr, aoe, none (the same closed set
+                of: tmux, workmux, herdr, aoe, orca, none (the same closed set
                 as the config key); `none` forces the plain shell. Bare
                 form only: a `run -- CMD` never starts a session, and
                 every other verb rejects the flag. A value this build
