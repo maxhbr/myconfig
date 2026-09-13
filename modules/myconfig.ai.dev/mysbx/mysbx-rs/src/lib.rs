@@ -26,6 +26,7 @@
 
 pub mod bwrap;
 pub mod config;
+pub mod handoff;
 pub mod merge;
 pub mod repo;
 pub mod report;
@@ -127,7 +128,9 @@ pub fn run(args: Vec<String>) -> i32 {
         // The run-scoped flags are refused with the verb before any
         // verb arm runs (D14 for `--multiplexer`, D16 for
         // `--ro`/`--rw`, the D8/D17 extension for `--result`/
-        // `--timeout`): they name the mounts, the payload or the
+        // `--timeout`, the D1 `--session` for the handoff verbs of
+        // workspace.md D6 — a handoff names its session positionally,
+        // and is not a run): they name the mounts, the payload or the
         // outcome of a run, and no OTHER verb has one to choose or
         // add. `--multiplexer` is refused for `run` too (D11: a
         // one-shot never starts a session), while `--ro`/`--rw` are
@@ -140,7 +143,19 @@ pub fn run(args: Vec<String>) -> i32 {
                 || (flags.session.is_some() && other != "run")
                 || ((flags.result || flags.timeout.is_some()) && other != "run")
                 || ((!flags.ro.is_empty() || !flags.rw.is_empty()) && other != "run"))
-                && matches!(other, "run" | "gui" | "init" | "edit" | "version" | "help") =>
+                && matches!(
+                    other,
+                    "run"
+                        | "gui"
+                        | "init"
+                        | "edit"
+                        | "version"
+                        | "help"
+                        | "fetch"
+                        | "merge"
+                        | "push"
+                        | "diff"
+                ) =>
         {
             eprintln!(
                 "mysbx: {} is not valid with `{other}`",
@@ -165,6 +180,23 @@ pub fn run(args: Vec<String>) -> i32 {
             // passes it through verbatim).
             gui(flags, &rest[1..])
         }
+        // The host-side handoff verbs of the workspace model
+        // (workspace.md D6): git plumbing between the host repo and a
+        // session's clone — no sandbox is started. They sit BEFORE the
+        // generic `flags.any()` arm on purpose: `--dry-run` is valid
+        // with them (cli.md D9 — it prints the git commands instead
+        // of running them), while `--verbose` is refused — there is
+        // no run to report on (the run-scoped flags are refused by
+        // the arm above: a handoff is not a run, there is no
+        // workspace to choose and no payload).
+        Some("fetch") if flags.verbose => reject_verbose("fetch"),
+        Some("merge") if flags.verbose => reject_verbose("merge"),
+        Some("push") if flags.verbose => reject_verbose("push"),
+        Some("diff") if flags.verbose => reject_verbose("diff"),
+        Some("fetch") => handoff::verb(&rest[1..], handoff::Kind::Fetch, flags.dry_run),
+        Some("merge") => handoff::verb(&rest[1..], handoff::Kind::Merge, flags.dry_run),
+        Some("push") => handoff::verb(&rest[1..], handoff::Kind::Push, flags.dry_run),
+        Some("diff") => handoff::verb(&rest[1..], handoff::Kind::Diff, flags.dry_run),
         // The run-scoped flags are only meaningful for the bare form and
         // `run`: on `init` `--dry-run` would promise side-effect-freeness
         // while files are still created, and there is no run to report on
@@ -469,6 +501,17 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
         rest = tail;
     }
     Ok((flags, rest))
+}
+
+/// The `--verbose` refusal of the handoff verbs (workspace.md D6):
+/// they start no sandbox, so there is no run report to print — the
+/// same reason `init`/`help` reject the flag (cli.md D10), with the
+/// verb named like every other flag/verb refusal.
+fn reject_verbose(verb: &str) -> i32 {
+    eprintln!("mysbx: --verbose is not valid with `{verb}`");
+    eprintln!("  it reports a run's configuration — a handoff starts no sandbox");
+    eprintln!("try `mysbx --help`");
+    2
 }
 
 /// `mysbx run [--dry-run] [--verbose] -- CMD...` — parse the `run`

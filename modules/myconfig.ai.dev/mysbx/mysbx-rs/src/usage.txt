@@ -4,6 +4,7 @@ Usage:
   mysbx [--dry-run] [--verbose] [--multiplexer <mux>] [--session <name>] [--ro <path>]... [--rw <path>]...
   mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
+  mysbx fetch | merge | push | diff NAME [verb-arguments...]
   mysbx [COMMAND]
 
 Commands:
@@ -47,6 +48,42 @@ Commands:
                 $EDITOR (or $VISUAL); creates it first when missing,
                 like `init` would. The host-wide user config is
                 not what this edits
+  fetch NAME    bring the session branch agent/mysbx/NAME of the
+                named session into the host repo — a fast-forward-only
+                fetch of the session's clone, fully qualified on both
+                sides, no tags: an absent host-local branch is
+                created, an ancestor is advanced, a diverged or
+                rewound one is REJECTED without being touched
+                (rebased session history stays an explicit operator
+                action). The host repo learns nothing permanent
+                about the clone: no remote is configured. No sandbox
+                is started; the repo is the one the current directory
+                resolves to. With --dry-run the exact git commands
+                are printed instead
+  merge NAME [--no-ff|--ff|--squash] [-- GIT-MERGE-ARGS...]
+                merge the fetched session branch into the currently
+                checked-out branch of the host repo. Refuses a
+                detached HEAD and a dirty host tree first; --no-ff is
+                the default, --ff/--squash/explicit git-merge args
+                pass through. After the fetch the merge consumes the
+                EXACT ref refs/heads/agent/mysbx/NAME — never the
+                bare name a same-named tag could shadow — and on
+                success the fetched host-local ref is deleted again
+                (it was the ferry copy); on conflict it stays, with
+                the recovery hint. No sandbox is started
+  push NAME [REMOTE]
+                publish the session branch: the implicit fetch
+                first (the pushed ref is current), then
+                `git push REMOTE refs/heads/…:refs/heads/…` through
+                the HOST REPO's own remotes — REMOTE defaults to its
+                `origin`. Explicit, non-forced, fully qualified.
+                git's own exit code and diagnostics pass through
+  diff NAME     the changes on the session branch since it diverged
+                from the host's HEAD: the implicit fetch, then the
+                THREE-DOT diff `git diff
+                HEAD...refs/heads/agent/mysbx/NAME` — not the host's
+                own drift. git's own exit code and diagnostics pass
+                through
   version       print the version
   help          print this help
 
@@ -58,7 +95,10 @@ Options:
                 refused here too: the sidecar is part of the run it
                 would print. With `--session`, the git commands of the
                 clone creation are printed in the same format before
-                the argv when this is the session's first run
+                the argv when this is the session's first run. With the
+                handoff verbs (fetch/merge/push/diff), the exact git
+                commands of the handoff are printed in the same format
+                instead of run
   --verbose     print the run configuration (repo, config files, backend,
                 network, mounts, environment, payload) to stdout with a
                 `## ` prefix before running; must precede the command.

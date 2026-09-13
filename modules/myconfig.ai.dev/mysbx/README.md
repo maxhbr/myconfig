@@ -56,6 +56,22 @@ read-only, `--rw` refused. `run --result --session <name> -- CMD...`
 writes the outcome to the per-session file
 `<repo>.mysbx/clones/<name>.json` instead of `result.json`.
 
+The session's work comes back through the **handoff verbs**
+([`docs/design/workspace.md`](./docs/design/workspace.md) D6) —
+`mysbx fetch <name>`, `mysbx merge <name>`, `mysbx push <name>
+[REMOTE]`, `mysbx diff <name>`, all host-side git plumbing that
+starts no sandbox and takes the session as their one positional:
+`fetch` fast-forwards the session branch `agent/mysbx/<name>` into
+the host repo (fully-qualified, no force marker, no tags — a
+diverged host-local branch is rejected, never overwritten), `merge`
+refuses a detached HEAD and a dirty host tree, merges the EXACT
+fetched ref (`--no-ff` the default) and deletes the ferry ref on
+success, `push` publishes through the host repo's own remotes
+(default `origin`) after the implicit fetch, and `diff` shows the
+session's changes since it diverged from the host HEAD (the
+three-dot form). `--dry-run` prints the exact git commands instead
+of running them.
+
 `mysbx run -- CMD...` runs one command in the sandbox;
 `mysbx run --dry-run -- CMD...` prints the exact `bwrap` invocation it
 would execute — argv[0] (the backend binary, the wrapped store path under
