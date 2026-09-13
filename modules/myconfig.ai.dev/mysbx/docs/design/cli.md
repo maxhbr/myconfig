@@ -45,8 +45,12 @@ is still discovered); plain `init` never touches the config at all.
 ### D3: Verb subcommands, no nesting
 
 Subcommands are single verbs (`init`, `run`, `edit`, `version`, `help`). No
-nested command trees. Rationale: the surface is small and stays memorable;
-nesting would only pay off with many more commands.
+nested command trees — one exception: the `session` noun group
+(`session list`, `session destroy`), a closed set defined by
+[workspace.md](./workspace.md) D7. Rationale: the surface is small and
+stays memorable; nesting would only pay off with many more commands —
+and the session group is the one place a noun carries its own meaning
+(“destroy the session”, not “destroy the repo”).
 
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2), `run -- COMMAND` for

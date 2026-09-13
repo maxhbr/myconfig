@@ -18,6 +18,8 @@ overview; design decisions, TODOs and any other long text belong in `docs/`:
   - [`docs/design/cli.md`](./docs/design/cli.md) - the command line surface
   - [`docs/design/config.md`](./docs/design/config.md) - configuration and the
     sidecar directory
+  - [`docs/design/workspace.md`](./docs/design/workspace.md) - the workspace
+    model: the live repo default and the opt-in clone sessions
 - `docs/TODOs/` - planned work, one file per TODO
 
 ## How to use:
@@ -128,7 +130,10 @@ The `config.toml` file in the sidecar defines
 
 - additional mounts into the sandbox and the forwarded environment
   - the repo itself is implicit: always available rw at its real path,
-    not expressible in the config
+    not expressible in the config (the default `live` workspace mode;
+    the opt-in clone sessions of
+    [`docs/design/workspace.md`](./docs/design/workspace.md) have no
+    config surface — `--session NAME` is the whole switch)
   - `$HOME` inside the sandbox is implicit too: an empty tmpfs at
     `/mysbx-home` (the host home is never mounted), and `HOME` and `PATH`
     are set after `[env]`, so no layer can repoint them
@@ -140,6 +145,10 @@ It is deliberately placed outside of the repo and the sandbox.
 The directory has room for:
 - state files
 - mounts for ~/.share
+- `clones/` — the named clone sessions of the workspace mode
+  ([`docs/design/workspace.md`](./docs/design/workspace.md)): one
+  isolated clone per session (`clones/NAME`, branch `agent/mysbx/NAME`)
+  plus its per-session result file (`clones/NAME.json`)
 - ...
 
 ## Configuration:
