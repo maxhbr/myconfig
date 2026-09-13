@@ -313,7 +313,7 @@ in
           ++ hy3-multiGpu
           ++ qwen3_8_27B.candidateModels
           ++ qwen38_flash_next.amdModels
-          # ++ nex_n25_mini.amdModels
+          ++ nex_n25_mini.amdModels
         )
       )
     );
