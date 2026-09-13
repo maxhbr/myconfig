@@ -88,6 +88,32 @@ let
   ) benchDevices;
 
   hmEnabled = lib.hasAttrByPath [ "home-manager" "sharedModules" ] options;
+
+  # --- duplicate wrapper detection ---------------------------------------
+  # Every (model, device) pair from `models` AND `scriptOnlyModels` (via
+  # `devices` + `unlistedDevices`) generates a `llama-server_<Device>_<Name>`
+  # wrapper. Two entries with the same (device, name) produce two different
+  # derivations claiming the same `bin/<name>`, which makes home-manager's
+  # `buildEnv` fail with "two given paths contain a conflicting subpath".
+  # Fail at eval time with a precise message instead.
+  duplicateScriptKeys =
+    let
+      guardedPairs = lib.concatMap (
+        m:
+        map (device: {
+          inherit device;
+          name = m.name;
+        }) (builtins.filter guardDevice (m.devices ++ m.unlistedDevices))
+      ) unpackedModels;
+      counts = builtins.foldl' (
+        acc: p:
+        let
+          key = "${p.device}_${p.name}";
+        in
+        acc // { ${key} = (acc.${key} or 0) + 1; }
+      ) { } guardedPairs;
+    in
+    builtins.filter (k: counts.${k} > 1) (builtins.attrNames counts);
 in
 {
   config = lib.mkMerge [
@@ -101,5 +127,24 @@ in
         }
       ];
     })
+
+    {
+      assertions = [
+        {
+          assertion = duplicateScriptKeys == [ ];
+          message = ''
+            myconfig.ai.llama-cpp: duplicate (device, model) wrapper entries:
+              ${lib.concatStringsSep "\n  " (map (k: "llama-server_${k}") duplicateScriptKeys)}
+            Each (model, device) pair in `models` and `scriptOnlyModels`
+            (via `devices` and `unlistedDevices`) generates one
+            `llama-server_<Device>_<Name>` home-manager wrapper; two entries
+            with the same (device, name) collide in buildEnv with "two given
+            paths contain a conflicting subpath". Remove the duplicate entry
+            (usually a model present in both `models` (via `unlistedDevices`)
+            and `scriptOnlyModels`) or give one of them a distinct `name`.
+          '';
+        }
+      ];
+    }
   ];
 }

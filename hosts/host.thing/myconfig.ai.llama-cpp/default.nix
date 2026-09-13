@@ -102,6 +102,17 @@ let
     ++ nex_n25_mini.amdModels
     ++ hy3.amdModels
   );
+  # Names of all models that get a host-side Vulkan1 wrapper through
+  # `scriptOnlyModels` in `rtx-llama-cpp-config` below (every
+  # `amdModels` entry, served with the AMD `--no-mmap` tuning). These
+  # must NOT also be given `Vulkan1` via `unlistedDevices` on the RTX
+  # models: all-scripts.nix emits one `llama-server_<Device>_<Name>`
+  # wrapper per (model, device) from BOTH `models` and
+  # `scriptOnlyModels`, and the amd entry differs (`--no-mmap`), so
+  # home-manager's buildEnv fails with "two given paths contain a
+  # conflicting subpath".
+  scriptOnlyVulkan1Names = map (m: m.name) amdModels;
+
   fromRtxModels =
     let
       # Gather all names and aliases from AMD models, including aliases
@@ -247,10 +258,18 @@ let
           "Vulkan0"
           "CUDA0"
         ];
-        unlistedDevices = [
-          "Vulkan1"
-          "ROCm0"
-        ];
+        unlistedDevices =
+          # Models already served on Vulkan1 via `scriptOnlyModels`
+          # (with the AMD `--no-mmap` tuning) only keep ad-hoc ROCm0
+          # here — a second Vulkan1 entry would generate a colliding
+          # wrapper (see `scriptOnlyVulkan1Names` above).
+          if builtins.elem model.name scriptOnlyVulkan1Names then
+            [ "ROCm0" ]
+          else
+            [
+              "Vulkan1"
+              "ROCm0"
+            ];
       }
     ) rtxModels;
     scriptOnlyModels =
