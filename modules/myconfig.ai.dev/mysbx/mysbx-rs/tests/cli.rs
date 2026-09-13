@@ -4777,3 +4777,357 @@ fn a_verbose_result_run_reports_the_waiting_mode() {
         .collect();
     assert!(argv.starts_with("bwrap\n"), "{argv}");
 }
+
+// ---- the clone sessions of the workspace model (workspace.md D1-D5) --------
+
+/// A real git repository fixture (workspace.md D2 works on the host
+/// repo's HEAD, so the end-to-end tests of a session need one commit
+/// to clone from). Returns `None` when no runnable `git` is on PATH —
+/// the same skip the bwrap execution tests make.
+fn git_repo(base: &Path, name: &str) -> Option<PathBuf> {
+    let repo = base.join(name);
+    std::fs::create_dir_all(&repo).unwrap();
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "mysbx-tests")
+            .env("GIT_AUTHOR_EMAIL", "mysbx-tests@invalid")
+            .env("GIT_COMMITTER_NAME", "mysbx-tests")
+            .env("GIT_COMMITTER_EMAIL", "mysbx-tests@invalid")
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+    if !git(&["init", "-b", "main"])
+        || {
+            std::fs::write(repo.join("file"), "content").unwrap();
+            !git(&["add", "file"])
+        }
+        || !git(&["commit", "-m", "initial"])
+    {
+        return None;
+    }
+    Some(repo)
+}
+
+/// A fixture whose repo is a REAL git repository (initialized sidecar,
+/// backend in the user config) — the shape a `--session` run needs.
+fn git_session_fixture(
+    name: &str,
+    args: &[&'static str],
+) -> Option<(Invocation, PathBuf, PathBuf)> {
+    let (inv, repo, sidecar) = fixture_user_backend(name, args);
+    git_repo(inv.cwd.parent().unwrap(), "repo")?;
+    Some((inv, repo, sidecar))
+}
+
+#[test]
+fn a_session_dry_run_prints_the_clone_commands_and_creates_nothing() {
+    // cli.md D9 + workspace.md D2: the dry run of a FIRST session
+    // prints the exact `git` commands in the argv format (one
+    // argument per line, the executable first) and creates nothing —
+    // `clones/` does not even appear.
+    let Some((inv, repo, sidecar)) =
+        git_session_fixture("session-dry-first", &["--session", "fix-1", "--dry-run"])
+    else {
+        return; // no git on PATH: skip, like the bwrap execution tests
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    // The creation block: `git clone --origin origin --no-hardlinks
+    // <repo> <clone>`, then the branch checkout at HEAD.
+    let clone_path = sidecar.join("clones").join("fix-1");
+    let clone_cmd = ["git", "clone", "--origin", "origin", "--no-hardlinks"];
+    let start = lines
+        .iter()
+        .position(|l| *l == "git")
+        .expect("the creation block is printed");
+    for (i, want) in clone_cmd.iter().enumerate() {
+        assert_eq!(lines[start + i], *want, "stdout: {stdout}");
+    }
+    assert_eq!(lines[start + 5], repo.to_string_lossy());
+    assert_eq!(lines[start + 6], clone_path.to_string_lossy());
+    // The checkout command follows: the second `git` block, with the
+    // branch `agent/mysbx/fix-1`.
+    assert!(lines[start..].contains(&"checkout"), "{stdout}");
+    // The bwrap argv follows, with the clone (which does NOT exist
+    // yet — the dry run creates nothing) bound at the repo path.
+    let bwrap_at = lines
+        .iter()
+        .position(|l| *l == "bwrap")
+        .expect("the argv block follows");
+    assert!(bwrap_at > start);
+    let argv = &lines[bwrap_at..];
+    let bind_at = argv
+        .iter()
+        .position(|l| *l == "--bind")
+        .expect("the clone bind");
+    assert_eq!(argv[bind_at + 1], clone_path.to_string_lossy());
+    assert_eq!(argv[bind_at + 2], repo.to_string_lossy());
+    // Nothing was created.
+    assert!(!sidecar.join("clones").exists(), "stdout: {stdout}");
+}
+
+#[test]
+fn an_existing_session_dry_run_prints_no_creation_commands() {
+    // The registry of D2: a clone directory exists ⇒ the session
+    // exists ⇒ no creation, and the dry run prints only the argv.
+    let Some((inv, repo, sidecar)) =
+        git_session_fixture("session-dry-exists", &["--session", "fix-1", "--dry-run"])
+    else {
+        return;
+    };
+    let clone = sidecar.join("clones").join("fix-1");
+    std::fs::create_dir_all(&clone).unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // No creation: no `--no-hardlinks` and no `## creating:` line
+    // (the bind of the EXISTING clone legitimately contains the
+    // string "clones" — the directory name — so the flag is the
+    // tell, not the substring).
+    assert!(!stdout.contains("--no-hardlinks"), "no creation: {stdout}");
+    assert!(!stdout.contains("## creating"), "no creation: {stdout}");
+    assert!(stdout.starts_with("bwrap\n"), "{stdout}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let bind_at = lines.iter().position(|l| *l == "--bind").expect("bind");
+    assert_eq!(lines[bind_at + 1], clone.to_string_lossy());
+    assert_eq!(lines[bind_at + 2], repo.to_string_lossy());
+}
+
+#[test]
+fn the_first_session_run_creates_the_clone_on_the_session_branch() {
+    // workspace.md D2, end to end: the first `--session` run creates
+    // the clone with both required flags, on the branch
+    // `agent/mysbx/fix-1`, at the host repo's HEAD. The run itself
+    // may end in `0` (a runnable bwrap) or `70` (none — the exec
+    // fails after the creation); the clone is what is asserted.
+    let Some((inv, repo, sidecar)) = git_session_fixture(
+        "session-create",
+        &["run", "--session", "fix-1", "--", "true"],
+    ) else {
+        return;
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert!(code == 0 || code == 70, "code {code}: {stderr}\n{stdout}");
+    let clone = sidecar.join("clones").join("fix-1");
+    assert!(clone.join(".git").is_dir(), "the clone exists: {stdout}");
+    let branch = Command::new("git")
+        .arg("-C")
+        .arg(&clone)
+        .args(["branch", "--show-current"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&branch.stdout).trim(),
+        "agent/mysbx/fix-1"
+    );
+    // `--no-hardlinks` cannot be observed from the result, but the
+    // objects must not be hardlinks of the host's: the clone is a
+    // standalone repository.
+    assert!(clone.join(".git").join("objects").is_dir());
+    assert!(repo.join(".git").is_dir());
+    // The creation was reported before the run (D2).
+    assert!(
+        stdout.contains("## creating:"),
+        "reported before the run: {stdout}"
+    );
+}
+
+#[test]
+fn a_second_session_run_does_not_recreate() {
+    // The registry: an existing clone means no creation commands, no
+    // `## creating:` line — the run proceeds into it.
+    let Some((inv, _, sidecar)) = git_session_fixture(
+        "session-second",
+        &["run", "--session", "fix-1", "--", "true"],
+    ) else {
+        return;
+    };
+    let clone = sidecar.join("clones").join("fix-1");
+    std::fs::create_dir_all(&clone).unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert!(code == 0 || code == 70, "code {code}: {stderr}\n{stdout}");
+    assert!(!stdout.contains("## creating"), "no recreation: {stdout}");
+}
+
+#[test]
+fn an_empty_host_repo_is_refused_at_session_creation() {
+    // workspace.md D2: no commits, nothing to clone — a refused run
+    // (exit `70`) naming the offending fact, and no `clones/`
+    // directory left behind.
+    let (inv, repo, sidecar) = fixture_user_backend(
+        "session-empty-repo",
+        &["run", "--session", "fix-1", "--", "true"],
+    );
+    std::fs::create_dir_all(repo.join(".git")).unwrap(); // not a real repo: HEAD unresolvable
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("no commits"), "{stderr}");
+    assert!(stderr.contains(&*repo.to_string_lossy()), "{stderr}");
+    assert!(!sidecar.join("clones").exists());
+}
+
+#[test]
+fn a_host_branch_named_agent_is_refused_at_session_creation() {
+    // workspace.md D2: the ref-directory conflict with the reserved
+    // `agent/mysbx/*` namespace, refused up front with the fact named.
+    let Some((inv, repo, sidecar)) = git_session_fixture(
+        "session-agent-branch",
+        &["run", "--session", "fix-1", "--", "true"],
+    ) else {
+        return;
+    };
+    let ok = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["branch", "agent"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok, "creating the branch failed");
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("`agent`"), "{stderr}");
+    assert!(!sidecar.join("clones").exists());
+}
+
+#[test]
+fn a_session_result_run_writes_the_per_session_file() {
+    // workspace.md D5: `run --result --session NAME` writes
+    // `clones/NAME.json`, not `result.json` — one file per session, so
+    // parallel sessions cannot overwrite each other's outcomes. The
+    // clone exists (the registry), the backend is missing from the
+    // test environment: the run records `infrastructure-error` and
+    // still writes the per-session file (the spawn failure IS the
+    // run's outcome, cli.md D17).
+    let (inv, _, sidecar) = fixture_user_backend(
+        "session-result",
+        &["run", "--session", "fix-1", "--result", "--", "true"],
+    );
+    let clone = sidecar.join("clones").join("fix-1");
+    std::fs::create_dir_all(&clone).unwrap();
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    let result = sidecar.join("clones").join("fix-1.json");
+    let text = std::fs::read_to_string(&result)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e} (stderr: {stderr})", result.display()));
+    assert!(
+        text.contains("\"state\": \"infrastructure-error\""),
+        "{text}"
+    );
+    // The pointer line names the per-session file (D5: the pointer
+    // goes to stderr in both cases).
+    assert!(stderr.contains("mysbx: result:"), "{stderr}");
+    assert!(stderr.contains(&*result.to_string_lossy()), "{stderr}");
+    // And the live result file was NOT written.
+    assert!(!sidecar.join("result.json").exists());
+}
+
+#[test]
+fn a_live_result_run_still_writes_result_json() {
+    // D5's other half: a live `--result` run keeps
+    // `<repo>.mysbx/result.json` — the session spelling changes
+    // nothing for the live mode (D1).
+    let (inv, _, sidecar) = fixture_user_backend("live-result", &["run", "--result", "--", "true"]);
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    let result = sidecar.join("result.json");
+    let text = std::fs::read_to_string(&result).unwrap();
+    assert!(
+        text.contains("\"state\": \"infrastructure-error\""),
+        "{text}"
+    );
+    assert!(stderr.contains(&*result.to_string_lossy()), "{stderr}");
+}
+
+#[test]
+fn rw_is_refused_in_a_session_run() {
+    // workspace.md D4, end to end: `--rw` with `--session` is a
+    // refused run (exit `70`, not a usage error) naming the flag and
+    // the mode — never a silent downgrade.
+    let (inv, _, _) = fixture_user_backend(
+        "session-rw",
+        &["run", "--session", "fix-1", "--rw", "/tmp", "--", "true"],
+    );
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("--rw"), "{stderr}");
+    assert!(stderr.contains("clone run"), "{stderr}");
+}
+
+#[test]
+fn a_bad_session_name_is_a_usage_error() {
+    // workspace.md D2: the grammar is enforced at parse time (exit
+    // `2`), in both positions, for both run forms.
+    for args in [
+        vec!["--session", "../evil"],
+        vec!["--session", "a/b"],
+        vec!["--session", ""],
+        vec!["--session", ".hidden"],
+        vec!["run", "--session", "..", "--", "true"],
+    ] {
+        let (inv, _, _) = fixture_user_backend("session-grammar", &[]);
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("invalid session name"),
+            "{args:?}: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn a_run_inside_a_session_clone_is_refused() {
+    // workspace.md D9: the sidecar is not a checkout. A run started
+    // inside `clones/fix-1` is refused (exit `70`) naming the owning
+    // repo and the session — not silently run as a live sandbox of
+    // the clone's own `.git`.
+    let (inv, repo, sidecar) = fixture_user_backend("inside-clone", &["--dry-run"]);
+    let clone = sidecar.join("clones").join("fix-1");
+    std::fs::create_dir_all(&clone).unwrap();
+    let mut inv2 = inv;
+    inv2.cwd = clone.clone();
+    let (code, _, stderr) = run_binary(&inv2);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(
+        stderr.contains("refusing to run inside the clone of session fix-1"),
+        "{stderr}"
+    );
+    assert!(stderr.contains(&*repo.to_string_lossy()), "{stderr}");
+}
+
+#[test]
+fn a_session_run_report_marks_the_clone_workspace() {
+    // cli.md D10 + workspace.md D3/D4: the `--verbose` report of a
+    // clone run names the workspace (the clone bound rw at the repo
+    // path, the host repo not mounted) — the isolation claim of the
+    // mode is checkable against the argv, like every other.
+    let Some((inv, repo, sidecar)) = git_session_fixture(
+        "session-verbose",
+        &["--session", "fix-1", "--verbose", "--dry-run"],
+    ) else {
+        return;
+    };
+    let clone = sidecar.join("clones").join("fix-1");
+    std::fs::create_dir_all(&clone).unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains(&format!(
+            "workspace:      clone run — {} bound rw at {} (the host repo is not mounted)",
+            clone.display(),
+            repo.display()
+        )),
+        "{report}"
+    );
+    // The argv block still follows, unprefixed.
+    assert!(stdout.contains("bwrap\n"), "{stdout}");
+}

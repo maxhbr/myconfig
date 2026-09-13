@@ -1,8 +1,8 @@
 mysbx - my sandboxing tool
 
 Usage:
-  mysbx [--dry-run] [--verbose] [--multiplexer <mux>] [--ro <path>]... [--rw <path>]...
-  mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--ro <path>]... [--rw <path>]... -- COMMAND...
+  mysbx [--dry-run] [--verbose] [--multiplexer <mux>] [--session <name>] [--ro <path>]... [--rw <path>]...
+  mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
   mysbx [COMMAND]
 
@@ -56,7 +56,9 @@ Options:
                 per line — and exit; must precede the command, creates
                 nothing and runs no command. An uninitialized repo is
                 refused here too: the sidecar is part of the run it
-                would print
+                would print. With `--session`, the git commands of the
+                clone creation are printed in the same format before
+                the argv when this is the session's first run
   --verbose     print the run configuration (repo, config files, backend,
                 network, mounts, environment, payload) to stdout with a
                 `## ` prefix before running; must precede the command.
@@ -71,6 +73,27 @@ Options:
                 every other verb rejects the flag. A value this build
                 pinned no entry for is a refused run, like a config
                 layer selecting it
+  --session <name>
+                run in the named session's clone (the clone mode of
+                docs/design/workspace.md): the session's standalone
+                git repository `<repo>.mysbx/clones/NAME` is bound
+                rw at the repo's own path, the host repo itself is
+                not mounted at all, every configured mount is forced
+                read-only and `--rw` is refused — the clone is the
+                only writable bind. The FIRST `--session NAME` run
+                creates the clone from the host repo's current HEAD
+                on the session branch `agent/mysbx/NAME`
+                (continuing at an existing tip when an earlier
+                session left the branch in the host repo); an empty
+                host repo and a host branch named `agent` are
+                refused. <name> matches [A-Za-z0-9][A-Za-z0-9._-]{0,63}
+                — no slashes, no leading dot; anything else is a
+                usage error. With `run --result` the outcome is
+                written to `<repo>.mysbx/clones/NAME.json` instead
+                of result.json. Valid before the verb and after it
+                for `run`; every other verb rejects it. There is no
+                configuration for sessions: the flag is the whole
+                switch, and `clones/` is the registry
   --ro <path>   bind one more host file or directory into the sandbox
                 of THIS run, read-only — on top of every `[[mounts]]`
                 entry of the config layers, in addition to them, never

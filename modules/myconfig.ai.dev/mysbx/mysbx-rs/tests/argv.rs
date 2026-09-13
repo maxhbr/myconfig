@@ -13,7 +13,7 @@
 //! Only the base binds are fixed absolute host paths (`/nix/store`, …),
 //! and those are identical on every machine.
 
-use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload, SANDBOX_HOME};
+use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload, Workspace, SANDBOX_HOME};
 use mysbx::config::{Mode, Mount, Multiplexer};
 use mysbx::merge::Merged;
 use mysbx::repo::Repo;
@@ -72,6 +72,7 @@ fn params() -> Params<'static> {
         ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
+        workspace: Workspace::Live,
     }
 }
 
@@ -166,6 +167,16 @@ fn bind_pairs(argv: &[String]) -> Vec<(&str, &str)> {
     argv.windows(3)
         .filter(|w| w[0] == "--ro-bind" || w[0] == "--bind")
         .map(|w| (w[1].as_str(), w[2].as_str()))
+        .collect()
+}
+
+/// All `(flag, source, dest)` bind triples — the MODE-sensitive view:
+/// which of `--ro-bind`/`--bind` a pair was emitted with decides what
+/// the payload can write through it.
+fn bind_triples(argv: &[String]) -> Vec<(&str, &str, &str)> {
+    argv.windows(3)
+        .filter(|w| w[0] == "--ro-bind" || w[0] == "--bind")
+        .map(|w| (w[0].as_str(), w[1].as_str(), w[2].as_str()))
         .collect()
 }
 
@@ -1598,6 +1609,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
+        workspace: Workspace::Live,
     };
     let argv = bwrap_argv(
         &base(true),
@@ -1635,6 +1647,7 @@ fn a_pinned_bin_sh_is_bound_read_only_into_the_empty_root() {
         ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
+        workspace: Workspace::Live,
     };
     let argv = bwrap_argv(
         &base(true),
@@ -2507,6 +2520,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        workspace: Workspace::Live,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2535,6 +2549,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        workspace: Workspace::Live,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2565,6 +2580,7 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        workspace: Workspace::Live,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2588,6 +2604,7 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        workspace: Workspace::Live,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2612,6 +2629,7 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        workspace: Workspace::Live,
     };
     let cfg = base(true);
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
@@ -2638,6 +2656,7 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        workspace: Workspace::Live,
     };
     let mut cfg = base(true);
     cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
@@ -2665,6 +2684,7 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
         ca_bundle: None,
         policy_paths: &[], // nothing exists -> nothing protected
         mux_entry: None,
+        workspace: Workspace::Live,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2694,6 +2714,7 @@ fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
         ca_bundle: None,
         policy_paths: policy,
         mux_entry: None,
+        workspace: Workspace::Live,
     }
 }
 
@@ -2872,4 +2893,291 @@ fn a_read_only_mount_of_a_policy_pathname_stays_allowed() {
         &params,
     )
     .unwrap();
+}
+
+// ---- the clone sessions of the workspace model (workspace.md D1-D5) --------
+
+/// The session clone of the synthetic repo, the path `--session fix-1`
+/// would derive: `<sidecar>/clones/fix-1`.
+const SYNTH_CLONE: &str = "/synth/repo.mysbx/clones/fix-1";
+
+/// `Params` with the workspace switched to the clone of the synthetic
+/// repo — the argv a `--session fix-1` run builds.
+fn clone_params() -> Params<'static> {
+    Params {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        bin_sh: None,
+        nix_conf: None,
+        ca_bundle: None,
+        policy_paths: &[],
+        mux_entry: None,
+        workspace: Workspace::Clone {
+            clone: Path::new(SYNTH_CLONE),
+        },
+    }
+}
+
+/// The worst-case LIVE repo for the absence tests: external git dirs,
+/// a worktrees sibling AND state-dirs declared — a clone run must
+/// drop every one of those binds.
+fn laden_repo() -> Repo {
+    Repo {
+        root: PathBuf::from("/synth/repo"),
+        sidecar: PathBuf::from("/synth/repo.mysbx"),
+        git_dirs: vec![PathBuf::from("/synth/main/.git")],
+        worktrees: Some(PathBuf::from("/synth/repo__worktrees")),
+    }
+}
+
+fn laden_cfg() -> Merged {
+    let mut cfg = base(true);
+    cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    cfg.mounts
+        .push(make_mount("/synth/data/refs", None, Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/synth/data/cache", Some("/cache"), Mode::Rw));
+    cfg
+}
+
+#[test]
+fn a_clone_run_binds_the_clone_rw_at_the_repo_path() {
+    // D3, the core shape: the clone is bound rw AT THE REPO'S OWN
+    // PATH — path identity is preserved, and the payload cannot tell
+    // the bind from the real checkout. The `--chdir` stays the repo
+    // path for the same reason.
+    let repo = laden_repo();
+    let argv = bwrap_argv(
+        &laden_cfg(),
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &clone_params(),
+    )
+    .unwrap();
+    let pairs = bind_pairs(&argv);
+    // The rw bind of the clone at the repo path — flag `--bind`,
+    // source the clone, dest the repo path.
+    let triples = bind_triples(&argv);
+    assert!(
+        triples.contains(&("--bind", SYNTH_CLONE, "/synth/repo")),
+        "the clone must be bound rw at the repo's own path: {triples:?}"
+    );
+    // The bind's SOURCE is the clone, exactly the clone directory —
+    // not the sidecar, not `clones/`.
+    assert!(
+        pairs.contains(&(SYNTH_CLONE, "/synth/repo")),
+        "the rw bind at the repo path must source the clone: {pairs:?}"
+    );
+    // `--chdir` still lands in the repo path.
+    let chdir = argv
+        .iter()
+        .position(|a| a == "--chdir")
+        .expect("--chdir present");
+    assert_eq!(argv[chdir + 1], "/synth/repo");
+}
+
+#[test]
+fn a_clone_run_mounts_nothing_else_of_the_host_repo() {
+    // D3: the host repo, the `__worktrees` sibling, the git metadata
+    // directories and the state-dir binds of a live run are ALL
+    // absent from a clone run's argv — the clone is the only thing
+    // bound at the repo path, and it carries its own `.git`
+    // directory, so there is nothing external to approve or bind.
+    let repo = laden_repo();
+    let argv = bwrap_argv(
+        &laden_cfg(),
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &clone_params(),
+    )
+    .unwrap();
+    let pairs = bind_pairs(&argv);
+    // The host repo appears only as the clone bind's DEST, never as a
+    // source; the git dir, the worktrees sibling and the state
+    // backing store appear nowhere at all.
+    for forbidden in [
+        ("/synth/repo", "the host repo"),
+        ("/synth/main/.git", "a git metadata directory"),
+        ("/synth/repo__worktrees", "the worktrees sibling"),
+        (
+            "/synth/repo.mysbx/state/.local/share/opencode",
+            "a state-dir backing store",
+        ),
+    ] {
+        assert!(
+            !pairs.iter().any(|(src, _)| *src == forbidden.0),
+            "{} must not be bound in a clone run: {pairs:?}",
+            forbidden.1
+        );
+    }
+    // The in-sandbox state dest is absent too.
+    assert!(!argv.contains(&format!("{}/.local/share/opencode", SANDBOX_HOME)));
+    // No source of any bind sits inside the host repo except through
+    // the clone (whose path lives in the SIDECAR, not the repo).
+    assert!(
+        pairs
+            .iter()
+            .all(|(src, _)| !src.starts_with("/synth/repo/") && *src != "/synth/repo"),
+        "the host repo tree must be unreachable: {pairs:?}"
+    );
+}
+
+#[test]
+fn a_clone_run_forces_every_configured_mount_ro() {
+    // D4: every `[[mounts]]` entry is downgraded to read-only — the
+    // rw cache entry of the laden fixture binds with `--ro-bind`, the
+    // ro one stays ro. The downgrade applies to the configured mounts
+    // only: the clone keeps its `--bind`.
+    let argv = bwrap_argv(
+        &laden_cfg(),
+        &laden_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &clone_params(),
+    )
+    .unwrap();
+    let triples = bind_triples(&argv);
+    assert!(
+        triples.contains(&("--ro-bind", "/synth/data/refs", "/synth/data/refs")),
+        "the ro entry keeps its mode: {triples:?}"
+    );
+    assert!(
+        triples.contains(&("--ro-bind", "/synth/data/cache", "/cache")),
+        "the rw entry must be downgraded to `--ro-bind`: {triples:?}"
+    );
+    assert!(
+        !triples.contains(&("--bind", "/synth/data/cache", "/cache")),
+        "no configured mount may stay writable in a clone run: {triples:?}"
+    );
+    // The clone bind stays rw — the only writable one (D4).
+    assert!(
+        triples.contains(&("--bind", SYNTH_CLONE, "/synth/repo")),
+        "{triples:?}"
+    );
+}
+
+#[test]
+fn golden_clone_session() {
+    // Byte-for-byte: the laden fixture as a clone run — the clone at
+    // the repo path, both mounts forced ro, no git/worktrees/state
+    // binds, the payload unchanged. The golden file is the reviewable
+    // statement of D3's "nothing else of the host repo".
+    let argv = bwrap_argv(
+        &laden_cfg(),
+        &laden_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &clone_params(),
+    )
+    .unwrap();
+    assert_golden("clone-session.txt", &argv);
+}
+
+#[test]
+fn a_clone_run_still_refuses_a_dest_below_the_repo_path() {
+    // The guards keep holding with the clone as the writable source:
+    // a dest below the repo path resolves through content the payload
+    // can write (the clone), so review-2 item 2 applies unchanged.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/synth/repo/jump"),
+        Mode::Ro,
+    ));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &clone_params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_clone_run_still_refuses_a_mount_hiding_the_repo_path() {
+    // check_hidden_mounts: the implicit bind's dest is the repo path
+    // (the clone binds THERE), so a configured mount covering it is
+    // refused like one covering the live repo bind.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/synth"), Mode::Ro));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &clone_params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn a_ro_mount_sourcing_the_clone_contributes_its_dest_to_the_writable_set() {
+    // The ro-alias rule (review-3 item 1) holds in a clone run too: a
+    // read-only mount whose SOURCE is inside the clone re-exposes
+    // writable content (the same host inode is writable through the
+    // clone bind), so a dest below IT is refused as symlink-plantable.
+    let mut cfg = base(true);
+    cfg.mounts.push(make_mount(
+        &format!("{SYNTH_CLONE}/tools"),
+        Some("/synth/aliased"),
+        Mode::Ro,
+    ));
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/synth/aliased/sub"),
+        Mode::Ro,
+    ));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &clone_params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn live_mounts_are_unchanged_by_the_workspace_enum() {
+    // D1: a run without `--session` is byte-identical to today's argv.
+    // The laden fixture in live mode keeps its rw mount, its git dir,
+    // its worktrees bind and its state binds — pinning that the clone
+    // branch of `bwrap_argv` did not leak into the default.
+    let argv = bwrap_argv(
+        &laden_cfg(),
+        &laden_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    let pairs = bind_pairs(&argv);
+    assert!(pairs.contains(&("/synth/repo", "/synth/repo")));
+    assert!(pairs.contains(&("/synth/main/.git", "/synth/main/.git")));
+    assert!(pairs.contains(&("/synth/repo__worktrees", "/synth/repo__worktrees")));
+    assert!(pairs.contains(&(
+        "/synth/repo.mysbx/state/.local/share/opencode",
+        "/mysbx-home/.local/share/opencode"
+    )));
+    assert!(
+        pairs.contains(&("/synth/data/cache", "/cache")),
+        "{pairs:?}"
+    );
 }

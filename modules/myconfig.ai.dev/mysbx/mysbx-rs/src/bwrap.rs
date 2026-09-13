@@ -24,6 +24,37 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
+/// Which tree a run works in — the two modes of the workspace model
+/// (docs/design/workspace.md D1). A CLI-layer fact, never a config
+/// one: there is no `workspace` key in either layer (D1 — an unknown
+/// key is a schema error, config.md D11), and a session name is a
+/// per-run fact, not repository policy.
+///
+/// - [`Live`] is the default and byte-identical to today's argv: the
+///   repo itself is the workspace, the implicit always-rw bind of
+///   config.md D13.
+/// - [`Clone`] is selected by `--session NAME`: the session's clone
+///   at `<repo>.mysbx/clones/NAME` is bound rw AT THE REPO'S OWN
+///   PATH (D3 — path identity is preserved), while the host repo,
+///   the `__worktrees` sibling, the git metadata directories and the
+///   `state-dirs` binds are NOT mounted at all, and every configured
+///   mount is downgraded to read-only (D4) — the clone is the only
+///   writable bind of a clone run.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Workspace<'a> {
+    /// The default: the repo itself, always rw (config.md D13).
+    #[default]
+    Live,
+    /// `--session NAME`: the clone at `clone`, bound rw at the repo's
+    /// own path. The name itself is carried by
+    /// [`crate::session::Session`]; the argv builder needs only the
+    /// path.
+    Clone {
+        /// The session's clone, `<repo>.mysbx/clones/NAME`.
+        clone: &'a Path,
+    },
+}
+
 /// What runs inside the sandbox. Either the interactive shell or a command
 /// vector (docs/design/cli.md D4: everything after `--` is passed verbatim
 /// and never parsed — flag-looking arguments are payload content, not
@@ -179,6 +210,13 @@ pub struct Params<'a> {
     /// bare shell instead would be discovered only after the work was
     /// done in the wrong place.
     pub mux_entry: Option<&'a str>,
+    /// Which tree this run works in (workspace.md D1): the live repo
+    /// (the default, unchanged) or a named session's clone (D3/D4 —
+    /// the argv differences are exactly the workspace's). A
+    /// CLI-layer fact, like every other field of `Params`: it does
+    /// not come from a configuration layer, and no TOML key can name
+    /// it (workspace.md D1).
+    pub workspace: Workspace<'a>,
 }
 
 /// A trusted policy file, represented by everything the payload must
@@ -393,36 +431,86 @@ pub fn bwrap_argv(
         argv.push("/etc/nix/nix.conf".into());
     }
 
-    // 4. the repo, rw, at its real host path (D13), plus the git
-    // metadata directories a `.git` FILE points at outside the root
-    // (linked worktrees, submodules — review-1 finding 4): git needs
-    // them rw to update refs and the index. Common dir first so a
-    // gitdir nested inside it stays reachable in the degenerate
-    // layout (a later equal-or-ancestor bind would hide it).
-    // Review-2 item 1: the pointer lives in a repo-writable file, so
-    // it is NOT a mount specification — every target must be at or
-    // below an entry of `cfg.git_dirs`, the approval list of the
-    // trusted layers, before it is bound. `/`, the home directory and
-    // anything related to a protected sandbox path are never
-    // approvable and are refused outright.
-    bind(&mut argv, false, &root, None);
-    for git_dir in &repo.git_dirs {
-        check_git_dir(git_dir, &cfg.git_dirs)?;
-        bind(&mut argv, false, &git_dir.to_string_lossy(), None);
-    }
-    // 4a. the workmux worktrees sibling, rw, at its real host path —
-    // implicit infrastructure like the repo bind (D13), discovered
-    // per run and therefore inexpressible in configuration, exactly
-    // like the git metadata above. Bound ONLY when it exists (see
-    // [`Repo::worktrees`]): a run never creates it, so existence is
-    // the operator's trust decision; an absent sibling keeps the
-    // sandbox narrow, and `workmux add` inside it fails with a
-    // filesystem error naming the path — the honest outcome for a
-    // directory no layer declared.
-    if let Some(worktrees) = &repo.worktrees {
-        bind(&mut argv, false, &worktrees.to_string_lossy(), None);
-    }
-
+    // 4. the workspace bind — the repo, rw, at its real host path
+    // (D13), plus the git metadata directories a `.git` FILE points
+    // at outside the root (linked worktrees, submodules — review-1
+    // finding 4): git needs them rw to update refs and the index.
+    // Common dir first so a gitdir nested inside it stays reachable in
+    // the degenerate layout (a later equal-or-ancestor bind would
+    // hide it). Review-2 item 1: the pointer lives in a
+    // repo-writable file, so it is NOT a mount specification —
+    // every target must be at or below an entry of `cfg.git_dirs`,
+    // the approval list of the trusted layers, before it is bound.
+    // `/`, the home directory and anything related to a protected
+    // sandbox path are never approvable and are refused outright.
+    //
+    // In a CLONE run (workspace.md D3) the section shrinks to ONE
+    // bind: the session's clone, rw, AT THE REPO'S OWN PATH — path
+    // identity is preserved, tools keyed to the repo path work
+    // unchanged. The host repo is NOT mounted at all, the
+    // `__worktrees` sibling is NOT bound (it is operator state of
+    // the live checkout), and the git-dirs approvals do not apply
+    // either: the clone carries its own `.git` DIRECTORY, not a
+    // pointer, so there is nothing external to approve.
+    let (workspace_src, workspace_dest, implicit_rw_sources): (String, String, Vec<PathBuf>) =
+        match params.workspace {
+            Workspace::Live => {
+                bind(&mut argv, false, &root, None);
+                for git_dir in &repo.git_dirs {
+                    check_git_dir(git_dir, &cfg.git_dirs)?;
+                    bind(&mut argv, false, &git_dir.to_string_lossy(), None);
+                }
+                // 4a. the workmux worktrees sibling, rw, at its real host
+                // path — implicit infrastructure like the repo bind
+                // (D13), discovered per run and therefore inexpressible
+                // in configuration, exactly like the git metadata above.
+                // Bound ONLY when it exists (see [`Repo::worktrees`]): a
+                // run never creates it, so existence is the operator's
+                // trust decision; an absent sibling keeps the sandbox
+                // narrow, and `workmux add` inside it fails with a
+                // filesystem error naming the path — the honest outcome
+                // for a directory no layer declared.
+                if let Some(worktrees) = &repo.worktrees {
+                    bind(&mut argv, false, &worktrees.to_string_lossy(), None);
+                }
+                (
+                    root.clone(),
+                    root.clone(),
+                    std::iter::once(normalize(&root))
+                        .chain(
+                            repo.git_dirs
+                                .iter()
+                                .map(|g| normalize(&g.to_string_lossy())),
+                        )
+                        .chain(
+                            repo.worktrees
+                                .as_deref()
+                                .map(|w| normalize(&w.to_string_lossy()))
+                                .into_iter(),
+                        )
+                        .collect(),
+                )
+            }
+            Workspace::Clone { clone } => {
+                bind(&mut argv, false, &clone.to_string_lossy(), Some(&root));
+                // The clone is the ONLY writable bind of a clone run
+                // (D4) — the one HOST source the writable-set analyses
+                // start from, and the one rw source the policy-file
+                // refusal checks. It sits in the sidecar, but the bind
+                // is exactly the clone directory: it covers neither
+                // `config.toml` nor `state/` (D3, "policy-file
+                // adjacency"). The in-sandbox path of the writable tree
+                // stays the REPO's own path (D3: path identity is
+                // preserved) — source and dest differ in a clone run,
+                // which the live run's conflation of the two never
+                // showed.
+                (
+                    clone.to_string_lossy().into_owned(),
+                    root.clone(),
+                    vec![normalize(&clone.to_string_lossy())],
+                )
+            }
+        };
     // 4b. the `state-dirs` binds (docs/design/config.md D15): one rw
     // bind per declared entry — the host source synthesized from the
     // sidecar (`<sidecar>/state/<entry>`, created by the CLI before
@@ -434,21 +522,30 @@ pub fn bwrap_argv(
     // `[[mounts]]` entry may cover their dests (the hidden-mount
     // check below treats them like the repo and the git dirs), and
     // no entry may nest inside another — see [`check_state_dirs`].
-    check_state_dirs(&cfg.state_dirs)?;
-    let state_binds: Vec<(String, String)> = cfg
-        .state_dirs
-        .iter()
-        .map(|entry| {
-            (
-                repo.sidecar
-                    .join("state")
-                    .join(entry)
-                    .to_string_lossy()
-                    .into_owned(),
-                format!("{SANDBOX_HOME}/{entry}"),
-            )
-        })
-        .collect();
+    //
+    // In a CLONE run the `state-dirs` are NOT handled at all
+    // (workspace.md D4): no backing store is created, nothing is
+    // bound — per-session versus shared agent state is deliberately
+    // deferred to a follow-up bead, and scratch space stays the
+    // tmpfs home and `/tmp`, as in any run.
+    let state_binds: Vec<(String, String)> = if let Workspace::Clone { .. } = params.workspace {
+        Vec::new()
+    } else {
+        check_state_dirs(&cfg.state_dirs)?;
+        cfg.state_dirs
+            .iter()
+            .map(|entry| {
+                (
+                    repo.sidecar
+                        .join("state")
+                        .join(entry)
+                        .to_string_lossy()
+                        .into_owned(),
+                    format!("{SANDBOX_HOME}/{entry}"),
+                )
+            })
+            .collect()
+    };
     for (_src, dest) in &state_binds {
         // Defense in depth: the parser already rejects every spelling
         // that could leave the sandbox home, and a state dest is a
@@ -471,30 +568,26 @@ pub fn bwrap_argv(
     // config (this repo's own sandbox policy). The payload writing one
     // steers the NEXT run: a `git-dirs` approval can be added, the
     // `.git` pointer rewritten to match. `rw` mounts are the direct
-    // case; the repo bind and the git dirs are `rw` too, so they are
-    // checked as well — a sidecar or user config sitting inside the
+    // case; the workspace bind and the git dirs are `rw` too, so they
+    // are checked as well — a sidecar or user config sitting inside the
     // work tree is refused, not silently exposed. The worktrees
     // sibling is an rw implicit bind as well and joins the set for the
     // same reason. `ro` mounts do not count: the payload cannot write
     // through them.
-    let implicit_rw_sources = std::iter::once(normalize(&root))
-        .chain(
-            repo.git_dirs
-                .iter()
-                .map(|g| normalize(&g.to_string_lossy())),
-        )
-        .chain(
-            repo.worktrees
-                .as_deref()
-                .map(|w| normalize(&w.to_string_lossy()))
-                .into_iter(),
-        );
+    //
+    // In a CLONE run the implicit set is exactly the clone (D4: it is
+    // the only writable bind), and no configured mount can join it:
+    // every `[[mounts]]` entry is downgraded to read-only below, so
+    // the policy-file refusal holds by the existing check against
+    // the clone's source alone — the bind is exactly the clone
+    // directory (D3, "policy-file adjacency"), covering neither
+    // `config.toml` nor `state/`.
     for src in cfg
         .mounts
         .iter()
-        .filter(|m| m.mode == Mode::Rw)
+        .filter(|m| m.mode == Mode::Rw && matches!(params.workspace, Workspace::Live))
         .map(|m| normalize(&m.path))
-        .chain(implicit_rw_sources)
+        .chain(implicit_rw_sources.into_iter())
     {
         for policy in params.policy_paths {
             // Every guarded path of the policy, not just its resolved
@@ -583,15 +676,16 @@ pub fn bwrap_argv(
         // paths, so an ancestor SOURCE was the one gap.
         const DAEMON_DIR: &str = "/nix/var/nix";
         // Every effective source, not just the configured mounts:
-        // the implicit repo bind is checked too (review-3 item 2 said
-        // so explicitly). In practice a repo cannot sit there — `/`
-        // and the home tree are refused at discovery — but `/nix` or
-        // `/nix/var` are ordinary directories, and the rule is cheap.
+        // the workspace bind is checked too (review-3 item 2 said so
+        // explicitly — in a clone run that is the CLONE's source,
+        // D3). In practice a repo cannot sit there — `/` and the home
+        // tree are refused at discovery — but `/nix` or `/nix/var` are
+        // ordinary directories, and the rule is cheap.
         for src in cfg
             .mounts
             .iter()
             .map(|m| normalize(&m.path))
-            .chain(std::iter::once(normalize(&root)))
+            .chain(std::iter::once(normalize(&workspace_src)))
         {
             if src.starts_with(DAEMON_DIR) || Path::new(DAEMON_DIR).starts_with(&src) {
                 return Err(Error::DaemonUnderDeniedNetwork {
@@ -600,22 +694,45 @@ pub fn bwrap_argv(
             }
         }
     }
+    // The implicit binds the hidden-mount check guards are the
+    // workspace bind (the repo in a live run, the clone at the
+    // repo's path in a clone run — the DEST is the repo path either
+    // way, D3) plus the git dirs, the worktrees sibling and the
+    // state binds of a LIVE run; a clone run binds none of the
+    // latter three (D3/D4).
+    let (implicit_git_dirs, implicit_worktrees): (&[PathBuf], Option<&Path>) =
+        match params.workspace {
+            Workspace::Live => (&repo.git_dirs, repo.worktrees.as_deref()),
+            Workspace::Clone { .. } => (&[], None),
+        };
     check_hidden_mounts(
         &cfg.mounts,
         &root,
-        &repo.git_dirs,
-        repo.worktrees.as_deref(),
+        implicit_git_dirs,
+        implicit_worktrees,
         &state_binds,
     )?;
     check_symlinkable_dests(
         &cfg.mounts,
-        &root,
-        &repo.git_dirs,
-        repo.worktrees.as_deref(),
+        &workspace_src,
+        &workspace_dest,
+        implicit_git_dirs,
+        implicit_worktrees,
         &state_binds,
     )?;
     for m in &cfg.mounts {
-        bind(&mut argv, m.mode == Mode::Ro, &m.path, m.dest.as_deref());
+        // 5a. the forced-ro downgrade of a clone run (workspace.md
+        // D4): every `[[mounts]]` entry — rw ones included — is bound
+        // read-only, because the clone is the only writable bind of
+        // a clone run. The downgrade is silent here but not in the
+        // report (`--verbose` marks every downgraded mount) and
+        // never applies to the `--rw` flag: that one is REFUSED for a
+        // clone run before the argv is built, naming the flag and
+        // the mode — an operator who believes a directory is
+        // writable while the payload meets `EROFS` is the worse
+        // failure.
+        let ro = m.mode == Mode::Ro || matches!(params.workspace, Workspace::Clone { .. });
+        bind(&mut argv, ro, &m.path, m.dest.as_deref());
     }
 
     // 6. environment: host-forwarded first, then `[env]` (later
@@ -1297,16 +1414,19 @@ fn check_hidden_mounts(
 /// propagated in BOTH directions until nothing changes.
 fn check_symlinkable_dests(
     mounts: &[Mount],
-    repo_root: &str,
+    workspace_src: &str,
+    workspace_dest: &str,
     git_dirs: &[PathBuf],
     worktrees: Option<&Path>,
     state_binds: &[(String, String)],
 ) -> Result<(), Error> {
-    // HOST paths whose content the sandbox can write. The repo (rw by
-    // D13), the git metadata directories and the worktrees sibling
-    // (rw when it exists) start the set; an `rw` mount adds its
-    // source, because the payload writes the host path through it.
-    let mut writable_sources: Vec<PathBuf> = vec![normalize(repo_root)];
+    // HOST paths whose content the sandbox can write. The workspace
+    // bind — the repo in a live run (rw by D13), the session's clone
+    // in a clone run (D3/D4, the only writable bind) — the git
+    // metadata directories and the worktrees sibling (rw when it
+    // exists) start the set; an `rw` mount adds its source, because
+    // the payload writes the host path through it.
+    let mut writable_sources: Vec<PathBuf> = vec![normalize(workspace_src)];
     writable_sources.extend(git_dirs.iter().map(|g| normalize(&g.to_string_lossy())));
     if let Some(worktrees) = worktrees {
         let w = normalize(&worktrees.to_string_lossy());
@@ -1315,8 +1435,10 @@ fn check_symlinkable_dests(
         }
     }
     // IN-SANDBOX paths below which a dest may not land, because their
-    // content is one of the writable sources above. The repo and the
-    // git dirs are bound at their host path, so they are both.
+    // content is one of the writable sources above. The workspace
+    // bind's in-sandbox path is the repo's own path in BOTH modes
+    // (D13 for live; D3 binds the clone there, preserving path
+    // identity), and the git dirs are bound at their host paths.
     // State dirs are rw binds too — the payload persists its agent
     // state there — so their sources join the writable set and their
     // dests the in-sandbox set. The SEEDING carve-out of D14 is not
@@ -1330,7 +1452,10 @@ fn check_symlinkable_dests(
             writable_sources.push(src);
         }
     }
-    let mut writable_dests: Vec<PathBuf> = writable_sources.clone();
+    let mut writable_dests: Vec<PathBuf> = vec![normalize(workspace_dest)];
+    // The git dirs and the worktrees sibling are bound at their own
+    // host paths, so their in-sandbox paths are their sources.
+    writable_dests.extend(writable_sources.iter().skip(1).cloned());
     for (_src, dest) in state_binds {
         let dest = normalize(dest);
         if !writable_dests.contains(&dest) {
@@ -1519,6 +1644,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            workspace: Workspace::Live,
         }
     }
 

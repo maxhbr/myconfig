@@ -54,5 +54,21 @@ in
     # hand-rolled fixed environment (tests/cli.rs::spawn); `TMPDIR` and a
     # writable HOME suffice. `cargo`/`rustc` come from the stdenv set up
     # by buildRustPackage.
+    #
+    # The session-clone tests (tests/cli.rs::git_repo, workspace.md
+    # D1-D5) drive the REAL git — the creation decision probes refs
+    # and HEAD, which no stub can model — so the test phase needs it
+    # on PATH, and real git needs a committer identity and a locked
+    # config (same pattern as the gvisor tier's agent-gvisor-tests).
+    nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ pkgs.git ];
+    preCheck = ''
+      export HOME=$TMPDIR
+      export GIT_CONFIG_GLOBAL=/dev/null
+      export GIT_CONFIG_SYSTEM=/dev/null
+      export GIT_AUTHOR_NAME=mysbx-tests
+      export GIT_AUTHOR_EMAIL=mysbx-tests@invalid
+      export GIT_COMMITTER_NAME=mysbx-tests
+      export GIT_COMMITTER_EMAIL=mysbx-tests@invalid
+    '';
   });
 }

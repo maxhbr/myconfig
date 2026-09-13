@@ -21,7 +21,7 @@
 //! run. Whoever can run `mysbx --verbose` can also read both config
 //! files.
 
-use crate::bwrap::{HostEnv, Params, Payload, MUX_SOCKET_DIR, SANDBOX_HOME};
+use crate::bwrap::{HostEnv, Params, Payload, Workspace, MUX_SOCKET_DIR, SANDBOX_HOME};
 use crate::config::Mode;
 use crate::merge::Merged;
 use crate::repo::Repo;
@@ -132,19 +132,56 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         }
     ));
 
-    // Mounts, in argv order: the implicit repo bind first (config.md
-    // D13), then the worktrees sibling (implicit, when it exists),
-    // then the configured mounts in declaration order.
+    // The workspace of this run (workspace.md D1): the live repo —
+    // the default, said out loud like the multiplexer is, because
+    // "which tree does this run write" is a property of every run —
+    // or the named session's clone (D3: bound rw at the repo's own
+    // path, host repo not mounted, every configured mount forced ro
+    // by D4). The clone-creation state is the caller's business; the
+    // report describes the run as it stands.
+    match r.params.workspace {
+        Workspace::Live => {
+            p("workspace:      live — the repo itself, bound rw (the default)".to_string())
+        }
+        Workspace::Clone { clone } => p(format!(
+            "workspace:      clone run — {} bound rw at {} (the host repo is not mounted)",
+            clone.display(),
+            r.repo.root.display(),
+        )),
+    }
+
+    // Mounts, in argv order: the implicit workspace bind first (the
+    // repo in a live run, config.md D13; the session's clone at the
+    // repo's own path in a clone run, workspace.md D3), then the
+    // worktrees sibling (implicit, when it exists — a live run only,
+    // D3), then the configured mounts in declaration order. In a
+    // clone run every configured mount is forced ro (D4), and the
+    // report marks every downgraded entry — the operator must see
+    // which entries the mode narrowed, not just a changed letter.
+    let clone_run = matches!(r.params.workspace, Workspace::Clone { .. });
     p(format!(
         "mounts:         {} (in declaration order)",
-        r.merged.mounts.len() + 1 + r.repo.worktrees.iter().count()
+        r.merged.mounts.len()
+            + 1
+            + if clone_run {
+                0
+            } else {
+                r.repo.worktrees.iter().count()
+            }
     ));
-    p(format!(
-        "  rw {} -> {}  [repo, implicit]",
-        r.repo.root.display(),
-        r.repo.root.display()
-    ));
-    if let Some(worktrees) = &r.repo.worktrees {
+    match r.params.workspace {
+        Workspace::Live => p(format!(
+            "  rw {} -> {}  [repo, implicit]",
+            r.repo.root.display(),
+            r.repo.root.display()
+        )),
+        Workspace::Clone { clone } => p(format!(
+            "  rw {} -> {}  [session clone, implicit]",
+            clone.display(),
+            r.repo.root.display()
+        )),
+    }
+    if let (false, Some(worktrees)) = (clone_run, &r.repo.worktrees) {
         p(format!(
             "  rw {} -> {}  [worktrees, implicit]",
             worktrees.display(),
@@ -159,12 +196,23 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         } else {
             "sidecar config"
         };
+        // D4: a clone run downgrades every rw entry to ro. The report
+        // shows the EFFECTIVE mode and marks the downgrade, so a
+        // configured `mode = "rw"` never silently reads as if it
+        // applied.
+        let (mode, downgrade) = if clone_run && m.mode == Mode::Rw {
+            ("ro", ", downgraded — clone run")
+        } else {
+            (
+                match m.mode {
+                    Mode::Ro => "ro",
+                    Mode::Rw => "rw",
+                },
+                "",
+            )
+        };
         p(format!(
-            "  {} {} -> {}  [{layer}]",
-            match m.mode {
-                Mode::Ro => "ro",
-                Mode::Rw => "rw",
-            },
+            "  {mode} {} -> {}  [{layer}{downgrade}]",
             m.path,
             m.dest.as_deref().unwrap_or(&m.path),
         ));
@@ -175,21 +223,35 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // report must see where `$HOME` points and that it is not the host's.
     // State dirs (D15) bind subdirectories of it to sidecar-backed
     // stores, so with any declared entry the parenthetical says so
-    // instead of implying an all-ephemeral home.
-    p(if r.merged.state_dirs.is_empty() {
-        format!("home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)")
+    // instead of implying an all-ephemeral home — EXCEPT in a clone
+    // run, where the state-dirs are not handled at all (workspace.md
+    // D4): the home stays all-ephemeral and the report must not claim
+    // a persistence the run does not perform.
+    if r.merged.state_dirs.is_empty() || clone_run {
+        p(format!(
+            "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
+        ));
     } else {
-        format!(
+        p(format!(
             "home:           {SANDBOX_HOME} (tmpfs + {} state dir(s) persisted in the sidecar; the host home is not mounted)",
             r.merged.state_dirs.len(),
-        )
-    });
+        ));
+    }
 
     // State dirs (config.md D15), in declaration order: what the sandbox
     // persists across runs and where the backing store lives. They are
     // implicit binds like the repo, so they belong with the mount
-    // listing's provenance, not buried in prose.
-    if !r.merged.state_dirs.is_empty() {
+    // listing's provenance, not buried in prose. In a clone run they
+    // are OFF (workspace.md D4) — said out loud when a layer declared
+    // any, so the difference to a live run is visible instead of
+    // implied by absence.
+    if !r.merged.state_dirs.is_empty() && clone_run {
+        p(format!(
+            "state dirs:     off in a clone run ({} declared, not handled — workspace.md D4)",
+            r.merged.state_dirs.len()
+        ));
+    }
+    if !r.merged.state_dirs.is_empty() && !clone_run {
         p(format!(
             "state dirs:     {} (rw, persisted in the sidecar)",
             r.merged.state_dirs.len()
@@ -414,6 +476,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            workspace: Workspace::Live,
         };
         lines(&Report {
             repo: &repo,
@@ -515,6 +578,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            workspace: Workspace::Live,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -559,6 +623,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            workspace: Workspace::Live,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -604,6 +669,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            workspace: Workspace::Live,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -651,6 +717,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            workspace: Workspace::Live,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -695,6 +762,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            workspace: Workspace::Live,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -744,6 +812,7 @@ mod tests {
                 ca_bundle: None,
                 policy_paths: &[],
                 mux_entry: Some("/synth/bin/mysbx-mux-entry"),
+                workspace: Workspace::Live,
             };
             let report_of = |payload: &Payload| {
                 lines(&Report {
@@ -826,6 +895,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            workspace: Workspace::Live,
         };
         let payload = Payload::Shell;
         let out = lines(&Report {
@@ -875,6 +945,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            workspace: Workspace::Live,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -899,5 +970,141 @@ mod tests {
             "{joined}"
         );
         assert!(!joined.contains("executing"), "{joined}");
+    }
+
+    // ---- the clone runs of the workspace model (workspace.md D3/D4) ----------
+
+    #[test]
+    fn a_clone_run_report_names_the_workspace_and_marks_downgraded_mounts() {
+        // D3/D4 in the report: the workspace line says WHICH tree is
+        // bound (the clone, at the repo's own path) and that the host
+        // repo is not mounted; every downgraded mount is marked, the
+        // implicit bind is the session clone, and the state-dirs of
+        // the fixture are OFF in a clone run (D4) instead of claimed
+        // as persisted.
+        let (repo, mut merged, host) = fixture_report();
+        merged.state_dirs.push(".local/share/opencode".to_string());
+        let clone = PathBuf::from("/synth/repo.mysbx/clones/fix-1");
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            bin_sh: None,
+            nix_conf: None,
+            ca_bundle: None,
+            policy_paths: &[],
+            mux_entry: None,
+            workspace: crate::bwrap::Workspace::Clone { clone: &clone },
+        };
+        let joined = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: true,
+            merged: &merged,
+            user_mount_count: 1,
+            cli_mount_count: 0,
+            host_env: &host,
+            params: &params,
+            bwrap_bin: "bwrap",
+            payload: &Payload::Shell,
+            dry_run: true,
+            result: false,
+        })
+        .join("\n");
+        assert!(
+            joined.contains(
+                "workspace:      clone run — /synth/repo.mysbx/clones/fix-1 bound rw at /synth/repo (the host repo is not mounted)",
+            ),
+            "{joined}"
+        );
+        // The implicit bind is the session clone at the repo path,
+        // not the repo.
+        assert!(
+            joined.contains(
+                "  rw /synth/repo.mysbx/clones/fix-1 -> /synth/repo  [session clone, implicit]"
+            ),
+            "{joined}"
+        );
+        assert!(!joined.contains("[repo, implicit]"), "{joined}");
+        // The rw mount of the fixture is downgraded AND marked (D4 +
+        // cli.md D10), never silently narrowed.
+        assert!(
+            joined.contains(
+                "  ro /synth/shared -> /synth/shared  [user config, downgraded — clone run]"
+            ),
+            "{joined}"
+        );
+        // The ro mount keeps its mode and its plain provenance.
+        assert!(
+            joined.contains("  ro /synth/shared/sub -> /inside  [sidecar config]"),
+            "{joined}"
+        );
+        // The state dirs are OFF (D4), said out loud — and the home
+        // line does not claim the sidecar persistence a live run
+        // would show.
+        assert!(
+            joined.contains(
+                "state dirs:     off in a clone run (1 declared, not handled — workspace.md D4)"
+            ),
+            "{joined}"
+        );
+        assert!(
+            joined.contains(&format!(
+                "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
+            )),
+            "{joined}"
+        );
+        assert!(!joined.contains("persisted in the sidecar"), "{joined}");
+    }
+
+    #[test]
+    fn a_live_run_report_stays_the_live_one() {
+        // D1: the live default is untouched — the workspace line says
+        // live, the repo bind keeps its [repo, implicit] line, and an
+        // rw mount is NOT marked downgraded.
+        let (repo, merged, host) = fixture_report();
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            bin_sh: None,
+            nix_conf: None,
+            ca_bundle: None,
+            policy_paths: &[],
+            mux_entry: None,
+            workspace: Workspace::Live,
+        };
+        let joined = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: true,
+            merged: &merged,
+            user_mount_count: 1,
+            cli_mount_count: 0,
+            host_env: &host,
+            params: &params,
+            bwrap_bin: "bwrap",
+            payload: &Payload::Shell,
+            dry_run: true,
+            result: false,
+        })
+        .join("\n");
+        assert!(
+            joined.contains("workspace:      live — the repo itself, bound rw (the default)"),
+            "{joined}"
+        );
+        assert!(
+            joined.contains("rw /synth/repo -> /synth/repo  [repo, implicit]"),
+            "{joined}"
+        );
+        assert!(
+            joined.contains("rw /synth/shared -> /synth/shared  [user config]"),
+            "{joined}"
+        );
+        assert!(!joined.contains("downgraded"), "{joined}");
     }
 }
