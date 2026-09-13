@@ -44,7 +44,7 @@ repository and can therefore make the global option repository-local:
   it read-write at the identical path, and `herdr-jail-entry` writes a session
   `~/.config/herdr/config.toml` (from `herdrJailConfigCommonFile`) whose
   `[worktrees] directory` points at it, restores the built-in
-  `keys.new_worktree`, and execs `herdr --no-session`. Checkouts land in
+  `keys.new_worktree`, and execs `herdr`. Checkouts land in
   `<parent-of-repo>/<repo>__worktrees/<repo>/<branch-slug>` — the extra
   `<repo>` level is herdr's fixed `<repo-name>/<branch-slug>` suffix.
 - `modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix` —

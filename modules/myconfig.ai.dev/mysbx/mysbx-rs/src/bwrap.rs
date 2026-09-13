@@ -76,8 +76,8 @@ pub const SANDBOX_HOME: &str = "/mysbx-home";
 /// `/tmp/tmux-1000` or at a bound host directory.
 ///
 /// The value is set for EVERY session-starting choice, including the
-/// one that is not a tmux server (`herdr`, which runs monolithic and
-/// keeps its own state in the tmpfs `HOME`): one code path, and a
+/// one that is not a tmux server (`herdr`, which keeps its own socket
+/// and state under the tmpfs `HOME`): one code path, and a
 /// pane that runs plain `tmux` inside such a session lands on this
 /// private socket instead of the host default `/tmp/tmux-<uid>`.
 pub const MUX_SOCKET_DIR: &str = "/mysbx-home/.mysbx-tmux";

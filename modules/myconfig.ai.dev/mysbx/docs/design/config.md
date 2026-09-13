@@ -786,10 +786,13 @@ built, so `--dry-run` refuses it too and no `bwrap` is started.
 (`bwrap.rs::check_mux_socket`) apply unchanged: no mount `dest` at or
 below it, no `state-dirs` entry backing it. tmux, workmux and aoe are
 tmux servers and put their socket there; herdr is its own multiplexer
-and runs monolithic (`herdr --no-session`), so its socket and state
-live in the sandbox-home tmpfs, which is per-run and per-sandbox by
-construction (D14). The variable is set for herdr too, uniformly: one
-code path, and a pane running plain `tmux` inside a herdr session lands
+and keeps its own socket and state in the sandbox-home tmpfs
+(`~/.config/herdr` inside the sandbox), which is per-run and
+per-sandbox by construction (D14). (Older herdr versions ran
+monolithic via a `--no-session` flag for exactly this reason; current
+ones removed it, and the tmpfs `HOME` makes it unnecessary.) The
+variable is set for herdr too, uniformly: one code path, and a pane
+running plain `tmux` inside a herdr session lands
 on the same private socket rather than on `/tmp/tmux-<uid>`.
 
 **`run -- CMD` is unaffected** (cli.md D11): a one-shot command is
