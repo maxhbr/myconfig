@@ -21,10 +21,13 @@
 #     cannot resolve and every pane would die immediately ("no server
 #     running"). Same pin, and the same one-invocation bootstrap, as
 #     ../../myconfig.ai.workmux/jail.nix.
-#   * with a session name derived from the repo, so the mysbx sandboxes
-#     of two repositories never look like one session in a shared
-#     configuration. (Their sockets are already disjoint; the name keeps
-#     `tmux ls` readable.)
+#   * with a session name derived from the repo and the optional
+#     session name (when `--session NAME` is used), so the mysbx
+#     sandboxes of two repositories never look like one session in a
+#     shared configuration. Window mode uses
+#     `workmux-<repo-basename>`; session mode uses
+#     `workmux-<repo-basename>-<session-name>`. (Their sockets are
+#     already disjoint; the name keeps `tmux ls` readable.)
 #
 # Everything this script needs is in its own closure — it does not rely
 # on the sandbox `PATH` (`MYSBX_TOOLS_PATH`), which a host may narrow.

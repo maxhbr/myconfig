@@ -18,10 +18,13 @@
 #     fallback, because tmux's own default (`/tmp/tmux-<uid>`) would be
 #     a different, unguarded location — the very thing D16/D17 keep the
 #     socket away from.
-#   * `sessionName` — a session name derived from the repo, so the
-#     sandboxes of two repositories never look like one session in a
-#     shared configuration. (Their sockets are already disjoint; the
-#     name keeps `tmux ls` readable.)
+#   * `sessionName` — a session name derived from the repo and
+#     optionally the session name (when `--session NAME` is used), so
+#     the sandboxes of two repositories never look like one session in
+#     a shared configuration. Window mode uses
+#     `<prefix>-<repo-basename>`; session mode uses
+#     `<prefix>-<repo-basename>-<session-name>`. (Their sockets are
+#     already disjoint; the name keeps `tmux ls` readable.)
 { lib }:
 {
   # Validates `TMUX_TMPDIR` and creates `$socket_dir`. The socket FILE
@@ -46,15 +49,24 @@
     chmod 0700 "$socket_dir"
   '';
 
-  # Sets `repo_root` and `session` ("<prefix>-<repo>-<hash>"). mysbx
-  # `--chdir`s into the repo root, so `$PWD` IS the repo — no `git
-  # rev-parse` needed (and none possible in a sandbox whose git
-  # metadata a layer did not approve). The short hash keeps two
-  # checkouts with the same basename distinguishable.
+  # Sets `repo_root` and `session`. The naming scheme depends on
+  # whether a session name is provided:
+  #   * window mode (no session): `${prefix}-<repo-basename>`
+  #   * session mode: `${prefix}-<repo-basename>-<session-name>`
+  # mysbx `--chdir`s into the repo root, so `$PWD` IS the repo — no
+  # `git rev-parse` needed (and none possible in a sandbox whose git
+  # metadata a layer did not approve). The session name is passed via
+  # `MYSBX_SESSION_NAME` when `--session NAME` is used.
   sessionName = prefix: ''
     repo_root="$PWD"
-    path_hash="$(printf %s "$repo_root" | sha256sum | cut -c1-4)"
-    session="${prefix}-$(basename "$repo_root")-$path_hash"
+    repo_basename="$(basename "$repo_root")"
+    if [ -n "''${MYSBX_SESSION_NAME:-}" ]; then
+      # session mode: `mysbx-<repo>-<session-name>`
+      session="${prefix}-''$repo_basename-''${MYSBX_SESSION_NAME}"
+    else
+      # window mode: `mysbx-<repo>`
+      session="${prefix}-''$repo_basename"
+    fi
   '';
 
   # tmux resolves the pane shell from /etc/passwd, which the mysbx base
