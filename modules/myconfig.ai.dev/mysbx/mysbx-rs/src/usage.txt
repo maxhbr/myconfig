@@ -150,6 +150,9 @@ Commands:
                 code propagates unchanged, like `$EDITOR` does for
                 `mysbx edit`. With --dry-run the exact `hunk`
                 invocation is printed instead
+  gvisor-load-image
+                load the gVisor agent container image into Podman;
+                supports `--force`, `--test`, `--image <ref>`, `--help`
   version       print the version
   help          print this help
 
