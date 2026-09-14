@@ -19,7 +19,10 @@
         enable = true;
         dev = {
           opencode.enable = true;
-          pi-coding-agent.enable = true;
+          pi-coding-agent = {
+            enable = true;
+            litellmUrl = "http://localhost:4000";
+          };
 
           # The `mysbx` sandboxing CLI (modules/myconfig.ai.dev/mysbx/README.md).
           # Like the other sandbox tiers it is enabled EXPLICITLY per host and
