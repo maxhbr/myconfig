@@ -136,10 +136,14 @@ Everything below exists in at least one tier above and has no counterpart in
   gvisor tier's rootless cgroup handling — `--cgroup-manager=cgroupfs`
   + runtime flag `ignore-cgroups`, overridable via
   `MYSBX_GVISOR_CGROUP_MANAGER` / `MYSBX_GVISOR_RUNTIME_FLAGS` (bd
-  myconfig-b13). Remaining before it is production-ready: the payload
-  shell / tool PATH are host store paths the container does not mount
-  (bd myconfig-wao), and no host has exercised a full interactive
-  session yet.
+  myconfig-b13). The payload runs against the image's own userland
+  (bd myconfig-wao): the shell is the image's `/bin/bash` and the
+  `PATH` the image's `/bin:/usr/bin` (overridable via
+  `MYSBX_GVISOR_SHELL` / `MYSBX_GVISOR_TOOLS_PATH`), never the host
+  store pins the bwrap backend uses — the container mounts nothing
+  from the host `/nix/store`. Remaining before it is
+  production-ready: no host has exercised a full interactive session
+  yet.
 - **Entering the sandbox** — the primary action per `cli.md` D2.
 - **`run COMMAND` / the `--` payload split** (`cli.md` D3, D4).
 - **A credential story.** Every existing tier had to answer this and they

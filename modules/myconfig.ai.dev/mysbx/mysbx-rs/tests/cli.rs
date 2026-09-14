@@ -70,6 +70,8 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env_remove("MYSBX_GVISOR_IMAGE_ID")
         .env_remove("MYSBX_GVISOR_RUNTIME_FLAGS")
         .env_remove("MYSBX_GVISOR_CGROUP_MANAGER")
+        .env_remove("MYSBX_GVISOR_SHELL")
+        .env_remove("MYSBX_GVISOR_TOOLS_PATH")
         .env_remove("MYSBX_PODMAN")
         // Keep the host's TERM & co. out of the result: the forwarded set
         // must come only from variables the test actually sets. The list
@@ -6650,6 +6652,78 @@ fn podman_gvisor_rootless_cgroup_env_overrides_defaults() {
     assert_eq!(lines[2], "--runtime-flag");
     assert_eq!(lines[3], "ignore-cgroups");
     assert_eq!(lines[4], "--cgroup-manager=systemd");
+}
+
+#[test]
+fn podman_gvisor_payload_uses_the_image_userland_not_host_pins() {
+    // bd myconfig-wao: the podman-gvisor payload is the image's own
+    // userland — `/bin/bash` and `PATH=/bin:/usr/bin`, the agent
+    // image's OCI config — NOT the host store pins the bwrap backend
+    // reads. `MYSBX_SHELL` / `MYSBX_TOOLS_PATH` are host `/nix/store`
+    // paths this backend deliberately mounts nothing of, so a payload
+    // built from them would die with `no such file or directory`
+    // inside the container.
+    let (inv, _repo, sidecar) = fixture("podman-gvisor-image-userland", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    // The host pins are set (as the wrapper does) and must be IGNORED
+    // by this backend.
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        .env("MYSBX_SHELL", "/nix/store/aaaa-bash/bin/bash")
+        .env("MYSBX_TOOLS_PATH", "/nix/store/bbbb-tools/bin")
+        .env("MYSBX_CA_BUNDLE", "/nix/store/cccc-cacert/ca-bundle.crt")
+        .env("MYSBX_BINSH", "/nix/store/aaaa-bash/bin/sh")
+        .env("MYSBX_NIX_CONF", "/nix/store/dddd-nix.conf");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    for line in stdout.lines() {
+        assert!(
+            !line.contains("/nix/store"),
+            "no host store path may reach the podman argv: {line}"
+        );
+    }
+    let lines: Vec<&str> = stdout.lines().collect();
+    let dash = lines
+        .iter()
+        .rposition(|l| *l == "--")
+        .expect("payload separator");
+    assert_eq!(lines[dash + 1], "/bin/bash", "payload is the image shell");
+    assert!(
+        lines.contains(&"PATH=/bin:/usr/bin"),
+        "PATH is the image PATH: {stdout}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.starts_with("SSL_CERT_FILE=")),
+        "no host CA pin — the image carries its own: {stdout}"
+    );
+}
+
+#[test]
+fn podman_gvisor_multiplexer_without_image_entry_is_refused() {
+    // A multiplexer selected under podman-gvisor with no in-image
+    // entry pinned is a refused run (exit 70), the same refusal a
+    // bwrap host without that multiplexer gets — never a silent bare
+    // shell (bd myconfig-wao).
+    let (inv, _repo, sidecar) = fixture("podman-gvisor-mux-refused", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-gvisor\"\nmultiplexer = \"tmux\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        // A HOST mux entry pin is set — and must not satisfy the
+        // podman backend: a host store script cannot be the payload
+        // of a container that mounts nothing from the host store.
+        .env("MYSBX_MUX_ENTRY_TMUX", "/nix/store/eeee-tmux-entry");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(70));
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("no entry is pinned"),
+        "the refusal must name the missing pin: {stderr}"
+    );
 }
 
 #[test]
