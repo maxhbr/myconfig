@@ -93,6 +93,16 @@
     };
     environment.systemPackages = [
       pkgs.netavark
+      # Host-side gVisor (runsc): the gvisor tier registers runsc in
+      # containers.conf by its CURRENT store path
+      # (myconfig.ai.dev.gvisor-agent-sandbox's `runtimes.runsc`), and
+      # a pin bump changes that path — a container created under the
+      # old one then leaves podman erroring "runtime … is in use by a
+      # container, but is not available" on every `podman ps`. A
+      # host-side runsc keeps the registered name resolvable and the
+      # `mysbx`/`agent-gvisor` backends' `--runtime=runsc` independent
+      # of the exact pin.
+      pkgs.gvisor
     ];
   };
 }
