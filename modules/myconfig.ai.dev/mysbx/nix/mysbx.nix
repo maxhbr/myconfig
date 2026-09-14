@@ -263,6 +263,10 @@ let
   # anchors are therefore reproducible and independent of the host's
   # /etc layout.
   caBundle = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+  # The fish tab completion shipped in the package
+  # (../mysbx-rs/completions) — a nix store path, not a $src reference:
+  # `symlinkJoin` has no source directory to install from.
+  completions = ../mysbx-rs/completions/mysbx.fish;
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -283,6 +287,15 @@ symlinkJoin {
       --set MYSBX_CA_BUNDLE '${caBundle}' \
       ${muxEntryPins} \
       ${terminalPin}
+
+    # Hand-written fish tab completion (../mysbx-rs/completions, kept in
+    # sync with the CLI surface by the `mysbx-completions` check in
+    # checks.nix), the same idiom as agent-gvisor.nix. The crate stays
+    # zero-dependency: this is a plain fish script, not clap-generated.
+    # The vendor path is the one `installShellFiles --fish` uses and
+    # fish's NixOS integration collects.
+    install -Dm 0644 ${completions} \
+      $out/share/fish/vendor_completions.d/mysbx.fish
   '';
 
   meta = {
@@ -294,5 +307,6 @@ symlinkJoin {
   passthru = {
     inherit crate toolsEnv sandboxNixConf;
     caBundle = caBundle;
+    completions = completions;
   };
 }

@@ -13,6 +13,14 @@
 #                 suite hand-writes its `config.toml` and cannot see a
 #                 regression in the generator. See ./config-eval-test.nix.
 #
+#   mysbx-completions
+#                 the fish tab completion shipped by the package
+#                 (../mysbx-rs/completions/mysbx.fish, installed by
+#                 ./mysbx.nix): installed byte-for-byte, parses as fish,
+#                 and every subcommand and option of usage.txt is
+#                 completed. Same pattern as the gvisor tier's
+#                 `agent-gvisor-completions` check.
+#
 # Wired into `nix flake check` for `x86_64-linux` in `flake.nix`, following
 # ../../sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix.
 #
@@ -47,6 +55,79 @@ in
   # The generator, evaluated: what a host actually gets in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
   mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
+
+  mysbx-completions =
+    let
+      completion = ../mysbx-rs/completions/mysbx.fish;
+    in
+    pkgs.runCommand "mysbx-completions"
+      {
+        nativeBuildInputs = with pkgs; [
+          fish
+          gnugrep
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-completions: $*" >&2
+          exit 1
+        }
+
+        installed="${pkg}/share/fish/vendor_completions.d/mysbx.fish"
+        test -f "$installed" || fail "not installed at: $installed"
+
+        # the installed file is the maintained source, byte for byte
+        cmp ${completion} "$installed" || fail "installed completion differs from ${completion}"
+
+        # it must parse as fish
+        fish --no-execute "$installed" || fail "fish -n rejects the completion"
+
+        # every dispatch word of usage.txt is offered as a subcommand —
+        # the verbs of the dispatcher (src/lib.rs) plus the closed
+        # session sub-verb group (src/sessionverbs.rs, D7)
+        for sub in run gui init edit fetch merge push diff version help session; do
+          grep -q -- "-a $sub" "$installed" || fail "no completion for subcommand: $sub"
+        done
+        for sub in list destroy; do
+          grep -q -- "-a $sub" "$installed" || fail "no completion for session sub-verb: $sub"
+        done
+
+        # every option of usage.txt is completed (`-l <name>`, i.e. the
+        # `--<name>` long form), plus the verb-tail flags usage.txt
+        # documents only inside the command descriptions
+        # (`init --approve-git-dirs`, `merge --no-ff|--ff|--squash`,
+        # `session destroy --force`) and the two short flags
+        for opt in \
+          dry-run \
+          verbose \
+          multiplexer \
+          session \
+          ro \
+          rw \
+          result \
+          timeout \
+          help \
+          version \
+          approve-git-dirs \
+          no-ff \
+          ff \
+          squash \
+          force \
+        ; do
+          grep -q -- "-l $opt" "$installed" || fail "no completion for option: --$opt"
+        done
+        grep -q -- "-s h" "$installed" || fail "no completion for -h"
+        grep -q -- "-s V" "$installed" || fail "no completion for -V"
+
+        # the multiplexer values are the closed set of config.rs NAMES
+        grep -q -- "-a 'tmux workmux herdr aoe orca none'" "$installed" \
+          || fail "the multiplexer completions are not the closed set of NAMES"
+
+        # session names come from the clones/ registry (workspace.md D2)
+        grep -q 'mysbx_sessions' "$installed" || fail "no session-registry lookup"
+
+        touch "$out"
+      '';
 
   mysbx-tests = crate.overrideAttrs (old: {
     doCheck = true;
