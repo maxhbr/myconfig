@@ -40,6 +40,18 @@
     };
     date = "2026-09-05";
   };
+  pi-token-speed = {
+    pname = "pi-token-speed";
+    version = "2c7e5be62ffdc88e417394611498410acdce847d";
+    src = fetchFromGitHub {
+      owner = "gsanhueza";
+      repo = "pi-token-speed";
+      rev = "2c7e5be62ffdc88e417394611498410acdce847d";
+      fetchSubmodules = false;
+      sha256 = "sha256-5qrkxL0Ae3MhNbtNKS675Ju175EEPMCpdiWuB1UBSTQ=";
+    };
+    date = "2026-09-13";
+  };
   simple-english = {
     pname = "simple-english";
     version = "9ce426c79b1736c28af7e91f1b730e7a7cc3f468";

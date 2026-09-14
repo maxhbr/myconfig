@@ -18,6 +18,11 @@
           pi-coding-agent = {
             enable = true;
             litellmUrl = "http://localhost:4000";
+            # TPS/tokens-per-second display in the pi status bar
+            # (pi-token-speed extension, deployed to
+            # `~/.pi/agent/extensions/pi-token-speed/`). See
+            # modules/myconfig.ai.dev/programs/programs.pi-coding-agent.
+            tokenSpeed.enable = true;
           };
           claude-code.enable = true;
           codex.enable = true;

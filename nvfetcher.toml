@@ -35,6 +35,16 @@ src.git = "https://github.com/luchasarie/bro-skill"
 src.branch = "main"
 fetch.github = "luchasarie/bro-skill"
 
+# pi-token-speed extension (real-time tokens-per-second display for the
+# pi TUI status bar), consumed by
+# modules/myconfig.ai.dev/programs/programs.pi-coding-agent. Upstream has no
+# npm runtime dependencies (peer deps on pi itself are provided by pi's
+# extension loader as virtual modules), so the raw source tree is enough.
+[pi-token-speed]
+src.git = "https://github.com/gsanhueza/pi-token-speed"
+src.branch = "master"
+fetch.github = "gsanhueza/pi-token-speed"
+
 # Official LiteLLM Grafana dashboard.
 #
 # Track the tip of LiteLLM's main branch, but fetch only the dashboard JSON

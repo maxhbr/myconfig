@@ -56,6 +56,27 @@
         },
         "version": "eeb7732fc11fd47762ca84cc3fb7cc74235d7097"
     },
+    "pi-token-speed": {
+        "cargoLock": null,
+        "date": "2026-09-13",
+        "extract": null,
+        "name": "pi-token-speed",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
+            "name": null,
+            "owner": "gsanhueza",
+            "repo": "pi-token-speed",
+            "rev": "2c7e5be62ffdc88e417394611498410acdce847d",
+            "sha256": "sha256-5qrkxL0Ae3MhNbtNKS675Ju175EEPMCpdiWuB1UBSTQ=",
+            "sparseCheckout": [],
+            "type": "github"
+        },
+        "version": "2c7e5be62ffdc88e417394611498410acdce847d"
+    },
     "simple-english": {
         "cargoLock": null,
         "date": "2026-09-06",

@@ -977,6 +977,30 @@ let
   # `myconfig-*` extensions above which only use type-only imports.
   handoffExtension = "${pi-coding-agent-pkg}/lib/node_modules/pi-monorepo/examples/extensions/handoff.ts";
 
+  # `pi-token-speed` (https://github.com/gsanhueza/pi-token-speed): a
+  # third-party pi extension that displays real-time tokens-per-second
+  # (TPS), time-to-first-token (TTFT) and color-coded speed tiers in the
+  # pi status bar while a response is streaming, plus a `/tps` settings
+  # command. The upstream source is pinned by nvfetcher
+  # (`nvfetcher.toml` / `_sources/generated.nix`, like the skills sources);
+  # upstream has no npm runtime dependencies (its peer deps on pi itself are
+  # provided by pi's extension loader as virtual modules), so the fetched
+  # source tree is deployed as-is - no `npm install` required.
+  #
+  # Deployed as a multi-file global extension at
+  # `~/.pi/agent/extensions/pi-token-speed/` (pi loads `*/index.ts`; the
+  # sibling `./src/...` imports resolve via relative specifiers). Vendor
+  # files upstream does not need at runtime (tests, package.json,
+  # tsconfig) are dropped for a clean read-only extension directory.
+  # Upstream targets pi >= 0.85.1 (peerDependencies), matching the pinned
+  # `pkgs.nixos-unstable.pi-coding-agent` here.
+  tokenSpeedSrc = (pkgs.callPackage ../../../../_sources/generated.nix { }).pi-token-speed.src;
+
+  tokenSpeedExtension = pkgs.runCommand "pi-token-speed-extension" { } ''
+    mkdir -p $out
+    cp -r ${tokenSpeedSrc}/index.ts ${tokenSpeedSrc}/src $out/
+  '';
+
   piBwrap = callLib ../../fns/bubblewrap-simple-app.nix {
     name = "pi";
     pkg = pkgs.nixos-unstable.pi-coding-agent;
@@ -1411,6 +1435,25 @@ in
         '';
         default = null;
       };
+
+      # pi-token-speed (https://github.com/gsanhueza/pi-token-speed): a
+      # third-party extension that displays real-time tokens-per-second
+      # (TPS) in the pi status bar while responses stream. Disabled by
+      # default: it is upstream code this repo does not control, so hosts
+      # opt in explicitly (e.g. hosts/host.f13/ai.f13.nix).
+      tokenSpeed.enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Deploy the pi-token-speed extension
+          (https://github.com/gsanhueza/pi-token-speed, pinned via
+          `_sources/generated.nix`) to `~/.pi/agent/extensions/pi-token-speed/`.
+          It shows real-time tokens-per-second and time-to-first-token in
+          the pi status bar and adds a `/tps` settings command. Configure
+          it via the `tokenSpeed` section in `~/.pi/agent/settings.json`
+          (see the upstream README).
+        '';
+      };
     };
   };
   config = lib.mkIf config.myconfig.ai.dev.pi-coding-agent.enable {
@@ -1470,6 +1513,14 @@ in
           # activation for hosts that disable the plugin.
           (lib.optionalAttrs (cfg.litellmUrl != "") {
             ".pi/agent/extensions/myconfig-litellm-models.ts".source = litellmModelsExtension;
+          })
+          # pi-token-speed: third-party TPS status-bar extension (see the
+          # option above and the `tokenSpeedExtension` let binding).
+          # `optionalAttrs` (not `mkIf`) so the `home.file.<path>` attribute
+          # is absent entirely on hosts that disable it.
+          (lib.optionalAttrs cfg.tokenSpeed.enable {
+            ".pi/agent/extensions/pi-token-speed/index.ts".source = "${tokenSpeedExtension}/index.ts";
+            ".pi/agent/extensions/pi-token-speed/src".source = "${tokenSpeedExtension}/src";
           })
         ];
         home.packages = [
