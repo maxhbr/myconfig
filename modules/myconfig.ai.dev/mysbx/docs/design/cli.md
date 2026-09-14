@@ -46,7 +46,7 @@ is still discovered); plain `init` never touches the config at all.
 
 Subcommands are single verbs (`init`, `run`, `edit`, `version`, `help`). No
 nested command trees — two exceptions: the `session` noun group
-(`session list`, `session destroy`), a closed set defined by
+(`session list`, `session destroy`, `session hunk`), a closed set defined by
 [workspace.md](./workspace.md) D7, and the `worktree` noun group
 (`worktree list`, `worktree diff`, `worktree hunk`), a closed set defined by
 [worktree.md](./worktree.md) W1. Rationale: the surface is small and
@@ -63,8 +63,9 @@ machine-readable-outcome form, `gui [ARG...]` (D15), the handoff verbs
 ([workspace.md](./workspace.md) D6 — the host-side git plumbing between
 the host repo and a session's clone; no sandbox is started, the session
 is the one positional and `--dry-run` prints the git commands), the
-session noun group `session list` / `session destroy NAME [--force]`
-([workspace.md](./workspace.md) D7 — the first D3 exception above), the
+session noun group `session list` / `session destroy NAME [--force]` /
+`session hunk NAME` ([workspace.md](./workspace.md) D7 — the first D3
+exception above), the
 session noun group's worktree sibling `worktree list` /
 `worktree diff NAME` / `worktree hunk NAME`
 ([worktree.md](./worktree.md) W1 — the second D3 exception: read-only

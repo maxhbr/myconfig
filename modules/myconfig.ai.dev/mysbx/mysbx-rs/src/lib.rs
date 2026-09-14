@@ -198,7 +198,7 @@ pub fn run(args: Vec<String>) -> i32 {
         Some("push") if flags.verbose => reject_verbose("push"),
         Some("diff") if flags.verbose => reject_verbose("diff"),
         // The session noun group (workspace.md D7) — the one CLOSED
-        // nested-verb exception to cli.md D3, two verbs, not an open
+        // nested-verb exception to cli.md D3, three verbs, not an open
         // tree. Host-side like the handoff verbs: no sandbox is
         // started, the repo is the one the cwd resolves to, `--dry-run`
         // prints the exact commands (cli.md D9) and `--verbose` is
@@ -236,17 +236,20 @@ pub fn run(args: Vec<String>) -> i32 {
             match rest.get(1).map(String::as_str) {
                 Some("list") => sessionverbs::list(&rest[2..], flags.dry_run),
                 Some("destroy") => sessionverbs::destroy(&rest[2..], flags.dry_run),
-                // The group is closed: a third verb is a decision,
+                Some("hunk") => sessionverbs::hunk(&rest[2..], flags.dry_run),
+                // The group is closed: a fourth verb is a decision,
                 // not a given — unknown members are usage errors
-                // naming the two that exist (D7).
+                // naming the three that exist (D7).
                 Some(other) => {
                     eprintln!("mysbx session: unknown session verb: {other}");
-                    eprintln!("  the session group is closed: list, destroy (workspace.md D7)");
+                    eprintln!(
+                        "  the session group is closed: list, destroy, hunk (workspace.md D7)"
+                    );
                     eprintln!("try `mysbx --help`");
                     2
                 }
                 None => {
-                    eprintln!("mysbx session: a verb is required: list or destroy");
+                    eprintln!("mysbx session: a verb is required: list, destroy or hunk");
                     eprintln!("try `mysbx --help`");
                     2
                 }

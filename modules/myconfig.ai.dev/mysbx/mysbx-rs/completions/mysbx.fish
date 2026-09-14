@@ -162,7 +162,7 @@ function __mysbx_expects_name
             and return 0
             return 1
         case session
-            test "$t[2]" = destroy
+            test "$t[2]" = destroy -o "$t[2]" = hunk
             and not set -q t[3]
             and return 0
             return 1
@@ -312,13 +312,14 @@ complete -c mysbx -f -n '__mysbx_no_verb' -a push -d 'Push the session branch th
 complete -c mysbx -f -n '__mysbx_no_verb' -a diff -d 'Three-dot diff of the host HEAD against the session branch'
 complete -c mysbx -f -n '__mysbx_no_verb' -a version -d 'Print the version'
 complete -c mysbx -f -n '__mysbx_no_verb' -a help -d 'Print this help'
-complete -c mysbx -f -n '__mysbx_no_verb' -a session -d 'The session group: list | destroy'
+complete -c mysbx -f -n '__mysbx_no_verb' -a session -d 'The session group: list | destroy | hunk'
 complete -c mysbx -f -n '__mysbx_no_verb' -a worktree -d 'The worktree group: list | diff | hunk'
 
 # The session sub-verbs (workspace.md D7 — a closed group, not an open
 # tree).
 complete -c mysbx -f -n '__mysbx_expects_session_verb' -a list -d 'The sessions of the current repo (the clones/ registry)'
 complete -c mysbx -f -n '__mysbx_expects_session_verb' -a destroy -d 'Remove the named session clone (guarded removal)'
+complete -c mysbx -f -n '__mysbx_expects_session_verb' -a hunk -d 'The session diff in the interactive hunk viewer'
 
 # The worktree sub-verbs (docs/design/worktree.md W1 — a closed
 # group, like the session one).
@@ -368,9 +369,9 @@ complete -c mysbx -f -n '__mysbx_merge_named' -a '--' -d 'Everything after is gi
 # unmerged-work refusal).
 complete -c mysbx -n '__mysbx_in_destroy' -l force -d 'Destroy even when the session branch holds unmerged work'
 
-# The NAME position of the handoff verbs and of `session destroy`:
-# the existing sessions of the registry (a new NAME is still typable —
-# a completion offers, it never forbids).
+# The NAME position of the handoff verbs and of `session destroy` /
+# `session hunk`: the existing sessions of the registry (a new NAME is
+# still typable — a completion offers, it never forbids).
 complete -c mysbx -f -n '__mysbx_expects_name' -a '(__mysbx_sessions)' -d 'Existing session (the first --session run creates one)'
 
 # The NAME position of `worktree diff` / `worktree hunk`: the host

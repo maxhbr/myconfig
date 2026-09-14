@@ -1,12 +1,13 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
 //! The session noun group of the workspace model
-//! (docs/design/workspace.md, D7): `session list` / `session destroy`
-//! — the ONE closed nested-verb exception to cli.md D3's "single
-//! verbs, no nested command trees" rule. Two verbs, not an open tree:
-//! a third is a decision, not a given.
+//! (docs/design/workspace.md, D7): `session list` /
+//! `session destroy` / `session hunk` — the ONE closed
+//! nested-verb exception to cli.md D3's "single verbs, no nested
+//! command trees" rule. Three verbs, not an open tree: a fourth is a
+//! decision, not a given.
 //!
-//! Neither verb starts a sandbox. Both operate on the repo the cwd
+//! Neither verb starts a sandbox. All operate on the repo the cwd
 //! resolves to (cli.md D1 — there is no `--repo` flag, like every
 //! other verb), and the D9 inside-clone refusal of
 //! [`crate::repo::resolve_cwd`] fires for them too: the session verbs
@@ -33,6 +34,13 @@
 //!   `fetch` (D6) is NOT deleted: it is the operator's imported copy,
 //!   and deleting it silently would contradict the unmerged-work
 //!   guard this verb exists to enforce.
+//! - **`session hunk NAME`** — the diff of `mysbx diff NAME` (D6's
+//!   implicit fetch, then the THREE-DOT range
+//!   `HEAD...refs/heads/agent/mysbx/NAME`) in the interactive `hunk`
+//!   viewer, exec'd like `$EDITOR` is for `mysbx edit` (cli.md D12,
+//!   the `worktree hunk` precedent of docs/design/worktree.md W4):
+//!   the tool replaces this process, owns the terminal, and its
+//!   exit code propagates unchanged (cli.md D8).
 //!
 //! "The host repo does not have a commit" is answered by REACHABILITY
 //! from the host's own refs — a commit the host fetched into a
@@ -44,7 +52,8 @@
 //!
 //! The argv vectors the `--dry-run` contract prints are pure
 //! functions of the [`Session`](crate::session::Session)
-//! ([`count_argv`], [`contains_argv`], [`remove_argv`]) — the same
+//! ([`count_argv`], [`contains_argv`], [`remove_argv`],
+//! [`hunk_argv`]) — the same
 //! data-where-it-can-be discipline as
 //! [`crate::session::Session::plan`] and the handoff builders of
 //! [`crate::handoff`] — so the tests assert against the same builders
@@ -59,6 +68,7 @@ use std::path::{Path, PathBuf};
 /// (the same pairing rule usage.txt follows, cli.md D5).
 const USAGE_LIST: &str = "usage: mysbx session list";
 const USAGE_DESTROY: &str = "usage: mysbx session destroy NAME [--force]";
+const USAGE_HUNK: &str = "usage: mysbx session hunk NAME";
 
 /// The column widths of `session list`'s table — the gvisor
 /// precedent's shape (`agent-gvisor list`), narrowed to the three
@@ -602,6 +612,162 @@ pub fn destroy(args: &[String], dry_run: bool) -> i32 {
     0
 }
 
+/// `hunk diff HEAD...refs/heads/agent/mysbx/NAME` — the interactive
+/// review of the session's diff, the same THREE-DOT range
+/// [`crate::handoff::diff_argv`] shows (D6): the changes on the
+/// session branch since it diverged from the host's HEAD, not the
+/// host's own drift. The invocation mysbx execs, run with the HOST
+/// repo as the working directory — the fetched session branch lives
+/// there, like the `git -C <repo> diff` of `mysbx diff` (D6); the
+/// `--dry-run` block prints it without the cwd note, which is an
+/// environment fact, not an argument.
+pub fn hunk_argv(session: &Session) -> Vec<String> {
+    vec![
+        "diff".into(),
+        format!("HEAD...refs/heads/{}", session.branch),
+    ]
+}
+
+/// `mysbx session hunk NAME` (D7): the interactive `hunk` review of
+/// the session's diff — the implicit fetch of `mysbx diff` (D6:
+/// `git -C <repo> fetch --no-tags <clone> <refspec>`), then the same
+/// three-dot range in the viewer, exec'd like `$EDITOR` is for
+/// `mysbx edit` (cli.md D12, the `worktree hunk` precedent of
+/// docs/design/worktree.md W4) — the tool replaces this process,
+/// owns the terminal, and its exit code propagates unchanged
+/// (cli.md D8).
+///
+/// The refusal order mirrors [`destroy`]'s first three steps: the
+/// NAME grammar at parse time (`2`), the repo resolution (the D9
+/// inside-clone refusal, `70`), then the registry (D2) — a missing
+/// clone is the unknown-session refusal (`70`), the same words
+/// `destroy` and the handoff verbs use. A debris entry — a clone
+/// without `.git` — has no branch to fetch and no diff to review:
+/// the refusal names the fact (`70`).
+pub fn hunk(args: &[String], dry_run: bool) -> i32 {
+    // 1. the one positional NAME — exactly one, no flags, no `--`
+    // (the same closed shape as the handoff verbs, workspace.md D6).
+    let name = match parse_hunk(args) {
+        Ok(n) => n,
+        Err(code) => return code,
+    };
+
+    // 2. the host repo (cli.md D1). The D9 inside-clone refusal of
+    // the resolver fires here too: the session verbs belong to the
+    // HOST side of a session.
+    let repo = match crate::repo::resolve_cwd() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    let session = Session::new(&repo, &name);
+
+    // 3. the registry (D2): no clone directory ⇒ no session ⇒ the
+    // unknown-session refusal, the same words `destroy` and the
+    // handoff verbs use.
+    if !session.clone_exists() {
+        eprintln!(
+            "mysbx: unknown session: {name} — the clone {} does not exist",
+            session.clone.display()
+        );
+        eprintln!("  start one with `mysbx run --session {name} -- CMD`");
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+
+    // Debris — an entry without `.git` — has no session branch and
+    // no diff: the fetch would fail on a broken clone, and the
+    // refusal names the fact instead.
+    if !session.clone.join(".git").exists() {
+        eprintln!(
+            "mysbx: refusing to hunk session {name}: {} carries no .git — it is debris of an interrupted creation, not a clone to diff (workspace.md D7)",
+            session.clone.display()
+        );
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+
+    // 4. the implicit fetch of `mysbx diff` (D6): the reviewed ref is
+    // current — the exact fetched host-local ref
+    // `refs/heads/agent/mysbx/NAME`, never a stale or absent one.
+    let fetch = crate::handoff::fetch_argv(&repo, &session);
+
+    // 5. `--dry-run` (cli.md D9): the exact commands the hunk would
+    // run — the fetch first, then the `hunk` invocation, one
+    // argument per line, the executable first — and nothing runs
+    // (a dry run of an interactive tool shows the work, not the
+    // result). The refusals above already ran, like `destroy`'s.
+    if dry_run {
+        print_commands(&[fetch]);
+        let argv = hunk_argv(&session);
+        println!("hunk");
+        for arg in &argv {
+            println!("{arg}");
+        }
+        return 0;
+    }
+
+    // 6. the fetch, then the exec. Progress lines go to stderr like
+    // the diagnostics (cli.md D9: stdout belongs to results — the
+    // viewer's own output IS the answer the operator asked for).
+    eprintln!(
+        "mysbx: fetching branch {} from the session clone into {}",
+        session.branch,
+        repo.root.display()
+    );
+    match crate::handoff::run_git(&fetch) {
+        Some(0) => {}
+        _ => {
+            eprintln!(
+                "mysbx: fetch from the session clone failed; the clone may be missing or broken, or the host branch {} may have diverged from the session branch (workspace.md D6)",
+                session.branch
+            );
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    }
+    let mut cmd = std::process::Command::new("hunk");
+    cmd.args(hunk_argv(&session)).current_dir(&repo.root);
+    // `exec` like the sandbox path and `mysbx edit`: the viewer
+    // replaces this process, so it owns the terminal and its exit
+    // code propagates unchanged (cli.md D8). A `hunk` that cannot
+    // be exec'd is the plain runtime failure of the exec (worktree
+    // W4).
+    use std::os::unix::process::CommandExt;
+    let e = cmd.exec();
+    eprintln!("mysbx: cannot exec hunk: {e}");
+    crate::EXIT_INFRASTRUCTURE
+}
+
+/// Parse the `session hunk` tail: exactly one NAME, no flags and no
+/// `--` (the verb has no payload for one to separate); anything else
+/// is a usage error (`2`) naming the accepted shape. The NAME
+/// grammar is enforced here, at parse time, like every schema edge
+/// (workspace.md D2, cli.md D8).
+fn parse_hunk(args: &[String]) -> Result<String, i32> {
+    let name = match args.first() {
+        Some(n) => n.clone(),
+        None => {
+            eprintln!("mysbx session hunk: a session name is required");
+            eprintln!("try `mysbx --help`");
+            return Err(2);
+        }
+    };
+    if !crate::session::valid_name(&name) {
+        eprintln!("mysbx session hunk: invalid session name `{name}`");
+        eprintln!(
+            "  the grammar is [A-Za-z0-9][A-Za-z0-9._-]{{0,63}} — no slashes, no leading dot"
+        );
+        eprintln!("try `mysbx --help`");
+        return Err(2);
+    }
+    if let Some(arg) = args.get(1) {
+        eprintln!("mysbx session hunk: unexpected argument: {arg}");
+        eprintln!("{USAGE_HUNK}");
+        return Err(2);
+    }
+    Ok(name)
+}
+
 /// Parse the `session destroy` tail: exactly one NAME plus at most
 /// one `--force`, either order; anything else is a usage error (`2`)
 /// naming the accepted shape. The NAME grammar is enforced here, at
@@ -841,6 +1007,19 @@ mod tests {
     // ---- the destroy tail parser ------------------------------------
 
     #[test]
+    fn the_hunk_invocation_is_the_diff_range() {
+        // D6's three-dot range in the interactive viewer — the same
+        // range `mysbx diff` shows, `HEAD...refs/heads/<branch>`.
+        assert_eq!(
+            hunk_argv(&synth_session()),
+            vec![
+                "diff".to_string(),
+                "HEAD...refs/heads/agent/mysbx/fix-1".to_string(),
+            ]
+        );
+    }
+
+    #[test]
     fn destroy_takes_one_name_and_at_most_one_force() {
         assert_eq!(
             parse_destroy(&["fix-1".to_string()]).unwrap(),
@@ -869,6 +1048,29 @@ mod tests {
         ] {
             let owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
             assert!(parse_destroy(&owned).is_err(), "{args:?}");
+        }
+    }
+
+    // ---- the hunk tail parser ----------------------------------------
+
+    #[test]
+    fn hunk_takes_exactly_one_name() {
+        let name = "fix-1".to_string();
+        assert_eq!(parse_hunk(&[name.clone()]), Ok(name));
+    }
+
+    #[test]
+    fn hunk_usage_errors() {
+        for args in [
+            vec!["fix-1", "extra"],
+            vec!["a/b"],
+            vec!["-x"],
+            vec!["--"],
+            vec!["fix-1", "--force"],
+            vec![],
+        ] {
+            let owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+            assert!(parse_hunk(&owned).is_err(), "{args:?}");
         }
     }
 }
