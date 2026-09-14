@@ -58,7 +58,6 @@ let
     "Qwen3.8-27B-UD-Q6_K_XL-instruct-general-tasks"
     "Qwen3.8-27B-UD-Q6_K_XL-instruct-reasoning-tasks"
     "Qwen3.8-27B-UD-Q6_K_XL-precise-coding-tasks"
-    "TheDrummer_Skyfall-31B-v4.2-Q6_K"
     "gemma-4-26B-A4B-it-UD-Q6_K_XL"
     "gemma-4-26B-A4B-it-UD-Q8_K_XL"
     "gemma-4-26B-A4B-it-qat-q4_0"
