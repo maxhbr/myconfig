@@ -11,6 +11,7 @@
 let
   osconfig = config;
   system = pkgs.stdenv.hostPlatform.system;
+  cfg = config.myconfig.ai.dev.pi-coding-agent;
   callLib = file: import file { inherit lib pkgs; };
   callJailLib =
     file:
@@ -379,8 +380,25 @@ let
   # rewrite to localhost for in-host clients.
   litellmHost =
     if osconfig.services.litellm.host == "0.0.0.0" then "localhost" else osconfig.services.litellm.host;
-  litellmProvider = lib.optional osconfig.services.litellm.enable (mkOpenAiCompatibleProvider {
-    key = "${osconfig.networking.hostName}-litellm";
+
+  # The litellm provider id is shared between the build-time registration
+  # (`litellmProviderStatic` below) and the runtime/dynamic litellm-models
+  # extension (`litellmModelsExtension`, driven by `cfg.litellmUrl`): both
+  # register `${hostname}-litellm`. Exactly ONE of them owns the id at a
+  # time: when dynamic discovery is enabled (`cfg.litellmUrl != ""`), the
+  # build-time provider is dropped from `allProviders` entirely and the
+  # extension registers the full provider config (including models fetched
+  # at runtime). pi merges `registerProvider` calls per field, so a split
+  # registration (static extension contributing `baseUrl` + dynamic one the
+  # models) would race on extension load order; a single owner avoids that
+  # and any duplicate-provider conflicts.
+  litellmProviderKey = "${osconfig.networking.hostName}-litellm";
+
+  # Static (build-time) litellm provider registration: the full baked model
+  # list. Only used when `cfg.litellmUrl == ""` (dynamic model discovery
+  # disabled) — see `litellmProvider` below.
+  litellmProviderStatic = mkOpenAiCompatibleProvider {
+    key = litellmProviderKey;
     name = "LiteLLM (${osconfig.networking.hostName})";
     baseUrl = "http://${litellmHost}:${toString osconfig.services.litellm.port}/v1";
     # `model_list` contains one entry per DEPLOYMENT; a model group
@@ -390,7 +408,13 @@ let
     # `model_name`. Deduplicate so pi registers each model once.
     models = lib.unique (lib.map (m: m.model_name) osconfig.services.litellm.settings.model_list);
     inherit contextWindowLookup;
-  });
+  };
+
+  # When the dynamic litellm-models extension owns the provider id, the
+  # build-time registration is skipped entirely (single-owner rule above).
+  litellmProvider = lib.optional (
+    osconfig.services.litellm.enable && cfg.litellmUrl == ""
+  ) litellmProviderStatic;
 
   llamaSwapProvider = lib.optional osconfig.services.llama-swap.enable (mkOpenAiCompatibleProvider {
     key = "llama-swap";
@@ -472,6 +496,235 @@ let
         for (const builtinId of builtinProviderIds) {
           pi.registerProvider(builtinId, { models: [] });
         }
+      }
+    '';
+
+  # Generate a TypeScript extension that discovers the litellm proxy's
+  # model list at RUNTIME via GET {litellmUrl}/v1/models (the
+  # OpenAI-compatible model list litellm serves) instead of baking it into
+  # the derivation at eval time. Deployed only when `cfg.litellmUrl != ""`.
+  # See the bead `myconfig-99z` and the option
+  # `myconfig.ai.dev.pi-coding-agent.litellmUrl` below.
+  #
+  # Design (pi 0.85.x extension API, docs/extensions.md):
+  #   * The extension factory is ASYNC: pi awaits it before session_start,
+  #     so the models fetched at load time are available to `--list-models`,
+  #     `/model` and `settings.defaultModel` resolution at startup. This is
+  #     the documented pattern for "dynamically discovering available
+  #     models".
+  #   * The provider config also carries `refreshModels`, which pi calls
+  #     during model catalog refresh (e.g. when `/model` opens, or via
+  #     `pi update --models`); the returned list replaces the extension's
+  #     models without persisting anything (we pass no `persist` publication,
+  #     keeping `~/.pi/agent/models-store.json` clean and the list truly
+  #     dynamic).
+  #   * `/litellm-refresh` re-fetches on demand: pi has no public periodic
+  #     refresh API, so "dynamic update" = at every startup, at `/model`
+  #     catalog refresh, and via the explicit command. That covers changes on
+  #     the proxy side without rebuilding the nix packaging.
+  #   * The extension is the ONLY registrant of the `${hostname}-litellm`
+  #     provider id when active (see the single-owner comment at
+  #     `litellmProvider`), so there are no duplicate-provider conflicts with
+  #     the build-time `pi-providers.ts` registration.
+  #   * Robustness: any fetch/parse failure is logged as a warning and the
+  #     provider stays registered with zero models — pi keeps running. In
+  #     `print`/`json` mode (no UI) warnings go to stderr instead of
+  #     `ctx.ui.notify`.
+  #   * Context-window metadata: litellm's /v1/models carries
+  #     `max_input_tokens` (context) and `max_output_tokens` per model (it
+  #     does NOT serve model_info there — that is /model/info). Both fields
+  #     are OPTIONAL in the OpenAI schema; a missing `max_input_tokens` falls
+  #     back to the same conservative 128k default the build-time path uses,
+  #     a missing `max_output_tokens` falls back to the same
+  #     min(contextWindow/4, 64k) derivation. No silent guessing beyond the
+  #     documented fallback.
+  #
+  #   * Headless smoke test (validated for bd myconfig-99z):
+  #       nix build the extension:
+  #         nix build --impure --expr '(builtins.getFlake (toString ./.)).nixosConfigurations.test-f13.config.home-manager.users.mhuber.home.file.".pi/agent/extensions/myconfig-litellm-models.ts".source'
+  #       then, in an empty dir with an isolated PI_CODING_AGENT_DIR:
+  #         PI_CODING_AGENT_DIR=/tmp/pi-agent pi --list-models -e <ext.ts>
+  #           -> `[litellm-models] registered N model(s) … (dynamic)` + the
+  #              fetched models under provider `<hostname>-litellm`.
+  #         sed the BASE_URL to a dead port -> pi still starts, logs
+  #           `could not fetch …; registered provider … with no models`,
+  #           exit 0 (graceful degradation).
+  #         pi -p --no-session --provider <hostname>-litellm --model <id> \
+  #           -e <ext.ts> "say pong" -> real completion through a
+  #           dynamically discovered model.
+  litellmModelsExtension =
+    let
+      # `apiKey` accepts a literal or an env-var reference (`$ENV` /
+      # `${ENV}`). A literal "dummy" matches the build-time registration for
+      # keyless litellm deployments; with `litellmApiKeyEnv` set, the key is
+      # resolved from that env var at request time (never stored in the
+      # nix derivation).
+      apiKeyConfig =
+        if cfg.litellmApiKeyEnv != null then "\"$''${cfg.litellmApiKeyEnv}\"" else "\"dummy\"";
+    in
+    pkgs.writeText "pi-litellm-models.ts" ''
+      // Auto-generated by myconfig.ai.dev.pi-coding-agent. Do not edit by hand.
+      //
+      // Dynamic litellm model discovery (bd myconfig-99z): fetches
+      // GET {BASE_URL}/models at pi startup (async factory - pi awaits it
+      // before session_start), registers the litellm provider with the
+      // fetched model list, re-fetches on pi model-catalog refresh
+      // (`refreshModels`) and on the `/litellm-refresh` command. Zero
+      // hardcoded model names: the model list is whatever the proxy serves
+      // at runtime. Proxy-side changes are picked up by restarting pi,
+      // reopening /model, or running /litellm-refresh - no nix rebuild
+      // involved.
+      import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+      const PROVIDER_ID = "${litellmProviderKey}";
+      const PROVIDER_NAME = "LiteLLM (${osconfig.networking.hostName})";
+      const BASE_URL = "${cfg.litellmUrl}/v1";
+      // Same shape as the build-time registration in myconfig-providers.ts:
+      // keyless litellm deployments use a dummy key (litellm ignores it) and
+      // no Authorization header. When `litellmApiKeyEnv` is set in the
+      // generating module, the value is `$<ENV>` instead: pi resolves the
+      // env var at request time and sends it as the bearer token, so the
+      // key never enters the nix store.
+      const API_KEY: string = ${apiKeyConfig};
+      // Keyless loopback proxies need no Authorization header. With an
+      // env-var key, send it as `Authorization: Bearer <key>` like any
+      // OpenAI-compatible client.
+      const AUTH_HEADER: boolean = ${if cfg.litellmApiKeyEnv != null then "true" else "false"};
+
+      interface LitellmModelEntry {
+        id: string;
+        max_input_tokens?: number;
+        max_output_tokens?: number;
+      }
+
+      // Conservative fallbacks, mirroring the build-time defaults in the
+      // generating Nix module (`mkOpenAiCompatibleProvider` /
+      // `deriveMaxOutputTokens`): 128k context; output budget =
+      // min(context/4, 64k).
+      const FALLBACK_CONTEXT_WINDOW = 131072;
+      const FALLBACK_MAX_OUTPUT = 65536;
+
+      function toPiModel(entry: LitellmModelEntry) {
+        const contextWindow =
+          typeof entry.max_input_tokens === "number" && entry.max_input_tokens > 0
+            ? entry.max_input_tokens
+            : FALLBACK_CONTEXT_WINDOW;
+        const maxTokens =
+          typeof entry.max_output_tokens === "number" && entry.max_output_tokens > 0
+            ? entry.max_output_tokens
+            : Math.min(Math.floor(contextWindow / 4), FALLBACK_MAX_OUTPUT);
+        return {
+          id: entry.id,
+          name: entry.id,
+          reasoning: false,
+          input: ["text"] as const,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow,
+          maxTokens,
+        };
+      }
+
+      async function fetchModels(signal: AbortSignal): Promise<LitellmModelEntry[]> {
+        const response = await fetch(BASE_URL + "/models", { signal });
+        if (!response.ok) {
+          throw new Error("litellm /v1/models returned HTTP " + response.status);
+        }
+        const payload = (await response.json()) as { data?: LitellmModelEntry[] };
+        const models = Array.isArray(payload.data) ? payload.data : [];
+        return models.filter((m) => typeof m?.id === "string" && m.id.length > 0);
+      }
+
+      function log(message: string) {
+        // Headless (print/json/rpc startup) surfaces have no ctx.ui yet;
+        // stderr always works and keeps the failure diagnosable.
+        process.stderr.write("[litellm-models] " + message + "\n");
+      }
+
+      function providerConfig(models: ReturnType<typeof toPiModel>[]) {
+        return {
+          name: PROVIDER_NAME,
+          baseUrl: BASE_URL,
+          api: "openai-completions" as const,
+          apiKey: API_KEY,
+          authHeader: AUTH_HEADER,
+          models,
+        };
+      }
+
+      export default async function (pi: ExtensionAPI) {
+        // Startup fetch. pi awaits async factories before session_start, so
+        // the fetched models are available to /model, --list-models and
+        // default-model resolution. A failure here must NOT brick the
+        // session: register the provider with zero models and continue.
+        let models: ReturnType<typeof toPiModel>[] = [];
+        let startupError: string | undefined;
+        try {
+          models = (await fetchModels(AbortSignal.timeout(10_000))).map(toPiModel);
+        } catch (error) {
+          startupError = error instanceof Error ? error.message : String(error);
+        }
+        pi.registerProvider(PROVIDER_ID, {
+          ...providerConfig(models),
+          // Re-fetch on pi model-catalog refresh (e.g. the /model picker,
+          // `pi update --models`). Called in a restore phase with
+          // `allowNetwork: false` first: returning `undefined` there keeps
+          // the current (startup-fetched) list - an empty array would be
+          // truthy and would REPLACE the models with none. Nothing is
+          // persisted (no `context.publish({ persist })`), so the next
+          // startup re-fetches anyway.
+          refreshModels: async (context: any) => {
+            if (!context.allowNetwork || context.signal.aborted) {
+              return undefined;
+            }
+            const entries = await fetchModels(context.signal);
+            return entries.map(toPiModel);
+          },
+        });
+        if (startupError === undefined) {
+          log("registered " + models.length + " model(s) from " + BASE_URL + " (dynamic)");
+        } else {
+          log(
+            "could not fetch " + BASE_URL + "/models (" + startupError + "); " +
+            "registered provider \"" + PROVIDER_ID + "\" with no models; " +
+            "retry via /litellm-refresh"
+          );
+        }
+
+        // Explicit in-session refresh: force a targeted catalog refresh of
+        // just this provider through pi's model registry (same code path
+        // as the /model picker), which calls the `refreshModels` callback
+        // above and keeps the previous list on failure.
+        pi.registerCommand("litellm-refresh", {
+          description: "Re-fetch the litellm model list from /v1/models",
+          handler: async (_args: string, ctx: any) => {
+            try {
+              const result = await ctx.modelRegistry.refresh({
+                providers: [PROVIDER_ID],
+                allowNetwork: true,
+                force: true,
+                signal: AbortSignal.timeout(10_000),
+              });
+              if (result.aborted) {
+                throw new Error("refresh timed out");
+              }
+              const errors = Array.from(result.errors.entries());
+              if (errors.length > 0) {
+                throw new Error(errors.map(([id, error]) => id + ": " + error.message).join("; "));
+              }
+              const count = ctx.modelRegistry
+                .getAll()
+                .filter((model: any) => model.provider === PROVIDER_ID).length;
+              const note = "refreshed: " + count + " model(s) from " + BASE_URL;
+              if (ctx?.hasUI) ctx.ui.notify("litellm-models: " + note, "info");
+              log(note);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              const note = "refresh failed (" + message + "); keeping previous model list";
+              if (ctx?.hasUI) ctx.ui.notify("litellm-models: " + note, "warning");
+              log(note);
+            }
+          },
+        });
       }
     '';
 
@@ -1085,7 +1338,79 @@ in
 {
   options.myconfig = with lib; {
     ai.dev.pi-coding-agent = {
-      enable = mkEnableOption "myconfig.ai.dev.pi-coding-agent";
+      enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          pi coding agent, its wrappers (pi/piBwrap, agent-bubblewrap-pi,
+          agent-qemu-pi, worktree variants) and the generated pi
+          extensions (providers, jail marker, subagent/handoff examples).
+
+          When a litellm proxy is configured
+          (`services.litellm.enable`), the litellm provider's model list is
+          discovered DYNAMICALLY at pi runtime via
+          `myconfig.ai.dev.pi-coding-agent.litellmUrl` (generated
+          `myconfig-litellm-models.ts` extension: GET {url}/v1/models at
+          startup, on catalog refresh and via the `/litellm-refresh`
+          command) — see `litellmUrl` and the bead `myconfig-99z`. Set
+          `litellmUrl = ""` to fall back to the build-time baked model
+          list.
+        '';
+      };
+
+      # Dynamic litellm model discovery (bd myconfig-99z). When non-empty,
+      # the generated `myconfig-litellm-models.ts` extension is deployed and
+      # owns the `${hostname}-litellm` provider: it fetches
+      # GET {url}/v1/models at pi startup (and on catalog refresh / the
+      # `/litellm-refresh` command) and registers the models it finds — no
+      # build-time baking of litellm model lists. The build-time provider
+      # registration (`pi-providers.ts`) is skipped for litellm in that case,
+      # so the two never conflict.
+      litellmUrl = mkOption {
+        type = types.str;
+        description = ''
+          Base URL of an OpenAI-compatible litellm proxy whose model list
+          pi discovers at RUNTIME via `GET {url}/v1/models` (generated
+          `myconfig-litellm-models.ts` extension). The model list is never
+          baked into the derivation; proxy-side changes appear after a pi
+          restart, a model-catalog refresh or the `/litellm-refresh`
+          command — no nix rebuild involved.
+
+          Empty string (default) disables the dynamic plugin and keeps the
+          build-time litellm provider registration (the full model list
+          evaluated from `services.litellm.settings.model_list` at nix
+          eval time).
+        '';
+        default =
+          if osconfig.services.litellm.enable then
+            "http://${
+              if osconfig.services.litellm.host == "0.0.0.0" then "localhost" else osconfig.services.litellm.host
+            }:${toString osconfig.services.litellm.port}"
+          else
+            "";
+        defaultText = literalExpression "(http://<services.litellm.host>:<services.litellm.port> when services.litellm.enable, \"\" otherwise)";
+      };
+
+      # Optional name of an environment variable that carries the litellm
+      # proxy's API key. pi's `apiKey` config accepts `$ENV` references and
+      # resolves them at request time, so the key never enters the store.
+      # Null (default) registers the literal "dummy" key — correct for the
+      # keyless loopback-only deployments this repo configures (see
+      # hosts/shared.litellm.proxy.nix: no master_key configured).
+      litellmApiKeyEnv = mkOption {
+        type = types.nullOr types.str;
+        description = ''
+          Name of an environment variable holding the litellm proxy's API
+          key. The generated extension registers `$<litellmApiKeyEnv>` as
+          the provider `apiKey`, which pi resolves from the environment at
+          request time (and sends as the Authorization header).
+
+          Null (default) registers the literal dummy key, matching the
+          build-time provider registration for keyless litellm
+          deployments.
+        '';
+        default = null;
+      };
     };
   };
   config = lib.mkIf config.myconfig.ai.dev.pi-coding-agent.enable {
@@ -1136,6 +1461,16 @@ in
           subagentExtensionFiles
           subagentAgentFiles
           subagentPromptFiles
+          # Dynamic litellm model discovery (bd myconfig-99z): deployed
+          # ONLY when `litellmUrl != ""`; it then solely owns the
+          # `${hostname}-litellm` provider id (see `litellmProvider`).
+          # `optionalAttrs` (not `mkIf` on `.source`): with `mkIf` the
+          # `home.file.<path>` attribute would still be declared while its
+          # `.source` is left undefined, which breaks home-manager
+          # activation for hosts that disable the plugin.
+          (lib.optionalAttrs (cfg.litellmUrl != "") {
+            ".pi/agent/extensions/myconfig-litellm-models.ts".source = litellmModelsExtension;
+          })
         ];
         home.packages = [
           pkgs.nixos-unstable.pi-coding-agent
