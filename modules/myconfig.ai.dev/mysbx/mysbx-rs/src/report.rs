@@ -62,9 +62,20 @@ pub struct Report<'a> {
     /// were actually set).
     pub host_env: &'a HostEnv,
     pub params: &'a Params<'a>,
-    /// The backend binary that would be executed (`MYSBX_BWRAP` after
-    /// its fallback).
+    /// The backend binary that would be executed (`MYSBX_BWRAP` /
+    /// `MYSBX_PODMAN` after their fallbacks).
     pub bwrap_bin: &'a str,
+    /// The configured backend name (`bubblewrap` or `podman-gvisor`).
+    /// The report labels the backend line with it (`bwrap:` /
+    /// `podman:`) — the label is what an operator greps for, and a
+    /// podman run claiming a `bwrap:` binary would lie.
+    pub backend: &'a str,
+    /// The container image of a podman-gvisor run
+    /// (`MYSBX_GVISOR_IMAGE`). `None` on bubblewrap, where the line
+    /// is not printed at all — a bwrap run has no image, and printing
+    /// `(none)` for it would suggest a missing pin instead of an
+    /// inapplicable one.
+    pub image: Option<&'a str>,
     pub payload: &'a Payload,
     /// Whether this run stops before `exec` — said out loud, so the
     /// report never claims a command ran that did not.
@@ -315,7 +326,19 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         }
     }
 
-    p(format!("bwrap:          {}", r.bwrap_bin));
+    // The backend binary, labeled by the backend itself: `bwrap:` for
+    // the bubblewrap backend, `podman:` for podman-gvisor (which also
+    // names its image — the container the run starts is as much a
+    // property of the run as the binary a bwrap run execs).
+    match r.backend {
+        "podman-gvisor" => {
+            p(format!("podman:         {}", r.bwrap_bin));
+            if let Some(image) = r.image {
+                p(format!("image:          {image}"));
+            }
+        }
+        _ => p(format!("bwrap:          {}", r.bwrap_bin)),
+    }
     p(format!("shell:          {}", r.params.shell));
     p(format!("tools PATH:     {}", r.params.tools_path));
     // Review-2 item 3: the host's /etc/nix/nix.conf is never mounted
@@ -491,6 +514,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "/synth/bin/bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload,
             dry_run,
             result: false,
@@ -593,6 +618,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload: &Payload::Shell,
             dry_run: true,
             result: false,
@@ -638,6 +665,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload: &Payload::Shell,
             dry_run: true,
             result: false,
@@ -684,6 +713,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload: &Payload::Shell,
             dry_run: false,
             result: false,
@@ -732,6 +763,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload: &Payload::Shell,
             dry_run: true,
             result: false,
@@ -777,6 +810,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload: &Payload::Shell,
             dry_run: true,
             result: false,
@@ -829,6 +864,8 @@ mod tests {
                     host_env: &host,
                     params: &params,
                     bwrap_bin: "bwrap",
+                    backend: "bubblewrap",
+                    image: None,
                     payload,
                     dry_run: true,
                     result: false,
@@ -912,6 +949,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "/synth/bin/bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload: &payload,
             dry_run: true,
             result: false,
@@ -961,6 +1000,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload: &Payload::Command(vec!["ls".into()]),
             dry_run: false,
             result: true,
@@ -1009,6 +1050,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload: &Payload::Shell,
             dry_run: true,
             result: false,
@@ -1089,6 +1132,8 @@ mod tests {
             host_env: &host,
             params: &params,
             bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
             payload: &Payload::Shell,
             dry_run: true,
             result: false,

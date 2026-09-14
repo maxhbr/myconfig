@@ -6504,3 +6504,128 @@ fn worktree_diff_of_a_fresh_worktree_is_empty() {
     assert!(stdout.trim().is_empty(), "no diff: {stdout}");
     assert!(stderr.contains("workmux-base record"), "{stderr}");
 }
+
+// Tests for the `gvisor-load-image` subcommand
+#[test]
+fn gvisor_load_image_help_shows_usage() {
+    // The --help flag prints usage and exits 0
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-help", &[]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["gvisor-load-image", "--help"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("Usage:"), "stdout: {stdout}");
+    assert!(stdout.contains("gvisor-load-image"), "stdout: {stdout}");
+    assert!(stdout.contains("--force"), "stdout: {stdout}");
+    assert!(stdout.contains("--test"), "stdout: {stdout}");
+    assert!(stdout.contains("--image"), "stdout: {stdout}");
+}
+
+#[test]
+fn gvisor_load_image_unknown_option_is_usage_error() {
+    // Unknown options are usage errors (exit 2)
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-unknown", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["gvisor-load-image", "--unknown"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("unknown option"), "stderr: {stderr}");
+}
+
+#[test]
+fn gvisor_load_image_repeats_flag_is_usage_error() {
+    // Repeated flags are usage errors
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-repeat", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["gvisor-load-image", "--force", "--force"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("repeated flag"), "stderr: {stderr}");
+}
+
+#[test]
+fn gvisor_load_image_verbose_is_refused() {
+    // --verbose is refused (no sandbox is started)
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-verbose", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--verbose", "gvisor-load-image"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(
+        stderr.contains("--verbose is not valid"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn gvisor_load_image_dry_run_is_refused() {
+    // --dry-run is refused (no sandbox is started)
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-dry", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run", "gvisor-load-image"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(
+        stderr.contains("--dry-run is not valid"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn gvisor_load_image_image_requires_value() {
+    // --image without a value is a usage error
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-image-val", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["gvisor-load-image", "--image"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(
+        stderr.contains("--image requires a value"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn gvisor_load_image_with_image_ref() {
+    // --image with a reference (non-tarball) reports state
+    // Since we can't actually load in tests, we just check it doesn't crash
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-ref", &[]);
+    let (code, _, stderr) = run_binary_with(
+        &inv,
+        &["gvisor-load-image", "--image", "localhost/test:latest"],
+    );
+    // Will fail because podman isn't available or image doesn't exist, but should fail gracefully
+    // Exit code 70 for infrastructure error is expected when podman isn't available
+    assert!(
+        code == 0 || code == 70,
+        "expected 0 or 70, got {code}; stderr: {stderr}"
+    );
+}
+
+#[test]
+fn gvisor_load_image_rejects_session_flag() {
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-session", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--session", "test", "gvisor-load-image"]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("--session is not valid with `gvisor-load-image"));
+}
+
+#[test]
+fn gvisor_load_image_rejects_result_flag() {
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-result", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--result", "gvisor-load-image"]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("--result is not valid with `gvisor-load-image"));
+}
+
+#[test]
+fn gvisor_load_image_rejects_timeout_flag() {
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-timeout", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--timeout", "5", "gvisor-load-image"]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("--timeout is not valid with `gvisor-load-image"));
+}
+
+#[test]
+fn gvisor_load_image_rejects_ro_flag() {
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-ro", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--ro", "/tmp", "gvisor-load-image"]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("--ro is not valid with `gvisor-load-image"));
+}
+
+#[test]
+fn gvisor_load_image_rejects_rw_flag() {
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-rw", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--rw", "/tmp", "gvisor-load-image"]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("--rw is not valid with `gvisor-load-image"));
+}

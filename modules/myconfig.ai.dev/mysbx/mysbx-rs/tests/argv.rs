@@ -16,7 +16,9 @@
 use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload, Workspace, SANDBOX_HOME};
 use mysbx::config::{Mode, Mount, Multiplexer};
 use mysbx::merge::Merged;
+use mysbx::podman_gvisor::{podman_run_argv, Params as PodmanParams};
 use mysbx::repo::Repo;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -3257,4 +3259,361 @@ fn session_name_env_works_for_all_multiplexers() {
             .expect("MYSBX_SESSION_NAME should be set");
         assert_eq!(argv[i + 1], "fix-1", "{mux}");
     }
+}
+
+// ---- podman-gvisor backend tests --------------------------------------------
+
+/// A synthetic podman-gvisor params.
+fn podman_params() -> PodmanParams<'static> {
+    PodmanParams {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        bin_sh: None,
+        nix_conf: None,
+        ca_bundle: None,
+        policy_paths: &[],
+        mux_entry: None,
+        workspace: Workspace::Live,
+        image: "localhost/agent-gvisor:latest",
+        runtime_flags: &[],
+        ignore_cgroups: false,
+        network_spec: None,
+        pids_limit: None,
+        memory: None,
+        cpus: None,
+    }
+}
+
+/// A podman-gvisor base config.
+fn podman_base(network: bool) -> Merged {
+    Merged {
+        backend: Some("podman-gvisor".into()),
+        network,
+        mounts: Vec::new(),
+        env: BTreeMap::new(),
+        git_dirs: Vec::new(),
+        state_dirs: Vec::new(),
+        multiplexer: Multiplexer::None,
+    }
+}
+
+#[test]
+fn podman_golden_minimal_config() {
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    assert_golden("podman-minimal.txt", &argv);
+}
+
+#[test]
+fn podman_golden_one_ro_mount() {
+    let mut cfg = podman_base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data/refs", None, Mode::Ro));
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    assert_golden("podman-ro-mount.txt", &argv);
+}
+
+#[test]
+fn podman_golden_one_rw_mount() {
+    let mut cfg = podman_base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data/cache", None, Mode::Rw));
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    assert_golden("podman-rw-mount.txt", &argv);
+}
+
+#[test]
+fn podman_golden_network_false() {
+    let mut params = podman_params();
+    params.network_spec = Some("none");
+
+    let argv = podman_run_argv(
+        &podman_base(false),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_golden("podman-network-false.txt", &argv);
+    // Network false should set network_spec to "none"
+    // Verify --network and none appear consecutively
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--network" && w[1] == "none"),
+        "argv should contain --network none consecutively: {argv:?}"
+    );
+}
+
+#[test]
+fn podman_golden_state_dirs() {
+    let mut cfg = podman_base(true);
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    cfg.state_dirs.push(".local/state/opencode".to_string());
+    cfg.mounts.push(make_mount(
+        "/synth/data/configs",
+        Some("/inside/x"),
+        Mode::Ro,
+    ));
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    assert_golden("podman-state-dirs.txt", &argv);
+}
+
+#[test]
+fn podman_golden_env_entry() {
+    let mut cfg = podman_base(true);
+    cfg.env.insert("EDITOR".into(), "repo-nvim".into());
+    cfg.env.insert("PROJECT".into(), "demo".into());
+    let host = host_env(&[
+        ("TERM", "xterm-256color"),
+        ("COLORTERM", "truecolor"),
+        ("LANG", "C.UTF-8"),
+        ("EDITOR", "host-nvim"),
+    ]);
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host,
+        &podman_params(),
+    )
+    .unwrap();
+    assert_golden("podman-env-entry.txt", &argv);
+}
+
+#[test]
+fn podman_golden_ca_bundle_pin() {
+    let mut params = podman_params();
+    params.ca_bundle = Some("/nix/store/aaaa-nss-cacert/etc/ssl/certs/ca-bundle.crt");
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_golden("podman-ca-bundle-pin.txt", &argv);
+}
+
+#[test]
+fn podman_golden_clone_session() {
+    let cfg = podman_base(true);
+    let mut repo = synth_repo();
+    repo.worktrees = None; // Clone mode doesn't bind worktrees
+    let mut params = podman_params();
+    params.workspace = Workspace::Clone {
+        clone: Path::new("/synth/repo.mysbx/clones/test"),
+    };
+    let argv = podman_run_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
+    assert_golden("podman-clone-session.txt", &argv);
+}
+
+#[test]
+fn podman_no_run_no_host_home_beyond_declared_mounts() {
+    let mut cfg = podman_base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data/refs", None, Mode::Ro));
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+
+    // Check that no host home paths appear
+    let text = argv.join(" ");
+    assert!(!text.contains("/home/"), "no host home path: {text}");
+    assert!(!text.contains("$HOME"), "no literal $HOME: {text}");
+
+    // Verify structure: only declared mounts and implicit binds
+    let mount_indices: Vec<usize> = argv
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.as_str() == "--mount")
+        .map(|(i, _)| i)
+        .collect();
+
+    // Extract all mount destinations
+    let mount_dests: Vec<&str> = mount_indices
+        .iter()
+        .filter_map(|&i| {
+            if i + 1 < argv.len() {
+                argv.get(i + 1).map(|s| s.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Verify protected paths are not mount destinations
+    for dest in &mount_dests {
+        assert!(
+            !dest.starts_with("/home/"),
+            "mount destination {dest} should not be under /home/"
+        );
+        assert_ne!(*dest, "/", "root should not be a mount destination");
+    }
+}
+
+#[test]
+fn podman_mount_order_is_preserved() {
+    let cfg = Merged {
+        backend: Some("podman-gvisor".into()),
+        network: true,
+        mounts: vec![
+            make_mount("/synth/data/outer", None, Mode::Ro),
+            make_mount("/synth/other", None, Mode::Rw),
+        ],
+        env: BTreeMap::new(),
+        git_dirs: Vec::new(),
+        state_dirs: Vec::new(),
+        multiplexer: Multiplexer::None,
+    };
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    // Check that mounts appear in order (podman uses --mount with combined strings)
+    let outer = argv
+        .iter()
+        .position(|x| x.contains("src=/synth/data/outer"))
+        .expect("mount for /synth/data/outer not found in argv");
+    let nested = argv
+        .iter()
+        .position(|x| x.contains("src=/synth/other"))
+        .expect("mount for /synth/other not found in argv");
+    assert!(
+        outer < nested,
+        "the earlier declared mount must be bound first (outer at {outer}, nested at {nested})"
+    );
+}
+
+#[test]
+fn podman_nested_state_dirs_are_refused() {
+    let mut cfg = podman_base(true);
+    cfg.state_dirs.push(".local/share".to_string());
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    let err = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, mysbx::podman_gvisor::Error::StateDirNesting { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn podman_golden_with_resource_limits() {
+    let mut params = podman_params();
+    params.pids_limit = Some(Cow::from("100"));
+    params.memory = Some(Cow::from("2g"));
+    params.cpus = Some(Cow::from("1.5"));
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_golden("podman-resource-limits.txt", &argv);
+}
+
+#[test]
+fn podman_cgroups_ignored_skips_limits() {
+    // When ignore_cgroups=true, resource limits should NOT be applied
+    let mut params = podman_params();
+    params.pids_limit = Some(Cow::from("100"));
+    params.memory = Some(Cow::from("2g"));
+    params.cpus = Some(Cow::from("1.5"));
+    params.ignore_cgroups = true;
+
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+
+    // Verify resource limit flags are NOT present
+    assert!(
+        !argv.iter().any(|a| a == "--pids-limit"),
+        "--pids-limit should not appear when cgroups are ignored"
+    );
+    assert!(
+        !argv.iter().any(|a| a == "--memory"),
+        "--memory should not appear when cgroups are ignored"
+    );
+    assert!(
+        !argv.iter().any(|a| a == "--cpus"),
+        "--cpus should not appear when cgroups are ignored"
+    );
+}
+
+#[test]
+fn podman_with_runtime_flags() {
+    let mut params = podman_params();
+    let runtime_flags = vec![
+        "--log-level=debug".to_string(),
+        "ignore-cgroups".to_string(),
+    ];
+    params.runtime_flags = &runtime_flags;
+
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+
+    // Runtime flags should appear in argv (exact placement depends on implementation)
+    // For now, just verify they're present somewhere
+    let text = argv.join(" ");
+    assert!(
+        text.contains("--log-level=debug"),
+        "runtime flags should be in argv: {text}"
+    );
 }

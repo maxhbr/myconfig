@@ -27,7 +27,9 @@
 pub mod bwrap;
 pub mod config;
 pub mod handoff;
+pub mod loadimage;
 pub mod merge;
+pub mod podman_gvisor;
 pub mod repo;
 pub mod report;
 pub mod result;
@@ -159,6 +161,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "diff"
                         | "session"
                         | "worktree"
+                        | "gvisor-load-image"
                 ) =>
         {
             eprintln!(
@@ -255,6 +258,20 @@ pub fn run(args: Vec<String>) -> i32 {
                 }
             }
         }
+        // The run-scoped flags mean nothing here either: `--dry-run`
+        // would promise side-effect-freeness while the verb's whole job
+        // is a side effect (loading an image into the local store), and
+        // `--verbose` has no run to report on. Refused like on the other
+        // non-run verbs (usage error, exit 2).
+        Some("gvisor-load-image") if flags.any() => {
+            eprintln!(
+                "mysbx: {} is not valid with `gvisor-load-image`",
+                flags.first_name()
+            );
+            eprintln!("try `mysbx --help`");
+            2
+        }
+        Some("gvisor-load-image") => loadimage::run(&rest[1..]),
         Some("fetch") => handoff::verb(&rest[1..], handoff::Kind::Fetch, flags.dry_run),
         Some("merge") => handoff::verb(&rest[1..], handoff::Kind::Merge, flags.dry_run),
         Some("push") => handoff::verb(&rest[1..], handoff::Kind::Push, flags.dry_run),
@@ -1212,23 +1229,23 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     }
 
     // 4. the backend is explicit, never auto-detected (cli.md D7): a
-    // silently downgraded isolation level would be a security bug. The MVP
-    // accepts exactly `bubblewrap`.
-    match merged.backend.as_deref() {
-        Some("bubblewrap") => {}
+    // silently downgraded isolation level would be a security bug.
+    // The MVP implements `bubblewrap`; phase 2 adds `podman-gvisor`.
+    let backend = match merged.backend.as_deref() {
+        Some("bubblewrap" | "podman-gvisor") => merged.backend.as_deref().unwrap(),
         Some(other) => {
             eprintln!(
-                "mysbx: unsupported backend `{other}` — the MVP implements only `bubblewrap`"
+                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`"
             );
             return EXIT_INFRASTRUCTURE;
         }
         None => {
             eprintln!(
-                "mysbx: no backend configured — set `backend = \"bubblewrap\"` in the user or sidecar config"
+                "mysbx: no backend configured — set `backend = \"bubblewrap\"` or `backend = \"podman-gvisor\"` in the user or sidecar config"
             );
             return EXIT_INFRASTRUCTURE;
         }
-    }
+    };
 
     // 4a. the session clone (workspace.md D2): the FIRST `--session`
     // run creates it — the one deliberate exception to "a run creates
@@ -1342,7 +1359,17 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     .filter(|(exists, _)| *exists)
     .map(|(_, path)| trusted_policy(path))
     .collect();
-    let params = bwrap::Params {
+    // Build argv based on backend
+    // Also determine workspace for the report
+    let workspace = match &session {
+        Some(s) => bwrap::Workspace::Clone { clone: &s.clone },
+        None => bwrap::Workspace::Live,
+    };
+    // The report renders the common run parameters (shell, tool PATH,
+    // pins) through the bwrap-shaped `Params` — every backend shares
+    // those fields, so one struct serves both, and the backend-specific
+    // extras (the container image) travel as separate fields below.
+    let report_params = bwrap::Params {
         shell: &shell,
         tools_path: &tools_path,
         bin_sh: bin_sh.as_deref(),
@@ -1350,28 +1377,98 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         ca_bundle: ca_bundle.as_deref(),
         policy_paths: &policy_paths,
         mux_entry: mux_entry.as_deref(),
-        // The workspace of this run (workspace.md D1): the live repo
-        // — the default — or the session's clone (D3/D4). The argv
-        // builder branches on it; a run without `--session` passes
-        // `Live` and gets today's argv, byte for byte.
-        workspace: match &session {
-            Some(s) => bwrap::Workspace::Clone { clone: &s.clone },
-            None => bwrap::Workspace::Live,
-        },
+        workspace: workspace.clone(),
     };
-    let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
-        Ok(a) => a,
-        // Review-2 item 4: a config that cannot be laid out safely is an
-        // ordinary runtime failure — `mysbx:` on stderr, exit 1 — like
-        // the merge errors above, never a Rust panic.
-        Err(e) => {
-            eprintln!("mysbx: {e}");
-            return EXIT_INFRASTRUCTURE;
+    let (backend_bin, argv, image) = match backend {
+        "bubblewrap" => {
+            let params = bwrap::Params {
+                shell: &shell,
+                tools_path: &tools_path,
+                bin_sh: bin_sh.as_deref(),
+                nix_conf: nix_conf.as_deref(),
+                ca_bundle: ca_bundle.as_deref(),
+                policy_paths: &policy_paths,
+                mux_entry: mux_entry.as_deref(),
+                workspace: workspace.clone(),
+            };
+            let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            };
+            let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
+            (bwrap_bin, argv, None::<String>)
         }
+        "podman-gvisor" => {
+            use std::borrow::Cow;
+
+            // For podman-gvisor, we need different params
+            // Read configuration from environment variables (matching bubblewrap pattern)
+            let gvisor_image = env_or("MYSBX_GVISOR_IMAGE", "localhost/agent-gvisor:latest");
+
+            // Runtime flags: space-separated list from MYSBX_GVISOR_RUNTIME_FLAGS
+            // Example: "ignore-cgroups --log-level=debug"
+            let runtime_flags_raw = env_opt("MYSBX_GVISOR_RUNTIME_FLAGS").unwrap_or_default();
+            let runtime_flags: Vec<String> = runtime_flags_raw
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            // Resource limits (only applied when cgroups are enabled)
+            // Using Cow to handle both borrowed and owned strings
+            let pids_limit = env_opt("MYSBX_GVISOR_PIDS_LIMIT").map(Cow::from);
+            let memory = env_opt("MYSBX_GVISOR_MEMORY").map(Cow::from);
+            let cpus = env_opt("MYSBX_GVISOR_CPUS").map(Cow::from);
+
+            // Cgroups handling: when ignore-cgroups flag is set, skip resource limits
+            let ignore_cgroups = runtime_flags.iter().any(|f| f == "ignore-cgroups");
+
+            // Network spec: explicit "none" when network is denied, otherwise podman default (shared)
+            let pasta_spec = env_opt("MYSBX_GVISOR_PASTA_SPEC");
+            let network_spec: Option<&str> = if !merged.network {
+                Some("none")
+            } else {
+                pasta_spec.as_deref()
+            };
+
+            let params = podman_gvisor::Params {
+                shell: &shell,
+                tools_path: &tools_path,
+                bin_sh: bin_sh.as_deref(),
+                nix_conf: nix_conf.as_deref(),
+                ca_bundle: ca_bundle.as_deref(),
+                policy_paths: &policy_paths,
+                mux_entry: mux_entry.as_deref(),
+                workspace: match &session {
+                    Some(s) => crate::bwrap::Workspace::Clone { clone: &s.clone },
+                    None => crate::bwrap::Workspace::Live,
+                },
+                // Podman-gvisor specific params
+                image: &gvisor_image,
+                runtime_flags: &runtime_flags,
+                ignore_cgroups,
+                network_spec,
+                pids_limit,
+                memory,
+                cpus,
+            };
+            let argv = match podman_gvisor::podman_run_argv(
+                &merged, &repo, &payload, &host_env, &params,
+            ) {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            };
+            let podman_bin = env_or("MYSBX_PODMAN", "podman");
+            (podman_bin, argv, Some(gvisor_image))
+        }
+        _ => unreachable!(),
     };
-    // The Nix wrapper (item 6) pins the binary via MYSBX_BWRAP; the
-    // fallback is a plain PATH lookup so `cargo run` works unwrapped.
-    let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
 
     // 6. the `--verbose` report (cli.md D10), BEFORE the argv and before
     // the exec: it describes the run that is about to happen, and every
@@ -1389,8 +1486,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             user_mount_count,
             cli_mount_count,
             host_env: &host_env,
-            params: &params,
-            bwrap_bin: &bwrap_bin,
+            params: &report_params,
+            bwrap_bin: &backend_bin,
+            backend,
+            image: image.as_deref(),
             payload: &payload,
             dry_run,
             result: mode == RunMode::Result,
@@ -1409,14 +1508,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         // `MYSBX_BWRAP` was read only after the early return). Golden
         // tests compare bytes and `mysbx run --dry-run -- ls | wc -l`
         // stays meaningful — one line more.
-        println!("{bwrap_bin}");
+        println!("{backend_bin}");
         for arg in &argv {
             println!("{arg}");
         }
         return 0;
     }
 
-    let mut cmd = std::process::Command::new(&bwrap_bin);
+    let mut cmd = std::process::Command::new(&backend_bin);
     cmd.args(&argv);
     match mode {
         RunMode::Exec => {
@@ -1425,7 +1524,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // returns on failure, with the error as its return value.
             use std::os::unix::process::CommandExt;
             let e = cmd.exec();
-            eprintln!("mysbx: cannot exec {bwrap_bin}: {e}");
+            eprintln!("mysbx: cannot exec {backend_bin}: {e}");
             EXIT_INFRASTRUCTURE
         }
         RunMode::Result => run_with_result(
