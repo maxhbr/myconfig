@@ -3184,3 +3184,77 @@ fn live_mounts_are_unchanged_by_the_workspace_enum() {
         "{pairs:?}"
     );
 }
+
+// ---- session name derivation for multiplexer target naming ----
+
+#[test]
+fn window_mode_sets_no_session_name_env() {
+    // Window mode (Live workspace) does not set MYSBX_SESSION_NAME.
+    // The entry script will use `mysbx-<repo-basename>` as the tmux
+    // session name.
+    let mut cfg = base(true);
+    cfg.multiplexer = Multiplexer::Tmux;
+    let mut p = params();
+    p.mux_entry = Some("/synth/bin/mysbx-tmux-entry");
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
+    // TMUX_TMPDIR is set, but MYSBX_SESSION_NAME is not.
+    let keys = setenv_keys(&argv);
+    assert_eq!(keys, vec!["HOME", "PATH", "TMUX_TMPDIR"]);
+    assert!(!argv.iter().any(|a| a == "MYSBX_SESSION_NAME"));
+}
+
+#[test]
+fn session_mode_sets_session_name_env() {
+    // Session mode (Clone workspace) sets MYSBX_SESSION_NAME extracted
+    // from the clone path. The entry script will use
+    // `mysbx-<repo-basename>-<session-name>` as the tmux session name.
+    let mut cfg = base(true);
+    cfg.multiplexer = Multiplexer::Tmux;
+    let mut p = clone_params();
+    p.mux_entry = Some("/synth/bin/mysbx-tmux-entry");
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
+    // TMUX_TMPDIR and MYSBX_SESSION_NAME are set.
+    let keys = setenv_keys(&argv);
+    assert_eq!(
+        keys,
+        vec!["HOME", "PATH", "TMUX_TMPDIR", "MYSBX_SESSION_NAME"]
+    );
+    let i = argv
+        .iter()
+        .position(|a| a == "MYSBX_SESSION_NAME")
+        .expect("MYSBX_SESSION_NAME should be set");
+    // The session name is extracted from the clone path
+    // `/synth/repo.mysbx/clones/fix-1` → `fix-1`
+    assert_eq!(argv[i + 1], "fix-1");
+}
+
+#[test]
+fn session_name_env_works_for_all_multiplexers() {
+    // All session-starting multiplexers get the session name env when
+    // in session mode.
+    for mux in [
+        Multiplexer::Tmux,
+        Multiplexer::Workmux,
+        Multiplexer::Herdr,
+        Multiplexer::Aoe,
+        Multiplexer::Orca,
+    ] {
+        let (entry, _) = mux_case(mux);
+        let mut cfg = base(true);
+        cfg.multiplexer = mux;
+        let mut p = clone_params();
+        p.mux_entry = Some(entry);
+        let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
+        let keys = setenv_keys(&argv);
+        assert_eq!(
+            keys,
+            vec!["HOME", "PATH", "TMUX_TMPDIR", "MYSBX_SESSION_NAME"],
+            "{mux}"
+        );
+        let i = argv
+            .iter()
+            .position(|a| a == "MYSBX_SESSION_NAME")
+            .expect("MYSBX_SESSION_NAME should be set");
+        assert_eq!(argv[i + 1], "fix-1", "{mux}");
+    }
+}

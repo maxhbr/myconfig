@@ -792,6 +792,17 @@ pub fn bwrap_argv(
         argv.push("--setenv".into());
         argv.push("TMUX_TMPDIR".into());
         argv.push(MUX_SOCKET_DIR.into());
+        // Pass the session name to the entry script for tmux session
+        // naming. In window mode (Live workspace) no session name is
+        // set; in session mode (Clone workspace) extract the name from
+        // the clone path `<repo>.mysbx/clones/NAME`.
+        if let Workspace::Clone { clone } = params.workspace {
+            if let Some(session_name) = clone.file_name().and_then(|n| n.to_str()) {
+                argv.push("--setenv".into());
+                argv.push("MYSBX_SESSION_NAME".into());
+                argv.push(session_name.into());
+            }
+        }
     }
 
     // 7. work in the repo.
