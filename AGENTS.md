@@ -193,6 +193,12 @@ diverged when it does change — use the JSON snapshot to localise diffs.
 
 ### Nix Files
 - **Formatting**: Use nixfmt-rfc-style (RFC 51 style)
+- **Comments**: Keep comments minimal and strictly about the code as it
+  is NOW. Do NOT write comments that explain the history of the code
+  (what used to be there, how a bug was fixed, what was refactored) or
+  anything that belongs in the commit message instead. Do not write
+  verbose, growing comment blocks — if a comment needs more than a few
+  lines, the code or the commit message is the wrong place for the rest.
 - **File naming**: a module file's name mirrors the top-level option it
   defines or configures. Use dot-separated names following the option
   hierarchy.

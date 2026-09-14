@@ -15,7 +15,10 @@
         enable = true;
         dev = {
           opencode.enable = true;
-          pi-coding-agent.enable = true;
+          pi-coding-agent = {
+            enable = true;
+            litellmUrl = "http://localhost:4000";
+          };
           claude-code.enable = true;
           codex.enable = true;
           skills.enable = true;
