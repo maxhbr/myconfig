@@ -20,25 +20,25 @@
   };
   grafana-skills = {
     pname = "grafana-skills";
-    version = "51d33e71e191b409bbd25fc7be2684c610d18166";
+    version = "ac17a41c81649195d516509cf0194b5637fec44a";
     src = fetchFromGitHub {
       owner = "grafana";
       repo = "skills";
-      rev = "51d33e71e191b409bbd25fc7be2684c610d18166";
+      rev = "ac17a41c81649195d516509cf0194b5637fec44a";
       fetchSubmodules = false;
-      sha256 = "sha256-13pDO69zgLkDjJ49O/8a4ncmm6MTppAhDK8wioELpwY=";
+      sha256 = "sha256-wJasQ5bbbr0DTAzi2Gl0W8R3PEXgy/TSxrsREh5khvs=";
     };
-    date = "2026-08-18";
+    date = "2026-09-11";
   };
   litellm-grafana-dashboard = {
     pname = "litellm-grafana-dashboard";
-    version = "eeb7732fc11fd47762ca84cc3fb7cc74235d7097";
+    version = "30f33a949b8a2bb890a2baee18e2ab7ab015a4f7";
     src = fetchurl {
-      url = "https://raw.githubusercontent.com/BerriAI/litellm/eeb7732fc11fd47762ca84cc3fb7cc74235d7097/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
+      url = "https://raw.githubusercontent.com/BerriAI/litellm/30f33a949b8a2bb890a2baee18e2ab7ab015a4f7/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
       name = "litellm-grafana-dashboard.json";
       sha256 = "sha256-EteGQo3xd5GvvkjKre7wqOZ6Hr/Yty78VZe6le55Zcw=";
     };
-    date = "2026-09-05";
+    date = "2026-09-12";
   };
   pi-token-speed = {
     pname = "pi-token-speed";
@@ -54,14 +54,14 @@
   };
   simple-english = {
     pname = "simple-english";
-    version = "9ce426c79b1736c28af7e91f1b730e7a7cc3f468";
+    version = "6fa7943df766d73000b6ef8a184b012ac72b136e";
     src = fetchFromGitHub {
       owner = "AminBlg";
       repo = "SimpleEnglish";
-      rev = "9ce426c79b1736c28af7e91f1b730e7a7cc3f468";
+      rev = "6fa7943df766d73000b6ef8a184b012ac72b136e";
       fetchSubmodules = false;
-      sha256 = "sha256-6R0efQpuAo9SgZSUIKXDUHFNj/AQOyLwbkp2ZMCVYGM=";
+      sha256 = "sha256-5YmaG109U3Ycd32j25mi6KFmgTZ2fCdVWPyY6O2Fq6k=";
     };
-    date = "2026-09-06";
+    date = "2026-09-13";
   };
 }
