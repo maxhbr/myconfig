@@ -19,11 +19,12 @@
 //!
 //! Sections, in fixed order (order is semantic for overlapping binds):
 //!
-//! 0. `run` and its global args (`--runtime=runsc`, `--cgroup-manager`,
-//!    `--runtime-flag` per flag — from env vars, see below) — WITHOUT the
-//!    program name: the returned argv is arguments-only, like bwrap's
-//!    (`--clearenv` first there), because lib.rs prepends the backend
-//!    binary itself via `Command::new(MYSBX_PODMAN)`.
+//! 0. `run` and its global args (`--runtime=runsc`, `--runtime-flag`
+//!    per flag, `--cgroup-manager` when one is set — from env vars,
+//!    see below) — WITHOUT the program name: the returned argv is
+//!    arguments-only, like bwrap's (`--clearenv` first there), because
+//!    lib.rs prepends the backend binary itself via
+//!    `Command::new(MYSBX_PODMAN)`.
 //! 1. container identity: `--replace`, `--name`, `--hostname`, `--userns=keep-id`
 //! 2. base isolation: `--read-only`, `--read-only-tmpfs=true`,
 //!    `--cap-drop=ALL`, `--security-opt=no-new-privileges`
@@ -222,6 +223,12 @@ pub struct Params<'a> {
     /// Podman runtime flags (e.g. `ignore-cgroups`). These come from
     /// environment variables or backend configuration.
     pub runtime_flags: &'a [String],
+    /// The podman `--cgroup-manager` value, or `None` to omit the
+    /// flag entirely. The gvisor tier's rootless defaults
+    /// (rust/src/state.rs) are the precedent: rootless runs pass
+    /// `cgroupfs`, root runs omit the flag (the system cgroup manager
+    /// — typically systemd — owns the hierarchy).
+    pub cgroup_manager: Option<&'a str>,
     /// Whether cgroups are ignored (runtime flag `ignore-cgroups`).
     /// When true, resource limits are not enforced.
     pub ignore_cgroups: bool,
@@ -274,17 +281,19 @@ pub fn podman_run_argv(
     // `--clearenv`). A leading `podman` would double the program
     // name and garble podman's flag parsing.
     let mut argv: Vec<String> = Vec::new();
-    // Global args: --runtime=runsc, --cgroup-manager, --runtime-flag per flag
+    // Global args: --runtime=runsc, --runtime-flag per flag, then
+    // --cgroup-manager when set. The cgroup manager comes from
+    // params: omitted when None, the gvisor tier's shape (a rootless
+    // run pins cgroupfs via the env defaults in lib.rs, a root run
+    // lets podman's own default apply — hardcoding cgroupfs made
+    // runsc configure a cgroup it cannot write, bd myconfig-b13).
     argv.push("--runtime=runsc".into());
-
-    // Add runtime flags from params (e.g., --runtime-flag ignore-cgroups)
     for flag in params.runtime_flags {
         argv.extend(["--runtime-flag".into(), flag.clone()]);
     }
-
-    // Set cgroup manager explicitly when cgroups are enabled
-    // When ignore-cgroups is set, still use cgroupfs but limits won't apply
-    argv.push("--cgroup-manager=cgroupfs".into());
+    if let Some(manager) = params.cgroup_manager {
+        argv.push(format!("--cgroup-manager={manager}"));
+    }
 
     argv.push("run".into());
     argv.push("--replace".into());

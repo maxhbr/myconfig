@@ -1035,6 +1035,16 @@ unsafe fn libc_dup2(from: i32, to: i32) {
     dup2(from, to);
 }
 
+/// The real effective UID (libc `geteuid`) — the same zero-dependency
+/// raw extern as the `gui` detach block above; the gvisor tier's
+/// state.rs uses the identical idiom.
+unsafe fn libc_geteuid() -> u32 {
+    extern "C" {
+        fn geteuid() -> u32;
+    }
+    geteuid()
+}
+
 /// The shared pipeline of the bare form and `run`: resolve the repo, run
 /// the guards, require an initialized sidecar, load and merge both layers,
 /// check the backend, build the argv — then print it (`--dry-run`) or exec
@@ -1420,9 +1430,30 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 return EXIT_INFRASTRUCTURE;
             };
 
-            // Runtime flags: space-separated list from MYSBX_GVISOR_RUNTIME_FLAGS
-            // Example: "ignore-cgroups --log-level=debug"
-            let runtime_flags_raw = env_opt("MYSBX_GVISOR_RUNTIME_FLAGS").unwrap_or_default();
+            // Runtime flags and cgroup manager, mirroring the gvisor
+            // tier's rootless defaults (rust/src/state.rs
+            // `Env::from_euid` in ../../sandboxes/
+            // myconfig.ai.gvisor-agent-sandbox/): a rootless runsc
+            // cannot write the (non-delegated) cgroup of its pod, so
+            // it must run with the `ignore-cgroups` runtime flag under
+            // the cgroupfs manager — without it, runsc fails with
+            // "cannot set up cgroup for root: configuring cgroup: …
+            // permission denied" (bd myconfig-b13). A root run
+            // configures cgroups normally: no runtime flags, and the
+            // cgroup-manager flag omitted (podman's own default,
+            // usually systemd, owns the hierarchy). Both are
+            // operator-overridable per invocation.
+            let rootless = unsafe { libc_geteuid() != 0 };
+            let cgroup_manager = match env_opt("MYSBX_GVISOR_CGROUP_MANAGER") {
+                Some(manager) => Some(manager),
+                None if rootless => Some("cgroupfs".to_owned()),
+                None => None,
+            };
+            let runtime_flags_raw = if rootless {
+                env_or("MYSBX_GVISOR_RUNTIME_FLAGS", "ignore-cgroups")
+            } else {
+                env_opt("MYSBX_GVISOR_RUNTIME_FLAGS").unwrap_or_default()
+            };
             let runtime_flags: Vec<String> = runtime_flags_raw
                 .split_whitespace()
                 .map(|s| s.to_string())
@@ -1437,6 +1468,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
 
             // Cgroups handling: when ignore-cgroups flag is set, skip resource limits
             let ignore_cgroups = runtime_flags.iter().any(|f| f == "ignore-cgroups");
+            if ignore_cgroups && (pids_limit.is_some() || memory.is_some() || cpus.is_some()) {
+                eprintln!(
+                    "mysbx: warning: memory/cpu/pids limits not enforced, \
+                     the runtime ignores cgroups"
+                );
+            }
 
             // Network spec: explicit "none" when network is denied, otherwise podman default (shared)
             let pasta_spec = env_opt("MYSBX_GVISOR_PASTA_SPEC");
@@ -1461,6 +1498,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 // Podman-gvisor specific params
                 image: &gvisor_image,
                 runtime_flags: &runtime_flags,
+                cgroup_manager: cgroup_manager.as_deref(),
                 ignore_cgroups,
                 network_spec,
                 pids_limit,

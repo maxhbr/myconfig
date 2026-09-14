@@ -3276,6 +3276,9 @@ fn podman_params() -> PodmanParams<'static> {
         workspace: Workspace::Live,
         image: "localhost/agent-gvisor:latest",
         runtime_flags: &[],
+        // The rootless default of a wrapped run (lib.rs): cgroupfs is
+        // the manager a non-root runsc can actually use.
+        cgroup_manager: Some("cgroupfs"),
         ignore_cgroups: false,
         network_spec: None,
         pids_limit: None,
@@ -3621,4 +3624,54 @@ fn podman_with_runtime_flags() {
         text.contains("--log-level=debug"),
         "runtime flags should be in argv: {text}"
     );
+}
+
+#[test]
+fn podman_cgroup_manager_omitted_when_none() {
+    // None ⇒ no --cgroup-manager flag at all: the gvisor tier's root
+    // shape (the system manager owns the hierarchy). A hardcoded
+    // cgroupfs made runsc try to write a cgroup it cannot and fail
+    // with "cannot set up cgroup for root" (bd myconfig-b13).
+    let mut params = podman_params();
+    params.cgroup_manager = None;
+
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+
+    assert!(
+        !argv.iter().any(|a| a.starts_with("--cgroup-manager")),
+        "--cgroup-manager should be omitted when params say None: {argv:?}"
+    );
+    assert_eq!(argv[0], "--runtime=runsc");
+}
+
+#[test]
+fn podman_rootless_defaults_golden() {
+    // The argv of a real rootless run: lib.rs defaults euid != 0 to
+    // cgroupfs + ignore-cgroups (the gvisor tier's rootless defaults),
+    // so runsc never touches the cgroup hierarchy. Byte-for-byte
+    // against a golden — the flags are the fix for bd myconfig-b13,
+    // and a regression here is exactly the f13 failure.
+    let runtime_flags = ["ignore-cgroups".to_string()];
+    let params = PodmanParams {
+        runtime_flags: &runtime_flags,
+        cgroup_manager: Some("cgroupfs"),
+        ..podman_params()
+    };
+
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_golden("podman-rootless-defaults.txt", &argv);
 }

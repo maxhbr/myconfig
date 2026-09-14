@@ -132,10 +132,14 @@ Everything below exists in at least one tier above and has no counterpart in
   the merged config onto a rootless `podman run --runtime=runsc`
   (`podman_gvisor.rs`), with the image trio pinned by the wrapper
   (`MYSBX_GVISOR_TARBALL/_IMAGE/_IMAGE_ID`, `gvisor-load-image` loads
-  it, bd myconfig-xrt for the pin fix). Remaining before it is
-  production-ready: the payload shell / tool PATH are host store
-  paths the container does not mount (bd myconfig-wao), and no host
-  has exercised a full interactive session yet.
+  it, bd myconfig-xrt for the pin fix). Rootless runs default to the
+  gvisor tier's rootless cgroup handling — `--cgroup-manager=cgroupfs`
+  + runtime flag `ignore-cgroups`, overridable via
+  `MYSBX_GVISOR_CGROUP_MANAGER` / `MYSBX_GVISOR_RUNTIME_FLAGS` (bd
+  myconfig-b13). Remaining before it is production-ready: the payload
+  shell / tool PATH are host store paths the container does not mount
+  (bd myconfig-wao), and no host has exercised a full interactive
+  session yet.
 - **Entering the sandbox** — the primary action per `cli.md` D2.
 - **`run COMMAND` / the `--` payload split** (`cli.md` D3, D4).
 - **A credential story.** Every existing tier had to answer this and they

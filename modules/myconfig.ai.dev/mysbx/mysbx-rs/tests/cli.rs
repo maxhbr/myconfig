@@ -69,6 +69,7 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env_remove("MYSBX_GVISOR_IMAGE")
         .env_remove("MYSBX_GVISOR_IMAGE_ID")
         .env_remove("MYSBX_GVISOR_RUNTIME_FLAGS")
+        .env_remove("MYSBX_GVISOR_CGROUP_MANAGER")
         .env_remove("MYSBX_PODMAN")
         // Keep the host's TERM & co. out of the result: the forwarded set
         // must come only from variables the test actually sets. The list
@@ -6624,6 +6625,31 @@ fn podman_gvisor_backend_without_image_pin_is_refused() {
         stderr.contains("no container image configured"),
         "stderr: {stderr}"
     );
+}
+
+#[test]
+fn podman_gvisor_rootless_cgroup_env_overrides_defaults() {
+    // The cgroup handling is operator-overridable per invocation: with
+    // MYSBX_GVISOR_RUNTIME_FLAGS and MYSBX_GVISOR_CGROUP_MANAGER set,
+    // those — not the rootless defaults — build the argv (bd
+    // myconfig-b13).
+    let (inv, repo, sidecar) = fixture("podman-gvisor-cgroup-env", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        .env("MYSBX_GVISOR_CGROUP_MANAGER", "systemd")
+        .env("MYSBX_GVISOR_RUNTIME_FLAGS", "ignore-cgroups");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let code = out.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines[0], "podman");
+    assert_eq!(lines[1], "--runtime=runsc");
+    assert_eq!(lines[2], "--runtime-flag");
+    assert_eq!(lines[3], "ignore-cgroups");
+    assert_eq!(lines[4], "--cgroup-manager=systemd");
 }
 
 #[test]

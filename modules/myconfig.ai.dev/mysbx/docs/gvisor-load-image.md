@@ -34,6 +34,25 @@ The Nix wrapper pins all three when the host builds a gVisor agent image (`mycon
 
 `--image` overrides the reference alone. With **no** pin and no `--image`, the command is a usage error (exit 2) instead of inventing a `localhost/...` reference: no registry serves the Nix-built image, so a `podman pull` fallback can never work.
 
+### Run-only variables (not set by the wrapper)
+
+`backend = "podman-gvisor"` **runs** additionally read (empty/unset falls
+back to the built-in defaults):
+
+- `MYSBX_GVISOR_CGROUP_MANAGER`: the podman `--cgroup-manager` value.
+  Rootless default: `cgroupfs`; root default: flag omitted.
+- `MYSBX_GVISOR_RUNTIME_FLAGS`: space-separated runsc runtime flags
+  (`--runtime-flag` each). Rootless default: `ignore-cgroups` (a
+  rootless runsc cannot write its pod's cgroup — without it, `run`
+  fails with `cannot set up cgroup for root`); root default: none.
+  The flag `ignore-cgroups` also disables the `--pids-limit` /
+  `--memory` / `--cpus` argv entries: runsc would not enforce them.
+- `MYSBX_GVISOR_PIDS_LIMIT` / `MYSBX_GVISOR_MEMORY` / `MYSBX_GVISOR_CPUS`:
+  resource limits, only applied while cgroups are not ignored.
+- `MYSBX_GVISOR_PASTA_SPEC`: a pasta network spec overriding the
+  default shared network (`network = false` still forces `none`).
+- `MYSBX_PODMAN`: the podman binary (fallback: `podman`).
+
 ## Image Sources
 
 ### Tarball (the pinned default)
