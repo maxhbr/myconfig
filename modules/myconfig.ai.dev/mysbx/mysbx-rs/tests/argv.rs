@@ -3447,13 +3447,16 @@ fn podman_no_run_no_host_store_paths_in_payload() {
     )
     .unwrap();
 
-    // The payload is the last two argv entries: `--` then the shell.
-    let dash = argv
-        .iter()
-        .rposition(|a| a == "--")
-        .expect("argv must carry the payload separator `--`");
-    assert_eq!(argv.len(), dash + 2, "shell payload only: {argv:?}");
-    assert_eq!(argv[dash + 1], "/bin/synth-shell");
+    // The payload is the last argv entry: the shell — and there is
+    // deliberately NO `--` separator before it: docker strips one
+    // after the image, podman passes it through as the command's
+    // argv[0] and runsc fails with `error finding executable "--"`
+    // (bd myconfig-ivp).
+    assert_eq!(argv[argv.len() - 1], "/bin/synth-shell");
+    assert!(
+        !argv.iter().any(|a| a == "--"),
+        "no `--` separator in a podman argv: {argv:?}"
+    );
 
     // No CA-bundle store pins: the image carries its own bundle in
     // its OCI env.

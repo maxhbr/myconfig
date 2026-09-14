@@ -22,5 +22,4 @@ PATH=/bin:/usr/bin:/synth-image-tools
 --network
 none
 localhost/agent-gvisor:latest
---
 /bin/synth-shell

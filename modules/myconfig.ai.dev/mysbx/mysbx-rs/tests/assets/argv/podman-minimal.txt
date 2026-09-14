@@ -20,5 +20,4 @@ HOME=/mysbx-home
 --env
 PATH=/bin:/usr/bin:/synth-image-tools
 localhost/agent-gvisor:latest
---
 /bin/synth-shell

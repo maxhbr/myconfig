@@ -6684,11 +6684,18 @@ fn podman_gvisor_payload_uses_the_image_userland_not_host_pins() {
         );
     }
     let lines: Vec<&str> = stdout.lines().collect();
-    let dash = lines
-        .iter()
-        .rposition(|l| *l == "--")
-        .expect("payload separator");
-    assert_eq!(lines[dash + 1], "/bin/bash", "payload is the image shell");
+    // NO `--` separator: podman (unlike docker) does not strip one
+    // after the image, and runsc fails with `error finding executable
+    // "--"` (bd myconfig-ivp). The last line IS the payload.
+    assert!(
+        !lines.iter().any(|l| *l == "--"),
+        "no `--` separator in the podman argv: {stdout}"
+    );
+    assert_eq!(
+        lines[lines.len() - 1],
+        "/bin/bash",
+        "payload is the image shell"
+    );
     assert!(
         lines.contains(&"PATH=/bin:/usr/bin"),
         "PATH is the image PATH: {stdout}"

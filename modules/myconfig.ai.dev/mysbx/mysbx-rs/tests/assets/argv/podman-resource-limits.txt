@@ -26,5 +26,4 @@ PATH=/bin:/usr/bin:/synth-image-tools
 --cpus
 1.5
 localhost/agent-gvisor:latest
---
 /bin/synth-shell

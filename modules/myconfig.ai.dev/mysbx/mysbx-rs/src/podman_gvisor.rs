@@ -44,8 +44,10 @@
 //! 8. network: `--network` spec (shared by default, or `none` / pasta
 //!    spec when `network = false` or configured)
 //! 9. image reference (from config or default)
-//! 10. payload: the multiplexer entry (for interactive sessions) or
-//!     shell/command
+//! 10. payload — WITHOUT a `--` separator before it: the first token
+//!     after the image IS the command (podman, unlike docker, does
+//!     not strip a stray `--`); the multiplexer entry (for interactive
+//!     sessions) or the image's shell/command
 //!
 //! Deliberately different from bubblewrap:
 //!
@@ -514,8 +516,11 @@ pub fn podman_run_argv(
     // 10. image
     argv.push(params.image.into());
 
-    // 11. payload
-    argv.push("--".into());
+    // 11. payload — with NO `--` separator before it: docker strips
+    // a `--` between the image and the command, podman does NOT — it
+    // passes the token through as the container command's argv[0],
+    // and runsc then fails with `error finding executable "--"` (bd
+    // myconfig-ivp). The first token after the image IS the command.
     match payload {
         Payload::Shell if mux.starts_a_session() => {
             argv.push(params.mux_entry.unwrap_or(params.shell).into())
