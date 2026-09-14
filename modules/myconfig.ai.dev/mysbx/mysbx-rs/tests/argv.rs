@@ -3263,14 +3263,16 @@ fn session_name_env_works_for_all_multiplexers() {
 
 // ---- podman-gvisor backend tests --------------------------------------------
 
-/// A synthetic podman-gvisor params.
+/// A synthetic podman-gvisor params. The shell and tool `PATH` are
+/// image paths (bd myconfig-wao) — the container mounts nothing from
+/// the host `/nix/store`, so a host store path would die with `no
+/// such file or directory`. The synthetic values deliberately differ
+/// from the real defaults (`/bin/bash`, `/bin:/usr/bin`) so a test
+/// that silently regressed to bwrap's host pins fails the goldens.
 fn podman_params() -> PodmanParams<'static> {
     PodmanParams {
-        shell: "/synth/bin/bash",
-        tools_path: "/synth/bin",
-        bin_sh: None,
-        nix_conf: None,
-        ca_bundle: None,
+        shell: "/bin/synth-shell",
+        tools_path: "/bin:/usr/bin:/synth-image-tools",
         policy_paths: &[],
         mux_entry: None,
         workspace: Workspace::Live,
@@ -3417,21 +3419,6 @@ fn podman_golden_env_entry() {
 }
 
 #[test]
-fn podman_golden_ca_bundle_pin() {
-    let mut params = podman_params();
-    params.ca_bundle = Some("/nix/store/aaaa-nss-cacert/etc/ssl/certs/ca-bundle.crt");
-    let argv = podman_run_argv(
-        &podman_base(true),
-        &synth_repo(),
-        &Payload::Shell,
-        &host_env(&[]),
-        &params,
-    )
-    .unwrap();
-    assert_golden("podman-ca-bundle-pin.txt", &argv);
-}
-
-#[test]
 fn podman_golden_clone_session() {
     let cfg = podman_base(true);
     let mut repo = synth_repo();
@@ -3442,6 +3429,86 @@ fn podman_golden_clone_session() {
     };
     let argv = podman_run_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
     assert_golden("podman-clone-session.txt", &argv);
+}
+
+#[test]
+fn podman_no_run_no_host_store_paths_in_payload() {
+    // bd myconfig-wao: the payload shell and tool PATH are image
+    // paths, and the argv must carry no host `/nix/store` path
+    // outside the mount sources — the container mounts nothing from
+    // the host store, so a store path in the payload would die with
+    // `no such file or directory` on the first run.
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+
+    // The payload is the last two argv entries: `--` then the shell.
+    let dash = argv
+        .iter()
+        .rposition(|a| a == "--")
+        .expect("argv must carry the payload separator `--`");
+    assert_eq!(argv.len(), dash + 2, "shell payload only: {argv:?}");
+    assert_eq!(argv[dash + 1], "/bin/synth-shell");
+
+    // No CA-bundle store pins: the image carries its own bundle in
+    // its OCI env.
+    for a in &argv {
+        assert!(!a.contains("/nix/store"), "host store path in argv: {a}");
+    }
+}
+
+#[test]
+fn podman_container_name_is_unique_per_repo_path() {
+    // The container name must differ between two repos that share a
+    // basename — `--replace` would otherwise silently kill the
+    // sibling session's container (bd myconfig-wao).
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let name = argv
+        .iter()
+        .zip(argv.iter().skip(1))
+        .find(|(a, _)| a.as_str() == "--name")
+        .map(|(_, n)| n.as_str())
+        .expect("argv must carry --name");
+    assert_eq!(
+        name, "mysbx-repo-6e89dfc8f9",
+        "basename plus path hash, got {name:?}"
+    );
+    // A repo with the SAME basename but a different path gets a
+    // DIFFERENT container name.
+    let sibling = Repo {
+        root: PathBuf::from("/synth/other/repo"),
+        sidecar: PathBuf::from("/synth/other/repo.mysbx"),
+        git_dirs: Vec::new(),
+        worktrees: None,
+    };
+    let argv2 = podman_run_argv(
+        &podman_base(true),
+        &sibling,
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let name2 = argv2
+        .iter()
+        .zip(argv2.iter().skip(1))
+        .find(|(a, _)| a.as_str() == "--name")
+        .map(|(_, n)| n.as_str())
+        .expect("argv must carry --name");
+    assert_eq!(name2, "mysbx-repo-d133a1ae6c");
+    assert_ne!(name, name2, "same basename, different path: must differ");
 }
 
 #[test]

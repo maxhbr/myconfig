@@ -49,7 +49,13 @@
 //!
 //! Deliberately different from bubblewrap:
 //!
-//! - Uses a container image instead of host PATH
+//! - Uses a container image instead of host PATH: the image's own
+//!   userland provides the shell, the tool `PATH` and the TLS trust
+//!   anchors — NOTHING is bind-mounted from the host /nix/store
+//!   (the same policy as the gvisor tier: "host binaries must not be
+//!   bind-mounted"), and that is why the payload/PATH pins of this
+//!   backend are image paths, not the host store paths of bwrap's
+//!   `Params` (bd myconfig-wao)
 //! - Container runtime lifecycle (podman manages the container)
 //! - Container-user identity (via `--userns=keep-id`)
 //! - User-space kernel (gVisor's runsc)
@@ -112,69 +118,26 @@ pub const CONTAINER_HOME: &str = "/mysbx-home";
 pub const MUX_SOCKET_DIR: &str = "/mysbx-home/.mysbx-tmux";
 
 /// Common parameters of every invocation that do not come from a
-/// configuration layer: the shell binary and the dev-tool `PATH` closure
-/// root, both host paths the MVP carries in its own closure
-/// (docs/plan.md: "Payload shell", "dev-tool closure on `PATH`").
+/// configuration layer. Unlike bwrap's `Params` — whose shell and
+/// dev-tool `PATH` are HOST store paths the wrapper pins from its own
+/// closure — the payload-relevant ones here are **paths inside the
+/// container image**: this backend mounts nothing from the host
+/// `/nix/store`, so a host store path would die with `no such file or
+/// directory` the moment the payload starts (bd myconfig-wao). The
+/// defaults mirror the gVisor agent image's own OCI config
+/// (agent-image.nix: `Cmd = "/bin/bash"`, `Env =
+/// "PATH=/bin:/usr/bin"`) — the same userland the agent-gvisor
+/// sessions run against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Params<'a> {
-    /// Path of the shell used for [`Payload::Shell`].
+    /// Path of the shell used for [`Payload::Shell`] — a path INSIDE
+    /// the container (default `/bin/bash`, the agent image's `Cmd`).
     pub shell: &'a str,
-    /// The dev-tool closure's `bin` directory, set as `PATH` inside the
-    /// sandbox (git, tig, ripgrep, fd, jq, nix, python3, coreutils, …).
+    /// The container `PATH` (default `/bin:/usr/bin`, the agent
+    /// image's `Env`): the image's own `/bin` toolchain — git, tig,
+    /// ripgrep, fd, jq, python3, coreutils, … — never a host store
+    /// closure.
     pub tools_path: &'a str,
-    /// A shell to bind read-only at `/bin/sh` inside the sandbox, or
-    /// `None` for no `/bin/sh` at all.
-    ///
-    /// The sandbox root is not a FHS root: `/bin` exists nowhere in
-    /// the base table (docs/plan.md "The base"), only `/nix/store` and
-    /// `/usr/bin` (itself holding just `env` on plain NixOS). But
-    /// `/bin/sh` is a de-facto ABI of the Unix userland — tmux runs
-    /// EVERY `run-shell`/`if-shell`/`#()` job through `execl("/bin/sh",
-    /// …)` (tmux ≥ 3.5a reverted to hardcoding `_PATH_BSHELL` for jobs;
-    /// `default-shell` applies to panes and popups only), `posix_spawn`
-    /// of several tools falls back to it, and a plain `#!/bin/sh`
-    /// shebang needs it. Without the bind every such job dies with
-    /// `execl failed` before the payload command even starts — on the
-    /// workmux sidebar this surfaced as `'kill -USR1 $(tmux show-option
-    /// …)' returned 1` popups and sidebars that never appear. The Nix
-    /// wrapper pins `bash`'s own `bin/sh` symlink here (the same bash
-    /// closure [`Params::shell`] comes from — the vendored
-    /// `vendor/alexdavid-jail.nix` base combinator binds exactly this);
-    /// an unwrapped build passes `None` and the sandbox runs without a
-    /// `/bin/sh`, like it runs without a pinned nix.conf.
-    pub bin_sh: Option<&'a str>,
-    /// A **sanitized** `nix.conf` to bind at `/etc/nix/nix.conf`, or
-    /// `None` for no nix configuration at all (review-2 item 3).
-    ///
-    /// The host's own `/etc/nix/nix.conf` is deliberately never bound:
-    /// it may carry `access-tokens` (GitHub/GitLab credentials) and
-    /// other secrets, and a read-only bind hands them to the payload
-    /// just the same. The Nix wrapper generates a minimal client
-    /// configuration instead and pins it here; an unwrapped build
-    /// passes `None` and the sandbox runs `nix` with its built-in
-    /// defaults.
-    pub nix_conf: Option<&'a str>,
-    /// The **CA bundle** pinned from mysbx's own closure (`nss-cacert`'s
-    /// `ca-bundle.crt`), or `None` when this build pinned none (bd
-    /// myconfig-938).
-    ///
-    /// The resolver-set bind of `/etc/ssl` + `/etc/static` makes TLS work
-    /// on a NixOS host with its standard layout, but the argv promises
-    /// more than "works here": a host whose `/etc` layout differs, whose
-    /// ca-bundle is stale, or a payload tool that looks no further than
-    /// `SSL_CERT_FILE` should not be the reason a sandboxed agent cannot
-    /// reach its model endpoint. The gvisor agent-image tier pins the
-    /// same bundle for the same reason (agent-image.nix sets
-    /// `SSL_CERT_FILE`/`GIT_SSL_CAINFO`/`NIX_SSL_CERT_FILE` in the image
-    /// env). This pin is that mechanism's podman equivalent: the
-    /// wrapper pins a bundle from its OWN closure — reproducible, no
-    /// host state — and the argv sets the three env variables to it
-    /// AFTER `[env]`, like `HOME` and `PATH`, because they are
-    /// infrastructure for the same reason: a layer that repointed them
-    /// at a host path would widen the sandbox's view of the host `/etc`,
-    /// not configure the run. (An unwrapped build passes `None` and the
-    /// run relies on the resolver binds alone.)
-    pub ca_bundle: Option<&'a str>,
     /// The **trusted policy files** this run was configured from — the
     /// user config and the sidecar config, exactly as `load_layers`
     /// read them, each with the host paths that must stay unwritable
@@ -198,15 +161,14 @@ pub struct Params<'a> {
     /// [`Multiplexer::entry_var`], or `None` when this build pinned
     /// none for it.
     ///
-    /// Like [`Params::shell`] this is a host path from mysbx's own
-    /// closure, pinned by the Nix wrapper (`MYSBX_MUX_ENTRY_*`); the
-    /// script it names starts the multiplexer on the in-sandbox state
-    /// of [`MUX_SOCKET_DIR`] and attaches to it. There is no fallback
-    /// on purpose: a selected multiplexer with nothing pinned is a
-    /// refused run ([`Error::MultiplexerUnavailable`]), never a silent
-    /// plain shell — the operator asked for a session, and getting a
-    /// bare shell instead would be discovered only after the work was
-    /// done in the wrong place.
+    /// Like [`Params::shell`] this is a path INSIDE the container,
+    /// pinned by the Nix wrapper (`MYSBX_MUX_ENTRY_*`). No image ships
+    /// one today, so a selected multiplexer is a refused run
+    /// ([`Error::MultiplexerUnavailable`]) — the same refusal
+    /// semantics as a bwrap host that carries no multiplexer: never a
+    /// silent plain shell, because the operator asked for a session
+    /// and getting a bare shell instead would be discovered only after
+    /// the work was done in the wrong place.
     pub mux_entry: Option<&'a str>,
     /// Which tree this run works in (workspace.md D1): the live repo
     /// (the default, unchanged) or a named session's clone (D3/D4 —
@@ -302,14 +264,21 @@ pub fn podman_run_argv(
     // a runtime decision, not an argv-builder one)
 
     // 2. container identity
-    // Container name: derived from repo path for uniqueness
+    // Container name: the repo basename PLUS a short hash of the repo
+    // root path. The basename alone collides between different repos
+    // that share one — and `--replace` then silently kills the sibling
+    // session's container. The hash makes the name unique per repo
+    // path (the gvisor tier's `repo_id` precedent: a stable digest of
+    // the repo path, not its contents — the container of a repo must
+    // keep its name across checkouts and rebuilds).
     let container_name = format!(
-        "mysbx-{}",
+        "mysbx-{}-{}",
         repo.root
             .file_name()
             .unwrap_or_else(|| OsStr::new("unknown"))
             .to_string_lossy()
-            .replace(|c: char| !c.is_alphanumeric(), "-")
+            .replace(|c: char| !c.is_alphanumeric(), "-"),
+        fnv1a10(&root)
     );
     argv.extend(["--name".into(), container_name]);
     argv.extend(["--hostname".into(), "mysbx".into()]);
@@ -505,18 +474,15 @@ pub fn podman_run_argv(
     for (key, value) in &cfg.env {
         argv.extend(["--env".into(), format!("{key}={value}")]);
     }
-    // Infrastructure variables
+    // Infrastructure variables. `PATH` points INSIDE the image
+    // (params.tools_path defaults to the agent image's own
+    // `/bin:/usr/bin`), and the CA-bundle variables are NOT set at
+    // all: the image pins its own bundle in its OCI env
+    // (agent-image.nix sets `SSL_CERT_FILE` & co. at
+    // `/etc/ssl/certs/ca-bundle.crt`), and a host store path would
+    // not exist inside the container anyway (bd myconfig-wao).
     argv.extend(["--env".into(), format!("HOME={CONTAINER_HOME}")]);
     argv.extend(["--env".into(), format!("PATH={}", params.tools_path)]);
-    if let Some(ca_bundle) = params.ca_bundle {
-        for (key, value) in [
-            ("SSL_CERT_FILE", ca_bundle),
-            ("GIT_SSL_CAINFO", ca_bundle),
-            ("NIX_SSL_CERT_FILE", ca_bundle),
-        ] {
-            argv.extend(["--env".into(), format!("{key}={value}")]);
-        }
-    }
     if mux.starts_a_session() {
         argv.extend(["--env".into(), format!("TMUX_TMPDIR={MUX_SOCKET_DIR}")]);
     }
@@ -559,6 +525,20 @@ pub fn podman_run_argv(
     }
 
     Ok(argv)
+}
+
+/// First 10 hex chars of the FNV-1a 64 hash of `path` — a stable,
+/// dependency-free digest for the container-name suffix (the zero-
+/// dependency crate's equivalent of the gvisor tier's `sha256sum`-
+/// exec'ing `repo_id`; colossally unlikely to collide at 40 bits for
+/// the handful of repos one host runs).
+fn fnv1a10(path: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in path.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")[..10].to_owned()
 }
 
 /// Add a bind mount to the argv.
@@ -817,7 +797,9 @@ impl fmt::Display for Error {
             Error::MultiplexerUnavailable { multiplexer } => write!(
                 f,
                 "multiplexer {multiplexer} is selected but no entry is pinned \
-                 (MYSBX_MUX_ENTRY_* not set)"
+                 (the container image carries no in-image entry script; \
+                 MYSBX_MUX_ENTRY_* names a host store path this backend \
+                 mounts nothing of)"
             ),
             Error::MuxSocketDest { dest } => write!(
                 f,

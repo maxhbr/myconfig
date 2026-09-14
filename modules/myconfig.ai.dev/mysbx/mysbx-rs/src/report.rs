@@ -346,11 +346,18 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // generated, credential-free file the wrapper pins — or nothing.
     // Both states belong in the report: "nix reads no configuration"
     // is as much a property of the run as which shell it starts.
+    // Under podman-gvisor there is no nix inside the sandbox at all
+    // (the image ships none; a writable-store mechanism like the
+    // gvisor tier's `--nix` volume is deliberately out of scope for
+    // this backend), so the line says that instead of implying nix
+    // would merely read its defaults.
     p(format!(
         "nix.conf:       {}",
-        r.params
-            .nix_conf
-            .unwrap_or("(none — nix uses its defaults)")
+        match (r.backend, r.params.nix_conf) {
+            ("podman-gvisor", _) => "(none — no nix inside the sandbox)",
+            (_, Some(conf)) => conf,
+            (_, None) => "(none — nix uses its defaults)",
+        }
     ));
     // The `/bin/sh` state belongs in the report for the same reason
     // as the nix.conf line above: whether tmux `run-shell` jobs and
@@ -358,21 +365,30 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // property of the run, not packaging detail — an unwrapped build
     // (or a host that pins nothing) gets a sandbox without `/bin/sh`,
     // and the failing hooks that follow are diagnosable from here.
+    // Under podman-gvisor there is no `/bin/sh` pin at all: the image
+    // provides its own (bd myconfig-wao), so the line says so instead
+    // of claiming the sandbox has none.
     p(format!(
         "/bin/sh:        {}",
-        r.params
-            .bin_sh
-            .unwrap_or("(none — no /bin/sh inside the sandbox)")
+        match (r.backend, r.params.bin_sh) {
+            ("podman-gvisor", _) => "(the container image's own /bin/sh)",
+            (_, Some(sh)) => sh,
+            (_, None) => "(none — no /bin/sh inside the sandbox)",
+        }
     ));
     // The CA bundle is a pin like `MYSBX_NIX_CONF`: named in the
     // report both ways — the pinned store path when the wrapper set
     // one, the honest absence when it did not (the run then relies on
     // the resolver binds of `/etc/ssl` + `/etc/static` alone).
+    // Under podman-gvisor there is no pin either: the image carries
+    // its own bundle in its OCI env (bd myconfig-wao).
     p(format!(
         "ca-bundle:      {}",
-        r.params
-            .ca_bundle
-            .unwrap_or("(none — TLS trust anchors come from the /etc/ssl bind)")
+        match (r.backend, r.params.ca_bundle) {
+            ("podman-gvisor", _) => "(the container image's own CA bundle)",
+            (_, Some(b)) => b,
+            (_, None) => "(none — TLS trust anchors come from the /etc/ssl bind)",
+        }
     ));
     // The multiplexer (config.md D17 / cli.md D11): which one was
     // selected, what replaces the shell, where its private socket

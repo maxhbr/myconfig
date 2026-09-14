@@ -51,7 +51,29 @@ back to the built-in defaults):
   resource limits, only applied while cgroups are not ignored.
 - `MYSBX_GVISOR_PASTA_SPEC`: a pasta network spec overriding the
   default shared network (`network = false` still forces `none`).
+- `MYSBX_GVISOR_SHELL` / `MYSBX_GVISOR_TOOLS_PATH`: the payload shell
+  and the tool `PATH` — **paths inside the container image**, not
+  host store paths (the backend mounts nothing from the host
+  `/nix/store`, so the bwrap pins `MYSBX_SHELL`/`MYSBX_TOOLS_PATH`
+  must not and do not reach this backend's argv; bd myconfig-wao).
+  Defaults: `/bin/bash` and `/bin:/usr/bin`, the gVisor agent image's
+  own OCI config (`Cmd` / `Env`) — the same userland the agent-gvisor
+  sessions run against.
 - `MYSBX_PODMAN`: the podman binary (fallback: `podman`).
+
+The multiplexer integration is **not available** under this backend
+yet: no image ships an in-image entry script, so a config selecting
+`multiplexer = "…"` is a refused run naming the missing pin (the same
+refusal a bwrap host without that multiplexer gets) — never a silent
+plain shell. The TLS trust anchors come from the image itself (its
+OCI env pins `SSL_CERT_FILE` & co.), not from a host CA-bundle bind.
+
+**No nix inside the sandbox**: the backend supports no nix — neither
+the host daemon socket (the daemon-dir guard refuses it under a
+denied network, like bwrap) nor a writable in-container store. The
+gvisor tier's `--nix` volume mechanism is deliberately out of scope
+here; the image ships no `nix` binary, and payloads that need one must
+run under the gvisor tier or bwrap instead.
 
 ## Image Sources
 

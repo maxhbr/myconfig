@@ -1343,6 +1343,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // trust anchors are reproducible and independent of the host's
     // `/etc` layout.
     let ca_bundle = env_opt("MYSBX_CA_BUNDLE");
+    // The podman-gvisor backend's own payload pins (bd
+    // myconfig-wao): the container mounts NOTHING from the host
+    // `/nix/store`, so the host pins above cannot serve as its
+    // payload — the image's own userland does. The defaults are the
+    // gVisor agent image's OCI config (agent-image.nix):
+    // `/bin/bash` (`Cmd`) and `/bin:/usr/bin` (`Env`), the same
+    // userland agent-gvisor sessions run against. Both are
+    // operator-overridable per invocation for other images.
+    let gvisor_shell = env_or("MYSBX_GVISOR_SHELL", "/bin/bash");
+    let gvisor_tools_path = env_or("MYSBX_GVISOR_TOOLS_PATH", "/bin:/usr/bin");
     // Review-3 item 3: the trusted policy files of THIS run, handed to
     // the argv builder so it can refuse any `rw` bind that would expose
     // one to the payload.
@@ -1379,14 +1389,37 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // pins) through the bwrap-shaped `Params` — every backend shares
     // those fields, so one struct serves both, and the backend-specific
     // extras (the container image) travel as separate fields below.
+    // Under podman-gvisor those fields carry the backend's IMAGE pins
+    // (bd myconfig-wao), not the bwrap host pins: the report must not
+    // describe a shell/PAYH the argv never sets, and its `nix.conf` /
+    // `/bin/sh` / `ca-bundle` absence lines would be false inside an
+    // image that provides all three. The multiplexer pin is the same
+    // `None` the argv builder gets.
+    let (report_shell, report_tools_path, report_mux_entry) = if backend == "podman-gvisor" {
+        (gvisor_shell.clone(), gvisor_tools_path.clone(), None)
+    } else {
+        (shell.clone(), tools_path.clone(), mux_entry.clone())
+    };
     let report_params = bwrap::Params {
-        shell: &shell,
-        tools_path: &tools_path,
-        bin_sh: bin_sh.as_deref(),
-        nix_conf: nix_conf.as_deref(),
-        ca_bundle: ca_bundle.as_deref(),
+        shell: &report_shell,
+        tools_path: &report_tools_path,
+        bin_sh: if backend == "podman-gvisor" {
+            None
+        } else {
+            bin_sh.as_deref()
+        },
+        nix_conf: if backend == "podman-gvisor" {
+            None
+        } else {
+            nix_conf.as_deref()
+        },
+        ca_bundle: if backend == "podman-gvisor" {
+            None
+        } else {
+            ca_bundle.as_deref()
+        },
         policy_paths: &policy_paths,
-        mux_entry: mux_entry.as_deref(),
+        mux_entry: report_mux_entry.as_deref(),
         workspace: workspace.clone(),
     };
     let (backend_bin, argv, image) = match backend {
@@ -1483,14 +1516,22 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 pasta_spec.as_deref()
             };
 
+            // The backend's payload pins are the image's own userland
+            // (bd myconfig-wao), never the host store paths of the
+            // bwrap pins: `MYSBX_SHELL` & co. name host `/nix/store`
+            // paths this backend deliberately does not mount, so the
+            // container would die with `no such file or directory` on
+            // the first run. `MYSBX_MUX_ENTRY_*` likewise stays out: a
+            // host store entry script cannot be the payload here —
+            // until an image ships one, a selected multiplexer is
+            // refused by the argv builder
+            // (`MultiplexerUnavailable`), the same refusal a bwrap host
+            // without that multiplexer gets.
             let params = podman_gvisor::Params {
-                shell: &shell,
-                tools_path: &tools_path,
-                bin_sh: bin_sh.as_deref(),
-                nix_conf: nix_conf.as_deref(),
-                ca_bundle: ca_bundle.as_deref(),
+                shell: &gvisor_shell,
+                tools_path: &gvisor_tools_path,
                 policy_paths: &policy_paths,
-                mux_entry: mux_entry.as_deref(),
+                mux_entry: None,
                 workspace: match &session {
                     Some(s) => crate::bwrap::Workspace::Clone { clone: &s.clone },
                     None => crate::bwrap::Workspace::Live,

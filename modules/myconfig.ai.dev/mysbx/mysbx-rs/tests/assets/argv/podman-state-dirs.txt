@@ -3,7 +3,7 @@
 run
 --replace
 --name
-mysbx-repo
+mysbx-repo-6e89dfc8f9
 --hostname
 mysbx
 --userns=keep-id
@@ -24,7 +24,7 @@ type=bind,src=/synth/data/configs,dst=/inside/x,ro
 --env
 HOME=/mysbx-home
 --env
-PATH=/synth/bin
+PATH=/bin:/usr/bin:/synth-image-tools
 localhost/agent-gvisor:latest
 --
-/synth/bin/bash
+/bin/synth-shell
