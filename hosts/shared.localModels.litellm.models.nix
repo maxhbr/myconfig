@@ -624,7 +624,6 @@
   "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-Q4_K_XL-MTP"
   "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-Q4_K_XL-mmproj"
   "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-Q4_K_XL-sequential"
-  "gfx1151:ROCm0:TheDrummer_Skyfall-31B-v4.2-Q6_K"
   {
     name = "gfx1151:ROCm0:gemma-4-26B-A4B-it-UD-Q6_K_XL";
     contextWindow = 262144;
@@ -649,7 +648,6 @@
     maxOutputTokens = 16384;
   }
   "gfx1151:ROCm0:qwen3.5-122B-A10B-Q5_K_M"
-  "gfx1151:TheDrummer_Skyfall-31B-v4.2-Q6_K"
   {
     name = "gfx1151:gemma-4-26B-A4B-it-UD-Q6_K_XL";
     contextWindow = 262144;
@@ -923,7 +921,6 @@
     contextWindow = 196608;
     maxOutputTokens = 49152;
   }
-  "rtx5090:TheDrummer_Skyfall-31B-v4.2-Q6_K"
   {
     name = "rtx5090:gemma-4-26B-A4B-it-UD-Q6_K_XL";
     contextWindow = 262144;

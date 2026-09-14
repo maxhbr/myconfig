@@ -16,7 +16,6 @@ let
   qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
   qwen3_8_27B-multiGpu = qwen3_8_27B.multiGpuModels;
   hy3-multiGpu = hy3.multiGpuModels;
-  thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix { inherit modelsPullDir; };
   ornith = import ./Ornith-1.0-35B.nix { inherit modelsPullDir; };
   qwen3_235B = import ./Qwen3-235B-A22B.nix { inherit modelsPullDir; };
   qwen3_8_27B = import ./Qwen3.8-27B.nix {
@@ -62,7 +61,6 @@ let
   ]
   ++ withGroup "MoE" qwen3_6_35B-A3B.rtxModels
   ++ gemma4.rtxModels
-  ++ thedrummerSkyfall31B.rtxModels
   ++ agentsA1.rtxModels
   ++ withGroup "MoE" nex_n25_mini.rtxModels
   ++ withGroup "dense" qwen3_8_27B.rtxModels;
@@ -94,7 +92,6 @@ let
     ++ gemma4.amdModels
     ++ minimaxM2_7.amdModels
     ++ nemotron3Super.amdModels
-    ++ thedrummerSkyfall31B.amdModels
     ++ agentsA1.amdModels
     ++ qwen3_235B.amdModels
     ++ qwen3_8_27B.amdModels
