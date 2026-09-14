@@ -6707,6 +6707,64 @@ fn podman_gvisor_payload_uses_the_image_userland_not_host_pins() {
 }
 
 #[test]
+fn podman_gvisor_shell_pin_replaces_the_payload_shell() {
+    // bd myconfig-cew: the wrapper pins `MYSBX_GVISOR_SHELL` to the
+    // fish binary AS IT EXISTS INSIDE THE IMAGE (the gvisor tier
+    // bakes the host user's fish world, and the ro `~/.config/fish`
+    // mount carries its configuration — so a container session lands
+    // in the same shell as the host). The pin is an in-image store
+    // path, NOT a host pin: unlike `MYSBX_SHELL` (which the previous
+    // test proves is ignored), it IS honored and replaces the image's
+    // own `Cmd` (`/bin/bash`) as the interactive payload. A one-shot
+    // `run -- CMD` is unaffected — the pin applies to the shell
+    // payload only.
+    let (inv, _repo, sidecar) = fixture("podman-gvisor-shell-pin", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        .env("MYSBX_GVISOR_SHELL", "/nix/store/eeee-fish/bin/fish");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(
+        lines[lines.len() - 1],
+        "/nix/store/eeee-fish/bin/fish",
+        "payload is the pinned in-image shell: {stdout}"
+    );
+
+    // ... and the one-shot form keeps the explicit command (the
+    // one-shot printout ends in an extra blank line, so compare the
+    // trailing non-empty slice instead of indexing from the end).
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "rg", "--version"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        .env("MYSBX_GVISOR_SHELL", "/nix/store/eeee-fish/bin/fish");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout.lines().collect();
+    let payload: Vec<&str> = {
+        let mut tail: Vec<&str> = lines
+            .iter()
+            .rev()
+            .take_while(|l| !l.is_empty())
+            .copied()
+            .collect();
+        tail.reverse();
+        tail
+    };
+    assert_eq!(
+        payload,
+        vec!["rg", "--version"],
+        "one-shot payload is the command: {stdout}"
+    );
+    assert!(
+        !lines.contains(&"/nix/store/eeee-fish/bin/fish"),
+        "the shell pin does not replace a one-shot payload: {stdout}"
+    );
+}
+
+#[test]
 fn podman_gvisor_multiplexer_without_image_entry_is_refused() {
     // A multiplexer selected under podman-gvisor with no in-image
     // entry pinned is a refused run (exit 70), the same refusal a

@@ -58,7 +58,14 @@ back to the built-in defaults):
   must not and do not reach this backend's argv; bd myconfig-wao).
   Defaults: `/bin/bash` and `/bin:/usr/bin`, the gVisor agent image's
   own OCI config (`Cmd` / `Env`) — the same userland the agent-gvisor
-  sessions run against.
+  sessions run against. The Nix wrapper pins `MYSBX_GVISOR_SHELL` on
+  fish hosts to the fish binary as it exists inside the image (bd
+  myconfig-cew: the image is provisioned with the host user's fish
+  world, so an interactive session lands in the same shell, aliases
+  and configuration, via the ro `~/.config/fish` mount); the tool
+  `PATH` stays the image's own — `buildEnv` links every baked
+  package's `bin` into the image `/bin`, which the OCI `PATH` already
+  covers.
 - `MYSBX_PODMAN`: the podman binary (fallback: `podman`).
 
 The multiplexer integration is **not available** under this backend
