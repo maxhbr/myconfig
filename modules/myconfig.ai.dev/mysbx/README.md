@@ -75,8 +75,8 @@ of running them.
 The **session noun group**
 ([`docs/design/workspace.md`](./docs/design/workspace.md) D7) is the
 one closed exception to cli.md D3's single-verb rule —
-`mysbx session list` and `mysbx session destroy NAME [--force]`, two
-verbs, not an open tree. `list` prints one line per `clones/` entry
+`mysbx session list`, `mysbx session destroy NAME [--force]` and
+`mysbx session hunk NAME`, three verbs, not an open tree. `list` prints one line per `clones/` entry
 with the name, the session branch and the ahead-count — the commits
 in the session branch that the host repo does not have — and marks
 entries without `.git` as debris of an interrupted creation.
@@ -87,9 +87,12 @@ sidecar root, never `/`), refuses while the session branch holds
 commits the host repo does not have — fetch or merge them first —
 unless `--force` is given, then plain-`rm -rf`s the standalone clone
 (and its per-session result file) without touching the host repo or
-the host-local `agent/mysbx/NAME` branch a `fetch` left behind. Both
-verbs start no sandbox; `--dry-run` prints the exact probe and
-removal commands instead of running them.
+the host-local `agent/mysbx/NAME` branch a `fetch` left behind. `hunk`
+opens the session's diff — the same range `mysbx diff <name>` shows,
+with the same implicit fetch — in the interactive `hunk` diff viewer
+(exec'd, its exit code propagates). All three start no sandbox;
+`--dry-run` prints the exact probe and removal commands instead of
+running them.
 
 The **worktree noun group**
 ([`docs/design/worktree.md`](./docs/design/worktree.md) W1) is the

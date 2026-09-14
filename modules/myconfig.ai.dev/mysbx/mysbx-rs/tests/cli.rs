@@ -6078,6 +6078,197 @@ fn a_session_dry_run_prints_the_commands_and_removes_nothing() {
     let _ = repo;
 }
 
+#[test]
+fn session_hunk_dry_run_prints_the_fetch_and_the_invocation() {
+    // D7/cli.md D9: the exact commands of `session hunk` — the
+    // implicit fetch of `mysbx diff` (D6), then the `hunk` invocation
+    // with the same three-dot range — one argument per line, the
+    // executable first, and nothing runs: no fetch happens, the host
+    // repo keeps no agent/mysbx/NAME branch.
+    let Some((inv, repo, _, clone)) = handoff_fixture("session-hunk-dry", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    }) else {
+        return;
+    };
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run", "session", "hunk", "fix-1"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    // The fetch command first: `git -C <repo> fetch --no-tags
+    // <clone> <refspec>` — the exact D6 mechanics, shared with
+    // `mysbx diff`.
+    assert_eq!(lines[0], "git", "{stdout}");
+    assert_eq!(lines[1], "-C", "{stdout}");
+    assert_eq!(lines[2], repo.to_string_lossy(), "{stdout}");
+    assert_eq!(lines[3], "fetch", "{stdout}");
+    assert_eq!(lines[4], "--no-tags", "{stdout}");
+    assert_eq!(lines[5], clone.to_string_lossy(), "{stdout}");
+    assert_eq!(
+        lines[6], "refs/heads/agent/mysbx/fix-1:refs/heads/agent/mysbx/fix-1",
+        "{stdout}"
+    );
+    // Then the hunk invocation: `hunk diff HEAD...refs/heads/…`.
+    let hunk_at = lines
+        .iter()
+        .position(|l| *l == "hunk")
+        .expect("the hunk invocation: {stdout}");
+    assert_eq!(
+        &lines[hunk_at..],
+        &["hunk", "diff", "HEAD...refs/heads/agent/mysbx/fix-1",],
+        "{stdout}"
+    );
+    // Nothing ran: no host-local session branch was created.
+    let ferry = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args([
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/agent/mysbx/fix-1",
+        ])
+        .status()
+        .unwrap();
+    assert!(!ferry.success(), "a dry run fetches nothing");
+}
+
+#[test]
+fn session_hunk_refuses_unknown_sessions_debris_and_usage_errors() {
+    // The refusal order: the registry of D2 (a missing clone is the
+    // unknown-session refusal, 70, the same words `session destroy`
+    // and the handoff verbs use), debris (70 — no `.git`, no branch
+    // to review), and the parse-time grammar of the NAME (2) plus
+    // the closed group's usage errors.
+    let (inv, _, sidecar) = fixture_user_backend("session-hunk-errors", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["session", "hunk", "fix-1"]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("unknown session: fix-1"), "{stderr}");
+    assert!(stderr.contains("mysbx run --session fix-1"), "{stderr}");
+    // Debris: an entry without `.git`.
+    let debris = sidecar.join("clones").join("broken");
+    std::fs::create_dir_all(&debris).unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["session", "hunk", "broken"]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("refusing to hunk"), "{stderr}");
+    assert!(stderr.contains("debris"), "{stderr}");
+    // The usage errors: the missing NAME, a bad grammar, an extra
+    // argument, a flag, `--`, an unknown group verb, a bare
+    // `session`.
+    for args in [
+        vec!["session", "hunk"],
+        vec!["session", "hunk", "a/b"],
+        vec!["session", "hunk", "fix-1", "extra"],
+        vec!["session", "hunk", "--force", "fix-1"],
+        vec!["session", "hunk", "--"],
+        vec!["session", "bogus"],
+        vec!["session"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+    }
+    // `--verbose` is refused like every session verb (no run to
+    // report on); `--dry-run` IS valid (cli.md D9).
+    let (code, _, stderr) = run_binary_with(&inv, &["--verbose", "session", "hunk", "fix-1"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("--verbose"), "{stderr}");
+}
+
+#[test]
+fn session_hunk_execs_hunk_over_the_fetched_range() {
+    // W4 for sessions: after the implicit fetch, `hunk` is exec'd
+    // with the host repo as the working directory — a stand-in on
+    // PATH receives the exact argv (`diff HEAD...refs/heads/…`), its
+    // exit code propagates unchanged, and the fetched ref is the
+    // session's current tip (the same contract `mysbx diff` gives).
+    let Some((inv, repo, sidecar, clone)) = handoff_fixture("session-hunk-exec", |clone| {
+        std::fs::write(clone.join("session.txt"), "work").unwrap();
+        assert!(git_in(clone, &["add", "session.txt"]));
+        assert!(git_in(clone, &["commit", "-m", "session work"]));
+    }) else {
+        return;
+    };
+    let _ = sidecar;
+    // A stand-in `hunk`: a shell script that records its argv and
+    // cwd to a file and exits with a distinctive code, so both the
+    // exec and the code's propagation are proven at once.
+    let record = inv.home.join("hunk-argv");
+    let stand_in = inv.home.join("hunk");
+    std::fs::write(
+        &stand_in,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$PWD\" \"$@\" >> {}\nexit 3\n",
+            record.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(&stand_in).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&stand_in, perms).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["session", "hunk", "fix-1"]);
+    // The stand-in must WIN the PATH lookup (a real `hunk` must not
+    // shadow it), but `git` — of the implicit fetch — stays
+    // reachable: PREPEND the home, never replace the PATH.
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let path =
+        std::env::join_paths(std::iter::once(inv.home.clone()).chain(std::env::split_paths(&path)))
+            .unwrap();
+    cmd.env("PATH", path);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    // The stand-in's own exit code propagated unchanged (cli.md D8).
+    assert_eq!(out.status.code(), Some(3), "stderr: {stderr}");
+    // The exec'd argv: the range of `mysbx diff`, in the host repo.
+    assert_eq!(
+        std::fs::read_to_string(&record).unwrap(),
+        format!(
+            "{}\ndiff\nHEAD...refs/heads/agent/mysbx/fix-1\n",
+            repo.display()
+        )
+    );
+    // The fetch really happened first: the host-local session branch
+    // exists, at the session's tip (the ferry copy of D6).
+    let tip = Command::new("git")
+        .arg("-C")
+        .arg(&clone)
+        .args(["rev-parse", "refs/heads/agent/mysbx/fix-1"])
+        .output()
+        .unwrap();
+    let host = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["rev-parse", "refs/heads/agent/mysbx/fix-1"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&host.stdout).trim(),
+        String::from_utf8_lossy(&tip.stdout).trim(),
+        "the fetched ref is the session tip"
+    );
+    assert!(!stdout.contains("## "), "no report lines: {stdout}");
+}
+
+#[test]
+fn a_session_hunk_started_inside_a_session_clone_is_refused() {
+    // workspace.md D9, the session-verb side: `session hunk` belongs
+    // to the HOST side of a session; started inside the clone, the
+    // resolver refuses with the error naming the owning repo and
+    // the session.
+    let (mut inv, _, sidecar) = fixture_user_backend("session-hunk-inside-clone", &[]);
+    inv.args = vec!["session", "hunk", "fix-1"];
+    let clone = sidecar.join("clones").join("fix-1");
+    std::fs::create_dir_all(&clone).unwrap();
+    inv.cwd = clone.clone();
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(
+        stderr.contains("refusing to run inside the clone of session fix-1"),
+        "{stderr}"
+    );
+}
+
 // ---- the worktree noun group (docs/design/worktree.md W1-W5) ---------
 
 /// A git fixture with a workmux-style worktrees sibling: a real repo

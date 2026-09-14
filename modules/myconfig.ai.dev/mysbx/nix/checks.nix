@@ -90,7 +90,7 @@ in
         for sub in run gui init edit fetch merge push diff version help session worktree; do
           grep -q -- "-a $sub" "$installed" || fail "no completion for subcommand: $sub"
         done
-        for sub in list destroy; do
+        for sub in list destroy hunk; do
           grep -q -- "-a $sub" "$installed" || fail "no completion for session sub-verb: $sub"
         done
         for sub in list diff hunk; do

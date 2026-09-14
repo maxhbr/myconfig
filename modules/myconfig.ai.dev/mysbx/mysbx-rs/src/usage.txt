@@ -5,7 +5,7 @@ Usage:
   mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
   mysbx fetch | merge | push | diff NAME [verb-arguments...]
-  mysbx session list | session destroy NAME [--force]
+  mysbx session list | session destroy NAME [--force] | session hunk NAME
   mysbx worktree list | worktree diff NAME | worktree hunk NAME
   mysbx [COMMAND]
 
@@ -113,6 +113,17 @@ Commands:
                 it is the operator's imported copy. With --dry-run
                 the exact probe and removal commands are printed
                 instead, and nothing is removed
+  session hunk NAME
+                the session's diff — the same range `mysbx diff NAME`
+                shows — in the interactive `hunk` viewer: the implicit
+                fast-forward fetch of the session branch into the host
+                repo, then `hunk diff
+                HEAD...refs/heads/agent/mysbx/NAME` exec'd with the
+                host repo as the working directory — the tool owns
+                the terminal and its exit code propagates unchanged,
+                like `$EDITOR` does for `mysbx edit`. Refuses a session
+                without a `.git` (debris). With --dry-run the exact
+                fetch and `hunk` commands are printed instead
   worktree list the host's workmux worktrees — the directories of the
                 `<repo>__worktrees` sibling — one line per entry with
                 the handle, the checked-out branch, and the
@@ -154,10 +165,11 @@ Options:
                 handoff verbs (fetch/merge/push/diff), the exact git
                 commands of the handoff are printed in the same format
                 instead of run; with the session verbs (session list,
-                session destroy) the exact probe and removal commands
-                are printed the same way; with the worktree verbs
-                (worktree list, worktree diff, worktree hunk) the
-                exact probe and diff commands are printed the same way
+                session destroy, session hunk) the exact probe and
+                removal commands are printed the same way; with the
+                worktree verbs (worktree list, worktree diff, worktree
+                hunk) the exact probe and diff commands are printed the
+                same way
   --verbose     print the run configuration (repo, config files, backend,
                 network, mounts, environment, payload) to stdout with a
                 `## ` prefix before running; must precede the command.

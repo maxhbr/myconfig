@@ -218,11 +218,11 @@ Failure wording follows the gvisor spec: a diverged or rewound
 host-local branch, a missing clone, a dirty tree, a detached HEAD are
 each named as such; git's own diagnostics pass through.
 
-### D7: `mysbx session list` / `mysbx session destroy` — the one noun-group verb
+### D7: `mysbx session list` / `mysbx session destroy` / `mysbx session hunk` — the one noun-group verb
 
 [cli.md](./cli.md) D3 ("single verbs, no nested command trees") gains one
-**closed** exception: the `session` group, two verbs, not an open tree —
-a third verb is a decision, not a given.
+**closed** exception: the `session` group, three verbs, not an open tree —
+a fourth verb is a decision, not a given.
 
 - **`mysbx session list`** — `clones/` is the registry: one line per
   entry with the name, the session branch, and the ahead-count (commits
@@ -241,6 +241,15 @@ a third verb is a decision, not a given.
   is **not** deleted: it is the operator's imported copy, and deleting it
   silently would contradict the unmerged-work guard this verb exists to
   enforce.
+- **`mysbx session hunk NAME`** (bd myconfig-g2t) — the diff of D6's
+  `diff` verb in the interactive `hunk` viewer: the implicit fetch, then
+  `hunk diff HEAD...refs/heads/agent/mysbx/NAME` exec'd with the host
+  repo as the working directory — the tool replaces this process, owns
+  the terminal, and its exit code propagates unchanged, the same
+  discipline as `worktree hunk` ([worktree.md](./worktree.md) W4: a
+  plain `hunk` on PATH, no pin; `--dry-run` prints the exact fetch and
+  `hunk` commands). A session without a `.git` (debris) is refused — it
+  has no branch to review.
 
 ### D8: Unattended runs force clone mode
 
