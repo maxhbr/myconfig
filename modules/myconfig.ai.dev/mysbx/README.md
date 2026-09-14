@@ -91,6 +91,25 @@ the host-local `agent/mysbx/NAME` branch a `fetch` left behind. Both
 verbs start no sandbox; `--dry-run` prints the exact probe and
 removal commands instead of running them.
 
+The **worktree noun group**
+([`docs/design/worktree.md`](./docs/design/worktree.md) W1) is the
+second closed exception — `mysbx worktree list`, `mysbx worktree
+diff NAME` and `mysbx worktree hunk NAME`, read-only inspection of
+the host's **workmux worktrees** (the linked worktrees in the
+`<repo>__worktrees` sibling): `list` prints one line per entry with
+the handle, the checked-out branch and the ahead-count (the commits
+in the worktree's branch that the base branch does not have),
+marking entries without a `.git` pointer as debris; `diff` shows the
+THREE-DOT diff `<base>...<branch>` — the changes since the worktree
+diverged from its base, where the base is workmux's own
+`branch.<branch>.workmux-base` record of the host repo's config,
+falling back to `master`, `main`, then the host HEAD; and `hunk`
+opens that same range in the interactive `hunk` diff viewer (exec'd,
+its exit code propagates). All three start no sandbox; `--dry-run`
+prints the exact commands instead. Creating, merging and removing
+worktrees stays with `workmux` itself (W5: this group is read-only,
+and agent status stays with `workmux status`).
+
 `mysbx run -- CMD...` runs one command in the sandbox;
 `mysbx run --dry-run -- CMD...` prints the exact `bwrap` invocation it
 would execute — argv[0] (the backend binary, the wrapped store path under

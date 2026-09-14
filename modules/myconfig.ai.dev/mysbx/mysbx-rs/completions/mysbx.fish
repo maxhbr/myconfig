@@ -91,6 +91,12 @@ function __mysbx_in_session
     contains -- session (__mysbx_tokens)
 end
 
+function __mysbx_in_worktree
+    __mysbx_past_dd
+    and return 1
+    contains -- worktree (__mysbx_tokens)
+end
+
 function __mysbx_in_destroy
     __mysbx_past_dd
     and return 1
@@ -120,7 +126,8 @@ function __mysbx_merge_named
     and set -q t[2]
 end
 
-# The sub-verb position of the session group (workspace.md D7).
+# The sub-verb position of the session group (workspace.md D7) and
+# of the worktree group (docs/design/worktree.md W1).
 function __mysbx_expects_session_verb
     __mysbx_past_dd
     and return 1
@@ -130,8 +137,19 @@ function __mysbx_expects_session_verb
     and not set -q t[2]
 end
 
+function __mysbx_expects_worktree_verb
+    __mysbx_past_dd
+    and return 1
+    set -l t (__mysbx_tokens)
+    set -q t[1]
+    and test "$t[1]" = worktree
+    and not set -q t[2]
+end
+
 # The NAME position: the first positional of the four handoff verbs
-# (workspace.md D6) and of `session destroy` (D7).
+# (workspace.md D6) and of `session destroy` (D7) — session names;
+# `worktree diff` / `worktree hunk` (worktree.md W1) — worktree
+# handles, via [`__mysbx_expects_worktree_name`].
 function __mysbx_expects_name
     __mysbx_past_dd
     and return 1
@@ -148,8 +166,23 @@ function __mysbx_expects_name
             and not set -q t[3]
             and return 0
             return 1
+        case worktree
+            return 1
     end
     return 1
+end
+
+# The NAME position of `worktree diff NAME` / `worktree hunk NAME`
+# (docs/design/worktree.md W1).
+function __mysbx_expects_worktree_name
+    __mysbx_past_dd
+    and return 1
+    set -l t (__mysbx_tokens)
+    set -q t[1]
+    or return 1
+    test "$t[1]" = worktree
+    and test "$t[2]" = diff -o "$t[2]" = hunk
+    and not set -q t[3]
 end
 
 # The REMOTE position of `push NAME [REMOTE]` (D6).
@@ -211,6 +244,53 @@ function __mysbx_sessions
     end
 end
 
+# The worktree handles of the repo the current directory resolves
+# to (docs/design/worktree.md W2: the `<repo>__worktrees` sibling IS
+# the registry — a pure directory listing, the same discipline as
+# `__mysbx_sessions`). An entry without a `.git` FILE is debris, not
+# a worktree, and is not offered — but the `list`/`diff`/`hunk`
+# verbs still NAME it (a completion offers, it never forbids).
+function __mysbx_worktrees
+    set -l dir (pwd -P)
+    set -l repo
+    set -l walk $dir
+    while true
+        if test -d "$walk.mysbx"
+            set repo $walk
+            break
+        end
+        if test "$walk" = /
+            break
+        end
+        set walk (dirname $walk)
+    end
+    if not set -q repo[1]
+        set -l gitwalk $dir
+        while true
+            if test -e "$gitwalk/.git"
+                set repo $gitwalk
+                break
+            end
+            if test "$gitwalk" = /
+                break
+            end
+            set gitwalk (dirname $gitwalk)
+        end
+    end
+    if not set -q repo[1]
+        set repo $dir
+    end
+    set -l name (path basename -- $repo)
+    set -l worktrees (path dirname -- $repo)/$name\__worktrees
+    test -d "$worktrees"
+    or return 1
+    for entry in $worktrees/*
+        test -d "$entry"
+        or continue
+        path basename -- $entry
+    end
+end
+
 # The remotes of the host repo, for `push NAME [REMOTE]` (D6: the
 # host repo's own remotes; `git remote` walks up to the same repo).
 function __mysbx_remotes
@@ -233,11 +313,18 @@ complete -c mysbx -f -n '__mysbx_no_verb' -a diff -d 'Three-dot diff of the host
 complete -c mysbx -f -n '__mysbx_no_verb' -a version -d 'Print the version'
 complete -c mysbx -f -n '__mysbx_no_verb' -a help -d 'Print this help'
 complete -c mysbx -f -n '__mysbx_no_verb' -a session -d 'The session group: list | destroy'
+complete -c mysbx -f -n '__mysbx_no_verb' -a worktree -d 'The worktree group: list | diff | hunk'
 
 # The session sub-verbs (workspace.md D7 — a closed group, not an open
 # tree).
 complete -c mysbx -f -n '__mysbx_expects_session_verb' -a list -d 'The sessions of the current repo (the clones/ registry)'
 complete -c mysbx -f -n '__mysbx_expects_session_verb' -a destroy -d 'Remove the named session clone (guarded removal)'
+
+# The worktree sub-verbs (docs/design/worktree.md W1 — a closed
+# group, like the session one).
+complete -c mysbx -f -n '__mysbx_expects_worktree_verb' -a list -d 'The host workmux worktrees (the __worktrees registry)'
+complete -c mysbx -f -n '__mysbx_expects_worktree_verb' -a diff -d 'Three-dot diff of the worktree branch against its base'
+complete -c mysbx -f -n '__mysbx_expects_worktree_verb' -a hunk -d 'The same range in the interactive hunk viewer'
 
 # The global flags (cli.md D9/D10: they precede the verb; the
 # run-scoped ones also follow `run`). `--result`/`--timeout` are
@@ -285,6 +372,10 @@ complete -c mysbx -n '__mysbx_in_destroy' -l force -d 'Destroy even when the ses
 # the existing sessions of the registry (a new NAME is still typable —
 # a completion offers, it never forbids).
 complete -c mysbx -f -n '__mysbx_expects_name' -a '(__mysbx_sessions)' -d 'Existing session (the first --session run creates one)'
+
+# The NAME position of `worktree diff` / `worktree hunk`: the host
+# worktree handles of the `__worktrees` registry (W2).
+complete -c mysbx -f -n '__mysbx_expects_worktree_name' -a '(__mysbx_worktrees)' -d 'Existing host worktree handle (workmux add creates one)'
 
 # The REMOTE of `push NAME [REMOTE]` (default: origin).
 complete -c mysbx -f -n '__mysbx_expects_remote' -a '(__mysbx_remotes)' -d 'git remote of the host repo (default: origin)'

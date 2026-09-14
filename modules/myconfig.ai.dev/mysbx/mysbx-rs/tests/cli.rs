@@ -6077,3 +6077,239 @@ fn a_session_dry_run_prints_the_commands_and_removes_nothing() {
     assert!(!stdout.contains("SESSION"), "no listing: {stdout}");
     let _ = repo;
 }
+
+// ---- the worktree noun group (docs/design/worktree.md W1-W5) ---------
+
+/// A git fixture with a workmux-style worktrees sibling: a real repo
+/// with one commit on `master`, plus `<repo>__worktrees/<handle>` —
+/// a real LINKED worktree on its own branch (created with
+/// `git worktree add`, exactly what `workmux add` runs), with the
+/// workmux base record written like workmux writes it
+/// (`branch.<branch>.workmux-base` in the repo config). Returns
+/// `None` when no runnable `git` is on PATH — the same skip as
+/// `git_repo`.
+fn worktree_fixture(name: &str, handle: &str) -> Option<(Invocation, PathBuf, PathBuf, PathBuf)> {
+    let (inv, repo, sidecar) = git_session_fixture(name, &[])?;
+    let repo_name = repo.file_name()?.to_string_lossy().into_owned();
+    let worktrees = repo
+        .parent()
+        .map(|p| p.join(format!("{repo_name}__worktrees")))
+        .unwrap();
+    if !git_in(
+        &repo,
+        &[
+            "worktree",
+            "add",
+            &worktrees.join(handle).to_string_lossy(),
+            "-b",
+            handle,
+        ],
+    ) || !git_in(
+        &repo,
+        &["config", &format!("branch.{handle}.workmux-base"), "main"],
+    ) {
+        return None;
+    }
+    Some((inv, repo, sidecar, worktrees.join(handle)))
+}
+
+#[test]
+fn worktree_list_prints_handle_branch_and_ahead_count() {
+    // W1/W2: one line per __worktrees entry — the handle, the
+    // checked-out branch and the ahead-count (commits in the
+    // worktree's branch the BASE does not have). A worktree with one
+    // commit lists ahead 1; a fresh one ahead 0.
+    let Some((inv, repo, _, worktree)) = worktree_fixture("worktree-list", "fix-1") else {
+        return;
+    };
+    std::fs::write(worktree.join("w1.txt"), "work").unwrap();
+    assert!(git_in(&worktree, &["add", "w1.txt"]));
+    assert!(git_in(&worktree, &["commit", "-m", "worktree work"]));
+    let (code, stdout, stderr) = run_binary_with(&inv, &["worktree", "list"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(
+        lines[0],
+        format!("{:<24} {:<28} {}", "WORKTREE", "BRANCH", "AHEAD"),
+        "{stdout}"
+    );
+    assert!(lines.len() == 2, "one row: {stdout}");
+    assert!(
+        lines[1].starts_with(&format!("fix-1{}", " ".repeat(24 - 5))),
+        "{stdout}"
+    );
+    assert!(lines[1].contains("fix-1 "), "{stdout}");
+    assert!(lines[1].trim_end().ends_with('1'), "ahead 1: {stdout}");
+    let _ = repo;
+}
+
+#[test]
+fn worktree_list_marks_debris_and_skips_files() {
+    // W2: an entry without a `.git` POINTER is debris and marked as
+    // such; a stray FILE in the sibling is not a worktree and lists
+    // no row.
+    let Some((inv, _, _, worktree)) = worktree_fixture("worktree-list-debris", "fix-1") else {
+        return;
+    };
+    let worktrees = worktree.parent().unwrap().to_path_buf();
+    std::fs::create_dir_all(worktrees.join("broken")).unwrap();
+    std::fs::write(worktrees.join("stray.txt"), "not a worktree").unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["worktree", "list"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert!(lines.len() == 3, "two rows: {stdout}");
+    let broken = lines.iter().find(|l| l.starts_with("broken")).unwrap();
+    assert!(broken.contains("debris"), "{stdout}");
+    assert!(
+        !stdout.contains("stray.txt"),
+        "a stray file lists no row: {stdout}"
+    );
+}
+
+#[test]
+fn worktree_list_without_a_sibling_lists_nothing() {
+    // W2: an absent `__worktrees` is the empty registry — the listing
+    // succeeds with the header and no rows, like an empty clones/.
+    let (inv, _, _) = git_session_fixture("worktree-no-sibling", &[]).unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["worktree", "list"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "just the header: {stdout}");
+    assert!(lines[0].starts_with("WORKTREE"), "{stdout}");
+}
+
+#[test]
+fn worktree_diff_shows_the_three_dot_range() {
+    // W1/W3: the diff is `<base>...<branch>` — the changes since the
+    // divergence, and git's own exit code passes through. The base is
+    // the workmux record; a worktree whose branch advanced one commit
+    // shows exactly that commit's diff.
+    let Some((inv, repo, _, worktree)) = worktree_fixture("worktree-diff", "fix-1") else {
+        return;
+    };
+    std::fs::write(worktree.join("w1.txt"), "worktree work\n").unwrap();
+    assert!(git_in(&worktree, &["add", "w1.txt"]));
+    assert!(git_in(&worktree, &["commit", "-m", "worktree work"]));
+    let (code, stdout, stderr) = run_binary_with(&inv, &["worktree", "diff", "fix-1"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("w1.txt"), "{stdout}");
+    assert!(stdout.contains("+worktree work"), "{stdout}");
+    // The base that answered is reported (the workmux record).
+    assert!(
+        stderr.contains("workmux-base record"),
+        "the base line is reported: {stderr}"
+    );
+    let _ = repo;
+}
+
+#[test]
+fn worktree_diff_dry_run_prints_the_command() {
+    // cli.md D9: the exact git command, one argument per line, the
+    // executable first — and nothing runs.
+    let Some((inv, _, _, worktree)) = worktree_fixture("worktree-diff-dry", "fix-1") else {
+        return;
+    };
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run", "worktree", "diff", "fix-1"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines[0], "git", "{stdout}");
+    assert!(lines.contains(&"-C"), "{stdout}");
+    assert!(
+        lines.contains(&worktree.to_string_lossy().as_ref()),
+        "{stdout}"
+    );
+    assert!(lines.contains(&"diff"), "{stdout}");
+    assert!(lines.contains(&"main...fix-1"), "{stdout}");
+}
+
+#[test]
+fn worktree_hunk_dry_run_prints_the_invocation() {
+    // W4: the exact `hunk` invocation — `hunk`, then `diff`, then the
+    // range — and nothing runs (a dry run of an interactive tool).
+    let Some((inv, _, _, _)) = worktree_fixture("worktree-hunk-dry", "fix-1") else {
+        return;
+    };
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run", "worktree", "hunk", "fix-1"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines, vec!["hunk", "diff", "main...fix-1"], "{stdout}");
+}
+
+#[test]
+fn worktree_diff_refuses_unknown_debris_and_detached() {
+    // The refusal order of resolve_worktree: an unknown NAME, debris,
+    // and (skipped here: a detached HEAD needs a more elaborate
+    // fixture) — an unknown handle and debris are both 70 with the
+    // fact named.
+    let Some((inv, _, _, _)) = worktree_fixture("worktree-refusals", "fix-1") else {
+        return;
+    };
+    let (code, _, stderr) = run_binary_with(&inv, &["worktree", "diff", "no-such"]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("unknown worktree"), "{stderr}");
+    // Debris: an entry without a .git pointer.
+    let worktrees = inv.cwd.parent().unwrap().join(format!(
+        "{}__worktrees",
+        inv.cwd.file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::create_dir_all(worktrees.join("broken")).unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["worktree", "diff", "broken"]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("debris"), "{stderr}");
+}
+
+#[test]
+fn worktree_verbs_refuse_run_scoped_flags_and_verbose() {
+    // Like the session verbs: no sandbox is started, so the run-scoped
+    // flags are usage errors (2) and --verbose has no run to report
+    // on. --dry-run IS valid (cli.md D9).
+    let (inv, _, _) = fixture_user_backend("worktree-flags", &[]);
+    for args in [
+        vec!["--session", "fix-1", "worktree", "list"],
+        vec!["--ro", "/tmp", "worktree", "list"],
+        vec!["--result", "worktree", "list"],
+        vec!["--timeout", "5", "worktree", "diff", "fix-1"],
+        vec!["--multiplexer", "tmux", "worktree", "list"],
+        vec!["--verbose", "worktree", "list"],
+        vec!["--verbose", "worktree", "diff", "fix-1"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("is not valid with") || stderr.contains("--verbose"),
+            "{args:?}: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn worktree_usage_errors() {
+    // The closed group (W1): an unknown or missing sub-verb, a bad
+    // NAME grammar, and extra arguments are all usage errors (2).
+    let (inv, _, _) = fixture_user_backend("worktree-usage", &[]);
+    for args in [
+        vec!["worktree"],
+        vec!["worktree", "add"],
+        vec!["worktree", "diff"],
+        vec!["worktree", "diff", "a/b"],
+        vec!["worktree", "diff", "fix-1", "extra"],
+        vec!["worktree", "list", "unexpected"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+    }
+}
+
+#[test]
+fn worktree_diff_of_a_fresh_worktree_is_empty() {
+    // W3 sanity: a worktree at its base's tip shows no diff (the
+    // three-dot range of identical tips), and the base is still the
+    // workmux record.
+    let Some((inv, _, _, _)) = worktree_fixture("worktree-fresh", "fix-1") else {
+        return;
+    };
+    let (code, stdout, stderr) = run_binary_with(&inv, &["worktree", "diff", "fix-1"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.trim().is_empty(), "no diff: {stdout}");
+    assert!(stderr.contains("workmux-base record"), "{stderr}");
+}

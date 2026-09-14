@@ -6,6 +6,7 @@ Usage:
   mysbx gui [ARG...]
   mysbx fetch | merge | push | diff NAME [verb-arguments...]
   mysbx session list | session destroy NAME [--force]
+  mysbx worktree list | worktree diff NAME | worktree hunk NAME
   mysbx [COMMAND]
 
 Commands:
@@ -112,6 +113,32 @@ Commands:
                 it is the operator's imported copy. With --dry-run
                 the exact probe and removal commands are printed
                 instead, and nothing is removed
+  worktree list the host's workmux worktrees — the directories of the
+                `<repo>__worktrees` sibling — one line per entry with
+                the handle, the checked-out branch, and the
+                ahead-count (the commits in the worktree's branch that
+                the base branch does not have; `-` when no honest
+                number can be computed). An entry without a `.git`
+                pointer is debris and is marked as such. Starts no
+                sandbox; with --dry-run the exact git probe commands
+                are printed instead
+  worktree diff NAME
+                the changes on the named worktree's branch since it
+                diverged from its BASE branch: the THREE-DOT diff
+                `git -C <worktree> diff <base>...<branch>`. The base
+                is workmux's own record —
+                `branch.<branch>.workmux-base` of the host repo's
+                config — falling back to `master`, then `main`, then
+                the host repo's HEAD when no record exists; the base
+                that answered is reported to stderr. git's own exit
+                code and diagnostics pass through
+  worktree hunk NAME
+                the same three-dot range in the interactive `hunk`
+                diff viewer, exec'd with the worktree as the working
+                directory — the tool owns the terminal and its exit
+                code propagates unchanged, like `$EDITOR` does for
+                `mysbx edit`. With --dry-run the exact `hunk`
+                invocation is printed instead
   version       print the version
   help          print this help
 
@@ -128,7 +155,9 @@ Options:
                 commands of the handoff are printed in the same format
                 instead of run; with the session verbs (session list,
                 session destroy) the exact probe and removal commands
-                are printed the same way
+                are printed the same way; with the worktree verbs
+                (worktree list, worktree diff, worktree hunk) the
+                exact probe and diff commands are printed the same way
   --verbose     print the run configuration (repo, config files, backend,
                 network, mounts, environment, payload) to stdout with a
                 `## ` prefix before running; must precede the command.
