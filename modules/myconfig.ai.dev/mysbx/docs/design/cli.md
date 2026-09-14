@@ -45,12 +45,15 @@ is still discovered); plain `init` never touches the config at all.
 ### D3: Verb subcommands, no nesting
 
 Subcommands are single verbs (`init`, `run`, `edit`, `version`, `help`). No
-nested command trees — one exception: the `session` noun group
+nested command trees — two exceptions: the `session` noun group
 (`session list`, `session destroy`), a closed set defined by
-[workspace.md](./workspace.md) D7. Rationale: the surface is small and
+[workspace.md](./workspace.md) D7, and the `worktree` noun group
+(`worktree list`, `worktree diff`, `worktree hunk`), a closed set defined by
+[worktree.md](./worktree.md) W1. Rationale: the surface is small and
 stays memorable; nesting would only pay off with many more commands —
-and the session group is the one place a noun carries its own meaning
-(“destroy the session”, not “destroy the repo”).
+and the two noun groups are the places where a noun carries its own
+meaning (“destroy the session”, not “destroy the repo”; “diff the
+worktree”, not “diff the repo”).
 
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2), `run -- COMMAND` for
@@ -61,7 +64,12 @@ machine-readable-outcome form, `gui [ARG...]` (D15), the handoff verbs
 the host repo and a session's clone; no sandbox is started, the session
 is the one positional and `--dry-run` prints the git commands), the
 session noun group `session list` / `session destroy NAME [--force]`
-([workspace.md](./workspace.md) D7 — the D3 exception above), the
+([workspace.md](./workspace.md) D7 — the first D3 exception above), the
+session noun group's worktree sibling `worktree list` /
+`worktree diff NAME` / `worktree hunk NAME`
+([worktree.md](./worktree.md) W1 — the second D3 exception: read-only
+inspection of the host's workmux worktrees in `<repo>__worktrees`,
+host-side, no sandbox started), the
 global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
 the clone run mode), plus the global flags `--dry-run` (D9),
 `--verbose` (D10), `--result`/`--timeout` (D17) and `--multiplexer`

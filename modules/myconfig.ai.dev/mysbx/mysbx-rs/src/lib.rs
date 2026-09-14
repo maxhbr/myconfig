@@ -34,6 +34,7 @@ pub mod result;
 pub mod session;
 pub mod sessionverbs;
 pub mod toml;
+pub mod worktreeverbs;
 
 /// The usage text.
 pub const USAGE: &str = include_str!("usage.txt");
@@ -157,6 +158,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "push"
                         | "diff"
                         | "session"
+                        | "worktree"
                 ) =>
         {
             eprintln!(
@@ -202,6 +204,34 @@ pub fn run(args: Vec<String>) -> i32 {
         // prints the exact commands (cli.md D9) and `--verbose` is
         // refused — there is no run to report on.
         Some("session") if flags.verbose => reject_verbose("session"),
+        // The worktree noun group (docs/design/worktree.md, W1) — the
+        // second closed nested-verb exception to cli.md D3, beside
+        // `session`. Host-side like the handoff verbs: no sandbox is
+        // started, the repo is the one the cwd resolves to, `--dry-run`
+        // prints the exact commands (cli.md D9) and `--verbose` is
+        // refused — there is no run to report on.
+        Some("worktree") if flags.verbose => reject_verbose("worktree"),
+        Some("worktree") => {
+            match rest.get(1).map(String::as_str) {
+                Some("list") => worktreeverbs::list(&rest[2..], flags.dry_run),
+                Some("diff") => worktreeverbs::diff(&rest[2..], flags.dry_run),
+                Some("hunk") => worktreeverbs::hunk(&rest[2..], flags.dry_run),
+                // The group is closed: a fourth verb is a decision,
+                // not a given — unknown members are usage errors
+                // naming the three that exist (W1).
+                Some(other) => {
+                    eprintln!("mysbx worktree: unknown worktree verb: {other}");
+                    eprintln!("  the worktree group is closed: list, diff, hunk (docs/design/worktree.md W1)");
+                    eprintln!("try `mysbx --help`");
+                    2
+                }
+                None => {
+                    eprintln!("mysbx worktree: a verb is required: list, diff or hunk");
+                    eprintln!("try `mysbx --help`");
+                    2
+                }
+            }
+        }
         Some("session") => {
             match rest.get(1).map(String::as_str) {
                 Some("list") => sessionverbs::list(&rest[2..], flags.dry_run),
@@ -538,8 +568,8 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
 /// verb named like every other flag/verb refusal.
 fn reject_verbose(verb: &str) -> i32 {
     eprintln!("mysbx: --verbose is not valid with `{verb}`");
-    if verb == "session" {
-        eprintln!("  it reports a run's configuration — the session verbs start no sandbox");
+    if verb == "session" || verb == "worktree" {
+        eprintln!("  it reports a run's configuration — the {verb} verbs start no sandbox");
     } else {
         eprintln!("  it reports a run's configuration — a handoff starts no sandbox");
     }

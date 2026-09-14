@@ -84,13 +84,22 @@ in
 
         # every dispatch word of usage.txt is offered as a subcommand —
         # the verbs of the dispatcher (src/lib.rs) plus the closed
-        # session sub-verb group (src/sessionverbs.rs, D7)
-        for sub in run gui init edit fetch merge push diff version help session; do
+        # session sub-verb group (src/sessionverbs.rs, D7) and the
+        # closed worktree sub-verb group (src/worktreeverbs.rs,
+        # docs/design/worktree.md W1)
+        for sub in run gui init edit fetch merge push diff version help session worktree; do
           grep -q -- "-a $sub" "$installed" || fail "no completion for subcommand: $sub"
         done
         for sub in list destroy; do
           grep -q -- "-a $sub" "$installed" || fail "no completion for session sub-verb: $sub"
         done
+        for sub in list diff hunk; do
+          grep -q -- "-a $sub" "$installed" || fail "no completion for worktree sub-verb: $sub"
+        done
+
+        # the worktree handles come from the __worktrees registry
+        # (docs/design/worktree.md W2)
+        grep -q 'mysbx_worktrees' "$installed" || fail "no worktree-registry lookup"
 
         # every option of usage.txt is completed (`-l <name>`, i.e. the
         # `--<name>` long form), plus the verb-tail flags usage.txt
