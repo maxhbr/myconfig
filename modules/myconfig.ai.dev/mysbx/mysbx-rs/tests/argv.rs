@@ -3307,6 +3307,11 @@ fn podman_golden_minimal_config() {
         &podman_params(),
     )
     .unwrap();
+    // Args-only argv, like bwrap's: no program name, because lib.rs
+    // prepends MYSBX_PODMAN via Command::new. A leading `podman`
+    // doubles the program name and podman rejects the first flag
+    // (bd myconfig-7c2).
+    assert_eq!(argv[0], "--runtime=runsc");
     assert_golden("podman-minimal.txt", &argv);
 }
 

@@ -60,6 +60,16 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env("MYSBX_SHELL", "/synth/bin/bash")
         .env("MYSBX_TOOLS_PATH", "/synth/bin")
         .env_remove("MYSBX_BWRAP")
+        // The gvisor pins are wrapper-provided, never inherited from the
+        // test runner's own (possibly wrapped) environment — a wrapped
+        // mysbx on PATH would otherwise leak its image pins into tests
+        // that must exercise the UNPINNED refusal paths (bd
+        // myconfig-xrt).
+        .env_remove("MYSBX_GVISOR_TARBALL")
+        .env_remove("MYSBX_GVISOR_IMAGE")
+        .env_remove("MYSBX_GVISOR_IMAGE_ID")
+        .env_remove("MYSBX_GVISOR_RUNTIME_FLAGS")
+        .env_remove("MYSBX_PODMAN")
         // Keep the host's TERM & co. out of the result: the forwarded set
         // must come only from variables the test actually sets. The list
         // is the same constant the pipeline reads — not a hand copy that
@@ -6575,18 +6585,44 @@ fn gvisor_load_image_image_requires_value() {
 
 #[test]
 fn gvisor_load_image_with_image_ref() {
-    // --image with a reference (non-tarball) reports state
-    // Since we can't actually load in tests, we just check it doesn't crash
+    // A bare reference with no tarball pin is a REFUSED load now
+    // (exit 2): no registry serves the Nix-built image, so the old
+    // `podman pull` fallback could only fail against a registry named
+    // `localhost` (bd myconfig-xrt).
     let (inv, _, _) = fixture_user_backend("gvisor-load-image-ref", &[]);
     let (code, _, stderr) = run_binary_with(
         &inv,
         &["gvisor-load-image", "--image", "localhost/test:latest"],
     );
-    // Will fail because podman isn't available or image doesn't exist, but should fail gracefully
-    // Exit code 70 for infrastructure error is expected when podman isn't available
+    assert_eq!(code, 2);
     assert!(
-        code == 0 || code == 70,
-        "expected 0 or 70, got {code}; stderr: {stderr}"
+        stderr.contains("no image tarball to load"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn gvisor_load_image_without_any_pin_is_usage_error() {
+    // No --image, no MYSBX_GVISOR_* pins: a usage error, never an
+    // invented default reference (bd myconfig-xrt).
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-unpinned", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["gvisor-load-image"]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("no image configured"), "stderr: {stderr}");
+}
+
+#[test]
+fn podman_gvisor_backend_without_image_pin_is_refused() {
+    // backend = "podman-gvisor" with no MYSBX_GVISOR_IMAGE pin is a
+    // refused run (exit 70), never a run against an invented
+    // `localhost/…` reference (bd myconfig-xrt).
+    let (inv, repo, sidecar) = fixture("podman-gvisor-unpinned", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, 70);
+    assert!(
+        stderr.contains("no container image configured"),
+        "stderr: {stderr}"
     );
 }
 

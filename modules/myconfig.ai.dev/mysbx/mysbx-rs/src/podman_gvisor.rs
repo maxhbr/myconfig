@@ -19,28 +19,31 @@
 //!
 //! Sections, in fixed order (order is semantic for overlapping binds):
 //!
-//! 1. `podman run` with global args (`--runtime=runsc`, `--cgroup-manager`,
-//!    `--runtime-flag` per flag — from env vars, see below)
-//! 2. container identity: `--replace`, `--name`, `--hostname`, `--userns=keep-id`
-//! 3. base isolation: `--read-only`, `--read-only-tmpfs=true`,
+//! 0. `run` and its global args (`--runtime=runsc`, `--cgroup-manager`,
+//!    `--runtime-flag` per flag — from env vars, see below) — WITHOUT the
+//!    program name: the returned argv is arguments-only, like bwrap's
+//!    (`--clearenv` first there), because lib.rs prepends the backend
+//!    binary itself via `Command::new(MYSBX_PODMAN)`.
+//! 1. container identity: `--replace`, `--name`, `--hostname`, `--userns=keep-id`
+//! 2. base isolation: `--read-only`, `--read-only-tmpfs=true`,
 //!    `--cap-drop=ALL`, `--security-opt=no-new-privileges`
-//! 4. working directory: `--workdir` at the repo path (the container's
+//! 3. working directory: `--workdir` at the repo path (the container's
 //!    view of the workspace)
-//! 5. workspace bind: the repo (or clone) mounted at its own path
+//! 4. workspace bind: the repo (or clone) mounted at its own path
 //!    (config.md D13, workspace.md D3), plus git metadata dirs when
 //!    approved, plus the worktrees sibling when it exists, plus
 //!    state-dirs binds (config.md D15)
-//! 6. configured mounts, in declaration order (config.md D7/D8),
+//! 5. configured mounts, in declaration order (config.md D7/D8),
 //!    `--mount type=bind,src=HOST,dst=DEST,ro|rw`
-//! 7. environment: host-forwarded first, then `cfg.env`, then
+//! 6. environment: host-forwarded first, then `cfg.env`, then
 //!    infrastructure variables (`HOME`, `PATH`, CA-bundle vars,
 //!    `TMUX_TMPDIR` for a multiplexer session)
-//! 8. resource limits: `--pids-limit`, `--memory`, `--cpus` (when
+//! 7. resource limits: `--pids-limit`, `--memory`, `--cpus` (when
 //!    cgroups are not ignored)
-//! 9. network: `--network` spec (shared by default, or `none` / pasta
+//! 8. network: `--network` spec (shared by default, or `none` / pasta
 //!    spec when `network = false` or configured)
-//! 10. image reference (from config or default)
-//! 11. payload: the multiplexer entry (for interactive sessions) or
+//! 9. image reference (from config or default)
+//! 10. payload: the multiplexer entry (for interactive sessions) or
 //!     shell/command
 //!
 //! Deliberately different from bubblewrap:
@@ -265,8 +268,12 @@ pub fn podman_run_argv(
         }
     }
 
-    // 1. podman run with global args
-    let mut argv: Vec<String> = vec!["podman".into()];
+    // 1. podman run with global args — ARGS ONLY, no program name:
+    // lib.rs execs `Command::new(MYSBX_PODMAN).args(argv)`, the same
+    // convention as bwrap_argv (golden minimal.txt starts with
+    // `--clearenv`). A leading `podman` would double the program
+    // name and garble podman's flag parsing.
+    let mut argv: Vec<String> = Vec::new();
     // Global args: --runtime=runsc, --cgroup-manager, --runtime-flag per flag
     argv.push("--runtime=runsc".into());
 

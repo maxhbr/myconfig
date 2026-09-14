@@ -70,6 +70,7 @@
   symlinkJoin,
   buildEnv,
   writeText,
+  runCommand,
   bubblewrap,
   bash,
   # The CA bundle pinned as `MYSBX_CA_BUNDLE` (bd myconfig-938): the
@@ -133,6 +134,15 @@
   # rather than a silent bare shell. A `null` value is treated like an
   # absent one, so callers may pass a gated attrset unfiltered.
   muxEntries ? { },
+  # The gVisor agent OCI image of the podman-gvisor backend
+  # (../docs/gvisor-load-image.md, bd myconfig-6di.1): `null` pins
+  # nothing — `backend = "podman-gvisor"` is a refused run and
+  # `mysbx gvisor-load-image` a usage error, never an invented
+  # `localhost/…` reference pulled from a registry that does not
+  # exist (bd myconfig-xrt). The module layer defaults this to the
+  # gvisor tier's effective image (same build the `agent-gvisor`
+  # sessions run).
+  gvisorImage ? null,
 }:
 
 let
@@ -267,6 +277,35 @@ let
   # (../mysbx-rs/completions) — a nix store path, not a $src reference:
   # `symlinkJoin` has no source directory to install from.
   completions = ../mysbx-rs/completions/mysbx.fish;
+  # The podman-gvisor pins: the image tarball, the reference runs use,
+  # and the expected image ID (the config-blob digest, extracted ONCE
+  # at build time — the same mechanism as the gvisor tier's
+  # `agent-gvisor-image-id` derivation in
+  # ../../sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/load-image.nix).
+  # `podman` runs the reference; `gvisor-load-image` compares IDs to
+  # detect a stale build under the same tag. All three are LAZY — a
+  # `null` gvisorImage must not force `imageName` on null.
+  gvisorPins = lib.optionalString (gvisorImage != null) (
+    "--set MYSBX_GVISOR_TARBALL '${gvisorImage}' "
+    + "--set MYSBX_GVISOR_IMAGE '${gvisorImage.imageName}:${gvisorImage.imageTag}' "
+    + "--set MYSBX_GVISOR_IMAGE_ID \"$(cat ${
+      runCommand "mysbx-gvisor-image-id"
+        {
+          nativeBuildInputs = [
+            gnutar
+            gzip
+            gnused
+          ];
+        }
+        ''
+          # The config entry is `<sha256hex>.json`, with or without the
+          # `sha256:` prefix depending on the archive writer —
+          # dockerTools' buildLayeredImage omits it.
+          tar --extract --to-stdout --file ${gvisorImage} manifest.json \
+            | tr -d '"' | sed -n 's/.*Config[[:space:]]*:[[:space:]]*\(sha256:\)\{0,1\}\([0-9a-f]\{64\}\)\.json.*/\2/p' > $out
+        ''
+    })\""
+  );
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -286,7 +325,8 @@ symlinkJoin {
       --set MYSBX_NIX_CONF '${sandboxNixConf}' \
       --set MYSBX_CA_BUNDLE '${caBundle}' \
       ${muxEntryPins} \
-      ${terminalPin}
+      ${terminalPin} \
+      ${gvisorPins}
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
     # sync with the CLI surface by the `mysbx-completions` check in

@@ -7,12 +7,15 @@ SPDX-License-Identifier: MIT
 
 Status: snapshot. Point of analysis: commit `07c22d201e`
 (`07c22d201e…`, 2026-09-11), re-checked for the exit-code/result
-contract (bd myconfig-0ql).
+contract (bd myconfig-0ql), and for the podman-gvisor backend (bd
+myconfig-6di.1; pin fix bd myconfig-xrt).
 
-`mysbx` is **not implemented yet** — today the binary knows `help`, `version`
-and `init` and confines nothing (`../mysbx-rs/src/lib.rs`). This document is
-the target-state checklist: it puts the sandbox implementations that already
-exist in this repo side by side, so the `mysbx` design decisions
+`mysbx` is implemented as far as the bubblewrap default backend, the
+interactive/run surface, and a second podman+gVisor backend (argv-mapped,
+not yet exercised on a host); the nono/qemu/microvm backends, the credential
+story and the network policy remain future work. This document puts the
+sandbox implementations that already exist in this repo side by side, so
+the `mysbx` design decisions
 ([`design/cli.md`](./design/cli.md), [`design/config.md`](./design/config.md))
 can be checked against what is already working.
 
@@ -71,7 +74,7 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 
 | Axis | `bwrap-jail` | `bwrap-simple` | `nono` | `qemu` | `gvisor` | `microvm` | `mysbx` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Mechanism | bubblewrap namespaces | bubblewrap namespaces | Landlock + seccomp (`nono`) | QEMU microVM, own kernel | rootless podman + `runsc` | Cloud Hypervisor, own kernel | bubblewrap first, then podman+gVisor / nono, later qemu/microvm (`../README.md` roadmap) |
+| Mechanism | bubblewrap namespaces | bubblewrap namespaces | Landlock + seccomp (`nono`) | QEMU microVM, own kernel | rootless podman + `runsc` | Cloud Hypervisor, own kernel | bubblewrap (default) and podman+gVisor (`backend = "podman-gvisor"`, explicit config — argv maps mounts/env/state-dirs/multiplexer onto a `podman run`; image + ref + ID pinned by the wrapper, `gvisor-load-image` loads it); nono/qemu/microvm later (`../README.md` roadmap) |
 | Kernel boundary | no | no | no | yes | user-space kernel | yes | none yet |
 | Runs as | your uid | your uid | your uid | guest `agent` user | container user | guest `agent` user | your uid (planned) |
 | Filesystem policy | curated allow-list of binds, env cleared (`--clearenv`) | ro config dirs + writable XDG dirs | `--allow` / `--read` / `--allow-cwd` | virtiofs shares only | image + explicit `--mount` | virtiofs shares only | nothing from the host filesystem unless declared: repo (+ its git metadata dirs, only when approved in `git-dirs` — D13) + explicit `[[mounts]]` (`config.md` D9, D13) |
@@ -122,8 +125,17 @@ Sources: `../../default.nix` (the `mkDefault` for `nono`),
 Everything below exists in at least one tier above and has no counterpart in
 `../mysbx-rs/src/`:
 
-- **A backend.** No confinement at all is implemented; `run(...)` in
-  `../mysbx-rs/src/lib.rs` dispatches only `help|version|init`.
+- ~~**A backend.** No confinement at all is implemented; `run(...)` in
+  `../mysbx-rs/src/lib.rs` dispatches only `help|version|init`.~~ DONE:
+  bubblewrap (`bwrap.rs`) is the default backend. A SECOND backend
+  also landed (bd myconfig-6di.1): `backend = "podman-gvisor"` maps
+  the merged config onto a rootless `podman run --runtime=runsc`
+  (`podman_gvisor.rs`), with the image trio pinned by the wrapper
+  (`MYSBX_GVISOR_TARBALL/_IMAGE/_IMAGE_ID`, `gvisor-load-image` loads
+  it, bd myconfig-xrt for the pin fix). Remaining before it is
+  production-ready: the payload shell / tool PATH are host store
+  paths the container does not mount (bd myconfig-wao), and no host
+  has exercised a full interactive session yet.
 - **Entering the sandbox** — the primary action per `cli.md` D2.
 - **`run COMMAND` / the `--` payload split** (`cli.md` D3, D4).
 - **A credential story.** Every existing tier had to answer this and they

@@ -385,9 +385,23 @@ in
         which rootless Podman requires.
       '';
     };
+
+    effectiveImage = mkOption {
+      type = types.nullOr types.package;
+      readOnly = true;
+      description = ''
+        The image actually used by this module — `image` with
+        `extraImagePackages` folded in (or `null` when `image` is).
+        Read-only, for other modules that want to run the SAME image
+        build (e.g. `myconfig.ai.dev.mysbx.gvisor.image`, the podman
+        backend of the mysbx CLI) instead of re-deriving the override.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
+    myconfig.ai.dev.gvisor-agent-sandbox.effectiveImage = image;
+
     assertions = [
       {
         assertion = lib.all (p: p != "" && !lib.hasPrefix "/" p && !lib.hasInfix ".." p) cfg.home.seedPaths;

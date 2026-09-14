@@ -322,8 +322,9 @@ in
         inherit (cfg) extraTools;
         inherit muxEntries;
         alacritty = cfg.terminal.package;
+        gvisorImage = cfg.gvisor.image;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -459,6 +460,43 @@ in
           `null` (the default on hosts without `myconfig.desktop`)
           pins nothing: the unwrapped crate's plain `alacritty` PATH
           lookup applies instead.
+        '';
+      };
+    };
+
+    gvisor = {
+      # The podman-gvisor backend (mysbx-rs/src/podman_gvisor.rs, bd
+      # myconfig-6di.1) runs rootless podman with the runsc runtime and
+      # a Nix-built OCI image — the same image mechanism the
+      # standalone gvisor tier uses
+      # (../../sandboxes/myconfig.ai.gvisor-agent-sandbox/). The three
+      # pins below are what `mysbx gvisor-load-image` loads and what
+      # `backend = "podman-gvisor"` runs (MYSBX_GVISOR_TARBALL /
+      # MYSBX_GVISOR_IMAGE / MYSBX_GVISOR_IMAGE_ID in ./nix/mysbx.nix).
+      image = mkOption {
+        type = types.nullOr types.package;
+        # Gated on the gvisor tier module being ENABLED: the image is a
+        # multi-hundred-MB OCI build, and pulling it into every mysbx
+        # host's closure — including headless hosts that will never
+        # configure `backend = "podman-gvisor"` — is the wrong
+        # default, the same reasoning as `aoe.package`.
+        default =
+          if (config.myconfig.ai.dev.gvisor-agent-sandbox.enable or false) then
+            config.myconfig.ai.dev.gvisor-agent-sandbox.effectiveImage
+          else
+            null;
+        defaultText = literalExpression "the gvisor tier's image (when that module is enabled, else null)";
+        description = ''
+          The Nix-built OCI image the podman-gvisor backend runs,
+          pinned into the wrapper together with its reference and
+          expected image ID. `null` pins nothing: `backend =
+          "podman-gvisor"` is a refused run and
+          `mysbx gvisor-load-image` a usage error instead of both
+          inventing a `localhost/…` reference no registry serves.
+
+          Defaults to the image of the gvisor tier module when that is
+          enabled on the host — the exact package `agent-gvisor`
+          sessions run, so both tiers share one build.
         '';
       };
     };

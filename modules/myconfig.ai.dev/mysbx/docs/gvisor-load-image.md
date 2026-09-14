@@ -13,48 +13,44 @@ mysbx gvisor-load-image [--force|--test|--image <ref>|--help]
 This command loads the gVisor agent container image that mysbx uses when configured with the `podman-gvisor` backend. It is integrated into the mysbx CLI for convenience, providing the same functionality as the Nix-built `agent-gvisor-load-image` helper.
 
 Without options, the command:
-1. Checks if the image is present in the local Podman store
-2. If missing or stale (different build), loads it from a tarball or pulls the image reference
+1. Checks if the image is present in the local Podman store, comparing image IDs (config-blob digests) rather than tags
+2. If missing or stale (different build), loads the tarball with `podman load`
 3. Reports the state after loading
 
 ## Options
 
 - `--force`: Reload the image unconditionally, even if the current build is already loaded
 - `--test`: Report the image state without loading; exit 0 if current, 1 otherwise
-- `--image <ref>`: Override the image reference or tarball path
+- `--image <ref>`: Override the image reference (the pinned tarball is still loaded, then retagged; a path to an existing tarball file is also accepted)
 - `--help`, `-h`: Show usage information
 
 ## Environment Variables
 
-- `MYSBX_GVISOR_IMAGE`: The image reference to load (default: `localhost/agent-gvisor:latest`)
+The Nix wrapper pins all three when the host builds a gVisor agent image (`myconfig.ai.dev.mysbx.gvisor.image` — by default the gvisor tier's image when that module is enabled):
 
-When `--image` is not provided, the command uses `MYSBX_GVISOR_IMAGE` if set, otherwise falls back to the default `localhost/agent-gvisor:latest`.
+- `MYSBX_GVISOR_TARBALL`: the docker-archive tarball to `podman load`
+- `MYSBX_GVISOR_IMAGE`: the image reference the runs use
+- `MYSBX_GVISOR_IMAGE_ID`: the expected image ID (config-blob digest, extracted from the tarball at build time) — the staleness check
+
+`--image` overrides the reference alone. With **no** pin and no `--image`, the command is a usage error (exit 2) instead of inventing a `localhost/...` reference: no registry serves the Nix-built image, so a `podman pull` fallback can never work.
 
 ## Image Sources
 
-The command supports two types of image sources:
+### Tarball (the pinned default)
 
-### Tarball Path
-
-When the image reference is a path to an existing file (tarball), the command:
-1. Extracts the image ID from the tarball's `manifest.json`
-2. Compares it with the loaded image's ID
-3. Loads the tarball if the image is absent or stale
+`podman load` gives the image the reference recorded in the tarball's `RepoTags`; when the wanted reference differs (an explicit `--image` override), the image is retagged after the load, so the store serves it under both.
 
 Example:
 ```bash
-mysbx gvisor-load-image --image /nix/store/...-agent-gvisor-image.tar.gz
+mysbx gvisor-load-image
 ```
 
-### Image Reference
+### Explicit tarball path
 
-When the image reference is not a tarball path (e.g., `localhost/agent-gvisor:latest`), the command automatically falls back to `podman pull` to fetch the image. This is the default behavior when no tarball is provided.
+A path to an existing file is accepted via `--image`:
 
-Example:
 ```bash
-mysbx gvisor-load-image --image localhost/agent-gvisor:latest
-# or simply (uses default):
-mysbx gvisor-load-image
+mysbx gvisor-load-image --image /nix/store/...-agent-dev.tar.gz
 ```
 
 ## Exit Codes
@@ -70,29 +66,28 @@ mysbx gvisor-load-image
 
 ```bash
 $ mysbx gvisor-load-image --test
-image:    localhost/agent-gvisor:latest
-ref:      localhost/agent-gvisor:latest
-expected: -
-loaded:   sha256:abc123...
-state:    current
+## image:    /nix/store/...-agent-dev.tar.gz
+## ref:      localhost/agent-dev:latest
+## expected: sha256:abc123...
+## loaded:   sha256:abc123...
+## state:    current
 ```
 
 ### Load the image
 
 ```bash
 $ mysbx gvisor-load-image
-image:    /nix/store/...-agent-gvisor-image.tar.gz
-ref:      localhost/agent-gvisor:latest
-expected: sha256:abc123...
-loaded:   -
-state:    absent
-loading /nix/store/...-agent-gvisor-image.tar.gz as localhost/agent-gvisor:latest
-...
-image:    /nix/store/...-agent-gvisor-image.tar.gz
-ref:      localhost/agent-gvisor:latest
-expected: sha256:abc123...
-loaded:   sha256:abc123...
-state:    current
+## image:    /nix/store/...-agent-dev.tar.gz
+## ref:      localhost/agent-dev:latest
+## expected: sha256:abc123...
+## loaded:   -
+## state:    absent
+loading /nix/store/...-agent-dev.tar.gz as localhost/agent-dev:latest (this may take a moment)...
+## image:    /nix/store/...-agent-dev.tar.gz
+## ref:      localhost/agent-dev:latest
+## expected: sha256:abc123...
+## loaded:   sha256:abc123...
+## state:    current
 ```
 
 ### Force reload
@@ -145,8 +140,9 @@ This command is a Rust reimplementation of the Nix-built `agent-gvisor-load-imag
 - Supports `--test` mode for CI/CD pipelines
 - Provides detailed state reporting with `## ` prefix for consistency
 - Handles errors gracefully with appropriate exit codes
-- Automatically falls back to `podman pull` for image references
 - Validates sha256 digests (64 hex characters) to ensure manifest integrity
+- Refuses instead of pulling when no tarball is configured — no registry
+  serves the Nix-built image, so a `podman pull` fallback can never work
 
 The command does not start a sandbox and therefore rejects global flags like `--verbose`, `--dry-run`, `--session`, `--ro`, and `--rw`.
 

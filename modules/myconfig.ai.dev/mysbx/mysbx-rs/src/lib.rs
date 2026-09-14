@@ -1404,9 +1404,21 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         "podman-gvisor" => {
             use std::borrow::Cow;
 
-            // For podman-gvisor, we need different params
-            // Read configuration from environment variables (matching bubblewrap pattern)
-            let gvisor_image = env_or("MYSBX_GVISOR_IMAGE", "localhost/agent-gvisor:latest");
+            // The image reference the runs use — the same pin
+            // gvisor-load-image loads (MYSBX_GVISOR_IMAGE, set by the Nix
+            // wrapper when the host builds a gVisor agent image; see
+            // loadimage.rs). No fallback: an invented `localhost/…` ref
+            // would run a nonexistent image and mislead the operator
+            // (bd myconfig-xrt).
+            let Some(gvisor_image) = env_opt("MYSBX_GVISOR_IMAGE") else {
+                eprintln!("mysbx: podman-gvisor: no container image configured");
+                eprintln!(
+                    "  the Nix wrapper pins MYSBX_GVISOR_IMAGE when the host \
+                     builds a gVisor agent image; an unwrapped build sets none"
+                );
+                eprintln!("  set MYSBX_GVISOR_IMAGE <ref>, or switch backends");
+                return EXIT_INFRASTRUCTURE;
+            };
 
             // Runtime flags: space-separated list from MYSBX_GVISOR_RUNTIME_FLAGS
             // Example: "ignore-cgroups --log-level=debug"

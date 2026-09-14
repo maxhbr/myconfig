@@ -1,4 +1,3 @@
-podman
 --runtime=runsc
 --cgroup-manager=cgroupfs
 run
