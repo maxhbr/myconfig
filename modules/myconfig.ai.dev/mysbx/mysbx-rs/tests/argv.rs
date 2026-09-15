@@ -3743,17 +3743,25 @@ fn podman_home_is_a_fresh_tmpfs_emitted_before_every_bind() {
     .unwrap();
     let mounts = podman_mount_specs(&argv);
 
-    // Exactly ONE tmpfs — the home. Podman mounts `/dev`, `/tmp` & co.
-    // itself (`--read-only-tmpfs=true`); the user mounts mysbx adds
-    // are binds, plus this single tmpfs.
+    // Exactly THREE tmpfs mounts — the home plus the two XDG
+    // `.local` parents (bd myconfig-e50: runsc creates bind-mountpoint
+    // parents root-owned, so the container user cannot create
+    // siblings under a `.local/share` that exists only to host a
+    // state bind). Podman mounts `/dev`, `/tmp` & co. itself
+    // (`--read-only-tmpfs=true`); the user mounts mysbx adds are
+    // binds, plus these tmpfs mounts.
     let tmpfs: Vec<&&str> = mounts
         .iter()
         .filter(|m| m.starts_with("type=tmpfs,"))
         .collect();
     assert_eq!(
         tmpfs,
-        vec![&"type=tmpfs,dst=/mysbx-home"],
-        "one tmpfs at the container home, nothing else: {mounts:?}"
+        vec![
+            &"type=tmpfs,dst=/mysbx-home",
+            &"type=tmpfs,dst=/mysbx-home/.local/share",
+            &"type=tmpfs,dst=/mysbx-home/.local/state",
+        ],
+        "home tmpfs plus the two XDG parents, nothing else: {mounts:?}"
     );
 
     // It comes FIRST among the mounts — before the repo bind and
@@ -3827,6 +3835,104 @@ fn podman_state_dirs_bind_over_the_home_tmpfs_not_the_ro_root() {
     assert!(
         env.contains(&"XDG_STATE_HOME=/mysbx-home/.local/state"),
         "state home still derives from the container home: {env:?}"
+    );
+}
+
+#[test]
+fn podman_xdg_parent_tmpfs_precede_the_state_binds() {
+    // bd myconfig-e50: runsc's mount preparation CREATES the missing
+    // mountpoint dirs of a bind root-owned 0755, so a `.local/share`
+    // that exists on the home tmpfs only to host the
+    // `.local/share/opencode` state bind is not creatable-in for the
+    // container user (`--userns=keep-id`) and fish died with EACCES
+    // on `$XDG_DATA_HOME/fish`. The fix: tmpfs mounts at the two XDG
+    // `.local` parents, emitted in section 4 — BEFORE the section-5a
+    // state binds — so the argv reads parents-first and the state
+    // binds land ON TOP of them (persistence unchanged: the D15
+    // store wins the deeper dest in both engines' depth sorts).
+    let mut cfg = podman_base(true);
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let mounts = podman_mount_specs(&argv);
+    let home_tmpfs = mounts
+        .iter()
+        .position(|m| *m == "type=tmpfs,dst=/mysbx-home")
+        .expect("home tmpfs");
+    let share_tmpfs = mounts
+        .iter()
+        .position(|m| *m == "type=tmpfs,dst=/mysbx-home/.local/share")
+        .expect(".local/share tmpfs");
+    let state_tmpfs = mounts
+        .iter()
+        .position(|m| *m == "type=tmpfs,dst=/mysbx-home/.local/state")
+        .expect(".local/state tmpfs");
+    let share_bind = mounts
+        .iter()
+        .position(|m| *m == "type=bind,src=/synth/repo.mysbx/state/.local/share/opencode,dst=/mysbx-home/.local/share/opencode,rw")
+        .expect("share state bind");
+    assert!(
+        home_tmpfs < share_tmpfs && share_tmpfs < share_bind,
+        "tmpfs(/mysbx-home) < tmpfs(/mysbx-home/.local/share) < \
+         bind(.local/share/opencode), got {mounts:?}"
+    );
+    // `.local/state` gets its tmpfs too, unconditionally — even with
+    // no state entry under it (nothing pre-exists in the image there,
+    // an empty tmpfs dir is harmless).
+    assert!(
+        state_tmpfs < share_bind,
+        "the .local/state tmpfs also precedes the state binds: {mounts:?}"
+    );
+}
+
+#[test]
+fn podman_state_dir_naming_an_xdg_parent_binds_over_the_parent_tmpfs() {
+    // A `state-dirs` entry that EXACTLY names one of the section-4
+    // XDG parent tmpfs dests coexists with the tmpfs at the same
+    // dest: podman's sortMounts is a STABLE sort by destination
+    // depth, so equal-depth user mounts keep argv order and the LATER
+    // bind (section 5a, emitted after section 4) wins the mountpoint.
+    // The entry's sidecar backing store therefore stays the visible,
+    // persistent surface — the same semantics as without the tmpfs
+    // (bd myconfig-e50).
+    let mut cfg = podman_base(true);
+    cfg.state_dirs.push(".local/share".to_string());
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let mounts = podman_mount_specs(&argv);
+    let tmpfs = mounts
+        .iter()
+        .position(|m| *m == "type=tmpfs,dst=/mysbx-home/.local/share")
+        .expect(".local/share tmpfs");
+    let bind = mounts
+        .iter()
+        .position(|m| {
+            *m == "type=bind,src=/synth/repo.mysbx/state/.local/share,dst=/mysbx-home/.local/share,rw"
+        })
+        .expect("the exact-name state bind");
+    assert!(
+        tmpfs < bind,
+        "the state bind must follow the tmpfs in argv order (stable \
+         same-depth sort makes the later bind win): {mounts:?}"
+    );
+    // And the unconditional sibling parent tmpfs is still there too.
+    assert!(
+        mounts
+            .iter()
+            .any(|m| *m == "type=tmpfs,dst=/mysbx-home/.local/state"),
+        "the .local/state parent tmpfs stays: {mounts:?}"
     );
 }
 

@@ -34,7 +34,12 @@
 //!    [`CONTAINER_HOME`] — this backend's equivalent of bwrap's
 //!    tmpfs `SANDBOX_HOME` (config.md D14): everything the XDG base
 //!    dirs name lives on a writable surface without a single host
-//!    file entering through it
+//!    file entering through it — plus tmpfs mounts at the XDG
+//!    `.local/share`/`.local/state` parents
+//!    ([`CONTAINER_DATA_HOME`]/[`CONTAINER_STATE_HOME`], bd
+//!    myconfig-e50: runsc would create those bind-mountpoint parents
+//!    root-owned, and the container user could not create siblings
+//!    under them)
 //! 5. workspace bind: the repo (or clone) mounted at its own path
 //!    (config.md D13, workspace.md D3), plus git metadata dirs when
 //!    approved, plus the worktrees sibling when it exists, plus
@@ -125,6 +130,19 @@ pub const CONTAINER_HOME: &str = "/mysbx-home";
 /// pane that runs plain `tmux` inside such a session lands on this
 /// private socket instead of the host default `/tmp/tmux-<uid>`.
 pub const MUX_SOCKET_DIR: &str = "/mysbx-home/.mysbx-tmux";
+
+/// The `XDG_DATA_HOME` path inside the container home (bd
+/// myconfig-e50): section 4 mounts a tmpfs at it next to the home
+/// tmpfs itself, because runsc CREATES the missing mountpoint dirs
+/// of a bind root-owned — a `.local/share` that exists only to host
+/// a `state-dirs` bind is then not creatable-in for the container
+/// user (`--userns=keep-id`), and the payload shell dies on its
+/// first `mkdir` below it (fish: `EACCES` on `$XDG_DATA_HOME/fish`).
+pub const CONTAINER_DATA_HOME: &str = "/mysbx-home/.local/share";
+
+/// The `XDG_STATE_HOME` path inside the container home — same
+/// treatment as [`CONTAINER_DATA_HOME`] (bd myconfig-e50).
+pub const CONTAINER_STATE_HOME: &str = "/mysbx-home/.local/state";
 
 /// Common parameters of every invocation that do not come from a
 /// configuration layer. Unlike bwrap's `Params` — whose shell and
@@ -358,6 +376,27 @@ pub fn podman_run_argv(
     // ALSO reads parents-first — the engines' guarantee is relied
     // on, not required, for an argv-ordered run.
     tmpfs_mount(&mut argv, CONTAINER_HOME);
+    // The XDG parent tmpfs mounts (bd myconfig-e50): the base-dir
+    // variables of section 7 point at `.local/share`/`.local/state`
+    // below the home, but runsc's mount preparation CREATES the
+    // missing mountpoint dirs of a bind root-owned 0755 — a parent
+    // like `.local/share` that exists only to host the
+    // `.local/share/opencode` state bind is then NOT creatable-in
+    // for the container user, and fish died with EACCES creating
+    // `$XDG_DATA_HOME/fish`. Tmpfs mounts at those parents make them
+    // writable; nothing pre-exists in the image at either path, so
+    // emitting both unconditionally is harmless (an empty tmpfs dir
+    // under the home one). `.config` deliberately gets NO tmpfs: the
+    // ro host-config seed mount must stay the visibly-read-only
+    // surface (see section 7), and `.cache` needs none — no bind
+    // lives under it, so the payload creates it on the home tmpfs
+    // itself. A `state-dirs` entry naming one of these parents
+    // exactly still works: its bind is emitted in section 5a, LATER
+    // than these tmpfs mounts, and podman stable-sorts equal-depth
+    // user mounts by argv order — the bind wins, persistence is
+    // unchanged.
+    tmpfs_mount(&mut argv, CONTAINER_DATA_HOME);
+    tmpfs_mount(&mut argv, CONTAINER_STATE_HOME);
 
     // 5. workspace bind
     let (workspace_src, workspace_dest, implicit_rw_sources): (String, String, Vec<PathBuf>) =
@@ -560,6 +599,11 @@ pub fn podman_run_argv(
     // `/home/agent` paths, which the read-only root leaves as
     // unwritable as the pre-4 home was.
     //
+    // Writability comes from the section-4 tmpfs mounts — the home
+    // PLUS the two XDG `.local` parents (bd myconfig-e50): runsc
+    // would create the bind-mountpoint parents root-owned and the
+    // container user could not create siblings under them.
+    //
     // The values mirror the gVisor agent image's own OCI env
     // (agent-image.nix), only re-anchored at the mysbx home:
     // `.config` under the read-only host-config mount — a tool that
@@ -580,11 +624,11 @@ pub fn podman_run_argv(
     ]);
     argv.extend([
         "--env".into(),
-        format!("XDG_STATE_HOME={CONTAINER_HOME}/.local/state"),
+        format!("XDG_STATE_HOME={CONTAINER_STATE_HOME}"),
     ]);
     argv.extend([
         "--env".into(),
-        format!("XDG_DATA_HOME={CONTAINER_HOME}/.local/share"),
+        format!("XDG_DATA_HOME={CONTAINER_DATA_HOME}"),
     ]);
     argv.extend(["--env".into(), format!("PATH={}", params.tools_path)]);
     if mux.starts_a_session() {

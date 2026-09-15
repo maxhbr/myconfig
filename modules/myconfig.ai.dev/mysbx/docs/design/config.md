@@ -475,6 +475,16 @@ mount before every bind under it (podman sorts user mounts by
 destination depth, runsc re-sorts the OCI mounts, both
 parents-before-children), so configured `dest`s below the home and
 `state-dirs` binds land on top of the tmpfs exactly like on bwrap.
+The podman-gvisor backend additionally mounts tmpfs at the two XDG
+`.local` parents of the home — `$XDG_DATA_HOME` (`.local/share`) and
+`$XDG_STATE_HOME` (`.local/state`) — next to the home tmpfs itself:
+runsc creates the missing mountpoint dirs of a bind root-owned, so
+a parent that exists only to host a bind is not creatable-in for the
+container user and the shell died on its first XDG write below it
+(fish `EACCES` on `$XDG_DATA_HOME/fish`). The parent tmpfs mounts are
+emitted before every bind too, so `state-dirs` entries below them
+still land on top; `.config` deliberately gets none — the ro
+host-config seed mount stays the visibly-read-only surface.
 
 "The host home is not mounted" is enforced, not merely claimed
 (review-3 item 4): a mount source that IS the home (`path = "~/"`, or
