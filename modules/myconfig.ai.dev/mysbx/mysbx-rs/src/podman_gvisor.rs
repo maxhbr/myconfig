@@ -37,8 +37,9 @@
 //! 5. configured mounts, in declaration order (config.md D7/D8),
 //!    `--mount type=bind,src=HOST,dst=DEST,ro|rw`
 //! 6. environment: host-forwarded first, then `cfg.env`, then
-//!    infrastructure variables (`HOME`, `PATH`, CA-bundle vars,
-//!    `TMUX_TMPDIR` for a multiplexer session)
+//!    infrastructure variables (`HOME`, the XDG base dirs derived
+//!    from it, `PATH`, CA-bundle vars, `TMUX_TMPDIR` for a
+//!    multiplexer session)
 //! 7. resource limits: `--pids-limit`, `--memory`, `--cpus` (when
 //!    cgroups are not ignored)
 //! 8. network: `--network` spec (shared by default, or `none` / pasta
@@ -510,6 +511,46 @@ pub fn podman_run_argv(
     // `/etc/ssl/certs/ca-bundle.crt`), and a host store path would
     // not exist inside the container anyway (bd myconfig-wao).
     argv.extend(["--env".into(), format!("HOME={CONTAINER_HOME}")]);
+    // The XDG base dirs are infrastructure like `HOME` (config.md D14):
+    // they are derived FROM it, and emitting them matters ONLY under this
+    // backend — its container root is read-only (`--read-only` +
+    // `--read-only-tmpfs=true`, section 3): unlike bubblewrap's writable
+    // tmpfs home there is no writable `HOME` subtree to fall back into,
+    // and podman's bind-mount copy-up materializes only the FIRST path
+    // component of a bind, never the parents of `$HOME/.config`. With
+    // the variables unset, tools fall back to `$HOME/<dir>` and try to
+    // create history, caches or state under the read-only root — the
+    // fish startup errors from bd myconfig-jho (`Unable to locate data
+    // directory … Read-only file system` for `.local/share/fish`,
+    // `.config/fish` and `.cache/fish`, plus the follow-up
+    // `mkdir: cannot create directory '/home/agent/.cache/fish'`).
+    //
+    // The values mirror the gVisor agent image's own OCI env
+    // (agent-image.nix), only re-anchored at the mysbx home:
+    // `.config` under the read-only host-config mount — a tool that
+    // writes there fails with the SAME visible EROFS naming its old
+    // `$HOME/<dir>` path, so nothing silently loses state — while
+    // `.cache`/`.local` sit on the writable side of the home
+    // (persistable with `state-dirs` entries, e.g. `.local/state`;
+    // nesting rules keep the two out of each other's binds, D15).
+    // Set after the layers, like `HOME` — a later `--env` wins, so no
+    // config entry can repoint them.
+    argv.extend([
+        "--env".into(),
+        format!("XDG_CONFIG_HOME={CONTAINER_HOME}/.config"),
+    ]);
+    argv.extend([
+        "--env".into(),
+        format!("XDG_CACHE_HOME={CONTAINER_HOME}/.cache"),
+    ]);
+    argv.extend([
+        "--env".into(),
+        format!("XDG_STATE_HOME={CONTAINER_HOME}/.local/state"),
+    ]);
+    argv.extend([
+        "--env".into(),
+        format!("XDG_DATA_HOME={CONTAINER_HOME}/.local/share"),
+    ]);
     argv.extend(["--env".into(), format!("PATH={}", params.tools_path)]);
     if mux.starts_a_session() {
         argv.extend(["--env".into(), format!("TMUX_TMPDIR={MUX_SOCKET_DIR}")]);

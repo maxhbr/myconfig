@@ -25,6 +25,14 @@ type=bind,src=/synth/data/configs,dst=/inside/x,ro
 --env
 HOME=/mysbx-home
 --env
+XDG_CONFIG_HOME=/mysbx-home/.config
+--env
+XDG_CACHE_HOME=/mysbx-home/.cache
+--env
+XDG_STATE_HOME=/mysbx-home/.local/state
+--env
+XDG_DATA_HOME=/mysbx-home/.local/share
+--env
 PATH=/bin:/usr/bin:/synth-image-tools
 localhost/agent-gvisor:latest
 /bin/synth-shell

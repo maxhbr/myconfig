@@ -3382,6 +3382,96 @@ fn podman_golden_network_false() {
 }
 
 #[test]
+fn podman_xdg_base_dirs_derive_from_the_container_home() {
+    // bd myconfig-jho: under `--read-only` + `--read-only-tmpfs=true`
+    // the container home is writable only where a bind lands, and podman
+    // bind copy-up materializes only the FIRST path component of a bind
+    // — never the parents of `$HOME/.config`. With the XDG variables
+    // unset, tools fell back to `$HOME/<dir>` and died creating history,
+    // caches or state under the read-only root; the variables pin the
+    // base dirs at the writable (or visibly-mounted) home subpaths. Like
+    // `HOME`, they are infrastructure: derived from the container home,
+    // emitted after both env layers so no entry can repoint them.
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let pairs: Vec<String> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--env")
+        .map(|w| w[1].clone())
+        .collect();
+
+    // The four base dirs sit under the container home — never at the
+    // image's own `/home/agent` paths (the read-only root in this
+    // backend's shape, i.e. exactly the bug).
+    for dir in [".config", ".cache", ".local/state", ".local/share"] {
+        let expected = format!("/mysbx-home/{dir}");
+        assert!(
+            pairs
+                .iter()
+                .any(|kv| kv.starts_with("XDG_") && kv.ends_with(&format!("={expected}"))),
+            "no XDG variable at {expected}: {pairs:?}"
+        );
+    }
+    assert!(
+        !pairs.iter().any(|kv| kv.contains("/home/agent")),
+        "image home path leaked into the env: {pairs:?}"
+    );
+
+    // Infrastructure means LAST: after every host-forwarded and `env`
+    // entry, so a later `--env` always wins and an `[env] XDG_*` entry
+    // shows up in `--dry-run` but never reaches the payload (the same
+    // treatment `HOME`, `PATH` and the CA-bundle variables get).
+    let last_xdg = pairs
+        .iter()
+        .rposition(|kv| kv.starts_with("XDG_"))
+        .expect("XDG variables in argv");
+    assert!(
+        pairs[last_xdg + 1..]
+            .iter()
+            .all(|kv| kv.starts_with("PATH=")),
+        "only PATH may follow the XDG emit: {pairs:?}"
+    );
+}
+
+#[test]
+fn podman_config_env_cannot_repoint_the_xdg_base_dirs() {
+    // The infrastructure guard of `HOME`/`PATH` extends to the XDG base
+    // dirs: an `[env]` entry that spells one of them parses and appears
+    // in the argv, but the later infrastructure emit wins — the payload
+    // sees only the derived-from-HOME value.
+    let mut cfg = podman_base(true);
+    cfg.env
+        .insert("XDG_CACHE_HOME".into(), "/synth/leak".into());
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let hits: Vec<String> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--env" && w[1].starts_with("XDG_CACHE_HOME="))
+        .map(|w| w[1].clone())
+        .collect();
+    assert_eq!(
+        hits,
+        vec![
+            "XDG_CACHE_HOME=/synth/leak".to_string(),
+            "XDG_CACHE_HOME=/mysbx-home/.cache".to_string()
+        ],
+        "the config entry must parse first and lose last: {hits:?}"
+    );
+}
+
+#[test]
 fn podman_golden_state_dirs() {
     let mut cfg = podman_base(true);
     cfg.state_dirs.push(".local/share/opencode".to_string());
