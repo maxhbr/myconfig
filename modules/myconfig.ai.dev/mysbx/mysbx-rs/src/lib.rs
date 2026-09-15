@@ -137,13 +137,14 @@ pub fn run(args: Vec<String>) -> i32 {
         // and is not a run): they name the mounts, the payload or the
         // outcome of a run, and no OTHER verb has one to choose or
         // add. `--multiplexer` is refused for `run` too (D11: a
-        // one-shot never starts a session), while `--ro`/`--rw` are
-        // accepted before `run` exactly like `--dry-run` is (D10:
-        // one position rule for all global flags) — `run_command`
-        // appends to the same lists, so both spellings are the same
-        // run.
+        // one-shot never starts a session), while `--ro`/`--rw` and
+        // `--backend` (cli.md D18) are accepted before `run` exactly
+        // like `--dry-run` is (D10: one position rule for all global
+        // flags) — `run_command` appends to the same lists, so both
+        // spellings are the same run.
         Some(other)
             if (flags.multiplexer.is_some()
+                || (flags.backend.is_some() && other != "run")
                 || (flags.session.is_some() && other != "run")
                 || ((flags.result || flags.timeout.is_some()) && other != "run")
                 || ((!flags.ro.is_empty() || !flags.rw.is_empty()) && other != "run"))
@@ -336,6 +337,15 @@ pub struct Flags {
     /// for every other verb by the dispatcher — only a one-shot has
     /// a consumable outcome.
     pub result: bool,
+    /// The `--backend <name>` override (bd myconfig-veg): the sandbox
+    /// backend of THIS run, replacing the merged `backend` of the
+    /// configuration layers (cli.md D18). `None` means the flag was
+    /// not given and the configuration decides. The value is checked
+    /// only against the pipeline's backend set (step 4): an unknown
+    /// name is a refused run there (`70`), not a parse-time usage
+    /// error — the command line is fine, the backend it names does
+    /// not exist.
+    pub backend: Option<String>,
     /// The `--session NAME` flag (workspace.md D1): select clone mode
     /// — the named session's clone at `<repo>.mysbx/clones/NAME` is
     /// the workspace of this run, bound rw at the repo's own path
@@ -369,8 +379,9 @@ impl Flags {
     }
 
     /// The run-scoped flag named in the dispatcher's verb refusal —
-    /// `--multiplexer` first (it is the older flag), then the first
-    /// `--ro`/`--rw` addition, then `--timeout`/`--result`. `--timeout`
+    /// `--multiplexer` first (it is the older flag), then `--backend`,
+    /// then the first `--ro`/`--rw` addition, then `--timeout`/`--result`.
+    /// `--timeout`
     /// and `--result` are parsed here so they follow the one position
     /// rule of D10 (before the verb and after it, for `run` only), and
     /// the dispatcher names whichever was set when another verb is
@@ -378,6 +389,8 @@ impl Flags {
     fn first_run_scoped_name(&self) -> &'static str {
         if self.multiplexer.is_some() {
             "--multiplexer"
+        } else if self.backend.is_some() {
+            "--backend"
         } else if self.session.is_some() {
             "--session"
         } else if !self.ro.is_empty() {
@@ -492,6 +505,38 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                 } else {
                     flags.rw.push(value.clone());
                 }
+                // The value argument is consumed with the flag.
+                rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
+                continue;
+            }
+            "--backend" => {
+                // bd myconfig-veg: the backend of THIS run (cli.md
+                // D18). A value-taking, run-scoped flag like
+                // `--multiplexer`/`--session`: before the verb here,
+                // accepted again after `run` by `run_command`, refused
+                // elsewhere by the dispatcher. The VALUE is not
+                // validated here: the pipeline's backend check (step
+                // 4) owns the accepted set and refuses an unknown
+                // name as a run refusal (`70`), listing the valid
+                // ones — the command line is fine, the backend it
+                // names does not exist. A missing value is still a
+                // usage error (`2`), like every value-taking flag.
+                if flags.backend.is_some() {
+                    eprintln!("mysbx: repeated flag: --backend");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                let value = match tail.split_first() {
+                    Some((v, _)) => v,
+                    None => {
+                        eprintln!(
+                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`"
+                        );
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                };
+                flags.backend = Some(value.clone());
                 // The value argument is consumed with the flag.
                 rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
                 continue;
@@ -670,6 +715,31 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                 eprintln!("usage: {RUN_USAGE}");
                 return 2;
             }
+            "--backend" => {
+                // bd myconfig-veg: the same flag after the verb, the
+                // same one position rule as `--ro`/`--rw` (cli.md
+                // D18) — one rule for every run-scoped flag, both
+                // spellings one run. Not repeatable: a repeated flag
+                // is a typo (D5), and one run starts exactly one
+                // backend.
+                if flags.backend.is_some() {
+                    eprintln!("mysbx run: repeated flag: --backend");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                let value = match args.get(idx + 1) {
+                    Some(v) => v.clone(),
+                    None => {
+                        eprintln!(
+                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`"
+                        );
+                        eprintln!("usage: {RUN_USAGE}");
+                        return 2;
+                    }
+                };
+                flags.backend = Some(value);
+                idx += 2;
+            }
             "--ro" => {
                 // cli.md D16: the additions are run flags, so `run`
                 // accepts them too — the same one pipeline runs both
@@ -769,7 +839,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
 /// accepted set without opening the help (the same pairing rule
 /// usage.txt follows, D5).
 const RUN_USAGE: &str =
-    "mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...";
+    "mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...";
 
 /// How a sandbox run hands the terminal — and the exit code — over
 /// (cli.md D8/D17): exec, or wait-and-record.
@@ -1165,6 +1235,30 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         }
     };
 
+    let mut cli_set_backend = false;
+    // 3a: the `--backend` override (cli.md D18, bd myconfig-veg): the
+    // flag wins over the merged `backend` of both layers, the same
+    // precedence every flag has (D6: flags > sidecar > user >
+    // defaults) — the CLI is the outermost layer for this key. The
+    // layers stay untouched: the override lives for THIS run only,
+    // and the next `mysbx` uses the configuration again. The run is
+    // refused HERE, before the session clone (step 4a, which a
+    // broken configuration must not precede) and before the argv:
+    // the accepted set is the pipeline's (step 4's), the source a
+    // flag is not — so the refusal names the flag and lists the
+    // valid values (D8: the command line was fine, the backend it
+    // names does not exist).
+    if let Some(name) = &flags.backend {
+        if !matches!(name.as_str(), "bubblewrap" | "podman-gvisor") {
+            eprintln!(
+                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`"
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        merged.backend = Some(name.clone());
+        cli_set_backend = true;
+    }
+
     // 3a. the `--multiplexer` override (cli.md D14): the flag wins over
     // the merged `multiplexer` of both layers, the same precedence every
     // flag has (D6: flags > sidecar > user > defaults). The layers stay
@@ -1252,7 +1346,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
 
     // 4. the backend is explicit, never auto-detected (cli.md D7): a
     // silently downgraded isolation level would be a security bug.
-    // The MVP implements `bubblewrap`; phase 2 adds `podman-gvisor`.
+    // The accepted set is enforced here for BOTH sources — a config
+    // layer and `--backend` (cli.md D18) put the value into
+    // `merged.backend` alike; the flag's own refusal one merge above
+    // echoed it early, this arm is the authoritative one.
     let backend = match merged.backend.as_deref() {
         Some("bubblewrap" | "podman-gvisor") => merged.backend.as_deref().unwrap(),
         Some(other) => {
@@ -1594,6 +1691,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             sidecar_config: &sidecar_config_path,
             sidecar_config_exists,
             merged: &merged,
+            backend_from_cli: cli_set_backend,
             user_mount_count,
             cli_mount_count,
             host_env: &host_env,
@@ -2715,6 +2813,7 @@ mod tests {
                 dry_run: true,
                 verbose: true,
                 multiplexer: None,
+                backend: None,
                 ro: Vec::new(),
                 rw: Vec::new(),
                 timeout: None,
@@ -2801,6 +2900,42 @@ mod tests {
             run(vec!["run".into(), "--multiplexer".into(), "tmux".into()]),
             2
         );
+    }
+
+    // The `--backend` flag (cli.md D18, bd myconfig-veg): parsed in
+    // both positions like every run-scoped flag, its repeat and
+    // missing-value refusals are usage errors like the other flags',
+    // and the flag is refused with every verb except `run`.
+    #[test]
+    fn backend_flag_parses_positions_and_rejects_misuse() {
+        let s = |v: &[&str]| -> Vec<String> { v.iter().map(|x| (*x).to_string()).collect() };
+
+        // Both backends parse from the pre-verb position; the VALUE is
+        // deliberately NOT validated here (the pipeline's step 4 owns
+        // the accepted set, cli.md D18).
+        for text in ["bubblewrap", "podman-gvisor", "something-else"] {
+            let args = s(&["--backend", text, "--dry-run"]);
+            let (flags, rest) = split_global_flags(&args).unwrap();
+            assert_eq!(flags.backend.as_deref(), Some(text), "`{text}`");
+            assert!(flags.dry_run);
+            assert!(rest.is_empty(), "`{text}`");
+        }
+
+        // A missing value is a usage error, never a "keep configured".
+        assert_eq!(split_global_flags(&s(&["--backend"])), Err(2));
+
+        // Repeats are usage errors, like the other flags.
+        assert_eq!(
+            split_global_flags(&s(&["--backend", "bubblewrap", "--backend", "bubblewrap"])),
+            Err(2)
+        );
+
+        // The flag has no verb it may accompany except `run`: the
+        // dispatcher's guarded arm refuses it before the verb arm runs.
+        for verb in ["init", "edit", "version", "help", "gvisor-load-image"] {
+            let args = vec!["--backend".into(), "bubblewrap".into(), verb.into()];
+            assert_eq!(run(args), 2, "{verb}");
+        }
     }
 
     // The `--session` flag (workspace.md D1/D2): parsed in both
@@ -3120,6 +3255,7 @@ mod tests {
             "--dry-run",
             "--verbose",
             "--multiplexer",
+            "--backend",
             "--ro",
             "--rw",
             "--result",

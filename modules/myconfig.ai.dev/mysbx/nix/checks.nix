@@ -110,6 +110,7 @@ in
           dry-run \
           verbose \
           multiplexer \
+          backend \
           session \
           ro \
           rw \

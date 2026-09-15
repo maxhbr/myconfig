@@ -47,6 +47,13 @@ pub struct Report<'a> {
     pub sidecar_config_exists: bool,
     /// The merged, effective configuration.
     pub merged: &'a Merged,
+    /// Whether `merged.backend` was set by `--backend` for THIS run
+    /// (cli.md D18, bd myconfig-veg) instead of arriving from a config
+    /// layer. The backend line's provenance tag — the report marks
+    /// every command-line contribution (`[command line]` mounts,
+    /// D16) so it never claims a decision came from a file the
+    /// operator never opened.
+    pub backend_from_cli: bool,
     /// How many of `merged.mounts` came from the user layer. The merge
     /// puts the user mounts first, in declaration order, then the
     /// accepted sidecar mounts — so this single number attributes every
@@ -131,8 +138,13 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         present(r.sidecar_config_exists)
     ));
     p(format!(
-        "backend:        {}",
-        r.merged.backend.as_deref().unwrap_or("(none)")
+        "backend:        {}{}",
+        r.merged.backend.as_deref().unwrap_or("(none)"),
+        if r.backend_from_cli {
+            "  [--backend]"
+        } else {
+            ""
+        }
     ));
     p(format!(
         "network:        {}",
@@ -525,6 +537,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: false,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
@@ -629,6 +642,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
@@ -676,6 +690,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
@@ -724,6 +739,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 2,
             cli_mount_count: 0,
             host_env: &host,
@@ -774,6 +790,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 2,
             cli_mount_count: 0,
             host_env: &host,
@@ -821,6 +838,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 2,
             cli_mount_count: 0,
             host_env: &host,
@@ -875,6 +893,7 @@ mod tests {
                     sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
                     sidecar_config_exists: false,
                     merged: &merged,
+                    backend_from_cli: false,
                     user_mount_count: 1,
                     cli_mount_count: 0,
                     host_env: &host,
@@ -960,6 +979,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: false,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 1,
             cli_mount_count: 1,
             host_env: &host,
@@ -1011,6 +1031,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
@@ -1061,6 +1082,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
@@ -1143,6 +1165,7 @@ mod tests {
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
             merged: &merged,
+            backend_from_cli: false,
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,

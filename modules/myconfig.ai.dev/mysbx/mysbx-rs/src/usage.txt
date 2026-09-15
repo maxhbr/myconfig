@@ -1,8 +1,8 @@
 mysbx - my sandboxing tool
 
 Usage:
-  mysbx [--dry-run] [--verbose] [--multiplexer <mux>] [--session <name>] [--ro <path>]... [--rw <path>]...
-  mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...
+  mysbx [--dry-run] [--verbose] [--multiplexer <mux>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]...
+  mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
   mysbx fetch | merge | push | diff NAME [verb-arguments...]
   mysbx session list | session destroy NAME [--force] | session hunk NAME
@@ -187,6 +187,17 @@ Options:
                 every other verb rejects the flag. A value this build
                 pinned no entry for is a refused run, like a config
                 layer selecting it
+  --backend <name>
+                the sandbox backend of THIS run, overriding the
+                `backend` of the config layers for one invocation —
+                the next run uses the configuration again. <name> is
+                one of: bubblewrap, podman-gvisor (the same accepted
+                set the pipeline enforces on the configuration);
+                anything else is a refused run (exit 70) naming the
+                set, never a silent fallback — and neither layer has
+                to name a backend for the flag to select one. Valid
+                before the verb and after it for `run`; every other
+                verb rejects it
   --session <name>
                 run in the named session's clone (the clone mode of
                 docs/design/workspace.md): the session's standalone
