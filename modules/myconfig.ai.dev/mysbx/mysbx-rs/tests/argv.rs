@@ -3937,6 +3937,135 @@ fn podman_state_dir_naming_an_xdg_parent_binds_over_the_parent_tmpfs() {
 }
 
 #[test]
+fn podman_state_parent_dirs_are_tmpfsed_for_the_payload() {
+    // bd myconfig-ixz, the e50 failure generalized: runsc creates the
+    // missing bind-mountpoint ancestors root-owned 0755, so the
+    // parent of a `state-dirs` entry — `.pi/agent`, which hosts the
+    // `.pi/agent/sessions` state bind — is not writable for the
+    // container user (`--userns=keep-id`), and pi died writing its
+    // runtime files as SIBLINGS of the state dir
+    // (`auth.json`/`settings.json`/`trust.json`/`models.json` DIRECTLY
+    // into `.pi/agent`, all inside `getAgentDir()` — no XDG dirs).
+    // The rule: state dirs are "the writable part of the home", so
+    // their PARENT gets a tmpfs too — section 4, before the state
+    // bind of section 5a.
+    let mut cfg = podman_base(true);
+    cfg.state_dirs.push(".pi/agent/sessions".to_string());
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let mounts = podman_mount_specs(&argv);
+    let agent_tmpfs = mounts
+        .iter()
+        .position(|m| *m == "type=tmpfs,dst=/mysbx-home/.pi/agent")
+        .expect("tmpfs at the state entry's parent .pi/agent");
+    let sessions_bind = mounts
+        .iter()
+        .position(|m| *m == "type=bind,src=/synth/repo.mysbx/state/.pi/agent/sessions,dst=/mysbx-home/.pi/agent/sessions,rw")
+        .expect("the .pi/agent/sessions state bind");
+    assert!(
+        agent_tmpfs < sessions_bind,
+        "the .pi/agent tmpfs precedes the .pi/agent/sessions bind: {mounts:?}"
+    );
+    // ONLY the parent — the shallower ancestor `.pi` stays on the
+    // home tmpfs (runsc may root-own it as the tmpfs's own
+    // mountpoint ancestor, but the payload only needs x/search
+    // through it — 0755 has that — its +w lands on `.pi/agent`
+    // itself) — and `.config` is not part of the rule at all.
+    assert!(
+        !mounts
+            .iter()
+            .any(|m| *m == "type=tmpfs,dst=/mysbx-home/.pi"),
+        "no tmpfs above the state entry's parent: {mounts:?}"
+    );
+    assert!(
+        !mounts
+            .iter()
+            .any(|m| *m == "type=tmpfs,dst=/mysbx-home/.config"),
+        "the ro config surface stays tmpfs-free: {mounts:?}"
+    );
+    // The e50 XDG parent tmpfses stay after the generalization.
+    assert!(
+        mounts
+            .iter()
+            .any(|m| *m == "type=tmpfs,dst=/mysbx-home/.local/share"),
+        "the .local/share parent tmpfs stays: {mounts:?}"
+    );
+    assert!(
+        mounts
+            .iter()
+            .any(|m| *m == "type=tmpfs,dst=/mysbx-home/.local/state"),
+        "the .local/state parent tmpfs stays: {mounts:?}"
+    );
+}
+
+#[test]
+fn podman_state_parent_tmpfses_dedupe_entries_sharing_a_parent() {
+    // Two entries under one parent ask for the same tmpfs dest once
+    // (the argv must stay free of duplicate `--mount` dests); a
+    // clone run drops every state BIND but keeps the parent tmpfs
+    // (like the unconditional e50 pair: an empty tmpfs dir is
+    // harmless — nothing pre-exists in the image at any of these
+    // paths). Duplicate state entries are dropped by the merge
+    // (config.md D15: first occurrence wins).
+    let mut cfg = podman_base(true);
+    cfg.state_dirs.push(".pi/agent/sessions".to_string());
+    cfg.state_dirs.push(".pi/agent/mcp".to_string());
+    cfg.state_dirs.push(".local/share/opencode".to_string());
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let mounts = podman_mount_specs(&argv);
+    let agent = mounts
+        .iter()
+        .filter(|m| **m == "type=tmpfs,dst=/mysbx-home/.pi/agent")
+        .count();
+    assert_eq!(agent, 1, "one tmpfs per distinct parent: {mounts:?}");
+    assert!(
+        !mounts
+            .iter()
+            .any(|m| *m == "type=tmpfs,dst=/mysbx-home/.local/share/opencode"),
+        "no tmpfs AT a state entry dest: {mounts:?}"
+    );
+
+    let mut params = podman_params();
+    params.workspace = Workspace::Clone {
+        clone: Path::new("/synth/repo.mysbx/clones/test"),
+    };
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let mounts = podman_mount_specs(&argv);
+    assert!(
+        mounts
+            .iter()
+            .any(|m| *m == "type=tmpfs,dst=/mysbx-home/.pi/agent"),
+        "a clone run keeps the state-parent tmpfs: {mounts:?}"
+    );
+    assert!(
+        !mounts
+            .iter()
+            .any(|m| m.contains("src=/synth/repo.mysbx/state")),
+        "a clone run mounts no state bind: {mounts:?}"
+    );
+}
+
+#[test]
 fn podman_mount_dest_on_the_container_home_is_refused() {
     // The one-directional home guard of bwrap (review-2 item 5), now
     // that the home is a tmpfs HERE too: a mount dest EQUAL to the
