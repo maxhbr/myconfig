@@ -5,8 +5,18 @@ SPDX-License-Identifier: MIT
 
 # Implementation plan
 
-Status: agreed. Written at commit `102104b2c4` (2026-09-05), when `mysbx`
-implemented `help`, `version` and `init` and confined nothing.
+Status: the phase-1 MVP is complete — `mysbx` has the full CLI
+(`--dry-run`, `--ro`/`--rw`, run forms), the two-layer config merge
+(`cli.md` D16, `config.md` D7), the bubblewrap backend with its golden
+argv tests, and NixOS packaging with the `mysbx-tests` /
+`mysbx-completions` / `mysbx-generated-config-test` checks. The podman +
+gVisor (`runsc`) backend has since landed on top of the same seam
+(bd myconfig-6di.1). Phase 2 is the open work, tracked as beads:
+myconfig-t24 (credentials), myconfig-mo3 (2c network policy),
+myconfig-9mw (2d toolchain, done), myconfig-6di (2f further backends),
+myconfig-o6z (2e workspace model, decided), myconfig-91j, myconfig-0ql
+(exit-code/structured-result contract) and myconfig-dys (unattended
+runs, blocked on 0ql + o6z).
 
 This file is the phase plan. Each MVP work item has its own file in
 [`TODOs/`](./TODOs) with the concrete checklist; this file states *what* the
