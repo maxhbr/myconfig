@@ -3276,6 +3276,12 @@ fn podman_params() -> PodmanParams<'static> {
         policy_paths: &[],
         mux_entry: None,
         workspace: Workspace::Live,
+        // The exec'd backend keeps mysbx's stdio, so the container is
+        // attached: `--interactive` always (bd myconfig-jho). The
+        // synthetic `tty: false` keeps the goldens deterministic —
+        // a terminal run's pty is covered by its own test below.
+        interactive: true,
+        tty: false,
         image: "localhost/agent-gvisor:latest",
         runtime_flags: &[],
         // The rootless default of a wrapped run (lib.rs): cgroupfs is
@@ -3719,6 +3725,73 @@ fn podman_cgroup_manager_omitted_when_none() {
         "--cgroup-manager should be omitted when params say None: {argv:?}"
     );
     assert_eq!(argv[0], "--runtime=runsc");
+}
+
+#[test]
+fn podman_attached_run_wires_stdio() {
+    // bd myconfig-jho: without `--interactive` podman closes the
+    // container's stdin, an interactive shell payload reads instant
+    // EOF and exits 0 — the f13 "exits immediately, no container, no
+    // error" failure. The argv must attach the container to mysbx's
+    // own stdio: `--interactive` always, `--tty` when the operator is
+    // on a terminal (so a piped one-shot is not forced onto a pty).
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let run_at = argv.iter().position(|a| a == "run").expect("`run` in argv");
+    assert!(
+        argv.contains(&"--interactive".to_string()),
+        "--interactive must wire the container's stdin: {argv:?}"
+    );
+    assert!(
+        argv[..run_at + 3].contains(&"--interactive".to_string()),
+        "--interactive belongs to the run flags right after `run`: {argv:?}"
+    );
+    assert!(
+        !argv.contains(&"--tty".to_string()),
+        "no --tty without a terminal: {argv:?}"
+    );
+
+    let mut params = podman_params();
+    params.tty = true;
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert!(
+        argv.contains(&"--tty".to_string()),
+        "--tty must follow --interactive on a terminal: {argv:?}"
+    );
+    assert!(
+        argv.iter().position(|a| a == "--interactive") < argv.iter().position(|a| a == "--tty"),
+        "--interactive precedes --tty: {argv:?}"
+    );
+
+    // A run that attaches nothing is possible for future callers —
+    // but the flags are opt-OUT per params, never silently omitted.
+    let mut params = podman_params();
+    params.interactive = false;
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert!(
+        !argv.contains(&"--interactive".to_string()),
+        "opt-out drops the flag: {argv:?}"
+    );
 }
 
 #[test]

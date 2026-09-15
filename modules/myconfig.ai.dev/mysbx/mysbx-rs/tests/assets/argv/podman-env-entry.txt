@@ -2,6 +2,7 @@
 --cgroup-manager=cgroupfs
 run
 --replace
+--interactive
 --name
 mysbx-repo-6e89dfc8f9
 --hostname

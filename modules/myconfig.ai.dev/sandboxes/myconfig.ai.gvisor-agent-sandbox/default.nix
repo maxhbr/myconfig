@@ -55,6 +55,37 @@ let
   # `herdr` becomes the default command of a session.
   herdrEnabled = enabledAgentPackages != [ ];
 
+  # The fish runtime the HOST's rendered fish configuration assumes (bd
+  # myconfig-cew): fish itself, the runtime deps its config references by
+  # absolute store path (the `ls`/`cat` aliases of `programs.eza`/`bat`, the
+  # `any-nix-shell` of programs.fish's interactiveShellInit) and the plugin
+  # trees Home Manager's `programs.fish.plugins` points at (`plugins.<name>.src`
+  # is what the generated conf.d files load functions from). Baking the
+  # plugins' `src` trees — not the wrapped `fishPlugins.<name>` derivations —
+  # bakes exactly the paths the mounted `~/.config/fish` names, so the
+  # configuration resolves inside the image. `fishPlugins.hydro` is the
+  # exception: Home Manager wires its prompt functions into xdg.configFile
+  # directly, and the mounted conf.d `hydro.fish` needs no extra path.
+  #
+  # Deliberately driven by `home-manager.users."${myconfig.user}"`: the
+  # home-manager user is the one whose `~/.config/fish` mysbx mounts into its
+  # containers (../../mysbx/default.nix `baselineMounts`), so the image must
+  # carry the closure of exactly that user's fish world.
+  fishConveniencePackages =
+    let
+      hm = config.home-manager.users."${myconfig.user}";
+    in
+    lib.optionals (config.programs.fish.enable && hm.programs.fish.enable) (
+      [
+        hm.programs.fish.package
+        pkgs.any-nix-shell
+        pkgs.eza
+        pkgs.bat
+        pkgs.grc
+      ]
+      ++ (map (p: p.src) hm.programs.fish.plugins)
+    );
+
   # The image actually used: either the configured one, or the default with
   # `extraImagePackages` folded in.
   image =
@@ -190,6 +221,21 @@ in
       default =
         enabledAgentPackages
         ++ lib.optional herdrEnabled pkgs.herdr
+        # Shell convenience (bd myconfig-cew): the host user's fish world,
+        # so the podman-gvisor backend of mysbx can land interactive
+        # sessions in the same shell as the host — see
+        # `fishConveniencePackages` above for what and why.
+        ++ fishConveniencePackages
+        # The mysbx tool payload of the podman-gvisor backend (bd
+        # myconfig-cew): the multiplexer binaries its panes reach for.
+        # Consumed here (not defined BY mysbx) because an option
+        # `default` is a fallback — a definition from the mysbx
+        # module would replace this whole default instead of
+        # concatenating. The same cross-module read as the agent
+        # enable flags above; lazy, so a host without mysbx never
+        # forces the option.
+        ++ lib.optionals (config.myconfig.ai.dev.mysbx.enable or false
+        ) config.myconfig.ai.dev.mysbx.gvisor.imagePackages
         # Shared sandbox tooling (see ../myconfig.ai.sandboxTools.nix).
         ++ config.myconfig.ai.dev.sandboxTools.extraPackages
         # Nix for in-session builds, when enabled below
@@ -199,6 +245,10 @@ in
         the packages of the coding agents enabled on this host, i.e. one entry
         per set `myconfig.ai.<pi-coding-agent|opencode|claude-code|codex|github-copilot-cli|qwen-code>.enable`,
         plus `pkgs.herdr` when any of them is enabled,
+        plus the fish shell closure of the home-manager user when
+        `programs.fish.enable` (see `fishConveniencePackages`),
+        plus `myconfig.ai.dev.mysbx.gvisor.imagePackages` when mysbx is
+        enabled (the multiplexer tools of its podman-gvisor backend),
         plus `myconfig.ai.dev.sandboxTools.extraPackages`,
         plus `nix.package` when `myconfig.ai.gvisor-agent-sandbox.nix.enable`
       '';
@@ -206,7 +256,9 @@ in
       description = ''
         Extra packages baked into `image` — by default the coding-agent CLIs
         that are enabled on this host, so the sandbox ships the same agents as
-        the host. Set explicitly to slim the image down or to add tooling.
+        the host, plus the host user's fish shell closure (see
+        `fishConveniencePackages`). Set explicitly to slim the image down or
+        to add tooling.
 
         The base image deliberately ships no agent CLI; host binaries must
         not be bind-mounted, since that would drag the host `/nix` store into

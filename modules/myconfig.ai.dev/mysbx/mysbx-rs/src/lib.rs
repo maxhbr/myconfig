@@ -1045,6 +1045,18 @@ unsafe fn libc_geteuid() -> u32 {
     geteuid()
 }
 
+/// Whether stdin is a terminal (libc `isatty`) — decides the podman
+/// backend's `--tty` (bd myconfig-jho). The same zero-dependency raw
+/// extern idiom as `libc_geteuid`.
+fn stdin_is_tty() -> bool {
+    extern "C" {
+        fn isatty(fd: i32) -> i32;
+    }
+    // SAFETY: `isatty` only inspects the fd, it has no side effects.
+    // The return is nonzero on a terminal — not specified to be 1.
+    unsafe { isatty(0) != 0 }
+}
+
 /// The shared pipeline of the bare form and `run`: resolve the repo, run
 /// the guards, require an initialized sidecar, load and merge both layers,
 /// check the backend, build the argv — then print it (`--dry-run`) or exec
@@ -1536,6 +1548,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     Some(s) => crate::bwrap::Workspace::Clone { clone: &s.clone },
                     None => crate::bwrap::Workspace::Live,
                 },
+                // Stdio wiring (bd myconfig-jho): the backend is exec'd
+                // with mysbx's own stdio, so the container must be
+                // attached — `--interactive` always (a one-shot
+                // `run -- CMD` may read piped stdin too), `--tty`
+                // only when stdin is a real terminal, so a piped
+                // one-shot is not forced onto a pty.
+                interactive: true,
+                tty: stdin_is_tty(),
                 // Podman-gvisor specific params
                 image: &gvisor_image,
                 runtime_flags: &runtime_flags,
@@ -1606,6 +1626,20 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         return 0;
     }
 
+    // 7a. under `--verbose` the exact executed command is part of the
+    // report (bd myconfig-jho): the argv block above is dry-run-only,
+    // so a real verbose run printed every *configuration* line but
+    // never the argv it actually execs — and an operator reproducing
+    // a failed run by hand had to guess it. One `## `-prefixed line
+    // per argument, argv[0] first, the same shape the report uses, so
+    // `grep -v '^## '` keeps stripping it too.
+    if flags.verbose {
+        println!("## exec: {backend_bin}");
+        for arg in &argv {
+            println!("## arg:  {arg}");
+        }
+    }
+
     let mut cmd = std::process::Command::new(&backend_bin);
     cmd.args(&argv);
     match mode {
@@ -1613,6 +1647,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // `exec` replaces this process on success, so the payload's
             // exit code propagates unchanged (cli.md D8); the call only
             // returns on failure, with the error as its return value.
+            // podman's own stderr/stdout/stdin are INHERITED by the
+            // exec, so a failing podman prints its own message and
+            // exit code surfaces unchanged — nothing is swallowed
+            // here (the f13 silent exit was the *payload* exiting on
+            // EOF, not a lost podman error, bd myconfig-jho).
             use std::os::unix::process::CommandExt;
             let e = cmd.exec();
             eprintln!("mysbx: cannot exec {backend_bin}: {e}");

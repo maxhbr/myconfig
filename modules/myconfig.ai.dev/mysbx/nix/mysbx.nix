@@ -143,6 +143,20 @@
   # gvisor tier's effective image (same build the `agent-gvisor`
   # sessions run).
   gvisorImage ? null,
+  # The shell of the podman-gvisor backend's INTERACTIVE payload (bd
+  # myconfig-cew): the store path of the fish binary as it exists INSIDE
+  # `gvisorImage`. The wrapper pins it as `MYSBX_GVISOR_SHELL` so a
+  # container session lands in the same shell as the host — the image
+  # carries fish and the plugin/alias closure of the host's rendered
+  # `~/.config/fish`, which mysbx mounts read-only, so the binary path
+  # resolves inside the container. `null` keeps the image's own
+  # `Cmd` (`/bin/bash`, agent-image.nix).
+  #
+  # A store path, like every other pin: the caller passes the fish
+  # binary path of the SAME package the image bakes (the module layer
+  # threads it), so the path always matches a build of the image
+  # actually loaded.
+  gvisorShell ? null,
 }:
 
 let
@@ -285,27 +299,37 @@ let
   # `podman` runs the reference; `gvisor-load-image` compares IDs to
   # detect a stale build under the same tag. All three are LAZY — a
   # `null` gvisorImage must not force `imageName` on null.
-  gvisorPins = lib.optionalString (gvisorImage != null) (
-    "--set MYSBX_GVISOR_TARBALL '${gvisorImage}' "
-    + "--set MYSBX_GVISOR_IMAGE '${gvisorImage.imageName}:${gvisorImage.imageTag}' "
-    + "--set MYSBX_GVISOR_IMAGE_ID \"$(cat ${
-      runCommand "mysbx-gvisor-image-id"
-        {
-          nativeBuildInputs = [
-            gnutar
-            gzip
-            gnused
-          ];
-        }
-        ''
-          # The config entry is `<sha256hex>.json`, with or without the
-          # `sha256:` prefix depending on the archive writer —
-          # dockerTools' buildLayeredImage omits it.
-          tar --extract --to-stdout --file ${gvisorImage} manifest.json \
-            | tr -d '"' | sed -n 's/.*Config[[:space:]]*:[[:space:]]*\(sha256:\)\{0,1\}\([0-9a-f]\{64\}\)\.json.*/\2/p' > $out
-        ''
-    })\""
-  );
+  #
+  # The shell pin (bd myconfig-cew) sits in its own optionalString:
+  # it is meaningful even for a caller that builds its own image
+  # reference (MYSBX_GVISOR_IMAGE by hand), but a `null` pins nothing
+  # and the crate's image-OCI default (`/bin/bash`) applies. The
+  # container `PATH` needs NO pin: the image's buildEnv links every
+  # baked package's `bin` into `/bin`, so the OCI `PATH=/bin:/usr/bin`
+  # already covers the provisioned tools.
+  gvisorPins =
+    lib.optionalString (gvisorImage != null) (
+      "--set MYSBX_GVISOR_TARBALL '${gvisorImage}' "
+      + "--set MYSBX_GVISOR_IMAGE '${gvisorImage.imageName}:${gvisorImage.imageTag}' "
+      + "--set MYSBX_GVISOR_IMAGE_ID \"$(cat ${
+        runCommand "mysbx-gvisor-image-id"
+          {
+            nativeBuildInputs = [
+              gnutar
+              gzip
+              gnused
+            ];
+          }
+          ''
+            # The config entry is `<sha256hex>.json`, with or without the
+            # `sha256:` prefix depending on the archive writer —
+            # dockerTools' buildLayeredImage omits it.
+            tar --extract --to-stdout --file ${gvisorImage} manifest.json \
+              | tr -d '"' | sed -n 's/.*Config[[:space:]]*:[[:space:]]*\(sha256:\)\{0,1\}\([0-9a-f]\{64\}\)\.json.*/\2/p' > $out
+          ''
+      })\" "
+    )
+    + lib.optionalString (gvisorShell != null) "--set MYSBX_GVISOR_SHELL '${gvisorShell}' ";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on

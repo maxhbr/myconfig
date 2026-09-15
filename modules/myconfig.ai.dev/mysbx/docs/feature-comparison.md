@@ -141,9 +141,18 @@ Everything below exists in at least one tier above and has no counterpart in
   `PATH` the image's `/bin:/usr/bin` (overridable via
   `MYSBX_GVISOR_SHELL` / `MYSBX_GVISOR_TOOLS_PATH`), never the host
   store pins the bwrap backend uses — the container mounts nothing
-  from the host `/nix/store`. Remaining before it is
-  production-ready: no host has exercised a full interactive session
-  yet.
+  from the host `/nix/store`. The image is PROVISIONED like the
+  other tiers' payloads (bd myconfig-cew): the gvisor tier's
+  `extraImagePackages` carries the home-manager user's fish world
+  (fish, its plugins, the grc/any-nix-shell/eza/bat runtime the
+  rendered `~/.config/fish` references) plus mysbx's
+  `gvisor.imagePackages` (the selected multiplexer's tools), and
+  the wrapper pins `MYSBX_GVISOR_SHELL` to the in-image fish binary —
+  so an interactive session lands in the same shell, aliases and
+  configuration as on the host (the ro `~/.config/fish` mount
+  carries the config; every path it names is in the image closure).
+  Remaining before it is production-ready: no host has exercised a
+  full interactive session yet.
 - **Entering the sandbox** — the primary action per `cli.md` D2.
 - **`run COMMAND` / the `--` payload split** (`cli.md` D3, D4).
 - **A credential story.** Every existing tier had to answer this and they

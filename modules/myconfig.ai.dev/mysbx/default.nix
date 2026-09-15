@@ -23,6 +23,7 @@
   config,
   lib,
   pkgs,
+  myconfig,
   ...
 }:
 let
@@ -323,8 +324,9 @@ in
         inherit muxEntries;
         alacritty = cfg.terminal.package;
         gvisorImage = cfg.gvisor.image;
+        gvisorShell = cfg.gvisor.shell;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -469,8 +471,8 @@ in
       # myconfig-6di.1) runs rootless podman with the runsc runtime and
       # a Nix-built OCI image — the same image mechanism the
       # standalone gvisor tier uses
-      # (../../sandboxes/myconfig.ai.gvisor-agent-sandbox/). The three
-      # pins below are what `mysbx gvisor-load-image` loads and what
+      # (../../sandboxes/myconfig.ai.gvisor-agent-sandbox/). The pins below are what
+      # `mysbx gvisor-load-image` loads and what
       # `backend = "podman-gvisor"` runs (MYSBX_GVISOR_TARBALL /
       # MYSBX_GVISOR_IMAGE / MYSBX_GVISOR_IMAGE_ID in ./nix/mysbx.nix).
       image = mkOption {
@@ -497,6 +499,76 @@ in
           Defaults to the image of the gvisor tier module when that is
           enabled on the host — the exact package `agent-gvisor`
           sessions run, so both tiers share one build.
+        '';
+      };
+
+      # The interactive payload shell of the podman-gvisor backend (bd
+      # myconfig-cew): the same shell the user logs into on the host,
+      # baked into the image by the gvisor tier's
+      # `extraImagePackages` (which carries the fish world of the
+      # home-manager user whenever `programs.fish.enable`). The image
+      # contains the binary at its store path, and the read-only
+      # `~/.config/fish` mount (the tier's `baselineMounts`) carries
+      # the configuration, aliases and plugins — the image is
+      # provisioned so the mounted symlinks resolve (every path the
+      # rendered config names is in the image closure).
+      #
+      # `null` keeps the crate default: the image's own `Cmd`
+      # (`/bin/bash`), i.e. the pre-cew behaviour of a bare bash.
+      shell = mkOption {
+        type = types.nullOr types.str;
+        default =
+          let
+            hm = config.home-manager.users."${myconfig.user}".programs.fish;
+          in
+          if config.programs.fish.enable && hm.enable then "${hm.package}/bin/fish" else null;
+        defaultText = literalExpression ''
+          the fish binary path of the home-manager user's
+          `programs.fish.package` when fish is the user's shell
+          (`programs.fish.enable` and the home-manager user's
+          `programs.fish.enable`), else null'';
+        description = ''
+          The shell the podman-gvisor backend's INTERACTIVE payload
+          execs — a path INSIDE the container image (bd myconfig-cew:
+          the container must be provisioned with the same shell as
+          the host). Pinned into the wrapper as `MYSBX_GVISOR_SHELL`.
+
+          The default is the fish binary of the home-manager user's
+          `programs.fish.package` — the gvisor tier's image bakes
+          exactly that package, so the store path resolves inside the
+          container and the mounted `~/.config/fish` gives it the
+          same aliases and configuration as on the host.
+
+          `null` keeps the image's own `Cmd` (`/bin/bash`).
+        '';
+      };
+
+      # The multiplexer binaries the podman-gvisor container needs (bd
+      # myconfig-cew): the image is provisioned — via this option, which
+      # the gvisor tier's `extraImagePackages` default folds into the
+      # image — with the binaries a PANE inside a container session
+      # reaches for (`tmux` always, the selected multiplexer's own
+      # tool). `buildEnv` links every baked package's `bin` into the
+      # image `/bin`, so the OCI `PATH=/bin:/usr/bin` of the image
+      # covers them and no PATH override is needed. The ENTRY scripts
+      # stay host pins (`MYSBX_MUX_ENTRY_*`, bwrap only): a selected
+      # multiplexer under podman-gvisor remains a refused run until
+      # an image ships one.
+      imagePackages = mkOption {
+        type = types.listOf types.package;
+        default = selectedMuxTools;
+        defaultText = literalExpression "the selected multiplexer's tools (`selectedMuxTools` of this module)";
+        description = ''
+          Packages the gvisor tier bakes into the container image on
+          behalf of mysbx (bd myconfig-cew: the container must be
+          provisioned with the tools). Defaults to the selected
+          multiplexer's own tooling, so a pane inside a container
+          session finds it on `PATH` — the same payload the bwrap
+          backend gets via `extraTools`.
+
+          Only takes effect while the gvisor tier module is enabled
+          (`myconfig.ai.dev.gvisor-agent-sandbox.enable`): its
+          `extraImagePackages` default consumes this option.
         '';
       };
     };
