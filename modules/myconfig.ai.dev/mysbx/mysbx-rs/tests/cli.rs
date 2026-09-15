@@ -6733,9 +6733,10 @@ fn podman_gvisor_shell_pin_replaces_the_payload_shell() {
         "payload is the pinned in-image shell: {stdout}"
     );
 
-    // ... and the one-shot form keeps the explicit command (the
-    // one-shot printout ends in an extra blank line, so compare the
-    // trailing non-empty slice instead of indexing from the end).
+    // ... and the one-shot form keeps the explicit command: the
+    // printout is exactly the argv (one argument per line, no
+    // trailing blank), so the payload is the trailing slice after the
+    // image reference — the argv IS the whole stdout here.
     let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "rg", "--version"]);
     cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
         .env("MYSBX_GVISOR_SHELL", "/nix/store/eeee-fish/bin/fish");
@@ -6743,24 +6744,67 @@ fn podman_gvisor_shell_pin_replaces_the_payload_shell() {
     assert_eq!(out.status.code(), Some(0));
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let lines: Vec<&str> = stdout.lines().collect();
-    let payload: Vec<&str> = {
-        let mut tail: Vec<&str> = lines
-            .iter()
-            .rev()
-            .take_while(|l| !l.is_empty())
-            .copied()
-            .collect();
-        tail.reverse();
-        tail
-    };
     assert_eq!(
-        payload,
-        vec!["rg", "--version"],
+        &lines[lines.len() - 2..],
+        &["rg", "--version"],
         "one-shot payload is the command: {stdout}"
+    );
+    assert_eq!(
+        lines[lines.len() - 3],
+        "localhost/test:latest",
+        "the image reference precedes the payload: {stdout}"
     );
     assert!(
         !lines.contains(&"/nix/store/eeee-fish/bin/fish"),
         "the shell pin does not replace a one-shot payload: {stdout}"
+    );
+}
+
+#[test]
+fn verbose_podman_run_prints_the_executed_argv_and_wires_stdio() {
+    // bd myconfig-jho: a real (non-dry) `--verbose` run must print the
+    // exact command it is about to exec — the configuration report
+    // alone never showed the argv, and an operator reproducing a
+    // failed run had to guess it. The fake podman (`/usr/bin/env`)
+    // accepts the exec and fails on the podman flags, which is fine:
+    // the point is the `## exec:`/`## arg:` lines and the argv they
+    // carry — `--interactive` always (the stdio fix for the f13
+    // silent immediate exit), no `--tty` here (cargo pipes stdin).
+    let (inv, _, sidecar) = fixture("podman-gvisor-verbose-exec", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--multiplexer", "none"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        .env("MYSBX_PODMAN", "/usr/bin/env");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains("## exec: /usr/bin/env"),
+        "the executed program is named: {stdout}"
+    );
+    assert!(
+        report.contains("## arg:  --runtime=runsc"),
+        "the executed argv is printed argument per argument: {stdout}"
+    );
+    assert!(
+        report.contains("## arg:  --interactive"),
+        "the container's stdin is wired: {stdout}"
+    );
+    assert!(
+        !report.contains("--tty"),
+        "no --tty on a piped stdin: {stdout}"
+    );
+    // The exec reached the fake podman: env's own refusal is on stderr
+    // — the failure surfaced instead of a silent exit.
+    assert!(
+        !stderr.is_empty(),
+        "the backend's own error surfaces: {stdout}"
     );
 }
 

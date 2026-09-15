@@ -68,6 +68,21 @@ back to the built-in defaults):
   covers.
 - `MYSBX_PODMAN`: the podman binary (fallback: `podman`).
 
+### Stdio wiring
+
+Every podman-gvisor run execs podman with mysbx's own
+stdin/stdout/stderr, so the container is attached the same way
+(`bd myconfig-jho`): `--interactive` is always passed — without it
+podman closes the container's stdin, an interactive shell payload
+reads instant EOF and exits 0 before any container shows up in
+`podman ps` (the "exits immediately, no error" failure) — and
+`--tty` is added when stdin is a terminal, so a piped one-shot
+`run -- CMD` is not forced onto a pty. Under `--verbose` the exact
+executed command is printed (`## exec:` / `## arg:` lines) before
+the exec; podman's own stderr and exit code surface unchanged
+(the exec inherits the streams), and a backend that cannot be
+started at all is reported with exit 70.
+
 The multiplexer integration is **not available** under this backend
 yet: no image ships an in-image entry script, so a config selecting
 `multiplexer = "…"` is a refused run naming the missing pin (the same

@@ -179,6 +179,21 @@ pub struct Params<'a> {
     /// not come from a configuration layer, and no TOML key can name
     /// it (workspace.md D1).
     pub workspace: Workspace<'a>,
+    /// Whether the run attaches the terminal to the container
+    /// (`--interactive`): mysbx always execs podman with its own
+    /// stdio inherited, so the payload's stdin/stdout/stderr must be
+    /// forwarded — without `--interactive` podman closes the
+    /// container's stdin and an interactive shell payload reads
+    /// instant EOF and exits 0 before any container shows up in
+    /// `podman ps` (the f13 silent-exit, bd myconfig-jho). The gvisor
+    /// tier's attached runs pass it too (podman.rs `build_run_args`).
+    pub interactive: bool,
+    /// Whether stdin is a terminal (`--tty`): allocates a pty, so an
+    /// interactive payload gets a real terminal instead of a pipe.
+    /// Kept separate from [`Params::interactive`] because a one-shot
+    /// `run -- CMD` that reads piped stdin must not have a tty
+    /// forced on it.
+    pub tty: bool,
     /// The container image reference to use (e.g. `localhost/agent-gvisor:latest`).
     /// This is a backend-specific parameter, not part of the generic
     /// merged config — it comes from the backend configuration or a
@@ -261,9 +276,20 @@ pub fn podman_run_argv(
 
     argv.push("run".into());
     argv.push("--replace".into());
-    // For interactive runs we'd add --tty --interactive, but for now
-    // we build the argv for a generic run (detached vs interactive is
-    // a runtime decision, not an argv-builder one)
+    // Stdio wiring (bd myconfig-jho): the run execs podman with
+    // mysbx's own stdio, so the container must be attached the same
+    // way — `--interactive` forwards stdin (without it podman closes
+    // the container's stdin and a shell payload exits 0 on instant
+    // EOF, the f13 silent immediate exit), `--tty` allocates a pty
+    // for an interactive payload on a terminal. The gvisor tier's
+    // attached runs pass the same pair (podman.rs
+    // `build_run_args`, non-detach branch).
+    if params.interactive {
+        argv.push("--interactive".into());
+    }
+    if params.tty {
+        argv.push("--tty".into());
+    }
 
     // 2. container identity
     // Container name: the repo basename PLUS a short hash of the repo
