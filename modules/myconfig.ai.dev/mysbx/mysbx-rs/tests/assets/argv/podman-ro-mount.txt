@@ -17,6 +17,10 @@ mysbx
 --mount
 type=tmpfs,dst=/mysbx-home
 --mount
+type=tmpfs,dst=/mysbx-home/.local/share
+--mount
+type=tmpfs,dst=/mysbx-home/.local/state
+--mount
 type=bind,src=/synth/repo,dst=/synth/repo,rw
 --mount
 type=bind,src=/synth/data/refs,dst=/synth/data/refs,ro
