@@ -39,7 +39,11 @@
 //!    ([`CONTAINER_DATA_HOME`]/[`CONTAINER_STATE_HOME`], bd
 //!    myconfig-e50: runsc would create those bind-mountpoint parents
 //!    root-owned, and the container user could not create siblings
-//!    under them)
+//!    under them) and at the parent of every `state-dirs` entry that
+//!    lives below the home (the same root-owned-mountpoint failure,
+//!    generalized from the XDG pair: tmpfs the DEEPEST state
+//!    ancestor, never the read-only config surface — bd
+//!    myconfig-ixz)
 //! 5. workspace bind: the repo (or clone) mounted at its own path
 //!    (config.md D13, workspace.md D3), plus git metadata dirs when
 //!    approved, plus the worktrees sibling when it exists, plus
@@ -138,11 +142,65 @@ pub const MUX_SOCKET_DIR: &str = "/mysbx-home/.mysbx-tmux";
 /// a `state-dirs` bind is then not creatable-in for the container
 /// user (`--userns=keep-id`), and the payload shell dies on its
 /// first `mkdir` below it (fish: `EACCES` on `$XDG_DATA_HOME/fish`).
+/// The same root-owned-mountpoint failure generalizes to the parent
+/// of EVERY `state-dirs` entry below the home
+/// ([`state_parent_tmpfses`], bd myconfig-ixz).
 pub const CONTAINER_DATA_HOME: &str = "/mysbx-home/.local/share";
 
 /// The `XDG_STATE_HOME` path inside the container home — same
 /// treatment as [`CONTAINER_DATA_HOME`] (bd myconfig-e50).
 pub const CONTAINER_STATE_HOME: &str = "/mysbx-home/.local/state";
+
+/// The `state-dirs` tmpfs rule (bd myconfig-ixz), generalized from
+/// the XDG-parent pair of bd myconfig-e50: state dirs are by design
+/// "the writable part of the home", and their PARENT in the
+/// container must be as writable as the state dir itself, because
+/// real tools keep runtime files as SIBLINGS of the state dir — the
+/// pi integration persists `.pi/agent/sessions` while pi writes
+/// `auth.json` & co. DIRECTLY into `.pi/agent`, and runsc creates
+/// the missing bind-mountpoint ancestors root-owned 0755
+/// (`--userns=keep-id`: no write bit for the container user), so pi
+/// died with EACCES on its very first runtime file
+/// (`models.json error: ... open '/mysbx-home/.pi/agent/auth.json'`).
+///
+/// The rule tmpfses exactly ONE dest per entry: the entry's PARENT
+/// (`$HOME/.pi/agent` for `.pi/agent/sessions`). The shallower
+/// ancestors (runsc's own root-owned mountpoint chain, e.g. `.pi`)
+/// need no tmpfs: the payload never creates files there itself, it
+/// only needs x/search through them — 0755 has it — and its +w
+/// lands on the tmpfs'd parent itself. `.config` stays excluded:
+/// the ro host-config seed mount is the deliberately read-only
+/// surface — a parent gets a tmpfs only when a STATE entry makes it
+/// the vehicle of a writable bind, and only parents, never a
+/// pure-config ro surface. The XDG
+/// `.local/share`/`.local/state` parents are covered by their own
+/// unconditional tmpfs mounts ([`CONTAINER_DATA_HOME`],
+/// [`CONTAINER_STATE_HOME`], bd myconfig-e50), so they are not
+/// re-emitted here. Infrastructure, not binds: the tmpfs dests do not
+/// pass [`check_hidden_mounts`]/[`check_symlinkable_dests`] — the
+/// `state-dirs` binds of section 5a are emitted after them, and
+/// both engines sort mounts parents-before-children (podman's
+/// stable same-depth sort keeps the later bind the winner), so
+/// persistence semantics are unchanged (the e50 commit message
+/// asserted that equal-depth stable sort for the exact-dest case).
+fn state_parent_tmpfses(entries: &[String]) -> Vec<String> {
+    let covered = [CONTAINER_DATA_HOME, CONTAINER_STATE_HOME];
+    let mut dests: Vec<String> = Vec::new();
+    for entry in entries {
+        let parent = match Path::new(entry).parent() {
+            Some(p) => format!("{}/{}", CONTAINER_HOME, p.to_string_lossy()),
+            None => continue,
+        };
+        if parent == CONTAINER_HOME
+            || covered.contains(&parent.as_str())
+            || dests.iter().any(|d| *d == parent)
+        {
+            continue;
+        }
+        dests.push(parent);
+    }
+    dests
+}
 
 /// Common parameters of every invocation that do not come from a
 /// configuration layer. Unlike bwrap's `Params` — whose shell and
@@ -397,6 +455,46 @@ pub fn podman_run_argv(
     // unchanged.
     tmpfs_mount(&mut argv, CONTAINER_DATA_HOME);
     tmpfs_mount(&mut argv, CONTAINER_STATE_HOME);
+    // The state-parent tmpfs mounts (bd myconfig-ixz) — the same
+    // root-owned-mountpoint failure, generalized from the XDG pair
+    // above: state dirs are by design "the writable part of the
+    // home" (D15), and their PARENT in the container must be as
+    // writable as the state dir itself, because real tools keep
+    // runtime files as SIBLINGS of the state dir. The pi
+    // integration persists `.pi/agent/sessions` while pi writes
+    // `auth.json`, `settings.json`, `trust.json` and `models.json`
+    // DIRECTLY into `.pi/agent` (the ro config binds under it —
+    // `extensions/`, `agents/`, `prompts/`, `themes/`,
+    // `keybindings.json` — are payload-readable TREES that mount
+    // fine on top of a writable parent; `.pi/agent` holds pi's
+    // runtime file set, no config file that must stay read-only),
+    // and runsc creates the missing bind-mountpoint ancestors
+    // root-owned 0755 — with the entry's own bind at
+    // `.pi/agent/sessions`, the first sibling write died on f13
+    // with
+    //     models.json error: Availability refresh: EACCES: permission
+    //       denied, open '/mysbx-home/.pi/agent/auth.json'
+    // right after the e50 fish fix. The mountpoint parent is a
+    // vehicle for the engine, not a readable contract — tmpfs it:
+    // ONE dest per entry, the entry's PARENT (the DEEPEST state
+    // ancestor). The shallower ones (runsc's own root-owned
+    // mountpoint chain, e.g. `.pi` for the `.pi/agent` tmpfs) only
+    // need x/search — 0755 has it — while the payload's +w lands on
+    // the tmpfs'd parent itself. `.config` stays the
+    // deliberately-read-only config surface: only a STATE entry's
+    // parent is tmpfsed, never a pure-config ro surface. Clone runs
+    // drop the state binds but keep these tmpfses, like the e50
+    // pair — nothing pre-exists in the image at any of these paths,
+    // an empty tmpfs dir is harmless.
+    // Emitted like the e50 pair — section 4, before every bind,
+    // infrastructure: no hidden-mount or symlinkable-dest check
+    // sees a tmpfs dest, and the state binds land on top in both
+    // engines' parents-first sorts (the state-dirs nesting
+    // validators of config.rs are untouched: no entry may nest
+    // inside another, so at most one tmpfs dest per subtree spine).
+    for dest in state_parent_tmpfses(&cfg.state_dirs) {
+        tmpfs_mount(&mut argv, &dest);
+    }
 
     // 5. workspace bind
     let (workspace_src, workspace_dest, implicit_rw_sources): (String, String, Vec<PathBuf>) =
