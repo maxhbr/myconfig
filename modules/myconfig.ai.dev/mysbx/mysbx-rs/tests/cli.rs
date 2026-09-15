@@ -829,6 +829,153 @@ fn backend_bubblewrap_is_accepted() {
     );
 }
 
+// ---- --backend (cli.md D18, bd myconfig-veg) -------------------------------
+
+#[test]
+fn the_backend_flag_is_accepted_on_every_run_form() {
+    // The flag belongs to the bare form and to `run`, before the verb
+    // and after it — one position rule, like `--ro`/`--rw` (D10/D16).
+    for (args, label) in [
+        (
+            vec!["--backend", "bubblewrap", "--dry-run"],
+            "bare, pre-verb",
+        ),
+        (
+            vec!["run", "--backend", "bubblewrap", "--dry-run", "--", "true"],
+            "run, after the verb",
+        ),
+        (
+            vec!["--backend", "bubblewrap", "run", "--dry-run", "--", "true"],
+            "run, before the verb",
+        ),
+    ] {
+        let (inv, _, _) = fixture("backend-flag-forms", &[]);
+        let (code, stdout, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 0, "{label}: stderr: {stderr}");
+        assert!(stdout.starts_with("bwrap\n"), "{label}: {stdout}");
+    }
+}
+
+#[test]
+fn the_backend_flag_overrides_both_config_layers() {
+    // The CLI is the outermost layer (config.md D1): the flag wins
+    // over the sidecar and over the user config. Both layers name
+    // `bubblewrap` — in both directions the argv and the report must
+    // show the flag's choice — and with NEITHER layer naming a
+    // backend at all, the flag alone selects one.
+    let (inv, _, sidecar) = fixture_user_backend("backend-flag-user-config", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    let mut cmd = spawn_with_args(
+        &inv,
+        &["--backend", "podman-gvisor", "--verbose", "--dry-run"],
+    );
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains("backend:        podman-gvisor  [--backend]"),
+        "{report}"
+    );
+    assert!(!stdout.contains("backend:        bubblewrap"), "{stdout}");
+    assert!(
+        stdout.contains("\npodman\n--runtime=runsc\n"),
+        "argv of the flag's backend: {stdout}"
+    );
+
+    // The override is per-invocation: without the flag the same
+    // fixture runs the configured backend again (the empty sidecar
+    // layer lets the user config's bubblewrap decide, no provenance
+    // tag).
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    assert!(stdout.starts_with("## mysbx "), "report first: {stdout}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(report.contains("backend:        bubblewrap\n"), "{report}");
+    assert!(!report.contains("[--backend]"), "{report}");
+    // ... and the argv block behind it is the bwrap one.
+    assert_eq!(argv_block(&stdout), expected_minimal_argv(&inv.cwd));
+}
+
+#[test]
+fn the_backend_flag_selects_one_on_an_unset_configuration() {
+    // Neither layer names a backend: the flag alone decides (D18,
+    // "neither layer has to name a backend for the flag to select
+    // one"), where without the flag this run is refused with `no
+    // backend configured` (D7).
+    let (inv, _, _) = fixture("backend-flag-from-nothing", &[]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--backend", "bubblewrap", "--dry-run"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.starts_with("bwrap\n"), "{stdout}");
+}
+
+#[test]
+fn an_unknown_backend_flag_value_is_a_refused_run_naming_the_set() {
+    // cli.md D18/D8: the command line was fine, the backend it names
+    // does not exist — an infrastructure refusal (`70`), not a usage
+    // error, listing the valid values and naming the flag as the
+    // source; the rows of the config layers never appear.
+    let (inv, _, _) = fixture("backend-flag-bad", &[]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--backend", "qemu", "--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
+    assert!(
+        stderr.contains("unknown backend `qemu`"),
+        "stderr: {stderr}"
+    );
+    assert!(stderr.contains("(from --backend)"), "stderr: {stderr}");
+    assert!(stderr.contains("`bubblewrap`"), "stderr: {stderr}");
+    assert!(stderr.contains("`podman-gvisor`"), "stderr: {stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+
+    // A missing value, by contrast, is a usage error (2) — the
+    // command line itself is wrong.
+    let (code, _, _) = run_binary_with(&inv, &["--backend"]);
+    assert_eq!(code, 2);
+    let (code, _, stderr) = run_binary_with(&inv, &["run", "--backend"]);
+    assert_eq!(code, 2, "{stderr}");
+}
+
+#[test]
+fn the_backend_flag_is_rejected_by_every_verb() {
+    // cli.md D18: no verb without a run accepts the flag — the same
+    // "is not valid with `<verb>`" usage error (2) the other
+    // run-scoped flags get, and `run` accepts it only before its `--`.
+    for (args, name) in [
+        (vec!["--backend", "bubblewrap", "init"], "init"),
+        (vec!["--backend", "bubblewrap", "edit"], "edit"),
+        (vec!["--backend", "bubblewrap", "version"], "version"),
+        (vec!["--backend", "bubblewrap", "help"], "help"),
+        (
+            vec!["--backend", "bubblewrap", "gvisor-load-image"],
+            "gvisor-load-image",
+        ),
+        (vec!["--backend", "bubblewrap", "gui"], "gui"),
+    ] {
+        let (inv, _, _) = fixture(&format!("backend-flag-verb-{name}"), &[]);
+        let (code, stdout, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{name}: stdout: {stdout}");
+        assert!(stderr.contains("--backend"), "{name}: {stderr}");
+        assert!(stderr.contains("is not valid with"), "{name}: {stderr}");
+        assert!(!stdout.contains("--clearenv"), "{name}: no argv: {stdout}");
+    }
+
+    // A repeated flag is a typo, not an intensifier (D5).
+    let (inv, _, _) = fixture("backend-flag-repeated", &[]);
+    let (code, _, stderr) = run_binary_with(
+        &inv,
+        &["--backend", "bubblewrap", "--backend", "podman-gvisor"],
+    );
+    assert_eq!(code, 2, "{stderr}");
+    assert!(stderr.contains("repeated flag"), "{stderr}");
+}
+
 // ---- environment forwarding and payload handling ---------------------------
 
 #[test]

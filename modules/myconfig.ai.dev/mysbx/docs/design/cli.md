@@ -73,8 +73,8 @@ inspection of the host's workmux worktrees in `<repo>__worktrees`,
 host-side, no sandbox started), the
 global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
 the clone run mode), plus the global flags `--dry-run` (D9),
-`--verbose` (D10), `--result`/`--timeout` (D17) and `--multiplexer`
-(D14).
+`--verbose` (D10), `--result`/`--timeout` (D17), `--multiplexer`
+(D14) and `--backend` (D18).
 
 ### D4: `--` separates sandbox args from the payload command
 
@@ -547,6 +547,49 @@ laid out — writes nothing: there was no run to record, and the
 a failure of the exec/wait boundary itself is recorded, as
 `infrastructure-error` — the run happened, it failed at the edge, and
 the driver polling the file learns of it there.
+
+### D18: `--backend <name>` overrides the configured backend for one run
+
+The bare form and `run` accept `--backend <name>`, before the verb and
+after it for `run` — the same one position rule every run-scoped flag
+follows (D10/D14/D16/D17). The value is the same closed set the
+pipeline enforces on the configuration: `bubblewrap` | `podman-gvisor`.
+It wins over the merged `backend` of both layers for THIS invocation
+only, per the precedence of D6 (flags > sidecar > user > defaults,
+with the CLI as the outermost layer of config.md D1) — nothing is
+written, and the next `mysbx` runs the configured backend again.
+
+**Why a flag at all.** The backend of a host is a declarative default
+(the generated user layer names it, config.md D7); testing a second
+backend on a host still on the first one — the rollout window of
+`podman-gvisor` — would otherwise mean editing a policy file per
+invocation. Editing the sidecar to flip one run would leave the
+repo's policy changed for every later run; editing the user layer
+would change every repo of the host. Like `--multiplexer` (D14), the
+flag is the per-invocation answer.
+
+**No validation at parse time, no silent fallback either.** The value
+is DELIBERATELY not checked against the accepted set in the parser:
+the pipeline's backend check (D7: the backend is explicit, never
+auto-detected) already owns the set and refuses an unknown name with
+exit `70`, listing the valid values — the command line was fine, the
+backend it names does not exist, so this is an infrastructure
+refusal, not a usage error (`2`). The pipeline refusal is shared by
+both sources: a config layer naming an unknown backend and
+`--backend qemu` fail with the same shape, and the flag's message
+adds `(from --backend)` so the operator knows which layer to fix.
+Nothing falls back silently, whichever way an unknown value arrives.
+A missing value, a repeated flag or the flag on a verb with no run —
+`init`, `edit`, `version`, `help`, `gvisor-load-image` — is a usage
+error (`2`, D8), the same "is not valid with ``<verb>``" refusal the
+other run-scoped flags get. `gui` passes its tail verbatim (D15), so
+`mysbx gui --backend podman-gvisor` reaches the inner run.
+
+**The report attributes the source.** The `backend:` line of the
+`--verbose` report (D10) carries a `[--backend]` tag when the flag —
+not a config layer — selected the backend, the same provenance rule
+the mounts already follow (D16's `[command line]`): the report never
+claims a decision came from a file the operator never opened.
 
 ## Non-goals
 

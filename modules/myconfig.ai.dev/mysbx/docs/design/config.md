@@ -26,6 +26,12 @@ design decisions. See [cli.md](./cli.md) for the command-line surface.
 Later layers override earlier ones. No project-local config *inside* the
 repo is read (see D3).
 
+Some flags are per-invocation overrides of one config key rather than
+inputs of their own (`--multiplexer`, cli.md D14; `--backend`, cli.md
+D18); the CLI is then the outermost, strongest layer for exactly that
+key, for THIS run only — nothing is written, and the next run reads
+the layers alone.
+
 ### D2: The sidecar lives outside the repo
 
 The sidecar is a sibling directory `<repo>.mysbx/`, not `<repo>/.mysbx/`.
@@ -179,7 +185,10 @@ What the sidecar still may **not** do:
 
 `backend` passes through from whichever layer named it (the sidecar
 wins when both do, per the layer precedence of D6); it is not an access
-question.
+question. `--backend <name>` (cli.md D18) overrides the merged value
+for one invocation — the CLI as the third, strongest layer of D1 for
+this key — and accepts exactly the same set, so an unknown name is a
+refused run (`70`) whichever layer — or flag — said it.
 
 `git-dirs` (D13) works the same way as mounts: an entry in either layer
 approves external git metadata. What that does NOT do is let the
