@@ -17,6 +17,8 @@ mysbx
 --workdir
 /synth/repo
 --mount
+type=tmpfs,dst=/mysbx-home
+--mount
 type=bind,src=/synth/repo,dst=/synth/repo,rw
 --env
 HOME=/mysbx-home

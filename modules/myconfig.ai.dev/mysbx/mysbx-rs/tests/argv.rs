@@ -16,6 +16,7 @@
 use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload, Workspace, SANDBOX_HOME};
 use mysbx::config::{Mode, Mount, Multiplexer};
 use mysbx::merge::Merged;
+use mysbx::podman_gvisor::CONTAINER_HOME;
 use mysbx::podman_gvisor::{podman_run_argv, Params as PodmanParams};
 use mysbx::repo::Repo;
 use std::borrow::Cow;
@@ -3693,6 +3694,169 @@ fn podman_mount_order_is_preserved() {
     assert!(
         outer < nested,
         "the earlier declared mount must be bound first (outer at {outer}, nested at {nested})"
+    );
+}
+
+/// The `--mount` specs of an argv, in order: every `--mount` flag with
+/// the argument that follows it — the unit the tmpfs-ordering tests
+/// below speak in (podman mounts are one flag + one spec string).
+fn podman_mount_specs(argv: &[String]) -> Vec<&str> {
+    argv.windows(2)
+        .filter(|w| w[0] == "--mount")
+        .map(|w| w[1].as_str())
+        .collect()
+}
+
+#[test]
+fn podman_home_is_a_fresh_tmpfs_emitted_before_every_bind() {
+    // bd myconfig-lpl: the container root is read-only and podman's
+    // bind copy-up materializes only the first path component, so a
+    // home that exists only where a bind lands is not a home — the
+    // payload shell died on its first XDG state write. The fix is the
+    // bwrap shape (SANDBOX_HOME, config.md D14): a fresh empty tmpfs
+    // at the container home, emitted BEFORE every bind so the binds
+    // land ON TOP of it (the ro `~/.config/fish` seed mount and the
+    // state-dirs stores included).
+    //
+    // The ordering is not just argv convention: BOTH engines under
+    // this backend sort mounts parents-before-children regardless of
+    // flag order — podman 5.8.x `libpod/util.go::sortMounts` ("Mounts
+    // need to be sorted so paths will not cover other paths"), runsc
+    // `runsc/boot/vfs.go::prepareMounts` ("Sort the mounts so that we
+    // don't place children before parents") — so the tmpfs wins the
+    // `/mysbx-home` mountpoint and every configured dest below it
+    // wins over the tmpfs. The argv still emits the tmpfs FIRST: the
+    // guarantee is relied on, not required.
+    let mut cfg = podman_base(true);
+    cfg.mounts.push(make_mount(
+        "/home/synth/.config/fish",
+        Some("/mysbx-home/.config"),
+        Mode::Ro,
+    ));
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let mounts = podman_mount_specs(&argv);
+
+    // Exactly ONE tmpfs — the home. Podman mounts `/dev`, `/tmp` & co.
+    // itself (`--read-only-tmpfs=true`); the user mounts mysbx adds
+    // are binds, plus this single tmpfs.
+    let tmpfs: Vec<&&str> = mounts
+        .iter()
+        .filter(|m| m.starts_with("type=tmpfs,"))
+        .collect();
+    assert_eq!(
+        tmpfs,
+        vec![&"type=tmpfs,dst=/mysbx-home"],
+        "one tmpfs at the container home, nothing else: {mounts:?}"
+    );
+
+    // It comes FIRST among the mounts — before the repo bind and
+    // before every configured bind.
+    assert_eq!(
+        mounts[0], "type=tmpfs,dst=/mysbx-home",
+        "the home tmpfs precedes all binds: {mounts:?}"
+    );
+    assert!(
+        mounts
+            .iter()
+            .any(|m| *m == "type=bind,src=/synth/repo,dst=/synth/repo,rw"),
+        "repo bind present: {mounts:?}"
+    );
+    assert!(
+        mounts
+            .iter()
+            .any(|m| *m == "type=bind,src=/home/synth/.config/fish,dst=/mysbx-home/.config,ro"),
+        "ro config seed lands on top of the tmpfs: {mounts:?}"
+    );
+}
+
+#[test]
+fn podman_state_dirs_bind_over_the_home_tmpfs_not_the_ro_root() {
+    // The D15 contract under this backend: a `state-dirs` entry is a
+    // sidecar-backed rw bind at `/mysbx-home/<entry>` — which only
+    // works because the section-4 tmpfs sits UNDER it (bd
+    // myconfig-lpl). The argv must therefore express, in this order:
+    // the home tmpfs, then the workspace bind, then the state binds,
+    // then the configured mounts — the same layering bwrap gets from
+    // its section-3 base binds.
+    let mut cfg = podman_base(true);
+    cfg.state_dirs.push(".local/state/opencode".to_string());
+    cfg.mounts.push(make_mount(
+        "/home/synth/.config/fish",
+        Some("/mysbx-home/.config"),
+        Mode::Ro,
+    ));
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    let mounts = podman_mount_specs(&argv);
+    let pos = |needle: &str| {
+        mounts
+            .iter()
+            .position(|m| m.contains(needle))
+            .unwrap_or_else(|| panic!("{needle} not in {mounts:?}"))
+    };
+    let tmpfs = pos("type=tmpfs,dst=/mysbx-home");
+    let repo = pos("src=/synth/repo,dst=/synth/repo");
+    let state = pos("dst=/mysbx-home/.local/state/opencode");
+    let config = pos("dst=/mysbx-home/.config");
+    assert!(
+        tmpfs < repo && repo < state && state < config,
+        "tmpfs -> repo -> state bind -> configured mount, got {mounts:?}"
+    );
+
+    // `XDG_STATE_HOME` names a path that is now WRITABLE (the tmpfs
+    // at the home backs `/mysbx-home/.local`, the state bind seeds
+    // it) — the variable itself still points inside the home.
+    let env: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--env")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert!(
+        env.contains(&"XDG_STATE_HOME=/mysbx-home/.local/state"),
+        "state home still derives from the container home: {env:?}"
+    );
+}
+
+#[test]
+fn podman_mount_dest_on_the_container_home_is_refused() {
+    // The one-directional home guard of bwrap (review-2 item 5), now
+    // that the home is a tmpfs HERE too: a mount dest EQUAL to the
+    // container home would replace the section-4 tmpfs while `HOME`
+    // still names it, seeding the home with content no layer declared.
+    // Descendants stay allowed — the fish-config seed mount proves it.
+    let mut cfg = podman_base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some(CONTAINER_HOME), Mode::Rw));
+    let err = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(
+            err,
+            mysbx::podman_gvisor::Error::ProtectedDest {
+                protected: CONTAINER_HOME,
+                ..
+            }
+        ),
+        "wrong error: {err}"
     );
 }
 
