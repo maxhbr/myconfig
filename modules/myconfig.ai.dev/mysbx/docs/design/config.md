@@ -468,7 +468,13 @@ before it replaces anything, and the replacement is a temp-file +
 Inside the sandbox `HOME` is `/mysbx-home`, a fresh, empty, writable
 tmpfs created with the other base mounts. The host home directory is
 still **not** mounted, and the host's `HOME` *value* is never forwarded
-(it is not in the forwarded list, plan.md "Environment").
+(it is not in the forwarded list, plan.md "Environment"). Both
+backends implement the same row: bubblewrap's `--tmpfs`, podman's
+`--mount type=tmpfs,dst=/mysbx-home` — which the container engines
+mount before every bind under it (podman sorts user mounts by
+destination depth, runsc re-sorts the OCI mounts, both
+parents-before-children), so configured `dest`s below the home and
+`state-dirs` binds land on top of the tmpfs exactly like on bwrap.
 
 "The host home is not mounted" is enforced, not merely claimed
 (review-3 item 4): a mount source that IS the home (`path = "~/"`, or

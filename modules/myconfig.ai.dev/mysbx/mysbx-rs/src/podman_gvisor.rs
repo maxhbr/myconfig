@@ -30,22 +30,27 @@
 //!    `--cap-drop=ALL`, `--security-opt=no-new-privileges`
 //! 3. working directory: `--workdir` at the repo path (the container's
 //!    view of the workspace)
-//! 4. workspace bind: the repo (or clone) mounted at its own path
+//! 4. container home: a fresh empty `type=tmpfs` mount at
+//!    [`CONTAINER_HOME`] — this backend's equivalent of bwrap's
+//!    tmpfs `SANDBOX_HOME` (config.md D14): everything the XDG base
+//!    dirs name lives on a writable surface without a single host
+//!    file entering through it
+//! 5. workspace bind: the repo (or clone) mounted at its own path
 //!    (config.md D13, workspace.md D3), plus git metadata dirs when
 //!    approved, plus the worktrees sibling when it exists, plus
 //!    state-dirs binds (config.md D15)
-//! 5. configured mounts, in declaration order (config.md D7/D8),
+//! 6. configured mounts, in declaration order (config.md D7/D8),
 //!    `--mount type=bind,src=HOST,dst=DEST,ro|rw`
-//! 6. environment: host-forwarded first, then `cfg.env`, then
+//! 7. environment: host-forwarded first, then `cfg.env`, then
 //!    infrastructure variables (`HOME`, the XDG base dirs derived
 //!    from it, `PATH`, CA-bundle vars, `TMUX_TMPDIR` for a
 //!    multiplexer session)
-//! 7. resource limits: `--pids-limit`, `--memory`, `--cpus` (when
+//! 8. resource limits: `--pids-limit`, `--memory`, `--cpus` (when
 //!    cgroups are not ignored)
-//! 8. network: `--network` spec (shared by default, or `none` / pasta
+//! 9. network: `--network` spec (shared by default, or `none` / pasta
 //!    spec when `network = false` or configured)
-//! 9. image reference (from config or default)
-//! 10. payload — WITHOUT a `--` separator before it: the first token
+//! 10. image reference (from config or default)
+//! 11. payload — WITHOUT a `--` separator before it: the first token
 //!     after the image IS the command (podman, unlike docker, does
 //!     not strip a stray `--`); the multiplexer entry (for interactive
 //!     sessions) or the image's shell/command
@@ -88,9 +93,10 @@ pub type HostEnv = BTreeMap<String, String>;
 /// The sandbox's own home directory (docs/design/config.md D14, the
 /// `$HOME` row of the base table in docs/plan.md).
 ///
-/// A path **inside** the container, not a host path: the container
-/// image provides the home directory structure, and we set `HOME` to
-/// it via `--env`. The path deliberately lives outside `/home`, so
+/// A path **inside** the container, not a host path: section 4 mounts
+/// a fresh empty tmpfs there (the image carries no `/mysbx-home`),
+/// and we set `HOME` to it via `--env`. The path deliberately lives
+/// outside `/home`, so
 /// nothing inside the sandbox can be confused with a host home path:
 /// the invariant "no IN-SANDBOX path under `/home/`" (config.md D14)
 /// stays literally checkable on the argv's destinations — mount
@@ -255,7 +261,7 @@ pub fn podman_run_argv(
         }
     }
 
-    // 1. podman run with global args — ARGS ONLY, no program name:
+    // 0. podman run with global args — ARGS ONLY, no program name:
     // lib.rs execs `Command::new(MYSBX_PODMAN).args(argv)`, the same
     // convention as bwrap_argv (golden minimal.txt starts with
     // `--clearenv`). A leading `podman` would double the program
@@ -292,7 +298,7 @@ pub fn podman_run_argv(
         argv.push("--tty".into());
     }
 
-    // 2. container identity
+    // 1. container identity
     // Container name: the repo basename PLUS a short hash of the repo
     // root path. The basename alone collides between different repos
     // that share one — and `--replace` then silently kills the sibling
@@ -313,14 +319,45 @@ pub fn podman_run_argv(
     argv.extend(["--hostname".into(), "mysbx".into()]);
     argv.push("--userns=keep-id".into());
 
-    // 3. base isolation
+    // 2. base isolation
     argv.push("--read-only".into());
     argv.push("--read-only-tmpfs=true".into());
     argv.push("--cap-drop=ALL".into());
     argv.push("--security-opt=no-new-privileges".into());
 
-    // 4. working directory
+    // 3. working directory
     argv.extend(["--workdir".into(), root.clone()]);
+
+    // 4. container home: a fresh empty tmpfs at CONTAINER_HOME, the
+    // podman shape of bwrap's tmpfs SANDBOX_HOME (config.md D14).
+    //
+    // The XDG base-dir variables (section 7) point at
+    // `.config`/`.cache`/`.local/{state,share}` under this home, but
+    // the container root is read-only (`--read-only` +
+    // `--read-only-tmpfs=true`, section 2) and podman's bind copy-up
+    // materializes only the FIRST path component of a bind — so
+    // without a writable home surface the payload shell dies at
+    // startup on its very first state write (`mkdir
+    // /mysbx-home/.cache': Read-only file system`, the fish errors of
+    // bd myconfig-lpl).
+    //
+    // Ordering is semantic and verified against the pinned engines,
+    // both of which mount PARENTS BEFORE CHILDREN regardless of flag
+    // order: podman sorts every user mount by destination depth,
+    // stable — "Mounts need to be sorted so paths will not cover
+    // other paths" (podman 5.8.6 libpod/util.go sortMounts, called
+    // from container_internal_common.go) — and runsc re-sorts the
+    // OCI spec's mounts the same way ("Sort the mounts so that we
+    // don't place children before parents", runsc/boot/vfs.go
+    // prepareMounts; it also CREATES missing mountpoints, so the
+    // image needs no /mysbx-home). The tmpfs therefore lands BEFORE
+    // every bind under it, and the binds land ON TOP: the ro
+    // `~/.config/fish` mount and the state-dirs binds seed the tmpfs
+    // exactly like bwrap's section-3 tmpfs does. Emitted before the
+    // workspace and state binds anyway (this section) so the argv
+    // ALSO reads parents-first — the engines' guarantee is relied
+    // on, not required, for an argv-ordered run.
+    tmpfs_mount(&mut argv, CONTAINER_HOME);
 
     // 5. workspace bind
     let (workspace_src, workspace_dest, implicit_rw_sources): (String, String, Vec<PathBuf>) =
@@ -512,27 +549,25 @@ pub fn podman_run_argv(
     // not exist inside the container anyway (bd myconfig-wao).
     argv.extend(["--env".into(), format!("HOME={CONTAINER_HOME}")]);
     // The XDG base dirs are infrastructure like `HOME` (config.md D14):
-    // they are derived FROM it, and emitting them matters ONLY under this
-    // backend — its container root is read-only (`--read-only` +
-    // `--read-only-tmpfs=true`, section 3): unlike bubblewrap's writable
-    // tmpfs home there is no writable `HOME` subtree to fall back into,
-    // and podman's bind-mount copy-up materializes only the FIRST path
-    // component of a bind, never the parents of `$HOME/.config`. With
-    // the variables unset, tools fall back to `$HOME/<dir>` and try to
-    // create history, caches or state under the read-only root — the
-    // fish startup errors from bd myconfig-jho (`Unable to locate data
-    // directory … Read-only file system` for `.local/share/fish`,
-    // `.config/fish` and `.cache/fish`, plus the follow-up
-    // `mkdir: cannot create directory '/home/agent/.cache/fish'`).
+    // they are derived FROM it, and re-anchoring them matters ONLY under
+    // this backend — bubblewrap's `HOME` is already its own tmpfs,
+    // while here the container root is read-only (`--read-only` +
+    // `--read-only-tmpfs=true`, section 2) and podman's bind copy-up
+    // materializes only the FIRST path component of a bind. The
+    // section-4 tmpfs at the home is what makes every one of the
+    // four destinations writable (bd myconfig-lpl); emitting the
+    // variables additionally keeps tools off the image's own
+    // `/home/agent` paths, which the read-only root leaves as
+    // unwritable as the pre-4 home was.
     //
     // The values mirror the gVisor agent image's own OCI env
     // (agent-image.nix), only re-anchored at the mysbx home:
     // `.config` under the read-only host-config mount — a tool that
     // writes there fails with the SAME visible EROFS naming its old
     // `$HOME/<dir>` path, so nothing silently loses state — while
-    // `.cache`/`.local` sit on the writable side of the home
-    // (persistable with `state-dirs` entries, e.g. `.local/state`;
-    // nesting rules keep the two out of each other's binds, D15).
+    // `.cache`/`.local` are tmpfs-ephemeral unless a `state-dirs`
+    // entry binds a sidecar store over them (D15; nesting rules keep
+    // the entries out of each other's binds).
     // Set after the layers, like `HOME` — a later `--env` wins, so no
     // config entry can repoint them.
     argv.extend([
@@ -622,6 +657,13 @@ fn bind_mount(argv: &mut Vec<String>, src: &str, dest: &str, rw: bool) {
     ]);
 }
 
+/// Add a tmpfs mount to the argv (section 4): the container home —
+/// `--mount` form rather than the `--tmpfs DEST` shorthand so the
+/// two mount helpers of this builder stay one flag shape each.
+fn tmpfs_mount(argv: &mut Vec<String>, dest: &str) {
+    argv.extend(["--mount".into(), format!("type=tmpfs,dst={dest}")]);
+}
+
 /// Normalize a path string: resolve `..` components lexically.
 fn normalize(path: &str) -> PathBuf {
     let mut components = Vec::new();
@@ -675,6 +717,19 @@ fn check_dest(dest: &str) -> Option<&'static str> {
         if hits {
             return Some(*prot);
         }
+    }
+    // [`CONTAINER_HOME`] is protected in ONE direction only, the
+    // same guard bwrap runs for its tmpfs home (review-2 item 5): a
+    // dest EQUAL to it would replace the section-4 tmpfs while
+    // `HOME` still names it, seeding the home with content no layer
+    // declared. Strict descendants stay allowed — seeding dotfiles
+    // into the home by pointing a `dest` below it is the documented
+    // shape (config.md D14, the `~/.config/fish` baseline mount) and
+    // lands ON TOP of the tmpfs. On component boundaries the home's
+    // only ancestor is `/`, already refused above, so this check
+    // effectively guards the EQUAL case.
+    if Path::new(CONTAINER_HOME).starts_with(&dest_norm) {
+        return Some(CONTAINER_HOME);
     }
     None
 }
