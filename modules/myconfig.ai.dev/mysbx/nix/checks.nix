@@ -56,6 +56,112 @@ in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
   mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
 
+  # The pi integration's mounts, evaluated against the REAL reference
+  # host (`test-f13` enables both mysbx and pi-coding-agent, hosts/
+  # host.f13/ai.f13.nix): since bd myconfig-576 the mounts bind from a
+  # self-contained store tree of dereferenced copies (`piSandboxConfig`
+  # in ../../programs/programs.pi-coding-agent/default.nix), because the
+  # podman-gvisor backend mounts nothing from the host /nix/store and the
+  # raw home-manager symlink tree dangles inside the container. The
+  # assertion pin runs at EVAL time (a throw builds no derivation), and
+  # the check derivation REALISES `piSandboxConfig` + greps its tree,
+  # because only the build can prove the copies exist as real files
+  # (the eval-level shape is necessary, not sufficient: a `path =
+  # "/nix/store/…"` mount whose tree still contains symlinks would pass
+  # the eval assertions and dangle in the container exactly as before).
+  #
+  # Not in ./config-eval-test.nix: that minimal evaluation imports the
+  # mysbx module alone, and the pi module reads options across the whole
+  # `myconfig.ai.dev` umbrella (workmux, skills, …) — evaluating it
+  # standalone means re-importing half of `modules/` by hand. Using the
+  # reference host is the same pattern as ../../../tests/microvm.nix
+  # (`self.nixosConfigurations.test-f13`).
+  mysbx-pi-mounts-test =
+    let
+      lib = inputs.nixpkgs.lib;
+      cfg = self.nixosConfigurations.test-f13.config;
+      piMounts = builtins.filter (
+        m: lib.hasPrefix "/mysbx-home/.pi" m.dest || m.dest == "/mysbx-home/.agents/skills"
+      ) cfg.myconfig.ai.dev.mysbx.config.mounts;
+      # The store tree every pi mount binds from. Derived from the
+      # extensions mount's path (NOT via `builtins.match` — that strips
+      # the string context, and the tree would not become an input of
+      # this check derivation, so the build could not see it).
+      extMountPath = (builtins.head piMounts).path;
+      sandboxTree = lib.removeSuffix "/.pi/agent/extensions" extMountPath;
+      expectedDests = [
+        "/mysbx-home/.pi/agent/extensions"
+        "/mysbx-home/.pi/agent/agents"
+        "/mysbx-home/.pi/agent/prompts"
+        "/mysbx-home/.pi/agent/themes"
+        "/mysbx-home/.pi/agent/keybindings.json"
+        "/mysbx-home/.agents/skills"
+      ];
+      evalAssertions = [
+        {
+          assertion = builtins.length piMounts == builtins.length expectedDests;
+          message = "mysbx-pi-mounts-test: expected ${toString (builtins.length expectedDests)} pi mounts, got ${toString (builtins.length piMounts)}";
+        }
+        {
+          assertion = builtins.all (
+            m: lib.hasPrefix "/nix/store/" m.path && !lib.hasPrefix "~" m.path
+          ) piMounts;
+          message = "mysbx-pi-mounts-test: every pi mount path must be an absolute store path (bd myconfig-576), got: ${
+            lib.concatStringsSep ", " (map (m: m.path) piMounts)
+          }";
+        }
+        {
+          assertion = builtins.all (m: lib.hasPrefix sandboxTree m.path) piMounts;
+          message = "mysbx-pi-mounts-test: every pi mount path must sit inside the pi-sandbox-config derivation";
+        }
+        {
+          assertion = builtins.all (m: m.mode == "ro") piMounts;
+          message = "mysbx-pi-mounts-test: every pi mount must stay read-only";
+        }
+      ];
+      failures = builtins.filter (a: !a.assertion) evalAssertions;
+      evalGate =
+        if failures != [ ] then
+          throw "mysbx-pi-mounts-test: ${toString (builtins.length failures)} eval assertion(s) failed:\n  - ${
+            lib.concatMapStringsSep "\n  - " (f: f.message) failures
+          }"
+        else
+          "ok";
+    in
+    pkgs.runCommand "mysbx-pi-mounts-test"
+      {
+        inherit evalGate sandboxTree;
+        nativeBuildInputs = with pkgs; [
+          gnugrep
+          findutils
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-pi-mounts-test: $*" >&2
+          exit 1
+        }
+
+        [ "$evalGate" = ok ] || { echo "mysbx-pi-mounts-test: eval gate: $evalGate" >&2; exit 1; }
+
+        # The mounted subtrees must exist in the copied tree ...
+        for sub in .pi/agent/extensions .pi/agent/agents .pi/agent/prompts .pi/agent/themes .pi/agent/keybindings.json .agents/skills; do
+          test -e "$sandboxTree/$sub" || fail "$sub is missing from the pi-sandbox-config tree"
+        done
+
+        # ... and be REAL files: a symlink anywhere below the mounted
+        # subtrees dangles inside the podman-gvisor container, which
+        # has no /nix/store (bd myconfig-576). The whole tree is
+        # asserted, not just the mount points — the mounts are the
+        # parents of everything pi reads.
+        if [ -n "$(find "$sandboxTree" -type l -print -quit)" ]; then
+          find "$sandboxTree" -type l >&2
+          fail "the pi-sandbox-config tree contains symlinks"
+        fi
+
+        mkdir "$out"
+      '';
+
   mysbx-completions =
     let
       completion = ../mysbx-rs/completions/mysbx.fish;
