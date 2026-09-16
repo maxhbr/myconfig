@@ -7,6 +7,7 @@ Usage:
   mysbx fetch | merge | push | diff NAME [verb-arguments...]
   mysbx session list | session destroy NAME [--force] | session hunk NAME
   mysbx worktree list | worktree diff NAME | worktree hunk NAME
+  mysbx status
   mysbx [COMMAND]
 
 Commands:
@@ -150,6 +151,22 @@ Commands:
                 code propagates unchanged, like `$EDITOR` does for
                 `mysbx edit`. With --dry-run the exact `hunk`
                 invocation is printed instead
+  status        the one-command overview of this repo's mysbx setup,
+                host-side (no sandbox is started): the resolved repo
+                and sidecar with the init state (inited, or `not
+                inited` with the `mysbx init` hint), the effective
+                configuration a run would use — the backend (with
+                the layer that contributed it; when the sidecar is
+                not inited, from the user layer alone, with the
+                run-refusal named), the multiplexer, the network
+                sense — and the session and worktree registries in
+                the SAME one-line format `session list` and
+                `worktree list` print (or a short `none` line each).
+                Exit 0 even on a not-inited repo: status reports the
+                state, it never judges it. Takes no nested verbs;
+                --verbose is refused (no run to report on) and
+                --dry-run is accepted as a plain print (the verb has
+                no side effects)
   gvisor-load-image
                 load the gVisor agent container image into Podman;
                 supports `--force`, `--test`, `--image <ref>`, `--help`

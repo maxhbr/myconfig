@@ -383,29 +383,41 @@ pub fn list(args: &[String], dry_run: bool) -> i32 {
         print_commands(&dry_run_argv(&repo, &entries_probe_names(&repo)));
         return 0;
     }
-    let rows = entries(&repo);
-    println!(
+    for line in list_lines(&repo) {
+        println!("{line}");
+    }
+    0
+}
+
+/// The lines `session list` prints — the SAME lines this verb's
+/// stdout is made of, extracted so `mysbx status` (cli.md D19) can
+/// embed the listing without a second format that could drift from
+/// the list verb's contract (the verb's stdout IS the contract).
+/// `lines[0]` is the header, one row per line after it — an empty
+/// registry is the header alone.
+pub fn list_lines(repo: &Repo) -> Vec<String> {
+    let mut lines = vec![format!(
         "{:<NAME_WIDTH$} {:<BRANCH_WIDTH$} {}",
         "SESSION", "BRANCH", "AHEAD"
-    );
-    for e in &rows {
+    )];
+    for e in &entries(repo) {
         if e.debris {
-            println!(
+            lines.push(format!(
                 "{:<NAME_WIDTH$} {:<BRANCH_WIDTH$} {}",
                 e.name, "-", "debris (interrupted creation)"
-            );
+            ));
         } else {
             let ahead = match e.ahead {
                 Some(n) => n.to_string(),
                 None => "-".to_string(),
             };
-            println!(
+            lines.push(format!(
                 "{:<NAME_WIDTH$} {:<BRANCH_WIDTH$} {ahead}",
                 e.name, e.branch
-            );
+            ));
         }
     }
-    0
+    lines
 }
 
 /// The session names [`list`] would probe — the dry run's knowledge

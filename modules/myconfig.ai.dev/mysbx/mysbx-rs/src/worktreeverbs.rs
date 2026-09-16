@@ -366,27 +366,42 @@ pub fn list(args: &[String], dry_run: bool) -> i32 {
         print_commands(&dry_run_argv(&repo));
         return 0;
     }
-    let rows = entries(&repo);
-    println!(
+    for line in list_lines(&repo) {
+        println!("{line}");
+    }
+    0
+}
+
+/// The lines `worktree list` prints — the SAME lines this verb's
+/// stdout is made of, extracted so `mysbx status` (cli.md D19) can
+/// embed the listing without a second format that could drift from
+/// the list verb's contract (the verb's stdout IS the contract).
+/// `lines[0]` is the header, one row per line after it — an empty
+/// registry (or none at all) is the header alone.
+pub fn list_lines(repo: &Repo) -> Vec<String> {
+    let mut lines = vec![format!(
         "{:<NAME_WIDTH$} {:<BRANCH_WIDTH$} {}",
         "WORKTREE", "BRANCH", "AHEAD"
-    );
-    for e in &rows {
+    )];
+    for e in &entries(repo) {
         if e.debris {
-            println!(
+            lines.push(format!(
                 "{:<NAME_WIDTH$} {:<BRANCH_WIDTH$} {}",
                 e.name, "-", "debris (no .git pointer)"
-            );
+            ));
         } else {
             let branch = e.branch.as_deref().unwrap_or("-");
             let ahead = match e.ahead {
                 Some(n) => n.to_string(),
                 None => "-".to_string(),
             };
-            println!("{:<NAME_WIDTH$} {:<BRANCH_WIDTH$} {ahead}", e.name, branch);
+            lines.push(format!(
+                "{:<NAME_WIDTH$} {:<BRANCH_WIDTH$} {ahead}",
+                e.name, branch
+            ));
         }
     }
-    0
+    lines
 }
 
 /// The commands a `--dry-run` of [`list`] would run, in order: for

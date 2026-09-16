@@ -6665,6 +6665,143 @@ fn worktree_diff_of_a_fresh_worktree_is_empty() {
     assert!(stderr.contains("workmux-base record"), "{stderr}");
 }
 
+// ---- the status verb (cli.md D19) ----------------------------------------
+
+#[test]
+fn status_on_an_uninited_repo_reports_it_and_still_exits_zero() {
+    // D19: a not-inited repo is a state, not a failure — status says
+    // so with the `mysbx init` hint, still exits 0, and lists empty
+    // registries. The fixture has a sidecar DIRECTORY but no
+    // config.toml, so the not-inited-with-directory branch is the one
+    // exercised.
+    let (inv, repo, sidecar) = fixture_uninited("status-uninited", &["status"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.starts_with("## "), "D9 prefix: {stdout}");
+    assert!(stdout.contains(&repo.display().to_string()), "{stdout}");
+    assert!(stdout.contains(&sidecar.display().to_string()), "{stdout}");
+    assert!(stdout.contains("not inited"), "{stdout}");
+    assert!(stdout.contains("mysbx init"), "the hint: {stdout}");
+    // The effective-configuration section answers from the user
+    // layer alone (the fixture's empty one: a `(none …)` backend),
+    // and says the sidecar is not inited.
+    assert!(stdout.contains("backend:"), "{stdout}");
+    assert!(stdout.contains("(none"), "{stdout}");
+    assert!(
+        stdout.contains("user layer only — the sidecar is not inited"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("sessions:"), "{stdout}");
+    assert!(stdout.contains("none"), "{stdout}");
+    assert!(stdout.contains("worktrees:"), "{stdout}");
+}
+
+#[test]
+fn status_on_an_inited_repo_matches_the_list_verbs() {
+    // D19's reuse rule: the session and worktree lines status prints
+    // are the SAME lines the list verbs print — asserted by running
+    // all three and comparing, not by restating the format.
+    let Some((inv, _, _, worktree)) = worktree_fixture("status-inited", "fix-1") else {
+        return;
+    };
+    // A session beside the worktree, with one commit of work.
+    let sidecar = inv.cwd.parent().unwrap().join("repo.mysbx");
+    let clone = sidecar.join("clones").join("fix-1");
+    assert!(git_in(
+        &inv.cwd,
+        &[
+            "clone",
+            "--origin",
+            "origin",
+            "--no-hardlinks",
+            &inv.cwd.to_string_lossy(),
+            &clone.to_string_lossy(),
+        ]
+    ));
+    assert!(git_in(&clone, &["checkout", "-b", "agent/mysbx/fix-1"]));
+    std::fs::write(clone.join("s1.txt"), "work").unwrap();
+    assert!(git_in(&clone, &["add", "s1.txt"]));
+    assert!(git_in(&clone, &["commit", "-m", "session work"]));
+    std::fs::write(worktree.join("w1.txt"), "work").unwrap();
+    assert!(git_in(&worktree, &["add", "w1.txt"]));
+    assert!(git_in(&worktree, &["commit", "-m", "worktree work"]));
+
+    let (code, status, stderr) = run_binary_with(&inv, &["status"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(status.contains("inited"), "{status}");
+    // The effective configuration is shown: the backend of the user
+    // layer, attributed to it, the multiplexer, the network sense.
+    assert!(status.contains("backend:"), "{status}");
+    assert!(status.contains("bubblewrap"), "{status}");
+    assert!(status.contains("[user config]"), "{status}");
+    assert!(status.contains("multiplexer:"), "{status}");
+    assert!(status.contains("network:"), "{status}");
+
+    // The registries: the SAME rows the list verbs print, indented
+    // under their headings. Both the session and its worktree carry
+    // one commit, so the rows end in the ahead-count.
+    let (code, list, stderr) = run_binary_with(&inv, &["session", "list"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    for line in list.lines().skip(1) {
+        assert!(
+            status.contains(&format!("  {line}")),
+            "status embeds the session row `{line}`: {status}"
+        );
+    }
+    let (code, list, stderr) = run_binary_with(&inv, &["worktree", "list"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    for line in list.lines().skip(1) {
+        assert!(
+            status.contains(&format!("  {line}")),
+            "status embeds the worktree row `{line}`: {status}"
+        );
+    }
+}
+
+#[test]
+fn status_refuses_verbose_and_stray_arguments() {
+    // D19: --verbose is refused (no run to report on), a stray
+    // argument is a usage error naming the bare shape — and the
+    // run-scoped flags are refused by the dispatcher's shared arm.
+    let (inv, _, _) = fixture_user_backend("status-usage", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--verbose", "status"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(
+        stderr.contains("--verbose is not valid with `status`"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("status starts no sandbox"), "{stderr}");
+    let (code, _, stderr) = run_binary_with(&inv, &["status", "unexpected"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("unexpected argument"), "{stderr}");
+    assert!(stderr.contains("usage: mysbx status"), "{stderr}");
+    for args in [
+        vec!["--session", "fix-1", "status"],
+        vec!["--ro", "/tmp", "status"],
+        vec!["--backend", "bubblewrap", "status"],
+        vec!["--multiplexer", "tmux", "status"],
+        vec!["--result", "status"],
+        vec!["--timeout", "5", "status"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+        assert!(stderr.contains("is not valid with"), "{args:?}: {stderr}");
+    }
+}
+
+#[test]
+fn status_dry_run_prints_the_same_output() {
+    // D19: --dry-run is accepted as a plain print — the verb has no
+    // side effects to preview — so both spellings print the same
+    // overview.
+    let (inv, _, _) = fixture("status-dry-run", &[]);
+    let (code, plain, stderr) = run_binary_with(&inv, &["status"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let (code, dry, stderr) = run_binary_with(&inv, &["--dry-run", "status"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert_eq!(plain, dry, "--dry-run is a plain print");
+}
+
 // Tests for the `gvisor-load-image` subcommand
 #[test]
 fn gvisor_load_image_help_shows_usage() {

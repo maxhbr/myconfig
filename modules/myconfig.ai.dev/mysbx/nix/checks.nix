@@ -196,7 +196,7 @@ in
         # session sub-verb group (src/sessionverbs.rs, D7) and the
         # closed worktree sub-verb group (src/worktreeverbs.rs,
         # docs/design/worktree.md W1)
-        for sub in run gui init edit fetch merge push diff version help session worktree; do
+        for sub in run gui init edit fetch merge push diff version help session worktree status; do
           grep -q -- "-a $sub" "$installed" || fail "no completion for subcommand: $sub"
         done
         for sub in list destroy hunk; do

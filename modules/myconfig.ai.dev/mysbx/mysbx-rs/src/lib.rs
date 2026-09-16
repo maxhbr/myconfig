@@ -35,6 +35,7 @@ pub mod report;
 pub mod result;
 pub mod session;
 pub mod sessionverbs;
+pub mod status;
 pub mod toml;
 pub mod worktreeverbs;
 
@@ -162,6 +163,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "diff"
                         | "session"
                         | "worktree"
+                        | "status"
                         | "gvisor-load-image"
                 ) =>
         {
@@ -215,6 +217,14 @@ pub fn run(args: Vec<String>) -> i32 {
         // prints the exact commands (cli.md D9) and `--verbose` is
         // refused — there is no run to report on.
         Some("worktree") if flags.verbose => reject_verbose("worktree"),
+        // `status` (cli.md D19) is host-side like the handoff verbs:
+        // no sandbox is started, so `--verbose` — the report of a
+        // RUN — has nothing to report on here; `--dry-run` is
+        // accepted as a plain print (the verb's output is its whole
+        // job and has no side effects to preview, the list verbs'
+        // precedent).
+        Some("status") if flags.verbose => reject_verbose("status"),
+        Some("status") => status::run(&rest[1..], flags.dry_run),
         Some("worktree") => {
             match rest.get(1).map(String::as_str) {
                 Some("list") => worktreeverbs::list(&rest[2..], flags.dry_run),
@@ -635,6 +645,8 @@ fn reject_verbose(verb: &str) -> i32 {
     eprintln!("mysbx: --verbose is not valid with `{verb}`");
     if verb == "session" || verb == "worktree" {
         eprintln!("  it reports a run's configuration — the {verb} verbs start no sandbox");
+    } else if verb == "status" {
+        eprintln!("  it reports a run's configuration — status starts no sandbox");
     } else {
         eprintln!("  it reports a run's configuration — a handoff starts no sandbox");
     }
@@ -3252,6 +3264,7 @@ mod tests {
             "edit",
             "version",
             "help",
+            "status",
             "--dry-run",
             "--verbose",
             "--multiplexer",

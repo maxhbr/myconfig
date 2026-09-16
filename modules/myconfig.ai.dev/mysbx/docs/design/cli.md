@@ -70,7 +70,8 @@ session noun group's worktree sibling `worktree list` /
 `worktree diff NAME` / `worktree hunk NAME`
 ([worktree.md](./worktree.md) W1 — the second D3 exception: read-only
 inspection of the host's workmux worktrees in `<repo>__worktrees`,
-host-side, no sandbox started), the
+host-side, no sandbox started), the host-side overview verb `status`
+(D19), the
 global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
 the clone run mode), plus the global flags `--dry-run` (D9),
 `--verbose` (D10), `--result`/`--timeout` (D17), `--multiplexer`
@@ -590,6 +591,67 @@ other run-scoped flags get. `gui` passes its tail verbatim (D15), so
 not a config layer — selected the backend, the same provenance rule
 the mounts already follow (D16's `[command line]`): the report never
 claims a decision came from a file the operator never opened.
+
+### D19: `mysbx status` prints the one-command overview
+
+`mysbx status` is the host-side overview of a repo's mysbx setup —
+the answer to "what would a run here do, and what already exists?"
+without running one command per question. Like the handoff verbs it
+starts no sandbox; the repo is the one the cwd resolves to (D1).
+Everything it prints goes to stdout with the `## ` prefix (D9) —
+it is a result, not a diagnostic — and it always exits `0` for a
+successfully reported state: **a not-inited repo is a state, not a
+failure** (the run refusal of D13 is the failure; status is the
+command that shows it coming). Exit `2` for a wrong command line
+and `70` only when the repo cannot be resolved or a configuration
+file cannot be parsed — the overview refuses to show a merge it
+cannot compute, rather than guessing past a broken layer.
+
+**What it shows**, in order:
+
+1. **repo + sidecar**: the resolved repo root, the sidecar path
+   `<repo>.mysbx`, and the init state — `inited`, or `not inited
+   (run: mysbx init)` (D13: the config FILE is what a run requires;
+   a sidecar directory without one is named as such).
+2. **the effective configuration** after merging both layers
+   (user + sidecar, the same `load_layers`/`merge` a run uses):
+   the backend a run would get — with the layer that contributed
+   it, `[sidecar config]` or `[user config]`, since the merge's
+   precedence (sidecar over user, D6) makes the attribution exact —
+   or an explicit `(none …)` line naming the refusal a run would
+   meet; the multiplexer (including `none`); the network sense
+   (`shared` / `denied`). When the sidecar is not inited, the
+   sidecar layer is empty (an absent file loads as one), so the
+   same lines answer from the user layer alone, preceded by a
+   line saying the sidecar is not inited and a run would be
+   refused (D13).
+3. **sessions**: the SAME one-line-per-entry lines `mysbx session
+   list` prints (name, branch, ahead-count, debris marking — its
+   stdout is the contract), indented under a `sessions:` heading,
+   or a short `sessions: none` line when the registry is empty.
+4. **worktrees**: the SAME lines `mysbx worktree list` prints,
+   indented under a `worktrees:` heading, or a short `worktrees:
+   none` line.
+5. **the gvisor image pin**, when this build carries one
+   (`MYSBX_GVISOR_IMAGE` of the wrapper) — the trivial tail: the
+   pin is what a `podman-gvisor` run would consume.
+
+**Reuse, not duplication.** The session and worktree rows come from
+the list verbs' own line-producing functions
+(`sessionverbs::list_lines`, `worktreeverbs::list_lines` — the same
+functions `session list` / `worktree list` print), so the overview
+cannot drift from the verbs it summarizes.
+
+**Flag behavior.** The verb takes no nested verbs: a stray argument
+is a usage error (`2`) naming the bare shape `mysbx status`.
+`--verbose` is refused (the handoff-verb precedent: it reports a
+RUN's configuration, and status starts no run). `--dry-run` is
+**accepted and behaves as a plain print** — the verb has no side
+effects to preview, and refusing it would suggest one exists; the
+list verbs set the same precedent. The run-scoped flags
+(`--backend`, `--multiplexer`, `--session`, `--ro`, `--rw`,
+`--result`, `--timeout`) are refused by the dispatcher's shared
+rejection arm, which lists `status` among its verbs.
 
 ## Non-goals
 
