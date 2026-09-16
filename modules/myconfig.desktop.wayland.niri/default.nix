@@ -285,9 +285,11 @@ in
                   "niri/config.kdl".source = "${drv}/config.kdl";
                   "niri/include.kdl".source = "${drv}/include.kdl";
                 };
-              programs.waybar.settings.mainBar = lib.mkIf wsNamesCfg.enable {
+              programs.waybar.settings.mainBar = {
                 "niri/workspaces" = {
-                  "format" = "{value}";
+                  # {value} shows the workspace name if it has one, its
+                  # index otherwise (waybar niri-workspaces module).
+                  "format" = if wsNamesCfg.enable then "{value}" else "{index}";
                   rotate = 90;
                 };
                 modules-left = [ "niri/workspaces" ];
