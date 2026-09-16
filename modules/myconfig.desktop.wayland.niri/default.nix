@@ -47,6 +47,13 @@ let
     }
   '';
   uwsmCfg = cfg.desktop.wayland.uwsm;
+  # Dynamic workspace naming: see ./workspace-names.nix and
+  # doc/niri-dynamic-workspace-names.md.
+  wsNamesCfg = cfg.desktop.wayland.niri.workspaceNames;
+  wsNames = (import ./workspace-names.nix { inherit lib pkgs; }).niri-ws-names {
+    inherit (wsNamesCfg) rules interval;
+    inherit niri;
+  };
   # Compositor entrypoint used when running niri under uwsm. uwsm itself sets
   # up the graphical-session systemd targets, so we launch `niri --session`
   # directly instead of the `niri-session` helper script.
@@ -61,6 +68,43 @@ in
       type = types.str;
       default = "";
       description = "Additional config added to config.kdl";
+    };
+    desktop.wayland.niri.workspaceNames = {
+      enable = mkEnableOption "dynamic workspace naming for niri";
+      rules = mkOption {
+        type = types.listOf (
+          types.submodule {
+            options = {
+              app-id = mkOption {
+                type = types.str;
+                default = ".*";
+                description = "POSIX ERE matched against the window app-id";
+              };
+              title = mkOption {
+                type = types.str;
+                default = ".*";
+                description = "POSIX ERE matched against the window title";
+              };
+              name = mkOption {
+                type = types.str;
+                description = "Workspace name to apply when the rule matches";
+              };
+            };
+          }
+        );
+        default = [ ];
+        description = ''
+          Rules naming workspaces by their windows, evaluated in order
+          (first match wins): a workspace holding any window that matches
+          app-id and title is named `name`. A second workspace wanting the
+          same name gets `name_2`, and so on.
+        '';
+      };
+      interval = mkOption {
+        type = types.ints.positive;
+        default = 5;
+        description = "Poll interval (seconds) of the renaming daemon";
+      };
     };
   };
   # Always expose the `extraBinds` home-manager option (even when niri is not
@@ -225,6 +269,9 @@ in
                         include "include.kdl"
 
                         spawn-at-startup "${niri-autostart}"
+                        ${lib.optionalString wsNamesCfg.enable ''
+                          spawn-at-startup "${wsNames}/bin/niri-ws-names"
+                        ''}
                         EOF
                         substituteInPlace $out/config.kdl \
                           --replace-fail "@@niri-extra-binds@@" ${lib.escapeShellArg extraBinds}
@@ -238,14 +285,12 @@ in
                   "niri/config.kdl".source = "${drv}/config.kdl";
                   "niri/include.kdl".source = "${drv}/include.kdl";
                 };
-              programs.waybar.settings.mainBar = {
+              programs.waybar.settings.mainBar = lib.mkIf wsNamesCfg.enable {
                 "niri/workspaces" = {
-                  "format" = "{index}";
+                  "format" = "{value}";
                   rotate = 90;
                 };
                 modules-left = [ "niri/workspaces" ];
-                # modules-center = [ ];
-                # modules-right = [ "wlr/taskbar" ];
               };
               # A dedicated anchor for your compositor session
               systemd.user.services.niri = {
