@@ -314,6 +314,7 @@ complete -c mysbx -f -n '__mysbx_no_verb' -a version -d 'Print the version'
 complete -c mysbx -f -n '__mysbx_no_verb' -a help -d 'Print this help'
 complete -c mysbx -f -n '__mysbx_no_verb' -a session -d 'The session group: list | destroy | hunk'
 complete -c mysbx -f -n '__mysbx_no_verb' -a worktree -d 'The worktree group: list | diff | hunk'
+complete -c mysbx -f -n '__mysbx_no_verb' -a status -d 'The one-command overview: init state, effective config, sessions, worktrees'
 
 # The session sub-verbs (workspace.md D7 — a closed group, not an open
 # tree).
