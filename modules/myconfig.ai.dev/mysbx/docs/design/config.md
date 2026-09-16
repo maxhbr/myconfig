@@ -127,6 +127,25 @@ Other modules extend it by appending to `myconfig.ai.mysbx.config.mounts`.
 Outside myconfig the file stays an ordinary hand-written file; mysbx itself
 knows nothing about where it came from.
 
+Tool modules that mount **home-manager-deployed configuration** (config
+files written into `~` by Home Manager, i.e. `home.file`/
+`xdg.configFile`) use the shared library
+`../../nix/sandbox-config.nix` (`mkSandboxConfig`): it builds one
+self-contained store tree of dereferenced REAL-FILE copies of the
+mounted subtrees from Home Manager's merged `home.file` — the single
+source of truth, so the sandbox copies cannot drift from what the host
+deploys — and returns the `[[mounts]]` entries binding those subtrees
+read-only below `/mysbx-home` (D14). Real files are required because
+Home Manager deploys `home.file` entries as symlinks into its
+`<hash>-home-manager-files` generation tree, whose leaves may symlink
+into package store paths: under the podman-gvisor backend — which mounts
+nothing from the host /nix/store — such a two-hop chain dangles inside
+the container, and a tool would start with almost no configuration
+(observed with pi, bd myconfig-576). Since bd myconfig-ooh this is the
+sanctioned way for a tool integration to mount its config
+(pi-coding-agent, opencode and rtk use it); a subtrees list is all a
+caller states.
+
 ### D7: The sidecar config is trusted; mounts come from both layers
 
 The sidecar `config.toml` is **trusted**, at the same level as the user

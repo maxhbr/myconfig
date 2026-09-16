@@ -1,5 +1,12 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
+#
+# pi coding agent, its wrappers (pi/piBwrap, agent-bubblewrap-pi,
+# agent-qemu-pi, worktree variants), the generated pi extensions
+# (providers, jail marker, subagent/handoff examples) and the mysbx
+# tier integration: pi's config is mounted into mysbx sandboxes from a
+# dereferenced store tree built by the shared
+# ../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
 {
   config,
   lib,
@@ -7,7 +14,6 @@
   jail,
   ...
 }:
-
 let
   osconfig = config;
   system = pkgs.stdenv.hostPlatform.system;
@@ -24,6 +30,14 @@ let
         ;
     };
   jail-app = callJailLib ../../fns/bubblewrap-app.nix;
+
+  # The shared mysbx sandbox-config helper (the dereferenced-store-tree
+  # machinery, bd myconfig-ooh); consumed like the entry scripts consume
+  # ../../mysbx/nix/mux-entry-lib.nix.
+  sandboxConfigLib = import ../../mysbx/nix/sandbox-config.nix {
+    inherit lib;
+    runCommand = pkgs.runCommand;
+  };
 
   # Jail library handle + the jail-to-host channel combinator. The combinator
   # exposes a program *inside* the jail that forwards its single argument over
@@ -1289,11 +1303,11 @@ let
   #
   #   1. the `pi` binary on the sandbox PATH -> `myconfig.ai.dev.mysbx.extraTools`
   #   2. pi's *configuration* visible inside the sandbox -> read-only mounts
-  #      in the generated user config layer (`…mysbx.config.mounts`),
-  #      each bound from a self-contained store tree of dereferenced
-  #      copies (`piSandboxConfig` below — the sandbox binds real files,
-  #      because the podman-gvisor container has no home-manager-files
-  #      store path; see `piSandboxConfig` for the full rationale)
+  #      in the generated user config layer (`…mysbx.config.mounts`), each
+  #      bound from a self-contained store tree of dereferenced copies built
+  #      by the shared `mysbx/nix/sandbox-config.nix` helper (the sandbox
+  #      binds real files because the podman-gvisor container mounts nothing
+  #      from the host /nix/store — see the helper for the full rationale)
   #   3. the jail-marker extension must NOT flag the session as un-jailed:
   #      a mysbx sandbox is a jail just like `agent-bubblewrap-pi`, so the
   #      generated user layer also sets `PI_JAIL_MARKER=1` for every mysbx
@@ -1317,9 +1331,10 @@ let
   #      the sidecar, and a state entry is always a directory, so the
   #      files could not be persisted this way anyway).
   #
-  # What is mounted: one read-only mount per pi-config subtree, from a
-  # self-contained store tree (NOT the host home — see `piSandboxConfig`
-  # below). `~/.pi` itself is deliberately NOT mounted — it is pi's
+  # What is mounted: one read-only mount per pi-config subtree, from the
+  # self-contained store tree built by the shared `sandbox-config.nix`
+  # helper (NOT the host home — see `mysbxSandboxConfig` below).
+  # `~/.pi` itself is deliberately NOT mounted — it is pi's
   # writable state directory (sessions, settings, credentials); inside
   # the sandbox it stays the throwaway tmpfs home except for the
   # persisted `sessions/` subtree. Persisting a WIDER state entry (`.pi`
@@ -1351,119 +1366,26 @@ let
   # Handcrafted skills, discovered by pi from `~/.agents/skills/`.
   ++ lib.optional piHasHandcraftedSkills ".agents/skills";
 
-  # The single source of truth both the host deployment and the sandbox
-  # copies are built from: home-manager's own merged `home.file` option
-  # of the user whose mysbx config layer is generated. Every pi-config
-  # file this repo deploys — the `home.file` block below, the handcrafted
-  # skills/prompts/agents (../skills), rtk.ts (../programs.rtk),
-  # workmux-status.ts (../myconfig.ai.workmux) and the private-flake
-  # providers (skainet-provider.ts, trustedtokens-provider/) — is an
-  # entry of this attrset, so the sandbox tree below can never drift
-  # from what the host actually deploys: a new `home.file` entry under a
-  # mounted subtree lands in the sandbox automatically on the next
-  # build. `text`-style entries are covered too (home-manager materialises
-  # them as a `source` derivation, file-type.nix).
-  #
-  # Referenced only under `mkIf (…mysbx.enable …)` below (Nix is lazy),
-  # like `hmRipgrep` in ../../mysbx/default.nix. It CANNOT be circular:
-  # it feeds `…mysbx.config.mounts`, which the mysbx module renders into
-  # `home-manager.users.mhuber.xdg.configFile."mysbx/config.toml"` —
-  # and `xdg.configFile` feeds `home.file` keyed by `.config/mysbx/…`,
-  # a prefix the subtree filter below never matches, so
-  # `filterAttrs`'s lazy value forcing stops before the cycle could
-  # close.
-  mysbxPiHomeFile = config.home-manager.users.mhuber.home.file;
+  # The pi-config mounts for the mysbx sandbox, built by the shared
+  # helper (../../mysbx/nix/sandbox-config.nix — the dereferenced-store-
+  # tree machinery that landed here with bd myconfig-576, extracted into
+  # the mysbx library with bd myconfig-ooh so other tool modules can
+  # mount their home-manager-deployed config the same way). The helper
+  # builds its copies from home-manager's merged `home.file` — the
+  # single source of truth, so the sandbox tree can never drift from
+  # what the host deploys — and its anti-circularity argument applies
+  # here verbatim: the result feeds `…mysbx.config.mounts`, which the
+  # mysbx module renders into `home.file` keyed by `.config/mysbx/…`, a
+  # prefix no subtree below matches (Nix is lazy, so `mkIf`-gating the
+  # only reference below suffices).
+  mysbxSandboxConfig = sandboxConfigLib.mkSandboxConfig {
+    homeFile = config.home-manager.users.mhuber.home.file;
+    homeDirectory = config.home-manager.users.mhuber.home.homeDirectory;
+    subtrees = mysbxPiSubtrees;
+    name = "pi-sandbox-config";
+  };
 
-  # Home-manager's own trick (modules/files.nix `sourceStorePath`): a
-  # `source` that is a context-less store path — a flake source tree —
-  # would NOT become a derivation input when stringified into the copy
-  # script, and the build would fail with `cannot stat` on a builder
-  # that lacks the path (observed: the rtk skill dir, bd myconfig-576).
-  # Re-importing it via `builtins.path` adds the context.
-  mysbxPiSource =
-    source:
-    let
-      str = toString source;
-    in
-    if builtins.hasContext str then
-      str
-    else
-      builtins.path {
-        path = source;
-        name = lib.strings.sanitizeDerivationName "pi-sandbox-config-source-${baseNameOf str}";
-        recursive = lib.filesystem.pathIsDirectory source;
-      };
-
-  # One self-contained store tree of REAL FILES mirroring the mounted
-  # subtrees (`cp -RL --no-preserve=mode` semantics, the seed.rs
-  # precedent: ../../sandboxes/myconfig.ai.gvisor-agent-sandbox/rust/
-  # src/seed.rs — "Files are copies, not symlinks, because the sandbox
-  # has no /nix").
-  #
-  # Why copies: home-manager deploys `home.file` entries as SYMLINKS
-  # into its `<hash>-home-manager-files` generation tree, whose leaves
-  # for `.pi/agent/extensions/*` are themselves symlinks into package
-  # store paths — a two-hop chain. The podman-gvisor backend
-  # deliberately mounts NOTHING from the host /nix/store
-  # (../../mysbx/mysbx-rs/src/podman_gvisor.rs: the image's own userland
-  # provides everything), and while the FINAL hop is in the image, the
-  # INTERMEDIATE home-manager-files path is not, so a mount of the raw
-  # host tree hands the container dangling symlinks and pi starts with
-  # almost no extensions (bd myconfig-576). Mounting dereferenced
-  # copies from this derivation instead keeps every mount path an
-  # absolute store path that exists — canonicalization (D8) is a no-op.
-  # (The bubblewrap backend is unaffected either way: it ro-binds the
-  # host /nix, so both spellings resolve there.)
-  piSandboxConfig =
-    let
-      inSubtree =
-        target: builtins.any (sub: target == sub || lib.hasPrefix "${sub}/" target) mysbxPiSubtrees;
-      entries = lib.filterAttrs (target: _: inSubtree target) mysbxPiHomeFile;
-      # Home-manager's own deployment skips `enable = false` entries
-      # (modules/files.nix `enabledFiles`); the copies must match, or a
-      # disabled entry would exist inside the sandbox but not in `~`.
-      # BTree-style order: `mkdir -p` of a later entry's parent must not
-      # collide with an earlier copied FILE. Sorting by target length
-      # puts parents (shorter paths) before their children, the same
-      # invariant home-manager's own `files.nix` sorts by.
-      sorted = lib.sortOn (e: builtins.stringLength e.target) (
-        lib.filter (e: e.enable) (lib.attrValues entries)
-      );
-      copyLine =
-        e:
-        let
-          src = mysbxPiSource e.source;
-        in
-        ''
-
-          mkdir -p "$out/${lib.dirOf e.target}"
-          cp -RL --no-preserve=mode -- ${lib.escapeShellArg (toString src)} "$out/${e.target}"'';
-    in
-    pkgs.runCommand "pi-sandbox-config" { } (
-      ''
-        mkdir -p "$out"
-      ''
-      + lib.concatStrings (map copyLine sorted)
-      + ''
-
-        if [ -n "$(find "$out" -type l -print -quit)" ]; then
-          echo "pi-sandbox-config: symlinks left in the output tree" >&2
-          exit 1
-        fi
-      ''
-    );
-
-  # Every entry carries a `dest` under `/mysbx-home` because `HOME` is
-  # `/mysbx-home` in the sandbox (D14) and pi looks for its config below
-  # `$HOME`. The `path` is a subtree of `piSandboxConfig`: an absolute
-  # store path of REAL files (see `piSandboxConfig` above) instead of
-  # the host `~/...` symlink tree. `.pi/agent/keybindings.json` stays a
-  # FILE bind: its store source is the copied file, not a directory.
-  mysbxPiMounts = map (sub: {
-    path = "${piSandboxConfig}/${sub}";
-    dest = "/mysbx-home/${sub}";
-    mode = "ro";
-  }) mysbxPiSubtrees;
+  mysbxPiMounts = mysbxSandboxConfig.mounts;
 in
 {
   options.myconfig = with lib; {
