@@ -1,3 +1,11 @@
+# Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+#
+# opencode and its wrappers (opencode/opencodeBwrap,
+# agent-bubblewrap-opencode, worktree variants), plus the mysbx tier
+# integration: opencode's config is mounted into mysbx sandboxes from
+# a dereferenced store tree built by the shared
+# ../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
 {
   config,
   lib,
@@ -20,6 +28,14 @@ let
         ;
     };
   jail-app = callJailLib ../../fns/bubblewrap-app.nix;
+
+  # The shared mysbx sandbox-config helper (the dereferenced-store-tree
+  # machinery, bd myconfig-ooh); consumed like the entry scripts consume
+  # ../../mysbx/nix/mux-entry-lib.nix.
+  sandboxConfigLib = import ../../mysbx/nix/sandbox-config.nix {
+    inherit lib;
+    runCommand = pkgs.runCommand;
+  };
   mkWorkmuxWorktree = callLib ../../fns/workmux-worktree.nix;
 
   # Make the `workmux` binary available inside the sandboxes (for the
@@ -95,54 +111,63 @@ let
   #
   #   1. the `opencode` binary on the sandbox PATH -> `myconfig.ai.dev.mysbx.extraTools`
   #   2. opencode's *configuration* visible inside the sandbox -> read-only
-  #      mounts in the generated user config layer (`…mysbx.config.mounts`).
+  #      mounts in the generated user config layer (`…mysbx.config.mounts`),
+  #      each bound from a self-contained store tree of dereferenced copies
+  #      built by the shared `mysbx/nix/sandbox-config.nix` helper (bd
+  #      myconfig-ooh): the subtrees the helper copies mirror exactly what
+  #      home-manager deploys, so a D8 missing-source mount error can no
+  #      longer occur for these entries — the source is always the built
+  #      tree, and the helper materialises an (empty) directory for a
+  #      subtree home-manager deployed nothing into.
   #   3. opencode's *state* persists across runs -> `state-dirs` entries
   #      (`…mysbx.config.stateDirs`, ../../mysbx/docs/design/config.md D15)
   #      backed by `<repo>.mysbx/state/` in the sidecar — never the host
   #      `~/.local`, which stays out of the sandbox entirely.
   #
-  # Only home-manager-managed paths are mounted: mysbx canonicalizes every
-  # mount path eagerly and a missing path is a hard error on EVERY run
-  # (../../mysbx/docs/design/config.md D8), so each entry must be created by
-  # the very condition that adds it. The host's own
-  # `~/.local/{share,state}/opencode` and the auth files are deliberately
-  # NOT mounted: a sandboxed session starts unauthenticated (it talks to
-  # the local LiteLLM / llama.cpp providers, which need no credentials)
-  # and writes its state to the sidecar instead.
-  #
-  # Every entry carries a `dest` under `/mysbx-home` because `HOME` is
-  # `/mysbx-home` in the sandbox (D14) and opencode looks for its config
-  # below `$XDG_CONFIG_HOME` (i.e. `$HOME/.config`).
-  mysbxHomeMount = path: {
-    path = "~/${path}";
-    dest = "/mysbx-home/${path}";
-    mode = "ro";
-  };
+  # The host's own `~/.local/{share,state}/opencode` and the auth files are
+  # deliberately NOT mounted: a sandboxed session starts unauthenticated
+  # (it talks to the local LiteLLM / llama.cpp providers, which need no
+  # credentials) and writes its state to the sidecar instead.
 
   # Home Manager writes `~/.config/mcp/mcp.json` only when at least one
   # MCP server is configured (upstream `modules/programs/mcp.nix`:
-  # `xdg.configFile = mkIf (cfg.servers != { })`), and with no file there
-  # is no `~/.config/mcp` DIRECTORY either. Since a missing mount source
-  # is a hard error on every mysbx run of the host (D8) — not just for
-  # opencode — the mount is gated on the same condition, read from the
-  # user whose config layer mysbx generates. Same pattern (and the same
+  # `xdg.configFile = mkIf (cfg.servers != { })`), so with no MCP servers
+  # the `.config/mcp` subtree would be EMPTY in the copied tree (the
+  # helper materialises it as an empty directory, keeping the mount
+  # valid). The gate is kept anyway — read from the user whose config
+  # layer mysbx generates — so the generated layer only carries the
+  # entry when there is something to mount. Same pattern (and the same
   # laziness argument) as `hmRipgrep` in ../../mysbx/default.nix.
   hmMcpServers = config.home-manager.users.mhuber.programs.mcp.servers or { };
 
-  mysbxOpencodeMounts = map mysbxHomeMount (
-    [
-      # The generated config (providers, permission rules, agents,
-      # commands, skills — everything the `programs.opencode` block below
-      # writes below `~/.config/opencode`) — always present because the
-      # `settings` set below is non-empty, so Home Manager writes at
-      # least `opencode/opencode.json`.
-      ".config/opencode"
-    ]
-    # MCP server definitions, activated by `enableMcpIntegration` below.
-    # The whole `mcp` directory rather than the single file: one mount
-    # covers whatever Home Manager writes there.
-    ++ lib.optional (hmMcpServers != { }) ".config/mcp"
-  );
+  # Read from the user whose config layer mysbx generates, like
+  # `hmMcpServers` above (the helper needs the merged `home.file` as its
+  # single source of truth, plus the home directory to normalize the
+  # absolute `xdg.configFile` keys into relative targets). Only
+  # referenced under `mkIf (…mysbx.enable …)` below (Nix is lazy); not
+  # circular for the same reason as in ../programs.pi-coding-agent (no
+  # subtree below matches `.config/mysbx`).
+  hmHomeFile = config.home-manager.users.mhuber.home.file;
+  hmHomeDirectory = config.home-manager.users.mhuber.home.homeDirectory;
+
+  mysbxOpencodeMounts =
+    (sandboxConfigLib.mkSandboxConfig {
+      homeFile = hmHomeFile;
+      subtrees = [
+        # The generated config (providers, permission rules, agents,
+        # commands, skills — everything the `programs.opencode` block below
+        # writes below `~/.config/opencode`) — always populated because
+        # the `settings` set below is non-empty, so Home Manager writes
+        # at least `opencode/opencode.json`.
+        ".config/opencode"
+      ]
+      # MCP server definitions, activated by `enableMcpIntegration` below.
+      # The whole `mcp` directory rather than the single file: one mount
+      # covers whatever Home Manager writes there.
+      ++ lib.optional (hmMcpServers != { }) ".config/mcp";
+      name = "opencode-sandbox-config";
+      homeDirectory = hmHomeDirectory;
+    }).mounts;
 
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   contextWindowLookup = lib.listToAttrs (

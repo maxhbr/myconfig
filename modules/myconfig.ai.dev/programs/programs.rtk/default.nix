@@ -24,6 +24,10 @@
 # them from the very same pinned source, so the deployed plugins always match
 # the deployed binary.
 #
+# The mysbx tier integration mounts `~/.config/rtk` into mysbx sandboxes
+# from a dereferenced store tree built by the shared
+# ../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
+#
 # No state file needs to be pre-created: rtk creates its tracking database
 # (`~/.local/share/rtk/history.db`) lazily on first use, and a missing
 # `config.toml` simply means "all defaults" — so the deployment is complete
@@ -52,6 +56,20 @@ let
   piEnabled = aiCfg.pi-coding-agent.enable or false;
   opencodeEnabled = aiCfg.opencode.enable or false;
   claudeEnabled = aiCfg.claude-code.enable or false;
+
+  # The shared mysbx sandbox-config helper (the dereferenced-store-tree
+  # machinery, bd myconfig-ooh); consumed like the entry scripts consume
+  # ../../mysbx/nix/mux-entry-lib.nix. Read from the user whose config
+  # layer mysbx generates (plus that user's home directory, which the
+  # helper needs to normalize the absolute `xdg.configFile` keys) and
+  # referenced only under `mkIf aiCfg.mysbx.enable` below (Nix is lazy);
+  # not circular — no subtree matches `.config/mysbx`.
+  sandboxConfigLib = import ../../mysbx/nix/sandbox-config.nix {
+    inherit lib;
+    runCommand = pkgs.runCommand;
+  };
+  hmHomeFile = config.home-manager.users.mhuber.home.file;
+  hmHomeDirectory = config.home-manager.users.mhuber.home.homeDirectory;
 in
 {
   options.myconfig = with lib; {
@@ -109,21 +127,26 @@ in
     # ../programs.opencode/default.nix: put `rtk` on the sandbox PATH so the
     # agents' rewritten commands resolve inside the sandbox too, mount the
     # generated config read-only under the sandbox home (`HOME` is
-    # `/mysbx-home` there), and give rtk a per-repository state directory so
-    # its tracking database survives the tmpfs home without any host
+    # `/mysbx-home` there) — from a self-contained store tree of
+    # dereferenced copies built by the shared `../../mysbx/nix/sandbox-
+    # config.nix` helper (bd myconfig-ooh; the raw `~/…` mount would dangle
+    # under the podman-gvisor backend, which mounts nothing from the host
+    # /nix/store) — and give rtk a per-repository state directory so its
+    # tracking database survives the tmpfs home without any host
     # `~/.local` path entering the sandbox.
+    #
+    # `.config/rtk` is always populated: the `settings` defaults above
+    # are non-empty, so home-manager always writes
+    # `~/.config/rtk/config.toml`.
     myconfig.ai.dev.mysbx = lib.mkIf aiCfg.mysbx.enable {
       extraTools = [ cfg.package ];
-      config.mounts = [
-        {
-          # Always present: the `settings` defaults above are non-empty, so
-          # home-manager always writes `~/.config/rtk/config.toml` (a missing
-          # mount source is a hard error on every mysbx run).
-          path = "~/.config/rtk";
-          dest = "/mysbx-home/.config/rtk";
-          mode = "ro";
-        }
-      ];
+      config.mounts =
+        (sandboxConfigLib.mkSandboxConfig {
+          homeFile = hmHomeFile;
+          subtrees = [ ".config/rtk" ];
+          name = "rtk-sandbox-config";
+          homeDirectory = hmHomeDirectory;
+        }).mounts;
       config.stateDirs = [ ".local/share/rtk" ];
     };
 

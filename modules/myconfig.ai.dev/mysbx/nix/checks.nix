@@ -59,12 +59,15 @@ in
   # The pi integration's mounts, evaluated against the REAL reference
   # host (`test-f13` enables both mysbx and pi-coding-agent, hosts/
   # host.f13/ai.f13.nix): since bd myconfig-576 the mounts bind from a
-  # self-contained store tree of dereferenced copies (`piSandboxConfig`
-  # in ../../programs/programs.pi-coding-agent/default.nix), because the
+  # self-contained store tree of dereferenced copies (built by the
+  # shared `mkSandboxConfig` helper, ../../nix/sandbox-config.nix, from
+  # `mysbxSandboxConfig` in
+  # ../../programs/programs.pi-coding-agent/default.nix), because the
   # podman-gvisor backend mounts nothing from the host /nix/store and the
   # raw home-manager symlink tree dangles inside the container. The
   # assertion pin runs at EVAL time (a throw builds no derivation), and
-  # the check derivation REALISES `piSandboxConfig` + greps its tree,
+  # the check derivation REALISES the pi sandbox-config tree + greps its
+  # tree,
   # because only the build can prove the copies exist as real files
   # (the eval-level shape is necessary, not sufficient: a `path =
   # "/nix/store/…"` mount whose tree still contains symlinks would pass
