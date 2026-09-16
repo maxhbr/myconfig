@@ -98,7 +98,7 @@ let
                   sub(/_[0-9]+$/, "", base)
                   managed = (current in rulenames) || (base in rulenames && base != current)
                 }
-                print ws "\t" desired "\t" current "\t" managed
+                print ws "\037" desired "\037" current "\037" managed
               }
             ' "$tmpdir/workspaces.tsv" > "$tmpdir/plan.tsv"
 
@@ -107,8 +107,9 @@ let
           # --workspace on the CLI takes an index or name, so
           # workspaces are referenced by id via the raw JSON request
           # form (niri msg raw-request, verified against pinned niri
-          # 26.4.0).
-          while IFS=$'\t' read -r ws desired current managed; do
+          # 26.4.0). Fields are joined with \x1f (unit separator): tab
+          # is IFS whitespace, so `read` would collapse empty fields.
+          while IFS=$'\037' read -r ws desired current managed; do
             if [[ -z "$desired" ]]; then
               if [[ -n "$current" && "$managed" == 1 ]]; then
                 jq -cn --argjson id "$ws" \
