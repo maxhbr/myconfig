@@ -152,10 +152,19 @@ Implement an opt-in daemon wired into
   separate process per rename (cheap; or keep a persistent second
   connection if implemented in Rust).
 
-## Effort estimate
+## Status
 
-Not a trivial change: a stateful daemon with rule evaluation, collision
-handling, and testing under a live session. Per the task brief, only this
-research is recorded here; the implementation is filed as a bead
-("Dynamic workspace naming daemon for niri") and can be picked up with
-these notes as the spec.
+Implemented in `modules/myconfig.desktop.wayland.niri/workspace-names.nix` and
+wired into `modules/myconfig.desktop.wayland.niri/default.nix` as
+`myconfig.desktop.wayland.niri.workspaceNames` (enable + rules + interval).
+The daemon is a polling reconciler (simpler and more robust than the
+event-stream variant sketched above): each interval it snapshots
+`niri msg --json windows`/`workspaces`, classifies with awk, and applies
+renames via raw JSON requests referencing workspaces by id.
+
+Two gotchas discovered during end-to-end testing are worth remembering:
+- Tab is in the IFS whitespace class, so `read` with `IFS=$'\t'`
+  collapses empty fields — the plan is joined with `\x1f` instead.
+- The apply loop only unsets names on workspaces whose current name the
+  daemon could have produced (a rule name or its `_N` collision variant);
+  manual or static names are never touched.

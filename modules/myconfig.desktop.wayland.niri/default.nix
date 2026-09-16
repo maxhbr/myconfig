@@ -72,21 +72,23 @@ in
     desktop.wayland.niri.workspaceNames = {
       enable = mkEnableOption "dynamic workspace naming for niri";
       rules = mkOption {
+        # The daemon passes rules as a TSV file, so fields must not
+        # contain tabs or newlines.
         type = types.listOf (
           types.submodule {
             options = {
               app-id = mkOption {
-                type = types.str;
-                default = ".*";
+                type = types.strMatching "[^\t\n\r]*";
                 description = "POSIX ERE matched against the window app-id";
+                default = ".*";
               };
               title = mkOption {
-                type = types.str;
-                default = ".*";
+                type = types.strMatching "[^\t\n\r]*";
                 description = "POSIX ERE matched against the window title";
+                default = ".*";
               };
               name = mkOption {
-                type = types.str;
+                type = types.strMatching "[^\t\n\r]*";
                 description = "Workspace name to apply when the rule matches";
               };
             };
