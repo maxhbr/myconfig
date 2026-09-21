@@ -27,7 +27,7 @@
 #     switch, no out-link). The build artefact is left in the Nix store only.
 #   * A log file is written to `../_logs/<date>-myconfig-test-<host>.log`
 #     (matching the convention of `switch.sh`) and a symlink
-#     `../result.test-<host>.log` points at the most recent run.
+#     `../_results/result.test-<host>.log` points at the most recent run.
 #   * Exit status is non-zero if either the flake check or the build fails.
 
 set -euo pipefail
@@ -76,7 +76,8 @@ logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${host_name}.log"
 echo -e "\n\n\n\n\n\n\n" >>"$logfile"
 exec > >(tee -a "$logfile") 2>&1
 
-latest_logfile="../result.${host_name}.log"
+mkdir -p ../_results
+latest_logfile="../_results/result.${host_name}.log"
 ln -sf "$(realpath -m --relative-to="$(dirname "$latest_logfile")" "$logfile")" "$latest_logfile"
 
 log_info "starting test of ${host_name}"

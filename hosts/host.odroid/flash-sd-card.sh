@@ -81,8 +81,9 @@ fi
 # shellcheck disable=SC2254
 read -r -a extra_args <<<"${NIX_BUILD_EXTRA_ARGS:---option builders ''}"
 
-# Follow the repo convention of placing result symlinks next to the flake root.
-OUT_LINK="../result.${TARGET}.sd-image"
+# Follow the repo convention of placing result symlinks under ../_results/.
+OUT_LINK="../_results/result.${TARGET}.sd-image"
+mkdir -p "$(dirname "${OUT_LINK}")"
 
 echo "==> Updating flake inputs ..." >&2
 nix flake update

@@ -18,6 +18,7 @@ source_env_file "$(dirname "$(readlink -f "$0")")/.env"
 source_env_file "$(dirname "$0")/.env"
 verbose=""
 LEAD_HOST="f13"
+RESULTS_DIR="../_results"
 ulimit -c unlimited
 
 have() {
@@ -149,7 +150,7 @@ flake_update_one() (
 )
 get_out_link_of_target() {
     local target="$1"
-    echo '../result.'"$target"
+    echo "$RESULTS_DIR/result.$target"
 }
 git_repo_is_clean() {
     local repo="$1"
@@ -531,6 +532,7 @@ main() {
 
     flake_update "$([[ $MODE == "" ]] && echo "full" || echo "fast")"
 
+    mkdir -p "$RESULTS_DIR"
     local out_link
     out_link="$(get_out_link_of_target "$target")"
     if [[ $MODE == "--build-vm" ]]; then
