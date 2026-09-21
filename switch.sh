@@ -357,13 +357,24 @@ deploy() (
     else
         cmd="sudo $cmd"
     fi
+    local max_attempts=3
+    local attempt=1
     set -x
     until $cmd \
         `# --build-host localhost` \
         "$command" `#-p test` \
         ${verbose:+"--verbose"} \
         --flake '.#'"$target"; do
-        echo "... retry nixos-rebuild"
+        local rc=$?
+        set +x
+        if [[ $attempt -ge $max_attempts ]]; then
+            log_error "nixos-rebuild $command for $target failed after $max_attempts attempts (last exit code: $rc)"
+            exit 1
+        fi
+        log_warning "retry nixos-rebuild (attempt $attempt/$max_attempts) in 10s"
+        attempt=$((attempt + 1))
+        sleep 10
+        set -x
     done
 )
 sbom() (
