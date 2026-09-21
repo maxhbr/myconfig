@@ -317,13 +317,10 @@ impl PolicyPath {
 /// a host-backed `/tmp/<name>`, and the host home directory (only the
 /// empty tmpfs [`SANDBOX_HOME`] serves as `$HOME`). The builder itself
 /// still forwards NOTHING implicitly — only the variables the caller put
-/// in `host_env` reach the sandbox — but the CLI's collection step now
-/// DOES include the model-credential block (`OPENAI_*`, `ANTHROPIC_*`,
-/// `OPENROUTER_*`) in its allowlist (bd myconfig-20j, mirroring the
-/// jail/nono tiers): a credential lives only in the host environment, so
-/// an `[env]` entry cannot forward it, and a sandboxed agent without it
-/// cannot reach its model endpoint. See `FORWARDED_ENV_VARS` (lib.rs)
-/// and docs/plan.md "Environment".
+/// in `host_env` reach the sandbox. The CLI's collection step defaults to
+/// technical variables only (terminal, locale, editor); a credential
+/// reaches the sandbox solely when a layer names it in `forward-env`.
+/// See `FORWARDED_ENV_VARS` (lib.rs) and docs/plan.md "Environment".
 pub fn bwrap_argv(
     cfg: &Merged,
     repo: &Repo,
@@ -1642,6 +1639,7 @@ mod tests {
             env: BTreeMap::new(),
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
+            forward_env: Vec::new(),
             multiplexer: Multiplexer::None,
         }
     }

@@ -981,10 +981,10 @@ fn the_backend_flag_is_rejected_by_every_verb() {
 #[test]
 fn only_set_host_variables_are_forwarded() {
     // docs/plan.md "Environment": exactly the allowlist of lib.rs
-    // (`FORWARDED_ENV_VARS`) — the terminal/locale block, the
-    // model-credential block of bd myconfig-20j (OPENAI_*, ANTHROPIC_*,
-    // OPENROUTER_*, mirroring the jail/nono tiers) — each only when
-    // actually set.
+    // (`FORWARDED_ENV_VARS`) — technical variables only (terminal,
+    // locale, editor), each only when actually set. Credentials are
+    // NOT part of the default: a host that exports ANTHROPIC_AUTH_TOKEN
+    // does not leak it into an unconfigured sandbox.
     let (inv, _, _) = fixture_user_backend("forward-env", &["--dry-run"]);
     let mut cmd = spawn(&inv);
     cmd.env("TERM", "xterm-test")
@@ -996,27 +996,19 @@ fn only_set_host_variables_are_forwarded() {
     assert_eq!(out.status.code(), Some(0), "{stdout}");
     let lines: Vec<&str> = stdout.lines().collect();
 
-    // TERM, VISUAL and the two Anthropic credentials are set; the rest
-    // of the allowlist is not.
+    // TERM and VISUAL are set and technical; everything else is either
+    // unset or a secret nobody allowlisted.
     let term = lines.iter().position(|x| *x == "TERM").unwrap();
     let visual = lines.iter().position(|x| *x == "VISUAL").unwrap();
-    let token = lines
-        .iter()
-        .position(|x| *x == "ANTHROPIC_AUTH_TOKEN")
-        .unwrap();
-    let base = lines
-        .iter()
-        .position(|x| *x == "ANTHROPIC_BASE_URL")
-        .unwrap();
     assert_eq!(lines[term + 1], "xterm-test");
     assert_eq!(lines[visual + 1], "nvim-test");
-    assert_eq!(lines[token + 1], "secret-token");
-    assert_eq!(lines[base + 1], "https://example.internal");
     for absent in [
         "COLORTERM",
         "LANG",
         "LC_ALL",
         "EDITOR",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL",
         "ANTHROPIC_API_KEY",
@@ -1025,10 +1017,91 @@ fn only_set_host_variables_are_forwarded() {
     ] {
         assert!(!lines.contains(&absent), "{absent} must not be forwarded");
     }
+    assert!(
+        !stdout.contains("secret-token"),
+        "a host credential must not reach the sandbox by default: {stdout}"
+    );
     // Forwarded variables precede PATH, which is always last of the
     // --setenv section.
     let path = lines.iter().position(|x| *x == "PATH").unwrap();
-    assert!(term < path && visual < path && token < path && base < path);
+    assert!(term < path && visual < path);
+}
+
+#[test]
+fn forward_env_config_adds_to_the_default_allowlist() {
+    // A `forward-env` (user config or sidecar) ADDS names to the
+    // built-in default of `FORWARDED_ENV_VARS` — additive like
+    // `state-dirs`, never a replacement: everything the default
+    // already carries keeps forwarding, the config's names join it,
+    // and a duplicate (TERM is already a default) costs nothing. The
+    // values still come from the host environment only when set. This
+    // is the ONLY way a credential reaches a sandbox.
+    let (inv, _, _) = fixture_user_backend("forward-env-config", &["--dry-run"]);
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nforward-env = [\"ANTHROPIC_AUTH_TOKEN\", \"TERM\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn(&inv);
+    cmd.env("TERM", "xterm-config")
+        .env("ANTHROPIC_AUTH_TOKEN", "allowlisted-secret")
+        .env("VISUAL", "nvim-still-default")
+        .env("OPENAI_API_KEY", "not-allowlisted");
+    let out = cmd.output().unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let lines: Vec<&str> = stdout.lines().collect();
+
+    // The config's addition forwards when set...
+    let term = lines.iter().position(|x| *x == "TERM").unwrap();
+    let token = lines
+        .iter()
+        .position(|x| *x == "ANTHROPIC_AUTH_TOKEN")
+        .unwrap();
+    assert_eq!(lines[term + 1], "xterm-config");
+    assert_eq!(lines[token + 1], "allowlisted-secret");
+    // ...and the technical default still forwards too — a config that
+    // adds a credential does not silently drop VISUAL.
+    let visual = lines.iter().position(|x| *x == "VISUAL").unwrap();
+    assert_eq!(lines[visual + 1], "nvim-still-default");
+    // A name nobody allowlisted stays out even when set on the host,
+    // and an un-set default name never appears either.
+    for absent in ["COLORTERM", "LANG", "OPENAI_API_KEY"] {
+        assert!(!lines.contains(&absent), "{absent} must not be forwarded");
+    }
+    assert!(
+        !stdout.contains("not-allowlisted"),
+        "only allowlisted credentials may be forwarded: {stdout}"
+    );
+}
+
+#[test]
+fn forward_env_of_both_layers_concatenates() {
+    // Both layers declare `forward-env`; the lists concatenate user
+    // layer first (the same rule as state-dirs) — the host-wide config
+    // may pre-approve the defaults while a repo sidecar adds its own.
+    let (inv, _, sidecar) = fixture_user_backend("forward-env-merge", &["--dry-run"]);
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nforward-env = [\"TERM\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nforward-env = [\"TIER_TOKEN\", \"TERM\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn(&inv);
+    cmd.env("TERM", "xterm-merge")
+        .env("TIER_TOKEN", "tier-sidecar");
+    let out = cmd.output().unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let term = lines.iter().position(|x| *x == "TERM").unwrap();
+    let token = lines.iter().position(|x| *x == "TIER_TOKEN").unwrap();
+    assert_eq!(lines[term + 1], "xterm-merge");
+    assert_eq!(lines[token + 1], "tier-sidecar");
 }
 
 #[test]

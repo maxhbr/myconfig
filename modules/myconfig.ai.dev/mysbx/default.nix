@@ -302,6 +302,7 @@ let
     inherit (cfg.config) network multiplexer;
     mounts = map renderMount cfg.config.mounts;
     env = cfg.config.env;
+    "forward-env" = cfg.forwardedEnvVars;
   }
   // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
   // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; }
@@ -354,6 +355,35 @@ in
         Anything listed here is on the PATH of every mysbx payload, so
         the same "security-relevant list, not packaging detail" rule as
         for the baseline closure applies.
+      '';
+    };
+
+    forwardedEnvVars = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      example = literalExpression ''
+        [ "SOME_TOKEN" ]
+      '';
+      description = ''
+        Host environment variables forwarded into every sandbox IN
+        ADDITION to the crate's built-in default allowlist
+        (`FORWARDED_ENV_VARS`, mysbx-rs/src/lib.rs: the technical
+        terminal/locale/editor block), each only when actually set at
+        `mysbx` launch. Rendered into the host-wide
+        `~/.config/mysbx/config.toml` as the `forward-env` key, which
+        CONCATENATES onto that built-in default (the crate merges both
+        layers' `forward-env` lists the same way), so a repo sidecar may
+        add more per repository.
+
+        The built-in default carries NO secrets. A credential lives only
+        in the host environment — never in a store path — so an `[env]`
+        entry cannot forward it; naming it here is the only way a
+        sandboxed agent reaches its model endpoint (bd myconfig-20j).
+
+        ADDITIVE by design, like `myconfig.ai.dev.jail.fwdEnvs`: the
+        priv flake appends tier-specific credentials with a plain
+        assignment `forwardedEnvVars = [ "SOME_TOKEN" ];` — no
+        `mkForce`, no self-reference — and the built-in block stays.
       '';
     };
 

@@ -63,34 +63,26 @@ pub fn usage() {
 }
 
 /// Host environment variables forwarded into the sandbox — exactly this
-/// list, each only when actually set in the process environment
+/// default list, each only when actually set in the process environment
 /// (docs/plan.md, "Environment"). Nothing else is forwarded implicitly.
 /// Public so the integration tests assert against the same list the
 /// pipeline reads, not a hand-copied one.
 ///
-/// The model-credential block (`OPENAI_*`, `ANTHROPIC_*`, `OPENROUTER_*`)
-/// mirrors the jail/nono tiers (`fns/bubblewrap-app.nix`,
-/// `fns/nono-app.nix`: always-`OPENAI_API_KEY` plus the claude-code
-/// module's `anthropicFwdEnv`): a credential lives only in the host
-/// environment — never in a store path — so an `[env]` entry cannot
-/// forward it, and a sandboxed agent without it cannot reach its model
-/// endpoint at all (bd myconfig-20j). Each name still forwards only
-/// when set, so a host without a proxy loses nothing.
-pub const FORWARDED_ENV_VARS: &[&str] = &[
-    "TERM",
-    "COLORTERM",
-    "LANG",
-    "LC_ALL",
-    "EDITOR",
-    "VISUAL",
-    "OPENAI_API_KEY",
-    "OPENAI_BASE_URL",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_AUTH_TOKEN",
-    "OPENROUTER_API_KEY",
-    "OPENROUTER_BASE_URL",
-];
+/// The default carries ONLY technical variables — terminal, locale and
+/// editor — that a payload needs for convenience or correctness.
+/// Credentials are deliberately absent: no secret is forwarded unless a
+/// layer names it explicitly in `forward-env`, so a sandbox never
+/// inherits a host token by accident.
+///
+/// The list is the BASE of every run — `forwarded_env_vars` layers
+/// the merged `forward-env` key of the configuration layers
+/// (`~/.config/mysbx/config.toml` + sidecar, both declare, lists
+/// concatenate — the host-wide extension point the NixOS module seeds
+/// via `myconfig.ai.dev.mysbx.forwardedEnvVars`) and the wrapper's
+/// `MYSBX_FORWARD_ENV` pin on top of it, so each extension point ADDS
+/// names (e.g. a model credential) without restating this default.
+pub const FORWARDED_ENV_VARS: &[&str] =
+    &["TERM", "COLORTERM", "LANG", "LC_ALL", "EDITOR", "VISUAL"];
 
 /// Dispatch on the argument list (without argv[0]); returns the exit code.
 ///
@@ -1423,7 +1415,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     }
 
     // 5. the argv — its single source is `bwrap::bwrap_argv` (mvp-4).
-    let host_env = collect_host_env();
+    let host_env = collect_host_env(&merged);
     // Without the Nix wrapper (item 6 pins MYSBX_SHELL and
     // MYSBX_TOOLS_PATH) the fallbacks are silent and deliberate: /bin/sh
     // for the interactive shell, /usr/bin (a base-bound path) for PATH —
@@ -2165,15 +2157,52 @@ fn trusted_policy(path: &std::path::Path) -> bwrap::PolicyPath {
 /// unprotected.
 const SYMLINK_BUDGET: usize = 40;
 
+/// The effective forwarded list for one run, in precedence order:
+///
+/// 1. the merged `forward-env` of the configuration layers
+///    (docs/design/config.md — the host-wide `~/.config/mysbx/config.toml`
+///    and the sidecar both declare; their lists concatenate), APPENDED
+///    to the built-in default — the layers ADD names (e.g. a model
+///    credential, which the default never carries), they never need to
+///    restate the default block to keep it;
+/// 2. the `MYSBX_FORWARD_ENV` wrapper pin (a space-separated list of
+///    names, the same wrapper idiom as `MYSBX_BWRAP`), appended to
+///    whichever list step 1 picked — the Nix wrapper's extension
+///    point without a rebuild of the host config;
+/// 3. the built-in [`FORWARDED_ENV_VARS`] default, always the base of
+///    the list — an unwrapped `cargo run` forwards the same
+///    terminal/locale + model-credential set a wrapped, unconfigured
+///    build does.
+///
+/// Duplicates drop (first occurrence wins), so a layer that names a
+/// variable the default already carries costs nothing. A name
+/// forwards only when actually set at launch, so an absent variable
+/// costs nothing either.
+fn forwarded_env_vars(merged: &merge::Merged) -> Vec<String> {
+    let mut names: Vec<String> = FORWARDED_ENV_VARS.iter().map(|&s| s.to_string()).collect();
+    let pin = env_opt("MYSBX_FORWARD_ENV").unwrap_or_default();
+    for name in merged
+        .forward_env
+        .iter()
+        .map(String::as_str)
+        .chain(pin.split_whitespace())
+    {
+        if !names.iter().any(|n| n == name) {
+            names.push(name.to_string());
+        }
+    }
+    names
+}
+
 /// The forwarded host environment (docs/plan.md, "Environment"): exactly
-/// [`FORWARDED_ENV_VARS`], each only when actually set. This is the one
+/// [`forwarded_env_vars`], each only when actually set. This is the one
 /// place that reads the real process environment; the argv builder stays
 /// pure and receives the values as a parameter.
-fn collect_host_env() -> bwrap::HostEnv {
+fn collect_host_env(merged: &merge::Merged) -> bwrap::HostEnv {
     let mut env = bwrap::HostEnv::new();
-    for name in FORWARDED_ENV_VARS {
-        if let Ok(value) = std::env::var(name) {
-            env.insert(name.to_string(), value);
+    for name in forwarded_env_vars(merged) {
+        if let Ok(value) = std::env::var(&name) {
+            env.insert(name, value);
         }
     }
     env

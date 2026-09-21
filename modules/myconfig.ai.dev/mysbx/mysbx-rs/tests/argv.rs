@@ -54,6 +54,7 @@ fn base(network: bool) -> Merged {
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
+        forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
     }
 }
@@ -725,6 +726,7 @@ fn golden_both_layers_contribute_mounts() {
         ]),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
+        forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
     };
     let argv = bwrap_argv(
@@ -899,9 +901,8 @@ fn no_run_no_host_home_beyond_declared_mounts() {
     // mounted, the HOST home directory is never reachable except through
     // a mount that declares it, and the BUILDER forwards nothing on its
     // own — no variable appears that the caller did not hand in via
-    // `host_env` (`OPENAI_API_KEY` here stands in for the credential
-    // block; the CLI's collection step does forward it when the host
-    // sets it, bd myconfig-20j, but this test passes an empty host_env).
+    // `host_env` (`OPENAI_API_KEY` here stands in for a credential the
+    // caller never handed in; this test passes an empty host_env).
     // The `$HOME` row is a different claim:
     // `$HOME` inside the sandbox is a tmpfs (config.md D14), backed by
     // nothing on the host — see `sandbox_home_is_a_tmpfs_outside_home`.
@@ -988,6 +989,7 @@ fn mount_order_is_preserved() {
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
+        forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
     };
     let argv = bwrap_argv(
@@ -3305,6 +3307,7 @@ fn podman_base(network: bool) -> Merged {
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
+        forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
     }
 }
@@ -3672,6 +3675,7 @@ fn podman_mount_order_is_preserved() {
         env: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
+        forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
     };
     let argv = podman_run_argv(

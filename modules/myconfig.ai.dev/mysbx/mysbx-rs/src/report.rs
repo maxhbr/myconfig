@@ -510,6 +510,7 @@ mod tests {
             env,
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
+            forward_env: Vec::new(),
             multiplexer: Multiplexer::None,
         };
         let mut host = HostEnv::new();

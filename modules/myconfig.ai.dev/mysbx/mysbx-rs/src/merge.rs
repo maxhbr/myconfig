@@ -129,6 +129,14 @@ pub struct Merged {
     /// (absolute, `~/`, `.`/`..`), so no canonicalization happens
     /// here: there is nothing on the host to resolve yet.
     pub state_dirs: Vec<String>,
+    /// Host environment variables to forward into the sandbox when set
+    /// at launch (the `forward-env` key): both layers' entries, user
+    /// layer first, deduplicated keeping the first occurrence — the
+    /// same concatenation rule as `state-dirs`. The CLI concatenates
+    /// the result onto its built-in default list
+    /// (`FORWARDED_ENV_VARS`, lib.rs), so these are ADDITIONS to the
+    /// default, never a replacement.
+    pub forward_env: Vec<String>,
 }
 
 /// How a mount source relates to the invoking user's home directory
@@ -515,6 +523,31 @@ pub fn merge(
             .collect()
     };
 
+    // forward-env: both layers declare, the lists concatenate like
+    // state-dirs — user layer first, duplicates dropped keeping the
+    // first occurrence. The entries are environment variable NAMES,
+    // not paths and not values: nothing resolves against the host
+    // here, and the values are read from the host environment only
+    // at launch time (`collect_host_env`, lib.rs). The merged list
+    // CONCATENATES onto the built-in default (`FORWARDED_ENV_VARS`,
+    // lib.rs) — additive like `state-dirs`, never a replacement.
+    let forward_env: Vec<String> = {
+        let mut seen: Vec<&str> = Vec::new();
+        user.forward_env
+            .iter()
+            .chain(sidecar.forward_env.iter())
+            .filter(|e| {
+                if seen.contains(&e.as_str()) {
+                    false
+                } else {
+                    seen.push(e.as_str());
+                    true
+                }
+            })
+            .cloned()
+            .collect()
+    };
+
     Ok(Merged {
         backend: sidecar.backend.or(user.backend),
         network,
@@ -532,6 +565,7 @@ pub fn merge(
         env,
         git_dirs: approved_git_dirs,
         state_dirs,
+        forward_env,
     })
 }
 
@@ -1764,5 +1798,40 @@ mod tests {
             resolve_cli_path("~/specific", "--ro", &home, &cwd).unwrap(),
             under
         );
+    }
+
+    #[test]
+    fn forward_env_of_both_layers_concatenates_user_first() {
+        // The same concatenation rule as state-dirs: user layer first,
+        // sidecar entries follow; duplicates drop, first occurrence
+        // wins.
+        let merged = merge(
+            cfg("forward-env = [\"TIER_TOKEN\"]\n"),
+            cfg("forward-env = [\"ANTHROPIC_AUTH_TOKEN\", \"TIER_TOKEN\"]\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(
+            merged.forward_env,
+            vec!["TIER_TOKEN", "ANTHROPIC_AUTH_TOKEN"]
+        );
+    }
+
+    #[test]
+    fn forward_env_stays_empty_when_neither_layer_declares() {
+        // "Neither layer decided" is the empty list, and the CLI reads
+        // that as "apply the built-in default" — never as "forward
+        // nothing".
+        let merged = merge(
+            cfg("backend = \"bubblewrap\"\n"),
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(merged.forward_env.is_empty());
     }
 }

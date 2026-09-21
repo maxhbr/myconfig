@@ -231,6 +231,20 @@ pub struct Config {
     /// synthesized from the sidecar, and the only thing a layer may
     /// say is the shape of the path below the sandbox home.
     pub state_dirs: Vec<String>,
+    /// Host environment variables to forward into the sandbox when
+    /// actually set at launch (docs/plan.md "Environment"): the
+    /// allowlist `collect_host_env` reads. Names only — the VALUES
+    /// still come from the host environment at launch time, never from
+    /// the config (a credential lives only in the host environment,
+    /// never in a store path, so `[env]` cannot forward it and this
+    /// list names it instead). The list CONCATENATES onto the built-in
+    /// default (`FORWARDED_ENV_VARS`, lib.rs): a layer ADDS names
+    /// without restating the technical terminal/locale block. Secrets
+    /// are never in that default — naming one here is the ONLY way it
+    /// reaches a sandbox. Both layers
+    /// declare; the lists concatenate like `state-dirs` (order-stable,
+    /// first occurrence wins on duplicates).
+    pub forward_env: Vec<String>,
 }
 
 impl Default for Config {
@@ -243,6 +257,7 @@ impl Default for Config {
             env: BTreeMap::new(),
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
+            forward_env: Vec::new(),
         }
     }
 }
@@ -322,6 +337,7 @@ impl Config {
                 "env" => config.env = env(table(value, "env")?)?,
                 "git-dirs" => config.git_dirs = git_dirs(value)?,
                 "state-dirs" => config.state_dirs = state_dirs(value)?,
+                "forward-env" => config.forward_env = forward_env(value)?,
                 other => return Err(unknown("top level", other)),
             }
         }
@@ -391,6 +407,33 @@ fn git_dirs(value: &Value) -> Result<Vec<String>, Error> {
         .map(|(i, v)| {
             let at = format!("git-dirs #{}", i + 1);
             host_path(string(v, &at)?, &at)
+        })
+        .collect()
+}
+
+/// Parse the `forward-env` list: an array of environment-variable
+/// names. The values are never part of the config — they are read
+/// from the host environment at launch time, so no credential can
+/// enter a config file (or a store path) through this key.
+fn forward_env(value: &Value) -> Result<Vec<String>, Error> {
+    let items = value.as_array().ok_or_else(|| {
+        Error::Schema(format!(
+            "forward-env: expected an array of strings, found {}",
+            value.type_name()
+        ))
+    })?;
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let at = format!("forward-env #{}", i + 1);
+            let name = string(v, &at)?;
+            if name.is_empty() {
+                return Err(Error::Schema(format!(
+                    "{at}: expected a non-empty environment variable name"
+                )));
+            }
+            Ok(name.to_owned())
         })
         .collect()
 }

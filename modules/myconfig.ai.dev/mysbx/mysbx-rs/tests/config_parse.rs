@@ -269,3 +269,26 @@ fn git_dirs_rejects_non_strings_and_bad_tildes() {
     // `~user` is rejected for git-dirs exactly like for mount paths (D8).
     assert!(Config::parse("git-dirs = [\"~root/x\"]\n").is_err());
 }
+
+// ---- forward-env allowlist ------------------------------------------------
+
+#[test]
+fn forward_env_parses_as_a_list_of_variable_names() {
+    let cfg = Config::parse("forward-env = [\"TIER_TOKEN\", \"ANTHROPIC_AUTH_TOKEN\"]\n").unwrap();
+    assert_eq!(cfg.forward_env, vec!["TIER_TOKEN", "ANTHROPIC_AUTH_TOKEN"]);
+}
+
+#[test]
+fn forward_env_defaults_to_empty() {
+    // Neither layer declaring means "use the CLI's built-in default
+    // list" (FORWARDED_ENV_VARS, lib.rs) — not "forward nothing".
+    let cfg = Config::parse("backend = \"bubblewrap\"\n").unwrap();
+    assert!(cfg.forward_env.is_empty());
+}
+
+#[test]
+fn forward_env_rejects_non_strings_and_empty_names() {
+    assert!(Config::parse("forward-env = [1]\n").is_err());
+    assert!(Config::parse("forward-env = \"TIER_TOKEN\"\n").is_err());
+    assert!(Config::parse("forward-env = [\"\"]\n").is_err());
+}
