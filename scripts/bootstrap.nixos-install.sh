@@ -3,10 +3,19 @@ cd "$( dirname "${BASH_SOURCE[0]}" )/.."
 
 set -euo pipefail
 
+# Place result symlinks in ../_results/ (same convention as switch.sh).
+get_out_link() {
+    local target="$1"
+    local outLink="../_results/result.$target"
+    mkdir -p "$(dirname "$outLink")"
+    echo "$outLink"
+}
+
 sendBuiltSystem() {
     local host="$1"
     local target="$2"
-    local outLink='../result.'"$target"
+    local outLink
+    outLink="$(get_out_link "$target")"
 
     echo "send derivation for $target to IP=$host"
 
@@ -29,7 +38,8 @@ EOF
 
 installBuiltSystem() {
     local target="$1"
-    local outLink='../result.'"$target"
+    local outLink
+    outLink="$(get_out_link "$target")"
 
     set -x
 
