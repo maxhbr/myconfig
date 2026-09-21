@@ -1019,7 +1019,7 @@ section_l2() {
     fi
     assert_transport "$slot_a" "layer 2 (guest A)"
     assert_transport "$slot_b" "layer 2 (guest B)"
-    if ((!GUEST_HAS_NETWORK)); then
+    if ((! GUEST_HAS_NETWORK)); then
         # Under the vsock model transport (lightweight plan phase 6) there is no
         # shared layer 2 to isolate: neither guest has a TAP, so there is no
         # bridge port, no ARP, no IPv6 ND and no address to impersonate. Running
@@ -1984,7 +1984,7 @@ section_forgery() {
         fi
         rc=0
         wait "$submit_pid" || rc=$?
-        if ((!replayed)); then
+        if ((! replayed)); then
             # Without a planted request there was no replay to survive.
             skip "stale cancellation replay: the request could not be planted (slot='$slot'), so the new allocation was never attacked"
         elif [[ "$(jq -r '.state // ""' "$RESULTS_DIR/$task.json" 2>/dev/null)" == "cancelled" ]]; then
