@@ -20,25 +20,25 @@
   };
   grafana-skills = {
     pname = "grafana-skills";
-    version = "51d33e71e191b409bbd25fc7be2684c610d18166";
+    version = "05196628fa1a6a557fad1a5623156170693607eb";
     src = fetchFromGitHub {
       owner = "grafana";
       repo = "skills";
-      rev = "51d33e71e191b409bbd25fc7be2684c610d18166";
+      rev = "05196628fa1a6a557fad1a5623156170693607eb";
       fetchSubmodules = false;
-      sha256 = "sha256-13pDO69zgLkDjJ49O/8a4ncmm6MTppAhDK8wioELpwY=";
+      sha256 = "sha256-y4e2j8S+KlWntXrZxfBCh/tlFcEEmdqrf/BIPTEvy38=";
     };
-    date = "2026-08-18";
+    date = "2026-09-15";
   };
   litellm-grafana-dashboard = {
     pname = "litellm-grafana-dashboard";
-    version = "eeb7732fc11fd47762ca84cc3fb7cc74235d7097";
+    version = "1cac8bd9ab0bec8d5b6beb57669ad86ab4319c80";
     src = fetchurl {
-      url = "https://raw.githubusercontent.com/BerriAI/litellm/eeb7732fc11fd47762ca84cc3fb7cc74235d7097/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
+      url = "https://raw.githubusercontent.com/BerriAI/litellm/1cac8bd9ab0bec8d5b6beb57669ad86ab4319c80/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
       name = "litellm-grafana-dashboard.json";
-      sha256 = "sha256-EteGQo3xd5GvvkjKre7wqOZ6Hr/Yty78VZe6le55Zcw=";
+      sha256 = "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=";
     };
-    date = "2026-09-05";
+    date = "2026-09-21";
   };
   pi-token-speed = {
     pname = "pi-token-speed";
@@ -54,14 +54,14 @@
   };
   simple-english = {
     pname = "simple-english";
-    version = "9ce426c79b1736c28af7e91f1b730e7a7cc3f468";
+    version = "79b590fc8596523d92c26b1ea7e33236606ef069";
     src = fetchFromGitHub {
       owner = "AminBlg";
       repo = "SimpleEnglish";
-      rev = "9ce426c79b1736c28af7e91f1b730e7a7cc3f468";
+      rev = "79b590fc8596523d92c26b1ea7e33236606ef069";
       fetchSubmodules = false;
-      sha256 = "sha256-6R0efQpuAo9SgZSUIKXDUHFNj/AQOyLwbkp2ZMCVYGM=";
+      sha256 = "sha256-CPD3x2wcU7INpOpqn0Hg4iY9gB1BAfuHU8e9w//s1sA=";
     };
-    date = "2026-09-06";
+    date = "2026-09-16";
   };
 }
