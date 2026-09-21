@@ -138,7 +138,6 @@ in
     };
   };
   config = lib.mkIf config.myconfig.ai.dev.claude-code.enable {
-    myconfig.ai.dev.skills.playwright.enable = lib.mkDefault true;
     # The default `claude-code-worktree` maps to the `claude` named agent; the
     # jailed variant registers its own `agent-bubblewrap-claude` agent.
     myconfig.ai.dev.workmux.agents.claude = claudeCodeWorktree.agent;

@@ -204,7 +204,6 @@ in
     };
   };
   config = lib.mkIf config.myconfig.ai.dev.opencode.enable {
-    myconfig.ai.dev.skills.playwright.enable = lib.mkDefault true;
     myconfig.ai.dev.workmux.agents.opencode = opencodeWorktree.agent;
     myconfig.ai.dev.workmux.agents.agent-bubblewrap-opencode = agentBubblewrapOpencodeWorktree.agent;
 
