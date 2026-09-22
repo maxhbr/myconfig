@@ -168,9 +168,12 @@ in
   mysbx-completions =
     let
       completion = ../mysbx-rs/completions/mysbx.fish;
+      usage = ../mysbx-rs/src/usage.txt;
+      lib = ../mysbx-rs/src/lib.rs;
     in
     pkgs.runCommand "mysbx-completions"
       {
+        inherit usage lib;
         nativeBuildInputs = with pkgs; [
           fish
           gnugrep
@@ -191,52 +194,56 @@ in
         # it must parse as fish
         fish --no-execute "$installed" || fail "fish -n rejects the completion"
 
-        # every dispatch word of usage.txt is offered as a subcommand —
+        # Every dispatch word of usage.txt is offered as a subcommand —
         # the verbs of the dispatcher (src/lib.rs) plus the closed
         # session sub-verb group (src/sessionverbs.rs, D7) and the
         # closed worktree sub-verb group (src/worktreeverbs.rs,
-        # docs/design/worktree.md W1)
-        for sub in run gui init edit fetch merge push diff version help session worktree status; do
+        # docs/design/worktree.md W1). The EXPECTED set is EXTRACTED
+        # from usage.txt, not hand-listed here: the check is the sync
+        # CONTRACT between usage.txt and the completion, so a verb or
+        # flag added to usage.txt fails the build until the completion
+        # offers it.
+        verbs=$(sed -n '/^Commands:/,/^Options:/p' "$usage" \
+          | grep -oE '^  [a-z][a-z-]*' | tr -d ' ' | sort -u)
+        for sub in $verbs; do
           grep -q -- "-a $sub" "$installed" || fail "no completion for subcommand: $sub"
         done
-        for sub in list destroy hunk; do
+        session_verbs=$(sed -n '/^Commands:/,/^Options:/p' "$usage" \
+          | sed -n 's/^  session \([a-z][a-z-]*\).*/\1/p' | sort -u)
+        for sub in $session_verbs; do
           grep -q -- "-a $sub" "$installed" || fail "no completion for session sub-verb: $sub"
         done
-        for sub in list diff hunk; do
+        worktree_verbs=$(sed -n '/^Commands:/,/^Options:/p' "$usage" \
+          | sed -n 's/^  worktree \([a-z][a-z-]*\).*/\1/p' | sort -u)
+        for sub in $worktree_verbs; do
           grep -q -- "-a $sub" "$installed" || fail "no completion for worktree sub-verb: $sub"
         done
+        # usage.txt documents every verb twice — the Usage header and
+        # the Commands section — so a verb of the dispatcher that
+        # usage.txt does not name cannot be extracted above; assert the
+        # two agree to keep the extraction honest
+        dispatchers=$(sed -n 's/^        Some("\([a-z][a-z-]*\)") .*/\1/p' "$lib" | sort -u)
+        [ "$verbs" = "$dispatchers" ] \
+          || fail "usage.txt verbs and src/lib.rs dispatcher differ:$verbs | $dispatchers"
 
         # the worktree handles come from the __worktrees registry
         # (docs/design/worktree.md W2)
         grep -q 'mysbx_worktrees' "$installed" || fail "no worktree-registry lookup"
 
-        # every option of usage.txt is completed (`-l <name>`, i.e. the
-        # `--<name>` long form), plus the verb-tail flags usage.txt
-        # documents only inside the command descriptions
-        # (`init --approve-git-dirs`, `merge --no-ff|--ff|--squash`,
-        # `session destroy --force`) and the two short flags
-        for opt in \
-          dry-run \
-          verbose \
-          multiplexer \
-          backend \
-          session \
-          ro \
-          rw \
-          result \
-          timeout \
-          help \
-          version \
-          approve-git-dirs \
-          no-ff \
-          ff \
-          squash \
-          force \
-        ; do
+        # every option usage.txt names (`-l <name>`, i.e. the `--<name>`
+        # long form) is completed — the Options headers plus the
+        # verb-tail flags documented only inside the command
+        # descriptions (`init --approve-git-dirs`,
+        # `merge --no-ff|--ff|--squash`, `session destroy --force`,
+        # `gvisor-load-image --force|--test|--image`) — extracted,
+        # like the verbs above
+        opts=$(grep -oE -- '--[a-z][a-z-]*' "$usage" | sed 's/^--//' | sort -u)
+        for opt in $opts; do
           grep -q -- "-l $opt" "$installed" || fail "no completion for option: --$opt"
         done
-        grep -q -- "-s h" "$installed" || fail "no completion for -h"
-        grep -q -- "-s V" "$installed" || fail "no completion for -V"
+        for short in $(sed -n '/^Options:/,$p' "$usage" | sed -n 's/^  -\([A-Za-z]\),.*/\1/p' | sort -u); do
+          grep -q -- "-s $short" "$installed" || fail "no completion for -$short"
+        done
 
         # the multiplexer values are the closed set of config.rs NAMES
         grep -q -- "-a 'tmux workmux herdr aoe orca none'" "$installed" \
