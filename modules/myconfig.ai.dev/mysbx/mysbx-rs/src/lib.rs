@@ -1624,6 +1624,21 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 );
             }
 
+            // Backend-specific environment pins (MYSBX_GVISOR_ENV): a
+            // space-separated list of `KEY=VALUE` entries the Nix
+            // wrapper bakes for the podman-gvisor path alone — the
+            // model endpoint the host's LiteLLM forwarder serves is
+            // reachable under a DIFFERENT URL inside a container than
+            // on the host (pasta's `--map-guest-addr` target instead of
+            // the host loopback), so it cannot live in the config
+            // `[env]` both backends share. Entries without a `=` are
+            // ignored rather than turned into an empty variable name.
+            let gvisor_env: Vec<String> = env_or("MYSBX_GVISOR_ENV", "")
+                .split_whitespace()
+                .filter(|entry| entry.contains('='))
+                .map(|entry| entry.to_owned())
+                .collect();
+
             // Network spec: explicit "none" when network is denied, otherwise podman default (shared)
             let pasta_spec = env_opt("MYSBX_GVISOR_PASTA_SPEC");
             let network_spec: Option<&str> = if !merged.network {
@@ -1666,6 +1681,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 cgroup_manager: cgroup_manager.as_deref(),
                 ignore_cgroups,
                 network_spec,
+                extra_env: &gvisor_env,
                 pids_limit,
                 memory,
                 cpus,

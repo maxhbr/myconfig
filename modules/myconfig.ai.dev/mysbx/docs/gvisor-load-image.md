@@ -49,8 +49,24 @@ back to the built-in defaults):
   `--memory` / `--cpus` argv entries: runsc would not enforce them.
 - `MYSBX_GVISOR_PIDS_LIMIT` / `MYSBX_GVISOR_MEMORY` / `MYSBX_GVISOR_CPUS`:
   resource limits, only applied while cgroups are not ignored.
-- `MYSBX_GVISOR_PASTA_SPEC`: a pasta network spec overriding the
+- `MYSBX_GVISOR_PASTA_SPEC`: the pasta network spec used instead of the
   default shared network (`network = false` still forces `none`).
+  Pinned by the Nix wrapper with `--set-default` (so an invocation can
+  still override it) as `pasta:--map-guest-addr,<address>` whenever the
+  host runs the shared LiteLLM forwarder
+  (`myconfig.ai.dev.litellm-forwarder`): that translation is what makes
+  the host's loopback-only proxy reachable from inside the container,
+  which the container's own `127.0.0.1` is not. The option behind the
+  pin is `myconfig.ai.dev.mysbx.gvisor.pastaSpec`.
+- `MYSBX_GVISOR_ENV`: space-separated `KEY=VALUE` environment pins for
+  this backend alone, emitted as `--env` after the config layers' `[env]`
+  (a pin wins over a configured value) and before the sandbox's own
+  `HOME`/`PATH`/XDG variables (which no pin can repoint). Entries
+  without a `=` are ignored. The wrapper pins the model endpoint of the
+  LiteLLM forwarder here (`OPENAI_BASE_URL` plus the per-agent variables
+  the generated pi/opencode configurations read), because that URL is
+  correct only inside a container. The option behind the pin is
+  `myconfig.ai.dev.mysbx.gvisor.env`.
 - `MYSBX_GVISOR_SHELL` / `MYSBX_GVISOR_TOOLS_PATH`: the payload shell
   and the tool `PATH` — **paths inside the container image**, not
   host store paths (the backend mounts nothing from the host

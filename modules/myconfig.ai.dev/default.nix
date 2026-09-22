@@ -28,6 +28,10 @@ in
     # (./sandboxes/); mysbx and workmux were moved here by myconfig-e4j.4.
     # The agent CLI programs were moved here by myconfig-e4j.2, and
     # skills/, fns/ and hermes-agent by myconfig-e4j.5
+    # The host-side LiteLLM forwarder shared by the container sandbox tiers
+    # (the gvisor tier and mysbx's podman-gvisor backend)
+    ./myconfig.ai.dev.litellm-forwarder.nix
+
     ./sandboxes/myconfig.ai.jail.nix
     ./sandboxes/myconfig.ai.nono.nix
     ./sandboxes/myconfig.ai.nono-agent-sandbox.nix

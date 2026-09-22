@@ -157,6 +157,30 @@
   # threads it), so the path always matches a build of the image
   # actually loaded.
   gvisorShell ? null,
+  # The podman network spec of the podman-gvisor backend
+  # (`MYSBX_GVISOR_PASTA_SPEC`, ../docs/gvisor-load-image.md): a
+  # `pasta:--map-guest-addr,<address>` spec that makes the host's
+  # LiteLLM forwarder reachable from inside the container, the same
+  # spec the gvisor tier bakes as `AGENT_GVISOR_NETWORK`. `null`
+  # leaves podman's default (shared) network.
+  #
+  # Pinned with `--set-default`, not `--set`: the variable is also an
+  # operator override (the docs document it as one), and a network
+  # spec is a per-invocation debugging knob rather than a closure
+  # path that must match the build.
+  gvisorPastaSpec ? null,
+  # Backend-specific environment pins of the podman-gvisor backend
+  # (`MYSBX_GVISOR_ENV`): an attrset rendered as a space-separated
+  # `KEY=VALUE` list. The container gets them as `--env` after the
+  # config layers and before the sandbox's own infrastructure
+  # variables (src/podman_gvisor.rs section 7). What belongs here is
+  # environment that is only correct under THIS backend, e.g. the
+  # container-side URL of the host's LiteLLM forwarder, which differs
+  # from the host loopback URL the bwrap backend uses.
+  #
+  # Values must not contain whitespace — the crate splits the list on
+  # it, so a value with a space would be silently truncated.
+  gvisorEnv ? { },
 }:
 
 let
@@ -307,6 +331,20 @@ let
   # container `PATH` needs NO pin: the image's buildEnv links every
   # baked package's `bin` into `/bin`, so the OCI `PATH=/bin:/usr/bin`
   # already covers the provisioned tools.
+  # The rendered `MYSBX_GVISOR_ENV` value (see the `gvisorEnv`
+  # argument): `KEY=VALUE` entries, space-separated, in attribute
+  # order. A value carrying whitespace cannot survive that encoding,
+  # so refuse it here instead of shipping a truncated variable.
+  gvisorEnvValue = lib.concatStringsSep " " (
+    lib.mapAttrsToList (
+      name: value:
+      if builtins.match ".*[[:space:]].*" value != null then
+        throw "mysbx: gvisorEnv.${name} must not contain whitespace (MYSBX_GVISOR_ENV is a space-separated list), got `${value}`"
+      else
+        "${name}=${value}"
+    ) gvisorEnv
+  );
+
   gvisorPins =
     lib.optionalString (gvisorImage != null) (
       "--set MYSBX_GVISOR_TARBALL '${gvisorImage}' "
@@ -329,7 +367,11 @@ let
           ''
       })\" "
     )
-    + lib.optionalString (gvisorShell != null) "--set MYSBX_GVISOR_SHELL '${gvisorShell}' ";
+    + lib.optionalString (gvisorShell != null) "--set MYSBX_GVISOR_SHELL '${gvisorShell}' "
+    + lib.optionalString (
+      gvisorPastaSpec != null
+    ) "--set-default MYSBX_GVISOR_PASTA_SPEC '${gvisorPastaSpec}' "
+    + lib.optionalString (gvisorEnv != { }) "--set MYSBX_GVISOR_ENV '${gvisorEnvValue}' ";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on

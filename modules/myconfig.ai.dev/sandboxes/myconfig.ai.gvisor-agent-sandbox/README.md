@@ -272,7 +272,10 @@ bridge address egresses that interface toward its gateway instead of being
 locally delivered, and the socket's `BindToDevice` rejected anything not
 arriving on the bridge. The old bridge approach and the intermediate
 `--map-host-loopback` fix (address-scoped, exposing every loopback port) are
-documented in the header comment of `./litellm-endpoint.nix`.
+documented in the header comment of
+`../../myconfig.ai.dev.litellm-forwarder.nix`, the shared module that runs the
+forwarder for this tier and for mysbx's `podman-gvisor` backend;
+`./litellm-endpoint.nix` configures it for this tier.
 
 The host LiteLLM proxy itself is not touched and stays loopback-only. It is
 enabled automatically wherever `services.litellm.enable` is on; knobs live
