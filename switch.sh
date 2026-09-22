@@ -46,6 +46,22 @@ log_error() {
     echo -e "$(tput setaf 1)error: $1$(tput sgr0)" >&2
 }
 
+# Block until the operator presses a key. Reads the terminal directly, so
+# it still works while stdin carries something else. Without a terminal
+# there is nobody to wait for: fall back to the sleep the caller would
+# have done.
+wait_for_keypress() {
+    local message="$1"
+    local fallback_delay="${2:-10}"
+    if [[ ! -r /dev/tty ]]; then
+        log_warning "$message (no terminal: continuing in ${fallback_delay}s)"
+        sleep "$fallback_delay"
+        return
+    fi
+    log_warning "$message"
+    read -r -n 1 -s </dev/tty || true
+}
+
 guard_pid() {
     local target="$1"
     local this_pid=$$
@@ -359,6 +375,7 @@ deploy() (
     fi
     local max_attempts=3
     local attempt=1
+    local retry_delay=10
     set -x
     until $cmd \
         `# --build-host localhost` \
@@ -371,9 +388,18 @@ deploy() (
             log_error "nixos-rebuild $command for $target failed after $max_attempts attempts (last exit code: $rc)"
             exit 1
         fi
-        log_warning "retry nixos-rebuild (attempt $attempt/$max_attempts) in 10s"
         attempt=$((attempt + 1))
-        sleep 10
+        if [[ $attempt -ge $max_attempts ]]; then
+            # The last attempt waits for the operator instead of firing
+            # on its own: the usual failure is a missed sudo password
+            # prompt, which only a human at the keyboard can answer.
+            wait_for_keypress \
+                "last attempt ($attempt/$max_attempts) at nixos-rebuild $command for $target — press any key to start, Ctrl-C to abort" \
+                "$retry_delay"
+        else
+            log_warning "retry nixos-rebuild (attempt $attempt/$max_attempts) in ${retry_delay}s"
+            sleep "$retry_delay"
+        fi
         set -x
     done
 )
