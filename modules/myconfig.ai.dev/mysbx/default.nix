@@ -99,6 +99,10 @@ let
   # revisit if one ever does.
   hmRipgrep = config.home-manager.users.mhuber.programs.ripgrep;
 
+  # The shared host-side LiteLLM forwarder (../myconfig.ai.dev.litellm-forwarder.nix):
+  # the endpoint a podman-gvisor container reaches the host proxy at.
+  litellmForwarder = config.myconfig.ai.dev.litellm-forwarder;
+
   # Home Manager's difftastic integration (bd myconfig-kvo): when it
   # activates `diff.external` (the `external`/`both` git modes), every
   # `git diff` on the host runs through the structural diff renderer —
@@ -334,8 +338,10 @@ in
         alacritty = cfg.terminal.package;
         gvisorImage = cfg.gvisor.image;
         gvisorShell = cfg.gvisor.shell;
+        gvisorPastaSpec = cfg.gvisor.pastaSpec;
+        gvisorEnv = cfg.gvisor.env;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -617,6 +623,60 @@ in
       # stay host pins (`MYSBX_MUX_ENTRY_*`, bwrap only): a selected
       # multiplexer under podman-gvisor remains a refused run until
       # an image ships one.
+      pastaSpec = mkOption {
+        type = types.nullOr types.str;
+        # The host's LiteLLM proxy binds 127.0.0.1 only, and inside a
+        # container that address is the CONTAINER's loopback, so the
+        # sandbox needs the shared forwarder of
+        # ../myconfig.ai.dev.litellm-forwarder.nix plus pasta's
+        # `--map-guest-addr` translation of its advertised address —
+        # the same spec the gvisor tier bakes as
+        # `AGENT_GVISOR_NETWORK`.
+        default =
+          let
+            fwd = config.myconfig.ai.dev.litellm-forwarder;
+          in
+          if fwd.enable then "pasta:--map-guest-addr,${fwd.address}" else null;
+        defaultText = literalExpression ''
+          "pasta:--map-guest-addr,''${config.myconfig.ai.dev.litellm-forwarder.address}"
+          when that forwarder runs, else null'';
+        description = ''
+          The podman `--network` spec of the podman-gvisor backend,
+          pinned into the wrapper as `MYSBX_GVISOR_PASTA_SPEC`
+          (`--set-default`, so an invocation can still override it).
+
+          `null` leaves podman's default (shared) network, which
+          reaches everything the host reaches EXCEPT services bound to
+          the host loopback. `network = false` still forces
+          `--network none` regardless of this option.
+        '';
+      };
+
+      env = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        example = literalExpression ''{ OPENAI_BASE_URL = "http://192.168.84.1:14000/v1"; }'';
+        description = ''
+          Environment variables handed to the payload of the
+          podman-gvisor backend ALONE, pinned into the wrapper as
+          `MYSBX_GVISOR_ENV` and emitted as `--env` after the config
+          layers' `[env]` (so they win over a configured value) and
+          before the sandbox's own `HOME`/`PATH`/XDG variables (which
+          no pin can repoint).
+
+          This is for environment that is only CORRECT under this
+          backend: the container has its own network stack and its own
+          loopback, so the host endpoints named by `config.env` — which
+          both backends share, and which the bubblewrap backend reaches
+          through the host network namespace — are wrong here. Values
+          must not contain whitespace (the variable is a
+          space-separated list).
+
+          Per-agent modules append their own entries, like they append
+          to `config.mounts`.
+        '';
+      };
+
       imagePackages = mkOption {
         type = types.listOf types.package;
         default = selectedMuxTools;
@@ -992,6 +1052,32 @@ in
     # Baseline mounts; further definitions (from per-agent modules or the
     # host config) are concatenated onto this list.
     myconfig.ai.dev.mysbx.config.mounts = baselineMounts ++ workmuxMounts;
+
+    # The host side of model access for the podman-gvisor backend: the
+    # shared port-scoped forwarder of
+    # ../myconfig.ai.dev.litellm-forwarder.nix, whose advertised address
+    # `gvisor.pastaSpec` maps into the container. Gated on an image
+    # being available — that is what makes `backend = "podman-gvisor"`
+    # runnable on this host at all — and on the host running LiteLLM.
+    # The forwarder is socket-activated, so an enabled-but-unused one
+    # runs nothing.
+    #
+    # The bubblewrap backend needs none of this: it shares the host
+    # network namespace, where `127.0.0.1:<litellm port>` is the proxy
+    # itself.
+    myconfig.ai.dev.litellm-forwarder.enable = lib.mkIf (
+      cfg.gvisor.image != null && config.services.litellm.enable
+    ) true;
+
+    # The endpoint as the CONTAINER sees it, for tools that read
+    # `OPENAI_BASE_URL` (the same variable the gvisor tier writes into
+    # `~/.config/agent-gvisor/litellm.env`). The agent CLIs whose model
+    # configuration is a generated file add their own entries from their
+    # own modules (../programs/programs.pi-coding-agent,
+    # ../programs/programs.opencode).
+    myconfig.ai.dev.mysbx.gvisor.env = lib.mkIf litellmForwarder.enable {
+      OPENAI_BASE_URL = litellmForwarder.endpoint;
+    };
 
     # The selected multiplexer's own tooling, on the sandbox PATH: the
     # entries pin their own copies, but a PANE that runs the tool (the

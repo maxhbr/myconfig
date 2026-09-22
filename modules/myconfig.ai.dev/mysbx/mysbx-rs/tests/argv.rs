@@ -3320,6 +3320,9 @@ fn podman_params() -> PodmanParams<'static> {
         cgroup_manager: Some("cgroupfs"),
         ignore_cgroups: false,
         network_spec: None,
+        // No backend env pins by default (an unwrapped build sets
+        // MYSBX_GVISOR_ENV nowhere); the pin tests pass their own.
+        extra_env: &[],
         pids_limit: None,
         memory: None,
         cpus: None,
@@ -3501,6 +3504,74 @@ fn podman_config_env_cannot_repoint_the_xdg_base_dirs() {
         ],
         "the config entry must parse first and lose last: {hits:?}"
     );
+}
+
+#[test]
+fn podman_backend_env_pins_win_over_the_config_layers() {
+    // MYSBX_GVISOR_ENV carries environment that is only correct under
+    // this backend (the container-side URL of the host's LiteLLM
+    // forwarder): emitted after the layers, so a pin beats an `[env]`
+    // entry of the same name.
+    let mut cfg = podman_base(true);
+    cfg.env
+        .insert("MODEL_URL".into(), "http://127.0.0.1:4000/v1".into());
+    let pins = ["MODEL_URL=http://192.168.84.1:14000/v1".to_string()];
+    let mut params = podman_params();
+    params.extra_env = &pins;
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let hits: Vec<String> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--env" && w[1].starts_with("MODEL_URL="))
+        .map(|w| w[1].clone())
+        .collect();
+    assert_eq!(
+        hits,
+        vec![
+            "MODEL_URL=http://127.0.0.1:4000/v1".to_string(),
+            "MODEL_URL=http://192.168.84.1:14000/v1".to_string()
+        ],
+        "the config entry must come first and the pin last: {hits:?}"
+    );
+}
+
+#[test]
+fn podman_backend_env_pins_cannot_repoint_the_infrastructure_variables() {
+    // The pins are trusted (they come from the Nix wrapper) but they
+    // are still emitted BEFORE `HOME`/`PATH`/the XDG dirs, so the
+    // sandbox invariants of config.md D14 stay the last word.
+    let pins = [
+        "HOME=/synth/leak".to_string(),
+        "PATH=/synth/leak/bin".to_string(),
+    ];
+    let mut params = podman_params();
+    params.extra_env = &pins;
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    for (var, want) in [
+        ("HOME=", "HOME=/mysbx-home"),
+        ("PATH=", "PATH=/bin:/usr/bin:/synth-image-tools"),
+    ] {
+        let last = argv
+            .windows(2)
+            .filter(|w| w[0] == "--env" && w[1].starts_with(var))
+            .map(|w| w[1].clone())
+            .next_back()
+            .unwrap_or_else(|| panic!("no {var} in the argv: {argv:?}"));
+        assert_eq!(last, want, "the infrastructure emit must win: {argv:?}");
+    }
 }
 
 #[test]

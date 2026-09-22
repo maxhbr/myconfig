@@ -408,6 +408,21 @@ let
   # and any duplicate-provider conflicts.
   litellmProviderKey = "${osconfig.networking.hostName}-litellm";
 
+  # Environment variable that replaces the litellm provider's baked
+  # `baseUrl` (an OpenAI-compatible base URL, `/v1` included) for one
+  # session. Read by BOTH generated extensions — the build-time
+  # registration in `providersExtension` and the runtime discovery in
+  # `litellmModelsExtension` — so whichever owns the provider id honours
+  # it.
+  #
+  # Its consumer is the sandbox tier that mounts this very configuration
+  # into a container: the host proxy binds `127.0.0.1` only, which inside
+  # a container is the container's own loopback, so a sandboxed session
+  # must name the host-side forwarder instead
+  # (../../myconfig.ai.dev.litellm-forwarder.nix). Unset — every host
+  # session — keeps the baked URL.
+  litellmBaseUrlEnvVar = "MYCONFIG_LITELLM_BASE_URL";
+
   # Static (build-time) litellm provider registration: the full baked model
   # list. Only used when `cfg.litellmUrl == ""` (dynamic model discovery
   # disabled) — see `litellmProvider` below.
@@ -526,6 +541,18 @@ let
       import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
       const providers: Record<string, any> = ${providersJson};
+      // Sandbox endpoint override (see `litellmBaseUrlEnvVar` in the
+      // generating Nix module): a container sandbox reaches the host's
+      // loopback-only LiteLLM proxy under a different URL than the host
+      // itself (the port-scoped forwarder behind pasta's
+      // `--map-guest-addr` target), and pi has ONE config for both. The
+      // baked `baseUrl` above is the host URL; an environment that names
+      // another one replaces it for that session only.
+      const litellmProviderId = "${litellmProviderKey}";
+      const litellmBaseUrlOverride = process.env.${litellmBaseUrlEnvVar};
+      if (litellmBaseUrlOverride && providers[litellmProviderId]) {
+        providers[litellmProviderId].baseUrl = litellmBaseUrlOverride;
+      }
       // Built-in provider ids whose model list is blanked (see
       // `blankedBuiltinProviderIds` in the generating Nix module). Registering
       // `models: []` replaces that provider's built-in model list, so only the
@@ -623,7 +650,12 @@ let
 
       const PROVIDER_ID = "${litellmProviderKey}";
       const PROVIDER_NAME = "LiteLLM (${osconfig.networking.hostName})";
-      const BASE_URL = "${cfg.litellmUrl}/v1";
+      // The baked host URL, overridable per session by
+      // ${litellmBaseUrlEnvVar} — what a container sandbox sets, whose
+      // route to the host proxy is the port-scoped forwarder rather than
+      // the host loopback (the sandbox then discovers the model list
+      // through that endpoint at runtime, like any other session).
+      const BASE_URL = process.env.${litellmBaseUrlEnvVar} || "${cfg.litellmUrl}/v1";
       // Same shape as the build-time registration in myconfig-providers.ts:
       // keyless litellm deployments use a dummy key (litellm ignores it) and
       // no Authorization header. When `litellmApiKeyEnv` is set in the
@@ -1531,6 +1563,15 @@ in
       extraTools = [ pi-coding-agent-pkg ];
       config.mounts = mysbxPiMounts;
       config.env.PI_JAIL_MARKER = "1";
+      # The litellm endpoint of the podman-gvisor backend: pi's mounted
+      # configuration names the host loopback, which inside a container
+      # is the container's own. `gvisor.env` reaches that backend ALONE
+      # (the bubblewrap backend shares the host network namespace, where
+      # the baked URL is right), and both generated extensions read the
+      # variable (`litellmBaseUrlEnvVar` above).
+      gvisor.env = lib.mkIf osconfig.myconfig.ai.dev.litellm-forwarder.enable {
+        ${litellmBaseUrlEnvVar} = osconfig.myconfig.ai.dev.litellm-forwarder.endpoint;
+      };
       # pi's session store, backed by `<repo>.mysbx/state/.pi/agent/sessions`
       # (D15). No nesting conflict with the opencode/rtk entries
       # (`.local/...`) — `check_state_dirs` enforces that pairwise anyway.

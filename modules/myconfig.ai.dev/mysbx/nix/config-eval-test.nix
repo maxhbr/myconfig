@@ -52,6 +52,11 @@ let
       modules = [
         inputs.home.nixosModules.home-manager
         ../../sandboxes/myconfig.ai.sandboxTools.nix
+        # ... and the shared LiteLLM forwarder
+        # (../../myconfig.ai.dev.litellm-forwarder.nix), whose endpoint
+        # and advertised address the podman-gvisor pins of the mysbx
+        # module read — imported for the same reason as the hook above.
+        ../../myconfig.ai.dev.litellm-forwarder.nix
         # ... and the orca module, which `myconfig.ai.dev`'s own
         # import list carries on real hosts but a minimal eval does
         # not — the `muxOrca` scenario below needs
@@ -261,6 +266,36 @@ let
       throw "mysbx generated-config test: the availability gate fired for an AVAILABLE multiplexer (failed: ${builtins.concatStringsSep "\n" available})"
     else
       "ok";
+  # The podman-gvisor pins that carry the host's LiteLLM endpoint into a
+  # container (../../myconfig.ai.dev.litellm-forwarder.nix): the pasta
+  # translation of the advertised address, and the endpoint itself as
+  # backend environment. Both are options, not file content, so they are
+  # checked here like the assertions above.
+  gvisorPinGate =
+    let
+      gvisorOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.gvisor;
+      on = gvisorOf [
+        {
+          myconfig.ai.dev.litellm-forwarder = {
+            enable = true;
+            port = 4000;
+            forwardPort = 14000;
+            address = "10.99.0.1";
+          };
+        }
+      ];
+      off = gvisorOf [ { } ];
+    in
+    if on.pastaSpec != "pasta:--map-guest-addr,10.99.0.1" then
+      throw "mysbx generated-config test: the pasta spec does not map the forwarder address (got ${toString on.pastaSpec})"
+    else if (on.env.OPENAI_BASE_URL or null) != "http://10.99.0.1:14000/v1" then
+      throw "mysbx generated-config test: the backend env does not carry the forwarded endpoint (got ${builtins.toJSON on.env})"
+    else if off.pastaSpec != null then
+      throw "mysbx generated-config test: a host without the forwarder pinned a pasta spec (${toString off.pastaSpec})"
+    else if off.env != { } then
+      throw "mysbx generated-config test: a host without the forwarder pinned backend env (${builtins.toJSON off.env})"
+    else
+      "ok";
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -282,7 +317,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
-    inherit assertionGate;
+    inherit assertionGate gvisorPinGate;
   }
   ''
     fail() {

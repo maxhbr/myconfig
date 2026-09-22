@@ -222,6 +222,23 @@ in
         ".local/share/opencode"
         ".local/state/opencode"
       ];
+      # The litellm endpoint of the podman-gvisor backend: the mounted
+      # configuration names the host loopback, which inside a container
+      # is the container's own, so the sandboxed session needs the
+      # host-side forwarder's URL instead
+      # (../../myconfig.ai.dev.litellm-forwarder.nix). opencode merges
+      # `OPENCODE_CONFIG_CONTENT` over its config files, so a fragment
+      # carrying nothing but the provider's `baseURL` replaces that one
+      # key and leaves the rest of the mounted configuration in place.
+      #
+      # `gvisor.env` reaches that backend ALONE / the bubblewrap backend
+      # shares the host network namespace, where the baked URL is right.
+      gvisor.env = lib.mkIf osconfig.myconfig.ai.dev.litellm-forwarder.enable {
+        OPENCODE_CONFIG_CONTENT = builtins.toJSON {
+          provider."${osconfig.networking.hostName}-litellm".options.baseURL =
+            osconfig.myconfig.ai.dev.litellm-forwarder.endpoint;
+        };
+      };
     };
 
     home-manager.sharedModules = [

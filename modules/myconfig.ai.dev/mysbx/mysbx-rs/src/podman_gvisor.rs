@@ -50,10 +50,10 @@
 //!    state-dirs binds (config.md D15)
 //! 6. configured mounts, in declaration order (config.md D7/D8),
 //!    `--mount type=bind,src=HOST,dst=DEST,ro|rw`
-//! 7. environment: host-forwarded first, then `cfg.env`, then
-//!    infrastructure variables (`HOME`, the XDG base dirs derived
-//!    from it, `PATH`, CA-bundle vars, `TMUX_TMPDIR` for a
-//!    multiplexer session)
+//! 7. environment: host-forwarded first, then `cfg.env`, then the
+//!    backend pins of `MYSBX_GVISOR_ENV`, then infrastructure
+//!    variables (`HOME`, the XDG base dirs derived from it, `PATH`,
+//!    CA-bundle vars, `TMUX_TMPDIR` for a multiplexer session)
 //! 8. resource limits: `--pids-limit`, `--memory`, `--cpus` (when
 //!    cgroups are not ignored)
 //! 9. network: `--network` spec (shared by default, or `none` / pasta
@@ -298,6 +298,14 @@ pub struct Params<'a> {
     /// `Some("none")` means no network, or a pasta spec for custom
     /// networking.
     pub network_spec: Option<&'a str>,
+    /// Backend-specific environment pins (`MYSBX_GVISOR_ENV`), each a
+    /// `KEY=VALUE` string. They are emitted AFTER the config layers'
+    /// `[env]` (so a pin wins over a configured value) and BEFORE the
+    /// infrastructure variables (so no pin can repoint `HOME`, the XDG
+    /// base dirs or `PATH`). What needs them is environment that is
+    /// only correct under THIS backend, e.g. the container-side URL of
+    /// the host's LiteLLM forwarder.
+    pub extra_env: &'a [String],
     /// Resource limits from configuration.
     /// Using Cow to allow both borrowed (from env vars) and owned strings.
     pub pids_limit: Option<Cow<'a, str>>,
@@ -676,6 +684,12 @@ pub fn podman_run_argv(
     }
     for (key, value) in &cfg.env {
         argv.extend(["--env".into(), format!("{key}={value}")]);
+    }
+    // Backend pins (MYSBX_GVISOR_ENV): after the layers, so a pin wins
+    // over a configured value, and before the infrastructure variables
+    // below, which stay the last word on `HOME`/`PATH`/the XDG dirs.
+    for entry in params.extra_env {
+        argv.extend(["--env".into(), entry.clone()]);
     }
     // Infrastructure variables. `PATH` points INSIDE the image
     // (params.tools_path defaults to the agent image's own

@@ -320,6 +320,40 @@ sandbox, and `workmux add` inside it fails with a filesystem error
 naming the path. A sidecar `[[mounts]]` entry is therefore only
 needed to bind a worktrees directory that lives somewhere else.
 
+## Model endpoint under the podman-gvisor backend
+
+The host LiteLLM proxy binds `127.0.0.1` only, and inside a container
+that address is the CONTAINER's loopback — the URLs baked into the
+mounted agent configurations (`http://127.0.0.1:<port>/v1`) reach
+nothing there. Three pieces close that gap, all of them scoped to the
+`podman-gvisor` backend; the bubblewrap backend shares the host network
+namespace, where the baked URLs are already right.
+
+1. The host runs the shared port-scoped forwarder
+   (`myconfig.ai.dev.litellm-forwarder`, also used by the
+   [`agent-gvisor` tier](../sandboxes/myconfig.ai.gvisor-agent-sandbox/README.md)):
+   `0.0.0.0:<forwardPort>` → `127.0.0.1:<port>`, socket-activated, and
+   dropped by the firewall on every interface but `lo`. mysbx turns it
+   on wherever `gvisor.image` is set and the host runs LiteLLM.
+2. The wrapper pins `MYSBX_GVISOR_PASTA_SPEC` as
+   `pasta:--map-guest-addr,<address>`
+   (`myconfig.ai.dev.mysbx.gvisor.pastaSpec`), so the container's
+   connections to that address land on the host's global address, where
+   the forwarder listens. Only services bound to `0.0.0.0` are reachable
+   that way — the host's other loopback-only services stay unreachable.
+3. The wrapper pins the endpoint as backend environment
+   (`MYSBX_GVISOR_ENV`, `myconfig.ai.dev.mysbx.gvisor.env`):
+   `OPENAI_BASE_URL` plus the variables the generated agent
+   configurations read — `MYCONFIG_LITELLM_BASE_URL` for pi's provider
+   extensions and `OPENCODE_CONFIG_CONTENT` for opencode's provider
+   `baseURL`. Those pins exist only on this backend's `podman run`
+   argv, after the config layers' `[env]` and before the sandbox's own
+   `HOME`/`PATH`/XDG variables.
+
+No credential travels with them: the proxy this repo configures is
+keyless, and API keys reach a sandbox only through
+`forwardedEnvVars`.
+
 ## Browser automation
 
 `myconfig.ai.dev.mysbx.browser.enable` puts a chrome-family browser
