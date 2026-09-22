@@ -1072,14 +1072,42 @@ fn tmpfs_tmp_is_not_host_backed() {
         &params(),
     )
     .unwrap();
-    let t = argv.iter().position(|x| x.as_str() == "--tmpfs").unwrap();
-    assert_eq!(argv[t + 1], "/tmp");
+    assert!(
+        argv.windows(2).any(|w| w[0] == "--tmpfs" && w[1] == "/tmp"),
+        "/tmp must be a tmpfs: {argv:?}"
+    );
     for w in argv.windows(3) {
         assert!(
             !((w[0] == "--bind" || w[0] == "--ro-bind") && w[2] == "/tmp"),
             "/tmp must not be bind-backed: {:?}",
             argv
         );
+    }
+}
+
+#[test]
+fn dev_shm_is_a_tmpfs_of_its_own() {
+    // bubblewrap's `--dev` creates no /dev/shm, so POSIX shared memory
+    // is unusable without this row of the base table — a chrome-family
+    // browser crashes outright. It sits AFTER `--dev /dev`, otherwise
+    // the devtmpfs would cover it again, and it is a tmpfs, so nothing
+    // of the host's /dev/shm is reachable.
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    let dev = argv.iter().position(|x| x.as_str() == "--dev").unwrap();
+    let shm = argv
+        .windows(2)
+        .position(|w| w[0] == "--tmpfs" && w[1] == "/dev/shm")
+        .expect("/dev/shm must be a tmpfs");
+    assert!(dev < shm, "/dev/shm must come after --dev /dev: {argv:?}");
+    for (src, dest) in bind_pairs(&argv) {
+        assert_ne!(dest, "/dev/shm", "/dev/shm is bind-backed by {src}");
     }
 }
 
@@ -1101,7 +1129,7 @@ fn sandbox_home_is_a_tmpfs_outside_home() {
         .filter(|w| w[0] == "--tmpfs")
         .map(|w| w[1].as_str())
         .collect();
-    assert_eq!(tmpfs, vec!["/tmp", SANDBOX_HOME]);
+    assert_eq!(tmpfs, vec!["/dev/shm", "/tmp", SANDBOX_HOME]);
     assert!(!SANDBOX_HOME.starts_with("/home"), "{SANDBOX_HOME}");
     for (src, dest) in bind_pairs(&argv) {
         assert_ne!(

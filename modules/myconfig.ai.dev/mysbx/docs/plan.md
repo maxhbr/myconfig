@@ -85,6 +85,7 @@ every knob is a decision:
 | `/usr/bin` ro | yes | `/usr/bin/env` shebangs |
 | `/bin/sh` ro | yes, when the wrapper pins one (`MYSBX_BINSH`) | a de-facto ABI of the Unix userland: tmux runs every `run-shell`/`if-shell`/`#()` job through `execl("/bin/sh", …)` (tmux ≥ 3.5a hardcodes `_PATH_BSHELL` for jobs — `default-shell` covers panes and popups only), and `#!/bin/sh` shebangs need it. The minimal root has no `/bin` at all, so without the bind every such job dies with `execl failed` — on the workmux sidebar this surfaced as `'kill -USR1 $(tmux show-option …)' returned 1` popups and sidebars that never appear. The pin is bash's own `bin/sh` from the wrapper's closure (the same bind `vendor/alexdavid-jail.nix`'s base combinator makes for the jail tier); the dest is protected like every base-bind root. Unwrapped builds pin nothing and run without `/bin/sh` |
 | `--proc`, `--dev` | yes | |
+| tmpfs `/dev/shm` | yes | bubblewrap's `--dev` creates none, so POSIX shared memory is unusable without it — a chrome-family browser crashes outright. Private to the sandbox like every other tmpfs; the podman-gvisor backend gets its own from podman |
 | `/etc/localtime` | yes | timestamps |
 | tmpfs `/tmp` | yes | **not** the host-backed `/tmp/<name>` |
 | tmpfs `$HOME` (`/mysbx-home`) | yes | an in-sandbox home so `cd ~`, `~/.bash_history`, git & co. work; empty, writable, outside `/home` (`config.md` D14) |

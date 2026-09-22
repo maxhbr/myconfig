@@ -280,7 +280,8 @@ impl PolicyPath {
 ///    either direction is assertable in the golden tests)
 /// 3. the base binds (the "The base" table of docs/plan.md):
 ///    `/nix/store` ro, `/usr/bin` ro, `--proc /proc`, `--dev /dev`,
-///    `/etc/localtime` ro, tmpfs `/tmp`, tmpfs [`SANDBOX_HOME`]
+///    tmpfs `/dev/shm`, `/etc/localtime` ro, tmpfs `/tmp`,
+///    tmpfs [`SANDBOX_HOME`]
 /// 4. the repo itself, read-write, at its real host path
 ///    (docs/design/config.md D13), followed by the git metadata
 ///    directories its `.git` FILE points at, also rw (review-1 finding 4:
@@ -1079,6 +1080,12 @@ static RESOLVER_PATHS: &[&str] = &[
 /// → `/usr/bin`; timezones → `/etc/localtime`; a fresh tmpfs `/tmp`,
 /// NOT the host-backed one).
 ///
+/// `/dev/shm` is a tmpfs of its own because bubblewrap's `--dev` does
+/// not create one: a payload that allocates POSIX shared memory —
+/// a chrome-family browser is the case that forced this — finds the
+/// path missing and crashes. It is private to the sandbox like every other tmpfs here,
+/// so nothing is shared with the host.
+///
 /// The two nix binds review-1 finding 6 added are NOT here (review-2
 /// item 3): `/nix/var/nix` carries the daemon socket and rides with
 /// the network switch instead (section 2), and the host
@@ -1096,6 +1103,8 @@ fn base_binds() -> Vec<String> {
         "/proc".into(),
         "--dev".into(),
         "/dev".into(),
+        "--tmpfs".into(),
+        "/dev/shm".into(),
         "--ro-bind".into(),
         "/etc/localtime".into(),
         "/etc/localtime".into(),
@@ -1869,7 +1878,7 @@ mod tests {
             .filter(|w| w[0] == "--tmpfs")
             .map(|w| w[1].as_str())
             .collect();
-        assert_eq!(tmpfs, vec!["/tmp", SANDBOX_HOME]);
+        assert_eq!(tmpfs, vec!["/dev/shm", "/tmp", SANDBOX_HOME]);
         let i = pos(&argv, "HOME");
         assert_eq!(&argv[i - 1..i + 2], &["--setenv", "HOME", SANDBOX_HOME]);
         assert!(!SANDBOX_HOME.starts_with("/home"));
@@ -2211,8 +2220,7 @@ mod tests {
         }
         // `/tmp` is a tmpfs, not a bind — so the host's default
         // `/tmp/tmux-<uid>` cannot be reached even by accident.
-        let i = pos(&argv, "--tmpfs");
-        assert_eq!(argv[i + 1], "/tmp");
+        assert!(argv.windows(2).any(|w| w[0] == "--tmpfs" && w[1] == "/tmp"));
     }
 
     #[test]

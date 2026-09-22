@@ -32,6 +32,8 @@
 /proc
 --dev
 /dev
+--tmpfs
+/dev/shm
 --ro-bind
 /etc/localtime
 /etc/localtime
