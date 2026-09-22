@@ -15,8 +15,10 @@
 #   Failed to connect to socket /run/user/<uid>/bus: Connection refused
 # and the whole switch exits 4 even though nothing that matters failed.
 #
-# The patch probes the session bus socket before spawning the child and
-# skips users without one, matching the intent of the upstream comment.
+# The patch connects to the session bus socket before spawning the
+# child and skips users whose bus refuses connections (a stale socket
+# file is left behind, so a stat() alone does not detect this),
+# matching the intent of the upstream comment.
 #
 # TODO: remove once upstream nixpkgs ships a fix (no upstream issue has
 # been filed yet; see doc/TODOs/drop-switch-to-configuration-skip-dead-users-patch.md

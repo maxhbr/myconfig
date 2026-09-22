@@ -1,31 +1,40 @@
 diff --git a/src/main.rs b/src/main.rs
 --- a/src/main.rs
 +++ b/src/main.rs
-@@ -2413,6 +2413,29 @@
+@@ -2413,6 +2413,38 @@
                      }
                  };
  
-+                // The BindsTo= on user@.service keeps /run/user/<uid> and the
-+                // user manager's lifetime in sync only while both units are
-+                // loaded. For users whose manager was stopped (or never
-+                // started) after their runtime directory was created — e.g.
-+                // logind-managed greeter sessions or linger users whose
-+                // user@<uid>.service is inactive — the directory can outlive
-+                // the manager and the per-user session bus. Probe the socket
-+                // before spawning: if it does not exist there is no user
-+                // manager to reload units for, so skip the user instead of
-+                // failing the whole switch.
++                // The BindsTo= on user@.service only stops the user manager
++                // when user-runtime-dir@.service goes away, not the other way
++                // round, so /run/user/<uid> (and a stale bus socket inside it)
++                // can outlive the manager: greeter sessions that ended, or
++                // linger users whose user@<uid>.service is inactive. Connect
++                // to the session bus the child would use; if nothing accepts,
++                // there are no user units to manage, so skip the user instead
++                // of failing the whole switch.
 +                let session_bus = runtime_path.join("bus");
-+                if !nix::sys::stat::stat(&session_bus)
-+                    .map(|st| st.st_mode & nix::libc::S_IFMT == nix::libc::S_IFSOCK)
-+                    .unwrap_or(false)
-+                {
-+                    eprintln!(
-+                        "skipping user {name}: {} is not a socket \
-+                         (user manager not running)",
-+                        session_bus.display()
-+                    );
-+                    continue;
++                match std::os::unix::net::UnixStream::connect(&session_bus) {
++                    Ok(_) => {}
++                    Err(err)
++                        if matches!(
++                            err.kind(),
++                            std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
++                        ) =>
++                    {
++                        eprintln!(
++                            "skipping user {name}: cannot connect to {} \
++                             ({err}; user manager not running)",
++                            session_bus.display()
++                        );
++                        continue;
++                    }
++                    Err(err) => {
++                        log::debug!(
++                            "probing {} for user {name} failed: {err}",
++                            session_bus.display()
++                        );
++                    }
 +                }
 +
                  eprintln!("reloading user units for {name}...");

@@ -18,9 +18,11 @@ The per-user child then fails with
 whole `nixos-rebuild switch` exits 4 even though nothing that matters failed
 (no such user has user units worth reloading).
 
-The local patch probes the session bus socket (`/run/user/<uid>/bus`) before
-spawning the per-user child and skips users without one, matching the intent
-of the upstream comment. Ideally this becomes an upstream fix — the issue has
+The local patch connects to the session bus socket (`/run/user/<uid>/bus`)
+before spawning the per-user child and skips the user when the connect fails
+with `ENOENT` or `ECONNREFUSED`. A `stat()` check is not enough: the observed
+failure is `Connection refused`, i.e. the socket file still exists but nobody
+listens on it. Ideally this becomes an upstream fix — the issue has
 NOT yet been filed (no GitHub credentials available while writing this);
 file it against NixOS/nixpkgs with the reproduction notes above and record
 the link here:
