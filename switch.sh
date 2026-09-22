@@ -62,6 +62,39 @@ wait_for_keypress() {
     read -r -n 1 -s </dev/tty || true
 }
 
+SUDO_KEEPALIVE_PID=""
+sudo_keepalive_stop() {
+    if [[ -n $SUDO_KEEPALIVE_PID ]]; then
+        kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
+        SUDO_KEEPALIVE_PID=""
+    fi
+}
+# Ask for the sudo password while the operator is still watching and keep
+# the timestamp alive until the script exits. The privileged calls come
+# last, after a build that can run for an hour, and a password prompt
+# nobody is there to answer fails the whole deploy.
+#
+# Only the `sudo` invocations are privileged: this script keeps running as
+# the invoking user, and the refresh loop is a background job that does
+# nothing but extend the existing timestamp.
+sudo_keepalive_start() {
+    if [[ $EUID -eq 0 || -n $SUDO_KEEPALIVE_PID ]]; then
+        return 0
+    fi
+    log_step "priming sudo credentials for the deploy at the end of this run"
+    if ! sudo -v; then
+        log_error "could not obtain sudo credentials"
+        exit 1
+    fi
+    local parent=$$
+    while kill -0 "$parent" 2>/dev/null; do
+        sudo -n -v 2>/dev/null || break
+        sleep 50
+    done &
+    SUDO_KEEPALIVE_PID=$!
+    trap sudo_keepalive_stop EXIT
+}
+
 guard_pid() {
     local target="$1"
     local this_pid=$$
@@ -525,6 +558,11 @@ main() {
             log_error "VPN is active, refusing to update remote host $target"
             exit 1
         fi
+    elif [[ $MODE != "--build-vm" ]]; then
+        # Before the logging redirection below, so the prompt reaches the
+        # terminal unwrapped. A remote target needs no local privileges:
+        # nixos-rebuild talks to it as root over ssh.
+        sudo_keepalive_start
     fi
 
     ################################################################################
