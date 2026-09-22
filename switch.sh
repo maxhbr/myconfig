@@ -409,9 +409,17 @@ sbom() (
     local sbom_dir="$out_link.sbom"
     mkdir -p "$sbom_dir"
     log_step "sbom $sbom_dir"
+    # sbomnix writes its output into the working directory, so the path
+    # has to survive the `cd`: the out-link is relative to the flake
+    # root, not to `$sbom_dir`.
+    local out_link_abs
+    out_link_abs="$(readlink -f "$out_link")"
     cd "$sbom_dir"
-    sbomnix "$out_link"
     local cdx="sbom.cdx.json"
+    # A leftover from an earlier run would otherwise be uploaded as if it
+    # described the build that just failed to produce one.
+    rm -f "$cdx"
+    sbomnix "$out_link_abs"
     if [[ -f $cdx ]]; then
         local dtrack_token="${DTRACK_TOKEN:-}"
         if [[ -z $dtrack_token ]]; then
