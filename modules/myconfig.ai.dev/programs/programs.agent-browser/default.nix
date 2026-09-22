@@ -27,7 +27,11 @@
 # (closure size, security surface). Inside a sandbox an agent can either
 # run `agent-browser install` (downloads a pinned Chrome into
 # `~/.agent-browser`, needs network and a writable home) or the host opts
-# in:
+# in — for mysbx alone:
+#
+#   myconfig.ai.dev.mysbx.browser.enable = true;
+#
+# or for every tier at once:
 #
 #   myconfig.ai.dev.sandboxTools.extraPackages = [ pkgs.chromium ];
 #   myconfig.ai.dev.sandboxTools.extraEnv.AGENT_BROWSER_EXECUTABLE_PATH =

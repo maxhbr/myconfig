@@ -144,12 +144,20 @@ let
   # `hmDifftasticExternal`, so a host whose git already uses the default
   # diff gets no entry — the override is the REPAIR for the difftastic
   # activation, not a blanket rewrite of every host's git behavior.
+  # The configured browser with `--no-sandbox` baked in: a chrome-family
+  # browser cannot build its own namespace sandbox inside this one, and
+  # every caller is a machine that passes its own argv (see ./nix/browser.nix).
+  browserPackage = pkgs.callPackage ./nix/browser.nix { browser = cfg.browser.package; };
+
   baselineEnv =
     (lib.optionalAttrs (hmRipgrep.enable && hmRipgrep.arguments != [ ]) {
       RIPGREP_CONFIG_PATH = homeDest "~/.config/ripgrep/ripgreprc";
     })
     // (lib.optionalAttrs hmDifftasticExternal {
       GIT_EXTERNAL_DIFF = lib.getExe gitDefaultDiff;
+    })
+    // (lib.optionalAttrs cfg.browser.enable {
+      AGENT_BROWSER_EXECUTABLE_PATH = lib.getExe browserPackage;
     });
 
   # `dest` is optional in the schema and there is no TOML null: a
@@ -356,6 +364,26 @@ in
         the same "security-relevant list, not packaging detail" rule as
         for the baseline closure applies.
       '';
+    };
+
+    browser = {
+      enable = mkEnableOption ''
+        a chrome-family browser on the mysbx sandbox PATH, for
+        `agent-browser` and other CDP clients. Off by default: the
+        closure is large and a browser is a wide attack surface, so a
+        host opts in per deployment.
+
+        What lands on the PATH is `package` wrapped by
+        ./nix/browser.nix, which prepends `--no-sandbox` and passes
+        every other argument through: the browser cannot build its own
+        namespace sandbox inside this one, and every caller is a
+        machine with its own fixed argv. The wrapper is pinned as
+        `AGENT_BROWSER_EXECUTABLE_PATH` in the generated `[env]` too,
+        so `agent-browser` uses exactly this build instead of probing
+        the PATH or downloading its own Chrome into the sandbox home
+      '';
+
+      package = mkPackageOption pkgs "chromium" { };
     };
 
     forwardedEnvVars = mkOption {
@@ -985,7 +1013,9 @@ in
     # it — a tool wanted in every tier goes through the hook, exactly
     # once.
     myconfig.ai.dev.mysbx.extraTools =
-      selectedMuxTools ++ config.myconfig.ai.dev.sandboxTools.extraPackages;
+      selectedMuxTools
+      ++ config.myconfig.ai.dev.sandboxTools.extraPackages
+      ++ lib.optional cfg.browser.enable browserPackage;
 
     # Baseline [env] (RIPGREP_CONFIG_PATH — review-3 item 6 — and
     # GIT_EXTERNAL_DIFF — bd myconfig-kvo), merged with the shared

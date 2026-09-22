@@ -320,6 +320,33 @@ sandbox, and `workmux add` inside it fails with a filesystem error
 naming the path. A sidecar `[[mounts]]` entry is therefore only
 needed to bind a worktrees directory that lives somewhere else.
 
+## Browser automation
+
+`myconfig.ai.dev.mysbx.browser.enable` puts a chrome-family browser
+(`browser.package`, `pkgs.chromium` by default) on the sandbox `PATH`
+and pins it as `AGENT_BROWSER_EXECUTABLE_PATH` in the generated
+`[env]`, so the `agent-browser` CLI — which every tier already carries
+through `myconfig.ai.dev.sandboxTools.extraPackages` — drives that
+exact build instead of probing the `PATH` or downloading its own
+Chrome into the tmpfs home on every run.
+
+What is installed is the package wrapped by
+[`nix/browser.nix`](./nix/browser.nix): it prepends `--no-sandbox` and
+passes every other argument through, keeping the executable's name so
+the PATH probes still find it. A chrome-family browser sandboxes its
+renderers with a user namespace and cannot do so inside this one —
+bubblewrap already holds the payload in a user namespace with
+`no_new_privs` — so without the flag it dies at startup. The layer
+given up is one the payload never had; the boundary that matters stays
+bubblewrap (or gVisor on the podman backend). The flag is baked in
+because every caller is a machine that spawns the executable with its
+own argument list.
+
+It is off by default: the closure is large and a browser is a wide
+attack surface, so a host opts in. The `/dev/shm` tmpfs the browser
+needs is part of the base binds for every run (bubblewrap's `--dev`
+creates none), not something this option adds.
+
 ## Integrated coding agents
 `pi` ([`programs.pi-coding-agent`](../../programs/programs.pi-coding-agent/default.nix)) is
 the first coding agent integrated with mysbx: on hosts where both features are
