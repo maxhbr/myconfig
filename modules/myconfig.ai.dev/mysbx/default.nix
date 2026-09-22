@@ -380,10 +380,15 @@ in
         entry cannot forward it; naming it here is the only way a
         sandboxed agent reaches its model endpoint (bd myconfig-20j).
 
-        ADDITIVE by design, like `myconfig.ai.dev.jail.fwdEnvs`: the
-        priv flake appends tier-specific credentials with a plain
-        assignment `forwardedEnvVars = [ "SOME_TOKEN" ];` — no
-        `mkForce`, no self-reference — and the built-in block stays.
+        This repository sets NO credential names: the model API key,
+        token and base-URL variables are named by the private flake,
+        which assigns them here. Keep it that way — which endpoints a
+        deployment talks to is not public configuration.
+
+        ADDITIVE by design, like `myconfig.ai.dev.jail.fwdEnvs`: a
+        deployment appends its variables with a plain assignment
+        `forwardedEnvVars = [ "SOME_TOKEN" ];` — no `mkForce`, no
+        self-reference — and the built-in block stays.
       '';
     };
 

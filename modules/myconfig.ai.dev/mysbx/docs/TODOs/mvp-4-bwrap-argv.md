@@ -34,17 +34,17 @@ item 6 executes it.
 5. configured mounts, in declaration order, `--ro-bind` / `--bind`, with
    `dest` defaulting to the source path
 6. environment: the forwarded host variables (`FORWARDED_ENV_VARS` of
-   `src/lib.rs` — the terminal/locale block `TERM COLORTERM LANG LC_ALL
-   EDITOR VISUAL` plus the model-credential block of bd myconfig-20j —
-   each only when set), then `[env]`, then `PATH` pointing at
+   `src/lib.rs` — the technical block `TERM COLORTERM LANG LC_ALL
+   EDITOR VISUAL`, extended by the merged `forward-env` of the
+   configuration layers — each only when set), then `[env]`, then `PATH` pointing at
    the MVP's dev-tool closure
 7. `--chdir` into the repo
 8. `--` and the payload
 
 Not present, deliberately: `/run`, `~/tmp`, and a host-backed `/tmp/<name>`.
-The builder forwards only what the caller hands it (`host_env`) — the
-credential block reaches the argv only because the CLI's collection step
-puts it there when the host sets it. See the base table in `../plan.md` for
+The builder forwards only what the caller hands it (`host_env`) — a
+credential reaches the argv only when a configuration layer named it in
+`forward-env` and the host has it set. See the base table in `../plan.md` for
 the reasoning behind each.
 
 ## Do

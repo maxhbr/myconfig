@@ -72,7 +72,10 @@ pub fn usage() {
 /// editor — that a payload needs for convenience or correctness.
 /// Credentials are deliberately absent: no secret is forwarded unless a
 /// layer names it explicitly in `forward-env`, so a sandbox never
-/// inherits a host token by accident.
+/// inherits a host token by accident. Which key, token and base-URL
+/// variables a deployment forwards is its own configuration (in this
+/// tree: the private flake's `myconfig.ai.dev.mysbx.forwardedEnvVars`),
+/// not a name hard-coded here.
 ///
 /// The list is the BASE of every run — `forwarded_env_vars` layers
 /// the merged `forward-env` key of the configuration layers
