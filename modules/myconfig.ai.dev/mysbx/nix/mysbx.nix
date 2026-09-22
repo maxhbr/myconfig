@@ -106,6 +106,7 @@
   jq,
   git,
   tig,
+  neovim,
   nix,
   python3,
   curl,
@@ -196,10 +197,14 @@ let
   # and `tig` (the git TUI: the payload is always a git worktree, and
   # reviewing it is the one interactive job a sandboxed agent session
   # hands back to the human — a tiny closure next to the `git` that is
-  # already shipped). `diffutils`, `gnutar`, `gzip` and `unzip` are
-  # back in (bd myconfig-en7): they are not package management but
-  # basic dev tools, and their absence broke sandbox payloads on the
-  # first `diff`/`tar`. Per plan.md phase 2d, `mysbx` consumes the
+  # already shipped). `neovim` is the sandbox's `$EDITOR`: without an
+  # editor `git commit` aborts, `mysbx edit` has nothing to open
+  # (`../docs/design/cli.md` D12) and a payload that spawns `$EDITOR`
+  # fails — forwarding the host's value does not help, because it names
+  # a program that need not exist in here. `diffutils`, `gnutar`,
+  # `gzip` and `unzip` are back in (bd myconfig-en7): they are not
+  # package management but basic dev tools, and their absence broke
+  # sandbox payloads on the first `diff`/`tar`. Per plan.md phase 2d, `mysbx` consumes the
   # shared `myconfig.ai.dev.sandboxTools` hook like every other tier
   # — the hook's packages arrive in `extraTools` via ../default.nix.
   # The baseline list lives HERE, next to the code that consumes it,
@@ -228,6 +233,7 @@ let
       jq
       git
       tig
+      neovim
       nix
       python3
       curl
@@ -412,6 +418,9 @@ symlinkJoin {
 
   passthru = {
     inherit crate toolsEnv sandboxNixConf;
+    # The editor the generated `[env]` points `EDITOR`/`VISUAL` at, so
+    # the variables and the closure can never name different builds.
+    editor = neovim;
     caBundle = caBundle;
     completions = completions;
   };

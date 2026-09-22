@@ -153,8 +153,19 @@ let
   # every caller is a machine that passes its own argv (see ./nix/browser.nix).
   browserPackage = pkgs.callPackage ./nix/browser.nix { browser = cfg.browser.package; };
 
+  # The sandbox has its own editor (`neovim` in the dev-tool closure), so
+  # `$EDITOR` names a program that exists in here. The forwarded host
+  # value is overridden on purpose: it routinely names something the
+  # sandbox cannot run at all (`code --wait`, an `emacsclient` talking to
+  # a host socket) or a bare name that is not on the sandbox PATH.
+  editorEnv = {
+    EDITOR = lib.getExe cfg.package.editor;
+    VISUAL = lib.getExe cfg.package.editor;
+  };
+
   baselineEnv =
-    (lib.optionalAttrs (hmRipgrep.enable && hmRipgrep.arguments != [ ]) {
+    editorEnv
+    // (lib.optionalAttrs (hmRipgrep.enable && hmRipgrep.arguments != [ ]) {
       RIPGREP_CONFIG_PATH = homeDest "~/.config/ripgrep/ripgreprc";
     })
     // (lib.optionalAttrs hmDifftasticExternal {
