@@ -341,12 +341,22 @@ in
           node = "/dev/dri/card0";
           modifier = "rw";
         }
+        # ROCm runtime needs the KFD node; without it llama-server
+        # fails with "no ROCm-capable device is detected".
+        {
+          node = "/dev/kfd";
+          modifier = "rw";
+        }
       ];
 
       # Important: actual device + driver userspace visibility
       bindMounts = {
         "/dev/dri" = {
           hostPath = "/dev/dri";
+          isReadOnly = false;
+        };
+        "/dev/kfd" = {
+          hostPath = "/dev/kfd";
           isReadOnly = false;
         };
         "/run/opengl-driver" = {
@@ -377,6 +387,11 @@ in
           hardware.graphics.enable = true;
           services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
           myconfig.ai.llama-cpp = gfx-llama-cpp-config;
+          # The container does not inherit the host's session
+          # environment (hardware.Radeon8060S.nix); ROCm needs the
+          # gfx-version override for gfx1151 (Strix Halo) or it finds
+          # no usable device.
+          systemd.services.llama-swap.environment.HSA_OVERRIDE_GFX_VERSION = "11.5.1";
         };
     };
     myconfig.ai.localModels = config.containers.llama-cpp-33657.config.myconfig.ai.localModels;
