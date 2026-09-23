@@ -162,6 +162,18 @@ switch — `nono`'s `--allow-domain` / `--allow-connect-port` model is the
 closest existing precedent, and it is what makes "the sandbox may reach the
 model proxy and nothing else" expressible.
 
+Decided for the allowlist (bd myconfig-mo3.1): the schema exists on every
+backend. A run refuses a finer policy on a backend that cannot enforce it.
+Bubblewrap cannot. The first enforcement is the nono backend (bd
+myconfig-6di.2); until that lands, an allowlist is refused everywhere.
+No helper is wrapped inside bubblewrap to fake support. Proxy-only egress
+(bd myconfig-mo3.2) stays a separate profile and is not this allowlist.
+That profile is `egress = "proxy-only"` (config.md D20): the `network`
+bool is unchanged when the key is omitted. Bubblewrap enforces it with
+`--unshare-net` plus one socket to the host LiteLLM forwarder.
+podman-gvisor refuses it until its pasta spec is default-deny
+(bd myconfig-6di.3).
+
 **2d — the toolchain and `myconfig.ai.sandboxTools`.** DONE (bd
 myconfig-9mw): `mysbx` consumes
 `myconfig.ai.dev.sandboxTools.extraPackages` / `.extraEnv` like every

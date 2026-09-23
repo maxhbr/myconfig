@@ -74,7 +74,8 @@ config that can execute is config that can escape.
   tree
 - the backend and its resource limits
 - network policy (`network = false` is the deny switch; the network is
-  shared by default)
+  shared by default; `egress = "proxy-only"` is the stricter profile in
+  D20, off unless a layer sets it)
 - environment forwarded into the sandbox (`[env]`)
 - which terminal multiplexer the interactive payload is
   (`multiplexer`, see D17) — the one key where the sidecar overrides
@@ -200,7 +201,9 @@ What the sidecar still may **not** do:
   `false`. `network` is a host-wide policy switch with no per-entry
   granularity: a user who denied the network host-wide means it for
   every sandbox, and a repo re-enabling it is exactly the thing that
-  switch exists to prevent.
+  switch exists to prevent. The same widening rule applies to `egress`
+  (D20): a sidecar may tighten `shared` to `proxy-only`, and may not
+  set `shared` over a user-config `proxy-only`.
 
 `backend` passes through from whichever layer named it (the sidecar
 wins when both do, per the layer precedence of D6); it is not an access
@@ -917,3 +920,41 @@ an operator must know:
   the sandbox shares the host loopback). Unset, the upstream server
   binds 6768 or a fallback, and the readiness block on the sandbox's
   stdout is the source of truth for the bound endpoint.
+
+### D20: `egress = "proxy-only"` is a profile, not an allowlist
+
+```toml
+egress = "proxy-only"   # shared | proxy-only; omit for shared
+```
+
+`network` stays the on/off switch of D5. This key does not replace it,
+and it is not the domain/port allowlist (bd myconfig-mo3.1). An omitted
+key is `shared`: the sandbox shares the host stack unless
+`network = false`. Existing configs do not change.
+
+`proxy-only` means the payload can open a connection to the host
+LiteLLM proxy and to nothing else. The model credential stays on the
+host proxy. No layer may place that credential in `[env]` or in any
+other config key when this profile is set (bd myconfig-t24). The
+profile is not a way to turn `network = false` back on: a user-config
+`network = false` still denies the network, and a sidecar may not set
+`egress = "shared"` over a user-config `proxy-only` (D7).
+
+Enforcement is per backend, and a backend that cannot enforce the
+profile refuses the run rather than starting with a shared stack:
+
+- **bubblewrap** can enforce it: `--unshare-net` (no route, no
+  resolver, no `/nix/var/nix`), one Unix socket to a host forwarder
+  that dials the loopback LiteLLM port, and an in-sandbox relay of
+  that socket onto `127.0.0.1` so clients use a normal base URL. If
+  the forwarder is not configured, the run refuses. This is the first
+  implementation (bd myconfig-mo3.2).
+- **podman-gvisor** cannot enforce it with the current pasta spec.
+  `pasta:--map-guest-addr` adds a path to the forwarder; it does not
+  remove the container's default route. Until that spec is
+  default-deny, this backend refuses `proxy-only` (bd myconfig-6di.3).
+
+`proxy-only` and a mo3.1 allowlist are different mechanisms. Setting
+both is a schema error until a backend can enforce both. `orca` still
+needs the shared stack (D17); `egress = "proxy-only"` does not satisfy
+that.
