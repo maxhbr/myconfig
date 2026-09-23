@@ -18,6 +18,7 @@ depends on the *kind* of artefact its `.nix` file registers:
 | Directory | Registered as | Contents |
 | --- | --- | --- |
 | `commit/` | a skill **and** a pi prompt template | `SKILL.md` (the skill) + `prompt.md` (the pi `/commit` template) |
+| `herdr-workmux/` | a skill | `SKILL.md` only |
 | `implement-and-review-and-commit/` | a skill | `SKILL.md` only |
 | `implement-and-review-and-commit-until-done/` | a skill | `SKILL.md` only |
 | `research/` | a pi **sub-agent** and a prompt template | `agent.md` (the sub-agent, deployed to `~/.pi/agent/agents/`) + `prompt.md` (the pi `/research` template) |
@@ -51,6 +52,9 @@ namespace also covers skills whose *sources* come from elsewhere and only the
   `herdr --skill` output (a derivation, not a local directory); registered
   in `../programs/programs.herdr.nix` and implicitly enabled by the herdr CLI, so
   there is no glue file under `skills/`;
+- `herdr-workmux/` — local dispatcher skill for worktree agents started
+  from a Herdr pane (`herdr-workmux.nix`); not a substitute for the
+  generated `herdr` skill;
 - `playwright-cli.nix` — registers a package-provided skill;
 - `default.nix` — the module itself: discovers skills from flake-pinned
   sources, syncs everything into the enabled harnesses via home-manager
