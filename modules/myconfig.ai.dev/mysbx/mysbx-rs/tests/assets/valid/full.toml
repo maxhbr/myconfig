@@ -12,6 +12,13 @@ network = true
 # or with another sandbox.
 multiplexer = "workmux"
 
+# The display (config.md D18): how a Wayland compositor reaches the
+# sandbox — `off` for a headless run (the default), `waypipe` for the
+# per-run waypipe channel. The guest display socket always lives at
+# /mysbx-home/wayland-0, inside the sandbox home tmpfs; the host
+# compositor socket and $XDG_RUNTIME_DIR are never bound.
+display = "waypipe"
+
 # State directories (config.md D15): sandbox-home-relative paths whose
 # content persists in the sidecar across runs — backed by
 # `<repo>.mysbx/state/<entry>` and bound rw at `/mysbx-home/<entry>`.

@@ -42,6 +42,23 @@
 #                     absent for the ones a host does not carry — a
 #                     config selecting an absent one fails loudly
 #                     instead of silently starting a plain shell.
+#   MYSBX_WAYPIPE     the host-side `waypipe client` binary of the
+#                     display channel (../docs/design/config.md D18,
+#                     `display = "waypipe"`): started per run before
+#                     the payload. Absent for hosts that carry no
+#                     waypipe — a config selecting it is a refused
+#                     run, never a silently headless one.
+#   MYSBX_GVISOR_WAYPIPE
+#                     the waypipe binary INSIDE the podman-gvisor
+#                     image, the server end of the same channel on
+#                     the container backend. Absent = refused.
+#   MYSBX_WAYPIPE_SECCTX
+#                     NOT a wrapper pin — a deliberate operator
+#                     override: the security-context application ID
+#                     the host client passes to the compositor when
+#                     it supports the security-context protocol
+#                     (waypipe's `--secctx`). Unset (the default)
+#                     means no `--secctx`.
 #   MYSBX_NIX_CONF    a SANITIZED nix client configuration bound at
 #                     /etc/nix/nix.conf inside the sandbox (review-2
 #                     item 3). The host's own /etc/nix/nix.conf is
@@ -182,6 +199,19 @@
   # Values must not contain whitespace — the crate splits the list on
   # it, so a value with a space would be silently truncated.
   gvisorEnv ? { },
+  # The waypipe binary of the HOST side of the display channel
+  # (../docs/design/config.md D18, `display = "waypipe"`): the wrapper
+  # pins it as `MYSBX_WAYPIPE`, and a run that selects waypipe without
+  # the pin is refused — a host that carries no waypipe never starts
+  # a silently headless sandbox. `null` pins nothing.
+  waypipe ? null,
+  # The waypipe binary INSIDE the podman-gvisor image (D18 on the
+  # container backend): the store path of the waypipe binary as it
+  # exists inside `gvisorImage`, pinned as `MYSBX_GVISOR_WAYPIPE` for
+  # the same refusal semantics as the bwrap-side `waypipe`. `null`
+  # pins nothing — `display = "waypipe"` with `backend =
+  # "podman-gvisor"` is refused.
+  gvisorWaypipe ? null,
 }:
 
 let
@@ -378,6 +408,12 @@ let
       gvisorPastaSpec != null
     ) "--set-default MYSBX_GVISOR_PASTA_SPEC '${gvisorPastaSpec}' "
     + lib.optionalString (gvisorEnv != { }) "--set MYSBX_GVISOR_ENV '${gvisorEnvValue}' ";
+  # The display-channel pins (D18): the host-side client binary and
+  # the in-image server binary. Both optional, both absolute store
+  # paths — the wrapper idiom of every other pin.
+  waypipePins =
+    lib.optionalString (waypipe != null) "--set MYSBX_WAYPIPE '${lib.getExe waypipe}' "
+    + lib.optionalString (gvisorWaypipe != null) "--set MYSBX_GVISOR_WAYPIPE '${gvisorWaypipe}'";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -398,7 +434,8 @@ symlinkJoin {
       --set MYSBX_CA_BUNDLE '${caBundle}' \
       ${muxEntryPins} \
       ${terminalPin} \
-      ${gvisorPins}
+      ${gvisorPins} \
+      ${waypipePins}
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
     # sync with the CLI surface by the `mysbx-completions` check in

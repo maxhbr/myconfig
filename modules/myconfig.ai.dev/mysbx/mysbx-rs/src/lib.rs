@@ -1441,6 +1441,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // instead of quietly starting a plain shell where a session was
     // asked for.
     let mux_entry = merged.multiplexer.entry_var().and_then(env_opt);
+    // The waypipe pins (docs/design/config.md D18): the host-side
+    // `waypipe client` binary, from this build's own closure, and —
+    // for the podman-gvisor backend — the in-image `waypipe server`
+    // path (`MYSBX_GVISOR_WAYPIPE`, set by the wrapper when the image
+    // carries waypipe; the container mounts nothing from the host
+    // store, so the host pin cannot serve there). No fallback on
+    // purpose: unset means "this build carries no display channel",
+    // and a selected display is refused instead of running headless.
+    let waypipe_client = env_opt("MYSBX_WAYPIPE");
+    let gvisor_waypipe = env_opt("MYSBX_GVISOR_WAYPIPE");
     // `/bin/sh` for the sandbox (see [`bwrap::Params::bin_sh`]):
     // a pin like `MYSBX_NIX_CONF` — unset means "no `/bin/sh` bind",
     // never "the host's" (a host `/bin/sh` is outside mysbx's own
@@ -1511,6 +1521,33 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // `/bin/sh` / `ca-bundle` absence lines would be false inside an
     // image that provides all three. The multiplexer pin is the same
     // `None` the argv builder gets.
+    //
+    // The waypipe channel of a `display = "waypipe"` run (D18): the
+    // per-run token directory `<sidecar>/waypipe/<pid>` — computed
+    // here, ONCE, because the argv builder, the report AND the
+    // host-side client spawn below must agree on one path (the socket
+    // file is always `<dir>/waypipe.sock`). The backend picks which
+    // guest binary wraps the payload: the host closure's waypipe for
+    // bubblewrap (`MYSBX_WAYPIPE`, also the client), the in-image waypipe
+    // for podman-gvisor (`MYSBX_GVISOR_WAYPIPE`). A backend with no
+    // guest binary pinned passes `None` and the argv builder refuses.
+    let pid = std::process::id();
+    let waypipe_socket_dir = repo.sidecar.join("waypipe").join(pid.to_string());
+    let waypipe_socket_dir_str = waypipe_socket_dir.to_string_lossy().into_owned();
+    let waypipe_params: Option<bwrap::Waypipe<'_>> = if merged.display.is_waypipe() {
+        let guest_bin = if backend == "podman-gvisor" {
+            gvisor_waypipe.as_deref()
+        } else {
+            waypipe_client.as_deref()
+        };
+        guest_bin.map(|guest_bin| bwrap::Waypipe {
+            socket_dir: &waypipe_socket_dir_str,
+            guest_bin,
+        })
+    } else {
+        None
+    };
+    let report_waypipe: Option<bwrap::Waypipe<'_>> = waypipe_params.clone();
     let (report_shell, report_tools_path, report_mux_entry) = if backend == "podman-gvisor" {
         (gvisor_shell.clone(), gvisor_tools_path.clone(), None)
     } else {
@@ -1536,6 +1573,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         },
         policy_paths: &policy_paths,
         mux_entry: report_mux_entry.as_deref(),
+        waypipe: report_waypipe.clone(),
         workspace: workspace.clone(),
     };
     let (backend_bin, argv, image) = match backend {
@@ -1548,6 +1586,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 ca_bundle: ca_bundle.as_deref(),
                 policy_paths: &policy_paths,
                 mux_entry: mux_entry.as_deref(),
+                waypipe: waypipe_params.clone(),
                 workspace: workspace.clone(),
             };
             let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
@@ -1663,6 +1702,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 tools_path: &gvisor_tools_path,
                 policy_paths: &policy_paths,
                 mux_entry: None,
+                waypipe: waypipe_params.clone(),
                 workspace: match &session {
                     Some(s) => crate::bwrap::Workspace::Clone { clone: &s.clone },
                     None => crate::bwrap::Workspace::Live,
@@ -1761,6 +1801,58 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         }
     }
 
+    // 7b. the host-side waypipe client (docs/design/config.md D18),
+    // for a REAL run with `display = "waypipe"` only — `--dry-run`
+    // returned above and created nothing. The client is spawned
+    // BEFORE the backend exec: `exec` replaces this process, so
+    // nothing after it in this function could run. It creates the
+    // per-run socket in the token directory (`<dir>/waypipe.sock`),
+    // connects to the host compositor and forwards the channel; the
+    // argv's `--bind` puts the socket directory where the in-sandbox
+    // waypipe server's connection children reach it. Under podman-gvisor
+    // the same client connects the same socket file, which the container
+    // reaches through its `--mount type=bind` of the token directory
+    // — a bind of a host directory, the same crossing bwrap makes.
+    let mut waypipe_child: Option<std::process::Child> = None;
+    if merged.display.is_waypipe() {
+        match waypipe_params.as_ref() {
+            // The client runs on the HOST — connecting the token-dir
+            // socket to the host compositor — and the socket file
+            // crosses into the sandbox through the token-dir bind,
+            // which works the same under podman's `--userns=keep-id`
+            // as under bwrap: it is a bind of a host directory, not
+            // a namespace crossing the client makes itself.
+            Some(_) => {
+                if let Err(msg) =
+                    start_waypipe_channel(&repo, &waypipe_socket_dir, &mut waypipe_child)
+                {
+                    eprintln!("mysbx: {msg}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            }
+            None => {
+                eprintln!(
+                    "mysbx: display = \"waypipe\" but this build pinned no waypipe {}",
+                    if backend == "podman-gvisor" {
+                        "for the image (MYSBX_GVISOR_WAYPIPE)"
+                    } else {
+                        "client (MYSBX_WAYPIPE)"
+                    }
+                );
+                eprintln!(
+                    "  {}",
+                    if backend == "podman-gvisor" {
+                        "bake waypipe into the gvisor image (myconfig.ai.dev.mysbx.display.package threads it into gvisor.imagePackages)"
+                    } else {
+                        "install mysbx on a host that carries waypipe (myconfig.ai.dev.mysbx.display.package)"
+                    }
+                );
+                eprintln!("  or set display = \"off\" (docs/design/config.md D18)");
+                return EXIT_INFRASTRUCTURE;
+            }
+        }
+    }
+
     let mut cmd = std::process::Command::new(&backend_bin);
     cmd.args(&argv);
     match mode {
@@ -1772,23 +1864,47 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // exec, so a failing podman prints its own message and
             // exit code surfaces unchanged — nothing is swallowed
             // here (the f13 silent exit was the *payload* exiting on
-            // EOF, not a lost podman error, bd myconfig-jho).
+            // EOF, not a lost podman error, bd myconfig-jho). The
+            // waypipe client (D18) was already spawned: kill it —
+            // nothing else will (the exec that would have orphaned it
+            // onto PDEATHSIG never happened).
             use std::os::unix::process::CommandExt;
             let e = cmd.exec();
+            if let Some(mut child) = waypipe_child {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
             eprintln!("mysbx: cannot exec {backend_bin}: {e}");
             EXIT_INFRASTRUCTURE
         }
-        RunMode::Result => run_with_result(
-            cmd,
-            &repo,
-            &payload,
-            flags.timeout,
-            // workspace.md D5: a `--result` clone run writes its
-            // outcome to the per-session `clones/NAME.json`, so
-            // parallel sessions cannot overwrite each other's
-            // results; a live run keeps `<sidecar>/result.json`.
-            session.as_ref().map(|s| s.result.clone()),
-        ),
+        RunMode::Result => {
+            let exit = run_with_result(
+                cmd,
+                &repo,
+                &payload,
+                flags.timeout,
+                // workspace.md D5: a `--result` clone run writes its
+                // outcome to the per-session `clones/NAME.json`, so
+                // parallel sessions cannot overwrite each other's
+                // results; a live run keeps `<sidecar>/result.json`.
+                session.as_ref().map(|s| s.result.clone()),
+            );
+            // The waypipe client of a waited run is cleaned up here
+            // (D18): a multi client never exits on its own when the
+            // guest server goes away — kill it, reap it, and remove
+            // the per-run token directory so nothing outlives the run.
+            // (Exec-mode runs rely on PDEATHSIG instead: mysbx execs
+            // the backend, and the client dies with that tree; the
+            // token directory is swept by the next waypipe run.)
+            if let Some(mut child) = waypipe_child {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            if merged.display.is_waypipe() {
+                let _ = std::fs::remove_dir_all(&waypipe_socket_dir);
+            }
+            exit
+        }
     }
 }
 
@@ -2483,6 +2599,242 @@ fn ensure_state_dirs(repo: &repo::Repo, state_dirs: &[String]) -> Result<(), Str
         }
     }
     Ok(())
+}
+
+/// Create the per-run waypipe token directory `<sidecar>/waypipe/<pid>`
+/// (docs/design/config.md D18), symlink-free via [`ensure_plain_dir`],
+/// and sweep stale sibling token directories whose owning process is
+/// gone — an interactive (`exec`) run leaves its directory behind on
+/// purpose (the process that would clean up is gone with it), so the
+/// NEXT waypipe run removes them; a name that does not parse as a pid
+/// is not ours and stays untouched (nor is `0`, which would probe
+/// process-group semantics instead of a process).
+fn ensure_waypipe_token_dir(repo: &repo::Repo, dir: &std::path::Path) -> Result<(), String> {
+    let root = repo.sidecar.join("waypipe");
+    ensure_plain_dir(&root)?;
+    ensure_plain_dir(dir)?;
+    let _ = std::fs::set_permissions(
+        dir,
+        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
+    );
+    if let Ok(entries) = std::fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Ok(stale_pid) = name.parse::<u32>() else {
+                continue;
+            };
+            if stale_pid == 0 || stale_pid == std::process::id() {
+                continue;
+            }
+            // `kill(pid, 0)` probes existence without signalling, but
+            // the status alone cannot tell gone (ESRCH) from alive-but
+            // -not-signalable (EPERM, another user's process): only
+            // errno does, and errno is meaningful ONLY on a `-1`
+            // status. Sweep on ESRCH ONLY — an alive owner keeps its
+            // directory, even when the pid was reused.
+            let gone = unsafe { libc_kill_status(stale_pid as i32, 0) } == -1
+                && unsafe { *libc_errno_location() } == ESRCH;
+            if gone {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Start the host side of the waypipe channel (docs/design/config.md
+/// D18): create the token directory, spawn `waypipe --socket
+/// <dir>/waypipe.sock client` (plus `--secctx <appid>` when
+/// `MYSBX_WAYPIPE_SECCTX` is set) with stdin/stdout null and stderr
+/// inherited, and wait for the socket file to appear — the guest
+/// server-conn children connect to it, so it must exist before the
+/// backend starts. All options are ROOT options in waypipe's CLI, so
+/// they precede the `client` subcommand, and the client runs in MULTI
+/// mode (no `--oneshot`): the multi-mode guest server spawns one
+/// server-conn per window the payload opens, and the client must
+/// accept them all. A multi client never exits on its own once the
+/// guest side is gone, so it is pinned to its parent via
+/// `prctl(PR_SET_PDEATHSIG, SIGKILL)` — in exec mode mysbx execs the
+/// backend, and when that process tree dies the client is killed by
+/// the kernel. Result-mode runs and every failure path below kill it
+/// explicitly (this function owns the child until the socket appears;
+/// [`sandbox`] owns it after).
+fn start_waypipe_channel(
+    repo: &repo::Repo,
+    socket_dir: &std::path::Path,
+    child_out: &mut Option<std::process::Child>,
+) -> Result<(), String> {
+    ensure_waypipe_token_dir(repo, socket_dir)?;
+    let socket = socket_dir.join("waypipe.sock");
+    // Unlink a stale socket file before the client binds: an
+    // exec-mode run leaves its token directory behind (D18 — nothing
+    // of the host outlives the exec to clean it), and a later run
+    // that happens to land on the same pid finds the old
+    // `waypipe.sock` still in it, which the client's `bind(2)`
+    // refuses with EADDRINUSE. Unlinking is always safe here: the
+    // directory is this run's own token (`<pid>`), and two live
+    // processes never share a pid — whatever socket sits at the
+    // path belongs to a run that is gone. A missing file is not an
+    // error.
+    let _ = std::fs::remove_file(&socket);
+    // The host-side client binary: `MYSBX_WAYPIPE` — the wrapper's
+    // host pin — with the PATH fallback of the unwrapped crate. The
+    // guest server end is the backend's own pin (MYSBX_WAYPIPE under
+    // bwrap, MYSBX_GVISOR_WAYPIPE inside the podman-gvisor image);
+    // the wrapper sets the host pin wherever it sets a guest one, so
+    // a refused-for-lack-of-client run is one without waypipe at all.
+    let client_bin = env_or("MYSBX_WAYPIPE", "waypipe");
+    let mut cmd = std::process::Command::new(&client_bin);
+    cmd.arg("--socket")
+        .arg(&socket)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null());
+    // `MYSBX_WAYPIPE_SECCTX` is a deliberate operator pin, not a
+    // wrapper pin: when set, the client passes the value to the
+    // compositor as the security-context application ID (on compositors
+    // that support the security-context protocol); unset means no
+    // `--secctx`. A root option, so it comes before the subcommand.
+    if let Some(secctx) = env_opt("MYSBX_WAYPIPE_SECCTX") {
+        cmd.arg("--secctx").arg(secctx);
+    }
+    cmd.arg("client");
+    // Die with mysbx's process: a multi-mode client never exits on its
+    // own, so in exec mode — mysbx replaced by the backend — the kernel
+    // kills it when the tree dies. `std::process::id()` is captured
+    // BEFORE the fork: in the child it would be the child's own pid.
+    use std::os::unix::process::CommandExt;
+    let parent_at_fork = std::process::id();
+    unsafe {
+        cmd.pre_exec(move || die_with_parent(parent_at_fork));
+    }
+    let mut spawned = cmd
+        .spawn()
+        .map_err(|e| format!("cannot start the waypipe client {}: {e}", client_bin))?;
+    // The client creates the socket when it is ready to accept the
+    // guest servers' connections; a dead client must not be polled
+    // for the full budget (its stderr, inherited, already said why).
+    // `wait_for_waypipe_socket` reports, the caller kills: this
+    // function owns the child until the socket appears.
+    let outcome = wait_for_waypipe_socket(&socket, &mut spawned, std::time::Duration::from_secs(5));
+    if outcome.is_err() {
+        let _ = spawned.kill();
+        let _ = spawned.wait();
+    }
+    outcome.map(|()| {
+        *child_out = Some(spawned);
+    })
+}
+
+/// Wait (polling at 50ms) for `socket` to exist, bounded by `budget`,
+/// while watching `child`: a child that exits before creating the
+/// socket ends the wait immediately — the caller decides what to do
+/// with it. The socket-poll half of [`start_waypipe_channel`], free
+/// so the unit tests can drive it with a fake child and a socket
+/// they create themselves.
+fn wait_for_waypipe_socket(
+    socket: &std::path::Path,
+    child: &mut std::process::Child,
+    budget: std::time::Duration,
+) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + budget;
+    loop {
+        if socket.exists() {
+            return Ok(());
+        }
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return Err(format!(
+                    "the waypipe client exited before creating {} — no display reaches the sandbox",
+                    socket.display()
+                ));
+            }
+            Ok(None) => {}
+            Err(e) => return Err(format!("cannot watch the waypipe client: {e}")),
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(format!(
+                "the waypipe client did not create {} within {:?} — no display reaches the sandbox",
+                socket.display(),
+                budget
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// `prctl(PR_SET_PDEATHSIG, SIGKILL)` as a `pre_exec` closure: the
+/// child dies with the process that spawned it. Applied to the waypipe
+/// client (D18), whose multi mode never exits on its own.
+///
+/// `expected_parent` is the pid of the spawning process, captured
+/// BEFORE the fork (the closure body runs in the child, where it
+/// cannot be re-derived). It exists for the canonical fork-race
+/// guard: `PR_SET_PDEATHSIG` is armed after `fork(2)`, so a parent
+/// that died in that window never triggers the signal. If the
+/// parent already changed when the arming finishes, the child exits
+/// instead of running on — and an error from `pre_exec` fails the
+/// spawn, which the caller reports as a refused run.
+unsafe fn die_with_parent(expected_parent: u32) -> std::io::Result<()> {
+    if libc_prctl(PR_SET_PDEATHSIG, SIGKILL as i64) != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    if libc_getppid() != expected_parent as i32 {
+        return Err(std::io::Error::other(format!(
+            "the spawning process {expected_parent} died before the waypipe \
+             client could pin itself to it"
+        )));
+    }
+    Ok(())
+}
+
+/// `PR_SET_PDEATHSIG` (setting the signal delivered when the parent
+/// dies) — the first `prctl(2)` option argument.
+const PR_SET_PDEATHSIG: i32 = 1;
+
+/// `getppid(2)` — the parent-pid re-check of [`die_with_parent`]. The
+/// same zero-dependency raw extern idiom as `libc_geteuid`.
+unsafe fn libc_getppid() -> i32 {
+    extern "C" {
+        fn getppid() -> i32;
+    }
+    getppid()
+}
+
+/// `kill(2)` WITH its status — the pid-existence probe of the waypipe
+/// token-dir sweep (docs/design/config.md D18), with signal `0` (probe
+/// only, nothing is signalled). The same zero-dependency raw extern
+/// idiom as `libc_geteuid`.
+unsafe fn libc_kill_status(pid: i32, sig: i32) -> i32 {
+    extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+    kill(pid, sig)
+}
+
+/// `errno` of the calling thread, as a pointer — read after a libc
+/// call to distinguish its failure modes (the waypipe sweep: ESRCH
+/// means gone, EPERM means alive but not signalable). The same
+/// zero-dependency raw extern idiom as `libc_geteuid`.
+unsafe fn libc_errno_location() -> *mut i32 {
+    extern "C" {
+        fn __errno_location() -> *mut i32;
+    }
+    __errno_location()
+}
+
+/// `ESRCH` — "no such process", the errno the waypipe token-dir sweep
+/// reads after its `kill(pid, 0)` probe (Linux).
+const ESRCH: i32 = 3;
+
+/// `prctl(2)` — the `PR_SET_PDEATHSIG` option of the waypipe client's
+/// `pre_exec` (D18). Variadic in the prototype; the two-arg spelling
+/// covers the options mysbx uses. The same zero-dependency raw extern
+/// idiom as `libc_geteuid`.
+unsafe fn libc_prctl(option: i32, arg2: i64) -> i32 {
+    extern "C" {
+        fn prctl(option: i32, ...) -> i32;
+    }
+    prctl(option, arg2)
 }
 
 /// Make `path` an existing, real directory, creating it when missing.
@@ -3520,5 +3872,93 @@ mod tests {
         assert_eq!(run(vec!["run".into(), "--".into()]), 2);
         assert_eq!(run(vec!["run".into(), "--dry-run".into()]), 2);
         assert_eq!(run(vec!["run".into(), "--verbose".into()]), 2);
+    }
+
+    // ---- the waypipe channel's host half (docs/design/config.md D18) ----
+
+    /// A fake "client": a `sleep` child stands in for the spawned
+    /// waypipe client — [`wait_for_waypipe_socket`] only watches it
+    /// and polls the path.
+    fn fake_child() -> std::process::Child {
+        std::process::Command::new("sleep")
+            .arg("30")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .stdin(std::process::Stdio::null())
+            .spawn()
+            .expect("cannot spawn the sleep stand-in")
+    }
+
+    #[test]
+    fn the_socket_wait_ends_when_the_socket_appears() {
+        // A listening unix socket created by the TEST (std has
+        // UnixListener) is exactly the file the real client creates —
+        // the wait ends the moment the path exists, well within the
+        // budget.
+        let dir = std::env::temp_dir().join(format!(
+            "mysbx-wait-socket-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let socket = dir.join("waypipe.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let mut child = fake_child();
+        wait_for_waypipe_socket(&socket, &mut child, std::time::Duration::from_secs(5))
+            .expect("the socket exists — the wait must end");
+        let _ = child.kill();
+        let _ = child.wait();
+        drop(listener);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_socket_wait_fails_fast_when_the_client_dies() {
+        // A client that exits before creating the socket must not be
+        // polled for the full budget — the wait ends at its death.
+        let dir = std::env::temp_dir().join(format!(
+            "mysbx-wait-dead-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let socket = dir.join("waypipe.sock");
+        let mut child = std::process::Command::new("true")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .stdin(std::process::Stdio::null())
+            .spawn()
+            .expect("cannot spawn the dying stand-in");
+        let started = std::time::Instant::now();
+        let err = wait_for_waypipe_socket(&socket, &mut child, std::time::Duration::from_secs(60))
+            .expect_err("the dead child must end the wait");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(10),
+            "the wait must fail fast, not burn the budget: {err}"
+        );
+        assert!(err.contains("exited before creating"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_socket_wait_times_out_when_nothing_appears() {
+        // Nothing creates the socket and the child lives on: the
+        // budget ends the wait with the path named.
+        let dir = std::env::temp_dir().join(format!(
+            "mysbx-wait-timeout-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let socket = dir.join("waypipe.sock");
+        let mut child = fake_child();
+        let err =
+            wait_for_waypipe_socket(&socket, &mut child, std::time::Duration::from_millis(150))
+                .expect_err("a living client and no socket must time out");
+        assert!(err.contains("did not create"), "{err}");
+        assert!(err.contains("waypipe.sock"), "{err}");
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

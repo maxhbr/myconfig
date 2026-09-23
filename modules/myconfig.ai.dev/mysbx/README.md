@@ -320,6 +320,37 @@ sandbox, and `workmux add` inside it fails with a filesystem error
 naming the path. A sidecar `[[mounts]]` entry is therefore only
 needed to bind a worktrees directory that lives somewhere else.
 
+## The display channel (`display`)
+
+`display = "off" | "waypipe"` in a configuration layer selects how a
+Wayland compositor reaches the sandbox — `off` (the default) for a
+headless run, `waypipe` for the per-run waypipe channel
+([`docs/design/config.md` D18](docs/design/config.md)). The sandbox is
+headless by construction: no compositor socket is bound, no
+`$XDG_RUNTIME_DIR` is mounted, no display variable is forwarded.
+
+With `waypipe` selected, mysbx starts `waypipe client` on the
+host before the payload execs and wraps the payload in
+`waypipe server` inside: the guest display socket is created
+at `/mysbx-home/wayland-0` (in the sandbox-home tmpfs, never the host
+runtime directory), and the host compositor's socket never enters the
+sandbox — the payload talks to a waypipe, never to the compositor. The
+channel is per-run: its token directory lives under
+`<repo>.mysbx/waypipe/<pid>/`. The guest server runs in multi mode
+(one connection per window, it exits with the payload); the host
+client accepts every connection and is killed when the mysbx process
+it was started for dies. A stale token directory is swept by the next
+waypipe run of the same repo. Both payload forms carry the wrap —
+`mysbx run -- CMD` too, because a command that opens a window needs
+the channel just as much as a shell does.
+
+`waypipe` needs a wrapper pin (`MYSBX_WAYPIPE`): a selection this build
+did not pin is a refused run naming the variable, never a silently
+headless sandbox. On myconfig hosts the pin follows
+`myconfig.ai.dev.mysbx.display.package` — setting it to `pkgs.waypipe` is
+the host-wide opt-in; the podman-gvisor backend needs waypipe inside
+the image too (`gvisor.waypipe`, threaded and baked automatically).
+
 ## Model endpoint under the podman-gvisor backend
 
 The host LiteLLM proxy binds `127.0.0.1` only, and inside a container

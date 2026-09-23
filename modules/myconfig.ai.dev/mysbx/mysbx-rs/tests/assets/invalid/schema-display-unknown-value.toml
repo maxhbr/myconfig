@@ -1,0 +1,4 @@
+# The `display` enum is closed (config.md D18): a value mysbx does not
+# carry is a schema error naming the accepted values, never a silently
+# ignored key.
+display = "x11"

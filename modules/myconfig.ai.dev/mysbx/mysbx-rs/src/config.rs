@@ -154,6 +154,72 @@ impl fmt::Display for Multiplexer {
     }
 }
 
+/// How a Wayland display reaches the sandbox (docs/design/config.md D18):
+/// `Off` (the default) mounts nothing and forwards nothing, `Waypipe`
+/// proxies the host compositor through a waypipe channel whose guest end
+/// presents a fake compositor socket inside the sandbox and whose host
+/// end (`waypipe client`) runs OUTSIDE the sandbox, next to the host
+/// compositor.
+///
+/// A closed enum on purpose, like [`Multiplexer`]: a layer may say WHICH
+/// channel this build carries runs, never a command line (D4). The naming
+/// follows waypipe's own and is inverted from the sandbox's intuition:
+/// the CLIENT is the compositor-side (host) end, the SERVER the
+/// application-side (guest) end that presents the fake compositor to the
+/// payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Display {
+    /// No display: the run is headless, the pre-D18 behaviour and what an
+    /// undecided configuration resolves to.
+    Off,
+    /// The display channel of D18: a per-run waypipe channel between
+    /// a host `waypipe client` and the in-sandbox `waypipe server` that
+    /// wraps the payload. Needs the waypipe pin (`MYSBX_WAYPIPE`, or
+    /// `MYSBX_GVISOR_WAYPIPE` under podman-gvisor); a selection without
+    /// one is a refused run.
+    Waypipe,
+}
+
+impl Display {
+    /// The accepted spellings, in the order the schema error lists them.
+    pub const NAMES: &'static [&'static str] = &["off", "waypipe"];
+
+    fn parse(s: &str, at: &str) -> Result<Display, Error> {
+        match s {
+            "off" => Ok(Display::Off),
+            "waypipe" => Ok(Display::Waypipe),
+            other => Err(Error::Schema(format!(
+                "{at}: invalid display `{other}`, expected one of {}",
+                Display::NAMES
+                    .iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))),
+        }
+    }
+
+    /// The value as written in the configuration — the spelling every
+    /// message and the `--verbose` report use.
+    pub fn name(self) -> &'static str {
+        match self {
+            Display::Off => "off",
+            Display::Waypipe => "waypipe",
+        }
+    }
+
+    /// Whether this selection opens a display channel at all.
+    pub fn is_waypipe(self) -> bool {
+        self == Display::Waypipe
+    }
+}
+
+impl fmt::Display for Display {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// One additional host path exposed inside the sandbox.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount {
@@ -204,6 +270,20 @@ pub struct Config {
     /// `[env]` — either layer may decide it and the sidecar simply
     /// wins when both do (both layers are trusted, D7).
     pub multiplexer: Option<Multiplexer>,
+    /// How a Wayland display reaches the sandbox
+    /// (docs/design/config.md D18). `None` means "not decided by this
+    /// layer", like `backend` and `multiplexer`; the [`Display::Off`]
+    /// default is applied after the merge, so a silent layer never
+    /// counts as an explicit "headless".
+    ///
+    /// Like `multiplexer` it is not a host-access grant beyond the
+    /// channel it names: the socket directory it binds holds exactly
+    /// one waypipe socket (the guards refuse any configuration that
+    /// could put anything else at or below `/mysbx-home/wayland-0`),
+    /// and both ends of the channel are binaries from mysbx's own
+    /// closure, so either layer may decide it and the sidecar wins
+    /// when both do.
+    pub display: Option<Display>,
     pub mounts: Vec<Mount>,
     /// Environment forwarded into the sandbox.
     pub env: BTreeMap<String, String>,
@@ -253,6 +333,7 @@ impl Default for Config {
             backend: None,
             network: None,
             multiplexer: None,
+            display: None,
             mounts: Vec::new(),
             env: BTreeMap::new(),
             git_dirs: Vec::new(),
@@ -332,6 +413,9 @@ impl Config {
                          instead of `workmux = false`"
                             .to_owned(),
                     ))
+                }
+                "display" => {
+                    config.display = Some(Display::parse(string(value, "display")?, "display")?)
                 }
                 "mounts" => config.mounts = mounts(value)?,
                 "env" => config.env = env(table(value, "env")?)?,
@@ -691,6 +775,38 @@ mod tests {
             }
         }
         assert_eq!(seen.len(), 5);
+    }
+
+    #[test]
+    fn display_is_a_tri_state_enum() {
+        // docs/design/config.md D18: like `backend`, an omitted key
+        // decides nothing — the `off` default is applied after the merge.
+        assert_eq!(Config::parse("").unwrap().display, None);
+        for (text, want) in [("off", Display::Off), ("waypipe", Display::Waypipe)] {
+            let c = Config::parse(&format!("display = \"{text}\"\n")).unwrap();
+            assert_eq!(c.display, Some(want), "{text}");
+            assert_eq!(want.name(), text);
+            assert_eq!(want.is_waypipe(), text == "waypipe");
+        }
+        assert_eq!(Display::NAMES.len(), 2);
+    }
+
+    #[test]
+    fn display_rejects_unknown_values_and_wrong_types() {
+        // Strict enum (D9/D11/D18): an unknown value names the key and
+        // lists what is accepted, so a typo is fixable from the error.
+        for bad in ["x11", "wayland", "", "Waypipe", "waypipe "] {
+            let e = Config::parse(&format!("display = \"{bad}\"\n")).unwrap_err();
+            let msg = e.to_string();
+            assert!(matches!(e, Error::Schema(_)), "{bad:?}: {msg}");
+            assert!(msg.contains("display"), "{bad:?}: {msg}");
+            for name in Display::NAMES {
+                assert!(msg.contains(name), "{bad:?}: {msg} does not list {name}");
+            }
+        }
+        let e = Config::parse("display = true\n").unwrap_err();
+        assert!(e.to_string().contains("display"), "{e}");
+        assert!(matches!(e, Error::Schema(_)));
     }
 
     #[test]

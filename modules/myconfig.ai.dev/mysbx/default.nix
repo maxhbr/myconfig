@@ -323,6 +323,7 @@ let
 
   userConfigToml = {
     inherit (cfg.config) network multiplexer;
+    display = cfg.config.display;
     mounts = map renderMount cfg.config.mounts;
     env = cfg.config.env;
     "forward-env" = cfg.forwardedEnvVars;
@@ -351,8 +352,10 @@ in
         gvisorShell = cfg.gvisor.shell;
         gvisorPastaSpec = cfg.gvisor.pastaSpec;
         gvisorEnv = cfg.gvisor.env;
+        waypipe = cfg.display.package;
+        gvisorWaypipe = cfg.gvisor.waypipe;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -518,6 +521,29 @@ in
       '';
     };
 
+    # The waypipe binary of the display channel (./docs/design/config.md
+    # D18, `display = "waypipe"`): the wrapper pins it as
+    # `MYSBX_WAYPIPE` (the HOST-side `waypipe client` mysbx
+    # starts per run) and the bwrap backend ships it into the sandbox
+    # as the guest-side server (`waypipe server`). A `null` (the
+    # default on hosts that do not opt in) pins nothing: `display =
+    # "waypipe"` is then an evaluation error host-wide and a refused
+    # run for a sidecar — never a silently headless sandbox. Setting
+    # the package is the opt-in that makes the selection available,
+    # the same shape as `terminal.package`.
+    display = {
+      package = mkOption {
+        type = types.nullOr types.package;
+        default = null;
+        example = literalExpression "pkgs.waypipe";
+        description = ''
+          The waypipe package of the display channel, pinned into the
+          mysbx wrapper as `MYSBX_WAYPIPE`. `null` disables the
+          `"waypipe"` value of `config.display` on this host.
+        '';
+      };
+    };
+
     terminal = {
       package = mkOption {
         type = types.nullOr types.package;
@@ -623,6 +649,36 @@ in
         '';
       };
 
+      # The waypipe binary INSIDE the podman-gvisor image (D18 on the
+      # container backend): the store path of the waypipe binary as it
+      # exists inside `gvisorImage`, pinned as `MYSBX_GVISOR_WAYPIPE` for
+      # the guest (server) end of the display channel. `null` pins
+      # nothing — `display = "waypipe"` with `backend = "podman-gvisor"`
+      # is a refused run.
+      #
+      # The default threads the SAME package as the host side: when
+      # `display.package` is set, waypipe is baked into the image (via
+      # `gvisor.imagePackages`, which the gvisor tier's
+      # `extraImagePackages` default folds in) and the store path —
+      # `/nix/store/…-waypipe/bin/waypipe` — resolves inside the
+      # container exactly like `gvisor.shell` does.
+      waypipe = mkOption {
+        type = types.nullOr types.str;
+        default = if cfg.display.package != null then "${cfg.display.package}/bin/waypipe" else null;
+        defaultText = literalExpression ''
+          "''${config.myconfig.ai.dev.mysbx.display.package}/bin/waypipe"
+          when that package is set, else null'';
+        description = ''
+          The waypipe binary the podman-gvisor backend's payload is
+          wrapped in when `display = "waypipe"` — a path INSIDE the
+          container image, pinned into the wrapper as
+          `MYSBX_GVISOR_WAYPIPE`. The default is the same package as
+          the host side, baked into the image via
+          `gvisor.imagePackages`. `null` pins nothing: the selection
+          is refused on this backend.
+        '';
+      };
+
       # The multiplexer binaries the podman-gvisor container needs (bd
       # myconfig-cew): the image is provisioned — via this option, which
       # the gvisor tier's `extraImagePackages` default folds into the
@@ -690,8 +746,8 @@ in
 
       imagePackages = mkOption {
         type = types.listOf types.package;
-        default = selectedMuxTools;
-        defaultText = literalExpression "the selected multiplexer's tools (`selectedMuxTools` of this module)";
+        default = selectedMuxTools ++ lib.optionals (cfg.display.package != null) [ cfg.display.package ];
+        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`";
         description = ''
           Packages the gvisor tier bakes into the container image on
           behalf of mysbx (bd myconfig-cew: the container must be
@@ -847,6 +903,35 @@ in
               the sandbox (`/mysbx-home/.mysbx-tmux`, exported as
               `TMUX_TMPDIR` after `[env]`, so no layer can repoint
               it), never shared with the host or another sandbox.
+            '';
+          };
+          display = mkOption {
+            type = types.enum [
+              "off"
+              "waypipe"
+            ];
+            default = "off";
+            description = ''
+              How a Wayland compositor reaches the sandbox
+              (./docs/design/config.md D18): `off` (the default) for a
+              headless run, `waypipe` for the per-run waypipe channel —
+              the host side (`waypipe client`) is started by
+              mysbx before the payload, the guest display socket always
+              lives at `/mysbx-home/wayland-0` inside the sandbox home
+              tmpfs, and neither the host compositor socket nor
+              `$XDG_RUNTIME_DIR` is ever bound.
+
+              This is the host-wide DEFAULT: a repository's sidecar
+              config may name another value (or `off`), and it wins —
+              both layers are trusted and the key grants no host
+              access (D7/D18).
+
+              `waypipe` needs the wrapper pin, i.e. a non-null
+              `display.package` (and, for the podman-gvisor backend, a
+              waypipe inside the image, `gvisor.waypipe`). An
+              unpinned selection is an evaluation error here, and a
+              refused run for a sidecar that names one — never a
+              silently headless sandbox.
             '';
           };
           mounts = mkOption {
@@ -1058,6 +1143,37 @@ in
             multiplexer (docs/design/config.md D17).
           '';
         }
+        {
+          # Availability of the podman-gvisor image pin (D18): a
+          # `gvisor.waypipe` set by hand implies a waypipe package to
+          # thread — the default derives the pin FROM the package, so
+          # a non-null pin with a null package can only be a hand
+          # override that would push nothing into the image and leave
+          # the pinned path nonexistent inside it.
+          assertion = cfg.gvisor.waypipe == null || cfg.display.package != null;
+          message = ''
+            myconfig.ai.dev.mysbx.gvisor.waypipe is set, but
+            myconfig.ai.dev.mysbx.display.package is null — the image
+            needs the waypipe package baked in
+            (gvisor.imagePackages) for the pin to resolve inside it;
+            set display.package (pkgs.waypipe) too
+            (docs/design/config.md D18).
+          '';
+        }
+        {
+          # Availability of the SELECTED display channel, checked at
+          # eval time (D18) — the same shape as the multiplexer
+          # assertion above. The runtime refuses an unpinned selection
+          # too (that is the guard for a *sidecar* naming one), but a
+          # host-wide default nobody can serve is a build error.
+          assertion = cfg.config.display != "waypipe" || cfg.display.package != null;
+          message = ''
+            myconfig.ai.dev.mysbx.config.display is "waypipe", but
+            myconfig.ai.dev.mysbx.display.package is null — set it to the
+            waypipe package (pkgs.waypipe), or select "off"
+            (docs/design/config.md D18).
+          '';
+        }
       ];
 
     # Baseline mounts; further definitions (from per-agent modules or the
@@ -1112,7 +1228,14 @@ in
     myconfig.ai.dev.mysbx.extraTools =
       selectedMuxTools
       ++ config.myconfig.ai.dev.sandboxTools.extraPackages
-      ++ lib.optional cfg.browser.enable browserPackage;
+      ++ lib.optional cfg.browser.enable browserPackage
+      # The waypipe binary of the display channel (D18): the argv
+      # already pins it for the guest server wrap, but putting it on
+      # the sandbox PATH too lets a payload inspect the channel
+      # (`waypipe --version`) without reaching for the store path.
+      ++ lib.optionals (cfg.config.display == "waypipe" && cfg.display.package != null) [
+        cfg.display.package
+      ];
 
     # Baseline [env] (RIPGREP_CONFIG_PATH — review-3 item 6 — and
     # GIT_EXTERNAL_DIFF — bd myconfig-kvo), merged with the shared

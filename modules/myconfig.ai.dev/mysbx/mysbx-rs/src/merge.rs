@@ -77,7 +77,7 @@
 //! item 4 (the argv builder) accepts. `Config` values are layer *inputs*
 //! and never leave this module's boundary as effective configuration.
 
-use crate::config::{Config, Mount, Multiplexer};
+use crate::config::{Config, Display, Mount, Multiplexer};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -102,6 +102,15 @@ pub struct Merged {
     /// the key grants no host access, so the sidecar simply wins when
     /// both layers decide (D17).
     pub multiplexer: Multiplexer,
+    /// How a Wayland display reaches the sandbox
+    /// (docs/design/config.md D18): resolved once from the layers'
+    /// tri-state values, like `multiplexer` — and like it without a
+    /// narrowing rule, because the channel it selects is waypipe-
+    /// controlled on both ends (the socket directory it binds holds
+    /// exactly one waypipe socket) and exposes nothing else of the
+    /// host. The sidecar wins when both layers decide; `off` when
+    /// neither said anything.
+    pub display: Display,
     /// User-config mounts first (in declaration order), then the sidecar
     /// mounts (in their declaration order within the sidecar file).
     /// Never sorted, never deduplicated — a repeated path is a repeated
@@ -561,6 +570,11 @@ pub fn merge(
             .multiplexer
             .or(user.multiplexer)
             .unwrap_or(Multiplexer::None),
+        // display (D18): the later layer wins where it decided, like
+        // `backend` and `multiplexer` — the channel is waypipe-
+        // controlled on both ends, so the key needs no narrowing rule.
+        // Headless (`off`) when neither layer said anything.
+        display: sidecar.display.or(user.display).unwrap_or(Display::Off),
         mounts,
         env,
         git_dirs: approved_git_dirs,
@@ -943,6 +957,35 @@ mod tests {
         assert_eq!(
             m(Some(Multiplexer::None), Some(Multiplexer::Tmux)),
             Multiplexer::Tmux
+        );
+    }
+
+    #[test]
+    fn the_display_defaults_to_off_and_the_sidecar_wins() {
+        // docs/design/config.md D18: headless by default, either layer
+        // may decide, the sidecar wins when both do (like `backend` and
+        // `multiplexer`) — no narrowing rule, because the channel the key
+        // selects is waypipe-controlled on both ends and exposes
+        // nothing else of the host.
+        let m = |u: Option<Display>, s: Option<Display>| {
+            let mut user = Config::default();
+            user.display = u;
+            let mut sidecar = Config::default();
+            sidecar.display = s;
+            merge(user, sidecar, &user_file(), &sidecar_file(), &no_home())
+                .unwrap()
+                .display
+        };
+        assert_eq!(m(None, None), Display::Off);
+        assert_eq!(m(Some(Display::Waypipe), None), Display::Waypipe);
+        assert_eq!(m(None, Some(Display::Waypipe)), Display::Waypipe);
+        // The sidecar may switch the display off again for one repo, or
+        // ask for one where the user config said nothing — every
+        // direction, no error.
+        assert_eq!(m(Some(Display::Waypipe), Some(Display::Off)), Display::Off);
+        assert_eq!(
+            m(Some(Display::Off), Some(Display::Waypipe)),
+            Display::Waypipe
         );
     }
 

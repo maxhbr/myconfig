@@ -1,0 +1,3 @@
+# `display` is a string naming one of the two channel values (config.md
+# D18), and the parser is strict: a boolean is a schema error.
+display = true

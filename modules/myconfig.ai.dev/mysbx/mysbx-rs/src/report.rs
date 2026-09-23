@@ -21,8 +21,10 @@
 //! run. Whoever can run `mysbx --verbose` can also read both config
 //! files.
 
-use crate::bwrap::{HostEnv, Params, Payload, Workspace, MUX_SOCKET_DIR, SANDBOX_HOME};
-use crate::config::Mode;
+use crate::bwrap::{
+    HostEnv, Params, Payload, Workspace, MUX_SOCKET_DIR, SANDBOX_HOME, WAYPIPE_DISPLAY,
+};
+use crate::config::{Display, Mode};
 use crate::merge::Merged;
 use crate::repo::Repo;
 use std::path::Path;
@@ -298,13 +300,14 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         r.host_env.len(),
         r.merged.env.len(),
     ));
+    let display_on = r.merged.display.is_waypipe();
     for (k, v) in r.host_env {
         // Both sections are printed in argv order (host first, `[env]`
         // second), and the argv builder lets the later `--setenv` win —
         // so a host variable that `[env]` also sets never reaches the
         // payload. Say so, instead of listing the same name twice with
         // two values and no hint which one applies.
-        if infrastructure(k) {
+        if infrastructure(k, display_on) {
             p(format!("  {k}={v}  [host, ignored — set by mysbx]"));
         } else if r.merged.env.contains_key(k) {
             p(format!("  {k}={v}  [host, overridden by [env]]"));
@@ -313,7 +316,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         }
     }
     for (k, v) in &r.merged.env {
-        if infrastructure(k) {
+        if infrastructure(k, display_on) {
             // `HOME` and `PATH` are set after `[env]` (config.md D14), so
             // a layer that names them never reaches the payload.
             p(format!("  {k}={v}  [config, ignored — set by mysbx]"));
@@ -433,6 +436,27 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         }
     }
 
+    // The display channel (config.md D18): which one a run uses, where
+    // its guest socket lands, and — when nothing is pinned — that the
+    // run is refused. The host client binary and the in-sandbox socket
+    // path are the two facts an operator checks the argv against.
+    match r.merged.display {
+        Display::Off => p("display:         off — the run is headless".to_string()),
+        Display::Waypipe => match r.params.waypipe.as_ref() {
+            Some(wp) => {
+                p(format!(
+                        "display:         waypipe — socket {}/waypipe.sock (host side), guest display {} under {SANDBOX_HOME}",
+                        wp.socket_dir,
+                        WAYPIPE_DISPLAY,
+                    ));
+                p(format!("  guest bin:    {}", wp.guest_bin));
+            }
+            None => p(
+                "display:         waypipe, refused — no waypipe pinned (MYSBX_WAYPIPE)".to_string(),
+            ),
+        },
+    }
+
     match r.payload {
         Payload::Shell if mux.starts_a_session() => p(format!(
             "payload:        {mux} session {}",
@@ -456,16 +480,25 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
 
 /// The variables `bwrap_argv` sets last and no layer can override
 /// (config.md D14).
-fn infrastructure(key: &str) -> bool {
+fn infrastructure(key: &str, display_on: bool) -> bool {
     // `SSL_CERT_FILE`/`GIT_SSL_CAINFO`/`NIX_SSL_CERT_FILE` are set after
     // `[env]` when a bundle is pinned (bd myconfig-938), so a layer that
     // names them never reaches the payload — the same treatment
     // `HOME` and `PATH` get.
+    // `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY` join the set only for a
+    // run whose display is on (config.md D18): the argv pins the first
+    // at the sandbox home, and the guest `waypipe server` mysbx wraps
+    // the payload in sets the second for it — a later `--setenv`-like
+    // win, so a layer that names either never reaches the payload
+    // THEN. With the display off neither variable is infrastructure,
+    // and a forwarded or configured value reaches the payload like
+    // any other.
     key == "HOME"
         || key == "PATH"
         || key == "SSL_CERT_FILE"
         || key == "GIT_SSL_CAINFO"
         || key == "NIX_SSL_CERT_FILE"
+        || (display_on && (key == "XDG_RUNTIME_DIR" || key == "WAYLAND_DISPLAY"))
 }
 
 fn present(exists: bool) -> &'static str {
@@ -479,7 +512,7 @@ fn present(exists: bool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Mount, Multiplexer};
+    use crate::config::{Display, Mount, Multiplexer};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 
@@ -512,6 +545,7 @@ mod tests {
             state_dirs: Vec::new(),
             forward_env: Vec::new(),
             multiplexer: Multiplexer::None,
+            display: Display::Off,
         };
         let mut host = HostEnv::new();
         host.insert("TERM".to_owned(), "xterm".to_owned());
@@ -528,6 +562,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         };
         lines(&Report {
@@ -633,6 +668,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         };
         let joined = lines(&Report {
@@ -681,6 +717,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         };
         let joined = lines(&Report {
@@ -730,6 +767,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         };
         let joined = lines(&Report {
@@ -781,6 +819,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         };
         let joined = lines(&Report {
@@ -829,6 +868,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         };
         let joined = lines(&Report {
@@ -883,6 +923,7 @@ mod tests {
                 ca_bundle: None,
                 policy_paths: &[],
                 mux_entry: Some("/synth/bin/mysbx-mux-entry"),
+                waypipe: None,
                 workspace: Workspace::Live,
             };
             let report_of = |payload: &Payload| {
@@ -949,6 +990,147 @@ mod tests {
     }
 
     #[test]
+    fn the_display_is_reported_with_its_channel_and_refusals() {
+        // cli.md D10: the report is where an operator checks the display
+        // channel against the argv — the host-side socket path, the
+        // guest display name, the guest binary, and the refusal note
+        // when nothing is pinned. `off` is stated like `none` is: which
+        // display a run has is a property of every run.
+        let (repo, mut merged, host) = fixture_report();
+        merged.display = Display::Waypipe;
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            bin_sh: None,
+            nix_conf: None,
+            ca_bundle: None,
+            policy_paths: &[],
+            mux_entry: None,
+            waypipe: Some(crate::bwrap::Waypipe {
+                socket_dir: "/synth/repo.mysbx/waypipe/1234",
+                guest_bin: "/synth/bin/waypipe",
+            }),
+            workspace: Workspace::Live,
+        };
+        let report_of = |payload: &Payload| {
+            lines(&Report {
+                repo: &repo,
+                sidecar_exists: true,
+                user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+                user_config_exists: true,
+                sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+                sidecar_config_exists: false,
+                merged: &merged,
+                backend_from_cli: false,
+                user_mount_count: 1,
+                cli_mount_count: 0,
+                host_env: &host,
+                params: &params,
+                bwrap_bin: "bwrap",
+                backend: "bubblewrap",
+                image: None,
+                payload,
+                dry_run: true,
+                result: false,
+            })
+            .join("\n")
+        };
+        let shell = report_of(&Payload::Shell);
+        assert!(
+            shell.contains(
+                "display:         waypipe — socket /synth/repo.mysbx/waypipe/1234/waypipe.sock"
+            ),
+            "{shell}"
+        );
+        assert!(
+            shell.contains(&format!(
+                "guest display {WAYPIPE_DISPLAY} under {SANDBOX_HOME}"
+            )),
+            "{shell}"
+        );
+        assert!(
+            shell.contains("  guest bin:    /synth/bin/waypipe"),
+            "{shell}"
+        );
+        // The env-provenance marks apply with the display on: a layer
+        // or a forwarded host variable naming XDG_RUNTIME_DIR or
+        // WAYLAND_DISPLAY never reaches the payload.
+        let mut with_env = merged.clone();
+        with_env
+            .env
+            .insert("XDG_RUNTIME_DIR".into(), "/synth/evil".into());
+        let mut forwarded = HostEnv::new();
+        forwarded.insert("WAYLAND_DISPLAY".into(), "host-0".into());
+        let marked = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: false,
+            merged: &with_env,
+            backend_from_cli: false,
+            user_mount_count: 1,
+            cli_mount_count: 0,
+            host_env: &forwarded,
+            params: &params,
+            bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
+            payload: &Payload::Shell,
+            dry_run: true,
+            result: false,
+        })
+        .join("\n");
+        assert!(
+            marked.contains("XDG_RUNTIME_DIR=/synth/evil  [config, ignored — set by mysbx]"),
+            "{marked}"
+        );
+        assert!(
+            marked.contains("WAYLAND_DISPLAY=host-0  [host, ignored — set by mysbx]"),
+            "{marked}"
+        );
+
+        // Without the pin the report says the run is refused.
+        let mut unrefused = params.clone();
+        unrefused.waypipe = None;
+        let refused = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: false,
+            merged: &merged,
+            backend_from_cli: false,
+            user_mount_count: 1,
+            cli_mount_count: 0,
+            host_env: &host,
+            params: &unrefused,
+            bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
+            payload: &Payload::Shell,
+            dry_run: true,
+            result: false,
+        })
+        .join("\n");
+        assert!(
+            refused.contains("display:         waypipe, refused — no waypipe pinned"),
+            "{refused}"
+        );
+
+        // And the default: `off` is stated out loud, and the env marks
+        // do NOT apply — a configured XDG_RUNTIME_DIR reaches the
+        // payload when no display channel overrides it.
+        let plain = render(true, &Payload::Shell).join("\n");
+        assert!(
+            plain.contains("display:         off — the run is headless"),
+            "{plain}"
+        );
+    }
+
+    #[test]
     fn the_report_attributes_cli_additions_to_the_command_line() {
         // cli.md D16/D10: the `--ro`/`--rw` additions are the LAST
         // mounts of the merged list, so the last `cli_mount_count`
@@ -969,6 +1151,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         };
         let payload = Payload::Shell;
@@ -1022,6 +1205,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         };
         let joined = lines(&Report {
@@ -1073,6 +1257,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: crate::bwrap::Workspace::Clone { clone: &clone },
         };
         let joined = lines(&Report {
@@ -1156,6 +1341,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         };
         let joined = lines(&Report {

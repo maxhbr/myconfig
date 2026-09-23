@@ -73,6 +73,12 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env_remove("MYSBX_GVISOR_SHELL")
         .env_remove("MYSBX_GVISOR_TOOLS_PATH")
         .env_remove("MYSBX_PODMAN")
+        // The waypipe pins are wrapper-provided too (D18): a wrapped
+        // mysbx on PATH would otherwise leak its display pins into
+        // tests that must exercise the UNPINNED refusal path.
+        .env_remove("MYSBX_WAYPIPE")
+        .env_remove("MYSBX_GVISOR_WAYPIPE")
+        .env_remove("MYSBX_WAYPIPE_SECCTX")
         // Keep the host's TERM & co. out of the result: the forwarded set
         // must come only from variables the test actually sets. The list
         // is the same constant the pipeline reads — not a hand copy that
@@ -1976,6 +1982,171 @@ fn the_selected_entry_really_runs_with_an_in_sandbox_socket_dir() {
         );
         let _ = std::fs::remove_dir_all("/tmp/host-tmux");
     }
+}
+
+// ---- the display channel (docs/design/config.md D18) ---------------
+
+/// [`fixture`] with `backend` and `display = "waypipe"` in the USER
+/// config — the shape the generated myconfig layer would have on a
+/// host that pins waypipe.
+fn fixture_display(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
+    let (inv, repo, sidecar) = fixture(name, args);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\ndisplay = \"waypipe\"\n",
+    )
+    .unwrap();
+    (inv, repo, sidecar)
+}
+
+#[test]
+fn a_waypipe_display_without_the_client_pin_is_a_refused_run() {
+    // D18: a selection this build cannot serve (no `MYSBX_WAYPIPE`)
+    // exits 70 with the pin named — never a silently headless run.
+    // `--dry-run` refuses it too: the failure is a configuration
+    // error, not an exec failure.
+    let (inv, _, sidecar) = fixture_display("display-unpinned", &["--dry-run"]);
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"] as &[&str]);
+    cmd.env_remove("MYSBX_WAYPIPE");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("display"), "{stderr}");
+    assert!(stderr.contains("MYSBX_WAYPIPE"), "{stderr}");
+    // Nothing was created: no waypipe/ token directory under the sidecar.
+    assert!(!sidecar.join("waypipe").exists());
+}
+
+#[test]
+fn a_waypipe_display_dry_run_wraps_the_payload_and_creates_nothing() {
+    // D18: with the pin set the argv wraps the payload in the guest
+    // `waypipe server`, binds the per-run token directory — and a dry
+    // run still creates nothing under the sidecar.
+    let (inv, repo, sidecar) = fixture_display("display-dry-run", &["--dry-run"]);
+    let waypipe = repo.join("fake-waypipe");
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"] as &[&str]);
+    cmd.env("MYSBX_WAYPIPE", &waypipe);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // The argv prints one argument per line, so the wrap shows as the
+    // consecutive tokens of the guest server invocation — waypipe's
+    // options are ROOT options, so they precede the `server`
+    // subcommand and the payload follows its `--`.
+    let lines: Vec<&str> = stdout.lines().collect();
+    let server_at = lines
+        .iter()
+        .position(|l| *l == "server")
+        .expect("the guest waypipe server is not the payload prefix");
+    assert_eq!(lines[server_at - 5], waypipe.to_string_lossy());
+    assert_eq!(lines[server_at - 4], "--socket");
+    assert!(
+        lines[..server_at]
+            .iter()
+            .any(|l| l.ends_with("/waypipe.sock")),
+        "the per-run socket is not named: {stdout}"
+    );
+    assert_eq!(lines[server_at - 2], "--display");
+    assert_eq!(lines[server_at - 1], "wayland-0");
+    assert_eq!(lines[server_at + 1], "--");
+    assert!(!sidecar.join("waypipe").exists());
+}
+
+#[test]
+fn a_waypipe_display_run_reports_the_channel() {
+    // cli.md D10: the `--verbose` report carries the display line —
+    // the host-side socket path, the guest display name and the guest
+    // binary — so the operator can check the channel against the argv.
+    let (inv, _, _) = fixture_display("display-verbose", &["--dry-run"]);
+    let waypipe = "/synth/bin/waypipe";
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"] as &[&str]);
+    cmd.env("MYSBX_WAYPIPE", waypipe);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("display:         waypipe"), "{stdout}");
+    assert!(stdout.contains("waypipe.sock"), "{stdout}");
+    assert!(stdout.contains(waypipe), "{stdout}");
+    // The default is stated too: an ordinary run says `off`.
+    let (inv2, _, _) = fixture_user_backend("display-verbose-off", &["--verbose", "--dry-run"]);
+    let mut cmd = spawn_with_args(&inv2, &["--verbose", "--dry-run"] as &[&str]);
+    cmd.env_remove("MYSBX_WAYPIPE");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("display:         off — the run is headless"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn a_waypipe_result_run_spawns_the_client_and_cleans_up_after_the_run() {
+    // S1, the real spawn path (D18) with a FAKE waypipe client and a
+    // FAKE bwrap — both `#!/bin/sh` scripts: the client creates the
+    // socket PATH (a plain file is all the spawn contract polls for)
+    // and a marker proving it ran, then detaches its stderr (mysbx
+    // inherits stderr into the client on purpose — the test's output
+    // pipe must not be held by the fake's `sleep`) and sleeps (a multi
+    // client never exits on its own); the backend exits 0. A `--result`
+    // run must then: exit 0 (the fake bwrap's code), have spawned the
+    // client (the marker), have killed it (its pid is gone) and have
+    // removed the per-run token directory — nothing of the channel
+    // outlives the run.
+    let (inv, repo, sidecar) = fixture_display("display-result-spawn", &["run"]);
+    let base = repo.parent().unwrap();
+    let marker = base.join("client-spawned");
+    let pidfile = base.join("client-pid");
+    let fake_client = base.join("fake-waypipe-client");
+    std::fs::write(
+        &fake_client,
+        format!(
+            "#!/bin/sh\nprintf %s $$ > {}\ntouch \"$2\"\nprintf spawned > {}\nexec 2>/dev/null\nsleep 10\n",
+            pidfile.display(),
+            marker.display()
+        ),
+    )
+    .unwrap();
+    let fake_bwrap = base.join("fake-bwrap");
+    std::fs::write(&fake_bwrap, "#!/bin/sh\nexit 0\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&fake_client, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::set_permissions(&fake_bwrap, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--result", "--", "/usr/bin/env"] as &[&str]);
+    cmd.env("MYSBX_WAYPIPE", &fake_client)
+        .env("MYSBX_BWRAP", &fake_bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "the fake backend's exit is the run's\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(!stderr.contains("infrastructure"), "{stderr}");
+    // The client DID run: it created the socket path and its marker.
+    assert_eq!(std::fs::read_to_string(&marker).unwrap(), "spawned");
+    // The waited run KILLED it: the pid it published is gone (a pid
+    // reuse within the test is not a realistic hazard — the sweep of
+    // a reused pid is D18's own best-effort rule, not this test's).
+    let pid: u32 = std::fs::read_to_string(&pidfile)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    assert!(
+        !std::path::Path::new(&format!("/proc/{pid}")).exists(),
+        "the waypipe client must not outlive the waited run"
+    );
+    // The per-run token directory is gone too (only the `waypipe/`
+    // root remains).
+    assert!(sidecar.join("waypipe").exists());
+    assert_eq!(
+        std::fs::read_dir(sidecar.join("waypipe")).unwrap().count(),
+        0,
+        "the token directory must not outlive the run"
+    );
 }
 
 // ---- `mysbx edit` (docs/design/cli.md D12) --------------------------------

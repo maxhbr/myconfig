@@ -113,6 +113,21 @@ pub const SANDBOX_HOME: &str = "/mysbx-home";
 /// private socket instead of the host default `/tmp/tmux-<uid>`.
 pub const MUX_SOCKET_DIR: &str = "/mysbx-home/.mysbx-tmux";
 
+/// The `WAYLAND_DISPLAY` name the waypipe server presents its fake
+/// compositor socket under (docs/design/config.md D18). A bare name,
+/// deliberately: the multi-mode server creates it in
+/// `$XDG_RUNTIME_DIR`, which the argv pins at [`SANDBOX_HOME`], so the
+/// socket lands at `/mysbx-home/wayland-0` — a path inside the sandbox
+/// home tmpfs by construction.
+pub const WAYPIPE_DISPLAY: &str = "wayland-0";
+
+/// The in-sandbox path of the waypipe server's display socket:
+/// `$XDG_RUNTIME_DIR/<WAYPIPE_DISPLAY>` with `XDG_RUNTIME_DIR` pinned
+/// at [`SANDBOX_HOME`] (D18). No bind ever lands at or below it (see
+/// [`check_display_socket`]); the socket itself is created by the
+/// multi-mode guest server inside the sandbox, not mounted.
+pub const WAYPIPE_DISPLAY_PATH: &str = "/mysbx-home/wayland-0";
+
 /// Common parameters of every invocation that do not come from a
 /// configuration layer: the shell binary and the dev-tool `PATH` closure
 /// root, both host paths the MVP carries in its own closure
@@ -210,6 +225,24 @@ pub struct Params<'a> {
     /// bare shell instead would be discovered only after the work was
     /// done in the wrong place.
     pub mux_entry: Option<&'a str>,
+    /// The **waypipe channel** of a run whose merged `display` is
+    /// `waypipe` (docs/design/config.md D18): the host directory
+    /// holding the per-run `waypipe.sock` the host-side `waypipe
+    /// client` creates and the argv binds rw into the sandbox, plus
+    /// the guest `waypipe server` binary that wraps the payload.
+    /// `None` when this build pinned no waypipe (`MYSBX_WAYPIPE`) —
+    /// a selected display is then a refused run
+    /// ([`Error::DisplayUnavailable`]), never a silently headless one.
+    ///
+    /// Both values are infrastructure like [`Params::shell`]: the
+    /// socket directory is created by the CLI per run (under the
+    /// sidecar, outside the sandbox's reach) and holds exactly one
+    /// waypipe socket; the guest binary comes from mysbx's own
+    /// closure, pinned by the Nix wrapper. The socket FILE is always
+    /// `<socket_dir>/waypipe.sock` — the same path on both ends of the
+    /// channel, bound rw at itself so the guest finds it where the
+    /// host created it.
+    pub waypipe: Option<Waypipe<'a>>,
     /// Which tree this run works in (workspace.md D1): the live repo
     /// (the default, unchanged) or a named session's clone (D3/D4 —
     /// the argv differences are exactly the workspace's). A
@@ -217,6 +250,26 @@ pub struct Params<'a> {
     /// not come from a configuration layer, and no TOML key can name
     /// it (workspace.md D1).
     pub workspace: Workspace<'a>,
+}
+
+/// The waypipe channel of a `display = "waypipe"` run
+/// (docs/design/config.md D18): the per-run host socket directory the
+/// CLI created (the host-side `waypipe client` listens on
+/// `<socket_dir>/waypipe.sock`) and the guest `waypipe server` binary
+/// from mysbx's own closure that wraps the payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Waypipe<'a> {
+    /// Host directory holding the per-run socket file `waypipe.sock`.
+    /// Created symlink-free by the CLI under the sidecar
+    /// (`<sidecar>/waypipe/<pid>`), bound rw at itself, never created by
+    /// a `--dry-run`.
+    pub socket_dir: &'a str,
+    /// The `waypipe` binary INSIDE the sandbox's reach (a store path
+    /// from mysbx's own closure, on the sandbox `PATH` and pinned by
+    /// the wrapper as `MYSBX_WAYPIPE`) — the SERVER end that presents
+    /// the fake compositor socket to the payload and connects to the
+    /// client's socket.
+    pub guest_bin: &'a str,
 }
 
 /// A trusted policy file, represented by everything the payload must
@@ -287,7 +340,9 @@ impl PolicyPath {
 ///    directories its `.git` FILE points at, also rw (review-1 finding 4:
 ///    worktrees and submodules are unusable without them), then the
 ///    `state-dirs` binds (config.md D15): each declared entry backed
-///    by `<sidecar>/state/<entry>` and bound rw at `/mysbx-home/<entry>`
+///    by `<sidecar>/state/<entry>` and bound rw at `/mysbx-home/<entry>`,
+///    then — for a `display = "waypipe"` run — the per-run waypipe
+///    socket directory, bound rw at itself (config.md D18)
 /// 5. the configured mounts, in declaration order, `--ro-bind` / `--bind`,
 ///    each `dest` defaulting to its source path (mount order is argv
 ///    order). Two layout rules are enforced: a dest that would shadow
@@ -307,12 +362,17 @@ impl PolicyPath {
 ///    wrapper pinned a bundle (infrastructure for the same reason,
 ///    bd myconfig-938), plus `TMUX_TMPDIR`
 ///    ([`MUX_SOCKET_DIR`]) for a run with a multiplexer, which is
-///    infrastructure for the same reason (config.md D16/D17)
+///    infrastructure for the same reason (config.md D16/D17), and
+///    `XDG_RUNTIME_DIR` (the tmpfs home) for a run with the waypipe
+///    display, likewise infrastructure (config.md D18)
 /// 7. `--chdir` into the repo root
 /// 8. `--` and the payload, verbatim — except that the *interactive*
 ///    payload of a run with `multiplexer = …` is that multiplexer's
 ///    pinned entry instead of the shell (config.md D17, cli.md D11);
-///    `run -- CMD` is untouched
+///    `run -- CMD` is untouched — and that a run with
+///    `display = "waypipe"` is wrapped in the guest waypipe server
+///    (config.md D18), which presents the fake compositor socket to
+///    the payload and connects to the host client's socket
 ///
 /// Deliberately absent (see the base table's "no" rows): `/run`, `~/tmp`,
 /// a host-backed `/tmp/<name>`, and the host home directory (only the
@@ -346,6 +406,17 @@ pub fn bwrap_argv(
         check_mux_socket(&cfg.mounts, &cfg.state_dirs)?;
         if params.mux_entry.is_none() {
             return Err(Error::MultiplexerUnavailable { multiplexer: mux });
+        }
+    }
+    // The display channel applies to EVERY payload form (D18): unlike
+    // the multiplexer it is not a session, and a `run -- CMD` whose
+    // command opens a window needs it just as much as the interactive
+    // shell. The guards and the wrap below therefore see the merged
+    // value directly.
+    if cfg.display.is_waypipe() {
+        check_display_socket(&cfg.mounts, &cfg.state_dirs)?;
+        if params.waypipe.is_none() {
+            return Err(Error::DisplayUnavailable);
         }
     }
     let mut argv: Vec<String> = vec!["--clearenv".into(), "--unshare-all".into()];
@@ -561,6 +632,29 @@ pub fn bwrap_argv(
         bind(&mut argv, false, src, Some(dest));
     }
 
+    // 4c. the waypipe socket bind (docs/design/config.md D18): the
+    // per-run host directory holding `waypipe.sock`, bound rw at ITSELF
+    // — right after the state-dirs binds, before every configured
+    // mount, so the same later-wins rules treat it as the implicit
+    // infrastructure it is. The directory holds exactly one socket file
+    // and nothing else (the CLI creates it fresh per run), so the rw
+    // bind exposes no host content beyond the channel; both ends of
+    // the channel are binaries from mysbx's own closure. The display
+    // socket itself (`$XDG_RUNTIME_DIR/wayland-0` below the tmpfs
+    // home) is created by the in-sandbox waypipe server, never bound.
+    let waypipe_bind: Option<(String, String)> = cfg.display.is_waypipe().then(|| {
+        let dir = params
+            .waypipe
+            .as_ref()
+            .expect("checked at the top of the builder")
+            .socket_dir
+            .to_owned();
+        (dir.clone(), dir)
+    });
+    if let Some((src, dest)) = &waypipe_bind {
+        bind(&mut argv, false, src, Some(dest));
+    }
+
     // Review-3 item 3: a writable bind may never expose a trusted
     // policy file — the user config (host-wide grants) or the sidecar
     // config (this repo's own sandbox policy). The payload writing one
@@ -709,6 +803,7 @@ pub fn bwrap_argv(
         implicit_git_dirs,
         implicit_worktrees,
         &state_binds,
+        waypipe_bind.as_ref().map(|(s, d)| (s.as_str(), d.as_str())),
     )?;
     check_symlinkable_dests(
         &cfg.mounts,
@@ -717,6 +812,7 @@ pub fn bwrap_argv(
         implicit_git_dirs,
         implicit_worktrees,
         &state_binds,
+        waypipe_bind.as_ref().map(|(s, d)| (s.as_str(), d.as_str())),
     )?;
     for m in &cfg.mounts {
         // 5a. the forced-ro downgrade of a clone run (workspace.md
@@ -756,6 +852,20 @@ pub fn bwrap_argv(
     argv.push("--setenv".into());
     argv.push("PATH".into());
     argv.push(params.tools_path.into());
+    // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run is
+    // infrastructure for the same reason as `HOME` and `PATH`
+    // (docs/design/config.md D18): it anchors the guest waypipe
+    // server's display socket (`WAYLAND_DISPLAY = "wayland-0"` is a
+    // bare name, so the server creates it in the runtime dir), and
+    // the value is the tmpfs home this builder created. Set after
+    // `[env]`, so a layer that spells it out never reaches the
+    // payload. `WAYLAND_DISPLAY` itself is set by the waypipe
+    // server for the wrapped payload, not by the argv.
+    if cfg.display.is_waypipe() {
+        argv.push("--setenv".into());
+        argv.push("XDG_RUNTIME_DIR".into());
+        argv.push(SANDBOX_HOME.into());
+    }
     // The CA-bundle variables are infrastructure for the same reason as
     // `HOME` and `PATH` (bd myconfig-938): they name a path THIS WRAPPER
     // pinned from its own closure — a store path, no host state — so a
@@ -809,6 +919,29 @@ pub fn bwrap_argv(
 
     // 8. the payload, verbatim.
     argv.push("--".into());
+    // A `display = "waypipe"` run wraps EVERY payload form (D18): the
+    // guest waypipe server presents the fake compositor socket to the
+    // payload (it sets `WAYLAND_DISPLAY`) and connects to the client's
+    // per-run socket through the rw bind. All of its flags are ROOT
+    // options in waypipe's CLI (the subcommand must come first), its
+    // multi mode is the one that CREATES the display socket for the
+    // payload — and one server-conn child per window the payload
+    // opens — and it exits when the payload does. Its own `--`
+    // separates its command from its flags, so the payload stays
+    // verbatim after it.
+    if cfg.display.is_waypipe() {
+        let wp = params
+            .waypipe
+            .as_ref()
+            .expect("checked at the top of the builder");
+        argv.push(wp.guest_bin.into());
+        argv.push("--socket".into());
+        argv.push(format!("{}/waypipe.sock", wp.socket_dir).into());
+        argv.push("--display".into());
+        argv.push(WAYPIPE_DISPLAY.into());
+        argv.push("server".into());
+        argv.push("--".into());
+    }
     match payload {
         // The multiplexer entry REPLACES the shell (cli.md D11): it is
         // the interactive payload, and it execs the multiplexer's
@@ -940,6 +1073,24 @@ pub enum Error {
     /// then be a path on the HOST, shared by every mysbx sandbox of
     /// this repository, instead of a path that dies with the tmpfs.
     MuxSocketPersisted { entry: String },
+    /// The configuration selects the waypipe display
+    /// (`display = "waypipe"`, docs/design/config.md D18) but this
+    /// build pinned no waypipe (`MYSBX_WAYPIPE`). Falling back to a
+    /// headless run is not an option: the operator asked for windows,
+    /// and silently not getting them would be discovered only after a
+    /// payload that needed the display failed.
+    DisplayUnavailable,
+    /// A mount `dest` is related to [`WAYPIPE_DISPLAY_PATH`]
+    /// (docs/design/config.md D18): the fake compositor socket the
+    /// guest waypipe server presents must be created inside the
+    /// sandbox home tmpfs by that server, never seeded from a host
+    /// mount.
+    DisplaySocketDest { dest: String },
+    /// A `state-dirs` entry would back the waypipe display socket
+    /// (docs/design/config.md D18) with a sidecar directory: the
+    /// socket would become a HOST path shared by every sandbox of
+    /// this repository instead of dying with the tmpfs home.
+    DisplaySocketPersisted { entry: String },
 }
 
 impl fmt::Display for Error {
@@ -1040,6 +1191,31 @@ impl fmt::Display for Error {
                  this repository instead of dying with the tmpfs home \
                  (docs/design/config.md D16/D17); the socket is deliberately not \
                  persistable, so drop the entry"
+            ),
+            Error::DisplayUnavailable => write!(
+                f,
+                "display = \"waypipe\" but this build pinned no waypipe client \
+                 (MYSBX_WAYPIPE) \u{2014} the payload would run headless instead \
+                 of getting its windows (docs/design/config.md D18); install \
+                 mysbx on a host that carries waypipe \
+                 (myconfig.ai.dev.mysbx.display.package), or set display = \"off\""
+            ),
+            Error::DisplaySocketDest { dest } => write!(
+                f,
+                "mount dest {dest} is related to the waypipe display socket \
+                 {WAYPIPE_DISPLAY_PATH}, which the in-sandbox waypipe server \
+                 creates inside the sandbox home tmpfs \u{2014} a host mount there \
+                 would not be the channel mysbx opened \
+                 (docs/design/config.md D18); mount it elsewhere below \
+                 {SANDBOX_HOME}"
+            ),
+            Error::DisplaySocketPersisted { entry } => write!(
+                f,
+                "state-dirs entry `{entry}` would back the waypipe display socket \
+                 {WAYPIPE_DISPLAY_PATH} with a sidecar directory \u{2014} the socket \
+                 would become a HOST path shared by every sandbox of this \
+                 repository instead of dying with the tmpfs home \
+                 (docs/design/config.md D18); drop the entry"
             ),
             Error::StateDirNesting { outer, inner } => write!(
                 f,
@@ -1317,21 +1493,62 @@ fn check_mux_socket(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error
     Ok(())
 }
 
+/// The display-socket isolation of a `display = "waypipe"` run
+/// (docs/design/config.md D18), enforced like [`check_mux_socket`]:
+/// nothing a configuration can say may interfere with the socket the
+/// guest waypipe server creates at
+/// `$XDG_RUNTIME_DIR/<WAYPIPE_DISPLAY>` (= [`WAYPIPE_DISPLAY_PATH`],
+/// below the sandbox home tmpfs).
+///
+/// Two ways a config could:
+///
+/// - a mount `dest` at or below the display socket would put host
+///   content where the waypipe server must own the directory — a
+///   socket planted by a mount would not be the channel mysbx
+///   opened. Both directions are refused, like the mux socket dir.
+/// - a `state-dirs` entry naming the display socket (or an ancestor
+///   of it inside the home) would back it with a sidecar directory,
+///   making the display socket a HOST path shared by every sandbox
+///   of this repository.
+///
+/// Only reached for a run that opens the display channel: with
+/// `display = "off"` the path is an ordinary home path a config may
+/// use for anything.
+fn check_display_socket(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error> {
+    let socket = Path::new(WAYPIPE_DISPLAY_PATH);
+    for m in mounts {
+        let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
+        if dest.starts_with(socket) || socket.starts_with(&dest) {
+            return Err(Error::DisplaySocketDest {
+                dest: dest.to_string_lossy().into_owned(),
+            });
+        }
+    }
+    for entry in state_dirs {
+        let dest = normalize(&format!("{SANDBOX_HOME}/{entry}"));
+        if dest.starts_with(socket) || socket.starts_with(&dest) {
+            return Err(Error::DisplaySocketPersisted {
+                entry: entry.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
 fn check_hidden_mounts(
     mounts: &[Mount],
     repo_root: &str,
     git_dirs: &[PathBuf],
     worktrees: Option<&Path>,
     state_binds: &[(String, String)],
+    waypipe_bind: Option<(&str, &str)>,
 ) -> Result<(), Error> {
     // Implicit binds come before every configured mount: the repo root,
-    // the git metadata directories a `.git` file points at, and the
-    // workmux worktrees sibling when it exists. A configured mount
-    // whose dest covers any of them replaces that subtree wholesale.
-    // The implicit set is discovered per run, so it cannot be
-    // anticipated in configuration: covering it is refused in EVERY
-    // form, equal dest included, because the mount would not just
-    // shadow an entry — it would replace implicit infrastructure.
+    // the git metadata directories a `.git` file points at, the
+    // workmux worktrees sibling when it exists, and the state binds of
+    // a LIVE run; a clone run binds none of the latter three (D3/D4)
+    // — plus the waypipe socket bind of a `display = "waypipe"` run
+    // (D18), the same implicit-infrastructure treatment.
     let mut implicit: Vec<(PathBuf, &str)> = vec![(normalize(repo_root), "the repo working tree")];
     for g in git_dirs {
         implicit.push((normalize(&g.to_string_lossy()), "a git metadata directory"));
@@ -1344,6 +1561,9 @@ fn check_hidden_mounts(
     }
     for (_src, dest) in state_binds {
         implicit.push((normalize(dest), "a state directory"));
+    }
+    if let Some((_src, dest)) = waypipe_bind {
+        implicit.push((normalize(dest), "the waypipe socket directory"));
     }
     for (later_i, later) in mounts.iter().enumerate() {
         let later_dest = normalize(later.dest.as_deref().unwrap_or(&later.path));
@@ -1436,6 +1656,7 @@ fn check_symlinkable_dests(
     git_dirs: &[PathBuf],
     worktrees: Option<&Path>,
     state_binds: &[(String, String)],
+    waypipe_bind: Option<(&str, &str)>,
 ) -> Result<(), Error> {
     // HOST paths whose content the sandbox can write. The workspace
     // bind — the repo in a live run (rw by D13), the session's clone
@@ -1474,6 +1695,20 @@ fn check_symlinkable_dests(
     // host paths, so their in-sandbox paths are their sources.
     writable_dests.extend(writable_sources.iter().skip(1).cloned());
     for (_src, dest) in state_binds {
+        let dest = normalize(dest);
+        if !writable_dests.contains(&dest) {
+            writable_dests.push(dest);
+        }
+    }
+    // The waypipe socket bind is rw too (D18): the in-sandbox waypipe
+    // server writes its connection through it, so its dest joins the
+    // in-sandbox writable set and its source the host one — a
+    // configured dest may not land below either.
+    if let Some((src, dest)) = waypipe_bind {
+        let src = normalize(src);
+        if !writable_sources.contains(&src) {
+            writable_sources.push(src);
+        }
         let dest = normalize(dest);
         if !writable_dests.contains(&dest) {
             writable_dests.push(dest);
@@ -1625,7 +1860,7 @@ fn bind(argv: &mut Vec<String>, ro: bool, src: &str, dest: Option<&str>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Mount;
+    use crate::config::{Display, Mount};
     use std::path::PathBuf;
 
     /// A synthetic repo root. [`bwrap_argv`] is pure: it canonicalizes
@@ -1650,6 +1885,7 @@ mod tests {
             state_dirs: Vec::new(),
             forward_env: Vec::new(),
             multiplexer: Multiplexer::None,
+            display: Display::Off,
         }
     }
 
@@ -1662,6 +1898,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            waypipe: None,
             workspace: Workspace::Live,
         }
     }
@@ -1675,6 +1912,14 @@ mod tests {
         argv.iter()
             .position(|x| x == needle)
             .unwrap_or_else(|| panic!("missing {needle}"))
+    }
+
+    /// All `(source, dest)` bind pairs of the argv.
+    fn bind_pairs(argv: &[String]) -> Vec<(&str, &str)> {
+        argv.windows(3)
+            .filter(|w| w[0] == "--ro-bind" || w[0] == "--bind")
+            .map(|w| (w[1].as_str(), w[2].as_str()))
+            .collect()
     }
 
     #[test]
@@ -2325,6 +2570,150 @@ mod tests {
         // a different guard).
         let (repo, mut cfg, p) = shell_repo_defaults();
         cfg.state_dirs = vec![".mysbx-tmux".to_string()];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+    }
+
+    // ---- the display channel (docs/design/config.md D18) ------------------
+
+    /// The defaults with `display = "waypipe"` and the waypipe pin set.
+    fn display_defaults() -> (Repo, Merged, Params<'static>) {
+        let (repo, mut cfg, mut p) = shell_repo_defaults();
+        cfg.display = Display::Waypipe;
+        p.waypipe = Some(Waypipe {
+            socket_dir: "/synth/repo.mysbx/waypipe/1234",
+            guest_bin: "/synth/bin/waypipe",
+        });
+        (repo, cfg, p)
+    }
+
+    #[test]
+    fn a_waypipe_display_binds_the_socket_dir_and_wraps_the_payload() {
+        let (repo, cfg, p) = display_defaults();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        // The socket directory is bound rw right after the state binds
+        // — before every configured mount — at itself.
+        assert!(bind_pairs(&argv).contains(&(
+            "/synth/repo.mysbx/waypipe/1234",
+            "/synth/repo.mysbx/waypipe/1234"
+        )));
+        // `XDG_RUNTIME_DIR` is infrastructure, set after HOME/PATH.
+        let i = pos(&argv, "XDG_RUNTIME_DIR");
+        assert_eq!(
+            &argv[i - 1..i + 2],
+            &["--setenv", "XDG_RUNTIME_DIR", SANDBOX_HOME]
+        );
+        assert!(pos(&argv, "HOME") < i && pos(&argv, "PATH") < i);
+        // The payload is wrapped in the guest waypipe server — its
+        // flags are root options (before the `server` subcommand), its
+        // multi mode creates the display socket — which presents
+        // `wayland-0` to the shell behind its own `--`.
+        let dd = pos(&argv, "--");
+        assert_eq!(
+            &argv[dd + 1..dd + 9],
+            &[
+                "/synth/bin/waypipe",
+                "--socket",
+                "/synth/repo.mysbx/waypipe/1234/waypipe.sock",
+                "--display",
+                WAYPIPE_DISPLAY,
+                "server",
+                "--",
+                "/synth/bin/bash",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_waypipe_display_wraps_the_run_form_too() {
+        // D18: unlike the multiplexer the display is not a session —
+        // a one-shot `run -- CMD` whose command opens a window needs
+        // the channel, so it is wrapped like the shell.
+        let (repo, cfg, p) = display_defaults();
+        let payload = Payload::Command(vec!["ls".into(), "-x".into()]);
+        let argv = bwrap_argv(&cfg, &repo, &payload, &HostEnv::new(), &p).unwrap();
+        let dd = argv.iter().rposition(|x| x == "--").unwrap();
+        assert_eq!(&argv[dd + 1..], &["ls", "-x"]);
+        assert_eq!(argv[dd - 1], "server");
+    }
+
+    #[test]
+    fn a_waypipe_display_without_the_pin_is_refused() {
+        let (repo, mut cfg, p) = shell_repo_defaults();
+        cfg.display = Display::Waypipe; // nothing pinned in `p`
+        let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+            .expect_err("must be refused");
+        assert!(
+            matches!(err, Error::DisplayUnavailable),
+            "wrong error: {err}"
+        );
+        let err = bwrap_argv(
+            &cfg,
+            &repo,
+            &Payload::Command(vec!["ls".into()]),
+            &HostEnv::new(),
+            &p,
+        )
+        .expect_err("the run form needs the channel too");
+        assert!(
+            matches!(err, Error::DisplayUnavailable),
+            "wrong error: {err}"
+        );
+    }
+
+    #[test]
+    fn a_mount_may_not_land_on_the_waypipe_display_socket() {
+        for dest in [
+            WAYPIPE_DISPLAY_PATH,
+            &format!("{WAYPIPE_DISPLAY_PATH}/sub"),
+            &format!("{WAYPIPE_DISPLAY_PATH}/../wayland-0"),
+        ] {
+            let (repo, mut cfg, p) = display_defaults();
+            cfg.mounts = vec![Mount {
+                path: "/synth/data".into(),
+                dest: Some(dest.to_string()),
+                mode: Mode::Ro,
+            }];
+            let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+                .expect_err("must be refused");
+            assert!(
+                matches!(err, Error::DisplaySocketDest { .. }),
+                "{dest}: wrong error: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_waypipe_display_socket_may_not_be_persisted() {
+        for entry in ["wayland-0", "wayland-0/x"] {
+            let (repo, mut cfg, p) = display_defaults();
+            cfg.state_dirs = vec![entry.to_string()];
+            let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p)
+                .expect_err("must be refused");
+            assert!(
+                matches!(err, Error::DisplaySocketPersisted { .. }),
+                "{entry}: wrong error: {err}"
+            );
+        }
+        // An unrelated state dir stays fine.
+        let (repo, mut cfg, p) = display_defaults();
+        cfg.state_dirs = vec![".local/share/opencode".to_string()];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+    }
+
+    #[test]
+    fn display_off_leaves_the_display_path_an_ordinary_home_path() {
+        // The guards exist for a run that opens the channel; with
+        // `display = "off"` the display path is just a home path a
+        // config may use (D18: nothing is reserved globally).
+        let (repo, mut cfg, p) = shell_repo_defaults();
+        cfg.mounts = vec![Mount {
+            path: "/synth/data".into(),
+            dest: Some(WAYPIPE_DISPLAY_PATH.to_string()),
+            mode: Mode::Ro,
+        }];
+        bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let (repo, mut cfg, p) = shell_repo_defaults();
+        cfg.state_dirs = vec!["wayland-0".to_string()];
         bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
     }
 }

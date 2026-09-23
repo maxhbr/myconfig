@@ -14,7 +14,7 @@
 //! and those are identical on every machine.
 
 use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload, Workspace, SANDBOX_HOME};
-use mysbx::config::{Mode, Mount, Multiplexer};
+use mysbx::config::{Display, Mode, Mount, Multiplexer};
 use mysbx::merge::Merged;
 use mysbx::podman_gvisor::CONTAINER_HOME;
 use mysbx::podman_gvisor::{podman_run_argv, Params as PodmanParams};
@@ -56,6 +56,7 @@ fn base(network: bool) -> Merged {
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
+        display: Display::Off,
     }
 }
 
@@ -76,6 +77,7 @@ fn params() -> Params<'static> {
         ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     }
 }
@@ -728,6 +730,7 @@ fn golden_both_layers_contribute_mounts() {
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
+        display: Display::Off,
     };
     let argv = bwrap_argv(
         &cfg,
@@ -868,6 +871,76 @@ fn multiplexer_none_keeps_the_interactive_argv_unchanged() {
     assert!(!argv.iter().any(|a| a == "TMUX_TMPDIR"));
 }
 
+// ---- the display channel (docs/design/config.md D18) --------------------
+
+/// The waypipe pin of a display test: one socket directory, one guest
+/// binary — the shapes the wrapper would pin.
+fn waypipe_params() -> Params<'static> {
+    let mut p = params();
+    p.waypipe = Some(mysbx::bwrap::Waypipe {
+        socket_dir: "/synth/repo.mysbx/waypipe/1234",
+        guest_bin: "/synth/bin/waypipe",
+    });
+    p
+}
+
+#[test]
+fn golden_waypipe_display_shell() {
+    // D18: an INTERACTIVE run with `display = "waypipe"` binds the
+    // per-run socket directory rw, pins `XDG_RUNTIME_DIR` at the
+    // tmpfs home and wraps the shell in the guest waypipe server.
+    let mut cfg = base(true);
+    cfg.display = Display::Waypipe;
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &waypipe_params(),
+    )
+    .unwrap();
+    assert_golden("display-waypipe-shell.txt", &argv);
+}
+
+#[test]
+fn golden_waypipe_display_run() {
+    // D18: the display is NOT mux-like — a one-shot `run -- CMD` is
+    // wrapped too, because a command that opens a window needs the
+    // channel just as much as the interactive shell.
+    let mut cfg = base(true);
+    cfg.display = Display::Waypipe;
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Command(vec!["ls".into(), "-x".into()]),
+        &host_env(&[]),
+        &waypipe_params(),
+    )
+    .unwrap();
+    assert_golden("display-waypipe-run.txt", &argv);
+}
+
+#[test]
+fn display_off_is_byte_identical_to_the_pre_d18_argv() {
+    // The byte-compat contract: `display = "off"` (and the key absent
+    // from both layers) gives exactly the pre-existing argv, even
+    // with a waypipe pin present — the pin is not an opt-in by
+    // itself, the config key is.
+    let mut cfg = base(true);
+    cfg.display = Display::Off;
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &waypipe_params(),
+    )
+    .unwrap();
+    assert_golden("interactive-shell.txt", &argv);
+    assert!(!argv.iter().any(|a| a.contains("waypipe")));
+    assert!(!argv.iter().any(|a| a == "XDG_RUNTIME_DIR"));
+}
+
 #[test]
 fn golden_command_payload_with_flag_looking_args() {
     // cli.md D4: everything after `--` is verbatim and never parsed —
@@ -991,6 +1064,7 @@ fn mount_order_is_preserved() {
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
+        display: Display::Off,
     };
     let argv = bwrap_argv(
         &cfg,
@@ -1645,6 +1719,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     };
     let argv = bwrap_argv(
@@ -1683,6 +1758,7 @@ fn a_pinned_bin_sh_is_bound_read_only_into_the_empty_root() {
         ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     };
     let argv = bwrap_argv(
@@ -2556,6 +2632,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     };
     let mut cfg = base(true);
@@ -2585,6 +2662,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     };
     let mut cfg = base(true);
@@ -2616,6 +2694,7 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     };
     let mut cfg = base(true);
@@ -2640,6 +2719,7 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     };
     let mut cfg = base(true);
@@ -2665,6 +2745,7 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     };
     let cfg = base(true);
@@ -2692,6 +2773,7 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
         ca_bundle: None,
         policy_paths: &policy,
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     };
     let mut cfg = base(true);
@@ -2720,6 +2802,7 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
         ca_bundle: None,
         policy_paths: &[], // nothing exists -> nothing protected
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     };
     let mut cfg = base(true);
@@ -2750,6 +2833,7 @@ fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
         ca_bundle: None,
         policy_paths: policy,
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
     }
 }
@@ -2948,6 +3032,7 @@ fn clone_params() -> Params<'static> {
         ca_bundle: None,
         policy_paths: &[],
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Clone {
             clone: Path::new(SYNTH_CLONE),
         },
@@ -3306,6 +3391,7 @@ fn podman_params() -> PodmanParams<'static> {
         tools_path: "/bin:/usr/bin:/synth-image-tools",
         policy_paths: &[],
         mux_entry: None,
+        waypipe: None,
         workspace: Workspace::Live,
         // The exec'd backend keeps mysbx's stdio, so the container is
         // attached: `--interactive` always (bd myconfig-jho). The
@@ -3340,7 +3426,53 @@ fn podman_base(network: bool) -> Merged {
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
+        display: Display::Off,
     }
+}
+
+#[test]
+fn podman_golden_waypipe_display_shell() {
+    // D18 on the podman-gvisor backend: the socket dir is bound rw at
+    // itself (a `--mount type=bind`), `XDG_RUNTIME_DIR` points at the
+    // container home, and the payload is wrapped in the IN-IMAGE
+    // waypipe — the first container arg is waypipe, its own `--`
+    // separates its CMD (no extra `--` before the image command).
+    let mut cfg = podman_base(true);
+    cfg.display = Display::Waypipe;
+    let mut params = podman_params();
+    params.waypipe = Some(mysbx::bwrap::Waypipe {
+        socket_dir: "/synth/repo.mysbx/waypipe/1234",
+        guest_bin: "/bin/waypipe",
+    });
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_golden("podman-display-waypipe.txt", &argv);
+    let image_at = argv.iter().position(|a| a == params.image).unwrap();
+    assert_eq!(argv[image_at + 1], "/bin/waypipe");
+    assert_eq!(argv[image_at + 2], "--socket");
+    // The subcommand comes after its root options, and the payload
+    // follows the server's own `--`.
+    assert!(argv[image_at + 3..]
+        .windows(2)
+        .any(|w| w[0] == "server" && w[1] == "--"));
+    assert!(
+        argv.windows(2).any(|w| w[0] == "--mount"
+            && w[1].contains(
+                "src=/synth/repo.mysbx/waypipe/1234,dst=/synth/repo.mysbx/waypipe/1234,rw"
+            )),
+        "the socket dir bind is missing: {argv:?}"
+    );
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--env" && w[1] == "XDG_RUNTIME_DIR=/mysbx-home"),
+        "XDG_RUNTIME_DIR must be pinned at the container home: {argv:?}"
+    );
 }
 
 #[test]
@@ -3776,6 +3908,7 @@ fn podman_mount_order_is_preserved() {
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
         multiplexer: Multiplexer::None,
+        display: Display::Off,
     };
     let argv = podman_run_argv(
         &cfg,

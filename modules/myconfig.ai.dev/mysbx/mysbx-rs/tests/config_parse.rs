@@ -6,7 +6,7 @@
 //! user could write, `invalid/` files are the mistakes the strict parser
 //! must reject (docs/design/config.md).
 
-use mysbx::config::{Config, Error, Mode, Multiplexer};
+use mysbx::config::{Config, Display, Error, Mode, Multiplexer};
 use std::path::{Path, PathBuf};
 
 fn asset(rel: &str) -> PathBuf {
@@ -61,6 +61,8 @@ fn every_asset_is_exercised() {
         "invalid/schema-unknown-key.toml",
         "invalid/schema-multiplexer-unknown-value.toml",
         "invalid/schema-multiplexer-wrong-type.toml",
+        "invalid/schema-display-unknown-value.toml",
+        "invalid/schema-display-wrong-type.toml",
         "invalid/schema-workmux-key-removed.toml",
         "invalid/schema-wrong-type.toml",
         "invalid/syntax-duplicate-key.toml",
@@ -107,6 +109,9 @@ fn full_config() {
     // multiplexer (D17): tri-state like `network`; the interactive
     // payload of this layer is a workmux session.
     assert_eq!(c.multiplexer, Some(Multiplexer::Workmux));
+    // display (D18): tri-state like `backend`; this layer asks for the
+    // waypipe channel.
+    assert_eq!(c.display, Some(Display::Waypipe));
 
     assert_eq!(c.mounts.len(), 2);
     assert_eq!(c.mounts[0].path, "/home/user/.config/pi");
@@ -213,6 +218,14 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         (
             "invalid/schema-multiplexer-unknown-value.toml",
             "invalid multiplexer `zellij`",
+        ),
+        (
+            "invalid/schema-display-unknown-value.toml",
+            "invalid display `x11`",
+        ),
+        (
+            "invalid/schema-display-wrong-type.toml",
+            "display: expected a string",
         ),
         (
             // The migration message of D17: it must name the key that

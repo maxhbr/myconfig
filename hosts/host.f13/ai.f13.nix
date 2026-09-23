@@ -50,7 +50,19 @@
           # The `mysbx` sandboxing CLI (modules/myconfig.ai.dev/mysbx/README.md),
           # the WIP successor of the sandbox tiers above. Enabled explicitly
           # per host like the other tiers; it only puts the CLI on PATH.
-          mysbx.enable = true;
+          mysbx = {
+            enable = true;
+            # The waypipe of the display channel
+            # (./modules/myconfig.ai.dev/mysbx/docs/design/config.md D18):
+            # pins the host-side `waypipe client` (MYSBX_WAYPIPE), puts
+            # waypipe on the sandbox PATH and into the podman-gvisor
+            # image. The `display` config stays "off" host-wide — a
+            # repository opts in per sidecar with `display = "waypipe"`
+            # (`mysbx edit`), which keeps the live verification of bd
+            # myconfig-1d6 (a payload window on this host's compositor)
+            # a per-repo decision.
+            display.package = pkgs.waypipe;
+          };
           # Cloud Hypervisor agent-sandbox tier
           # (see modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/agent-microvm.md).
           # Explicitly enabled here — NOT via the broad `myconfig.ai.enable`
