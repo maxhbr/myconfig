@@ -231,8 +231,9 @@ let
       };
       # Per-model extra environment variables, exported around the
       # llama-server / llama-bench run in ADDITION to the device-specific
-      # vars (LLAMA_ARG_DEVICE, CUDA_VISIBLE_DEVICES suppression). Use
-      # for backend tuning that should NOT be applied globally.
+      # vars (CUDA_VISIBLE_DEVICES suppression; the device itself is
+      # passed via the --device CLI flag). Use for backend tuning that
+      # should NOT be applied globally.
       extraEnv = mkOption {
         type = types.attrsOf types.str;
         default = { };

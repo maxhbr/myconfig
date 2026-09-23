@@ -361,24 +361,37 @@ in
         # `services.llama-cpp.package` is set by services.llama-cpp.nix
         # via `lib.mkDefault` (it picks a multi-backend llama-cpp build
         # appropriate for the host's GPU variants). We don't override
-        # it here — at runtime the LLAMA_ARG_DEVICE env var (set below)
-        # selects which backend that build uses. Hosts that need a
-        # different package can set `services.llama-cpp.package`
-        # explicitly with the usual mkForce / mkOverride mechanism.
+        # it here — at runtime the `--device` CLI flag (set below in
+        # `settings.device`) selects which backend that build uses.
+        # Hosts that need a different package can set
+        # `services.llama-cpp.package` explicitly with the usual mkForce
+        # / mkOverride mechanism.
         openFirewall = cfg.serviceOpenFirewall;
         settings = {
           host = cfg.serviceListenAddress;
           port = cfg.servicePort;
           models-preset = serviceModelsPresetFile;
           models-max = rcfg.modelsMax;
+          # Pass the device via the --device CLI flag instead of the
+          # LLAMA_ARG_DEVICE env var. The env-var path fails to detect
+          # ROCm devices in llama.cpp 0.4.1 ("no ROCm-capable device is
+          # detected") while the CLI flag works reliably.
+          device = serviceDevice;
         };
       };
 
-      # llama-server picks the device via $LLAMA_ARG_DEVICE.
+      # The device is now passed via the `--device` CLI flag (see
+      # `settings.device` above) instead of the `LLAMA_ARG_DEVICE` env
+      # var. The env-var path fails to detect ROCm devices in llama.cpp
+      # 0.4.1 ("no ROCm-capable device is detected") while the CLI flag
+      # works reliably.
+      #
       # `CUDA_VISIBLE_DEVICES=` (empty) is required for Vulkan/ROCm so
       # CUDA libs don't fight the active backend. `devices.envForDevice`
-      # returns "KEY=VALUE" strings; convert them to the
-      # systemd `environment` attrset shape.
+      # returns "KEY=VALUE" (and "UNSET:KEY") strings; convert them to
+      # the systemd `environment` attrset shape. `UNSET:` entries are
+      # skipped here (systemd `environment` has no unset; an unset
+      # is achieved by simply not setting the var, which is the default).
       #
       # HOME / XDG_CACHE_HOME: the upstream services.llama-cpp unit runs
       # as a DynamicUser with no $HOME, so the multi-backend build's
@@ -396,9 +409,10 @@ in
       #     no `video`/`render` membership, so it cannot open
       #     `/dev/nvidia*` (root:video 0660) or `/dev/dri/renderD*`
       #     (root:render 0660). CUDA then sees zero devices and
-      #     llama-server rejects `LLAMA_ARG_DEVICE=CUDA0` with
+      #     llama-server rejects the device with
       #       error while handling environment variable "LLAMA_ARG_DEVICE":
       #       invalid device: CUDA0
+      #     (now fixed by using `--device` CLI flag + the provisions below)
       #  2. `SystemCallFilter = ["@system-service" "~@privileged"]`
       #     omits the `@resources` group that ollama includes. That
       #     group covers the NUMA memory-policy syscalls (`mbind`,
@@ -466,7 +480,7 @@ in
             name = k;
             value = v;
           }
-        ) (devices.envForDevice serviceDevice)
+        ) (builtins.filter (e: !lib.hasPrefix "UNSET:" e) (devices.envForDevice serviceDevice))
       );
 
       myconfig.ai.localModels = [

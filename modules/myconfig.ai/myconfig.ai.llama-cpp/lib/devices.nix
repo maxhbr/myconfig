@@ -76,10 +76,15 @@ in
 
   llamaBenchFor = device: lib.getExe' (packageForDevice device) "llama-bench";
 
-  # Environment variables exported around llama-server / llama-bench runs to
-  # pin them to a specific device. For multi-device strings the full
-  # comma-separated value is preserved in LLAMA_ARG_DEVICE; the Vulkan/ROCm
-  # CUDA_VISIBLE_DEVICES suppression is based on the first device.
+  # Environment variables exported around llama-server / llama-bench runs
+  # to suppress conflicting backends. The device itself is now passed via
+  # the `--device` CLI flag (see `deviceCliFlag`) instead of the
+  # `LLAMA_ARG_DEVICE` env var — the env-var path fails to detect ROCm
+  # devices in llama.cpp 0.4.1 ("no ROCm-capable device is detected")
+  # while the CLI flag works reliably.
+  #
+  # For multi-device strings the CUDA_VISIBLE_DEVICES suppression is based
+  # on the first device.
   #
   # NOTE: we must `unset` (not `export CUDA_VISIBLE_DEVICES=`) because
   # an empty-string value confuses ROCm into thinking no device is visible.
@@ -89,8 +94,11 @@ in
     let
       d = firstDevice device;
     in
-    [ "LLAMA_ARG_DEVICE=${device}" ]
-    ++ lib.optional (lib.hasPrefix "Vulkan" d || lib.hasPrefix "ROCm" d) "UNSET:CUDA_VISIBLE_DEVICES";
+    lib.optional (lib.hasPrefix "Vulkan" d || lib.hasPrefix "ROCm" d) "UNSET:CUDA_VISIBLE_DEVICES";
+
+  # Shell-escaped `--device <device>` CLI flag for llama-server / llama-bench.
+  # For multi-device strings the full comma-separated value is preserved.
+  deviceCliFlag = device: "--device ${lib.escapeShellArg device}";
 
   # Extract the numeric suffix from a device string (e.g. "Vulkan0" -> "0",
   # "ROCm1" -> "1"). For multi-device strings the index of the first device

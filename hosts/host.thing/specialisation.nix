@@ -35,11 +35,7 @@
     #         "on"
     #       ];
     #     };
-    #     systemd.services.llama-cpp = {
-    #       environment = {
-    #         LLAMA_ARG_DEVICE = "Vulkan1";
-    #       };
-    #     };
+    #     services.llama-cpp.settings.device = "Vulkan1";
     #   };
     # };
   };

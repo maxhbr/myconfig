@@ -21,7 +21,7 @@
   devices,
 }:
 let
-  inherit (devices) llamaServerFor envForDevice;
+  inherit (devices) llamaServerFor envForDevice deviceCliFlag;
 
   # Translate a list of free-form `--flag value` / `-flag value` /
   # `--no-flag` CLI args into an attrset suitable for INI emission.
@@ -179,7 +179,11 @@ let
     let
       server = llamaServerFor device;
       scriptName = "llama-server_${device}";
-      envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
+      envExports = lib.concatStringsSep "\n" (
+        map (
+          e: if lib.hasPrefix "UNSET:" e then "unset ${lib.removePrefix "UNSET:" e}" else "export ${e}"
+        ) (envForDevice device)
+      );
     in
     pkgs.writeShellApplication {
       name = scriptName;
@@ -188,6 +192,7 @@ let
 
         set -x
         ${server} \
+          ${deviceCliFlag device} \
           --host 127.0.0.1 \
           --port "''${1:-${toString port}}" \
           --models-preset ${iniFile} \

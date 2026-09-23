@@ -18,6 +18,7 @@ let
     llamaServerFor
     llamaBenchFor
     envForDevice
+    deviceCliFlag
     isMultiDevice
     packageForDevice
     backendForDevice
@@ -228,6 +229,7 @@ let
 
         set -x
         ${server} \
+          ${deviceCliFlag device} \
           --port "''${1:-22545}" \
           -m ${lib.escapeShellArg model.path} \
           --gpu-layers all \
@@ -255,7 +257,7 @@ let
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-bench_${safeDevice}_${safeName}";
       # Exported for capture_metadata's llama-server invocation. llama-bench
-      # itself ignores LLAMA_ARG_DEVICE and uses the explicit -dev CLI flag.
+      # itself uses the explicit -dev CLI flag (see bench() below).
       extraEnvList = lib.mapAttrsToList (k: v: "${k}=${v}") model.extraEnv;
       envExports = lib.concatStringsSep "\n" (
         map (
