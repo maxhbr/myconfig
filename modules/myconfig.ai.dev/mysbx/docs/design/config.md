@@ -921,6 +921,142 @@ an operator must know:
   binds 6768 or a fallback, and the readiness block on the sandbox's
   stdout is the source of truth for the bound endpoint.
 
+### D18: `display` — how a Wayland compositor reaches the sandbox
+
+```toml
+display = "waypipe"       # off | waypipe
+```
+
+One top-level string key selects the display channel of a sandbox.
+The sandbox is headless by construction: no compositor socket is
+bound, `$XDG_RUNTIME_DIR` is not mounted, `$DISPLAY` and
+`$WAYLAND_DISPLAY` are not forwarded — a graphical payload simply has
+nothing to draw on. `display` is the opt-in that opens one channel,
+and there is exactly one channel to open today:
+
+| value | channel |
+| --- | --- |
+| `"off"` | none — the run is headless (the default) |
+| `"waypipe"` | [waypipe](https://gitlab.freedesktop.org/mstoeckl/waypipe), the Wayland proxy: host-side `waypipe client`, guest-side `waypipe server`, one channel per run |
+
+**Why waypipe and not a socket bind.** Binding the host
+`$XDG_RUNTIME_DIR/wayland-0` into the sandbox would be a window OUT
+of the isolation, not a window IN: the compositor protocol is
+bidirectional and versioned, the socket grants the payload every
+protocol object the compositor serves (clipboard, input, screenshots,
+window management of the whole session), and a bind of the host
+runtime directory hands over credentials of other applications that
+live there too (D13's argument, one directory over). waypipe instead
+terminates the protocol on the host side and re-serves it on a
+sandbox-internal socket: the payload talks to a waypipe, never to the
+compositor, and the protocol surface crossing the boundary is what
+waypipe itself proxies (buffers, surfaces, input events) — the same
+reasoning that made the multiplexer sockets sandbox-internal (D17).
+
+**The channel is per-run and self-contained.** mysbx creates
+`<sidecar>/waypipe/<pid>/` — a token directory owned by this run, mode
+`0700`, alongside the clones and the sidecar's other state — starts
+`waypipe --socket <dir>/waypipe.sock client` on the HOST before the
+payload execs, and binds the directory read-write into the sandbox at
+its own path (the guest server-conn children `connect()` through that
+bind, which is why it is rw). Inside, the payload argv is wrapped in
+`waypipe --socket <dir>/waypipe.sock --display wayland-0 server --`
+(bwrap.rs::WAYPIPE_DISPLAY): the guest server runs in MULTI mode — it
+CREATES the display socket at `/mysbx-home/wayland-0`, in the
+sandbox-home tmpfs, sets `WAYLAND_DISPLAY=wayland-0` for the payload,
+spawns one server-conn child per Wayland connection the payload's
+windows make, and exits when the payload does. `XDG_RUNTIME_DIR` is
+pinned to `/mysbx-home` for every `display = "waypipe"` run (emitted
+after `[env]`, like `HOME` and `PATH`, so no layer can repoint it),
+and the host compositor's socket never enters the sandbox at all.
+The host client is multi too — it must accept every connection the
+guest server-conn children make — and a multi client never exits on
+its own once the guest side is gone, so mysbx pins it to its own
+process with `prctl(PR_SET_PDEATHSIG, SIGKILL)`: in exec mode mysbx
+is replaced by the backend and the kernel kills the client when that
+process tree dies; a `--result` run kills and reaps the client and
+removes its token directory when the payload is done. A stale `<pid>`
+directory whose owner is gone is swept on the next waypipe run of the
+same sandbox (`kill(pid, 0)` probes, ESRCH-only: an alive owner keeps
+its directory, even when the pid was reused) — and before the client
+binds, mysbx unlinks a stale `waypipe.sock` left in the run's own
+token directory, so a pid reused across exec-mode runs cannot meet
+its predecessor's socket with an `EADDRINUSE`.
+
+An operator may pin `MYSBX_WAYPIPE_SECCTX` in the environment of a run:
+the value is the security-context application ID the host client
+passes to the compositor when it supports the security-context
+protocol (waypipe's `--secctx`); unset (the default) means no
+`--secctx`.
+
+**Unlike the multiplexer, `run -- CMD` is wrapped too.** A one-shot
+command that opens a window needs the channel just as much as an
+interactive shell does — `xterm -e`, a GUI test run, an image viewer —
+so both payload forms carry the wrap (D17 wrapped only the interactive
+one because a session is interactive by definition). The display is a
+property of the run, not of the payload form.
+
+**A string enum, not a table** — the D17 argument, verbatim: what a
+layer may say is *which of the channels this build carries* runs.
+Validated strictly; anything outside the two names is a schema error
+naming the file, the key and the accepted values.
+
+**Default: `off`.** An omitted key decides nothing (tri-state in a
+layer, like `backend`), and with neither layer deciding the run is
+headless — and the argv is byte-identical to the pre-D18 one, the
+byte-compat contract every D holds.
+
+**Layering: either layer may decide, and the sidecar wins when both
+do** — like `backend`, not like `network`, and for the same trust
+reasons as D17 (both layers are trusted, D7, and the key selects
+among payloads mysbx itself carries). The user config is the default
+and the sidecar the decision, including `display = "off"` for a repo
+that wants a headless run on a graphical host.
+
+**Availability is checked, never fallen back on.** `waypipe` needs a
+pin from mysbx's own closure — `MYSBX_WAYPIPE` (the host-side client
+binary; on the podman-gvisor backend, `MYSBX_GVISOR_WAYPIPE` for the
+in-image server end), set by the wrapper (`../../nix/mysbx.nix`) from
+`myconfig.ai.dev.mysbx.display.package` (`../../default.nix`). A selection
+that is not pinned — an unwrapped build, a host that installs no
+waypipe — is a **refused run** (exit `70`, the message naming the
+value and the missing variable), never a silently headless sandbox:
+the operator asked for a display, and discovering the missing one after
+the payload drew nothing is the worse outcome. The refusal is a
+configuration error, not an exec failure: it happens while the argv is
+built, so `--dry-run` refuses it too and neither `bwrap` nor the
+waypipe client is started. A `display = "waypipe"` host-wide without a
+`display.package` is an evaluation error in the module (the D17
+assertion shape).
+
+**What the channel is, and is not.** The channel is a render path:
+windows the payload creates appear on the host compositor, and input
+on them reaches the payload — a GUI dev loop inside the isolation. The
+channel is NOT desktop integration: the sandbox shares no clipboard,
+no screenshots, no session state, no host window manager objects
+beyond what waypipe proxies; anything beyond windows and input is out
+of scope, and a payload that needs it needs a different tool. The host
+compositor's other clients are unreachable — the payload's windows
+are windows like any other, but they cannot enumerate or talk to
+neighbours.
+
+On myconfig hosts the value is generated:
+`myconfig.ai.dev.mysbx.config.display` (`../../default.nix`) writes it
+into the user layer and defaults to `"off"`; the module pins waypipe
+when the host opts in (`display.package = pkgs.waypipe;`), threads it
+into the image of the podman-gvisor backend (`gvisor.waypipe` — the
+same store path, baked in via `gvisor.imagePackages`), and adds it to
+the sandbox `PATH` via `extraTools` so a payload can inspect the
+channel.
+
+**The other backends (a note, no code).** The channel is a plain byte
+stream, so it crosses whatever boundary a backend has: `microvm`/
+`qemu` would later carry it over vsock or an explicitly forwarded TCP
+port instead of a unix socket bind, and `nono` would need a check
+that waypipe's syscall set (memfd, `SCM_RIGHTS` on the guest-side
+socket) is available under its syscall filter. Neither backend exists
+yet; neither note blocks anything.
+
 ### D20: `egress = "proxy-only"` is a profile, not an allowlist
 
 ```toml

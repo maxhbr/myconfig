@@ -144,6 +144,28 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
     };
     p(backend_line);
     p(format!("multiplexer:     {}", merged.multiplexer.name()));
+    // The display channel (config.md D18), right after the
+    // multiplexer: the effective selection plus — when waypipe is
+    // selected — whether this build could actually open it (the
+    // wrapper's `MYSBX_WAYPIPE` pin; a run would refuse the selection
+    // without it). The pin probed here is the BWRAP backend's; the
+    // podman-gvisor backend's image pin (`MYSBX_GVISOR_WAYPIPE`) is
+    // checked at run time by the refusal path, not here — status does
+    // not know which backend a run will use.
+    p(match merged.display {
+        crate::config::Display::Off => "display:         off".to_string(),
+        crate::config::Display::Waypipe => {
+            let pinned = std::env::var("MYSBX_WAYPIPE")
+                .ok()
+                .filter(|v| !v.is_empty())
+                .is_some();
+            if pinned {
+                "display:         waypipe".to_string()
+            } else {
+                "display:         waypipe (refused: no waypipe pinned — set myconfig.ai.dev.mysbx.display.package)".to_string()
+            }
+        }
+    });
     p(format!(
         "network:         {}",
         if merged.network {

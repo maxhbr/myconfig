@@ -186,7 +186,9 @@ variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH` /
 `MYSBX_CA_BUNDLE` (the pinned CA bundle the TLS env variables point
 at, or `(none)`) values after
 their fallbacks, the payload, and whether the run will exec or stop at
-the argv.
+the argv. The effective display channel (config.md D18) is shown too:
+`off`, or `waypipe` with the host-side socket path, the guest display
+name and the guest binary — or the refusal note when nothing is pinned.
 
 The report cannot say *how* the repo was resolved (sidecar ancestor / git
 root / cwd): `repo::resolve` does not return that, and restructuring it

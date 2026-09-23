@@ -81,7 +81,7 @@
 //! as your uid with a bind-mounted CWD" — this backend proves the seam
 //! is general.
 
-use crate::bwrap::{Payload, PolicyPath, Workspace};
+use crate::bwrap::{Payload, PolicyPath, Waypipe, Workspace};
 use crate::config::{Mode, Mount, Multiplexer};
 use crate::merge::Merged;
 use crate::repo::Repo;
@@ -134,6 +134,18 @@ pub const CONTAINER_HOME: &str = "/mysbx-home";
 /// pane that runs plain `tmux` inside such a session lands on this
 /// private socket instead of the host default `/tmp/tmux-<uid>`.
 pub const MUX_SOCKET_DIR: &str = "/mysbx-home/.mysbx-tmux";
+
+/// The `WAYLAND_DISPLAY` name the guest waypipe server presents its
+/// fake compositor socket under (docs/design/config.md D18), the same
+/// spelling the bwrap backend uses — a bare name, so the multi-mode
+/// server creates it in `$XDG_RUNTIME_DIR`.
+pub const WAYPIPE_DISPLAY: &str = "wayland-0";
+
+/// The in-container path of the waypipe display socket:
+/// `$XDG_RUNTIME_DIR/<WAYPIPE_DISPLAY>` with `XDG_RUNTIME_DIR` pinned
+/// at [`CONTAINER_HOME`] (D18). No bind ever lands at or below it; the
+/// socket is created by the multi-mode in-container waypipe server.
+pub const WAYPIPE_DISPLAY_PATH: &str = "/mysbx-home/wayland-0";
 
 /// The `XDG_DATA_HOME` path inside the container home (bd
 /// myconfig-e50): section 4 mounts a tmpfs at it next to the home
@@ -255,6 +267,17 @@ pub struct Params<'a> {
     /// and getting a bare shell instead would be discovered only after
     /// the work was done in the wrong place.
     pub mux_entry: Option<&'a str>,
+    /// The **waypipe channel** of a run whose merged `display` is
+    /// `waypipe` (docs/design/config.md D18): the host socket directory
+    /// (bound rw at itself, so the in-container waypipe server finds
+    /// the socket where the host client created it) and the guest
+    /// `waypipe server` binary — a path INSIDE the container image
+    /// (`MYSBX_GVISOR_WAYPIPE`, pinned by the wrapper when the image
+    /// carries waypipe). `None` when nothing is pinned: a selected
+    /// display is a refused run ([`Error::DisplayUnavailable`]) — the
+    /// container mounts nothing from the host `/nix/store`, so no
+    /// fallback could exist.
+    pub waypipe: Option<Waypipe<'a>>,
     /// Which tree this run works in (workspace.md D1): the live repo
     /// (the default, unchanged) or a named session's clone (D3/D4 —
     /// the argv differences are exactly the workspace's). A
@@ -342,6 +365,15 @@ pub fn podman_run_argv(
         check_mux_socket(&cfg.mounts, &cfg.state_dirs)?;
         if params.mux_entry.is_none() {
             return Err(Error::MultiplexerUnavailable { multiplexer: mux });
+        }
+    }
+    // The display channel applies to EVERY payload form (D18), like
+    // on the bwrap backend — a one-shot `run -- CMD` that opens a
+    // window needs it just as much as the interactive shell.
+    if cfg.display.is_waypipe() {
+        check_display_socket(&cfg.mounts, &cfg.state_dirs)?;
+        if params.waypipe.is_none() {
+            return Err(Error::DisplayUnavailable);
         }
     }
 
@@ -589,6 +621,24 @@ pub fn podman_run_argv(
         bind_mount(&mut argv, src, dest, true);
     }
 
+    // 5b. the waypipe socket bind (D18): the per-run host directory
+    // holding `waypipe.sock`, bound rw at ITSELF, right after the
+    // state binds — the same implicit-infrastructure placement as on
+    // the bwrap backend. The directory holds exactly one socket file
+    // and nothing else.
+    let waypipe_bind: Option<(String, String)> = cfg.display.is_waypipe().then(|| {
+        let dir = params
+            .waypipe
+            .as_ref()
+            .expect("checked at the top of the builder")
+            .socket_dir
+            .to_owned();
+        (dir.clone(), dir)
+    });
+    if let Some((src, dest)) = &waypipe_bind {
+        bind_mount(&mut argv, src, dest, true);
+    }
+
     // Review-3 item 3: policy file protection (same as bwrap)
     for src in cfg
         .mounts
@@ -658,6 +708,7 @@ pub fn podman_run_argv(
         implicit_git_dirs,
         implicit_worktrees,
         &state_binds,
+        waypipe_bind.as_ref().map(|(s, d)| (s.as_str(), d.as_str())),
     )?;
     check_symlinkable_dests(
         &cfg.mounts,
@@ -666,6 +717,7 @@ pub fn podman_run_argv(
         implicit_git_dirs,
         implicit_worktrees,
         &state_binds,
+        waypipe_bind.as_ref().map(|(s, d)| (s.as_str(), d.as_str())),
     )?;
     for m in &cfg.mounts {
         // Clone run: force all mounts to read-only (D4)
@@ -746,6 +798,15 @@ pub fn podman_run_argv(
     if mux.starts_a_session() {
         argv.extend(["--env".into(), format!("TMUX_TMPDIR={MUX_SOCKET_DIR}")]);
     }
+    // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run (D18):
+    // infrastructure like `HOME`, anchoring the guest waypipe
+    // server's display socket (a bare `WAYLAND_DISPLAY` name is
+    // created in the runtime dir). Set last, so no config entry can
+    // repoint it. `WAYLAND_DISPLAY` itself is set by the waypipe
+    // server for the wrapped payload.
+    if cfg.display.is_waypipe() {
+        argv.extend(["--env".into(), format!("XDG_RUNTIME_DIR={CONTAINER_HOME}")]);
+    }
 
     // 8. resource limits
     // Only apply resource limits when cgroups are enabled.
@@ -779,6 +840,26 @@ pub fn podman_run_argv(
     // passes the token through as the container command's argv[0],
     // and runsc then fails with `error finding executable "--"` (bd
     // myconfig-ivp). The first token after the image IS the command.
+    // A `display = "waypipe"` run therefore starts with the in-image
+    // waypipe (D18): waypipe's OWN `--` separates its command, so
+    // mysbx adds none before the image command. All of its flags are
+    // ROOT options in waypipe's CLI (the subcommand must come first),
+    // and its multi mode is the one that CREATES the display socket
+    // for the payload — and one server-conn child per window the
+    // payload opens — and it exits when the payload does.
+    if cfg.display.is_waypipe() {
+        let wp = params
+            .waypipe
+            .as_ref()
+            .expect("checked at the top of the builder");
+        argv.push(wp.guest_bin.into());
+        argv.push("--socket".into());
+        argv.push(format!("{}/waypipe.sock", wp.socket_dir).into());
+        argv.push("--display".into());
+        argv.push(WAYPIPE_DISPLAY.into());
+        argv.push("server".into());
+        argv.push("--".into());
+    }
     match payload {
         Payload::Shell if mux.starts_a_session() => {
             argv.push(params.mux_entry.unwrap_or(params.shell).into())
@@ -912,6 +993,36 @@ fn check_mux_socket(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error
     Ok(())
 }
 
+/// Check the waypipe display socket isolation of a
+/// `display = "waypipe"` run (docs/design/config.md D18), mirroring
+/// [`check_mux_socket`]: no mount may land at or below
+/// [`WAYPIPE_DISPLAY_PATH`], and no `state-dirs` entry may back it.
+fn check_display_socket(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error> {
+    for m in mounts {
+        let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
+        if dest == normalize(WAYPIPE_DISPLAY_PATH)
+            || dest.starts_with(&format!("{WAYPIPE_DISPLAY_PATH}/"))
+            || normalize(WAYPIPE_DISPLAY_PATH).starts_with(&format!("{}/", dest.display()))
+        {
+            return Err(Error::DisplaySocketDest {
+                dest: dest.to_string_lossy().into_owned(),
+            });
+        }
+    }
+    for entry in state_dirs {
+        let dest = normalize(&format!("{CONTAINER_HOME}/{entry}"));
+        if dest == normalize(WAYPIPE_DISPLAY_PATH)
+            || dest.starts_with(&format!("{WAYPIPE_DISPLAY_PATH}/"))
+            || normalize(WAYPIPE_DISPLAY_PATH).starts_with(&format!("{}/", dest.display()))
+        {
+            return Err(Error::DisplaySocketPersisted {
+                entry: entry.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// Check git dir approval (same as bwrap).
 fn check_git_dir(git_dir: &Path, approved: &[PathBuf]) -> Result<(), Error> {
     if !approved.iter().any(|a| git_dir.starts_with(a)) {
@@ -944,6 +1055,7 @@ fn check_hidden_mounts(
     git_dirs: &[PathBuf],
     worktrees: Option<&Path>,
     state_binds: &[(String, String)],
+    waypipe_bind: Option<(&str, &str)>,
 ) -> Result<(), Error> {
     // Build list of implicit binds
     let mut implicit: Vec<String> = vec![repo_root.to_string()];
@@ -952,6 +1064,9 @@ fn check_hidden_mounts(
         implicit.push(wt.to_string_lossy().into_owned());
     }
     implicit.extend(state_binds.iter().map(|(_, d)| d.clone()));
+    if let Some((_src, dest)) = waypipe_bind {
+        implicit.push(dest.to_string());
+    }
 
     // Check each mount against earlier ones and implicit binds
     let mut all_dests: Vec<String> = implicit.clone();
@@ -982,6 +1097,7 @@ fn check_symlinkable_dests(
     git_dirs: &[PathBuf],
     worktrees: Option<&Path>,
     state_binds: &[(String, String)],
+    waypipe_bind: Option<(&str, &str)>,
 ) -> Result<(), Error> {
     // Build writable set
     let mut writable: Vec<String> = vec![workspace_src.to_string()];
@@ -990,6 +1106,9 @@ fn check_symlinkable_dests(
         writable.push(wt.to_string_lossy().into_owned());
     }
     writable.extend(state_binds.iter().map(|(s, _)| s.clone()));
+    if let Some((src, _dest)) = waypipe_bind {
+        writable.push(src.to_string());
+    }
 
     for m in mounts {
         let dest = m.dest.as_deref().unwrap_or(&m.path);
@@ -1039,6 +1158,16 @@ pub enum Error {
     MuxSocketDest { dest: String },
     /// A `state-dirs` entry would make [`MUX_SOCKET_DIR`] sidecar-backed.
     MuxSocketPersisted { entry: String },
+    /// The configuration selects the waypipe display (D18) but this
+    /// build pinned no in-image waypipe (`MYSBX_GVISOR_WAYPIPE`). The
+    /// container mounts nothing from the host `/nix/store`, so no
+    /// host pin could serve — the refusal names the image.
+    DisplayUnavailable,
+    /// A mount `dest` is related to [`WAYPIPE_DISPLAY_PATH`].
+    DisplaySocketDest { dest: String },
+    /// A `state-dirs` entry would back [`WAYPIPE_DISPLAY_PATH`] with
+    /// a sidecar directory.
+    DisplaySocketPersisted { entry: String },
 }
 
 impl fmt::Display for Error {
@@ -1093,6 +1222,26 @@ impl fmt::Display for Error {
                 f,
                 "state-dirs entry {entry} would persist the multiplexer \
                  socket directory {MUX_SOCKET_DIR}"
+            ),
+            Error::DisplayUnavailable => write!(
+                f,
+                "display = \"waypipe\" but no in-image waypipe is pinned \
+                 (MYSBX_GVISOR_WAYPIPE) \u{2014} the container would run \
+                 headless instead of getting its windows \
+                 (docs/design/config.md D18); bake waypipe into the \
+                 container image (myconfig.ai.dev.mysbx.display.package), \
+                 or set display = \"off\""
+            ),
+            Error::DisplaySocketDest { dest } => write!(
+                f,
+                "mount dest {dest} is at or below the waypipe display \
+                 socket {WAYPIPE_DISPLAY_PATH}, which the in-container \
+                 waypipe server creates inside the container home"
+            ),
+            Error::DisplaySocketPersisted { entry } => write!(
+                f,
+                "state-dirs entry {entry} would persist the waypipe \
+                 display socket {WAYPIPE_DISPLAY_PATH} in the sidecar"
             ),
         }
     }
