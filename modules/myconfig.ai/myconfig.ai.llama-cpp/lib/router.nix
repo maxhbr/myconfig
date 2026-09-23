@@ -75,7 +75,10 @@ let
               acc
               // {
                 keys = acc.keys // {
-                  ${key} = true;
+                  # llama.cpp 0.4.1 removed `--no-mmap` in favour of
+                  # `--load-mode none`; translate so `params` entries
+                  # keep working in INI presets.
+                  ${if key == "no-mmap" then "load-mode" else key} = if key == "no-mmap" then "none" else true;
                 };
               }
             ) tail

@@ -191,7 +191,9 @@ let
           Override the global `mlock` setting for this model.
           `null` to inherit the global default; `false` to disable
           `mlock` even if the global enables it; `true` to enable it
-          even if the global disables it.
+          even if the global disables it. Emitted as the llama.cpp
+          `--load-mode` INI key (`mlock` / `auto`), since 0.4.1 removed
+          the `mlock` option in favour of `load-mode`.
         '';
       };
       # Per-model llama.cpp package override. When null the package is
@@ -254,15 +256,19 @@ let
         type = types.nullOr types.bool;
         default = null;
         description = ''
-          Control the `--no-mmap` flag explicitly, independent of the
-          free-form `params` list.
-          null (default): pass `params` through verbatim; `--no-mmap` is
-            present iff it appears in `params`.
-          true: ensure `--no-mmap` is in the effective flags (added if
-            not already in `params`).
-          false: strip `--no-mmap` from `params` so the model is served
-            with mmap + mlock (the GGUF is mmap'd then mlock'd into
-            RAM), which can reduce resident memory for large models.
+          Control the model loading mode explicitly, independent of
+          the free-form `params` list. Since llama.cpp 0.4.1 removed
+          `--no-mmap` in favour of `--load-mode`, any `--no-mmap` in
+          `params` (or set via this option) is translated to
+          `--load-mode none`.
+          null (default): pass `params` through verbatim; `--load-mode
+            none` is used iff `--no-mmap` appears in `params`.
+          true: force `--load-mode none` (read the model into RAM, no
+            mlock) even if `--no-mmap` is not in `params`.
+          false: strip `--no-mmap` from `params` so the model is
+            served with mmap + mlock (the GGUF is mmap'd then mlock'd
+            into RAM), which can reduce resident memory for large
+            models.
         '';
       };
       # Pinned SHA-256 of the target model file (the LFS oid, hex).

@@ -65,13 +65,21 @@ let
       # `params` list. null = pass params through as-is (legacy); true =
       # ensure --no-mmap is present; false = strip --no-mmap so the
       # model is served with mmap+mlock.
-      effectiveParams =
+      rawParams =
         if model.noMmap == true then
           model.params ++ (lib.optional (!lib.elem "--no-mmap" model.params) "--no-mmap")
         else if model.noMmap == false then
           lib.filter (p: p != "--no-mmap") model.params
         else
           model.params;
+      # llama.cpp 0.4.1 removed `--mlock` / `--no-mmap` in favour of
+      # `--load-mode`: `none` (read into RAM, no mlock) is the old
+      # `--no-mmap`; `mlock` (read into RAM + mlock) is the old
+      # `--mlock`. Translate any legacy `--no-mmap` param into the
+      # load-mode flag and drop it from the emitted command line.
+      wantsNoMmap = lib.elem "--no-mmap" rawParams;
+      effectiveParams = lib.filter (p: p != "--no-mmap") rawParams;
+      loadModeFlag = if wantsNoMmap then "--load-mode none" else "--load-mode mlock";
       # Sanitise the device string for use in the script/package name:
       # replace commas with dashes so "Vulkan0,Vulkan1" -> "Vulkan0-Vulkan1".
       safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
@@ -95,9 +103,10 @@ let
         if model.noMmap == null then
           "inherit(params)"
         else if model.noMmap then
-          "true(--no-mmap)"
+          "true(--load-mode none)"
         else
           "false(mmap+mlock)";
+      loadModeRepr = if wantsNoMmap then "none" else "mlock";
       banner = ''
         echo "[llama-cpp] === startup banner ===" >&2
         echo "[llama-cpp]   model:     ${model.name}" >&2
@@ -115,6 +124,7 @@ let
         }" >&2
         echo "[llama-cpp]   parallel:  ${toString model.parallel}" >&2
         echo "[llama-cpp]   noMmap:    ${noMmapRepr}" >&2
+        echo "[llama-cpp]   loadMode:  ${loadModeRepr}" >&2
         echo "[llama-cpp]   serverPkg: ${
           if model.serverPackage != null then
             "fork:" + (model.serverPackage.name or "?")
@@ -234,7 +244,7 @@ let
           -m ${lib.escapeShellArg model.path} \
           --gpu-layers all \
           --flash-attn on \
-          --mlock \
+          ${loadModeFlag} \
           --metrics \
           --no-webui \
           --timeout 600 \

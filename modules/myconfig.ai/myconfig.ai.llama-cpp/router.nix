@@ -78,7 +78,10 @@ let
   globalKeys = {
     gpu-layers = "all";
     flash-attn = "on";
-    mlock = true;
+    # llama.cpp 0.4.1 removed `--mlock` in favour of `--load-mode`;
+    # `mlock` = read the model into RAM and mlock it (the old
+    # `--mlock` behaviour).
+    load-mode = "mlock";
     metrics = true;
     no-webui = true;
     # Disable per-slot *context checkpoints* (-ctxcp / --ctx-checkpoints
@@ -205,7 +208,7 @@ let
       keys = {
         model = m.path;
       }
-      // lib.optionalAttrs (m.mlock != null) { mlock = m.mlock; }
+      // lib.optionalAttrs (m.mlock != null) { load-mode = if m.mlock then "mlock" else "auto"; }
       # See lib/scripts.nix: `ctxSize` is the PER-REQUEST context, and
       # llama-server only divides `--ctx-size` by the slot count when the
       # KV cache is not unified.
@@ -458,9 +461,9 @@ in
           "~@privileged"
         ];
         ProcSubset = lib.mkForce "all";
-        # llama-server --mlock will try to lock ~2 GB of RAM. The default
-        # RLIMIT_MEMLOCK (64 KB) is far too small; set to unlimited so the
-        # service can mlock() the full working set without EAGAIN.
+        # llama-server `--load-mode mlock` will try to lock ~2 GB of RAM. The
+        # default RLIMIT_MEMLOCK (64 KB) is far too small; set to unlimited so
+        # the service can mlock() the full working set without EAGAIN.
         LimitMEMLOCK = -1;
       };
 
