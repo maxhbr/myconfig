@@ -12,6 +12,7 @@ let
   gemma4 = import ./gemma4.nix { inherit modelsPullDir; };
   minimaxM2_7 = import ./MiniMax-M2.7-GGUF.nix { inherit modelsPullDir; };
   nemotron3Super = import ./Nemotron-3-Super.nix { inherit modelsPullDir; };
+  mimoV2_6_flash = import ./MiMo-V2.6-Flash.nix { inherit modelsPullDir; };
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix { inherit modelsPullDir; };
   qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
   qwen3_8_27B-multiGpu = qwen3_8_27B.multiGpuModels;
@@ -98,6 +99,7 @@ let
     ++ qwen38_flash_next.amdModels
     ++ nex_n25_mini.amdModels
     ++ hy3.amdModels
+    ++ withGroup "MoE" mimoV2_6_flash.amdModels
   );
   # Names of all models that get a host-side Vulkan1 wrapper through
   # `scriptOnlyModels` in `rtx-llama-cpp-config` below (every
