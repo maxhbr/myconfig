@@ -33,9 +33,9 @@ comes from (e.g. `cli.md D2`), so drift between design and code stays visible.
 | Key | Tier | Module / entry point | Generated commands |
 | --- | --- | --- | --- |
 | `agentUsers` | 1 | [`myconfig.agentUsers.nix`](../../../myconfig.agentUsers.nix) | `<name>-tmux`, `<name>-alacritty-tmux` |
-| `bwrap-jail` | 2 | [`fns/bubblewrap-app.nix`](../../myconfig.ai.dev/fns/bubblewrap-app.nix) + [`myconfig.ai.jail.nix`](../../myconfig.ai.jail.nix) | `agent-bubblewrap-pi`, `-opencode`, `-claude`, `…-tmp`, `…-worktree` |
-| `bwrap-simple` | 2 | [`fns/bubblewrap-simple-app.nix`](../../myconfig.ai.dev/fns/bubblewrap-simple-app.nix) | `<name>-bwrap` (`pi-bwrap`, `codex-bwrap`, `fish-bwrap`, …) |
-| `nono` | 2 | [`myconfig.ai.nono-agent-sandbox.nix`](../../myconfig.ai.nono-agent-sandbox.nix) + [`fns/nono-app.nix`](../../myconfig.ai.dev/fns/nono-app.nix) | `agent-nono-pi`, `-opencode`, `-claude`, `-codex` |
+| `bwrap-jail` | 2 | [`fns/bubblewrap-app.nix`](../../fns/bubblewrap-app.nix) + [`myconfig.ai.jail.nix`](../../myconfig.ai.jail.nix) | `agent-bubblewrap-pi`, `-opencode`, `-claude`, `…-tmp`, `…-worktree` |
+| `bwrap-simple` | 2 | [`fns/bubblewrap-simple-app.nix`](../../fns/bubblewrap-simple-app.nix) | `<name>-bwrap` (`pi-bwrap`, `codex-bwrap`, `fish-bwrap`, …) |
+| `nono` | 2 | [`myconfig.ai.nono-agent-sandbox.nix`](../../myconfig.ai.nono-agent-sandbox.nix) + [`fns/nono-app.nix`](../../fns/nono-app.nix) | `agent-nono-pi`, `-opencode`, `-claude`, `-codex` |
 | `qemu` | 3 | [`myconfig.ai.qemu-agent-sandbox/`](../../myconfig.ai.qemu-agent-sandbox) | `agent-qemu-pi`, `agent-qemu-herdr`, `agent-qemu-workmux-tmux` |
 | `gvisor` | 3.5 | [`myconfig.ai.gvisor-agent-sandbox/`](../../myconfig.ai.gvisor-agent-sandbox) | `agent-gvisor` |
 | `microvm` | 4 | [`myconfig.ai.microvm/`](../../myconfig.ai.microvm) | `agent-microvm`, `microvm-<agent>` workmux panes |
@@ -68,15 +68,15 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 `../../myconfig.ai.gvisor-agent-sandbox/rust/src/usage.txt`,
 `../../myconfig.ai.microvm/launcher.nix` (the `usage()` heredoc),
 `../../myconfig.ai.microvm/docs/agent-microvm-howto.md` (exit codes),
-`../../myconfig.ai.dev/fns/bubblewrap-app.nix`, `../../myconfig.ai.dev/fns/bubblewrap-simple-app.nix`,
-`../../myconfig.ai.dev/fns/nono-app.nix`,
+`../../fns/bubblewrap-app.nix`, `../../fns/bubblewrap-simple-app.nix`,
+`../../fns/nono-app.nix`,
 `../../myconfig.ai.qemu-agent-sandbox/builders.nix`.
 
 ## 3. Sandboxing features
 
 | Axis | `bwrap-jail` | `bwrap-simple` | `nono` | `qemu` | `gvisor` | `microvm` | `mysbx` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Mechanism | bubblewrap namespaces | bubblewrap namespaces | Landlock + seccomp (`nono`) | QEMU microVM, own kernel | rootless podman + `runsc` | Cloud Hypervisor, own kernel | bubblewrap (default), podman+gVisor (`backend = "podman-gvisor"` — argv maps mounts/env/state-dirs/multiplexer onto a `podman run`; image + ref + ID pinned by the wrapper, `gvisor-load-image` loads it) and nono — Landlock + seccomp (`backend = "nono"`, explicit config — argv maps mounts/env/state-dirs/allowlist onto a `nono run`; binary + profile pinned by the wrapper, bd myconfig-6di.2); qemu/microvm later (`../README.md` roadmap) |
+| Mechanism | bubblewrap namespaces | bubblewrap namespaces | Landlock + seccomp (`nono`) | QEMU microVM, own kernel | rootless podman + `runsc` | Cloud Hypervisor, own kernel | bubblewrap (default), podman+gVisor (`backend = "podman-gvisor"` — argv maps mounts/env/state-dirs/multiplexer onto a `podman run`; image + ref + ID pinned by the wrapper, `gvisor-load-image` loads it) and nono — Landlock + seccomp (`backend = "nono"`, explicit config — argv maps mounts/state-dirs/allowlist onto a `nono run`, the environment is pinned in the exec environment (inherited parent env); binary + profile pinned by the wrapper, bd myconfig-6di.2); qemu/microvm later (`../README.md` roadmap) |
 | Kernel boundary | no | no | no | yes | user-space kernel | yes | none yet |
 | Runs as | your uid | your uid | your uid | guest `agent` user | container user | guest `agent` user | your uid (planned) |
 | Filesystem policy | curated allow-list of binds, env cleared (`--clearenv`) | ro config dirs + writable XDG dirs | `--allow` / `--read` / `--allow-cwd` | virtiofs shares only | image + explicit `--mount` | virtiofs shares only | nothing from the host filesystem unless declared: repo (+ its git metadata dirs, only when approved in `git-dirs` — D13) + explicit `[[mounts]]` (`config.md` D9, D13) |
@@ -86,9 +86,9 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Network default | on (`network` combinator: resolv.conf + CA bundle) | on (`shareNet = true`) | off unless `--allow-domain` / `--allow-connect-port` / `--listen-port` | SLiRP user-mode NAT, outbound only + one loopback SSH port | rootless podman default, `--network`/`AGENT_GVISOR_NETWORK` (pasta spec), in-sandbox loopback forwarders | private bridge `agentbr0` with per-TAP L2 isolation, `networkProfile` (default `proxy-only`) | on, shared; `network = false` is the deny switch; per-domain/port allowlist (`allow-domains`/`connect-ports`/`listen-ports`) enforced on the nono backend, refused elsewhere (`config.md` D5, D9, D21) |
 | Env forwarding | `try-fwd-env` list + `myconfig.ai.dev.jail.fwdEnvs`, always `OPENAI_API_KEY` | `envVars` attrset | same shape via `myconfig.ai.dev.nono.fwdEnvs` | pushed over the SSH session env at launch | `--env` / `--env-file` | none needed for model access | built-in allowlist (`FORWARDED_ENV_VARS`, lib.rs): terminal/locale block only, extended additively by the `forward-env` key of either configuration layer (seeded host-wide by `myconfig.ai.dev.mysbx.forwardedEnvVars`, bd myconfig-20j), plus the `[env]` table |
 | Model credentials | real host key inside the sandbox | n/a | real host key inside the sandbox | real key, over SSH env | seeded config, endpoints rewritten to a sandbox-reachable proxy | **never reaches the guest** — host LiteLLM via bridge-only forwarder | real host key inside the sandbox, but only for the key/token/URL variables a deployment names in `forward-env` — never by default (bd myconfig-20j) |
-| Agent-config seeding | `try-ro-bind` of `configDirs`, rw `userDataDirs` | `readOnlyConfigDirs` | `--read` of config dirs, `--allow` of state dirs | [`fns/seed-agent-config.nix`](../../myconfig.ai.dev/fns/seed-agent-config.nix), rsync over SSH | `home.seedPaths` + `AGENT_GVISOR_HOME_SEED_REWRITE` | root-owned staged copy via `config-seed.nix` | user config decides which host config is exposed (`config.md` D6) |
+| Agent-config seeding | `try-ro-bind` of `configDirs`, rw `userDataDirs` | `readOnlyConfigDirs` | `--read` of config dirs, `--allow` of state dirs | [`fns/seed-agent-config.nix`](../../fns/seed-agent-config.nix), rsync over SSH | `home.seedPaths` + `AGENT_GVISOR_HOME_SEED_REWRITE` | root-owned staged copy via `config-seed.nix` | user config decides which host config is exposed (`config.md` D6) |
 | Per-repo state dir | none | none | none | throwaway runtime dir | `<repo>__agent-gvisor/` + registry | root-owned task→clone index under `runtimeRoot` | sidecar `<repo>.mysbx/`, outside repo *and* sandbox (`config.md` D2, D10) |
-| Agent state persists across runs | rw `userDataDirs` bind the *host* state | same host dirs read-only | `--allow` of state dirs | no (throwaway) | yes, container volume | yes, clone-side | yes, but never through host-home paths: `state-dirs` entries are backed by the sidecar (`config.md` D15) |
+| Agent state persists across runs | rw `userDataDirs` bind the *host* state | same host dirs read-only | `--allow` of state dirs | no (throwaway) | yes, container volume | yes, clone-side | yes, but never through host-home paths: `state-dirs` entries are backed by the sidecar (`config.md` D15) — remapped to `/mysbx-home/<entry>` on bwrap/podman, NOT remapped under nono (they persist at their real sidecar paths, `nono.rs` section 4) |
 | Repo-local config trusted? | n/a | n/a | n/a | n/a | n/a | n/a | no from *inside* the repo (`config.md` D3); yes for the sidecar beside it, which the payload cannot write (`config.md` D7) |
 | Resource limits | none | none | none | VM `vcpu`/`mem` | `--memory --cpus --pids-limit` | prebuilt `resourceClasses` (vcpu/mem/slots) | `backend` limits foreseen (`config.md` D5), not implemented |
 | Refuses `$HOME` as CWD | yes (`rejectHomeCwd`) | — | yes (`rejectHomeCwd`) | yes | n/a (clone-based) | n/a (clone-based) | not implemented |
@@ -97,8 +97,8 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Startup cost | ~none | ~none | ~none | seconds (boot) | ~a second (container) | prebuilt slot + host config | ~none (planned) |
 | Interactive agent UI inside the sandbox | terminal jail wrapper only | n/a | CLI | SSH terminal | terminal exec / webview | web console via bridge | the **interactive payload** is per-user selectable (`config.md` D17, bd myconfig-1os): `tmux`/`workmux`/`aoe` (tmux server on a sandbox-private socket), `herdr` (own state in the tmpfs `HOME`), **`orca`** — the Orca runtime server (`orca serve`) reached from the Orca desktop/mobile client over the shared network, the one payload whose control surface is a listen endpoint rather than a terminal; `none` = plain shell |
 
-Sources: `../../myconfig.ai.dev/fns/bubblewrap-app.nix`, `../../myconfig.ai.dev/fns/bubblewrap-simple-app.nix`,
-`../../myconfig.ai.dev/fns/nono-app.nix`, `../../myconfig.ai.jail.nix`, `../../myconfig.ai.nono.nix`,
+Sources: `../../fns/bubblewrap-app.nix`, `../../fns/bubblewrap-simple-app.nix`,
+`../../fns/nono-app.nix`, `../../myconfig.ai.jail.nix`, `../../myconfig.ai.nono.nix`,
 `../../myconfig.ai.qemu-agent-sandbox/builders.nix`,
 `../../myconfig.ai.gvisor-agent-sandbox/README.md` and its `docs/spec.md`,
 `../../myconfig.ai.microvm/docs/agent-microvm-security-model.md`,
@@ -159,8 +159,9 @@ Everything below exists in at least one tier above and has no counterpart in
   `backend = "nono"` maps the merged config onto a `nono run`
   (Landlock + seccomp, `nono.rs`), binary + profile pinned by the
   wrapper (`MYSBX_NONO`/`MYSBX_NONO_PROFILE`). First-cut refusals for
-  what Landlock cannot express — clone sessions (no path remap),
-  mounts with a `dest`, multiplexer and waypipe runs — are tracked in
+  what that model cannot express — clone remap, mount `dest` remap,
+  multiplexer, waypipe, and shared-network-without-allowlist
+  (`NetworkSharedUnsupported`) — are tracked in
   `../../../../doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`.
   Not yet exercised on a host.
 - **Network policy.** DONE for the allowlist (bd myconfig-mo3.1):

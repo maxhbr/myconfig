@@ -1,11 +1,13 @@
 # Revisit the nono backend's first-cut refusals
 
 The mysbx nono backend (`modules/myconfig.ai.dev/mysbx/mysbx-rs/src/nono.rs`,
-dispatched in `src/lib.rs` steps 4b/4c) maps the merged config onto a
-`nono run` under Landlock + seccomp (bd myconfig-6di.2). Its Landlock model
-has no path remap and no bind machinery, so four mysbx features are refused
-outright on this backend. Each refusal below is correct today; revisit each
-once nono's flag surface is confirmed on a real host.
+dispatched in `src/lib.rs` step 5; its refusals live in `src/lib.rs`
+steps 4b/4c and in the `nono.rs` argv builder) maps the merged config
+onto a `nono run` under Landlock + seccomp (bd myconfig-6di.2). Its
+Landlock model has no path remap and no bind machinery, so five mysbx
+features are refused outright on this backend. Each refusal below is
+correct today; revisit each once nono's flag surface is confirmed on a
+real host.
 
 Introduced by commits `7d1e097928` and `5a02f7a3bb` on branch
 `6di2-nono`.
@@ -20,6 +22,12 @@ Introduced by commits `7d1e097928` and `5a02f7a3bb` on branch
   present the clone at the repo's path must exist in nono (none does
   today), or the workspace semantic must change (a non-remapped clone
   path).
+- **Mount `dest` remap** (a `[[mounts]]` entry whose `dest` differs
+  from its `path`) — refused with `Error::RemapUnsupported` (`nono.rs`,
+  argv section 5). Landlock grants access AT a path, it cannot move
+  one, so a bind at a different destination is inexpressible. To lift:
+  nono must gain a remap mechanism, or the operator keeps
+  `dest` == `path` for every mount under this backend.
 - **Waypipe display** (`display = "waypipe"`) — refused with
   `Error::DisplayUnavailable` (`nono.rs`). waypipe's syscall set (memfd,
   `SCM_RIGHTS` on the guest-side socket) must be audited under nono's
@@ -33,8 +41,9 @@ Introduced by commits `7d1e097928` and `5a02f7a3bb` on branch
   `/mysbx-home/.mysbx-tmux` inside the tmpfs home) has no Landlock
   equivalent: nono has no sandbox home, and the host tmux socket dir
   `/tmp/tmux-<uid>` is writable under nono's default profile. To lift: a
-  Landlock-equivalent private socket location is needed (nono's
-  `--allow-unix-socket-bind` flag family could serve; needs verification).
+  Landlock-equivalent private socket location is needed (a socket-bind
+  grant could serve, if nono grows one — the verified 0.74.0 surface
+  has `--allow-unix-socket`, no bind family).
 - **Shared network on nono** (`network = true`, the default, with an EMPTY
   allowlist) — refused with `Error::NetworkSharedUnsupported` (`nono.rs`).
   nono mediates per connection (seccomp baseline; only the

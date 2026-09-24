@@ -492,9 +492,9 @@ Inside the sandbox `HOME` is `/mysbx-home`, a fresh, empty, writable
 tmpfs created with the other base mounts. The host home directory is
 still **not** mounted, and the host's `HOME` *value* is never forwarded
 (it is not in the forwarded list, plan.md "Environment"). Both
-backends implement the same row: bubblewrap's `--tmpfs`, podman's
-`--mount type=tmpfs,dst=/mysbx-home` — which the container engines
-mount before every bind under it (podman sorts user mounts by
+tmpfs-capable backends implement the same row: bubblewrap's `--tmpfs`,
+podman's `--mount type=tmpfs,dst=/mysbx-home` — which the container
+engines mount before every bind under it (podman sorts user mounts by
 destination depth, runsc re-sorts the OCI mounts, both
 parents-before-children), so configured `dest`s below the home and
 `state-dirs` binds land on top of the tmpfs exactly like on bwrap.
@@ -508,6 +508,20 @@ container user and the shell died on its first XDG write below it
 emitted before every bind too, so `state-dirs` entries below them
 still land on top; `.config` deliberately gets none — the ro
 host-config seed mount stays the visibly-read-only surface.
+
+**The nono exception (backend = "nono").** The tmpfs-home row above is
+the bubblewrap/podman-gvisor shape; under nono there is NO tmpfs home
+and no `/mysbx-home`. nono has no bind or remap machinery (Landlock
+grants access AT a path, it cannot move or overlay one), so the exec
+environment lib.rs builds sets `HOME` to the invoking user's REAL home
+path string. That value grants nothing: Landlock keeps the host home
+UNWRITABLE — only an explicit `--allow` grants write access below it —
+and the sandbox's writable surfaces are the repo (with its approved
+git dirs and the worktrees sibling), the `state-dirs` sidecar paths
+(`<repo>.mysbx/state/<entry>`, at their real host paths, not remapped)
+and the configured `rw` mounts. Everything else in this decision that
+names `/mysbx-home` (the seeding path, the `dest` guards, the
+generated-layer assertion) applies to the tmpfs backends only.
 
 "The host home is not mounted" is enforced, not merely claimed
 (review-3 item 4): a mount source that IS the home (`path = "~/"`, or
@@ -547,12 +561,15 @@ Rationale, in the order the constraints bite:
   sandbox would mirror a host path that is deliberately absent; a payload
   (or a reviewer of `--dry-run`) could not tell the two apart. The
   literal invariant is worth keeping checkable, so the sandbox home is
-  namespaced instead: `/mysbx-home`. It reads "no in-sandbox path under
+  namespaced instead: `/mysbx-home` (on the tmpfs backends; under nono
+  there is no sandbox home at all — the exception above). It reads "no
+  in-sandbox path under
   `/home/`" — mount *sources* are host paths and may of course live in
   the host home; what must not happen is a `dest` (or `HOME` itself)
   mirroring one. That is why the generated user layer gives its
   baseline mounts explicit destinations under `/mysbx-home` (review-2
-  item 6) instead of letting them default to their host path. The check
+  item 6) instead of letting them default to their host path (the
+  bubblewrap/podman-gvisor generated layer). The check
   is a NixOS assertion on the generated layer; a hand-written config or
   sidecar can still write such a `dest`, and mysbx accepts it — the
   invariant is a property of what myconfig generates, not something the
@@ -1123,9 +1140,10 @@ ports are errors naming the file and the key, never warnings.
 same rule as `state-dirs` and `forward-env` (D15), not the mounts rule
 (D7): the user layer's entries first, in declaration order, then the
 sidecar's, then duplicates dropped keeping the FIRST occurrence. The
-order survives to the argv, so `--verbose` and the allowlist flag
-sequence stay readable. Either layer may declare; the sidecar adds
-domains, it does not override the user layer's.
+order survives to the argv, so the merged allowlist flag sequence
+stays readable in the `--dry-run` argv and in the `--verbose` step-7a
+`## arg` dump of the executed command. Either layer may declare; the
+sidecar adds domains, it does not override the user layer's.
 
 **Enforcement is per backend, and a backend that cannot enforce the
 keys refuses the run (exit `70`) rather than accepting and ignoring
@@ -1154,5 +1172,6 @@ every backend**: the switch denies the network, the allowlist names what
 may be reached through it — both cannot hold at once.
 
 `egress = "proxy-only"` stays a different mechanism (D20): setting a
-D21 allowlist next to it is already a schema error, and D20 keeps
-owning that mutual exclusion.
+D21 allowlist next to it is already a schema error (trivially today:
+`egress` is not yet a key, so both cannot be set at once), and D20
+keeps owning that mutual exclusion.

@@ -210,11 +210,9 @@ backend is a function from merged config + payload to a process invocation.
 Both named next backends are done: podman+gVisor (bd myconfig-6di.1) maps
 the merged config onto a rootless `podman run --runtime=runsc`; nono
 (bd myconfig-6di.2) maps it onto a `nono run` under Landlock + seccomp,
-refusing what that model cannot express — clone sessions (no path remap
-under Landlock, so a clone cannot be bound at the repo's path), mounts
-with a `dest` remap, multiplexer sessions and the waypipe display (their
-socket machinery has no Landlock-equivalent first cut,
-`doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`). Remaining:
+refusing the inexpressible — clone remap, mount `dest` remap,
+multiplexer, waypipe, and shared-network-without-allowlist
+(`doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`). Remaining:
 qemu and microvm, long-term.
 
 **2g — per-repo opt-out of user mounts.** `config.md` D7 settled the other

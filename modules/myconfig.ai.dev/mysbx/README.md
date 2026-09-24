@@ -469,11 +469,9 @@ dev-tool closure in [`nix/mysbx.nix`](./nix/mysbx.nix) instead, next to
 ## On the Roadmap:
 ### next:
 - the packaged bubblewrap tier is expected to evolve per phase 2 in
-  [`docs/plan.md`](./docs/plan.md) (generated user config, credentials,
+  [`docs/plan.md`](./docs/plan.md) (credentials,
   proxy-only egress — the `sandboxTools` integration of phase 2d and the
   per-domain/port allowlist schema of phase 2c are done)
-## after that:
-- container (via podman), with gvisor for additional layer of security
 ### long term:
 - qemu
 - microvm
