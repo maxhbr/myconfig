@@ -1399,7 +1399,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         if backend != "nono" {
             eprintln!(
                 "mysbx: the configuration sets {} — only the `nono` backend enforces them; the `{backend}` backend cannot (bubblewrap shares or unshares the whole network namespace, podman-gvisor's pasta does not filter by domain, bd myconfig-6di.3)",
-                allowlist_keys.join(", ")
+                allowlist_keys
+                    .iter()
+                    .map(|k| format!("`{k}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
             eprintln!("  a finer network policy is refused, never accepted-and-ignored — switch the backend to `nono`, or drop the keys");
             return EXIT_INFRASTRUCTURE;
@@ -1412,10 +1416,32 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         if !merged.network {
             eprintln!(
                 "mysbx: network = false denies the network; an allowlist ({}) contradicts it — drop the keys or share the network",
-                allowlist_keys.join(", ")
+                allowlist_keys
+                    .iter()
+                    .map(|k| format!("`{k}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
             return EXIT_INFRASTRUCTURE;
         }
+    }
+
+    // 4c. `--session` under the nono backend: a clone run is a
+    // PATH REMAP (the clone bound AT the repo's own path,
+    // workspace.md D3) and Landlock cannot move a path, so it is
+    // inexpressible there — the nono argv builder refuses it too
+    // (Error::CloneUnsupported, defense in depth). The refusal must
+    // sit HERE, before step 4a creates anything: a clone that is
+    // created first and refused second would leave a clone behind
+    // on the host (a violation of "a broken configuration creates
+    // nothing"). It is before the `--dry-run` early return like
+    // every other 4b-block refusal, so a dry run audits it too.
+    if backend == "nono" && session.is_some() {
+        eprintln!(
+            "mysbx: --session is refused on the nono backend — Landlock has no path remap, so a clone session cannot be bound at the repo's path"
+        );
+        eprintln!("  run live (without --session), or pick another backend for --session");
+        return EXIT_INFRASTRUCTURE;
     }
 
     // 4a. the session clone (workspace.md D2): the FIRST `--session`
@@ -1839,23 +1865,44 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             //   containing nix.conf — verified): under bwrap the file
             //   is bound at /etc/nix/nix.conf; under nono there is no
             //   bind machinery, the exec environment points nix at the
-            //   pinned file's directory instead.
+            //   pinned file's directory instead — set only with the
+            //   shared network, like bwrap's bind.
             // - the three CA-bundle keys bwrap sets via --setenv, same
             //   values.
+            //
+            // Insertion order is the precedence: the forwarded and
+            // `[env]` values FIRST, the infrastructure keys (`HOME`,
+            // `PATH`, `NIX_CONF_DIR`, the CA-bundle variables) AFTER
+            // them — a later insert wins, so no layer can repoint an
+            // infrastructure variable (config.md D14, the bwrap.rs
+            // `--setenv`-last invariant).
             let mut env: std::collections::BTreeMap<String, String> =
                 std::collections::BTreeMap::new();
+            for (key, value) in host_env.iter().chain(merged.env.iter()) {
+                env.insert(key.clone(), value.clone());
+            }
+            // `HOME` and `PATH` are infrastructure, not configuration
+            // (config.md D14): inserted AFTER the forwarded and `[env]`
+            // values, so no layer can repoint them — the same
+            // precedence bwrap's later `--setenv` wins and this map's
+            // insert order gives.
             if let Ok(home) = std::env::var("HOME") {
                 if !home.is_empty() {
                     env.insert("HOME".into(), home);
                 }
             }
-            env.insert("PATH".into(), tools_path.clone());
-            for (key, value) in host_env.iter().chain(merged.env.iter()) {
-                env.insert(key.clone(), value.clone());
-            }
-            if let Some(nix_conf) = nix_conf.as_deref() {
-                if let Some(parent) = std::path::Path::new(nix_conf).parent() {
-                    env.insert("NIX_CONF_DIR".into(), parent.to_string_lossy().into_owned());
+            env.insert("PATH".into(), params.tools_path.to_owned());
+            // NIX_CONF_DIR travels with the shared network only:
+            // under bwrap the pinned nix.conf is bound exactly when
+            // the daemon socket is (`--share-net`), because the
+            // daemon is unreachable under `network = false` and its
+            // configuration would be dead weight — the same rule
+            // here.
+            if merged.network {
+                if let Some(nix_conf) = nix_conf.as_deref() {
+                    if let Some(parent) = std::path::Path::new(nix_conf).parent() {
+                        env.insert("NIX_CONF_DIR".into(), parent.to_string_lossy().into_owned());
+                    }
                 }
             }
             if let Some(ca_bundle) = ca_bundle.as_deref() {

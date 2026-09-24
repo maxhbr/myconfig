@@ -171,7 +171,6 @@ pub struct Params<'a> {
 /// forwarded variables travel via the exec environment lib.rs
 /// builds, so the builder itself ignores the map — the signature
 /// stays uniform so callers and tests stay backend-agnostic.
-#[allow(unused_variables)]
 pub fn nono_run_argv(
     cfg: &Merged,
     repo: &Repo,
@@ -179,6 +178,11 @@ pub fn nono_run_argv(
     host_env: &HostEnv,
     params: &Params<'_>,
 ) -> Result<Vec<String>, Error> {
+    // The forwarded host variables are deliberately unused: they
+    // travel via the exec environment lib.rs builds (see the
+    // module docs) — the signature stays uniform so callers and
+    // tests stay backend-agnostic.
+    let _ = &host_env;
     let root = repo.root.to_string_lossy().into_owned();
     // The multiplexer applies to the INTERACTIVE payload only
     // (cli.md D11) — the same rule as the other backends: a `run`
@@ -241,11 +245,11 @@ pub fn nono_run_argv(
     // backends, and it must be said out loud: under bwrap/podman the
     // store is remapped to `/mysbx-home/<entry>` (a dest the payload
     // sees below its sandbox home); under nono there is NO remap, so
-    // the payload sees `<repo>.mysbx/state/<entry>` exactly. Tools
-    // that key on `$HOME/<entry>` therefore need their `HOME` set to
-    // the host home (the exec environment does that) AND the entry
-    // resolved against it — which works, because the entry path IS
-    // the same string on both sides of the Landlock boundary. The
+    // the payload sees `<repo>.mysbx/state/<entry>` — reachable at its
+    // sidecar path ONLY. A tool that keys on `$HOME/<entry>` will NOT
+    // find its state there (`$HOME/<entry>` is under the host home,
+    // which stays unwritable under Landlock): that is the documented
+    // backend semantic, stated in the feature comparison. The
     // nesting check is the other backends' (no entry inside another:
     // `--allow` is recursive, a nested grant would be redundant, but
     // a nesting here means the CONFIG is ambiguous, and ambiguity is
@@ -344,14 +348,28 @@ pub fn nono_run_argv(
     // Under `network = false` the socket is a network service exactly
     // like under bwrap (the daemon builds fixed-output derivations,
     // which keep network access), so a source at, below or containing
-    // `/nix/var/nix` is refused with the same rule — there is no
-    // `--read /nix/var/nix` bind here at all (that is a bwrap thing);
-    // nono's daemon reachability is this socket flag alone.
+    // `/nix/var/nix` is refused with the same rule — across ALL mount
+    // sources, ro included, like bwrap and podman-gvisor: a read-only
+    // grant of the daemon directory is still the daemon's surface
+    // (connect() needs no write), so the same config is refused
+    // consistently across backends. There is no `--read /nix/var/nix`
+    // bind here at all (that is a bwrap thing); nono's daemon
+    // reachability is this socket flag alone.
     if cfg.network {
         argv.extend(["--allow-unix-socket".into(), NIX_DAEMON_SOCKET.into()]);
     } else {
         const DAEMON_DIR: &str = "/nix/var/nix";
-        for src in rw_mount_sources.iter().chain(implicit_rw_sources.iter()) {
+        let ro_mount_sources: Vec<PathBuf> = cfg
+            .mounts
+            .iter()
+            .filter(|m| m.mode == crate::config::Mode::Ro)
+            .map(|m| normalize(&m.path))
+            .collect();
+        for src in ro_mount_sources
+            .iter()
+            .chain(rw_mount_sources.iter())
+            .chain(implicit_rw_sources.iter())
+        {
             if src.starts_with(DAEMON_DIR) || Path::new(DAEMON_DIR).starts_with(src) {
                 return Err(Error::DaemonUnderDeniedNetwork {
                     source: src.to_string_lossy().into_owned(),
