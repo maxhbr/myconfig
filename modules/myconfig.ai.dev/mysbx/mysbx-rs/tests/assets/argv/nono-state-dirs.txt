@@ -1,0 +1,15 @@
+run
+--profile
+default
+--allow
+/synth/repo
+--allow-cwd
+--read
+/nix/store
+--allow
+/synth/repo.mysbx/state/.local/share/opencode
+--allow
+/synth/repo.mysbx/state/.cache/foo
+--block-net
+--
+/synth/bin/bash

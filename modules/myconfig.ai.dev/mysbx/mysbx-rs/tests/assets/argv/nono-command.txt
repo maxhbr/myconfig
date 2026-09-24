@@ -1,0 +1,12 @@
+run
+--profile
+default
+--allow
+/synth/repo
+--allow-cwd
+--read
+/nix/store
+--block-net
+--
+ls
+-la

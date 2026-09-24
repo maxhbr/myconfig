@@ -1,0 +1,4 @@
+# allow-domains is an array of NON-EMPTY domain names (bd
+# myconfig-mo3.1): an empty string names nothing and is a schema error,
+# not a silently-dropped entry.
+allow-domains = [""]

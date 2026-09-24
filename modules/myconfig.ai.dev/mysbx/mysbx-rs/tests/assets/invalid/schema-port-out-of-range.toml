@@ -1,0 +1,3 @@
+# connect-ports / listen-ports are arrays of TCP port numbers, each
+# 1-65535 (bd myconfig-mo3.1): zero is not a port.
+connect-ports = [443, 0]

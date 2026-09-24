@@ -7402,3 +7402,349 @@ fn gvisor_load_image_rejects_rw_flag() {
     assert_eq!(code, 2);
     assert!(stderr.contains("--rw is not valid with `gvisor-load-image"));
 }
+
+// ---- the nono backend (bd myconfig-6di.2) -----------------------------------
+
+/// The nono-minimal golden (tests/assets/argv/nono-minimal.txt) with
+/// the fixture repo path substituted, `nono` as argv[0] — the expected
+/// `--dry-run` output of the smallest nono invocation.
+fn expected_nono_minimal_argv(repo: &Path) -> String {
+    let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/assets/argv/nono-minimal.txt");
+    let argv = std::fs::read_to_string(&golden)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", golden.display()))
+        .replace("/synth/repo", &repo.to_string_lossy());
+    format!("nono\n{argv}")
+}
+
+/// A fixture with `backend = "nono"` in the sidecar config.
+fn fixture_nono(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
+    let (inv, repo, sidecar) = fixture(name, args);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"nono\"\n").unwrap();
+    (inv, repo, sidecar)
+}
+
+#[test]
+fn nono_backend_dry_run_prints_the_argv() {
+    // backend = "nono", network = false: the dry run prints the nono
+    // argv, one argument per line — argv[0] the backend binary, the
+    // payload last, byte-identical to the nono-minimal golden with
+    // the repo path substituted.
+    let (inv, _, sidecar) = fixture_nono("nono-dry-run", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\nnetwork = false\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines[0], "nono", "argv[0] is the backend binary: {stdout}");
+    assert_eq!(lines[1], "run");
+    assert_eq!(lines[2], "--profile");
+    assert_eq!(lines[3], "default");
+    // The payload is the last argument.
+    assert_eq!(lines[lines.len() - 1], "/synth/bin/bash");
+    assert_eq!(stdout, expected_nono_minimal_argv(&inv.cwd));
+}
+
+#[test]
+fn nono_backend_flag_positions() {
+    // `--backend nono` before the verb and after it both select the
+    // backend; with an allowlist configured the flag-overridden run
+    // carries the allowlist too. `network = false` keeps the runs
+    // accepted (no allowlist next to a shared network).
+    for (args, label) in [
+        (vec!["--backend", "nono", "--dry-run"], "bare, pre-verb"),
+        (
+            vec!["run", "--backend", "nono", "--dry-run", "--", "true"],
+            "run, after the verb",
+        ),
+    ] {
+        let (inv, _, sidecar) = fixture("nono-backend-flag-forms", &[]);
+        std::fs::write(sidecar.join("config.toml"), "network = false\n").unwrap();
+        let (code, stdout, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 0, "{label}: stderr: {stderr}");
+        assert!(stdout.starts_with("nono\n"), "{label}: {stdout}");
+    }
+
+    // An allowlist plus the flag: the run succeeds and the flag alone
+    // selects the backend that can enforce it (a shared network next
+    // to the allowlist — the combination the nono backend maps).
+    let (inv, _, sidecar) = fixture("nono-backend-flag-allowlist", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "network = true\nallow-domains = [\"api.openai.com\"]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--backend", "nono", "--dry-run"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.starts_with("nono\n"), "{stdout}");
+}
+
+#[test]
+fn nono_report_labels_the_backend() {
+    // The report names the backend with its provenance tag and labels
+    // the backend binary `nono:` — a nono run claiming a `bwrap:`
+    // binary would lie (report.rs). `network = false` keeps the run
+    // accepted.
+    let (inv, _, sidecar) = fixture("nono-report", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\nnetwork = false\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) =
+        run_binary_with(&inv, &["--backend", "nono", "--verbose", "--dry-run"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains("backend:        nono  [--backend]"),
+        "{report}"
+    );
+    assert!(
+        report.contains("nono:           nono"),
+        "the backend-binary line labels itself nono: {report}"
+    );
+    assert!(!report.contains("bwrap:"), "{report}");
+    // The argv block behind the report is the nono one.
+    assert!(argv_block(&stdout).starts_with("nono\nrun\n"), "{stdout}");
+}
+
+#[test]
+fn allowlist_on_bubblewrap_is_refused() {
+    // The merged allowlist is backend-agnostic policy; bubblewrap
+    // cannot enforce it, so the run is refused (70) naming the backend
+    // and every offending key — under --dry-run too, with no argv on
+    // stdout.
+    let (inv, _, sidecar) = fixture("nono-allowlist-bwrap", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\n\
+         allow-domains = [\"api.openai.com\"]\n\
+         connect-ports = [443]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("bubblewrap"), "{stderr}");
+    assert!(stderr.contains("allow-domains"), "{stderr}");
+    assert!(
+        stderr.contains("allow-connect-ports") || stderr.contains("connect-ports"),
+        "{stderr}"
+    );
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn allowlist_on_podman_gvisor_is_refused() {
+    // podman-gvisor's pasta does not filter by domain either — the
+    // same refusal, naming the backend and the listen-ports key.
+    let (inv, _, sidecar) = fixture("nono-allowlist-podman", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-gvisor\"\nlisten-ports = [8080]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("podman-gvisor"), "{stderr}");
+    assert!(stderr.contains("listen-ports"), "{stderr}");
+    assert!(
+        !stdout.contains("--runtime=runsc"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn allowlist_with_network_false_is_refused() {
+    // network = false denies the network; an allowlist contradicts it.
+    // Refused for the nono backend too (the pipeline's step 4b check
+    // fires before the builder's defense-in-depth one).
+    let (inv, _, sidecar) = fixture("nono-allowlist-contradiction", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\nnetwork = false\nallow-domains = [\"api.openai.com\"]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("contradict"), "{stderr}");
+    assert!(
+        !stdout.contains("--block-net"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn nono_with_session_is_refused_before_the_clone_is_created() {
+    // --session under nono is a path remap, inexpressible under
+    // Landlock. The refusal (step 4c) fires before step 4a creates
+    // anything — verified on a REAL run (no --dry-run): exit 70 and
+    // no clones/ directory under the sidecar.
+    let (inv, _, sidecar) = fixture_nono("nono-session-refused", &["--session", "s1"]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--session", "s1", "--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("--session"), "{stderr}");
+    assert!(stderr.contains("nono"), "{stderr}");
+    assert!(
+        stderr.contains("remap") || stderr.contains("clone"),
+        "the message explains the remap/clone: {stderr}"
+    );
+    assert!(
+        !stdout.contains("run\n--profile"),
+        "no argv on refusal: {stdout}"
+    );
+
+    // The real run: same refusal, and the sidecar has no clones/.
+    let (inv, _, sidecar) = fixture_nono("nono-session-refused-real", &["--session", "s1"]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--session", "s1"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        !stdout.contains("run\n--profile"),
+        "no argv on refusal: {stdout}"
+    );
+    assert!(
+        !sidecar.join("clones").exists(),
+        "the refusal must precede the clone creation: {}",
+        sidecar.display()
+    );
+}
+
+#[test]
+fn nono_with_waypipe_is_refused() {
+    // display = "waypipe" under nono: the syscall set is unaudited
+    // under nono's seccomp filter — refused, never silently headless.
+    let (inv, _, sidecar) = fixture("nono-waypipe-refused", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\nnetwork = false\ndisplay = \"waypipe\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("waypipe"), "{stderr}");
+    assert!(stderr.contains("nono"), "{stderr}");
+    assert!(
+        !stdout.contains("--allow-cwd"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn nono_with_multiplexer_is_refused() {
+    // A session-starting multiplexer under nono: no tmpfs home for the
+    // private socket directory — refused under --dry-run too.
+    let (inv, _, sidecar) = fixture("nono-mux-refused", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\nnetwork = false\nmultiplexer = \"tmux\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("multiplexer"), "{stderr}");
+    assert!(stderr.contains("tmux"), "{stderr}");
+    assert!(
+        !stdout.contains("--allow-cwd"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn nono_with_dest_remap_mount_is_refused() {
+    // A mount with dest != path under nono: Landlock cannot move a
+    // path — refused by the argv builder.
+    let (inv, _, sidecar) = fixture("nono-remap-refused", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\n\
+         [[mounts]]\npath = \"/etc/ssl\"\ndest = \"/ssl\"\nmode = \"ro\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("/etc/ssl"), "{stderr}");
+    assert!(stderr.contains("/ssl"), "{stderr}");
+    assert!(
+        !stdout.contains("--allow-cwd"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn nono_shared_network_without_allowlist_is_refused() {
+    // The mysbx default (network shared, no allowlist) cannot be
+    // expressed under nono: it mediates per connection. The refusal
+    // says so — with `network = true` explicit AND with the key
+    // omitted (the merged default is shared).
+    for (config, label) in [
+        ("backend = \"nono\"\nnetwork = true\n", "explicit true"),
+        ("backend = \"nono\"\n", "omitted (default shared)"),
+    ] {
+        let (inv, _, sidecar) = fixture("nono-shared-network-refused", &[]);
+        std::fs::write(sidecar.join("config.toml"), config).unwrap();
+        let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+        assert_eq!(
+            code,
+            mysbx::EXIT_INFRASTRUCTURE,
+            "{label}: stderr: {stderr}"
+        );
+        assert!(
+            stderr.contains("cannot share the host network"),
+            "{label}: {stderr}"
+        );
+        assert!(
+            stderr.contains("allow-domains") && stderr.contains("connect-ports"),
+            "{label}: the message lists the keys to configure: {stderr}"
+        );
+        assert!(
+            !stdout.contains("--allow-cwd"),
+            "no argv on refusal: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn nono_allowlist_reaches_the_argv() {
+    // The full mapping end-to-end: allow-domains, connect-ports and
+    // listen-ports all reach the printed argv with the configured
+    // values, in merged order, next to the daemon-socket grant of the
+    // shared network.
+    let (inv, _, sidecar) = fixture("nono-allowlist-argv", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\n\
+         allow-domains = [\"api.openai.com\", \"github.com\"]\n\
+         connect-ports = [443, 22]\n\
+         listen-ports = [8080]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.starts_with("nono\nrun\n"), "{stdout}");
+    for pair in [
+        ("--allow-domain", "api.openai.com"),
+        ("--allow-domain", "github.com"),
+        ("--allow-connect-port", "443"),
+        ("--allow-connect-port", "22"),
+        ("--listen-port", "8080"),
+        ("--allow-unix-socket", "/nix/var/nix/daemon-socket/socket"),
+    ] {
+        assert!(
+            stdout
+                .lines()
+                .zip(stdout.lines().skip(1))
+                .any(|(a, b)| a == pair.0 && b == pair.1),
+            "missing `{}` `{}` pair in argv: {stdout}",
+            pair.0,
+            pair.1
+        );
+    }
+    assert!(
+        !stdout.lines().any(|l| l == "--block-net"),
+        "a shared network is not blocked: {stdout}"
+    );
+}

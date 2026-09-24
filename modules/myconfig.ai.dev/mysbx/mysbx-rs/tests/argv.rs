@@ -16,6 +16,7 @@
 use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload, Workspace, SANDBOX_HOME};
 use mysbx::config::{Display, Mode, Mount, Multiplexer};
 use mysbx::merge::Merged;
+use mysbx::nono::{nono_run_argv, Params as NonoParams};
 use mysbx::podman_gvisor::CONTAINER_HOME;
 use mysbx::podman_gvisor::{podman_run_argv, Params as PodmanParams};
 use mysbx::repo::Repo;
@@ -4557,4 +4558,506 @@ fn podman_rootless_defaults_golden() {
     )
     .unwrap();
     assert_golden("podman-rootless-defaults.txt", &argv);
+}
+
+// ---- nono backend tests ------------------------------------------------------
+
+/// A synthetic nono params: HOST pins like bwrap's (nono runs the
+/// payload on the host kernel), the `default` profile lib.rs falls
+/// back to.
+fn nono_params() -> NonoParams<'static> {
+    NonoParams {
+        shell: "/synth/bin/bash",
+        tools_path: "/synth/bin",
+        policy_paths: &[],
+        workspace: Workspace::Live,
+        profile: "default",
+    }
+}
+
+/// A nono base config: no allowlist entries — callers that test the
+/// network mapping fill them.
+fn nono_base(network: bool) -> Merged {
+    Merged {
+        backend: Some("nono".into()),
+        network,
+        mounts: Vec::new(),
+        env: BTreeMap::new(),
+        git_dirs: Vec::new(),
+        state_dirs: Vec::new(),
+        forward_env: Vec::new(),
+        allow_domains: Vec::new(),
+        connect_ports: Vec::new(),
+        listen_ports: Vec::new(),
+        multiplexer: Multiplexer::None,
+        display: Display::Off,
+    }
+}
+
+#[test]
+fn nono_golden_minimal() {
+    // network = false: `--block-net`, no `--allow-unix-socket` (the
+    // daemon socket is a network service under a denied network).
+    let argv = nono_run_argv(
+        &nono_base(false),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert_golden("nono-minimal.txt", &argv);
+    assert!(
+        !argv.contains(&"--allow-unix-socket".to_string()),
+        "no daemon socket under a denied network: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_golden_allowlist() {
+    // The core mapping of bd myconfig-6di.2: the allowlist becomes
+    // `--allow-domain` per domain in order, `--allow-connect-port` per
+    // port, and — with a shared network — the daemon socket flag. No
+    // `--block-net`, no `--listen-port` (none configured).
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into(), "github.com".into()];
+    cfg.connect_ports = vec![443];
+    let argv = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert_golden("nono-allowlist.txt", &argv);
+    let allow_domain_at: Vec<usize> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--allow-domain")
+        .map(|w| argv.iter().position(|a| *a == w[1]).unwrap())
+        .collect();
+    let domains: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--allow-domain")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert_eq!(domains, ["api.openai.com", "github.com"]);
+    assert_eq!(allow_domain_at.len(), 2);
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--allow-unix-socket" && w[1] == "/nix/var/nix/daemon-socket/socket"),
+        "the daemon socket is granted with the shared network: {argv:?}"
+    );
+    assert!(!argv.contains(&"--block-net".to_string()));
+    assert!(
+        !argv.windows(2).any(|w| w[0] == "--listen-port"),
+        "no listen-port flag without a configured listen port: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_golden_ro_mount() {
+    // A read-only mount is a `--read` grant at its own path.
+    let mut cfg = nono_base(false);
+    cfg.mounts
+        .push(make_mount("/synth/data/refs", None, Mode::Ro));
+    let argv = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert_golden("nono-ro-mount.txt", &argv);
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--read" && w[1] == "/synth/data/refs"),
+        "ro mount is a --read: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_golden_rw_mount() {
+    // A read-write mount is an `--allow` grant at its own path.
+    let mut cfg = nono_base(false);
+    cfg.mounts
+        .push(make_mount("/synth/data/cache", None, Mode::Rw));
+    let argv = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert_golden("nono-rw-mount.txt", &argv);
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--allow" && w[1] == "/synth/data/cache"),
+        "rw mount is an --allow: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_golden_state_dirs() {
+    // state-dirs land at their REAL sidecar path — the semantic
+    // difference from the other backends: no remap, so the payload
+    // sees `<repo>.mysbx/state/<entry>`.
+    let mut cfg = nono_base(false);
+    cfg.state_dirs = vec![".local/share/opencode".into(), ".cache/foo".into()];
+    let argv = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert_golden("nono-state-dirs.txt", &argv);
+    for entry in [
+        "/synth/repo.mysbx/state/.local/share/opencode",
+        "/synth/repo.mysbx/state/.cache/foo",
+    ] {
+        assert!(
+            argv.windows(2).any(|w| w[0] == "--allow" && w[1] == entry),
+            "state store {entry} missing from the argv: {argv:?}"
+        );
+    }
+}
+
+#[test]
+fn nono_golden_command_payload() {
+    // A one-shot: the payload verbatim after `--`, the shell pin never
+    // entered the argv.
+    let argv = nono_run_argv(
+        &nono_base(false),
+        &synth_repo(),
+        &Payload::Command(vec!["ls".into(), "-la".into()]),
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert_golden("nono-command.txt", &argv);
+    assert!(
+        !argv.contains(&"/synth/bin/bash".to_string()),
+        "the shell pin is not the one-shot payload: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_golden_git_dirs() {
+    // The approved git dir is `--allow`ed like the repo root.
+    let mut cfg = nono_base(false);
+    cfg.git_dirs = vec![PathBuf::from("/synth/gitdirs/main")];
+    let argv = nono_run_argv(
+        &cfg,
+        &worktree_repo(&["/synth/gitdirs/main"]),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert_golden("nono-git-dirs.txt", &argv);
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--allow" && w[1] == "/synth/gitdirs/main"),
+        "the approved git dir is granted: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_refuses_a_dest_remap() {
+    // Landlock grants access AT a path, it cannot move one: a `dest`
+    // different from the source is refused, `dest == path` is fine
+    // (it is no remap).
+    let mut cfg = nono_base(false);
+    cfg.mounts
+        .push(make_mount("/synth/data/refs", Some("/inside"), Mode::Ro));
+    let err = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("a remap must be refused");
+    assert!(
+        matches!(err, mysbx::nono::Error::RemapUnsupported { .. }),
+        "wrong error: {err}"
+    );
+
+    let mut cfg = nono_base(false);
+    cfg.mounts.push(make_mount(
+        "/synth/data/refs",
+        Some("/synth/data/refs"),
+        Mode::Ro,
+    ));
+    let argv = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect("dest == path is no remap");
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--read" && w[1] == "/synth/data/refs"),
+        "the dest==path mount is a plain read grant: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_refuses_a_clone_run() {
+    // The clone-remap (clone bound AT the repo path, workspace.md D3)
+    // is inexpressible under Landlock.
+    let workspace = Workspace::Clone {
+        clone: Path::new("/synth/repo.mysbx/clones/s1"),
+    };
+    let params = NonoParams {
+        workspace,
+        ..nono_params()
+    };
+    let err = nono_run_argv(
+        &nono_base(false),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .expect_err("a clone run must be refused");
+    assert!(
+        matches!(err, mysbx::nono::Error::CloneUnsupported),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn nono_refuses_every_session_starting_multiplexer_for_the_shell_only() {
+    // The interactive payload: a session-starting multiplexer is
+    // refused (no tmpfs home for the private socket directory).
+    for mux in [
+        Multiplexer::Tmux,
+        Multiplexer::Workmux,
+        Multiplexer::Herdr,
+        Multiplexer::Aoe,
+        Multiplexer::Orca,
+    ] {
+        let mut cfg = nono_base(false);
+        cfg.multiplexer = mux;
+        let err = nono_run_argv(
+            &cfg,
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env(&[]),
+            &nono_params(),
+        )
+        .expect_err("a session multiplexer must be refused");
+        assert!(
+            matches!(err,
+                mysbx::nono::Error::MultiplexerUnavailable { multiplexer }
+                if multiplexer == mux),
+            "wrong error: {err}"
+        );
+    }
+
+    // A one-shot never starts a session, so the multiplexer does not
+    // refuse it (cli.md D11).
+    let mut cfg = nono_base(false);
+    cfg.multiplexer = Multiplexer::Tmux;
+    let argv = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Command(vec!["true".into()]),
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect("a one-shot is not a session");
+    assert_eq!(argv[argv.len() - 1], "true");
+}
+
+#[test]
+fn nono_refuses_the_waypipe_display_for_both_payload_forms() {
+    // The waypipe syscall set is unaudited under nono's seccomp filter
+    // — refused for the shell AND for a one-shot.
+    for payload in [Payload::Shell, Payload::Command(vec!["true".into()])] {
+        let mut cfg = nono_base(false);
+        cfg.display = Display::Waypipe;
+        let err = nono_run_argv(
+            &cfg,
+            &synth_repo(),
+            &payload,
+            &host_env(&[]),
+            &nono_params(),
+        )
+        .expect_err("waypipe must be refused");
+        assert!(
+            matches!(err, mysbx::nono::Error::DisplayUnavailable),
+            "wrong error: {err}"
+        );
+    }
+}
+
+#[test]
+fn nono_refuses_a_shared_network_without_an_allowlist() {
+    // `network = true` (the mysbx default) with no allowlist: nono
+    // cannot express "share the host network".
+    let err = nono_run_argv(
+        &nono_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("a shared network must be refused");
+    assert!(
+        matches!(err, mysbx::nono::Error::NetworkSharedUnsupported),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn nono_refuses_an_allowlist_under_a_denied_network() {
+    // `network = false` with a non-empty allowlist contradicts the
+    // deny — defense in depth next to the pipeline's step 4b refusal.
+    for (domains, ports, listen) in [
+        (vec!["api.openai.com".to_string()], vec![], vec![]),
+        (vec![], vec![443], vec![]),
+        (vec![], vec![], vec![8080]),
+    ] {
+        let mut cfg = nono_base(false);
+        cfg.allow_domains = domains;
+        cfg.connect_ports = ports;
+        cfg.listen_ports = listen;
+        let err = nono_run_argv(
+            &cfg,
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env(&[]),
+            &nono_params(),
+        )
+        .expect_err("an allowlist under a denied network must be refused");
+        assert!(
+            matches!(err, mysbx::nono::Error::AllowlistUnderDeniedNetwork),
+            "wrong error: {err}"
+        );
+    }
+}
+
+#[test]
+fn nono_refuses_an_unapproved_git_dir() {
+    // The repo's `.git` pointer names a directory no trusted layer
+    // approved — the bwrap/podman rule (review-2 item 1).
+    let err = nono_run_argv(
+        &nono_base(false),
+        &worktree_repo(&["/synth/gitdirs/main"]),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("an unapproved git dir must be refused");
+    assert!(
+        matches!(err, mysbx::nono::Error::GitDirNotApproved { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn nono_refuses_nested_state_dirs() {
+    // Two entries that nest: `--allow` is recursive, the inner entry
+    // is redundant at best (config.md D15).
+    let mut cfg = nono_base(false);
+    cfg.state_dirs = vec!["a".into(), "a/b".into()];
+    let err = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("nested state dirs must be refused");
+    assert!(
+        matches!(err, mysbx::nono::Error::StateDirNesting { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn nono_refuses_a_writable_grant_over_a_policy_file() {
+    // An `rw` mount that contains a guarded policy path exposes it —
+    // the same refusal the other backends run (review-3 item 3).
+    let policy = [mysbx::bwrap::PolicyPath::lexical(
+        "/synth/home/.config/mysbx/config.toml",
+    )];
+    let params = NonoParams {
+        policy_paths: &policy,
+        ..nono_params()
+    };
+    let mut cfg = nono_base(false);
+    cfg.mounts
+        .push(make_mount("/synth/home/.config/mysbx", None, Mode::Rw));
+    let err = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .expect_err("a writable policy dir must be refused");
+    assert!(
+        matches!(err, mysbx::nono::Error::PolicyFileWritable { .. }),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn nono_refuses_a_grant_under_the_nix_daemon_dir_when_the_network_is_denied() {
+    // `network = false`: a source at, below or containing
+    // `/nix/var/nix` hands the daemon socket back — refused across
+    // ALL mount sources, ro included (review-3 item 2's broadened
+    // guard).
+    for (mode, below) in [(Mode::Ro, true), (Mode::Rw, true), (Mode::Ro, false)] {
+        let path = if below {
+            "/nix/var/nix/daemon-socket"
+        } else {
+            "/nix"
+        };
+        let mut cfg = nono_base(false);
+        cfg.mounts.push(make_mount(path, None, mode));
+        let err = nono_run_argv(
+            &cfg,
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env(&[]),
+            &nono_params(),
+        )
+        .expect_err("a daemon-dir grant under a denied network must be refused");
+        assert!(
+            matches!(err, mysbx::nono::Error::DaemonUnderDeniedNetwork { .. }),
+            "wrong error for {path} ({mode:?}): {err}"
+        );
+    }
+}
+
+#[test]
+fn nono_refuses_a_writable_ancestor_of_a_state_store() {
+    // An `rw` mount source containing a state backing store lets the
+    // payload swap it for a symlink — refused (config.md D15).
+    let mut cfg = nono_base(false);
+    cfg.state_dirs = vec!["x".into()];
+    cfg.mounts
+        .push(make_mount("/synth/repo.mysbx", None, Mode::Rw));
+    let err = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("a writable state tree must be refused");
+    assert!(
+        matches!(err, mysbx::nono::Error::StateTreeWritable { .. }),
+        "wrong error: {err}"
+    );
 }
