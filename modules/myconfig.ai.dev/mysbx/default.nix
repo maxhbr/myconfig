@@ -7,7 +7,8 @@
 # repo (`myconfig.ai.dev.jail`, `myconfig.ai.dev.nono-agent-sandbox`,
 # `myconfig.ai.dev.gvisor-agent-sandbox`, `myconfig.ai.dev.microvm`): a single CLI
 # that owns the sidecar directory next to a repository and drives the
-# underlying backend (bubblewrap first, containers/microvm later).
+# underlying backend (bubblewrap by default, podman-gvisor and nono
+# alongside; qemu/microvm later).
 #
 # Like the other sandbox tiers, this module is OFF by default and enabled
 # explicitly per host — it is never switched on implicitly by the broad
@@ -735,7 +736,7 @@ in
           This is for environment that is only CORRECT under this
           backend: the container has its own network stack and its own
           loopback, so the host endpoints named by `config.env` — which
-          both backends share, and which the bubblewrap backend reaches
+          the other backends share, and which the bubblewrap backend reaches
           through the host network namespace — are wrong here. Values
           must not contain whitespace (the variable is a
           space-separated list).

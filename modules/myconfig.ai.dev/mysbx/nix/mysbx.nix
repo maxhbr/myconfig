@@ -94,7 +94,8 @@
 #                     profile.
 #
 # All these pins are absolute store paths — nothing is left to host lookup.
-# (MYSBX_NONO_PROFILE is the one operator knob among them.)
+# (MYSBX_NONO_PROFILE is an operator knob among them, like
+# MYSBX_GVISOR_PASTA_SPEC.)
 {
   lib,
   rustPlatform,
@@ -444,10 +445,12 @@ let
   # The nono backend pins: the binary (absolute store path, `--set`
   # like every other closure pin) and the profile (an operator knob,
   # `--set-default` like gvisorPastaSpec so an invocation can still
-  # override it).
-  nonoPins =
-    lib.optionalString (nono != null) "--set MYSBX_NONO '${lib.getExe nono}' "
-    + "--set-default MYSBX_NONO_PROFILE '${nonoProfile}'";
+  # override it). Both are gated on `nono != null` together: without
+  # the binary the profile pin would be meaningless noise in the
+  # wrapper, so a null-pinning caller gets neither.
+  nonoPins = lib.optionalString (
+    nono != null
+  ) "--set MYSBX_NONO '${lib.getExe nono}' --set-default MYSBX_NONO_PROFILE '${nonoProfile}'";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on

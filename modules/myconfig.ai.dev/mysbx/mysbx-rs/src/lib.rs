@@ -1758,7 +1758,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // reachable under a DIFFERENT URL inside a container than
             // on the host (pasta's `--map-guest-addr` target instead of
             // the host loopback), so it cannot live in the config
-            // `[env]` both backends share. Entries without a `=` are
+            // `[env]` the other backends share. Entries without a `=` are
             // ignored rather than turned into an empty variable name.
             let gvisor_env: Vec<String> = env_or("MYSBX_GVISOR_ENV", "")
                 .split_whitespace()
