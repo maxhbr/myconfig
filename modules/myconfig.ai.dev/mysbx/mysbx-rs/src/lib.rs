@@ -29,6 +29,7 @@ pub mod config;
 pub mod handoff;
 pub mod loadimage;
 pub mod merge;
+pub mod nono;
 pub mod podman_gvisor;
 pub mod repo;
 pub mod report;
@@ -535,7 +536,7 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                     Some((v, _)) => v,
                     None => {
                         eprintln!(
-                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`"
+                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`"
                         );
                         eprintln!("try `mysbx --help`");
                         return Err(2);
@@ -738,7 +739,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                     Some(v) => v.clone(),
                     None => {
                         eprintln!(
-                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`"
+                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`"
                         );
                         eprintln!("usage: {RUN_USAGE}");
                         return 2;
@@ -1256,9 +1257,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // valid values (D8: the command line was fine, the backend it
     // names does not exist).
     if let Some(name) = &flags.backend {
-        if !matches!(name.as_str(), "bubblewrap" | "podman-gvisor") {
+        if !matches!(name.as_str(), "bubblewrap" | "podman-gvisor" | "nono") {
             eprintln!(
-                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`"
+                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -1358,20 +1359,64 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // `merged.backend` alike; the flag's own refusal one merge above
     // echoed it early, this arm is the authoritative one.
     let backend = match merged.backend.as_deref() {
-        Some("bubblewrap" | "podman-gvisor") => merged.backend.as_deref().unwrap(),
+        Some("bubblewrap" | "podman-gvisor" | "nono") => merged.backend.as_deref().unwrap(),
         Some(other) => {
             eprintln!(
-                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`"
+                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`"
             );
             return EXIT_INFRASTRUCTURE;
         }
         None => {
             eprintln!(
-                "mysbx: no backend configured — set `backend = \"bubblewrap\"` or `backend = \"podman-gvisor\"` in the user or sidecar config"
+                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"` or `backend = \"nono\"` in the user or sidecar config"
             );
             return EXIT_INFRASTRUCTURE;
         }
     };
+
+    // 4b. allowlist enforcement (bd myconfig-mo3.1/myconfig-6di.2): the
+    // merged `allow-domains`/`connect-ports`/`listen-ports` are
+    // backend-agnostic policy — only the nono backend can enforce
+    // them today (per-domain via nono's proxy, per-port via
+    // Landlock/seccomp). A finer policy that a backend silently
+    // ACCEPTS-AND-IGNORES would be a security bug, so the run is
+    // refused: bubblewrap shares or unshares the whole network
+    // namespace (`--share-net`/nothing) — it cannot filter per
+    // domain or port; podman-gvisor's pasta does not filter by
+    // domain either (bd myconfig-6di.3). The refusal sits BEFORE the
+    // session clone (a broken configuration must create nothing)
+    // and BEFORE the `--dry-run` early return, so a dry run audits
+    // the refusal too.
+    let allowlist_keys: Vec<&str> = [
+        (!merged.allow_domains.is_empty()).then_some("allow-domains"),
+        (!merged.connect_ports.is_empty()).then_some("connect-ports"),
+        (!merged.listen_ports.is_empty()).then_some("listen-ports"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !allowlist_keys.is_empty() {
+        if backend != "nono" {
+            eprintln!(
+                "mysbx: the configuration sets {} — only the `nono` backend enforces them; the `{backend}` backend cannot (bubblewrap shares or unshares the whole network namespace, podman-gvisor's pasta does not filter by domain, bd myconfig-6di.3)",
+                allowlist_keys.join(", ")
+            );
+            eprintln!("  a finer network policy is refused, never accepted-and-ignored — switch the backend to `nono`, or drop the keys");
+            return EXIT_INFRASTRUCTURE;
+        }
+        // The same contradiction the nono argv builder refuses as
+        // defense in depth (Error::AllowlistUnderDeniedNetwork),
+        // refused here for EVERY backend: `network = false` denies
+        // the network, an allowlist names what may be reached — both
+        // cannot hold at once.
+        if !merged.network {
+            eprintln!(
+                "mysbx: network = false denies the network; an allowlist ({}) contradicts it — drop the keys or share the network",
+                allowlist_keys.join(", ")
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
 
     // 4a. the session clone (workspace.md D2): the FIRST `--session`
     // run creates it — the one deliberate exception to "a run creates
@@ -1576,7 +1621,22 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         waypipe: report_waypipe.clone(),
         workspace: workspace.clone(),
     };
-    let (backend_bin, argv, image) = match backend {
+    // The backend dispatch produces the backend binary, the argv and
+    // — for nono only — an exec environment: nono INHERITS the parent
+    // environment (the nono-app.nix tier precedent: the wrapper
+    // exports variables before exec'ing nono; there is no --clearenv
+    // equivalent), so the variables bwrap passes via --setenv and
+    // podman via --env flags must be set on top of the inherited
+    // parent env instead, via `Command::envs`. bwrap gets
+    // `--clearenv` (a cleared environment never enters), podman
+    // gets `--env` flags — both return `None` here and keep their
+    // existing argv-only behavior.
+    let (backend_bin, argv, image, exec_env): (
+        _,
+        _,
+        Option<String>,
+        Option<std::collections::BTreeMap<String, String>>,
+    ) = match backend {
         "bubblewrap" => {
             let params = bwrap::Params {
                 shell: &shell,
@@ -1597,7 +1657,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 }
             };
             let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
-            (bwrap_bin, argv, None::<String>)
+            // bwrap's --clearenv + --setenv own the environment —
+            // nothing to pin on top of the inherited parent env.
+            (bwrap_bin, argv, None::<String>, None)
         }
         "podman-gvisor" => {
             use std::borrow::Cow;
@@ -1736,7 +1798,72 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 }
             };
             let podman_bin = env_or("MYSBX_PODMAN", "podman");
-            (podman_bin, argv, Some(gvisor_image))
+            // podman's --env flags own the environment — nothing to
+            // pin on top of the inherited parent env.
+            (podman_bin, argv, Some(gvisor_image), None)
+        }
+        "nono" => {
+            // The backend binary and profile (the tier wrapper pins
+            // both; "default" is nono's own conservative base
+            // profile — the same one nono-app.nix passes).
+            let nono_bin = env_or("MYSBX_NONO", "nono");
+            let nono_profile = env_or("MYSBX_NONO_PROFILE", "default");
+            let params = nono::Params {
+                shell: &shell,
+                tools_path: &tools_path,
+                policy_paths: &policy_paths,
+                workspace: workspace.clone(),
+                profile: &nono_profile,
+            };
+            let argv = match nono::nono_run_argv(&merged, &repo, &payload, &host_env, &params) {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            };
+            // The exec environment (nono inherits the parent env; mysbx
+            // pins exactly these variables on top, the same values
+            // bwrap would --setenv):
+            //
+            // - `HOME` is the invoking user's REAL home: nono has no
+            //   sandbox home, so the payload's HOME is the host home
+            //   path string — Landlock keeps the host home UNWRITABLE
+            //   unless an --allow granted a subdirectory, so the value
+            //   itself grants nothing.
+            // - `PATH` is the pinned dev-tool closure.
+            // - host-forwarded variables and the config layers' `[env]`
+            //   table, the same values bwrap would set.
+            // - `NIX_CONF_DIR` points nix at the PARENT DIRECTORY of the
+            //   pinned file (nix honors NIX_CONF_DIR as the directory
+            //   containing nix.conf — verified): under bwrap the file
+            //   is bound at /etc/nix/nix.conf; under nono there is no
+            //   bind machinery, the exec environment points nix at the
+            //   pinned file's directory instead.
+            // - the three CA-bundle keys bwrap sets via --setenv, same
+            //   values.
+            let mut env: std::collections::BTreeMap<String, String> =
+                std::collections::BTreeMap::new();
+            if let Ok(home) = std::env::var("HOME") {
+                if !home.is_empty() {
+                    env.insert("HOME".into(), home);
+                }
+            }
+            env.insert("PATH".into(), tools_path.clone());
+            for (key, value) in host_env.iter().chain(merged.env.iter()) {
+                env.insert(key.clone(), value.clone());
+            }
+            if let Some(nix_conf) = nix_conf.as_deref() {
+                if let Some(parent) = std::path::Path::new(nix_conf).parent() {
+                    env.insert("NIX_CONF_DIR".into(), parent.to_string_lossy().into_owned());
+                }
+            }
+            if let Some(ca_bundle) = ca_bundle.as_deref() {
+                for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
+                    env.insert(key.into(), ca_bundle.to_owned());
+                }
+            }
+            (nono_bin, argv, None::<String>, Some(env))
         }
         _ => unreachable!(),
     };
@@ -1855,6 +1982,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
 
     let mut cmd = std::process::Command::new(&backend_bin);
     cmd.args(&argv);
+    // The exec environment is a NONO-only fact: bwrap gets --clearenv
+    // and its --setenv flags, podman gets --env flags — nono inherits
+    // the parent environment (nono-app.nix precedent) and mysbx only
+    // pins the variables of the backend arm on top. Applies to both
+    // RunMode::Exec and RunMode::Result: the Command is built before
+    // the match.
+    if let Some(env) = &exec_env {
+        cmd.envs(env);
+    }
     match mode {
         RunMode::Exec => {
             // `exec` replaces this process on success, so the payload's

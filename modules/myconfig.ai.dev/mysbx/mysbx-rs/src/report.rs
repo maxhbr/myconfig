@@ -74,10 +74,10 @@ pub struct Report<'a> {
     /// The backend binary that would be executed (`MYSBX_BWRAP` /
     /// `MYSBX_PODMAN` after their fallbacks).
     pub bwrap_bin: &'a str,
-    /// The configured backend name (`bubblewrap` or `podman-gvisor`).
-    /// The report labels the backend line with it (`bwrap:` /
-    /// `podman:`) — the label is what an operator greps for, and a
-    /// podman run claiming a `bwrap:` binary would lie.
+    /// The configured backend name (`bubblewrap`, `podman-gvisor` or
+    /// `nono`). The report labels the backend line with it (`bwrap:` /
+    /// `podman:` / `nono:`) — the label is what an operator greps for, and a
+    /// nono run claiming a `bwrap:` binary would lie.
     pub backend: &'a str,
     /// The container image of a podman-gvisor run
     /// (`MYSBX_GVISOR_IMAGE`). `None` on bubblewrap, where the line
@@ -344,7 +344,11 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // The backend binary, labeled by the backend itself: `bwrap:` for
     // the bubblewrap backend, `podman:` for podman-gvisor (which also
     // names its image — the container the run starts is as much a
-    // property of the run as the binary a bwrap run execs).
+    // property of the run as the binary a bwrap run execs), `nono:`
+    // for the nono backend (a host-path backend like bwrap — the
+    // report's shell/PATH/nix.conf//bin/sh/ca-bundle pins describe
+    // the exec environment lib.rs sets on top of the inherited
+    // parent env, not argv flags).
     match r.backend {
         "podman-gvisor" => {
             p(format!("podman:         {}", r.bwrap_bin));
@@ -352,6 +356,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                 p(format!("image:          {image}"));
             }
         }
+        "nono" => p(format!("nono:           {}", r.bwrap_bin)),
         _ => p(format!("bwrap:          {}", r.bwrap_bin)),
     }
     p(format!("shell:          {}", r.params.shell));

@@ -208,7 +208,7 @@ Options:
                 the sandbox backend of THIS run, overriding the
                 `backend` of the config layers for one invocation —
                 the next run uses the configuration again. <name> is
-                one of: bubblewrap, podman-gvisor (the same accepted
+                one of: bubblewrap, podman-gvisor, nono (the same accepted
                 set the pipeline enforces on the configuration);
                 anything else is a refused run (exit 70) naming the
                 set, never a silent fallback — and neither layer has
