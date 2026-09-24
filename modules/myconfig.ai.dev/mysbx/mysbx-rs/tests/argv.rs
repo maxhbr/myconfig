@@ -4631,18 +4631,12 @@ fn nono_golden_allowlist() {
     )
     .unwrap();
     assert_golden("nono-allowlist.txt", &argv);
-    let allow_domain_at: Vec<usize> = argv
-        .windows(2)
-        .filter(|w| w[0] == "--allow-domain")
-        .map(|w| argv.iter().position(|a| *a == w[1]).unwrap())
-        .collect();
     let domains: Vec<&str> = argv
         .windows(2)
         .filter(|w| w[0] == "--allow-domain")
         .map(|w| w[1].as_str())
         .collect();
     assert_eq!(domains, ["api.openai.com", "github.com"]);
-    assert_eq!(allow_domain_at.len(), 2);
     assert!(
         argv.windows(2)
             .any(|w| w[0] == "--allow-unix-socket" && w[1] == "/nix/var/nix/daemon-socket/socket"),

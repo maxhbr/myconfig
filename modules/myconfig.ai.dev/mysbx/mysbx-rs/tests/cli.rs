@@ -73,6 +73,8 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env_remove("MYSBX_GVISOR_SHELL")
         .env_remove("MYSBX_GVISOR_TOOLS_PATH")
         .env_remove("MYSBX_PODMAN")
+        .env_remove("MYSBX_NONO")
+        .env_remove("MYSBX_NONO_PROFILE")
         // The waypipe pins are wrapper-provided too (D18): a wrapped
         // mysbx on PATH would otherwise leak its display pins into
         // tests that must exercise the UNPINNED refusal path.
@@ -7418,8 +7420,22 @@ fn expected_nono_minimal_argv(repo: &Path) -> String {
 
 /// A fixture with `backend = "nono"` in the sidecar config.
 fn fixture_nono(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
+    fixture_nono_config(name, args, "")
+}
+
+/// [`fixture_nono`] with an extra `config.toml` body appended after the
+/// `backend = "nono"` line.
+fn fixture_nono_config(
+    name: &str,
+    args: &[&'static str],
+    config: &str,
+) -> (Invocation, PathBuf, PathBuf) {
     let (inv, repo, sidecar) = fixture(name, args);
-    std::fs::write(sidecar.join("config.toml"), "backend = \"nono\"\n").unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!("backend = \"nono\"\n{config}"),
+    )
+    .unwrap();
     (inv, repo, sidecar)
 }
 
@@ -7429,12 +7445,7 @@ fn nono_backend_dry_run_prints_the_argv() {
     // argv, one argument per line — argv[0] the backend binary, the
     // payload last, byte-identical to the nono-minimal golden with
     // the repo path substituted.
-    let (inv, _, sidecar) = fixture_nono("nono-dry-run", &[]);
-    std::fs::write(
-        sidecar.join("config.toml"),
-        "backend = \"nono\"\nnetwork = false\n",
-    )
-    .unwrap();
+    let (inv, _, _) = fixture_nono_config("nono-dry-run", &[], "network = false\n");
     let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
     assert_eq!(code, 0, "stderr: {stderr}");
     let lines: Vec<&str> = stdout.lines().collect();
@@ -7528,10 +7539,7 @@ fn allowlist_on_bubblewrap_is_refused() {
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("bubblewrap"), "{stderr}");
     assert!(stderr.contains("allow-domains"), "{stderr}");
-    assert!(
-        stderr.contains("allow-connect-ports") || stderr.contains("connect-ports"),
-        "{stderr}"
-    );
+    assert!(stderr.contains("connect-ports"), "{stderr}");
     assert!(
         !stdout.contains("--clearenv"),
         "no argv on refusal: {stdout}"
@@ -7584,7 +7592,7 @@ fn nono_with_session_is_refused_before_the_clone_is_created() {
     // Landlock. The refusal (step 4c) fires before step 4a creates
     // anything — verified on a REAL run (no --dry-run): exit 70 and
     // no clones/ directory under the sidecar.
-    let (inv, _, sidecar) = fixture_nono("nono-session-refused", &["--session", "s1"]);
+    let (inv, _, _sidecar) = fixture_nono("nono-session-refused", &["--session", "s1"]);
     let (code, stdout, stderr) = run_binary_with(&inv, &["--session", "s1", "--dry-run"]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("--session"), "{stderr}");
@@ -7599,7 +7607,15 @@ fn nono_with_session_is_refused_before_the_clone_is_created() {
     );
 
     // The real run: same refusal, and the sidecar has no clones/.
+    // The repo is COMMITTED (the `git_repo` helper, like the session
+    // fixtures): on an empty repo the plan stops at EmptyHostRepo
+    // and no backend would ever create a clone — a committed repo is
+    // what lets the no-clones/ assertion discriminate a refusal that
+    // sits BEFORE step 4a from one that fires after it.
     let (inv, _, sidecar) = fixture_nono("nono-session-refused-real", &["--session", "s1"]);
+    let Some(_) = git_repo(inv.cwd.parent().unwrap(), "repo") else {
+        return; // no git on PATH: skip, like the session fixtures
+    };
     let (code, stdout, stderr) = run_binary_with(&inv, &["--session", "s1"]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
@@ -7656,17 +7672,24 @@ fn nono_with_multiplexer_is_refused() {
 #[test]
 fn nono_with_dest_remap_mount_is_refused() {
     // A mount with dest != path under nono: Landlock cannot move a
-    // path — refused by the argv builder.
+    // path — refused by the argv builder. The source is a directory
+    // INSIDE the fixture (not a host-dependent /etc/ssl): the needle
+    // asserts the exact path of this run only.
     let (inv, _, sidecar) = fixture("nono-remap-refused", &[]);
+    let mount_src = inv.cwd.join("remap-src");
+    std::fs::create_dir_all(&mount_src).unwrap();
+    let mount_src = mount_src.to_string_lossy().into_owned();
     std::fs::write(
         sidecar.join("config.toml"),
-        "backend = \"nono\"\n\
-         [[mounts]]\npath = \"/etc/ssl\"\ndest = \"/ssl\"\nmode = \"ro\"\n",
+        format!(
+            "backend = \"nono\"\n\
+             [[mounts]]\npath = {mount_src:?}\ndest = \"/ssl\"\nmode = \"ro\"\n"
+        ),
     )
     .unwrap();
     let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
-    assert!(stderr.contains("/etc/ssl"), "{stderr}");
+    assert!(stderr.contains(&mount_src), "{stderr}");
     assert!(stderr.contains("/ssl"), "{stderr}");
     assert!(
         !stdout.contains("--allow-cwd"),
