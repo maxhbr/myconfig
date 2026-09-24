@@ -21,6 +21,34 @@
       ctxSize = 262144;
       cacheType = "q8_0";
       ttl = 1500;
+      variants = {
+        # DRY sampler on top of the Xiaomi-recommended sampling: same
+        # temp/top-p, flat top-k/min-p/repeat-penalty, with DRY
+        # repetition breaking. ctxSize 262144 and the q8_0 KV/
+        # spec-draft cache types are inherited from the base entry
+        # (cacheType expands to --cache-type-k/v and
+        # --spec-draft-type-k/v).
+        dry = {
+          params = [
+            "--top-k"
+            "0"
+            "--min-p"
+            "0.0"
+            "--repeat-penalty"
+            "1.0"
+            "--dry-multiplier"
+            "0.5"
+            "--dry-base"
+            "1.75"
+            "--dry-allowed-length"
+            "4"
+            "--dry-penalty-last-n"
+            "4096"
+            "--dry-sequence-breaker"
+            "none"
+          ];
+        };
+      };
     }
   ];
 }
