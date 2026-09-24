@@ -55,6 +55,9 @@ fn base(network: bool) -> Merged {
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
+        allow_domains: Vec::new(),
+        connect_ports: Vec::new(),
+        listen_ports: Vec::new(),
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -729,6 +732,9 @@ fn golden_both_layers_contribute_mounts() {
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
+        allow_domains: Vec::new(),
+        connect_ports: Vec::new(),
+        listen_ports: Vec::new(),
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -1063,6 +1069,9 @@ fn mount_order_is_preserved() {
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
+        allow_domains: Vec::new(),
+        connect_ports: Vec::new(),
+        listen_ports: Vec::new(),
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -3425,6 +3434,9 @@ fn podman_base(network: bool) -> Merged {
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
+        allow_domains: Vec::new(),
+        connect_ports: Vec::new(),
+        listen_ports: Vec::new(),
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -3907,6 +3919,9 @@ fn podman_mount_order_is_preserved() {
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
+        allow_domains: Vec::new(),
+        connect_ports: Vec::new(),
+        listen_ports: Vec::new(),
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };

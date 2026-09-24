@@ -1884,6 +1884,9 @@ mod tests {
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
             forward_env: Vec::new(),
+            allow_domains: Vec::new(),
+            connect_ports: Vec::new(),
+            listen_ports: Vec::new(),
             multiplexer: Multiplexer::None,
             display: Display::Off,
         }

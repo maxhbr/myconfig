@@ -146,6 +146,23 @@ pub struct Merged {
     /// (`FORWARDED_ENV_VARS`, lib.rs), so these are ADDITIONS to the
     /// default, never a replacement.
     pub forward_env: Vec<String>,
+    /// Domains the sandbox may connect to (`allow-domains`,
+    /// bd myconfig-mo3.1): both layers declare, the lists concatenate
+    /// user layer first, deduplicated by exact string keeping the
+    /// first occurrence (order-stable) — the same rule as
+    /// `state-dirs`/`forward-env`. Backend-agnostic policy: a backend
+    /// that cannot enforce it refuses the run in the pipeline
+    /// (lib.rs), not here.
+    pub allow_domains: Vec<String>,
+    /// TCP ports the sandbox may connect out to (`connect-ports`,
+    /// bd myconfig-mo3.1): both layers' entries, user layer first,
+    /// deduplicated numerically keeping the first occurrence — the
+    /// same rule as `allow_domains`.
+    pub connect_ports: Vec<u16>,
+    /// TCP ports the sandbox may listen on (`listen-ports`,
+    /// bd myconfig-mo3.1): same concatenation and dedup rule as
+    /// [`Merged::connect_ports`].
+    pub listen_ports: Vec<u16>,
 }
 
 /// How a mount source relates to the invoking user's home directory
@@ -557,6 +574,47 @@ pub fn merge(
             .collect()
     };
 
+    // allow-domains / connect-ports / listen-ports (bd
+    // myconfig-mo3.1): both layers declare, the lists concatenate
+    // user layer first and deduplicate keeping the FIRST occurrence —
+    // the same seen-filter as `state-dirs`/`forward-env`. Domains
+    // dedupe by exact string, ports numerically. Backend-agnostic:
+    // enforcement (or the refusal of a backend that cannot enforce
+    // the policy) happens in the pipeline, not in the merge.
+    let allow_domains: Vec<String> = {
+        let mut seen: Vec<&str> = Vec::new();
+        user.allow_domains
+            .iter()
+            .chain(sidecar.allow_domains.iter())
+            .filter(|e| {
+                if seen.contains(&e.as_str()) {
+                    false
+                } else {
+                    seen.push(e.as_str());
+                    true
+                }
+            })
+            .cloned()
+            .collect()
+    };
+    let dedupe_ports = |user: &[u16], sidecar: &[u16]| -> Vec<u16> {
+        let mut seen: Vec<u16> = Vec::new();
+        user.iter()
+            .chain(sidecar.iter())
+            .filter(|p| {
+                if seen.contains(p) {
+                    false
+                } else {
+                    seen.push(**p);
+                    true
+                }
+            })
+            .copied()
+            .collect()
+    };
+    let connect_ports = dedupe_ports(&user.connect_ports, &sidecar.connect_ports);
+    let listen_ports = dedupe_ports(&user.listen_ports, &sidecar.listen_ports);
+
     Ok(Merged {
         backend: sidecar.backend.or(user.backend),
         network,
@@ -580,6 +638,9 @@ pub fn merge(
         git_dirs: approved_git_dirs,
         state_dirs,
         forward_env,
+        allow_domains,
+        connect_ports,
+        listen_ports,
     })
 }
 
@@ -1750,6 +1811,70 @@ mod tests {
         )
         .unwrap();
         assert!(merged.state_dirs.is_empty());
+    }
+
+    // ---- allow-domains / connect-ports / listen-ports (bd
+    // myconfig-mo3.1) -------------------------------------------
+
+    #[test]
+    fn allowlist_of_both_layers_concatenates_user_first() {
+        // Same rule as state-dirs: both layers declare, user entries
+        // first, sidecar entries after — order-stable, nothing
+        // resolved against the host.
+        let merged = merge(
+            cfg("allow-domains = [\"example.org\"]\nconnect-ports = [443]\nlisten-ports = [8080]\n"),
+            cfg("allow-domains = [\"api.example.org\", \"example.org\"]\nconnect-ports = [22]\nlisten-ports = [9090]\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.allow_domains, vec!["example.org", "api.example.org"]);
+        assert_eq!(merged.connect_ports, vec![443, 22]);
+        assert_eq!(merged.listen_ports, vec![8080, 9090]);
+    }
+
+    #[test]
+    fn allowlist_duplicates_are_dropped_first_occurrence_wins() {
+        // A repeated domain or port is one entry; the FIRST occurrence
+        // is kept so the user layer's position survives, exactly like
+        // state-dirs. Ports dedupe numerically, domains by exact
+        // string.
+        let merged = merge(
+            cfg("allow-domains = [\"example.org\", \"mirror.org\"]\nconnect-ports = [443, 22]\nlisten-ports = [8080]\n"),
+            cfg("allow-domains = [\"mirror.org\", \"example.org\", \"example.org\"]\nconnect-ports = [22, 443, 443]\nlisten-ports = [8080, 8080]\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.allow_domains, vec!["example.org", "mirror.org"]);
+        assert_eq!(merged.connect_ports, vec![443, 22]);
+        assert_eq!(merged.listen_ports, vec![8080]);
+    }
+
+    #[test]
+    fn an_omitted_allowlist_layer_contributes_nothing() {
+        // The default is empty, and a layer that does not mention the
+        // keys contributes nothing to any of the three lists.
+        let merged = merge(
+            cfg(
+                "allow-domains = [\"example.org\"]\nconnect-ports = [443]\nlisten-ports = [8080]\n",
+            ),
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.allow_domains, vec!["example.org"]);
+        assert_eq!(merged.connect_ports, vec![443]);
+        assert_eq!(merged.listen_ports, vec![8080]);
+
+        let merged = merge(cfg(""), cfg(""), &user_file(), &sidecar_file(), &no_home()).unwrap();
+        assert!(merged.allow_domains.is_empty());
+        assert!(merged.connect_ports.is_empty());
+        assert!(merged.listen_ports.is_empty());
     }
 
     // ---- resolve_cli_path (the --ro/--rw additions, cli.md D16) ------
