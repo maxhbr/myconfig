@@ -12,7 +12,7 @@ design decisions. See [cli.md](./cli.md) for the command-line surface.
 - **user config** — `$XDG_CONFIG_HOME/mysbx/config.toml`, host-wide
   defaults.
 - **backend** — the sandbox technology that actually confines the process
-  (bubblewrap, podman+gVisor, qemu, microvm).
+  (bubblewrap, podman+gVisor, nono, qemu, microvm).
 
 ## Decisions
 
@@ -74,8 +74,9 @@ config that can execute is config that can escape.
   tree
 - the backend and its resource limits
 - network policy (`network = false` is the deny switch; the network is
-  shared by default; `egress = "proxy-only"` is the stricter profile in
-  D20, off unless a layer sets it)
+  shared by default; the per-domain/port allowlist keys of D21;
+  `egress = "proxy-only"` is the stricter profile in D20, off unless a
+  layer sets it)
 - environment forwarded into the sandbox (`[env]`)
 - which terminal multiplexer the interactive payload is
   (`multiplexer`, see D17) — the one key where the sidecar overrides
@@ -1049,13 +1050,15 @@ same store path, baked in via `gvisor.imagePackages`), and adds it to
 the sandbox `PATH` via `extraTools` so a payload can inspect the
 channel.
 
-**The other backends (a note, no code).** The channel is a plain byte
+**The other backends (a note).** The channel is a plain byte
 stream, so it crosses whatever boundary a backend has: `microvm`/
 `qemu` would later carry it over vsock or an explicitly forwarded TCP
-port instead of a unix socket bind, and `nono` would need a check
-that waypipe's syscall set (memfd, `SCM_RIGHTS` on the guest-side
-socket) is available under its syscall filter. Neither backend exists
-yet; neither note blocks anything.
+port instead of a unix socket bind. Under `nono` the check this note
+asked for is still pending — waypipe's syscall set (memfd, `SCM_RIGHTS`
+on the guest-side socket) needs an audit under nono's seccomp filter,
+and until that audit says yes, the nono backend refuses
+`display = "waypipe"` (never a silently headless run);
+`doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md` tracks the lift.
 
 ### D20: `egress = "proxy-only"` is a profile, not an allowlist
 
@@ -1094,3 +1097,62 @@ profile refuses the run rather than starting with a shared stack:
 both is a schema error until a backend can enforce both. `orca` still
 needs the shared stack (D17); `egress = "proxy-only"` does not satisfy
 that.
+
+### D21: the network allowlist keys are backend-agnostic; enforcement is per backend
+
+Three top-level keys name what a sandbox with the network on may reach —
+the mo3.1 allowlist (bd myconfig-mo3.1), decided as *schema* on every
+backend and as *enforcement* per backend:
+
+```toml
+allow-domains  = ["proxy.internal", "github.com"]
+connect-ports  = [443, 22]
+listen-ports   = [8080]
+```
+
+- `allow-domains` — an array of non-empty strings; domains the sandbox
+  may connect to.
+- `connect-ports` — an array of integers `1`–`65535`; ports outbound
+  connections may target.
+- `listen-ports` — the same shape; ports the sandbox may listen on.
+
+Strict schema (D11): wrong types, empty domain strings and out-of-range
+ports are errors naming the file and the key, never warnings.
+
+**Merge: concatenate, dedupe first occurrence, order-stable** — the
+same rule as `state-dirs` and `forward-env` (D15), not the mounts rule
+(D7): the user layer's entries first, in declaration order, then the
+sidecar's, then duplicates dropped keeping the FIRST occurrence. The
+order survives to the argv, so `--verbose` and the allowlist flag
+sequence stay readable. Either layer may declare; the sidecar adds
+domains, it does not override the user layer's.
+
+**Enforcement is per backend, and a backend that cannot enforce the
+keys refuses the run (exit `70`) rather than accepting and ignoring
+them** — a finer policy that a backend silently does not apply would be
+a security bug:
+
+| backend | an allowlist means |
+| --- | --- |
+| `nono` | enforced (bd myconfig-6di.2): `--allow-domain` / `--allow-connect-port` / `--listen-port` per merged entry, in merged order; DNS is resolved by nono's own proxy, so no implicit `connect-ports` 53/853 is added |
+| `bubblewrap` | refused — bubblewrap shares or unshares the whole network namespace (`--share-net`/nothing), it cannot filter per domain or port |
+| `podman-gvisor` | refused — pasta does not filter by domain (bd myconfig-6di.3) |
+
+The first enforcement is the nono backend (bd myconfig-6di.2). The
+refusal fires while the argv is laid out, BEFORE the `--dry-run` early
+return, so a dry run audits it too.
+
+**On nono the shared default itself is inexpressible.** nono mediates
+per connection (a seccomp baseline; only the listed domains and ports
+pass), so `backend = "nono"` with the default `network = true` and an
+EMPTY allowlist is refused: silently granting nothing would be a
+silent downgrade of "shared". The operator lists what the sandbox may
+reach, or picks a backend that shares the host stack.
+
+**`network = false` plus any allowlist key is a contradiction refused on
+every backend**: the switch denies the network, the allowlist names what
+may be reached through it — both cannot hold at once.
+
+`egress = "proxy-only"` stays a different mechanism (D20): setting a
+D21 allowlist next to it is already a schema error, and D20 keeps
+owning that mutual exclusion.

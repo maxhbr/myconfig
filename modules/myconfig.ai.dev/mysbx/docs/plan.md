@@ -10,13 +10,13 @@ Status: the phase-1 MVP is complete — `mysbx` has the full CLI
 (`cli.md` D16, `config.md` D7), the bubblewrap backend with its golden
 argv tests, and NixOS packaging with the `mysbx-tests` /
 `mysbx-completions` / `mysbx-generated-config-test` checks. The podman +
-gVisor (`runsc`) backend has since landed on top of the same seam
-(bd myconfig-6di.1). Phase 2 is the open work, tracked as beads:
-myconfig-t24 (credentials), myconfig-mo3 (2c network policy),
-myconfig-9mw (2d toolchain, done), myconfig-6di (2f further backends),
-myconfig-o6z (2e workspace model, decided), myconfig-91j, myconfig-0ql
-(exit-code/structured-result contract) and myconfig-dys (unattended
-runs, blocked on 0ql + o6z).
+gVisor (`runsc`) backend (bd myconfig-6di.1) and the nono backend
+(Landlock + seccomp, bd myconfig-6di.2) have since landed on top of the
+same seam, and the per-domain/port network allowlist with them (bd
+myconfig-mo3.1, `config.md` D21). The remaining open work is tracked as
+beads: myconfig-t24 (credentials), myconfig-mo3.2 (proxy-only egress),
+myconfig-6di (qemu/microvm backends), myconfig-o6z (2e workspace model,
+decided), myconfig-91j, and myconfig-dys (unattended runs).
 
 This file is the phase plan. Each MVP work item has its own file in
 [`TODOs/`](./TODOs) with the concrete checklist; this file states *what* the
@@ -142,7 +142,9 @@ All six items are done; the MVP is complete.
 
 ## Phase 2 and later — sketches, not designs
 
-Each item below is **not designed yet**. They are recorded so the MVP is
+Each item below was a sketch when the MVP was cut; several have since
+been decided or landed (2c/2d/2e/2f). The remaining sketches are
+recorded so the MVP is
 visibly not a dead end, and because they were raised and deferred while the
 MVP was cut.
 
@@ -162,17 +164,21 @@ switch — `nono`'s `--allow-domain` / `--allow-connect-port` model is the
 closest existing precedent, and it is what makes "the sandbox may reach the
 model proxy and nothing else" expressible.
 
-Decided for the allowlist (bd myconfig-mo3.1): the schema exists on every
-backend. A run refuses a finer policy on a backend that cannot enforce it.
-Bubblewrap cannot. The first enforcement is the nono backend (bd
-myconfig-6di.2); until that lands, an allowlist is refused everywhere.
-No helper is wrapped inside bubblewrap to fake support. Proxy-only egress
-(bd myconfig-mo3.2) stays a separate profile and is not this allowlist.
-That profile is `egress = "proxy-only"` (config.md D20): the `network`
-bool is unchanged when the key is omitted. Bubblewrap enforces it with
-`--unshare-net` plus one socket to the host LiteLLM forwarder.
-podman-gvisor refuses it until its pasta spec is default-deny
-(bd myconfig-6di.3).
+DECIDED and LANDED. The allowlist schema (bd myconfig-mo3.1) is
+`allow-domains`/`connect-ports`/`listen-ports` on every backend
+(`config.md` D21): both layers concatenate, user layer first, deduped
+keeping the first occurrence. Enforcement is per backend — a backend
+that cannot enforce the keys refuses the run, never accepts and ignores
+them: the nono backend enforces them (bd myconfig-6di.2, mapping onto
+`--allow-domain`/`--allow-connect-port`/`--listen-port`), bubblewrap
+refuses (whole-net-namespace only), podman-gvisor refuses (pasta does
+not filter by domain, bd myconfig-6di.3). Proxy-only egress
+(bd myconfig-mo3.2) stays a separate profile and is not this
+allowlist. That profile is `egress = "proxy-only"` (`config.md` D20):
+the `network` bool is unchanged when the key is omitted. Bubblewrap
+enforces it with `--unshare-net` plus one socket to the host LiteLLM
+forwarder. podman-gvisor refuses it until its pasta spec is
+default-deny (bd myconfig-6di.3).
 
 **2d — the toolchain and `myconfig.ai.sandboxTools`.** DONE (bd
 myconfig-9mw): `mysbx` consumes
@@ -201,6 +207,15 @@ A clone mode is the prerequisite for unattended runs.
 **2f — further backends.** `README.md` names podman+gVisor and `nono` next,
 qemu and microvm long-term. The MVP's `bwrap_argv` boundary is the seam: a
 backend is a function from merged config + payload to a process invocation.
+Both named next backends are done: podman+gVisor (bd myconfig-6di.1) maps
+the merged config onto a rootless `podman run --runtime=runsc`; nono
+(bd myconfig-6di.2) maps it onto a `nono run` under Landlock + seccomp,
+refusing what that model cannot express — clone sessions (no path remap
+under Landlock, so a clone cannot be bound at the repo's path), mounts
+with a `dest` remap, multiplexer sessions and the waypipe display (their
+socket machinery has no Landlock-equivalent first cut,
+`doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`). Remaining:
+qemu and microvm, long-term.
 
 **2g — per-repo opt-out of user mounts.** `config.md` D7 settled the other
 direction (a sidecar declares its own mounts), but leaves open how a user

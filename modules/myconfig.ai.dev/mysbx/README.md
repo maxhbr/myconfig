@@ -209,6 +209,11 @@ The `config.toml` file in the sidecar defines
     `/mysbx-home` (the host home is never mounted), and `HOME` and `PATH`
     are set after `[env]`, so no layer can repoint them
     ([`config.md` D14](./docs/design/config.md))
+- network policy: `network = false` is the deny switch, and the
+  per-domain/port allowlist (`allow-domains`, `connect-ports`,
+  `listen-ports` — [`config.md` D21](./docs/design/config.md)) names
+  what a sandbox with the network on may reach; it is enforced on the
+  nono backend and refused on the others
 - ...
 
 It is deliberately placed outside of the repo and the sandbox.
@@ -454,15 +459,21 @@ dev-tool closure in [`nix/mysbx.nix`](./nix/mysbx.nix) instead, next to
   `mysbx run [--dry-run] -- CMD` and the bare interactive form, driven by the
   user config + sidecar layers, with the bwrap binary, payload shell and
   dev-tool PATH all pinned from the Nix package (see [`nix/mysbx.nix`](./nix/mysbx.nix))
+- podman + gVisor — the second backend (bd myconfig-6di.1):
+  `backend = "podman-gvisor"` maps the merged config onto a rootless
+  `podman run --runtime=runsc`; not yet exercised on a host
+- nono (Landlock + seccomp, `backend = "nono"`) — the third backend (bd
+  myconfig-6di.2): the merged config maps onto a `nono run`; the
+  per-domain/port network allowlist is enforced here and refused on
+  backends that cannot (`config.md` D21). Not yet exercised on a host.
 ## On the Roadmap:
 ### next:
 - the packaged bubblewrap tier is expected to evolve per phase 2 in
   [`docs/plan.md`](./docs/plan.md) (generated user config, credentials,
-  network policy, further backends — the `sandboxTools` integration of
-  phase 2d is done)
+  proxy-only egress — the `sandboxTools` integration of phase 2d and the
+  per-domain/port allowlist schema of phase 2c are done)
 ## after that:
 - container (via podman), with gvisor for additional layer of security
-- nono
 ### long term:
 - qemu
 - microvm
