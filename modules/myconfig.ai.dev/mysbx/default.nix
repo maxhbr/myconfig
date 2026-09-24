@@ -354,8 +354,9 @@ in
         gvisorEnv = cfg.gvisor.env;
         waypipe = cfg.display.package;
         gvisorWaypipe = cfg.gvisor.waypipe;
+        nono = cfg.nono.package;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; nono = cfg.nono.package; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -763,6 +764,36 @@ in
       };
     };
 
+    nono = {
+      # The nono backend (mysbx-rs/src/nono.rs): `nono run` under
+      # Landlock + seccomp — the same sandbox the tier-2 standalone
+      # wrappers of
+      # ../../sandboxes/myconfig.ai.nono-agent-sandbox.nix use. The
+      # package below is what the wrapper pins as `MYSBX_NONO`
+      # (./nix/mysbx.nix); `MYSBX_NONO_PROFILE` keeps its `"default"`
+      # inside the package file.
+      package = mkOption {
+        type = types.nullOr types.package;
+        # Unlike `gvisor.image` (gated on the gvisor tier module — a
+        # multi-hundred-MB OCI build), nono is a plain nixpkgs
+        # package, so it defaults to `pkgs.nono` directly, the same
+        # shape as the display/waypipe option defaulting to a
+        # package.
+        default = pkgs.nono;
+        defaultText = literalExpression "pkgs.nono";
+        description = ''
+          The nono sandbox binary of the nono backend (Landlock +
+          seccomp; upstream nolabs-ai/nono, `pkgs.nono` — the same
+          tool the tier-2 wrappers of
+          ../../sandboxes/myconfig.ai.nono-agent-sandbox.nix use),
+          pinned into the wrapper as `MYSBX_NONO`.
+
+          `null` pins nothing: `backend = "nono"` is a refused run,
+          never a silently-unsandboxed one.
+        '';
+      };
+    };
+
     workmux = {
       enable = mkOption {
         type = types.bool;
@@ -851,9 +882,15 @@ in
       type = types.submodule {
         options = {
           backend = mkOption {
-            type = types.nullOr (types.enum [ "bubblewrap" ]);
+            type = types.nullOr (
+              types.enum [
+                "bubblewrap"
+                "podman-gvisor"
+                "nono"
+              ]
+            );
             default = "bubblewrap";
-            description = "Sandbox backend; `null` leaves the choice to the sidecar.";
+            description = "Sandbox backend (`bubblewrap`, `podman-gvisor` or `nono`); `null` leaves the choice to the sidecar.";
           };
           network = mkOption {
             type = types.bool;

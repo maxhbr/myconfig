@@ -78,8 +78,23 @@
 #                     The same mechanism the gvisor agent image uses
 #                     (agent-image.nix sets the three variables at its
 #                     pinned bundle).
+#   MYSBX_NONO       the nono backend binary (Landlock + seccomp
+#                     sandbox, upstream nolabs-ai/nono, `pkgs.nono`;
+#                     mysbx-rs/src/nono.rs). The wrapped package pins
+#                     it from its own closure; an unwrapped build
+#                     gets no pin and the crate's PATH fallback
+#                     (`nono` via env_or) applies.
+#   MYSBX_NONO_PROFILE
+#                     NOT a closure path — an operator knob like
+#                     MYSBX_GVISOR_PASTA_SPEC: the nono profile of
+#                     every `nono run` (the crate's `--profile`
+#                     flag). Pinned with `--set-default`, so an
+#                     invocation can still override it. Default
+#                     `"default"`, nono's built-in conservative base
+#                     profile.
 #
 # All these pins are absolute store paths — nothing is left to host lookup.
+# (MYSBX_NONO_PROFILE is the one operator knob among them.)
 {
   lib,
   rustPlatform,
@@ -212,6 +227,18 @@
   # pins nothing — `display = "waypipe"` with `backend =
   # "podman-gvisor"` is refused.
   gvisorWaypipe ? null,
+  # The nono backend binary (mysbx-rs/src/nono.rs, upstream
+  # nolabs-ai/nono): `null` pins nothing and the crate's PATH
+  # fallback (`nono` via env_or) applies — the same contract as the
+  # bubblewrap pin above. Injected by callPackage; a parameter, not a
+  # `pkgs.` reference, keeps this file evaluable against any nixpkgs
+  # revision the caller brings.
+  nono ? null,
+  # The nono profile of every `nono run` (the crate's `--profile`
+  # flag): an operator knob like `gvisorPastaSpec` — pinned with
+  # `--set-default`, overridable per environment — never a closure
+  # path. `"default"` is nono's built-in conservative base profile.
+  nonoProfile ? "default",
 }:
 
 let
@@ -414,6 +441,13 @@ let
   waypipePins =
     lib.optionalString (waypipe != null) "--set MYSBX_WAYPIPE '${lib.getExe waypipe}' "
     + lib.optionalString (gvisorWaypipe != null) "--set MYSBX_GVISOR_WAYPIPE '${gvisorWaypipe}'";
+  # The nono backend pins: the binary (absolute store path, `--set`
+  # like every other closure pin) and the profile (an operator knob,
+  # `--set-default` like gvisorPastaSpec so an invocation can still
+  # override it).
+  nonoPins =
+    lib.optionalString (nono != null) "--set MYSBX_NONO '${lib.getExe nono}' "
+    + "--set-default MYSBX_NONO_PROFILE '${nonoProfile}'";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -435,7 +469,8 @@ symlinkJoin {
       ${muxEntryPins} \
       ${terminalPin} \
       ${gvisorPins} \
-      ${waypipePins}
+      ${waypipePins} \
+      ${nonoPins}
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
     # sync with the CLI surface by the `mysbx-completions` check in

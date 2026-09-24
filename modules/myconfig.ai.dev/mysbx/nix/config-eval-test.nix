@@ -230,6 +230,11 @@ let
       { myconfig.ai.orca.enable = true; }
       { myconfig.ai.dev.mysbx.config.multiplexer = "orca"; }
     ];
+    # The nono backend (mysbx-rs/src/nono.rs): the selection reaches
+    # the generated layer as the `backend` key, like any other backend.
+    nonoBackend = generated [
+      { myconfig.ai.dev.mysbx.config.backend = "nono"; }
+    ];
     # A host-wide selection this host cannot start must fail at EVAL
     # time, naming the option to set — not on the first `mysbx` of
     # every sandbox.
@@ -314,6 +319,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       muxHerdr
       muxTmux
       muxOrca
+      nonoBackend
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
@@ -405,6 +411,11 @@ pkgs.runCommand "mysbx-generated-config-test"
     # AppImage via `myconfig.ai.orca.package`.
     grep -q '^multiplexer = "orca"$' "$muxOrca" \
       || fail "the orca selection is missing" "$muxOrca"
+    # ... and the nono backend selection reaches the generated layer
+    # as the `backend` key (the wrapper pin it needs is the package
+    # default, checked in checks.nix's wrapper test).
+    grep -q '^backend = "nono"$' "$nonoBackend" \
+      || fail "the nono backend selection is missing" "$nonoBackend"
 
     # 7. the shared sandbox-tools hook (phase 2d): its env entries reach
     #    the generated [env] table, a hook/baseline clash resolves to
