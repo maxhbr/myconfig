@@ -255,6 +255,61 @@ in
         touch "$out"
       '';
 
+  # bd myconfig-bf2: the `MYSBX_NIX_CONF` pin must be a file named
+  # `nix.conf` inside a directory, because the nono backend's exec
+  # environment sets `NIX_CONF_DIR` to the pin's PARENT — a bare store
+  # file made that parent `/nix/store`, and nix read no configuration
+  # at all (no flakes inside the sandbox). Two gates: an eval-time
+  # assertion on the path shape, and a build-time one where the REAL
+  # pinned nix resolves its configuration from the REAL pinned
+  # directory — `nix config show experimental-features` must report
+  # `flakes`, which is only possible when the file was actually
+  # loaded.
+  mysbx-nix-conf-pin-test =
+    let
+      lib = inputs.nixpkgs.lib;
+      pin = pkg.passthru.sandboxNixConfDir;
+      shapeOk = lib.hasSuffix "/nix.conf" pkg.passthru.sandboxNixConfPin;
+      evalGate =
+        if shapeOk then
+          "ok"
+        else
+          throw "mysbx-nix-conf-pin-test: MYSBX_NIX_CONF must be <dir>/nix.conf, got ${pkg.passthru.sandboxNixConfPin}";
+    in
+    pkgs.runCommand "mysbx-nix-conf-pin-test"
+      {
+        inherit evalGate pin;
+        nativeBuildInputs = [ pkgs.nix ];
+      }
+      ''
+        fail() {
+          echo "mysbx-nix-conf-pin-test: $*" >&2
+          exit 1
+        }
+
+        [ "$evalGate" = ok ] || { echo "mysbx-nix-conf-pin-test: eval gate: $evalGate" >&2; exit 1; }
+
+        # the pin the wrapper sets: a directory whose `nix.conf` exists
+        test -f "$pin/nix.conf" \
+          || fail "the pin's parent has no nix.conf: $pin"
+
+        # the REAL nix resolves the REAL configuration from the
+        # directory the nono backend would set NIX_CONF_DIR to —
+        # the exact acceptance of bd myconfig-bf2, checked in an
+        # empty environment so no host config can mask a miss
+        features=$(env -i \
+          PATH="$PATH" \
+          HOME="$TMPDIR" \
+          NIX_CONF_DIR="$pin" \
+          nix config show experimental-features)
+        case "$features" in
+          *flakes*) ;;
+          *) fail "nix did not load the pinned nix.conf (got: $features)" ;;
+        esac
+
+        mkdir "$out"
+      '';
+
   mysbx-tests = crate.overrideAttrs (old: {
     doCheck = true;
     # The CLI tests drive the built binary as a subprocess with a

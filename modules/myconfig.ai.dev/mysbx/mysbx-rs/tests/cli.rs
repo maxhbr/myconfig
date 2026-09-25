@@ -7771,3 +7771,87 @@ fn nono_allowlist_reaches_the_argv() {
         "a shared network is not blocked: {stdout}"
     );
 }
+
+// ---- the nono NIX_CONF_DIR pin contract (bd myconfig-bf2) ---------------------
+
+#[test]
+fn nono_refuses_a_nix_conf_pin_that_is_not_named_nix_conf() {
+    // Under nono the pinned nix.conf is consumed as
+    // `NIX_CONF_DIR = <parent of the file>`, and nix reads that
+    // directory's `nix.conf` — so a pin NOT named `nix.conf` would
+    // silently load NO configuration (the bug shape: a bare store
+    // file made the parent `/nix/store`). Refused loudly instead,
+    // the same "fail on a packaging bug" rule as bwrap's
+    // non-`--try` binds. Only with the shared network: the env
+    // variable travels with the daemon socket, and a denied network
+    // never reads the pin at all.
+    for (network, label) in [(true, "shared network"), (false, "denied network")] {
+        let (inv, _, sidecar) = fixture_nono_config(
+            "nono-nix-conf-pin-shape",
+            &[],
+            &format!(
+                "network = {network}\n{}",
+                if network {
+                    "allow-domains = [\"api.openai.com\"]\n"
+                } else {
+                    ""
+                }
+            ),
+        );
+        let conf = inv.home.join("mysbx-nix.conf");
+        std::fs::write(&conf, "experimental-features = nix-command flakes\n").unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env("MYSBX_NIX_CONF", &conf);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if network {
+            assert_eq!(
+                out.status.code(),
+                Some(mysbx::EXIT_INFRASTRUCTURE),
+                "{label}: stderr: {stderr}"
+            );
+            assert!(
+                stderr.contains("nix.conf"),
+                "{label}: the message names the contract: {stderr}"
+            );
+            assert!(stdout.is_empty(), "{label}: no argv on refusal: {stdout}");
+        } else {
+            // A denied network never sets NIX_CONF_DIR, so the pin's
+            // name is not consumed and the run is accepted.
+            assert_eq!(out.status.code(), Some(0), "{label}: stderr: {stderr}");
+            assert!(stdout.starts_with("nono\nrun\n"), "{label}: {stdout}");
+        }
+    }
+}
+
+#[test]
+fn nono_accepts_a_nix_conf_pin_named_nix_conf() {
+    // The contract's positive side: a pin that IS a file named
+    // `nix.conf` inside a directory — the shape the Nix wrapper pins
+    // since bd myconfig-bf2 — makes the run's exec env set
+    // NIX_CONF_DIR to that directory, and nix then finds its
+    // configuration. `--dry-run` returns before the exec, so the
+    // observable is the acceptance plus the report naming the pin.
+    let (inv, _, _) = fixture_nono_config(
+        "nono-nix-conf-pin-ok",
+        &[],
+        "network = true\nallow-domains = [\"api.openai.com\"]\n",
+    );
+    let dir = inv.home.join("nix-conf-dir");
+    std::fs::create_dir_all(&dir).unwrap();
+    let conf = dir.join("nix.conf");
+    std::fs::write(&conf, "experimental-features = nix-command flakes\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+    cmd.env("MYSBX_NIX_CONF", &conf);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stderr: {stderr}");
+    assert!(argv_block(&stdout).starts_with("nono\nrun\n"), "{stdout}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains(&format!("nix.conf:       {}", conf.display())),
+        "the report names the pin: {report}"
+    );
+}

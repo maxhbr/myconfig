@@ -1501,7 +1501,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // The sanitized nix client configuration (review-2 item 3). There
     // is no fallback on purpose: unset means "bind no nix.conf", never
     // "bind the host's" — that file may carry access-tokens, and a
-    // read-only bind hands them to the payload all the same.
+    // read-only bind hands them to the payload all the same. Under
+    // nono the pin is consumed as `NIX_CONF_DIR = <parent of the
+    // file>`, which nix reads as a directory containing `nix.conf`
+    // — so the pin must be a file NAMED `nix.conf` inside a directory
+    // (bd myconfig-bf2); under bwrap the file is bound at
+    // /etc/nix/nix.conf regardless of its name.
     let nix_conf = env_opt("MYSBX_NIX_CONF");
     // The multiplexer entry (docs/design/config.md D17): the
     // interactive payload of a run that selected one. Exactly the pin
@@ -1861,8 +1866,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // - host-forwarded variables and the config layers' `[env]`
             //   table, the same values bwrap would set.
             // - `NIX_CONF_DIR` points nix at the PARENT DIRECTORY of the
-            //   pinned file (nix honors NIX_CONF_DIR as the directory
-            //   containing nix.conf — verified): under bwrap the file
+            //   pinned file, which nix reads as the directory containing
+            //   `nix.conf` — so the pin must be a file named `nix.conf`
+            //   inside a directory (bd myconfig-bf2; when the pin was a
+            //   bare store file the parent was `/nix/store` and nix read
+            //   no configuration at all): under bwrap the file
             //   is bound at /etc/nix/nix.conf; under nono there is no
             //   bind machinery, the exec environment points nix at the
             //   pinned file's directory instead — set only with the
@@ -1897,9 +1905,27 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // the daemon socket is (`--share-net`), because the
             // daemon is unreachable under `network = false` and its
             // configuration would be dead weight — the same rule
-            // here.
+            // here. The pin must be a file NAMED `nix.conf` inside a
+            // directory (bd myconfig-bf2): nix reads `NIX_CONF_DIR`
+            // as a directory containing `nix.conf`, so a differently
+            // named pin — a bare store file's parent is `/nix/store`
+            // — would silently load NO configuration. A refusal, not
+            // silence: the same "fail loudly on a packaging bug"
+            // rule as bwrap's non-`--try` binds.
             if merged.network {
                 if let Some(nix_conf) = nix_conf.as_deref() {
+                    if std::path::Path::new(nix_conf)
+                        .file_name()
+                        .and_then(|f| f.to_str())
+                        != Some("nix.conf")
+                    {
+                        eprintln!(
+                            "mysbx: nono: MYSBX_NIX_CONF must be a file named 'nix.conf' \
+                             inside a directory (nix reads NIX_CONF_DIR as a directory \
+                             containing nix.conf), got: {nix_conf}"
+                        );
+                        return EXIT_INFRASTRUCTURE;
+                    }
                     if let Some(parent) = std::path::Path::new(nix_conf).parent() {
                         env.insert("NIX_CONF_DIR".into(), parent.to_string_lossy().into_owned());
                     }
