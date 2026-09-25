@@ -91,7 +91,6 @@ in
     ./bro.nix
     ./commit.nix
     ./grafana-core.nix
-    ./herdr-workmux.nix
     ./implement-and-review-and-commit.nix
     ./implement-and-review-and-commit-until-done.nix
     # ./playwright-cli.nix
