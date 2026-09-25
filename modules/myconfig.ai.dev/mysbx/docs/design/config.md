@@ -415,7 +415,9 @@ absent sibling keeps the sandbox narrow; `workmux add` inside it fails
 with a filesystem error naming the path. The bind is guarded exactly
 like the repo's: a mount covering it is refused, a dest below it is
 refused, and a sibling that contains the home directory is refused at
-resolution.
+resolution. With the sibling bound, the herdr entry points herdr's
+worktree root at it too (D17), so every multiplexer that can create
+worktrees uses the same registry.
 
 **The pointer itself grants nothing (review-2 item 1).** The `.git`
 file lives *inside* the repo, so it is content the sandbox can rewrite
@@ -872,6 +874,24 @@ and needs no terminal socket at all. The variable is set for herdr
 and orca too, uniformly: one code path, and a pane running plain
 `tmux` inside a herdr or orca session lands
 on the same private socket rather than on `/tmp/tmux-<uid>`.
+
+**`herdr` places worktrees in the workmux sibling (D13).** herdr's
+own worktree option (`[worktrees] directory`) is a single global root
+with no per-repo placeholders — on the host that is why
+`programs.herdr.nix` replaces the built-in action with a custom
+command — but a sandbox has exactly ONE repository, so the entry
+(`../../nix/herdr-entry.nix`) makes the option repository-local at
+start time: it points `[worktrees] directory` at the `<repo>__worktrees`
+sibling WHEN THE SIBLING IS BOUND, i.e. exactly when `Repo::worktrees`
+recorded it (the `-d` test inside the sandbox IS the bind test). An
+absent sibling leaves the key unset and herdr falls back to its own
+default inside the tmpfs home — ephemeral, like a `workmux add` that
+fails on the unbound path: the D13 guard ("a run never creates the
+sibling") is preserved, because the entry only ever CONFIGURES an
+existing, rw-bound directory. herdr appends `<repo>/<branch-slug>` to
+its root, so checkouts land one level deeper than workmux puts them,
+inside the same sibling — the same tradeoff the bubblewrap-jail tier
+of `programs.herdr.nix` accepted.
 
 **`run -- CMD` is unaffected** (cli.md D11): a one-shot command is
 never wrapped in a session, so its argv is byte-identical to a

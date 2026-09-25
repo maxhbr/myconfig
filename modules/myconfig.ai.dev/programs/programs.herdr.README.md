@@ -63,6 +63,17 @@ socket API — still use the global `[worktrees] directory`
 configuration choice here; see
 [`../../../doc/TODOs/herdr-per-repo-worktree-directory.md`](../../../doc/TODOs/herdr-per-repo-worktree-directory.md).
 
+The mysbx tier (`multiplexer = "herdr"`,
+[`../mysbx/nix/herdr-entry.nix`](../mysbx/nix/herdr-entry.nix)) closes
+the same gap with the same one-repository argument: its entry script
+writes a session config whose `[worktrees] directory` points at the
+sibling when mysbx bound it (mysbx binds the sibling rw only when it
+exists on the host and never creates it), and leaves the key unset —
+falling back to herdr's default inside the ephemeral tmpfs home — when
+it did not. Checkouts therefore land in
+`<parent-of-repo>/<repo>__worktrees/<repo>/<branch-slug>`, the same
+one-level-deeper tradeoff the jail accepts below.
+
 ## `agent-bubblewrap-herdr`: the sandbox closes that gap
 
 A jail session has exactly **one** repository, so there the global option can
