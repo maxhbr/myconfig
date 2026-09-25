@@ -40,6 +40,17 @@ in
       '';
     };
 
+    keysubdirsAsGroups = mkEnableOption "the keysubdirs-as-groups syntactic sugar" // {
+      description = ''
+        Enable gitolite's `keysubdirs-as-groups` sugar: every
+        subdirectory of keydir/ becomes an implicit user group of the
+        same name, so keys dropped into
+        `keydir/<group>/user.pub` grant that group without touching
+        gitolite.conf. Groups defined explicitly in gitolite.conf
+        accumulate with the implicit ones.
+      '';
+    };
+
     restrictToWg0 = mkEnableOption "restricting gitolite access to the wg0 subnet" // {
       description = ''
         gitolite shares the host sshd (port 22) with regular admin SSH,
@@ -55,6 +66,11 @@ in
     services.gitolite = {
       enable = true;
       inherit (cfg) adminPubkey;
+      extraGitoliteRc = lib.optionalString cfg.keysubdirsAsGroups ''
+        # Subdirectories of keydir/ become implicit user groups
+        # (see myconfig.gitolite.keysubdirsAsGroups):
+        push( @{$RC{ENABLE}}, 'keysubdirs-as-groups' );
+      '';
     };
 
     services.openssh.extraConfig = lib.mkIf cfg.restrictToWg0 (

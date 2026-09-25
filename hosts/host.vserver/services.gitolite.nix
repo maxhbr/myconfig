@@ -10,6 +10,7 @@
   config = {
     myconfig.gitolite = {
       enable = true;
+      keysubdirsAsGroups = true;
       restrictToWg0 = true;
     };
   };
