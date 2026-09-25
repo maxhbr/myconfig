@@ -98,7 +98,9 @@
 //! What deliberately does NOT appear: `bin_sh`, `nix_conf` and
 //! `ca_bundle` are NOT argv flags under nono (no bind machinery) —
 //! they travel via the exec environment lib.rs builds (`HOME`, `PATH`,
-//! `NIX_CONF_DIR`, the CA-bundle variables).
+//! `NIX_CONF_DIR`, the CA-bundle variables). `NIX_CONF_DIR` is the
+//! PARENT of the pinned `nix.conf` file, so the pin must be named
+//! `nix.conf` and live inside a directory (bd myconfig-bf2).
 
 use crate::bwrap::{Payload, PolicyPath, Workspace};
 use crate::config::Multiplexer;
@@ -133,8 +135,9 @@ pub const NIX_DAEMON_SOCKET: &str = "/nix/var/nix/daemon-socket/socket";
 /// bind machinery, so there is nothing this builder could do with
 /// them. They reach the payload through the exec environment lib.rs
 /// builds (`PATH` carries the tools closure, `NIX_CONF_DIR` points nix
-/// at the pinned file's directory, `SSL_CERT_FILE` & co. name the
-/// pinned bundle).
+/// at the pinned file's parent directory — the pin is a file named
+/// `nix.conf` inside it, bd myconfig-bf2 — and `SSL_CERT_FILE` & co.
+/// name the pinned bundle).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Params<'a> {
     /// Path of the shell used for [`Payload::Shell`] — a host store
