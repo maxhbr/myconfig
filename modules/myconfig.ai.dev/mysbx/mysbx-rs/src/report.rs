@@ -24,7 +24,7 @@
 use crate::bwrap::{
     HostEnv, Params, Payload, Workspace, MUX_SOCKET_DIR, SANDBOX_HOME, WAYPIPE_DISPLAY,
 };
-use crate::config::{Display, Mode};
+use crate::config::{Display, Mode, Multiplexer};
 use crate::merge::Merged;
 use crate::repo::Repo;
 use std::path::Path;
@@ -472,6 +472,35 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                         .mux_entry
                         .unwrap_or("(none pinned — the run is refused)")
                 ));
+                // herdr places worktrees in the workmux sibling
+                // (D13/D17): the entry points herdr's `[worktrees]`
+                // directory at `<repo>__worktrees` when the argv
+                // builder bound it, so the report says where a
+                // herdr-spawned worktree lands — the placement claim,
+                // checked against the `worktrees:` bind line above.
+                // Clone runs mount no sibling (workspace.md D3), so
+                // there the entry finds no directory and herdr keeps
+                // its default — the report says that too, rather than
+                // claiming a placement the sandbox cannot make.
+                if mux == Multiplexer::Herdr {
+                    match (
+                        &r.repo.worktrees,
+                        r.params.workspace.clone(),
+                    ) {
+                        (Some(worktrees), Workspace::Live) => p(format!(
+                            "  worktrees:    {} — herdr's worktree root (checkouts land below <repo>/<branch-slug>)",
+                            worktrees.display()
+                        )),
+                        (_, Workspace::Live) => p(
+                            "  worktrees:    herdr keeps its own default — no worktrees sibling exists next to the repo (config.md D13)"
+                                .to_string(),
+                        ),
+                        (_, Workspace::Clone { .. }) => p(
+                            "  worktrees:    herdr keeps its own default — a clone run binds no __worktrees sibling (workspace.md D3)"
+                                .to_string(),
+                        ),
+                    }
+                }
             }
             Payload::Command(_) => p(format!(
                 "multiplexer:    {mux}, but not applied — it replaces the INTERACTIVE payload only (cli.md D11)"
@@ -1032,6 +1061,95 @@ mod tests {
         assert!(
             plain.contains("payload:        shell /synth/bin/bash"),
             "{plain}"
+        );
+    }
+
+    #[test]
+    fn the_herdr_report_names_the_worktree_root_it_will_configure() {
+        // config.md D17: with `multiplexer = "herdr"` and a live
+        // workspace, the entry points herdr's `[worktrees]` directory
+        // at the `<repo>__worktrees` sibling when the argv builder
+        // bound it — the report says where a herdr-spawned worktree
+        // lands, checked against the `worktrees:` bind line. Without
+        // the sibling (and in a clone run, which mounts none) it says
+        // herdr keeps its own default instead of claiming a placement
+        // the sandbox cannot make.
+        fn herdr_params<'a>(workspace: Workspace<'a>) -> Params<'a> {
+            Params {
+                shell: "/synth/bin/bash",
+                tools_path: "/synth/bin",
+                bin_sh: None,
+                nix_conf: None,
+                ca_bundle: None,
+                policy_paths: &[],
+                mux_entry: Some("/synth/bin/mysbx-herdr-entry"),
+                waypipe: None,
+                workspace,
+            }
+        }
+        let report_of = |repo: Repo, workspace: Workspace| {
+            let (_, mut merged, host) = fixture_report();
+            merged.multiplexer = Multiplexer::Herdr;
+            lines(&Report {
+                repo: &repo,
+                sidecar_exists: true,
+                user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+                user_config_exists: true,
+                sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+                sidecar_config_exists: false,
+                merged: &merged,
+                backend_from_cli: false,
+                user_mount_count: 1,
+                cli_mount_count: 0,
+                host_env: &host,
+                params: &herdr_params(workspace),
+                bwrap_bin: "bwrap",
+                backend: "bubblewrap",
+                image: None,
+                payload: &Payload::Shell,
+                dry_run: true,
+                result: false,
+            })
+            .join("\n")
+        };
+
+        // Live run WITH the sibling: the placement line names the
+        // sibling, exactly the directory the argv binds.
+        let (repo, _, _) = fixture_report();
+        let repo_with = Repo {
+            worktrees: Some(PathBuf::from("/synth/repo__worktrees")),
+            ..repo.clone()
+        };
+        let with = report_of(repo_with, Workspace::Live);
+        assert!(
+            with.contains(
+                "  worktrees:    /synth/repo__worktrees — herdr's worktree root (checkouts land below <repo>/<branch-slug>)"
+            ),
+            "{with}"
+        );
+
+        // Live run WITHOUT the sibling: no placement is claimed.
+        let without = report_of(repo.clone(), Workspace::Live);
+        assert!(
+            without.contains(
+                "  worktrees:    herdr keeps its own default — no worktrees sibling exists next to the repo (config.md D13)"
+            ),
+            "{without}"
+        );
+
+        // Clone run: the sibling is never mounted (workspace.md D3),
+        // so the entry cannot configure it.
+        let clone = report_of(
+            repo,
+            Workspace::Clone {
+                clone: Path::new("/synth/repo.mysbx/clones/fix-1"),
+            },
+        );
+        assert!(
+            clone.contains(
+                "  worktrees:    herdr keeps its own default — a clone run binds no __worktrees sibling (workspace.md D3)"
+            ),
+            "{clone}"
         );
     }
 
