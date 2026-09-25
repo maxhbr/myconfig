@@ -256,44 +256,51 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // Under nono NONE of that holds (no tmpfs home, no remap): HOME is
     // the real host home — kept unwritable by Landlock — and the state
     // stores persist at their real sidecar paths, so the line must
-    // say the backend's actual semantics instead of bwrap's.
+    // say the backend's actual semantics instead of bwrap's. The
+    // counts use the EFFECTIVE entries (the declared ones plus the
+    // implicit `.ssh` of a `ssh-key` run, config.md D22): the home IS
+    // partly sidecar-backed either way.
+    let effective_state_dirs = r.merged.effective_state_dirs();
     if r.backend == "nono" {
-        if r.merged.state_dirs.is_empty() {
+        if effective_state_dirs.is_empty() {
             p("home:           the host home is $HOME (no remap; the host home is not writable under nono)".to_string());
         } else {
             p(format!(
                 "home:           the host home is $HOME (no remap; the host home is not writable under nono; {} state dir(s) persist at their sidecar paths)",
-                r.merged.state_dirs.len(),
+                effective_state_dirs.len(),
             ));
         }
-    } else if r.merged.state_dirs.is_empty() || clone_run {
+    } else if effective_state_dirs.is_empty() || clone_run {
         p(format!(
             "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
         ));
     } else {
         p(format!(
             "home:           {SANDBOX_HOME} (tmpfs + {} state dir(s) persisted in the sidecar; the host home is not mounted)",
-            r.merged.state_dirs.len(),
+            effective_state_dirs.len(),
         ));
     }
 
     // State dirs (config.md D15), in declaration order: what the sandbox
     // persists across runs and where the backing store lives. They are
     // implicit binds like the repo, so they belong with the mount
-    // listing's provenance, not buried in prose. In a clone run they
-    // are OFF (workspace.md D4) — said out loud when a layer declared
-    // any, so the difference to a live run is visible instead of
-    // implied by absence.
-    if !r.merged.state_dirs.is_empty() && clone_run {
+    // listing's provenance, not buried in prose. The implicit `.ssh`
+    // of a `ssh-key` run (config.md D22) is listed like a declared one
+    // — it IS a state entry, and the ssh-key line below names the
+    // keypair itself. In a clone run the state dirs (the implicit
+    // `.ssh` included) are OFF (workspace.md D4) — said out loud when
+    // anything was declared, so the difference to a live run is visible
+    // instead of implied by absence.
+    if !effective_state_dirs.is_empty() && clone_run {
         p(format!(
             "state dirs:     off in a clone run ({} declared, not handled — workspace.md D4)",
-            r.merged.state_dirs.len()
+            effective_state_dirs.len()
         ));
     }
-    if !r.merged.state_dirs.is_empty() && !clone_run {
+    if !effective_state_dirs.is_empty() && !clone_run {
         p(format!(
             "state dirs:     {} (rw, persisted in the sidecar)",
-            r.merged.state_dirs.len()
+            effective_state_dirs.len()
         ));
         // The in-sandbox path in full (`/mysbx-home/<entry>`), not the
         // bare entry: the report is read against the argv, where the
@@ -301,7 +308,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         // the sandbox root. Under nono there is NO remap: the store is
         // reachable at its sidecar path and nowhere else, so the line
         // says that instead of inventing a sandbox path.
-        for entry in &r.merged.state_dirs {
+        for entry in &effective_state_dirs {
             if r.backend == "nono" {
                 p(format!(
                     "  {}  [state; no remap — the sandbox path is the sidecar path]",
@@ -313,6 +320,30 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                     r.repo.sidecar.join("state").join(entry).display()
                 ));
             }
+        }
+    }
+
+    // The sandbox's own SSH keypair (docs/design/config.md D22): a
+    // `ssh-key` run binds `<sidecar>/state/.ssh` at the sandbox `~/.ssh`
+    // — an implicit state entry, so its provenance belongs here next to
+    // the state dirs, not buried in prose. The PRIVATE key never
+    // leaves the sidecar/sandbox; the line names the paths so the
+    // operator can check the bind against the argv.
+    if r.merged.ssh_key && !clone_run {
+        if r.backend == "nono" {
+            p(format!(
+                "ssh key:        {} (generated, ed25519; no remap — reach it via GIT_SSH_COMMAND, not $HOME)",
+                r
+                    .merged
+                    .ssh_store_dir(&r.repo.sidecar)
+                    .join("id_ed25519")
+                    .display()
+            ));
+        } else {
+            p(format!(
+                "ssh key:        {SANDBOX_HOME}/.ssh <-> {}  [generated, ed25519]",
+                r.merged.ssh_store_dir(&r.repo.sidecar).display()
+            ));
         }
     }
 
@@ -619,6 +650,7 @@ mod tests {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
+            ssh_key: false,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         };

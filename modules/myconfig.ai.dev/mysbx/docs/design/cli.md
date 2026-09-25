@@ -71,7 +71,9 @@ session noun group's worktree sibling `worktree list` /
 ([worktree.md](./worktree.md) W1 — the second D3 exception: read-only
 inspection of the host's workmux worktrees in `<repo>__worktrees`,
 host-side, no sandbox started), the host-side overview verb `status`
-(D19), the
+(D19), the host-side keypair verb `ssh-pubkey`
+([config.md](./config.md) D22 — prints the public half of the sandbox's
+generated ssh keypair, generating it when enabled and missing), the
 global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
 the clone run mode), plus the global flags `--dry-run` (D9),
 `--verbose` (D10), `--result`/`--timeout` (D17), `--multiplexer`

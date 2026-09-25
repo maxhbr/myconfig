@@ -267,6 +267,22 @@ binds it rw at `/mysbx-home/<entry>`. The host home is never the source.
 Entries may not nest, no mount may cover them, and `--dry-run` creates
 nothing. See `docs/design/config.md` D15.
 
+### The sandbox's own SSH keypair (`ssh-key`)
+
+`ssh-key = true` (either configuration layer; the sidecar wins) makes
+mysbx generate an ed25519 keypair per repository into
+`<repo>.mysbx/state/.ssh/` — private key `0600`, no passphrase — and
+bind the directory rw at the sandbox's `~/.ssh`, so `git` over SSH
+works inside the sandbox WITHOUT forwarding any host credential: no
+host `~/.ssh` is ever mounted. The lifecycle is create-if-missing and
+recreate-if-deleted-or-invalid; an operator-provided pair is never
+overwritten. On creation the PUBLIC key is printed (and `mysbx
+ssh-pubkey` prints it on demand — unprefixed, ready to paste as a
+GitHub deploy key or a gitolite keydir entry, e.g. for the gitolite on
+hosts thing/vserver). Under the nono backend there is no path remap:
+the key stays at its sidecar path and `GIT_SSH_COMMAND` points git at
+it. See `docs/design/config.md` D22.
+
 ### The multiplexer session (`multiplexer`)
 
 `multiplexer = "tmux" | "workmux" | "herdr" | "aoe" | "orca" | "none"` in a

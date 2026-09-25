@@ -1,0 +1,13 @@
+run
+--profile
+default
+--allow
+/synth/repo
+--allow-cwd
+--read
+/nix/store
+--allow
+/synth/repo.mysbx/state/.ssh
+--block-net
+--
+/synth/bin/bash

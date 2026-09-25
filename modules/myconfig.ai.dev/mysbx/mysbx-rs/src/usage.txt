@@ -8,6 +8,7 @@ Usage:
   mysbx session list | session destroy NAME [--force] | session hunk NAME
   mysbx worktree list | worktree diff NAME | worktree hunk NAME
   mysbx status
+  mysbx ssh-pubkey
   mysbx [COMMAND]
 
 Commands:
@@ -167,6 +168,20 @@ Commands:
                 --verbose is refused (no run to report on) and
                 --dry-run is accepted as a plain print (the verb has
                 no side effects)
+  ssh-pubkey   print the PUBLIC half of this repo's sandbox ssh
+                keypair (<repo>.mysbx/state/.ssh/id_ed25519.pub) —
+                the value to register as a GitHub deploy key or a
+                gitolite keydir entry; the private key never leaves
+                the sidecar/sandbox. Host-side, no sandbox is
+                started. With `ssh-key = true` in a configuration
+                layer the verb also enforces the run lifecycle: a
+                missing pair is generated, an incomplete one
+                repaired, an existing one left untouched. With the
+                key disabled an existing pair still prints, but a
+                missing one is a refusal — a disabled key must not
+                quietly re-enable itself. Takes no nested verbs;
+                --verbose is refused and --dry-run prints what
+                would happen without generating anything
   gvisor-load-image
                 load the gVisor agent container image into Podman;
                 supports `--force`, `--test`, `--image <ref>`, `--help`

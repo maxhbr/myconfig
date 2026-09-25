@@ -16,6 +16,7 @@
 use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload, Workspace, SANDBOX_HOME};
 use mysbx::config::{Display, Mode, Mount, Multiplexer};
 use mysbx::merge::Merged;
+use mysbx::nono::Error as NonoError;
 use mysbx::nono::{nono_run_argv, Params as NonoParams};
 use mysbx::podman_gvisor::CONTAINER_HOME;
 use mysbx::podman_gvisor::{podman_run_argv, Params as PodmanParams};
@@ -59,6 +60,7 @@ fn base(network: bool) -> Merged {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        ssh_key: false,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -281,6 +283,104 @@ fn golden_state_dirs() {
     )
     .unwrap();
     assert_golden("state-dirs.txt", &argv);
+}
+
+#[test]
+fn golden_ssh_key() {
+    // `ssh-key = true` (docs/design/config.md D22): the implicit
+    // `.ssh` state entry is bound rw at `/mysbx-home/.ssh` — next to
+    // the repo and git binds, before every configured mount, exactly
+    // like a declared `state-dirs = [".ssh"]` would be. ssh and git
+    // find the generated keypair through the default `~/.ssh`
+    // identity lookup, without any host credential being mounted.
+    let mut cfg = base(true);
+    cfg.ssh_key = true;
+    cfg.mounts.push(make_mount(
+        "/synth/data/configs",
+        Some("/inside/x"),
+        Mode::Ro,
+    ));
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    assert_golden("ssh-key.txt", &argv);
+    // The bind exists, and no `~/.ssh` of the HOST ever does: the argv
+    // never names a path under the host home (D14).
+    assert!(argv.windows(3).any(|w| {
+        w[0] == "--bind" && w[1] == "/synth/repo.mysbx/state/.ssh" && w[2] == "/mysbx-home/.ssh"
+    }));
+    assert!(
+        !argv.iter().any(|a| a.starts_with("/home/")),
+        "no host-home path in the argv: {argv:?}"
+    );
+}
+
+#[test]
+fn a_mount_may_not_cover_the_ssh_dir() {
+    // The ssh bind is implicit infrastructure like any state bind:
+    // a mount whose dest covers `/mysbx-home/.ssh` is refused
+    // (check_hidden_mounts sees the effective state list).
+    let mut cfg = base(true);
+    cfg.ssh_key = true;
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/mysbx-home/.ssh"),
+        Mode::Ro,
+    ));
+    let err = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        err.to_string().contains("would hide a state directory"),
+        "wrong error: {err}"
+    );
+}
+
+#[test]
+fn ssh_key_off_binds_no_ssh_dir() {
+    // The default: without `ssh-key` no `.ssh` bind appears at all,
+    // and the sandbox home's `.ssh` is just an empty tmpfs path.
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params(),
+    )
+    .unwrap();
+    assert!(
+        !argv.iter().any(|a| a == "/mysbx-home/.ssh"),
+        "no .ssh bind without the key: {argv:?}"
+    );
+}
+
+#[test]
+fn ssh_key_in_a_clone_run_binds_nothing() {
+    // workspace.md D4: a clone run handles no state dirs — the
+    // implicit `.ssh` included. The clone is the only writable bind;
+    // a session clone starts without the repo's ssh key.
+    let mut cfg = base(true);
+    cfg.ssh_key = true;
+    cfg.state_dirs = vec![".local/share/opencode".into()];
+    let mut p = params();
+    p.workspace = Workspace::Clone {
+        clone: Path::new("/synth/repo.mysbx/clones/s1"),
+    };
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
+    assert!(
+        !argv.iter().any(|a| a.contains("state/.ssh")),
+        "clone run binds no ssh store: {argv:?}"
+    );
 }
 
 #[test]
@@ -736,6 +836,7 @@ fn golden_both_layers_contribute_mounts() {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        ssh_key: false,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -1073,6 +1174,7 @@ fn mount_order_is_preserved() {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        ssh_key: false,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -3438,6 +3540,7 @@ fn podman_base(network: bool) -> Merged {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        ssh_key: false,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -3923,6 +4026,7 @@ fn podman_mount_order_is_preserved() {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        ssh_key: false,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -4589,6 +4693,7 @@ fn nono_base(network: bool) -> Merged {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        ssh_key: false,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -4718,6 +4823,53 @@ fn nono_golden_state_dirs() {
             "state store {entry} missing from the argv: {argv:?}"
         );
     }
+}
+
+#[test]
+fn nono_golden_ssh_key() {
+    // `ssh-key = true` (docs/design/config.md D22): the implicit
+    // `.ssh` entry becomes an `--allow` of its REAL sidecar path —
+    // the same no-remap semantic as every nono state store; git
+    // finds the key through the GIT_SSH_COMMAND lib.rs pins in the
+    // exec environment, not through `$HOME/.ssh`.
+    let mut cfg = nono_base(false);
+    cfg.ssh_key = true;
+    let argv = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert_golden("nono-ssh-key.txt", &argv);
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--allow" && w[1] == "/synth/repo.mysbx/state/.ssh"),
+        "the ssh store grant is missing from the argv: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_ssh_key_nested_state_dirs_still_refused() {
+    // The implicit `.ssh` entry flows through the SAME nesting check
+    // as declared ones (D15): an entry inside it (or containing it)
+    // is an ambiguous layout, refused with the dedicated error.
+    let mut cfg = nono_base(false);
+    cfg.ssh_key = true;
+    cfg.state_dirs = vec![".ssh/sub".into()];
+    let err = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("must be refused");
+    assert!(
+        matches!(err, NonoError::StateDirNesting { .. }),
+        "wrong error: {err}"
+    );
 }
 
 #[test]
