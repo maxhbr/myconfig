@@ -390,6 +390,11 @@ pub fn bwrap_argv(
     params: &Params<'_>,
 ) -> Result<Vec<String>, Error> {
     let root = repo.root.to_string_lossy().into_owned();
+    // The state entries a run actually binds (docs/design/config.md
+    // D22): the declared `state-dirs` plus the implicit `.ssh` of a
+    // run with `ssh-key` — computed once, before the guards, so the
+    // socket checks and the bind emission below see one list.
+    let effective_state_dirs = cfg.effective_state_dirs();
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
     // D11): `mysbx run -- CMD` is a one-shot, and wrapping it in a
     // multiplexer would leave the command's output in a pane nobody
@@ -403,7 +408,7 @@ pub fn bwrap_argv(
         Multiplexer::None
     };
     if mux.starts_a_session() {
-        check_mux_socket(&cfg.mounts, &cfg.state_dirs)?;
+        check_mux_socket(&cfg.mounts, &effective_state_dirs)?;
         if params.mux_entry.is_none() {
             return Err(Error::MultiplexerUnavailable { multiplexer: mux });
         }
@@ -414,7 +419,7 @@ pub fn bwrap_argv(
     // shell. The guards and the wrap below therefore see the merged
     // value directly.
     if cfg.display.is_waypipe() {
-        check_display_socket(&cfg.mounts, &cfg.state_dirs)?;
+        check_display_socket(&cfg.mounts, &effective_state_dirs)?;
         if params.waypipe.is_none() {
             return Err(Error::DisplayUnavailable);
         }
@@ -591,6 +596,10 @@ pub fn bwrap_argv(
     // `[[mounts]]` entry may cover their dests (the hidden-mount
     // check below treats them like the repo and the git dirs), and
     // no entry may nest inside another — see [`check_state_dirs`].
+    // A run with `ssh-key` (docs/design/config.md D22) binds the same
+    // shape for its implicit `.ssh` entry: the effective list carries
+    // it, so the generated keypair lands at `/mysbx-home/.ssh` where
+    // ssh and git look for it.
     //
     // In a CLONE run the `state-dirs` are NOT handled at all
     // (workspace.md D4): no backing store is created, nothing is
@@ -600,8 +609,8 @@ pub fn bwrap_argv(
     let state_binds: Vec<(String, String)> = if let Workspace::Clone { .. } = params.workspace {
         Vec::new()
     } else {
-        check_state_dirs(&cfg.state_dirs)?;
-        cfg.state_dirs
+        check_state_dirs(&effective_state_dirs)?;
+        effective_state_dirs
             .iter()
             .map(|entry| {
                 (
@@ -1887,6 +1896,7 @@ mod tests {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
+            ssh_key: false,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         }

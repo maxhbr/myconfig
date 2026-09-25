@@ -202,6 +202,28 @@ fn is_bwrap_available() -> bool {
         .unwrap_or(false)
 }
 
+/// Whether a usable `ssh-keygen` sits on the PATH — SMOKE-TESTED,
+/// because ssh-keygen refuses to run for a uid without a passwd entry
+/// ("No user exists for uid …"), the norm inside this very repo's
+/// mysbx sandbox but never on a real host or in CI: those get the
+/// lifecycle tests, the degraded environment skips.
+fn is_ssh_keygen_available() -> bool {
+    let probe =
+        std::env::temp_dir().join(format!("mysbx-ssh-keygen-cli-probe-{}", std::process::id()));
+    let ok = Command::new("ssh-keygen")
+        .args(["-t", "ed25519", "-N", "", "-C", "probe", "-f"])
+        .arg(&probe)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let _ = std::fs::remove_file(&probe);
+    let _ = std::fs::remove_file(format!("{}.pub", probe.display()));
+    ok
+}
+
 // ---- the core acceptance: --dry-run prints the argv ------------------------
 
 #[test]
@@ -1379,6 +1401,147 @@ fn verbose_report_lists_state_dirs() {
         )),
         "{report}"
     );
+}
+
+// ---- the sandbox ssh keypair (docs/design/config.md D22) ---------
+
+/// A fixture with `ssh-key = true` in the sidecar layer and the
+/// bubblewrap backend (the minimal shape a `ssh-key` run needs).
+fn fixture_ssh_key(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
+    let (inv, repo, sidecar) = fixture(name, args);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nssh-key = true\n",
+    )
+    .unwrap();
+    (inv, repo, sidecar)
+}
+
+#[test]
+fn a_dry_run_binds_the_ssh_dir_and_creates_nothing() {
+    // D22: the argv binds `<sidecar>/state/.ssh` rw at
+    // `/mysbx-home/.ssh` — the implicit state entry — and `--dry-run`
+    // stays side-effect-free: no state tree, no keypair. No host
+    // `~/.ssh` content is ever mounted: the only ssh path in the argv
+    // is the sidecar store.
+    let (inv, repo, sidecar) = fixture_ssh_key("ssh-key-dry-run", &["--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let canon = repo.canonicalize().unwrap();
+    let side = canon.parent().unwrap().join("repo.mysbx");
+    assert!(
+        stdout.contains(&format!(
+            "--bind\n{}/state/.ssh\n/mysbx-home/.ssh\n",
+            side.display()
+        )),
+        "the ssh bind is missing from the argv: {stdout}"
+    );
+    assert!(
+        !stdout.contains("/home/"),
+        "a host home path in the argv: {stdout}"
+    );
+    assert!(
+        !side.join("state").exists(),
+        "the dry run created the state tree"
+    );
+}
+
+#[test]
+fn the_verbose_report_names_the_ssh_key() {
+    // D22: the report shows the bind with its provenance — the
+    // sandbox `~/.ssh` on one side, the sidecar store on the other,
+    // `[generated, ed25519]` — so the operator can check the argv
+    // against it, and `state dirs:` counts the implicit entry.
+    let (inv, repo, _) = fixture_ssh_key("ssh-key-verbose", &["--verbose", "--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let canon = repo.canonicalize().unwrap();
+    let side = canon.parent().unwrap().join("repo.mysbx");
+    assert!(
+        stdout.contains(&format!(
+            "ssh key:        /mysbx-home/.ssh <-> {}/state/.ssh  [generated, ed25519]",
+            side.display()
+        )),
+        "the ssh key line is missing from the report: {stdout}"
+    );
+    assert!(
+        stdout.contains("state dirs:     1 (rw, persisted in the sidecar)"),
+        "the implicit entry must count as a state dir: {stdout}"
+    );
+}
+
+#[test]
+fn the_ssh_pubkey_verb_prints_and_generates() {
+    // D22: `mysbx ssh-pubkey` generates the pair (the key is enabled)
+    // and prints the public line unprefixed — the value to paste into
+    // a GitHub deploy-key form / a gitolite keydir. A second call
+    // leaves the key untouched.
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    let (inv, repo, sidecar) = fixture_ssh_key("ssh-key-verb", &["ssh-pubkey"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let canon = repo.canonicalize().unwrap();
+    let side = canon.parent().unwrap().join("repo.mysbx");
+    let dir = side.join("state").join(".ssh");
+    assert!(
+        dir.join("id_ed25519").is_file(),
+        "no private key was created"
+    );
+    // The printed public key is exactly the `.pub` file's content.
+    let printed = stdout
+        .lines()
+        .find(|l| l.starts_with("ssh-ed25519 "))
+        .expect("the public key was not printed");
+    assert_eq!(
+        printed,
+        std::fs::read_to_string(dir.join("id_ed25519.pub"))
+            .unwrap()
+            .trim_end()
+    );
+    // A second call: same key, not regenerated.
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l.starts_with("ssh-ed25519 ") && l == printed),
+        "the existing pair must print unchanged: {stdout}"
+    );
+    let _ = std::fs::remove_dir_all(&sidecar.parent().unwrap());
+}
+
+#[test]
+fn the_ssh_pubkey_verb_refuses_to_invent_a_disabled_key() {
+    // A disabled key must not quietly re-enable itself: no pair, no
+    // generation — a refusal naming the option. An EXISTING pair
+    // still prints (the key may have been turned off after use),
+    // pinned by the next test's fixture.
+    let (inv, _, sidecar) = fixture("ssh-key-disabled", &["ssh-pubkey"]);
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "a disabled key must be refused, not invented");
+    assert!(stderr.contains("ssh-key"), "{stderr}");
+    assert!(!sidecar.join("state").exists(), "nothing was created");
+}
+
+#[test]
+fn the_ssh_pubkey_dry_run_prints_the_plan_and_generates_nothing() {
+    let (inv, repo, sidecar) = fixture_ssh_key("ssh-key-dry-verb", &["--dry-run", "ssh-pubkey"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let canon = repo.canonicalize().unwrap();
+    let side = canon.parent().unwrap().join("repo.mysbx");
+    assert!(
+        stdout.contains(&format!("## would create: {}/state/.ssh", side.display())),
+        "{stdout}"
+    );
+    assert!(
+        !side.join("state").exists(),
+        "--dry-run generated a keypair"
+    );
+    let _ = std::fs::remove_dir_all(&sidecar.parent().unwrap());
 }
 
 #[test]

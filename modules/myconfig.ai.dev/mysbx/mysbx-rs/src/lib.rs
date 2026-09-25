@@ -160,6 +160,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "session"
                         | "worktree"
                         | "status"
+                        | "ssh-pubkey"
                         | "gvisor-load-image"
                 ) =>
         {
@@ -221,6 +222,17 @@ pub fn run(args: Vec<String>) -> i32 {
         // precedent).
         Some("status") if flags.verbose => reject_verbose("status"),
         Some("status") => status::run(&rest[1..], flags.dry_run),
+        // `ssh-pubkey` (docs/design/config.md D22): host-side like the
+        // handoff verbs — print the sandbox keypair's PUBLIC key so
+        // the operator can register it (GitHub deploy key, gitolite
+        // keydir). Reads an existing keypair or generates one when the
+        // key is enabled and the pair is missing — the same
+        // create/recreate lifecycle a run performs, WITHOUT starting
+        // a sandbox. `--verbose` has no run to report on;
+        // `--dry-run` prints what a real run would create/leave
+        // untouched, generating nothing.
+        Some("ssh-pubkey") if flags.verbose => reject_verbose("ssh-pubkey"),
+        Some("ssh-pubkey") => ssh_pubkey(&rest[1..], flags.dry_run),
         Some("worktree") => {
             match rest.get(1).map(String::as_str) {
                 Some("list") => worktreeverbs::list(&rest[2..], flags.dry_run),
@@ -1340,6 +1352,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // Creation is idempotent; a failure is a runtime error like the
     // sidecar creation above.
     //
+    // A run with `ssh-key` (docs/design/config.md D22) additionally
+    // generates its own keypair under `<sidecar>/state/.ssh/` — the
+    // same state tree, the same live-runs-only gate: the dry run
+    // audits the bind, the real run ends with a usable keypair.
+    //
     // In a CLONE run the `state-dirs` are NOT handled at all
     // (workspace.md D4): no backing store is created, nothing is
     // bound — per-session versus shared agent state is deliberately
@@ -1349,6 +1366,19 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         if let Err(msg) = ensure_state_dirs(&repo, &merged.state_dirs) {
             eprintln!("mysbx: {msg}");
             return EXIT_INFRASTRUCTURE;
+        }
+        if merged.ssh_key {
+            // The `ssh-keygen` of the run: the wrapper's pin
+            // (`MYSBX_SSH_KEYGEN`, this build's own closure) with the
+            // PATH fallback of the unwrapped crate — the same idiom as
+            // `MYSBX_BWRAP`. Refused, not ignored: a run whose keypair
+            // it cannot generate must not continue with an `~/.ssh`
+            // bind that does not exist.
+            let keygen = env_or("MYSBX_SSH_KEYGEN", "ssh-keygen");
+            if let Err(msg) = ensure_ssh_key(&repo, &repo.sidecar.join("state"), &keygen) {
+                eprintln!("mysbx: {msg}");
+                return EXIT_INFRASTRUCTURE;
+            }
         }
     }
 
@@ -1908,6 +1938,21 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             if let Some(ca_bundle) = ca_bundle.as_deref() {
                 for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
                     env.insert(key.into(), ca_bundle.to_owned());
+                }
+            }
+            // The sandbox's own SSH keypair (docs/design/config.md
+            // D22): under nono there is NO remap, so the keypair never
+            // sits at `$HOME/.ssh` — `HOME` is the real host home,
+            // which stays unwritable under Landlock, and ssh's default
+            // identity lookup finds nothing there. Point git at the
+            // sidecar store directly, `IdentitiesOnly` so no host agent
+            // or host default identity is ever consulted.
+            // Infrastructure, not configuration: inserted AFTER the
+            // forwarded and `[env]` values like `HOME`/`PATH` (D14),
+            // so no layer can repoint it.
+            if merged.ssh_key {
+                if let Some(cmd) = ssh_command_for_nono(&repo, &merged) {
+                    env.insert("GIT_SSH_COMMAND".into(), cmd);
                 }
             }
             (nono_bin, argv, None::<String>, Some(env))
@@ -2743,6 +2788,132 @@ fn ensure_sidecar(repo: &repo::Repo) -> Result<(), String> {
     Ok(())
 }
 
+/// `mysbx ssh-pubkey` (docs/design/config.md D22): print the public
+/// half of the sandbox's own keypair — the value the operator pastes
+/// into a GitHub deploy-key form or a gitolite keydir entry. Host-side,
+/// no sandbox is started; the repo is the one the cwd resolves to
+/// (cli.md D1).
+///
+/// With `ssh-key` enabled (either layer) the verb enforces the same
+/// lifecycle a run does: an existing pair is left untouched, a missing
+/// or incomplete one is generated/re-derived — so the verb alone can
+/// bootstrap a repo's key without a first sandbox run. With the key
+/// disabled it still prints an EXISTING pair (an operator may have
+/// turned the key off after using it) but refuses to invent one: a
+/// disabled key must not quietly re-enable itself. `--dry-run` prints
+/// what would be created/left untouched, generating nothing.
+///
+/// Exit codes (cli.md D8): `2` for a wrong command line, `70` for a
+/// repo that cannot be resolved, a missing sidecar config (D13) or a
+/// broken configuration file.
+fn ssh_pubkey(args: &[String], dry_run: bool) -> i32 {
+    const USAGE: &str = "usage: mysbx ssh-pubkey";
+    if let Some(arg) = args.first() {
+        eprintln!("mysbx ssh-pubkey: unexpected argument: {arg}");
+        eprintln!("{USAGE}");
+        return 2;
+    }
+    let repo = match repo::resolve_cwd() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return EXIT_INFRASTRUCTURE;
+        }
+    };
+    if let Err(msg) = require_initialized_sidecar(&repo) {
+        eprintln!("mysbx: {msg}");
+        return EXIT_INFRASTRUCTURE;
+    }
+    // The merged layers decide whether the key is on (D22); the load
+    // also validates both files, like every run path.
+    let home = std::env::var_os("HOME").unwrap_or_default();
+    let xdg = std::env::var("XDG_CONFIG_HOME").ok();
+    let merged =
+        match merge::load_layers(std::path::Path::new(&home), xdg.as_deref(), &repo.sidecar)
+            .and_then(|l| {
+                merge::merge(
+                    l.user.0,
+                    l.sidecar.0,
+                    &l.user.1,
+                    &l.sidecar.1,
+                    std::path::Path::new(&home),
+                )
+            }) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("mysbx: {e}");
+                return EXIT_INFRASTRUCTURE;
+            }
+        };
+    let dir = merged.ssh_store_dir(&repo.sidecar);
+    let public = dir.join("id_ed25519.pub");
+    let private = dir.join("id_ed25519");
+    let pair_exists = private.is_file() && public.is_file();
+    if dry_run {
+        if pair_exists {
+            println!("## present: {} (left untouched)", public.display());
+        } else if merged.ssh_key {
+            println!(
+                "## would create: {}/ (ed25519, no passphrase)",
+                dir.display()
+            );
+        } else {
+            println!(
+                "## no keypair, and ssh-key is disabled — nothing to create (docs/design/config.md D22)"
+            );
+        }
+        return 0;
+    }
+    if !pair_exists {
+        if !merged.ssh_key {
+            eprintln!(
+                "mysbx: no sandbox ssh keypair in {}, and `ssh-key` is disabled in the configuration \
+                 layers — enable it (`ssh-key = true`) and run `mysbx` once, or register the key \
+                 of a run that had it on (docs/design/config.md D22)",
+                dir.display()
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        let keygen = env_or("MYSBX_SSH_KEYGEN", "ssh-keygen");
+        if let Err(msg) = ensure_ssh_key(&repo, &repo.sidecar.join("state"), &keygen) {
+            eprintln!("mysbx: {msg}");
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
+    match std::fs::read_to_string(&public) {
+        Ok(key) => {
+            // The result itself: unprefixed, one line, exactly the
+            // value to paste — the `## ` report lines around it are
+            // context, not content (cli.md D9).
+            println!("{}", key.trim_end());
+            println!(
+                "## private key stays in {} — it never leaves the sidecar/sandbox",
+                dir.display()
+            );
+            0
+        }
+        Err(e) => {
+            eprintln!("mysbx: cannot read {}: {e}", public.display());
+            EXIT_INFRASTRUCTURE
+        }
+    }
+}
+
+/// The `GIT_SSH_COMMAND` of a nono run with `ssh-key` (docs/design/
+/// config.md D22): `ssh -i <sidecar>/state/.ssh/id_ed25519
+/// -o IdentitiesOnly=yes -o UserKnownHostsFile=<sidecar>/state/.ssh/
+/// known_hosts`, so git over SSH uses the generated key and persists
+/// the server keys next to it — without any `$HOME/.ssh` lookup (the
+/// nono backend has no remap, `HOME` is the real host home).
+fn ssh_command_for_nono(repo: &repo::Repo, merged: &merge::Merged) -> Option<String> {
+    let dir = merged.ssh_store_dir(&repo.sidecar);
+    Some(format!(
+        "ssh -i {} -o IdentitiesOnly=yes -o UserKnownHostsFile={}",
+        dir.join("id_ed25519").display(),
+        dir.join("known_hosts").display()
+    ))
+}
+
 /// Create the `<sidecar>/state/<entry>` backing directory of every
 /// merged `state-dirs` entry (docs/design/config.md D15), idempotently,
 /// and report each creation like `ensure_sidecar` does. The argv builder
@@ -2782,6 +2953,168 @@ fn ensure_state_dirs(repo: &repo::Repo, state_dirs: &[String]) -> Result<(), Str
         }
     }
     Ok(())
+}
+
+/// The sandbox's own SSH keypair (docs/design/config.md D22): what
+/// [`ensure_ssh_key`] left behind after a run — `Created` when this
+/// run generated (or re-derived) the pair, `Present` when a complete
+/// pair was already there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SshKeyOutcome {
+    Created,
+    Present,
+}
+
+/// Ensure the per-repo sandbox SSH keypair exists under
+/// `<sidecar>/state/.ssh/{id_ed25519,id_ed25519.pub}`
+/// (docs/design/config.md D22) and is usable, then report it:
+///
+/// - **create-if-missing**: a first run generates a fresh ed25519 pair
+///   with `ssh-keygen` (no passphrase, private key `0600`).
+/// - **recreate-if-deleted-or-invalid**: a run must END with a usable
+///   pair, so a missing private key (or a pub file whose private half
+///   is gone) is regenerated. An EXISTING VALID pair is never
+///   overwritten — an operator-provided key keeps its place, and
+///   `ssh-keygen` itself refuses to clobber a private key (its stdin
+///   is null here, so the overwrite prompt fails the spawn, defense
+///   in depth against a race between the check and the generation).
+/// - a private key whose `.pub` is missing gets the pub half
+///   RE-DERIVED (`ssh-keygen -y`), leaving the private key untouched;
+///   an unreadable/corrupt private key is regenerated as a pair.
+///
+/// Generation happens HOST-SIDE, before the backend starts: the key
+/// then rides the ordinary state-dirs bind (`<sidecar>/state/.ssh` at
+/// `/mysbx-home/.ssh`, D15/D22), and no in-sandbox first-run step is
+/// needed. `ssh-keygen` comes from the run's own environment — the
+/// Nix wrapper pins `MYSBX_SSH_KEYGEN` from its closure, the crate's
+/// fallback is a plain PATH lookup — and never from the host home.
+/// The backing directory is created symlink-free like every state
+/// entry ([`ensure_plain_dir`]): a symlink planted in the state tree
+/// must not redirect the keypair out of the sidecar.
+///
+/// On creation the PUBLIC key is printed (one `## `-prefixed line):
+/// the operator registers it as a GitHub deploy key / a gitolite
+/// keydir entry. The private key never leaves the sidecar/sandbox.
+fn ensure_ssh_key(
+    repo: &repo::Repo,
+    sidecar_state_root: &std::path::Path,
+    keygen: &str,
+) -> Result<SshKeyOutcome, String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    // The state root first (D15): a repo with `ssh-key` but no
+    // `state-dirs` entries has no `<sidecar>/state` yet, and
+    // `ensure_plain_dir` creates one level at a time on purpose —
+    // nothing may ever be created through an unverified parent.
+    ensure_plain_dir(sidecar_state_root)?;
+    let dir = sidecar_state_root.join(".ssh");
+    ensure_plain_dir(&dir)?;
+    // `~/.ssh` semantics: the payload owns the directory, but 0700 is
+    // what ssh itself insists on for the private key's parent chain —
+    // it refuses a key in a group/other-readable dir on strict hosts.
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
+        .map_err(|e| format!("cannot chmod {}: {e}", dir.display()))?;
+    let private = dir.join("id_ed25519");
+    let public = dir.join("id_ed25519.pub");
+
+    let plain_file = |path: &std::path::Path| match std::fs::symlink_metadata(path) {
+        Ok(md) if md.file_type().is_symlink() => Err(format!(
+            "ssh key file {} is a symlink — the state tree is writable by the sandbox, \
+                 so a symlink there would redirect the keypair out of the sidecar \
+                 (docs/design/config.md D15/D22); remove it and run again",
+            path.display()
+        )),
+        Ok(md) if md.is_file() => Ok(true),
+        Ok(_) => Err(format!(
+            "ssh key path {} exists and is not a regular file (docs/design/config.md D22)",
+            path.display()
+        )),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(format!("cannot inspect {}: {e}", path.display())),
+    };
+
+    let private_present = plain_file(&private)?;
+    let public_present = plain_file(&public)?;
+
+    if private_present && public_present {
+        // A complete pair: left untouched, whatever created it
+        // (D22: never overwrite a valid operator-provided key).
+        return Ok(SshKeyOutcome::Present);
+    }
+    if private_present {
+        // The pub half is missing or was deleted: derive it from the
+        // private key, which stays byte-identical. `-y` fails on a
+        // corrupt key — then the pair is regenerated below.
+        let out = std::process::Command::new(keygen)
+            .arg("-y")
+            .arg("-f")
+            .arg(&private)
+            .stderr(std::process::Stdio::null())
+            .output()
+            .map_err(|e| format!("cannot start ssh-keygen {keygen}: {e}"))?;
+        if out.status.success() {
+            let key = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
+            if key.starts_with("ssh-ed25519 ") {
+                std::fs::write(&public, format!("{key}\n"))
+                    .map_err(|e| format!("cannot write {}: {e}", public.display()))?;
+                std::fs::set_permissions(&public, std::fs::Permissions::from_mode(0o644))
+                    .map_err(|e| format!("cannot chmod {}: {e}", public.display()))?;
+                println!("## created: {} (re-derived)", public.display());
+                return Ok(SshKeyOutcome::Created);
+            }
+        }
+        // A private key `ssh-keygen -y` cannot read is not usable —
+        // remove the dead file and fall through to a fresh pair
+        // ("a run must end with a usable keypair", D22).
+        std::fs::remove_file(&private)
+            .map_err(|e| format!("cannot remove the unusable {}: {e}", private.display()))?;
+    }
+
+    // A fresh pair. `ssh-keygen` writes `id_ed25519` 0600 by itself;
+    // the chmod is defense in depth for a `keygen` that does not.
+    // The comment names the repo so the operator can tell deploy
+    // keys apart in the registries they paste them into.
+    let comment = format!(
+        "mysbx {}",
+        repo.root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("sandbox")
+    );
+    let out = std::process::Command::new(keygen)
+        .arg("-t")
+        .arg("ed25519")
+        .arg("-N")
+        .arg("")
+        .arg("-C")
+        .arg(&comment)
+        .arg("-f")
+        .arg(&private)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .output()
+        .map_err(|e| format!("cannot start ssh-keygen {keygen}: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "ssh-keygen failed to create the sandbox keypair in {}: {}",
+            dir.display(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    std::fs::set_permissions(&private, std::fs::Permissions::from_mode(0o600))
+        .map_err(|e| format!("cannot chmod {}: {e}", private.display()))?;
+    let _ = std::fs::set_permissions(&public, std::fs::Permissions::from_mode(0o644));
+    println!(
+        "## created: {}/ (the sandbox's own ssh keypair, ed25519)",
+        dir.display()
+    );
+    if let Ok(key) = std::fs::read_to_string(&public) {
+        // The one value the operator needs to paste into a GitHub
+        // deploy-key form / a gitolite keydir entry: printed once, on
+        // creation, never the private half.
+        println!("## ssh public key: {}", key.trim_end());
+    }
+    Ok(SshKeyOutcome::Created)
 }
 
 /// Create the per-run waypipe token directory `<sidecar>/waypipe/<pid>`
@@ -3168,6 +3501,14 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
 #\n\
 # state-dirs = [\".local/share/opencode\"]\n\
 #\n\
+# The sandbox's own ssh keypair (config.md D22): mysbx generates an\n\
+# ed25519 key at <repo>.mysbx/state/.ssh/id_ed25519 and binds it rw\n\
+# at /mysbx-home/.ssh — register the public key (printed on creation,\n\
+# and by `mysbx ssh-pubkey`) as a GitHub deploy key or a gitolite\n\
+# keydir entry, and git over ssh works without any host credential:\n\
+#\n\
+# ssh-key = true\n\
+#\n\
 # [env]\n\
 # EDITOR = \"nvim\"\n";
     let mut contents = contents.to_owned();
@@ -3380,6 +3721,228 @@ fn write_atomically(path: &std::path::Path, contents: &str) -> Result<(), String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- the sandbox ssh keypair (docs/design/config.md D22) --------
+
+    /// A synthetic repo + a tempdir sidecar state root, plus the
+    /// ssh-keygen binary the generation step should call. The test
+    /// env (a dev shell or the build sandbox) may carry no real
+    /// `ssh-keygen` — then these tests exercise nothing and skip, the
+    /// same precedent the real-execution tests of tests/cli.rs set
+    /// (`is_bwrap_available`).
+    fn ssh_key_fixture(name: &str) -> Option<(repo::Repo, std::path::PathBuf, String)> {
+        let keygen = which_ssh_keygen()?;
+        let base =
+            std::env::temp_dir().join(format!("mysbx-lib-test-ssh-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("repo")).ok()?;
+        let root = base.join("repo");
+        let sidecar = base.join("repo.mysbx");
+        let state = sidecar.join("state");
+        std::fs::create_dir_all(&state).ok()?;
+        let repo = repo::Repo {
+            root: root.clone(),
+            sidecar: sidecar.clone(),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        Some((repo, state, keygen))
+    }
+
+    /// The `ssh-keygen` of this test run — the PATH lookup of the
+    /// unwrapped crate, SMOKE-TESTED: ssh-keygen refuses to run for a
+    /// uid without a passwd entry ("No user exists for uid …"), which
+    /// is the norm inside a mysbx sandbox of this very repo but never
+    /// on a real host or in CI — those environments get the full
+    /// coverage, the degraded one skips rather than fails. `None` when
+    /// absent or unusable.
+    fn which_ssh_keygen() -> Option<String> {
+        if let Ok(pin) = std::env::var("MYSBX_SSH_KEYGEN") {
+            if !pin.is_empty() {
+                return Some(pin);
+            }
+        }
+        let path = std::env::var_os("PATH")?;
+        let candidate = std::env::split_paths(&path)
+            .map(|dir| dir.join("ssh-keygen"))
+            .find(|c| c.is_file())?;
+        let probe = std::process::Command::new(&candidate)
+            .args(["-t", "ed25519", "-N", "", "-C", "probe", "-f"])
+            .arg(
+                std::env::temp_dir().join(format!("mysbx-ssh-keygen-probe-{}", std::process::id())),
+            )
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        if !probe.status.success() {
+            return None;
+        }
+        let _ = std::fs::remove_file(
+            std::env::temp_dir().join(format!("mysbx-ssh-keygen-probe-{}", std::process::id())),
+        );
+        let _ = std::fs::remove_file(
+            std::env::temp_dir().join(format!("mysbx-ssh-keygen-probe-{}.pub", std::process::id())),
+        );
+        Some(candidate.to_string_lossy().into_owned())
+    }
+
+    #[test]
+    fn ssh_key_is_created_on_first_run_and_skipped_afterwards() {
+        let Some((repo, state, keygen)) = ssh_key_fixture("create") else {
+            return;
+        };
+        let dir = state.join(".ssh");
+        // First run: created, 0600 private, 0644 public, ed25519.
+        assert_eq!(
+            ensure_ssh_key(&repo, &state, &keygen).unwrap(),
+            SshKeyOutcome::Created
+        );
+        assert!(dir.join("id_ed25519").is_file());
+        assert!(dir.join("id_ed25519.pub").is_file());
+        use std::os::unix::fs::PermissionsExt;
+        let mode = dir
+            .join("id_ed25519")
+            .metadata()
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "the private key must be 0600");
+        let pub_line = std::fs::read_to_string(dir.join("id_ed25519.pub")).unwrap();
+        assert!(
+            pub_line.starts_with("ssh-ed25519 "),
+            "not an ed25519 key: {pub_line}"
+        );
+        // The private half never carries a passphrase (it must be
+        // usable inside the sandbox without an agent).
+        let probe = std::process::Command::new(&keygen)
+            .args(["-y", "-f"])
+            .arg(dir.join("id_ed25519"))
+            .output()
+            .unwrap();
+        assert!(probe.status.success(), "the key is not passphrase-less");
+
+        // Second run: left untouched — the same key, Present.
+        let before = std::fs::read(dir.join("id_ed25519")).unwrap();
+        assert_eq!(
+            ensure_ssh_key(&repo, &state, &keygen).unwrap(),
+            SshKeyOutcome::Present
+        );
+        assert_eq!(std::fs::read(dir.join("id_ed25519")).unwrap(), before);
+
+        let _ = std::fs::remove_dir_all(repo.root.parent().unwrap());
+    }
+
+    #[test]
+    fn ssh_key_an_operator_provided_pair_is_never_overwritten() {
+        let Some((repo, state, keygen)) = ssh_key_fixture("manual") else {
+            return;
+        };
+        let dir = state.join(".ssh");
+        std::fs::create_dir_all(&dir).unwrap();
+        // A manually placed pair: exactly the acceptance case — a
+        // key the operator dropped in keeps its bytes, run after run.
+        std::fs::write(dir.join("id_ed25519"), "not a real key but present\n").unwrap();
+        std::fs::write(
+            dir.join("id_ed25519.pub"),
+            "ssh-ed25519 AAAA operator@host\n",
+        )
+        .unwrap();
+        assert_eq!(
+            ensure_ssh_key(&repo, &state, &keygen).unwrap(),
+            SshKeyOutcome::Present
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("id_ed25519")).unwrap(),
+            "not a real key but present\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("id_ed25519.pub")).unwrap(),
+            "ssh-ed25519 AAAA operator@host\n"
+        );
+
+        let _ = std::fs::remove_dir_all(repo.root.parent().unwrap());
+    }
+
+    #[test]
+    fn ssh_key_is_recreated_after_deletion_and_after_corruption() {
+        let Some((repo, state, keygen)) = ssh_key_fixture("recreate") else {
+            return;
+        };
+        let dir = state.join(".ssh");
+        assert_eq!(
+            ensure_ssh_key(&repo, &state, &keygen).unwrap(),
+            SshKeyOutcome::Created
+        );
+        let first = std::fs::read(dir.join("id_ed25519")).unwrap();
+
+        // Delete the WHOLE pair: recreated, and it is a DIFFERENT key.
+        std::fs::remove_file(dir.join("id_ed25519")).unwrap();
+        std::fs::remove_file(dir.join("id_ed25519.pub")).unwrap();
+        assert_eq!(
+            ensure_ssh_key(&repo, &state, &keygen).unwrap(),
+            SshKeyOutcome::Created
+        );
+        let second = std::fs::read(dir.join("id_ed25519")).unwrap();
+        assert_ne!(first, second, "the recreated key must be a fresh one");
+        assert!(dir.join("id_ed25519.pub").is_file());
+
+        // A corrupt private key with a valid-looking pub half: the
+        // pair is unusable, the run regenerates it.
+        std::fs::write(dir.join("id_ed25519"), "garbage\n").unwrap();
+        std::fs::remove_file(dir.join("id_ed25519.pub")).unwrap();
+        assert_eq!(
+            ensure_ssh_key(&repo, &state, &keygen).unwrap(),
+            SshKeyOutcome::Created
+        );
+        let third = std::fs::read(dir.join("id_ed25519")).unwrap();
+        assert_ne!(second, third);
+        let pub_line = std::fs::read_to_string(dir.join("id_ed25519.pub")).unwrap();
+        assert!(pub_line.starts_with("ssh-ed25519 "));
+
+        let _ = std::fs::remove_dir_all(repo.root.parent().unwrap());
+    }
+
+    #[test]
+    fn ssh_key_a_missing_pub_half_is_rederived_from_the_private_key() {
+        let Some((repo, state, keygen)) = ssh_key_fixture("rederive") else {
+            return;
+        };
+        let dir = state.join(".ssh");
+        assert_eq!(
+            ensure_ssh_key(&repo, &state, &keygen).unwrap(),
+            SshKeyOutcome::Created
+        );
+        let private = std::fs::read(dir.join("id_ed25519")).unwrap();
+        // Only the pub half deleted: the private key must stay
+        // byte-identical (it may be the key an operator registered
+        // elsewhere) — the pub half is re-derived from it.
+        std::fs::remove_file(dir.join("id_ed25519.pub")).unwrap();
+        assert_eq!(
+            ensure_ssh_key(&repo, &state, &keygen).unwrap(),
+            SshKeyOutcome::Created
+        );
+        assert_eq!(std::fs::read(dir.join("id_ed25519")).unwrap(), private);
+        let pub_line = std::fs::read_to_string(dir.join("id_ed25519.pub")).unwrap();
+        assert!(pub_line.starts_with("ssh-ed25519 "));
+
+        let _ = std::fs::remove_dir_all(repo.root.parent().unwrap());
+    }
+
+    #[test]
+    fn ssh_key_refuses_a_symlink_planted_in_the_state_tree() {
+        let Some((repo, state, keygen)) = ssh_key_fixture("symlink") else {
+            return;
+        };
+        std::fs::create_dir_all(&state).unwrap();
+        let _ = std::os::unix::fs::symlink("/etc", state.join(".ssh"));
+        let err = ensure_ssh_key(&repo, &state, &keygen).unwrap_err();
+        assert!(err.contains("symlink"), "{err}");
+
+        let _ = std::fs::remove_dir_all(repo.root.parent().unwrap());
+    }
 
     #[test]
     fn help_and_version_succeed() {

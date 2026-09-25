@@ -349,6 +349,12 @@ pub fn podman_run_argv(
     params: &Params<'_>,
 ) -> Result<Vec<String>, Error> {
     let root = repo.root.to_string_lossy().into_owned();
+    // The state entries a run actually binds (docs/design/config.md
+    // D22): the declared `state-dirs` plus the implicit `.ssh` of a
+    // run with `ssh-key` — computed once, before the guards, so the
+    // socket checks, the state-parent tmpfses and the bind emission
+    // below all see one list.
+    let effective_state_dirs = cfg.effective_state_dirs();
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
     // D11): `mysbx run -- CMD` is a one-shot, and wrapping it in a
     // multiplexer would leave the command's output in a pane nobody
@@ -362,7 +368,7 @@ pub fn podman_run_argv(
         Multiplexer::None
     };
     if mux.starts_a_session() {
-        check_mux_socket(&cfg.mounts, &cfg.state_dirs)?;
+        check_mux_socket(&cfg.mounts, &effective_state_dirs)?;
         if params.mux_entry.is_none() {
             return Err(Error::MultiplexerUnavailable { multiplexer: mux });
         }
@@ -371,7 +377,7 @@ pub fn podman_run_argv(
     // on the bwrap backend — a one-shot `run -- CMD` that opens a
     // window needs it just as much as the interactive shell.
     if cfg.display.is_waypipe() {
-        check_display_socket(&cfg.mounts, &cfg.state_dirs)?;
+        check_display_socket(&cfg.mounts, &effective_state_dirs)?;
         if params.waypipe.is_none() {
             return Err(Error::DisplayUnavailable);
         }
@@ -532,7 +538,7 @@ pub fn podman_run_argv(
     // engines' parents-first sorts (the state-dirs nesting
     // validators of config.rs are untouched: no entry may nest
     // inside another, so at most one tmpfs dest per subtree spine).
-    for dest in state_parent_tmpfses(&cfg.state_dirs) {
+    for dest in state_parent_tmpfses(&effective_state_dirs) {
         tmpfs_mount(&mut argv, &dest);
     }
 
@@ -590,12 +596,15 @@ pub fn podman_run_argv(
             }
         };
 
-    // 5a. state-dirs binds (config.md D15)
+    // 5a. state-dirs binds (config.md D15) — plus the implicit `.ssh`
+    // entry of a run with `ssh-key` (docs/design/config.md D22): the
+    // generated keypair lands at `/mysbx-home/.ssh` in the container,
+    // where ssh and git look for it, backed by `<sidecar>/state/.ssh`.
     let state_binds: Vec<(String, String)> = if let Workspace::Clone { .. } = params.workspace {
         Vec::new()
     } else {
-        check_state_dirs(&cfg.state_dirs)?;
-        cfg.state_dirs
+        check_state_dirs(&effective_state_dirs)?;
+        effective_state_dirs
             .iter()
             .map(|entry| {
                 (

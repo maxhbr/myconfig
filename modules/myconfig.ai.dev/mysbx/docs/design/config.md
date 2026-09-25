@@ -72,6 +72,8 @@ config that can execute is config that can escape.
 - which sandbox-home subdirectories persist across runs
   (`state-dirs`, see D15): entries backed by the sidecar's `state/`
   tree
+- whether the sandbox gets its own generated ssh keypair
+  (`ssh-key`, see D22): git over SSH without any host credential
 - the backend and its resource limits
 - network policy (`network = false` is the deny switch; the network is
   shared by default; the per-domain/port allowlist keys of D21;
@@ -1175,3 +1177,86 @@ may be reached through it — both cannot hold at once.
 D21 allowlist next to it is already a schema error (trivially today:
 `egress` is not yet a key, so both cannot be set at once), and D20
 keeps owning that mutual exclusion.
+
+### D22: `ssh-key` — the sandbox's own SSH keypair, generated into the sidecar state
+
+```toml
+ssh-key = true
+```
+
+A boolean, off by default. When enabled, mysbx gives the sandbox its
+own git-over-SSH credential — WITHOUT forwarding any host credential:
+no host `~/.ssh` is ever mounted, no `SSH_AUTH_SOCK` is forwarded, and
+the key never existed on the host before the first run.
+
+**Where the key lives**: in the D15 state tree, as an implicit `.ssh`
+entry. The keypair is generated at
+
+```
+<repo>.mysbx/state/.ssh/id_ed25519      (0600, no passphrase)
+<repo>.mysbx/state/.ssh/id_ed25519.pub  (0644)
+```
+
+ed25519, no passphrase (the sandbox has no agent to unlock one), the
+directory `0700`. The backing directory is created symlink-free like
+every state entry (`lib.rs::ensure_plain_dir`): a symlink planted in
+the state tree must not redirect the keypair out of the sidecar, and a
+key file that IS a symlink is refused.
+
+**Lifecycle — create-if-missing, recreate-if-deleted-or-invalid,
+never overwrite**: every run (and `mysbx ssh-pubkey`) must END with a
+usable keypair, so the step is idempotent per run:
+
+- both files present → left untouched, whatever created them — an
+  operator-provided pair keeps its bytes run after run;
+- private key present, `.pub` missing → the pub half is RE-DERIVED
+  from the private key (`ssh-keygen -y`), leaving the private key
+  byte-identical;
+- private key missing (or unusable — `ssh-keygen -y` cannot read it)
+  → a fresh pair is generated; `ssh-keygen`'s own refusal to clobber
+  an existing private key (its stdin is null, so the overwrite prompt
+  fails) is defense in depth for the race between the check and the
+  generation.
+
+**Generation happens HOST-SIDE**, before the backend starts: mysbx
+calls `ssh-keygen` from its run environment — the Nix wrapper pins
+`MYSBX_SSH_KEYGEN` from its own closure, the unwrapped crate falls
+back to a PATH lookup — and the key then rides the ordinary state
+bind. The alternative (a first-run step inside the sandbox) would need
+a payload-side hook, which D4 forbids (config that can execute is
+config that can escape).
+
+**Exposure — the implicit state entry**: the key is bound rw at the
+sandbox's `~/.ssh` (`/mysbx-home/.ssh`), exactly like a declared
+`state-dirs = [".ssh"]` would be — the argv builders consume one
+effective list (`merge::Merged::effective_state_dirs`), so every D15
+guard applies to the ssh bind too (nesting, hidden mounts,
+symlinkable dests, the state-tree policy checks), and `known_hosts`
+persists per repository like any state. rw, not ro: ssh writes
+`known_hosts` on first contact, and a payload that deletes its own
+key merely triggers the recreate lifecycle on the next run.
+
+Per backend:
+
+| backend | the payload sees |
+| --- | --- |
+| `bubblewrap` | `~/.ssh` = `/mysbx-home/.ssh` (the default identity lookup finds the key) |
+| `podman-gvisor` | `~/.ssh` = `/mysbx-home/.ssh` (same remap as every state entry) |
+| `nono` | no remap — the key sits at its real sidecar path; lib.rs pins `GIT_SSH_COMMAND = ssh -i <sidecar>/state/.ssh/id_ed25519 -o IdentitiesOnly=yes …` in the exec environment, so git finds it without any `$HOME/.ssh` lookup |
+
+**UX — the public key is printed when created**, as a `## `-prefixed
+line on stdout (and the report names the bind: `ssh key: <dest> <->
+<sidecar>/state/.ssh [generated, ed25519]`). The `mysbx ssh-pubkey`
+verb prints the public key on demand — unprefixed, exactly the value
+to paste into a GitHub deploy-key form or a gitolite keydir entry —
+and enforces the same lifecycle a run does (generate the missing,
+repair the incomplete, never touch the valid). With the key disabled
+it still prints an existing pair but refuses to invent one. The
+private key never leaves the sidecar/sandbox.
+
+**Merge**: a tri-state per layer like `multiplexer` (D17) — the
+sidecar wins when both decide, the user layer is the host-wide
+default, off when neither said anything.
+
+In a CLONE run the key is not handled (workspace.md D4): no
+generation, no bind — a session clone starts without the repo's key.

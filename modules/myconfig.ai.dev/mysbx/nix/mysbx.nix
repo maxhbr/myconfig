@@ -240,6 +240,14 @@
   # `--set-default`, overridable per environment — never a closure
   # path. `"default"` is nono's built-in conservative base profile.
   nonoProfile ? "default",
+  # The `ssh-keygen` generating the per-repo sandbox keypair
+  # (mysbx-rs/src/lib.rs `ensure_ssh_key`, docs/design/config.md
+  # D22): `null` pins nothing and the crate's PATH fallback applies —
+  # the same contract as the bubblewrap pin above. Injected by
+  # callPackage (the module layer passes `openssh`); a parameter, not
+  # a `pkgs.` reference, keeps this file evaluable against any nixpkgs
+  # revision the caller brings.
+  ssh-keygen ? null,
 }:
 
 let
@@ -451,6 +459,13 @@ let
   nonoPins = lib.optionalString (
     nono != null
   ) "--set MYSBX_NONO '${lib.getExe nono}' --set-default MYSBX_NONO_PROFILE '${nonoProfile}'";
+  # The `ssh-keygen` of the sandbox keypair generation (docs/design/
+  # config.md D22): an absolute store path from mysbx's own closure —
+  # the same wrapper idiom as MYSBX_BWRAP, so host-side key generation
+  # never depends on the host PATH. Empty when the caller pins
+  # nothing — the fallback PATH lookup of the unwrapped crate applies.
+  sshKeygenPins =
+    if ssh-keygen != null then "--set MYSBX_SSH_KEYGEN '${ssh-keygen}/bin/ssh-keygen'" else "";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -473,7 +488,8 @@ symlinkJoin {
       ${terminalPin} \
       ${gvisorPins} \
       ${waypipePins} \
-      ${nonoPins}
+      ${nonoPins} \
+      ${sshKeygenPins}
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
     # sync with the CLI surface by the `mysbx-completions` check in

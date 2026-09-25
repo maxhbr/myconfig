@@ -249,15 +249,21 @@ pub fn nono_run_argv(
     // sidecar path ONLY. A tool that keys on `$HOME/<entry>` will NOT
     // find its state there (`$HOME/<entry>` is under the host home,
     // which stays unwritable under Landlock): that is the documented
-    // backend semantic, stated in the feature comparison. The
-    // nesting check is the other backends' (no entry inside another:
+    // backend semantic, stated in the feature comparison. A run with
+    // `ssh-key` (config.md D22) carries its implicit `.ssh` entry in
+    // the same list — the generated keypair is reachable at
+    // `<repo>.mysbx/state/.ssh/id_ed25519`, and lib.rs points
+    // `GIT_SSH_COMMAND` at it in the exec environment (git over SSH
+    // works without any `$HOME/.ssh` lookup).
+    // The nesting check is the other backends' (no entry inside another:
     // `--allow` is recursive, a nested grant would be redundant, but
     // a nesting here means the CONFIG is ambiguous, and ambiguity is
     // refused like everywhere else).
+    let effective_state_dirs = cfg.effective_state_dirs();
     let state_allows: Vec<PathBuf> = match params.workspace {
         Workspace::Live => {
-            check_state_dirs(&cfg.state_dirs)?;
-            cfg.state_dirs
+            check_state_dirs(&effective_state_dirs)?;
+            effective_state_dirs
                 .iter()
                 .map(|entry| repo.sidecar.join("state").join(entry))
                 .collect()

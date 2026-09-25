@@ -174,6 +174,26 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
             "denied (--unshare-all, no --share-net)"
         }
     ));
+    // The sandbox's own ssh keypair (config.md D22), right after the
+    // network sense: whether a run generates one, and whether the
+    // keypair already exists in the sidecar state (an operator can
+    // check registration state without starting a sandbox —
+    // `mysbx ssh-pubkey` prints the key itself).
+    if merged.ssh_key {
+        let private = merged.ssh_store_dir(&repo.sidecar).join("id_ed25519");
+        let state = if private.is_file() {
+            "keypair present"
+        } else {
+            "keypair missing (the next run generates it)"
+        };
+        p(format!(
+            "ssh key:         enabled — {} ({})",
+            state,
+            private.display()
+        ));
+    } else {
+        p("ssh key:         off".to_string());
+    }
 
     // 3. sessions: the SAME lines `session list` prints (D19's
     // reuse rule — the listing formats are the list verbs'
