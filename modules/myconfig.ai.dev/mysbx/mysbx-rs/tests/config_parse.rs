@@ -51,9 +51,11 @@ fn every_asset_is_exercised() {
         "valid/syntax-zoo.toml",
         "valid/user-config.toml",
         "invalid/schema-bad-mode.toml",
+        "invalid/schema-empty-domain.toml",
         "invalid/schema-env-eq-key.toml",
         "invalid/schema-env-flag-key.toml",
         "invalid/schema-missing-mount-path.toml",
+        "invalid/schema-port-out-of-range.toml",
         "invalid/schema-relative-dest.toml",
         "invalid/schema-repo-table.toml",
         "invalid/schema-state-dirs-climbing.toml",
@@ -131,6 +133,13 @@ fn full_config() {
         c.state_dirs,
         vec![".local/share/opencode", ".local/state/opencode"]
     );
+
+    // The network allowlist (bd myconfig-mo3.1/myconfig-6di.2):
+    // backend-agnostic policy keys, stored verbatim for the merge to
+    // concatenate and deduplicate.
+    assert_eq!(c.allow_domains, vec!["api.openai.com", "github.com"]);
+    assert_eq!(c.connect_ports, vec![443, 22]);
+    assert_eq!(c.listen_ports, vec![8080]);
 }
 
 #[test]
@@ -240,6 +249,14 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         (
             "invalid/schema-env-eq-key.toml",
             "is not a usable variable name",
+        ),
+        (
+            "invalid/schema-empty-domain.toml",
+            "expected a non-empty domain",
+        ),
+        (
+            "invalid/schema-port-out-of-range.toml",
+            "expected a port between 1 and 65535",
         ),
     ];
     for (rel, needle) in cases {

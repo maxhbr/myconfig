@@ -7,7 +7,8 @@
 # repo (`myconfig.ai.dev.jail`, `myconfig.ai.dev.nono-agent-sandbox`,
 # `myconfig.ai.dev.gvisor-agent-sandbox`, `myconfig.ai.dev.microvm`): a single CLI
 # that owns the sidecar directory next to a repository and drives the
-# underlying backend (bubblewrap first, containers/microvm later).
+# underlying backend (bubblewrap by default, podman-gvisor and nono
+# alongside; qemu/microvm later).
 #
 # Like the other sandbox tiers, this module is OFF by default and enabled
 # explicitly per host — it is never switched on implicitly by the broad
@@ -354,8 +355,9 @@ in
         gvisorEnv = cfg.gvisor.env;
         waypipe = cfg.display.package;
         gvisorWaypipe = cfg.gvisor.waypipe;
+        nono = cfg.nono.package;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; nono = cfg.nono.package; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -734,7 +736,7 @@ in
           This is for environment that is only CORRECT under this
           backend: the container has its own network stack and its own
           loopback, so the host endpoints named by `config.env` — which
-          both backends share, and which the bubblewrap backend reaches
+          the other backends share, and which the bubblewrap backend reaches
           through the host network namespace — are wrong here. Values
           must not contain whitespace (the variable is a
           space-separated list).
@@ -759,6 +761,36 @@ in
           Only takes effect while the gvisor tier module is enabled
           (`myconfig.ai.dev.gvisor-agent-sandbox.enable`): its
           `extraImagePackages` default consumes this option.
+        '';
+      };
+    };
+
+    nono = {
+      # The nono backend (mysbx-rs/src/nono.rs): `nono run` under
+      # Landlock + seccomp — the same sandbox the tier-2 standalone
+      # wrappers of
+      # ../../sandboxes/myconfig.ai.nono-agent-sandbox.nix use. The
+      # package below is what the wrapper pins as `MYSBX_NONO`
+      # (./nix/mysbx.nix); `MYSBX_NONO_PROFILE` keeps its `"default"`
+      # inside the package file.
+      package = mkOption {
+        type = types.nullOr types.package;
+        # Unlike `gvisor.image` (gated on the gvisor tier module — a
+        # multi-hundred-MB OCI build), nono is a plain nixpkgs
+        # package, so it defaults to `pkgs.nono` directly, the same
+        # shape as the display/waypipe option defaulting to a
+        # package.
+        default = pkgs.nono;
+        defaultText = literalExpression "pkgs.nono";
+        description = ''
+          The nono sandbox binary of the nono backend (Landlock +
+          seccomp; upstream nolabs-ai/nono, `pkgs.nono` — the same
+          tool the tier-2 wrappers of
+          ../../sandboxes/myconfig.ai.nono-agent-sandbox.nix use),
+          pinned into the wrapper as `MYSBX_NONO`.
+
+          `null` pins nothing: `backend = "nono"` is a refused run,
+          never a silently-unsandboxed one.
         '';
       };
     };
@@ -851,9 +883,15 @@ in
       type = types.submodule {
         options = {
           backend = mkOption {
-            type = types.nullOr (types.enum [ "bubblewrap" ]);
+            type = types.nullOr (
+              types.enum [
+                "bubblewrap"
+                "podman-gvisor"
+                "nono"
+              ]
+            );
             default = "bubblewrap";
-            description = "Sandbox backend; `null` leaves the choice to the sidecar.";
+            description = "Sandbox backend (`bubblewrap`, `podman-gvisor` or `nono`); `null` leaves the choice to the sidecar.";
           };
           network = mkOption {
             type = types.bool;

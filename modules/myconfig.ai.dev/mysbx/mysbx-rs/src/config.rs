@@ -325,6 +325,20 @@ pub struct Config {
     /// declare; the lists concatenate like `state-dirs` (order-stable,
     /// first occurrence wins on duplicates).
     pub forward_env: Vec<String>,
+    /// Domains the sandbox may connect to (`allow-domains`,
+    /// bd myconfig-mo3.1): a backend-agnostic schema key — every
+    /// backend parses it, and enforcement is per backend. A run
+    /// REFUSES a finer policy on a backend that cannot enforce it
+    /// (the pipeline in lib.rs, not the schema here).
+    pub allow_domains: Vec<String>,
+    /// TCP ports the sandbox may connect out to (`connect-ports`,
+    /// bd myconfig-mo3.1): same backend-agnostic declaration as
+    /// [`Config::allow_domains`].
+    pub connect_ports: Vec<u16>,
+    /// TCP ports the sandbox may listen on (`listen-ports`,
+    /// bd myconfig-mo3.1): same backend-agnostic declaration as
+    /// [`Config::allow_domains`].
+    pub listen_ports: Vec<u16>,
 }
 
 impl Default for Config {
@@ -339,6 +353,9 @@ impl Default for Config {
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
             forward_env: Vec::new(),
+            allow_domains: Vec::new(),
+            connect_ports: Vec::new(),
+            listen_ports: Vec::new(),
         }
     }
 }
@@ -422,6 +439,9 @@ impl Config {
                 "git-dirs" => config.git_dirs = git_dirs(value)?,
                 "state-dirs" => config.state_dirs = state_dirs(value)?,
                 "forward-env" => config.forward_env = forward_env(value)?,
+                "allow-domains" => config.allow_domains = allow_domains(value)?,
+                "connect-ports" => config.connect_ports = ports(value, "connect-ports")?,
+                "listen-ports" => config.listen_ports = ports(value, "listen-ports")?,
                 other => return Err(unknown("top level", other)),
             }
         }
@@ -518,6 +538,62 @@ fn forward_env(value: &Value) -> Result<Vec<String>, Error> {
                 )));
             }
             Ok(name.to_owned())
+        })
+        .collect()
+}
+
+/// Parse the `allow-domains` list (bd myconfig-mo3.1): an array of
+/// domain names the sandbox may connect to. Backend-agnostic by
+/// design — enforcement happens per backend, so a backend that
+/// cannot enforce the policy refuses the run downstream instead of
+/// silently ignoring entries here.
+fn allow_domains(value: &Value) -> Result<Vec<String>, Error> {
+    let items = value.as_array().ok_or_else(|| {
+        Error::Schema(format!(
+            "allow-domains: expected an array of strings, found {}",
+            value.type_name()
+        ))
+    })?;
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let at = format!("allow-domains #{}", i + 1);
+            let domain = string(v, &at)?;
+            if domain.is_empty() {
+                return Err(Error::Schema(format!("{at}: expected a non-empty domain")));
+            }
+            Ok(domain.to_owned())
+        })
+        .collect()
+}
+
+/// Parse a port list, `connect-ports` or `listen-ports`
+/// (bd myconfig-mo3.1): an array of TCP port numbers, each 1-65535.
+fn ports(value: &Value, key: &str) -> Result<Vec<u16>, Error> {
+    let items = value.as_array().ok_or_else(|| {
+        Error::Schema(format!(
+            "{key}: expected an array of integers, found {}",
+            value.type_name()
+        ))
+    })?;
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let at = format!("{key} #{}", i + 1);
+            let n = v.as_integer().ok_or_else(|| {
+                Error::Schema(format!(
+                    "{at}: expected an integer, found {}",
+                    v.type_name()
+                ))
+            })?;
+            if !(1..=65535).contains(&n) {
+                return Err(Error::Schema(format!(
+                    "{at}: expected a port between 1 and 65535, found {n}"
+                )));
+            }
+            Ok(n as u16)
         })
         .collect()
 }
@@ -891,6 +967,86 @@ mod tests {
             assert!(msg.contains("state-dirs"), "{p:?}: {msg}");
             assert!(msg.contains("sandbox home"), "{p:?}: {msg}");
         }
+    }
+
+    // ---- allow-domains / connect-ports / listen-ports (bd
+    // myconfig-mo3.1) -------------------------------------------
+
+    #[test]
+    fn allowlist_keys_parse() {
+        let c = Config::parse(
+            "allow-domains = [\"example.org\", \"api.example.org\"]\n\
+             connect-ports = [443, 22]\n\
+             listen-ports = [8080]\n",
+        )
+        .unwrap();
+        assert_eq!(c.allow_domains, vec!["example.org", "api.example.org"]);
+        assert_eq!(c.connect_ports, vec![443, 22]);
+        assert_eq!(c.listen_ports, vec![8080]);
+
+        // Empty arrays and the omitted keys are the empty default.
+        let c =
+            Config::parse("allow-domains = []\nconnect-ports = []\nlisten-ports = []\n").unwrap();
+        assert!(c.allow_domains.is_empty());
+        assert!(c.connect_ports.is_empty());
+        assert!(c.listen_ports.is_empty());
+        assert!(Config::default().allow_domains.is_empty());
+        assert!(Config::default().connect_ports.is_empty());
+        assert!(Config::default().listen_ports.is_empty());
+    }
+
+    #[test]
+    fn allow_domains_rejects_wrong_shapes() {
+        // Non-string and empty entries name the key and the entry.
+        let e = Config::parse("allow-domains = [1]\n").unwrap_err();
+        let msg = e.to_string();
+        assert!(matches!(e, Error::Schema(_)), "{msg}");
+        assert!(msg.contains("allow-domains"), "{msg}");
+
+        let e = Config::parse("allow-domains = [\"\"]\n").unwrap_err();
+        let msg = e.to_string();
+        assert!(matches!(e, Error::Schema(_)), "{msg}");
+        assert!(msg.contains("allow-domains #1"), "{msg}");
+        assert!(msg.contains("non-empty domain"), "{msg}");
+
+        // A wrong top-level type names the key, like every other one.
+        let e = Config::parse("allow-domains = \"example.org\"\n").unwrap_err();
+        assert!(e.to_string().contains("allow-domains"), "{e}");
+        assert!(matches!(e, Error::Schema(_)), "{e}");
+    }
+
+    #[test]
+    fn port_lists_reject_out_of_range_and_wrong_shapes() {
+        for (key, bad) in [
+            ("connect-ports", "0"),
+            ("connect-ports", "65536"),
+            ("connect-ports", "\"443\""),
+            ("listen-ports", "0"),
+            ("listen-ports", "65536"),
+            ("listen-ports", "true"),
+        ] {
+            let e = Config::parse(&format!("{key} = [{bad}]\n")).unwrap_err();
+            let msg = e.to_string();
+            assert!(matches!(e, Error::Schema(_)), "{key} = {bad}: {msg}");
+            assert!(msg.contains(key), "{key} = {bad}: {msg}");
+        }
+        // The error names the entry.
+        let e = Config::parse("connect-ports = [443, 0]\n").unwrap_err();
+        assert!(e.to_string().contains("connect-ports #2"), "{e}");
+        let e = Config::parse("listen-ports = [\"x\"]\n").unwrap_err();
+        let msg = e.to_string();
+        assert!(msg.contains("listen-ports #1"), "{msg}");
+        assert!(msg.contains("expected an integer"), "{msg}");
+
+        // A wrong top-level type names the key.
+        let e = Config::parse("connect-ports = 443\n").unwrap_err();
+        assert!(e.to_string().contains("connect-ports"), "{e}");
+        assert!(matches!(e, Error::Schema(_)), "{e}");
+
+        // The boundaries are inclusive.
+        let c = Config::parse("connect-ports = [1, 65535]\nlisten-ports = [1]\n").unwrap();
+        assert_eq!(c.connect_ports, vec![1, 65535]);
+        assert_eq!(c.listen_ports, vec![1]);
     }
 
     #[test]

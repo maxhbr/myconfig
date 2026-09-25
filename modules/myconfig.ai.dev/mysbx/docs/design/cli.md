@@ -107,9 +107,9 @@ See [config.md](./config.md) for the layers themselves.
 
 ### D7: Backend selection is explicit, not magic
 
-The sandbox technology (bubblewrap, podman+gVisor, qemu, microvm) is chosen
-by configuration or an explicit flag, never auto-detected from the host.
-Rationale: a silently downgraded isolation level is a security bug.
+The sandbox technology (bubblewrap, podman+gVisor, nono, qemu, microvm) is
+chosen by configuration or an explicit flag, never auto-detected from the
+host. Rationale: a silently downgraded isolation level is a security bug.
 
 ### D8: Exit codes
 
@@ -556,7 +556,8 @@ the driver polling the file learns of it there.
 The bare form and `run` accept `--backend <name>`, before the verb and
 after it for `run` — the same one position rule every run-scoped flag
 follows (D10/D14/D16/D17). The value is the same closed set the
-pipeline enforces on the configuration: `bubblewrap` | `podman-gvisor`.
+pipeline enforces on the configuration: `bubblewrap` | `podman-gvisor` |
+`nono`.
 It wins over the merged `backend` of both layers for THIS invocation
 only, per the precedence of D6 (flags > sidecar > user > defaults,
 with the CLI as the outermost layer of config.md D1) — nothing is

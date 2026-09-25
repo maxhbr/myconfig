@@ -36,7 +36,7 @@ Layers are merged in a fixed precedence, never concatenated blindly.
 
 **Backend**:
 The technology that actually confines the process (bubblewrap, podman+gVisor,
-qemu, microvm). Always chosen explicitly, never auto-detected.
+nono, qemu, microvm). Always chosen explicitly, never auto-detected.
 _Avoid_: driver, engine, runtime
 
 **Payload**:

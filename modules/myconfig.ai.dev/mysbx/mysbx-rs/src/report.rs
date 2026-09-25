@@ -72,12 +72,12 @@ pub struct Report<'a> {
     pub host_env: &'a HostEnv,
     pub params: &'a Params<'a>,
     /// The backend binary that would be executed (`MYSBX_BWRAP` /
-    /// `MYSBX_PODMAN` after their fallbacks).
+    /// `MYSBX_PODMAN` / `MYSBX_NONO` after their fallbacks).
     pub bwrap_bin: &'a str,
-    /// The configured backend name (`bubblewrap` or `podman-gvisor`).
-    /// The report labels the backend line with it (`bwrap:` /
-    /// `podman:`) — the label is what an operator greps for, and a
-    /// podman run claiming a `bwrap:` binary would lie.
+    /// The configured backend name (`bubblewrap`, `podman-gvisor` or
+    /// `nono`). The report labels the backend line with it (`bwrap:` /
+    /// `podman:` / `nono:`) — the label is what an operator greps for, and a
+    /// nono run claiming a `bwrap:` binary would lie.
     pub backend: &'a str,
     /// The container image of a podman-gvisor run
     /// (`MYSBX_GVISOR_IMAGE`). `None` on bubblewrap, where the line
@@ -252,7 +252,21 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // run, where the state-dirs are not handled at all (workspace.md
     // D4): the home stays all-ephemeral and the report must not claim
     // a persistence the run does not perform.
-    if r.merged.state_dirs.is_empty() || clone_run {
+    //
+    // Under nono NONE of that holds (no tmpfs home, no remap): HOME is
+    // the real host home — kept unwritable by Landlock — and the state
+    // stores persist at their real sidecar paths, so the line must
+    // say the backend's actual semantics instead of bwrap's.
+    if r.backend == "nono" {
+        if r.merged.state_dirs.is_empty() {
+            p("home:           the host home is $HOME (no remap; the host home is not writable under nono)".to_string());
+        } else {
+            p(format!(
+                "home:           the host home is $HOME (no remap; the host home is not writable under nono; {} state dir(s) persist at their sidecar paths)",
+                r.merged.state_dirs.len(),
+            ));
+        }
+    } else if r.merged.state_dirs.is_empty() || clone_run {
         p(format!(
             "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
         ));
@@ -284,12 +298,21 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         // The in-sandbox path in full (`/mysbx-home/<entry>`), not the
         // bare entry: the report is read against the argv, where the
         // dest is spelled out, and `/<entry>` would read like a path at
-        // the sandbox root.
+        // the sandbox root. Under nono there is NO remap: the store is
+        // reachable at its sidecar path and nowhere else, so the line
+        // says that instead of inventing a sandbox path.
         for entry in &r.merged.state_dirs {
-            p(format!(
-                "  {SANDBOX_HOME}/{entry} <-> {}  [state]",
-                r.repo.sidecar.join("state").join(entry).display()
-            ));
+            if r.backend == "nono" {
+                p(format!(
+                    "  {}  [state; no remap — the sandbox path is the sidecar path]",
+                    r.repo.sidecar.join("state").join(entry).display()
+                ));
+            } else {
+                p(format!(
+                    "  {SANDBOX_HOME}/{entry} <-> {}  [state]",
+                    r.repo.sidecar.join("state").join(entry).display()
+                ));
+            }
         }
     }
 
@@ -300,6 +323,13 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         r.host_env.len(),
         r.merged.env.len(),
     ));
+    // Under nono the parent environment is INHERITED (nono has no
+    // `--clearenv` equivalent; bwrap clears, podman passes flags) —
+    // the forwarded and `[env]` values above are pinned ON TOP of it,
+    // so the count is not the whole environment the payload sees.
+    if r.backend == "nono" {
+        p("  (nono inherits the parent environment; the forwarded and [env] values above are pinned on top)".to_string());
+    }
     let display_on = r.merged.display.is_waypipe();
     for (k, v) in r.host_env {
         // Both sections are printed in argv order (host first, `[env]`
@@ -324,7 +354,15 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             p(format!("  {k}={v}  [config]"));
         }
     }
-    p(format!("  HOME={SANDBOX_HOME}  [sandbox home]"));
+    // `HOME` differs by backend: bwrap and podman create a sandbox
+    // home and point HOME at it; nono has no remap and HOME stays
+    // the real host home (kept unwritable by Landlock) — said here
+    // too, so the env block agrees with the `home:` line above.
+    if r.backend == "nono" {
+        p("  HOME=$HOME of the invoking user  [host home — no remap]".to_string());
+    } else {
+        p(format!("  HOME={SANDBOX_HOME}  [sandbox home]"));
+    }
     p(format!("  PATH={}  [tools]", r.params.tools_path));
     // The pinned CA bundle belongs in the report for the same reason
     // as the nix.conf and `/bin/sh` lines below: which trust anchors
@@ -344,7 +382,11 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // The backend binary, labeled by the backend itself: `bwrap:` for
     // the bubblewrap backend, `podman:` for podman-gvisor (which also
     // names its image — the container the run starts is as much a
-    // property of the run as the binary a bwrap run execs).
+    // property of the run as the binary a bwrap run execs), `nono:`
+    // for the nono backend (a host-path backend like bwrap — the
+    // report's shell/PATH/nix.conf//bin/sh/ca-bundle pins describe
+    // the exec environment lib.rs sets on top of the inherited
+    // parent env, not argv flags).
     match r.backend {
         "podman-gvisor" => {
             p(format!("podman:         {}", r.bwrap_bin));
@@ -352,6 +394,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                 p(format!("image:          {image}"));
             }
         }
+        "nono" => p(format!("nono:           {}", r.bwrap_bin)),
         _ => p(format!("bwrap:          {}", r.bwrap_bin)),
     }
     p(format!("shell:          {}", r.params.shell));
@@ -544,6 +587,9 @@ mod tests {
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
             forward_env: Vec::new(),
+            allow_domains: Vec::new(),
+            connect_ports: Vec::new(),
+            listen_ports: Vec::new(),
             multiplexer: Multiplexer::None,
             display: Display::Off,
         };

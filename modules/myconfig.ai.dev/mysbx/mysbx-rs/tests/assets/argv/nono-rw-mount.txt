@@ -1,0 +1,13 @@
+run
+--profile
+default
+--allow
+/synth/repo
+--allow-cwd
+--read
+/nix/store
+--allow
+/synth/data/cache
+--block-net
+--
+/synth/bin/bash

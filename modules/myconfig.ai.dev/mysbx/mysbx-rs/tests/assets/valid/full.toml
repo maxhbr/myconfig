@@ -24,6 +24,15 @@ display = "waypipe"
 # `<repo>.mysbx/state/<entry>` and bound rw at `/mysbx-home/<entry>`.
 state-dirs = [".local/share/opencode", ".local/state/opencode"]
 
+# The network allowlist (bd myconfig-mo3.1/myconfig-6di.2): the domains
+# the sandbox may connect to and the TCP ports it may connect to and
+# listen on. Backend-agnostic policy — the `nono` backend enforces them
+# (per-domain via its proxy, per-port via Landlock/seccomp); a backend
+# that cannot enforce them refuses the run instead of ignoring them.
+allow-domains = ["api.openai.com", "github.com"]
+connect-ports = [443, 22]
+listen-ports = [8080]
+
 [[mounts]]
 path = "/home/user/.config/pi"
 mode = "ro"
