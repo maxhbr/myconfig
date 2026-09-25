@@ -9,6 +9,7 @@
     # configuration
     ./service.wireguard-server
     ./services.step-ca.nix
+    ./services.gitolite.nix
     ../shared.deployedServices.nix
   ];
   config = {
