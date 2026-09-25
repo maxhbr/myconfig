@@ -37,6 +37,10 @@ in
           passwordSecret = "forgejo-admin-password";
           gitSshKeys = "mhuber";
         };
+        "f13-agent" = {
+          admin = false;
+          email = "f13+agent@maxhbr.local";
+        };
         "hermes-agent" = { };
       };
     };
