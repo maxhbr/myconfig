@@ -114,7 +114,7 @@
 //!    client's per-run socket at `<socket_dir>/waypipe.sock` (bwrap
 //!    binds the socket dir rw at itself). Both sockets cross nono's
 //!    Landlock axes: the FILESYSTEM side is the home grant plus the
-//!    socket-dir ro mount, the UNIX-SOCKET side gets two
+//!    socket-dir rw bind, the UNIX-SOCKET side gets two
 //!    `--allow-unix-socket-dir-bind` grants (nono 0.74.0 — direct
 //!    child sockets only). Audit result (0.74.0 source + live probe
 //!    under the real profile + mediation): the TCP-only/block-all

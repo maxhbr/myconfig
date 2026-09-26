@@ -8,12 +8,16 @@ SPDX-License-Identifier: MIT
 Status: snapshot. Point of analysis: commit `d524576bea`
 (`d524576bea…`, 2026-09-24), re-checked for the exit-code/result
 contract (bd myconfig-0ql), for the podman-gvisor backend (bd
-myconfig-6di.1; pin fix bd myconfig-xrt) and for the nono backend (bd
-myconfig-6di.2).
+myconfig-6di.1; pin fix bd myconfig-xrt), for the nono backend (bd
+myconfig-6di.2, whose first cut bd myconfig-6di.4 redesigned into the
+LAYERED backend of `docs/design/backends.md` D1 — bubblewrap builds
+the view, `nono run` confines the payload inside it) and for all its
+follow-up beads through bd myconfig-6di.4.6.
 
 `mysbx` is implemented as far as the bubblewrap default backend, the
-interactive/run surface, a second podman+gVisor backend and a third nono
-backend (both argv-mapped, not yet exercised on a host); the
+interactive/run surface, a second podman+gVisor backend and the third,
+layered nono backend (all argv-mapped; not yet exercised on a host,
+bd myconfig-27o); the
 qemu/microvm backends, the credential story and the proxy-only egress
 profile remain future work. This document puts the
 sandbox implementations that already exist in this repo side by side, so
@@ -83,7 +87,7 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Workspace | `$PWD` rw (+ `__worktrees` sibling) | `$PWD` rw | `$PWD` rw (`--allow-cwd`) | `$PWD` rw at `/workspace` | isolated git clone at `<repo>__agent-gvisor/NAME`, mounted at the host path — host checkout never bind-mounted | standalone clone, `workspaceLayout = central\|beside-repo` | `live` default: the sidecar's repo, implicit, always rw at its real path (`config.md` D13) + the `<repo>__worktrees` sibling rw when it exists (implicit, never created by a run); opt-in clone sessions: `--session NAME` = isolated clone at `<repo>.mysbx/clones/NAME` bound rw at the repo's own path, host repo not mounted (`workspace.md` D1–D3, decided) |
 | Extra mounts | `extraReadOnly/ReadWriteEnvPaths`, `JAIL_EXTRA_*_PATHS` | `readOnlyConfigDirs`, `writableDirs` | `extraAllowDirs`, `extraReadOnlyDirs`, `--allow-unix-socket` | fixed (CWD + store) | `--mount`/`--config HOST:DEST[:ro\|rw]` | fixed share set | `[[mounts]] path/dest/mode`, `ro`/`rw` only (`../mysbx-rs/src/config.rs`) |
 | Host `/nix/store` | bound read-only (`bindFullNixStore`) | via the app closure | via the app closure | read-only virtiofs | not shared; optional writable store volume (`--nix`) | not shared — own EROFS guest store | undecided |
-| Network default | on (`network` combinator: resolv.conf + CA bundle) | on (`shareNet = true`) | off unless `--allow-domain` / `--allow-connect-port` / `--listen-port` | SLiRP user-mode NAT, outbound only + one loopback SSH port | rootless podman default, `--network`/`AGENT_GVISOR_NETWORK` (pasta spec), in-sandbox loopback forwarders | private bridge `agentbr0` with per-TAP L2 isolation, `networkProfile` (default `proxy-only`) | on, shared; `network = false` is the deny switch; per-domain/port allowlist (`allow-domains`/`connect-ports`/`listen-ports`) enforced on the nono backend, refused elsewhere (`config.md` D5, D9, D21) |
+| Network default | on (`network` combinator: resolv.conf + CA bundle) | on (`shareNet = true`) | `network = true` shares the host stack like bubblewrap (`--share-net`, no nono flag — nono's outbound default IS allow); `network = false` is the deny switch (`--block-net`, next to the empty netns); an allowlist filters egress through the proxy (`--allow-domain`/`--allow-connect-port`/`--listen-port`); under any allowlist the nix daemon stays out (bd myconfig-nj9) | SLiRP user-mode NAT, outbound only + one loopback SSH port | rootless podman default, `--network`/`AGENT_GVISOR_NETWORK` (pasta spec), in-sandbox loopback forwarders | private bridge `agentbr0` with per-TAP L2 isolation, `networkProfile` (default `proxy-only`) | on, shared; `network = false` is the deny switch; per-domain/port allowlist (`allow-domains`/`connect-ports`/`listen-ports`) enforced on the nono backend, refused elsewhere (`config.md` D5, D9, D21) |
 | Env forwarding | `try-fwd-env` list + `myconfig.ai.dev.jail.fwdEnvs`, always `OPENAI_API_KEY` | `envVars` attrset | same shape via `myconfig.ai.dev.nono.fwdEnvs` | pushed over the SSH session env at launch | `--env` / `--env-file` | none needed for model access | built-in allowlist (`FORWARDED_ENV_VARS`, lib.rs): terminal/locale block only, extended additively by the `forward-env` key of either configuration layer (seeded host-wide by `myconfig.ai.dev.mysbx.forwardedEnvVars`, bd myconfig-20j), plus the `[env]` table |
 | Model credentials | real host key inside the sandbox | n/a | real host key inside the sandbox | real key, over SSH env | seeded config, endpoints rewritten to a sandbox-reachable proxy | **never reaches the guest** — host LiteLLM via bridge-only forwarder | real host key inside the sandbox, but only for the key/token/URL variables a deployment names in `forward-env` — never by default (bd myconfig-20j) |
 | Agent-config seeding | `try-ro-bind` of `configDirs`, rw `userDataDirs` | `readOnlyConfigDirs` | `--read` of config dirs, `--allow` of state dirs | [`fns/seed-agent-config.nix`](../../fns/seed-agent-config.nix), rsync over SSH | `home.seedPaths` + `AGENT_GVISOR_HOME_SEED_REWRITE` | root-owned staged copy via `config-seed.nix` | user config decides which host config is exposed (`config.md` D6) |
@@ -173,9 +177,8 @@ Everything below exists in at least one tier above and has no counterpart in
   socket dir, pathname AF_UNIX mediation in the profile) and the
   waypipe display works (bd myconfig-6di.4.6 — audited against
   nono's filter tables, socket-dir grants for both ends of the
-  channel), tracked in
-  `../../../../doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`.
-  Not yet exercised on a host.
+  channel). All first-cut refusals are lifted; NOT yet exercised on a
+  host (bd myconfig-27o).
 - **Network policy.** DONE for the allowlist (bd myconfig-mo3.1):
   `allow-domains`/`connect-ports`/`listen-ports` are schema on every
   backend, and their first enforcement landed with the nono backend

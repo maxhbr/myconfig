@@ -211,11 +211,13 @@ qemu and microvm long-term. The MVP's `bwrap_argv` boundary is the seam: a
 backend is a function from merged config + payload to a process invocation.
 Both named next backends are done: podman+gVisor (bd myconfig-6di.1) maps
 the merged config onto a rootless `podman run --runtime=runsc`; nono
-(bd myconfig-6di.2) maps it onto a `nono run` under Landlock + seccomp,
-refusing the inexpressible — clone remap, mount `dest` remap,
-multiplexer, waypipe, and shared-network-without-allowlist
-(`doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`). Remaining:
-qemu and microvm, long-term.
+(bd myconfig-6di.2) started as a plain `nono run` and is the LAYERED
+backend now (bd myconfig-6di.4, `docs/design/backends.md` D1):
+bubblewrap builds the view, `nono run` confines the payload inside
+it — no first-cut refusals remain (clone remap, mount `dest` remap,
+the network default, multiplexer sessions and the waypipe display all
+work or map like the bubblewrap backend). Remaining: qemu and
+microvm, long-term.
 
 **2g — per-repo opt-out of user mounts.** `config.md` D7 settled the other
 direction (a sidecar declares its own mounts), but leaves open how a user

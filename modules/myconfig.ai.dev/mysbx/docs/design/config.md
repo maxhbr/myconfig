@@ -518,25 +518,11 @@ emitted before every bind too, so `state-dirs` entries below them
 still land on top; `.config` deliberately gets none — the ro
 host-config seed mount stays the visibly-read-only surface.
 
-**Superseded by [backends.md D1](./backends.md)** (bd myconfig-6di.4):
-the `nono` backend becomes bubblewrap with nono inside and gets the
-same tmpfs home as the bubblewrap backend. That has LANDED — the next
-paragraph described the first cut and no longer applies.
-
-**The nono exception (backend = "nono").** The tmpfs-home row above is
-the bubblewrap/podman-gvisor shape; under nono there is NO tmpfs home
-and no `/mysbx-home`. nono has no bind or remap machinery (Landlock
-grants access AT a path, it cannot move or overlay one), so the exec
-environment lib.rs builds sets `HOME` to the invoking user's REAL home
-path string. That value grants nothing: Landlock keeps the host home
-UNWRITABLE — only an explicit `--allow` grants write access below it —
-and the sandbox's writable surfaces are the repo (with its approved
-git dirs and the worktrees sibling), the `state-dirs` sidecar paths
-(`<repo>.mysbx/state/<entry>`, at their real host paths, not remapped)
-and the configured `rw` mounts. Everything else in this decision that
-names `/mysbx-home` (the seeding path, the `dest` guards, the
-generated-layer assertion) applies to the tmpfs backends only.
-
+The row above is the shape of EVERY backend (backends.md D1, bd
+myconfig-6di.4): the layered nono backend runs the payload inside a
+bubblewrap view — tmpfs `/mysbx-home`, seeded configs and all. The
+pure-nono exception that once lived here (a real-`HOME`-path exec
+environment with no tmpfs home) is GONE with that first cut.
 "The host home is not mounted" is enforced, not merely claimed
 (review-3 item 4): a mount source that IS the home (`path = "~/"`, or
 a symlink resolving to it) or CONTAINS it (`path = "/home"`, or a
@@ -575,8 +561,8 @@ Rationale, in the order the constraints bite:
   sandbox would mirror a host path that is deliberately absent; a payload
   (or a reviewer of `--dry-run`) could not tell the two apart. The
   literal invariant is worth keeping checkable, so the sandbox home is
-  namespaced instead: `/mysbx-home` (on the tmpfs backends; under nono
-  there is no sandbox home at all — the exception above). It reads "no
+  namespaced instead: `/mysbx-home`, on every backend (backends.md
+  D1 — the layered nono backend builds the same view). It reads "no
   in-sandbox path under
   `/home/`" — mount *sources* are host paths and may of course live in
   the host home; what must not happen is a `dest` (or `HOME` itself)
