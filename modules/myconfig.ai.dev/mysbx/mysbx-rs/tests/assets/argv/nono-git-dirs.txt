@@ -8,6 +8,8 @@ default
 /synth/gitdirs/main
 --read
 /nix/store
+--allow
+/synth/repo.mysbx/state/.ssh
 --block-net
 --
 /synth/bin/bash

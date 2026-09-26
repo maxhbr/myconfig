@@ -6,6 +6,8 @@ default
 --allow-cwd
 --read
 /nix/store
+--allow
+/synth/repo.mysbx/state/.ssh
 --allow-unix-socket
 /nix/var/nix/daemon-socket/socket
 --allow-domain

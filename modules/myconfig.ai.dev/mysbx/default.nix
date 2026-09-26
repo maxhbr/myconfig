@@ -331,8 +331,7 @@ let
   }
   // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
   // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; }
-  // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; }
-  // lib.optionalAttrs (cfg.config.sshKey) { ssh-key = true; };
+  // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; };
 in
 {
   options.myconfig.ai.dev.mysbx = with lib; {
@@ -1081,25 +1080,6 @@ in
               Per-agent modules append their tool's state directories
               here, exactly like they append config mounts to
               `mounts`.
-            '';
-          };
-          sshKey = mkOption {
-            type = types.bool;
-            default = false;
-            description = ''
-              The sandbox's own SSH keypair (./docs/design/config.md
-              D22): mysbx generates an ed25519 keypair per repository
-              into `<repo>.mysbx/state/.ssh/` (0600 on the private
-              key) and binds the directory rw at `/mysbx-home/.ssh`,
-              so `git` over SSH works inside the sandbox WITHOUT
-              forwarding any host credential — no host `~/.ssh` is
-              ever mounted. Register the generated public key
-              (printed on creation, and via `mysbx ssh-pubkey`) as a
-              GitHub deploy key or a gitolite keydir entry to give
-              the sandbox scoped repository access.
-
-              Either configuration layer may enable it; the sidecar
-              wins when both decide. Off by default.
             '';
           };
         };

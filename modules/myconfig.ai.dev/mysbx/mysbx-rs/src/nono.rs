@@ -252,8 +252,9 @@ pub fn nono_run_argv(
     // sidecar path ONLY. A tool that keys on `$HOME/<entry>` will NOT
     // find its state there (`$HOME/<entry>` is under the host home,
     // which stays unwritable under Landlock): that is the documented
-    // backend semantic, stated in the feature comparison. A run with
-    // `ssh-key` (config.md D22) carries its implicit `.ssh` entry in
+    // backend semantic, stated in the feature comparison. The
+    // unconditional sandbox keypair (config.md D22) carries its
+    // implicit `.ssh` entry in
     // the same list — the generated keypair is reachable at
     // `<repo>.mysbx/state/.ssh/id_ed25519`, and lib.rs points
     // `GIT_SSH_COMMAND` at it in the exec environment (git over SSH

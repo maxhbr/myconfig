@@ -22,6 +22,8 @@ type=tmpfs,dst=/mysbx-home/.local/share
 type=tmpfs,dst=/mysbx-home/.local/state
 --mount
 type=bind,src=/synth/repo,dst=/synth/repo,rw
+--mount
+type=bind,src=/synth/repo.mysbx/state/.ssh,dst=/mysbx-home/.ssh,rw
 --env
 COLORTERM=truecolor
 --env

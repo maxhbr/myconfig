@@ -45,6 +45,9 @@
 /synth/repo
 /synth/repo
 --bind
+/synth/repo.mysbx/state/.ssh
+/mysbx-home/.ssh
+--bind
 /synth/data/cache
 /synth/data/cache
 --setenv

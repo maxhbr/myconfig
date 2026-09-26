@@ -200,6 +200,13 @@ fn state_parent_tmpfses(entries: &[String]) -> Vec<String> {
     let mut dests: Vec<String> = Vec::new();
     for entry in entries {
         let parent = match Path::new(entry).parent() {
+            // An empty parent (`Some("")`, the single-component
+            // entries like the implicit `.ssh`) means the entry sits
+            // DIRECTLY below the container home: the home tmpfs of
+            // section 4 is its parent already, and a second tmpfs at
+            // `{CONTAINER_HOME}/` would shadow it with a trailing
+            // slash — and runsc would fail the duplicate anyway.
+            Some(p) if p == Path::new("") => continue,
             Some(p) => format!("{}/{}", CONTAINER_HOME, p.to_string_lossy()),
             None => continue,
         };
@@ -350,8 +357,8 @@ pub fn podman_run_argv(
 ) -> Result<Vec<String>, Error> {
     let root = repo.root.to_string_lossy().into_owned();
     // The state entries a run actually binds (docs/design/config.md
-    // D22): the declared `state-dirs` plus the implicit `.ssh` of a
-    // run with `ssh-key` — computed once, before the guards, so the
+    // D22): the declared `state-dirs` plus the implicit `.ssh` of the
+    // unconditional sandbox keypair — computed once, before the guards, so the
     // socket checks, the state-parent tmpfses and the bind emission
     // below all see one list.
     let effective_state_dirs = cfg.effective_state_dirs();
@@ -597,7 +604,7 @@ pub fn podman_run_argv(
         };
 
     // 5a. state-dirs binds (config.md D15) — plus the implicit `.ssh`
-    // entry of a run with `ssh-key` (docs/design/config.md D22): the
+    // entry of the unconditional sandbox keypair (docs/design/config.md D22): the
     // generated keypair lands at `/mysbx-home/.ssh` in the container,
     // where ssh and git look for it, backed by `<sidecar>/state/.ssh`.
     let state_binds: Vec<(String, String)> = if let Workspace::Clone { .. } = params.workspace {

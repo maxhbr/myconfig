@@ -23,6 +23,8 @@ type=tmpfs,dst=/mysbx-home/.local/state
 --mount
 type=bind,src=/synth/repo,dst=/synth/repo,rw
 --mount
+type=bind,src=/synth/repo.mysbx/state/.ssh,dst=/mysbx-home/.ssh,rw
+--mount
 type=bind,src=/synth/repo.mysbx/waypipe/1234,dst=/synth/repo.mysbx/waypipe/1234,rw
 --env
 HOME=/mysbx-home

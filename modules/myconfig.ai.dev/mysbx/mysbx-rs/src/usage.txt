@@ -173,13 +173,11 @@ Commands:
                 the value to register as a GitHub deploy key or a
                 gitolite keydir entry; the private key never leaves
                 the sidecar/sandbox. Host-side, no sandbox is
-                started. With `ssh-key = true` in a configuration
-                layer the verb also enforces the run lifecycle: a
+                started. The keypair is always generated (the verb
+                enforces the run lifecycle: a
                 missing pair is generated, an incomplete one
-                repaired, an existing one left untouched. With the
-                key disabled an existing pair still prints, but a
-                missing one is a refusal — a disabled key must not
-                quietly re-enable itself. Takes no nested verbs;
+                repaired, an existing one left untouched).
+                Takes no nested verbs;
                 --verbose is refused and --dry-run prints what
                 would happen without generating anything
   gvisor-load-image

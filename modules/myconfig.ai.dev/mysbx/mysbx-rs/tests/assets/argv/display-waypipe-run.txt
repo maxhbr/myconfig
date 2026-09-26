@@ -45,6 +45,9 @@
 /synth/repo
 /synth/repo
 --bind
+/synth/repo.mysbx/state/.ssh
+/mysbx-home/.ssh
+--bind
 /synth/repo.mysbx/waypipe/1234
 /synth/repo.mysbx/waypipe/1234
 --setenv

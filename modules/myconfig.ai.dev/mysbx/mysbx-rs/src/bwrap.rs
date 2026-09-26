@@ -391,8 +391,8 @@ pub fn bwrap_argv(
 ) -> Result<Vec<String>, Error> {
     let root = repo.root.to_string_lossy().into_owned();
     // The state entries a run actually binds (docs/design/config.md
-    // D22): the declared `state-dirs` plus the implicit `.ssh` of a
-    // run with `ssh-key` — computed once, before the guards, so the
+    // D22): the declared `state-dirs` plus the implicit `.ssh` of the
+    // unconditional sandbox keypair — computed once, before the guards, so the
     // socket checks and the bind emission below see one list.
     let effective_state_dirs = cfg.effective_state_dirs();
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
@@ -596,8 +596,9 @@ pub fn bwrap_argv(
     // `[[mounts]]` entry may cover their dests (the hidden-mount
     // check below treats them like the repo and the git dirs), and
     // no entry may nest inside another — see [`check_state_dirs`].
-    // A run with `ssh-key` (docs/design/config.md D22) binds the same
-    // shape for its implicit `.ssh` entry: the effective list carries
+    // Every run binds the same
+    // shape for the implicit `.ssh` entry of the unconditional sandbox
+    // keypair: the effective list carries
     // it, so the generated keypair lands at `/mysbx-home/.ssh` where
     // ssh and git look for it.
     //
@@ -1896,7 +1897,6 @@ mod tests {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
-            ssh_key: false,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         }
@@ -2013,6 +2013,10 @@ mod tests {
                 ("/usr/bin", "/usr/bin"),
                 ("/etc/localtime", "/etc/localtime"),
                 ("/synth/repo", "/synth/repo"),
+                // The unconditional sandbox keypair's implicit `.ssh`
+                // state entry (D22), then the mounts in declaration
+                // order with dest defaulting to the source path.
+                ("/synth/repo.mysbx/state/.ssh", "/mysbx-home/.ssh"),
                 ("/synth/ro-src", "/synth/ro-src"),
                 ("/synth/nested", "/inside/dest"),
             ],
@@ -2396,6 +2400,7 @@ mod tests {
             // the base binds are not this test's subject.
             .filter(|d| {
                 !d.starts_with("/synth/repo")
+                    && !d.starts_with("/mysbx-home")
                     && *d != "/nix/store"
                     && *d != "/usr/bin"
                     && *d != "/etc/localtime"
@@ -2403,7 +2408,6 @@ mod tests {
             .collect();
         assert_eq!(cfg_dests, vec!["/usr/bin2", "/tmpx", "/nix/storex"]);
     }
-
     #[test]
     fn mount_dest_inside_repo_is_refused() {
         // Review-2 item 2 turned this around: a dest inside the repo

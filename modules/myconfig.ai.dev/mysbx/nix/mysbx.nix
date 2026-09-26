@@ -150,6 +150,9 @@
   nix,
   python3,
   curl,
+  # `ssh` for git remotes over SSH, authenticated with the per-repo
+  # sandbox key (`mysbx ssh-pubkey`).
+  openssh,
   # The basic archive/patch dev tools added back to the closure (bd
   # myconfig-en7): `diff`/`cmp` (diffutils), `tar` and `gzip`/`unzip` are
   # coreutils-adjacent basics every coding-agent payload reaches for
@@ -310,6 +313,7 @@ let
       nix
       python3
       curl
+      openssh
       diffutils
       gnutar
       gzip

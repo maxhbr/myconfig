@@ -163,22 +163,12 @@ pub struct Merged {
     /// bd myconfig-mo3.1): same concatenation and dedup rule as
     /// [`Merged::connect_ports`].
     pub listen_ports: Vec<u16>,
-    /// Whether the sandbox gets its own generated SSH keypair
-    /// (`ssh-key`, docs/design/config.md D22): resolved once from the
-    /// layers' tri-state values, like `multiplexer` — the sidecar wins
-    /// when both decide (it is the repository's own choice, the user
-    /// layer the host-wide default), and `false` when neither said
-    /// anything. When enabled, mysbx generates an ed25519 keypair into
-    /// `<sidecar>/state/.ssh/` and exposes it as the sandbox's `~/.ssh`
-    /// (an implicit `state-dirs` entry — see
-    /// [`Merged::effective_state_dirs`]).
-    pub ssh_key: bool,
 }
 
 impl Merged {
     /// The state-directory entries a run actually binds: the merged
-    /// `state-dirs` declarations, plus the implicit `.ssh` entry of a
-    /// run with `ssh-key` enabled (docs/design/config.md D22) — a
+    /// `state-dirs` declarations, plus the implicit `.ssh` entry of
+    /// the sandbox's own SSH keypair (docs/design/config.md D22) — a
     /// declared entry of the same name wins (identical semantics: the
     /// backing store is the same `<sidecar>/state/.ssh`, and the
     /// generation step targets it either way). Every backend's argv
@@ -193,7 +183,7 @@ impl Merged {
         // to be refused as nesting instead of tripping the later
         // state-tree guard with a confusing message.
         let mut entries = Vec::with_capacity(self.state_dirs.len() + 1);
-        if self.ssh_key && !self.state_dirs.iter().any(|e| e == ".ssh") {
+        if !self.state_dirs.iter().any(|e| e == ".ssh") {
             entries.push(".ssh".to_owned());
         }
         entries.extend(self.state_dirs.iter().cloned());
@@ -659,14 +649,6 @@ pub fn merge(
     let connect_ports = dedupe_ports(&user.connect_ports, &sidecar.connect_ports);
     let listen_ports = dedupe_ports(&user.listen_ports, &sidecar.listen_ports);
 
-    // ssh-key (docs/design/config.md D22): the later layer wins where
-    // it decided, exactly like `multiplexer` — the key grants no host
-    // access (it CREATES a credential instead of forwarding one), so
-    // it needs neither the network's narrow-only rule nor an override
-    // refusal. Off when neither layer said anything (the key is
-    // opt-in: a run without it binds no `.ssh` at all).
-    let ssh_key = sidecar.ssh_key.or(user.ssh_key).unwrap_or(false);
-
     Ok(Merged {
         backend: sidecar.backend.or(user.backend),
         network,
@@ -693,7 +675,6 @@ pub fn merge(
         allow_domains,
         connect_ports,
         listen_ports,
-        ssh_key,
     })
 }
 
@@ -1866,67 +1847,17 @@ mod tests {
         assert!(merged.state_dirs.is_empty());
     }
 
-    // ---- ssh-key (docs/design/config.md D22) -----------------------------
+    // ---- the ssh keypair's implicit state entry (docs/design/config.md
+    // D22) -------------------------------------------------------------
 
     #[test]
-    fn ssh_key_is_off_unless_a_layer_enables_it() {
-        // The default: neither layer mentions the key, nothing is
-        // generated or bound.
-        let merged = merge(cfg(""), cfg(""), &user_file(), &sidecar_file(), &no_home()).unwrap();
-        assert!(!merged.ssh_key);
-        assert!(merged.effective_state_dirs().is_empty());
-    }
-
-    #[test]
-    fn ssh_key_either_layer_may_enable_and_the_sidecar_wins() {
-        // Either trusted layer may enable the key (D22).
-        let merged = merge(
-            cfg("ssh-key = true\n"),
-            cfg(""),
-            &user_file(),
-            &sidecar_file(),
-            &no_home(),
-        )
-        .unwrap();
-        assert!(merged.ssh_key);
+    fn every_run_carries_the_implicit_ssh_state_entry() {
+        // The keypair is unconditional (D22): `effective_state_dirs`
+        // always starts with `.ssh` — the argv builders bind exactly
+        // this list — and a declared entry of the same name wins (no
+        // duplicate).
         let merged = merge(
             cfg(""),
-            cfg("ssh-key = true\n"),
-            &user_file(),
-            &sidecar_file(),
-            &no_home(),
-        )
-        .unwrap();
-        assert!(merged.ssh_key);
-        // When both decide, the sidecar wins — the same precedence as
-        // `multiplexer` (D17): the repository's own choice.
-        let merged = merge(
-            cfg("ssh-key = false\n"),
-            cfg("ssh-key = true\n"),
-            &user_file(),
-            &sidecar_file(),
-            &no_home(),
-        )
-        .unwrap();
-        assert!(merged.ssh_key);
-        let merged = merge(
-            cfg("ssh-key = true\n"),
-            cfg("ssh-key = false\n"),
-            &user_file(),
-            &sidecar_file(),
-            &no_home(),
-        )
-        .unwrap();
-        assert!(!merged.ssh_key);
-    }
-
-    #[test]
-    fn ssh_key_adds_an_implicit_ssh_state_entry() {
-        // `effective_state_dirs` appends `.ssh` when the key is on —
-        // the argv builders bind exactly this list — and a declared
-        // entry of the same name wins (no duplicate).
-        let merged = merge(
-            cfg("ssh-key = true\n"),
             cfg("state-dirs = [\".local/share/opencode\"]\n"),
             &user_file(),
             &sidecar_file(),
@@ -1944,7 +1875,7 @@ mod tests {
         );
 
         let merged = merge(
-            cfg("ssh-key = true\n"),
+            cfg(""),
             cfg("state-dirs = [\".ssh\"]\n"),
             &user_file(),
             &sidecar_file(),

@@ -22,6 +22,9 @@
 --bind
 /synth/repo
 /synth/repo
+--bind
+/synth/repo.mysbx/state/.ssh
+/mysbx-home/.ssh
 --setenv
 HOME
 /mysbx-home

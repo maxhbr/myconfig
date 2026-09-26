@@ -1352,10 +1352,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // Creation is idempotent; a failure is a runtime error like the
     // sidecar creation above.
     //
-    // A run with `ssh-key` (docs/design/config.md D22) additionally
-    // generates its own keypair under `<sidecar>/state/.ssh/` — the
-    // same state tree, the same live-runs-only gate: the dry run
-    // audits the bind, the real run ends with a usable keypair.
+    // A run with `ssh-key` additionally generates the keypair under
+    // `<sidecar>/state/.ssh/` — the same state tree, the same
+    // live-runs-only gate: the dry run audits the bind, the real run
+    // ends with a usable keypair. The keypair is unconditional
+    // (docs/design/config.md D22): every run binds it.
     //
     // In a CLONE run the `state-dirs` are NOT handled at all
     // (workspace.md D4): no backing store is created, nothing is
@@ -1367,18 +1368,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             eprintln!("mysbx: {msg}");
             return EXIT_INFRASTRUCTURE;
         }
-        if merged.ssh_key {
-            // The `ssh-keygen` of the run: the wrapper's pin
-            // (`MYSBX_SSH_KEYGEN`, this build's own closure) with the
-            // PATH fallback of the unwrapped crate — the same idiom as
-            // `MYSBX_BWRAP`. Refused, not ignored: a run whose keypair
-            // it cannot generate must not continue with an `~/.ssh`
-            // bind that does not exist.
-            let keygen = env_or("MYSBX_SSH_KEYGEN", "ssh-keygen");
-            if let Err(msg) = ensure_ssh_key(&repo, &repo.sidecar.join("state"), &keygen) {
-                eprintln!("mysbx: {msg}");
-                return EXIT_INFRASTRUCTURE;
-            }
+        // The `ssh-keygen` of the run: the wrapper's pin
+        // (`MYSBX_SSH_KEYGEN`, this build's own closure) with the
+        // PATH fallback of the unwrapped crate — the same idiom as
+        // `MYSBX_BWRAP`. Refused, not ignored: a run whose keypair
+        // it cannot generate must not continue with an `~/.ssh`
+        // bind that does not exist.
+        let keygen = env_or("MYSBX_SSH_KEYGEN", "ssh-keygen");
+        if let Err(msg) = ensure_ssh_key(&repo, &repo.sidecar.join("state"), &keygen) {
+            eprintln!("mysbx: {msg}");
+            return EXIT_INFRASTRUCTURE;
         }
     }
 
@@ -1976,10 +1975,8 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // Infrastructure, not configuration: inserted AFTER the
             // forwarded and `[env]` values like `HOME`/`PATH` (D14),
             // so no layer can repoint it.
-            if merged.ssh_key {
-                if let Some(cmd) = ssh_command_for_nono(&repo, &merged) {
-                    env.insert("GIT_SSH_COMMAND".into(), cmd);
-                }
+            if let Some(cmd) = ssh_command_for_nono(&repo, &merged) {
+                env.insert("GIT_SSH_COMMAND".into(), cmd);
             }
             (nono_bin, argv, None::<String>, Some(env))
         }
@@ -2820,14 +2817,11 @@ fn ensure_sidecar(repo: &repo::Repo) -> Result<(), String> {
 /// no sandbox is started; the repo is the one the cwd resolves to
 /// (cli.md D1).
 ///
-/// With `ssh-key` enabled (either layer) the verb enforces the same
-/// lifecycle a run does: an existing pair is left untouched, a missing
-/// or incomplete one is generated/re-derived — so the verb alone can
-/// bootstrap a repo's key without a first sandbox run. With the key
-/// disabled it still prints an EXISTING pair (an operator may have
-/// turned the key off after using it) but refuses to invent one: a
-/// disabled key must not quietly re-enable itself. `--dry-run` prints
-/// what would be created/left untouched, generating nothing.
+/// The verb enforces the same lifecycle a run does: an existing pair
+/// is left untouched, a missing or incomplete one is generated/
+/// re-derived — so the verb alone can bootstrap a repo's key without
+/// a first sandbox run. `--dry-run` prints what would be created/left
+/// untouched, generating nothing.
 ///
 /// Exit codes (cli.md D8): `2` for a wrong command line, `70` for a
 /// repo that cannot be resolved, a missing sidecar config (D13) or a
@@ -2878,28 +2872,15 @@ fn ssh_pubkey(args: &[String], dry_run: bool) -> i32 {
     if dry_run {
         if pair_exists {
             println!("## present: {} (left untouched)", public.display());
-        } else if merged.ssh_key {
+        } else {
             println!(
                 "## would create: {}/ (ed25519, no passphrase)",
                 dir.display()
-            );
-        } else {
-            println!(
-                "## no keypair, and ssh-key is disabled — nothing to create (docs/design/config.md D22)"
             );
         }
         return 0;
     }
     if !pair_exists {
-        if !merged.ssh_key {
-            eprintln!(
-                "mysbx: no sandbox ssh keypair in {}, and `ssh-key` is disabled in the configuration \
-                 layers — enable it (`ssh-key = true`) and run `mysbx` once, or register the key \
-                 of a run that had it on (docs/design/config.md D22)",
-                dir.display()
-            );
-            return EXIT_INFRASTRUCTURE;
-        }
         let keygen = env_or("MYSBX_SSH_KEYGEN", "ssh-keygen");
         if let Err(msg) = ensure_ssh_key(&repo, &repo.sidecar.join("state"), &keygen) {
             eprintln!("mysbx: {msg}");
@@ -2925,7 +2906,7 @@ fn ssh_pubkey(args: &[String], dry_run: bool) -> i32 {
     }
 }
 
-/// The `GIT_SSH_COMMAND` of a nono run with `ssh-key` (docs/design/
+/// The `GIT_SSH_COMMAND` of a nono run (docs/design/
 /// config.md D22): `ssh -i <sidecar>/state/.ssh/id_ed25519
 /// -o IdentitiesOnly=yes -o UserKnownHostsFile=<sidecar>/state/.ssh/
 /// known_hosts`, so git over SSH uses the generated key and persists
@@ -3028,8 +3009,8 @@ fn ensure_ssh_key(
 ) -> Result<SshKeyOutcome, String> {
     use std::os::unix::fs::PermissionsExt;
 
-    // The state root first (D15): a repo with `ssh-key` but no
-    // `state-dirs` entries has no `<sidecar>/state` yet, and
+    // The state root first (D15): the keypair's `.ssh` needs its
+    // `<sidecar>/state` parent, and
     // `ensure_plain_dir` creates one level at a time on purpose —
     // nothing may ever be created through an unverified parent.
     ensure_plain_dir(sidecar_state_root)?;
@@ -3527,13 +3508,11 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
 #\n\
 # state-dirs = [\".local/share/opencode\"]\n\
 #\n\
-# The sandbox's own ssh keypair (config.md D22): mysbx generates an\n\
-# ed25519 key at <repo>.mysbx/state/.ssh/id_ed25519 and binds it rw\n\
-# at /mysbx-home/.ssh — register the public key (printed on creation,\n\
+# The sandbox's own ssh keypair (config.md D22) is always generated:\n\
+# an ed25519 key at <repo>.mysbx/state/.ssh/id_ed25519, bound rw at\n\
+# /mysbx-home/.ssh. Register the public key (printed on creation,\n\
 # and by `mysbx ssh-pubkey`) as a GitHub deploy key or a gitolite\n\
-# keydir entry, and git over ssh works without any host credential:\n\
-#\n\
-# ssh-key = true\n\
+# keydir entry, and git over ssh works without any host credential.\n\
 #\n\
 # [env]\n\
 # EDITOR = \"nvim\"\n";

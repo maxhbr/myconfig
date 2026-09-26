@@ -138,8 +138,8 @@ All six items are done; the MVP is complete.
   user-config counterpart (`config.md` D7).
 - No `myconfig.ai` module outside `mysbx/` changes.
 - Manual acceptance (operator, not CI): the sandbox shows only the declared
-  mounts, and `~/.ssh` is unreachable (the host's — a sandbox may get its
-  OWN generated keypair under `~/.ssh` via `ssh-key`, config.md D22:
+  mounts, and `~/.ssh` is unreachable (the host's — every sandbox gets its
+  OWN generated keypair under `~/.ssh`, config.md D22:
   create-if-missing, recreate-if-deleted, never any host credential).
 
 ## Phase 2 and later — sketches, not designs

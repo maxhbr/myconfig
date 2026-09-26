@@ -433,7 +433,14 @@ in
     # and HEAD, which no stub can model — so the test phase needs it
     # on PATH, and real git needs a committer identity and a locked
     # config (same pattern as the gvisor tier's agent-gvisor-tests).
-    nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ pkgs.git ];
+    # `openssh` is the `ssh-keygen` of the now-UNCONDITIONAL sandbox
+    # keypair (docs/design/config.md D22): every live run generates
+    # one host-side, and the unwrapped crate's PATH fallback must find
+    # it — the same way the wrapper's pin does on a host.
+    nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [
+      pkgs.git
+      pkgs.openssh
+    ];
     preCheck = ''
       export HOME=$TMPDIR
       export GIT_CONFIG_GLOBAL=/dev/null

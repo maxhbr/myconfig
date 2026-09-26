@@ -179,7 +179,7 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
     // keypair already exists in the sidecar state (an operator can
     // check registration state without starting a sandbox —
     // `mysbx ssh-pubkey` prints the key itself).
-    if merged.ssh_key {
+    {
         let private = merged.ssh_store_dir(&repo.sidecar).join("id_ed25519");
         let state = if private.is_file() {
             "keypair present"
@@ -187,12 +187,10 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
             "keypair missing (the next run generates it)"
         };
         p(format!(
-            "ssh key:         enabled — {} ({})",
+            "ssh key:         {} ({})",
             state,
             private.display()
         ));
-    } else {
-        p("ssh key:         off".to_string());
     }
 
     // 3. sessions: the SAME lines `session list` prints (D19's

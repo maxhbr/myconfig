@@ -7,6 +7,8 @@ default
 --read
 /nix/store
 --allow
+/synth/repo.mysbx/state/.ssh
+--allow
 /synth/repo.mysbx/state/.local/share/opencode
 --allow
 /synth/repo.mysbx/state/.cache/foo

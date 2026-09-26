@@ -6,6 +6,8 @@ default
 --allow-cwd
 --read
 /nix/store
+--allow
+/synth/repo.mysbx/state/.ssh
 --read
 /synth/data/refs
 --block-net

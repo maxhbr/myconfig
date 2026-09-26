@@ -236,13 +236,10 @@ let
     nonoBackend = generated [
       { myconfig.ai.dev.mysbx.config.backend = "nono"; }
     ];
-    # The sandbox's own ssh keypair (../docs/design/config.md D22):
-    # `ssh-key = true` reaches the generated layer exactly when the
-    # option is on, and never otherwise.
-    sshKeyOn = generated [
-      { myconfig.ai.dev.mysbx.config.sshKey = true; }
-    ];
-    sshKeyOff = generated [ { } ];
+    # The sandbox's own ssh keypair is unconditional (../docs/design/
+    # config.md D22): the option is gone, and the generated layer
+    # never carries an `ssh-key` key — the crate refuses one as
+    # obsolete.
     # A host-wide selection this host cannot start must fail at EVAL
     # time, naming the option to set — not on the first `mysbx` of
     # every sandbox.
@@ -328,8 +325,6 @@ pkgs.runCommand "mysbx-generated-config-test"
       muxTmux
       muxOrca
       nonoBackend
-      sshKeyOn
-      sshKeyOff
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
@@ -426,12 +421,12 @@ pkgs.runCommand "mysbx-generated-config-test"
     grep -q '^backend = "nono"$' "$nonoBackend" \
       || fail "the nono backend selection is missing" "$nonoBackend"
 
-    # 6a. the sandbox ssh keypair (D22): the key reaches the generated
-    #     layer when the option is on, and must not appear otherwise.
-    grep -q '^ssh-key = true$' "$sshKeyOn" \
-      || fail "the ssh-key selection is missing" "$sshKeyOn"
-    if grep -q '^ssh-key' "$sshKeyOff"; then
-      fail "ssh-key must not appear when the option is off" "$sshKeyOff"
+    # 6a. the sandbox ssh keypair (D22) is unconditional: the option
+    #     is gone, and the generated layer of a default config must
+    #     never carry an `ssh-key` key — the crate refuses one as
+    #     obsolete.
+    if grep -q '^ssh-key' "$dftOff"; then
+      fail "ssh-key must not appear in the generated layer" "$dftOff"
     fi
 
     # 7. the shared sandbox-tools hook (phase 2d): its env entries reach

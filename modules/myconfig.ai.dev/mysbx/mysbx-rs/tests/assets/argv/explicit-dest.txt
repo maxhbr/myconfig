@@ -44,6 +44,9 @@
 --bind
 /synth/repo
 /synth/repo
+--bind
+/synth/repo.mysbx/state/.ssh
+/mysbx-home/.ssh
 --ro-bind
 /synth/data/configs
 /inside/x

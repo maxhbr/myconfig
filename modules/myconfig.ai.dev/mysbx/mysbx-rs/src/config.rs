@@ -339,14 +339,6 @@ pub struct Config {
     /// bd myconfig-mo3.1): same backend-agnostic declaration as
     /// [`Config::allow_domains`].
     pub listen_ports: Vec<u16>,
-    /// The sandbox's own SSH keypair (`ssh-key`, docs/design/config.md
-    /// D22): `Some(true)`/`Some(false)` when this layer decided, `None`
-    /// when it said nothing. mysbx then generates an ed25519 keypair
-    /// into the sidecar state (`<sidecar>/state/.ssh/`, the D15 tree)
-    /// and binds it at `~/.ssh` inside the sandbox, so git over SSH
-    /// works with a key the operator registers as a deploy/gitolite
-    /// key — without forwarding any host credential. Off by default.
-    pub ssh_key: Option<bool>,
 }
 
 impl Default for Config {
@@ -364,7 +356,6 @@ impl Default for Config {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
-            ssh_key: None,
         }
     }
 }
@@ -451,7 +442,18 @@ impl Config {
                 "allow-domains" => config.allow_domains = allow_domains(value)?,
                 "connect-ports" => config.connect_ports = ports(value, "connect-ports")?,
                 "listen-ports" => config.listen_ports = ports(value, "listen-ports")?,
-                "ssh-key" => config.ssh_key = Some(boolean(value, "ssh-key")?),
+                // The config key D22 replaced: the sandbox's own SSH
+                // keypair is ALWAYS generated now, so the key decides
+                // nothing anymore. A config written for the old schema
+                // must FAIL rather than be silently dropped, and say
+                // what became of it — the same treatment as the
+                // replaced `workmux` key above.
+                "ssh-key" => {
+                    return Err(Error::Schema(
+                        "top level: the `ssh-key` key is obsolete — the sandbox's own SSH keypair \n                         is now ALWAYS generated into <repo>.mysbx/state/.ssh and bound at the \n                         sandbox's ~/.ssh (docs/design/config.md D22); remove the line"
+                            .to_owned(),
+                    ))
+                }
                 other => return Err(unknown("top level", other)),
             }
         }
@@ -982,23 +984,13 @@ mod tests {
     // ---- ssh-key (docs/design/config.md D22) ----------------------------
 
     #[test]
-    fn ssh_key_parses_as_an_optional_boolean() {
-        let c = Config::parse("ssh-key = true\n").unwrap();
-        assert_eq!(c.ssh_key, Some(true));
-        let c = Config::parse("ssh-key = false\n").unwrap();
-        assert_eq!(c.ssh_key, Some(false));
-        // The omitted key is `None` — the layer decided nothing, so the
-        // merge falls through to the other layer (D22).
-        assert_eq!(Config::default().ssh_key, None);
-    }
-
-    #[test]
-    fn ssh_key_rejects_non_booleans() {
-        // A wrong type names the key, like every other schema error.
-        let e = Config::parse("ssh-key = \"yes\"\n").unwrap_err();
+    fn ssh_key_is_refused_as_obsolete() {
+        // The keypair is unconditional now: a config that still sets
+        // the old `ssh-key` key must FAIL, naming what to remove.
+        let e = Config::parse("ssh-key = true\n").unwrap_err();
         let msg = e.to_string();
-        assert!(msg.contains("ssh-key"), "{msg}");
-        assert!(Config::parse("ssh-key = [true]\n").is_err());
+        assert!(msg.contains("obsolete"), "{msg}");
+        assert!(Config::parse("ssh-key = false\n").is_err());
     }
 
     // ---- allow-domains / connect-ports / listen-ports (bd

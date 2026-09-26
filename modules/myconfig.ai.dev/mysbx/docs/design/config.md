@@ -72,8 +72,6 @@ config that can execute is config that can escape.
 - which sandbox-home subdirectories persist across runs
   (`state-dirs`, see D15): entries backed by the sidecar's `state/`
   tree
-- whether the sandbox gets its own generated ssh keypair
-  (`ssh-key`, see D22): git over SSH without any host credential
 - the backend and its resource limits
 - network policy (`network = false` is the deny switch; the network is
   shared by default; the per-domain/port allowlist keys of D21;
@@ -1198,16 +1196,15 @@ D21 allowlist next to it is already a schema error (trivially today:
 `egress` is not yet a key, so both cannot be set at once), and D20
 keeps owning that mutual exclusion.
 
-### D22: `ssh-key` — the sandbox's own SSH keypair, generated into the sidecar state
+### D22: the sandbox's own SSH keypair, generated into the sidecar state
 
-```toml
-ssh-key = true
-```
-
-A boolean, off by default. When enabled, mysbx gives the sandbox its
-own git-over-SSH credential — WITHOUT forwarding any host credential:
-no host `~/.ssh` is ever mounted, no `SSH_AUTH_SOCK` is forwarded, and
-the key never existed on the host before the first run.
+Every sandbox gets its own git-over-SSH credential — WITHOUT
+forwarding any host credential: no host `~/.ssh` is ever mounted, no
+`SSH_AUTH_SOCK` is forwarded, and the key never existed on the host
+before the first run. The keypair is UNCONDITIONAL: there is no
+config key for it, and a `ssh-key = …` line in either layer is a hard
+schema error naming the key as obsolete (the same treatment as the
+replaced `workmux` key).
 
 **Where the key lives**: in the D15 state tree, as an implicit `.ssh`
 entry. The keypair is generated at
@@ -1274,9 +1271,8 @@ repair the incomplete, never touch the valid). With the key disabled
 it still prints an existing pair but refuses to invent one. The
 private key never leaves the sidecar/sandbox.
 
-**Merge**: a tri-state per layer like `multiplexer` (D17) — the
-sidecar wins when both decide, the user layer is the host-wide
-default, off when neither said anything.
+**Merge**: not a config key at all — nothing to merge, nothing for
+a layer to decide.
 
 In a CLONE run the key is not handled (workspace.md D4): no
 generation, no bind — a session clone starts without the repo's key.

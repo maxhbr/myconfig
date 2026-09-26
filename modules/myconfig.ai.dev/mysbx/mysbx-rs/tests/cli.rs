@@ -1393,7 +1393,16 @@ fn verbose_report_lists_state_dirs() {
         .parent()
         .unwrap()
         .join("repo.mysbx");
-    assert!(report.contains("state dirs:     1"), "{report}");
+    // The count includes the implicit `.ssh` entry of the
+    // unconditional keypair (D22): 2 entries, one declared.
+    assert!(report.contains("state dirs:     2"), "{report}");
+    assert!(
+        report.contains(&format!(
+            "  /mysbx-home/.ssh <-> {}/state/.ssh  [state]",
+            side.display()
+        )),
+        "{report}"
+    );
     assert!(
         report.contains(&format!(
             "  /mysbx-home/.local/share/opencode <-> {}/state/.local/share/opencode  [state]",
@@ -1405,15 +1414,11 @@ fn verbose_report_lists_state_dirs() {
 
 // ---- the sandbox ssh keypair (docs/design/config.md D22) ---------
 
-/// A fixture with `ssh-key = true` in the sidecar layer and the
-/// bubblewrap backend (the minimal shape a `ssh-key` run needs).
+/// A fixture with the bubblewrap backend (the minimal shape a run
+/// needs). The keypair is unconditional: no `ssh-key` key exists.
 fn fixture_ssh_key(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
     let (inv, repo, sidecar) = fixture(name, args);
-    std::fs::write(
-        sidecar.join("config.toml"),
-        "backend = \"bubblewrap\"\nssh-key = true\n",
-    )
-    .unwrap();
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
     (inv, repo, sidecar)
 }
 
@@ -1514,14 +1519,18 @@ fn the_ssh_pubkey_verb_prints_and_generates() {
 }
 
 #[test]
-fn the_ssh_pubkey_verb_refuses_to_invent_a_disabled_key() {
-    // A disabled key must not quietly re-enable itself: no pair, no
-    // generation — a refusal naming the option. An EXISTING pair
-    // still prints (the key may have been turned off after use),
-    // pinned by the next test's fixture.
-    let (inv, _, sidecar) = fixture("ssh-key-disabled", &["ssh-pubkey"]);
+fn the_ssh_pubkey_verb_refuses_a_disabled_key() {
+    // The old `ssh-key = false` is obsolete: the sidecar config must
+    // FAIL parsing, naming the key — the keypair is unconditional
+    // now, and a config that still sets the key must not load.
+    let (inv, _, sidecar) = fixture("ssh-key-disabled", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nssh-key = false\n",
+    )
+    .unwrap();
     let (code, _stdout, stderr) = run_binary(&inv);
-    assert_eq!(code, 70, "a disabled key must be refused, not invented");
+    assert_eq!(code, 70, "an obsolete ssh-key key must be refused");
     assert!(stderr.contains("ssh-key"), "{stderr}");
     assert!(!sidecar.join("state").exists(), "nothing was created");
 }

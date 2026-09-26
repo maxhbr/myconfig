@@ -258,7 +258,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // stores persist at their real sidecar paths, so the line must
     // say the backend's actual semantics instead of bwrap's. The
     // counts use the EFFECTIVE entries (the declared ones plus the
-    // implicit `.ssh` of a `ssh-key` run, config.md D22): the home IS
+    // implicit `.ssh` of the unconditional keypair, config.md D22): the home IS
     // partly sidecar-backed either way.
     let effective_state_dirs = r.merged.effective_state_dirs();
     if r.backend == "nono" {
@@ -285,7 +285,8 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // persists across runs and where the backing store lives. They are
     // implicit binds like the repo, so they belong with the mount
     // listing's provenance, not buried in prose. The implicit `.ssh`
-    // of a `ssh-key` run (config.md D22) is listed like a declared one
+    // of the unconditional keypair (config.md D22) is listed like a
+    // declared one
     // — it IS a state entry, and the ssh-key line below names the
     // keypair itself. In a clone run the state dirs (the implicit
     // `.ssh` included) are OFF (workspace.md D4) — said out loud when
@@ -324,12 +325,12 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     }
 
     // The sandbox's own SSH keypair (docs/design/config.md D22): a
-    // `ssh-key` run binds `<sidecar>/state/.ssh` at the sandbox `~/.ssh`
+    // run binds `<sidecar>/state/.ssh` at the sandbox `~/.ssh`
     // — an implicit state entry, so its provenance belongs here next to
     // the state dirs, not buried in prose. The PRIVATE key never
     // leaves the sidecar/sandbox; the line names the paths so the
     // operator can check the bind against the argv.
-    if r.merged.ssh_key && !clone_run {
+    if !clone_run {
         if r.backend == "nono" {
             p(format!(
                 "ssh key:        {} (generated, ed25519; no remap — reach it via GIT_SSH_COMMAND, not $HOME)",
@@ -650,7 +651,6 @@ mod tests {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
-            ssh_key: false,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         };
@@ -739,9 +739,12 @@ mod tests {
         assert!(!joined.contains("overridden"), "{joined}");
         assert!(joined.contains("PATH=/synth/bin  [tools]"), "{joined}");
         // The sandbox home is reported, and it is not the host's.
+        // The keypair's implicit `.ssh` entry (D22) persists in the
+        // sidecar even with nothing declared, so the home line counts
+        // it.
         assert!(
             joined.contains(&format!(
-                "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
+                "home:           {SANDBOX_HOME} (tmpfs + 1 state dir(s) persisted in the sidecar; the host home is not mounted)"
             )),
             "{joined}"
         );
@@ -951,7 +954,7 @@ mod tests {
         })
         .join("\n");
         assert!(
-            joined.contains("state dirs:     1 (rw, persisted in the sidecar)"),
+            joined.contains("state dirs:     2 (rw, persisted in the sidecar)"),
             "{joined}"
         );
         assert!(
@@ -965,7 +968,11 @@ mod tests {
     }
 
     #[test]
-    fn without_state_dirs_the_home_line_stays_the_tmpfs_one() {
+    fn without_state_dirs_the_home_line_names_the_implicit_ssh_entry() {
+        // The keypair is unconditional (D22): even with nothing
+        // declared, the implicit `.ssh` entry persists in the sidecar,
+        // so the home line names it — a bare tmpfs home is a clone
+        // run's shape only.
         let (repo, merged, host) = fixture_report();
         let params = Params {
             shell: "/synth/bin/bash",
@@ -1001,11 +1008,14 @@ mod tests {
         .join("\n");
         assert!(
             joined.contains(&format!(
-                "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
+                "home:           {SANDBOX_HOME} (tmpfs + 1 state dir(s) persisted in the sidecar; the host home is not mounted)"
             )),
             "{joined}"
         );
-        assert!(!joined.contains("state dirs:"), "{joined}");
+        assert!(
+            joined.contains("state dirs:     1 (rw, persisted in the sidecar)"),
+            "{joined}"
+        );
     }
 
     #[test]
@@ -1507,10 +1517,10 @@ mod tests {
         );
         // The state dirs are OFF (D4), said out loud — and the home
         // line does not claim the sidecar persistence a live run
-        // would show.
+        // would show. The count includes the implicit `.ssh` entry.
         assert!(
             joined.contains(
-                "state dirs:     off in a clone run (1 declared, not handled — workspace.md D4)"
+                "state dirs:     off in a clone run (2 declared, not handled — workspace.md D4)"
             ),
             "{joined}"
         );
