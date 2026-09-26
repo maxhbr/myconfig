@@ -511,6 +511,11 @@ emitted before every bind too, so `state-dirs` entries below them
 still land on top; `.config` deliberately gets none — the ro
 host-config seed mount stays the visibly-read-only surface.
 
+**Superseded by [backends.md D1](./backends.md)** (bd myconfig-6di.4):
+the `nono` backend becomes bubblewrap with nono inside and gets the
+same tmpfs home as the bubblewrap backend. Until that lands, the first
+cut described in the next paragraph applies.
+
 **The nono exception (backend = "nono").** The tmpfs-home row above is
 the bubblewrap/podman-gvisor shape; under nono there is NO tmpfs home
 and no `/mysbx-home`. nono has no bind or remap machinery (Landlock
@@ -1180,6 +1185,11 @@ The first enforcement is the nono backend (bd myconfig-6di.2). The
 refusal fires while the argv is laid out, BEFORE the `--dry-run` early
 return, so a dry run audits it too.
 
+**Superseded by [backends.md D1](./backends.md)** (bd myconfig-6di.4):
+the premise of the next paragraph is wrong, because nono allows
+outbound traffic by default. The layered backend maps the shared
+default onto bubblewrap's `--share-net` without nono network flags.
+
 **On nono the shared default itself is inexpressible.** nono mediates
 per connection (a seccomp baseline; only the listed domains and ports
 pass), so `backend = "nono"` with the default `network = true` and an
@@ -1260,6 +1270,10 @@ Per backend:
 | `bubblewrap` | `~/.ssh` = `/mysbx-home/.ssh` (the default identity lookup finds the key) |
 | `podman-gvisor` | `~/.ssh` = `/mysbx-home/.ssh` (same remap as every state entry) |
 | `nono` | no remap — the key sits at its real sidecar path; lib.rs pins `GIT_SSH_COMMAND = ssh -i <sidecar>/state/.ssh/id_ed25519 -o IdentitiesOnly=yes …` in the exec environment, so git finds it without any `$HOME/.ssh` lookup |
+
+The `nono` row is superseded by [backends.md D1](./backends.md) (bd
+myconfig-6di.4): the layered backend binds the key at
+`/mysbx-home/.ssh`, like the bubblewrap row.
 
 **UX — the public key is printed when created**, as a `## `-prefixed
 line on stdout (and the report names the bind: `ssh key: <dest> <->

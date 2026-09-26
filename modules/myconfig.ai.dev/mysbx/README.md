@@ -20,6 +20,8 @@ overview; design decisions, TODOs and any other long text belong in `docs/`:
     sidecar directory
   - [`docs/design/workspace.md`](./docs/design/workspace.md) - the workspace
     model: the live repo default and the opt-in clone sessions
+  - [`docs/design/backends.md`](./docs/design/backends.md) - how a backend
+    confines the payload (the layered `nono` backend)
 - `docs/TODOs/` - planned work, one file per TODO
 
 ## How to use:
