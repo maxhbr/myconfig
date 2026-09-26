@@ -331,7 +331,15 @@ let
   }
   // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
   // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; }
-  // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; };
+  // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; }
+  # The D21 allowlist keys (bd myconfig-xob): seeded host-wide, enforced
+  # per backend by the CLI (enforced on `nono`, refused on the others —
+  # never accepted-and-ignored, D21). Like the layers' own lists these
+  # concatenate: the user layer's entries land BEFORE the sidecar's, so
+  # a sidecar adds domains without restating the host-wide ones.
+  // lib.optionalAttrs (cfg.config.allowDomains != [ ]) { allow-domains = cfg.config.allowDomains; }
+  // lib.optionalAttrs (cfg.config.connectPorts != [ ]) { connect-ports = cfg.config.connectPorts; }
+  // lib.optionalAttrs (cfg.config.listenPorts != [ ]) { listen-ports = cfg.config.listenPorts; };
 in
 {
   options.myconfig.ai.dev.mysbx = with lib; {
@@ -1080,6 +1088,55 @@ in
               Per-agent modules append their tool's state directories
               here, exactly like they append config mounts to
               `mounts`.
+            '';
+          };
+
+          allowDomains = mkOption {
+            type = types.listOf types.str;
+            default = [ ];
+            example = [
+              "api.openai.com"
+              "github.com"
+            ];
+            description = ''
+              Host-wide `allow-domains` (./docs/design/config.md D21):
+              domains the sandbox may connect to — the network
+              allowlist, seeded into the generated user layer.
+
+              Enforcement is per backend and NEVER accepted-and-ignored
+              (D21): enforced on `backend = "nono"` (nono's egress
+              proxy, plain host names only — a URL/path form is refused,
+              bd myconfig-6di.4.4); `bubblewrap` and `podman-gvisor`
+              refuse the run when any allowlist key is set. These
+              options just seed the layer: the backend choice stays
+              per repository (sidecar) or per run (`--backend`).
+            '';
+          };
+          connectPorts = mkOption {
+            type = types.listOf types.port;
+            default = [ ];
+            example = [
+              443
+              22
+            ];
+            description = ''
+              Host-wide `connect-ports` (./docs/design/config.md D21):
+              outbound TCP ports the sandbox may target. Same per-backend
+              enforcement as `allowDomains` (enforced on `nono`, refused
+              on the other backends).
+            '';
+          };
+          listenPorts = mkOption {
+            type = types.listOf types.port;
+            default = [ ];
+            example = [ 8080 ];
+            description = ''
+              Host-wide `listen-ports` (./docs/design/config.md D21):
+              TCP ports the sandbox may listen on. Same per-backend
+              enforcement as `allowDomains`; on `nono`, listen ports
+              WITHOUT a domain/connect restriction are refused (with
+              only listen ports nono reports "outbound allowed", bd
+              myconfig-a14) — seed a real restriction, not port noise.
             '';
           };
         };

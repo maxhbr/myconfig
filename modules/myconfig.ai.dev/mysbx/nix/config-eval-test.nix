@@ -236,6 +236,15 @@ let
     nonoBackend = generated [
       { myconfig.ai.dev.mysbx.config.backend = "nono"; }
     ];
+    # The D21 allowlist keys (bd myconfig-xob): the module options seed
+    # the generated user layer, exactly the spelling the crate parses.
+    allowlist = generated [
+      {
+        myconfig.ai.dev.mysbx.config.allowDomains = [ "api.openai.com" "github.com" ];
+        myconfig.ai.dev.mysbx.config.connectPorts = [ 443 22 ];
+        myconfig.ai.dev.mysbx.config.listenPorts = [ 8080 ];
+      }
+    ];
     # The sandbox's own ssh keypair is unconditional (../docs/design/
     # config.md D22): the option is gone, and the generated layer
     # never carries an `ssh-key` key — the crate refuses one as
@@ -420,6 +429,20 @@ pkgs.runCommand "mysbx-generated-config-test"
     # as the `backend` key.
     grep -q '^backend = "nono"$' "$nonoBackend" \
       || fail "the nono backend selection is missing" "$nonoBackend"
+
+    # ... the D21 allowlist keys reach the layer with their exact key
+    # names and shapes (bd myconfig-xob); an empty module default
+    # leaves the keys out (the layers' lists concatenate with what a
+    # sidecar declares).
+    grep -q '^allow-domains = \["api.openai.com", "github.com"\]$' "$allowlist" \
+      || fail "the allowDomains seed is missing/mistyped" "$allowlist"
+    grep -q '^connect-ports = \[443, 22\]$' "$allowlist" \
+      || fail "the connectPorts seed is missing/mistyped" "$allowlist"
+    grep -q '^listen-ports = \[8080\]$' "$allowlist" \
+      || fail "the listenPorts seed is missing/mistyped" "$allowlist"
+    if grep -q '^allow-domains' "$nonoBackend"; then
+      fail "an empty allowDomains leaked a key" "$nonoBackend"
+    fi
 
     # 6a. the sandbox ssh keypair (D22) is unconditional: the option
     #     is gone, and the generated layer of a default config must
