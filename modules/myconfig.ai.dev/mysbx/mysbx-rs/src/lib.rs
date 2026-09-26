@@ -1843,10 +1843,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // bubblewrap backend does, and `nono run` wraps the
             // payload INSIDE that view. The nono binary and profile
             // are the tier wrapper's pins (MYSBX_NONO,
-            // MYSBX_NONO_PROFILE — an operator knob, `--set-default`;
-            // a mysbx-owned profile STORE PATH is bd
-            // myconfig-6di.4.3, this argv already carries whatever
-            // the pin names); the pinned coreutils `env` (MYSBX_ENV)
+            // MYSBX_NONO_PROFILE — pinned with `--set-default`, so an
+            // invocation can still point it at any nono profile NAME
+            // or store path). The DEFAULT is bd myconfig-6di.4.3:
+            // a wrapped build pins the mysbx profile STORE PATH the
+            // nix wrapper generated (nix/mysbx.nix, a reviewable
+            // policy with no `$HOME` denies); an unwrapped build
+            // falls back to "default", nono's built-in conservative
+            // profile. The pinned coreutils `env` (MYSBX_ENV)
             // applies the payload environment as nono's child, so
             // bwrap's `--clearenv`/`--setenv` carry only nono's
             // infrastructure variables and nono's own environment

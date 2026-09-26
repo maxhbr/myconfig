@@ -422,6 +422,40 @@ in
         mkdir "$out"
       '';
 
+  # bd myconfig-6di.4.3: the gate the packaging build's own `profile
+  # validate` cannot cover — the DELIVERED wrapper's profile pin (the
+  # exact store path MYSBX_NONO_PROFILE carries on a host)
+  # re-validated by the nono the wrapper pins. A drifted closure —
+  # nono and profile from different generations — fails here, not at
+  # a sandbox run. The expected CONTENTS are covered by the crate's
+  # golden argv fixtures (the profile value flows into the argv as
+  # `--profile <store path>`).
+  mysbx-nono-profile-test =
+    let
+      pin = pkg.passthru.nonoProfilePin;
+    in
+    pkgs.runCommand "mysbx-nono-profile-test"
+      {
+        nativeBuildInputs = [ pkgs.nono ];
+      }
+      ''
+        fail() {
+          echo "mysbx-nono-profile-test: $*" >&2
+          exit 1
+        }
+
+        test -s "${pin}" || fail "the profile pin is empty: ${pin}"
+
+        # empty-environment run so no host config can mask a miss:
+        # the same acceptance the packaging build ran, against the
+        # exact file a host's MYSBX_NONO_PROFILE names.
+        env -i PATH="$PATH" HOME="$TMPDIR" \
+          ${pkgs.nono}/bin/nono profile validate "${pin}" \
+          || fail "nono refused the pinned profile"
+
+        mkdir "$out"
+      '';
+
   mysbx-tests = crate.overrideAttrs (old: {
     doCheck = true;
     # The CLI tests drive the built binary as a subprocess with a

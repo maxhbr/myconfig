@@ -64,13 +64,9 @@
 #                     item 3). The host's own /etc/nix/nix.conf is
 #                     never bound: it may hold `access-tokens` and
 #                     other credentials, which a read-only bind hands
-#                     to the payload just the same. The pin is the
-#                     FILE `<dir>/nix.conf` of the directory below:
-#                     under bwrap it is bound at /etc/nix/nix.conf,
-#                     under nono the exec env points NIX_CONF_DIR at
-#                     the file's parent, which nix reads as the
-#                     directory containing nix.conf (bd
-#                     myconfig-bf2).
+#                     to the payload just the same. The pin is bound
+#                     at /etc/nix/nix.conf exactly when the daemon
+#                     socket is (with the shared network).
 #   MYSBX_CA_BUNDLE   a CA bundle (`ca-bundle.crt` of the `cacert`
 #                     package — nss-cacert — from THIS wrapper's
 #                     closure) whose store path the argv sets as
@@ -98,6 +94,21 @@
 #                     invocation can still override it. Default
 #                     `"default"`, nono's built-in conservative base
 #                     profile.
+#   MYSBX_NONO_PROFILE
+#                     the mysbx nono profile — a JSON store file
+#                     generated below (`nonoProfileJson`), the empty
+#                     policy that makes nono 0.74.0 a pure second
+#                     layer inside the bwrap view (docs/design/
+#                     backends.md D1 "nono's own inputs", bd
+#                     myconfig-6di.4.3): no profile grants, no `$HOME`
+#                     credential denies (with a grant covering an
+#                     ancestor those abort Landlock with
+#                     "deny-overlap is not enforceable"), `/tmp`
+#                     and `$TMPDIR` writes for the private tmpfs,
+#                     signal isolation. Pinned with `--set-default`:
+#                     an invocation can still override it with a
+#                     nono profile NAME (resolved in the sandbox
+#                     `$XDG_CONFIG_HOME`) or another store path.
 #   MYSBX_ENV        the coreutils `env` of the layered nono backend
 #                     (mysbx-rs/src/bwrap.rs, docs/design/
 #                     backends.md D1 "Two environments"): it runs as
@@ -256,11 +267,6 @@
   # `pkgs.` reference, keeps this file evaluable against any nixpkgs
   # revision the caller brings.
   nono ? null,
-  # The nono profile of every `nono run` (the crate's `--profile`
-  # flag): an operator knob like `gvisorPastaSpec` — pinned with
-  # `--set-default`, overridable per environment — never a closure
-  # path. `"default"` is nono's built-in conservative base profile.
-  nonoProfile ? "default",
   # The `ssh-keygen` generating the per-repo sandbox keypair
   # (mysbx-rs/src/lib.rs `ensure_ssh_key`, docs/design/config.md
   # D22): `null` pins nothing and the crate's PATH fallback applies —
@@ -401,6 +407,85 @@ let
   # (`+`, not `"${...}"`) so the string keeps the derivation-output
   # context of the directory.
   sandboxNixConf = sandboxNixConfDir + "/nix.conf";
+
+  # The mysbx nono profile (docs/design/backends.md D1 "nono's own
+  # inputs", bd myconfig-6di.4.3): a JSON store file that turns nono
+  # 0.74.0 into a pure second layer inside the bwrap view. nono's
+  # built-in profiles (the `default` group set) carry `$HOME`
+  # credential denies — browser configs, shell rc files — and a deny
+  # inside an ancestor the argv grants (`--allow /mysbx-home`) aborts
+  # Landlock on Linux with "deny-overlap is not enforceable" BEFORE
+  # the payload runs. The profile here carries:
+  #
+  # - `filesystem.write = ["/tmp", "$TMPDIR"]`: /tmp is bwrap's
+  #   private tmpfs and TMPDIR is /mysbx-nono/tmp (the `--setenv
+  #   TMPDIR` infra env), so both exist in the view; Landlock has no
+  #   default access, without this the payload cannot drop temp
+  #   files at all.
+  # - NO read/allow grants and NO deny: every filesystem grant is
+  #   derived from the RESOLVED bwrap layout by nono.rs (D1 "grants
+  #   follow the resolved layout") — a static profile grant could
+  #   only fight it, and the `$HOME` credential denies of the
+  #   built-in `default` profile are exactly what cannot be
+  #   expressed under a broad grant.
+  # - `network.block = false`: outbound network is the `nono run`
+  #   argv's decision (block/allowlist/proxy), the profile stays out
+  #   of it.
+  # - `security.signal_mode = "isolated"`: the payload runs in the
+  #   bwrap pid namespace — a signal from inside must not escape to
+  #   nono's own process.
+  # - `groups.include = []`: no nono group expansion — pack/group
+  #   contents are a moving target between nono releases, and the
+  #   extended upstream `default` groups are the $HOME denies above.
+  # - `workdir.access = "none"`: the CWD grant comes from the argv
+  #   (`--allow-cwd` + the repo grant), the profile adds nothing.
+  #
+  # The build VALIDATES the file with the pinned nono
+  # (`nono profile validate` — nono 0.74.0 parses profiles as
+  # JSON/JSONC, not TOML), so a schema change upstream fails the
+  # packaging, never a sandbox run. When the caller pins no nono the
+  # profile is not referenced by any pin either, so `nativeBuild`
+  # skips the validation step.
+  nonoProfileJson =
+    runCommand "mysbx-nono-profile.json"
+      {
+        passAsFile = [ "mysbxNonoProfileText" ];
+        mysbxNonoProfileText = builtins.toJSON {
+          meta = {
+            name = "mysbx";
+            description = "mysbx layered nono backend profile (docs/design/backends.md D1, bd myconfig-6di.4.3)";
+          };
+          groups = {
+            include = [ ];
+          };
+          security = {
+            signal_mode = "isolated";
+          };
+          network = {
+            block = false;
+          };
+          workdir = {
+            access = "none";
+          };
+          filesystem.write = [
+            "/tmp"
+            "$TMPDIR"
+          ];
+        };
+        nativeBuildInputs = lib.optionals (nono != null) [ nono ];
+      }
+      (
+        # nono parses the generated profile: a schema change upstream
+        # fails HERE, not at a sandbox run (`profile validate` is the
+        # same gate `nono profile promote` runs before writing a
+        # draft).
+        lib.optionalString (nono != null) ''
+          ${lib.getExe nono} profile validate "$mysbxNonoProfileTextPath"
+        ''
+        + ''
+          cp "$mysbxNonoProfileTextPath" "$out"
+        ''
+      );
   # One `--set MYSBX_MUX_ENTRY_<VALUE>` per available entry. The
   # variable names are the ones `config.rs::Multiplexer::entry_var`
   # reads — the mapping is `"MYSBX_MUX_ENTRY_" + uppercase(value)`, and
@@ -490,15 +575,17 @@ let
   waypipePins =
     lib.optionalString (waypipe != null) "--set MYSBX_WAYPIPE '${lib.getExe waypipe}' "
     + lib.optionalString (gvisorWaypipe != null) "--set MYSBX_GVISOR_WAYPIPE '${gvisorWaypipe}'";
-  # The nono backend pins: the binary (absolute store path, `--set`
-  # like every other closure pin) and the profile (an operator knob,
-  # `--set-default` like gvisorPastaSpec so an invocation can still
-  # override it). Both are gated on `nono != null` together: without
-  # the binary the profile pin would be meaningless noise in the
-  # wrapper, so a null-pinning caller gets neither.
+  # The nono backend pins of the layered backend (bd
+  # myconfig-6di.4.3): the binary (`--set`, an absolute store path
+  # like every other closure pin) and the mysbx profile (the
+  # generated store file `nonoProfileJson` above, `--set-default` —
+  # an invocation can still point MYSBX_NONO_PROFILE at any nono
+  # profile name or path). Both are gated on `nono != null`
+  # together: without the binary neither pin has a consumer in the
+  # sandbox, so a null-pinning caller gets neither.
   nonoPins = lib.optionalString (
     nono != null
-  ) "--set MYSBX_NONO '${lib.getExe nono}' --set-default MYSBX_NONO_PROFILE '${nonoProfile}'";
+  ) "--set MYSBX_NONO '${lib.getExe nono}' --set-default MYSBX_NONO_PROFILE '${nonoProfileJson}'";
   # The pinned `env` of the layered nono backend (backends.md D1,
   # "Two environments"): the coreutils `env` from THIS closure — an
   # absolute store path visible through the read-only `/nix/store`
@@ -560,6 +647,10 @@ symlinkJoin {
     # The pin the wrapper sets (`<dir>/nix.conf`), for the checks.nix
     # shape assertion of bd myconfig-bf2.
     sandboxNixConfPin = sandboxNixConf;
+    # The mysbx nono profile the wrapper sets (bd myconfig-6di.4.3),
+    # for the checks.nix gate that re-validates the DELIVERED file
+    # with the nono the wrapper pins (mysbx-nono-profile-test).
+    nonoProfilePin = nonoProfileJson;
     # The editor the generated `[env]` points `EDITOR`/`VISUAL` at, so
     # the variables and the closure can never name different builds.
     editor = neovim;

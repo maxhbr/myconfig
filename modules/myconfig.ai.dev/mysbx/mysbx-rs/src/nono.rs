@@ -48,11 +48,11 @@
 //! layout"):
 //!
 //! 1. `run` and its profile arg (`--profile`, from
-//!    `MYSBX_NONO_PROFILE` — today nono's built-in conservative
-//!    profile; a mysbx-owned profile STORE PATH is bd
-//!    myconfig-6di.4.3, this argv already carries whatever the pin
-//!    names) — WITHOUT the program name: lib.rs prepends the nono
-//!    binary itself, the same convention as the other builders.
+//!    `MYSBX_NONO_PROFILE` — the mysbx profile STORE PATH the nix
+//!    wrapper pins, bd myconfig-6di.4.3; an operator can still point
+//!    it at any nono profile name or path — the argv carries whatever
+//!    the pin names) — WITHOUT the program name: lib.rs prepends the
+//!    nono binary itself, the same convention as the other builders.
 //! 2. the workspace, rw + `--allow-cwd` (the nono-app.nix pairing):
 //!    the repo root in a live run — or the clone bound AT the repo
 //!    path in a clone run, which the same grant covers (workspace.md
@@ -135,10 +135,10 @@ pub struct Params<'a> {
     /// own path (D3), so the repo-root grant covers it either way.
     pub workspace: Workspace<'a>,
     /// The nono profile of every `nono run` (`MYSBX_NONO_PROFILE`):
-    /// today nono's built-in conservative profile, tomorrow a
-    /// mysbx-owned profile store path (bd myconfig-6di.4.3 — the
-    /// argv shape already fits, `--profile` takes whatever the pin
-    /// names).
+    /// the mysbx profile STORE PATH the nix wrapper pins (bd
+    /// myconfig-6di.4.3 — a reviewable policy matching the bwrap
+    /// view), or any nono profile name/path an operator picks. The
+    /// argv carries whatever the pin names.
     pub profile: &'a str,
 }
 

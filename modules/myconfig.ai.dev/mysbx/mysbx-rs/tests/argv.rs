@@ -4662,7 +4662,11 @@ fn podman_rootless_defaults_golden() {
 const NONO_BIN: &str = "nono";
 
 /// A synthetic nono params: the `default` profile of lib.rs's
-/// `MYSBX_NONO_PROFILE` fallback, live workspace by default.
+/// `MYSBX_NONO_PROFILE` fallback (bd myconfig-6di.4.3: a WRAPPED
+/// build pins the mysbx profile store path from nix/mysbx.nix
+/// instead — the fixtures use the unwrapped fallback spelling, the
+/// same `env_or` default the cli tests' dry-runs print), live
+/// workspace by default.
 fn nono_params() -> NonoParams<'static> {
     NonoParams {
         workspace: Workspace::Live,
