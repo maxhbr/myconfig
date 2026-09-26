@@ -594,11 +594,13 @@ mod tests {
             network: false,
             mounts: vec![
                 Mount {
+                    file: false,
                     path: "/synth/shared".into(),
                     dest: None,
                     mode: Mode::Rw,
                 },
                 Mount {
+                    file: false,
                     path: "/synth/shared/sub".into(),
                     dest: Some("/inside".into()),
                     mode: Mode::Ro,
@@ -1314,6 +1316,7 @@ mod tests {
         // from a file the operator never edited.
         let (repo, mut merged, host) = fixture_report();
         merged.mounts.push(Mount {
+            file: false,
             path: "/synth/granted".into(),
             dest: None,
             mode: Mode::Ro,

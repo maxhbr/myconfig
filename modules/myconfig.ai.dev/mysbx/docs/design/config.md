@@ -266,6 +266,13 @@ A `[[mounts]]` host path may be written in three ways:
 mounted is the real target of a `~/…`, `../…` or symlinked spelling,
 not the spelling itself.
 
+The canonicalization also records the source KIND (bd myconfig-2pv):
+directory versus single regular file. bubblewrap binds both the same
+way, but nono's Landlock grants differ — a file dest needs
+`--allow-file`/`--read-file`, a directory grant on a file path is
+refused by nono 0.74.0. The kind never widens anything: it is
+metadata of the resolved source, re-derived on every load.
+
 Resolution and canonicalization happen when the config is loaded, before
 the merge and before the backend starts. Broken paths fail fast with a
 clear error — naming the file, the path *as written* and, when it

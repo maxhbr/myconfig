@@ -1330,6 +1330,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                         }
                     };
                 merged.mounts.push(config::Mount {
+                    // The CLI kind is set here, not by the parser (bd
+                    // myconfig-2pv): the resolved path's file-ness —
+                    // the same symlink_metadata the merge's
+                    // canonicalization uses — decides the nono grant
+                    // flag, so `--ro somefile.json` grants the file
+                    // single-file kind, not a directory grant that
+                    // nono would refuse.
+                    file: std::fs::symlink_metadata(&canon)
+                        .map(|md| !md.is_dir())
+                        .unwrap_or(false),
                     path: canon.to_string_lossy().into_owned(),
                     dest: None,
                     mode,

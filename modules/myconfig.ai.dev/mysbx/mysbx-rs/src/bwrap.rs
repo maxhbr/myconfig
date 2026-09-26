@@ -2179,11 +2179,13 @@ mod tests {
         let mut cfg = cfg;
         cfg.mounts = vec![
             Mount {
+                file: false,
                 path: "/synth/ro-src".into(),
                 dest: None,
                 mode: Mode::Ro,
             },
             Mount {
+                file: false,
                 path: "/synth/nested".into(),
                 dest: Some("/inside/dest".into()),
                 mode: Mode::Rw,
@@ -2381,6 +2383,7 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/host-tmp".into(),
             dest: Some("/tmp".into()),
             mode: Mode::Rw,
@@ -2406,6 +2409,7 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/everything".into(),
             dest: Some("/".into()),
             mode: Mode::Rw,
@@ -2425,6 +2429,7 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/proc-faker".into(),
             dest: Some("/proc/sys".into()),
             mode: Mode::Ro,
@@ -2445,6 +2450,7 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/data".into(),
             dest: Some("/nix".into()),
             mode: Mode::Rw,
@@ -2464,6 +2470,7 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/data".into(),
             dest: Some("/etc".into()),
             mode: Mode::Ro,
@@ -2483,6 +2490,7 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/everything".into(),
             dest: Some("/x/..".into()),
             mode: Mode::Rw,
@@ -2502,6 +2510,7 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/proc-faker".into(),
             dest: Some("/nix/../proc".into()),
             mode: Mode::Rw,
@@ -2534,6 +2543,7 @@ mod tests {
             let (repo, cfg, p) = shell_repo_defaults();
             let mut cfg = cfg;
             cfg.mounts = vec![Mount {
+                file: false,
                 path: "/synth/data".into(),
                 dest: Some(dest.into()),
                 mode: Mode::Ro,
@@ -2553,6 +2563,7 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/data".into(),
             dest: Some("/tmp/../synth/dest".into()),
             mode: Mode::Ro,
@@ -2574,16 +2585,19 @@ mod tests {
         let mut cfg = cfg;
         cfg.mounts = vec![
             Mount {
+                file: false,
                 path: "/synth/a".into(),
                 dest: Some("/usr/bin2".into()),
                 mode: Mode::Ro,
             },
             Mount {
+                file: false,
                 path: "/synth/b".into(),
                 dest: Some("/tmpx".into()),
                 mode: Mode::Ro,
             },
             Mount {
+                file: false,
                 path: "/synth/c".into(),
                 dest: Some("/nix/storex".into()),
                 mode: Mode::Ro,
@@ -2617,6 +2631,7 @@ mod tests {
         let (repo, cfg, p) = shell_repo_defaults();
         let mut cfg = cfg;
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/data".into(),
             dest: Some("/synth/repo/.data".into()),
             mode: Mode::Ro,
@@ -2728,6 +2743,7 @@ mod tests {
         ] {
             let (repo, mut cfg, p) = mux_defaults();
             cfg.mounts = vec![Mount {
+                file: false,
                 path: "/synth/data".into(),
                 dest: Some(dest.to_string()),
                 mode: Mode::Ro,
@@ -2743,6 +2759,7 @@ mod tests {
         // mountable (same rule as `/usr/bin2` for the base paths).
         let (repo, mut cfg, p) = mux_defaults();
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/data".into(),
             dest: Some(format!("{MUX_SOCKET_DIR}2")),
             mode: Mode::Ro,
@@ -2775,6 +2792,7 @@ mod tests {
         // and a config may use it (D16: nothing is reserved globally).
         let (repo, mut cfg, p) = shell_repo_defaults();
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/data".into(),
             dest: Some(MUX_SOCKET_DIR.to_string()),
             mode: Mode::Ro,
@@ -2884,6 +2902,7 @@ mod tests {
         ] {
             let (repo, mut cfg, p) = display_defaults();
             cfg.mounts = vec![Mount {
+                file: false,
                 path: "/synth/data".into(),
                 dest: Some(dest.to_string()),
                 mode: Mode::Ro,
@@ -2922,6 +2941,7 @@ mod tests {
         // config may use (D18: nothing is reserved globally).
         let (repo, mut cfg, p) = shell_repo_defaults();
         cfg.mounts = vec![Mount {
+            file: false,
             path: "/synth/data".into(),
             dest: Some(WAYPIPE_DISPLAY_PATH.to_string()),
             mode: Mode::Ro,

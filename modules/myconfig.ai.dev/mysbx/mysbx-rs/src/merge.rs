@@ -415,7 +415,17 @@ fn canonicalize_layer(
                 path: resolved.clone(),
                 source: e.to_string(),
             })?;
-            Ok((canon, m.clone()))
+            // The source KIND travels with the canonicalized path (bd
+            // myconfig-2pv): directory versus single file decides the
+            // nono grant flag later. Symlinks are already resolved by
+            // the canonicalize, so metadata reports the real target's
+            // kind — a mount never grants a thing it does not bind.
+            let file = std::fs::symlink_metadata(&canon)
+                .map(|md| !md.is_dir())
+                .unwrap_or(false);
+            let mut m = m.clone();
+            m.file = file;
+            Ok((canon, m))
         })
         .collect()
 }
@@ -555,6 +565,7 @@ pub fn merge(
             path: canon.to_string_lossy().into_owned(),
             dest: m.dest.clone(),
             mode: m.mode,
+            file: m.file,
         })
         .collect();
 

@@ -238,6 +238,18 @@ pub struct Mount {
     /// Defaults to `ro` (D9: nothing from the host filesystem unless
     /// declared).
     pub mode: Mode,
+    /// The kind of the RESOLVED source (bd myconfig-2pv): a regular
+    /// file, not a directory. Set by the merge's canonicalization
+    /// step (D8 — the only place that touches the filesystem, so it
+    /// is also the only place that can know), never by the parser
+    /// (string-level only); the parser's own synthetic mounts carry
+    /// `false`, and so does every literal the callers that bypass
+    /// the merge construct (the argv builders run on `Merged`).
+    /// Consumers bind files exactly like directories (bwrap does),
+    /// but nono's Landlock grants differ: a directory grant targets
+    /// a DIRECTORY and a file grant a single file — the grant
+    /// emitters pick the flag from this flag (nono.rs section 4).
+    pub file: bool,
 }
 
 // The repo itself is deliberately not part of the schema: it is the sidecar's
@@ -500,7 +512,12 @@ fn mounts(value: &Value) -> Result<Vec<Mount>, Error> {
         }
         let path =
             path.ok_or_else(|| Error::Schema(format!("{at}: missing required key `path`")))?;
-        out.push(Mount { path, dest, mode });
+        out.push(Mount {
+            file: false,
+            path,
+            dest,
+            mode,
+        });
     }
     Ok(out)
 }

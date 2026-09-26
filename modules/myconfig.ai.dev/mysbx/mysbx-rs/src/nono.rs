@@ -72,8 +72,11 @@
 //!    clone run downgrades every entry to ro (workspace.md D4). A
 //!    dest below `/mysbx-home` needs no grant: the single rw grant of
 //!    section 3 covers it (and its read-only bind keeps it ro).
-//!    `--read-file`/`--allow-file` for file dests is bd
-//!    myconfig-2pv, not yet expressible in the config schema.
+//!    A single-FILE source grants `--allow-file`/`--read-file` (bd
+//!    myconfig-2pv): the kind of the resolved source travels in the
+//!    merged config (`Mount::file`, set by the merge's
+//!    canonicalization, config.md D8) — nono refuses a directory
+//!    grant on a file path with "path … is not a directory".
 //! 5. `--read /nix/store` unconditional (the tier invariant of
 //!    nono-app.nix's readOnlyDirFlags): the pinned store paths of
 //!    the shell, the tool closure and everything the wrapper baked
@@ -245,25 +248,34 @@ pub fn nono_run_argv(
     // wins — the same rule bubblewrap applies — and a clone run
     // downgrades every entry to ro (workspace.md D4). First
     // occurrence fixes the emission order, so a rebind updates the
-    // mode in place (deterministic and layout-faithful).
-    let mut dests: Vec<(String, Mode)> = Vec::new();
+    // mode in place (deterministic and layout-faithful). The kind is
+    // tracked alongside the mode (bd myconfig-2pv): a single-file
+    // source grants `--allow-file`/`--read-file` — a directory grant
+    // on a file path is refused by nono (`path ... is not a
+    // directory`, verified against 0.74.0); the LAST bind at a dest
+    // decides the kind, exactly like the mode.
+    let mut dests: Vec<(String, Mode, bool)> = Vec::new();
     for m in &cfg.mounts {
         let dest = m.dest.clone().unwrap_or_else(|| m.path.clone());
         let mode = if clone_run { Mode::Ro } else { m.mode };
-        match dests.iter_mut().find(|(d, _)| *d == dest) {
-            Some(slot) => slot.1 = mode,
-            None => dests.push((dest, mode)),
+        match dests.iter_mut().find(|(d, _, _)| *d == dest) {
+            Some(slot) => {
+                slot.1 = mode;
+                slot.2 = m.file;
+            }
+            None => dests.push((dest, mode, m.file)),
         }
     }
-    for (dest, mode) in &dests {
+    for (dest, mode, file) in &dests {
         let dest_norm = crate::bwrap::normalize(dest);
         if dest_norm.starts_with(Path::new(SANDBOX_HOME)) {
             continue; // covered by the /mysbx-home grant
         }
-        if *mode == Mode::Rw {
-            argv.extend(["--allow".into(), dest.clone()]);
-        } else {
-            argv.extend(["--read".into(), dest.clone()]);
+        match (mode, file) {
+            (Mode::Rw, false) => argv.extend(["--allow".into(), dest.clone()]),
+            (Mode::Rw, true) => argv.extend(["--allow-file".into(), dest.clone()]),
+            (Mode::Ro, false) => argv.extend(["--read".into(), dest.clone()]),
+            (Mode::Ro, true) => argv.extend(["--read-file".into(), dest.clone()]),
         }
     }
 

@@ -70,6 +70,20 @@ fn base(network: bool) -> Merged {
 
 fn make_mount(path: &str, dest: Option<&str>, mode: Mode) -> Mount {
     Mount {
+        file: false,
+        path: path.to_string(),
+        dest: dest.map(|d| d.to_string()),
+        mode,
+    }
+}
+
+/// A single-FILE mount: the same factory with the kind flag an
+/// operator's real config carries for regular files (bd myconfig-2pv;
+/// the merge sets it from the canonicalized source, the tests set it
+/// directly).
+fn make_file_mount(path: &str, dest: Option<&str>, mode: Mode) -> Mount {
+    Mount {
+        file: true,
         path: path.to_string(),
         dest: dest.map(|d| d.to_string()),
         mode,
@@ -4998,6 +5012,264 @@ fn nono_golden_rebind_rw_over_ro() {
 }
 
 #[test]
+#[test]
+fn nono_golden_file_mount_outside_the_home() {
+    // bd myconfig-2pv: a single-FILE source outside /mysbx-home gets
+    // the file kind grant — `--read-file`/`--allow-file`, never the
+    // directory flags nono refuses with "path ... is not a directory"
+    // (the directory bind of bwrap binds files fine; only the Landlock
+    // layer needs the distinction). The kind travels in the merged
+    // config (`Mount::file`, set by the merge's canonicalization, D8).
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts = vec![
+        make_file_mount(
+            "/synth/keys/id_ed25519.pub",
+            Some("/inside/key.pub"),
+            Mode::Ro,
+        ),
+        make_file_mount("/synth/data/notes.md", None, Mode::Rw),
+        // a DIRECTORY next to the file mounts, for the golden's
+        // contrast: same dest-position rules, dir flags.
+        make_mount("/synth/data/cache", None, Mode::Ro),
+    ];
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert_golden("nono-file-mount.txt", &argv);
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--read-file" && w[1] == "/inside/key.pub"),
+        "the ro file dest gets --read-file: {argv:?}"
+    );
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--allow-file" && w[1] == "/synth/data/notes.md"),
+        "the rw file mount gets --allow-file: {argv:?}"
+    );
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--read" && w[1] == "/synth/data/cache"),
+        "the dir mount keeps the directory flag: {argv:?}"
+    );
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| (w[0] == "--read" || w[0] == "--allow")
+                && (w[1] == "/inside/key.pub" || w[1] == "/synth/data/notes.md")),
+        "no directory flag on a file dest: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_file_mount_below_the_home_needs_no_grant() {
+    // The file kind under `/mysbx-home`: covered by the single rw
+    // home GRANT (a directory grant covers the files inside it),
+    // skipped like every dest below the home — and no
+    // `--read-file` noise appears for the seeds.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts.push(make_file_mount(
+        "/synth/dotfiles/workmux.yaml",
+        Some("/mysbx-home/.config/workmux/config.yaml"),
+        Mode::Ro,
+    ));
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert!(
+        !argv.windows(2).any(|w| (w[0] == "--allow"
+            || w[0] == "--read"
+            || w[0] == "--allow-file"
+            || w[0] == "--read-file")
+            && w[1].contains("workmux")),
+        "a file dest below the home appears in no grant: {argv:?}"
+    );
+    // The bind itself is the bubblewrap backend's ro file bind.
+    assert!(
+        argv.windows(3).any(|w| w[0] == "--ro-bind"
+            && w[1] == "/synth/dotfiles/workmux.yaml"
+            && w[2] == "/mysbx-home/.config/workmux/config.yaml"),
+        "the seed is bound at its dest: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_rebind_ro_over_rw_with_file_doors() {
+    // bd myconfig-2pv meets bd myconfig-uay: the LAST bind at a dest
+    // decides BOTH the mode and the kind — a file rw over a dir ro
+    // emits only `--allow-file`, a dir ro over a file rw only
+    // `--read`.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts = vec![
+        make_file_mount("/synth/keys/ro-file", Some("/inside/x"), Mode::Rw),
+        make_mount("/synth/data/ro-dir", Some("/inside/x"), Mode::Ro),
+    ];
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    let grants: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| {
+            (w[0] == "--allow"
+                || w[0] == "--read"
+                || w[0] == "--allow-file"
+                || w[0] == "--read-file")
+                && w[1] == "/inside/x"
+        })
+        .map(|w| w[0].as_str())
+        .collect();
+    assert_eq!(
+        grants,
+        ["--read"],
+        "one grant, the later bind's kind and mode: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_a_dest_below_a_writable_dest_is_refused_for_the_layered_run_too() {
+    // bd myconfig-uay part 2, layered: an `ro` DEST below an rw
+    // mount's dest cannot narrow — the payload could plant a symlink
+    // in the rw tree and redirect the ro bind (review-2 item 2). The
+    // bwrap layout refuses it for EVERY backend; the layered run
+    // shares the same check and never emits the widening grant.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts = vec![
+        make_mount("/synth/u", None, Mode::Rw),
+        make_mount("/synth/u/.ssh", None, Mode::Ro),
+    ];
+    let err = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("an ro dest below an rw dest must be refused");
+    assert!(
+        matches!(
+            err,
+            LayeredError::Bwrap(BwrapError::DestBelowWritable { .. })
+        ),
+        "wrong error: {err:?}"
+    );
+
+    // And the reverse order — the narrow ro bind FIRST (the wider rw
+    // dest hides it, a different refusal the layout carries: hidden
+    // mounts, not symlinkable dests). Either declaration order keeps
+    // the pair out of the sandbox.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts = vec![
+        make_mount("/synth/u/.ssh", None, Mode::Ro),
+        make_mount("/synth/u", None, Mode::Rw),
+    ];
+    let err = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("the same shape in the other order must be refused too");
+    assert!(
+        matches!(
+            err,
+            LayeredError::Bwrap(BwrapError::HiddenMount { .. })
+                | LayeredError::Bwrap(BwrapError::DestBelowWritable { .. })
+        ),
+        "wrong error: {err:?}"
+    );
+}
+
+#[test]
+fn nono_clone_downgrade_grants_stay_read_only() {
+    // bd myconfig-uay, the clone consistency: a clone run downgrades
+    // EVERY configured mount to ro (workspace.md D4) — the grants
+    // mirror the downgrade, so a pre-rebind rw source ends as a
+    // `--read` grant at its dest, never `--allow`.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts = vec![make_mount(
+        "/synth/data/cache",
+        Some("/inside/cache"),
+        Mode::Rw,
+    )];
+    let params = NonoParams {
+        workspace: Workspace::Clone {
+            clone: Path::new(SYNTH_CLONE),
+        },
+        ..nono_params()
+    };
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let grants: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| (w[0] == "--allow" || w[0] == "--read") && w[1] == "/inside/cache")
+        .map(|w| w[0].as_str())
+        .collect();
+    assert_eq!(
+        grants,
+        ["--read"],
+        "the clone's ro downgrade reaches the grant: {argv:?}"
+    );
+    // The later rw rebind is downgraded too, so the effective mode at
+    // the shared dest stays ro.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts = vec![
+        make_mount("/synth/data/ro", Some("/inside/x"), Mode::Ro),
+        make_mount("/synth/data/rw", Some("/inside/x"), Mode::Rw),
+    ];
+    let params = NonoParams {
+        workspace: Workspace::Clone {
+            clone: Path::new(SYNTH_CLONE),
+        },
+        ..nono_params()
+    };
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let grants: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| (w[0] == "--allow" || w[0] == "--read") && w[1] == "/inside/x")
+        .map(|w| w[0].as_str())
+        .collect();
+    assert_eq!(
+        grants,
+        ["--read"],
+        "clone downgrades both entries: {argv:?}"
+    );
+}
+
 fn nono_rebind_ro_over_rw_effective_mode_is_rw() {
     // The other direction: an rw rebind over an ro one — the last
     // bind wins, the grant is rw.
