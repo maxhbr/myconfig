@@ -11,10 +11,11 @@
 # This is the "single binary on the host" path, distinct from the
 # llama-swap-orchestrated per-(model, device) wrappers in ./llama-swap.nix.
 #
-# With `myconfig.ai.llama-cpp.serviceVariant = "llama-server"` the
-# router is pinned to one `serviceDevice`, so the default reuses that
-# device's build from `lib/devices.nix` (already built for the
-# per-device wrappers) instead of compiling an extra multi-backend one.
+# The default is always one of the single-backend builds from
+# `lib/devices.nix` (the same ones the per-device wrappers use, and
+# cacheable except CUDA): the router's `serviceDevice` if the
+# llama-server service is enabled, else CUDA > ROCm > Vulkan by GPU
+# variant, else the CPU-only `pkgs.llama-cpp`.
 {
   config,
   options,
@@ -38,16 +39,19 @@ let
   hasVariant = v: builtins.elem v gpuvariants;
   llamaCfg = config.myconfig.ai.llama-cpp;
   inherit (import ./lib { inherit lib pkgs; }) devices;
-  my-llama-cpp =
+  defaultDevice =
     if llamaCfg.serviceVariant == "llama-server" && llamaCfg.serviceDevice != null then
-      devices.packageForDevice llamaCfg.serviceDevice
+      llamaCfg.serviceDevice
+    else if hasVariant "nvidia" then
+      "CUDA0"
+    else if hasVariant "amd" then
+      "ROCm0"
+    else if hasVariant "amd-no-rocm" then
+      "Vulkan0"
     else
-      pkgs.llama-cpp.override {
-        rocmSupport = hasVariant "amd";
-        vulkanSupport = (hasVariant "amd-no-rocm" || hasVariant "amd");
-        cudaSupport = hasVariant "nvidia";
-        blasSupport = false;
-      };
+      null;
+  my-llama-cpp =
+    if defaultDevice != null then devices.packageForDevice defaultDevice else pkgs.llama-cpp;
   hmEnabled = lib.hasAttrByPath [ "home-manager" "sharedModules" ] options;
 in
 {
