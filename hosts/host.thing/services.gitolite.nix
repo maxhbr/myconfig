@@ -8,6 +8,9 @@
 
 {
   config = {
-    myconfig.gitolite.enable = true;
+    myconfig.gitolite = {
+      enable = true;
+      keysubdirsAsGroups = true;
+    };
   };
 }
