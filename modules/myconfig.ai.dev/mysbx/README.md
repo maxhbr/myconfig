@@ -281,9 +281,11 @@ recreate-if-deleted-or-invalid; an operator-provided pair is never
 overwritten. On creation the PUBLIC key is printed (and `mysbx
 ssh-pubkey` prints it on demand — unprefixed, ready to paste as a
 GitHub deploy key or a gitolite keydir entry, e.g. for the gitolite on
-hosts thing/vserver). Under the nono backend there is no path remap:
-the key stays at its sidecar path and `GIT_SSH_COMMAND` points git at
-it. See `docs/design/config.md` D22.
+hosts thing/vserver). See `docs/design/config.md` D22. (The
+nono backend is layered on the bubblewrap layout —
+[`docs/design/backends.md`](./docs/design/backends.md) D1 — so the
+key sits at the sandbox's `~/.ssh` there too, exactly like on
+bubblewrap.)
 
 ### The multiplexer session (`multiplexer`)
 
@@ -481,7 +483,11 @@ dev-tool closure in [`nix/mysbx.nix`](./nix/mysbx.nix) instead, next to
   `backend = "podman-gvisor"` maps the merged config onto a rootless
   `podman run --runtime=runsc`; not yet exercised on a host
 - nono (Landlock + seccomp, `backend = "nono"`) — the third backend (bd
-  myconfig-6di.2): the merged config maps onto a `nono run`; the
+  myconfig-6di.2, redesigned as the layered backend of
+  [`docs/design/backends.md`](./docs/design/backends.md) D1): bubblewrap
+  builds the filesystem view exactly as the bubblewrap backend does, and
+  `nono run` confines the payload inside it — Landlock grants derived
+  from the resolved layout, plus seccomp and the egress proxy; the
   per-domain/port network allowlist is enforced here and refused on
   backends that cannot (`config.md` D21). Not yet exercised on a host.
 ## On the Roadmap:

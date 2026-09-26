@@ -513,8 +513,8 @@ host-config seed mount stays the visibly-read-only surface.
 
 **Superseded by [backends.md D1](./backends.md)** (bd myconfig-6di.4):
 the `nono` backend becomes bubblewrap with nono inside and gets the
-same tmpfs home as the bubblewrap backend. Until that lands, the first
-cut described in the next paragraph applies.
+same tmpfs home as the bubblewrap backend. That has LANDED — the next
+paragraph described the first cut and no longer applies.
 
 **The nono exception (backend = "nono").** The tmpfs-home row above is
 the bubblewrap/podman-gvisor shape; under nono there is NO tmpfs home

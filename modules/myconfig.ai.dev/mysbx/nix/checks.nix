@@ -366,16 +366,18 @@ in
         touch "$out"
       '';
 
-  # bd myconfig-bf2: the `MYSBX_NIX_CONF` pin must be a file named
-  # `nix.conf` inside a directory, because the nono backend's exec
-  # environment sets `NIX_CONF_DIR` to the pin's PARENT — a bare store
-  # file made that parent `/nix/store`, and nix read no configuration
-  # at all (no flakes inside the sandbox). Two gates: an eval-time
-  # assertion on the path shape, and a build-time one where the REAL
-  # pinned nix resolves its configuration from the REAL pinned
-  # directory — `nix config show experimental-features` must report
-  # `flakes`, which is only possible when the file was actually
-  # loaded.
+  # The `MYSBX_NIX_CONF` pin is a file named `nix.conf` inside a
+  # directory: the wrapper pins `sandboxNixConfDir/nix.conf`, the
+  # shape bwrap binds at /etc/nix/nix.conf. (The original reason was
+  # the pure-nono backend's `NIX_CONF_DIR = <parent>` consumption, bd
+  # myconfig-bf2 — that backend is gone, backends.md D1, but the pin
+  # shape stays a wrapper invariant and the gates stay: a bare store
+  # file would silently change what the sandbox reads.) Two gates: an
+  # eval-time assertion on the path shape, and a build-time one where
+  # the REAL pinned nix resolves its configuration from the REAL
+  # pinned directory — `nix config show experimental-features` must
+  # report `flakes`, which is only possible when the file was
+  # actually loaded.
   mysbx-nix-conf-pin-test =
     let
       lib = inputs.nixpkgs.lib;
@@ -405,9 +407,8 @@ in
           || fail "the pin's parent has no nix.conf: $pin"
 
         # the REAL nix resolves the REAL configuration from the
-        # directory the nono backend would set NIX_CONF_DIR to —
-        # the exact acceptance of bd myconfig-bf2, checked in an
-        # empty environment so no host config can mask a miss
+        # pinned directory — checked in an empty environment so no
+        # host config can mask a miss
         features=$(env -i \
           PATH="$PATH" \
           HOME="$TMPDIR" \

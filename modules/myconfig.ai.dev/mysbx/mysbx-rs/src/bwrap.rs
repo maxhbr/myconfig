@@ -90,6 +90,16 @@ pub type HostEnv = BTreeMap<String, String>;
 /// in the host home.
 pub const SANDBOX_HOME: &str = "/mysbx-home";
 
+/// nono's own state tmpfs of a layered run (docs/design/
+/// backends.md D1, "nono's own inputs"): the `HOME` and XDG
+/// directories of [`inner_env`] point below it, so the nono inner
+/// wrapper's config, profile and state lookups resolve inside a
+/// tmpfs the payload is never granted. A base path of the layered
+/// layout — [`base_binds`] creates it and [`check_dest`] protects
+/// it in both directions — never seeded by a mount, never part of
+/// the payload's environment.
+pub const NONO_STATE: &str = "/mysbx-nono";
+
 /// The directory holding the private socket of a multiplexer payload
 /// (docs/design/config.md D16, generalized by D17), exported as
 /// `TMUX_TMPDIR` and used by the entry scripts as
@@ -250,6 +260,46 @@ pub struct Params<'a> {
     /// not come from a configuration layer, and no TOML key can name
     /// it (workspace.md D1).
     pub workspace: Workspace<'a>,
+    /// The **inner wrapper** of a layered run (docs/design/
+    /// backends.md D1), or `None` for a plain bwrap payload: the nono
+    /// backend pins the `nono run` argv — built by [`crate::nono`]
+    /// from this same resolved layout — as the prefix bwrap inserts
+    /// between its own `--` separator and the payload, plus the
+    /// pinned `env` that applies the payload environment as nono's
+    /// child. When set, the environment section carries ONLY nono's
+    /// infrastructure variables ([`inner_env`]) and [`base_binds`]
+    /// grows the [`NONO_STATE`] tmpfs; the bubblewrap backend keeps
+    /// its byte-identical argv by passing `None`.
+    pub inner: Option<Inner<'a>>,
+}
+
+/// The inner wrapper of a layered backend run (docs/design/
+/// backends.md D1): bubblewrap builds the filesystem view exactly as
+/// the bubblewrap backend does, and this wraps the payload INSIDE
+/// that view — Landlock and seccomp on top of the namespace
+/// isolation.
+///
+/// The struct is deliberately opaque to this module: WHICH grants
+/// and network flags the wrapper needs are the nono builder's
+/// business ([`crate::nono`], derived from this same resolved
+/// layout); bwrap only places the argv and keeps the two
+/// environments separate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Inner<'a> {
+    /// The wrapper's argv INCLUDING its program name — nono's
+    /// `run --profile <path> <grants> <network flags>` behind the
+    /// nono binary itself, all of it inserted after bwrap's own `--`
+    /// separator.
+    pub argv: &'a [String],
+    /// A pinned coreutils `env` (MYSBX_ENV) that runs as the
+    /// wrapper's child and applies the payload environment: `-u`
+    /// for every name of [`inner_env`] first (the payload never
+    /// sees an XDG directory below [`NONO_STATE`]), then the
+    /// forwarded host variables, `[env]`, and the `HOME`/`PATH`/CA
+    /// pins, then the payload (backends.md D1, "Two environments"
+    /// — nono's environment filter never sees the payload
+    /// environment).
+    pub env_bin: &'a str,
 }
 
 /// The waypipe channel of a `display = "waypipe"` run
@@ -364,7 +414,12 @@ impl PolicyPath {
 ///    ([`MUX_SOCKET_DIR`]) for a run with a multiplexer, which is
 ///    infrastructure for the same reason (config.md D16/D17), and
 ///    `XDG_RUNTIME_DIR` (the tmpfs home) for a run with the waypipe
-///    display, likewise infrastructure (config.md D18)
+///    display, likewise infrastructure (config.md D18).
+///    With an inner wrapper set ([`Params::inner`], the layered nono
+///    backend of backends.md D1) this section carries ONLY nono's
+///    infrastructure variables ([`inner_env`]) instead — the payload
+///    environment travels in the argv of the pinned `env` between
+///    nono and the payload.
 /// 7. `--chdir` into the repo root
 /// 8. `--` and the payload, verbatim — except that the *interactive*
 ///    payload of a run with `multiplexer = …` is that multiplexer's
@@ -372,7 +427,12 @@ impl PolicyPath {
 ///    `run -- CMD` is untouched — and that a run with
 ///    `display = "waypipe"` is wrapped in the guest waypipe server
 ///    (config.md D18), which presents the fake compositor socket to
-///    the payload and connects to the host client's socket
+///    the payload and connects to the host client's socket. With an
+///    inner wrapper set the chain grows by two links (backends.md
+///    D1): the wrapper argv first, then a `--`, then the pinned
+///    `env` that unsets every [`inner_env`] name and applies the
+///    payload environment before the payload — the "Two
+///    environments" rule.
 ///
 /// Deliberately absent (see the base table's "no" rows): `/run`, `~/tmp`,
 /// a host-backed `/tmp/<name>`, and the host home directory (only the
@@ -483,6 +543,15 @@ pub fn bwrap_argv(
     // configuration when the wrapper pinned one (review-2 item 3 — the
     // host's own nix.conf stays out, it may hold access-tokens).
     argv.extend(base_binds());
+    // The nono state tmpfs of a layered run (backends.md D1): an empty
+    // tmpfs, never granted to the payload, never seeded by a mount
+    // ([`check_dest`] protects it like every base path). With no inner
+    // wrapper the base binds stay byte-identical to the bubblewrap
+    // backend's.
+    if params.inner.is_some() {
+        argv.push("--tmpfs".into());
+        argv.push(NONO_STATE.into());
+    }
     // `/bin/sh` for the sandbox (see [`Params::bin_sh`] for why the
     // minimal root must grow one). Bound with the section's own
     // base-bind idiom, `--ro-bind`, not `-try`: the pin is a store
@@ -531,7 +600,7 @@ pub fn bwrap_argv(
             Workspace::Live => {
                 bind(&mut argv, false, &root, None);
                 for git_dir in &repo.git_dirs {
-                    check_git_dir(git_dir, &cfg.git_dirs)?;
+                    check_git_dir(git_dir, &cfg.git_dirs, params.inner.is_some())?;
                     bind(&mut argv, false, &git_dir.to_string_lossy(), None);
                 }
                 // 4a. the workmux worktrees sibling, rw, at its real host
@@ -631,7 +700,7 @@ pub fn bwrap_argv(
         // strict descendant of [`SANDBOX_HOME`], so this can only
         // fire if the constant itself ever moves onto a protected
         // path — fail loudly then, not at mount time.
-        if let Some(protected) = check_dest(dest) {
+        if let Some(protected) = check_dest(dest, params.inner.is_some()) {
             return Err(Error::ProtectedDest {
                 dest: dest.clone(),
                 protected,
@@ -754,7 +823,7 @@ pub fn bwrap_argv(
     // turns the NEXT run into a widened one.)
     for m in &cfg.mounts {
         let dest = m.dest.as_deref().unwrap_or(&m.path);
-        if let Some(protected) = check_dest(dest) {
+        if let Some(protected) = check_dest(dest, params.inner.is_some()) {
             // A mount that does not redirect (dest == source) hits
             // this only when a config declares a protected path as its
             // own source (`path = "/proc"`); the usual hit is a
@@ -840,85 +909,100 @@ pub fn bwrap_argv(
     }
 
     // 6. environment: host-forwarded first, then `[env]` (later
-    // `--setenv` wins), then the dev-tool `PATH` last.
-    for (key, value) in host_env {
-        argv.push("--setenv".into());
-        argv.push(key.clone());
-        argv.push(value.clone());
-    }
-    for (key, value) in &cfg.env {
-        argv.push("--setenv".into());
-        argv.push(key.clone());
-        argv.push(value.clone());
-    }
-    // `HOME` and `PATH` are infrastructure, not configuration: they name
-    // paths this builder created (the tmpfs of section 3, the tool
-    // closure of `params`), so a layer that could repoint them would
-    // break the sandbox rather than configure it (config.md D14). Set
-    // last: the later `--setenv` wins, so `[env]` cannot override them.
-    argv.push("--setenv".into());
-    argv.push("HOME".into());
-    argv.push(SANDBOX_HOME.into());
-    argv.push("--setenv".into());
-    argv.push("PATH".into());
-    argv.push(params.tools_path.into());
-    // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run is
-    // infrastructure for the same reason as `HOME` and `PATH`
-    // (docs/design/config.md D18): it anchors the guest waypipe
-    // server's display socket (`WAYLAND_DISPLAY = "wayland-0"` is a
-    // bare name, so the server creates it in the runtime dir), and
-    // the value is the tmpfs home this builder created. Set after
-    // `[env]`, so a layer that spells it out never reaches the
-    // payload. `WAYLAND_DISPLAY` itself is set by the waypipe
-    // server for the wrapped payload, not by the argv.
-    if cfg.display.is_waypipe() {
-        argv.push("--setenv".into());
-        argv.push("XDG_RUNTIME_DIR".into());
-        argv.push(SANDBOX_HOME.into());
-    }
-    // The CA-bundle variables are infrastructure for the same reason as
-    // `HOME` and `PATH` (bd myconfig-938): they name a path THIS WRAPPER
-    // pinned from its own closure — a store path, no host state — so a
-    // layer that repointed them at, say, a host-mounted `/etc` would
-    // widen the sandbox's trust anchors to whatever the host has there,
-    // not configure the run. Set after `[env]`, so an entry spelling
-    // them out shows up in `--dry-run` but never reaches the payload.
-    // Only set when a bundle is pinned: an unwrapped build has no
-    // closure pin, and inventing a path here would point every
-    // `SSL_CERT_FILE`-honoring tool at a nonexistent file — worse than
-    // the resolver binds alone, which the `/etc/ssl` row already gives
-    // the run.
-    if let Some(ca_bundle) = params.ca_bundle {
-        for (key, value) in [
-            ("SSL_CERT_FILE", ca_bundle),
-            ("GIT_SSL_CAINFO", ca_bundle),
-            ("NIX_SSL_CERT_FILE", ca_bundle),
-        ] {
+    // `--setenv` wins), then the dev-tool `PATH` last. With an inner
+    // wrapper set the section carries ONLY nono's infrastructure
+    // variables instead (backends.md D1, "Two environments"): nothing
+    // from a config layer, from `forward-env` or from the host
+    // reaches the wrapper, so a layer can never widen the policy
+    // through a `NONO_*` variable or redirect the wrapper's config
+    // lookup — the payload environment travels in the argv of the
+    // pinned `env` below.
+    if params.inner.is_some() {
+        for (key, value) in inner_env(params.tools_path) {
             argv.push("--setenv".into());
             argv.push(key.into());
-            argv.push(value.into());
+            argv.push(value);
         }
-    }
-    // `TMUX_TMPDIR` is infrastructure for the same reason (D16/D17): it
-    // names a path inside the tmpfs home this builder created, and it
-    // is what keeps the tmux socket out of every host-shared location
-    // (`/tmp/tmux-<uid>` on the host, another sandbox's sidecar). Set
-    // after `[env]`, so a layer that spells it out parses and shows up
-    // in `--dry-run` but never reaches the payload — exactly the
-    // treatment `HOME` and `PATH` get.
-    if mux.starts_a_session() {
+    } else {
+        for (key, value) in host_env {
+            argv.push("--setenv".into());
+            argv.push(key.clone());
+            argv.push(value.clone());
+        }
+        for (key, value) in &cfg.env {
+            argv.push("--setenv".into());
+            argv.push(key.clone());
+            argv.push(value.clone());
+        }
+        // `HOME` and `PATH` are infrastructure, not configuration: they name
+        // paths this builder created (the tmpfs of section 3, the tool
+        // closure of `params`), so a layer that could repoint them would
+        // break the sandbox rather than configure it (config.md D14). Set
+        // last: the later `--setenv` wins, so `[env]` cannot override them.
         argv.push("--setenv".into());
-        argv.push("TMUX_TMPDIR".into());
-        argv.push(MUX_SOCKET_DIR.into());
-        // Pass the session name to the entry script for tmux session
-        // naming. In window mode (Live workspace) no session name is
-        // set; in session mode (Clone workspace) extract the name from
-        // the clone path `<repo>.mysbx/clones/NAME`.
-        if let Workspace::Clone { clone } = params.workspace {
-            if let Some(session_name) = clone.file_name().and_then(|n| n.to_str()) {
+        argv.push("HOME".into());
+        argv.push(SANDBOX_HOME.into());
+        argv.push("--setenv".into());
+        argv.push("PATH".into());
+        argv.push(params.tools_path.into());
+        // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run is
+        // infrastructure for the same reason as `HOME` and `PATH`
+        // (docs/design/config.md D18): it anchors the guest waypipe
+        // server's display socket (`WAYLAND_DISPLAY = "wayland-0"` is a
+        // bare name, so the server creates it in the runtime dir), and
+        // the value is the tmpfs home this builder created. Set after
+        // `[env]`, so a layer that spells it out never reaches the
+        // payload. `WAYLAND_DISPLAY` itself is set by the waypipe
+        // server for the wrapped payload, not by the argv.
+        if cfg.display.is_waypipe() {
+            argv.push("--setenv".into());
+            argv.push("XDG_RUNTIME_DIR".into());
+            argv.push(SANDBOX_HOME.into());
+        }
+        // The CA-bundle variables are infrastructure for the same reason as
+        // `HOME` and `PATH` (bd myconfig-938): they name a path THIS WRAPPER
+        // pinned from its own closure — a store path, no host state — so a
+        // layer that repointed them at, say, a host-mounted `/etc` would
+        // widen the sandbox's trust anchors to whatever the host has there,
+        // not configure the run. Set after `[env]`, so an entry spelling
+        // them out shows up in `--dry-run` but never reaches the payload.
+        // Only set when a bundle is pinned: an unwrapped build has no
+        // closure pin, and inventing a path here would point every
+        // `SSL_CERT_FILE`-honoring tool at a nonexistent file — worse than
+        // the resolver binds alone, which the `/etc/ssl` row already gives
+        // the run.
+        if let Some(ca_bundle) = params.ca_bundle {
+            for (key, value) in [
+                ("SSL_CERT_FILE", ca_bundle),
+                ("GIT_SSL_CAINFO", ca_bundle),
+                ("NIX_SSL_CERT_FILE", ca_bundle),
+            ] {
                 argv.push("--setenv".into());
-                argv.push("MYSBX_SESSION_NAME".into());
-                argv.push(session_name.into());
+                argv.push(key.into());
+                argv.push(value.into());
+            }
+        }
+        // `TMUX_TMPDIR` is infrastructure for the same reason (D16/D17): it
+        // names a path inside the tmpfs home this builder created, and it
+        // is what keeps the tmux socket out of every host-shared location
+        // (`/tmp/tmux-<uid>` on the host, another sandbox's sidecar). Set
+        // after `[env]`, so a layer that spells it out parses and shows up
+        // in `--dry-run` but never reaches the payload — exactly the
+        // treatment `HOME` and `PATH` get.
+        if mux.starts_a_session() {
+            argv.push("--setenv".into());
+            argv.push("TMUX_TMPDIR".into());
+            argv.push(MUX_SOCKET_DIR.into());
+            // Pass the session name to the entry script for tmux session
+            // naming. In window mode (Live workspace) no session name is
+            // set; in session mode (Clone workspace) extract the name from
+            // the clone path `<repo>.mysbx/clones/NAME`.
+            if let Workspace::Clone { clone } = params.workspace {
+                if let Some(session_name) = clone.file_name().and_then(|n| n.to_str()) {
+                    argv.push("--setenv".into());
+                    argv.push("MYSBX_SESSION_NAME".into());
+                    argv.push(session_name.into());
+                }
             }
         }
     }
@@ -951,6 +1035,40 @@ pub fn bwrap_argv(
         argv.push(WAYPIPE_DISPLAY.into());
         argv.push("server".into());
         argv.push("--".into());
+    }
+    // The inner wrapper of a layered run (backends.md D1): the nono
+    // argv goes between bwrap's `--` and the payload, its own `--`
+    // separates its command, and the pinned `env` applies the
+    // payload environment as the wrapper's child. The `-u` list is
+    // exactly [`inner_env`]'s names: the payload never sees an XDG
+    // directory below [`NONO_STATE`], and the wrapper's environment
+    // filter never sees the payload environment (an `[env]`
+    // `PYTHONPATH` reaches the payload exactly as it does on the
+    // bubblewrap backend). The assignments keep the backend's own
+    // precedence — forwarded first, `[env]` next, the `HOME`/`PATH`
+    // and CA pins last, `env` applying them left to right so the
+    // later ones win.
+    if let Some(inner) = &params.inner {
+        argv.extend(inner.argv.iter().cloned());
+        argv.push("--".into());
+        argv.push(inner.env_bin.into());
+        for (key, _) in inner_env(params.tools_path) {
+            argv.push("-u".into());
+            argv.push(key.into());
+        }
+        for (key, value) in host_env {
+            argv.push(format!("{key}={value}"));
+        }
+        for (key, value) in &cfg.env {
+            argv.push(format!("{key}={value}"));
+        }
+        argv.push(format!("HOME={SANDBOX_HOME}"));
+        argv.push(format!("PATH={}", params.tools_path));
+        if let Some(ca_bundle) = params.ca_bundle {
+            for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
+                argv.push(format!("{key}={ca_bundle}"));
+            }
+        }
     }
     match payload {
         // The multiplexer entry REPLACES the shell (cli.md D11): it is
@@ -1259,6 +1377,29 @@ static RESOLVER_PATHS: &[&str] = &[
     "/run/systemd/resolve",
 ];
 
+/// The inner wrapper's infrastructure environment (docs/design/
+/// backends.md D1, "Two environments"): the ONLY variables bwrap's
+/// `--clearenv`/`--setenv` carry when [`Params::inner`] is set — a
+/// `PATH`, a `HOME` and the XDG directories nono's config, profile
+/// and state lookups read, all below the [`NONO_STATE`] tmpfs, and
+/// the update-check switch. Nothing from a config layer, from
+/// `forward-env` or from the host reaches the wrapper: a layer can
+/// therefore never widen the policy through a `NONO_*` variable or
+/// redirect the wrapper's config lookup. The same names are the
+/// `-u` list of the pinned `env` that applies the payload
+/// environment, so the payload never sees an XDG directory below
+/// `/mysbx-nono`.
+fn inner_env(tools_path: &str) -> Vec<(&'static str, String)> {
+    vec![
+        ("PATH", tools_path.to_owned()),
+        ("HOME", NONO_STATE.to_owned()),
+        ("XDG_CONFIG_HOME", format!("{NONO_STATE}/.config")),
+        ("XDG_STATE_HOME", format!("{NONO_STATE}/.local/state")),
+        ("TMPDIR", format!("{NONO_STATE}/tmp")),
+        ("NONO_NO_UPDATE_CHECK", "1".to_owned()),
+    ]
+}
+
 /// The fixed base binds of the MVP (docs/plan.md, base table). Every row
 /// with decision "yes" appears exactly once, in the order the existing
 /// `fns/bubblewrap-app.nix` base binds them (agents shell out to
@@ -1358,14 +1499,18 @@ static PROTECTED_DESTS: &[&str] = &[
 ];
 
 /// The protected path a mount `dest` would shadow or overwrite, if
-/// any. The dest is normalized lexically first (see [`normalize`]); the
+/// any. `nono_state` adds [`NONO_STATE`] to the protected set — a
+/// base path of the LAYERED layout only (backends.md D1), where it
+/// holds nono's own state: a dest at, below or above it is refused
+/// like every base path, so no mount ever seeds the tmpfs the
+/// wrapper keeps its config, profile and state in. The dest is normalized lexically first (see [`normalize`]); the
 /// merge (`crate::merge`) guarantees that source PATHS are
 /// canonicalized against the host, but a `dest` deliberately never is
 /// (it is an in-sandbox path) — so normalization is this function's
 /// job. Symlinks are NOT resolved here: they would need
 /// host-filesystem knowledge of the sandbox's new root, which does not
 /// exist at argv-build time.
-fn check_dest(dest: &str) -> Option<&'static str> {
+fn check_dest(dest: &str, nono_state: bool) -> Option<&'static str> {
     let path = normalize(dest);
     for protected in PROTECTED_DESTS {
         let protected_path = Path::new(protected);
@@ -1404,6 +1549,18 @@ fn check_dest(dest: &str) -> Option<&'static str> {
     // directory, and it stays mountable like `/usr/bin2`.
     if Path::new(SANDBOX_HOME).starts_with(&path) {
         return Some(SANDBOX_HOME);
+    }
+    // [`NONO_STATE`] of a layered run (backends.md D1): protected in
+    // BOTH directions like every base path — a dest at, below or
+    // above it is refused — because the tmpfs is never seeded and
+    // never shared, unlike [`SANDBOX_HOME`] whose strict descendants
+    // the dotfile-seeding mounts of config.md D14 legitimately use.
+    // `/mysbx-nono2` and `/mysbx-nonopod` are different directories
+    // and stay mountable, like `/usr/bin2` for the base paths.
+    if nono_state
+        && (path.starts_with(Path::new(NONO_STATE)) || Path::new(NONO_STATE).starts_with(&path))
+    {
+        return Some(NONO_STATE);
     }
     None
 }
@@ -1796,14 +1953,14 @@ fn check_symlinkable_dests(
 ///   layer that knows `$HOME`.
 /// - a target that is at-or-below NO approved entry: the pointer is
 ///   untrusted content (config.md D3) and grants nothing.
-fn check_git_dir(gitdir: &Path, approved: &[PathBuf]) -> Result<(), Error> {
+fn check_git_dir(gitdir: &Path, approved: &[PathBuf], nono_state: bool) -> Result<(), Error> {
     // Protected paths (`/` among them): the bind lands at the git dir's real host path,
     // so a gitdir related to one is as bad as a mount dest that is.
     // `check_dest` expects the normalized in-sandbox spelling; host
     // paths are already absolute and `..`-free after canonicalize,
     // but normalize anyway so the comparison matches the dest rules.
     let dest = normalize(&gitdir.to_string_lossy());
-    if let Some(protected) = check_dest(&dest.to_string_lossy()) {
+    if let Some(protected) = check_dest(&dest.to_string_lossy(), nono_state) {
         return Err(Error::GitDirProtected {
             gitdir: gitdir.to_owned(),
             protected,
@@ -1828,7 +1985,11 @@ fn check_git_dir(gitdir: &Path, approved: &[PathBuf]) -> Result<(), Error> {
 /// protected-dest guard tamper-proof (`"/nix/../proc"` must be seen as
 /// `/proc`). `/..` stays `/` — the kernel resolves the root's parent as
 /// itself.
-fn normalize(p: &str) -> PathBuf {
+///
+/// Shared with the nono grant emitter ([`crate::nono`]), which needs
+/// the same lexical view of a mount `dest` to decide whether the
+/// `/mysbx-home` grant covers it.
+pub(crate) fn normalize(p: &str) -> PathBuf {
     let mut out: Vec<std::ffi::OsString> = Vec::new();
     for c in Path::new(p).components() {
         match c {
@@ -1913,6 +2074,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         }
     }
 

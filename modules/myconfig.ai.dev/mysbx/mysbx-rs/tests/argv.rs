@@ -13,7 +13,10 @@
 //! Only the base binds are fixed absolute host paths (`/nix/store`, …),
 //! and those are identical on every machine.
 
-use mysbx::bwrap::{bwrap_argv, HostEnv, Params, Payload, Workspace, SANDBOX_HOME};
+use mysbx::bwrap::Error as BwrapError;
+use mysbx::bwrap::{
+    bwrap_argv, HostEnv, Inner, Params, Payload, Workspace, NONO_STATE, SANDBOX_HOME,
+};
 use mysbx::config::{Display, Mode, Mount, Multiplexer};
 use mysbx::merge::Merged;
 use mysbx::nono::Error as NonoError;
@@ -84,6 +87,7 @@ fn params() -> Params<'static> {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     }
 }
 
@@ -379,7 +383,7 @@ fn nested_state_dirs_are_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::StateDirNesting { .. }),
+        matches!(err, BwrapError::StateDirNesting { .. }),
         "wrong error: {err}"
     );
 }
@@ -460,7 +464,7 @@ fn a_mount_dest_below_a_state_dir_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -488,7 +492,7 @@ fn an_rw_mount_above_a_state_dir_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::StateTreeWritable { .. }),
+        matches!(err, BwrapError::StateTreeWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -1363,8 +1367,7 @@ fn parent_after_child_hides_the_child_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        err.to_string().contains(EXPECTED)
-            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        err.to_string().contains(EXPECTED) && matches!(err, BwrapError::HiddenMount { .. }),
         "wrong error: {err}"
     );
 }
@@ -1388,7 +1391,7 @@ fn child_after_a_writable_parent_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -1461,8 +1464,7 @@ fn hiding_is_judged_on_dest_not_source() {
     )
     .expect_err("must be refused");
     assert!(
-        err.to_string().contains(EXPECTED)
-            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        err.to_string().contains(EXPECTED) && matches!(err, BwrapError::HiddenMount { .. }),
         "wrong error: {err}"
     );
 }
@@ -1506,8 +1508,7 @@ fn mount_covering_the_repo_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        err.to_string().contains(EXPECTED)
-            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        err.to_string().contains(EXPECTED) && matches!(err, BwrapError::HiddenMount { .. }),
         "wrong error: {err}"
     );
 }
@@ -1528,8 +1529,7 @@ fn mount_exactly_on_the_repo_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        err.to_string().contains(EXPECTED)
-            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        err.to_string().contains(EXPECTED) && matches!(err, BwrapError::HiddenMount { .. }),
         "wrong error: {err}"
     );
 }
@@ -1551,7 +1551,7 @@ fn mount_below_the_repo_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -1576,8 +1576,7 @@ fn hidden_mounts_are_judged_after_dest_normalization() {
     )
     .expect_err("must be refused");
     assert!(
-        err.to_string().contains(EXPECTED)
-            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        err.to_string().contains(EXPECTED) && matches!(err, BwrapError::HiddenMount { .. }),
         "wrong error: {err}"
     );
 }
@@ -1666,7 +1665,7 @@ fn mount_covering_the_worktrees_sibling_is_refused() {
     assert!(
         err.to_string()
             .contains("would hide the worktrees directory")
-            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+            && matches!(err, BwrapError::HiddenMount { .. }),
         "wrong error: {err}"
     );
 }
@@ -1689,7 +1688,7 @@ fn dest_below_the_worktrees_sibling_is_refused() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -1725,8 +1724,7 @@ fn mount_covering_a_git_dir_is_refused() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
         .expect_err("must be refused");
     assert!(
-        err.to_string().contains(EXPECTED)
-            && matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        err.to_string().contains(EXPECTED) && matches!(err, BwrapError::HiddenMount { .. }),
         "wrong error: {err}"
     );
 }
@@ -1813,6 +1811,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     };
     let argv = bwrap_argv(
         &base(true),
@@ -1852,6 +1851,7 @@ fn a_pinned_bin_sh_is_bound_read_only_into_the_empty_root() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     };
     let argv = bwrap_argv(
         &base(true),
@@ -1904,7 +1904,7 @@ fn a_mount_dest_onto_bin_sh_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::ProtectedDest { protected, .. }
+        matches!(err, BwrapError::ProtectedDest { protected, .. }
             if protected == "/bin/sh"),
         "wrong error: {err}"
     );
@@ -1929,7 +1929,7 @@ fn a_mount_dest_of_bin_itself_is_refused_as_the_shadows_ancestor() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::ProtectedDest { protected, .. }
+        matches!(err, BwrapError::ProtectedDest { protected, .. }
             if protected == "/bin/sh"),
         "wrong error: {err}"
     );
@@ -1952,8 +1952,7 @@ fn mount_dest_onto_nix_var_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        err.to_string().contains(EXPECTED)
-            && matches!(err, mysbx::bwrap::Error::ProtectedDest { .. }),
+        err.to_string().contains(EXPECTED) && matches!(err, BwrapError::ProtectedDest { .. }),
         "wrong error: {err}"
     );
 }
@@ -1978,8 +1977,7 @@ fn mount_dest_below_nix_var_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        err.to_string().contains(EXPECTED)
-            && matches!(err, mysbx::bwrap::Error::ProtectedDest { .. }),
+        err.to_string().contains(EXPECTED) && matches!(err, BwrapError::ProtectedDest { .. }),
         "wrong error: {err}"
     );
 }
@@ -2025,7 +2023,7 @@ fn unapproved_git_dir_is_refused() {
     .expect_err("must be refused");
     assert!(
         err.to_string().contains("not approved")
-            && matches!(err, mysbx::bwrap::Error::GitDirNotApproved { .. }),
+            && matches!(err, BwrapError::GitDirNotApproved { .. }),
         "wrong error: {err}"
     );
 }
@@ -2060,7 +2058,7 @@ fn sibling_approval_does_not_cover() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::GitDirNotApproved { .. }),
+        matches!(err, BwrapError::GitDirNotApproved { .. }),
         "wrong error: {err}"
     );
 }
@@ -2076,10 +2074,7 @@ fn root_git_dir_is_refused_even_if_listed() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
         .expect_err("must be refused");
     assert!(
-        matches!(
-            err,
-            mysbx::bwrap::Error::GitDirProtected { protected: "/", .. }
-        ),
+        matches!(err, BwrapError::GitDirProtected { protected: "/", .. }),
         "wrong error: {err}"
     );
 }
@@ -2097,7 +2092,7 @@ fn protected_related_git_dir_is_refused_even_if_listed() {
     assert!(
         matches!(
             err,
-            mysbx::bwrap::Error::GitDirProtected {
+            BwrapError::GitDirProtected {
                 protected: "/nix/store",
                 ..
             }
@@ -2131,7 +2126,7 @@ fn the_jump_symlink_scenario_is_refused_lexically() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2151,7 +2146,7 @@ fn dest_below_a_git_dir_is_refused() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2179,7 +2174,7 @@ fn a_read_only_reexposure_of_repo_content_is_writable_too() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2205,7 +2200,7 @@ fn a_read_only_reexposure_of_a_writable_mount_is_writable_too() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2293,7 +2288,7 @@ fn mount_dest_on_the_sandbox_home_is_refused() {
     assert!(
         matches!(
             err,
-            mysbx::bwrap::Error::ProtectedDest {
+            BwrapError::ProtectedDest {
                 protected: SANDBOX_HOME,
                 ..
             }
@@ -2321,10 +2316,7 @@ fn a_root_dest_keeps_the_sharper_root_diagnosis() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(
-            err,
-            mysbx::bwrap::Error::ProtectedDest { protected: "/", .. }
-        ),
+        matches!(err, BwrapError::ProtectedDest { protected: "/", .. }),
         "wrong error: {err}"
     );
 }
@@ -2422,7 +2414,7 @@ fn redundant_spellings_of_the_sandbox_home_are_refused() {
         assert!(
             matches!(
                 err,
-                mysbx::bwrap::Error::ProtectedDest {
+                BwrapError::ProtectedDest {
                     protected: SANDBOX_HOME,
                     ..
                 }
@@ -2444,7 +2436,7 @@ fn a_git_dir_at_the_sandbox_home_is_refused_as_protected() {
     assert!(
         matches!(
             err,
-            mysbx::bwrap::Error::GitDirProtected {
+            BwrapError::GitDirProtected {
                 protected: SANDBOX_HOME,
                 ..
             }
@@ -2473,7 +2465,7 @@ fn a_mount_may_not_source_the_daemon_under_a_denied_network() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DaemonUnderDeniedNetwork { .. }),
+        matches!(err, BwrapError::DaemonUnderDeniedNetwork { .. }),
         "wrong error: {err}"
     );
 }
@@ -2529,7 +2521,7 @@ fn a_ro_alias_declared_before_the_rw_alias_is_caught() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2550,7 +2542,7 @@ fn a_ro_parent_containing_the_repo_is_not_a_safe_parent() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2576,7 +2568,7 @@ fn a_ro_parent_containing_an_rw_mount_is_not_a_safe_parent() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2599,7 +2591,7 @@ fn a_ro_parent_containing_a_git_dir_is_not_a_safe_parent() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params())
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2633,7 +2625,7 @@ fn a_ro_chain_of_aliases_over_writable_content_is_caught() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2658,7 +2650,7 @@ fn a_read_only_ancestor_of_the_nix_daemon_dir_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DaemonUnderDeniedNetwork { .. }),
+        matches!(err, BwrapError::DaemonUnderDeniedNetwork { .. }),
         "wrong error: {err}"
     );
 }
@@ -2680,7 +2672,7 @@ fn the_whole_host_root_is_refused_under_a_denied_network() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DaemonUnderDeniedNetwork { .. }),
+        matches!(err, BwrapError::DaemonUnderDeniedNetwork { .. }),
         "wrong error: {err}"
     );
 }
@@ -2726,6 +2718,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2733,7 +2726,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        matches!(err, BwrapError::PolicyFileWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2756,6 +2749,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2763,7 +2757,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        matches!(err, BwrapError::PolicyFileWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2788,6 +2782,7 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2813,6 +2808,7 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2839,12 +2835,13 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     };
     let cfg = base(true);
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        matches!(err, BwrapError::PolicyFileWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2867,13 +2864,14 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     };
     let mut cfg = base(true);
     cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        matches!(err, BwrapError::PolicyFileWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2899,6 +2897,7 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2930,6 +2929,7 @@ fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        inner: None,
     }
 }
 
@@ -2960,7 +2960,7 @@ fn a_writable_mount_over_a_policy_symlink_is_refused_although_the_target_is_else
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        matches!(err, BwrapError::PolicyFileWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -2987,7 +2987,7 @@ fn a_writable_mount_over_a_traversed_directory_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        matches!(err, BwrapError::PolicyFileWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -3014,7 +3014,7 @@ fn the_resolved_target_stays_protected_as_well() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        matches!(err, BwrapError::PolicyFileWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -3039,7 +3039,7 @@ fn the_repo_bind_covering_a_policy_pathname_is_refused() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        matches!(err, BwrapError::PolicyFileWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -3058,7 +3058,7 @@ fn a_git_dir_covering_a_policy_pathname_is_refused() {
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
         .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::PolicyFileWritable { .. }),
+        matches!(err, BwrapError::PolicyFileWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -3131,6 +3131,7 @@ fn clone_params() -> Params<'static> {
         workspace: Workspace::Clone {
             clone: Path::new(SYNTH_CLONE),
         },
+        inner: None,
     }
 }
 
@@ -3312,7 +3313,7 @@ fn a_clone_run_still_refuses_a_dest_below_the_repo_path() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -3334,7 +3335,7 @@ fn a_clone_run_still_refuses_a_mount_hiding_the_repo_path() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::HiddenMount { .. }),
+        matches!(err, BwrapError::HiddenMount { .. }),
         "wrong error: {err}"
     );
 }
@@ -3365,7 +3366,7 @@ fn a_ro_mount_sourcing_the_clone_contributes_its_dest_to_the_writable_set() {
     )
     .expect_err("must be refused");
     assert!(
-        matches!(err, mysbx::bwrap::Error::DestBelowWritable { .. }),
+        matches!(err, BwrapError::DestBelowWritable { .. }),
         "wrong error: {err}"
     );
 }
@@ -3488,6 +3489,8 @@ fn podman_params() -> PodmanParams<'static> {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        // (podman_gvisor::Params has no `inner` field — the layered
+        // wrapper is a bwrap-layout concern.)
         // The exec'd backend keeps mysbx's stdio, so the container is
         // attached: `--interactive` always (bd myconfig-jho). The
         // synthetic `tty: false` keeps the goldens deterministic —
@@ -4644,17 +4647,24 @@ fn podman_rootless_defaults_golden() {
     .unwrap();
     assert_golden("podman-rootless-defaults.txt", &argv);
 }
-
 // ---- nono backend tests ------------------------------------------------------
+//
+// The nono backend is LAYERED (docs/design/backends.md D1): lib.rs
+// builds the grant argv through `nono_run_argv` and wraps it into the
+// bubblewrap layout as `bwrap::Params::inner`. The helpers below
+// compose the same chain, so the goldens show the FULL argv a
+// `--dry-run` prints — bwrap's layout, then the nono chain, then the
+// pinned `env` applying the payload environment, then the payload.
 
-/// A synthetic nono params: HOST pins like bwrap's (nono runs the
-/// payload on the host kernel), the `default` profile lib.rs falls
-/// back to.
+/// The nono binary of the synthetic tests: the unwrapped crate's PATH
+/// fallback spelling (`env_or("MYSBX_NONO", "nono")`), so the cli
+/// tests' `--dry-run` byte-comparisons against these goldens agree.
+const NONO_BIN: &str = "nono";
+
+/// A synthetic nono params: the `default` profile of lib.rs's
+/// `MYSBX_NONO_PROFILE` fallback, live workspace by default.
 fn nono_params() -> NonoParams<'static> {
     NonoParams {
-        shell: "/synth/bin/bash",
-        tools_path: "/synth/bin",
-        policy_paths: &[],
         workspace: Workspace::Live,
         profile: "default",
     }
@@ -4679,11 +4689,105 @@ fn nono_base(network: bool) -> Merged {
     }
 }
 
+/// The error of the composed chain: either the grant emitter refuses
+/// (nono.rs) or the bwrap layout does (bwrap.rs) — a layered run can
+/// fail in either link, and the tests assert which one spoke.
+#[derive(Debug)]
+enum LayeredError {
+    Nono(NonoError),
+    Bwrap(BwrapError),
+}
+
+/// Compose the layered nono argv exactly like lib.rs: the grants from
+/// `nono_run_argv`, prefixed with the nono binary, wrapped into the
+/// bubblewrap layout as the inner command with the pinned `env`
+/// applying the payload environment. Pure like its parts, so the
+/// goldens stay machine-independent.
+fn nono_layered_argv(
+    cfg: &Merged,
+    repo: &Repo,
+    payload: &Payload,
+    host_env: &HostEnv,
+    nono_params: &NonoParams<'_>,
+) -> Result<Vec<String>, LayeredError> {
+    let grants = nono_run_argv(cfg, repo, payload, nono_params).map_err(LayeredError::Nono)?;
+    let mut inner_argv: Vec<String> = Vec::with_capacity(grants.len() + 1);
+    inner_argv.push(NONO_BIN.into());
+    inner_argv.extend(grants);
+    let p = Params {
+        workspace: nono_params.workspace.clone(),
+        inner: Some(Inner {
+            argv: &inner_argv,
+            env_bin: "env",
+        }),
+        ..params()
+    };
+    bwrap_argv(cfg, repo, payload, host_env, &p).map_err(LayeredError::Bwrap)
+}
+
+/// [`nono_layered_argv`] with trusted policy files threaded into the
+/// bwrap layout — the layered run carries them like the bubblewrap
+/// backend does, so the policy-file refusal fires in the layout.
+fn nono_layered_argv_with_policy(
+    cfg: &Merged,
+    repo: &Repo,
+    payload: &Payload,
+    host_env: &HostEnv,
+    nono_params: &NonoParams<'_>,
+    policy_paths: &[mysbx::bwrap::PolicyPath],
+) -> Result<Vec<String>, LayeredError> {
+    let grants = nono_run_argv(cfg, repo, payload, nono_params).map_err(LayeredError::Nono)?;
+    let mut inner_argv: Vec<String> = Vec::with_capacity(grants.len() + 1);
+    inner_argv.push(NONO_BIN.into());
+    inner_argv.extend(grants);
+    let p = Params {
+        workspace: nono_params.workspace.clone(),
+        policy_paths,
+        inner: Some(Inner {
+            argv: &inner_argv,
+            env_bin: "env",
+        }),
+        ..params()
+    };
+    bwrap_argv(cfg, repo, payload, host_env, &p).map_err(LayeredError::Bwrap)
+}
+
+/// [`nono_layered_argv`] with a CA bundle pin threaded into the bwrap
+/// layout — the pin reaches the payload through the env-segment.
+fn nono_layered_argv_with_pins(
+    cfg: &Merged,
+    repo: &Repo,
+    payload: &Payload,
+    host_env: &HostEnv,
+    nono_params: &NonoParams<'_>,
+    ca_bundle: Option<&'static str>,
+) -> Result<Vec<String>, LayeredError> {
+    let grants = nono_run_argv(cfg, repo, payload, nono_params).map_err(LayeredError::Nono)?;
+    let mut inner_argv: Vec<String> = Vec::with_capacity(grants.len() + 1);
+    inner_argv.push(NONO_BIN.into());
+    inner_argv.extend(grants);
+    let p = Params {
+        workspace: nono_params.workspace.clone(),
+        ca_bundle,
+        inner: Some(Inner {
+            argv: &inner_argv,
+            env_bin: "env",
+        }),
+        ..params()
+    };
+    bwrap_argv(cfg, repo, payload, host_env, &p).map_err(LayeredError::Bwrap)
+}
+
 #[test]
 fn nono_golden_minimal() {
-    // network = false: `--block-net`, no `--allow-unix-socket` (the
-    // daemon socket is a network service under a denied network).
-    let argv = nono_run_argv(
+    // network = false: the smallest layered argv — bwrap's base
+    // layout plus the `/mysbx-nono` tmpfs, nono's infra env, the
+    // `--block-net` grant chain, and `env` handing the payload its
+    // `HOME=/mysbx-home` before the shell. No `--allow-unix-socket`
+    // (the daemon socket is a network service under a denied
+    // network), no state-store grants (the `/mysbx-home` grant
+    // covers them all).
+    let argv = nono_layered_argv(
         &nono_base(false),
         &synth_repo(),
         &Payload::Shell,
@@ -4700,14 +4804,16 @@ fn nono_golden_minimal() {
 
 #[test]
 fn nono_golden_allowlist() {
-    // The core mapping of bd myconfig-6di.2: the allowlist becomes
-    // `--allow-domain` per domain in order, `--allow-connect-port` per
-    // port, and — with a shared network — the daemon socket flag. No
-    // `--block-net`, no `--listen-port` (none configured).
+    // The core mapping of bd myconfig-6di.2, layered: the allowlist
+    // becomes `--allow-domain` per domain in order,
+    // `--allow-connect-port` per port, and — with a shared network —
+    // the daemon socket flag. No `--block-net`, no `--listen-port`
+    // (none configured). The shared network also grows bwrap's
+    // resolver binds and the ro `/nix/var/nix` bind.
     let mut cfg = nono_base(true);
     cfg.allow_domains = vec!["api.openai.com".into(), "github.com".into()];
     cfg.connect_ports = vec![443];
-    let argv = nono_run_argv(
+    let argv = nono_layered_argv(
         &cfg,
         &synth_repo(),
         &Payload::Shell,
@@ -4735,12 +4841,27 @@ fn nono_golden_allowlist() {
 }
 
 #[test]
-fn nono_golden_ro_mount() {
-    // A read-only mount is a `--read` grant at its own path.
-    let mut cfg = nono_base(false);
-    cfg.mounts
-        .push(make_mount("/synth/data/refs", None, Mode::Ro));
-    let argv = nono_run_argv(
+fn nono_golden_mounts_with_dests() {
+    // The test-f13 shape (docs/design/backends.md D1, "Grants follow
+    // the resolved layout"): mounts with a dest BELOW `/mysbx-home`
+    // need no grant (the single rw home grant covers them; their
+    // read-only binds keep them read-only), a dest OUTSIDE gets one
+    // grant at the in-sandbox dest with the effective mode.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts = vec![
+        // a read-only seed below the sandbox home: NO grant
+        make_mount(
+            "/synth/dotfiles/gitconfig",
+            Some("/mysbx-home/.gitconfig"),
+            Mode::Ro,
+        ),
+        // a remapped dest outside the home: granted AT its dest
+        make_mount("/synth/data/refs", Some("/inside/refs"), Mode::Ro),
+        // a dest-less mount: granted at its own path
+        make_mount("/synth/data/cache", None, Mode::Rw),
+    ];
+    let argv = nono_layered_argv(
         &cfg,
         &synth_repo(),
         &Payload::Shell,
@@ -4748,21 +4869,42 @@ fn nono_golden_ro_mount() {
         &nono_params(),
     )
     .unwrap();
-    assert_golden("nono-ro-mount.txt", &argv);
+    assert_golden("nono-mount-dests.txt", &argv);
+    // The seed below the home: covered by the /mysbx-home grant, no
+    // grant of its own.
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| w[0] == "--read" && w[1] == "/mysbx-home/.gitconfig"),
+        "a seed below the home needs no grant of its own: {argv:?}"
+    );
+    // The remapped dest: granted at the DEST, not the source.
     assert!(
         argv.windows(2)
-            .any(|w| w[0] == "--read" && w[1] == "/synth/data/refs"),
-        "ro mount is a --read: {argv:?}"
+            .any(|w| w[0] == "--read" && w[1] == "/inside/refs"),
+        "the remapped dest is granted at its in-sandbox path: {argv:?}"
+    );
+    // The rw mount: an --allow at its own path.
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--allow" && w[1] == "/synth/data/cache"),
+        "the rw mount is granted: {argv:?}"
     );
 }
 
 #[test]
-fn nono_golden_rw_mount() {
-    // A read-write mount is an `--allow` grant at its own path.
-    let mut cfg = nono_base(false);
-    cfg.mounts
-        .push(make_mount("/synth/data/cache", None, Mode::Rw));
-    let argv = nono_run_argv(
+fn nono_golden_rebind_rw_over_ro() {
+    // Two binds sharing a dest: the later one wins, the same rule
+    // bubblewrap applies — the grant is the EFFECTIVE mode at that
+    // path (rw here), never wider than the layout (bd
+    // myconfig-uay).
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts = vec![
+        make_mount("/synth/data/refs", Some("/inside/refs"), Mode::Rw),
+        make_mount("/synth/data/refs-ro", Some("/inside/refs"), Mode::Ro),
+    ];
+    let argv = nono_layered_argv(
         &cfg,
         &synth_repo(),
         &Payload::Shell,
@@ -4770,22 +4912,57 @@ fn nono_golden_rw_mount() {
         &nono_params(),
     )
     .unwrap();
-    assert_golden("nono-rw-mount.txt", &argv);
-    assert!(
-        argv.windows(2)
-            .any(|w| w[0] == "--allow" && w[1] == "/synth/data/cache"),
-        "rw mount is an --allow: {argv:?}"
+    assert_golden("nono-rebind.txt", &argv);
+    // Exactly one grant at the rebind dest, and it is the read-only
+    // one: the later bind wins.
+    let grants: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| (w[0] == "--allow" || w[0] == "--read") && w[1] == "/inside/refs")
+        .map(|w| w[0].as_str())
+        .collect();
+    assert_eq!(
+        grants,
+        ["--read"],
+        "one grant, the effective mode: {argv:?}"
     );
+}
+
+#[test]
+fn nono_rebind_ro_over_rw_effective_mode_is_rw() {
+    // The other direction: an rw rebind over an ro one — the last
+    // bind wins, the grant is rw.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts = vec![
+        make_mount("/synth/data/refs-ro", Some("/inside/refs"), Mode::Ro),
+        make_mount("/synth/data/refs", Some("/inside/refs"), Mode::Rw),
+    ];
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    let grants: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| (w[0] == "--allow" || w[0] == "--read") && w[1] == "/inside/refs")
+        .map(|w| w[0].as_str())
+        .collect();
+    assert_eq!(grants, ["--allow"], "the later rw bind wins: {argv:?}");
 }
 
 #[test]
 fn nono_golden_state_dirs() {
-    // state-dirs land at their REAL sidecar path — the semantic
-    // difference from the other backends: no remap, so the payload
-    // sees `<repo>.mysbx/state/<entry>`.
-    let mut cfg = nono_base(false);
+    // state-dirs are bwrap's binds below `/mysbx-home` (config.md
+    // D15) — ONE rw grant of the home covers them all; no per-store
+    // grant appears (the pure-nono backend needed one per store at
+    // its sidecar path; the layered one does not).
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
     cfg.state_dirs = vec![".local/share/opencode".into(), ".cache/foo".into()];
-    let argv = nono_run_argv(
+    let argv = nono_layered_argv(
         &cfg,
         &synth_repo(),
         &Payload::Shell,
@@ -4794,13 +4971,26 @@ fn nono_golden_state_dirs() {
     )
     .unwrap();
     assert_golden("nono-state-dirs.txt", &argv);
-    for entry in [
-        "/synth/repo.mysbx/state/.local/share/opencode",
-        "/synth/repo.mysbx/state/.cache/foo",
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| w[0] == "--allow" && w[1].contains("/state/")),
+        "no per-store grant below the home grant: {argv:?}"
+    );
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--allow" && w[1] == SANDBOX_HOME),
+        "the home grant covers every state dest: {argv:?}"
+    );
+    // The binds themselves are the bubblewrap backend's.
+    for dest in [
+        "/mysbx-home/.local/share/opencode",
+        "/mysbx-home/.cache/foo",
+        "/mysbx-home/.ssh", // the implicit keypair entry (D22)
     ] {
         assert!(
-            argv.windows(2).any(|w| w[0] == "--allow" && w[1] == entry),
-            "state store {entry} missing from the argv: {argv:?}"
+            argv.windows(3).any(|w| w[0] == "--bind" && w[2] == dest),
+            "the state bind {dest} is in the layout: {argv:?}"
         );
     }
 }
@@ -4808,13 +4998,15 @@ fn nono_golden_state_dirs() {
 #[test]
 fn nono_golden_ssh_key() {
     // The unconditional sandbox keypair (docs/design/config.md D22):
-    // the implicit
-    // `.ssh` entry becomes an `--allow` of its REAL sidecar path —
-    // the same no-remap semantic as every nono state store; git
-    // finds the key through the GIT_SSH_COMMAND lib.rs pins in the
-    // exec environment, not through `$HOME/.ssh`.
-    let cfg = nono_base(false);
-    let argv = nono_run_argv(
+    // the implicit `.ssh` state entry is bound at `/mysbx-home/.ssh`
+    // like on the bubblewrap backend — ssh's default lookup finds it
+    // at `$HOME/.ssh`, because the pinned `env` sets
+    // `HOME=/mysbx-home` between nono and the payload. No
+    // `GIT_SSH_COMMAND` pin anywhere: the pure-nono workaround is
+    // gone with the pure-nono backend.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    let argv = nono_layered_argv(
         &cfg,
         &synth_repo(),
         &Payload::Shell,
@@ -4824,39 +5016,46 @@ fn nono_golden_ssh_key() {
     .unwrap();
     assert_golden("nono-ssh-key.txt", &argv);
     assert!(
-        argv.windows(2)
-            .any(|w| w[0] == "--allow" && w[1] == "/synth/repo.mysbx/state/.ssh"),
-        "the ssh store grant is missing from the argv: {argv:?}"
+        argv.windows(3)
+            .any(|w| w[0] == "--bind" && w[2] == "/mysbx-home/.ssh"),
+        "the ssh store bind is in the layout: {argv:?}"
+    );
+    assert!(
+        !argv.iter().any(|a| a.starts_with("GIT_SSH_COMMAND=")),
+        "no GIT_SSH_COMMAND pin in the layered env: {argv:?}"
     );
 }
 
 #[test]
-fn nono_ssh_key_nested_state_dirs_still_refused() {
-    // The implicit `.ssh` entry flows through the SAME nesting check
-    // as declared ones (D15): an entry inside it (or containing it)
-    // is an ambiguous layout, refused with the dedicated error.
-    let mut cfg = nono_base(false);
+fn nono_nested_state_dirs_are_refused_by_the_layout() {
+    // The implicit `.ssh` entry flows through the layout's nesting
+    // check (BwrapError::StateDirNesting) — the grant emitter
+    // never sees a layout bubblewrap would refuse.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
     cfg.state_dirs = vec![".ssh/sub".into()];
-    let err = nono_run_argv(
+    let err = nono_layered_argv(
         &cfg,
         &synth_repo(),
         &Payload::Shell,
         &host_env(&[]),
         &nono_params(),
     )
-    .expect_err("must be refused");
+    .expect_err("must be refused by the layout");
     assert!(
-        matches!(err, NonoError::StateDirNesting { .. }),
-        "wrong error: {err}"
+        matches!(err, LayeredError::Bwrap(BwrapError::StateDirNesting { .. })),
+        "wrong error: {err:?}"
     );
 }
 
 #[test]
 fn nono_golden_command_payload() {
-    // A one-shot: the payload verbatim after `--`, the shell pin never
-    // entered the argv.
-    let argv = nono_run_argv(
-        &nono_base(false),
+    // A one-shot: the payload verbatim after the env-segment, the
+    // shell pin never entered the argv.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    let argv = nono_layered_argv(
+        &cfg,
         &synth_repo(),
         &Payload::Command(vec!["ls".into(), "-la".into()]),
         &host_env(&[]),
@@ -4868,14 +5067,18 @@ fn nono_golden_command_payload() {
         !argv.contains(&"/synth/bin/bash".to_string()),
         "the shell pin is not the one-shot payload: {argv:?}"
     );
+    assert_eq!(argv[argv.len() - 2], "ls");
+    assert_eq!(argv[argv.len() - 1], "-la");
 }
 
 #[test]
 fn nono_golden_git_dirs() {
-    // The approved git dir is `--allow`ed like the repo root.
-    let mut cfg = nono_base(false);
+    // The approved git dir is bound by the layout and `--allow`ed by
+    // the grants, like the repo root.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
     cfg.git_dirs = vec![PathBuf::from("/synth/gitdirs/main")];
-    let argv = nono_run_argv(
+    let argv = nono_layered_argv(
         &cfg,
         &worktree_repo(&["/synth/gitdirs/main"]),
         &Payload::Shell,
@@ -4889,79 +5092,123 @@ fn nono_golden_git_dirs() {
             .any(|w| w[0] == "--allow" && w[1] == "/synth/gitdirs/main"),
         "the approved git dir is granted: {argv:?}"
     );
+    assert!(
+        argv.windows(3)
+            .any(|w| w[0] == "--bind" && w[2] == "/synth/gitdirs/main"),
+        "the approved git dir is bound by the layout: {argv:?}"
+    );
 }
 
 #[test]
-fn nono_refuses_a_dest_remap() {
-    // Landlock grants access AT a path, it cannot move one: a `dest`
-    // different from the source is refused, `dest == path` is fine
-    // (it is no remap).
-    let mut cfg = nono_base(false);
+fn nono_unapproved_git_dir_is_refused_by_the_layout() {
+    // The repo's `.git` pointer names a directory no trusted layer
+    // approved — the layout refuses the bind (review-2 item 1), so
+    // no grant ever exists.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    let err = nono_layered_argv(
+        &cfg,
+        &worktree_repo(&["/synth/gitdirs/main"]),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("an unapproved git dir must be refused");
+    assert!(
+        matches!(
+            err,
+            LayeredError::Bwrap(BwrapError::GitDirNotApproved { .. })
+        ),
+        "wrong error: {err:?}"
+    );
+}
+
+#[test]
+fn nono_dest_remaps_are_built_by_bwrap_now() {
+    // The refusal the pure-nono backend carried (`RemapUnsupported`)
+    // is lifted: bubblewrap binds the dest, and the grant lands at
+    // the in-sandbox dest path.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
     cfg.mounts
         .push(make_mount("/synth/data/refs", Some("/inside"), Mode::Ro));
-    let err = nono_run_argv(
+    let argv = nono_layered_argv(
         &cfg,
         &synth_repo(),
         &Payload::Shell,
         &host_env(&[]),
         &nono_params(),
     )
-    .expect_err("a remap must be refused");
+    .expect("a dest remap is expressible in the layered layout");
     assert!(
-        matches!(err, mysbx::nono::Error::RemapUnsupported { .. }),
-        "wrong error: {err}"
+        argv.windows(3)
+            .any(|w| w[0] == "--ro-bind" && w[1] == "/synth/data/refs" && w[2] == "/inside"),
+        "bwrap binds the remap: {argv:?}"
     );
-
-    let mut cfg = nono_base(false);
-    cfg.mounts.push(make_mount(
-        "/synth/data/refs",
-        Some("/synth/data/refs"),
-        Mode::Ro,
-    ));
-    let argv = nono_run_argv(
-        &cfg,
-        &synth_repo(),
-        &Payload::Shell,
-        &host_env(&[]),
-        &nono_params(),
-    )
-    .expect("dest == path is no remap");
     assert!(
         argv.windows(2)
-            .any(|w| w[0] == "--read" && w[1] == "/synth/data/refs"),
-        "the dest==path mount is a plain read grant: {argv:?}"
+            .any(|w| w[0] == "--read" && w[1] == "/inside"),
+        "the grant is at the dest: {argv:?}"
     );
 }
 
 #[test]
-fn nono_refuses_a_clone_run() {
-    // The clone-remap (clone bound AT the repo path, workspace.md D3)
-    // is inexpressible under Landlock.
-    let workspace = Workspace::Clone {
-        clone: Path::new("/synth/repo.mysbx/clones/s1"),
-    };
+fn nono_golden_clone_run() {
+    // A `--session` clone run — the refusal the pure-nono backend
+    // carried (`CloneUnsupported`) is lifted: bwrap binds the clone
+    // AT the repo's own path (workspace.md D3), the repo-root grant
+    // covers it, and every configured mount is downgraded to ro
+    // (D4) — the grant emitter mirrors the downgrade.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts
+        .push(make_mount("/synth/data/cache", None, Mode::Rw));
     let params = NonoParams {
-        workspace,
+        workspace: Workspace::Clone {
+            clone: Path::new(SYNTH_CLONE),
+        },
         ..nono_params()
     };
-    let err = nono_run_argv(
-        &nono_base(false),
+    let argv = nono_layered_argv(
+        &cfg,
         &synth_repo(),
         &Payload::Shell,
         &host_env(&[]),
         &params,
     )
-    .expect_err("a clone run must be refused");
+    .unwrap();
+    assert_golden("nono-clone-session.txt", &argv);
+    // The clone is bound at the repo's own path …
     assert!(
-        matches!(err, mysbx::nono::Error::CloneUnsupported),
-        "wrong error: {err}"
+        argv.windows(3)
+            .any(|w| w[0] == "--bind" && w[1] == SYNTH_CLONE && w[2] == "/synth/repo"),
+        "the clone is bound at the repo path: {argv:?}"
+    );
+    // … so ONE repo-root grant covers it — no separate clone grant.
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| w[0] == "--allow" && w[1] == SYNTH_CLONE),
+        "the repo-root grant covers the clone: {argv:?}"
+    );
+    // The D4 downgrade: the rw mount is bound ro, and the grant is
+    // the effective mode.
+    assert!(
+        argv.windows(3)
+            .any(|w| w[0] == "--ro-bind" && w[1] == "/synth/data/cache"),
+        "the clone run downgrades the rw mount to ro: {argv:?}"
+    );
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--read" && w[1] == "/synth/data/cache"),
+        "the grant mirrors the downgrade: {argv:?}"
     );
 }
 
 #[test]
 fn nono_refuses_every_session_starting_multiplexer_for_the_shell_only() {
     // The interactive payload: a session-starting multiplexer is
-    // refused (no tmpfs home for the private socket directory).
+    // refused until the unix-socket grants land (bd myconfig-6di.4.5).
     for mux in [
         Multiplexer::Tmux,
         Multiplexer::Workmux,
@@ -4971,17 +5218,11 @@ fn nono_refuses_every_session_starting_multiplexer_for_the_shell_only() {
     ] {
         let mut cfg = nono_base(false);
         cfg.multiplexer = mux;
-        let err = nono_run_argv(
-            &cfg,
-            &synth_repo(),
-            &Payload::Shell,
-            &host_env(&[]),
-            &nono_params(),
-        )
-        .expect_err("a session multiplexer must be refused");
+        let err = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params())
+            .expect_err("a session multiplexer must be refused");
         assert!(
             matches!(err,
-                mysbx::nono::Error::MultiplexerUnavailable { multiplexer }
+                NonoError::MultiplexerUnavailable { multiplexer }
                 if multiplexer == mux),
             "wrong error: {err}"
         );
@@ -4995,30 +5236,23 @@ fn nono_refuses_every_session_starting_multiplexer_for_the_shell_only() {
         &cfg,
         &synth_repo(),
         &Payload::Command(vec!["true".into()]),
-        &host_env(&[]),
         &nono_params(),
     )
     .expect("a one-shot is not a session");
-    assert_eq!(argv[argv.len() - 1], "true");
+    assert_eq!(argv[argv.len() - 1], "--block-net");
 }
 
 #[test]
 fn nono_refuses_the_waypipe_display_for_both_payload_forms() {
     // The waypipe syscall set is unaudited under nono's seccomp filter
-    // — refused for the shell AND for a one-shot.
+    // (bd myconfig-6di.4.6) — refused for the shell AND for a one-shot.
     for payload in [Payload::Shell, Payload::Command(vec!["true".into()])] {
         let mut cfg = nono_base(false);
         cfg.display = Display::Waypipe;
-        let err = nono_run_argv(
-            &cfg,
-            &synth_repo(),
-            &payload,
-            &host_env(&[]),
-            &nono_params(),
-        )
-        .expect_err("waypipe must be refused");
+        let err = nono_run_argv(&cfg, &synth_repo(), &payload, &nono_params())
+            .expect_err("waypipe must be refused");
         assert!(
-            matches!(err, mysbx::nono::Error::DisplayUnavailable),
+            matches!(err, NonoError::DisplayUnavailable),
             "wrong error: {err}"
         );
     }
@@ -5027,8 +5261,9 @@ fn nono_refuses_the_waypipe_display_for_both_payload_forms() {
 #[test]
 fn nono_refuses_a_shared_network_without_an_allowlist() {
     // `network = true` (the mysbx default) with no allowlist: nono
-    // cannot express "share the host network".
-    let err = nono_run_argv(
+    // cannot express "share the host network". Unchanged until
+    // bd myconfig-6di.4.4.
+    let err = nono_layered_argv(
         &nono_base(true),
         &synth_repo(),
         &Payload::Shell,
@@ -5037,8 +5272,8 @@ fn nono_refuses_a_shared_network_without_an_allowlist() {
     )
     .expect_err("a shared network must be refused");
     assert!(
-        matches!(err, mysbx::nono::Error::NetworkSharedUnsupported),
-        "wrong error: {err}"
+        matches!(err, LayeredError::Nono(NonoError::NetworkSharedUnsupported)),
+        "wrong error: {err:?}"
     );
 }
 
@@ -5055,125 +5290,96 @@ fn nono_refuses_an_allowlist_under_a_denied_network() {
         cfg.allow_domains = domains;
         cfg.connect_ports = ports;
         cfg.listen_ports = listen;
-        let err = nono_run_argv(
-            &cfg,
-            &synth_repo(),
-            &Payload::Shell,
-            &host_env(&[]),
-            &nono_params(),
-        )
-        .expect_err("an allowlist under a denied network must be refused");
+        let err = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params())
+            .expect_err("an allowlist under a denied network must be refused");
         assert!(
-            matches!(err, mysbx::nono::Error::AllowlistUnderDeniedNetwork),
+            matches!(err, NonoError::AllowlistUnderDeniedNetwork),
             "wrong error: {err}"
         );
     }
 }
 
 #[test]
-fn nono_refuses_an_unapproved_git_dir() {
-    // The repo's `.git` pointer names a directory no trusted layer
-    // approved — the bwrap/podman rule (review-2 item 1).
-    let err = nono_run_argv(
-        &nono_base(false),
-        &worktree_repo(&["/synth/gitdirs/main"]),
-        &Payload::Shell,
-        &host_env(&[]),
-        &nono_params(),
-    )
-    .expect_err("an unapproved git dir must be refused");
-    assert!(
-        matches!(err, mysbx::nono::Error::GitDirNotApproved { .. }),
-        "wrong error: {err}"
-    );
-}
-
-#[test]
-fn nono_refuses_nested_state_dirs() {
-    // Two entries that nest: `--allow` is recursive, the inner entry
-    // is redundant at best (config.md D15).
-    let mut cfg = nono_base(false);
-    cfg.state_dirs = vec!["a".into(), "a/b".into()];
-    let err = nono_run_argv(
-        &cfg,
-        &synth_repo(),
-        &Payload::Shell,
-        &host_env(&[]),
-        &nono_params(),
-    )
-    .expect_err("nested state dirs must be refused");
-    assert!(
-        matches!(err, mysbx::nono::Error::StateDirNesting { .. }),
-        "wrong error: {err}"
-    );
-}
-
-#[test]
-fn nono_refuses_a_writable_grant_over_a_policy_file() {
+fn nono_policy_files_are_protected_by_the_layout() {
     // An `rw` mount that contains a guarded policy path exposes it —
-    // the same refusal the other backends run (review-3 item 3).
+    // the layout refuses the bind (review-3 item 3), so the grant
+    // never exists. The pure-nono backend carried its own copy of
+    // the check; the layered one has exactly one, in the layout.
     let policy = [mysbx::bwrap::PolicyPath::lexical(
         "/synth/home/.config/mysbx/config.toml",
     )];
-    let params = NonoParams {
-        policy_paths: &policy,
-        ..nono_params()
-    };
-    let mut cfg = nono_base(false);
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
     cfg.mounts
         .push(make_mount("/synth/home/.config/mysbx", None, Mode::Rw));
-    let err = nono_run_argv(
+    let err = nono_layered_argv_with_policy(
         &cfg,
         &synth_repo(),
         &Payload::Shell,
         &host_env(&[]),
-        &params,
+        &nono_params(),
+        &policy,
     )
     .expect_err("a writable policy dir must be refused");
     assert!(
-        matches!(err, mysbx::nono::Error::PolicyFileWritable { .. }),
-        "wrong error: {err}"
+        matches!(
+            err,
+            LayeredError::Bwrap(BwrapError::PolicyFileWritable { .. })
+        ),
+        "wrong error: {err:?}"
     );
 }
 
 #[test]
-fn nono_refuses_a_grant_under_the_nix_daemon_dir_when_the_network_is_denied() {
+fn nono_the_daemon_dir_under_a_denied_network_is_refused_by_the_layout() {
     // `network = false`: a source at, below or containing
-    // `/nix/var/nix` hands the daemon socket back — refused across
-    // ALL mount sources, ro included (review-3 item 2's broadened
-    // guard).
+    // `/nix/var/nix` hands the daemon socket back — refused by the
+    // layout across ALL mount sources, ro included (review-3
+    // item 2's broadened guard).
     for (mode, below) in [(Mode::Ro, true), (Mode::Rw, true), (Mode::Ro, false)] {
         let path = if below {
             "/nix/var/nix/daemon-socket"
         } else {
-            "/nix"
+            "/nix/var"
         };
         let mut cfg = nono_base(false);
         cfg.mounts.push(make_mount(path, None, mode));
-        let err = nono_run_argv(
+        let err = nono_layered_argv(
             &cfg,
             &synth_repo(),
             &Payload::Shell,
             &host_env(&[]),
             &nono_params(),
         )
-        .expect_err("a daemon-dir grant under a denied network must be refused");
+        .expect_err("a daemon-dir mount under a denied network must be refused");
+        // `/nix/var/nix` and `/nix` are protected dests as well —
+        // `check_dest` fires first with the sharper diagnosis, exactly
+        // like on the bubblewrap backend; a source elsewhere inside
+        // the daemon dir (e.g. an unprivileged path below
+        // /nix/var/nix/tmp) hits the daemon rule itself. Both
+        // refusals keep the socket out of a denied-network sandbox.
         assert!(
-            matches!(err, mysbx::nono::Error::DaemonUnderDeniedNetwork { .. }),
-            "wrong error for {path} ({mode:?}): {err}"
+            matches!(
+                err,
+                LayeredError::Bwrap(BwrapError::DaemonUnderDeniedNetwork { .. })
+                    | LayeredError::Bwrap(BwrapError::ProtectedDest { .. })
+            ),
+            "wrong error for {path} ({mode:?}): {err:?}"
         );
     }
 }
 
 #[test]
-fn nono_refuses_a_writable_ancestor_of_a_state_store() {
+fn nono_a_writable_ancestor_of_a_state_store_is_refused_by_the_layout() {
     // An `rw` mount source containing a state backing store lets the
-    // payload swap it for a symlink — refused (config.md D15).
-    let mut cfg = nono_base(false);
+    // payload swap it for a symlink — refused by the layout
+    // (config.md D15), never granted.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
     cfg.state_dirs = vec!["x".into()];
     cfg.mounts
         .push(make_mount("/synth/repo.mysbx", None, Mode::Rw));
-    let err = nono_run_argv(
+    let err = nono_layered_argv(
         &cfg,
         &synth_repo(),
         &Payload::Shell,
@@ -5182,7 +5388,267 @@ fn nono_refuses_a_writable_ancestor_of_a_state_store() {
     )
     .expect_err("a writable state tree must be refused");
     assert!(
-        matches!(err, mysbx::nono::Error::StateTreeWritable { .. }),
-        "wrong error: {err}"
+        matches!(
+            err,
+            LayeredError::Bwrap(BwrapError::StateTreeWritable { .. })
+        ),
+        "wrong error: {err:?}"
+    );
+}
+
+#[test]
+fn nono_the_nono_state_tmpfs_is_a_protected_base_path() {
+    // `/mysbx-nono` (backends.md D1, "nono's own inputs"): a mount
+    // dest at, below or above it is refused like every base path,
+    // and the tmpfs is created empty by the base binds — nono's
+    // state never mixes with payload content.
+    for dest in ["/mysbx-nono", "/mysbx-nono/state", "/mysbx-nono/state/x"] {
+        let mut cfg = nono_base(true);
+        cfg.allow_domains = vec!["api.openai.com".into()];
+        cfg.mounts
+            .push(make_mount("/synth/data/refs", Some(dest), Mode::Rw));
+        let err = nono_layered_argv(
+            &cfg,
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env(&[]),
+            &nono_params(),
+        )
+        .expect_err("a dest onto the nono state tmpfs must be refused");
+        assert!(
+            matches!(err, LayeredError::Bwrap(BwrapError::ProtectedDest { protected, .. })
+                if protected == NONO_STATE),
+            "wrong error for {dest}: {err:?}"
+        );
+    }
+    // The tmpfs itself is in the base binds.
+    let argv = nono_layered_argv(
+        &nono_base(false),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--tmpfs" && w[1] == NONO_STATE),
+        "the nono state tmpfs is a base bind: {argv:?}"
+    );
+    // And it is never granted to the payload.
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| (w[0] == "--allow" || w[0] == "--read") && w[1] == NONO_STATE),
+        "the nono state tmpfs is never granted: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_two_environments_the_env_segment_applies_the_payload_env() {
+    // backends.md D1, "Two environments": bwrap's --setenv carries
+    // ONLY nono's infrastructure (PATH, the HOME/XDG dirs below
+    // /mysbx-nono, NONO_NO_UPDATE_CHECK) — nothing from the host, a
+    // config layer or forward-env reaches nono. The pinned env then
+    // unsets every infra name (-u) before applying the payload
+    // environment — forwarded first, [env] next (later wins), the
+    // HOME/PATH/CA pins last — so an [env] PYTHONPATH reaches the
+    // payload exactly as on the bubblewrap backend, and the payload
+    // never sees an XDG directory below /mysbx-nono.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.env.insert("TERM".into(), "cfg-wins".into());
+    cfg.env.insert("PYTHONPATH".into(), "/synth/pylibs".into());
+    let mut host = host_env(&[("TERM", "host-val"), ("EDITOR", "nvim")]);
+    host.insert("NONO_NO_UPDATE_CHECK".to_string(), "0".to_string());
+
+    let argv =
+        nono_layered_argv(&cfg, &synth_repo(), &Payload::Shell, &host, &nono_params()).unwrap();
+
+    // bwrap's --setenv carries ONLY the infrastructure variables.
+    let setenvs: Vec<(String, String)> = argv
+        .windows(3)
+        .filter(|w| w[0] == "--setenv")
+        .map(|w| (w[1].clone(), w[2].clone()))
+        .collect();
+    for key in [
+        "PATH",
+        "HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_STATE_HOME",
+        "TMPDIR",
+        "NONO_NO_UPDATE_CHECK",
+    ] {
+        assert!(
+            setenvs.iter().any(|(k, _)| k == key),
+            "the infra env sets {key}: {argv:?}"
+        );
+    }
+    assert_eq!(
+        setenvs
+            .iter()
+            .filter(|(k, _)| k != "PATH" && k != "HOME")
+            .count()
+            + setenvs
+                .iter()
+                .filter(|(k, _)| k == "PATH" || k == "HOME")
+                .count(),
+        setenvs.len()
+    );
+    assert_eq!(
+        setenvs.len(),
+        6,
+        "nothing else travels via --setenv: {setenvs:?}"
+    );
+    assert!(
+        setenvs.iter().any(|(k, v)| k == "HOME" && v == NONO_STATE),
+        "nono's HOME is its own state tmpfs: {setenvs:?}"
+    );
+    // The forwarded NONO_NO_UPDATE_CHECK=0 never reached nono: the
+    // infra value is the one --setenv carries, and the payload env
+    // re-applies it AFTER the -u (the value the host chose reaches
+    // the payload only, exactly like HOME below).
+    assert!(
+        setenvs
+            .iter()
+            .any(|(k, v)| k == "NONO_NO_UPDATE_CHECK" && v == "1"),
+        "nono's update check stays off: {setenvs:?}"
+    );
+
+    // The env-segment: `env -u <infra names> <payload env> <payload>`.
+    // The nono chain sits between bwrap's `--` and the payload; its
+    // own `--` separates the wrapper from the `env` child.
+    let nono_pos = argv
+        .iter()
+        .position(|a| a == NONO_BIN)
+        .expect("the nono chain is in the payload section");
+    let run_pos = argv
+        .iter()
+        .position(|a| a == "run")
+        .expect("the run subcommand follows the nono binary");
+    assert!(run_pos == nono_pos + 1, "run follows nono: {argv:?}");
+    let nono_dash = argv[nono_pos..]
+        .iter()
+        .position(|a| a == "--")
+        .expect("nono's own -- separator")
+        + nono_pos;
+    assert_eq!(
+        argv[nono_dash + 1],
+        "env",
+        "the pinned env applies the payload environment: {argv:?}"
+    );
+    // The -u list: every infra name, in the infra order.
+    let mut i = nono_dash + 2;
+    for key in [
+        "PATH",
+        "HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_STATE_HOME",
+        "TMPDIR",
+        "NONO_NO_UPDATE_CHECK",
+    ] {
+        assert_eq!(argv[i], "-u", "-u {key}: {argv:?}");
+        assert_eq!(argv[i + 1], key, "-u {key}: {argv:?}");
+        i += 2;
+    }
+    // The payload environment, in the backend's own precedence:
+    // forwarded (BTreeMap order: EDITOR, NONO_NO_UPDATE_CHECK, TERM),
+    // [env] (PYTHONPATH, TERM — later TERM wins), then the pins.
+    let assignments: Vec<&str> = argv[i..]
+        .iter()
+        .take_while(|a| !a.is_empty() && a.as_str() != "/synth/bin/bash")
+        .map(|a| a.as_str())
+        .collect();
+    let expected = [
+        "EDITOR=nvim",
+        "NONO_NO_UPDATE_CHECK=0",
+        "TERM=host-val",
+        "PYTHONPATH=/synth/pylibs",
+        "TERM=cfg-wins",
+        "HOME=/mysbx-home",
+        "PATH=/synth/bin",
+    ];
+    assert_eq!(assignments, expected, "the payload env, in order: {argv:?}");
+    assert_eq!(argv[argv.len() - 1], "/synth/bin/bash");
+    // The payload never sees an XDG directory below /mysbx-nono: no
+    // assignment re-sets them.
+    assert!(
+        !assignments
+            .iter()
+            .any(|a| a.starts_with("XDG_CONFIG_HOME=") || a.starts_with("XDG_STATE_HOME=")),
+        "the payload env re-sets no nono-infra XDG dir: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_no_env_binary_no_payload_env_vars_still_runs() {
+    // The smallest env-segment: `-u` list, the pins, the payload —
+    // no forwarded, no [env] entries (the minimal golden's shape).
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    let nono_pos = argv.iter().position(|a| a == NONO_BIN).unwrap();
+    let nono_dash = argv[nono_pos..].iter().position(|a| a == "--").unwrap() + nono_pos;
+    assert_eq!(argv[nono_dash + 1], "env");
+    let tail: Vec<&str> = argv[nono_dash + 1..].iter().map(|a| a.as_str()).collect();
+    assert_eq!(
+        tail,
+        vec![
+            "env",
+            "-u",
+            "PATH",
+            "-u",
+            "HOME",
+            "-u",
+            "XDG_CONFIG_HOME",
+            "-u",
+            "XDG_STATE_HOME",
+            "-u",
+            "TMPDIR",
+            "-u",
+            "NONO_NO_UPDATE_CHECK",
+            "HOME=/mysbx-home",
+            "PATH=/synth/bin",
+            "/synth/bin/bash",
+        ],
+        "the minimal env-segment: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_ca_bundle_pins_reach_the_payload_through_the_env_segment() {
+    // The CA pins are payload environment, not nono infrastructure:
+    // they travel as env assignments after [env], like HOME and PATH
+    // (bd myconfig-938's argv order, config.md D14).
+    let argv = nono_layered_argv_with_pins(
+        &{
+            let mut cfg = nono_base(true);
+            cfg.allow_domains = vec!["api.openai.com".into()];
+            cfg
+        },
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+        Some("/synth/store/ca-bundle.crt"),
+    )
+    .unwrap();
+    assert!(
+        argv.iter()
+            .any(|a| a == "SSL_CERT_FILE=/synth/store/ca-bundle.crt"),
+        "the CA pins reach the payload: {argv:?}"
+    );
+    assert!(
+        !argv
+            .windows(3)
+            .any(|w| w[0] == "--setenv" && w[1] == "SSL_CERT_FILE"),
+        "the CA pins are NOT nono infrastructure: {argv:?}"
     );
 }

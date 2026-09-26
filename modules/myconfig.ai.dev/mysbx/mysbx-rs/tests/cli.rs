@@ -75,6 +75,7 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env_remove("MYSBX_PODMAN")
         .env_remove("MYSBX_NONO")
         .env_remove("MYSBX_NONO_PROFILE")
+        .env_remove("MYSBX_ENV")
         // The waypipe pins are wrapper-provided too (D18): a wrapped
         // mysbx on PATH would otherwise leak its display pins into
         // tests that must exercise the UNPINNED refusal path.
@@ -7576,27 +7577,22 @@ fn gvisor_load_image_rejects_rw_flag() {
     assert_eq!(code, 2);
     assert!(stderr.contains("--rw is not valid with `gvisor-load-image"));
 }
-
-// ---- the nono backend (bd myconfig-6di.2) -----------------------------------
+// ---- the nono backend (backends.md D1: bubblewrap with nono inside) ---------
 
 /// The nono-minimal golden (tests/assets/argv/nono-minimal.txt) with
-/// the fixture repo path substituted, `nono` as argv[0] — the expected
-/// `--dry-run` output of the smallest nono invocation.
+/// the fixture repo path substituted, `bwrap` as argv[0] — the expected
+/// `--dry-run` output of the smallest layered nono invocation: the
+/// bwrap argv with the `nono run` chain and the pinned `env` inside.
 fn expected_nono_minimal_argv(repo: &Path) -> String {
     let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/assets/argv/nono-minimal.txt");
     let argv = std::fs::read_to_string(&golden)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", golden.display()))
         .replace("/synth/repo", &repo.to_string_lossy());
-    format!("nono\n{argv}")
+    format!("bwrap\n{argv}")
 }
 
-/// A fixture with `backend = "nono"` in the sidecar config.
-fn fixture_nono(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
-    fixture_nono_config(name, args, "")
-}
-
-/// [`fixture_nono`] with an extra `config.toml` body appended after the
-/// `backend = "nono"` line.
+/// A fixture with `backend = "nono"` in the sidecar config plus an
+/// extra `config.toml` body appended after the `backend = "nono"` line.
 fn fixture_nono_config(
     name: &str,
     args: &[&'static str],
@@ -7612,20 +7608,29 @@ fn fixture_nono_config(
 }
 
 #[test]
-fn nono_backend_dry_run_prints_the_argv() {
-    // backend = "nono", network = false: the dry run prints the nono
-    // argv, one argument per line — argv[0] the backend binary, the
-    // payload last, byte-identical to the nono-minimal golden with
-    // the repo path substituted.
+fn nono_backend_dry_run_prints_the_layered_argv() {
+    // backend = "nono", network = false: the dry run prints the
+    // LAYERED argv — bwrap's own layout, `nono run` inside, the
+    // pinned `env` applying the payload environment, the payload
+    // last — byte-identical to the nono-minimal golden with the repo
+    // path substituted, `bwrap` as argv[0] (MYSBX_BWRAP unset in the
+    // test harness, the crate's PATH fallback).
     let (inv, _, _) = fixture_nono_config("nono-dry-run", &[], "network = false\n");
     let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
     assert_eq!(code, 0, "stderr: {stderr}");
     let lines: Vec<&str> = stdout.lines().collect();
-    assert_eq!(lines[0], "nono", "argv[0] is the backend binary: {stdout}");
-    assert_eq!(lines[1], "run");
-    assert_eq!(lines[2], "--profile");
-    assert_eq!(lines[3], "default");
-    // The payload is the last argument.
+    assert_eq!(lines[0], "bwrap", "argv[0] is bwrap: {stdout}");
+    assert_eq!(lines[1], "--clearenv");
+    // The base layout carries nono's own state tmpfs.
+    assert!(stdout.contains("--tmpfs\n/mysbx-nono\n"), "{stdout}");
+    // The nono chain: `nono run --profile default`, the grants, its
+    // own `--`, then `env -u …` and the payload last.
+    assert!(
+        stdout.contains("nono\nrun\n--profile\ndefault\n"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("\n--block-net\n"), "{stdout}");
+    assert!(stdout.contains("\nenv\n-u\nPATH\n"), "{stdout}");
     assert_eq!(lines[lines.len() - 1], "/synth/bin/bash");
     assert_eq!(stdout, expected_nono_minimal_argv(&inv.cwd));
 }
@@ -7647,7 +7652,7 @@ fn nono_backend_flag_positions() {
         std::fs::write(sidecar.join("config.toml"), "network = false\n").unwrap();
         let (code, stdout, stderr) = run_binary_with(&inv, &args);
         assert_eq!(code, 0, "{label}: stderr: {stderr}");
-        assert!(stdout.starts_with("nono\n"), "{label}: {stdout}");
+        assert!(stdout.starts_with("bwrap\n"), "{label}: {stdout}");
     }
 
     // An allowlist plus the flag: the run succeeds and the flag alone
@@ -7661,21 +7666,22 @@ fn nono_backend_flag_positions() {
     .unwrap();
     let (code, stdout, stderr) = run_binary_with(&inv, &["--backend", "nono", "--dry-run"]);
     assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(stdout.starts_with("nono\n"), "{stdout}");
+    assert!(stdout.starts_with("bwrap\n"), "{stdout}");
 }
 
 #[test]
 fn nono_report_labels_the_backend() {
     // The report names the backend with its provenance tag and labels
-    // the backend binary `nono:` — a nono run claiming a `bwrap:`
-    // binary would lie (report.rs). `network = false` keeps the run
-    // accepted.
-    let (inv, _, sidecar) = fixture("nono-report", &[]);
-    std::fs::write(
-        sidecar.join("config.toml"),
-        "backend = \"nono\"\nnetwork = false\n",
-    )
-    .unwrap();
+    // the executed binary `nono:` — the layered run's argv[0] IS
+    // bwrap (backends.md D1), and the label says so: a nono run
+    // execs bwrap, and the argv it describes wraps `nono run` inside.
+    // `network = false` keeps the run accepted (the shared-network
+    // default would be refused — nono mediates per connection).
+    let (inv, _, _) = fixture_nono_config(
+        "nono-report",
+        &["--backend", "nono", "--verbose", "--dry-run"],
+        "network = false\n",
+    );
     let (code, stdout, stderr) =
         run_binary_with(&inv, &["--backend", "nono", "--verbose", "--dry-run"]);
     assert_eq!(code, 0, "stderr: {stderr}");
@@ -7685,12 +7691,23 @@ fn nono_report_labels_the_backend() {
         "{report}"
     );
     assert!(
-        report.contains("nono:           nono"),
-        "the backend-binary line labels itself nono: {report}"
+        report
+            .contains("nono:           bwrap (layered — bwrap builds the view, nono runs inside)"),
+        "the backend-binary line labels the layering: {report}"
     );
     assert!(!report.contains("bwrap:"), "{report}");
-    // The argv block behind the report is the nono one.
-    assert!(argv_block(&stdout).starts_with("nono\nrun\n"), "{stdout}");
+    // The report describes the layered truth: the sandbox home is
+    // the tmpfs, exactly like the bubblewrap backend's report (the
+    // `+ 1 state dir(s)` is the implicit `.ssh` keypair entry, D22).
+    assert!(
+        report.contains("home:           /mysbx-home (tmpfs"),
+        "{report}"
+    );
+    // The argv block behind the report is the layered one.
+    assert!(
+        argv_block(&stdout).starts_with("bwrap\n--clearenv\n"),
+        "{stdout}"
+    );
 }
 
 #[test]
@@ -7759,52 +7776,75 @@ fn allowlist_with_network_false_is_refused() {
 }
 
 #[test]
-fn nono_with_session_is_refused_before_the_clone_is_created() {
-    // --session under nono is a path remap, inexpressible under
-    // Landlock. The refusal (step 4c) fires before step 4a creates
-    // anything — verified on a REAL run (no --dry-run): exit 70 and
-    // no clones/ directory under the sidecar.
-    let (inv, _, _sidecar) = fixture_nono("nono-session-refused", &["--session", "s1"]);
+fn nono_session_clone_is_bound_at_the_repo_path() {
+    // --session under the LAYERED nono backend works (backends.md D1):
+    // bwrap binds the clone AT the repo's own path (workspace.md D3),
+    // the repo-root grant covers it, and the run is accepted — the
+    // pure-nono refusal is gone. The dry run creates nothing; the
+    // real run creates the clone like the bubblewrap backend's.
+    let (inv, _, sidecar) = fixture_nono_config(
+        "nono-session-dry",
+        &["--session", "s1", "--dry-run"],
+        "network = false\n",
+    );
+    // The repo is COMMITTED (the `git_repo` helper, like the session
+    // fixtures): on an empty repo the plan stops at EmptyHostRepo and
+    // there is no clone to bind — a committed repo is what lets the
+    // dry run print the bind.
+    if git_repo(inv.cwd.parent().unwrap(), "repo").is_none() {
+        return; // no git on PATH: skip, like the session fixtures
+    }
     let (code, stdout, stderr) = run_binary_with(&inv, &["--session", "s1", "--dry-run"]);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
-    assert!(stderr.contains("--session"), "{stderr}");
-    assert!(stderr.contains("nono"), "{stderr}");
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let clone = sidecar.join("clones").join("s1");
     assert!(
-        stderr.contains("remap") || stderr.contains("clone"),
-        "the message explains the remap/clone: {stderr}"
+        stdout
+            .lines()
+            .zip(stdout.lines().skip(1))
+            .any(|(a, b)| a == "--bind" && b == &clone.to_string_lossy().to_string()),
+        "the clone is bound: {stdout}"
+    );
+    // The grant is the repo's own path — the clone appears there.
+    assert!(
+        stdout
+            .lines()
+            .zip(stdout.lines().skip(1))
+            .any(|(a, b)| a == "--allow" && b == &inv.cwd.to_string_lossy().to_string()),
+        "the repo-root grant covers the clone: {stdout}"
     );
     assert!(
-        !stdout.contains("run\n--profile"),
-        "no argv on refusal: {stdout}"
+        !stdout.contains(&format!("--allow\n{}", clone.to_string_lossy())),
+        "no separate clone grant: {stdout}"
+    );
+    assert!(
+        !clone.exists(),
+        "the dry run creates nothing: {}",
+        sidecar.display()
     );
 
-    // The real run: same refusal, and the sidecar has no clones/.
-    // The repo is COMMITTED (the `git_repo` helper, like the session
-    // fixtures): on an empty repo the plan stops at EmptyHostRepo
-    // and no backend would ever create a clone — a committed repo is
-    // what lets the no-clones/ assertion discriminate a refusal that
-    // sits BEFORE step 4a from one that fires after it.
-    let (inv, _, sidecar) = fixture_nono("nono-session-refused-real", &["--session", "s1"]);
+    // The real run creates the clone on the session branch, like the
+    // bubblewrap backend's session run (the repo is COMMITTED so the
+    // plan has something to clone; without git on PATH the test
+    // skips, like the session fixtures).
+    let (inv, _, sidecar) = fixture_nono_config(
+        "nono-session-real",
+        &["--session", "s1"],
+        "network = false\n",
+    );
     let Some(_) = git_repo(inv.cwd.parent().unwrap(), "repo") else {
         return; // no git on PATH: skip, like the session fixtures
     };
     let (code, stdout, stderr) = run_binary_with(&inv, &["--session", "s1"]);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
-    assert!(
-        !stdout.contains("run\n--profile"),
-        "no argv on refusal: {stdout}"
-    );
-    assert!(
-        !sidecar.join("clones").exists(),
-        "the refusal must precede the clone creation: {}",
-        sidecar.display()
-    );
+    assert!(code == 0 || code == 70, "code {code}: {stderr}\n{stdout}");
+    let clone = sidecar.join("clones").join("s1");
+    assert!(clone.join(".git").is_dir(), "the clone exists: {stdout}");
 }
 
 #[test]
 fn nono_with_waypipe_is_refused() {
     // display = "waypipe" under nono: the syscall set is unaudited
-    // under nono's seccomp filter — refused, never silently headless.
+    // under nono's seccomp filter (bd myconfig-6di.4.6) — refused,
+    // never silently headless.
     let (inv, _, sidecar) = fixture("nono-waypipe-refused", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
@@ -7823,8 +7863,9 @@ fn nono_with_waypipe_is_refused() {
 
 #[test]
 fn nono_with_multiplexer_is_refused() {
-    // A session-starting multiplexer under nono: no tmpfs home for the
-    // private socket directory — refused under --dry-run too.
+    // A session-starting multiplexer under nono: the unix-socket
+    // grants are unaudited (bd myconfig-6di.4.5) — refused under
+    // --dry-run too.
     let (inv, _, sidecar) = fixture("nono-mux-refused", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
@@ -7842,12 +7883,13 @@ fn nono_with_multiplexer_is_refused() {
 }
 
 #[test]
-fn nono_with_dest_remap_mount_is_refused() {
-    // A mount with dest != path under nono: Landlock cannot move a
-    // path — refused by the argv builder. The source is a directory
+fn nono_with_dest_remap_mount_is_bound_by_bwrap() {
+    // A mount with dest != path under nono: the LAYERED layout binds
+    // it (the pure-nono `RemapUnsupported` refusal is gone), and the
+    // grant lands at the in-sandbox dest. The source is a directory
     // INSIDE the fixture (not a host-dependent /etc/ssl): the needle
     // asserts the exact path of this run only.
-    let (inv, _, sidecar) = fixture("nono-remap-refused", &[]);
+    let (inv, _, sidecar) = fixture("nono-remap-bind", &[]);
     let mount_src = inv.cwd.join("remap-src");
     std::fs::create_dir_all(&mount_src).unwrap();
     let mount_src = mount_src.to_string_lossy().into_owned();
@@ -7855,17 +7897,27 @@ fn nono_with_dest_remap_mount_is_refused() {
         sidecar.join("config.toml"),
         format!(
             "backend = \"nono\"\n\
+             network = false\n\
              [[mounts]]\npath = {mount_src:?}\ndest = \"/ssl\"\nmode = \"ro\"\n"
         ),
     )
     .unwrap();
     let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
-    assert!(stderr.contains(&mount_src), "{stderr}");
-    assert!(stderr.contains("/ssl"), "{stderr}");
+    assert_eq!(code, 0, "stderr: {stderr}");
     assert!(
-        !stdout.contains("--allow-cwd"),
-        "no argv on refusal: {stdout}"
+        stdout
+            .lines()
+            .zip(stdout.lines().skip(1).skip(0))
+            .any(|(a, b)| a == "--ro-bind" && b == &mount_src),
+        "bwrap binds the remap source: {stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("--ro-bind\n{mount_src}\n/ssl\n")),
+        "at the configured dest: {stdout}"
+    );
+    assert!(
+        stdout.contains("--read\n/ssl\n"),
+        "the grant is at the dest: {stdout}"
     );
 }
 
@@ -7874,7 +7926,8 @@ fn nono_shared_network_without_allowlist_is_refused() {
     // The mysbx default (network shared, no allowlist) cannot be
     // expressed under nono: it mediates per connection. The refusal
     // says so — with `network = true` explicit AND with the key
-    // omitted (the merged default is shared).
+    // omitted (the merged default is shared). Unchanged until bd
+    // myconfig-6di.4.4.
     for (config, label) in [
         ("backend = \"nono\"\nnetwork = true\n", "explicit true"),
         ("backend = \"nono\"\n", "omitted (default shared)"),
@@ -7907,7 +7960,7 @@ fn nono_allowlist_reaches_the_argv() {
     // The full mapping end-to-end: allow-domains, connect-ports and
     // listen-ports all reach the printed argv with the configured
     // values, in merged order, next to the daemon-socket grant of the
-    // shared network.
+    // shared network — inside the layered bwrap argv.
     let (inv, _, sidecar) = fixture("nono-allowlist-argv", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
@@ -7919,7 +7972,7 @@ fn nono_allowlist_reaches_the_argv() {
     .unwrap();
     let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
     assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(stdout.starts_with("nono\nrun\n"), "{stdout}");
+    assert!(stdout.starts_with("bwrap\n--clearenv\n"), "{stdout}");
     for pair in [
         ("--allow-domain", "api.openai.com"),
         ("--allow-domain", "github.com"),
@@ -7944,86 +7997,42 @@ fn nono_allowlist_reaches_the_argv() {
     );
 }
 
-// ---- the nono NIX_CONF_DIR pin contract (bd myconfig-bf2) ---------------------
-
 #[test]
-fn nono_refuses_a_nix_conf_pin_that_is_not_named_nix_conf() {
-    // Under nono the pinned nix.conf is consumed as
-    // `NIX_CONF_DIR = <parent of the file>`, and nix reads that
-    // directory's `nix.conf` — so a pin NOT named `nix.conf` would
-    // silently load NO configuration (the bug shape: a bare store
-    // file made the parent `/nix/store`). Refused loudly instead,
-    // the same "fail on a packaging bug" rule as bwrap's
-    // non-`--try` binds. Only with the shared network: the env
-    // variable travels with the daemon socket, and a denied network
-    // never reads the pin at all.
-    for (network, label) in [(true, "shared network"), (false, "denied network")] {
-        let (inv, _, sidecar) = fixture_nono_config(
-            "nono-nix-conf-pin-shape",
+fn nono_pinned_nix_conf_is_bound_like_the_bubblewrap_backend() {
+    // Under the layered backend the sanitized nix client configuration
+    // is bound at /etc/nix/nix.conf exactly like on the bubblewrap
+    // backend (backends.md D1: "the bubblewrap backend's argv,
+    // unchanged") — the pure-nono NIX_CONF_DIR contract (bd
+    // myconfig-bf2) is gone with it: whatever the pin is NAMED, the
+    // bind is at the in-sandbox path. The report names the pin, and a
+    // name other than `nix.conf` stays unrefused.
+    for (file_name, label) in [
+        ("nix.conf", "named nix.conf"),
+        ("mysbx-nix.conf", "other name"),
+    ] {
+        let (inv, _, _) = fixture_nono_config(
+            "nono-nix-conf-pin",
             &[],
-            &format!(
-                "network = {network}\n{}",
-                if network {
-                    "allow-domains = [\"api.openai.com\"]\n"
-                } else {
-                    ""
-                }
-            ),
+            "network = true\nallow-domains = [\"api.openai.com\"]\n",
         );
-        let conf = inv.home.join("mysbx-nix.conf");
+        let conf = inv.home.join(file_name);
         std::fs::write(&conf, "experimental-features = nix-command flakes\n").unwrap();
-        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
         cmd.env("MYSBX_NIX_CONF", &conf);
         let out = cmd.output().expect("failed to spawn the mysbx binary");
         let stdout = String::from_utf8_lossy(&out.stdout);
         let stderr = String::from_utf8_lossy(&out.stderr);
-        if network {
-            assert_eq!(
-                out.status.code(),
-                Some(mysbx::EXIT_INFRASTRUCTURE),
-                "{label}: stderr: {stderr}"
-            );
-            assert!(
-                stderr.contains("nix.conf"),
-                "{label}: the message names the contract: {stderr}"
-            );
-            assert!(stdout.is_empty(), "{label}: no argv on refusal: {stdout}");
-        } else {
-            // A denied network never sets NIX_CONF_DIR, so the pin's
-            // name is not consumed and the run is accepted.
-            assert_eq!(out.status.code(), Some(0), "{label}: stderr: {stderr}");
-            assert!(stdout.starts_with("nono\nrun\n"), "{label}: {stdout}");
-        }
+        assert_eq!(out.status.code(), Some(0), "{label}: stderr: {stderr}");
+        assert!(
+            stdout.contains(&format!(
+                "--ro-bind\n{}\n/etc/nix/nix.conf\n",
+                conf.display()
+            )),
+            "{label}: the pin is bound at /etc/nix/nix.conf: {stdout}"
+        );
+        assert!(
+            !stdout.contains("NIX_CONF_DIR="),
+            "{label}: no NIX_CONF_DIR in the layered argv: {stdout}"
+        );
     }
-}
-
-#[test]
-fn nono_accepts_a_nix_conf_pin_named_nix_conf() {
-    // The contract's positive side: a pin that IS a file named
-    // `nix.conf` inside a directory — the shape the Nix wrapper pins
-    // since bd myconfig-bf2 — makes the run's exec env set
-    // NIX_CONF_DIR to that directory, and nix then finds its
-    // configuration. `--dry-run` returns before the exec, so the
-    // observable is the acceptance plus the report naming the pin.
-    let (inv, _, _) = fixture_nono_config(
-        "nono-nix-conf-pin-ok",
-        &[],
-        "network = true\nallow-domains = [\"api.openai.com\"]\n",
-    );
-    let dir = inv.home.join("nix-conf-dir");
-    std::fs::create_dir_all(&dir).unwrap();
-    let conf = dir.join("nix.conf");
-    std::fs::write(&conf, "experimental-features = nix-command flakes\n").unwrap();
-    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
-    cmd.env("MYSBX_NIX_CONF", &conf);
-    let out = cmd.output().expect("failed to spawn the mysbx binary");
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(0), "stderr: {stderr}");
-    assert!(argv_block(&stdout).starts_with("nono\nrun\n"), "{stdout}");
-    let report = report_lines(&stdout).join("\n");
-    assert!(
-        report.contains(&format!("nix.conf:       {}", conf.display())),
-        "the report names the pin: {report}"
-    );
 }

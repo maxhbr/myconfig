@@ -98,6 +98,17 @@
 #                     invocation can still override it. Default
 #                     `"default"`, nono's built-in conservative base
 #                     profile.
+#   MYSBX_ENV        the coreutils `env` of the layered nono backend
+#                     (mysbx-rs/src/bwrap.rs, docs/design/
+#                     backends.md D1 "Two environments"): it runs as
+#                     nono's child inside the sandbox and applies
+#                     the payload environment — `-u` for every
+#                     nono-infra name, then the forwarded/[env]/pin
+#                     values — so nono's environment filter never
+#                     sees the payload environment. Pinned from this
+#                     wrapper's own closure (`coreutils`); an
+#                     unwrapped build gets no pin and the crate's
+#                     PATH fallback (`env` via env_or) applies.
 #
 # All these pins are absolute store paths — nothing is left to host lookup.
 # (MYSBX_NONO_PROFILE is an operator knob among them, like
@@ -488,6 +499,13 @@ let
   nonoPins = lib.optionalString (
     nono != null
   ) "--set MYSBX_NONO '${lib.getExe nono}' --set-default MYSBX_NONO_PROFILE '${nonoProfile}'";
+  # The pinned `env` of the layered nono backend (backends.md D1,
+  # "Two environments"): the coreutils `env` from THIS closure — an
+  # absolute store path visible through the read-only `/nix/store`
+  # bind, never a host PATH lookup. Gated with the nono pins: without
+  # the backend the env pin is meaningless noise in the wrapper, the
+  # same reasoning as the profile pin above.
+  nonoEnvPins = lib.optionalString (nono != null) "--set MYSBX_ENV '${coreutils}/bin/env'";
   # The `ssh-keygen` of the sandbox keypair generation (docs/design/
   # config.md D22): an absolute store path from mysbx's own closure —
   # the same wrapper idiom as MYSBX_BWRAP, so host-side key generation
@@ -518,6 +536,7 @@ symlinkJoin {
       ${gvisorPins} \
       ${waypipePins} \
       ${nonoPins} \
+      ${nonoEnvPins} \
       ${sshKeygenPins}
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in

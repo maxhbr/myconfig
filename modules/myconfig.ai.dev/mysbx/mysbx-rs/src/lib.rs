@@ -1455,24 +1455,6 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         }
     }
 
-    // 4c. `--session` under the nono backend: a clone run is a
-    // PATH REMAP (the clone bound AT the repo's own path,
-    // workspace.md D3) and Landlock cannot move a path, so it is
-    // inexpressible there — the nono argv builder refuses it too
-    // (Error::CloneUnsupported, defense in depth). The refusal must
-    // sit HERE, before step 4a creates anything: a clone that is
-    // created first and refused second would leave a clone behind
-    // on the host (a violation of "a broken configuration creates
-    // nothing"). It is before the `--dry-run` early return like
-    // every other 4b-block refusal, so a dry run audits it too.
-    if backend == "nono" && session.is_some() {
-        eprintln!(
-            "mysbx: --session is refused on the nono backend — Landlock has no path remap, so a clone session cannot be bound at the repo's path"
-        );
-        eprintln!("  run live (without --session), or pick another backend for --session");
-        return EXIT_INFRASTRUCTURE;
-    }
-
     // 4a. the session clone (workspace.md D2): the FIRST `--session`
     // run creates it — the one deliberate exception to "a run creates
     // nothing" (cli.md D13), because `--session NAME` is an explicit
@@ -1680,23 +1662,17 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         mux_entry: report_mux_entry.as_deref(),
         waypipe: report_waypipe.clone(),
         workspace: workspace.clone(),
+        inner: None,
     };
     // The backend dispatch produces the backend binary, the argv and
-    // — for nono only — an exec environment: nono INHERITS the parent
-    // environment (the nono-app.nix tier precedent: the wrapper
-    // exports variables before exec'ing nono; there is no --clearenv
-    // equivalent), so the variables bwrap passes via --setenv and
-    // podman via --env flags must be set on top of the inherited
-    // parent env instead, via `Command::envs`. bwrap gets
-    // `--clearenv` (a cleared environment never enters), podman
-    // gets `--env` flags — both return `None` here and keep their
-    // existing argv-only behavior.
-    let (backend_bin, argv, image, exec_env): (
-        _,
-        _,
-        Option<String>,
-        Option<std::collections::BTreeMap<String, String>>,
-    ) = match backend {
+    // — for podman-gvisor — the container image. Every backend's
+    // environment is argv-owned (bwrap's `--clearenv`/`--setenv`,
+    // podman's `--env` flags); the layered nono backend builds on
+    // bwrap's argv (docs/design/backends.md D1), so it inherits the
+    // same mechanism: bwrap carries nono's infrastructure
+    // environment, a pinned `env` between nono and the payload
+    // applies the payload environment.
+    let (backend_bin, argv, image): (_, _, Option<String>) = match backend {
         "bubblewrap" => {
             let params = bwrap::Params {
                 shell: &shell,
@@ -1708,6 +1684,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 mux_entry: mux_entry.as_deref(),
                 waypipe: waypipe_params.clone(),
                 workspace: workspace.clone(),
+                inner: None,
             };
             let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
                 Ok(a) => a,
@@ -1717,9 +1694,8 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 }
             };
             let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
-            // bwrap's --clearenv + --setenv own the environment —
-            // nothing to pin on top of the inherited parent env.
-            (bwrap_bin, argv, None::<String>, None)
+            // bwrap's --clearenv + --setenv own the environment.
+            (bwrap_bin, argv, None::<String>)
         }
         "podman-gvisor" => {
             use std::borrow::Cow;
@@ -1858,127 +1834,73 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 }
             };
             let podman_bin = env_or("MYSBX_PODMAN", "podman");
-            // podman's --env flags own the environment — nothing to
-            // pin on top of the inherited parent env.
-            (podman_bin, argv, Some(gvisor_image), None)
+            // podman's --env flags own the environment.
+            (podman_bin, argv, Some(gvisor_image))
         }
         "nono" => {
-            // The backend binary and profile (the tier wrapper pins
-            // both; "default" is nono's own conservative base
-            // profile — the same one nono-app.nix passes).
+            // The layered backend of docs/design/backends.md D1:
+            // bubblewrap builds the filesystem view exactly as the
+            // bubblewrap backend does, and `nono run` wraps the
+            // payload INSIDE that view. The nono binary and profile
+            // are the tier wrapper's pins (MYSBX_NONO,
+            // MYSBX_NONO_PROFILE — an operator knob, `--set-default`;
+            // a mysbx-owned profile STORE PATH is bd
+            // myconfig-6di.4.3, this argv already carries whatever
+            // the pin names); the pinned coreutils `env` (MYSBX_ENV)
+            // applies the payload environment as nono's child, so
+            // bwrap's `--clearenv`/`--setenv` carry only nono's
+            // infrastructure variables and nono's own environment
+            // filter never sees the payload environment.
             let nono_bin = env_or("MYSBX_NONO", "nono");
             let nono_profile = env_or("MYSBX_NONO_PROFILE", "default");
-            let params = nono::Params {
-                shell: &shell,
-                tools_path: &tools_path,
-                policy_paths: &policy_paths,
+            let env_bin = env_or("MYSBX_ENV", "env");
+            let nono_params = nono::Params {
                 workspace: workspace.clone(),
                 profile: &nono_profile,
             };
-            let argv = match nono::nono_run_argv(&merged, &repo, &payload, &host_env, &params) {
+            // The grant argv of the `nono run` INSIDE the sandbox —
+            // `run --profile <path> <grants> <network flags>`, derived
+            // from the resolved layout the bwrap argv builds below
+            // (never from the raw config: a grant the layout does not
+            // carry would be a lie, and a layout bug produces a
+            // matching grant, nono.rs).
+            let grants = match nono::nono_run_argv(&merged, &repo, &payload, &nono_params) {
                 Ok(a) => a,
                 Err(e) => {
                     eprintln!("mysbx: {e}");
                     return EXIT_INFRASTRUCTURE;
                 }
             };
-            // The exec environment (nono inherits the parent env; mysbx
-            // pins exactly these variables on top, the same values
-            // bwrap would --setenv):
-            //
-            // - `HOME` is the invoking user's REAL home: nono has no
-            //   sandbox home, so the payload's HOME is the host home
-            //   path string — Landlock keeps the host home UNWRITABLE
-            //   unless an --allow granted a subdirectory, so the value
-            //   itself grants nothing.
-            // - `PATH` is the pinned dev-tool closure.
-            // - host-forwarded variables and the config layers' `[env]`
-            //   table, the same values bwrap would set.
-            // - `NIX_CONF_DIR` points nix at the PARENT DIRECTORY of the
-            //   pinned file, which nix reads as the directory containing
-            //   `nix.conf` — so the pin must be a file named `nix.conf`
-            //   inside a directory (bd myconfig-bf2; when the pin was a
-            //   bare store file the parent was `/nix/store` and nix read
-            //   no configuration at all): under bwrap the file
-            //   is bound at /etc/nix/nix.conf; under nono there is no
-            //   bind machinery, the exec environment points nix at the
-            //   pinned file's directory instead — set only with the
-            //   shared network, like bwrap's bind.
-            // - the three CA-bundle keys bwrap sets via --setenv, same
-            //   values.
-            //
-            // Insertion order is the precedence: the forwarded and
-            // `[env]` values FIRST, the infrastructure keys (`HOME`,
-            // `PATH`, `NIX_CONF_DIR`, the CA-bundle variables) AFTER
-            // them — a later insert wins, so no layer can repoint an
-            // infrastructure variable (config.md D14, the bwrap.rs
-            // `--setenv`-last invariant).
-            let mut env: std::collections::BTreeMap<String, String> =
-                std::collections::BTreeMap::new();
-            for (key, value) in host_env.iter().chain(merged.env.iter()) {
-                env.insert(key.clone(), value.clone());
-            }
-            // `HOME` and `PATH` are infrastructure, not configuration
-            // (config.md D14): inserted AFTER the forwarded and `[env]`
-            // values, so no layer can repoint them — the same
-            // precedence bwrap's later `--setenv` wins and this map's
-            // insert order gives.
-            if let Ok(home) = std::env::var("HOME") {
-                if !home.is_empty() {
-                    env.insert("HOME".into(), home);
+            let mut inner_argv: Vec<String> = Vec::with_capacity(grants.len() + 1);
+            inner_argv.push(nono_bin.clone());
+            inner_argv.extend(grants);
+            let params = bwrap::Params {
+                shell: &shell,
+                tools_path: &tools_path,
+                bin_sh: bin_sh.as_deref(),
+                nix_conf: nix_conf.as_deref(),
+                ca_bundle: ca_bundle.as_deref(),
+                policy_paths: &policy_paths,
+                mux_entry: mux_entry.as_deref(),
+                waypipe: waypipe_params.clone(),
+                workspace: workspace.clone(),
+                inner: Some(bwrap::Inner {
+                    argv: &inner_argv,
+                    env_bin: &env_bin,
+                }),
+            };
+            let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    return EXIT_INFRASTRUCTURE;
                 }
-            }
-            env.insert("PATH".into(), params.tools_path.to_owned());
-            // NIX_CONF_DIR travels with the shared network only:
-            // under bwrap the pinned nix.conf is bound exactly when
-            // the daemon socket is (`--share-net`), because the
-            // daemon is unreachable under `network = false` and its
-            // configuration would be dead weight — the same rule
-            // here. The pin must be a file NAMED `nix.conf` inside a
-            // directory (bd myconfig-bf2): nix reads `NIX_CONF_DIR`
-            // as a directory containing `nix.conf`, so a differently
-            // named pin — a bare store file's parent is `/nix/store`
-            // — would silently load NO configuration. A refusal, not
-            // silence: the same "fail loudly on a packaging bug"
-            // rule as bwrap's non-`--try` binds.
-            if merged.network {
-                if let Some(nix_conf) = nix_conf.as_deref() {
-                    if std::path::Path::new(nix_conf)
-                        .file_name()
-                        .and_then(|f| f.to_str())
-                        != Some("nix.conf")
-                    {
-                        eprintln!(
-                            "mysbx: nono: MYSBX_NIX_CONF must be a file named 'nix.conf' \
-                             inside a directory (nix reads NIX_CONF_DIR as a directory \
-                             containing nix.conf), got: {nix_conf}"
-                        );
-                        return EXIT_INFRASTRUCTURE;
-                    }
-                    if let Some(parent) = std::path::Path::new(nix_conf).parent() {
-                        env.insert("NIX_CONF_DIR".into(), parent.to_string_lossy().into_owned());
-                    }
-                }
-            }
-            if let Some(ca_bundle) = ca_bundle.as_deref() {
-                for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
-                    env.insert(key.into(), ca_bundle.to_owned());
-                }
-            }
-            // The sandbox's own SSH keypair (docs/design/config.md
-            // D22): under nono there is NO remap, so the keypair never
-            // sits at `$HOME/.ssh` — `HOME` is the real host home,
-            // which stays unwritable under Landlock, and ssh's default
-            // identity lookup finds nothing there. Point git at the
-            // sidecar store directly, `IdentitiesOnly` so no host agent
-            // or host default identity is ever consulted.
-            // Infrastructure, not configuration: inserted AFTER the
-            // forwarded and `[env]` values like `HOME`/`PATH` (D14),
-            // so no layer can repoint it.
-            if let Some(cmd) = ssh_command_for_nono(&repo, &merged) {
-                env.insert("GIT_SSH_COMMAND".into(), cmd);
-            }
-            (nono_bin, argv, None::<String>, Some(env))
+            };
+            // bwrap builds the view; the whole chain — bwrap argv,
+            // nono grants, env-segment, payload — is the argv above,
+            // and bwrap's --clearenv/--setenv own the environment.
+            let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
+            (bwrap_bin, argv, None::<String>)
         }
         _ => unreachable!(),
     };
@@ -2097,15 +2019,6 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
 
     let mut cmd = std::process::Command::new(&backend_bin);
     cmd.args(&argv);
-    // The exec environment is a NONO-only fact: bwrap gets --clearenv
-    // and its --setenv flags, podman gets --env flags — nono inherits
-    // the parent environment (nono-app.nix precedent) and mysbx only
-    // pins the variables of the backend arm on top. Applies to both
-    // RunMode::Exec and RunMode::Result: the Command is built before
-    // the match.
-    if let Some(env) = &exec_env {
-        cmd.envs(env);
-    }
     match mode {
         RunMode::Exec => {
             // `exec` replaces this process on success, so the payload's
@@ -2904,21 +2817,6 @@ fn ssh_pubkey(args: &[String], dry_run: bool) -> i32 {
             EXIT_INFRASTRUCTURE
         }
     }
-}
-
-/// The `GIT_SSH_COMMAND` of a nono run (docs/design/
-/// config.md D22): `ssh -i <sidecar>/state/.ssh/id_ed25519
-/// -o IdentitiesOnly=yes -o UserKnownHostsFile=<sidecar>/state/.ssh/
-/// known_hosts`, so git over SSH uses the generated key and persists
-/// the server keys next to it — without any `$HOME/.ssh` lookup (the
-/// nono backend has no remap, `HOME` is the real host home).
-fn ssh_command_for_nono(repo: &repo::Repo, merged: &merge::Merged) -> Option<String> {
-    let dir = merged.ssh_store_dir(&repo.sidecar);
-    Some(format!(
-        "ssh -i {} -o IdentitiesOnly=yes -o UserKnownHostsFile={}",
-        dir.join("id_ed25519").display(),
-        dir.join("known_hosts").display()
-    ))
 }
 
 /// Create the `<sidecar>/state/<entry>` backing directory of every

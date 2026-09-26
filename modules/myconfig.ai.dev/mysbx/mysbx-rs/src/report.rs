@@ -253,24 +253,11 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // D4): the home stays all-ephemeral and the report must not claim
     // a persistence the run does not perform.
     //
-    // Under nono NONE of that holds (no tmpfs home, no remap): HOME is
-    // the real host home — kept unwritable by Landlock — and the state
-    // stores persist at their real sidecar paths, so the line must
-    // say the backend's actual semantics instead of bwrap's. The
-    // counts use the EFFECTIVE entries (the declared ones plus the
-    // implicit `.ssh` of the unconditional keypair, config.md D22): the home IS
-    // partly sidecar-backed either way.
+    // The nono backend needs no special case (docs/design/
+    // backends.md D1): it is layered on the bubblewrap layout, so
+    // the home is the same tmpfs and the same state binds.
     let effective_state_dirs = r.merged.effective_state_dirs();
-    if r.backend == "nono" {
-        if effective_state_dirs.is_empty() {
-            p("home:           the host home is $HOME (no remap; the host home is not writable under nono)".to_string());
-        } else {
-            p(format!(
-                "home:           the host home is $HOME (no remap; the host home is not writable under nono; {} state dir(s) persist at their sidecar paths)",
-                effective_state_dirs.len(),
-            ));
-        }
-    } else if effective_state_dirs.is_empty() || clone_run {
+    if effective_state_dirs.is_empty() || clone_run {
         p(format!(
             "home:           {SANDBOX_HOME} (tmpfs; the host home is not mounted)"
         ));
@@ -306,21 +293,12 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         // The in-sandbox path in full (`/mysbx-home/<entry>`), not the
         // bare entry: the report is read against the argv, where the
         // dest is spelled out, and `/<entry>` would read like a path at
-        // the sandbox root. Under nono there is NO remap: the store is
-        // reachable at its sidecar path and nowhere else, so the line
-        // says that instead of inventing a sandbox path.
+        // the sandbox root.
         for entry in &effective_state_dirs {
-            if r.backend == "nono" {
-                p(format!(
-                    "  {}  [state; no remap — the sandbox path is the sidecar path]",
-                    r.repo.sidecar.join("state").join(entry).display()
-                ));
-            } else {
-                p(format!(
-                    "  {SANDBOX_HOME}/{entry} <-> {}  [state]",
-                    r.repo.sidecar.join("state").join(entry).display()
-                ));
-            }
+            p(format!(
+                "  {SANDBOX_HOME}/{entry} <-> {}  [state]",
+                r.repo.sidecar.join("state").join(entry).display()
+            ));
         }
     }
 
@@ -331,21 +309,10 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // leaves the sidecar/sandbox; the line names the paths so the
     // operator can check the bind against the argv.
     if !clone_run {
-        if r.backend == "nono" {
-            p(format!(
-                "ssh key:        {} (generated, ed25519; no remap — reach it via GIT_SSH_COMMAND, not $HOME)",
-                r
-                    .merged
-                    .ssh_store_dir(&r.repo.sidecar)
-                    .join("id_ed25519")
-                    .display()
-            ));
-        } else {
-            p(format!(
-                "ssh key:        {SANDBOX_HOME}/.ssh <-> {}  [generated, ed25519]",
-                r.merged.ssh_store_dir(&r.repo.sidecar).display()
-            ));
-        }
+        p(format!(
+            "ssh key:        {SANDBOX_HOME}/.ssh <-> {}  [generated, ed25519]",
+            r.merged.ssh_store_dir(&r.repo.sidecar).display()
+        ));
     }
 
     // Environment. Values are shown verbatim; see the module docs for
@@ -355,13 +322,6 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         r.host_env.len(),
         r.merged.env.len(),
     ));
-    // Under nono the parent environment is INHERITED (nono has no
-    // `--clearenv` equivalent; bwrap clears, podman passes flags) —
-    // the forwarded and `[env]` values above are pinned ON TOP of it,
-    // so the count is not the whole environment the payload sees.
-    if r.backend == "nono" {
-        p("  (nono inherits the parent environment; the forwarded and [env] values above are pinned on top)".to_string());
-    }
     let display_on = r.merged.display.is_waypipe();
     for (k, v) in r.host_env {
         // Both sections are printed in argv order (host first, `[env]`
@@ -386,15 +346,12 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             p(format!("  {k}={v}  [config]"));
         }
     }
-    // `HOME` differs by backend: bwrap and podman create a sandbox
-    // home and point HOME at it; nono has no remap and HOME stays
-    // the real host home (kept unwritable by Landlock) — said here
-    // too, so the env block agrees with the `home:` line above.
-    if r.backend == "nono" {
-        p("  HOME=$HOME of the invoking user  [host home — no remap]".to_string());
-    } else {
-        p(format!("  HOME={SANDBOX_HOME}  [sandbox home]"));
-    }
+    // `HOME` is infrastructure (config.md D14) on every backend that
+    // builds a sandbox home: bwrap and podman point it at the tmpfs,
+    // and the layered nono backend builds on the same bubblewrap
+    // layout (docs/design/backends.md D1) — its pinned `env` applies
+    // the same value between nono and the payload.
+    p(format!("  HOME={SANDBOX_HOME}  [sandbox home]"));
     p(format!("  PATH={}  [tools]", r.params.tools_path));
     // The pinned CA bundle belongs in the report for the same reason
     // as the nix.conf and `/bin/sh` lines below: which trust anchors
@@ -415,10 +372,10 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // the bubblewrap backend, `podman:` for podman-gvisor (which also
     // names its image — the container the run starts is as much a
     // property of the run as the binary a bwrap run execs), `nono:`
-    // for the nono backend (a host-path backend like bwrap — the
-    // report's shell/PATH/nix.conf//bin/sh/ca-bundle pins describe
-    // the exec environment lib.rs sets on top of the inherited
-    // parent env, not argv flags).
+    // for the nono backend — which is layered on the bubblewrap
+    // layout (docs/design/backends.md D1), so the executed binary IS
+    // bwrap and the label is what keeps the report honest: the argv
+    // it describes wraps `nono run` inside the bwrap argv.
     match r.backend {
         "podman-gvisor" => {
             p(format!("podman:         {}", r.bwrap_bin));
@@ -426,7 +383,10 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                 p(format!("image:          {image}"));
             }
         }
-        "nono" => p(format!("nono:           {}", r.bwrap_bin)),
+        "nono" => p(format!(
+            "nono:           {} (layered — bwrap builds the view, nono runs inside)",
+            r.bwrap_bin
+        )),
         _ => p(format!("bwrap:          {}", r.bwrap_bin)),
     }
     p(format!("shell:          {}", r.params.shell));
@@ -671,6 +631,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         };
         lines(&Report {
             repo: &repo,
@@ -780,6 +741,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -829,6 +791,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -879,6 +842,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -931,6 +895,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -984,6 +949,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1042,6 +1008,7 @@ mod tests {
                 mux_entry: Some("/synth/bin/mysbx-mux-entry"),
                 waypipe: None,
                 workspace: Workspace::Live,
+                inner: None,
             };
             let report_of = |payload: &Payload| {
                 lines(&Report {
@@ -1127,6 +1094,7 @@ mod tests {
                 mux_entry: Some("/synth/bin/mysbx-herdr-entry"),
                 waypipe: None,
                 workspace,
+                inner: None,
             }
         }
         let report_of = |repo: Repo, workspace: Workspace| {
@@ -1217,6 +1185,7 @@ mod tests {
                 guest_bin: "/synth/bin/waypipe",
             }),
             workspace: Workspace::Live,
+            inner: None,
         };
         let report_of = |payload: &Payload| {
             lines(&Report {
@@ -1359,6 +1328,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         };
         let payload = Payload::Shell;
         let out = lines(&Report {
@@ -1413,6 +1383,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1465,6 +1436,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: crate::bwrap::Workspace::Clone { clone: &clone },
+            inner: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1549,6 +1521,7 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            inner: None,
         };
         let joined = lines(&Report {
             repo: &repo,

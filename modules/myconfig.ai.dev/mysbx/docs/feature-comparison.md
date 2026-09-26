@@ -76,7 +76,7 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 
 | Axis | `bwrap-jail` | `bwrap-simple` | `nono` | `qemu` | `gvisor` | `microvm` | `mysbx` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Mechanism | bubblewrap namespaces | bubblewrap namespaces | Landlock + seccomp (`nono`) | QEMU microVM, own kernel | rootless podman + `runsc` | Cloud Hypervisor, own kernel | bubblewrap (default), podman+gVisor (`backend = "podman-gvisor"` — argv maps mounts/env/state-dirs/multiplexer onto a `podman run`; image + ref + ID pinned by the wrapper, `gvisor-load-image` loads it) and nono — Landlock + seccomp (`backend = "nono"`, explicit config — argv maps mounts/state-dirs/allowlist onto a `nono run`, the environment is pinned in the exec environment (inherited parent env); binary + profile pinned by the wrapper, bd myconfig-6di.2); qemu/microvm later (`../README.md` roadmap) |
+| Mechanism | bubblewrap namespaces | bubblewrap namespaces | Landlock + seccomp (`nono`) | QEMU microVM, own kernel | rootless podman + `runsc` | Cloud Hypervisor, own kernel | bubblewrap (default), podman+gVisor (`backend = "podman-gvisor"` — argv maps mounts/env/state-dirs/multiplexer onto a `podman run`; image + ref + ID pinned by the wrapper, `gvisor-load-image` loads it) and nono — Landlock + seccomp layered on the bubblewrap layout (`backend = "nono"`, explicit config, `docs/design/backends.md` D1 — bwrap builds the view, a `nono run` inside confines the payload again, grants derived from the resolved layout; binary, profile and the payload-`env` pinned by the wrapper, bd myconfig-6di.2/6di.4.2); qemu/microvm later (`../README.md` roadmap) |
 | Kernel boundary | no | no | no | yes | user-space kernel | yes | none yet |
 | Runs as | your uid | your uid | your uid | guest `agent` user | container user | guest `agent` user | your uid (planned) |
 | Filesystem policy | curated allow-list of binds, env cleared (`--clearenv`) | ro config dirs + writable XDG dirs | `--allow` / `--read` / `--allow-cwd` | virtiofs shares only | image + explicit `--mount` | virtiofs shares only | nothing from the host filesystem unless declared: repo (+ its git metadata dirs, only when approved in `git-dirs` — D13) + explicit `[[mounts]]` (`config.md` D9, D13) |
@@ -88,7 +88,7 @@ Sources: `../mysbx-rs/src/usage.txt`, `../mysbx-rs/src/lib.rs`,
 | Model credentials | real host key inside the sandbox | n/a | real host key inside the sandbox | real key, over SSH env | seeded config, endpoints rewritten to a sandbox-reachable proxy | **never reaches the guest** — host LiteLLM via bridge-only forwarder | real host key inside the sandbox, but only for the key/token/URL variables a deployment names in `forward-env` — never by default (bd myconfig-20j) |
 | Agent-config seeding | `try-ro-bind` of `configDirs`, rw `userDataDirs` | `readOnlyConfigDirs` | `--read` of config dirs, `--allow` of state dirs | [`fns/seed-agent-config.nix`](../../fns/seed-agent-config.nix), rsync over SSH | `home.seedPaths` + `AGENT_GVISOR_HOME_SEED_REWRITE` | root-owned staged copy via `config-seed.nix` | user config decides which host config is exposed (`config.md` D6) |
 | Per-repo state dir | none | none | none | throwaway runtime dir | `<repo>__agent-gvisor/` + registry | root-owned task→clone index under `runtimeRoot` | sidecar `<repo>.mysbx/`, outside repo *and* sandbox (`config.md` D2, D10) |
-| Agent state persists across runs | rw `userDataDirs` bind the *host* state | same host dirs read-only | `--allow` of state dirs | no (throwaway) | yes, container volume | yes, clone-side | yes, but never through host-home paths: `state-dirs` entries are backed by the sidecar (`config.md` D15) — remapped to `/mysbx-home/<entry>` on bwrap/podman, NOT remapped under nono (they persist at their real sidecar paths, `nono.rs` section 4); git-over-SSH credentials follow the same shape — every sandbox's own ed25519 keypair (`config.md` D22) is generated into `<repo>.mysbx/state/.ssh/` and bound at the sandbox `~/.ssh` (under nono: reachable via the pinned `GIT_SSH_COMMAND`), never a host credential |
+| Agent state persists across runs | rw `userDataDirs` bind the *host* state | same host dirs read-only | `--allow` of state dirs | no (throwaway) | yes, container volume | yes, clone-side | yes, but never through host-home paths: `state-dirs` entries are backed by the sidecar (`config.md` D15) and remapped to `/mysbx-home/<entry>` on every backend (under the layered nono backend too — `backends.md` D1: bubblewrap builds the view, nono runs inside); git-over-SSH credentials follow the same shape — every sandbox's own ed25519 keypair (`config.md` D22) is generated into `<repo>.mysbx/state/.ssh/` and bound at the sandbox `~/.ssh`, never a host credential |
 | Repo-local config trusted? | n/a | n/a | n/a | n/a | n/a | n/a | no from *inside* the repo (`config.md` D3); yes for the sidecar beside it, which the payload cannot write (`config.md` D7) |
 | Resource limits | none | none | none | VM `vcpu`/`mem` | `--memory --cpus --pids-limit` | prebuilt `resourceClasses` (vcpu/mem/slots) | `backend` limits foreseen (`config.md` D5), not implemented |
 | Refuses `$HOME` as CWD | yes (`rejectHomeCwd`) | — | yes (`rejectHomeCwd`) | yes | n/a (clone-based) | n/a (clone-based) | not implemented |
@@ -155,13 +155,20 @@ Everything below exists in at least one tier above and has no counterpart in
   carries the config; every path it names is in the image closure).
   Remaining before it is production-ready: no host has exercised a
   full interactive session yet.
-- ~~**A second backend / the nono backend.**~~ DONE (bd myconfig-6di.2):
-  `backend = "nono"` maps the merged config onto a `nono run`
-  (Landlock + seccomp, `nono.rs`), binary + profile pinned by the
-  wrapper (`MYSBX_NONO`/`MYSBX_NONO_PROFILE`). First-cut refusals for
-  what that model cannot express — clone remap, mount `dest` remap,
-  multiplexer, waypipe, and shared-network-without-allowlist
-  (`NetworkSharedUnsupported`) — are tracked in
+- ~~**A second backend / the nono backend.**~~ DONE (bd
+  myconfig-6di.2, redesigned as the LAYERED backend of
+  `docs/design/backends.md` D1, bd myconfig-6di.4.2): `backend =
+  "nono"` runs the payload as `bwrap … -- nono run … -- env … --
+  <payload>` — bubblewrap builds the filesystem view exactly as the
+  bubblewrap backend does (tmpfs `/mysbx-home` + `/mysbx-nono`, mount
+  `dest`s, clone at the repo path, private `/tmp`, netns), nono adds
+  Landlock grants derived from the resolved layout plus seccomp and
+  its egress proxy; binary, profile and the payload-`env` pinned by
+  the wrapper (`MYSBX_NONO`/`MYSBX_NONO_PROFILE`/`MYSBX_ENV`). The
+  first-cut refusals clone-remap and mount-`dest`-remap are LIFTED
+  (bwrap binds them); multiplexer, waypipe and
+  shared-network-without-allowlist (`NetworkSharedUnsupported`)
+  remain, tracked in
   `../../../../doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`.
   Not yet exercised on a host.
 - **Network policy.** DONE for the allowlist (bd myconfig-mo3.1):
