@@ -22,6 +22,17 @@
 #     herdr versions had a `--no-session` "monolithic" mode for this;
 #     current ones removed it, and the tmpfs `HOME` makes it
 #     unnecessary.)
+#   * herdr's TUI auto-STARTS its background server and immediately
+#     connects — under nono's pathname AF_UNIX mediation (see
+#     ../docs/design/backends.md) a `connect(2)` to a not-yet-bound
+#     pathname socket is denied with EPERM *before* the kernel could
+#     answer ENOENT, and herdr treats EPERM as fatal instead of
+#     retrying. The entry therefore starts the server itself (`herdr
+#     server`) and waits for it to be reachable; the TUI then attaches
+#     to the running server (verified against herdr 0.9.1: the TUI's
+#     "no server running, spawning server daemon" path is exactly the
+#     branch this pre-start takes away, and an already-running server
+#     wins — "server already running, attaching as client").
 #   * `TMUX_TMPDIR` is still exported by mysbx and still validated here:
 #     it is how a pane that runs plain `tmux` inside the herdr session
 #     lands on the private socket instead of `/tmp/tmux-<uid>`.
@@ -149,6 +160,34 @@ writeShellApplication {
         echo "mysbx-herdr-entry: no $worktrees — it is not created here (mysbx config.md D13);" >&2
         echo "mysbx-herdr-entry: herdr worktrees use herdr's default until the sibling exists on the host" >&2
     fi
+
+    # Pre-start herdr's server and wait for it to be reachable. Without
+    # this, the TUI's own spawn-then-connect races the server's `bind()`
+    # of its sockets, and under nono's pathname AF_UNIX mediation that
+    # race is fatal: the connect to the not-yet-bound `herdr-client.sock`
+    # comes back EPERM (mediation canonicalizes the target and denies
+    # before the kernel sees the file does not exist), which herdr does
+    # not retry. `herdr server` is the same headless server the TUI
+    # attaches to (herdr 0.9.1 prints "you do not need `herdr server`"
+    # when the TUI would do this itself); its output goes to herdr's own
+    # log file next to the sockets, and `disown` keeps it past the
+    # `exec`. The poll is bounded and the loop FALLS THROUGH either way:
+    # if the server is up the TUI attaches to it, if it never came up
+    # the TUI's own error is the honest failure, not a second one made up
+    # here. Gate the START on the socket FILE (`-S`, a pure stat — no
+    # connect, so no IPC-denial noise): `herdr status server` exits 0
+    # even when the server is NOT running (verified against 0.9.1), so
+    # it cannot gate anything. Readiness is a real reply — the same
+    # probe the fix-up loop below uses — because a bound file is not
+    # yet an answering API.
+    if [ ! -S "$HOME/.config/herdr/herdr.sock" ]; then
+        herdr server >"$HOME/.config/herdr/herdr-server.log" 2>&1 &
+        disown $! || true
+    fi
+    for _ in $(seq 1 150); do
+        herdr workspace list >/dev/null 2>&1 && break
+        sleep 0.1
+    done
 
     (
         initial_ws=()

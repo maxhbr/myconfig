@@ -89,7 +89,10 @@ in
   # `fi`), runs it against both a present and an absent sibling, and
   # validates the generated session config with herdr's own
   # `config check` — the parser that would silently fall back to its
-  # default on a broken value otherwise. Static guards pin the rest of
+  # default on a broken value otherwise. The entry's server pre-start
+  # block (bd myconfig-bk2) is exercised the same way: extracted and
+  # run against the REAL herdr binary, which must spawn its headless
+  # server and make the socket API answer. Static guards pin the rest of
   # the contract: `bash -n` on the whole script, and no `mkdir` on
   # the sibling (config.md D13: a run never creates it).
   mysbx-herdr-entry-test =
@@ -177,6 +180,46 @@ in
         fi
         test ! -e "$tmp/repo__worktrees" \
           || fail "the block created the sibling"
+
+        # The server pre-start contract (bd myconfig-bk2): the entry
+        # must start herdr's headless server when its API socket is not
+        # bound yet, and leave an already-running one alone. Extract
+        # the entry's own pre-start block — the `-S` gate through its
+        # `fi`, plus the bounded readiness poll — and run it against
+        # the REAL herdr binary with a throwaway HOME, exactly like a
+        # fresh sandbox start: the socket must appear and the API must
+        # answer; a second run must not spawn a second server. The
+        # spawn must be gated on the socket FILE (herdr 0.9.1's
+        # `status server` exits 0 even when nothing runs, so it gates
+        # nothing), and the readiness poll must ask the API, not the
+        # filesystem.
+        prestart="$(sed -n '/^if \[ ! -S "\$HOME\/\.config\/herdr\/herdr\.sock" \]; then/,/^fi$/p' "$entry")" \
+          || fail "cannot extract the server pre-start block"
+        printf '%s\n' "$prestart" | grep -q 'herdr server' \
+          || fail "the pre-start block does not start the herdr server"
+        pollblock="$(sed -n '/^for _ in \$(seq 1 150); do/,/^    done$/p' "$entry" | head -n 6)" \
+          || true
+        printf '%s\n' "$pollblock" | grep -q 'herdr workspace list' \
+          || fail "the entry does not poll the API for server readiness"
+
+        # Scratch HOME for the live part of the check — nothing under
+        # the builder's real HOME is read or written.
+        htmp="$(mktemp -d)"
+        mkdir -p "$htmp/.config/herdr"
+        run_prestart() {
+          HOME="$htmp" bash -c "$prestart
+        for _ in \$(seq 1 150); do
+            herdr workspace list >/dev/null 2>&1 && break
+            sleep 0.1
+        done"
+        }
+        run_prestart \
+          || fail "the pre-start block failed on a fresh HOME"
+        test -S "$htmp/.config/herdr/herdr.sock" \
+          || fail "no herdr.sock after the pre-start block"
+        HOME="$htmp" herdr workspace list >/dev/null 2>&1 \
+          || fail "the socket API does not answer after the pre-start block"
+        HOME="$htmp" herdr server stop >/dev/null 2>&1 || true
 
         mkdir "$out"
       '';

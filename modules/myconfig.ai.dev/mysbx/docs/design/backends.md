@@ -155,6 +155,28 @@ block as known-benign: name operations against paths the view
 deliberately does not carry (nscd, dbus) are expected, everything
 else in the block is worth reading.
 
+#### Pathname mediation turns connect-ENOENT into EPERM (bd myconfig-bk2)
+
+Under `linux.af_unix_mediation = "pathname"` the supervisor resolves
+a CONNECT's target child-relative and `canonicalize()`s it
+(nono 0.74.0, `crates/nono-cli/src/exec_strategy/supervisor_linux.rs`,
+`decide_af_unix_pathname`); a socket file that does not exist yet does
+not canonicalize, and the connect is DENIED with EPERM before the
+kernel could answer ENOENT — the denial footer names it "target could
+not be canonicalized" (`ipc_denial_details`). The consequence for
+entry scripts: **connect-to-a-nonexistent-socket is EPERM, not
+ENOENT, and no payload may rely on ENOENT-retry semantics.** herdr's
+TUI spawns its background server and immediately connects, so the
+first connect races the server's `bind()`; herdr retries ENOENT but
+treats EPERM as fatal. The herdr entry therefore pre-starts the
+server itself (`herdr server`, gated on the socket file — herdr 0.9.1's
+`status server` exits 0 even when nothing runs) and polls the API for
+a real answer before `exec herdr` (./nix/herdr-entry.nix). tmux does
+NOT need the same treatment: its client falls into `server_start`,
+forks the server through `proc_fork_and_daemon` and connects on the
+fd the server hands back after binding (tmux 3.7c `client.c` /
+`proc.c`), so its attach connect never targets an unbound pathname.
+
 #### nono's own inputs
 
 - **Profile**: a store path built by the Nix module, passed as
