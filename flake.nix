@@ -601,6 +601,7 @@
                 pkgs = inputs.nixpkgs.legacyPackages."${system}";
                 files = pkgs.lib.concatStringsSep " " [
                   "switch.sh"
+                  "sync.sh"
                   # The EXECUTED myconfig.ai.dev.microvm batch-job harnesses and the
                   # real-KVM validation suite. They are plain scripts (not
                   # writeShellApplication), so nothing else gates them.
