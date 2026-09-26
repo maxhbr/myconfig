@@ -19,6 +19,9 @@
 --ro-bind-try
 /run/systemd/resolve
 /run/systemd/resolve
+--ro-bind-try
+/nix/var/nix
+/nix/var/nix
 --ro-bind
 /nix/store
 /nix/store
@@ -46,12 +49,6 @@
 --bind
 /synth/repo.mysbx/state/.ssh
 /mysbx-home/.ssh
---bind
-/synth/repo.mysbx/state/.local/share/opencode
-/mysbx-home/.local/share/opencode
---bind
-/synth/repo.mysbx/state/.cache/foo
-/mysbx-home/.cache/foo
 --setenv
 PATH
 /synth/bin
@@ -84,8 +81,8 @@ default
 /mysbx-home
 --read
 /nix/store
---allow-domain
-api.openai.com
+--allow-unix-socket
+/nix/var/nix/daemon-socket/socket
 --
 env
 -u

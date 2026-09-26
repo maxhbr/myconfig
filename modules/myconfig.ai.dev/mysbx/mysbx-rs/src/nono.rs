@@ -78,22 +78,32 @@
 //!    nono-app.nix's readOnlyDirFlags): the pinned store paths of
 //!    the shell, the tool closure and everything the wrapper baked
 //!    must be executable/readable through the view's ro store bind.
-//! 6. the nix daemon socket under the shared network: nono's
-//!    `--allow-unix-socket` on the default daemon socket path (the
-//!    flag implies `--read-file` on the socket, and bwrap binds
-//!    `/nix/var/nix` ro exactly when the network is shared — the
-//!    same rule as the bubblewrap backend). The allowlist case of
-//!    D1 (no daemon socket under an allowlist, the socket bind
-//!    dropped) is bd myconfig-6di.4.4.
-//! 7. network (the mapping of bd myconfig-mo3.1/myconfig-6di.2,
-//!    unchanged until 6di.4.4): `--block-net` when `network =
-//!    false`; an empty allowlist with a shared network is refused
-//!    ([`Error::NetworkSharedUnsupported`]) — nono cannot express
-//!    "share the whole host network" (it mediates per connection),
-//!    and a silent downgrade would be discovered only at the
-//!    payload's first connect; an allowlist becomes
-//!    `--allow-domain`/`--allow-connect-port`/`--listen-port` (the
-//!    proxy resolves DNS itself, so no port 53/853 is added).
+//! 6. the nix daemon socket, ONLY in the shared-no-allowlist case:
+//!    nono's `--allow-unix-socket` on the default daemon socket path
+//!    (the flag implies `--read-file` on the socket) rides with the
+//!    bwrap bind of `/nix/var/nix` — both exist exactly when the
+//!    network is shared WITHOUT an allowlist (bubblewrap parity, bd
+//!    myconfig-nj9). Under an allowlist the socket is bound by
+//!    neither layer: the daemon builds fixed-output derivations,
+//!    which keep network access, and a filtered sandbox must not
+//!    expose a hole the allowlist cannot see.
+//! 7. network (the mapping of the D1 table, bd myconfig-6di.4.4):
+//!    `--block-net` when `network = false` (defense in depth next to
+//!    the empty netns — nono allows outbound by default); NO network
+//!    flag when the network is shared without an allowlist (nono
+//!    0.74.0's default IS outbound allowed — no mediation, the pure
+//!    seccomp baseline applies only under an allowlist); and the
+//!    allowlist mapping `--allow-domain`/`--allow-connect-port`/
+//!    `--listen-port` per merged entry otherwise (the proxy resolves
+//!    DNS itself, so no port 53/853 is added). Two refusals guard
+//!    the allowlist's honesty (bd myconfig-a14, bd
+//!    myconfig-6di.4.4): `listen-ports` alone does not restrict
+//!    outbound traffic (nono reports "outbound allowed" with only
+//!    listen ports) — an allowlist that does not restrict is a lie,
+//!    so the config is refused; and `allow-domains` entries are
+//!    plain host names only — a URL or path form (no matter how it
+//!    is spelled) would need nono's TLS interception, out of scope
+//!    on this backend.
 //! 8. the multiplexer and display refusals, until their tasks land:
 //!    a session-starting multiplexer (bd myconfig-6di.4.5 — the
 //!    private socket directory exists again inside the sandbox home
@@ -140,6 +150,30 @@ pub struct Params<'a> {
     /// view), or any nono profile name/path an operator picks. The
     /// argv carries whatever the pin names.
     pub profile: &'a str,
+}
+
+/// Validate the allowlist's honesty (bd myconfig-a14, bd
+/// myconfig-6di.4.4) — the pure predicate both the pipeline's step 4b
+/// (lib.rs, BEFORE the session clone, so a broken configuration
+/// creates nothing) and the argv builder (defense in depth) call:
+/// `listen-ports` alone does not restrict outbound traffic (nono
+/// reports "outbound allowed" with only listen ports — an allowlist
+/// that does not restrict is a lie), and `allow-domains` entries are
+/// plain host names on this backend (a URL/path form would need
+/// nono's TLS interception, out of scope).
+pub fn validate_allowlist(cfg: &Merged) -> Result<(), Error> {
+    if cfg.allow_domains.is_empty() && cfg.connect_ports.is_empty() && !cfg.listen_ports.is_empty()
+    {
+        return Err(Error::ListenPortsOnly);
+    }
+    for domain in &cfg.allow_domains {
+        if domain.contains("://") || domain.contains('/') {
+            return Err(Error::DomainUrlForm {
+                domain: domain.clone(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Build the `nono run` grant argv — the segment between `run
@@ -240,29 +274,30 @@ pub fn nono_run_argv(
     // the payload dies before it starts.
     argv.extend(["--read".into(), "/nix/store".into()]);
 
-    // 6. the nix daemon socket: the one unix socket a shared-network
-    // run needs — nono's flag grants connect() on it, and bwrap
-    // binds `/nix/var/nix` ro exactly when the network is shared,
-    // like the bubblewrap backend (a denied network binds nothing
-    // and grants nothing: the daemon builds fixed-output
-    // derivations, which keep network access, so the configuration
-    // that would expose the socket is refused in the bwrap layout).
-    if cfg.network {
-        argv.extend(["--allow-unix-socket".into(), NIX_DAEMON_SOCKET.into()]);
-    }
-
-    // 7. network mapping (bd myconfig-mo3.1, myconfig-6di.2).
-    // nono's default is network-ALLOWED: the seccomp baseline denies
-    // most connects and the proxy passes the listed domains/ports —
-    // an EMPTY allowlist under nono is therefore NOT "the whole
-    // internet", but it is NOT "shared network" either, and the
-    // mysbx default (`network = true`, no allowlist, bwrap's
-    // `--share-net`) would silently become something else. The run
-    // is refused; the operator lists what the sandbox may reach or
-    // picks a backend that shares.
+    // 6. the nix daemon socket, ONLY in the shared-no-allowlist case
+    // (bubblewrap parity, bd myconfig-nj9): bwrap binds
+    // `/nix/var/nix` ro exactly when the network is shared WITHOUT
+    // an allowlist (bwrap.rs threads that same fact), and nono's
+    // flag grants connect() on the socket. Under an allowlist the
+    // socket is bound by neither layer — the daemon builds
+    // fixed-output derivations, which keep network access, and a
+    // filtered sandbox must not expose a hole the allowlist cannot
+    // see. Under a denied network nothing is bound or granted.
     let has_allowlist = !cfg.allow_domains.is_empty()
         || !cfg.connect_ports.is_empty()
         || !cfg.listen_ports.is_empty();
+    if cfg.network && !has_allowlist {
+        argv.extend(["--allow-unix-socket".into(), NIX_DAEMON_SOCKET.into()]);
+    }
+
+    // 7. network mapping (backends.md D1's table, bd
+    // myconfig-6di.4.4): bwrap owns the network namespace (the
+    // `--share-net`/empty-netns switch), nono owns the EGRESS filter.
+    // nono's default IS outbound allowed (nono 0.74.0; `--allow-net`
+    // is deprecated): a shared network without an allowlist is the
+    // default, no nono flag — the seccomp-medium baseline hides
+    // behind bwrap's namespace, not behind a silently narrow egress
+    // list.
     if !cfg.network {
         // The deny must be EXPLICIT under nono (allowed by default),
         // and an allowlist next to it is a contradiction — the
@@ -273,15 +308,24 @@ pub fn nono_run_argv(
         if has_allowlist {
             return Err(Error::AllowlistUnderDeniedNetwork);
         }
-    } else if !has_allowlist {
-        return Err(Error::NetworkSharedUnsupported);
-    } else {
+    } else if has_allowlist {
         // The allowlist, in merged order (merge.rs concatenates user
         // layer first, deduplicated keeping the first occurrence).
         // No `--allow-connect-port 53`/`853` is added: nono's PROXY
         // resolves DNS itself for the allowed domains, and a
         // per-port connect to some resolver is a separate policy the
         // operator can spell out explicitly.
+        //
+        // Two honesty guards, REFUSED not silently imitated (bd
+        // myconfig-a14, bd myconfig-6di.4.4): `validate_allowlist`
+        // — the same predicate the pipeline's step 4b runs before
+        // the session clone — refuses a listen-ports-only config
+        // (with only listen ports nono reports "outbound allowed":
+        // an allowlist that does not restrict is a lie) and
+        // URL/path-form `allow-domains` entries (no TLS interception
+        // on this backend, the D1 notes keep the entries plain host
+        // names). Re-run here, defense in depth in a pure function.
+        validate_allowlist(cfg)?;
         for domain in &cfg.allow_domains {
             argv.extend(["--allow-domain".into(), domain.clone()]);
         }
@@ -321,16 +365,24 @@ pub fn nono_run_argv(
 /// bubblewrap would refuse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// `network = true` (the mysbx default) with an empty allowlist:
-    /// nono cannot express "share the host network" — it mediates per
-    /// connection (the seccomp baseline denies most connects; only
-    /// listed domains/ports pass). A silent downgrade to "almost
-    /// nothing reachable" would be discovered only when the payload
-    /// fails at its first connect, so the run is refused and the
-    /// operator decides: list what the sandbox may reach
-    /// (`allow-domains`/`connect-ports`/`listen-ports`) or pick a
-    /// backend that shares the network.
-    NetworkSharedUnsupported,
+    /// `listen-ports` is configured but neither `allow-domains` nor
+    /// `connect-ports`: with only listen ports nono 0.74.0 reports
+    /// "outbound allowed" — the listen grant restricts nothing
+    /// (bd myconfig-a14, backends.md D1 "an allowlist must restrict
+    /// outbound traffic"). Accepted-and-ignored is not an option, so
+    /// the configuration is refused: the operator adds a restriction
+    /// (`allow-domains`/`connect-ports`) or drops the key.
+    ListenPortsOnly,
+    /// An `allow-domains` entry in URL or path form (a scheme or a
+    /// `/`): nono tunnels plain host names with `CONNECT` and
+    /// injects no CA certificate (backends.md D1), so the mysbx CA
+    /// pins stay authoritative; a URL form with a path glob needs
+    /// nono's TLS interception, out of scope on this backend (the
+    /// config.md D21 schema refuses it here, bd myconfig-6di.4.4).
+    DomainUrlForm {
+        /// The offending entry.
+        domain: String,
+    },
     /// `network = false` with a non-empty allowlist: the allowlist
     /// contradicts the deny — refused by the pipeline before the
     /// builder ever runs (step 4b, lib.rs), and again here, defense
@@ -355,15 +407,24 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::NetworkSharedUnsupported => write!(
+            Error::ListenPortsOnly => write!(
                 f,
-                "network = true (the default) but no allow-domains/connect-ports/\
-                 listen-ports are configured — nono cannot share the host \
-                 network namespace: it mediates per connection (the seccomp \
-                 baseline denies most connects, only listed domains and ports \
-                 pass). A run would silently downgrade the mysbx default into \
-                 \"almost nothing reachable\", so it is refused; list what the \
-                 sandbox may reach, or pick a backend that shares the network"
+                "listen-ports is configured but neither allow-domains nor \
+                 connect-ports — with only listen ports nono reports \
+                 \"outbound allowed\": the listen grant restricts nothing, \
+                 and an allowlist that does not restrict outbound traffic \
+                 is a lie (bd myconfig-a14) — add allow-domains or \
+                 connect-ports to make the policy real, or drop the key"
+            ),
+            Error::DomainUrlForm { domain } => write!(
+                f,
+                "allow-domains entry '{domain}' is a URL or path — on this \
+                 backend entries are plain host names (nono tunnels them \
+                 with CONNECT and injects no CA certificate, so mysbx's CA \
+                 pins stay authoritative); a URL form with a path glob \
+                 would need nono's TLS interception, which is out of scope \
+                 here (config.md D21, bd myconfig-6di.4.4) — use the bare \
+                 host name"
             ),
             Error::AllowlistUnderDeniedNetwork => write!(
                 f,

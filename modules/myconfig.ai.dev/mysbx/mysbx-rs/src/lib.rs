@@ -1453,6 +1453,20 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             );
             return EXIT_INFRASTRUCTURE;
         }
+        // The nono backend's allowlist honesty (bd myconfig-a14,
+        // bd myconfig-6di.4.4): `listen-ports` alone does not restrict
+        // outbound (nono reports "outbound allowed") and URL/path-form
+        // `allow-domains` entries would need nono's TLS interception —
+        // both are REFUSED here, before the session clone, so a
+        // broken configuration creates nothing. The builder re-runs
+        // the same pure predicate as defense in depth
+        // (nono::validate_allowlist).
+        if backend == "nono" {
+            if let Err(e) = nono::validate_allowlist(&merged) {
+                eprintln!("mysbx: {e}");
+                return EXIT_INFRASTRUCTURE;
+            }
+        }
     }
 
     // 4a. the session clone (workspace.md D2): the FIRST `--session`

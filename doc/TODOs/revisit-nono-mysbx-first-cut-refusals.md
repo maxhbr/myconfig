@@ -23,6 +23,22 @@ tracked by their own beads.
   the dest, and the grant lands at the in-sandbox dest with the effective
   mode (last bind wins).
 
+### Lifted (bd myconfig-6di.4.4, backends.md D1's network table)
+
+- **Shared network on nono** (`network = true`, the default, with an EMPTY
+  allowlist) — LIFTED: `Error::NetworkSharedUnsupported` is deleted; the
+  premise was wrong (nono allows outbound traffic by default), so the
+  layered backend is bubblewrap parity: bwrap's `--share-net`, resolver
+  binds and the ro `/nix/var/nix` bind, and nono adds no egress flag at
+  all. The daemon socket is bound and granted only in THIS case (bd
+  myconfig-nj9 pairs it): under an allowlist neither layer exposes
+  `/nix/var/nix`, and a mount sourcing it is refused by the layout.
+  Two allowlist honesty refusals came with it: `listen-ports` alone
+  (nono would report "outbound allowed" — bd myconfig-a14) and
+  URL-form `allow-domains` entries (no TLS interception on this
+  backend) are refused with `Error::ListenPortsOnly` /
+  `Error::DomainUrlForm`.
+
 ### Still refused
 
 - **Waypipe display** (`display = "waypipe"`) — refused with
@@ -38,14 +54,6 @@ tracked by their own beads.
   nono's unix-socket grants for the multiplexer payload are not audited
   yet. To lift: audit the socket path under nono's filters. Tracked by
   bd myconfig-6di.4.5.
-- **Shared network on nono** (`network = true`, the default, with an EMPTY
-  allowlist) — refused with `Error::NetworkSharedUnsupported` (`nono.rs`).
-  nono mediates per connection (seccomp baseline; only the
-  `allow-domains`/`connect-ports`/`listen-ports` entries of
-  `config.md` D21 pass), so "share the host network" is inexpressible and
-  silently granting nothing would be a silent downgrade. To lift: a future
-  nono flag or profile that grants unmediated shared networking — map
-  `network = true` onto it. Tracked by bd myconfig-6di.4.4.
 
 ## Related follow-up beads
 

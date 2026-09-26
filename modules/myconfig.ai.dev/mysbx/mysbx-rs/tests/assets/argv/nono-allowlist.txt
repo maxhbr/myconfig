@@ -19,9 +19,6 @@
 --ro-bind-try
 /run/systemd/resolve
 /run/systemd/resolve
---ro-bind-try
-/nix/var/nix
-/nix/var/nix
 --ro-bind
 /nix/store
 /nix/store
@@ -81,8 +78,6 @@ default
 /mysbx-home
 --read
 /nix/store
---allow-unix-socket
-/nix/var/nix/daemon-socket/socket
 --allow-domain
 api.openai.com
 --allow-domain

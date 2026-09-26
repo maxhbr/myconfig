@@ -166,9 +166,10 @@ Everything below exists in at least one tier above and has no counterpart in
   its egress proxy; binary, profile and the payload-`env` pinned by
   the wrapper (`MYSBX_NONO`/`MYSBX_NONO_PROFILE`/`MYSBX_ENV`). The
   first-cut refusals clone-remap and mount-`dest`-remap are LIFTED
-  (bwrap binds them); multiplexer, waypipe and
-  shared-network-without-allowlist (`NetworkSharedUnsupported`)
-  remain, tracked in
+  (bwrap binds them); the shared network is bubblewrap parity now
+  (bd myconfig-6di.4.4 — nono adds no outbound flag, and allowlist
+  runs filter egress through the proxy); the multiplexer and waypipe
+  refusals remain, tracked in
   `../../../../doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`.
   Not yet exercised on a host.
 - **Network policy.** DONE for the allowlist (bd myconfig-mo3.1):

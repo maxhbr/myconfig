@@ -7922,31 +7922,63 @@ fn nono_with_dest_remap_mount_is_bound_by_bwrap() {
 }
 
 #[test]
-fn nono_shared_network_without_allowlist_is_refused() {
-    // The mysbx default (network shared, no allowlist) cannot be
-    // expressed under nono: it mediates per connection. The refusal
-    // says so — with `network = true` explicit AND with the key
-    // omitted (the merged default is shared). Unchanged until bd
-    // myconfig-6di.4.4.
+fn nono_shared_network_without_allowlist_is_bubblewrap_parity() {
+    // The mysbx default (network shared, no allowlist) IS expressible
+    // now (bd myconfig-6di.4.4, backends.md D1's network table): bwrap
+    // shares the netns exactly like the bubblewrap backend, and nono
+    // adds no egress flag — outbound is nono 0.74.0's default. The
+    // daemon socket rides on both layers (bd myconfig-nj9).
     for (config, label) in [
         ("backend = \"nono\"\nnetwork = true\n", "explicit true"),
         ("backend = \"nono\"\n", "omitted (default shared)"),
     ] {
-        let (inv, _, sidecar) = fixture("nono-shared-network-refused", &[]);
+        let (inv, _, sidecar) = fixture("nono-shared-network-accepted", &[]);
         std::fs::write(sidecar.join("config.toml"), config).unwrap();
         let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
-        assert_eq!(
-            code,
-            mysbx::EXIT_INFRASTRUCTURE,
-            "{label}: stderr: {stderr}"
+        assert_eq!(code, 0, "{label}: stderr: {stderr}");
+        assert!(
+            stdout.starts_with("bwrap\n--clearenv\n"),
+            "{label}: {stdout}"
         );
         assert!(
-            stderr.contains("cannot share the host network"),
-            "{label}: {stderr}"
+            stdout.contains("--share-net\n"),
+            "{label}: the netns is shared: {stdout}"
         );
         assert!(
-            stderr.contains("allow-domains") && stderr.contains("connect-ports"),
-            "{label}: the message lists the keys to configure: {stderr}"
+            stdout.contains("--ro-bind-try\n/nix/var/nix\n/nix/var/nix\n"),
+            "{label}: the daemon dir is bound: {stdout}"
+        );
+        assert!(
+            stdout.contains("--allow-unix-socket\n/nix/var/nix/daemon-socket/socket\n"),
+            "{label}: the daemon socket is granted: {stdout}"
+        );
+        for absent in ["--block-net", "--allow-domain", "--allow-connect-port"] {
+            assert!(
+                !stdout.contains(&format!("{absent}\n")),
+                "{label}: no {absent} without an allowlist: {stdout}"
+            );
+        }
+    }
+}
+
+#[test]
+fn nono_listen_ports_only_is_refused() {
+    // bd myconfig-a14: listen-ports alone does not restrict outbound —
+    // nono reports "outbound allowed" with only listen ports, so the
+    // configuration is refused (exit 70), also under --dry-run, with
+    // the fix named.
+    for config in [
+        "backend = \"nono\"\nnetwork = true\nlisten-ports = [8080]\n",
+        "backend = \"nono\"\nlisten-ports = [8080, 9090]\n",
+    ] {
+        let (inv, _, sidecar) = fixture("nono-listen-only-refused", &[]);
+        std::fs::write(sidecar.join("config.toml"), config).unwrap();
+        let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+        assert!(stderr.contains("listen-ports"), "{stderr}");
+        assert!(
+            stderr.contains("outbound traffic is a lie") || stderr.contains("restrict"),
+            "the message says why: {stderr}"
         );
         assert!(
             !stdout.contains("--allow-cwd"),
@@ -7956,11 +7988,56 @@ fn nono_shared_network_without_allowlist_is_refused() {
 }
 
 #[test]
+fn nono_url_form_allow_domains_is_refused() {
+    // backends.md D1 / config.md D21, bd myconfig-6di.4.4:
+    // allow-domains entries are plain host names on this backend — a
+    // URL or path form would need nono's TLS interception. The
+    // refusal names the entry; a wildcard host stays accepted.
+    for (config, entry) in [
+        ("https://github.com/org/**", "scheme + path glob"),
+        ("github.com/org/**", "path glob"),
+    ] {
+        let (inv, _, sidecar) = fixture("nono-url-domain-refused", &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"nono\"\nallow-domains = [\"{config}\"]\n"),
+        )
+        .unwrap();
+        let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+        assert_eq!(
+            code,
+            mysbx::EXIT_INFRASTRUCTURE,
+            "{entry}: stderr: {stderr}"
+        );
+        assert!(stderr.contains(config), "{entry}: {stderr}");
+        assert!(stderr.contains("plain host names"), "{entry}: {stderr}");
+        assert!(
+            !stdout.contains("--allow-domain"),
+            "no argv on refusal: {stdout}"
+        );
+    }
+    let (inv, _, sidecar) = fixture("nono-wildcard-host-ok", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\nallow-domains = [\"*.example.com\"]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("--allow-domain\n*.example.com\n"),
+        "the wildcard host reaches the argv: {stdout}"
+    );
+}
+
+#[test]
 fn nono_allowlist_reaches_the_argv() {
     // The full mapping end-to-end: allow-domains, connect-ports and
     // listen-ports all reach the printed argv with the configured
-    // values, in merged order, next to the daemon-socket grant of the
-    // shared network — inside the layered bwrap argv.
+    // values, in merged order — inside the layered bwrap argv. NO
+    // daemon-socket grant, NO `/nix/var/nix` bind: under an allowlist
+    // neither layer exposes the nix daemon (bd myconfig-nj9,
+    // bd myconfig-6di.4.4).
     let (inv, _, sidecar) = fixture("nono-allowlist-argv", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
@@ -7979,7 +8056,6 @@ fn nono_allowlist_reaches_the_argv() {
         ("--allow-connect-port", "443"),
         ("--allow-connect-port", "22"),
         ("--listen-port", "8080"),
-        ("--allow-unix-socket", "/nix/var/nix/daemon-socket/socket"),
     ] {
         assert!(
             stdout
@@ -7995,44 +8071,71 @@ fn nono_allowlist_reaches_the_argv() {
         !stdout.lines().any(|l| l == "--block-net"),
         "a shared network is not blocked: {stdout}"
     );
+    assert!(
+        !stdout.contains("/nix/var/nix/daemon-socket/socket"),
+        "no daemon socket under an allowlist (bd myconfig-nj9): {stdout}"
+    );
+    assert!(
+        !stdout.contains("--ro-bind-try\n/nix/var/nix\n"),
+        "no /nix/var/nix bind under an allowlist: {stdout}"
+    );
 }
 
 #[test]
 fn nono_pinned_nix_conf_is_bound_like_the_bubblewrap_backend() {
     // Under the layered backend the sanitized nix client configuration
-    // is bound at /etc/nix/nix.conf exactly like on the bubblewrap
-    // backend (backends.md D1: "the bubblewrap backend's argv,
-    // unchanged") — the pure-nono NIX_CONF_DIR contract (bd
-    // myconfig-bf2) is gone with it: whatever the pin is NAMED, the
-    // bind is at the in-sandbox path. The report names the pin, and a
-    // name other than `nix.conf` stays unrefused.
-    for (file_name, label) in [
-        ("nix.conf", "named nix.conf"),
-        ("mysbx-nix.conf", "other name"),
-    ] {
-        let (inv, _, _) = fixture_nono_config(
-            "nono-nix-conf-pin",
-            &[],
+    // is bound at /etc/nix/nix.conf when the daemon is reachable — the
+    // SHARED no-allowlist case (bd myconfig-nj9 pairs it with the
+    // /nix/var/nix bind): whatever the pin is NAMED, the bind is at
+    // the in-sandbox path, and a name other than `nix.conf` stays
+    // unrefused. Under an ALLOWLIST the bind is dropped with the
+    // daemon socket (dead weight — the sandbox must not name a daemon
+    // it cannot reach).
+    for (network_config, expect_bind, label) in [
+        (
+            "network = true\n",
+            true,
+            "shared, no allowlist: bound (bubblewrap parity)",
+        ),
+        (
             "network = true\nallow-domains = [\"api.openai.com\"]\n",
-        );
-        let conf = inv.home.join(file_name);
-        std::fs::write(&conf, "experimental-features = nix-command flakes\n").unwrap();
-        let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
-        cmd.env("MYSBX_NIX_CONF", &conf);
-        let out = cmd.output().expect("failed to spawn the mysbx binary");
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        assert_eq!(out.status.code(), Some(0), "{label}: stderr: {stderr}");
-        assert!(
-            stdout.contains(&format!(
-                "--ro-bind\n{}\n/etc/nix/nix.conf\n",
-                conf.display()
-            )),
-            "{label}: the pin is bound at /etc/nix/nix.conf: {stdout}"
-        );
-        assert!(
-            !stdout.contains("NIX_CONF_DIR="),
-            "{label}: no NIX_CONF_DIR in the layered argv: {stdout}"
-        );
+            false,
+            "allowlist: dropped with the daemon socket",
+        ),
+        ("network = false\n", false, "denied network: dropped"),
+    ] {
+        for (file_name, label_file) in [
+            ("nix.conf", "named nix.conf"),
+            ("mysbx-nix.conf", "other name"),
+        ] {
+            let (inv, _, _) = fixture_nono_config("nono-nix-conf-pin", &[], network_config);
+            let conf = inv.home.join(file_name);
+            std::fs::write(&conf, "experimental-features = nix-command flakes\n").unwrap();
+            let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+            cmd.env("MYSBX_NIX_CONF", &conf);
+            let out = cmd.output().expect("failed to spawn the mysbx binary");
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let label = format!("{label} ({label_file})");
+            assert_eq!(out.status.code(), Some(0), "{label}: stderr: {stderr}");
+            if expect_bind {
+                assert!(
+                    stdout.contains(&format!(
+                        "--ro-bind\n{}\n/etc/nix/nix.conf\n",
+                        conf.display()
+                    )),
+                    "{label}: the pin is bound at /etc/nix/nix.conf: {stdout}"
+                );
+            } else {
+                assert!(
+                    !stdout.contains("/etc/nix/nix.conf"),
+                    "{label}: no nix.conf bind without the daemon: {stdout}"
+                );
+            }
+            assert!(
+                !stdout.contains("NIX_CONF_DIR="),
+                "{label}: no NIX_CONF_DIR in the layered argv: {stdout}"
+            );
+        }
     }
 }

@@ -484,6 +484,16 @@ pub fn bwrap_argv(
             return Err(Error::DisplayUnavailable);
         }
     }
+    // A layered run's daemon bind fact, computed once (bd
+    // myconfig-nj9): `/nix/var/nix` and the nix.conf pin below are
+    // bound on the layered path exactly when the network is shared
+    // WITHOUT an allowlist; the bubblewrap backend keeps its current
+    // semantics (the allowlist is refused there anyway).
+    let daemon_bound = params.inner.is_none()
+        || (cfg.network
+            && cfg.allow_domains.is_empty()
+            && cfg.connect_ports.is_empty()
+            && cfg.listen_ports.is_empty());
     let mut argv: Vec<String> = vec!["--clearenv".into(), "--unshare-all".into()];
     if cfg.network {
         argv.push("--share-net".into());
@@ -533,9 +543,22 @@ pub fn bwrap_argv(
         // `network = false` would make the report's "denied" a lie.
         // The price is that `nix` needs the shared network to work at
         // all — said out loud in plan.md's base table.
-        argv.push("--ro-bind-try".into());
-        argv.push("/nix/var/nix".into());
-        argv.push("/nix/var/nix".into());
+        //
+        // In a LAYERED run under an ALLOWLIST the bind is dropped
+        // (bd myconfig-nj9, backends.md D1's network rules): the
+        // daemon builds fixed-output derivations, which keep network
+        // access, and a filtered sandbox must not expose a hole the
+        // allowlist cannot see. `nix` inside such a sandbox works
+        // against the substitute cache it carries, not the daemon.
+        // The nix.conf pin below is paired with this bind on the
+        // layered path only — a client configuration that names a
+        // daemon the sandbox cannot reach is dead weight, not
+        // policy.
+        if daemon_bound {
+            argv.push("--ro-bind-try".into());
+            argv.push("/nix/var/nix".into());
+            argv.push("/nix/var/nix".into());
+        }
     }
 
     // 3. the base binds (docs/plan.md "The base" table, fixed absolute
@@ -569,9 +592,17 @@ pub fn bwrap_argv(
         // `--ro-bind`, not `-try`: the pin is a store path the wrapper
         // just built, so a missing one is a packaging bug that must
         // fail loudly rather than silently drop the configuration.
-        argv.push("--ro-bind".into());
-        argv.push(nix_conf.into());
-        argv.push("/etc/nix/nix.conf".into());
+        // On the LAYERED path the bind is paired with the daemon bind
+        // above (bd myconfig-nj9): under an allowlist neither layer
+        // exposes the daemon, and the client config that would point
+        // at it is dead weight. On the bubblewrap backend the pin is
+        // bound unconditionally — unchanged behavior (the allowlist
+        // is refused there anyway).
+        if daemon_bound {
+            argv.push("--ro-bind".into());
+            argv.push(nix_conf.into());
+            argv.push("/etc/nix/nix.conf".into());
+        }
     }
 
     // 4. the workspace bind — the repo, rw, at its real host path
@@ -834,18 +865,21 @@ pub fn bwrap_argv(
             });
         }
     }
-    if !cfg.network {
-        // The daemon is bound with `--share-net` and nowhere else
-        // (section 2) — but a configured mount could still source it.
-        // Its dest is irrelevant: what matters is that the socket
-        // becomes reachable at all. Both containment directions count
-        // (review-3 item 2): a source AT OR BELOW `/nix/var/nix` is one,
-        // and so is a HOST ANCESTOR — binding `/nix` or `/` read-only
-        // still exposes `/nix/var/nix/daemon-socket/socket` through
-        // the wider window. `check_dest` and `check_hidden_mounts`
-        // already refuse the in-sandbox ancestors of protected
-        // paths, so an ancestor SOURCE was the one gap.
-        const DAEMON_DIR: &str = "/nix/var/nix";
+    // The daemon-source guard mirrors the daemon bind: a mount may
+    // never carry the socket into a sandbox that does not already bind
+    // it (review-3 item 2, and bd myconfig-nj9 for the layered
+    // allowlist case — the bind is dropped there, so the same hole
+    // would reopen through an ordinary mount). Under a DENIED network
+    // the guard always ran; under a LAYERED allowlist it now runs
+    // additionally. Both containment directions count: a source AT OR
+    // BELOW `/nix/var/nix` is one, and so is a HOST ANCESTOR — binding
+    // `/nix` or `/` read-only still exposes
+    // `/nix/var/nix/daemon-socket/socket` through the wider window.
+    // `check_dest` and `check_hidden_mounts` already refuse the
+    // in-sandbox ancestors of protected paths, so an ancestor SOURCE
+    // was the one gap.
+    const DAEMON_DIR: &str = "/nix/var/nix";
+    if !cfg.network || (params.inner.is_some() && !daemon_bound) {
         // Every effective source, not just the configured mounts:
         // the workspace bind is checked too (review-3 item 2 said so
         // explicitly — in a clone run that is the CLONE's source,
@@ -1274,10 +1308,12 @@ impl fmt::Display for Error {
             Error::DaemonUnderDeniedNetwork { source } => write!(
                 f,
                 "source {source} is inside or above the nix daemon directory \
-                 /nix/var/nix, and this sandbox denies the network — the daemon \
-                 builds fixed-output derivations, which keep network access, so a \
-                 bind exposing the socket would hand back exactly what \
-                 `network = false` takes away; drop the bind or share the network"
+                 /nix/var/nix, and this sandbox keeps the daemon socket out \
+                 (a denied network, or an egress allowlist on the layered \
+                 nono backend, bd myconfig-nj9) — the daemon builds \
+                 fixed-output derivations, which keep network access, so a \
+                 bind exposing the socket would hand back exactly what the \
+                 filter takes away; drop the bind"
             ),
             Error::GitDirProtected { gitdir, protected } => write!(
                 f,

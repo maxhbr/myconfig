@@ -19,9 +19,6 @@
 --ro-bind-try
 /run/systemd/resolve
 /run/systemd/resolve
---ro-bind-try
-/nix/var/nix
-/nix/var/nix
 --ro-bind
 /nix/store
 /nix/store
@@ -83,8 +80,6 @@ default
 /synth/data/cache
 --read
 /nix/store
---allow-unix-socket
-/nix/var/nix/daemon-socket/socket
 --allow-domain
 api.openai.com
 --

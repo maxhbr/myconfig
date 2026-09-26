@@ -4809,11 +4809,13 @@ fn nono_golden_minimal() {
 #[test]
 fn nono_golden_allowlist() {
     // The core mapping of bd myconfig-6di.2, layered: the allowlist
-    // becomes `--allow-domain` per domain in order,
-    // `--allow-connect-port` per port, and — with a shared network —
-    // the daemon socket flag. No `--block-net`, no `--listen-port`
-    // (none configured). The shared network also grows bwrap's
-    // resolver binds and the ro `/nix/var/nix` bind.
+    // becomes `--allow-domain` per domain in order and
+    // `--allow-connect-port` per port. NO daemon socket flag — under
+    // an allowlist neither layer exposes the nix daemon (bd
+    // myconfig-nj9): bwrap's `/nix/var/nix` bind is dropped too (the
+    // resolver set stays — the proxy and the allowed domains still
+    // ride `--share-net`). No `--block-net`, no `--listen-port`
+    // (none configured).
     let mut cfg = nono_base(true);
     cfg.allow_domains = vec!["api.openai.com".into(), "github.com".into()];
     cfg.connect_ports = vec![443];
@@ -4833,15 +4835,79 @@ fn nono_golden_allowlist() {
         .collect();
     assert_eq!(domains, ["api.openai.com", "github.com"]);
     assert!(
-        argv.windows(2)
+        !argv
+            .windows(2)
             .any(|w| w[0] == "--allow-unix-socket" && w[1] == "/nix/var/nix/daemon-socket/socket"),
-        "the daemon socket is granted with the shared network: {argv:?}"
+        "no daemon socket under an allowlist (bd myconfig-nj9): {argv:?}"
+    );
+    assert!(
+        !argv
+            .windows(3)
+            .any(|w| w[0] == "--ro-bind-try" && w[1] == "/nix/var/nix"),
+        "no /nix/var/nix bind under an allowlist: {argv:?}"
     );
     assert!(!argv.contains(&"--block-net".to_string()));
+    assert!(argv.contains(&"--share-net".to_string()));
+    // The resolver set stays: the allowed domains are reached THROUGH
+    // nono's proxy, which is still a netns-resident process needing
+    // the resolver binds.
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--ro-bind-try" && w[1] == "/etc/resolv.conf"),
+        "the resolver set rides the shared netns: {argv:?}"
+    );
     assert!(
         !argv.windows(2).any(|w| w[0] == "--listen-port"),
         "no listen-port flag without a configured listen port: {argv:?}"
     );
+}
+
+#[test]
+fn nono_refuses_listen_ports_only() {
+    // bd myconfig-a14: `listen-ports` alone does not restrict
+    // outbound — nono reports "outbound allowed" with only listen
+    // ports, so the config would be a policy that is not one.
+    // REFUSED (backends.md D1: "must either produce a restricted
+    // invocation or be refused"), for every port shape.
+    for listen in [[8080u16].to_vec(), [8080u16, 9090u16].to_vec()] {
+        let mut cfg = nono_base(true);
+        cfg.listen_ports = listen;
+        let err = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params())
+            .expect_err("listen-ports alone must be refused");
+        assert!(
+            matches!(err, NonoError::ListenPortsOnly),
+            "wrong error: {err}"
+        );
+    }
+}
+
+#[test]
+fn nono_refuses_url_form_allow_domains() {
+    // backends.md D1 / config.md D21, bd myconfig-6di.4.4:
+    // `allow-domains` entries are plain host names. A URL (scheme +
+    // path/pattern) or a path form needs nono's TLS interception,
+    // out of scope here — refused with the entry named.
+    for domain in [
+        "https://github.com/org/**",
+        "http://api.example.com",
+        "github.com/org/**",
+        "example.com/path",
+    ] {
+        let mut cfg = nono_base(true);
+        cfg.allow_domains = vec![domain.to_string()];
+        let err = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params())
+            .expect_err("a URL-form entry must be refused");
+        assert!(
+            matches!(err, NonoError::DomainUrlForm { domain: ref d } if d == domain),
+            "wrong error for {domain}: {err}"
+        );
+    }
+    // A wildcard subdomain STAYS a plain host name (nono's CONNECT
+    // proxy takes it): not a URL form.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["*.example.com".into()];
+    nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params())
+        .expect("a wildcard host is a plain host name");
 }
 
 #[test]
@@ -5263,21 +5329,47 @@ fn nono_refuses_the_waypipe_display_for_both_payload_forms() {
 }
 
 #[test]
-fn nono_refuses_a_shared_network_without_an_allowlist() {
-    // `network = true` (the mysbx default) with no allowlist: nono
-    // cannot express "share the host network". Unchanged until
-    // bd myconfig-6di.4.4.
-    let err = nono_layered_argv(
+fn nono_golden_shared_network() {
+    // `network = true` (the mysbx default) with no allowlist (bd
+    // myconfig-6di.4.4, backends.md D1's network table): bwrap owns
+    // the netns — `--share-net`, the resolver binds and the ro
+    // `/nix/var/nix` bind exactly like the bubblewrap backend's
+    // shared run — and nono adds NO network flag: outbound is
+    // nono 0.74.0's default, and `--allow-net` is deprecated. The
+    // daemon socket is granted (bubblewrap parity, the no-allowlist
+    // case of bd myconfig-nj9).
+    let argv = nono_layered_argv(
         &nono_base(true),
         &synth_repo(),
         &Payload::Shell,
         &host_env(&[]),
         &nono_params(),
     )
-    .expect_err("a shared network must be refused");
+    .unwrap();
+    assert_golden("nono-network-shared.txt", &argv);
+    assert!(argv.contains(&"--share-net".to_string()));
+    // No nono egress flag: no block, no domain, no port.
+    for absent in [
+        "--block-net",
+        "--allow-domain",
+        "--allow-connect-port",
+        "--listen-port",
+    ] {
+        assert!(
+            !argv.contains(&absent.to_string()),
+            "no {absent} without an allowlist: {argv:?}"
+        );
+    }
+    // The daemon rides: bound by bwrap, granted by nono.
     assert!(
-        matches!(err, LayeredError::Nono(NonoError::NetworkSharedUnsupported)),
-        "wrong error: {err:?}"
+        argv.windows(3)
+            .any(|w| w[0] == "--ro-bind-try" && w[1] == "/nix/var/nix"),
+        "the daemon dir is bound with the shared network: {argv:?}"
+    );
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--allow-unix-socket" && w[1] == "/nix/var/nix/daemon-socket/socket"),
+        "the daemon socket is granted with the shared network: {argv:?}"
     );
 }
 
@@ -5371,6 +5463,48 @@ fn nono_the_daemon_dir_under_a_denied_network_is_refused_by_the_layout() {
             "wrong error for {path} ({mode:?}): {err:?}"
         );
     }
+}
+
+#[test]
+fn nono_a_daemon_source_is_refused_under_an_allowlist_too() {
+    // bd myconfig-nj9, mirrored: under an allowlist the layers drop
+    // the daemon bind AND the socket grant — so an ordinary mount may
+    // not carry the socket back in. The same guard that serves
+    // `network = false` runs for the layered allowlist case; the
+    // bubblewrap backend (no inner wrapper) keeps accepting it, there
+    // the daemon is bound anyway.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    cfg.mounts.push(make_mount(
+        "/nix/var/nix/daemon-socket",
+        Some("/opt/socket"),
+        Mode::Ro,
+    ));
+    let err = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .expect_err("a daemon-source mount under an allowlist must be refused");
+    assert!(
+        matches!(
+            err,
+            LayeredError::Bwrap(BwrapError::DaemonUnderDeniedNetwork { .. })
+        ),
+        "wrong error: {err:?}"
+    );
+
+    // The bubblewrap backend with the same config: accepted — there
+    // the daemon is bound anyway (the allowlist is refused for that
+    // backend at step 4b; the layout itself does not filter).
+    let p = Params {
+        inner: None,
+        ..params()
+    };
+    bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p)
+        .unwrap_or_else(|e| panic!("bwrap backend unchanged: {e}"));
 }
 
 #[test]

@@ -176,7 +176,9 @@ unix-socket grants (bd myconfig-6di.4.5).
 | --- | --- |
 | mount `dest` different from its source | lifted: bubblewrap binds it |
 | `--session` clone runs | lifted: bubblewrap binds the clone at the repo path |
-| `network = true` without an allowlist | lifted: the premise was wrong, nono allows outbound traffic by default |
+| `network = true` without an allowlist | lifted (bd myconfig-6di.4.4): the premise was wrong — nono allows outbound traffic by default, so bwrap shares the netns and nono adds no flag, bubblewrap parity |
+| `listen-ports` alone on nono | refused (bd myconfig-a14, bd myconfig-6di.4.4): with only listen ports nono reports "outbound allowed" — an allowlist that does not restrict outbound is a lie |
+| URL-form `allow-domains` on nono | refused (bd myconfig-6di.4.4): no TLS interception on this backend, entries stay plain host names |
 | multiplexer sessions | lifted when the unix-socket grants land (bd myconfig-6di.4.5), refused until then |
 | `display = "waypipe"` | kept until nono's seccomp filter is audited for it (bd myconfig-6di.4.6) |
 | an allowlist on `bubblewrap` or `podman-gvisor` | unchanged (config.md D21) |

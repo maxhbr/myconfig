@@ -1177,7 +1177,7 @@ a security bug:
 
 | backend | an allowlist means |
 | --- | --- |
-| `nono` | enforced (bd myconfig-6di.2): `--allow-domain` / `--allow-connect-port` / `--listen-port` per merged entry, in merged order; DNS is resolved by nono's own proxy, so no implicit `connect-ports` 53/853 is added |
+| `nono` | enforced (bd myconfig-6di.2, layered bd myconfig-6di.4.4): `--allow-domain` / `--allow-connect-port` / `--listen-port` per merged entry, in merged order; DNS is resolved by nono's own proxy, so no implicit `connect-ports` 53/853 is added; `listen-ports` WITHOUT `allow-domains`/`connect-ports` is refused (with only listen ports nono reports "outbound allowed", bd myconfig-a14) and URL/path-form entries are refused (no TLS interception here) |
 | `bubblewrap` | refused — bubblewrap shares or unshares the whole network namespace (`--share-net`/nothing), it cannot filter per domain or port |
 | `podman-gvisor` | refused — pasta does not filter by domain (bd myconfig-6di.3) |
 
@@ -1185,17 +1185,16 @@ The first enforcement is the nono backend (bd myconfig-6di.2). The
 refusal fires while the argv is laid out, BEFORE the `--dry-run` early
 return, so a dry run audits it too.
 
-**Superseded by [backends.md D1](./backends.md)** (bd myconfig-6di.4):
-the premise of the next paragraph is wrong, because nono allows
-outbound traffic by default. The layered backend maps the shared
-default onto bubblewrap's `--share-net` without nono network flags.
-
-**On nono the shared default itself is inexpressible.** nono mediates
-per connection (a seccomp baseline; only the listed domains and ports
-pass), so `backend = "nono"` with the default `network = true` and an
-EMPTY allowlist is refused: silently granting nothing would be a
-silent downgrade of "shared". The operator lists what the sandbox may
-reach, or picks a backend that shares the host stack.
+**Superseded by [backends.md D1](./backends.md)** (bd myconfig-6di.4,
+bd myconfig-6di.4.4): the layered backend maps the shared default onto
+bubblewrap's `--share-net` without nono network flags (nono allows
+outbound traffic by default — the next paragraph's premise was
+wrong). What REMAINS on `backend = "nono"`: `listen-ports` alone is
+refused (with only listen ports nono reports "outbound allowed" — an
+allowlist that does not restrict outbound is a lie, bd
+myconfig-a14), and an `allow-domains` entry in URL/path form is
+refused (nono tunnels plain host names with CONNECT and injects no CA
+certificate; URLs would need its TLS interception).
 
 **`network = false` plus any allowlist key is a contradiction refused on
 every backend**: the switch denies the network, the allowlist names what
@@ -1269,11 +1268,7 @@ Per backend:
 | --- | --- |
 | `bubblewrap` | `~/.ssh` = `/mysbx-home/.ssh` (the default identity lookup finds the key) |
 | `podman-gvisor` | `~/.ssh` = `/mysbx-home/.ssh` (same remap as every state entry) |
-| `nono` | no remap — the key sits at its real sidecar path; lib.rs pins `GIT_SSH_COMMAND = ssh -i <sidecar>/state/.ssh/id_ed25519 -o IdentitiesOnly=yes …` in the exec environment, so git finds it without any `$HOME/.ssh` lookup |
-
-The `nono` row is superseded by [backends.md D1](./backends.md) (bd
-myconfig-6di.4): the layered backend binds the key at
-`/mysbx-home/.ssh`, like the bubblewrap row.
+| `nono` | `~/.ssh` = `/mysbx-home/.ssh` (the layered backend remaps like the bubblewrap row, backends.md D1) |
 
 **UX — the public key is printed when created**, as a `## `-prefixed
 line on stdout (and the report names the bind: `ssh key: <dest> <->
