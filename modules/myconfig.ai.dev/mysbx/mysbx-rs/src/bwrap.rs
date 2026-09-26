@@ -123,6 +123,14 @@ pub const NONO_STATE: &str = "/mysbx-nono";
 /// private socket instead of the host default `/tmp/tmux-<uid>`.
 pub const MUX_SOCKET_DIR: &str = "/mysbx-home/.mysbx-tmux";
 
+/// herdr's sandbox API socket directory (bd myconfig-7ov): the
+/// selected entry script writes the session config there and herdr
+/// binds its server/client sockets — `herdr.sock`, `herdr-client.sock`,
+/// both direct children. Created by the layered layout (`--dir`) so
+/// nono's pathname-socket grant anchors to a real directory; guarded
+/// like every home path otherwise.
+pub const HERDR_SOCKET_DIR: &str = "/mysbx-home/.config/herdr";
+
 /// The `WAYLAND_DISPLAY` name the waypipe server presents its fake
 /// compositor socket under (docs/design/config.md D18). A bare name,
 /// deliberately: the multi-mode server creates it in
@@ -574,6 +582,47 @@ pub fn bwrap_argv(
     if params.inner.is_some() {
         argv.push("--tmpfs".into());
         argv.push(NONO_STATE.into());
+        // The nono infra env pins XDG_CONFIG_HOME, XDG_STATE_HOME and
+        // TMPDIR below this tmpfs (inner_env), and nono 0.74.0 probes
+        // all three at startup — bd myconfig-7ov, the live f13 log:
+        // an empty tmpfs made `resolve_user_config_dir` fail to
+        // canonicalize XDG_CONFIG_HOME (five WARNs per run, falling
+        // back to $HOME/.config — which is /mysbx-nono/.config
+        // through HOME, the same path either way), the
+        // `validated_home`/state-root canonicalizations walked dead
+        // paths, and the capability state file
+        // ($TMPDIR/.nono-*.json, `nono why --self`) failed with
+        // ENOENT. bwrap's `--dir` creates the directories inside the
+        // new namespace (verified: 0755, after the tmpfs, so the dir
+        // mounts land on it) — all three, cheap and explicit, so the
+        // contract the infra env promises is real. Never granted or
+        // mountable: check_dest protects every NONO_STATE path.
+        //
+        // The MULTIPLEXER unix-socket grants need the same anchor (bd
+        // myconfig-7ov, the f13 log's third finding in the mux cone):
+        // under the profile's `af_unix_mediation = "pathname"` a
+        // socket grant canonicalizes to a REAL directory at nono's
+        // start (`UnixSocketCapability::new_file`/`new_dir` return
+        // PathNotFound and the grant is then SKIPPED — the f13 log's
+        // `WARN '/mysbx-home/.mysbx-tmux' does not exist and will be
+        // ignored`), so the dirs the entries use are created here,
+        // before nono runs: the tmux socket dir [`MUX_SOCKET_DIR`] and
+        // herdr's API dir [`HERDR_SOCKET_DIR`]. The runtime mkdir of
+        // the entry scripts still applies (this is the anchor of the
+        // grants cone), and the home grant covers both into the
+        // sandbox only — the mux guards stay untouched.
+        for dir in [
+            format!("{NONO_STATE}/.config"),
+            format!("{NONO_STATE}/.local/state"),
+            format!("{NONO_STATE}/tmp"),
+        ] {
+            argv.push("--dir".into());
+            argv.push(dir);
+        }
+        for dir in [MUX_SOCKET_DIR, HERDR_SOCKET_DIR] {
+            argv.push("--dir".into());
+            argv.push(dir.to_owned());
+        }
     }
     // `/bin/sh` for the sandbox (see [`Params::bin_sh`] for why the
     // minimal root must grow one). Bound with the section's own

@@ -43,6 +43,16 @@
 /mysbx-home
 --tmpfs
 /mysbx-nono
+--dir
+/mysbx-nono/.config
+--dir
+/mysbx-nono/.local/state
+--dir
+/mysbx-nono/tmp
+--dir
+/mysbx-home/.mysbx-tmux
+--dir
+/mysbx-home/.config/herdr
 --bind
 /synth/repo
 /synth/repo

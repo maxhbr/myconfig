@@ -146,6 +146,48 @@ impl Multiplexer {
     pub fn starts_a_session(self) -> bool {
         self != Multiplexer::None
     }
+
+    /// The directories whose DIRECT-CHILD unix sockets the payload's
+    /// multiplexer may connect to and bind on, per the selected entry
+    /// script (bd myconfig-7ov: the first live f13 run died because
+    /// the grant followed the tmux dir unconditionally). One entry
+    /// script's comment per row — nix/*-entry.nix — plus the bwrap
+    /// layout facts.
+    ///
+    /// The FILESYSTEM side needs no extra grant: every directory here
+    /// lies under `/mysbx-home`, and nono's single rw home grant
+    /// covers it. These are the UNIX-SOCKET grants under the profile's
+    /// `af_unix_mediation = "pathname"` — without the explicit grant
+    /// the mediation filter denies connect/bind (the f13 fatal: herdr
+    /// could not create its server socket, the run exited 1).
+    ///
+    /// - tmux / workmux / aoe: a tmux server on `$TMUX_TMPDIR`
+    ///   (bwrap.rs `MUX_SOCKET_DIR` = `/mysbx-home/.mysbx-tmux`), the
+    ///   socket FILE `$TMUX_TMPDIR/socket` — a direct child. workmux
+    ///   re-executes tmux with `-S "$socket"`, aoe drives the same
+    ///   server through the same variable.
+    /// - orca: the server keeps NO unix socket of its own below the
+    ///   home (its pairing endpoint is TCP loopback; the dbus socket
+    ///   name in the log is a HOST path that never exists in the
+    ///   view), but the entry still validates `TMUX_TMPDIR` and a
+    ///   pane running plain tmux lands on it — keep the mux dir.
+    ///   `requireSocketDir` also `mkdir`s it, so the subtree grant is
+    ///   a no-op either way without mediation noise.
+    /// - herdr: NOT a tmux server — its API sockets are
+    ///   `$HOME/.config/herdr/herdr.sock` (server) and
+    ///   `.../herdr-client.sock` (the client passes it over SSH),
+    ///   both direct children of `/mysbx-home/.config/herdr` (the
+    ///   entry script writes the session config there every start,
+    ///   `mkdir -p`; the f13 log names both paths verbatim).
+    pub fn unix_socket_dirs(self) -> &'static [&'static str] {
+        match self {
+            Multiplexer::None => &[],
+            Multiplexer::Herdr => &["/mysbx-home/.config/herdr"],
+            // Every other entry keeps the tmux socket dir; herdr swaps
+            // it (it does not use TMUX_TMPDIR for its own API socket).
+            _ => &["/mysbx-home/.mysbx-tmux"],
+        }
+    }
 }
 
 impl fmt::Display for Multiplexer {

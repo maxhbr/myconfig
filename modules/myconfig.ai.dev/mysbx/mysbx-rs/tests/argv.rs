@@ -5592,16 +5592,21 @@ fn nono_golden_multiplexer_session() {
             ..params()
         };
         let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
-        // The socket dir grant accompanies every session.
-        assert!(
-            argv.windows(2)
-                .any(|w| w[0] == "--allow-unix-socket-dir-bind" && w[1] == MUX_SOCKET_DIR),
-            "the mux socket dir grant is in the chain: {argv:?}"
-        );
-        // The entry is the payload, never the shell.
-        assert_eq!(argv[argv.len() - 1], entry);
+        // The EVERY selected entry's socket dirs accompany the session
+        // ([`Multiplexer::unix_socket_dirs`] — bd myconfig-7ov's shape).
+        for dir in mux.unix_socket_dirs() {
+            assert!(
+                argv.windows(2)
+                    .any(|w| w[0] == "--allow-unix-socket-dir-bind" && w[1] == *dir),
+                "the mux socket dir grant for {dir} is in the chain: {argv:?}"
+            );
+            // The entry is the payload, never the shell.
+            assert_eq!(argv[argv.len() - 1], entry);
+        }
         // TMUX_TMPDIR is a payload-env ASSIGNMENT (KEY=value) of the
-        // pinned env, naming the private socket dir.
+        // pinned env, naming the private tmux socket dir (herdr
+        // validates it for panes, it does not bind its API socket
+        // there).
         assert!(
             argv.iter()
                 .any(|a| a == &format!("TMUX_TMPDIR={MUX_SOCKET_DIR}")),

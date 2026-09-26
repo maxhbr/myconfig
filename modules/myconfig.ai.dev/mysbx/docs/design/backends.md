@@ -140,6 +140,21 @@ treatment config.md D14 gives `HOME`. Overriding them could only
 break connectivity, because direct connections are blocked. It could
 never widen access, so the entry is ignored rather than refused.
 
+#### Naming-service probes and the IPC-denial block (bd myconfig-7ov)
+
+The pathname AF_UNIX mediation filter traps every pathname
+`connect(2)`/`bind(2)`, and glibc's NSS probes `/var/run/nscd/socket`
+before every user/group lookup. The path is not in the view, so no
+capability covers it and each probe is denied — benign (glibc falls
+back to files/DNS) but loud: the run footer's "IPC denial:" block
+lists the probes. nono 0.74.0 exposes no knob to quieten it —
+`diagnostics.suppress_system_services` hides only profile-prompt
+entries, and `--no-diagnostics` gates only the failure footer, not
+the denial block of a successful session — so mysbx documents the
+block as known-benign: name operations against paths the view
+deliberately does not carry (nscd, dbus) are expected, everything
+else in the block is worth reading.
+
 #### nono's own inputs
 
 - **Profile**: a store path built by the Nix module, passed as

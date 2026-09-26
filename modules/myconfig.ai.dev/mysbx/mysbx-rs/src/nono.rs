@@ -293,26 +293,33 @@ pub fn nono_run_argv(
         ]);
     }
 
-    // 3b. the multiplexer's UNIX-SOCKET grant (bd myconfig-6di.4.5):
-    // the socket dir is inside the home tmpfs, so the filesystem side
-    // is the rw grant above — but pathname AF_UNIX connect() and
-    // bind() are a SEPARATE Landlock axis when the profile asks for
-    // mediation (the mysbx profile ships `linux.af_unix_mediation =
-    // "pathname"`, see nix/mysbx.nix): without the explicit socket
-    // grant the tmux server inside could not create nor connect its
-    // own socket. The flag is nono 0.74.0's
+    // 3b. the multiplexer's UNIX-SOCKET grants (bd myconfig-6di.4.5:
+    // the mechanism; bd myconfig-7ov: the per-multiplexer shape the
+    // f13 fatal exposed). The socket dirs are inside the home tmpfs —
+    // the filesystem side is the rw grant above — but pathname
+    // AF_UNIX connect() and bind() are a SEPARATE Landlock axis when
+    // the profile asks for mediation (it ships
+    // `linux.af_unix_mediation = "pathname"`, see nix/mysbx.nix):
+    // without the explicit socket grant the server inside could not
+    // create nor connect its own socket, and the first live f13 run
+    // (herdr) died with `bind ... (no matching unix_socket
+    // capability)` on its API socket. The flag is nono 0.74.0's
     // `--allow-unix-socket-dir-bind`: connect + bind on any
-    // DIRECT-CHILD socket of the directory — the exact shape of the
-    // entry scripts (`$TMUX_TMPDIR/socket`, one file), verified live:
-    // a payload making a static bind(2)/connect(2) probe succeeds
-    // with the grant and fails both with it absent (EACCES on bind,
-    // ECONNREFUSED-flow refusal on connect). Identifier grants only
-    // — the dir is below the home grant, never a hole into the host.
+    // DIRECT-CHILD socket of the directory, verified live (a payload
+    // making a static bind(2)/connect(2) probe succeeds with the grant
+    // and fails both without it). WHICH directories ride with the
+    // selected entry is [`Multiplexer::unix_socket_dirs`] — tmux lines
+    // up with the $TMUX_TMPDIR socket dir all tracks share, herdr's
+    // API sockets live under `$HOME/.config/herdr` (the 4.5 emission
+    // of the tmux dir unconditionally was the bug). The
+    // `check_mux_socket`/`MuxSocketDest`/`MuxSocketPersisted` guards
+    // stay untouched: they protect the TMUX_TMPDIR path itself, not
+    // the grants cone. Identifier grants only — every dir is below the
+    // home grant, never a hole into the host.
     if mux.starts_a_session() {
-        argv.extend([
-            "--allow-unix-socket-dir-bind".into(),
-            crate::bwrap::MUX_SOCKET_DIR.into(),
-        ]);
+        for dir in mux.unix_socket_dirs() {
+            argv.extend(["--allow-unix-socket-dir-bind".into(), (*dir).into()]);
+        }
     }
 
     // 4. the configured mounts at their in-sandbox dest, one grant
