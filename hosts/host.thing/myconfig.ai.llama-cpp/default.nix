@@ -22,26 +22,16 @@ let
   qwen3_8_27B = import ./Qwen3.8-27B.nix {
     inherit modelsPullDir;
     sharpTemplate = ../../../modules/myconfig.ai/myconfig.ai.llama-cpp/templates/sharp.jinja;
-    # forkPkg = pkgs.llama-cpp-strix-halo;
   };
   hy3 = import ./Hy3-Q2_K_L.nix { inherit modelsPullDir; };
-  # 2026-09-12: Flash-Next needs no patched base build — PR #27742
-  # (qwen4exp) was merged 2026-08-27 and is in the stable release
-  # v0.4.0 that nixpkgs ships (see
-  # doc/TODOs/drop-patched-llama-cpp-pr-27742.md). The `-MTP` entries
-  # below DO still need the PR-28243 build: mainline has no MTP graph
-  # for `qwen4exp` yet (see nixpkgs.overlays.llama-cpp-pr-28243.nix and
+  # The `-MTP` entries need the PR-28243 build: mainline has no MTP
+  # graph for `qwen4exp` yet (see
   # doc/TODOs/drop-llama-cpp-pr-28243-pin-when-qwen4exp-mtp-merges.md).
   qwen38_flash_next = import ./Qwen3.8-Flash-Next.nix {
     inherit modelsPullDir;
     mtpServerPackage = patched-llama-cpp-pr-28243-pkg;
   };
   nex_n25_mini = import ./Nex-N2.5-mini.nix { inherit modelsPullDir; };
-  # 2026-09-12: GLM-5.3-Flash dropped — PR #27754 (glm5next) is still
-  # open upstream and the host no longer carries the patched build or
-  # the model. Re-add via `import ./GLM-5.3-Flash.nix { inherit
-  # modelsPullDir; }` once glm5next is in a release the host runs (see
-  # doc/TODOs/drop-patched-llama-cpp-pr-27754.md).
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -176,11 +166,6 @@ let
         ) rtxModels
       );
 
-  # Lookup of what the host's inference-cpp hook currently resolves to
-  # (the stock nixpkgs build selected by services.llama-cpp.nix for the
-  # host's GPU variants).  Used by the container override below.
-  host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
-
   # PR-28243 patched build for qwen4exp MTP (Qwen3.8-Flash-Next
   # speculative decoding). Only the `-MTP` Flash-Next entries need
   # this — it is set per-model via the `serverPackage` option so the
@@ -194,11 +179,6 @@ let
     blasSupport = false;
   };
 
-  # 2026-09-12: the other patched builds were dropped —
-  # `patched-llama-cpp-pkg` (PR #27742 / qwen4exp) because the PR is
-  # merged and shipped in the stable v0.4.0 release nixpkgs carries,
-  # `patched-llama-cpp-pr-27754-pkg` (glm5next) together with the
-  # GLM-5.3-Flash models because the PR is still open upstream.
   gfx-llama-cpp-config = {
     serviceVariant = "llama-swap";
     # serviceDevice = "Vulkan0"; # only for serviceVariant llama-server
@@ -385,7 +365,6 @@ in
             rocmPackages.rocm-smi
           ];
           hardware.graphics.enable = true;
-          services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
           myconfig.ai.llama-cpp = gfx-llama-cpp-config;
           # The container does not inherit the host's session
           # environment (hardware.Radeon8060S.nix); ROCm needs the

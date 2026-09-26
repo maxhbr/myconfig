@@ -141,13 +141,14 @@ from the overlay") was executed preemptively:
 - the `Qwen3.8-27B-DFlash2-Q6_K_XL` candidate is commented out in
   `candidateModels` in `hosts/host.thing/myconfig.ai.llama-cpp/Qwen3.8-27B.nix`
   (keep the code, do not serve it);
-- the `llama-cpp-strix-halo` derivation is disabled (commented out) in
-  `hosts/host.thing/nixpkgs.overlays.llama-cpp.nix` and `forkPkg` is no
-  longer passed to the `Qwen3.8-27B.nix` import — nothing builds the
-  fork anymore.
+- the `llama-cpp-strix-halo` derivation and the whole
+  `hosts/host.thing/nixpkgs.overlays.llama-cpp.nix` overlay were deleted
+  in `7c701bd595` (recover the fork block from `7c701bd595^`), and
+  `forkPkg` is no longer passed to the `Qwen3.8-27B.nix` import —
+  nothing builds the fork anymore.
 
 Re-enabling requires: uncomment the candidate + `forkPkg` passthrough,
-uncomment the fork overlay block, re-fetch `forkRev`/`forkHash` (the
+restore the fork overlay block from git history, re-fetch `forkRev`/`forkHash` (the
 fork has diverged further: 213 ahead / 467 behind upstream master as of
 2026-09-12), and re-check whether the op-NONE abort is fixed upstream
 by then (watch issues #26636 / #27833). If it is, prefer the fixed

@@ -362,10 +362,9 @@ in
       services.llama-cpp = {
         enable = true;
         # `services.llama-cpp.package` is set by services.llama-cpp.nix
-        # via `lib.mkDefault` (it picks a multi-backend llama-cpp build
-        # appropriate for the host's GPU variants). We don't override
-        # it here — at runtime the `--device` CLI flag (set below in
-        # `settings.device`) selects which backend that build uses.
+        # via `lib.mkDefault` to the `serviceDevice` build from
+        # lib/devices.nix; the `--device` CLI flag (set below in
+        # `settings.device`) selects the device within that backend.
         # Hosts that need a different package can set
         # `services.llama-cpp.package` explicitly with the usual mkForce
         # / mkOverride mechanism.

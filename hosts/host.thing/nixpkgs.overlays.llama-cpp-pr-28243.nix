@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # Build of ggml-org/llama.cpp PR #28243 applied on top of stock
-# nixpkgs `llama-cpp` (v0.4.0):
+# nixpkgs `llama-cpp`:
 #   https://github.com/ggml-org/llama.cpp/pull/28243
 # ("models: Qwen3.8-Flash-Next MTP" — multi-token prediction for the
 # `qwen4exp` architecture, plus cross-model tensor borrowing for the
@@ -16,7 +16,7 @@
 #   https://github.com/danielhanchen/llama.cpp/tree/qwen4exp/mtp
 # and is mirrored as `refs/pull/28243/head` on the upstream repo.
 #
-# Why a patched build is needed: the stock nixpkgs llama-cpp (v0.4.0,
+# Why a patched build is needed: the stock nixpkgs llama-cpp (0.5.0,
 # which contains merged PR #27742) knows the `qwen4exp` trunk but does
 # NOT load the NEXTN (MTP) tensors and has no MTP graph for the
 # architecture — see the requirements section of
@@ -44,7 +44,7 @@ let
   version = "10786";
   hash = "sha256-SU0HhkGWpX5GqNPDWDZCxbpKklKpJuu47UTnNWyN7ZQ=";
   # `tools/ui/package-lock.json` is byte-identical to b10408 and to
-  # the v0.4.0 release nixpkgs ships (verified by fetching and
+  # the v0.4.0 release (verified by fetching and
   # hashing all three), so the nixpkgs npmDepsHash still applies.
   npmDepsHash = "sha256-2Q7XhaLAArmviOLdQsNbYTfdyDE5pW9lR26cRHEVl9k=";
 in

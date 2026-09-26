@@ -10,6 +10,11 @@
 #
 # This is the "single binary on the host" path, distinct from the
 # llama-swap-orchestrated per-(model, device) wrappers in ./llama-swap.nix.
+#
+# With `myconfig.ai.llama-cpp.serviceVariant = "llama-server"` the
+# router is pinned to one `serviceDevice`, so the default reuses that
+# device's build from `lib/devices.nix` (already built for the
+# per-device wrappers) instead of compiling an extra multi-backend one.
 {
   config,
   options,
@@ -31,12 +36,18 @@ let
     else
       [ ];
   hasVariant = v: builtins.elem v gpuvariants;
-  my-llama-cpp = pkgs.llama-cpp.override {
-    rocmSupport = hasVariant "amd";
-    vulkanSupport = (hasVariant "amd-no-rocm" || hasVariant "amd");
-    cudaSupport = hasVariant "nvidia";
-    blasSupport = false;
-  };
+  llamaCfg = config.myconfig.ai.llama-cpp;
+  inherit (import ./lib { inherit lib pkgs; }) devices;
+  my-llama-cpp =
+    if llamaCfg.serviceVariant == "llama-server" && llamaCfg.serviceDevice != null then
+      devices.packageForDevice llamaCfg.serviceDevice
+    else
+      pkgs.llama-cpp.override {
+        rocmSupport = hasVariant "amd";
+        vulkanSupport = (hasVariant "amd-no-rocm" || hasVariant "amd");
+        cudaSupport = hasVariant "nvidia";
+        blasSupport = false;
+      };
   hmEnabled = lib.hasAttrByPath [ "home-manager" "sharedModules" ] options;
 in
 {

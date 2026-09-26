@@ -55,12 +55,8 @@
         ];
       }
     )
-    # 2026-09-12: the llama-cpp pin overlays (stock pin, PR-27742,
-    # PR-27754) were dropped — nixpkgs ships llama-cpp v0.4.0 which
-    # covers everything the pins provided; see
-    # doc/TODOs/drop-patched-llama-cpp-pr-27742.md and
-    # doc/TODOs/drop-patched-llama-cpp-pr-27754.md. Only the PR-28243
-    # pin (qwen4exp MTP, still unmerged upstream) remains.
+    # qwen4exp MTP for Qwen3.8-Flash-Next; see
+    # doc/TODOs/drop-llama-cpp-pr-28243-pin-when-qwen4exp-mtp-merges.md
     ./nixpkgs.overlays.llama-cpp-pr-28243.nix
     ./myconfig.ai.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix

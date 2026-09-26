@@ -226,9 +226,9 @@ let
           per-(model, device) script wrappers.
 
           Use this for models that require a patched or custom
-          llama.cpp build (e.g. the PR-27742 `qwen4exp` build for
-          Qwen3.8-Flash-Next, or the Nathanw1014 strix-halo-vulkan
-          fork) without forcing the entire host onto that build.
+          llama.cpp build (e.g. the PR-28243 `qwen4exp` MTP build for
+          Qwen3.8-Flash-Next) without forcing the entire host onto
+          that build.
         '';
       };
       # Per-model extra environment variables, exported around the
