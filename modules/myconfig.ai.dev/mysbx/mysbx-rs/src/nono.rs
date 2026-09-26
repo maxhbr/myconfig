@@ -107,13 +107,35 @@
 //!    plain host names only — a URL or path form (no matter how it
 //!    is spelled) would need nono's TLS interception, out of scope
 //!    on this backend.
-//! 8. the display refusal (bd myconfig-6di.4.6 — its syscall set
-//!    needs an audit under nono's seccomp filter): refused, never
-//!    silently headless. The multiplexer refusal is LIFTED (bd
-//!    myconfig-6di.4.5, sections 3b and 4): the unix-socket grant of
-//!    the mux socket dir is real, the entry-pin requirement is the
-//!    bwrap layout's, and the profile ships pathname AF_UNIX
-//!    mediation (nix/mysbx.nix) so the socket stays inside.
+//! 8. the WAYPIPE display channel (bd myconfig-6di.4.6, audited and
+//!    LIFTED): the guest waypipe server binds its fake compositor
+//!    socket at `/mysbx-home/wayland-0` ([`WAYPIPE_DISPLAY_PATH`], a
+//!    direct child of the sandbox home) and connects to the host
+//!    client's per-run socket at `<socket_dir>/waypipe.sock` (bwrap
+//!    binds the socket dir rw at itself). Both sockets cross nono's
+//!    Landlock axes: the FILESYSTEM side is the home grant plus the
+//!    socket-dir ro mount, the UNIX-SOCKET side gets two
+//!    `--allow-unix-socket-dir-bind` grants (nono 0.74.0 — direct
+//!    child sockets only). Audit result (0.74.0 source + live probe
+//!    under the real profile + mediation): the TCP-only/block-all
+//!    static baselines' socket traps allow AF_UNIX socket() and
+//!    socketpair() ([`sandbox/linux.rs`] filter tables), the
+//!    AF_UNIX mediation filter explicitly CONTINUES sendmsg with a
+//!    NULL msg_name (the fd-passing/SCM_RIGHTS case), memfd_create is
+//!    trapped by NO nono filter, and the mediation supervisor allows
+//!    bind/connect on granted paths — a waypipe server payload
+//!    (bind `wayland-0`, connect `waypipe.sock`, forward) runs
+//!    end-to-end under `--block-net` WITH the grants and fails
+//!    exactly-when-ungranted (`bind ... (no matching unix_socket
+//!    capability)`); under an allowlist or the shared default the
+//!    same grants apply (the mediation filter installs in EVERY mode
+//!    when the profile sets `af_unix_mediation = "pathname"`, which
+//!    is the only seccomp filter that ever touches waypipe's own
+//!    syscall set; the shared default has none at all). An operator
+//!    overriding `MYSBX_NONO_PROFILE` with a mediation-less profile
+//!    gets nono's plain semantics — sockets reachable through the
+//!    filesystem grants already given; that is the operator's own
+//!    pinned policy, reviewed like every other profile value.
 //!
 //! Everything else is the bubblewrap backend's: `bin_sh`, `nix_conf`
 //! and `ca_bundle` are argv binds inside the view, the payload
@@ -122,7 +144,7 @@
 //! `/mysbx-nono` — nono's own state tmpfs, never granted — is a base
 //! path of the bwrap layout (bwrap.rs [`crate::bwrap::NONO_STATE`]).
 
-use crate::bwrap::{Payload, Workspace, SANDBOX_HOME};
+use crate::bwrap::{Payload, Workspace, SANDBOX_HOME, WAYPIPE_DISPLAY_PATH};
 use crate::config::{Mode, Multiplexer};
 use crate::merge::Merged;
 use crate::repo::Repo;
@@ -153,6 +175,14 @@ pub struct Params<'a> {
     /// view), or any nono profile name/path an operator picks. The
     /// argv carries whatever the pin names.
     pub profile: &'a str,
+    /// The per-run waypipe socket directory (bwrap.rs
+    /// [`crate::bwrap::Waypipe::socket_dir`]) when the run opens the
+    /// display channel: the guest server CONNECTS to
+    /// `<socket_dir>/waypipe.sock`, so the directory needs its
+    /// `--allow-unix-socket-dir-bind` grant (bd myconfig-6di.4.6).
+    /// `None` when the display is off or when this call runs before
+    /// the socket dir exists (the bwrap layout refuses the run first).
+    pub waypipe_socket_dir: Option<&'a str>,
 }
 
 /// Validate the allowlist's honesty (bd myconfig-a14, bd
@@ -239,6 +269,29 @@ pub fn nono_run_argv(
     // multiplexer socket directory and the waypipe display socket
     // are the same tmpfs (D16–D18).
     argv.extend(["--allow".into(), SANDBOX_HOME.into()]);
+
+    // 3a. the WAYPIPE display's unix-socket grants (bd myconfig-6di.4.6,
+    // audited and lifted): the guest waypipe server creates its fake
+    // compositor socket at `/mysbx-home/wayland-0` — a DIRECT CHILD of
+    // the sandbox home — and connects to the host client's socket at
+    // `<socket_dir>/waypipe.sock` — a direct child of the per-run
+    // socket dir, bound rw at ITSELF by the layout. Both are
+    // `--allow-unix-socket-dir-bind` grants: connect AND bind on
+    // direct-child sockets only (nono 0.74.0; audited live under the
+    // real profile — see the module docs, section 8). The filesystem
+    // side: the home grant above, the socket dir's ro bind below;
+    // neither layer widens anything — every granted path lies inside
+    // the view bwrap already created.
+    if let Some(waypipe_dir) = params.waypipe_socket_dir {
+        argv.extend([
+            "--allow-unix-socket-dir-bind".into(),
+            WAYPIPE_DISPLAY_PATH.into(),
+        ]);
+        argv.extend([
+            "--allow-unix-socket-dir-bind".into(),
+            (*waypipe_dir).to_owned(),
+        ]);
+    }
 
     // 3b. the multiplexer's UNIX-SOCKET grant (bd myconfig-6di.4.5):
     // the socket dir is inside the home tmpfs, so the filesystem side
@@ -370,18 +423,13 @@ pub fn nono_run_argv(
         }
     }
 
-    // 8. the display refusal (bd myconfig-6di.4.6): the waypipe
-    // display's syscall set (memfd, `SCM_RIGHTS` on the guest-side
-    // socket) needs an audit under nono's seccomp filter — until that
-    // audit the run is refused, never silently headless. The
-    // multiplexer refusal is LIFTED (bd myconfig-6di.4.5, section 3b):
-    // the entry-pin requirement is the bwrap layout's (`params.mux_
-    // entry` — a run with a multiplexer and nothing pinned is refused
-    // THERE, never a silent shell), the socket grant is above, and a
-    // one-shot never starts a session.
-    if cfg.display.is_waypipe() {
-        return Err(Error::DisplayUnavailable);
-    }
+    // The waypipe refusal of the first cut is LIFTED (bd
+    // myconfig-6di.4.6, sections 3a and the module docs' audit note):
+    // bwrap builds the socket binds, nono grants the two socket dirs,
+    // and the profile's AF_UNIX mediation keeps every other pathname
+    // socket out. The guest-binary pin requirement is the bwrap
+    // layout's (bwrap.rs `Params::waypipe`: `None` is a refused run
+    // THERE).
 
     Ok(argv)
 }
@@ -419,11 +467,6 @@ pub enum Error {
     /// builder ever runs (step 4b, lib.rs), and again here, defense
     /// in depth in a pure function.
     AllowlistUnderDeniedNetwork,
-    /// The waypipe display is selected, but its syscall set (memfd,
-    /// `SCM_RIGHTS` on the guest-side socket) needs an audit under
-    /// nono's seccomp filter (bd myconfig-6di.4.6) — until that audit
-    /// says yes, the run is refused, never silently headless.
-    DisplayUnavailable,
 }
 
 impl fmt::Display for Error {
@@ -454,15 +497,6 @@ impl fmt::Display for Error {
                  (allow-domains/connect-ports/listen-ports) contradicts it — \
                  both cannot hold at once; drop the allowlist or share the \
                  network"
-            ),
-            Error::DisplayUnavailable => write!(
-                f,
-                "display = \"waypipe\" but the syscall set it needs (memfd, \
-                 SCM_RIGHTS on the guest-side socket) is unaudited under \
-                 nono's seccomp filter (docs/design/config.md D18, \"The \
-                 other backends\", bd myconfig-6di.4.6) — the run would be \
-                 refused by the filter or silently headless, and neither is \
-                 acceptable; set display = \"off\", or pick another backend"
             ),
         }
     }

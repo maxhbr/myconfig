@@ -170,8 +170,10 @@ Everything below exists in at least one tier above and has no counterpart in
   (bd myconfig-6di.4.4 — nono adds no outbound flag, and allowlist
   runs filter egress through the proxy); multiplexer sessions work
   (bd myconfig-6di.4.5 — `--allow-unix-socket-dir-bind` on the private
-  socket dir, pathname AF_UNIX mediation in the profile), the waypipe
-  refusal remains, tracked in
+  socket dir, pathname AF_UNIX mediation in the profile) and the
+  waypipe display works (bd myconfig-6di.4.6 — audited against
+  nono's filter tables, socket-dir grants for both ends of the
+  channel), tracked in
   `../../../../doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`.
   Not yet exercised on a host.
 - **Network policy.** DONE for the allowlist (bd myconfig-mo3.1):

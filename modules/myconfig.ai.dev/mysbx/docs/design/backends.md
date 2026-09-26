@@ -158,6 +158,24 @@ never widen access, so the entry is ignored rather than refused.
   the legacy `$HOME/.nono`). Both resolve below `/mysbx-nono`, so the
   `/mysbx-home` grant does not collide with them.
 - **No network use by the launcher**: `NONO_NO_UPDATE_CHECK=1`.
+- **Waypipe display**: audited against nono 0.74.0 (bd
+  myconfig-6di.4.6) and LIFTED. Source-audit of the filter tables
+  (`crates/nono/src/sandbox/linux.rs`): the block-all and TCP-only
+  static baselines trap socket()/socketpair()/io_uring only — AF_UNIX
+  socket and socketpair pass; the pathname AF_UNIX mediation filter
+  (the one the mysbx profile ships) traps connect/bind/sendto/
+  sendmsg/sendmmsg and its supervisor explicitly CONTINUES `sendmsg`
+  with a NULL `msg_name` (fd passing over an established connection,
+  `SCM_RIGHTS`); `memfd_create` is trapped by no filter. Live probe
+  under the real pinned profile inside a hand-built bwrap view: the
+  waypipe server binds the fake compositor socket (`wayland-0`, a
+  direct child of the sandbox home) and connects to the host client
+  (`<socket_dir>/waypipe.sock`) end to end under `--block-net` with
+  the two `--allow-unix-socket-dir-bind` grants; without the home
+  grant the run reports `bind ... (no matching unix_socket
+  capability)` — the refusal dies exactly where the grant boundary
+  is. Under the shared default no seccomp filter installs at all
+  (nono 0.74.0, `NetworkMode::AllowAll`).
 - **Unused nono features**: credential injection, TLS interception,
   rollbacks and audit sessions.
 
@@ -189,7 +207,7 @@ filter.
 | `listen-ports` alone on nono | refused (bd myconfig-a14, bd myconfig-6di.4.4): with only listen ports nono reports "outbound allowed" — an allowlist that does not restrict outbound is a lie |
 | URL-form `allow-domains` on nono | refused (bd myconfig-6di.4.4): no TLS interception on this backend, entries stay plain host names |
 | multiplexer sessions | lifted (bd myconfig-6di.4.5): the socket dir gets `--allow-unix-socket-dir-bind`, the profile ships pathname AF_UNIX mediation; the entry-pin requirement is the bwrap layout's |
-| `display = "waypipe"` | kept until nono's seccomp filter is audited for it (bd myconfig-6di.4.6) |
+| `display = "waypipe"` | lifted (bd myconfig-6di.4.6): audited — AF_UNIX socket/socketpair pass every static baseline, the mediation filter continues `sendmsg` with a NULL `msg_name` (the fd-passing case), and `memfd_create` is trapped by no filter; the two socket dirs get `--allow-unix-socket-dir-bind` grants, live-probed end-to-end under `--block-net` |
 | an allowlist on `bubblewrap` or `podman-gvisor` | unchanged (config.md D21) |
 | `network = false` with an allowlist | unchanged (config.md D21) |
 

@@ -4686,6 +4686,7 @@ fn nono_params() -> NonoParams<'static> {
     NonoParams {
         workspace: Workspace::Live,
         profile: "default",
+        waypipe_socket_dir: None,
     }
 }
 
@@ -4713,8 +4714,17 @@ fn nono_base(network: bool) -> Merged {
 /// fail in either link, and the tests assert which one spoke.
 #[derive(Debug)]
 enum LayeredError {
-    Nono(NonoError),
+    /// The variant is carried for Debug output only (`{err:?}` in the
+    /// refusal tests); no test matches on the grants emitter's own
+    /// error value any more.
+    Nono(#[allow(dead_code)] NonoError),
     Bwrap(BwrapError),
+}
+
+/// The bwrap `params()` under its non-conflicting name (some tests
+/// shadow the name with a local binding).
+fn bwrap_defaults() -> Params<'static> {
+    params()
 }
 
 /// Compose the layered nono argv exactly like lib.rs: the grants from
@@ -5270,6 +5280,7 @@ fn nono_clone_downgrade_grants_stay_read_only() {
     );
 }
 
+#[test]
 fn nono_rebind_ro_over_rw_effective_mode_is_rw() {
     // The other direction: an rw rebind over an ro one — the last
     // bind wins, the grant is rw.
@@ -5618,19 +5629,67 @@ fn nono_golden_multiplexer_session() {
 }
 
 #[test]
-fn nono_refuses_the_waypipe_display_for_both_payload_forms() {
-    // The waypipe syscall set is unaudited under nono's seccomp filter
-    // (bd myconfig-6di.4.6) — refused for the shell AND for a one-shot.
+fn nono_golden_waypipe_display() {
+    // bd myconfig-6di.4.6 lifts the refusal (audited — see the
+    // nono.rs module docs): the display channel's two sockets gain
+    // their dirs-mode unix-socket grants — the fake compositor at
+    // /mysbx-home/wayland-0 and the host client's per-run socket dir
+    // (a param, like the layout's `Params::waypipe`) — for the shell
+    // AND for a one-shot (the channel wraps EVERY payload form,
+    // config.md D18).
+    let socket_dir = "/synth/repo.mysbx/waypipe/4711";
     for payload in [Payload::Shell, Payload::Command(vec!["true".into()])] {
         let mut cfg = nono_base(false);
         cfg.display = Display::Waypipe;
-        let err = nono_run_argv(&cfg, &synth_repo(), &payload, &nono_params())
-            .expect_err("waypipe must be refused");
+        let params = NonoParams {
+            waypipe_socket_dir: Some(socket_dir),
+            ..nono_params()
+        };
+        let argv = nono_run_argv(&cfg, &synth_repo(), &payload, &params)
+            .expect("waypipe builds under the audited grants");
         assert!(
-            matches!(err, NonoError::DisplayUnavailable),
-            "wrong error: {err}"
+            argv.windows(2)
+                .any(|w| w[0] == "--allow-unix-socket-dir-bind" && w[1] == "/mysbx-home/wayland-0"),
+            "the compositor socket grant is in the chain: {argv:?}"
+        );
+        assert!(
+            argv.windows(2)
+                .any(|w| w[0] == "--allow-unix-socket-dir-bind" && w[1] == socket_dir),
+            "the per-run socket dir grant is in the chain: {argv:?}"
         );
     }
+
+    // The layered golden: with the layout's waypipe wrap (guest
+    // binary + socket) around the payload, the bwrap side carries the
+    // rw socket-dir bind and the guest wrap; the nono grants ride
+    // with them.
+    let mut cfg = nono_base(false);
+    cfg.display = Display::Waypipe;
+    let params = NonoParams {
+        waypipe_socket_dir: Some(socket_dir),
+        ..nono_params()
+    };
+    let grants = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &params).unwrap();
+    let mut inner_argv = Vec::with_capacity(grants.len() + 1);
+    inner_argv.push(NONO_BIN.into());
+    inner_argv.extend(grants);
+    let p = Params {
+        waypipe: Some(mysbx::bwrap::Waypipe {
+            socket_dir,
+            guest_bin: "/synth/bin/waypipe",
+        }),
+        inner: Some(Inner {
+            argv: &inner_argv,
+            env_bin: "env",
+        }),
+        ..bwrap_defaults()
+    };
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
+    assert_golden("nono-waypipe.txt", &argv);
+    assert!(
+        argv.iter().any(|a| a == "--allow-unix-socket-dir-bind"),
+        "the grants are in the full chain: {argv:?}"
+    );
 }
 
 #[test]
@@ -6118,6 +6177,7 @@ fn nono_tmpdir_stays_sandbox_private() {
     assert_eq!(nono_tmpdirs, ["/mysbx-nono/tmp"], "{setenvs:?}");
 }
 
+#[test]
 fn nono_no_env_binary_no_payload_env_vars_still_runs() {
     // The smallest env-segment: `-u` list, the pins, the payload —
     // no forwarded, no [env] entries (the minimal golden's shape).

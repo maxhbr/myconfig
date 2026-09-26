@@ -61,13 +61,15 @@ tracked by their own beads.
 
 ### Still refused
 
-- **Waypipe display** (`display = "waypipe"`) — refused with
-  `Error::DisplayUnavailable` (`nono.rs`). waypipe's syscall set (memfd,
-  `SCM_RIGHTS` on the guest-side socket) must be audited under nono's
-  seccomp filter (the `config.md` D18 "The other backends" note anticipated
-  exactly this). To lift: the audit must come out clean, then wire the
-  channel like bwrap does (the `lib.rs` waypipe arm + display handling in
-  `nono.rs`). Tracked by bd myconfig-6di.4.6.
+- ~~**Waypipe display**~~ — LIFTED (bd myconfig-6di.4.6): audited
+  against nono 0.74.0's filter tables — AF_UNIX socket/socketpair
+  pass the static baselines, the mediation filter continues
+  `sendmsg` with a NULL `msg_name` (fd passing), `memfd_create` is
+  never trapped; live-probed end-to-end (waypipe server inside a
+  bwrap view under `--block-net`). The grants:
+  `--allow-unix-socket-dir-bind /mysbx-home/wayland-0` and on the
+  per-run socket dir; the guest-binary pin requirement is the bwrap
+  layout's (unchanged).
 ## Related follow-up beads
 
 - `bd myconfig-xob`: module options for the allowlist keys, so the

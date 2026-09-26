@@ -240,8 +240,14 @@ let
     # the generated user layer, exactly the spelling the crate parses.
     allowlist = generated [
       {
-        myconfig.ai.dev.mysbx.config.allowDomains = [ "api.openai.com" "github.com" ];
-        myconfig.ai.dev.mysbx.config.connectPorts = [ 443 22 ];
+        myconfig.ai.dev.mysbx.config.allowDomains = [
+          "api.openai.com"
+          "github.com"
+        ];
+        myconfig.ai.dev.mysbx.config.connectPorts = [
+          443
+          22
+        ];
         myconfig.ai.dev.mysbx.config.listenPorts = [ 8080 ];
       }
     ];

@@ -1102,12 +1102,13 @@ channel.
 **The other backends (a note).** The channel is a plain byte
 stream, so it crosses whatever boundary a backend has: `microvm`/
 `qemu` would later carry it over vsock or an explicitly forwarded TCP
-port instead of a unix socket bind. Under `nono` the check this note
-asked for is still pending — waypipe's syscall set (memfd, `SCM_RIGHTS`
-on the guest-side socket) needs an audit under nono's seccomp filter,
-and until that audit says yes, the nono backend refuses
-`display = "waypipe"` (never a silently headless run);
-`doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md` tracks the lift.
+port instead of a unix socket bind. Under the layered `nono` backend
+the audit the note asked for came out clean (bd myconfig-6di.4.6 —
+see backends.md "nono's own inputs" for the filter tables and the
+live probe): waypipe runs with two `--allow-unix-socket-dir-bind`
+grants, one for the fake compositor socket the guest server creates
+(below the sandbox home, D14) and one for the per-run channel
+directory.
 
 ### D20: `egress = "proxy-only"` is a profile, not an allowlist
 

@@ -7841,24 +7841,45 @@ fn nono_session_clone_is_bound_at_the_repo_path() {
 }
 
 #[test]
-fn nono_with_waypipe_is_refused() {
-    // display = "waypipe" under nono: the syscall set is unaudited
-    // under nono's seccomp filter (bd myconfig-6di.4.6) — refused,
-    // never silently headless.
-    let (inv, _, sidecar) = fixture("nono-waypipe-refused", &[]);
+fn nono_with_waypipe_builds_the_chain() {
+    // bd myconfig-6di.4.6 lifts the refusal (audited — see nono.rs's
+    // module docs): with the waypipe pin the layered chain builds —
+    // the bwrap layout's socket-dir bind and guest wrap plus the two
+    // dirs-mode unix-socket grants. With NO pin the BWRAP layout
+    // refuses (the same `DisplayUnavailable`-shaped refusal every
+    // backend gets from `Params::waypipe = None`).
+    let (inv, _, sidecar) = fixture("nono-waypipe-chain", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
         "backend = \"nono\"\nnetwork = false\ndisplay = \"waypipe\"\n",
     )
     .unwrap();
+    let fake_guest = inv.cwd.join("fake-waypipe-guest");
+    std::fs::write(&fake_guest, "#!/bin/true\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+    cmd.env("MYSBX_WAYPIPE", &fake_guest);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stderr: {stderr}");
+    assert!(
+        stdout.contains("--allow-unix-socket-dir-bind\n/mysbx-home/wayland-0\n"),
+        "the compositor socket grant rides the chain: {stdout}"
+    );
+    assert!(
+        stdout.contains("--allow-unix-socket-dir-bind\n") && stdout.contains("/waypipe/"),
+        "the per-run socket dir grant is in the chain: {stdout}"
+    );
+    assert!(
+        stdout.contains("server\n--\n") || stdout.ends_with("server\n"),
+        "the guest wrap is in the argv: {stdout}"
+    );
+
+    // Pin absent: the bwrap layout refuses the run.
     let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("waypipe"), "{stderr}");
-    assert!(stderr.contains("nono"), "{stderr}");
-    assert!(
-        !stdout.contains("--allow-cwd"),
-        "no argv on refusal: {stdout}"
-    );
+    assert!(!stdout.contains("--allow-cwd"), "no argv: {stdout}");
 }
 
 #[test]

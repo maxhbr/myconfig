@@ -1885,6 +1885,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             let nono_params = nono::Params {
                 workspace: workspace.clone(),
                 profile: &nono_profile,
+                // The display channel's socket dir (bd myconfig-6di.4.6):
+                // the grant emitter needs the SAME path the layout
+                // binds — one computed value, threaded like the
+                // bwrap::Params.waypipe above.
+                waypipe_socket_dir: waypipe_params.as_ref().map(|w| w.socket_dir),
             };
             // The grant argv of the `nono run` INSIDE the sandbox —
             // `run --profile <path> <grants> <network flags>`, derived

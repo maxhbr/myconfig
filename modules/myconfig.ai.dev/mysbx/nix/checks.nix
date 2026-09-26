@@ -53,6 +53,20 @@ let
   # variables and must not see the wrapper's pins.
   pkg = pkgs.callPackage ../nix/mysbx.nix { };
   crate = pkg.passthru.crate;
+  # The FULL default wrapper — re-called WITH the nono pin (bd
+  # myconfig-pux): a host's `default.nix` passes `nono =
+  # cfg.nono.package` (default `pkgs.nono`), so the pins
+  # MYSBX_NONO/MYSBX_NONO_PROFILE/MYSBX_ENV must exist on the nono ≠
+  # null path. The checks below read this derivation's wrapper env.
+  pkgNono = pkgs.callPackage ../nix/mysbx.nix {
+    nono = pkgs.nono;
+    ssh-keygen = pkgs.openssh;
+  };
+  # The wrapper script of the full package — the file postBuild
+  # produced; its content carries every `--set` pin.
+  wrapped = pkgs.runCommand "mysbx-wrapped-content" { } ''
+    cat "${pkgNono}/bin/mysbx" > $out
+  '';
   # Known and accepted (same property as the gvisor tier's check): CI
   # tests this crate from the locked `inputs.nixpkgs`, which can differ
   # slightly from the host-eval nixpkgs the wrapped binary on a host
@@ -454,6 +468,93 @@ in
           || fail "nono refused the pinned profile"
 
         mkdir "$out"
+      '';
+
+  # bd myconfig-pux: the nono backend's WRAPPER wiring, end to end.
+  # The gate has two halves, and each proves what static greps on the
+  # package file cannot:
+  #
+  # 1. The wrapper env of the FULL default package (nono = pkgs.nono,
+  #    how every host builds it): MYSBX_NONO, MYSBX_NONO_PROFILE and
+  #    MYSBX_ENV are present AND each value is an absolute store path
+  #    that actually exists in THIS closure — a pin whose target fell
+  #    out of the closure (a dropped nonoProfile input, a renamed
+  #    attrset key) shows up here, not as a runtime PATH fallback.
+  # 2. A REAL `--dry-run` of the wrapped binary under the generated
+  #    nono config: a synthetic repo + a sidecar config with
+  #    `backend = "nono"`, run with the wrapper's own pins — proves
+  #    the nono selection builds the layered argv cleanly (no
+  #    refusal) with everything the wrapper pins, i.e. the pin set is
+  #    not just PRESENT but SUFFICIENT for the backend this host
+  #    configures. What it does NOT prove: an actual sandboxed
+  #    execution (Landlock inside the check sandbox is not
+  #    possible) — that is bd myconfig-27o.
+  mysbx-nono-wrapper-test =
+    pkgs.runCommand "mysbx-nono-wrapper-test"
+      {
+        nativeBuildInputs = [
+          pkgNono
+          pkgs.git
+        ];
+      }
+      ''
+                fail() {
+                  echo "mysbx-nono-wrapper-test: $*" >&2
+                  exit 1
+                }
+
+                content=$(cat "${pkgNono}/bin/mysbx")
+                for var in MYSBX_NONO MYSBX_NONO_PROFILE MYSBX_ENV; do
+                  echo "$content" | grep -aq "$var" \
+                    || fail "the wrapper does not pin $var"
+                done
+                # The profile pin is a store FILE (the generated nono profile
+                # of bd myconfig-6di.4.3), not the operator-knob string.
+                # The wrapper is a makeBinaryWrapper result: the shell line
+                # `--set-default 'MYSBX_NONO_PROFILE' '<path>'` survives in the
+                # embedded postBuild string. Pull the profile's store path out
+                # of it — the VALUE the wrapper's stub registers.
+                prof=$(echo "$content" | tr -d "'" | awk '/--set-default MYSBX_NONO_PROFILE/ {print $3; exit}')
+                [ -n "$prof" ] || fail "no MYSBX_NONO_PROFILE value found"
+                test -s "$prof" || fail "the profile pin target does not exist: $prof"
+                grep -q '"name":"mysbx"' "$prof" \
+                  || fail "the profile pin is not the generated mysbx profile"
+
+                # The dry-run half: a synthetic repo with a sidecar naming
+                # `backend = "nono"`; the wrapped binary runs dry inside the
+                # check sandbox with its OWN pins (no env override).
+                repo="$TMPDIR/repo"
+                mkdir -p "$repo" "$TMPDIR/repo.mysbx"
+                # The sidecar the run reads: `backend = "nono"` — the thin
+                # shape the dry-run half of this check proves.
+                cat > "$TMPDIR/repo.mysbx/config.toml" <<'CLOSURECONFIG'
+        backend = "nono"
+        network = false
+        CLOSURECONFIG
+                git -C "$repo" init -q
+                git -C "$repo" config user.email t@invalid
+                git -C "$repo" config user.name t
+                touch "$repo/README"
+                git -C "$repo" add README
+                git -C "$repo" commit -qm init
+
+                cd "$repo"
+                # The canonicalization needs a HOME that exists (the check
+                # sandbox has none — runCommand's user is /homeless-shelter).
+                mkdir -p "$TMPDIR/home"
+                argv=$(HOME="$TMPDIR/home" "${pkgNono}/bin/mysbx" --dry-run 2>"$TMPDIR/stderr") \
+                  || fail "the wrapped dry-run refused: $(cat "$TMPDIR/stderr")"
+                echo "$argv" | head -1 | grep -q bwrap \
+                  || fail "the argv[0] is not bwrap: $argv"
+                echo "$argv" | grep -q '^/nix/store/[a-z0-9]*-nono-[^/]*/bin/nono$' \
+                  || fail "the nono binary is not the inner wrapper: $argv"
+                echo "$argv" | grep -q "^--profile$" \
+                  || fail "no profile arg in the chain: $argv"
+                # The profile arg carries the pinned store file, exactly the
+                # value the wrapper set.
+                echo "$argv" | grep -q "^$prof$" \
+                  || fail "the argv does not carry the pinned profile"
+                mkdir "$out"
       '';
 
   mysbx-tests = crate.overrideAttrs (old: {
