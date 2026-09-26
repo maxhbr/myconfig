@@ -461,12 +461,36 @@ let
           security = {
             signal_mode = "isolated";
           };
+          linux = {
+            # bd myconfig-6di.4.5 — pathname AF_UNIX seccomp mediation.
+            # Without it, nono 0.74.0's default is "off": ANY filesystem
+            # grant (and mysbx's grants are broad!) makes pathname
+            # sockets reachable on Landlock V4+ — so any file
+            # `/mysbx-home/.mysbx-tmux/socket` could be connected by
+            # the payload once the directory grant covers the path.
+            # With "pathname" the seccomp filter requires an explicit
+            # unix_socket* grant instead, which mysbx's argv emits
+            # exactly for the mux socket dir when a session starts
+            # (bwrap.rs MUX_SOCKET_DIR — D16/D17-isolated from the
+            # host), keeping tmux's socket LANDLOCK-ONLY-REACHABLE,
+            # never host-visible. `--allow-unix-socket-*` CLI flags
+            # funnel through the same gate.
+            af_unix_mediation = "pathname";
+          };
           network = {
             block = false;
           };
           workdir = {
             access = "none";
           };
+          # bwrap's private tmpfs; bwrap `--clearenv` drops the host
+          # TMPDIR and the infra env re-seeds it below the nono state
+          # tmpfs (`/mysbx-nono/tmp`), so the profile's own `$TMPDIR`
+          # resolves to the nono-private tmpfs, never to a host path
+          # (bd myconfig-7hh — nono's `validated_tmpdir()` defaults to
+          # /tmp when TMPDIR is unset, which would grant the HOST /tmp
+          # through Landlock). /tmp here covers bwrap's private tmpfs
+          # for payloads that hardcode it instead of TMPDIR.
           filesystem.write = [
             "/tmp"
             "$TMPDIR"

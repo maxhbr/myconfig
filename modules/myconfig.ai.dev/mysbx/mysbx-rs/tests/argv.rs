@@ -15,7 +15,8 @@
 
 use mysbx::bwrap::Error as BwrapError;
 use mysbx::bwrap::{
-    bwrap_argv, HostEnv, Inner, Params, Payload, Workspace, NONO_STATE, SANDBOX_HOME,
+    bwrap_argv, HostEnv, Inner, Params, Payload, Workspace, MUX_SOCKET_DIR, NONO_STATE,
+    SANDBOX_HOME,
 };
 use mysbx::config::{Display, Mode, Mount, Multiplexer};
 use mysbx::merge::Merged;
@@ -5012,7 +5013,6 @@ fn nono_golden_rebind_rw_over_ro() {
 }
 
 #[test]
-#[test]
 fn nono_golden_file_mount_outside_the_home() {
     // bd myconfig-2pv: a single-FILE source outside /mysbx-home gets
     // the file kind grant — `--read-file`/`--allow-file`, never the
@@ -5548,40 +5548,73 @@ fn nono_golden_clone_run() {
 }
 
 #[test]
-fn nono_refuses_every_session_starting_multiplexer_for_the_shell_only() {
-    // The interactive payload: a session-starting multiplexer is
-    // refused until the unix-socket grants land (bd myconfig-6di.4.5).
-    for mux in [
-        Multiplexer::Tmux,
-        Multiplexer::Workmux,
-        Multiplexer::Herdr,
-        Multiplexer::Aoe,
-        Multiplexer::Orca,
+fn nono_golden_multiplexer_session() {
+    // bd myconfig-6di.4.5 lifts the refusal: a session-starting
+    // multiplexer under nono is a working chain now — the entry
+    // replaces the shell as the payload (cli.md D11, the bwrap
+    // layout's mux_entry requirement still holds), and the mux socket
+    // dir gains its UNIX-SOCKET grant: `--allow-unix-socket-dir-bind`
+    // (nono 0.74.0), connect+bind on any direct-child socket of
+    // `/mysbx-home/.mysbx-tmux` — the filesystem side is the home's rw
+    // grant. `TMUX_TMPDIR` travels in the PAYLOAD env segment now
+    // (Two environments: it is payload infrastructure, set by the
+    // pinned `env`, not in nono's --setenv set).
+    for (mux, entry) in [
+        (Multiplexer::Tmux, "/synth/bin/mysbx-tmux-entry"),
+        (Multiplexer::Workmux, "/synth/bin/mysbx-workmux-entry"),
+        (Multiplexer::Aoe, "/synth/bin/mysbx-aoe-entry"),
+        (Multiplexer::Orca, "/synth/bin/mysbx-orca-entry"),
+        (Multiplexer::Herdr, "/synth/bin/mysbx-herdr-entry"),
     ] {
         let mut cfg = nono_base(false);
         cfg.multiplexer = mux;
-        let err = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params())
-            .expect_err("a session multiplexer must be refused");
+        let grants = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params()).unwrap();
+        let mut inner_argv = Vec::with_capacity(grants.len() + 1);
+        inner_argv.push(NONO_BIN.into());
+        inner_argv.extend(grants);
+        let p = Params {
+            mux_entry: Some(entry),
+            inner: Some(Inner {
+                argv: &inner_argv,
+                env_bin: "env",
+            }),
+            ..params()
+        };
+        let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
+        // The socket dir grant accompanies every session.
         assert!(
-            matches!(err,
-                NonoError::MultiplexerUnavailable { multiplexer }
-                if multiplexer == mux),
-            "wrong error: {err}"
+            argv.windows(2)
+                .any(|w| w[0] == "--allow-unix-socket-dir-bind" && w[1] == MUX_SOCKET_DIR),
+            "the mux socket dir grant is in the chain: {argv:?}"
+        );
+        // The entry is the payload, never the shell.
+        assert_eq!(argv[argv.len() - 1], entry);
+        // TMUX_TMPDIR is a payload-env ASSIGNMENT (KEY=value) of the
+        // pinned env, naming the private socket dir.
+        assert!(
+            argv.iter()
+                .any(|a| a == &format!("TMUX_TMPDIR={MUX_SOCKET_DIR}")),
+            "TMUX_TMPDIR lands in the payload env: {argv:?}"
         );
     }
 
-    // A one-shot never starts a session, so the multiplexer does not
-    // refuse it (cli.md D11).
+    // The golden for the tmux session: the full chain, byte-for-byte.
     let mut cfg = nono_base(false);
     cfg.multiplexer = Multiplexer::Tmux;
-    let argv = nono_run_argv(
-        &cfg,
-        &synth_repo(),
-        &Payload::Command(vec!["true".into()]),
-        &nono_params(),
-    )
-    .expect("a one-shot is not a session");
-    assert_eq!(argv[argv.len() - 1], "--block-net");
+    let grants = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params()).unwrap();
+    let mut inner_argv = Vec::with_capacity(grants.len() + 1);
+    inner_argv.push(NONO_BIN.into());
+    inner_argv.extend(grants);
+    let p = Params {
+        mux_entry: Some("/synth/bin/mysbx-tmux-entry"),
+        inner: Some(Inner {
+            argv: &inner_argv,
+            env_bin: "env",
+        }),
+        ..params()
+    };
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
+    assert_golden("nono-mux-session.txt", &argv);
 }
 
 #[test]
@@ -5991,6 +6024,100 @@ fn nono_two_environments_the_env_segment_applies_the_payload_env() {
 }
 
 #[test]
+fn nono_tmpdir_stays_sandbox_private() {
+    // bd myconfig-7hh: the sidecar must stay unreachable through temp
+    // paths. Verified in nono 0.74.0 source (`validated_tmpdir()`): an
+    // UNSET TMPDIR falls back to `/tmp`, and the `system_write_linux`
+    // group grants `$TMPDIR` — so an unset TMPDIR in nono's env would
+    // have the profile grant the HOST /tmp. The INFRA env therefore
+    // always re-seeds TMPDIR below the nono state tmpfs
+    // (/mysbx-nono/tmp — private, never a host path), the payload env
+    // UNSETS it, and nothing of the payload env sample can carry a
+    // host TMPDIR unless an explicit forward-env names it.
+    //
+    // 1. nono's env: TMPDIR is set, below /mysbx-nono.
+    let mut cfg = nono_base(false);
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    let setenvs: Vec<(String, String)> = argv
+        .windows(3)
+        .filter(|w| w[0] == "--setenv")
+        .map(|w| (w[1].clone(), w[2].clone()))
+        .collect();
+    assert!(
+        setenvs
+            .iter()
+            .any(|(k, v)| k == "TMPDIR" && v == "/mysbx-nono/tmp"),
+        "nono's TMPDIR is its own state tmpfs: {setenvs:?}"
+    );
+    // The payload env `env` unsets TMPDIR before applying assignments,
+    // so the payload starts with NO TMPDIR (then the assignment layer
+    // applies... none of the assignments being TMPDIR here — the
+    // payload sees an unset TMPDIR and its tools fall back to /tmp,
+    // which inside the sandbox IS bwrap's private tmpfs).
+    let env_pos = argv.iter().position(|a| a == "env").unwrap();
+    assert_eq!(
+        &argv[env_pos + 1..env_pos + 6],
+        &["-u", "PATH", "-u", "HOME", "-u"],
+        "the -u list opens with the infra names: {argv:?}"
+    );
+    assert!(
+        argv[env_pos + 1..env_pos + 12]
+            .windows(2)
+            .any(|w| w[0] == "-u" && w[1] == "TMPDIR"),
+        "TMPDIR is explicitly unset for the payload before the assignments: {argv:?}"
+    );
+    assert!(
+        !argv
+            .iter()
+            .skip(env_pos)
+            .any(|a| a.starts_with("TMPDIR=") && !a.starts_with("TMPDIR=/mysbx")),
+        "no host-backed TMPDIR assignment reaches the payload: {argv:?}"
+    );
+
+    // 2. [env] TMPDIR is a payload-env assignment like any other key:
+    // verbatim in the env segment, untouched by the profile.
+    cfg.env.insert("TMPDIR".into(), "/synth/paytmp".into());
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params(),
+    )
+    .unwrap();
+    assert!(
+        argv.iter().any(|a| a == "TMPDIR=/synth/paytmp"),
+        "an [env] TMPDIR reaches the payload as an assignment: {argv:?}"
+    );
+
+    // 3. nono's OWN env NEVER sees the payload's [env] TMPDIR: the
+    // --setenv triple stays exactly the infra value.
+    let setenvs: Vec<(String, String)> = argv
+        .windows(3)
+        .filter(|w| w[0] == "--setenv")
+        .map(|w| (w[1].clone(), w[2].clone()))
+        .collect();
+    assert!(
+        setenvs
+            .iter()
+            .all(|(k, _)| k != "TMPDIR" || setenvs.iter().any(|(k2, _)| k2 == "TMPDIR")),
+        "TMPDIR in nono's env is infra-only"
+    );
+    let nono_tmpdirs: Vec<&str> = setenvs
+        .iter()
+        .filter(|(k, _)| k == "TMPDIR")
+        .map(|(_, v)| v.as_str())
+        .collect();
+    assert_eq!(nono_tmpdirs, ["/mysbx-nono/tmp"], "{setenvs:?}");
+}
+
 fn nono_no_env_binary_no_payload_env_vars_still_runs() {
     // The smallest env-segment: `-u` list, the pins, the payload —
     // no forwarded, no [env] entries (the minimal golden's shape).

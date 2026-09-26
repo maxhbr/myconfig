@@ -1103,6 +1103,24 @@ pub fn bwrap_argv(
                 argv.push(format!("{key}={ca_bundle}"));
             }
         }
+        // `TMUX_TMPDIR` mirrors the bubblewrap backend's `--setenv`
+        // treatment (D16/D17): payload infrastructure naming the
+        // private socket dir inside the tmpfs home, emitted after the
+        // CA pins (which are infrastructure of the same kind), so a
+        // layer's `[env]` entry cannot repoint it — the later
+        // assignment wins. In the pure-bwrap shape it is a `--setenv`
+        // instead (the section above); here it must ride the payload
+        // env segment because nono's own `--setenv` set carries ONLY
+        // nono's infrastructure (backends.md D1, "Two
+        // environments"). The mux SESSION name rides the same way.
+        if mux.starts_a_session() {
+            argv.push(format!("TMUX_TMPDIR={MUX_SOCKET_DIR}"));
+            if let Workspace::Clone { clone } = params.workspace {
+                if let Some(session_name) = clone.file_name().and_then(|n| n.to_str()) {
+                    argv.push(format!("MYSBX_SESSION_NAME={session_name}"));
+                }
+            }
+        }
     }
     match payload {
         // The multiplexer entry REPLACES the shell (cli.md D11): it is

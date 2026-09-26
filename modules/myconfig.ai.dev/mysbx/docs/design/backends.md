@@ -168,7 +168,16 @@ bubblewrap backend (config.md D15). The sandbox SSH key is at
 `~/.ssh` (config.md D22), so the backend needs no `GIT_SSH_COMMAND`
 pin. The multiplexer socket directory `/mysbx-home/.mysbx-tmux`
 (config.md D16/D17) exists again. The multiplexer also needs nono's
-unix-socket grants (bd myconfig-6di.4.5).
+unix-socket grant: `--allow-unix-socket-dir-bind` on the socket dir
+(bd myconfig-6di.4.5, nono 0.74.0 — connect AND bind on any
+direct-child socket, exactly the entry scripts' `$TMUX_TMPDIR/socket`
+shape), emitted when a session starts. The filesystem side needs no
+new grant — the dir lies below the rw home grant. The mysbx profile
+ships `linux.af_unix_mediation = "pathname"`: without it, nono's
+default leaves pathname sockets reachable through ANY filesystem
+grant, and the isolation claim of D16/D17 ("the socket never leaves
+this sandbox") would rest on the binder's goodwill instead of the
+filter.
 
 #### Refusals
 
@@ -179,7 +188,7 @@ unix-socket grants (bd myconfig-6di.4.5).
 | `network = true` without an allowlist | lifted (bd myconfig-6di.4.4): the premise was wrong — nono allows outbound traffic by default, so bwrap shares the netns and nono adds no flag, bubblewrap parity |
 | `listen-ports` alone on nono | refused (bd myconfig-a14, bd myconfig-6di.4.4): with only listen ports nono reports "outbound allowed" — an allowlist that does not restrict outbound is a lie |
 | URL-form `allow-domains` on nono | refused (bd myconfig-6di.4.4): no TLS interception on this backend, entries stay plain host names |
-| multiplexer sessions | lifted when the unix-socket grants land (bd myconfig-6di.4.5), refused until then |
+| multiplexer sessions | lifted (bd myconfig-6di.4.5): the socket dir gets `--allow-unix-socket-dir-bind`, the profile ships pathname AF_UNIX mediation; the entry-pin requirement is the bwrap layout's |
 | `display = "waypipe"` | kept until nono's seccomp filter is audited for it (bd myconfig-6di.4.6) |
 | an allowlist on `bubblewrap` or `podman-gvisor` | unchanged (config.md D21) |
 | `network = false` with an allowlist | unchanged (config.md D21) |

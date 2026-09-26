@@ -7862,23 +7862,47 @@ fn nono_with_waypipe_is_refused() {
 }
 
 #[test]
-fn nono_with_multiplexer_is_refused() {
-    // A session-starting multiplexer under nono: the unix-socket
-    // grants are unaudited (bd myconfig-6di.4.5) — refused under
-    // --dry-run too.
-    let (inv, _, sidecar) = fixture("nono-mux-refused", &[]);
+fn nono_with_multiplexer_starts_a_session() {
+    // bd myconfig-6di.4.5 lifts the refusal: a session-starting
+    // multiplexer under nono builds the whole layered chain — the
+    // pinned entry is the payload, and the dirs-mode unix-socket
+    // grant (`--allow-unix-socket-dir-bind`) accompanies it.
+    // Unpinned mux entry (no MYSBX_MUX_ENTRY_TMUX in the test env) is
+    // the BWRAP layout's refusal — the same message the bubblewrap
+    // backend prints.
+    let (inv, _, sidecar) = fixture("nono-mux-session", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
         "backend = \"nono\"\nnetwork = false\nmultiplexer = \"tmux\"\n",
     )
     .unwrap();
-    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
-    assert!(stderr.contains("multiplexer"), "{stderr}");
-    assert!(stderr.contains("tmux"), "{stderr}");
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--verbose", "--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
-        !stdout.contains("--allow-cwd"),
-        "no argv on refusal: {stdout}"
+        stderr.contains("pinned no tmux entry"),
+        "the refusal is the entry-pin one: {stderr}"
+    );
+
+    // With the entry pinned: the run builds, the full chain is in the
+    // argv, with the socket grant and the entry as the payload.
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+    cmd.env("MYSBX_MUX_ENTRY_TMUX", "/nix/store/aaaa-tmux-entry");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stderr: {stderr}");
+    assert!(
+        stdout.contains("--allow-unix-socket-dir-bind\n/mysbx-home/.mysbx-tmux\n"),
+        "the unix-socket grant rides along: {stdout}"
+    );
+    assert!(
+        stdout.contains("/nix/store/aaaa-tmux-entry\n")
+            || stdout.ends_with("/nix/store/aaaa-tmux-entry\n"),
+        "the pinned entry is the payload: {stdout}"
+    );
+    assert!(
+        stdout.contains("TMUX_TMPDIR=/mysbx-home/.mysbx-tmux\n"),
+        "the payload env carries the private socket dir: {stdout}"
     );
 }
 

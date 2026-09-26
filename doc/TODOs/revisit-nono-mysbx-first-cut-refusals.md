@@ -23,6 +23,26 @@ tracked by their own beads.
   the dest, and the grant lands at the in-sandbox dest with the effective
   mode (last bind wins).
 
+### Lifted (bd myconfig-6di.4.5, and the casing of bd myconfig-7hh)
+
+- ~~**Multiplexer sessions**~~ — LIFTED: the socket dir gets nono's
+  `--allow-unix-socket-dir-bind` when a session starts, and the mysbx
+  profile ships `linux.af_unix_mediation = "pathname"` (the seccomp
+  filter rejects pathname bind/connect without an explicit
+  unix-socket grant — the pin that makes the D16/D17 claim hold under
+  nono too). The mux-entry pin requirement is the bwrap layout's and
+  stays. Live probed with a static bind/connect probe binary (bind
+  and connect succeed under the grant, both fail without it).
+- **Sidecar temp isolation** (bd myconfig-7hh) — verified structurally:
+  `/tmp` is bwrap's private tmpfs; the sidecar policy files are NOT
+  bound under it. nono 0.74.0 resolves an UNSET TMPDIR to `/tmp` and
+  its `system_write_linux` group grants `$TMPDIR` — the mysbx profile
+  writes `$TMPDIR` and the infra env pins `TMPDIR=/mysbx-nono/tmp`
+  (the nono state tmpfs), so the grant covers only sandbox-private
+  content; the payload env unsets TMPDIR (tools fall back to
+  in-sandbox `/tmp`). Host-side live check of a `/tmp`-located repo
+  stays with bd myconfig-27o.
+
 ### Lifted (bd myconfig-6di.4.4, backends.md D1's network table)
 
 - **Shared network on nono** (`network = true`, the default, with an EMPTY
@@ -48,13 +68,6 @@ tracked by their own beads.
   exactly this). To lift: the audit must come out clean, then wire the
   channel like bwrap does (the `lib.rs` waypipe arm + display handling in
   `nono.rs`). Tracked by bd myconfig-6di.4.6.
-- **Multiplexer sessions** (`multiplexer` = `tmux`/`workmux`/`aoe`/`herdr`/
-  `orca`) — refused with `Error::MultiplexerUnavailable` (`nono.rs`). The
-  private socket directory lives in the sandbox home tmpfs again, but
-  nono's unix-socket grants for the multiplexer payload are not audited
-  yet. To lift: audit the socket path under nono's filters. Tracked by
-  bd myconfig-6di.4.5.
-
 ## Related follow-up beads
 
 - `bd myconfig-xob`: module options for the allowlist keys, so the

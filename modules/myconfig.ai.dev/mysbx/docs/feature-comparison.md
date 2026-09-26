@@ -168,8 +168,10 @@ Everything below exists in at least one tier above and has no counterpart in
   first-cut refusals clone-remap and mount-`dest`-remap are LIFTED
   (bwrap binds them); the shared network is bubblewrap parity now
   (bd myconfig-6di.4.4 — nono adds no outbound flag, and allowlist
-  runs filter egress through the proxy); the multiplexer and waypipe
-  refusals remain, tracked in
+  runs filter egress through the proxy); multiplexer sessions work
+  (bd myconfig-6di.4.5 — `--allow-unix-socket-dir-bind` on the private
+  socket dir, pathname AF_UNIX mediation in the profile), the waypipe
+  refusal remains, tracked in
   `../../../../doc/TODOs/revisit-nono-mysbx-first-cut-refusals.md`.
   Not yet exercised on a host.
 - **Network policy.** DONE for the allowlist (bd myconfig-mo3.1):

@@ -107,13 +107,13 @@
 //!    plain host names only — a URL or path form (no matter how it
 //!    is spelled) would need nono's TLS interception, out of scope
 //!    on this backend.
-//! 8. the multiplexer and display refusals, until their tasks land:
-//!    a session-starting multiplexer (bd myconfig-6di.4.5 — the
-//!    private socket directory exists again inside the sandbox home
-//!    tmpfs, but nono's unix-socket grants are not audited yet) and
-//!    the waypipe display (bd myconfig-6di.4.6 — its syscall set
-//!    needs an audit under nono's seccomp filter). Refused, never
-//!    silently headless or session-less.
+//! 8. the display refusal (bd myconfig-6di.4.6 — its syscall set
+//!    needs an audit under nono's seccomp filter): refused, never
+//!    silently headless. The multiplexer refusal is LIFTED (bd
+//!    myconfig-6di.4.5, sections 3b and 4): the unix-socket grant of
+//!    the mux socket dir is real, the entry-pin requirement is the
+//!    bwrap layout's, and the profile ships pathname AF_UNIX
+//!    mediation (nix/mysbx.nix) so the socket stays inside.
 //!
 //! Everything else is the bubblewrap backend's: `bin_sh`, `nix_conf`
 //! and `ca_bundle` are argv binds inside the view, the payload
@@ -237,9 +237,30 @@ pub fn nono_run_argv(
     // stay read-only through their read-only binds (the kernel
     // returns `EROFS` before Landlock is consulted); the private
     // multiplexer socket directory and the waypipe display socket
-    // are the same tmpfs (D16–D18), guarded by the refusals below
-    // until their tasks land.
+    // are the same tmpfs (D16–D18).
     argv.extend(["--allow".into(), SANDBOX_HOME.into()]);
+
+    // 3b. the multiplexer's UNIX-SOCKET grant (bd myconfig-6di.4.5):
+    // the socket dir is inside the home tmpfs, so the filesystem side
+    // is the rw grant above — but pathname AF_UNIX connect() and
+    // bind() are a SEPARATE Landlock axis when the profile asks for
+    // mediation (the mysbx profile ships `linux.af_unix_mediation =
+    // "pathname"`, see nix/mysbx.nix): without the explicit socket
+    // grant the tmux server inside could not create nor connect its
+    // own socket. The flag is nono 0.74.0's
+    // `--allow-unix-socket-dir-bind`: connect + bind on any
+    // DIRECT-CHILD socket of the directory — the exact shape of the
+    // entry scripts (`$TMUX_TMPDIR/socket`, one file), verified live:
+    // a payload making a static bind(2)/connect(2) probe succeeds
+    // with the grant and fails both with it absent (EACCES on bind,
+    // ECONNREFUSED-flow refusal on connect). Identifier grants only
+    // — the dir is below the home grant, never a hole into the host.
+    if mux.starts_a_session() {
+        argv.extend([
+            "--allow-unix-socket-dir-bind".into(),
+            crate::bwrap::MUX_SOCKET_DIR.into(),
+        ]);
+    }
 
     // 4. the configured mounts at their in-sandbox dest, one grant
     // per distinct dest OUTSIDE `/mysbx-home` (the home grant of
@@ -349,17 +370,15 @@ pub fn nono_run_argv(
         }
     }
 
-    // 8. the multiplexer and display refusals, until their tasks
-    // land (bd myconfig-6di.4.5/6di.4.6). The private socket
-    // directory of the multiplexer integration lives in the sandbox
-    // home tmpfs again (D16/D17 — bwrap builds it), but nono's
-    // unix-socket grants are not audited yet; the waypipe display's
-    // syscall set (memfd, `SCM_RIGHTS` on the guest-side socket)
-    // needs an audit under nono's seccomp filter. Until then the run
-    // is refused, never silently session-less or headless.
-    if mux.starts_a_session() {
-        return Err(Error::MultiplexerUnavailable { multiplexer: mux });
-    }
+    // 8. the display refusal (bd myconfig-6di.4.6): the waypipe
+    // display's syscall set (memfd, `SCM_RIGHTS` on the guest-side
+    // socket) needs an audit under nono's seccomp filter — until that
+    // audit the run is refused, never silently headless. The
+    // multiplexer refusal is LIFTED (bd myconfig-6di.4.5, section 3b):
+    // the entry-pin requirement is the bwrap layout's (`params.mux_
+    // entry` — a run with a multiplexer and nothing pinned is refused
+    // THERE, never a silent shell), the socket grant is above, and a
+    // one-shot never starts a session.
     if cfg.display.is_waypipe() {
         return Err(Error::DisplayUnavailable);
     }
@@ -400,15 +419,6 @@ pub enum Error {
     /// builder ever runs (step 4b, lib.rs), and again here, defense
     /// in depth in a pure function.
     AllowlistUnderDeniedNetwork,
-    /// A session-starting multiplexer is selected, but nono's
-    /// unix-socket grants for the multiplexer payload are not audited
-    /// yet (bd myconfig-6di.4.5): the private socket directory lives
-    /// in the sandbox home tmpfs again, and refusing is safer than
-    /// assuming the socket passes nono's filters unfiltered.
-    MultiplexerUnavailable {
-        /// The selected multiplexer.
-        multiplexer: Multiplexer,
-    },
     /// The waypipe display is selected, but its syscall set (memfd,
     /// `SCM_RIGHTS` on the guest-side socket) needs an audit under
     /// nono's seccomp filter (bd myconfig-6di.4.6) — until that audit
@@ -444,16 +454,6 @@ impl fmt::Display for Error {
                  (allow-domains/connect-ports/listen-ports) contradicts it — \
                  both cannot hold at once; drop the allowlist or share the \
                  network"
-            ),
-            Error::MultiplexerUnavailable { multiplexer } => write!(
-                f,
-                "multiplexer = \"{multiplexer}\" is selected but the nono \
-                 backend refuses multiplexer sessions until nono's \
-                 unix-socket grants are audited (bd myconfig-6di.4.5) — the \
-                 private socket directory lives in the sandbox home tmpfs, \
-                 and assuming the socket passes unfiltered is not a claim \
-                 mysbx makes; set multiplexer = \"none\", or pick another \
-                 backend"
             ),
             Error::DisplayUnavailable => write!(
                 f,
