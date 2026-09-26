@@ -30,3 +30,10 @@ misc/semi-safe-keypair
 # bd (beads) runtime lock, recreated on every run and left behind when a
 # run is interrupted
 .beads.gate.lock
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
