@@ -30,14 +30,20 @@
 # `myconfig.ai.enable` never gets beads, and a host can opt out with
 # `myconfig.ai.dev.beads.enable = false;`.
 #
-# Besides the `bd` binary this module ships `bd-export` (writeShellApplication
-# wrapping ./bd-export.sh): a companion that dumps the complete beads state
-# of the current repository (README.md index + one issues/<id>.md per issue,
-# source of truth `bd export --all`) as human- and AI-readable markdown, so
-# agents and humans can read the issue landscape without running bd or
-# touching the Dolt DB. The bd-generated `beads` skill does not mention it
-# (it is generated from the CLI), so the agent-facing docs live in the
-# script's header comment.
+# Besides the `bd` binary this module ships two companions built with
+# writeShellApplication:
+#   * `bd-export` (./bd-export.sh): dumps the complete beads state of the
+#     current repository (README.md index + one issues/<id>.md per issue,
+#     source of truth `bd export --all`) as human- and AI-readable markdown,
+#     so agents and humans can read the issue landscape without running bd
+#     or touching the Dolt DB.
+#   * `bd-init` (./bd-init.sh): brings beads up in the current repo and
+#     wires it to the matching gitolite repo on vserver — `bd init`, Dolt
+#     remote + sync.remote (refs/dolt/data into the source repo itself)
+#     and a plain git remote, the same setup this myconfig repo uses.
+# The bd-generated `beads` skill does not mention either (it is generated
+# from the CLI), so the agent-facing docs live in the scripts' header
+# comments.
 {
   config,
   lib,
@@ -112,6 +118,19 @@ let
       ];
       text = builtins.readFile ./bd-export.sh;
     };
+
+  # `bd-init`: bring beads up in the current repo and wire it to the
+  # matching gitolite repo on vserver (see ./bd-init.sh): `bd init`,
+  # Dolt remote + sync.remote via `refs/dolt/data` into the source repo
+  # itself, plus a plain git remote. bd and git are resolved from PATH at
+  # runtime, same convention as bd-export (and git ships on every host
+  # anyway).
+  bdInit =
+    with pkgs;
+    writeShellApplication {
+      name = "bd-init";
+      text = builtins.readFile ./bd-init.sh;
+    };
 in
 {
   options.myconfig = with lib; {
@@ -184,6 +203,7 @@ in
         home.packages = [
           package
           bdExport
+          bdInit
         ];
 
         xdg.configFile."beads/config.toml".source = tomlFormat.generate "beads-config.toml" cfg.settings;
