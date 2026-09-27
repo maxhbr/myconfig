@@ -180,18 +180,51 @@ writeShellApplication {
     # it cannot gate anything. Readiness is a real reply — the same
     # probe the fix-up loop below uses — because a bound file is not
     # yet an answering API.
+    #
+    # The wait itself is PACED, because the mediation is not free:
+    # every pathname bind()/connect() is a seccomp notification the
+    # supervisor answers, and the supervisor rate-limits them with a
+    # token bucket (nono 0.74.0: 10/s refill, burst 5) whose exhausted
+    # denials return EPERM and are NOT even listed in the run's
+    # IPC-denial footer (supervisor_linux.rs
+    # `handle_network_notification`, debug-only "Rate limited network
+    # seccomp notification"). Server startup alone spends most of the
+    # burst (two binds, two nscd probes), and every `herdr` CLI costs
+    # several tokens more (nscd probes + two API connects), so a poll
+    # loop faster than ~1/s can NEVER succeed: it outruns the refill
+    # and denies itself forever — the 10Hz loop this block once used
+    # failed 150/150 probes live (f13, bd myconfig-27o). Shape: stat()
+    # is free, so wait for the socket file at 10Hz; a fixed 1s grace
+    # then covers the server's bootstrap (~25ms, verified against
+    # 0.9.1) and lets the bucket refill; the API probes run at 1s
+    # cadence, far below the refill rate, so they cannot starve the
+    # TUI that `exec`s right after.
     if [ ! -S "$HOME/.config/herdr/herdr.sock" ]; then
         herdr server >"$HOME/.config/herdr/herdr-server.log" 2>&1 &
         disown $! || true
     fi
-    for _ in $(seq 1 150); do
-        herdr workspace list >/dev/null 2>&1 && break
+    for _ in $(seq 1 50); do
+        [ -S "$HOME/.config/herdr/herdr.sock" ] && break
         sleep 0.1
     done
+    sleep 1
+    for _ in $(seq 1 10); do
+        herdr workspace list >/dev/null 2>&1 && break
+        sleep 1
+    done
 
+    # The relocation below runs WHILE the TUI starts, and its own
+    # list/create/close burst costs more tokens than the burst-5
+    # bucket holds — the same rate limiter prices every `herdr` CLI.
+    # It therefore waits out the TUI's startup connects (2s) and
+    # RETRIES the create/close once per second instead of failing
+    # silently: a rate-limited create is EPERM-shaped but transient,
+    # and a retry a second later finds a refilled bucket every time
+    # (live-verified, bd myconfig-27o).
     (
+        sleep 2
         initial_ws=()
-        for _ in $(seq 1 100); do
+        for _ in $(seq 1 13); do
             if out="$(herdr workspace list 2>/dev/null)"; then
                 mapfile -t initial_ws < <(
                     printf '%s' "$out" |
@@ -201,19 +234,25 @@ writeShellApplication {
                     break
                 fi
             fi
-            sleep 0.1
+            sleep 1
         done
         # No API answer (or no workspace yet) — leave herdr alone rather
         # than adding a second workspace to an unknown state.
         if [ "''${#initial_ws[@]}" -eq 0 ]; then
             exit 0
         fi
-        herdr workspace create \
-            --cwd "$repo_root" \
-            --label "$(basename "$repo_root")" \
-            --focus >/dev/null || exit 0
+        for _ in $(seq 1 5); do
+            herdr workspace create \
+                --cwd "$repo_root" \
+                --label "$(basename "$repo_root")" \
+                --focus >/dev/null 2>&1 && break
+            sleep 1
+        done
         for ws in "''${initial_ws[@]}"; do
-            herdr workspace close "$ws" >/dev/null 2>&1 || true
+            for _ in $(seq 1 3); do
+                herdr workspace close "$ws" >/dev/null 2>&1 && break
+                sleep 1
+            done
         done
     ) >/dev/null 2>&1 &
 

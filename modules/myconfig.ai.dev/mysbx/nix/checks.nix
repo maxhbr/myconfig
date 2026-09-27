@@ -124,6 +124,7 @@ in
           bashInteractive
           gnugrep
           herdr
+          procps
         ];
       }
       ''
@@ -185,33 +186,68 @@ in
         # must start herdr's headless server when its API socket is not
         # bound yet, and leave an already-running one alone. Extract
         # the entry's own pre-start block — the `-S` gate through its
-        # `fi`, plus the bounded readiness poll — and run it against
-        # the REAL herdr binary with a throwaway HOME, exactly like a
-        # fresh sandbox start: the socket must appear and the API must
-        # answer; a second run must not spawn a second server. The
-        # spawn must be gated on the socket FILE (herdr 0.9.1's
-        # `status server` exits 0 even when nothing runs, so it gates
-        # nothing), and the readiness poll must ask the API, not the
-        # filesystem.
+        # `fi` — and run it against the REAL herdr binary with a
+        # throwaway HOME, exactly like a fresh sandbox start: the socket
+        # must appear and the API must answer; a second run must not
+        # spawn a second server. The spawn must be gated on the socket
+        # FILE (herdr 0.9.1's `status server` exits 0 even when nothing
+        # runs, so it gates nothing), and readiness must be asked of
+        # the API, not the filesystem.
+        #
+        # The PACING is part of the contract (bd myconfig-27o): under
+        # nono's pathname AF_UNIX mediation the supervisor rate-limits
+        # every mediated bind/connect with a token bucket (10/s refill,
+        # burst 5) whose exhausted denials are EPERM and never reach the
+        # IPC-denial footer, so the entry's wait must (1) wait for the
+        # socket file with free stat() calls, (2) grant a fixed 1s
+        # grace before the first API probe (bootstrap + bucket refill),
+        # and (3) probe the API at a 1s cadence — a faster poll outruns
+        # the refill and can never succeed. All three shapes are
+        # asserted on the entry's own text before the live run replays
+        # the very same wait.
         prestart="$(sed -n '/^if \[ ! -S "\$HOME\/\.config\/herdr\/herdr\.sock" \]; then/,/^fi$/p' "$entry")" \
           || fail "cannot extract the server pre-start block"
         printf '%s\n' "$prestart" | grep -q 'herdr server' \
           || fail "the pre-start block does not start the herdr server"
-        pollblock="$(sed -n '/^for _ in \$(seq 1 150); do/,/^    done$/p' "$entry" | head -n 6)" \
+        # The entry's script text is dedented when writeShellApplication
+        # renders it, so every extraction below matches the RENDERED
+        # entry ($entry), top-level loops at column 0.
+        waitblock="$(sed -n '/^for _ in \$(seq 1 50); do/,/^done$/p' "$entry" \
+          | sed -n '1,/^done$/p')" \
+          || fail "cannot extract the socket-file wait block"
+        printf '%s\n' "$waitblock" | grep -Fq '[ -S "$HOME/.config/herdr/herdr.sock" ] && break' \
+          || fail "the entry does not wait for the socket FILE with a stat"
+        printf '%s\n' "$waitblock" | grep -q '^    sleep 0.1$' \
+          || fail "the socket-file wait is not a 10Hz stat poll (free — stat costs no mediation token)"
+        graceblock="$(sed -n '/^sleep 1$/,/^for _ in \$(seq 1 10); do$/p' "$entry" | head -n 2)" \
           || true
+        printf '%s\n' "$graceblock" | grep -q '^sleep 1$' \
+          || fail "the entry has no 1s grace between socket file and API probe"
+        pollblock="$(sed -n '/^for _ in \$(seq 1 10); do/,/^done$/p' "$entry" \
+          | sed -n '1,/^done$/p')" \
+          || fail "cannot extract the readiness poll block"
         printf '%s\n' "$pollblock" | grep -q 'herdr workspace list' \
           || fail "the entry does not poll the API for server readiness"
+        printf '%s\n' "$pollblock" | grep -q '^    sleep 1$' \
+          || fail "the readiness poll is not paced at 1s (nono token bucket, bd myconfig-27o)"
+        # No API-touching loop anywhere in the entry may run faster
+        # than 1s: the relocation subshell is the only other consumer.
+        if grep -q 'sleep 0.1' <(sed -n '/^(\$/,/^) >\/dev\/null 2>&1 &$/p' "$entry"); then
+          fail "an un-paced 0.1s API poll survived in the relocation subshell"
+        fi
 
         # Scratch HOME for the live part of the check — nothing under
         # the builder's real HOME is read or written.
         htmp="$(mktemp -d)"
         mkdir -p "$htmp/.config/herdr"
+        # Replay the entry's OWN wait, not a re-implementation: the
+        # stat wait, the 1s grace and the paced API poll, exactly as
+        # the sandbox runs them.
         run_prestart() {
           HOME="$htmp" bash -c "$prestart
-        for _ in \$(seq 1 150); do
-            herdr workspace list >/dev/null 2>&1 && break
-            sleep 0.1
-        done"
+        $waitblock
+        sleep 1
+        $pollblock"
         }
         run_prestart \
           || fail "the pre-start block failed on a fresh HOME"
@@ -219,6 +255,17 @@ in
           || fail "no herdr.sock after the pre-start block"
         HOME="$htmp" herdr workspace list >/dev/null 2>&1 \
           || fail "the socket API does not answer after the pre-start block"
+        # A second run must not spawn a second server: the `-S` gate
+        # sees the socket the first run's server bound (on this — the
+        # check's — host there is no nono mediation, so the pacing is
+        # exercised as text only here; the live nono behavior is the
+        # f13 acceptance).
+        server_pids_before="$(pgrep -f 'herdr server' || true)"
+        run_prestart \
+          || fail "the pre-start block failed on an already-running server"
+        server_pids_after="$(pgrep -f 'herdr server' || true)"
+        [ "$server_pids_before" = "$server_pids_after" ] \
+          || fail "the second pre-start run spawned a second server"
         HOME="$htmp" herdr server stop >/dev/null 2>&1 || true
 
         mkdir "$out"

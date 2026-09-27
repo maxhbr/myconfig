@@ -177,6 +177,33 @@ forks the server through `proc_fork_and_daemon` and connects on the
 fd the server hands back after binding (tmux 3.7c `client.c` /
 `proc.c`), so its attach connect never targets an unbound pathname.
 
+#### The mediation supervisor rate-limits every bind/connect (bd myconfig-27o)
+
+Every pathname bind()/connect() the filter traps is a seccomp
+notification the supervisor answers, and the supervisor prices them
+with a token bucket — nono 0.74.0, `supervisor_linux.rs`
+`RateLimiter::new(10, 5)`: 10 tokens/s refill, burst 5. The decisive
+property: an exhausted bucket denies with EPERM and the denial is
+NOT recorded in the run's IPC-denial footer (the rate-limit branch
+returns before `record_af_unix_ipc_denial`; the message is
+debug-only), so a rate-limited failure looks exactly like a grant
+failure — except the footer stays quiet about it. Live cost on f13:
+herdr's server startup alone spends most of the burst (two binds,
+two nscd probes), and every `herdr` CLI costs several tokens more
+(NSS probes plus two API connects), so a poll loop faster than ~1/s
+against the herdr API can NEVER succeed — it outruns the refill and
+denies itself forever (the pre-start's original 10Hz poll failed
+150/150 probes, which is the f13 "server did not become ready"
+symptom of bd myconfig-27o). The herdr entry's wait is therefore
+SHAPED by the bucket (./nix/herdr-entry.nix): a free 10Hz stat()
+wait for the socket file, a fixed 1s grace (bootstrap + refill), and
+API probes at a 1s cadence; the workspace relocation retries its
+create/close once per second, because a rate-limited attempt is
+transient by construction. The consequence for every future
+nono-backend payload: **no AF_UNIX poll loop under this backend may
+run faster than 1Hz, and a denial at burst time is not evidence of a
+missing grant.**
+
 #### nono's own inputs
 
 - **Profile**: a store path built by the Nix module, passed as
