@@ -91,9 +91,11 @@ done
 
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" || exit 1
 
-# Make the passphrase-less key available to the agent before any remote
-# access (git fetch/push and `bd sync` both go over ssh).
+# Make a key available to the agent before any remote access
+# (git fetch/push and `bd sync` both go over ssh): prefer the
+# passphrase-less key, fall back to the regular one.
 key=$HOME/.ssh/id_ed25519_no_pw
+[[ -f $key ]] || key=$HOME/.ssh/id_ed25519
 if [[ -f $key ]]; then
     log "adding ${key##*/} to ssh-agent"
     ssh-add "$key" >/dev/null 2>&1 || true
