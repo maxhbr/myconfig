@@ -91,6 +91,14 @@ done
 
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" || exit 1
 
+# Make the passphrase-less key available to the agent before any remote
+# access (git fetch/push and `bd sync` both go over ssh).
+key=$HOME/.ssh/id_ed25519_no_pw
+if [[ -f $key ]]; then
+    log "adding ${key##*/} to ssh-agent"
+    ssh-add "$key" >/dev/null 2>&1 || true
+fi
+
 git remote get-url "$remote" >/dev/null 2>&1 || die "no git remote named '$remote'"
 
 local_ref=refs/heads/$branch
