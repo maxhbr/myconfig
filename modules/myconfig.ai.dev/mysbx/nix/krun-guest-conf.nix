@@ -3,9 +3,10 @@
 #
 # The nested-podman guest configuration of the podman-krun backend
 # (bd myconfig-6di.5.8, docs/design/backends.md D2): one store tree
-# carrying the `/etc/containers/{containers,storage}.conf` podman
-# reads, plus `/etc/subuid`/`/etc/subgid` for the guest-root user's
-# subordinate ranges. Baked into the (shared) agent image via
+# carrying the `/etc/containers/{containers,storage}.conf` and
+# `policy.json` podman reads, plus `/etc/subuid`/`/etc/subgid` for the
+# guest-root user's subordinate ranges. Baked into the (shared) agent
+# image via
 # `myconfig.ai.dev.mysbx.krun.nestedPodman.packages` — the image's
 # `/etc` already exists (dockerTools.caCertificates, fakeNss), and
 # buildEnv links this tree's `etc` into it.
@@ -41,6 +42,15 @@
 #   (libkrunfw has OVERLAY_FS) — fuse-overlayfs (already on the
 #   wrapped podman's PATH) is the fallback only if that proves broken
 #   in live validation (bd myconfig-6di.5.7).
+# - policy.json: containers/image refuses every pull when neither
+#   `/etc/containers/policy.json` nor the user's
+#   `~/.config/containers/policy.json` exists, and neither pkgs.podman
+#   nor the agent image ships one (on NixOS it comes from the
+#   virtualisation.containers module, not the package). The default
+#   is that module's default, skopeo's default-policy.json:
+#   insecureAcceptAnything — no signature verification, the same
+#   trust a plain NixOS podman host has. `containersPolicy` overrides
+#   it.
 # - subuid/subgid: a subordinate range for the guest-root user
 #   (`agent`) — root inside the guest maps its inner containers
 #   through it. The HOST user's own ranges do not apply here: the
@@ -51,6 +61,7 @@
   subUidRange ? "100000:65536",
   containersConf ? null,
   storageConf ? null,
+  containersPolicy ? null,
 }:
 let
   defaultContainersConf = ''
@@ -79,16 +90,23 @@ let
     graphroot = "/var/tmp/containers/storage"
     runroot = "/run/containers/storage"
   '';
+
+  defaultPolicy = {
+    default = [ { type = "insecureAcceptAnything"; } ];
+    transports.docker-daemon."" = [ { type = "insecureAcceptAnything"; } ];
+  };
 in
 runCommand "mysbx-krun-guest-conf"
   {
     containersConfText = if containersConf == null then defaultContainersConf else containersConf;
     storageConfText = if storageConf == null then defaultStorageConf else storageConf;
+    policyText = builtins.toJSON (if containersPolicy == null then defaultPolicy else containersPolicy);
   }
   ''
     mkdir -p $out/etc/containers
     printf '%s\n' "$containersConfText" > $out/etc/containers/containers.conf
     printf '%s\n' "$storageConfText" > $out/etc/containers/storage.conf
+    printf '%s\n' "$policyText" > $out/etc/containers/policy.json
     # The registries defaults of the image apply; nothing to pin here
     # yet (pull policy is the acceptance runbook's variable, .7).
     printf 'agent:%s\n' "${subUidRange}" > $out/etc/subuid

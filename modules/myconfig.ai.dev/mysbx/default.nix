@@ -859,7 +859,7 @@ in
             carries conmon, crun, netavark, passt and
             fuse-overlayfs) plus the guest configuration tree
             (./nix/krun-guest-conf.nix: containers.conf,
-            storage.conf, /etc/subuid, /etc/subgid).
+            storage.conf, policy.json, /etc/subuid, /etc/subgid).
 
             Live validation of the nested run is bd
             myconfig-6di.5.7's runbook — the agent sandbox has no

@@ -522,7 +522,9 @@ Consequences, stated honestly:
   the overlay driver and roots PINNED onto the tmpfs surfaces
   `/var/tmp/containers/storage` + `/run/containers/storage` — podman's
   `/var/lib` default sits on the read-only root, `--read-only-tmpfs`
-  covers only /dev, /dev/shm, /run, /tmp, /var/tmp;
+  covers only /dev, /dev/shm, /run, /tmp, /var/tmp; `policy.json`
+  with the NixOS/skopeo default `insecureAcceptAnything` — without
+  any policy file containers/image refuses every pull;
   `/etc/subuid`+`/etc/subgid` for the guest-root user), both baked
   into the shared agent image via `krun.nestedPodman.{enable,packages}`
   (off by default — a gvisor-only host pays no podman closure).

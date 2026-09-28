@@ -150,6 +150,10 @@ in
       }
       python3 ${compare} "${guestConf}/etc" ${expectedJson} \
         || fail "the guest containers.conf/storage.conf do not match the pinned tables"
+      # containers/image refuses every pull without a policy file.
+      python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); sys.exit(0 if p["default"] == [{"type": "insecureAcceptAnything"}] else 1)' \
+        "${guestConf}/etc/containers/policy.json" \
+        || fail "policy.json must exist, parse as JSON and carry the default insecureAcceptAnything policy"
       grep -q '^agent:100000:65536$' "${guestConf}/etc/subuid" \
         || fail "the subuid range for the guest-root user is missing"
       grep -q '^agent:100000:65536$' "${guestConf}/etc/subgid" \
