@@ -1551,8 +1551,17 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // Multiplexer sessions need no arm here: the argv builder's
     // image-pin rule (`MultiplexerUnavailable`) refuses them — an
     // in-image entry script is the prerequisite for a session on
-    // BOTH podman backends, and AF_UNIX sockets over virtio-fs are
-    // part of what bd myconfig-6di.5.4 verifies before that lifts.
+    // BOTH podman backends. AF_UNIX-over-virtio-fs is why the
+    // socket-touching features stay refused on krun (verified
+    // against the libkrun sources in bd myconfig-6di.5.4): the
+    // virtiofs server passes INODES (passthrough.rs forwards
+    // stat/read/write/mknod calls), never live socket objects — a
+    // socket file created on the host reaches the guest as a dead
+    // inode, and a guest bind()/connect() has no host socket object
+    // to reach, so any feature built on a socket crossing the
+    // virtiofs root would half-run and die. Sockets must live on
+    // guest tmpfs — which needs an in-image entry and a live-
+    // validated mount, both still outstanding (bd myconfig-6di.5.7).
     // The refusal sits BEFORE the session clone (a broken
     // configuration creates nothing) and before the `--dry-run`
     // early return, so a dry run audits the refusal too.
@@ -1562,9 +1571,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
              (first cut, docs/design/backends.md D2)"
         );
         eprintln!(
-            "  the waypipe channel over libkrun's virtio-fs is unverified — the \
-             podman-gvisor audit covered runsc's mount path, not virtio-fs; \
-             bd myconfig-6di.5.4 verifies mounts before this lifts"
+            "  the waypipe channel needs an AF_UNIX socket that crosses virtio-fs, \
+             which passes inodes, not live socket objects — the socket must live \
+             on guest tmpfs, which needs an in-image entry (bd myconfig-6di.5.4, \
+             live validation bd myconfig-6di.5.7)"
         );
         eprintln!("  set display = \"off\", or switch the backend to `podman-gvisor`");
         return EXIT_INFRASTRUCTURE;

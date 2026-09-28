@@ -8,10 +8,10 @@ mysbx-repo-6e89dfc8f9
 --hostname
 mysbx
 --userns=keep-id
+--annotation
+run.oci.handler=krun
 --read-only
 --read-only-tmpfs=true
---cap-drop=ALL
---security-opt=no-new-privileges
 --workdir
 /synth/repo
 --mount

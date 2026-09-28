@@ -335,12 +335,42 @@ podman process through `/dev/kvm`, and libkrun's TSI (Transparent
 Socket Impersonation) plus podman's pasta netns give the guest its
 network — no device the payload could otherwise reach.
 
-The podman-gvisor argv must stay BYTE-IDENTICAL: the krun variant is a
-separate enum value that swaps exactly one value — `--runtime=runsc`
-becomes `--runtime=<the crun+libkrun store path>` — and nothing else in
-the built argv. The existing golden tests plus a before/after snapshot
-of the gvisor argv enforce that (see the tests of bd
-myconfig-6di.5.3).
+The podman-gvisor argv stays BYTE-IDENTICAL; the krun variant is a
+separate enum value swapping `--runtime=runsc` for
+`--runtime=<the crun+libkrun store path>` PLUS an exactly enumerated
+set of differences that exist because the krun execution model
+enforces different things — each verified against the crun/libkrun
+sources (bd myconfig-6di.5.4):
+
+- `--annotation run.oci.handler=krun` — crun runs the libkrun VM
+  handler ONLY with this annotation (src/libcrun/custom-handler.c
+  `find_handler_for_container`); without it the pinned crun silently
+  runs a PLAIN container, no VM, weaker than gVisor. The annotation
+  is the VM's on switch, not decoration.
+- NO `--cap-drop=ALL` / `--security-opt=no-new-privileges` — crun's
+  krun handler never execs the OCI process (the guest init execs the
+  payload as guest root, reading only `Env`/`args`/`WorkingDir` from
+  the OCI config, libkrun init/init.c), so the flags would advertise
+  enforcement that does not exist. `--read-only` stays: crun remounts
+  the prepared root read-only host-side and virtiofs hands the guest
+  exactly that tree.
+- resource limits as `--annotation krun.cpus=…`/`krun.ram_mib=…`
+  instead of the cgroup flags (bd myconfig-6di.5.6) — with refusals
+  for what the annotations cannot express.
+- `--userns=keep-id` stays but means something different: it maps the
+  HOST-SIDE rootfs preparation (the bind sources are prepared under
+  the host user's uid so the virtiofs server can share them), while
+  inside the guest the payload runs as guest root and virtiofs maps
+  guest-root accesses to the host user unchanged (passthrough.rs
+  `set_creds` — guest uid 0 is the host user's own uid, and chown to
+  any OTHER uid is refused with EPERM unless the server holds
+  CAP_SETUID). The honest consequence: files created by the payload
+  in the shared mounts are host-uid-owned as on the other backends.
+
+The existing golden tests plus a before/after snapshot of the gvisor
+argv enforce the gvisor's byte-identity (see the tests of bd
+myconfig-6di.5.3), and the krun golden pins the enumerated
+differences (bd myconfig-6di.5.4).
 
 #### Threat model delta vs. gVisor — stated honestly
 
@@ -386,9 +416,12 @@ and silently ignored — the same rule as every backend:
 | `network = false` | enforced: `--network none` exactly as on podman-gvisor |
 | `allow-domains`/`connect-ports`/`listen-ports` | refused (config.md D21's table stays: libkrun's egress is podman's pasta netns — same pasta, same gap as podman-gvisor) |
 | `egress = "proxy-only"` | refused until verified (config.md D20: pasta's `--map-guest-addr` adds a path to the forwarder, it does not remove the default route — same fix to share with bd myconfig-6di.3 / myconfig-jq2) |
-| `display = "waypipe"` | refused in the first cut (waypipe's host-client socket bind over virtio-fs under a libkrun guest is unverified — the runsc audit does not carry over) |
-| multiplexer sessions | refused in the first cut (AF_UNIX sockets do not cross virtio-fs: the socket must live on guest tmpfs, which the podman-gvisor argv does not provide — pending bd myconfig-6di.5.4) |
-| host AF_UNIX sockets across virtio-fs | refused where a feature needs them (AF_UNIX is not a virtio-fs-passed inode type; any feature built on a host socket crossing the mount is refused, not best-effort) |
+| `display = "waypipe"` | refused in the first cut (the waypipe channel needs an AF_UNIX socket crossing virtio-fs, which passes inodes, not live socket objects — bd myconfig-6di.5.4 verified the gap against the libkrun sources; lifting needs an in-image entry with a guest-tmpfs socket dir, live-validated under bd myconfig-6di.5.7) |
+| multiplexer sessions | refused in the first cut (same root cause: the tmux socket must live on guest tmpfs, and the image carries no entry script — the argv builder's image-pin rule refuses the session on BOTH podman backends; an in-image entry is the prerequisite, live validation bd myconfig-6di.5.7) |
+| host AF_UNIX sockets across virtio-fs | refused where a feature needs them (verified: the virtiofs server forwards stat/read/write/mknod over host inodes, libkrun passthrough.rs — a socket file reaches the guest as a dead inode and a guest bind()/connect() has no host socket object to reach; any feature built on a host socket crossing the mount is refused, not best-effort) |
+| `--cap-drop=ALL` / `no-new-privileges` | NOT emitted on krun (bd myconfig-6di.5.4): crun's krun handler never execs the OCI process — the guest init runs the payload as guest root, reading only Env/args/WorkingDir from the OCI config (libkrun init/init.c) — so the flags would advertise enforcement that does not exist. `--read-only` stays (crun remounts the prepared root read-only host-side; virtiofs hands the guest that exact tree) |
+| mounts / state-dirs / dest remap / clone sessions | the shared podman mount model, UNCHANGED: crun applies every OCI mount host-side on the container rootfs (container.c/linux.c — binds, tmpfses, ro remount), and libkrun shares the prepared tree as the virtiofs root. The gvisor layout survives verbatim: the home tmpfs, the state-parent tmpfses, the workspace bind, the state binds and the configured mounts all land on the tree the guest sees. Verified against the crun sources in bd myconfig-6di.5.4; live validation bd myconfig-6di.5.7 |
+| uid mapping | `--userns=keep-id` stays but maps the HOST-SIDE preparation only: inside the guest the payload runs as guest root (the init never setuids) and the virtiofs server maps guest-root accesses to the host user's own uid unchanged (passthrough.rs `set_creds`; chown to any OTHER uid is EPERM unless the server holds CAP_SETUID). Files the payload writes in the shared mounts are host-uid-owned, as on the other backends; the nested-podman setuid story is bd myconfig-6di.5.8's risk |
 | `/dev/kvm` availability | a doctor-style eval-time check: the wrapper asserts the user has rw access to `/dev/kvm` (the `kvm` group) — a host without it gets a refused run, never a silent fallback to another runtime |
 | resource limits | mapped onto the krun VM annotations `krun.cpus` / `krun.ram_mib` (crun's krun handler, bd myconfig-6di.5.6) — the first mysbx limit mechanism with no cgroup dependency; `--pids-limit` refused (no pids controller is wired for a whole-VM "container"), fractional vCPUs and sub-128-MiB memory refused (crun silently defaults `ram_mib <= 128`) — never accepted and silently ignored |
 
@@ -413,8 +446,16 @@ and silently ignored — the same rule as every backend:
 
 - **setuid/ownership over virtio-fs** (nested podman's
   `newuidmap`/`newgidmap` and file ownership semantics under the
-  `--userns=keep-id` host mapping — bd myconfig-6di.5.4/.8): the
-  main correctness risk; live validation requires real KVM.
+  `--userns=keep-id` host mapping — bd myconfig-6di.5.4/.8):
+  source-verified in .4: the virtiofs server maps guest-root to the
+  host user's uid unchanged, and a chown to any OTHER uid is EPERM
+  unless the server (the rootless podman process) holds CAP_SETUID
+  (libkrun passthrough.rs `set_creds`) — so guest files can only
+  ever carry the host user's own uid, and a guest setuid bit on a
+  virtiofs file is unverifiable from the host side. The remaining
+  risk is whether nested podman tolerates that single-uid world
+  (its overlay and newuidmap need real uid arithmetic); live
+  validation requires real KVM (bd myconfig-6di.5.7/.8).
 - **Overlay upper-layer location** (Nix builds, bd myconfig-6di.5.9):
   overlayfs upper must not live on virtio-fs; guest tmpfs costs VM RAM,
   a sidecar-backed disk image adds an image lifecycle. Decided in the

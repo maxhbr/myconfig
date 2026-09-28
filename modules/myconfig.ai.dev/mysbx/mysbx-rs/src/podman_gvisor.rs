@@ -16,10 +16,14 @@
 //! user-space kernel); `"podman-krun"` runs crun built against libkrun
 //! (nixpkgs `crun` withLibkrun) — each run a rootless KVM microVM with
 //! its own kernel, mounts over virtio-fs. The krun value is a RUNTIME
-//! VARIANT, not a second builder: the argv is identical except for the
-//! `--runtime` value of section 0, which the caller pins (`Params::runtime`),
-//! so the gvisor goldens stay byte-identical and the krun argv is the
-//! same layout under a different runtime.
+//! VARIANT, not a second builder: the argv is the gvisor layout except
+//! for the ENUMERATED differences D2 names (`Params::krun` switches
+//! them): the `--runtime` value of section 0, the
+//! `run.oci.handler=krun` activation annotation of section 1 (crun runs
+//! the libkrun VM handler only with it), the two guest-unenforceable
+//! hardening flags of section 2 dropped, and the limits of section 8
+//! as VM annotations instead of cgroup flags. The gvisor goldens stay
+//! byte-identical; the krun golden pins the differences.
 //!
 //! The argv builder is pure — it canonicalizes nothing and checks no
 //! existence (the merge already did that, docs/design/config.md D8) —
@@ -34,8 +38,13 @@
 //!    first there), because lib.rs prepends the backend binary itself
 //!    via `Command::new(MYSBX_PODMAN)`.
 //! 1. container identity: `--replace`, `--name`, `--hostname`, `--userns=keep-id`
-//! 2. base isolation: `--read-only`, `--read-only-tmpfs=true`,
-//!    `--cap-drop=ALL`, `--security-opt=no-new-privileges`
+//!    — plus the `run.oci.handler=krun` activation annotation when
+//!    `Params::krun` (without it crun silently runs a plain container,
+//!    no VM)
+//! 2. base isolation: `--read-only`, `--read-only-tmpfs=true`, and —
+//!    gvisor ONLY — `--cap-drop=ALL`, `--security-opt=no-new-privileges`
+//!    (the krun handler never execs the OCI process, so the flags would
+//!    advertise enforcement that does not exist)
 //! 3. working directory: `--workdir` at the repo path (the container's
 //!    view of the workspace)
 //! 4. container home: a fresh empty `type=tmpfs` mount at
@@ -479,12 +488,45 @@ pub fn podman_run_argv(
     argv.extend(["--name".into(), container_name]);
     argv.extend(["--hostname".into(), "mysbx".into()]);
     argv.push("--userns=keep-id".into());
+    // The VM's ON switch (bd myconfig-6di.5.4): crun runs the libkrun
+    // handler ONLY when the OCI spec carries the annotation
+    // `run.oci.handler=krun` (crun src/libcrun/custom-handler.c
+    // `find_handler_for_container`: `annotation = find_annotation
+    // (container, "run.oci.handler")`). Nothing about `--runtime=<crun>
+    // selects it — without the annotation, the pinned crun happily
+    // runs a PLAIN container: no VM, no guest kernel, silently weaker
+    // than the gvisor backend the variant promises to be a variant
+    // of (backends.md D2). The annotation is therefore not optional
+    // dressing but the difference between the backend and a lie.
+    if params.krun {
+        argv.extend(["--annotation".into(), "run.oci.handler=krun".into()]);
+    }
 
     // 2. base isolation
     argv.push("--read-only".into());
     argv.push("--read-only-tmpfs=true".into());
-    argv.push("--cap-drop=ALL".into());
-    argv.push("--security-opt=no-new-privileges".into());
+    // The two process-hardening flags are gvisor-ONLY (bd
+    // myconfig-6di.5.4): crun's krun handler never execs the OCI
+    // process — `run_func` starts the VM instead (container.c, the
+    // custom-handler branch of the entrypoint) — and the guest init
+    // execs the payload as guest root with full capabilities,
+    // reading only `Env`/`args`/`WorkingDir` from the OCI config
+    // (libkrun init/init.c `config_parse_file` — `process.user`,
+    // capabilities and noNewPrivileges are never read). Emitting
+    // them on the krun variant would advertise enforcement that
+    // does not exist: an operator reading the dry run must not
+    // believe a cap-drop protects a payload that is root inside the
+    // guest by design (the confinement is the guest kernel, the
+    // same boundary every VM backend has). `--read-only` DOES stay:
+    // crun applies the ro root remount host-side (linux.c, the
+    // `def->root->readonly` remount of the mount phase) and the
+    // virtiofs server hands the guest exactly crun's prepared root,
+    // so the read-only contract is enforced on the shared tree
+    // itself, not on a guest process that never exists.
+    if !params.krun {
+        argv.push("--cap-drop=ALL".into());
+        argv.push("--security-opt=no-new-privileges".into());
+    }
 
     // 3. working directory
     argv.extend(["--workdir".into(), root.clone()]);

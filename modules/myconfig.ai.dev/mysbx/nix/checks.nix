@@ -134,7 +134,10 @@ in
           || fail "the pinned crun was built without libkrun"
 
         # 3. the dry run: backend = "podman-krun" swaps --runtime to
-        #    the pinned path (and only that).
+        #    the pinned path, and carries the handler annotation —
+        #    crun runs the libkrun VM handler ONLY for
+        #    run.oci.handler=krun (custom-handler.c), without it the
+        #    run would silently be a plain container, no VM.
         repo="$TMPDIR/repo"
         mkdir -p "$repo" "$TMPDIR/repo.mysbx"
         printf 'backend = "podman-krun"\n' > "$TMPDIR/repo.mysbx/config.toml"
@@ -152,6 +155,10 @@ in
         first=$(echo "$argv" | sed -n '2p')
         [ "$first" = "--runtime=$crun" ] \
           || fail "the dry run does not swap --runtime to the pinned crun (got: $first)"
+        echo "$argv" | grep -qx 'run.oci.handler=krun' \
+          || fail "the dry run does not carry the run.oci.handler=krun annotation (no VM without it)"
+        echo "$argv" | grep -q '^--cap-drop=ALL$' \
+          && fail "the krun argv advertises --cap-drop=ALL, which the krun handler never enforces (the payload is guest root)"
         # 4. the rest of the argv is the gvisor layout: the image
         #    reference and the image-userland payload survive.
         echo "$argv" | grep -q '^localhost/test:latest$' \

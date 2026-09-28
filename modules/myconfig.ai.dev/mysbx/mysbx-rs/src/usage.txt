@@ -231,9 +231,10 @@ Options:
                 configuration); anything else is a refused run
                 (exit 70) naming the set, never a silent fallback —
                 and neither layer has to name a backend for the flag
-                to select one. `podman-krun` is `podman-gvisor` with
-                the OCI runtime swapped to crun built against
-                libkrun (a rootless KVM microVM per run; first cut:
+                to select one. `podman-krun` is `podman-gvisor` under
+                the OCI runtime crun built against libkrun — a
+                rootless KVM microVM per run, and it needs /dev/kvm
+                access (a refused run without it). First cut:
                 waypipe display and multiplexer sessions are
                 refused — `docs/design/backends.md` D2). Valid
                 before the verb and after it for `run`; every other

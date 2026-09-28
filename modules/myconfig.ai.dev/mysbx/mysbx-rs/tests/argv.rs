@@ -4705,12 +4705,18 @@ fn podman_krun_golden_minimal_config() {
 }
 
 #[test]
-fn podman_krun_argv_equals_gvisor_modulo_the_runtime() {
-    // The variant contract as an explicit comparison: build the SAME
-    // config under both runtimes and diff the argvs. Only argv[0]
-    // (the `--runtime` line of section 0) may differ; every other
-    // argument must be byte-identical — a krun change that alters the
-    // layout is a builder bug, not a variant.
+fn podman_krun_argv_equals_gvisor_except_the_enumerated_differences() {
+    // The variant contract (backends.md D2, bd myconfig-6di.5.4):
+    // build the SAME config under both runtimes and diff the argvs.
+    // The krun variant differs ONLY in the enumerated set D2 names —
+    // the runtime swap, the handler-activation annotation, the two
+    // guest-unenforceable hardening flags dropped (the krun handler
+    // never execs the OCI process; the guest init runs the payload
+    // as guest root, libkrun init/init.c reads only Env/args/
+    // WorkingDir) — plus, for a config with limits, the VM
+    // annotations instead of the cgroup flags (the limits tests
+    // below pin that mapping). Anything else differing is a builder
+    // bug, not a variant.
     for (cfg, payload) in [
         (podman_base(true), Payload::Shell),
         (podman_base(false), Payload::Shell),
@@ -4730,16 +4736,48 @@ fn podman_krun_argv_equals_gvisor_modulo_the_runtime() {
         .unwrap();
         let krun =
             podman_run_argv(&cfg, &synth_repo(), &payload, &host_env(&[]), &krun_params).unwrap();
-        assert_eq!(gvisor.len(), krun.len());
-        for (i, (g, k)) in gvisor.iter().zip(krun.iter()).enumerate() {
+        // Both enumerated differences are LENGTH-NEUTRAL (two flags
+        // dropped, two annotation args added), so the argvs stay
+        // same-length — but not same-POSITION past keep-id. Compare
+        // with the enumerated differences removed instead of zipping
+        // raw positions.
+        let strip = |argv: &[String], drop: &[&str]| {
+            argv.iter()
+                .filter(|a| !drop.contains(&a.as_str()))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let g = strip(
+            &gvisor,
+            &["--cap-drop=ALL", "--security-opt=no-new-privileges"],
+        );
+        let k = strip(&krun, &["--annotation", "run.oci.handler=krun"]);
+        assert_eq!(g.len(), k.len(), "{gvisor:?}\n{krun:?}");
+        for (i, (gi, ki)) in g.iter().zip(k.iter()).enumerate() {
             if i == 0 {
-                assert_ne!(g, k, "the runtime line is the one difference");
-                assert_eq!(g, "--runtime=runsc");
-                assert_eq!(k, &format!("--runtime={KRUN_RUNTIME}"));
+                assert_eq!(gi, "--runtime=runsc");
+                assert_eq!(ki, &format!("--runtime={KRUN_RUNTIME}"));
             } else {
-                assert_eq!(g, k, "argument {i} differs between the variants");
+                assert_eq!(gi, ki, "argument {i} differs between the variants");
             }
         }
+        // The enumerated differences themselves, positionally: the
+        // handler annotation sits right after keep-id, and the
+        // guest-unenforceable hardening flags are gone.
+        let keep_id = krun
+            .iter()
+            .position(|a| a == "--userns=keep-id")
+            .expect("keep-id present");
+        assert_eq!(
+            &krun[keep_id + 1..keep_id + 3],
+            ["--annotation", "run.oci.handler=krun"],
+            "{krun:?}"
+        );
+        assert!(
+            !krun.contains(&"--cap-drop=ALL".to_string())
+                && !krun.contains(&"--security-opt=no-new-privileges".to_string()),
+            "the guest-unenforceable hardening flags must not appear: {krun:?}"
+        );
     }
 }
 
@@ -4773,7 +4811,11 @@ fn podman_krun_limits_map_to_vm_annotations() {
         .collect();
     assert_eq!(
         annotations,
-        vec![&"krun.cpus=2".to_string(), &"krun.ram_mib=4096".to_string()],
+        vec![
+            &"run.oci.handler=krun".to_string(),
+            &"krun.cpus=2".to_string(),
+            &"krun.ram_mib=4096".to_string(),
+        ],
         "{argv:?}"
     );
     // NO cgroup flags on the krun variant: `--cpus`/`--memory` would

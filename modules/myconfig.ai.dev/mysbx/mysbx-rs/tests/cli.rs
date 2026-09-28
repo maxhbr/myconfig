@@ -7774,12 +7774,15 @@ fn allowlist_on_podman_krun_is_refused() {
 }
 
 #[test]
-fn podman_krun_dry_run_swaps_only_the_runtime() {
-    // The variant contract end-to-end (bd myconfig-6di.5.3,
+fn podman_krun_dry_run_swaps_the_runtime_keeps_the_layout() {
+    // The variant contract end-to-end (bd myconfig-6di.5.3/.4,
     // docs/design/backends.md D2): `backend = "podman-krun"` builds
-    // the SAME argv as `podman-gvisor` with `--runtime` swapped to
-    // the pinned crun+libkrun path (MYSBX_KRUN_RUNTIME). The same
-    // image pin (MYSBX_GVISOR_IMAGE) serves both variants.
+    // the same LAYOUT as `podman-gvisor` with `--runtime` swapped to
+    // the pinned crun+libkrun path (MYSBX_KRUN_RUNTIME), plus the
+    // enumerated D2 differences (the handler annotation — asserted
+    // by its own test — and the dropped guest-unenforceable hardening
+    // flags). The same image pin (MYSBX_GVISOR_IMAGE) serves both
+    // variants.
     let (inv, _, sidecar) = fixture("podman-krun-dry-run", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
@@ -7922,6 +7925,51 @@ fn podman_krun_limits_become_vm_annotations() {
     assert!(
         stderr.contains("cannot enforce a pids limit"),
         "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn podman_krun_dry_run_carries_the_handler_annotation() {
+    // The VM's on switch (bd myconfig-6di.5.4): crun runs the
+    // libkrun handler ONLY for the `run.oci.handler=krun`
+    // annotation (crun custom-handler.c find_handler_for_container)
+    // — without it the pinned crun silently runs a PLAIN container,
+    // no VM, weaker than gVisor. The dry run must visibly carry it,
+    // and the guest-unenforceable hardening flags must be visibly
+    // absent (the payload is guest root by design; advertising a
+    // cap-drop that nothing enforces would be a lie on the audit
+    // surface).
+    let (inv, _, sidecar) = fixture("podman-krun-annotation", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines[0], "podman");
+    let i = lines
+        .iter()
+        .position(|l| *l == "--annotation")
+        .expect("the handler annotation is missing");
+    assert_eq!(lines[i + 1], "run.oci.handler=krun", "{stdout}");
+    assert!(
+        !lines
+            .iter()
+            .any(|l| { *l == "--cap-drop=ALL" || *l == "--security-opt=no-new-privileges" }),
+        "guest-unenforceable hardening flags on the krun argv: {stdout}"
+    );
+    // keep-id stays: it prepares the bind sources host-side under
+    // the host user's uid, the uid the virtiofs server shares them
+    // as (backends.md D2).
+    assert!(
+        lines.iter().any(|l| *l == "--userns=keep-id"),
+        "keep-id is missing: {stdout}"
     );
 }
 
