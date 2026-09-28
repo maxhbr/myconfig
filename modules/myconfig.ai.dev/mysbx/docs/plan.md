@@ -216,8 +216,17 @@ backend now (bd myconfig-6di.4, `docs/design/backends.md` D1):
 bubblewrap builds the view, `nono run` confines the payload inside
 it — no first-cut refusals remain (clone remap, mount `dest` remap,
 the network default, multiplexer sessions and the waypipe display all
-work or map like the bubblewrap backend). Remaining: qemu and
-microvm, long-term.
+work or map like the bubblewrap backend). The VM-level backend is
+DECIDED too (bd myconfig-6di.5, `docs/design/backends.md` D2):
+`backend = "podman-krun"` is podman-gvisor with the OCI runtime
+swapped to crun built against libkrun (nixpkgs `crun` withLibkrun) —
+a runtime variant, not a new argv builder; each run is a rootless
+KVM microVM with the stock libkrunfw kernel, mounts over virtio-fs.
+Honest boundary statement: krun is NOT stronger than gVisor — the VMM
+and the guest share one security context; the gains are
+host-kernel-bug isolation and full kernel compatibility (which the
+required nested podman and Nix-overlay builds need). Remaining:
+qemu and microvm, long-term.
 
 **2g — per-repo opt-out of user mounts.** `config.md` D7 settled the other
 direction (a sidecar declares its own mounts), but leaves open how a user

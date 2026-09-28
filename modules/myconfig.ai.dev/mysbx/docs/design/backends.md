@@ -320,3 +320,101 @@ filter.
   run-time `--backend` choice.
 - **Keep the first cut next to the layered mode**: doubles the surface
   and keeps the Landlock-only bugs alive.
+
+### D2: The `podman-krun` backend is `podman-gvisor` with the OCI runtime swapped to crun/libkrun
+
+`backend = "podman-krun"` (bd myconfig-6di.5) is a RUNTIME VARIANT of
+`podman-gvisor`: the same argv builder, the same container image pinning,
+the same layout checks — only the OCI runtime changes. `runsc` (gVisor's
+user-space kernel) is replaced by `crun` built against `libkrun`
+(nixpkgs `crun`, `withLibkrun` — the default on `x86_64-linux`), so each
+run is a KVM microVM with its own kernel (libkrunfw's stock kernel) and
+mounts travel over virtio-fs instead of runsc's gofer. Rootless, no
+bridge, no tap, no root: the microVM is started from the unprivileged
+podman process through `/dev/kvm`, and libkrun's TSI (Transparent
+Socket Impersonation) plus podman's pasta netns give the guest its
+network — no device the payload could otherwise reach.
+
+The podman-gvisor argv must stay BYTE-IDENTICAL: the krun variant is a
+separate enum value that swaps exactly one value — `--runtime=runsc`
+becomes `--runtime=<the crun+libkrun store path>` — and nothing else in
+the built argv. The existing golden tests plus a before/after snapshot
+of the gvisor argv enforce that (see the tests of bd
+myconfig-6di.5.3).
+
+#### Threat model delta vs. gVisor — stated honestly
+
+libkrun is NOT a stronger isolation boundary than gVisor. libkrun's
+upstream security model puts the VMM and the guest kernel in ONE
+security context: a guest escape reaches the VMM's process, which is
+the same unprivileged host process that started it. There is no
+additional boundary between the guest kernel and the VMM. What the
+krun variant buys instead:
+
+- **Host-kernel-bug isolation**: a Linux kernel bug exploitable by the
+  payload attacks the GUEST kernel (libkrunfw's stock kernel), not the
+  host kernel. gVisor's Sentry reimplements the syscall surface
+  instead — a different, partial kernel; krun runs a real one.
+- **Full kernel compatibility**: everything a real kernel does works —
+  cgroup namespaces, overlayfs inside user namespaces, FUSE, netfilter,
+  tun — which is what the REQUIRED scope decisions below need (nested
+  rootless podman, Nix builds over the host store). gVisor's Sentry
+  would have to emulate each of those.
+
+The docs never claim krun is stronger than gVisor: the gain is host
+kernel bug isolation and kernel compatibility, not a second boundary
+between guest and VMM.
+
+#### Alternatives considered
+
+| Alternative | Why rejected |
+| --- | --- |
+| qemu + virtiofsd + passt, native | a second full argv builder: qemu machine flags, virtiofsd daemons, passt wiring — all the things podman already owns for rootless containers; kept as the deferred fallback (its own bead) only in case crun/libkrun fails in practice |
+| cloud-hypervisor directly | no user-mode networking — it needs a TAP device on a bridge, and a bridge/tap is a root-owned host device, which this design refuses |
+| firecracker | disks only, no virtio-fs — no live repo mounts, which the whole mysbx workspace model (`live` repo bind) depends on |
+| reusing the `myconfig.ai.microvm` slots | root-owned prebuilt slot pool whose mounts are fixed at NixOS eval time — incompatible with the runtime TOML config merge that decides mounts per run; also far heavier than a per-run microVM |
+| kata containers | containerd-based and root-oriented; heavy, and the rootless story is weaker than podman+crun/libkrun |
+| nested qemu inside the podman-gvisor container | recursive virtualization of a container image that already runs under runsc — no |
+
+#### Refusals of the first cut
+
+Everything the krun variant cannot enforce is REFUSED, never accepted
+and silently ignored — the same rule as every backend:
+
+| Feature | First-cut status |
+| --- | --- |
+| `network = false` | enforced: `--network none` exactly as on podman-gvisor |
+| `allow-domains`/`connect-ports`/`listen-ports` | refused (config.md D21's table stays: libkrun's egress is podman's pasta netns — same pasta, same gap as podman-gvisor) |
+| `egress = "proxy-only"` | refused until verified (config.md D20: pasta's `--map-guest-addr` adds a path to the forwarder, it does not remove the default route — same fix to share with bd myconfig-6di.3 / myconfig-jq2) |
+| `display = "waypipe"` | refused in the first cut (waypipe's host-client socket bind over virtio-fs under a libkrun guest is unverified — the runsc audit does not carry over) |
+| multiplexer sessions | refused in the first cut (AF_UNIX sockets do not cross virtio-fs: the socket must live on guest tmpfs, which the podman-gvisor argv does not provide — pending bd myconfig-6di.5.4) |
+| host AF_UNIX sockets across virtio-fs | refused where a feature needs them (AF_UNIX is not a virtio-fs-passed inode type; any feature built on a host socket crossing the mount is refused, not best-effort) |
+| `/dev/kvm` availability | a doctor-style eval-time check: the wrapper asserts the user has rw access to `/dev/kvm` (the `kvm` group) — a host without it gets a refused run, never a silent fallback to another runtime |
+
+#### Scope decisions (from the epic, bd myconfig-6di.5)
+
+- **Required: nested rootless podman inside the guest** (bd
+  myconfig-6di.5.8). The guest kernel (libkrunfw) has user namespaces,
+  overlayfs, FUSE, tun and nftables; the work is userspace — setuid
+  `newuidmap`/`newgidmap`, `/etc/subuid`+`/etc/subgid`, storage OFF
+  virtio-fs (fuse-overlayfs or guest tmpfs), `cgroup-manager=cgroupfs`.
+- **Required: Nix builds inside the guest** (bd myconfig-6di.5.9):
+  host `/nix/store` mounted read-only over virtio-fs as the overlay's
+  LOWER layer, upper layer on guest tmpfs — the Nix local-overlay
+  store (`experimental-feature local-overlay-store`, `lower-store =
+  local?root=…&read-only=true`) preferred over a separate chroot store.
+- **Secondary: nesting other sandboxes** — no guest compatibility
+  probes, no work beyond what nested podman needs.
+- **Out of scope: nono inside krun** — the stock libkrunfw kernel
+  (no Landlock) is fine; a custom kernel is out of scope.
+
+#### Risks carried into the children
+
+- **setuid/ownership over virtio-fs** (nested podman's
+  `newuidmap`/`newgidmap` and file ownership semantics under the
+  `--userns=keep-id` host mapping — bd myconfig-6di.5.4/.8): the
+  main correctness risk; live validation requires real KVM.
+- **Overlay upper-layer location** (Nix builds, bd myconfig-6di.5.9):
+  overlayfs upper must not live on virtio-fs; guest tmpfs costs VM RAM,
+  a sidecar-backed disk image adds an image lifecycle. Decided in the
+  child.
