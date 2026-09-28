@@ -548,7 +548,7 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                     Some((v, _)) => v,
                     None => {
                         eprintln!(
-                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`"
+                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
                         );
                         eprintln!("try `mysbx --help`");
                         return Err(2);
@@ -751,7 +751,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                     Some(v) => v.clone(),
                     None => {
                         eprintln!(
-                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`"
+                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
                         );
                         eprintln!("usage: {RUN_USAGE}");
                         return 2;
@@ -1269,9 +1269,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // valid values (D8: the command line was fine, the backend it
     // names does not exist).
     if let Some(name) = &flags.backend {
-        if !matches!(name.as_str(), "bubblewrap" | "podman-gvisor" | "nono") {
+        if !matches!(
+            name.as_str(),
+            "bubblewrap" | "podman-gvisor" | "nono" | "podman-krun"
+        ) {
             eprintln!(
-                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`"
+                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -1398,16 +1401,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // `merged.backend` alike; the flag's own refusal one merge above
     // echoed it early, this arm is the authoritative one.
     let backend = match merged.backend.as_deref() {
-        Some("bubblewrap" | "podman-gvisor" | "nono") => merged.backend.as_deref().unwrap(),
+        Some("bubblewrap" | "podman-gvisor" | "nono" | "podman-krun") => {
+            merged.backend.as_deref().unwrap()
+        }
         Some(other) => {
             eprintln!(
-                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`"
+                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
             );
             return EXIT_INFRASTRUCTURE;
         }
         None => {
             eprintln!(
-                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"` or `backend = \"nono\"` in the user or sidecar config"
+                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"`, `backend = \"nono\"` or `backend = \"podman-krun\"` in the user or sidecar config"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -1520,6 +1525,35 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             "  switch the backend to `bubblewrap` for an orca session, or select \
              another multiplexer"
         );
+        return EXIT_INFRASTRUCTURE;
+    }
+
+    // 4d. the podman-krun backend's first-cut refusals (docs/design/
+    // backends.md D2, bd myconfig-6di.5.3): the waypipe display is
+    // refused until its host-client socket bind over virtio-fs under
+    // a libkrun guest is verified — the runsc audit does not carry
+    // over, a virtio-fs bind is a different mount path than runsc's
+    // gofer, and a feature that cannot be verified is never accepted
+    // and silently ignored (the same rule every backend follows).
+    // Multiplexer sessions need no arm here: the argv builder's
+    // image-pin rule (`MultiplexerUnavailable`) refuses them — an
+    // in-image entry script is the prerequisite for a session on
+    // BOTH podman backends, and AF_UNIX sockets over virtio-fs are
+    // part of what bd myconfig-6di.5.4 verifies before that lifts.
+    // The refusal sits BEFORE the session clone (a broken
+    // configuration creates nothing) and before the `--dry-run`
+    // early return, so a dry run audits the refusal too.
+    if backend == "podman-krun" && merged.display.is_waypipe() {
+        eprintln!(
+            "mysbx: display = \"waypipe\" is not supported on the `podman-krun` backend \
+             (first cut, docs/design/backends.md D2)"
+        );
+        eprintln!(
+            "  the waypipe channel over libkrun's virtio-fs is unverified — the \
+             podman-gvisor audit covered runsc's mount path, not virtio-fs; \
+             bd myconfig-6di.5.4 verifies mounts before this lifts"
+        );
+        eprintln!("  set display = \"off\", or switch the backend to `podman-gvisor`");
         return EXIT_INFRASTRUCTURE;
     }
 
@@ -1690,7 +1724,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     let waypipe_socket_dir = repo.sidecar.join("waypipe").join(pid.to_string());
     let waypipe_socket_dir_str = waypipe_socket_dir.to_string_lossy().into_owned();
     let waypipe_params: Option<bwrap::Waypipe<'_>> = if merged.display.is_waypipe() {
-        let guest_bin = if backend == "podman-gvisor" {
+        // Under podman-krun a waypipe display is refused upstream
+        // (step 4d, first cut) — the krun arm of this conditional is
+        // unreachable for a refused run and treats the backend like
+        // gvisor for the in-image pin either way.
+        let guest_bin = if matches!(backend, "podman-gvisor" | "podman-krun") {
             gvisor_waypipe.as_deref()
         } else {
             waypipe_client.as_deref()
@@ -1703,25 +1741,26 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         None
     };
     let report_waypipe: Option<bwrap::Waypipe<'_>> = waypipe_params.clone();
-    let (report_shell, report_tools_path, report_mux_entry) = if backend == "podman-gvisor" {
-        (gvisor_shell.clone(), gvisor_tools_path.clone(), None)
-    } else {
-        (shell.clone(), tools_path.clone(), mux_entry.clone())
-    };
+    let (report_shell, report_tools_path, report_mux_entry) =
+        if matches!(backend, "podman-gvisor" | "podman-krun") {
+            (gvisor_shell.clone(), gvisor_tools_path.clone(), None)
+        } else {
+            (shell.clone(), tools_path.clone(), mux_entry.clone())
+        };
     let report_params = bwrap::Params {
         shell: &report_shell,
         tools_path: &report_tools_path,
-        bin_sh: if backend == "podman-gvisor" {
+        bin_sh: if matches!(backend, "podman-gvisor" | "podman-krun") {
             None
         } else {
             bin_sh.as_deref()
         },
-        nix_conf: if backend == "podman-gvisor" {
+        nix_conf: if matches!(backend, "podman-gvisor" | "podman-krun") {
             None
         } else {
             nix_conf.as_deref()
         },
-        ca_bundle: if backend == "podman-gvisor" {
+        ca_bundle: if matches!(backend, "podman-gvisor" | "podman-krun") {
             None
         } else {
             ca_bundle.as_deref()
@@ -1765,7 +1804,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // bwrap's --clearenv + --setenv own the environment.
             (bwrap_bin, argv, None::<String>)
         }
-        "podman-gvisor" => {
+        // The podman-gvisor and podman-krun backends share one argv
+        // builder (podman_gvisor.rs): the krun value is a RUNTIME
+        // VARIANT (docs/design/backends.md D2) — same layout, same
+        // image pinning, only `--runtime` differs (runsc vs the
+        // pinned crun+libkrun path).
+        "podman-gvisor" | "podman-krun" => {
             use std::borrow::Cow;
 
             // The image reference the runs use — the same pin
@@ -1773,9 +1817,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // wrapper when the host builds a gVisor agent image; see
             // loadimage.rs). No fallback: an invented `localhost/…` ref
             // would run a nonexistent image and mislead the operator
-            // (bd myconfig-xrt).
+            // (bd myconfig-xrt). The krun variant runs the SAME image —
+            // the container image is runtime-agnostic.
             let Some(gvisor_image) = env_opt("MYSBX_GVISOR_IMAGE") else {
-                eprintln!("mysbx: podman-gvisor: no container image configured");
+                eprintln!("mysbx: {backend}: no container image configured");
                 eprintln!(
                     "  the Nix wrapper pins MYSBX_GVISOR_IMAGE when the host \
                      builds a gVisor agent image; an unwrapped build sets none"
@@ -1852,6 +1897,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 pasta_spec.as_deref()
             };
 
+            // The confining runtime of section 0 (backends.md D2):
+            // gvisor runs runsc, the krun variant runs crun built
+            // against libkrun (nixpkgs `crun` withLibkrun — the Nix
+            // wrapper pins the store path as `MYSBX_KRUN_RUNTIME`;
+            // the bare `crun` default serves an unwrapped build's
+            // PATH lookup, the same convention as MYSBX_BWRAP's).
+            let runtime = if backend == "podman-krun" {
+                env_or("MYSBX_KRUN_RUNTIME", "crun")
+            } else {
+                "runsc".to_owned()
+            };
+
             // The backend's payload pins are the image's own userland
             // (bd myconfig-wao), never the host store paths of the
             // bwrap pins: `MYSBX_SHELL` & co. name host `/nix/store`
@@ -1883,6 +1940,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 tty: stdin_is_tty(),
                 // Podman-gvisor specific params
                 image: &gvisor_image,
+                runtime: &runtime,
                 runtime_flags: &runtime_flags,
                 cgroup_manager: cgroup_manager.as_deref(),
                 ignore_cgroups,
@@ -2074,7 +2132,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             None => {
                 eprintln!(
                     "mysbx: display = \"waypipe\" but this build pinned no waypipe {}",
-                    if backend == "podman-gvisor" {
+                    if matches!(backend, "podman-gvisor" | "podman-krun") {
                         "for the image (MYSBX_GVISOR_WAYPIPE)"
                     } else {
                         "client (MYSBX_WAYPIPE)"
@@ -2082,7 +2140,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 );
                 eprintln!(
                     "  {}",
-                    if backend == "podman-gvisor" {
+                    if matches!(backend, "podman-gvisor" | "podman-krun") {
                         "bake waypipe into the gvisor image (myconfig.ai.dev.mysbx.display.package threads it into gvisor.imagePackages)"
                     } else {
                         "install mysbx on a host that carries waypipe (myconfig.ai.dev.mysbx.display.package)"
@@ -4051,7 +4109,12 @@ mod tests {
         // Both backends parse from the pre-verb position; the VALUE is
         // deliberately NOT validated here (the pipeline's step 4 owns
         // the accepted set, cli.md D18).
-        for text in ["bubblewrap", "podman-gvisor", "something-else"] {
+        for text in [
+            "bubblewrap",
+            "podman-gvisor",
+            "podman-krun",
+            "something-else",
+        ] {
             let args = s(&["--backend", text, "--dry-run"]);
             let (flags, rest) = split_global_flags(&args).unwrap();
             assert_eq!(flags.backend.as_deref(), Some(text), "`{text}`");

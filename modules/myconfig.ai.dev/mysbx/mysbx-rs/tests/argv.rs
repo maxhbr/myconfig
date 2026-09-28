@@ -3513,6 +3513,9 @@ fn podman_params() -> PodmanParams<'static> {
         interactive: true,
         tty: false,
         image: "localhost/agent-gvisor:latest",
+        // The gvisor variant's runtime: `runsc` (the krun tests pass
+        // the pinned crun path instead, backends.md D2).
+        runtime: "runsc",
         runtime_flags: &[],
         // The rootless default of a wrapped run (lib.rs): cgroupfs is
         // the manager a non-root runsc can actually use.
@@ -4661,6 +4664,79 @@ fn podman_rootless_defaults_golden() {
     )
     .unwrap();
     assert_golden("podman-rootless-defaults.txt", &argv);
+}
+
+// ---- podman-krun backend tests ----------------------------------------------
+//
+// The krun backend is a RUNTIME VARIANT of the podman-gvisor builder
+// (docs/design/backends.md D2): the SAME argv with the `--runtime`
+// value swapped to the pinned crun+libkrun path. The tests below pin
+// a synthetic crun path the way lib.rs pins `MYSBX_KRUN_RUNTIME`, and
+// assert both halves of the variant contract: the krun argv equals
+// the gvisor argv modulo the runtime line (a golden of its own so a
+// diff is readable), and the gvisor argv stays byte-identical
+// (the shared goldens above cover it — the snapshot test below is
+// the explicit before/after guard of bd myconfig-6di.5.3).
+
+/// The synthetic krun runtime pin: an absolute store-path shape, the
+/// way the Nix wrapper pins `MYSBX_KRUN_RUNTIME`
+/// (crun.override { withLibkrun = true; }).
+const KRUN_RUNTIME: &str = "/nix/store/synth-crun-libkrun/bin/crun";
+
+#[test]
+fn podman_krun_golden_minimal_config() {
+    // The krun variant's own golden: byte-for-byte the gvisor minimal
+    // golden with `--runtime` swapped — the whole point of the variant.
+    let mut params = podman_params();
+    params.runtime = KRUN_RUNTIME;
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_eq!(argv[0], format!("--runtime={KRUN_RUNTIME}"));
+    assert_golden("podman-krun-minimal.txt", &argv);
+}
+
+#[test]
+fn podman_krun_argv_equals_gvisor_modulo_the_runtime() {
+    // The variant contract as an explicit comparison: build the SAME
+    // config under both runtimes and diff the argvs. Only argv[0]
+    // (the `--runtime` line of section 0) may differ; every other
+    // argument must be byte-identical — a krun change that alters the
+    // layout is a builder bug, not a variant.
+    for (cfg, payload) in [
+        (podman_base(true), Payload::Shell),
+        (podman_base(false), Payload::Shell),
+    ] {
+        let mut gvisor_params = podman_params();
+        gvisor_params.runtime = "runsc";
+        let mut krun_params = podman_params();
+        krun_params.runtime = KRUN_RUNTIME;
+        let gvisor = podman_run_argv(
+            &cfg,
+            &synth_repo(),
+            &payload,
+            &host_env(&[]),
+            &gvisor_params,
+        )
+        .unwrap();
+        let krun =
+            podman_run_argv(&cfg, &synth_repo(), &payload, &host_env(&[]), &krun_params).unwrap();
+        assert_eq!(gvisor.len(), krun.len());
+        for (i, (g, k)) in gvisor.iter().zip(krun.iter()).enumerate() {
+            if i == 0 {
+                assert_ne!(g, k, "the runtime line is the one difference");
+                assert_eq!(g, "--runtime=runsc");
+                assert_eq!(k, &format!("--runtime={KRUN_RUNTIME}"));
+            } else {
+                assert_eq!(g, k, "argument {i} differs between the variants");
+            }
+        }
+    }
 }
 // ---- nono backend tests ------------------------------------------------------
 //

@@ -1,6 +1,6 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! The podman + gVisor (runsc) backend argv builder.
+//! The podman backend argv builder (runsc and crun/libkrun).
 //!
 //! Precedent: the gvisor tier (modules/myconfig.ai.dev/sandboxes/
 //! myconfig.ai.gvisor-agent-sandbox/, tier 3.5) runs rootless podman
@@ -10,8 +10,16 @@
 //!
 //! This backend maps the mysbx merged config (mounts, network policy,
 //! env, state-dirs, multiplexer payload) onto a podman invocation with
-//! the runsc runtime. It is the SECOND backend and doubles as the proof
-//! that the backend seam is general.
+//! a confining OCI runtime. It is the SECOND backend and doubles as the
+//! proof that the backend seam is general. It serves TWO backend values
+//! (docs/design/backends.md D2): `"podman-gvisor"` runs runsc (gVisor's
+//! user-space kernel); `"podman-krun"` runs crun built against libkrun
+//! (nixpkgs `crun` withLibkrun) — each run a rootless KVM microVM with
+//! its own kernel, mounts over virtio-fs. The krun value is a RUNTIME
+//! VARIANT, not a second builder: the argv is identical except for the
+//! `--runtime` value of section 0, which the caller pins (`Params::runtime`),
+//! so the gvisor goldens stay byte-identical and the krun argv is the
+//! same layout under a different runtime.
 //!
 //! The argv builder is pure — it canonicalizes nothing and checks no
 //! existence (the merge already did that, docs/design/config.md D8) —
@@ -19,12 +27,12 @@
 //!
 //! Sections, in fixed order (order is semantic for overlapping binds):
 //!
-//! 0. `run` and its global args (`--runtime=runsc`, `--runtime-flag`
-//!    per flag, `--cgroup-manager` when one is set — from env vars,
-//!    see below) — WITHOUT the program name: the returned argv is
-//!    arguments-only, like bwrap's (`--clearenv` first there), because
-//!    lib.rs prepends the backend binary itself via
-//!    `Command::new(MYSBX_PODMAN)`.
+//! 0. `run` and its global args (`--runtime=<Params::runtime>`,
+//!    `--runtime-flag` per flag, `--cgroup-manager` when one is set —
+//!    from env vars, see below) — WITHOUT the program name: the
+//!    returned argv is arguments-only, like bwrap's (`--clearenv`
+//!    first there), because lib.rs prepends the backend binary itself
+//!    via `Command::new(MYSBX_PODMAN)`.
 //! 1. container identity: `--replace`, `--name`, `--hostname`, `--userns=keep-id`
 //! 2. base isolation: `--read-only`, `--read-only-tmpfs=true`,
 //!    `--cap-drop=ALL`, `--security-opt=no-new-privileges`
@@ -75,7 +83,12 @@
 //!   `Params` (bd myconfig-wao)
 //! - Container runtime lifecycle (podman manages the container)
 //! - Container-user identity (via `--userns=keep-id`)
-//! - User-space kernel (gVisor's runsc)
+//! - The confining kernel: gVisor's runsc (user-space kernel) for
+//!   `podman-gvisor`, or libkrun's microVM kernel via crun for
+//!   `podman-krun` — a real guest kernel under KVM. NOT a stronger
+//!   boundary than gVisor: the VMM and the guest share one security
+//!   context (backends.md D2); the gains are host-kernel-bug
+//!   isolation and full kernel compatibility.
 //!
 //! The backend seam must NOT bake in "argv builder that execs directly
 //! as your uid with a bind-mounted CWD" — this backend proves the seam
@@ -312,6 +325,13 @@ pub struct Params<'a> {
     /// merged config — it comes from the backend configuration or a
     /// default. For podman-gvisor, this is the gVisor agent image.
     pub image: &'a str,
+    /// The OCI runtime of section 0's `--runtime`: `"runsc"` for
+    /// `backend = "podman-gvisor"`, the pinned crun+libkrun store
+    /// path for `backend = "podman-krun"` (backends.md D2 — the
+    /// krun backend is this builder under a different runtime, so
+    /// the gvisor argv stays byte-identical). A wrapper pin like
+    /// every other, never a PATH lookup by this builder.
+    pub runtime: &'a str,
     /// Podman runtime flags (e.g. `ignore-cgroups`). These come from
     /// environment variables or backend configuration.
     pub runtime_flags: &'a [String],
@@ -396,13 +416,16 @@ pub fn podman_run_argv(
     // `--clearenv`). A leading `podman` would double the program
     // name and garble podman's flag parsing.
     let mut argv: Vec<String> = Vec::new();
-    // Global args: --runtime=runsc, --runtime-flag per flag, then
-    // --cgroup-manager when set. The cgroup manager comes from
-    // params: omitted when None, the gvisor tier's shape (a rootless
-    // run pins cgroupfs via the env defaults in lib.rs, a root run
-    // lets podman's own default apply — hardcoding cgroupfs made
-    // runsc configure a cgroup it cannot write, bd myconfig-b13).
-    argv.push("--runtime=runsc".into());
+    // Global args: --runtime (the backend's confining kernel,
+    // `Params::runtime`: `runsc` for podman-gvisor, the pinned
+    // crun+libkrun path for podman-krun, backends.md D2),
+    // --runtime-flag per flag, then --cgroup-manager when set. The
+    // cgroup manager comes from params: omitted when None, the
+    // gvisor tier's shape (a rootless run pins cgroupfs via the env
+    // defaults in lib.rs, a root run lets podman's own default
+    // apply — hardcoding cgroupfs made runsc configure a cgroup it
+    // cannot write, bd myconfig-b13).
+    argv.push(format!("--runtime={}", params.runtime));
     for flag in params.runtime_flags {
         argv.extend(["--runtime-flag".into(), flag.clone()]);
     }

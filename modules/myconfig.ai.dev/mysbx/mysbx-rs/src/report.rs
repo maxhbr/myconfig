@@ -377,7 +377,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // bwrap and the label is what keeps the report honest: the argv
     // it describes wraps `nono run` inside the bwrap argv.
     match r.backend {
-        "podman-gvisor" => {
+        "podman-gvisor" | "podman-krun" => {
             p(format!("podman:         {}", r.bwrap_bin));
             if let Some(image) = r.image {
                 p(format!("image:          {image}"));
@@ -404,7 +404,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     p(format!(
         "nix.conf:       {}",
         match (r.backend, r.params.nix_conf) {
-            ("podman-gvisor", _) => "(none — no nix inside the sandbox)",
+            ("podman-gvisor", _) | ("podman-krun", _) => "(none — no nix inside the sandbox)",
             (_, Some(conf)) => conf,
             (_, None) => "(none — nix uses its defaults)",
         }
@@ -421,7 +421,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     p(format!(
         "/bin/sh:        {}",
         match (r.backend, r.params.bin_sh) {
-            ("podman-gvisor", _) => "(the container image's own /bin/sh)",
+            ("podman-gvisor", _) | ("podman-krun", _) => "(the container image's own /bin/sh)",
             (_, Some(sh)) => sh,
             (_, None) => "(none — no /bin/sh inside the sandbox)",
         }
@@ -435,7 +435,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     p(format!(
         "ca-bundle:      {}",
         match (r.backend, r.params.ca_bundle) {
-            ("podman-gvisor", _) => "(the container image's own CA bundle)",
+            ("podman-gvisor", _) | ("podman-krun", _) => "(the container image's own CA bundle)",
             (_, Some(b)) => b,
             (_, None) => "(none — TLS trust anchors come from the /etc/ssl bind)",
         }

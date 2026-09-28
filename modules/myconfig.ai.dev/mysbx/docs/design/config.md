@@ -12,7 +12,8 @@ design decisions. See [cli.md](./cli.md) for the command-line surface.
 - **user config** — `$XDG_CONFIG_HOME/mysbx/config.toml`, host-wide
   defaults.
 - **backend** — the sandbox technology that actually confines the process
-  (bubblewrap, podman+gVisor, nono, qemu, microvm).
+  (bubblewrap, podman+gVisor, podman+crun/libkrun, nono, qemu,
+  microvm).
 
 ## Decisions
 
@@ -1193,6 +1194,7 @@ a security bug:
 | `nono` | enforced (bd myconfig-6di.2, layered bd myconfig-6di.4.4): `--allow-domain` / `--allow-connect-port` / `--listen-port` per merged entry, in merged order; DNS is resolved by nono's own proxy, so no implicit `connect-ports` 53/853 is added; `listen-ports` WITHOUT `allow-domains`/`connect-ports` is refused (with only listen ports nono reports "outbound allowed", bd myconfig-a14) and URL/path-form entries are refused (no TLS interception here) |
 | `bubblewrap` | refused — bubblewrap shares or unshares the whole network namespace (`--share-net`/nothing), it cannot filter per domain or port |
 | `podman-gvisor` | refused — pasta does not filter by domain (bd myconfig-6di.3) |
+| `podman-krun` | refused — the same pasta egress as `podman-gvisor` (libkrun's TSI over the pasta netns, backends.md D2); no `krun`-specific filtering exists |
 
 The first enforcement is the nono backend (bd myconfig-6di.2). The
 refusal fires while the argv is laid out, BEFORE the `--dry-run` early

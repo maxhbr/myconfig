@@ -7756,6 +7756,99 @@ fn allowlist_on_podman_gvisor_is_refused() {
 }
 
 #[test]
+fn allowlist_on_podman_krun_is_refused() {
+    // The krun variant shares podman-gvisor's pasta egress (TSI over
+    // the pasta netns, backends.md D2): an allowlist is refused on
+    // `podman-krun` exactly like on `podman-gvisor` — never
+    // accepted-and-ignored.
+    let (inv, _, sidecar) = fixture("nono-allowlist-podman-krun", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\nlisten-ports = [8080]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("podman-krun"), "{stderr}");
+    assert!(stderr.contains("listen-ports"), "{stderr}");
+}
+
+#[test]
+fn podman_krun_dry_run_swaps_only_the_runtime() {
+    // The variant contract end-to-end (bd myconfig-6di.5.3,
+    // docs/design/backends.md D2): `backend = "podman-krun"` builds
+    // the SAME argv as `podman-gvisor` with `--runtime` swapped to
+    // the pinned crun+libkrun path (MYSBX_KRUN_RUNTIME). The same
+    // image pin (MYSBX_GVISOR_IMAGE) serves both variants.
+    let (inv, _, sidecar) = fixture("podman-krun-dry-run", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest").env(
+        "MYSBX_KRUN_RUNTIME",
+        "/nix/store/synth-crun-libkrun/bin/crun",
+    );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines[0], "podman");
+    assert_eq!(
+        lines[1], "--runtime=/nix/store/synth-crun-libkrun/bin/crun",
+        "the pinned crun replaces runsc: {stdout}"
+    );
+    // everything after the runtime line is the gvisor argv: the image
+    // reference and payload are the image-userland shape.
+    assert!(
+        lines.contains(&"localhost/test:latest"),
+        "the same image pin serves the krun variant: {stdout}"
+    );
+    assert_eq!(lines[lines.len() - 1], "/bin/bash");
+}
+
+#[test]
+fn podman_krun_without_image_pin_is_refused() {
+    // The krun variant runs the SAME image as podman-gvisor — without
+    // the image pin it is a refused run naming the backend, never a
+    // run against an invented reference.
+    let (inv, _, sidecar) = fixture("podman-krun-unpinned", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, 70);
+    assert!(
+        stderr.contains("no container image configured"),
+        "stderr: {stderr}"
+    );
+    assert!(stderr.contains("podman-krun"), "stderr: {stderr}");
+}
+
+#[test]
+fn podman_krun_waypipe_display_is_refused_first_cut() {
+    // D2's first-cut refusal list: the waypipe display is refused on
+    // the krun backend until its socket bind over virtio-fs is
+    // verified (bd myconfig-6di.5.4) — never accepted-and-ignored.
+    // Refused BEFORE the image pin check and before the dry-run argv
+    // (a broken configuration audits too).
+    let (inv, _, sidecar) = fixture("podman-krun-waypipe", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\ndisplay = \"waypipe\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(
+        stderr.contains("display = \"waypipe\" is not supported on the `podman-krun` backend"),
+        "stderr: {stderr}"
+    );
+    assert!(stdout.is_empty(), "no argv on refusal: {stdout}");
+}
+
+#[test]
 fn allowlist_with_network_false_is_refused() {
     // network = false denies the network; an allowlist contradicts it.
     // Refused for the nono backend too (the pipeline's step 4b check
