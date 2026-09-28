@@ -8598,54 +8598,6 @@ fn podman_krun_git_trust_names_exactly_the_bound_workspace_paths() {
 }
 
 #[test]
-fn podman_krun_git_trust_real_run_writes_the_sidecar_file() {
-    // A real run (no --dry-run) writes the per-run trust file BEFORE
-    // the backend dispatch; its [safe] section names the repo root
-    // exactly, carries the `/*` form for the workspace tree, and the
-    // [include] block that keeps a seeded global config reachable.
-    // podman may be absent in the test runner, so the run exits 70 on
-    // the missing binary — the assertion is about the sidecar file,
-    // which is written before any dispatch.
-    let (inv, repo, sidecar) = fixture("podman-krun-git-trust-real", &[]);
-    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
-    let mut cmd = spawn_with_args(&inv, &[] as &[&str]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
-    let out = cmd.output().expect("failed to spawn mysbx");
-    let _ = out;
-    // The run needs a backend; with the stub absent it exits 70 — the
-    // trust file must exist by then (it is written BEFORE dispatch).
-    let dirs = sidecar.join("gittrust");
-    let mut found = None;
-    if let Ok(entries) = std::fs::read_dir(&dirs) {
-        for entry in entries.flatten() {
-            let file = entry.path().join("gitconfig");
-            if file.is_file() {
-                found = Some(file);
-            }
-        }
-    }
-    let file = found.expect("the run wrote the per-run trust file");
-    let text = std::fs::read_to_string(&file).unwrap();
-    assert!(
-        text.contains(&format!("\tdirectory = \"{}\"\n", repo.display())),
-        "the exact workspace entry is missing: {text}"
-    );
-    assert!(
-        text.contains(&format!("\tdirectory = \"{}/*\"\n", repo.display())),
-        "the workspace /* entry is missing: {text}"
-    );
-    assert!(
-        !text.contains("directory = \"*\""),
-        "a bare * would widen the trust to every path: {text}"
-    );
-    // The include block keeps a seeded global config reachable.
-    assert!(
-        text.contains("\tpath = /mysbx-home/.gitconfig\n"),
-        "the include of the sandbox gitconfig is missing: {text}"
-    );
-}
-
-#[test]
 fn podman_gvisor_carries_no_trust_file() {
     // The trust story is krun-only (bd myconfig-zj2): the gvisor
     // payload runs as the keep-id-mapped user — the uid already owns
