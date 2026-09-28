@@ -383,7 +383,10 @@ swap is skipped entirely, no `TMUX_TMPDIR`, none of the socket guards.
 **The same refusal, not a weaker one.** A value this build pinned no
 entry for is refused exactly like a config layer selecting it (D11/D17):
 exit `70` with the `mysbx: ` message naming the value and the missing
-variable — never a silent plain shell. The flag grants no access a
+variable — never a silent plain shell. `orca` on a non-`bubblewrap`
+backend is refused the same way (D17's backend rule, bd myconfig-2m8):
+the flag grants no exception a configuration would not have. The flag
+grants no access a
 configuration would not have: it selects a payload from mysbx's own
 closure either way.
 

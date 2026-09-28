@@ -7928,6 +7928,107 @@ fn nono_with_multiplexer_starts_a_session() {
 }
 
 #[test]
+fn orca_multiplexer_is_refused_on_nono_and_podman_gvisor() {
+    // bd myconfig-2m8: the orca payload is the Orca runtime server —
+    // an Electron AppImage via appimage-run with its own Xvfb — and
+    // that needs the bubblewrap backend's real device set and
+    // unmediated syscall stream. nono's grants cover the mux socket
+    // dirs, not Electron's socket/syscall surface (the 6di.4.6 waypipe
+    // audit covered waypipe only); the gvisor image ships no
+    // AppImage/Xvfb runtime at all. A selection a backend cannot
+    // deliver is refused — exit 70, before the session clone and
+    // before the dry-run early return, so `--dry-run` audits the
+    // refusal too. The entry is PINNED in these tests: the refusal
+    // is the backend's, not the entry-pin one that would fire first
+    // otherwise.
+    for backend in ["nono", "podman-gvisor"] {
+        let (inv, _, sidecar) = fixture(&format!("orca-refused-{backend}"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\nmultiplexer = \"orca\"\n"),
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+        cmd.env("MYSBX_MUX_ENTRY_ORCA", "/nix/store/aaaa-orca-entry");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(
+            out.status.code(),
+            Some(mysbx::EXIT_INFRASTRUCTURE),
+            "{backend}: {stderr}"
+        );
+        assert!(
+            stderr.contains(&format!(
+                "multiplexer = \"orca\" is not supported on the `{backend}` backend"
+            )),
+            "{backend}: the refusal names the value and the backend: {stderr}"
+        );
+        assert!(
+            stderr.contains("switch the backend to `bubblewrap`"),
+            "{backend}: the remedy is named: {stderr}"
+        );
+        assert!(!stdout.contains("aaaa-orca-entry"), "no argv: {stdout}");
+    }
+
+    // bubblewrap still ACCEPTS orca: the refusal is per backend, and
+    // the D17 behaviour of the one backend that can deliver the
+    // payload is unchanged.
+    let (inv, _, sidecar) = fixture("orca-accepted-bwrap", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nmultiplexer = \"orca\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_MUX_ENTRY_ORCA", "/nix/store/aaaa-orca-entry");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stderr: {stderr}");
+    assert!(
+        stdout.ends_with("/nix/store/aaaa-orca-entry\n"),
+        "the orca entry is the payload on bubblewrap: {stdout}"
+    );
+
+    // The `--multiplexer orca` FLAG path (cli.md D14) hits the same
+    // refusal — the flag is merged (3a) before the backend check, so
+    // it grants no exception a configuration would not have.
+    let (inv, _, sidecar) = fixture("orca-flag-refused", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"nono\"\n").unwrap();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--multiplexer", "orca", "--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("is not supported on the `nono` backend"),
+        "the flag selection is refused like a config one: {stderr}"
+    );
+
+    // `run -- CMD` never starts a session (cli.md D11): the refusal
+    // guards the INTERACTIVE payload's choice only, so a one-shot on
+    // the nono backend is untouched by an orca multiplexer key.
+    let (inv, _, sidecar) = fixture("orca-run-unaffected", &["run", "--"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\nmultiplexer = \"orca\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["run", "--dry-run", "--", "true"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.starts_with("bwrap\n"),
+        "the one-shot argv is built: {stdout}"
+    );
+    assert!(
+        !stdout.contains("aaaa-orca-entry"),
+        "no orca entry payload in a run argv: {stdout}"
+    );
+    assert!(
+        stdout.ends_with("true\n"),
+        "the one-shot payload is the command: {stdout}"
+    );
+}
+
+#[test]
 fn nono_with_dest_remap_mount_is_bound_by_bwrap() {
     // A mount with dest != path under nono: the LAYERED layout binds
     // it (the pure-nono `RemapUnsupported` refusal is gone), and the

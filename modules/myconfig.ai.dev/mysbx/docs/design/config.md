@@ -818,7 +818,7 @@ agent-oriented multiplexers side by side.
 | `"workmux"` | the workmux session of D16 (sidebar + dashboard) |
 | `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer (`../../../../programs/programs.herdr.nix`) |
 | `"aoe"` | Agent of Empires (`../../../../programs/programs.agent-of-empires/`), a tmux-based agent session manager |
-| `"orca"` | [Orca](https://onorca.dev) (`../../../../services.orca.nix`), the agent orchestrator — its payload is the Orca **runtime server** (`orca serve`) started inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint (the headless-server form of the upstream guide); see the entry script `../../../../nix/orca-entry.nix` for the display/network/state decisions |
+| `"orca"` | [Orca](https://onorca.dev) (`../../../../services.orca.nix`), the agent orchestrator — its payload is the Orca **runtime server** (`orca serve`) started inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint (the headless-server form of the upstream guide); see the entry script `../../../../nix/orca-entry.nix` for the display/network/state decisions — **bubblewrap only**, refused on `nono`/`podman-gvisor` (bd myconfig-2m8) |
 | `"none"` | a plain interactive shell — the pre-D16 behaviour |
 
 **A string enum, not a table, and not a command.** A `[multiplexer]`
@@ -858,6 +858,20 @@ session, and discovering the plain shell after the work happened in it
 is the worse outcome (the D16 argument, kept). The refusal is a
 configuration error, not an exec failure: it happens while the argv is
 built, so `--dry-run` refuses it too and no `bwrap` is started.
+
+**`orca` additionally needs a backend that can run it** (bd
+myconfig-2m8): the payload is an Electron AppImage started through
+`appimage-run` with its own Xvfb auto-start, and only the `bubblewrap`
+backend provides what that needs — the real device set and an
+unmediated syscall stream. `nono` would accept the selection and die
+mid-startup (its grants cover the mux socket dirs, not the
+Electron/X11 socket and syscall surface — the waypipe audit of bd
+myconfig-6di.4.6 covered waypipe's syscalls, never Electron's), and
+the gvisor image ships no AppImage/Xvfb runtime at all. So
+`multiplexer = "orca"` with `backend = "nono"` or `"podman-gvisor"`
+is a **refused run** (exit `70`, before the session clone and audited
+by `--dry-run`), the same accepted-never-ignored rule the D21
+allowlist follows — never a broken half-run discovered after the fact.
 
 **The socket/state isolation of D16 holds for every value.**
 `/mysbx-home/.mysbx-tmux` (`bwrap.rs::MUX_SOCKET_DIR`) is exported as

@@ -216,6 +216,11 @@ Options:
                 form only: a `run -- CMD` never starts a session, and
                 every other verb rejects the flag. A value this build
                 pinned no entry for is a refused run, like a config
+                layer's; `orca` additionally requires the `bubblewrap`
+                backend — its Electron/AppImage payload cannot run
+                under `nono` (bd myconfig-2m8) or `podman-gvisor`, and
+                the selection is refused there, never a broken
+                half-run.
                 layer selecting it
   --backend <name>
                 the sandbox backend of THIS run, overriding the

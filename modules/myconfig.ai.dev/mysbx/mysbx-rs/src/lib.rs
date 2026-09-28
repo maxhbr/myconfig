@@ -1479,6 +1479,50 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         }
     }
 
+    // 4c. the orca multiplexer's backend support (bd myconfig-2m8):
+    // `multiplexer = "orca"` is the one value whose payload is not a
+    // terminal — the Orca runtime server, an Electron app shipped as
+    // an AppImage and started through `appimage-run` with its own
+    // Xvfb auto-start (nix/orca-entry.nix). That payload needs what
+    // only the bubblewrap backend provides: the real device set,
+    // `--dev`'s pty/`/dev/shm` surface and an unmediated syscall
+    // stream. The nono backend would accept the selection today — its
+    // grants cover the mux socket dirs, not the Electron/X11 socket
+    // and syscall surface the runtime actually touches (the waypipe
+    // audit of bd myconfig-6di.4.6 covered waypipe's syscalls, never
+    // Electron's) — so the session would die mid-startup, a broken
+    // half-run discovered only after the fact; the podman-gvisor
+    // backend already refuses every multiplexer by its image-pin
+    // rule, and even an in-image orca entry could not run: the image
+    // carries no AppImage runtime, no Xvfb, no Electron closure, and
+    // runsc has no X/display story. A selection a backend cannot
+    // deliver is refused here — exit 70, before the session clone (a
+    // broken configuration creates nothing) and before the `--dry-run`
+    // early return (a dry run audits the refusal too) — the same
+    // accepted-never-ignored rule the allowlist refusal above follows.
+    // `run -- CMD` never starts a session (cli.md D11), so the
+    // refusal sees only the interactive payload's choice.
+    if matches!(payload, bwrap::Payload::Shell)
+        && merged.multiplexer == config::Multiplexer::Orca
+        && backend != "bubblewrap"
+    {
+        eprintln!(
+            "mysbx: multiplexer = \"orca\" is not supported on the `{backend}` backend \
+             (bd myconfig-2m8)"
+        );
+        eprintln!(
+            "  the orca payload is the Orca runtime server — an Electron AppImage \
+             started via appimage-run with its own Xvfb; the nono backend's \
+             grants do not cover the Electron/X11 socket and syscall surface, \
+             and the gvisor image ships no AppImage/Xvfb runtime at all"
+        );
+        eprintln!(
+            "  switch the backend to `bubblewrap` for an orca session, or select \
+             another multiplexer"
+        );
+        return EXIT_INFRASTRUCTURE;
+    }
+
     // 4a. the session clone (workspace.md D2): the FIRST `--session`
     // run creates it — the one deliberate exception to "a run creates
     // nothing" (cli.md D13), because `--session NAME` is an explicit

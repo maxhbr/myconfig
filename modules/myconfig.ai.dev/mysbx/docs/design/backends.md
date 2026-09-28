@@ -282,6 +282,7 @@ filter.
 | `display = "waypipe"` | lifted (bd myconfig-6di.4.6): audited — AF_UNIX socket/socketpair pass every static baseline, the mediation filter continues `sendmsg` with a NULL `msg_name` (the fd-passing case), and `memfd_create` is trapped by no filter; the two socket dirs get `--allow-unix-socket-dir-bind` grants, live-probed end-to-end under `--block-net` |
 | an allowlist on `bubblewrap` or `podman-gvisor` | unchanged (config.md D21) |
 | `network = false` with an allowlist | unchanged (config.md D21) |
+| `multiplexer = "orca"` on `nono` or `podman-gvisor` | refused (bd myconfig-2m8): the payload is an Electron AppImage via appimage-run with its own Xvfb — the nono grants cover the mux socket dirs, not the Electron/X11 socket and syscall surface (the 6di.4.6 audit covered waypipe only), and the gvisor image ships no AppImage/Xvfb runtime at all; bubblewrap alone accepts it |
 
 #### Rationale
 

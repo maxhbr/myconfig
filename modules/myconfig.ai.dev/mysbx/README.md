@@ -299,12 +299,15 @@ configuration layer selects what the **interactive** form
 | `"workmux"` | a [workmux](https://github.com/raine/workmux) session (sidebar + dashboard) |
 | `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer ([`../../programs/programs.herdr.nix`](../../programs/programs.herdr.nix)) |
 | `"aoe"` | Agent of Empires ([`../../programs/programs.agent-of-empires/`](../../programs/programs.agent-of-empires)) |
-| `"orca"` | [Orca](https://onorca.dev) ([`../services.orca.nix`](../services.orca.nix)) — the runtime server (`orca serve`) inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint; needs the shared network |
+| `"orca"` | [Orca](https://onorca.dev) ([`../services.orca.nix`](../services.orca.nix)) — the runtime server (`orca serve`) inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint; needs the shared network **and the `bubblewrap` backend** (bd myconfig-2m8) |
 | `"none"` | a plain interactive shell (the default) |
 
 mysbx execs the entry its wrapper pinned for that value
 (`MYSBX_MUX_ENTRY_<VALUE>`); a value this build did not pin is a refused
-run naming the variable, never a silent bare shell. `mysbx run -- CMD`
+run naming the variable, never a silent bare shell. `orca` is
+additionally refused on the `nono` and `podman-gvisor` backends — its
+Electron/AppImage payload needs the device set and unmediated syscall
+stream only bubblewrap provides (bd myconfig-2m8). `mysbx run -- CMD`
 starts no session and is byte-identical to a `"none"` run
 (`docs/design/cli.md` D11). Either layer may decide, and the sidecar
 wins — the user config is the host-wide default, the sidecar is the
