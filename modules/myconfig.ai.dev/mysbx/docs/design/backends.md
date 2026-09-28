@@ -214,7 +214,8 @@ missing grant.**
   `HOME=/mysbx-home` those denies even aborted nono once a grant
   covered an ancestor ("Landlock deny-overlap is not enforceable on
   Linux"). A mysbx-owned profile keeps the policy pinned and
-  reviewable. The profile contents are bd myconfig-6di.4.3.
+  reviewable. The profile contents are bd myconfig-6di.4.3 and bd
+  myconfig-2pe (the `/tmp` + `$TMPDIR` read/write grants).
 - **State**: `/mysbx-nono`, a tmpfs created with the base mounts. It
   is never granted to the payload, and a mount `dest` at, below or
   above it is refused like every base path. nono refuses any grant
