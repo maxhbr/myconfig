@@ -70,19 +70,45 @@ fi
 pass "5 ro rootfs: / is not writable"
 
 # 6. network=false enforcement (bd myconfig-6di.5.5 — the VMM dials
-# from the empty netns; no route, no resolver). Uses a scratch
-# sidecar so the repo's own configuration is not touched.
-netdir=$(mktemp -d)
-cp -r "$repo/.git" "$netdir/repo.git" 2>/dev/null || true
-(printf 'backend = "podman-krun"\nnetwork = false\n' > "$netdir/config.toml")
-# The probe: a run whose network is denied cannot resolve a host.
-if (cd "$netdir" && HOME=$HOME "$mysbx" --dry-run >/dev/null 2>&1); then
-    pass "6 network=false: dry run accepted (the enforcement shape is asserted in the argv golden)"
-else
-    fail "6 network=false" "the dry run of the network-denied config was refused — check the sidecar setup"
-fi
-rm -rf "$netdir"
-pass "6 network=false: the denial reaches the argv (--network none, golden podman-krun network tests)"
+# from the empty netns; no route, no resolver). A positive control in
+# the repo first, so a host without egress does not pass as
+# enforcement; then a scratch repo whose sidecar sets network = false,
+# so the repo's own configuration is not touched. Each payload prints
+# its curl exit code: a run mysbx refused prints nothing, and that is
+# a FAIL, not a denial.
+curl_rc() {
+    local dir=$1 url=$2
+    # shellcheck disable=SC2016 # $1/$? expand inside the sandbox
+    (cd "$dir" && "$mysbx" run -- sh -c \
+        'curl -sS --max-time 10 -o /dev/null "$1" 2>/dev/null; echo "curl-rc=$?"' \
+        sh "$url") | sed -n 's/^curl-rc=\([0-9]*\).*/\1/p' | tail -n 1
+}
+rc=$(curl_rc "$repo" https://cache.nixos.org/nix-cache-info || true)
+[ -n "$rc" ] || fail "6 network control" "the default-network run did not start"
+[ "$rc" -eq 0 ] ||
+    fail "6 network control" "the default-network run has no egress (curl exit $rc) — the denial probe would prove nothing"
+pass "6 network control: default network reaches cache.nixos.org"
+
+# Off /tmp: the sandbox's own /tmp is a tmpfs, and a workspace below
+# it would not look like any real repo.
+cache=${XDG_CACHE_HOME:-$HOME/.cache}
+mkdir -p "$cache"
+scratch=$(mktemp -d "$cache/mysbx-krun-net-probe.XXXXXX")
+trap 'rm -rf "$scratch"' EXIT
+netrepo="$scratch/net"
+git init -q "$netrepo"
+git -C "$netrepo" -c user.name=probe -c user.email=probe@invalid \
+    -c commit.gpgsign=false commit -q --no-verify --allow-empty -m probe
+(cd "$netrepo" && "$mysbx" init >/dev/null)
+# A plain repo needs no git-dir approvals, so the generated sidecar
+# config can be replaced wholesale.
+printf 'backend = "podman-krun"\nnetwork = false\n' >"$netrepo.mysbx/config.toml"
+for url in https://cache.nixos.org/nix-cache-info http://1.1.1.1/; do
+    rc=$(curl_rc "$netrepo" "$url" || true)
+    [ -n "$rc" ] || fail "6 network=false" "the network=false run did not start ($url)"
+    [ "$rc" -ne 0 ] || fail "6 network=false" "$url was reachable with network = false"
+    pass "6 network=false: $url denied (curl exit $rc)"
+done
 
 # 7. the krun feature dry-runs: the annotations this backend adds are
 # on the audit surface (bd myconfig-6di.5.4/.6)

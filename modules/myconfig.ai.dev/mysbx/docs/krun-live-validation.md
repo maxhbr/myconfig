@@ -38,8 +38,12 @@ The probes below assume the repo is a git checkout with a sidecar
 Covers, in order: boot (a one-shot `true`), guest-kernel proof
 (`uname -r`), exit-code propagation (`exit 42`), live-repo edit
 (write through the workspace bind), ro rootfs (`EROFS` on `/`),
-network=false enforcement, and the dry-run shape of every krun
-feature this backend adds. Each probe names the bd decision it
+network=false enforcement (a positive egress control in the repo,
+then real curl attempts — by hostname and by IP literal — from a
+scratch repo whose sidecar sets `network = false`; a run mysbx
+refuses counts as a FAIL, never as a denial), and the krun
+annotations on the dry run. It needs `curl` in the image and egress
+on the host. Each probe names the bd decision it
 validates; a FAIL line quotes the decision document
 (`docs/design/backends.md` D2).
 
@@ -106,7 +110,8 @@ getent hosts cache.nixos.org     # the VMM resolves from the netns
 ```
 
 and with `network = false` in the sidecar, the same command must
-FAIL (no route) — the probe 1.6 of the script asserts the shape.
+FAIL (no route) — probe 6 of the script asserts the denial with
+curl.
 
 ## 3. Recording
 
