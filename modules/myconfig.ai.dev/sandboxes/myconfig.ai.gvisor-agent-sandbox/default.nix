@@ -248,7 +248,9 @@ in
         plus the fish shell closure of the home-manager user when
         `programs.fish.enable` (see `fishConveniencePackages`),
         plus `myconfig.ai.dev.mysbx.gvisor.imagePackages` when mysbx is
-        enabled (the multiplexer tools of its podman-gvisor backend),
+        enabled (the multiplexer tools of its podman-gvisor backend,
+        plus the nested-podman userspace of its podman-krun backend
+        when `krun.nestedPodman.enable`),
         plus `myconfig.ai.dev.sandboxTools.extraPackages`,
         plus `nix.package` when `myconfig.ai.gvisor-agent-sandbox.nix.enable`
       '';

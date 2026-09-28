@@ -244,6 +244,18 @@ let
     krunBackend = generated [
       { myconfig.ai.dev.mysbx.config.backend = "podman-krun"; }
     ];
+    # The nested-podman provisioning of the krun backend (bd
+    # myconfig-6di.5.8): enabling it folds `krun.nestedPodman.packages`
+    # into `gvisor.imagePackages` — the shared-image seam. Evaluated
+    # gates (not TOML bytes — these are package lists): on = the podman
+    # closure and the guest conf tree are IN; off = neither is.
+    krunNestedOn = generated [
+      {
+        myconfig.ai.dev.mysbx.krun.nestedPodman.enable = true;
+        # A stand-in image package: the scenario asserts on the
+        # OPTION default, never builds the multi-hundred-MB image.
+      }
+    ];
     # The D21 allowlist keys (bd myconfig-xob): the module options seed
     # the generated user layer, exactly the spelling the crate parses.
     allowlist = generated [
@@ -348,6 +360,30 @@ let
       throw "mysbx generated-config test: the package has no outPath"
     else
       "ok";
+
+  # The nested-podman provisioning gate (bd myconfig-6di.5.8): the
+  # option default must fold the podman closure and the guest conf
+  # tree into `gvisor.imagePackages` when enabled, and fold NOTHING
+  # in when disabled — a gvisor-only host must not pull a podman
+  # closure. Evaluated on the same module eval as the scenarios, so
+  # the assertions fire at check-build time without ever building the
+  # multi-hundred-MB image.
+  krunNestedPodmanGate =
+    let
+      on =
+        (evaluated [
+          { myconfig.ai.dev.mysbx.krun.nestedPodman.enable = true; }
+        ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
+      off = (evaluated [ ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
+      hasPodman = pkgs.lib.any (p: p.pname or "" == "podman");
+      hasGuestConf = pkgs.lib.any (p: p.name or "" == "mysbx-krun-guest-conf");
+    in
+    if !(hasPodman on && hasGuestConf on) then
+      throw "mysbx generated-config test: krun.nestedPodman.enable did not fold podman + the guest conf into gvisor.imagePackages"
+    else if (hasPodman off || hasGuestConf off) then
+      throw "mysbx generated-config test: a disabled krun.nestedPodman leaked podman or the guest conf into gvisor.imagePackages"
+    else
+      "ok";
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -368,11 +404,17 @@ pkgs.runCommand "mysbx-generated-config-test"
       muxOrca
       nonoBackend
       krunBackend
+      krunNestedOn
       allowlist
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
-    inherit assertionGate gvisorPinGate krunPinGate;
+    inherit
+      assertionGate
+      gvisorPinGate
+      krunPinGate
+      krunNestedPodmanGate
+      ;
   }
   ''
     fail() {

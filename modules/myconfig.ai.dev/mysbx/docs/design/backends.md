@@ -474,9 +474,31 @@ Consequences, stated honestly:
 
 - **Required: nested rootless podman inside the guest** (bd
   myconfig-6di.5.8). The guest kernel (libkrunfw) has user namespaces,
-  overlayfs, FUSE, tun and nftables; the work is userspace — setuid
-  `newuidmap`/`newgidmap`, `/etc/subuid`+`/etc/subgid`, storage OFF
-  virtio-fs (fuse-overlayfs or guest tmpfs), `cgroup-manager=cgroupfs`.
+  overlayfs, FUSE, tun and nftables. The "rootless" of the nested
+  podman is the VM boundary itself, NOT a guest-uid story: the
+  payload runs as GUEST ROOT (verified, bd myconfig-6di.5.4), so the
+  setuid `newuidmap` plan of the epic is UNNECESSARY AND
+  UNBUILDABLE — nixpkgs cannot ship a setuid or fcap binary at all
+  (shadow's packaging forces 0755, `security.wrappers` is a NixOS
+  rootfs mechanism dockerTools has no equivalent of), and virtiofs
+  would not carry the bit either. What ships instead (bd
+  myconfig-6di.5.8): the wrapped `pkgs.podman` — its own helper
+  closure carries conmon, crun, catatonit, netavark, passt,
+  aardvark-dns and fuse-overlayfs — plus a guest configuration tree
+  (`krun-guest-conf.nix`: `containers.conf` with
+  `events_logger="file"`, `cgroup_manager="cgroupfs"`,
+  `cgroups="disabled"`, `no_pivot_root=true`; `storage.conf` with
+  the overlay driver and roots PINNED onto the tmpfs surfaces
+  `/var/tmp/containers/storage` + `/run/containers/storage` — podman's
+  `/var/lib` default sits on the read-only root, `--read-only-tmpfs`
+  covers only /dev, /dev/shm, /run, /tmp, /var/tmp;
+  `/etc/subuid`+`/etc/subgid` for the guest-root user), both baked
+  into the shared agent image via `krun.nestedPodman.{enable,packages}`
+  (off by default — a gvisor-only host pays no podman closure).
+  Storage stays OFF virtio-fs: both roots on the container's tmpfs
+  surfaces (RAM-cost, sizeable via the krun limit pins, bd
+  myconfig-6di.5.6). Live validation is bd
+  myconfig-6di.5.7's runbook (the agent sandbox has no /dev/kvm).
 - **Required: Nix builds inside the guest** (bd myconfig-6di.5.9):
   host `/nix/store` mounted read-only over virtio-fs as the overlay's
   LOWER layer, upper layer on guest tmpfs — the Nix local-overlay
@@ -489,18 +511,29 @@ Consequences, stated honestly:
 
 #### Risks carried into the children
 
-- **setuid/ownership over virtio-fs** (nested podman's
-  `newuidmap`/`newgidmap` and file ownership semantics under the
-  `--userns=keep-id` host mapping — bd myconfig-6di.5.4/.8):
-  source-verified in .4: the virtiofs server maps guest-root to the
-  host user's uid unchanged, and a chown to any OTHER uid is EPERM
-  unless the server (the rootless podman process) holds CAP_SETUID
-  (libkrun passthrough.rs `set_creds`) — so guest files can only
-  ever carry the host user's own uid, and a guest setuid bit on a
-  virtiofs file is unverifiable from the host side. The remaining
-  risk is whether nested podman tolerates that single-uid world
-  (its overlay and newuidmap need real uid arithmetic); live
-  validation requires real KVM (bd myconfig-6di.5.7/.8).
+- **setuid/ownership over virtio-fs** (nested podman — bd
+  myconfig-6di.5.4/.8): RESOLVED to a non-risk by the design of bd
+  myconfig-6di.5.8. The epic's setuid `newuidmap` plan is dead on
+  two independent grounds: nixpkgs cannot ship a setuid/fcap binary
+  into an image at all (shadow's packaging forces 0755 —
+  `security.wrappers` is a NixOS rootfs mechanism with no dockerTools
+  equivalent), and even a setuid bit set at build time would not
+  survive: dockerTools rsync-chowns every layer to 0:0 without
+  xattrs, and virtiofs stat (verified in .4) exposes only the host
+  user's own uid to the guest. It is also UNNECESSARY: the payload
+  runs as guest root (bd myconfig-6di.5.4 — the guest init never
+  setuids), and guest root writes a single-line `/proc/<pid>/uid_map`
+  directly — `newuidmap` only exists to let an UNPRIVILEGED user
+  write the MULTI-line maps out of `/etc/subuid` (nixos/programs/
+  shadow.nix), which guest root needs no helper for. The residual
+  honest risk, unchanged: the guest's uid world is single-uid
+  (virtiofs `set_creds` maps every chown to the host user's uid),
+  so files a nested container writes to the SHARED mounts (the
+  workspace bind, state dirs) appear host-uid-owned — correct
+  behavior, but the nested pod's OVERLAY must not live on those
+  mounts (it does not: `/var`, bd myconfig-6di.5.8). Live
+  confirmation of a full nested `podman run` is bd
+  myconfig-6di.5.7's runbook.
 - **Overlay upper-layer location** (Nix builds, bd myconfig-6di.5.9):
   overlayfs upper must not live on virtio-fs; guest tmpfs costs VM RAM,
   a sidecar-backed disk image adds an image lifecycle. Decided in the

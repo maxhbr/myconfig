@@ -758,15 +758,26 @@ in
 
       imagePackages = mkOption {
         type = types.listOf types.package;
-        default = selectedMuxTools ++ lib.optionals (cfg.display.package != null) [ cfg.display.package ];
-        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`";
+        default =
+          selectedMuxTools
+          ++ lib.optionals (cfg.display.package != null) [ cfg.display.package ]
+          # The nested-podman userspace of the krun backend (bd
+          # myconfig-6di.5.8): the image is SHARED between both podman
+          # backends, so provisioning rides this seam — appended only
+          # when the host opts in, a gvisor-only host pays no podman
+          # closure.
+          ++ lib.optionals cfg.krun.nestedPodman.enable cfg.krun.nestedPodman.packages;
+        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` when `krun.nestedPodman.enable`";
         description = ''
           Packages the gvisor tier bakes into the container image on
           behalf of mysbx (bd myconfig-cew: the container must be
           provisioned with the tools). Defaults to the selected
           multiplexer's own tooling, so a pane inside a container
           session finds it on `PATH` — the same payload the bwrap
-          backend gets via `extraTools`.
+          backend gets via `extraTools` — plus the nested-podman
+          userspace of the podman-krun backend when
+          `krun.nestedPodman.enable` (bd myconfig-6di.5.8: podman and
+          its guest configuration tree, baked into the shared image).
 
           Only takes effect while the gvisor tier module is enabled
           (`myconfig.ai.dev.gvisor-agent-sandbox.enable`): its
@@ -805,6 +816,56 @@ in
           whose PATH `crun` lacks libkrun gets crun's own refusal,
           never a silently unsandboxed run.
         '';
+      };
+
+      nestedPodman = {
+        # Nested rootless podman inside the krun guest (bd
+        # myconfig-6di.5.8, backends.md D2's scope decision). The
+        # "rootless" of the nested podman is the VM boundary itself:
+        # the payload runs as GUEST ROOT (verified, bd
+        # myconfig-6di.5.4 — the libkrun guest init never setuids),
+        # so no setuid/fcap newuidmap can or must exist — nixpkgs
+        # cannot ship one (shadow builds 0755, dockerTools chowns
+        # layers 0:0) and virtiofs would not carry the bit anyway.
+        # What the nested pod needs is userspace + config, baked
+        # into the (shared) agent image.
+        enable = mkEnableOption "nested rootless podman inside the podman-krun guest";
+
+        packages = mkOption {
+          type = types.listOf types.package;
+          # pkgs.podman's own passthru wiring already carries its
+          # helper closure (conmon, crun, catatonit, netavark, passt,
+          # aardvark-dns, fuse-overlayfs on its PATH via
+          # `--prefix PATH`) — baking the wrapped podman plus this
+          # list is the whole runtime story. fuse-overlayfs rides
+          # along in podman's binPath already; the guest conf below
+          # prefers the kernel overlay driver and leaves it the
+          # fallback.
+          default = [
+            pkgs.podman
+            (pkgs.callPackage ./nix/krun-guest-conf.nix { })
+          ];
+          defaultText = literalExpression ''
+            [ pkgs.podman
+              (pkgs.callPackage ./nix/krun-guest-conf.nix { })
+            ]
+          '';
+          description = ''
+            The nested-podman userspace baked into the agent image
+            when `krun.nestedPodman.enable` — consumed through
+            `gvisor.imagePackages` (the image is shared between both
+            podman backends, so provisioning rides the same seam):
+            by default the wrapped `pkgs.podman` (its own closure
+            carries conmon, crun, netavark, passt and
+            fuse-overlayfs) plus the guest configuration tree
+            (./nix/krun-guest-conf.nix: containers.conf,
+            storage.conf, /etc/subuid, /etc/subgid).
+
+            Live validation of the nested run is bd
+            myconfig-6di.5.7's runbook — the agent sandbox has no
+            /dev/kvm, so nothing here is executed at check time.
+          '';
+        };
       };
     };
 

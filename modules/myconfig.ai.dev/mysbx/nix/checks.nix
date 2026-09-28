@@ -88,6 +88,51 @@ in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
   mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
 
+  # The nested-podman guest configuration tree (bd myconfig-6di.5.8):
+  # the bytes podman will read inside the krun guest. Static by
+  # design — the nested run itself is live validation (bd
+  # myconfig-6di.5.7), which this sandbox cannot do without /dev/kvm;
+  # what CAN be pinned here is that the tree ships the honest
+  # consequence set of the guest model (no journald -> file logging,
+  # no systemd -> cgroupfs + cgroups=disabled, virtiofs root ->
+  # no_pivot_root, storage off the shared mounts -> /var defaults)
+  # and the subuid/subgid ranges the guest-root user maps inner
+  # containers through.
+  mysbx-krun-guest-conf-test =
+    let
+      guestConf = pkgs.callPackage ../nix/krun-guest-conf.nix { };
+    in
+    pkgs.runCommand "mysbx-krun-guest-conf-test" { } ''
+      fail() {
+        echo "mysbx-krun-guest-conf-test: $*" >&2
+        exit 1
+      }
+      conf="${guestConf}/etc/containers/containers.conf"
+      grep -q '^cgroup_manager = "cgroupfs"$' "$conf" \
+        || fail "cgroup_manager must be cgroupfs (no systemd inside the guest)"
+      grep -q '^cgroups = "disabled"$' "$conf" \
+        || fail "cgroups must be disabled (nothing delegates the guest's cgroup2 mount)"
+      grep -q '^events_logger = "file"$' "$conf" \
+        || fail "events_logger must be file (no journald inside the guest)"
+      grep -q '^no_pivot_root = true$' "$conf" \
+        || fail "no_pivot_root must be true (the virtiofs root is the VM's own root)"
+      store="${guestConf}/etc/containers/storage.conf"
+      grep -q '^driver = "overlay"$' "$store" \
+        || fail "the storage driver must be the kernel overlay (libkrunfw has OVERLAY_FS)"
+      # The roots are PINNED onto tmpfs surfaces: podman's /var/lib
+      # default sits on the read-only root (podman's --read-only-tmpfs
+      # covers only /dev, /dev/shm, /run, /tmp, /var/tmp).
+      grep -q '^graphroot = "/var/tmp/containers/storage"$' "$store" \
+        || fail "graphroot must sit on the /var/tmp tmpfs, not the read-only root"
+      grep -q '^runroot = "/run/containers/storage"$' "$store" \
+        || fail "runroot must sit on the /run tmpfs, not the read-only root"
+      grep -q '^agent:100000:65536$' "${guestConf}/etc/subuid" \
+        || fail "the subuid range for the guest-root user is missing"
+      grep -q '^agent:100000:65536$' "${guestConf}/etc/subgid" \
+        || fail "the subgid range for the guest-root user is missing"
+      touch $out
+    '';
+
   # The podman-krun runtime pin (docs/design/backends.md D2, bd
   # myconfig-6di.5.2): the wrapper must carry `MYSBX_KRUN_RUNTIME`
   # pointing at a crun built WITH the libkrun handler, and a
