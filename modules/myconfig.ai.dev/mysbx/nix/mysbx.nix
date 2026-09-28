@@ -60,6 +60,14 @@
 #                     --runtime`. Pinned with `--set-default`, an
 #                     operator knob like MYSBX_GVISOR_PASTA_SPEC;
 #                     absent = the crate's bare `crun` PATH fallback.
+#   MYSBX_KRUN_NIX / MYSBX_KRUN_NIX_SHIM
+#                     the krun Nix story's switch and the in-image
+#                     shim path (bd myconfig-6di.5.9): both pinned
+#                     with `--set` when `krun.nix.enable` — the story
+#                     wraps every payload and adds infrastructure
+#                     mounts, so an invocation must not be able to
+#                     turn it on. Absent = the run stays plain
+#                     krun (no story, no shim, no mounts).
 #   MYSBX_WAYPIPE_SECCTX
 #                     NOT a wrapper pin — a deliberate operator
 #                     override: the security-context application ID
@@ -269,6 +277,18 @@
   # operator knob (a runtime swap for debugging), the same reasoning
   # as MYSBX_GVISOR_PASTA_SPEC.
   krunRuntime ? null,
+  # The krun Nix story's wrapper pins (bd myconfig-6di.5.9): the Nix
+  # module folds the shim into the agent image and pins the switch ON
+  # when `krun.nix.enable`. `--set`, never `--set-default`: the story
+  # changes the payload chain (every run is shim-wrapped) and adds
+  # infrastructure mounts — an invocation must not be able to turn it
+  # on against an image that ships no shim. `null` pins nothing: a
+  # krun run of a host that did not enable `krun.nix` gets neither
+  # pin, and the crate's unset switch keeps the run plain (a story
+  # enabled but unpinned would be a refused run — the module never
+  # produces that shape).
+  krunNix ? null,
+  krunNixShim ? null,
   # The waypipe binary of the HOST side of the display channel
   # (../docs/design/config.md D18, `display = "waypipe"`): the wrapper
   # pins it as `MYSBX_WAYPIPE`, and a run that selects waypipe without
@@ -640,9 +660,16 @@ let
   # The podman-krun runtime pin (backends.md D2): the crun+libkrun
   # store path `--runtime` gets on the krun variant. `--set-default`:
   # an invocation can still point MYSBX_KRUN_RUNTIME at any runtime.
-  krunPins = lib.optionalString (
-    krunRuntime != null
-  ) "--set-default MYSBX_KRUN_RUNTIME '${krunRuntime}/bin/crun' ";
+  krunPins =
+    lib.optionalString (
+      krunRuntime != null
+    ) "--set-default MYSBX_KRUN_RUNTIME '${krunRuntime}/bin/crun' "
+    # The krun Nix story pins (bd myconfig-6di.5.9): both or neither —
+    # a switch without its shim (or vice versa) is a host
+    # misconfiguration the wrapper must not bake.
+    + lib.optionalString (
+      krunNix != null && krunNixShim != null
+    ) "--set MYSBX_KRUN_NIX '1' --set MYSBX_KRUN_NIX_SHIM '${krunNixShim}' ";
   # The display-channel pins (D18): the host-side client binary and
   # the in-image server binary. Both optional, both absolute store
   # paths — the wrapper idiom of every other pin.

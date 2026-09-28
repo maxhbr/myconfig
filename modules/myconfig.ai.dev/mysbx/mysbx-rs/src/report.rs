@@ -400,7 +400,11 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // (the image ships none; a writable-store mechanism like the
     // gvisor tier's `--nix` volume is deliberately out of scope for
     // this backend), so the line says that instead of implying nix
-    // would merely read its defaults.
+    // would merely read its defaults. Under podman-krun the SAME
+    // static line stays honest when `krun.nix.enable` is off; when
+    // the story is on, the guest nix's configuration is built by the
+    // shim's `NIX_CONFIG` (bd myconfig-6di.5.9) — not a bound file,
+    // so no nix.conf line exists to name here either way.
     p(format!(
         "nix.conf:       {}",
         match (r.backend, r.params.nix_conf) {

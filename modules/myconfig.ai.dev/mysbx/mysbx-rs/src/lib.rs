@@ -1934,6 +1934,22 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             let memory = env_opt("MYSBX_GVISOR_MEMORY").map(Cow::from);
             let cpus = env_opt("MYSBX_GVISOR_CPUS").map(Cow::from);
 
+            // The krun Nix story's switch (bd myconfig-6di.5.9): the Nix
+            // module folds the shim into the agent image and pins the
+            // switch ON when `krun.nix.enable`; the wrapper `--set`s it, so
+            // no invocation can silently turn the story on (an unset pin
+            // is a refused run below, never a run with dangling
+            // infrastructure mounts and no shim).
+            let krun_nix = match env_opt("MYSBX_KRUN_NIX") {
+                Some(v) if !v.is_empty() && v != "0" => true,
+                _ => false,
+            };
+            // The shim is an IN-IMAGE path (the image-pin rule of the
+            // multiplexer entry): the argv builder refuses a krun Nix
+            // run without one (`KrunNixShimUnavailable`), so an image
+            // that ships no shim never reaches a payload whose first
+            // exec would die with `no such file or directory`.
+
             // Cgroups handling: when ignore-cgroups flag is set, skip resource limits
             let ignore_cgroups = runtime_flags.iter().any(|f| f == "ignore-cgroups");
             if !krun
@@ -1992,6 +2008,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // refused by the argv builder
             // (`MultiplexerUnavailable`), the same refusal a bwrap host
             // without that multiplexer gets.
+            // The in-image krun Nix shim path (`/bin/agent-krun-init`):
+            // bound to a local so the `as_deref()` borrow outlives the
+            // params struct.
+            let krun_nix_shim = env_opt("MYSBX_KRUN_NIX_SHIM");
             let params = podman_gvisor::Params {
                 shell: &gvisor_shell,
                 tools_path: &gvisor_tools_path,
@@ -2019,6 +2039,8 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 ignore_cgroups,
                 network_spec,
                 extra_env: &gvisor_env,
+                krun_nix,
+                krun_nix_shim: krun_nix_shim.as_deref(),
                 pids_limit,
                 memory,
                 cpus,

@@ -426,6 +426,7 @@ and silently ignored — the same rule as every backend:
 | uid mapping | `--userns=keep-id` stays but maps the HOST-SIDE preparation only: inside the guest the payload runs as guest root (the init never setuids) and the virtiofs server maps guest-root accesses to the host user's own uid unchanged (passthrough.rs `set_creds`; chown to any OTHER uid is EPERM unless the server holds CAP_SETUID). Files the payload writes in the shared mounts are host-uid-owned, as on the other backends; the nested-podman setuid story is bd myconfig-6di.5.8's risk |
 | `/dev/kvm` availability | a doctor-style eval-time check: the wrapper asserts the user has rw access to `/dev/kvm` (the `kvm` group) — a host without it gets a refused run, never a silent fallback to another runtime |
 | resource limits | mapped onto the krun VM annotations `krun.cpus` / `krun.ram_mib` (crun's krun handler, bd myconfig-6di.5.6) — the first mysbx limit mechanism with no cgroup dependency; `--pids-limit` refused (no pids controller is wired for a whole-VM "container"), fractional vCPUs and sub-128-MiB memory refused (crun silently defaults `ram_mib <= 128`) — never accepted and silently ignored |
+| Nix over the host store | the krun-only opt-in story (bd myconfig-6di.5.9): `krun.nix.enable` binds the host store + its db READ-ONLY (`/nix/store-lower`, `/nix/var-lower/nix`), tmpfses `/nix`, and wraps every payload in the guest shim `/bin/agent-krun-init`, which mounts the overlayfs and points Nix at the merged view through a `local-overlay` store. The FIRST deliberate host-store bind of this backend (read-only by construction), refused on the gvisor variant (`KrunNixOnGvisor` — runsc has no guest kernel) and without a pinned shim (`KrunNixShimUnavailable` — the image-pin rule). Lower-db staleness (SQLite `immutable=1`, no WAL replay) and per-run upper ephemerality are the documented semantics, never silent. NOT a daemon-socket grant under `network = false`: the ro lower store reads the db FILE directly (never dials the daemon), and the socket file itself reaches the guest as a dead inode over virtiofs (bd myconfig-6di.5.4) — the `DaemonUnderDeniedNetwork` refusal of user mounts is unchanged |
 
 #### The network model, verified (bd myconfig-6di.5.5)
 
@@ -499,11 +500,35 @@ Consequences, stated honestly:
   surfaces (RAM-cost, sizeable via the krun limit pins, bd
   myconfig-6di.5.6). Live validation is bd
   myconfig-6di.5.7's runbook (the agent sandbox has no /dev/kvm).
-- **Required: Nix builds inside the guest** (bd myconfig-6di.5.9):
-  host `/nix/store` mounted read-only over virtio-fs as the overlay's
-  LOWER layer, upper layer on guest tmpfs — the Nix local-overlay
-  store (`experimental-feature local-overlay-store`, `lower-store =
-  local?root=…&read-only=true`) preferred over a separate chroot store.
+- **Required: Nix builds inside the guest** (bd
+  myconfig-6di.5.9), RESOLVED to the local-overlay design, verified
+  against the pinned Nix 2.34.8 sources and exercised host-side:
+  the argv binds the host `/nix/store` READ-ONLY at
+  `/nix/store-lower` and the host `/nix/var/nix` READ-ONLY at
+  `/nix/var-lower/nix` (section 6b of the builder, after every user
+  mount), plus a per-run tmpfs at `/nix`; the guest shim
+  (`/bin/agent-krun-init`, baked into the shared agent image by
+  `krun.nix.enable`) mounts — as guest root, the one place in the
+  mysbx stack with a real kernel (libkrunfw `CONFIG_OVERLAY_FS=y`)
+  — an overlayfs `lowerdir=/nix/store-lower,
+  upperdir=/nix/upper,workdir=/nix/work` at `/nix/store` and exports
+  `store = local-overlay://?lower-store=local://%3Freal=…%26read-only=true&…`
+  (the inner local-store query percent-encoded through the outer
+  one — Nix's URL parser decodes nested queries, verified in
+  src/libutil/url.cc and exercised against the live daemon
+  database). Nix then REUSES host paths through the ro lower store
+  (its SQLite opened `immutable=1`: no locks, no WAL replay) and
+  writes only the upper layer and `/nix/state`. Honest semantics,
+  accepted and documented, never silent: the lower db is STALE by
+  the daemon's WAL until a checkpoint (paths registered but not yet
+  checkpointed are invisible — the observed cost of `read-only`),
+  the upper layer is PER-RUN ephemeral (nothing survives the VM;
+  the persisted sidecar disk stays a future option), and the story
+  is krun-ONLY (`KrunNixOnGvisor`: runsc has no guest kernel to
+  mount the overlay — a gvisor host that enables `krun.nix` gets a
+  refused run, never a silently-mountless env var). The live
+  `nix build` is bd myconfig-6di.5.7's runbook — no /dev/kvm in the
+  agent sandbox.
 - **Secondary: nesting other sandboxes** — no guest compatibility
   probes, no work beyond what nested podman needs.
 - **Out of scope: nono inside krun** — the stock libkrunfw kernel
@@ -535,6 +560,11 @@ Consequences, stated honestly:
   confirmation of a full nested `podman run` is bd
   myconfig-6di.5.7's runbook.
 - **Overlay upper-layer location** (Nix builds, bd myconfig-6di.5.9):
-  overlayfs upper must not live on virtio-fs; guest tmpfs costs VM RAM,
-  a sidecar-backed disk image adds an image lifecycle. Decided in the
-  child.
+  DECIDED in the child — per-run guest tmpfs (`/nix/upper` on the
+  `/nix` tmpfs of section 6b): overlayfs refuses an upper layer on
+  virtio-fs, the tmpfs costs VM RAM (sizeable via the krun limit
+  pins, bd myconfig-6di.5.6), and per-run ephemerality is the
+  honest default (a build's outputs leave through the workspace
+  bind or a copy, not through the store). A sidecar-backed disk for
+  a persisted store remains a future option, blocked on nothing
+  but a decision.

@@ -8557,3 +8557,88 @@ fn nono_pinned_nix_conf_is_bound_like_the_bubblewrap_backend() {
         }
     }
 }
+
+// ---- podman-krun Nix story (bd myconfig-6di.5.9) ----------------------------
+
+#[test]
+fn podman_krun_nix_dry_run_carries_the_overlay_infrastructure() {
+    // The argv surface of the story (backends.md D2): the ro binds of
+    // the host store and its database, the /nix tmpfs of the overlay's
+    // upper layer, the MYSBX_KRUN_NIX promise, and the shim-wrapped
+    // payload — all visible in the audit that a --dry-run is.
+    let (inv, _, sidecar) = fixture("podman-krun-nix-dry", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    cmd.env("MYSBX_KRUN_NIX", "1");
+    cmd.env("MYSBX_KRUN_NIX_SHIM", "/bin/agent-krun-init");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout.lines().collect();
+    let expect_mount = |needle: &str| {
+        lines
+            .iter()
+            .any(|l| l.starts_with("type=") && l.contains(needle))
+            || lines.iter().any(|l| l.contains(needle))
+    };
+    assert!(
+        expect_mount("src=/nix/store,dst=/nix/store-lower,ro"),
+        "the ro host store bind is missing: {stdout}"
+    );
+    assert!(
+        expect_mount("src=/nix/var/nix,dst=/nix/var-lower/nix,ro"),
+        "the ro host db bind is missing: {stdout}"
+    );
+    assert!(
+        expect_mount("type=tmpfs,dst=/nix"),
+        "the /nix tmpfs of the upper layer is missing: {stdout}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| *l == "MYSBX_KRUN_NIX=1" || *l == "MYSBX_KRUN_NIX"),
+        "the shim promise is missing: {stdout}"
+    );
+    let image = lines
+        .iter()
+        .position(|l| *l == "localhost/test:latest")
+        .expect("the image reference is present");
+    assert_eq!(
+        lines[image + 1],
+        "/bin/agent-krun-init",
+        "the payload is not shim-wrapped: {stdout}"
+    );
+}
+
+#[test]
+fn podman_krun_nix_without_the_pins_is_a_refused_run() {
+    // The pins are wrapper-baked (`--set`, never `--set-default`): a
+    // run whose krun.nix is enabled but whose wrapper carries no
+    // shim pin is refused by the argv builder — never a run with the
+    // infrastructure mounts and a payload whose first exec dies with
+    // `no such file or directory`. The refusal is a dry-run-visible
+    // error too (the builder runs before the dry-run return).
+    let (inv, _, sidecar) = fixture("podman-krun-nix-unpinned", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    cmd.env("MYSBX_KRUN_NIX", "1");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "the unpinned shim is an infrastructure refusal, exit 70: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("agent-krun-init") && stderr.contains("krun.nix.enable"),
+        "the refusal names the missing shim and its fix: {stderr}"
+    );
+}

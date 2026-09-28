@@ -67,6 +67,10 @@
 //!    state-dirs binds (config.md D15)
 //! 6. configured mounts, in declaration order (config.md D7/D8),
 //!    `--mount type=bind,src=HOST,dst=DEST,ro|rw`
+//! 6b. the krun Nix infrastructure, opt-in (bd myconfig-6di.5.9):
+//!    the ro host-store and host-db binds, the `/nix` tmpfs of the
+//!    overlay's upper layer, and the `MYSBX_KRUN_NIX` promise —
+//!    emitted after the user mounts, consumed by the guest shim
 //! 7. environment: host-forwarded first, then `cfg.env`, then the
 //!    backend pins of `MYSBX_GVISOR_ENV`, then infrastructure
 //!    variables (`HOME`, the XDG base dirs derived from it, `PATH`,
@@ -374,6 +378,28 @@ pub struct Params<'a> {
     /// only correct under THIS backend, e.g. the container-side URL of
     /// the host's LiteLLM forwarder.
     pub extra_env: &'a [String],
+    /// Whether this run enables the krun Nix story (bd
+    /// myconfig-6di.5.9, backends.md D2): the guest shim mounts the
+    /// overlayfs over the ro host-store view and points Nix at the
+    /// merged view through a `local-overlay` store. The argv side of
+    /// that story is infrastructure: the two ro binds (`/nix/store` at
+    /// `/nix/store-lower`, `/nix/var/nix` at `/nix/var-lower/nix`),
+    /// the `/nix` tmpfs carrying the overlay's upper layer and state,
+    /// and the `MYSBX_KRUN_NIX=1` promise to the shim.
+    ///
+    /// krun-only by construction (the shim needs guest root + the
+    /// libkrunfw kernel); `true` on the gvisor variant is a refused
+    /// run ([`Error::KrunNixOnGvisor`]) — never a silently-mountless
+    /// env var the shim would not act on.
+    pub krun_nix: bool,
+    /// The in-image shim path the krun Nix payload is wrapped in (an
+    /// image contract like [`Params::mux_entry`]: `/bin/agent-krun-init`,
+    /// baked into the shared agent image by the Nix module). `None`
+    /// with a [`Params::krun_nix`] run is a refused run
+    /// ([`Error::KrunNixShimUnavailable`]) — the same image-pin rule
+    /// as the multiplexer entry: a payload whose first exec would die
+    /// with `no such file or directory` is never produced.
+    pub krun_nix_shim: Option<&'a str>,
     /// Resource limits from configuration.
     /// Using Cow to allow both borrowed (from env vars) and owned strings.
     pub pids_limit: Option<Cow<'a, str>>,
@@ -426,6 +452,23 @@ pub fn podman_run_argv(
         if params.waypipe.is_none() {
             return Err(Error::DisplayUnavailable);
         }
+    }
+    // The krun Nix story (bd myconfig-6di.5.9): guest-root overlayfs
+    // + the `local-overlay` store — krun-only by construction. The
+    // gvisor variant has no guest kernel to mount the overlay (runsc
+    // is a user-space kernel; its sandbox sees the binds, not an
+    // overlay), so the story cannot exist there: a `true` on gvisor
+    // is refused, never a silently-mountless env var the shim would
+    // never act on (the accept-and-never-enforce shape this backend
+    // refuses everywhere).
+    if params.krun_nix && !params.krun {
+        return Err(Error::KrunNixOnGvisor);
+    }
+    // ...and the shim must be pinned: the story wraps EVERY payload in
+    // the in-image shim, so a run without one is refused here, before
+    // any argv exists.
+    if params.krun_nix && params.krun_nix_shim.is_none() {
+        return Err(Error::KrunNixShimUnavailable);
     }
 
     // 0. podman run with global args — ARGS ONLY, no program name:
@@ -820,6 +863,44 @@ pub fn podman_run_argv(
         );
     }
 
+    // 6b. the krun Nix infrastructure (bd myconfig-6di.5.9, backends.md
+    // D2): three mounts and one env promise, all infrastructure,
+    // emitted AFTER the user mounts so nothing configured can shadow
+    // them. The guest shim (`/bin/agent-krun-init`, baked into the
+    // shared agent image by the Nix module) consumes them and mounts
+    // the overlay as guest root:
+    //
+    // - `/nix/store-lower`: the host store, read-only. The FIRST rule
+    //   of this backend is "NOTHING is bind-mounted from the host
+    //   /nix/store" — the krun Nix story is the deliberate, opt-in
+    //   exception, and it stays read-only: the guest writes ONLY to
+    //   the upper layer.
+    // - `/nix/var-lower/nix`: the host Nix state directory, read-only
+    //   — the lower store's database (`/nix/var-lower/nix/db/db.sqlite`).
+    //   It is the daemon's LIVE database: the ro store opens it
+    //   `immutable` (no locks, no WAL replay), so recent daemon writes
+    //   that live in the WAL are invisible until checkpointed — the
+    //   documented staleness semantics (backends.md D2).
+    // - `/nix`: a fresh tmpfs carrying the overlay's own writable
+    //   surfaces (`upper`, `work`, `state`) and the merged store
+    //   mountpoint — per-run ephemeral, the decided upper-layer
+    //   location (nothing survives the VM; a persisted sidecar disk is
+    //   the future option the design leaves open).
+    //
+    // The destinations `/nix/store-lower` and `/nix/var-lower/nix` are
+    // NOT under the protected `/nix/store` (they are siblings below
+    // `/nix`), and `check_dest` is not consulted: infrastructure
+    // destinations of THIS backend, the same exemption the home tmpfs
+    // of section 4 has. A user mount that names one of them is
+    // shadowed (emitted earlier, mounted lower) — an operator who
+    // needs to override that must not configure it but disable the
+    // story (the module option).
+    if params.krun_nix {
+        bind_mount(&mut argv, "/nix/store", "/nix/store-lower", false);
+        bind_mount(&mut argv, "/nix/var/nix", "/nix/var-lower/nix", false);
+        tmpfs_mount(&mut argv, "/nix");
+    }
+
     // 7. environment
     for (key, value) in host_env {
         argv.extend(["--env".into(), format!("{key}={value}")]);
@@ -832,6 +913,15 @@ pub fn podman_run_argv(
     // below, which stay the last word on `HOME`/`PATH`/the XDG dirs.
     for entry in params.extra_env {
         argv.extend(["--env".into(), entry.clone()]);
+    }
+    // The krun Nix promise (bd myconfig-6di.5.9): the shim's switch.
+    // Emitted with the backend pins, before the infrastructure
+    // variables below — a config `[env]` entry could override it, but
+    // the shim treats any non-empty `MYSBX_KRUN_NIX` as ON, so the
+    // only reachable override is the OFF direction (a config that
+    // widens nothing; the mounts of section 6b stay, unconsumed).
+    if params.krun_nix {
+        argv.extend(["--env".into(), "MYSBX_KRUN_NIX=1".into()]);
     }
     // Infrastructure variables. `PATH` points INSIDE the image
     // (params.tools_path defaults to the agent image's own
@@ -983,6 +1073,22 @@ pub fn podman_run_argv(
         argv.push(WAYPIPE_DISPLAY.into());
         argv.push("server".into());
         argv.push("--".into());
+    }
+    // The krun Nix shim wraps EVERY payload form (bd
+    // myconfig-6di.5.9): a one-shot `run -- CMD` needs the overlay
+    // store as much as an interactive shell. The shim is an
+    // in-image path pinned by the Nix module's image packages —
+    // `params.shell` cannot serve (it IS the payload the shim
+    // wraps), and no fallback exists: the module refuses the run
+    // when the image carries no shim, the same image-pin rule as
+    // the multiplexer entry.
+    if params.krun_nix {
+        argv.push(
+            params
+                .krun_nix_shim
+                .expect("checked at the top of the builder")
+                .into(),
+        );
     }
     match payload {
         Payload::Shell if mux.starts_a_session() => {
@@ -1380,6 +1486,16 @@ pub enum Error {
     /// microVM, no pids controller is wired for it — an unenforceable
     /// limit is refused, never accepted and silently ignored.
     KrunPidsLimit { pids: String },
+    /// The krun Nix story was asked for on the gvisor variant (bd
+    /// myconfig-6di.5.9): runsc has no guest kernel to mount the
+    /// overlayfs, so the overlay store cannot exist there. Refused
+    /// at argv build time — never a silently-mountless env var.
+    KrunNixOnGvisor,
+    /// A krun Nix run without the in-image shim pinned (bd
+    /// myconfig-6di.5.9): the payload would die on its first exec
+    /// with `no such file or directory`. The same image-pin rule as
+    /// [`Error::MultiplexerUnavailable`].
+    KrunNixShimUnavailable,
 }
 
 impl fmt::Display for Error {
@@ -1466,6 +1582,21 @@ impl fmt::Display for Error {
                  the container is the whole microVM and no pids controller \
                  is wired for it — drop the pids limit or switch the \
                  backend to `podman-gvisor`"
+            ),
+            Error::KrunNixOnGvisor => write!(
+                f,
+                "the Nix overlay store is a podman-krun feature (bd \
+                 myconfig-6di.5.9): it needs the libkrunfw guest kernel to \
+                 mount the overlayfs over the read-only host store — runsc \
+                 has no guest kernel. Switch the backend to `podman-krun` \
+                 or disable krun.nix"
+            ),
+            Error::KrunNixShimUnavailable => write!(
+                f,
+                "the krun Nix story needs the in-image guest shim \
+                 (/bin/agent-krun-init), and this build pinned none — the \
+                 image must be built with \
+                 myconfig.ai.dev.mysbx.krun.nix.enable"
             ),
         }
     }
