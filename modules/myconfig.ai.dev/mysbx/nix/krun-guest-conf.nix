@@ -15,9 +15,11 @@
 # - `events_logger = "file"` — no journald inside the guest (the guest
 #   init is not systemd; journald does not exist), podman must not
 #   warn-and-fallback on every invocation.
-# - `cgroup_manager = "cgroupfs"` + `cgroups = "disabled"` — the guest
-#   has a cgroup2 mount (libkrun init mount_filesystems) but nothing
-#   delegates it and no controller wiring for a nested pod exists;
+# - `[engine] cgroup_manager = "cgroupfs"` + `[containers] cgroups =
+#   "disabled"` (podman reads each key ONLY from its own table and
+#   silently ignores it anywhere else) — the guest has a cgroup2
+#   mount (libkrun init mount_filesystems) but nothing delegates it
+#   and no controller wiring for a nested pod exists;
 #   cgroupfs + disabled keeps podman from dying on a systemd DBus that
 #   does not exist, while `--cgroup-manager=cgroupfs` stays the
 #   documented per-invocation override.
@@ -53,13 +55,14 @@
 let
   defaultContainersConf = ''
     [containers]
-    # No journald inside the guest — file logging, never warn-and-fallback.
     apparmor_profile = ""
+    # Nothing delegates the guest's cgroup2 mount.
+    cgroups = "disabled"
+    # No journald inside the guest — file logging, never warn-and-fallback.
     log_driver = "k8s-file"
 
     [engine]
     cgroup_manager = "cgroupfs"
-    cgroups = "disabled"
     events_logger = "file"
     # The virtiofs root is the VM's own root: no pivot_root on it.
     no_pivot_root = true

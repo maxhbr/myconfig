@@ -91,41 +91,65 @@ in
   # The nested-podman guest configuration tree (bd myconfig-6di.5.8):
   # the bytes podman will read inside the krun guest. Static by
   # design — the nested run itself is live validation (bd
-  # myconfig-6di.5.7), which this sandbox cannot do without /dev/kvm;
-  # what CAN be pinned here is that the tree ships the honest
-  # consequence set of the guest model (no journald -> file logging,
-  # no systemd -> cgroupfs + cgroups=disabled, virtiofs root ->
-  # no_pivot_root, storage off the shared mounts -> /var defaults)
-  # and the subuid/subgid ranges the guest-root user maps inner
-  # containers through.
+  # myconfig-6di.5.7), which this sandbox cannot do without /dev/kvm.
+  # The TOML files are PARSED and compared table by table: podman
+  # reads each key only from its own table and silently ignores a
+  # misplaced one (containers/common config/new.go logs undecoded
+  # keys at debug level), so a line grep cannot catch a key in the
+  # wrong table. Any extra, missing or moved key fails.
   mysbx-krun-guest-conf-test =
     let
       guestConf = pkgs.callPackage ../nix/krun-guest-conf.nix { };
+      expected = {
+        containers = {
+          containers = {
+            apparmor_profile = "";
+            cgroups = "disabled";
+            log_driver = "k8s-file";
+          };
+          engine = {
+            cgroup_manager = "cgroupfs";
+            events_logger = "file";
+            no_pivot_root = true;
+          };
+        };
+        storage = {
+          storage = {
+            driver = "overlay";
+            # Both roots on tmpfs surfaces: podman's /var/lib default
+            # sits on the read-only root (--read-only-tmpfs covers only
+            # /dev, /dev/shm, /run, /tmp, /var/tmp).
+            graphroot = "/var/tmp/containers/storage";
+            runroot = "/run/containers/storage";
+          };
+        };
+      };
+      expectedJson = pkgs.writeText "mysbx-krun-guest-conf-expected.json" (builtins.toJSON expected);
+      compare = pkgs.writeText "mysbx-krun-guest-conf-compare.py" ''
+        import json, sys, tomllib
+
+        etc, expected_path = sys.argv[1], sys.argv[2]
+        expected = json.load(open(expected_path))
+        failed = False
+        for name, want in expected.items():
+            path = f"{etc}/containers/{name}.conf"
+            with open(path, "rb") as f:
+                got = tomllib.load(f)
+            if got != want:
+                failed = True
+                print(f"{path}: parsed tables differ from the pinned set", file=sys.stderr)
+                print(f"  got:      {json.dumps(got, sort_keys=True)}", file=sys.stderr)
+                print(f"  expected: {json.dumps(want, sort_keys=True)}", file=sys.stderr)
+        sys.exit(1 if failed else 0)
+      '';
     in
-    pkgs.runCommand "mysbx-krun-guest-conf-test" { } ''
+    pkgs.runCommand "mysbx-krun-guest-conf-test" { nativeBuildInputs = [ pkgs.python3 ]; } ''
       fail() {
         echo "mysbx-krun-guest-conf-test: $*" >&2
         exit 1
       }
-      conf="${guestConf}/etc/containers/containers.conf"
-      grep -q '^cgroup_manager = "cgroupfs"$' "$conf" \
-        || fail "cgroup_manager must be cgroupfs (no systemd inside the guest)"
-      grep -q '^cgroups = "disabled"$' "$conf" \
-        || fail "cgroups must be disabled (nothing delegates the guest's cgroup2 mount)"
-      grep -q '^events_logger = "file"$' "$conf" \
-        || fail "events_logger must be file (no journald inside the guest)"
-      grep -q '^no_pivot_root = true$' "$conf" \
-        || fail "no_pivot_root must be true (the virtiofs root is the VM's own root)"
-      store="${guestConf}/etc/containers/storage.conf"
-      grep -q '^driver = "overlay"$' "$store" \
-        || fail "the storage driver must be the kernel overlay (libkrunfw has OVERLAY_FS)"
-      # The roots are PINNED onto tmpfs surfaces: podman's /var/lib
-      # default sits on the read-only root (podman's --read-only-tmpfs
-      # covers only /dev, /dev/shm, /run, /tmp, /var/tmp).
-      grep -q '^graphroot = "/var/tmp/containers/storage"$' "$store" \
-        || fail "graphroot must sit on the /var/tmp tmpfs, not the read-only root"
-      grep -q '^runroot = "/run/containers/storage"$' "$store" \
-        || fail "runroot must sit on the /run tmpfs, not the read-only root"
+      python3 ${compare} "${guestConf}/etc" ${expectedJson} \
+        || fail "the guest containers.conf/storage.conf do not match the pinned tables"
       grep -q '^agent:100000:65536$' "${guestConf}/etc/subuid" \
         || fail "the subuid range for the guest-root user is missing"
       grep -q '^agent:100000:65536$' "${guestConf}/etc/subgid" \
