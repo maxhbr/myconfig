@@ -13,6 +13,14 @@
 #                 suite hand-writes its `config.toml` and cannot see a
 #                 regression in the generator. See ./config-eval-test.nix.
 #
+#   mysbx-krun-wrapper-test
+#                 the podman-krun runtime pin (docs/design/backends.md D2):
+#                 the wrapper carries MYSBX_KRUN_RUNTIME at a crun built
+#                 with the libkrun handler (`+LIBKRUN` on its own feature
+#                 line), and a `backend = "podman-krun"` dry run emits
+#                 `--runtime=<that path>` — the runtime swap is the only
+#                 argv difference, so the dry run doubles as the swap proof.
+#
 #   mysbx-completions
 #                 the fish tab completion shipped by the package
 #                 (../mysbx-rs/completions/mysbx.fish, installed by
@@ -79,6 +87,80 @@ in
   # The generator, evaluated: what a host actually gets in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
   mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
+
+  # The podman-krun runtime pin (docs/design/backends.md D2, bd
+  # myconfig-6di.5.2): the wrapper must carry `MYSBX_KRUN_RUNTIME`
+  # pointing at a crun built WITH the libkrun handler, and a
+  # `backend = "podman-krun"` dry run must emit `--runtime=<that
+  # path>` — the runtime swap is the ONLY argv difference, so the
+  # dry run doubling as the swap proof is the honest static gate.
+  mysbx-krun-wrapper-test =
+    let
+      # The wrapper WITH the krun pin, the shape a host's default.nix
+      # builds (`krunRuntime = cfg.krun.runtime`).
+      pkgKrun = pkgs.callPackage ../nix/mysbx.nix {
+        krunRuntime = pkgs.crun.override { withLibkrun = true; };
+        ssh-keygen = pkgs.openssh;
+      };
+    in
+    pkgs.runCommand "mysbx-krun-wrapper-test"
+      {
+        nativeBuildInputs = [
+          pkgs.git
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-krun-wrapper-test: $*" >&2
+          exit 1
+        }
+
+        content=$(cat "${pkgKrun}/bin/mysbx")
+        # 1. the wrapper pins the runtime, as a --set-default (the makeBinaryWrapper
+        #    result carries the env table AND the embedded script line; strip
+        #    the quotes before matching the flag, the same idiom the nono
+        #    wrapper check uses).
+        echo "$content" | grep -aq "MYSBX_KRUN_RUNTIME" \
+          || fail "the wrapper does not pin MYSBX_KRUN_RUNTIME"
+        crun=$(echo "$content" | tr -d "'" | awk '/--set-default MYSBX_KRUN_RUNTIME/ {print $3; exit}')
+        case "$crun" in
+          /nix/store/*-crun-*/bin/crun) ;;
+          *) fail "the MYSBX_KRUN_RUNTIME value is not a crun store path: $crun" ;;
+        esac
+        test -x "$crun" || fail "the pinned runtime does not exist: $crun"
+        # 2. the pinned crun carries the libkrun handler: its own
+        #    feature line names +LIBKRUN.
+        "$crun" --version 2>/dev/null | grep -q '+LIBKRUN' \
+          || fail "the pinned crun was built without libkrun"
+
+        # 3. the dry run: backend = "podman-krun" swaps --runtime to
+        #    the pinned path (and only that).
+        repo="$TMPDIR/repo"
+        mkdir -p "$repo" "$TMPDIR/repo.mysbx"
+        printf 'backend = "podman-krun"\n' > "$TMPDIR/repo.mysbx/config.toml"
+        git -C "$repo" init -q
+        git -C "$repo" config user.email t@invalid
+        git -C "$repo" config user.name t
+        touch "$repo/README"
+        git -C "$repo" add . && git -C "$repo" commit -qm init
+        export MYSBX_GVISOR_IMAGE=localhost/test:latest
+        # The canonicalization needs a HOME that exists (the check
+        # sandbox has none — runCommand's user is /homeless-shelter).
+        mkdir -p "$TMPDIR/home"
+        argv=$( cd "$repo" && HOME="$TMPDIR/home" "${pkgKrun}/bin/mysbx" --dry-run ) \
+          || fail "the dry run failed"
+        first=$(echo "$argv" | sed -n '2p')
+        [ "$first" = "--runtime=$crun" ] \
+          || fail "the dry run does not swap --runtime to the pinned crun (got: $first)"
+        # 4. the rest of the argv is the gvisor layout: the image
+        #    reference and the image-userland payload survive.
+        echo "$argv" | grep -q '^localhost/test:latest$' \
+          || fail "the image reference is missing from the krun argv"
+        test "$(echo "$argv" | tail -n 1)" = "/bin/bash" \
+          || fail "the payload is not the image shell"
+
+        touch $out
+      '';
 
   # The herdr entry's worktree-placement contract (bd myconfig-i6h):
   # the entry must point herdr's `[worktrees] directory` at the

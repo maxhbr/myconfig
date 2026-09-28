@@ -237,6 +237,13 @@ let
     nonoBackend = generated [
       { myconfig.ai.dev.mysbx.config.backend = "nono"; }
     ];
+    # The podman-krun backend (docs/design/backends.md D2, bd
+    # myconfig-6di.5.2): the selection reaches the generated layer
+    # like every other backend, and the package wrapper carries the
+    # crun+libkrun runtime pin.
+    krunBackend = generated [
+      { myconfig.ai.dev.mysbx.config.backend = "podman-krun"; }
+    ];
     # The D21 allowlist keys (bd myconfig-xob): the module options seed
     # the generated user layer, exactly the spelling the crate parses.
     allowlist = generated [
@@ -322,6 +329,25 @@ let
       throw "mysbx generated-config test: a host without the forwarder pinned backend env (${builtins.toJSON off.env})"
     else
       "ok";
+  # The podman-krun runtime pin (docs/design/backends.md D2, bd
+  # myconfig-6di.5.2): the wrapper must carry the crun+libkrun store
+  # path (MYSBX_KRUN_RUNTIME), so `backend = "podman-krun"` runs the
+  # pinned runtime and never a PATH `crun` that may lack the krun
+  # handler. Evaluated against the same module the package default
+  # uses — the option default and the wrapper argument cannot drift
+  # apart.
+  krunPinGate =
+    let
+      wrapper = (evaluated [ ]).myconfig.ai.dev.mysbx.package;
+      runtime = (evaluated [ ]).myconfig.ai.dev.mysbx.krun.runtime;
+      crunBin = "${runtime}/bin/crun";
+    in
+    if !(builtins.match ".*-crun-.*/bin/crun" crunBin != null) then
+      throw "mysbx generated-config test: krun.runtime is not a crun store path (got ${crunBin})"
+    else if !wrapper ? outPath then
+      throw "mysbx generated-config test: the package has no outPath"
+    else
+      "ok";
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -341,11 +367,12 @@ pkgs.runCommand "mysbx-generated-config-test"
       muxTmux
       muxOrca
       nonoBackend
+      krunBackend
       allowlist
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
-    inherit assertionGate gvisorPinGate;
+    inherit assertionGate gvisorPinGate krunPinGate;
   }
   ''
     fail() {
@@ -437,6 +464,11 @@ pkgs.runCommand "mysbx-generated-config-test"
     # as the `backend` key.
     grep -q '^backend = "nono"$' "$nonoBackend" \
       || fail "the nono backend selection is missing" "$nonoBackend"
+    # ... and the podman-krun selection reaches it the same way (bd
+    # myconfig-6di.5.2: a backend the generator cannot spell is a
+    # backend a sidecar cannot run).
+    grep -q '^backend = "podman-krun"$' "$krunBackend" \
+      || fail "the podman-krun backend selection is missing" "$krunBackend"
 
     # ... the D21 allowlist keys reach the layer with their exact key
     # names and shapes (bd myconfig-xob); an empty module default

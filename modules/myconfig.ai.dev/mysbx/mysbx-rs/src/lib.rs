@@ -1147,6 +1147,19 @@ fn stdin_is_tty() -> bool {
     unsafe { isatty(0) != 0 }
 }
 
+/// Whether `/dev/kvm` is openable read-write by THIS user (the krun
+/// backend's doctor check, backends.md D2, bd myconfig-6di.5.2). A
+/// real `O_RDWR` open, never a mode-bit guess: udev's seat ACLs
+/// (uaccess) grant per-session rw that the mode bits do not show.
+/// The opened fd is dropped immediately — access, not ownership.
+fn kvm_available() -> bool {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/kvm")
+        .is_ok()
+}
+
 /// The shared pipeline of the bare form and `run`: resolve the repo, run
 /// the guards, require an initialized sidecar, load and merge both layers,
 /// check the backend, build the argv — then print it (`--dry-run`) or exec
@@ -1811,6 +1824,29 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         // pinned crun+libkrun path).
         "podman-gvisor" | "podman-krun" => {
             use std::borrow::Cow;
+
+            // The /dev/kvm doctor check of the krun variant (backends.md
+            // D2, bd myconfig-6di.5.2): crun+libkrun starts each run as
+            // a KVM microVM through `/dev/kvm`, and a user without rw
+            // access (the `kvm` group) gets a host where every krun run
+            // would die inside crun with a raw KVM error — a refused
+            // run naming `/dev/kvm` is the honest diagnosis. Refused
+            // BEFORE the argv and before the `--dry-run` return, so a
+            // dry run audits it too. The check is REAL access (an
+            // O_RDWR open), never a mode-bit guess: udev ACLs (uaccess)
+            // grant per-seat rw outside the mode bits.
+            if backend == "podman-krun" && !dry_run && !kvm_available() {
+                eprintln!("mysbx: podman-krun: /dev/kvm is not readable+writable for this user");
+                eprintln!(
+                    "  crun+libkrun starts every run as a KVM microVM through /dev/kvm; \
+                     a host without rw access cannot run this backend"
+                );
+                eprintln!(
+                    "  add the user to the `kvm` group (or enable the seat udev ACL), \
+                     or switch the backend to `podman-gvisor`"
+                );
+                return EXIT_INFRASTRUCTURE;
+            }
 
             // The image reference the runs use — the same pin
             // gvisor-load-image loads (MYSBX_GVISOR_IMAGE, set by the Nix

@@ -361,12 +361,13 @@ in
         gvisorShell = cfg.gvisor.shell;
         gvisorPastaSpec = cfg.gvisor.pastaSpec;
         gvisorEnv = cfg.gvisor.env;
+        krunRuntime = cfg.krun.runtime;
         waypipe = cfg.display.package;
         gvisorWaypipe = cfg.gvisor.waypipe;
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; krunRuntime = cfg.krun.runtime; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -774,6 +775,39 @@ in
       };
     };
 
+    krun = {
+      # The podman-krun backend (mysbx-rs/src/podman_gvisor.rs under a
+      # swapped runtime, docs/design/backends.md D2, bd myconfig-6di.5):
+      # `backend = "podman-krun"` runs the podman-gvisor argv with the
+      # OCI runtime swapped to crun built against libkrun — each run a
+      # rootless KVM microVM with its own kernel, mounts over
+      # virtio-fs. Requires the user to have rw access to `/dev/kvm`
+      # (the `kvm` group or the seat udev ACL); a run on a host without
+      # it is refused, never a silent fallback.
+      runtime = mkOption {
+        type = types.nullOr types.package;
+        # nixpkgs' crun already defaults `withLibkrun` to
+        # `lib.meta.availableOn stdenv.hostPlatform libkrun` (true on
+        # x86_64-linux), so the plain `crun` package carries the krun
+        # handler and no override is needed — pinned verbatim so a
+        # future nixpkgs default change cannot silently strip the krun
+        # build out of the wrapper's closure.
+        default = pkgs.crun.override { withLibkrun = true; };
+        defaultText = literalExpression "pkgs.crun.override { withLibkrun = true; }";
+        description = ''
+          The OCI runtime of the podman-krun backend — crun built
+          against libkrun (nixpkgs `crun`, `withLibkrun = true`),
+          pinned into the wrapper as `MYSBX_KRUN_RUNTIME`
+          (`--set-default`, so an invocation can still override it).
+
+          `null` pins nothing: `backend = "podman-krun"` then runs
+          against the crate's bare `crun` PATH fallback — a host
+          whose PATH `crun` lacks libkrun gets crun's own refusal,
+          never a silently unsandboxed run.
+        '';
+      };
+    };
+
     nono = {
       # The nono backend (mysbx-rs/src/nono.rs): `nono run` under
       # Landlock + seccomp — the same sandbox the tier-2 standalone
@@ -897,10 +931,11 @@ in
                 "bubblewrap"
                 "podman-gvisor"
                 "nono"
+                "podman-krun"
               ]
             );
             default = "bubblewrap";
-            description = "Sandbox backend (`bubblewrap`, `podman-gvisor` or `nono`); `null` leaves the choice to the sidecar.";
+            description = "Sandbox backend (`bubblewrap`, `podman-gvisor`, `nono` or `podman-krun`); `null` leaves the choice to the sidecar.";
           };
           network = mkOption {
             type = types.bool;

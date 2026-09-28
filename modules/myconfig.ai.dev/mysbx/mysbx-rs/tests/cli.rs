@@ -7849,6 +7849,30 @@ fn podman_krun_waypipe_display_is_refused_first_cut() {
 }
 
 #[test]
+fn podman_krun_dry_run_needs_no_kvm() {
+    // The /dev/kvm doctor check (lib.rs, bd myconfig-6di.5.2) is a
+    // REAL-RUN gate: `--dry-run` stays host-independent — it audits
+    // the argv (and therefore the runtime swap) on any host, with or
+    // without /dev/kvm. A dry run with no image pin still refuses
+    // (the pin check is upstream of the kvm gate), so this test pins a
+    // synthetic image and only asserts the exit is 0 — never a kvm
+    // refusal — which is exactly the contract.
+    let (inv, _, sidecar) = fixture("podman-krun-dry-no-kvm", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a dry run must not hit the kvm gate: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(!stdout.contains("/dev/kvm"), "{stdout}");
+}
+
+#[test]
 fn allowlist_with_network_false_is_refused() {
     // network = false denies the network; an allowlist contradicts it.
     // Refused for the nono backend too (the pipeline's step 4b check
