@@ -10,6 +10,7 @@ mysbx
 --userns=keep-id
 --annotation
 run.oci.handler=krun
+--group-add=keep-groups
 --read-only
 --read-only-tmpfs=true
 --workdir

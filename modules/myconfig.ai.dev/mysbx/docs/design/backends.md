@@ -349,6 +349,20 @@ sources (bd myconfig-6di.5.4):
   `find_handler_for_container`); without it the pinned crun silently
   runs a PLAIN container, no VM, weaker than gVisor. The annotation
   is the VM's on switch, not decoration.
+- `--group-add=keep-groups` (bd myconfig-b5o) — the VMM is the
+  container entrypoint process (the krun handler runs the VM
+  in-process), and crun would setgroups it to the OCI config's
+  `additionalGids` — under `keep-id`, the mapped user's group only.
+  When `/dev/kvm` access comes from the host user's supplementary
+  `kvm` GROUP, the host-side doctor gate passes (mysbx's own
+  process carries the group) while the VMM would lose it and die
+  with EACCES. podman turns this flag into the annotation
+  `run.oci.keep_original_groups=1` (cmd/podman/containers/
+  create.go — refused together with any other `--group-add`, and
+  mysbx emits no other), and crun's `can_setgroups` then SKIPS the
+  setgroups call (linux.c) — the entrypoint keeps the host's
+  supplementary groups. Gvisor argv unchanged: runsc opens no
+  /dev/kvm.
 - NO `--cap-drop=ALL` / `--security-opt=no-new-privileges` — crun's
   krun handler never execs the OCI process (the guest init execs the
   payload as guest root, reading only `Env`/`args`/`WorkingDir` from
@@ -368,6 +382,23 @@ sources (bd myconfig-6di.5.4):
   any OTHER uid is refused with EPERM unless the server holds
   CAP_SETUID). The honest consequence: files created by the payload
   in the shared mounts are host-uid-owned as on the other backends.
+- the guest-root git trust (bd myconfig-zj2) — the OTHER consequence
+  of the same uid model: the workspace mounts keep the host uid the
+  virtiofs stat reports (ownership is NOT rewritten), and guest git
+  refuses every ordinary command with `detected dubious ownership`.
+  git reads `safe.directory` ONLY from the protected system+global
+  config scope (config.c read_protected_config: ignore_repo,
+  ignore_worktree, ignore_cmdline — the GIT_CONFIG_COUNT env block
+  is dead for this key by design), so the builder binds a per-run
+  sidecar file read-only at `/etc/mysbx/gitconfig`, exports
+  `GIT_CONFIG_GLOBAL` to it (last, after every config `[env]`), and
+  the file trusts EXACTLY the approved workspace paths (workspace,
+  approved git-dirs, worktrees sibling, with `/*` forms for the
+  trees — never a bare `*`, the microvm launcher's posture) plus
+  `[include]`s of the two in-sandbox user-config paths, so an
+  operator-seeded `~/.gitconfig` stays reachable. The gvisor variant
+  needs none of it (the keep-id user owns the mounts); a trust
+  there is refused (`GitTrustOnGvisor`).
 
 The existing golden tests plus a before/after snapshot of the gvisor
 argv enforce the gvisor's byte-identity (see the tests of bd

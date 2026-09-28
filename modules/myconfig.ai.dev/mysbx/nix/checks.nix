@@ -249,6 +249,8 @@ in
           || fail "the dry run does not swap --runtime to the pinned crun (got: $first)"
         echo "$argv" | grep -qx 'run.oci.handler=krun' \
           || fail "the dry run does not carry the run.oci.handler=krun annotation (no VM without it)"
+        echo "$argv" | grep -qx -- '--group-add=keep-groups' \
+          || fail "the dry run does not preserve the supplementary groups (bd myconfig-b5o: the VMM loses the kvm group and every device-by-group run dies with EACCES)"
         echo "$argv" | grep -q '^--cap-drop=ALL$' \
           && fail "the krun argv advertises --cap-drop=ALL, which the krun handler never enforces (the payload is guest root)"
         # 4. the rest of the argv is the gvisor layout: the image

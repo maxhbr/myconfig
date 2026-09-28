@@ -3531,6 +3531,9 @@ fn podman_params() -> PodmanParams<'static> {
         // tests pass a switch and a shim.
         krun_nix: false,
         krun_nix_shim: None,
+        // The git trust file is opt-in per run (bd myconfig-zj2); the
+        // krun tests that exercise it pass their own.
+        git_trust: None,
         pids_limit: None,
         memory: None,
         cpus: None,
@@ -4713,14 +4716,15 @@ fn podman_krun_argv_equals_gvisor_except_the_enumerated_differences() {
     // The variant contract (backends.md D2, bd myconfig-6di.5.4):
     // build the SAME config under both runtimes and diff the argvs.
     // The krun variant differs ONLY in the enumerated set D2 names —
-    // the runtime swap, the handler-activation annotation, the two
-    // guest-unenforceable hardening flags dropped (the krun handler
-    // never execs the OCI process; the guest init runs the payload
-    // as guest root, libkrun init/init.c reads only Env/args/
-    // WorkingDir) — plus, for a config with limits, the VM
-    // annotations instead of the cgroup flags (the limits tests
-    // below pin that mapping). Anything else differing is a builder
-    // bug, not a variant.
+    // the runtime swap, the handler-activation annotation, the
+    // supplementary-group preservation (`--group-add=keep-groups`,
+    // bd myconfig-b5o), the two guest-unenforceable hardening flags
+    // dropped (the krun handler never execs the OCI process; the
+    // guest init runs the payload as guest root, libkrun init/init.c
+    // reads only Env/args/WorkingDir) — plus, for a config with
+    // limits, the VM annotations instead of the cgroup flags (the
+    // limits tests below pin that mapping). Anything else differing
+    // is a builder bug, not a variant.
     for (cfg, payload) in [
         (podman_base(true), Payload::Shell),
         (podman_base(false), Payload::Shell),
@@ -4740,9 +4744,7 @@ fn podman_krun_argv_equals_gvisor_except_the_enumerated_differences() {
         .unwrap();
         let krun =
             podman_run_argv(&cfg, &synth_repo(), &payload, &host_env(&[]), &krun_params).unwrap();
-        // Both enumerated differences are LENGTH-NEUTRAL (two flags
-        // dropped, two annotation args added), so the argvs stay
-        // same-length — but not same-POSITION past keep-id. Compare
+        // Both enumerated differences are length-relevant; compare
         // with the enumerated differences removed instead of zipping
         // raw positions.
         let strip = |argv: &[String], drop: &[&str]| {
@@ -4755,7 +4757,14 @@ fn podman_krun_argv_equals_gvisor_except_the_enumerated_differences() {
             &gvisor,
             &["--cap-drop=ALL", "--security-opt=no-new-privileges"],
         );
-        let k = strip(&krun, &["--annotation", "run.oci.handler=krun"]);
+        let k = strip(
+            &krun,
+            &[
+                "--annotation",
+                "run.oci.handler=krun",
+                "--group-add=keep-groups",
+            ],
+        );
         assert_eq!(g.len(), k.len(), "{gvisor:?}\n{krun:?}");
         for (i, (gi, ki)) in g.iter().zip(k.iter()).enumerate() {
             if i == 0 {
@@ -6738,4 +6747,58 @@ fn podman_krun_nix_off_adds_nothing() {
     )
     .unwrap();
     assert_golden("podman-krun-minimal.txt", &argv);
+}
+
+#[test]
+fn podman_krun_preserves_the_supplementary_groups() {
+    // bd myconfig-b5o: the VMM is the container entrypoint process; when
+    // /dev/kvm access comes via the kvm GROUP, crun's setgroups must be
+    // skipped or the VMM loses the group and every run dies with EACCES.
+    // podman's --group-add=keep-groups becomes the crun annotation
+    // run.oci.keep_original_groups=1 (cmd/podman/containers/create.go),
+    // and can_setgroups returns 0 for it (linux.c). Krun-only: the
+    // gvisor argv must not grow it (the variant stays byte-identical),
+    // and it must be the CPU-section sibling of the handler annotation.
+    let mut krun_params = podman_params();
+    krun_params.runtime = KRUN_RUNTIME;
+    krun_params.krun = true;
+    let krun = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &krun_params,
+    )
+    .unwrap();
+    assert!(
+        krun.iter().any(|a| a == "--group-add=keep-groups"),
+        "keep-groups missing on the krun variant: {krun:?}"
+    );
+    let keep_id = krun
+        .iter()
+        .position(|a| a == "--userns=keep-id")
+        .expect("keep-id present");
+    assert_eq!(
+        &krun[keep_id + 1..keep_id + 4],
+        [
+            "--annotation",
+            "run.oci.handler=krun",
+            "--group-add=keep-groups"
+        ],
+        "{krun:?}"
+    );
+    let mut gvisor_params = podman_params();
+    gvisor_params.runtime = "runsc";
+    let gvisor = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &gvisor_params,
+    )
+    .unwrap();
+    assert!(
+        !gvisor.iter().any(|a| a == "--group-add=keep-groups"),
+        "the gvisor argv must stay byte-identical (no runsc equivalent): {gvisor:?}"
+    );
 }

@@ -247,6 +247,20 @@ fn state_parent_tmpfses(entries: &[String]) -> Vec<String> {
     dests
 }
 
+/// The git trust file of a krun run (bd myconfig-zj2): the host path
+/// mysbx wrote the per-run gitconfig to (the sidecar's gittrust dir,
+/// the waypipe per-run-dir precedent), bound read-only at the
+/// container path, and the container path the payload env's
+/// GIT_CONFIG_GLOBAL names. The content — git's `safe.directory`
+/// entries for exactly the approved workspace paths — is produced by
+/// lib.rs from the same repo/workspace facts the section-5 binds use;
+/// the builder can only bind and point.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitTrust {
+    pub host_file: String,
+    pub container_file: String,
+}
+
 /// Common parameters of every invocation that do not come from a
 /// configuration layer. Unlike bwrap's `Params` — whose shell and
 /// dev-tool `PATH` are HOST store paths the wrapper pins from its own
@@ -400,6 +414,16 @@ pub struct Params<'a> {
     /// as the multiplexer entry: a payload whose first exec would die
     /// with `no such file or directory` is never produced.
     pub krun_nix_shim: Option<&'a str>,
+    /// The guest-root git trust file of a krun run (bd myconfig-zj2):
+    /// a per-run file mysbx wrote into the sidecar, bound read-only
+    /// and exported as the payload's GIT_CONFIG_GLOBAL, granting
+    /// git's `safe.directory` exactly to the approved workspace
+    /// paths. `None` on the gvisor variant is the ONLY working shape:
+    /// `Some` there is a refused run ([`Error::GitTrustOnGvisor`]) —
+    /// the gvisor payload runs as the keep-id-mapped user (ownership
+    /// matches) and the bind would be an infrastructure mount the
+    /// backend never promised.
+    pub git_trust: Option<GitTrust>,
     /// Resource limits from configuration.
     /// Using Cow to allow both borrowed (from env vars) and owned strings.
     pub pids_limit: Option<Cow<'a, str>>,
@@ -469,6 +493,14 @@ pub fn podman_run_argv(
     // any argv exists.
     if params.krun_nix && params.krun_nix_shim.is_none() {
         return Err(Error::KrunNixShimUnavailable);
+    }
+    // The git trust file is a krun-only story as well (bd
+    // myconfig-zj2): the gvisor payload runs as the keep-id-mapped
+    // user — the ownership check it defends against cannot fire — so
+    // a Some there is refused, never a silently-mounted infra bind
+    // that grants nothing and widens the audit surface.
+    if params.git_trust.is_some() && !params.krun {
+        return Err(Error::GitTrustOnGvisor);
     }
 
     // 0. podman run with global args — ARGS ONLY, no program name:
@@ -543,6 +575,33 @@ pub fn podman_run_argv(
     // dressing but the difference between the backend and a lie.
     if params.krun {
         argv.extend(["--annotation".into(), "run.oci.handler=krun".into()]);
+    }
+    // The supplementary-group preservation of the krun variant (bd
+    // myconfig-b5o): the VMM is the container entrypoint process
+    // (crun's krun handler runs the VM IN-PROCESS via
+    // krun_start_enter), and crun's `libcrun_container_setgroups`
+    // sets the OCI config's `additionalGids` — which `--userns=keep-id`
+    // runs leave at the mapped user's group only. When /dev/kvm access
+    // comes from the host user's supplementary `kvm` GROUP (mode 0660
+    // root:kvm), the entrypoint would then be unable to open the
+    // device and every run would die inside libkrun with EACCES —
+    // while the host-side doctor gate (kvm_available, an O_RDWR open
+    // by mysbx's OWN process) sees the group and passes. podman's
+    // `--group-add keep-groups` is the documented mechanism
+    // (podman-run.1.md.in: "if the user only has access rights via a
+    // group, accessing the device from inside a rootless container
+    // fails. Use the --group-add keep-groups flag"); podman turns it
+    // into the annotation `run.oci.keep_original_groups=1`
+    // (cmd/podman/containers/create.go, where it is refused together
+    // with any other --group-add), and crun's can_setgroups returns 0
+    // for it — setgroups is SKIPPED (linux.c) — so no group is
+    // dropped and the VMM keeps the host's supplementary groups.
+    // Krun-only: runsc has no /dev/kvm to open; the gvisor argv
+    // stays byte-identical. Gvisor-variant runs never pass another
+    // --group-add, so keep-groups' "must be the only one" rule holds
+    // by construction.
+    if params.krun {
+        argv.push("--group-add=keep-groups".into());
     }
 
     // 2. base isolation
@@ -901,6 +960,24 @@ pub fn podman_run_argv(
         tmpfs_mount(&mut argv, "/nix");
     }
 
+    // 6c. the guest-root git trust bind (bd myconfig-zj2): the
+    // per-run gitconfig mysbx wrote into the sidecar, bound READ-ONLY
+    // at the infrastructure path GIT_CONFIG_GLOBAL will name. The
+    // content grants git's `safe.directory` to exactly the approved
+    // workspace paths — the same set the section-5 binds mount — and
+    // includes the two possible in-sandbox user-config paths, so an
+    // operator-seeded ~/.gitconfig stays reachable (GIT_CONFIG_GLOBAL
+    // REPLACES the user config path, and its XDG fallback with it).
+    // Infrastructure destination, exempt from check_dest like the
+    // home tmpfs and the 6b mounts; the ro mode keeps the payload
+    // from editing its own trust grant into a wider one DURING the
+    // run (a bound-then-rewritten file would make the NEXT git
+    // invocation read altered trust — the trust file is not config
+    // the payload may steer).
+    if let Some(gt) = &params.git_trust {
+        bind_mount(&mut argv, &gt.host_file, &gt.container_file, false);
+    }
+
     // 7. environment
     for (key, value) in host_env {
         argv.extend(["--env".into(), format!("{key}={value}")]);
@@ -986,6 +1063,18 @@ pub fn podman_run_argv(
     // server for the wrapped payload.
     if cfg.display.is_waypipe() {
         argv.extend(["--env".into(), format!("XDG_RUNTIME_DIR={CONTAINER_HOME}")]);
+    }
+    // The guest-root git trust (bd myconfig-zj2): GIT_CONFIG_GLOBAL
+    // set LAST, after every config `[env]` entry, so no configuration
+    // layer can repoint the trust grant — this variable is the
+    // infrastructure that makes git operative under guest root, in
+    // the same class as HOME (config.md D14). The file itself is ro
+    // (the section-6c bind).
+    if let Some(gt) = &params.git_trust {
+        argv.extend([
+            "--env".into(),
+            format!("GIT_CONFIG_GLOBAL={}", gt.container_file),
+        ]);
     }
 
     // 8. resource limits
@@ -1496,6 +1585,12 @@ pub enum Error {
     /// with `no such file or directory`. The same image-pin rule as
     /// [`Error::MultiplexerUnavailable`].
     KrunNixShimUnavailable,
+    /// The git trust file was asked for on the gvisor variant (bd
+    /// myconfig-zj2): the gvisor payload runs as the keep-id-mapped
+    /// user, the dubious-ownership check cannot fire, and the bind
+    /// would widen the audit surface for nothing. Refused — never
+    /// accepted and silently mounted.
+    GitTrustOnGvisor,
 }
 
 impl fmt::Display for Error {
@@ -1597,6 +1692,14 @@ impl fmt::Display for Error {
                  (/bin/agent-krun-init), and this build pinned none — the \
                  image must be built with \
                  myconfig.ai.dev.mysbx.krun.nix.enable"
+            ),
+            Error::GitTrustOnGvisor => write!(
+                f,
+                "the guest-root git trust is a podman-krun story (bd \
+                 myconfig-zj2): the gvisor payload runs as the keep-id \
+                 user, whose uid already owns the repo mounts — the \
+                 dubious-ownership trust cannot exist there. Switch the \
+                 backend to `podman-krun`"
             ),
         }
     }

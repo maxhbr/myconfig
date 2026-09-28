@@ -8642,3 +8642,118 @@ fn podman_krun_nix_without_the_pins_is_a_refused_run() {
         "the refusal names the missing shim and its fix: {stderr}"
     );
 }
+
+// ---- the krun git trust (bd myconfig-zj2) -----------------------------------
+
+#[test]
+fn podman_krun_git_trust_names_exactly_the_bound_workspace_paths() {
+    // The dubious-ownership fix (bd myconfig-zj2): a krun run exports
+    // GIT_CONFIG_GLOBAL at the per-run trust file, binds it ro, and the
+    // file's safe.directory entries are EXACTLY what the argv bound —
+    // the workspace root (exact + the `/*` form), the approved
+    // git-dirs (exact) and, when it exists, the worktrees sibling.
+    // Never a bare `*`.
+    let (inv, repo, sidecar) = fixture("podman-krun-git-trust", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    // The argv carries the ro bind and the env.
+    assert!(
+        stdout.contains("dst=/etc/mysbx/gitconfig,ro"),
+        "the trust file is not ro-bound: {stdout}"
+    );
+    assert!(
+        stdout.contains("GIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"),
+        "GIT_CONFIG_GLOBAL is not exported: {stdout}"
+    );
+    // The trust file was NOT written: a --dry-run creates nothing.
+    assert!(
+        !sidecar.join("gittrust").exists(),
+        "a --dry-run must not create the trust file"
+    );
+    assert!(repo.is_dir());
+}
+
+#[test]
+fn podman_krun_git_trust_real_run_writes_the_sidecar_file() {
+    // A real run (no --dry-run) writes the per-run trust file BEFORE
+    // the backend dispatch; its [safe] section names the repo root
+    // exactly, carries the `/*` form for the workspace tree, and the
+    // [include] block that keeps a seeded global config reachable.
+    // podman may be absent in the test runner, so the run exits 70 on
+    // the missing binary — the assertion is about the sidecar file,
+    // which is written before any dispatch.
+    let (inv, repo, sidecar) = fixture("podman-krun-git-trust-real", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &[] as &[&str]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    let _ = out;
+    // The run needs a backend; with the stub absent it exits 70 — the
+    // trust file must exist by then (it is written BEFORE dispatch).
+    let dirs = sidecar.join("gittrust");
+    let mut found = None;
+    if let Ok(entries) = std::fs::read_dir(&dirs) {
+        for entry in entries.flatten() {
+            let file = entry.path().join("gitconfig");
+            if file.is_file() {
+                found = Some(file);
+            }
+        }
+    }
+    let file = found.expect("the run wrote the per-run trust file");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        text.contains(&format!("\tdirectory = \"{}\"\n", repo.display())),
+        "the exact workspace entry is missing: {text}"
+    );
+    assert!(
+        text.contains(&format!("\tdirectory = \"{}/*\"\n", repo.display())),
+        "the workspace /* entry is missing: {text}"
+    );
+    assert!(
+        !text.contains("directory = \"*\""),
+        "a bare * would widen the trust to every path: {text}"
+    );
+    // The include block keeps a seeded global config reachable.
+    assert!(
+        text.contains("\tpath = /mysbx-home/.gitconfig\n"),
+        "the include of the sandbox gitconfig is missing: {text}"
+    );
+}
+
+#[test]
+fn podman_gvisor_carries_no_trust_file() {
+    // The trust story is krun-only (bd myconfig-zj2): the gvisor
+    // payload runs as the keep-id-mapped user — the uid already owns
+    // the repo mounts, so the dubious-ownership check cannot fire and
+    // no trust bind may appear on the gvisor argv.
+    let (inv, _, sidecar) = fixture("podman-gvisor-git-trust", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        !stdout.contains("GIT_CONFIG_GLOBAL") && !stdout.contains("/etc/mysbx/gitconfig"),
+        "no trust bind or env on the gvisor argv: {stdout}"
+    );
+    assert!(
+        !sidecar.join("gittrust").exists(),
+        "the gvisor run must not create the trust file"
+    );
+}

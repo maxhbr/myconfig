@@ -50,6 +50,10 @@ validates; a FAIL line quotes the decision document
 ```bash
 # in one shell, inside the sandbox:
 mysbx                            # interactive shell in the VM
+git status                       # bd myconfig-zj2: NO dubious-ownership
+                                 # failure — the krun run's trust file
+                                 # names the workspace for git's
+                                 # protected config
 touch /synth-marker && echo hi > $HOME/.cache/marker
 # from the HOST while the run is up:
 ls -l <repo>/.mysbx/state        # the state-dirs sidecar backing

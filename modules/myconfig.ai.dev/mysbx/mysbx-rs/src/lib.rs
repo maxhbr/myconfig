@@ -1152,6 +1152,54 @@ fn stdin_is_tty() -> bool {
 /// real `O_RDWR` open, never a mode-bit guess: udev's seat ACLs
 /// (uaccess) grant per-session rw that the mode bits do not show.
 /// The opened fd is dropped immediately — access, not ownership.
+/// The git trust paths of a run (bd myconfig-zj2): exactly what the
+/// argv's section-5 workspace binds mount. `/*` suffix entries cover
+/// git repos the workspace contains (submodules, worktree checkouts
+/// under the repo root or inside the worktrees sibling); the exact
+/// entries cover the worktree/gitdir tops themselves. The approved
+/// git-dir list carries NO `/*` form — a gitdir is git metadata, not
+/// a workspace tree to walk — but the trust file must always name
+/// the paths the builder binds, so the trust never outruns a bind.
+fn podman_trusted_git_paths(
+    repo: &crate::repo::Repo,
+    workspace: bwrap::Workspace<'_>,
+) -> Result<Vec<String>, String> {
+    use std::path::Path;
+    let mut paths = Vec::new();
+    let push = |paths: &mut Vec<String>, p: &Path| {
+        let s = p.to_string_lossy().into_owned();
+        if !paths.contains(&s) {
+            paths.push(s.clone());
+            paths.push(format!("{s}/*"));
+        }
+    };
+    match workspace {
+        bwrap::Workspace::Live => {
+            // git dirs are APPROVED lists (config.md D16: every entry
+            // must be approved by a trusted config layer) — the same
+            // assumption the argv builder's `check_git_dir` makes
+            // (the gitdirs resolve from the repo's own pointers; an
+            // unapproved relation is the builder's refusal).
+            push(&mut paths, &repo.root);
+            for git_dir in &repo.git_dirs {
+                let s = git_dir.to_string_lossy().into_owned();
+                if !paths.contains(&s) {
+                    paths.push(s);
+                }
+            }
+            if let Some(worktrees) = &repo.worktrees {
+                push(&mut paths, worktrees);
+            }
+        }
+        bwrap::Workspace::Clone { .. } => {
+            // The clone is bound AT the repo's own path (bd
+            // myconfig-6di.5.4) — one workspace surface.
+            push(&mut paths, &repo.root);
+        }
+    }
+    Ok(paths)
+}
+
 fn kvm_available() -> bool {
     std::fs::OpenOptions::new()
         .read(true)
@@ -1746,6 +1794,39 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     let pid = std::process::id();
     let waypipe_socket_dir = repo.sidecar.join("waypipe").join(pid.to_string());
     let waypipe_socket_dir_str = waypipe_socket_dir.to_string_lossy().into_owned();
+    // The guest-root git trust of the krun variant (bd myconfig-zj2):
+    // the payload runs as guest root while the repo mounts keep their
+    // host ownership (keep-id maps the HOST-side prep only; virtiofs
+    // does not rewrite reported ownership), so every ordinary `git`
+    // command inside the sandbox fails with `detected dubious
+    // ownership`. git's fix is the `safe.directory` config — and it is
+    // PROTECTED config: git reads it ONLY from system + global config
+    // (config.c read_protected_config: ignore_repo, ignore_worktree,
+    // ignore_cmdline — the GIT_CONFIG_COUNT env block is ignored for
+    // this key by design), so the only container-channel that works is
+    // a config FILE + GIT_CONFIG_GLOBAL. mysbx writes one per run into
+    // the sidecar (the waypipe per-run-dir precedent) granting trust
+    // EXACTLY to the paths this run binds — the workspace, its
+    // approved git-dirs and the worktrees sibling — never `*`
+    // (the microvm launcher's same finding, launcher.nix). The file
+    // is bound read-only and the payload env points GIT_CONFIG_GLOBAL
+    // at it; `[include]` entries keep an operator-seeded global
+    // config reachable (GIT_CONFIG_GLOBAL REPLACES the user config
+    // path and suppresses the XDG fallback — without the includes a
+    // seeded ~/.gitconfig would be silently hidden).
+    //
+    // Krun-only by construction: the other podman variant's payload
+    // is the keep-id-mapped user (uid == host uid), so the ownership
+    // check would never fire; setting the trust there would widen
+    // nothing yet still be argv noise — a `Some` on the gvisor side
+    // is refused by the builder (`GitTrustOnGvisor`).
+    //
+    // The file is written INSIDE the podman arm, after the /dev/kvm
+    // gate: a refused run must not leave sidecar debris (a krun run
+    // on a host without /dev/kvm is refused pre-exec, and the trust
+    // file would be pure leftovers). The cleanup of a REAL waited
+    // run happens after the backend exits, from this same Option.
+    let mut git_trust_file: Option<std::path::PathBuf> = None;
     let waypipe_params: Option<bwrap::Waypipe<'_>> = if merged.display.is_waypipe() {
         // Under podman-krun a waypipe display is refused upstream
         // (step 4d, first cut) — the krun arm of this conditional is
@@ -1899,6 +1980,80 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // (they are VM annotations, section 8 of the builder),
             // so no rootless special case is needed for them.
             let krun = backend == "podman-krun";
+            // The guest-root git trust file (bd myconfig-zj2): a
+            // krun run writes it — the payload's only git-side way to
+            // trust the approved workspace paths. A --dry-run audits
+            // the argv (bind + GIT_CONFIG_GLOBAL) and creates
+            // NOTHING; a gvisor run writes nothing and binds
+            // NOTHING (the keep-id payload already owns the mounts).
+            let git_trust_params = if krun {
+                // The approved workspace paths, the same set the
+                // argv's section-5 binds mount (bd myconfig-6di.5.4):
+                // live = the repo root + its approved git-dirs + the
+                // worktrees sibling; clone = the repo path the clone
+                // is bound at. `/*` suffixes cover git repos the
+                // workspace CONTAINS (submodules, worktree checkouts)
+                // — git matches the `/*` form by prefix; the exact
+                // entries cover the worktree tops of this repo
+                // itself.
+                let trusted = match podman_trusted_git_paths(&repo, workspace.clone()) {
+                    Ok(paths) => paths,
+                    Err(e) => {
+                        eprintln!("mysbx: {e}");
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                };
+                let dir = repo.sidecar.join("gittrust").join(pid.to_string());
+                let file = dir.join("gitconfig");
+                // A --dry-run audits the argv (bind + env) and
+                // creates NOTHING; the container path is what a real
+                // run would bind.
+                if !dry_run {
+                    if let Err(e) = std::fs::create_dir_all(&dir) {
+                        eprintln!(
+                            "mysbx: cannot create the git trust directory {}: {e}",
+                            dir.display()
+                        );
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                    let mut text = String::from(
+                        "# Generated by mysbx for this run (bd myconfig-zj2) — do not edit.\n\
+# The podman-krun payload runs as guest root while the repo mounts keep their\n\
+# host ownership; git's protected config reads safe.directory ONLY from the\n\
+# global scope, so this file (bound read-only, GIT_CONFIG_GLOBAL) grants\n\
+# trust to EXACTLY the paths this run bound. Never a bare `*`.\n\
+[include]\n\
+\tpath = /mysbx-home/.gitconfig\n\
+\tpath = /mysbx-home/.config/git/config\n\
+[safe]\n",
+                    );
+                    for path in &trusted {
+                        // gitconfig string values: double-quoted with
+                        // backslash and quote escaped; git's pathname
+                        // parser keeps the rest verbatim. Unquoted
+                        // values would end at `;`/`#`.
+                        text.push_str(&format!(
+                            "\tdirectory = \"{}\"\n",
+                            path.replace('\\', "\\\\").replace('"', "\\\"")
+                        ));
+                    }
+                    if let Err(e) = std::fs::write(&file, &text) {
+                        eprintln!(
+                            "mysbx: cannot write the git trust file {}: {e}",
+                            file.display()
+                        );
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                    git_trust_file = Some(file.clone());
+                }
+                Some(podman_gvisor::GitTrust {
+                    host_file: file.to_string_lossy().into_owned(),
+                    container_file: "/etc/mysbx/gitconfig".to_owned(),
+                })
+            } else {
+                None
+            };
+
             let rootless = unsafe { libc_geteuid() != 0 };
             let (cgroup_manager_env, runtime_flags_env, runtime_flags_default) = if krun {
                 ("MYSBX_KRUN_CGROUP_MANAGER", "MYSBX_KRUN_RUNTIME_FLAGS", "")
@@ -2041,6 +2196,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 extra_env: &gvisor_env,
                 krun_nix,
                 krun_nix_shim: krun_nix_shim.as_deref(),
+                git_trust: git_trust_params,
                 pids_limit,
                 memory,
                 cpus,
@@ -2296,6 +2452,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             }
             if merged.display.is_waypipe() {
                 let _ = std::fs::remove_dir_all(&waypipe_socket_dir);
+            }
+            // The per-run git trust dir the krun run wrote (bd
+            // myconfig-zj2): required only while the container ran, so
+            // a waited run removes it with the waypipe token dir. An
+            // exec run replaces this process and cannot clean up — the
+            // pid-scoped dir is the waypipe debris model.
+            if let Some(f) = &git_trust_file {
+                let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
             }
             exit
         }
