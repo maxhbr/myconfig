@@ -225,7 +225,7 @@ KVM microVM with the stock libkrunfw kernel, mounts over virtio-fs.
 Honest boundary statement: krun is NOT stronger than gVisor — the VMM
 and the guest share one security context; the gains are
 host-kernel-bug isolation and full kernel compatibility (which the
-required nested podman and Nix-overlay builds need). Remaining:
+required nested podman needs). Remaining:
 qemu and microvm, long-term.
 
 **2g — per-repo opt-out of user mounts.** `config.md` D7 settled the other

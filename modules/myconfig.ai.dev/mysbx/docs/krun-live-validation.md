@@ -3,7 +3,7 @@
 The scripted smoke + manual probes that validate the `podman-krun`
 backend on a host with real `/dev/kvm` (f13). Everything here was
 designed, source-verified and statically gated in bd myconfig-6di.5.1
-– .5.9; what CANNOT be checked without a booting microVM is exactly
+– .5.8; what CANNOT be checked without a booting microVM is exactly
 this list. Run it after `nixos-rebuild switch` with
 `myconfig.ai.dev.mysbx.enable` and a sidecar/backend configuration in
 place (see `docs/design/config.md`).
@@ -45,6 +45,9 @@ validates; a FAIL line quotes the decision document
 
 ## 2. The manual probes (the parts a script cannot see)
 
+Nix builds inside the guest are not part of the krun variant
+(`docs/design/backends.md` D2, *Dropped*).
+
 ### 2.1 Mounts and state-dirs over virtio-fs (bd myconfig-6di.5.4)
 
 ```bash
@@ -62,33 +65,9 @@ cat <repo>/synth-marker          # the live-repo bind is rw
 
 Verify: files written in the sandbox appear host-uid-owned (the
 virtiofs `set_creds` mapping, D2's uid row); the state-dirs bind
-survives the run; a write to `/` fails `Read-only file system`
-(the shim did not run, `/nix` is not mounted).
+survives the run; a write to `/` fails `Read-only file system`.
 
-### 2.2 The nix overlay store (bd myconfig-6di.5.9)
-
-Enable `myconfig.ai.dev.mysbx.krun.nix.enable`, rebuild, reload the
-image, and inside the sandbox:
-
-```bash
-nix --version                    # the image's nix
-nix path-info /nix/store/<any host path>   # resolved through the ro lower store
-nix build nixpkgs#hello --no-link --print-out-pairs | grep outPath
-# a path that exists in BOTH layers must stat the same store dir:
-nix path-info /nix/store | head
-```
-
-Verify: the build WRITES only to the upper layer (nothing under
-`/nix/store-lower` changes — it is ro), a host path with a known
-drv resolves without copying (compare `nix path-info` output against
-the host's), and `nix path-info` on a path registered only in the
-daemon's WAL documents the staleness (missing until a checkpoint —
-`nix-store --gc` or a daemon restart checkpoints; do not chase it as
-a bug). `grep ' /nix/store ' /proc/mounts` inside the sandbox must
-show the overlay with `lowerdir=/nix/store-lower,...` — check-mount
-enforces this, but seeing it is the point.
-
-### 2.3 Nested rootless podman (bd myconfig-6di.5.8)
+### 2.2 Nested rootless podman (bd myconfig-6di.5.8)
 
 Enable `myconfig.ai.dev.mysbx.krun.nestedPodman.enable`, rebuild,
 reload the image, and inside the sandbox:
@@ -104,7 +83,7 @@ roots, and with `network = false` in the sidecar the PULL fails
 honestly (the documented failure mode) while a local `podman run`
 of an already-pulled image still works.
 
-### 2.4 Limits as VM annotations (bd myconfig-6di.5.6)
+### 2.3 Limits as VM annotations (bd myconfig-6di.5.6)
 
 Set `MYSBX_GVISOR_CPUS`/`MYSBX_GVISOR_MEMORY` on the host (the
 wrapper pins), and inside the sandbox:
@@ -114,7 +93,7 @@ nproc                            # == the annotation's whole vCPUs
 grep MemTotal /proc/meminfo      # ~= the annotation's MiB
 ```
 
-### 2.5 DNS over TSI (bd myconfig-6di.5.5)
+### 2.4 DNS over TSI (bd myconfig-6di.5.5)
 
 ```bash
 getent hosts cache.nixos.org     # the VMM resolves from the netns

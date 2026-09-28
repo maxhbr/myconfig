@@ -88,53 +88,6 @@ in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
   mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
 
-  # The krun Nix guest shim (bd myconfig-6di.5.9): the bytes of
-  # /bin/agent-krun-init — the overlay mount, the store URI spelling
-  # (with its percent-encoded nested query), the NIX_CONFIG the
-  # payload inherits, and the fail-closed guards. The overlay mount
-  # itself is live validation (bd myconfig-6di.5.7, no /dev/kvm
-  # here); what a check CAN pin is that the script a host bakes
-  # matches the argv builder's layout contract (the destinations of
-  # section 6b) and keeps its promises (no silent degraded mode).
-  mysbx-krun-nix-shim-test =
-    let
-      shim = pkgs.writeTextFile {
-        name = "agent-krun-init";
-        destination = "/bin/agent-krun-init";
-        executable = true;
-        text = builtins.readFile ../nix/krun-nix-init.sh;
-      };
-    in
-    pkgs.runCommand "mysbx-krun-nix-shim-test" { } ''
-      fail() {
-        echo "mysbx-krun-nix-shim-test: $*" >&2
-        exit 1
-      }
-      script="${shim}/bin/agent-krun-init"
-      grep -q 'lowerdir=/nix/store-lower,upperdir=/nix/upper,workdir=/nix/work' "$script" \
-        || fail "the overlay mount must name the argv builder's section-6b layout verbatim"
-      # The FILE carries the printf SOURCE (%%3F — the percent-escape
-      # printf emits as %3F when the shim runs); grep the source
-      # spelling, not the runtime expansion.
-      grep -q 'local-overlay://?lower-store=local://%%3Freal=/nix/store-lower' "$script" \
-        || fail "the store URI must spell the ro lower store with its nested query percent-encoded"
-      grep -q 'state=/nix/var-lower/nix' "$script" \
-        || fail "the lower store's state must point at the ro host db bind"
-      grep -q 'read-only=true' "$script" \
-        || fail "the lower store must be read-only"
-      grep -q 'local-overlay-store read-only-local-store' "$script" \
-        || fail "the NIX_CONFIG must enable both experimental features the story needs"
-      grep -q 'build-users-group =' "$script" \
-        || fail "the guest has no nixbld users — the build users group must be emptied"
-      grep -q 'MYSBX_KRUN_NIX' "$script" \
-        || fail "the shim must be gated on the argv's promise, never self-starting"
-      grep -q '^#!/bin/bash' "$script" \
-        || fail "the shim must not carry a /nix/store shebang (the image has no /nix yet)"
-      grep -q 'die ' "$script" \
-        || fail "the shim must fail closed"
-      touch $out
-    '';
-
   # The nested-podman guest configuration tree (bd myconfig-6di.5.8):
   # the bytes podman will read inside the krun guest. Static by
   # design — the nested run itself is live validation (bd

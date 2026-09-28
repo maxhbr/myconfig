@@ -24,8 +24,7 @@
 # - `network_cmd_path` unset, `no_pivot_root = true` — the guest runs
 #   everything as root in one mount namespace handed over virtio-fs;
 #   pivot_root on the virtiofs root is exactly what the guest kernel
-#   does NOT support cleanly (the shared tree is the VM's root, and
-#   the upper-layer question is bd myconfig-6di.5.9's).
+#   does NOT support cleanly (the shared tree is the VM's root).
 # - storage.conf: `driver = "overlay"` with EXPLICIT
 #   `graphroot = "/var/tmp/containers/storage"` and
 #   `runroot = "/run/containers/storage"` — the podman defaults

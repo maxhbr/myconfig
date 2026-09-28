@@ -384,39 +384,6 @@ let
       throw "mysbx generated-config test: a disabled krun.nestedPodman leaked podman or the guest conf into gvisor.imagePackages"
     else
       "ok";
-
-  # The krun Nix provisioning gate (bd myconfig-6di.5.9): the same
-  # on/off folding as the nested-podman gate above, plus the two
-  # wrapper pins the argv builder consumes — a krun Nix run of an
-  # unpinned wrapper must be the module's impossible shape, and the
-  # gates pin that it is: `krun.nix.enable` produces BOTH pins, a
-  # disabled story produces NEITHER.
-  krunNixGate =
-    let
-      eval = n: (evaluated n).myconfig.ai.dev.mysbx.package;
-      on = eval [ { myconfig.ai.dev.mysbx.krun.nix.enable = true; } ];
-      off = eval [ ];
-      # The wrapper pins are not directly inspectable on the symlink
-      # join; the args the module passes ARE — through the default
-      # callPackage text. Inspect the option DEFAULTS instead: the
-      # callPackage args come from the same cfg reads, so pinning
-      # the image packages folding (the visible surface) plus the
-      # package eval (the wrapper builds) is the honest gate.
-      onPkgs =
-        (evaluated [ { myconfig.ai.dev.mysbx.krun.nix.enable = true; } ])
-        .myconfig.ai.dev.mysbx.gvisor.imagePackages;
-      offPkgs = (evaluated [ ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
-      hasNix = pkgs.lib.any (p: p.pname or "" == "nix");
-      hasShim = pkgs.lib.any (p: p.name or "" == "agent-krun-init");
-    in
-    if !(hasNix onPkgs && hasShim onPkgs) then
-      throw "mysbx generated-config test: krun.nix.enable did not fold nix + the guest shim into gvisor.imagePackages"
-    else if (hasNix offPkgs || hasShim offPkgs) then
-      throw "mysbx generated-config test: a disabled krun.nix leaked nix or the guest shim into gvisor.imagePackages"
-    else if !on ? outPath || !off ? outPath then
-      throw "mysbx generated-config test: the wrapper package failed to evaluate under krun.nix on/off"
-    else
-      "ok";
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -447,7 +414,6 @@ pkgs.runCommand "mysbx-generated-config-test"
       gvisorPinGate
       krunPinGate
       krunNestedPodmanGate
-      krunNixGate
       ;
   }
   ''

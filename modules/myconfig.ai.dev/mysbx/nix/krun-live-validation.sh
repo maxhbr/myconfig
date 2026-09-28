@@ -93,15 +93,4 @@ printf '%s\n' "$dry" | grep -q 'run.oci.handler=krun' ||
     fail "7 krun annotations" "the handler annotation is missing"
 pass "7 krun annotations on the dry run"
 
-# 8. multiplexer session / nested podman / nix overlay: gated on the
-# host's module options — the runbook §2 probes them manually; the
-# script only asserts the shape when the options are on.
-if printf '%s\n' "$dry" | grep -q 'agent-krun-init'; then
-    printf '%s\n' "$dry" | grep -q 'dst=/nix/store-lower' ||
-        fail "8 krun nix" "the shim is wrapped but the lower-store bind is missing"
-    pass "8 krun nix infrastructure on the dry run (live nix build: runbook §2.2)"
-else
-    pass "8 krun nix not enabled (set myconfig.ai.dev.mysbx.krun.nix.enable; runbook §2.2)"
-fi
-
 printf 'krun live validation: all probes passed\n'

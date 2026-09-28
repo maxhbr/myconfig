@@ -362,14 +362,12 @@ in
         gvisorPastaSpec = cfg.gvisor.pastaSpec;
         gvisorEnv = cfg.gvisor.env;
         krunRuntime = cfg.krun.runtime;
-        krunNix = if cfg.krun.nix.enable then "1" else null;
-        krunNixShim = if cfg.krun.nix.enable then "/bin/agent-krun-init" else null;
         waypipe = cfg.display.package;
         gvisorWaypipe = cfg.gvisor.waypipe;
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; krunRuntime = cfg.krun.runtime; krunNix = if cfg.krun.nix.enable then \"1\" else null; krunNixShim = if cfg.krun.nix.enable then \"/bin/agent-krun-init\" else null; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; krunRuntime = cfg.krun.runtime; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -767,26 +765,9 @@ in
           # myconfig-6di.5.8): the image is SHARED between both podman
           # backends, so provisioning rides this seam — appended only
           # when the host opts in, a gvisor-only host pays no podman
-          # closure. The krun Nix userspace (bd myconfig-6di.5.9)
-          # rides the same seam for the same reason.
-          ++ lib.optionals cfg.krun.nestedPodman.enable cfg.krun.nestedPodman.packages
-          ++ lib.optionals cfg.krun.nix.enable (
-            cfg.krun.nix.packages
-            ++ [
-              # The guest shim: a plain-#!/bin/bash script at
-              # /bin/agent-krun-init (no /nix/store shebang — the
-              # image has no /nix until the shim builds one), the
-              # same writeTextFile idiom the gvisor tier's own init
-              # script uses.
-              (pkgs.writeTextFile {
-                name = "agent-krun-init";
-                destination = "/bin/agent-krun-init";
-                executable = true;
-                text = builtins.readFile ./nix/krun-nix-init.sh;
-              })
-            ]
-          );
-        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` / `krun.nix.packages` + the guest shim when `krun.nestedPodman.enable` / `krun.nix.enable`";
+          # closure.
+          ++ lib.optionals cfg.krun.nestedPodman.enable cfg.krun.nestedPodman.packages;
+        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` when `krun.nestedPodman.enable`";
         description = ''
           Packages the gvisor tier bakes into the container image on
           behalf of mysbx (bd myconfig-cew: the container must be
@@ -794,11 +775,9 @@ in
           multiplexer's own tooling, so a pane inside a container
           session finds it on `PATH` — the same payload the bwrap
           backend gets via `extraTools` — plus the nested-podman
-          userspace and the Nix overlay story of the podman-krun
-          backend when `krun.nestedPodman.enable` / `krun.nix.enable`
-          (bd myconfig-6di.5.8/.9: podman, its guest configuration
-          tree, nix and the guest shim, baked into the shared
-          image).
+          userspace of the podman-krun backend when
+          `krun.nestedPodman.enable` (bd myconfig-6di.5.8: podman and
+          its guest configuration tree, baked into the shared image).
 
           Only takes effect while the gvisor tier module is enabled
           (`myconfig.ai.dev.gvisor-agent-sandbox.enable`): its
@@ -885,64 +864,6 @@ in
             Live validation of the nested run is bd
             myconfig-6di.5.7's runbook — the agent sandbox has no
             /dev/kvm, so nothing here is executed at check time.
-          '';
-        };
-      };
-
-      nix = {
-        # Nix builds inside the krun guest (bd myconfig-6di.5.9,
-        # backends.md D2's scope decision): the host /nix/store and
-        # its database are bound READ-ONLY over virtio-fs, the guest
-        # kernel (libkrunfw, CONFIG_OVERLAY_FS=y) mounts an overlayfs
-        # whose upper layer lives on the per-run /nix tmpfs, and Nix
-        # runs against the merged view through a `local-overlay`
-        # store (Nix 2.34's experimental layered store) with the ro
-        # host store as its lower store. Host store paths are
-        # REUSED, never copied; the host store is never written.
-        #
-        # The honest limits, all documented in backends.md D2: the
-        # lower database is read `immutable` (no locks, no WAL
-        # replay), so paths whose registrations still live in the
-        # daemon's WAL are invisible until a checkpoint — staleness
-        # is the accepted semantic, not a bug; the upper layer is
-        # per-run ephemeral (nothing survives the VM; the persisted
-        # sidecar disk remains a future option); and the story is
-        # krun-only — a host whose backend is podman-gvisor gets a
-        # refused run from the argv builder (runsc has no guest
-        # kernel to mount the overlay).
-        #
-        # What ships: nix itself into the shared agent image (the
-        # `krun.nix.packages` override point), the guest shim
-        # (./nix/krun-nix-init.sh, at /bin/agent-krun-init through
-        # the same image seam), and the two wrapper pins
-        # (`MYSBX_KRUN_NIX`, `MYSBX_KRUN_NIX_SHIM`) the argv builder
-        # consumes. The overlay mount and the live `nix build` are
-        # bd myconfig-6di.5.7's runbook — no /dev/kvm in the agent
-        # sandbox.
-        enable = mkEnableOption "Nix builds inside the podman-krun guest over the read-only host store";
-
-        packages = mkOption {
-          type = types.listOf types.package;
-          # nixpkgs' nix 2.34 builds the local-overlay store
-          # UNCONDITIONALLY (src/libstore/meson.build lists
-          # local-overlay-store.cc — there is no compile-time switch),
-          # and `read-only` on a local store rides the
-          # read-only-local-store experimental feature of the same
-          # version: the pinned >= 2.34 requirement is documented, not
-          # enforced by an override (the nixpkgs nix carries no
-          # `enableLocalOverlayStore` argument to override with).
-          default = [ pkgs.nix ];
-          defaultText = literalExpression "[ pkgs.nix ]";
-          description = ''
-            The Nix userspace baked into the agent image when
-            `krun.nix.enable` — consumed through
-            `gvisor.imagePackages` (the image is shared between both
-            # podman backends, so provisioning rides the same seam as
-            `krun.nestedPodman.packages`).
-
-            The pinned nix must be >= 2.34: the overlay story rides
-            the `local-overlay-store` and `read-only-local-store`
-            experimental features, both of 2.34.
           '';
         };
       };
