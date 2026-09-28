@@ -568,3 +568,15 @@ Consequences, stated honestly:
   bind or a copy, not through the store). A sidecar-backed disk for
   a persisted store remains a future option, blocked on nothing
   but a decision.
+
+#### Live validation (bd myconfig-6di.5.7)
+
+Everything above is source-verified and statically gated; what
+needs a booting microVM is collected in one runbook,
+../../krun-live-validation.md, with the scripted half at
+../nix/krun-live-validation.sh (boot, guest kernel, exit codes,
+live-repo edit, ro rootfs, network=false) and the manual probes
+the script cannot see (mounts/state-dirs/uid over virtio-fs, the
+nix overlay store in a live build, nested podman, the VM
+annotations as nproc/MemTotal, DNS over TSI). The agent sandbox
+has no /dev/kvm — the runbook is the handoff.
