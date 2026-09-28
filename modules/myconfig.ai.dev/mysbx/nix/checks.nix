@@ -533,14 +533,22 @@ in
   # nono and profile from different generations — fails here, not at
   # a sandbox run. The expected CONTENTS are covered by the crate's
   # golden argv fixtures (the profile value flows into the argv as
-  # `--profile <store path>`).
+  # `--profile <store path>`), with one exception asserted here:
+  # the /tmp + $TMPDIR READ grant next to the write grant (bd
+  # myconfig-2pe) — nono's `write` axis is write-ONLY, so without
+  # `filesystem.read` the payload could never read back its own temp
+  # files. `profile validate` accepts a readless profile silently,
+  # so the regression gate lives here.
   mysbx-nono-profile-test =
     let
       pin = pkg.passthru.nonoProfilePin;
     in
     pkgs.runCommand "mysbx-nono-profile-test"
       {
-        nativeBuildInputs = [ pkgs.nono ];
+        nativeBuildInputs = [
+          pkgs.nono
+          pkgs.jq
+        ];
       }
       ''
         fail() {
@@ -556,6 +564,19 @@ in
         env -i PATH="$PATH" HOME="$TMPDIR" \
           ${pkgs.nono}/bin/nono profile validate "${pin}" \
           || fail "nono refused the pinned profile"
+
+        # bd myconfig-2pe: the read grant is a behavior gate, not
+        # schema — `profile validate` passes a write-only /tmp too.
+        # nono 0.74.0's `AccessMode::Write` adds no Landlock
+        # `ReadFile`, so the delivered profile must carry
+        # `filesystem.read` mirroring `filesystem.write` path for
+        # path, or every temp file the payload creates is one it can
+        # never open again.
+        jq -e '
+          (.filesystem.read | sort) == (["/tmp", "$TMPDIR"] | sort)
+          and (.filesystem.write | sort) == (["/tmp", "$TMPDIR"] | sort)
+        ' "${pin}" >/dev/null \
+          || fail "the pinned profile lost the /tmp + $TMPDIR read/write grants"
 
         mkdir "$out"
       '';

@@ -104,8 +104,9 @@
 #                     credential denies (with a grant covering an
 #                     ancestor those abort Landlock with
 #                     "deny-overlap is not enforceable"), `/tmp`
-#                     and `$TMPDIR` writes for the private tmpfs,
-#                     signal isolation. Pinned with `--set-default`:
+#                     and `$TMPDIR` read+write for the private
+#                     tmpfs, signal isolation. Pinned with
+#                     `--set-default`:
 #                     an invocation can still override it with a
 #                     nono profile NAME (resolved in the sandbox
 #                     `$XDG_CONFIG_HOME`) or another store path.
@@ -417,17 +418,28 @@ let
   # Landlock on Linux with "deny-overlap is not enforceable" BEFORE
   # the payload runs. The profile here carries:
   #
-  # - `filesystem.write = ["/tmp", "$TMPDIR"]`: /tmp is bwrap's
+  # - `filesystem.write = ["/tmp", "$TMPDIR"]` (with the `read`
+  #   counterpart above): /tmp is bwrap's
   #   private tmpfs and TMPDIR is /mysbx-nono/tmp (the `--setenv
   #   TMPDIR` infra env), so both exist in the view; Landlock has no
   #   default access, without this the payload cannot drop temp
   #   files at all.
-  # - NO read/allow grants and NO deny: every filesystem grant is
-  #   derived from the RESOLVED bwrap layout by nono.rs (D1 "grants
-  #   follow the resolved layout") — a static profile grant could
-  #   only fight it, and the `$HOME` credential denies of the
-  #   built-in `default` profile are exactly what cannot be
-  #   expressed under a broad grant.
+  # - `filesystem.read = ["/tmp", "$TMPDIR"]` next to the write
+  #   grant: nono's `write` axis is Landlock WRITE-ONLY (nono 0.74.0
+  #   `AccessMode::Write` adds no `ReadFile`) — without the read
+  #   counterpart every temp file the payload drops is one it can
+  #   never open(O_RDONLY) again (EACCES on read-back; `cargo`
+  #   round-tripping cc objects through $TMPDIR was the live
+  #   casualty, bd myconfig-2pe). Both paths still exist only in
+  #   the bwrap view (D1 below), so the read grant widens nothing
+  #   into the host.
+  # - NO other read/allow grants and NO deny: every filesystem
+  #   grant beyond /tmp + $TMPDIR is derived from the RESOLVED
+  #   bwrap layout by nono.rs (D1 "grants follow the resolved
+  #   layout") — a static profile grant could only fight it, and
+  #   the `$HOME` credential denies of the built-in `default`
+  #   profile are exactly what cannot be expressed under a broad
+  #   grant.
   # - `network.block = false`: outbound network is the `nono run`
   #   argv's decision (block/allowlist/proxy), the profile stays out
   #   of it.
@@ -491,6 +503,17 @@ let
           # /tmp when TMPDIR is unset, which would grant the HOST /tmp
           # through Landlock). /tmp here covers bwrap's private tmpfs
           # for payloads that hardcode it instead of TMPDIR.
+          #
+          # `read` mirrors `write` path for path (bd myconfig-2pe):
+          # nono 0.74.0's `AccessMode::Write` is Landlock WRITE-ONLY
+          # (no `ReadFile` in its rule), so a temp file the payload
+          # created could never be opened for reading again — the
+          # read axis is the read-back half of the SAME tmpfs grant,
+          # not a new path into the host.
+          filesystem.read = [
+            "/tmp"
+            "$TMPDIR"
+          ];
           filesystem.write = [
             "/tmp"
             "$TMPDIR"
