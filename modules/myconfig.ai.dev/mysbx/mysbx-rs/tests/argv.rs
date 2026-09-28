@@ -5631,6 +5631,30 @@ fn nono_golden_multiplexer_session() {
     };
     let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
     assert_golden("nono-mux-session.txt", &argv);
+
+    // bd myconfig-peo: workmux's golden pins the SECOND grant — the
+    // temp dir the sidebar daemon binds its snapshot socket in
+    // (`workmux-sidebar-<hash>.sock`, a direct child of the payload's
+    // `temp_dir()`, which is `/tmp` because the payload env carries
+    // no TMPDIR). Without it the daemon's bind is denied under the
+    // profile's pathname mediation and `workmux sidebar` dies with
+    // "Sidebar daemon failed to start".
+    let mut cfg = nono_base(false);
+    cfg.multiplexer = Multiplexer::Workmux;
+    let grants = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params()).unwrap();
+    let mut inner_argv = Vec::with_capacity(grants.len() + 1);
+    inner_argv.push(NONO_BIN.into());
+    inner_argv.extend(grants);
+    let p = Params {
+        mux_entry: Some("/synth/bin/mysbx-workmux-entry"),
+        inner: Some(Inner {
+            argv: &inner_argv,
+            env_bin: "env",
+        }),
+        ..params()
+    };
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
+    assert_golden("nono-workmux-session.txt", &argv);
 }
 
 #[test]

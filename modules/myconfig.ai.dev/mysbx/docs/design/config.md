@@ -767,9 +767,14 @@ That isolation is **enforced, not assumed** (`bwrap.rs::check_workmux_socket`):
   (`/tmp/tmux-<uid>`) does not exist inside the sandbox at all — which
   also covers workmux's *own* sidebar socket, which it derives from the
   tmux socket path and puts in `/tmp`
-  (`/tmp/workmux-sidebar--mysbx-home-.mysbx-tmux-socket.sock`, observed
-  in a real run): inside the tmpfs, i.e. per sandbox, like the tmux
-  socket itself.
+  (`/tmp/workmux-sidebar-<hash>.sock`, the hash of the tmux socket
+  path since workmux 1d5e7da): inside the tmpfs, i.e. per sandbox,
+  like the tmux socket itself. On the nono backend that tmpfs
+  location is exactly why the unix-socket grant covers `/tmp` for
+  workmux (bd myconfig-peo): under the profile's pathname AF_UNIX
+  mediation the socket needs its parent dir in
+  [`Multiplexer::unix_socket_dirs`], or the sidebar daemon's bind is
+  denied and the session boots without its sidebar.
 
 Layer semantics: see D17 — either layer may decide and the sidecar wins.
 

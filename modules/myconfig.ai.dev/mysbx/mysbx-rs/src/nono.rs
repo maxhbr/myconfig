@@ -295,27 +295,34 @@ pub fn nono_run_argv(
 
     // 3b. the multiplexer's UNIX-SOCKET grants (bd myconfig-6di.4.5:
     // the mechanism; bd myconfig-7ov: the per-multiplexer shape the
-    // f13 fatal exposed). The socket dirs are inside the home tmpfs —
-    // the filesystem side is the rw grant above — but pathname
-    // AF_UNIX connect() and bind() are a SEPARATE Landlock axis when
-    // the profile asks for mediation (it ships
-    // `linux.af_unix_mediation = "pathname"`, see nix/mysbx.nix):
-    // without the explicit socket grant the server inside could not
-    // create nor connect its own socket, and the first live f13 run
-    // (herdr) died with `bind ... (no matching unix_socket
-    // capability)` on its API socket. The flag is nono 0.74.0's
-    // `--allow-unix-socket-dir-bind`: connect + bind on any
-    // DIRECT-CHILD socket of the directory, verified live (a payload
-    // making a static bind(2)/connect(2) probe succeeds with the grant
-    // and fails both without it). WHICH directories ride with the
-    // selected entry is [`Multiplexer::unix_socket_dirs`] — tmux lines
-    // up with the $TMUX_TMPDIR socket dir all tracks share, herdr's
-    // API sockets live under `$HOME/.config/herdr` (the 4.5 emission
-    // of the tmux dir unconditionally was the bug). The
-    // `check_mux_socket`/`MuxSocketDest`/`MuxSocketPersisted` guards
-    // stay untouched: they protect the TMUX_TMPDIR path itself, not
-    // the grants cone. Identifier grants only — every dir is below the
-    // home grant, never a hole into the host.
+    // f13 fatal exposed; bd myconfig-peo: workmux's second dir). The
+    // socket dirs are inside the home tmpfs — the filesystem side is
+    // the rw grant above — but pathname AF_UNIX connect() and bind()
+    // are a SEPARATE Landlock axis when the profile asks for
+    // mediation (it ships `linux.af_unix_mediation = "pathname"`,
+    // see nix/mysbx.nix): without the explicit socket grant the
+    // server inside could not create nor connect its own socket,
+    // and the first live f13 run (herdr) died with `bind ... (no
+    // matching unix_socket capability)` on its API socket. The
+    // flag is nono 0.74.0's `--allow-unix-socket-dir-bind`:
+    // connect + bind on any DIRECT-CHILD socket of the directory,
+    // verified live (a payload making a static bind(2)/connect(2)
+    // probe succeeds with the grant and fails both without it).
+    // WHICH directories ride with the selected entry is
+    // [`Multiplexer::unix_socket_dirs`] — tmux lines up with the
+    // $TMUX_TMPDIR socket dir all tracks share, herdr's API sockets
+    // live under `$HOME/.config/herdr` (the 4.5 emission of the tmux
+    // dir unconditionally was the bug), and workmux carries TWO:
+    // the tmux socket dir plus `/tmp`, where its sidebar daemon
+    // binds `workmux-sidebar-<hash>.sock` by its own
+    // `temp_dir()` design (the 4.5 grant of only the tmux dir left
+    // the daemon's bind denied — "Sidebar daemon failed to start",
+    // bd myconfig-peo). The `check_mux_socket`/`MuxSocketDest`/
+    // `MuxSocketPersisted` guards stay untouched: they protect the
+    // TMUX_TMPDIR path itself, not the grants cone. Identifier
+    // grants only — every dir is inside the sandbox view (the home
+    // tmpfs or the private `/tmp` tmpfs, bd myconfig-7hh), never a
+    // hole into the host.
     if mux.starts_a_session() {
         for dir in mux.unix_socket_dirs() {
             argv.extend(["--allow-unix-socket-dir-bind".into(), (*dir).into()]);

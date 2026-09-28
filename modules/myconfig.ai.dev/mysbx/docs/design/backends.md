@@ -253,8 +253,16 @@ pin. The multiplexer socket directory `/mysbx-home/.mysbx-tmux`
 unix-socket grant: `--allow-unix-socket-dir-bind` on the socket dir
 (bd myconfig-6di.4.5, nono 0.74.0 — connect AND bind on any
 direct-child socket, exactly the entry scripts' `$TMUX_TMPDIR/socket`
-shape), emitted when a session starts. The filesystem side needs no
-new grant — the dir lies below the rw home grant. The mysbx profile
+shape), emitted when a session starts. The grant follows the selected
+entry ([`Multiplexer::unix_socket_dirs`]): herdr's API dir
+`/mysbx-home/.config/herdr` (bd myconfig-7ov), and workmux's second
+dir `/tmp` (bd myconfig-peo) — the sidebar daemon binds its snapshot
+socket at `temp_dir()/workmux-sidebar-<hash>.sock` by its own design,
+the payload env carries no TMPDIR, so that dir is the private tmpfs
+`/tmp` (bd myconfig-7hh); without the grant the daemon's bind is
+denied and `workmux sidebar` dies with "Sidebar daemon failed to
+start". The filesystem side needs no new grant — every dir lies below
+the rw home grant or the payload-writable tmpfs `/tmp`. The mysbx profile
 ships `linux.af_unix_mediation = "pathname"`: without it, nono's
 default leaves pathname sockets reachable through ANY filesystem
 grant, and the isolation claim of D16/D17 ("the socket never leaves

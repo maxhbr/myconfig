@@ -161,11 +161,23 @@ impl Multiplexer {
     /// the mediation filter denies connect/bind (the f13 fatal: herdr
     /// could not create its server socket, the run exited 1).
     ///
-    /// - tmux / workmux / aoe: a tmux server on `$TMUX_TMPDIR`
+    /// - tmux / aoe: a tmux server on `$TMUX_TMPDIR`
     ///   (bwrap.rs `MUX_SOCKET_DIR` = `/mysbx-home/.mysbx-tmux`), the
-    ///   socket FILE `$TMUX_TMPDIR/socket` — a direct child. workmux
-    ///   re-executes tmux with `-S "$socket"`, aoe drives the same
-    ///   server through the same variable.
+    ///   socket FILE `$TMUX_TMPDIR/socket` — a direct child. aoe drives
+    ///   the same server through the same variable.
+    /// - workmux: the tmux server's socket dir as above, PLUS the
+    ///   payload temp dir `/tmp` (bd myconfig-peo): the sidebar
+    ///   daemon binds its snapshot socket at
+    ///   `std::env::temp_dir()/workmux-sidebar-<hash>.sock` (upstream
+    ///   `daemon.rs socket_path`), the payload env carries no TMPDIR,
+    ///   so Rust's `temp_dir()` resolves `/tmp` — the sandbox's
+    ///   private tmpfs (bd myconfig-7hh). Without the grant the
+    ///   daemon's bind is denied, `ensure_daemon_running` times out
+    ///   and `workmux sidebar` dies with "Sidebar daemon failed to
+    ///   start"; every sidebar pane client connects to the same
+    ///   socket. The grant is contained: `/tmp` is tmpfs-private to
+    ///   this one sandbox, and pathname mediation only gates sockets
+    ///   the payload could already create abstract-namespace anyway.
     /// - orca: the server keeps NO unix socket of its own below the
     ///   home (its pairing endpoint is TCP loopback; the dbus socket
     ///   name in the log is a HOST path that never exists in the
@@ -183,6 +195,9 @@ impl Multiplexer {
         match self {
             Multiplexer::None => &[],
             Multiplexer::Herdr => &["/mysbx-home/.config/herdr"],
+            // workmux's own temp-dir socket (bd myconfig-peo, see the
+            // rows above) rides next to the tmux server's socket dir.
+            Multiplexer::Workmux => &["/mysbx-home/.mysbx-tmux", "/tmp"],
             // Every other entry keeps the tmux socket dir; herdr swaps
             // it (it does not use TMUX_TMPDIR for its own API socket).
             _ => &["/mysbx-home/.mysbx-tmux"],
