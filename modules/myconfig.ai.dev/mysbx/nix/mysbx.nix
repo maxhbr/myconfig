@@ -52,6 +52,14 @@
 #                     the waypipe binary INSIDE the podman-gvisor
 #                     image, the server end of the same channel on
 #                     the container backend. Absent = refused.
+#   MYSBX_KRUN_RUNTIME
+#                     the podman-krun backend's OCI runtime (docs/
+#                     design/backends.md D2): crun built against
+#                     libkrun, the runtime a `backend =
+#                     "podman-krun"` run passes to `podman
+#                     --runtime`. Pinned with `--set-default`, an
+#                     operator knob like MYSBX_GVISOR_PASTA_SPEC;
+#                     absent = the crate's bare `crun` PATH fallback.
 #   MYSBX_WAYPIPE_SECCTX
 #                     NOT a wrapper pin — a deliberate operator
 #                     override: the security-context application ID
@@ -248,6 +256,19 @@
   # Values must not contain whitespace — the crate splits the list on
   # it, so a value with a space would be silently truncated.
   gvisorEnv ? { },
+  # The podman-krun backend's OCI runtime (backends.md D2, bd
+  # myconfig-6di.5.2): crun built against libkrun — nixpkgs' `crun`
+  # already defaults `withLibkrun` to `lib.meta.availableOn
+  # stdenv.hostPlatform libkrun` (true on x86_64-linux), so the
+  # plain `crun` package carries the krun handler and no override is
+  # needed. `null` pins nothing — `backend = "podman-krun"` then runs
+  # against the crate's bare `crun` PATH fallback (an unwrapped
+  # build's spelling, the same contract as MYSBX_BWRAP).
+  #
+  # Pinned with `--set-default`, not `--set`: the variable stays an
+  # operator knob (a runtime swap for debugging), the same reasoning
+  # as MYSBX_GVISOR_PASTA_SPEC.
+  krunRuntime ? null,
   # The waypipe binary of the HOST side of the display channel
   # (../docs/design/config.md D18, `display = "waypipe"`): the wrapper
   # pins it as `MYSBX_WAYPIPE`, and a run that selects waypipe without
@@ -616,6 +637,12 @@ let
       gvisorPastaSpec != null
     ) "--set-default MYSBX_GVISOR_PASTA_SPEC '${gvisorPastaSpec}' "
     + lib.optionalString (gvisorEnv != { }) "--set MYSBX_GVISOR_ENV '${gvisorEnvValue}' ";
+  # The podman-krun runtime pin (backends.md D2): the crun+libkrun
+  # store path `--runtime` gets on the krun variant. `--set-default`:
+  # an invocation can still point MYSBX_KRUN_RUNTIME at any runtime.
+  krunPins = lib.optionalString (
+    krunRuntime != null
+  ) "--set-default MYSBX_KRUN_RUNTIME '${krunRuntime}/bin/crun' ";
   # The display-channel pins (D18): the host-side client binary and
   # the in-image server binary. Both optional, both absolute store
   # paths — the wrapper idiom of every other pin.
@@ -668,6 +695,7 @@ symlinkJoin {
       ${muxEntryPins} \
       ${terminalPin} \
       ${gvisorPins} \
+      ${krunPins} \
       ${waypipePins} \
       ${nonoPins} \
       ${nonoEnvPins} \

@@ -361,12 +361,13 @@ in
         gvisorShell = cfg.gvisor.shell;
         gvisorPastaSpec = cfg.gvisor.pastaSpec;
         gvisorEnv = cfg.gvisor.env;
+        krunRuntime = cfg.krun.runtime;
         waypipe = cfg.display.package;
         gvisorWaypipe = cfg.gvisor.waypipe;
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; krunRuntime = cfg.krun.runtime; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -757,20 +758,107 @@ in
 
       imagePackages = mkOption {
         type = types.listOf types.package;
-        default = selectedMuxTools ++ lib.optionals (cfg.display.package != null) [ cfg.display.package ];
-        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`";
+        default =
+          selectedMuxTools
+          ++ lib.optionals (cfg.display.package != null) [ cfg.display.package ]
+          # The nested-podman userspace of the krun backend (bd
+          # myconfig-6di.5.8): the image is SHARED between both podman
+          # backends, so provisioning rides this seam — appended only
+          # when the host opts in, a gvisor-only host pays no podman
+          # closure.
+          ++ lib.optionals cfg.krun.nestedPodman.enable cfg.krun.nestedPodman.packages;
+        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` when `krun.nestedPodman.enable`";
         description = ''
           Packages the gvisor tier bakes into the container image on
           behalf of mysbx (bd myconfig-cew: the container must be
           provisioned with the tools). Defaults to the selected
           multiplexer's own tooling, so a pane inside a container
           session finds it on `PATH` — the same payload the bwrap
-          backend gets via `extraTools`.
+          backend gets via `extraTools` — plus the nested-podman
+          userspace of the podman-krun backend when
+          `krun.nestedPodman.enable` (bd myconfig-6di.5.8: the podman
+          storage wrapper and its guest configuration tree, baked into
+          the shared image).
 
           Only takes effect while the gvisor tier module is enabled
           (`myconfig.ai.dev.gvisor-agent-sandbox.enable`): its
           `extraImagePackages` default consumes this option.
         '';
+      };
+    };
+
+    krun = {
+      # The podman-krun backend (mysbx-rs/src/podman_gvisor.rs under a
+      # swapped runtime, docs/design/backends.md D2, bd myconfig-6di.5):
+      # `backend = "podman-krun"` runs the podman-gvisor argv with the
+      # OCI runtime swapped to crun built against libkrun — each run a
+      # rootless KVM microVM with its own kernel, mounts over
+      # virtio-fs. Requires the user to have rw access to `/dev/kvm`
+      # (the `kvm` group or the seat udev ACL); a run on a host without
+      # it is refused, never a silent fallback.
+      runtime = mkOption {
+        type = types.nullOr types.package;
+        # nixpkgs' crun already defaults `withLibkrun` to
+        # `lib.meta.availableOn stdenv.hostPlatform libkrun` (true on
+        # x86_64-linux), so the plain `crun` package carries the krun
+        # handler and no override is needed — pinned verbatim so a
+        # future nixpkgs default change cannot silently strip the krun
+        # build out of the wrapper's closure.
+        default = pkgs.crun.override { withLibkrun = true; };
+        defaultText = literalExpression "pkgs.crun.override { withLibkrun = true; }";
+        description = ''
+          The OCI runtime of the podman-krun backend — crun built
+          against libkrun (nixpkgs `crun`, `withLibkrun = true`),
+          pinned into the wrapper as `MYSBX_KRUN_RUNTIME`
+          (`--set-default`, so an invocation can still override it).
+
+          `null` pins nothing: `backend = "podman-krun"` then runs
+          against the crate's bare `crun` PATH fallback — a host
+          whose PATH `crun` lacks libkrun gets crun's own refusal,
+          never a silently unsandboxed run.
+        '';
+      };
+
+      nestedPodman = {
+        # Nested rootless podman inside the krun guest (bd
+        # myconfig-6di.5.8, backends.md D2's scope decision). The
+        # "rootless" of the nested podman is the VM boundary itself:
+        # the payload runs as GUEST ROOT (verified, bd
+        # myconfig-6di.5.4 — the libkrun guest init never setuids),
+        # so no setuid/fcap newuidmap can or must exist — nixpkgs
+        # cannot ship one (shadow builds 0755, dockerTools chowns
+        # layers 0:0) and virtiofs would not carry the bit anyway.
+        # What the nested pod needs is userspace + config, baked
+        # into the (shared) agent image.
+        enable = mkEnableOption "nested rootless podman inside the podman-krun guest";
+
+        packages = mkOption {
+          type = types.listOf types.package;
+          # One tree: the guest configuration plus `bin/podman`, the
+          # storage wrapper around pkgs.podman (whose closure carries
+          # conmon, crun, netavark, passt, fuse-overlayfs). pkgs.podman
+          # itself is NOT listed: the image's buildEnv ignores
+          # collisions, so a second `bin/podman` could silently shadow
+          # the wrapper.
+          default = [ (pkgs.callPackage ./nix/krun-guest-conf.nix { }) ];
+          defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-conf.nix { }) ]";
+          description = ''
+            The nested-podman userspace baked into the agent image
+            when `krun.nestedPodman.enable` — consumed through
+            `gvisor.imagePackages` (the image is shared between both
+            podman backends, so provisioning rides the same seam):
+            by default the guest tree of ./nix/krun-guest-conf.nix —
+            `bin/podman`, a wrapper that puts podman's state on
+            guest-native tmpfs and then execs `pkgs.podman`, plus
+            containers.conf, storage.conf, policy.json, /etc/subuid
+            and /etc/subgid. A different podman goes in as that
+            file's `podman` argument, never as a second list entry.
+
+            Live validation of the nested run is bd
+            myconfig-6di.5.7's runbook — the agent sandbox has no
+            /dev/kvm, so nothing here is executed at check time.
+          '';
+        };
       };
     };
 
@@ -897,10 +985,11 @@ in
                 "bubblewrap"
                 "podman-gvisor"
                 "nono"
+                "podman-krun"
               ]
             );
             default = "bubblewrap";
-            description = "Sandbox backend (`bubblewrap`, `podman-gvisor` or `nono`); `null` leaves the choice to the sidecar.";
+            description = "Sandbox backend (`bubblewrap`, `podman-gvisor`, `nono` or `podman-krun`); `null` leaves the choice to the sidecar.";
           };
           network = mkOption {
             type = types.bool;

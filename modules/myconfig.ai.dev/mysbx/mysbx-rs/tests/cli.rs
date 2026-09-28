@@ -7756,6 +7756,278 @@ fn allowlist_on_podman_gvisor_is_refused() {
 }
 
 #[test]
+fn allowlist_on_podman_krun_is_refused() {
+    // The krun variant shares podman-gvisor's pasta egress (TSI over
+    // the pasta netns, backends.md D2): an allowlist is refused on
+    // `podman-krun` exactly like on `podman-gvisor` — never
+    // accepted-and-ignored.
+    let (inv, _, sidecar) = fixture("nono-allowlist-podman-krun", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\nlisten-ports = [8080]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("podman-krun"), "{stderr}");
+    assert!(stderr.contains("listen-ports"), "{stderr}");
+}
+
+#[test]
+fn podman_krun_network_false_is_enforced_like_gvisor() {
+    // bd myconfig-6di.5.5: `network = false` on the krun backend is
+    // the same `--network none` as on podman-gvisor, and the
+    // enforcement is verified: the VMM (the rootless podman process)
+    // is created inside the container's empty netns, and the guest's
+    // ONLY egress is a TSI proxy connection the VMM dials from that
+    // netns (libkrun muxer, TsiFlags::HIJACK_INET) — no route, no
+    // resolver, nothing past the netns. The dry run must carry the
+    // same `--network none` line, and the same nix-daemon mount
+    // contradiction the gvisor tier refuses must refuse here too.
+    let (inv, _, sidecar) = fixture("podman-krun-network-false", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\nnetwork = false\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        stdout.lines().any(|l| l == "--network") && stdout.lines().any(|l| l == "none"),
+        "the krun dry run must carry --network none: {stdout}"
+    );
+}
+
+#[test]
+fn podman_krun_allowlist_refusal_names_tsi() {
+    // bd myconfig-6di.5.5: the D21 refusal on podman-krun names the
+    // backend's ACTUAL egress mechanism — TSI is an unfiltered
+    // proxy (any connect() the guest makes, the VMM dials from the
+    // container netns) — never a vague "not supported".
+    let (inv, _, sidecar) = fixture("podman-krun-allowlist-tsi", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\nallow-domains = [\"example.org\"]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(
+        stderr.contains("TSI"),
+        "the refusal must name the TSI egress mechanism: {stderr}"
+    );
+    assert!(stderr.contains("allow-domains"), "stderr: {stderr}");
+}
+
+#[test]
+fn podman_krun_dry_run_swaps_the_runtime_keeps_the_layout() {
+    // The variant contract end-to-end (bd myconfig-6di.5.3/.4,
+    // docs/design/backends.md D2): `backend = "podman-krun"` builds
+    // the same LAYOUT as `podman-gvisor` with `--runtime` swapped to
+    // the pinned crun+libkrun path (MYSBX_KRUN_RUNTIME), plus the
+    // enumerated D2 differences (the handler annotation — asserted
+    // by its own test — and the dropped guest-unenforceable hardening
+    // flags). The same image pin (MYSBX_GVISOR_IMAGE) serves both
+    // variants.
+    let (inv, _, sidecar) = fixture("podman-krun-dry-run", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest").env(
+        "MYSBX_KRUN_RUNTIME",
+        "/nix/store/synth-crun-libkrun/bin/crun",
+    );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines[0], "podman");
+    assert_eq!(
+        lines[1], "--runtime=/nix/store/synth-crun-libkrun/bin/crun",
+        "the pinned crun replaces runsc: {stdout}"
+    );
+    // everything after the runtime line is the gvisor argv: the image
+    // reference and payload are the image-userland shape.
+    assert!(
+        lines.contains(&"localhost/test:latest"),
+        "the same image pin serves the krun variant: {stdout}"
+    );
+    assert_eq!(lines[lines.len() - 1], "/bin/bash");
+}
+
+#[test]
+fn podman_krun_without_image_pin_is_refused() {
+    // The krun variant runs the SAME image as podman-gvisor — without
+    // the image pin it is a refused run naming the backend, never a
+    // run against an invented reference.
+    let (inv, _, sidecar) = fixture("podman-krun-unpinned", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, 70);
+    assert!(
+        stderr.contains("no container image configured"),
+        "stderr: {stderr}"
+    );
+    assert!(stderr.contains("podman-krun"), "stderr: {stderr}");
+}
+
+#[test]
+fn podman_krun_waypipe_display_is_refused_first_cut() {
+    // D2's first-cut refusal list: the waypipe display is refused on
+    // the krun backend until its socket bind over virtio-fs is
+    // verified (bd myconfig-6di.5.4) — never accepted-and-ignored.
+    // Refused BEFORE the image pin check and before the dry-run argv
+    // (a broken configuration audits too).
+    let (inv, _, sidecar) = fixture("podman-krun-waypipe", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\ndisplay = \"waypipe\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(
+        stderr.contains("display = \"waypipe\" is not supported on the `podman-krun` backend"),
+        "stderr: {stderr}"
+    );
+    assert!(stdout.is_empty(), "no argv on refusal: {stdout}");
+}
+
+#[test]
+fn podman_krun_dry_run_needs_no_kvm() {
+    // The /dev/kvm doctor check (lib.rs, bd myconfig-6di.5.2) is a
+    // REAL-RUN gate: `--dry-run` stays host-independent — it audits
+    // the argv (and therefore the runtime swap) on any host, with or
+    // without /dev/kvm. A dry run with no image pin still refuses
+    // (the pin check is upstream of the kvm gate), so this test pins a
+    // synthetic image and only asserts the exit is 0 — never a kvm
+    // refusal — which is exactly the contract.
+    let (inv, _, sidecar) = fixture("podman-krun-dry-no-kvm", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a dry run must not hit the kvm gate: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(!stdout.contains("/dev/kvm"), "{stdout}");
+}
+
+#[test]
+fn podman_krun_limits_become_vm_annotations() {
+    // bd myconfig-6di.5.6: the SHARED limit pins (MYSBX_GVISOR_CPUS /
+    // _MEMORY — one "resource limits of the sandbox" setting per
+    // host, both podman variants consume them) map onto krun VM
+    // annotations on the dry-run argv: no cgroup flags, and a
+    // pids-limit pin is a REFUSED run naming the gap.
+    let (inv, _, sidecar) = fixture("podman-krun-limits", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        .env("MYSBX_GVISOR_CPUS", "2")
+        .env("MYSBX_GVISOR_MEMORY", "4g");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        stdout.contains("krun.cpus=2") && stdout.contains("krun.ram_mib=4096"),
+        "the limit annotations are missing: {stdout}"
+    );
+    assert!(
+        !stdout
+            .lines()
+            .any(|l| l.starts_with("--cpus") || l.starts_with("--memory")),
+        "no cgroup flags on the krun variant: {stdout}"
+    );
+
+    // The pids-limit pin on the krun variant is a refused run — no
+    // pids controller is wired for a whole-VM "container".
+    let (inv, _, sidecar) = fixture("podman-krun-pids", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        .env("MYSBX_GVISOR_PIDS_LIMIT", "512");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("cannot enforce a pids limit"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn podman_krun_dry_run_carries_the_handler_annotation() {
+    // The VM's on switch (bd myconfig-6di.5.4): crun runs the
+    // libkrun handler ONLY for the `run.oci.handler=krun`
+    // annotation (crun custom-handler.c find_handler_for_container)
+    // — without it the pinned crun silently runs a PLAIN container,
+    // no VM, weaker than gVisor. The dry run must visibly carry it,
+    // and the guest-unenforceable hardening flags must be visibly
+    // absent (the payload is guest root by design; advertising a
+    // cap-drop that nothing enforces would be a lie on the audit
+    // surface).
+    let (inv, _, sidecar) = fixture("podman-krun-annotation", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines[0], "podman");
+    let i = lines
+        .iter()
+        .position(|l| *l == "--annotation")
+        .expect("the handler annotation is missing");
+    assert_eq!(lines[i + 1], "run.oci.handler=krun", "{stdout}");
+    assert!(
+        !lines
+            .iter()
+            .any(|l| { *l == "--cap-drop=ALL" || *l == "--security-opt=no-new-privileges" }),
+        "guest-unenforceable hardening flags on the krun argv: {stdout}"
+    );
+    // keep-id stays: it prepares the bind sources host-side under
+    // the host user's uid, the uid the virtiofs server shares them
+    // as (backends.md D2).
+    assert!(
+        lines.iter().any(|l| *l == "--userns=keep-id"),
+        "keep-id is missing: {stdout}"
+    );
+}
+
+#[test]
 fn allowlist_with_network_false_is_refused() {
     // network = false denies the network; an allowlist contradicts it.
     // Refused for the nono backend too (the pipeline's step 4b check
@@ -8284,4 +8556,71 @@ fn nono_pinned_nix_conf_is_bound_like_the_bubblewrap_backend() {
             );
         }
     }
+}
+
+// ---- the krun git trust (bd myconfig-zj2) -----------------------------------
+
+#[test]
+fn podman_krun_git_trust_names_exactly_the_bound_workspace_paths() {
+    // The dubious-ownership fix (bd myconfig-zj2): a krun run exports
+    // GIT_CONFIG_GLOBAL at the per-run trust file, binds it ro, and the
+    // file's safe.directory entries are EXACTLY what the argv bound —
+    // the workspace root (exact + the `/*` form), the approved
+    // git-dirs (exact) and, when it exists, the worktrees sibling.
+    // Never a bare `*`.
+    let (inv, repo, sidecar) = fixture("podman-krun-git-trust", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    // The argv carries the ro bind and the env.
+    assert!(
+        stdout.contains("dst=/etc/mysbx/gitconfig,ro"),
+        "the trust file is not ro-bound: {stdout}"
+    );
+    assert!(
+        stdout.contains("GIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"),
+        "GIT_CONFIG_GLOBAL is not exported: {stdout}"
+    );
+    // The trust file was NOT written: a --dry-run creates nothing.
+    assert!(
+        !sidecar.join("gittrust").exists(),
+        "a --dry-run must not create the trust file"
+    );
+    assert!(repo.is_dir());
+}
+
+#[test]
+fn podman_gvisor_carries_no_trust_file() {
+    // The trust story is krun-only (bd myconfig-zj2): the gvisor
+    // payload runs as the keep-id-mapped user — the uid already owns
+    // the repo mounts, so the dubious-ownership check cannot fire and
+    // no trust bind may appear on the gvisor argv.
+    let (inv, _, sidecar) = fixture("podman-gvisor-git-trust", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        !stdout.contains("GIT_CONFIG_GLOBAL") && !stdout.contains("/etc/mysbx/gitconfig"),
+        "no trust bind or env on the gvisor argv: {stdout}"
+    );
+    assert!(
+        !sidecar.join("gittrust").exists(),
+        "the gvisor run must not create the trust file"
+    );
 }

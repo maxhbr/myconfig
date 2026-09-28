@@ -562,7 +562,7 @@ The bare form and `run` accept `--backend <name>`, before the verb and
 after it for `run` — the same one position rule every run-scoped flag
 follows (D10/D14/D16/D17). The value is the same closed set the
 pipeline enforces on the configuration: `bubblewrap` | `podman-gvisor` |
-`nono`.
+`nono` | `podman-krun`.
 It wins over the merged `backend` of both layers for THIS invocation
 only, per the precedence of D6 (flags > sidecar > user > defaults,
 with the CLI as the outermost layer of config.md D1) — nothing is

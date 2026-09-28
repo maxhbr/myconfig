@@ -13,6 +13,14 @@
 #                 suite hand-writes its `config.toml` and cannot see a
 #                 regression in the generator. See ./config-eval-test.nix.
 #
+#   mysbx-krun-wrapper-test
+#                 the podman-krun runtime pin (docs/design/backends.md D2):
+#                 the wrapper carries MYSBX_KRUN_RUNTIME at a crun built
+#                 with the libkrun handler (`+LIBKRUN` on its own feature
+#                 line), and a `backend = "podman-krun"` dry run emits
+#                 `--runtime=<that path>` — the runtime swap is the only
+#                 argv difference, so the dry run doubles as the swap proof.
+#
 #   mysbx-completions
 #                 the fish tab completion shipped by the package
 #                 (../mysbx-rs/completions/mysbx.fish, installed by
@@ -79,6 +87,184 @@ in
   # The generator, evaluated: what a host actually gets in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
   mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
+
+  # The nested-podman guest tree (bd myconfig-6di.5.8): the storage
+  # wrapper at bin/podman (bd myconfig-6di.5.16) and the bytes podman
+  # will read inside the krun guest. Static by
+  # design — the nested run itself is live validation (bd
+  # myconfig-6di.5.7), which this sandbox cannot do without /dev/kvm.
+  # The TOML files are PARSED and compared table by table: podman
+  # reads each key only from its own table and silently ignores a
+  # misplaced one (containers/common config/new.go logs undecoded
+  # keys at debug level), so a line grep cannot catch a key in the
+  # wrong table. Any extra, missing or moved key fails.
+  mysbx-krun-guest-conf-test =
+    let
+      guestConf = pkgs.callPackage ../nix/krun-guest-conf.nix { };
+      expected = {
+        containers = {
+          containers = {
+            apparmor_profile = "";
+            cgroups = "disabled";
+            log_driver = "k8s-file";
+            netns = "host";
+          };
+          engine = {
+            cgroup_manager = "cgroupfs";
+            events_logger = "file";
+            no_pivot_root = true;
+            tmp_dir = "/run/containers/libpod";
+            image_copy_tmp_dir = "storage";
+            runtimes_flags.crun = [ "root=/run/containers/crun" ];
+          };
+          network.network_config_dir = "/var/tmp/containers/networks";
+        };
+        storage = {
+          storage = {
+            driver = "overlay";
+            # Below the guest tmpfs mounts of the podman wrapper.
+            graphroot = "/var/tmp/containers/storage";
+            runroot = "/run/containers/storage";
+          };
+        };
+      };
+      expectedJson = pkgs.writeText "mysbx-krun-guest-conf-expected.json" (builtins.toJSON expected);
+      compare = pkgs.writeText "mysbx-krun-guest-conf-compare.py" ''
+        import json, sys, tomllib
+
+        etc, expected_path = sys.argv[1], sys.argv[2]
+        expected = json.load(open(expected_path))
+        failed = False
+        for name, want in expected.items():
+            path = f"{etc}/containers/{name}.conf"
+            with open(path, "rb") as f:
+                got = tomllib.load(f)
+            if got != want:
+                failed = True
+                print(f"{path}: parsed tables differ from the pinned set", file=sys.stderr)
+                print(f"  got:      {json.dumps(got, sort_keys=True)}", file=sys.stderr)
+                print(f"  expected: {json.dumps(want, sort_keys=True)}", file=sys.stderr)
+        sys.exit(1 if failed else 0)
+      '';
+    in
+    pkgs.runCommand "mysbx-krun-guest-conf-test" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+      fail() {
+        echo "mysbx-krun-guest-conf-test: $*" >&2
+        exit 1
+      }
+      python3 ${compare} "${guestConf}/etc" ${expectedJson} \
+        || fail "the guest containers.conf/storage.conf do not match the pinned tables"
+      # containers/image refuses every pull without a policy file.
+      python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); sys.exit(0 if p["default"] == [{"type": "insecureAcceptAnything"}] else 1)' \
+        "${guestConf}/etc/containers/policy.json" \
+        || fail "policy.json must exist, parse as JSON and carry the default insecureAcceptAnything policy"
+      # bin/podman is the storage wrapper: it mounts guest tmpfs at
+      # both storage mounts as root, fails instead of falling back,
+      # and execs exactly the pinned podman.
+      wrapper="${guestConf}/bin/podman"
+      [ -x "$wrapper" ] || fail "bin/podman (the storage wrapper) is missing"
+      [ "$(readlink -f "$wrapper")" = "$(readlink -f "${guestConf.wrapper}/bin/podman")" ] \
+        || fail "bin/podman is not the storage wrapper"
+      for dir in /var/tmp/containers /run/containers; do
+        grep -qF "$dir" "$wrapper" || fail "the wrapper does not mount $dir"
+      done
+      grep -q 'mount -t tmpfs' "$wrapper" || fail "the wrapper must mount a guest tmpfs"
+      grep -q 'exit 125' "$wrapper" || fail "a failed mount must be an error, never a fallback"
+      grep -qF 'exec ${guestConf.podman}/bin/podman "$@"' "$wrapper" \
+        || fail "the wrapper must exec the pinned podman"
+      # The build user is not root: the pass-through path, end to end.
+      [ "$(id -u)" -ne 0 ] || fail "the check expects a non-root build user"
+      HOME=$TMPDIR "$wrapper" --version | grep -q '^podman version ${guestConf.podman.version}$' \
+        || fail "the wrapper does not pass through to the pinned podman as non-root"
+      grep -q '^agent:100000:65536$' "${guestConf}/etc/subuid" \
+        || fail "the subuid range for the guest-root user is missing"
+      grep -q '^agent:100000:65536$' "${guestConf}/etc/subgid" \
+        || fail "the subgid range for the guest-root user is missing"
+      touch $out
+    '';
+
+  # The podman-krun runtime pin (docs/design/backends.md D2, bd
+  # myconfig-6di.5.2): the wrapper must carry `MYSBX_KRUN_RUNTIME`
+  # pointing at a crun built WITH the libkrun handler, and a
+  # `backend = "podman-krun"` dry run must emit `--runtime=<that
+  # path>` — the runtime swap is the ONLY argv difference, so the
+  # dry run doubling as the swap proof is the honest static gate.
+  mysbx-krun-wrapper-test =
+    let
+      # The wrapper WITH the krun pin, the shape a host's default.nix
+      # builds (`krunRuntime = cfg.krun.runtime`).
+      pkgKrun = pkgs.callPackage ../nix/mysbx.nix {
+        krunRuntime = pkgs.crun.override { withLibkrun = true; };
+        ssh-keygen = pkgs.openssh;
+      };
+    in
+    pkgs.runCommand "mysbx-krun-wrapper-test"
+      {
+        nativeBuildInputs = [
+          pkgs.git
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-krun-wrapper-test: $*" >&2
+          exit 1
+        }
+
+        content=$(cat "${pkgKrun}/bin/mysbx")
+        # 1. the wrapper pins the runtime, as a --set-default (the makeBinaryWrapper
+        #    result carries the env table AND the embedded script line; strip
+        #    the quotes before matching the flag, the same idiom the nono
+        #    wrapper check uses).
+        echo "$content" | grep -aq "MYSBX_KRUN_RUNTIME" \
+          || fail "the wrapper does not pin MYSBX_KRUN_RUNTIME"
+        crun=$(echo "$content" | tr -d "'" | awk '/--set-default MYSBX_KRUN_RUNTIME/ {print $3; exit}')
+        case "$crun" in
+          /nix/store/*-crun-*/bin/crun) ;;
+          *) fail "the MYSBX_KRUN_RUNTIME value is not a crun store path: $crun" ;;
+        esac
+        test -x "$crun" || fail "the pinned runtime does not exist: $crun"
+        # 2. the pinned crun carries the libkrun handler: its own
+        #    feature line names +LIBKRUN.
+        "$crun" --version 2>/dev/null | grep -q '+LIBKRUN' \
+          || fail "the pinned crun was built without libkrun"
+
+        # 3. the dry run: backend = "podman-krun" swaps --runtime to
+        #    the pinned path, and carries the handler annotation —
+        #    crun runs the libkrun VM handler ONLY for
+        #    run.oci.handler=krun (custom-handler.c), without it the
+        #    run would silently be a plain container, no VM.
+        repo="$TMPDIR/repo"
+        mkdir -p "$repo" "$TMPDIR/repo.mysbx"
+        printf 'backend = "podman-krun"\n' > "$TMPDIR/repo.mysbx/config.toml"
+        git -C "$repo" init -q
+        git -C "$repo" config user.email t@invalid
+        git -C "$repo" config user.name t
+        touch "$repo/README"
+        git -C "$repo" add . && git -C "$repo" commit -qm init
+        export MYSBX_GVISOR_IMAGE=localhost/test:latest
+        # The canonicalization needs a HOME that exists (the check
+        # sandbox has none — runCommand's user is /homeless-shelter).
+        mkdir -p "$TMPDIR/home"
+        argv=$( cd "$repo" && HOME="$TMPDIR/home" "${pkgKrun}/bin/mysbx" --dry-run ) \
+          || fail "the dry run failed"
+        first=$(echo "$argv" | sed -n '2p')
+        [ "$first" = "--runtime=$crun" ] \
+          || fail "the dry run does not swap --runtime to the pinned crun (got: $first)"
+        echo "$argv" | grep -qx 'run.oci.handler=krun' \
+          || fail "the dry run does not carry the run.oci.handler=krun annotation (no VM without it)"
+        echo "$argv" | grep -qx -- '--group-add=keep-groups' \
+          || fail "the dry run does not preserve the supplementary groups (bd myconfig-b5o: the VMM loses the kvm group and every device-by-group run dies with EACCES)"
+        echo "$argv" | grep -q '^--cap-drop=ALL$' \
+          && fail "the krun argv advertises --cap-drop=ALL, which the krun handler never enforces (the payload is guest root)"
+        # 4. the rest of the argv is the gvisor layout: the image
+        #    reference and the image-userland payload survive.
+        echo "$argv" | grep -q '^localhost/test:latest$' \
+          || fail "the image reference is missing from the krun argv"
+        test "$(echo "$argv" | tail -n 1)" = "/bin/bash" \
+          || fail "the payload is not the image shell"
+
+        touch $out
+      '';
 
   # The herdr entry's worktree-placement contract (bd myconfig-i6h):
   # the entry must point herdr's `[worktrees] directory` at the

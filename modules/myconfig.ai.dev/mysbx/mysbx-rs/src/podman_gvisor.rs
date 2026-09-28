@@ -1,6 +1,6 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! The podman + gVisor (runsc) backend argv builder.
+//! The podman backend argv builder (runsc and crun/libkrun).
 //!
 //! Precedent: the gvisor tier (modules/myconfig.ai.dev/sandboxes/
 //! myconfig.ai.gvisor-agent-sandbox/, tier 3.5) runs rootless podman
@@ -10,8 +10,20 @@
 //!
 //! This backend maps the mysbx merged config (mounts, network policy,
 //! env, state-dirs, multiplexer payload) onto a podman invocation with
-//! the runsc runtime. It is the SECOND backend and doubles as the proof
-//! that the backend seam is general.
+//! a confining OCI runtime. It is the SECOND backend and doubles as the
+//! proof that the backend seam is general. It serves TWO backend values
+//! (docs/design/backends.md D2): `"podman-gvisor"` runs runsc (gVisor's
+//! user-space kernel); `"podman-krun"` runs crun built against libkrun
+//! (nixpkgs `crun` withLibkrun) — each run a rootless KVM microVM with
+//! its own kernel, mounts over virtio-fs. The krun value is a RUNTIME
+//! VARIANT, not a second builder: the argv is the gvisor layout except
+//! for the ENUMERATED differences D2 names (`Params::krun` switches
+//! them): the `--runtime` value of section 0, the
+//! `run.oci.handler=krun` activation annotation of section 1 (crun runs
+//! the libkrun VM handler only with it), the two guest-unenforceable
+//! hardening flags of section 2 dropped, and the limits of section 8
+//! as VM annotations instead of cgroup flags. The gvisor goldens stay
+//! byte-identical; the krun golden pins the differences.
 //!
 //! The argv builder is pure — it canonicalizes nothing and checks no
 //! existence (the merge already did that, docs/design/config.md D8) —
@@ -19,15 +31,20 @@
 //!
 //! Sections, in fixed order (order is semantic for overlapping binds):
 //!
-//! 0. `run` and its global args (`--runtime=runsc`, `--runtime-flag`
-//!    per flag, `--cgroup-manager` when one is set — from env vars,
-//!    see below) — WITHOUT the program name: the returned argv is
-//!    arguments-only, like bwrap's (`--clearenv` first there), because
-//!    lib.rs prepends the backend binary itself via
-//!    `Command::new(MYSBX_PODMAN)`.
+//! 0. `run` and its global args (`--runtime=<Params::runtime>`,
+//!    `--runtime-flag` per flag, `--cgroup-manager` when one is set —
+//!    from env vars, see below) — WITHOUT the program name: the
+//!    returned argv is arguments-only, like bwrap's (`--clearenv`
+//!    first there), because lib.rs prepends the backend binary itself
+//!    via `Command::new(MYSBX_PODMAN)`.
 //! 1. container identity: `--replace`, `--name`, `--hostname`, `--userns=keep-id`
-//! 2. base isolation: `--read-only`, `--read-only-tmpfs=true`,
-//!    `--cap-drop=ALL`, `--security-opt=no-new-privileges`
+//!    — plus the `run.oci.handler=krun` activation annotation when
+//!    `Params::krun` (without it crun silently runs a plain container,
+//!    no VM)
+//! 2. base isolation: `--read-only`, `--read-only-tmpfs=true`, and —
+//!    gvisor ONLY — `--cap-drop=ALL`, `--security-opt=no-new-privileges`
+//!    (the krun handler never execs the OCI process, so the flags would
+//!    advertise enforcement that does not exist)
 //! 3. working directory: `--workdir` at the repo path (the container's
 //!    view of the workspace)
 //! 4. container home: a fresh empty `type=tmpfs` mount at
@@ -50,6 +67,8 @@
 //!    state-dirs binds (config.md D15)
 //! 6. configured mounts, in declaration order (config.md D7/D8),
 //!    `--mount type=bind,src=HOST,dst=DEST,ro|rw`
+//!    6b. krun only: the per-run git trust file, bound ro (bd
+//!    myconfig-zj2)
 //! 7. environment: host-forwarded first, then `cfg.env`, then the
 //!    backend pins of `MYSBX_GVISOR_ENV`, then infrastructure
 //!    variables (`HOME`, the XDG base dirs derived from it, `PATH`,
@@ -75,7 +94,12 @@
 //!   `Params` (bd myconfig-wao)
 //! - Container runtime lifecycle (podman manages the container)
 //! - Container-user identity (via `--userns=keep-id`)
-//! - User-space kernel (gVisor's runsc)
+//! - The confining kernel: gVisor's runsc (user-space kernel) for
+//!   `podman-gvisor`, or libkrun's microVM kernel via crun for
+//!   `podman-krun` — a real guest kernel under KVM. NOT a stronger
+//!   boundary than gVisor: the VMM and the guest share one security
+//!   context (backends.md D2); the gains are host-kernel-bug
+//!   isolation and full kernel compatibility.
 //!
 //! The backend seam must NOT bake in "argv builder that execs directly
 //! as your uid with a bind-mounted CWD" — this backend proves the seam
@@ -221,6 +245,20 @@ fn state_parent_tmpfses(entries: &[String]) -> Vec<String> {
     dests
 }
 
+/// The git trust file of a krun run (bd myconfig-zj2): the host path
+/// mysbx wrote the per-run gitconfig to (the sidecar's gittrust dir,
+/// the waypipe per-run-dir precedent), bound read-only at the
+/// container path, and the container path the payload env's
+/// GIT_CONFIG_GLOBAL names. The content — git's `safe.directory`
+/// entries for exactly the approved workspace paths — is produced by
+/// lib.rs from the same repo/workspace facts the section-5 binds use;
+/// the builder can only bind and point.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitTrust {
+    pub host_file: String,
+    pub container_file: String,
+}
+
 /// Common parameters of every invocation that do not come from a
 /// configuration layer. Unlike bwrap's `Params` — whose shell and
 /// dev-tool `PATH` are HOST store paths the wrapper pins from its own
@@ -312,6 +350,22 @@ pub struct Params<'a> {
     /// merged config — it comes from the backend configuration or a
     /// default. For podman-gvisor, this is the gVisor agent image.
     pub image: &'a str,
+    /// The OCI runtime of section 0's `--runtime`: `"runsc"` for
+    /// `backend = "podman-gvisor"`, the pinned crun+libkrun store
+    /// path for `backend = "podman-krun"` (backends.md D2 — the
+    /// krun backend is this builder under a different runtime, so
+    /// the gvisor argv stays byte-identical). A wrapper pin like
+    /// every other, never a PATH lookup by this builder.
+    pub runtime: &'a str,
+    /// Whether this build is the krun runtime variant (`backend =
+    /// "podman-krun"`, backends.md D2). One fact with
+    /// [`Params::runtime`], carried separately because it changes
+    /// MORE than the runtime flag: section 8 maps the limits onto
+    /// krun VM annotations (`krun.cpus` / `krun.ram_mib`) instead of
+    /// cgroup flags, and refuses `--pids-limit` (the guest has no
+    /// pids controller wired — an unenforceable limit is never
+    /// accepted and silently ignored).
+    pub krun: bool,
     /// Podman runtime flags (e.g. `ignore-cgroups`). These come from
     /// environment variables or backend configuration.
     pub runtime_flags: &'a [String],
@@ -336,6 +390,16 @@ pub struct Params<'a> {
     /// only correct under THIS backend, e.g. the container-side URL of
     /// the host's LiteLLM forwarder.
     pub extra_env: &'a [String],
+    /// The guest-root git trust file of a krun run (bd myconfig-zj2):
+    /// a per-run file mysbx wrote into the sidecar, bound read-only
+    /// and exported as the payload's GIT_CONFIG_GLOBAL, granting
+    /// git's `safe.directory` exactly to the approved workspace
+    /// paths. `None` on the gvisor variant is the ONLY working shape:
+    /// `Some` there is a refused run ([`Error::GitTrustOnGvisor`]) —
+    /// the gvisor payload runs as the keep-id-mapped user (ownership
+    /// matches) and the bind would be an infrastructure mount the
+    /// backend never promised.
+    pub git_trust: Option<GitTrust>,
     /// Resource limits from configuration.
     /// Using Cow to allow both borrowed (from env vars) and owned strings.
     pub pids_limit: Option<Cow<'a, str>>,
@@ -389,6 +453,14 @@ pub fn podman_run_argv(
             return Err(Error::DisplayUnavailable);
         }
     }
+    // The git trust file is a krun-only story as well (bd
+    // myconfig-zj2): the gvisor payload runs as the keep-id-mapped
+    // user — the ownership check it defends against cannot fire — so
+    // a Some there is refused, never a silently-mounted infra bind
+    // that grants nothing and widens the audit surface.
+    if params.git_trust.is_some() && !params.krun {
+        return Err(Error::GitTrustOnGvisor);
+    }
 
     // 0. podman run with global args — ARGS ONLY, no program name:
     // lib.rs execs `Command::new(MYSBX_PODMAN).args(argv)`, the same
@@ -396,13 +468,16 @@ pub fn podman_run_argv(
     // `--clearenv`). A leading `podman` would double the program
     // name and garble podman's flag parsing.
     let mut argv: Vec<String> = Vec::new();
-    // Global args: --runtime=runsc, --runtime-flag per flag, then
-    // --cgroup-manager when set. The cgroup manager comes from
-    // params: omitted when None, the gvisor tier's shape (a rootless
-    // run pins cgroupfs via the env defaults in lib.rs, a root run
-    // lets podman's own default apply — hardcoding cgroupfs made
-    // runsc configure a cgroup it cannot write, bd myconfig-b13).
-    argv.push("--runtime=runsc".into());
+    // Global args: --runtime (the backend's confining kernel,
+    // `Params::runtime`: `runsc` for podman-gvisor, the pinned
+    // crun+libkrun path for podman-krun, backends.md D2),
+    // --runtime-flag per flag, then --cgroup-manager when set. The
+    // cgroup manager comes from params: omitted when None, the
+    // gvisor tier's shape (a rootless run pins cgroupfs via the env
+    // defaults in lib.rs, a root run lets podman's own default
+    // apply — hardcoding cgroupfs made runsc configure a cgroup it
+    // cannot write, bd myconfig-b13).
+    argv.push(format!("--runtime={}", params.runtime));
     for flag in params.runtime_flags {
         argv.extend(["--runtime-flag".into(), flag.clone()]);
     }
@@ -447,12 +522,72 @@ pub fn podman_run_argv(
     argv.extend(["--name".into(), container_name]);
     argv.extend(["--hostname".into(), "mysbx".into()]);
     argv.push("--userns=keep-id".into());
+    // The VM's ON switch (bd myconfig-6di.5.4): crun runs the libkrun
+    // handler ONLY when the OCI spec carries the annotation
+    // `run.oci.handler=krun` (crun src/libcrun/custom-handler.c
+    // `find_handler_for_container`: `annotation = find_annotation
+    // (container, "run.oci.handler")`). Nothing about `--runtime=<crun>
+    // selects it — without the annotation, the pinned crun happily
+    // runs a PLAIN container: no VM, no guest kernel, silently weaker
+    // than the gvisor backend the variant promises to be a variant
+    // of (backends.md D2). The annotation is therefore not optional
+    // dressing but the difference between the backend and a lie.
+    if params.krun {
+        argv.extend(["--annotation".into(), "run.oci.handler=krun".into()]);
+    }
+    // The supplementary-group preservation of the krun variant (bd
+    // myconfig-b5o): the VMM is the container entrypoint process
+    // (crun's krun handler runs the VM IN-PROCESS via
+    // krun_start_enter), and crun's `libcrun_container_setgroups`
+    // sets the OCI config's `additionalGids` — which `--userns=keep-id`
+    // runs leave at the mapped user's group only. When /dev/kvm access
+    // comes from the host user's supplementary `kvm` GROUP (mode 0660
+    // root:kvm), the entrypoint would then be unable to open the
+    // device and every run would die inside libkrun with EACCES —
+    // while the host-side doctor gate (kvm_available, an O_RDWR open
+    // by mysbx's OWN process) sees the group and passes. podman's
+    // `--group-add keep-groups` is the documented mechanism
+    // (podman-run.1.md.in: "if the user only has access rights via a
+    // group, accessing the device from inside a rootless container
+    // fails. Use the --group-add keep-groups flag"); podman turns it
+    // into the annotation `run.oci.keep_original_groups=1`
+    // (cmd/podman/containers/create.go, where it is refused together
+    // with any other --group-add), and crun's can_setgroups returns 0
+    // for it — setgroups is SKIPPED (linux.c) — so no group is
+    // dropped and the VMM keeps the host's supplementary groups.
+    // Krun-only: runsc has no /dev/kvm to open; the gvisor argv
+    // stays byte-identical. Gvisor-variant runs never pass another
+    // --group-add, so keep-groups' "must be the only one" rule holds
+    // by construction.
+    if params.krun {
+        argv.push("--group-add=keep-groups".into());
+    }
 
     // 2. base isolation
     argv.push("--read-only".into());
     argv.push("--read-only-tmpfs=true".into());
-    argv.push("--cap-drop=ALL".into());
-    argv.push("--security-opt=no-new-privileges".into());
+    // The two process-hardening flags are gvisor-ONLY (bd
+    // myconfig-6di.5.4): crun's krun handler never execs the OCI
+    // process — `run_func` starts the VM instead (container.c, the
+    // custom-handler branch of the entrypoint) — and the guest init
+    // execs the payload as guest root with full capabilities,
+    // reading only `Env`/`args`/`WorkingDir` from the OCI config
+    // (libkrun init/init.c `config_parse_file` — `process.user`,
+    // capabilities and noNewPrivileges are never read). Emitting
+    // them on the krun variant would advertise enforcement that
+    // does not exist: an operator reading the dry run must not
+    // believe a cap-drop protects a payload that is root inside the
+    // guest by design (the confinement is the guest kernel, the
+    // same boundary every VM backend has). `--read-only` DOES stay:
+    // crun applies the ro root remount host-side (linux.c, the
+    // `def->root->readonly` remount of the mount phase) and the
+    // virtiofs server hands the guest exactly crun's prepared root,
+    // so the read-only contract is enforced on the shared tree
+    // itself, not on a guest process that never exists.
+    if !params.krun {
+        argv.push("--cap-drop=ALL".into());
+        argv.push("--security-opt=no-new-privileges".into());
+    }
 
     // 3. working directory
     argv.extend(["--workdir".into(), root.clone()]);
@@ -746,6 +881,24 @@ pub fn podman_run_argv(
         );
     }
 
+    // 6b. the guest-root git trust bind (bd myconfig-zj2): the
+    // per-run gitconfig mysbx wrote into the sidecar, bound READ-ONLY
+    // at the infrastructure path GIT_CONFIG_GLOBAL will name. The
+    // content grants git's `safe.directory` to exactly the approved
+    // workspace paths — the same set the section-5 binds mount — and
+    // includes the two possible in-sandbox user-config paths, so an
+    // operator-seeded ~/.gitconfig stays reachable (GIT_CONFIG_GLOBAL
+    // REPLACES the user config path, and its XDG fallback with it).
+    // Infrastructure destination, exempt from check_dest like the
+    // home tmpfs; the ro mode keeps the payload
+    // from editing its own trust grant into a wider one DURING the
+    // run (a bound-then-rewritten file would make the NEXT git
+    // invocation read altered trust — the trust file is not config
+    // the payload may steer).
+    if let Some(gt) = &params.git_trust {
+        bind_mount(&mut argv, &gt.host_file, &gt.container_file, false);
+    }
+
     // 7. environment
     for (key, value) in host_env {
         argv.extend(["--env".into(), format!("{key}={value}")]);
@@ -823,11 +976,57 @@ pub fn podman_run_argv(
     if cfg.display.is_waypipe() {
         argv.extend(["--env".into(), format!("XDG_RUNTIME_DIR={CONTAINER_HOME}")]);
     }
+    // The guest-root git trust (bd myconfig-zj2): GIT_CONFIG_GLOBAL
+    // set LAST, after every config `[env]` entry, so no configuration
+    // layer can repoint the trust grant — this variable is the
+    // infrastructure that makes git operative under guest root, in
+    // the same class as HOME (config.md D14). The file itself is ro
+    // (the section-6b bind).
+    if let Some(gt) = &params.git_trust {
+        argv.extend([
+            "--env".into(),
+            format!("GIT_CONFIG_GLOBAL={}", gt.container_file),
+        ]);
+    }
 
     // 8. resource limits
-    // Only apply resource limits when cgroups are enabled.
-    // When ignore_cgroups=true (runtime flag), these are skipped.
-    if !params.ignore_cgroups {
+    //
+    // The krun variant maps them onto VM annotations (backends.md
+    // D2): crun's krun handler reads `krun.cpus` / `krun.ram_mib`
+    // from the container config annotations
+    // (src/libcrun/handlers/krun.c
+    // `libkrun_parse_resource_configuration`), and they size the
+    // microVM itself — the first limit mechanism of any mysbx
+    // backend with no cgroup dependency at all. Three honest
+    // consequences, all refused rather than silently ignored:
+    //
+    // - `--pids-limit` has NO krun equivalent: the "container" is
+    //   the whole VM, no pids controller is wired for it, and an
+    //   unenforced limit would be a lie. Refused.
+    // - `--cpus 1.5` cannot become `krun.cpus` (a whole number of
+    //   vCPUs): the krun annotation is parsed with `strtol` and no
+    //   fractions exist. A fractional value is refused, never
+    //   rounded (a rounded limit is not the limit that was asked
+    //   for).
+    // - a memory value below the handler's minimum is refused: crun
+    //   turns `krun.ram_mib <= 128` into a SILENT default (the OCI
+    //   limit or 1024 MiB), which is exactly the
+    //   accepted-and-ignored shape this backend must never produce.
+    if params.krun {
+        if let Some(pids) = &params.pids_limit {
+            return Err(Error::KrunPidsLimit {
+                pids: pids.to_string(),
+            });
+        }
+        if let Some(cpus) = &params.cpus {
+            let vcpus = parse_krun_cpus(cpus)?;
+            argv.extend(["--annotation".into(), format!("krun.cpus={vcpus}")]);
+        }
+        if let Some(mem) = &params.memory {
+            let mib = parse_krun_ram_mib(mem)?;
+            argv.extend(["--annotation".into(), format!("krun.ram_mib={mib}")]);
+        }
+    } else if !params.ignore_cgroups {
         if let Some(limit) = &params.pids_limit {
             argv.extend(["--pids-limit".into(), limit.as_ref().into()]);
         }
@@ -885,6 +1084,82 @@ pub fn podman_run_argv(
     }
 
     Ok(argv)
+}
+
+/// Parse a `--cpus`-shaped value into the whole number of vCPUs the
+/// `krun.cpus` annotation accepts (crun's krun handler parses it
+/// with `strtol` — integers only). Fractional values are REFUSED,
+/// never rounded: a rounded limit is not the limit that was asked
+/// for, and podman's `--cpus` grammar (which this value shares, it
+/// comes from the same pin) admits fractions the annotation cannot
+/// express.
+pub fn parse_krun_cpus(raw: &str) -> Result<u32, Error> {
+    match raw.trim().parse::<f64>() {
+        Ok(v) if v.fract() == 0.0 && v >= 1.0 && v <= u32::MAX as f64 => Ok(v as u32),
+        _ => Err(Error::KrunLimit {
+            key: "krun.cpus",
+            raw: raw.to_owned(),
+            why: "krun.cpus is a whole number of vCPUs (>= 1)",
+        }),
+    }
+}
+
+/// Parse a `--memory`-shaped value into the whole MiB the
+/// `krun.ram_mib` annotation accepts. Podman's `--memory` grammar
+/// (byte, `k`/`K`, `m`/`M`, `g`/`G`, decimal or binary `b` suffixes)
+/// is accepted because the pin shares it; the MiB result must be a
+/// whole number > 128 — crun's handler silently turns
+/// `krun.ram_mib <= 128` into a DEFAULT (the OCI memory limit or
+/// 1024 MiB, src/libcrun/handlers/krun.c `LIBKRUN_MINIMUM_RAM_MIB`),
+/// and a limit that silently becomes a default is exactly the
+/// accepted-and-ignored shape this backend refuses.
+pub fn parse_krun_ram_mib(raw: &str) -> Result<u64, Error> {
+    const MIN_MIB: u64 = 128;
+    let trimmed = raw.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let (digits, multiplier) = if let Some(d) = lower.strip_suffix("gib") {
+        (d, 1024 * 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix('g') {
+        (d, 1024 * 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix("mib") {
+        (d, 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix('m') {
+        (d, 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix("kib") {
+        (d, 1024)
+    } else if let Some(d) = lower.strip_suffix('k') {
+        (d, 1024)
+    } else if let Some(d) = lower.strip_suffix('b') {
+        (d, 1)
+    } else {
+        (lower.as_str(), 1)
+    };
+    let bytes: u64 = match digits.trim().parse::<u64>() {
+        Ok(v) => v.checked_mul(multiplier).unwrap_or(u64::MAX),
+        Err(_) => {
+            return Err(Error::KrunLimit {
+                key: "krun.ram_mib",
+                raw: raw.to_owned(),
+                why: "a memory size (bytes, or K/M/G suffix)",
+            })
+        }
+    };
+    if bytes % (1024 * 1024) != 0 {
+        return Err(Error::KrunLimit {
+            key: "krun.ram_mib",
+            raw: raw.to_owned(),
+            why: "a whole number of MiB (krun.ram_mib has no byte granularity)",
+        });
+    }
+    let mib = bytes / (1024 * 1024);
+    if mib <= MIN_MIB {
+        return Err(Error::KrunLimit {
+            key: "krun.ram_mib",
+            raw: raw.to_owned(),
+            why: "more than 128 MiB (crun silently defaults ram_mib <= 128)",
+        });
+    }
+    Ok(mib)
 }
 
 /// First 10 hex chars of the FNV-1a 64 hash of `path` — a stable,
@@ -1184,6 +1459,24 @@ pub enum Error {
     /// A `state-dirs` entry would back [`WAYPIPE_DISPLAY_PATH`] with
     /// a sidecar directory.
     DisplaySocketPersisted { entry: String },
+    /// A resource-limit pin cannot be expressed as a krun VM
+    /// annotation (backends.md D2): fractional vCPUs, non-MiB memory
+    /// or a value crun would silently default.
+    KrunLimit {
+        key: &'static str,
+        raw: String,
+        why: &'static str,
+    },
+    /// `--pids-limit` on the krun variant: the guest is the whole
+    /// microVM, no pids controller is wired for it — an unenforceable
+    /// limit is refused, never accepted and silently ignored.
+    KrunPidsLimit { pids: String },
+    /// The git trust file was asked for on the gvisor variant (bd
+    /// myconfig-zj2): the gvisor payload runs as the keep-id-mapped
+    /// user, the dubious-ownership check cannot fire, and the bind
+    /// would widen the audit surface for nothing. Refused — never
+    /// accepted and silently mounted.
+    GitTrustOnGvisor,
 }
 
 impl fmt::Display for Error {
@@ -1258,6 +1551,26 @@ impl fmt::Display for Error {
                 f,
                 "state-dirs entry {entry} would persist the waypipe \
                  display socket {WAYPIPE_DISPLAY_PATH} in the sidecar"
+            ),
+            Error::KrunLimit { key, raw, why } => write!(
+                f,
+                "the krun backend cannot map the limit pin `{raw}` onto the \
+                 VM annotation {key} — it requires {why}"
+            ),
+            Error::KrunPidsLimit { pids } => write!(
+                f,
+                "the krun backend cannot enforce a pids limit ({pids}): \
+                 the container is the whole microVM and no pids controller \
+                 is wired for it — drop the pids limit or switch the \
+                 backend to `podman-gvisor`"
+            ),
+            Error::GitTrustOnGvisor => write!(
+                f,
+                "the guest-root git trust is a podman-krun story (bd \
+                 myconfig-zj2): the gvisor payload runs as the keep-id \
+                 user, whose uid already owns the repo mounts — the \
+                 dubious-ownership trust cannot exist there. Switch the \
+                 backend to `podman-krun`"
             ),
         }
     }

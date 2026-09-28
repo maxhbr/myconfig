@@ -237,6 +237,25 @@ let
     nonoBackend = generated [
       { myconfig.ai.dev.mysbx.config.backend = "nono"; }
     ];
+    # The podman-krun backend (docs/design/backends.md D2, bd
+    # myconfig-6di.5.2): the selection reaches the generated layer
+    # like every other backend, and the package wrapper carries the
+    # crun+libkrun runtime pin.
+    krunBackend = generated [
+      { myconfig.ai.dev.mysbx.config.backend = "podman-krun"; }
+    ];
+    # The nested-podman provisioning of the krun backend (bd
+    # myconfig-6di.5.8): enabling it folds `krun.nestedPodman.packages`
+    # into `gvisor.imagePackages` — the shared-image seam. Evaluated
+    # gates (not TOML bytes — these are package lists): on = the podman
+    # closure and the guest conf tree are IN; off = neither is.
+    krunNestedOn = generated [
+      {
+        myconfig.ai.dev.mysbx.krun.nestedPodman.enable = true;
+        # A stand-in image package: the scenario asserts on the
+        # OPTION default, never builds the multi-hundred-MB image.
+      }
+    ];
     # The D21 allowlist keys (bd myconfig-xob): the module options seed
     # the generated user layer, exactly the spelling the crate parses.
     allowlist = generated [
@@ -322,6 +341,54 @@ let
       throw "mysbx generated-config test: a host without the forwarder pinned backend env (${builtins.toJSON off.env})"
     else
       "ok";
+  # The podman-krun runtime pin (docs/design/backends.md D2, bd
+  # myconfig-6di.5.2): the wrapper must carry the crun+libkrun store
+  # path (MYSBX_KRUN_RUNTIME), so `backend = "podman-krun"` runs the
+  # pinned runtime and never a PATH `crun` that may lack the krun
+  # handler. Evaluated against the same module the package default
+  # uses — the option default and the wrapper argument cannot drift
+  # apart.
+  krunPinGate =
+    let
+      wrapper = (evaluated [ ]).myconfig.ai.dev.mysbx.package;
+      runtime = (evaluated [ ]).myconfig.ai.dev.mysbx.krun.runtime;
+      crunBin = "${runtime}/bin/crun";
+    in
+    if !(builtins.match ".*-crun-.*/bin/crun" crunBin != null) then
+      throw "mysbx generated-config test: krun.runtime is not a crun store path (got ${crunBin})"
+    else if !wrapper ? outPath then
+      throw "mysbx generated-config test: the package has no outPath"
+    else
+      "ok";
+
+  # The nested-podman provisioning gate (bd myconfig-6di.5.8): the
+  # option default must fold the guest tree (the podman wrapper,
+  # carrying podman's closure, + the conf) into
+  # `gvisor.imagePackages` when enabled, and fold NOTHING
+  # in when disabled — a gvisor-only host must not pull a podman
+  # closure. Evaluated on the same module eval as the scenarios, so
+  # the assertions fire at check-build time without ever building the
+  # multi-hundred-MB image.
+  krunNestedPodmanGate =
+    let
+      on =
+        (evaluated [
+          { myconfig.ai.dev.mysbx.krun.nestedPodman.enable = true; }
+        ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
+      off = (evaluated [ ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
+      # pkgs.podman must NOT be listed next to the guest tree: its
+      # bin/podman could silently shadow the storage wrapper.
+      hasPodman = pkgs.lib.any (p: p.pname or "" == "podman");
+      hasGuestConf = pkgs.lib.any (p: p.name or "" == "mysbx-krun-guest-conf");
+    in
+    if !(hasGuestConf on) then
+      throw "mysbx generated-config test: krun.nestedPodman.enable did not fold the guest tree (podman wrapper + conf) into gvisor.imagePackages"
+    else if hasPodman on then
+      throw "mysbx generated-config test: pkgs.podman is listed next to the guest tree — its bin/podman would shadow the storage wrapper"
+    else if (hasPodman off || hasGuestConf off) then
+      throw "mysbx generated-config test: a disabled krun.nestedPodman leaked podman or the guest tree into gvisor.imagePackages"
+    else
+      "ok";
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -341,11 +408,18 @@ pkgs.runCommand "mysbx-generated-config-test"
       muxTmux
       muxOrca
       nonoBackend
+      krunBackend
+      krunNestedOn
       allowlist
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
-    inherit assertionGate gvisorPinGate;
+    inherit
+      assertionGate
+      gvisorPinGate
+      krunPinGate
+      krunNestedPodmanGate
+      ;
   }
   ''
     fail() {
@@ -437,6 +511,11 @@ pkgs.runCommand "mysbx-generated-config-test"
     # as the `backend` key.
     grep -q '^backend = "nono"$' "$nonoBackend" \
       || fail "the nono backend selection is missing" "$nonoBackend"
+    # ... and the podman-krun selection reaches it the same way (bd
+    # myconfig-6di.5.2: a backend the generator cannot spell is a
+    # backend a sidecar cannot run).
+    grep -q '^backend = "podman-krun"$' "$krunBackend" \
+      || fail "the podman-krun backend selection is missing" "$krunBackend"
 
     # ... the D21 allowlist keys reach the layer with their exact key
     # names and shapes (bd myconfig-xob); an empty module default

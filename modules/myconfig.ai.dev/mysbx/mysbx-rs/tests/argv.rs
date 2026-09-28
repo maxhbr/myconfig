@@ -3513,6 +3513,11 @@ fn podman_params() -> PodmanParams<'static> {
         interactive: true,
         tty: false,
         image: "localhost/agent-gvisor:latest",
+        // The gvisor variant's runtime: `runsc` (the krun tests pass
+        // the pinned crun path instead, backends.md D2).
+        runtime: "runsc",
+        // The gvisor variant of every shared-golden test.
+        krun: false,
         runtime_flags: &[],
         // The rootless default of a wrapped run (lib.rs): cgroupfs is
         // the manager a non-root runsc can actually use.
@@ -3522,6 +3527,9 @@ fn podman_params() -> PodmanParams<'static> {
         // No backend env pins by default (an unwrapped build sets
         // MYSBX_GVISOR_ENV nowhere); the pin tests pass their own.
         extra_env: &[],
+        // The git trust file is opt-in per run (bd myconfig-zj2); the
+        // krun tests that exercise it pass their own.
+        git_trust: None,
         pids_limit: None,
         memory: None,
         cpus: None,
@@ -4661,6 +4669,294 @@ fn podman_rootless_defaults_golden() {
     )
     .unwrap();
     assert_golden("podman-rootless-defaults.txt", &argv);
+}
+
+// ---- podman-krun backend tests ----------------------------------------------
+//
+// The krun backend is a RUNTIME VARIANT of the podman-gvisor builder
+// (docs/design/backends.md D2): the SAME argv with the `--runtime`
+// value swapped to the pinned crun+libkrun path. The tests below pin
+// a synthetic crun path the way lib.rs pins `MYSBX_KRUN_RUNTIME`, and
+// assert both halves of the variant contract: the krun argv equals
+// the gvisor argv modulo the runtime line (a golden of its own so a
+// diff is readable), and the gvisor argv stays byte-identical
+// (the shared goldens above cover it — the snapshot test below is
+// the explicit before/after guard of bd myconfig-6di.5.3).
+
+/// The synthetic krun runtime pin: an absolute store-path shape, the
+/// way the Nix wrapper pins `MYSBX_KRUN_RUNTIME`
+/// (crun.override { withLibkrun = true; }).
+const KRUN_RUNTIME: &str = "/nix/store/synth-crun-libkrun/bin/crun";
+
+#[test]
+fn podman_krun_golden_minimal_config() {
+    // The krun variant's own golden: byte-for-byte the gvisor minimal
+    // golden with `--runtime` swapped — the whole point of the variant.
+    let mut params = podman_params();
+    params.runtime = KRUN_RUNTIME;
+    params.krun = true;
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_eq!(argv[0], format!("--runtime={KRUN_RUNTIME}"));
+    assert_golden("podman-krun-minimal.txt", &argv);
+}
+
+#[test]
+fn podman_krun_argv_equals_gvisor_except_the_enumerated_differences() {
+    // The variant contract (backends.md D2, bd myconfig-6di.5.4):
+    // build the SAME config under both runtimes and diff the argvs.
+    // The krun variant differs ONLY in the enumerated set D2 names —
+    // the runtime swap, the handler-activation annotation, the
+    // supplementary-group preservation (`--group-add=keep-groups`,
+    // bd myconfig-b5o), the two guest-unenforceable hardening flags
+    // dropped (the krun handler never execs the OCI process; the
+    // guest init runs the payload as guest root, libkrun init/init.c
+    // reads only Env/args/WorkingDir) — plus, for a config with
+    // limits, the VM annotations instead of the cgroup flags (the
+    // limits tests below pin that mapping). Anything else differing
+    // is a builder bug, not a variant.
+    for (cfg, payload) in [
+        (podman_base(true), Payload::Shell),
+        (podman_base(false), Payload::Shell),
+    ] {
+        let mut gvisor_params = podman_params();
+        gvisor_params.runtime = "runsc";
+        let mut krun_params = podman_params();
+        krun_params.runtime = KRUN_RUNTIME;
+        krun_params.krun = true;
+        let gvisor = podman_run_argv(
+            &cfg,
+            &synth_repo(),
+            &payload,
+            &host_env(&[]),
+            &gvisor_params,
+        )
+        .unwrap();
+        let krun =
+            podman_run_argv(&cfg, &synth_repo(), &payload, &host_env(&[]), &krun_params).unwrap();
+        // Both enumerated differences are length-relevant; compare
+        // with the enumerated differences removed instead of zipping
+        // raw positions.
+        let strip = |argv: &[String], drop: &[&str]| {
+            argv.iter()
+                .filter(|a| !drop.contains(&a.as_str()))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let g = strip(
+            &gvisor,
+            &["--cap-drop=ALL", "--security-opt=no-new-privileges"],
+        );
+        let k = strip(
+            &krun,
+            &[
+                "--annotation",
+                "run.oci.handler=krun",
+                "--group-add=keep-groups",
+            ],
+        );
+        assert_eq!(g.len(), k.len(), "{gvisor:?}\n{krun:?}");
+        for (i, (gi, ki)) in g.iter().zip(k.iter()).enumerate() {
+            if i == 0 {
+                assert_eq!(gi, "--runtime=runsc");
+                assert_eq!(ki, &format!("--runtime={KRUN_RUNTIME}"));
+            } else {
+                assert_eq!(gi, ki, "argument {i} differs between the variants");
+            }
+        }
+        // The enumerated differences themselves, positionally: the
+        // handler annotation sits right after keep-id, and the
+        // guest-unenforceable hardening flags are gone.
+        let keep_id = krun
+            .iter()
+            .position(|a| a == "--userns=keep-id")
+            .expect("keep-id present");
+        assert_eq!(
+            &krun[keep_id + 1..keep_id + 3],
+            ["--annotation", "run.oci.handler=krun"],
+            "{krun:?}"
+        );
+        assert!(
+            !krun.contains(&"--cap-drop=ALL".to_string())
+                && !krun.contains(&"--security-opt=no-new-privileges".to_string()),
+            "the guest-unenforceable hardening flags must not appear: {krun:?}"
+        );
+    }
+}
+
+#[test]
+fn podman_krun_limits_map_to_vm_annotations() {
+    // The krun limits are VM annotations (backends.md D2, bd
+    // myconfig-6di.5.6): `krun.cpus` / `krun.ram_mib`, read by crun's
+    // krun handler from the container annotations — no cgroup
+    // dependency, the first limit mechanism of any mysbx backend that
+    // sizes the confinement itself (the VM). A fractional CPU count
+    // and a sub-128-MiB memory value are refused (crun silently
+    // defaults the latter), never accepted and silently ignored.
+    let mut params = podman_params();
+    params.runtime = KRUN_RUNTIME;
+    params.krun = true;
+    params.cpus = Some("2".into());
+    params.memory = Some("4g".into());
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let annotations: Vec<&String> = argv
+        .iter()
+        .zip(argv.iter().skip(1))
+        .filter(|(a, _)| *a == "--annotation")
+        .map(|(_, v)| v)
+        .collect();
+    assert_eq!(
+        annotations,
+        vec![
+            &"run.oci.handler=krun".to_string(),
+            &"krun.cpus=2".to_string(),
+            &"krun.ram_mib=4096".to_string(),
+        ],
+        "{argv:?}"
+    );
+    // NO cgroup flags on the krun variant: `--cpus`/`--memory` would
+    // be unenforced (or crash crun as a runtime flag), the limits are
+    // the annotations.
+    assert!(!argv.contains(&"--cpus".to_string()));
+    assert!(!argv.contains(&"--memory".to_string()));
+}
+
+#[test]
+fn podman_krun_limits_refuse_what_they_cannot_express() {
+    // Three refusals, never silent rounding/defaulting: a fractional
+    // vCPU count, a memory value below crun's silent-default minimum,
+    // and a pids limit (no pids controller is wired for a whole-VM
+    // "container").
+    let mut params = podman_params();
+    params.runtime = KRUN_RUNTIME;
+    params.krun = true;
+    params.cpus = Some("1.5".into());
+    let err = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            mysbx::podman_gvisor::Error::KrunLimit {
+                key: "krun.cpus",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+
+    params.cpus = None;
+    params.memory = Some("100m".into());
+    let err = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            mysbx::podman_gvisor::Error::KrunLimit {
+                key: "krun.ram_mib",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+
+    params.memory = None;
+    params.pids_limit = Some("512".into());
+    let err = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, mysbx::podman_gvisor::Error::KrunPidsLimit { .. }),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn podman_krun_network_false_refuses_the_daemon_dir_like_gvisor() {
+    // bd myconfig-6di.5.5: `network = false` is enforced on the krun
+    // variant exactly as on podman-gvisor — the same
+    // `--network none`, and the same daemon-socket contradiction: a
+    // mount source at, below or containing `/nix/var/nix` hands the
+    // payload the daemon socket over virtio-fs, whose builds keep
+    // network access — refused on BOTH podman variants by the same
+    // builder rule (`DaemonUnderDeniedNetwork`).
+    let mut cfg = podman_base(false);
+    cfg.mounts
+        .push(make_mount("/nix/var/nix/daemon-socket", None, Mode::Ro));
+    let mut gvisor_params = podman_params();
+    gvisor_params.runtime = "runsc";
+    let mut krun_params = podman_params();
+    krun_params.runtime = KRUN_RUNTIME;
+    krun_params.krun = true;
+    for (label, params) in [("gvisor", gvisor_params), ("krun", krun_params)] {
+        let err = podman_run_argv(
+            &cfg,
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env(&[]),
+            &params,
+        )
+        .expect_err("a daemon-dir mount under a denied network must be refused");
+        assert!(
+            matches!(
+                err,
+                mysbx::podman_gvisor::Error::DaemonUnderDeniedNetwork { .. }
+            ),
+            "{label}: wrong error: {err:?}"
+        );
+    }
+}
+
+#[test]
+fn podman_krun_ram_parsing_covers_the_podman_memory_grammar() {
+    // The MiB parser: podman's `--memory` spellings map onto whole
+    // MiB values, byte-precision values are refused (the annotation
+    // has no byte granularity).
+    let cases = [
+        ("512m", Some(512)),
+        ("4g", Some(4096)),
+        ("2G", Some(2048)),
+        ("1024M", Some(1024)),
+        ("1gib", Some(1024)),
+        ("2147483648b", Some(2048)),
+        ("1073741824", Some(1024)),
+        ("128m", None),
+        ("1.5g", None),
+        ("1000000b", None),
+    ];
+    for (raw, expect) in cases {
+        let got = mysbx::podman_gvisor::parse_krun_ram_mib(raw).ok();
+        assert_eq!(got, expect, "`{raw}`");
+    }
 }
 // ---- nono backend tests ------------------------------------------------------
 //
@@ -6276,5 +6572,59 @@ fn nono_ca_bundle_pins_reach_the_payload_through_the_env_segment() {
             .windows(3)
             .any(|w| w[0] == "--setenv" && w[1] == "SSL_CERT_FILE"),
         "the CA pins are NOT nono infrastructure: {argv:?}"
+    );
+}
+
+#[test]
+fn podman_krun_preserves_the_supplementary_groups() {
+    // bd myconfig-b5o: the VMM is the container entrypoint process; when
+    // /dev/kvm access comes via the kvm GROUP, crun's setgroups must be
+    // skipped or the VMM loses the group and every run dies with EACCES.
+    // podman's --group-add=keep-groups becomes the crun annotation
+    // run.oci.keep_original_groups=1 (cmd/podman/containers/create.go),
+    // and can_setgroups returns 0 for it (linux.c). Krun-only: the
+    // gvisor argv must not grow it (the variant stays byte-identical),
+    // and it must be the CPU-section sibling of the handler annotation.
+    let mut krun_params = podman_params();
+    krun_params.runtime = KRUN_RUNTIME;
+    krun_params.krun = true;
+    let krun = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &krun_params,
+    )
+    .unwrap();
+    assert!(
+        krun.iter().any(|a| a == "--group-add=keep-groups"),
+        "keep-groups missing on the krun variant: {krun:?}"
+    );
+    let keep_id = krun
+        .iter()
+        .position(|a| a == "--userns=keep-id")
+        .expect("keep-id present");
+    assert_eq!(
+        &krun[keep_id + 1..keep_id + 4],
+        [
+            "--annotation",
+            "run.oci.handler=krun",
+            "--group-add=keep-groups"
+        ],
+        "{krun:?}"
+    );
+    let mut gvisor_params = podman_params();
+    gvisor_params.runtime = "runsc";
+    let gvisor = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &gvisor_params,
+    )
+    .unwrap();
+    assert!(
+        !gvisor.iter().any(|a| a == "--group-add=keep-groups"),
+        "the gvisor argv must stay byte-identical (no runsc equivalent): {gvisor:?}"
     );
 }
