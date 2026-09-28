@@ -332,8 +332,10 @@ run is a KVM microVM with its own kernel (libkrunfw's stock kernel) and
 mounts travel over virtio-fs instead of runsc's gofer. Rootless, no
 bridge, no tap, no root: the microVM is started from the unprivileged
 podman process through `/dev/kvm`, and libkrun's TSI (Transparent
-Socket Impersonation) plus podman's pasta netns give the guest its
-network — no device the payload could otherwise reach.
+Socket Impersonation) over the container's own netns give the guest
+its network — no device the payload could otherwise reach (the
+verified network model: the section after the refusal table, bd
+myconfig-6di.5.5).
 
 The podman-gvisor argv stays BYTE-IDENTICAL; the krun variant is a
 separate enum value swapping `--runtime=runsc` for
@@ -413,8 +415,8 @@ and silently ignored — the same rule as every backend:
 
 | Feature | First-cut status |
 | --- | --- |
-| `network = false` | enforced: `--network none` exactly as on podman-gvisor |
-| `allow-domains`/`connect-ports`/`listen-ports` | refused (config.md D21's table stays: libkrun's egress is podman's pasta netns — same pasta, same gap as podman-gvisor) |
+| `network = false` | enforced, and VERIFIED against the crun/libkrun sources (bd myconfig-6di.5.5): `--network none` gives the container an empty netns, the VMM (the rootless podman process) is created INSIDE it, and every guest egress is a TSI proxy connection the VMM dials from that netns — no route, no resolver, exactly the gvisor semantics. See the network model below |
+| `allow-domains`/`connect-ports`/`listen-ports` | refused (config.md D21's table stays: krun's egress is libkrun's TSI proxy — an UNFILTERED dial from the container netns, no per-domain/port hook in the muxer — verified, see the network model below; same gap as podman-gvisor's pasta) |
 | `egress = "proxy-only"` | refused until verified (config.md D20: pasta's `--map-guest-addr` adds a path to the forwarder, it does not remove the default route — same fix to share with bd myconfig-6di.3 / myconfig-jq2) |
 | `display = "waypipe"` | refused in the first cut (the waypipe channel needs an AF_UNIX socket crossing virtio-fs, which passes inodes, not live socket objects — bd myconfig-6di.5.4 verified the gap against the libkrun sources; lifting needs an in-image entry with a guest-tmpfs socket dir, live-validated under bd myconfig-6di.5.7) |
 | multiplexer sessions | refused in the first cut (same root cause: the tmux socket must live on guest tmpfs, and the image carries no entry script — the argv builder's image-pin rule refuses the session on BOTH podman backends; an in-image entry is the prerequisite, live validation bd myconfig-6di.5.7) |
@@ -424,6 +426,49 @@ and silently ignored — the same rule as every backend:
 | uid mapping | `--userns=keep-id` stays but maps the HOST-SIDE preparation only: inside the guest the payload runs as guest root (the init never setuids) and the virtiofs server maps guest-root accesses to the host user's own uid unchanged (passthrough.rs `set_creds`; chown to any OTHER uid is EPERM unless the server holds CAP_SETUID). Files the payload writes in the shared mounts are host-uid-owned, as on the other backends; the nested-podman setuid story is bd myconfig-6di.5.8's risk |
 | `/dev/kvm` availability | a doctor-style eval-time check: the wrapper asserts the user has rw access to `/dev/kvm` (the `kvm` group) — a host without it gets a refused run, never a silent fallback to another runtime |
 | resource limits | mapped onto the krun VM annotations `krun.cpus` / `krun.ram_mib` (crun's krun handler, bd myconfig-6di.5.6) — the first mysbx limit mechanism with no cgroup dependency; `--pids-limit` refused (no pids controller is wired for a whole-VM "container"), fractional vCPUs and sub-128-MiB memory refused (crun silently defaults `ram_mib <= 128`) — never accepted and silently ignored |
+
+#### The network model, verified (bd myconfig-6di.5.5)
+
+How the krun guest reaches the network, traced through the pinned
+sources (crun 1.30 krun.c, libkrun lib.rs/vsock muxer):
+
+- crun's krun handler adds a net device ONLY for the annotations
+  `krun.tap_name` / `krun.use_passt` (krun.c
+  `libkrun_configure_network`) — the mysbx argv sets NEITHER.
+- With no net device, libkrun's implicit vsock heuristic fires
+  (`enable_tsi = net.list.is_empty()`, lib.rs) and the vsock device is
+  created with `TsiFlags::HIJACK_INET`; the guest kernel boots with
+  `tsi_hijack` on its cmdline (vmm/builder.rs).
+- Egress is then TSI — Transparent Socket Impersonation: the guest
+  kernel routes socket syscalls at the vsock CID, the muxer creates a
+  TSI proxy (muxer.rs `process_proxy_create` — per-connection, gated
+  on `HIJACK_INET`), and the VMM performs the connection from ITS OWN
+  network namespace.
+- The VMM is the crun/podman process, created inside whatever netns
+  `--network` selected: the podman default (pasta) or the empty
+  none-netns of `network = false`. The guest therefore has EXACTLY
+  the egress of the container netns — no independent guest route,
+  nothing the payload could use past the netns.
+
+Consequences, stated honestly:
+
+- `network = false` IS the same enforcement as podman-gvisor: the VMM
+  has no route, and TSI dials from it. The run refuses the same nix
+  daemon mount contradiction the gvisor tier refuses.
+- allowlists are refused exactly as on podman-gvisor: TSI is an
+  UNFILTERED proxy (any AF_INET/AF_INET6 connect() the guest makes, the
+  VMM dials) — no per-domain or per-port hook exists in the muxer, so
+  the D21 refusal fires (pipeline step 4b) with krun's mechanism named.
+- `egress = "proxy-only"` is not a schema key yet (config.md D20), so
+  the strict parser refuses the config on EVERY backend before any
+  backend question; when D20 lands, krun shares the podman-gvisor
+  gap (pasta's `--map-guest-addr` ADDS a forwarder path, it does not
+  remove the default route), so krun will refuse it too unless the
+  guest netns can be made default-deny — same shared fix to track
+  under bd myconfig-6di.3 / myconfig-jq2.
+- DNS travels the same TSI path (the VMM resolves from the netns's
+  resolver) — no guest-specific resolver story is needed for the first
+  cut, and none is invented here.
 
 #### Scope decisions (from the epic, bd myconfig-6di.5)
 

@@ -4892,6 +4892,42 @@ fn podman_krun_limits_refuse_what_they_cannot_express() {
 }
 
 #[test]
+fn podman_krun_network_false_refuses_the_daemon_dir_like_gvisor() {
+    // bd myconfig-6di.5.5: `network = false` is enforced on the krun
+    // variant exactly as on podman-gvisor — the same
+    // `--network none`, and the same daemon-socket contradiction: a
+    // mount source at, below or containing `/nix/var/nix` hands the
+    // payload the daemon socket over virtio-fs, whose builds keep
+    // network access — refused on BOTH podman variants by the same
+    // builder rule (`DaemonUnderDeniedNetwork`).
+    let mut cfg = podman_base(false);
+    cfg.mounts
+        .push(make_mount("/nix/var/nix/daemon-socket", None, Mode::Ro));
+    let mut gvisor_params = podman_params();
+    gvisor_params.runtime = "runsc";
+    let mut krun_params = podman_params();
+    krun_params.runtime = KRUN_RUNTIME;
+    krun_params.krun = true;
+    for (label, params) in [("gvisor", gvisor_params), ("krun", krun_params)] {
+        let err = podman_run_argv(
+            &cfg,
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env(&[]),
+            &params,
+        )
+        .expect_err("a daemon-dir mount under a denied network must be refused");
+        assert!(
+            matches!(
+                err,
+                mysbx::podman_gvisor::Error::DaemonUnderDeniedNetwork { .. }
+            ),
+            "{label}: wrong error: {err:?}"
+        );
+    }
+}
+
+#[test]
 fn podman_krun_ram_parsing_covers_the_podman_memory_grammar() {
     // The MiB parser: podman's `--memory` spellings map onto whole
     // MiB values, byte-precision values are refused (the annotation

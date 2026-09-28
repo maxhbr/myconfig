@@ -7774,6 +7774,60 @@ fn allowlist_on_podman_krun_is_refused() {
 }
 
 #[test]
+fn podman_krun_network_false_is_enforced_like_gvisor() {
+    // bd myconfig-6di.5.5: `network = false` on the krun backend is
+    // the same `--network none` as on podman-gvisor, and the
+    // enforcement is verified: the VMM (the rootless podman process)
+    // is created inside the container's empty netns, and the guest's
+    // ONLY egress is a TSI proxy connection the VMM dials from that
+    // netns (libkrun muxer, TsiFlags::HIJACK_INET) — no route, no
+    // resolver, nothing past the netns. The dry run must carry the
+    // same `--network none` line, and the same nix-daemon mount
+    // contradiction the gvisor tier refuses must refuse here too.
+    let (inv, _, sidecar) = fixture("podman-krun-network-false", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\nnetwork = false\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        stdout.lines().any(|l| l == "--network") && stdout.lines().any(|l| l == "none"),
+        "the krun dry run must carry --network none: {stdout}"
+    );
+}
+
+#[test]
+fn podman_krun_allowlist_refusal_names_tsi() {
+    // bd myconfig-6di.5.5: the D21 refusal on podman-krun names the
+    // backend's ACTUAL egress mechanism — TSI is an unfiltered
+    // proxy (any connect() the guest makes, the VMM dials from the
+    // container netns) — never a vague "not supported".
+    let (inv, _, sidecar) = fixture("podman-krun-allowlist-tsi", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\nallow-domains = [\"example.org\"]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(
+        stderr.contains("TSI"),
+        "the refusal must name the TSI egress mechanism: {stderr}"
+    );
+    assert!(stderr.contains("allow-domains"), "stderr: {stderr}");
+}
+
+#[test]
 fn podman_krun_dry_run_swaps_the_runtime_keeps_the_layout() {
     // The variant contract end-to-end (bd myconfig-6di.5.3/.4,
     // docs/design/backends.md D2): `backend = "podman-krun"` builds
