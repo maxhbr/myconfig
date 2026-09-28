@@ -332,6 +332,15 @@ pub struct Params<'a> {
     /// the gvisor argv stays byte-identical). A wrapper pin like
     /// every other, never a PATH lookup by this builder.
     pub runtime: &'a str,
+    /// Whether this build is the krun runtime variant (`backend =
+    /// "podman-krun"`, backends.md D2). One fact with
+    /// [`Params::runtime`], carried separately because it changes
+    /// MORE than the runtime flag: section 8 maps the limits onto
+    /// krun VM annotations (`krun.cpus` / `krun.ram_mib`) instead of
+    /// cgroup flags, and refuses `--pids-limit` (the guest has no
+    /// pids controller wired — an unenforceable limit is never
+    /// accepted and silently ignored).
+    pub krun: bool,
     /// Podman runtime flags (e.g. `ignore-cgroups`). These come from
     /// environment variables or backend configuration.
     pub runtime_flags: &'a [String],
@@ -848,9 +857,43 @@ pub fn podman_run_argv(
     }
 
     // 8. resource limits
-    // Only apply resource limits when cgroups are enabled.
-    // When ignore_cgroups=true (runtime flag), these are skipped.
-    if !params.ignore_cgroups {
+    //
+    // The krun variant maps them onto VM annotations (backends.md
+    // D2): crun's krun handler reads `krun.cpus` / `krun.ram_mib`
+    // from the container config annotations
+    // (src/libcrun/handlers/krun.c
+    // `libkrun_parse_resource_configuration`), and they size the
+    // microVM itself — the first limit mechanism of any mysbx
+    // backend with no cgroup dependency at all. Three honest
+    // consequences, all refused rather than silently ignored:
+    //
+    // - `--pids-limit` has NO krun equivalent: the "container" is
+    //   the whole VM, no pids controller is wired for it, and an
+    //   unenforced limit would be a lie. Refused.
+    // - `--cpus 1.5` cannot become `krun.cpus` (a whole number of
+    //   vCPUs): the krun annotation is parsed with `strtol` and no
+    //   fractions exist. A fractional value is refused, never
+    //   rounded (a rounded limit is not the limit that was asked
+    //   for).
+    // - a memory value below the handler's minimum is refused: crun
+    //   turns `krun.ram_mib <= 128` into a SILENT default (the OCI
+    //   limit or 1024 MiB), which is exactly the
+    //   accepted-and-ignored shape this backend must never produce.
+    if params.krun {
+        if let Some(pids) = &params.pids_limit {
+            return Err(Error::KrunPidsLimit {
+                pids: pids.to_string(),
+            });
+        }
+        if let Some(cpus) = &params.cpus {
+            let vcpus = parse_krun_cpus(cpus)?;
+            argv.extend(["--annotation".into(), format!("krun.cpus={vcpus}")]);
+        }
+        if let Some(mem) = &params.memory {
+            let mib = parse_krun_ram_mib(mem)?;
+            argv.extend(["--annotation".into(), format!("krun.ram_mib={mib}")]);
+        }
+    } else if !params.ignore_cgroups {
         if let Some(limit) = &params.pids_limit {
             argv.extend(["--pids-limit".into(), limit.as_ref().into()]);
         }
@@ -908,6 +951,82 @@ pub fn podman_run_argv(
     }
 
     Ok(argv)
+}
+
+/// Parse a `--cpus`-shaped value into the whole number of vCPUs the
+/// `krun.cpus` annotation accepts (crun's krun handler parses it
+/// with `strtol` — integers only). Fractional values are REFUSED,
+/// never rounded: a rounded limit is not the limit that was asked
+/// for, and podman's `--cpus` grammar (which this value shares, it
+/// comes from the same pin) admits fractions the annotation cannot
+/// express.
+pub fn parse_krun_cpus(raw: &str) -> Result<u32, Error> {
+    match raw.trim().parse::<f64>() {
+        Ok(v) if v.fract() == 0.0 && v >= 1.0 && v <= u32::MAX as f64 => Ok(v as u32),
+        _ => Err(Error::KrunLimit {
+            key: "krun.cpus",
+            raw: raw.to_owned(),
+            why: "krun.cpus is a whole number of vCPUs (>= 1)",
+        }),
+    }
+}
+
+/// Parse a `--memory`-shaped value into the whole MiB the
+/// `krun.ram_mib` annotation accepts. Podman's `--memory` grammar
+/// (byte, `k`/`K`, `m`/`M`, `g`/`G`, decimal or binary `b` suffixes)
+/// is accepted because the pin shares it; the MiB result must be a
+/// whole number > 128 — crun's handler silently turns
+/// `krun.ram_mib <= 128` into a DEFAULT (the OCI memory limit or
+/// 1024 MiB, src/libcrun/handlers/krun.c `LIBKRUN_MINIMUM_RAM_MIB`),
+/// and a limit that silently becomes a default is exactly the
+/// accepted-and-ignored shape this backend refuses.
+pub fn parse_krun_ram_mib(raw: &str) -> Result<u64, Error> {
+    const MIN_MIB: u64 = 128;
+    let trimmed = raw.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let (digits, multiplier) = if let Some(d) = lower.strip_suffix("gib") {
+        (d, 1024 * 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix('g') {
+        (d, 1024 * 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix("mib") {
+        (d, 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix('m') {
+        (d, 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix("kib") {
+        (d, 1024)
+    } else if let Some(d) = lower.strip_suffix('k') {
+        (d, 1024)
+    } else if let Some(d) = lower.strip_suffix('b') {
+        (d, 1)
+    } else {
+        (lower.as_str(), 1)
+    };
+    let bytes: u64 = match digits.trim().parse::<u64>() {
+        Ok(v) => v.checked_mul(multiplier).unwrap_or(u64::MAX),
+        Err(_) => {
+            return Err(Error::KrunLimit {
+                key: "krun.ram_mib",
+                raw: raw.to_owned(),
+                why: "a memory size (bytes, or K/M/G suffix)",
+            })
+        }
+    };
+    if bytes % (1024 * 1024) != 0 {
+        return Err(Error::KrunLimit {
+            key: "krun.ram_mib",
+            raw: raw.to_owned(),
+            why: "a whole number of MiB (krun.ram_mib has no byte granularity)",
+        });
+    }
+    let mib = bytes / (1024 * 1024);
+    if mib <= MIN_MIB {
+        return Err(Error::KrunLimit {
+            key: "krun.ram_mib",
+            raw: raw.to_owned(),
+            why: "more than 128 MiB (crun silently defaults ram_mib <= 128)",
+        });
+    }
+    Ok(mib)
 }
 
 /// First 10 hex chars of the FNV-1a 64 hash of `path` — a stable,
@@ -1207,6 +1326,18 @@ pub enum Error {
     /// A `state-dirs` entry would back [`WAYPIPE_DISPLAY_PATH`] with
     /// a sidecar directory.
     DisplaySocketPersisted { entry: String },
+    /// A resource-limit pin cannot be expressed as a krun VM
+    /// annotation (backends.md D2): fractional vCPUs, non-MiB memory
+    /// or a value crun would silently default.
+    KrunLimit {
+        key: &'static str,
+        raw: String,
+        why: &'static str,
+    },
+    /// `--pids-limit` on the krun variant: the guest is the whole
+    /// microVM, no pids controller is wired for it — an unenforceable
+    /// limit is refused, never accepted and silently ignored.
+    KrunPidsLimit { pids: String },
 }
 
 impl fmt::Display for Error {
@@ -1281,6 +1412,18 @@ impl fmt::Display for Error {
                 f,
                 "state-dirs entry {entry} would persist the waypipe \
                  display socket {WAYPIPE_DISPLAY_PATH} in the sidecar"
+            ),
+            Error::KrunLimit { key, raw, why } => write!(
+                f,
+                "the krun backend cannot map the limit pin `{raw}` onto the \
+                 VM annotation {key} — it requires {why}"
+            ),
+            Error::KrunPidsLimit { pids } => write!(
+                f,
+                "the krun backend cannot enforce a pids limit ({pids}): \
+                 the container is the whole microVM and no pids controller \
+                 is wired for it — drop the pids limit or switch the \
+                 backend to `podman-gvisor`"
             ),
         }
     }

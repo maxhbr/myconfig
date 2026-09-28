@@ -7873,6 +7873,59 @@ fn podman_krun_dry_run_needs_no_kvm() {
 }
 
 #[test]
+fn podman_krun_limits_become_vm_annotations() {
+    // bd myconfig-6di.5.6: the SHARED limit pins (MYSBX_GVISOR_CPUS /
+    // _MEMORY — one "resource limits of the sandbox" setting per
+    // host, both podman variants consume them) map onto krun VM
+    // annotations on the dry-run argv: no cgroup flags, and a
+    // pids-limit pin is a REFUSED run naming the gap.
+    let (inv, _, sidecar) = fixture("podman-krun-limits", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        .env("MYSBX_GVISOR_CPUS", "2")
+        .env("MYSBX_GVISOR_MEMORY", "4g");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        stdout.contains("krun.cpus=2") && stdout.contains("krun.ram_mib=4096"),
+        "the limit annotations are missing: {stdout}"
+    );
+    assert!(
+        !stdout
+            .lines()
+            .any(|l| l.starts_with("--cpus") || l.starts_with("--memory")),
+        "no cgroup flags on the krun variant: {stdout}"
+    );
+
+    // The pids-limit pin on the krun variant is a refused run — no
+    // pids controller is wired for a whole-VM "container".
+    let (inv, _, sidecar) = fixture("podman-krun-pids", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+        .env("MYSBX_GVISOR_PIDS_LIMIT", "512");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("cannot enforce a pids limit"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
 fn allowlist_with_network_false_is_refused() {
     // network = false denies the network; an allowlist contradicts it.
     // Refused for the nono backend too (the pipeline's step 4b check

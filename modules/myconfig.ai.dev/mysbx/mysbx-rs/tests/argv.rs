@@ -3516,6 +3516,8 @@ fn podman_params() -> PodmanParams<'static> {
         // The gvisor variant's runtime: `runsc` (the krun tests pass
         // the pinned crun path instead, backends.md D2).
         runtime: "runsc",
+        // The gvisor variant of every shared-golden test.
+        krun: false,
         runtime_flags: &[],
         // The rootless default of a wrapped run (lib.rs): cgroupfs is
         // the manager a non-root runsc can actually use.
@@ -4689,6 +4691,7 @@ fn podman_krun_golden_minimal_config() {
     // golden with `--runtime` swapped — the whole point of the variant.
     let mut params = podman_params();
     params.runtime = KRUN_RUNTIME;
+    params.krun = true;
     let argv = podman_run_argv(
         &podman_base(true),
         &synth_repo(),
@@ -4716,6 +4719,7 @@ fn podman_krun_argv_equals_gvisor_modulo_the_runtime() {
         gvisor_params.runtime = "runsc";
         let mut krun_params = podman_params();
         krun_params.runtime = KRUN_RUNTIME;
+        krun_params.krun = true;
         let gvisor = podman_run_argv(
             &cfg,
             &synth_repo(),
@@ -4736,6 +4740,135 @@ fn podman_krun_argv_equals_gvisor_modulo_the_runtime() {
                 assert_eq!(g, k, "argument {i} differs between the variants");
             }
         }
+    }
+}
+
+#[test]
+fn podman_krun_limits_map_to_vm_annotations() {
+    // The krun limits are VM annotations (backends.md D2, bd
+    // myconfig-6di.5.6): `krun.cpus` / `krun.ram_mib`, read by crun's
+    // krun handler from the container annotations — no cgroup
+    // dependency, the first limit mechanism of any mysbx backend that
+    // sizes the confinement itself (the VM). A fractional CPU count
+    // and a sub-128-MiB memory value are refused (crun silently
+    // defaults the latter), never accepted and silently ignored.
+    let mut params = podman_params();
+    params.runtime = KRUN_RUNTIME;
+    params.krun = true;
+    params.cpus = Some("2".into());
+    params.memory = Some("4g".into());
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let annotations: Vec<&String> = argv
+        .iter()
+        .zip(argv.iter().skip(1))
+        .filter(|(a, _)| *a == "--annotation")
+        .map(|(_, v)| v)
+        .collect();
+    assert_eq!(
+        annotations,
+        vec![&"krun.cpus=2".to_string(), &"krun.ram_mib=4096".to_string()],
+        "{argv:?}"
+    );
+    // NO cgroup flags on the krun variant: `--cpus`/`--memory` would
+    // be unenforced (or crash crun as a runtime flag), the limits are
+    // the annotations.
+    assert!(!argv.contains(&"--cpus".to_string()));
+    assert!(!argv.contains(&"--memory".to_string()));
+}
+
+#[test]
+fn podman_krun_limits_refuse_what_they_cannot_express() {
+    // Three refusals, never silent rounding/defaulting: a fractional
+    // vCPU count, a memory value below crun's silent-default minimum,
+    // and a pids limit (no pids controller is wired for a whole-VM
+    // "container").
+    let mut params = podman_params();
+    params.runtime = KRUN_RUNTIME;
+    params.krun = true;
+    params.cpus = Some("1.5".into());
+    let err = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            mysbx::podman_gvisor::Error::KrunLimit {
+                key: "krun.cpus",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+
+    params.cpus = None;
+    params.memory = Some("100m".into());
+    let err = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            mysbx::podman_gvisor::Error::KrunLimit {
+                key: "krun.ram_mib",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+
+    params.memory = None;
+    params.pids_limit = Some("512".into());
+    let err = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, mysbx::podman_gvisor::Error::KrunPidsLimit { .. }),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn podman_krun_ram_parsing_covers_the_podman_memory_grammar() {
+    // The MiB parser: podman's `--memory` spellings map onto whole
+    // MiB values, byte-precision values are refused (the annotation
+    // has no byte granularity).
+    let cases = [
+        ("512m", Some(512)),
+        ("4g", Some(4096)),
+        ("2G", Some(2048)),
+        ("1024M", Some(1024)),
+        ("1gib", Some(1024)),
+        ("2147483648b", Some(2048)),
+        ("1073741824", Some(1024)),
+        ("128m", None),
+        ("1.5g", None),
+        ("1000000b", None),
+    ];
+    for (raw, expect) in cases {
+        let got = mysbx::podman_gvisor::parse_krun_ram_mib(raw).ok();
+        assert_eq!(got, expect, "`{raw}`");
     }
 }
 // ---- nono backend tests ------------------------------------------------------

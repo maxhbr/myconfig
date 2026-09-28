@@ -58,6 +58,29 @@ back to the built-in defaults):
   the host's loopback-only proxy reachable from inside the container,
   which the container's own `127.0.0.1` is not. The option behind the
   pin is `myconfig.ai.dev.mysbx.gvisor.pastaSpec`.
+
+`backend = "podman-krun"` (backends.md D2 — the same builder under a
+libkrun runtime) **runs** additionally read its OWN flag pins:
+
+- `MYSBX_KRUN_RUNTIME`: the OCI runtime binary (crun built against
+  libkrun, pinned by the Nix wrapper; the option is
+  `myconfig.ai.dev.mysbx.krun.runtime`).
+- `MYSBX_KRUN_CGROUP_MANAGER` / `MYSBX_KRUN_RUNTIME_FLAGS`: the krun
+  variants of the two flags above, defaulting to NO runtime flags —
+  crun has no `ignore-cgroups` option (that is a runsc flag), so the
+  gvisor default would make crun die on an unknown flag. They are
+  separate pins so an operator can configure one variant without
+  breaking the other.
+- `MYSBX_GVISOR_PIDS_LIMIT` / `MYSBX_GVISOR_MEMORY` / `MYSBX_GVISOR_CPUS`:
+  SHARED with the gvisor variant (one "resource limits of the
+  sandbox" setting per host) but mapped differently: the krun run
+  turns them into the VM annotations `krun.cpus=<n>` / `krun.ram_mib=<m>`
+  (crun's krun handler sizes the microVM from them, no cgroup
+  dependency). What the annotation cannot express is REFUSED, not
+  silently degraded: a pids limit (no pids controller is wired for a
+  whole-VM "container"), a fractional CPU count (`krun.cpus` is a
+  whole number of vCPUs, never rounded), a memory value below 128 MiB
+  (crun silently defaults `krun.ram_mib <= 128`) or not a whole MiB.
 - `MYSBX_GVISOR_ENV`: space-separated `KEY=VALUE` environment pins for
   this backend alone, emitted as `--env` after the config layers' `[env]`
   (a pin wins over a configured value) and before the sandbox's own

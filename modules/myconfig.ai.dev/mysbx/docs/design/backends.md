@@ -390,6 +390,7 @@ and silently ignored — the same rule as every backend:
 | multiplexer sessions | refused in the first cut (AF_UNIX sockets do not cross virtio-fs: the socket must live on guest tmpfs, which the podman-gvisor argv does not provide — pending bd myconfig-6di.5.4) |
 | host AF_UNIX sockets across virtio-fs | refused where a feature needs them (AF_UNIX is not a virtio-fs-passed inode type; any feature built on a host socket crossing the mount is refused, not best-effort) |
 | `/dev/kvm` availability | a doctor-style eval-time check: the wrapper asserts the user has rw access to `/dev/kvm` (the `kvm` group) — a host without it gets a refused run, never a silent fallback to another runtime |
+| resource limits | mapped onto the krun VM annotations `krun.cpus` / `krun.ram_mib` (crun's krun handler, bd myconfig-6di.5.6) — the first mysbx limit mechanism with no cgroup dependency; `--pids-limit` refused (no pids controller is wired for a whole-VM "container"), fractional vCPUs and sub-128-MiB memory refused (crun silently defaults `ram_mib <= 128`) — never accepted and silently ignored |
 
 #### Scope decisions (from the epic, bd myconfig-6di.5)
 

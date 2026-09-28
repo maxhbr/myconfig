@@ -1878,24 +1878,47 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // cgroup-manager flag omitted (podman's own default,
             // usually systemd, owns the hierarchy). Both are
             // operator-overridable per invocation.
+            //
+            // The krun variant CANNOT share runsc's flags (bd
+            // myconfig-6di.5.6): `--runtime-flag` passes the flag to
+            // the OCI runtime binary, and crun — unlike runsc — has
+            // no `ignore-cgroups` option; the gvisor default would
+            // make crun die on an unknown flag. The krun pins are
+            // their own variables (MYSBX_KRUN_*), defaulting to no
+            // flags; the limits do not depend on cgroups under krun
+            // (they are VM annotations, section 8 of the builder),
+            // so no rootless special case is needed for them.
+            let krun = backend == "podman-krun";
             let rootless = unsafe { libc_geteuid() != 0 };
-            let cgroup_manager = match env_opt("MYSBX_GVISOR_CGROUP_MANAGER") {
+            let (cgroup_manager_env, runtime_flags_env, runtime_flags_default) = if krun {
+                ("MYSBX_KRUN_CGROUP_MANAGER", "MYSBX_KRUN_RUNTIME_FLAGS", "")
+            } else {
+                (
+                    "MYSBX_GVISOR_CGROUP_MANAGER",
+                    "MYSBX_GVISOR_RUNTIME_FLAGS",
+                    if rootless { "ignore-cgroups" } else { "" },
+                )
+            };
+            let cgroup_manager = match env_opt(cgroup_manager_env) {
                 Some(manager) => Some(manager),
                 None if rootless => Some("cgroupfs".to_owned()),
                 None => None,
             };
-            let runtime_flags_raw = if rootless {
-                env_or("MYSBX_GVISOR_RUNTIME_FLAGS", "ignore-cgroups")
-            } else {
-                env_opt("MYSBX_GVISOR_RUNTIME_FLAGS").unwrap_or_default()
-            };
+            let runtime_flags_raw = env_or(runtime_flags_env, runtime_flags_default);
             let runtime_flags: Vec<String> = runtime_flags_raw
                 .split_whitespace()
                 .map(|s| s.to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
 
-            // Resource limits (only applied when cgroups are enabled)
+            // Resource limits (only applied when cgroups are enabled on
+            // the gvisor variant; the krun variant maps them onto VM
+            // annotations regardless, section 8 of the builder).
+            // SHARED pins (MYSBX_GVISOR_*): one "resource limits of
+            // the sandbox" setting per host, consumed by both variants
+            // — gvisor as cgroup flags, krun as VM annotations. What a
+            // variant cannot express is refused by the builder, so
+            // the sharing never becomes accept-and-ignore.
             // Using Cow to handle both borrowed and owned strings
             let pids_limit = env_opt("MYSBX_GVISOR_PIDS_LIMIT").map(Cow::from);
             let memory = env_opt("MYSBX_GVISOR_MEMORY").map(Cow::from);
@@ -1903,7 +1926,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
 
             // Cgroups handling: when ignore-cgroups flag is set, skip resource limits
             let ignore_cgroups = runtime_flags.iter().any(|f| f == "ignore-cgroups");
-            if ignore_cgroups && (pids_limit.is_some() || memory.is_some() || cpus.is_some()) {
+            if !krun
+                && ignore_cgroups
+                && (pids_limit.is_some() || memory.is_some() || cpus.is_some())
+            {
                 eprintln!(
                     "mysbx: warning: memory/cpu/pids limits not enforced, \
                      the runtime ignores cgroups"
@@ -1939,7 +1965,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // wrapper pins the store path as `MYSBX_KRUN_RUNTIME`;
             // the bare `crun` default serves an unwrapped build's
             // PATH lookup, the same convention as MYSBX_BWRAP's).
-            let runtime = if backend == "podman-krun" {
+            let runtime = if krun {
                 env_or("MYSBX_KRUN_RUNTIME", "crun")
             } else {
                 "runsc".to_owned()
@@ -1977,6 +2003,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 // Podman-gvisor specific params
                 image: &gvisor_image,
                 runtime: &runtime,
+                krun,
                 runtime_flags: &runtime_flags,
                 cgroup_manager: cgroup_manager.as_deref(),
                 ignore_cgroups,
