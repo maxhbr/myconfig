@@ -106,6 +106,7 @@ in
             apparmor_profile = "";
             cgroups = "disabled";
             log_driver = "k8s-file";
+            netns = "host";
           };
           engine = {
             cgroup_manager = "cgroupfs";

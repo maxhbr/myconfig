@@ -24,7 +24,21 @@
 #   cgroupfs + disabled keeps podman from dying on a systemd DBus that
 #   does not exist, while `--cgroup-manager=cgroupfs` stays the
 #   documented per-invocation override.
-# - `network_cmd_path` unset, `no_pivot_root = true` — the guest runs
+# - `[containers] netns = "host"` — nested containers share the guest's
+#   one network stack instead of podman's rootful default (a netavark
+#   bridge + NAT). The guest has no NIC, only loopback: crun sets neither
+#   `krun.tap_name` nor `krun.use_passt`, so all egress is libkrun's
+#   TSI socket hijack (backends.md D2, the network model). A bridged
+#   container's forwarded packets would have no egress interface, and
+#   netavark's iptables driver would find no xtables in libkrunfw
+#   (NETFILTER_XTABLES and IP_NF_IPTABLES unset). pasta would add a
+#   tun device and a second forwarder in front of the same TSI path.
+#   Cost: nested containers see the guest's loopback services — the
+#   guest itself is the sandbox boundary, and mysbx's `network = false`
+#   holds unchanged (the VMM has no route). `podman run --network=...`
+#   still overrides per invocation; `podman build` does not read this
+#   key, so RUN steps that need the network take `--network=host`.
+# - `no_pivot_root = true` — the guest runs
 #   everything as root in one mount namespace handed over virtio-fs;
 #   pivot_root on the virtiofs root is exactly what the guest kernel
 #   does NOT support cleanly (the shared tree is the VM's root).
@@ -71,6 +85,8 @@ let
     cgroups = "disabled"
     # No journald inside the guest — file logging, never warn-and-fallback.
     log_driver = "k8s-file"
+    # The guest's only network is TSI; no bridge, no NAT, no firewall.
+    netns = "host"
 
     [engine]
     cgroup_manager = "cgroupfs"

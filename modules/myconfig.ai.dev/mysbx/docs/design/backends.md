@@ -518,7 +518,11 @@ Consequences, stated honestly:
   aardvark-dns and fuse-overlayfs — plus a guest configuration tree
   (`krun-guest-conf.nix`: `containers.conf` with
   `events_logger="file"`, `cgroup_manager="cgroupfs"`,
-  `cgroups="disabled"`, `no_pivot_root=true`; `storage.conf` with
+  `cgroups="disabled"`, `no_pivot_root=true`, and `netns="host"` —
+  the guest has no NIC, only loopback and TSI, so a netavark bridge +
+  NAT would have no egress interface and libkrunfw has no xtables
+  for netavark's iptables driver; nested containers share the
+  guest's stack and its exact egress; `storage.conf` with
   the overlay driver and roots PINNED onto the tmpfs surfaces
   `/var/tmp/containers/storage` + `/run/containers/storage` — podman's
   `/var/lib` default sits on the read-only root, `--read-only-tmpfs`

@@ -75,13 +75,19 @@ reload the image, and inside the sandbox:
 ```bash
 podman run --rm docker.io/library/alpine true
 podman run --rm docker.io/library/alpine sh -c 'echo hi > /data && cat /data'
+# egress + DNS from the nested container (netns = "host": the guest's TSI stack)
+podman run --rm docker.io/library/alpine wget -qO- https://cache.nixos.org/nix-cache-info
+podman run --rm docker.io/library/alpine nslookup cache.nixos.org
 ```
 
 Verify: the pull works (network shared), the run succeeds with
 `storage.conf`'s overlay driver on the `/var/tmp`+`/run` tmpfs
-roots, and with `network = false` in the sidecar the PULL fails
-honestly (the documented failure mode) while a local `podman run`
-of an already-pulled image still works.
+roots, the nested container reaches the network and resolves names
+without any bridge, and with `network = false` in the sidecar the
+PULL fails honestly (the documented failure mode) while a local
+`podman run` of an already-pulled image still works. If egress
+fails, record whether `podman run --network=pasta` works instead —
+that is the fallback the guest conf would switch to.
 
 ### 2.3 Limits as VM annotations (bd myconfig-6di.5.6)
 
