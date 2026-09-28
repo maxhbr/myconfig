@@ -1,15 +1,15 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# The nested-podman guest configuration of the podman-krun backend
+# The nested-podman guest userspace of the podman-krun backend
 # (bd myconfig-6di.5.8, docs/design/backends.md D2): one store tree
-# carrying the `/etc/containers/{containers,storage}.conf` and
+# carrying `bin/podman` (the storage wrapper below, which execs the
+# real `podman`), the `/etc/containers/{containers,storage}.conf` and
 # `policy.json` podman reads, plus `/etc/subuid`/`/etc/subgid` for the
 # guest-root user's subordinate ranges. Baked into the (shared) agent
-# image via
-# `myconfig.ai.dev.mysbx.krun.nestedPodman.packages` — the image's
-# `/etc` already exists (dockerTools.caCertificates, fakeNss), and
-# buildEnv links this tree's `etc` into it.
+# image via `myconfig.ai.dev.mysbx.krun.nestedPodman.packages` — the
+# image's `/etc` already exists (dockerTools.caCertificates, fakeNss),
+# and buildEnv links this tree's `bin` and `etc` into it.
 #
 # The values are the verified-consequence set of the krun guest model:
 #
@@ -42,20 +42,22 @@
 #   everything as root in one mount namespace handed over virtio-fs;
 #   pivot_root on the virtiofs root is exactly what the guest kernel
 #   does NOT support cleanly (the shared tree is the VM's root).
-# - storage.conf: `driver = "overlay"` with EXPLICIT
-#   `graphroot = "/var/tmp/containers/storage"` and
-#   `runroot = "/run/containers/storage"` — the podman defaults
-#   (`/var/lib/containers/storage`) would sit on the READ-ONLY
-#   virtiofs root (podman's `--read-only-tmpfs` tmpfses only
-#   `/dev, /dev/shm, /run, /tmp, /var/tmp` — cmd/podman/common/
-#   create.go), so both roots are pinned onto the tmpfs surfaces
-#   the container already has. Costs VM RAM (tmpfs), which the krun
-#   limit pins can size (bd myconfig-6di.5.6); a host needing bigger
-#   storage mounts a tmpfs or disk over the paths. `mount_program`
-#   stays unset: the overlay driver needs the guest kernel's overlayfs
-#   (libkrunfw has OVERLAY_FS) — fuse-overlayfs (already on the
-#   wrapped podman's PATH) is the fallback only if that proves broken
-#   in live validation (bd myconfig-6di.5.7).
+# - all podman state on GUEST-native tmpfs (bd myconfig-6di.5.16,
+#   backends.md D2 for the virtio-fs reasons): as guest root,
+#   `bin/podman` mounts tmpfs at `graphMount` and `runMount` (once
+#   per VM, under a lock on the guest's /dev/shm) and then execs the
+#   real podman; a failed mount is exit 125, never a fallback. The
+#   conf keeps graphroot, runroot, tmp_dir, image_copy_tmp_dir
+#   ("storage": graphroot/tmp, unless TMPDIR is set), the network
+#   config dir and crun's state root below those two mounts. As any
+#   other uid the wrapper execs podman untouched. Each tmpfs may
+#   take up to half the VM RAM (tmpfs default; krun limit pins, bd
+#   myconfig-6di.5.6) — large images need a larger VM. `driver =
+#   "overlay"` uses the guest kernel's overlayfs (libkrunfw
+#   OVERLAY_FS); fuse-overlayfs (on podman's PATH) is the fallback
+#   if that fails live (bd myconfig-6di.5.7). Overrides of
+#   `storageConf`/`containersConf` must keep these paths below the
+#   mounts.
 # - policy.json: containers/image refuses every pull when neither
 #   `/etc/containers/policy.json` nor the user's
 #   `~/.config/containers/policy.json` exists, and neither pkgs.podman
@@ -71,7 +73,14 @@
 #   guest's uid space is the VM's, the virtiofs mapping to the host
 #   user happens below it (backends.md D2, the uid-mapping row).
 {
+  lib,
   runCommand,
+  writeShellApplication,
+  coreutils,
+  util-linux,
+  podman,
+  graphMount ? "/var/tmp/containers",
+  runMount ? "/run/containers",
   subUidRange ? "100000:65536",
   containersConf ? null,
   storageConf ? null,
@@ -93,19 +102,57 @@ let
     events_logger = "file"
     # The virtiofs root is the VM's own root: no pivot_root on it.
     no_pivot_root = true
+    # Must be tmpfs: the guest tmpfs the podman wrapper mounts.
+    tmp_dir = "${runMount}/libpod"
+    # Pull/build/load temp data in graphroot/tmp, not on virtio-fs /var/tmp.
+    image_copy_tmp_dir = "storage"
+
+    [engine.runtimes_flags]
+    # crun's state (status, exec fifo) off the virtio-fs /run/crun.
+    crun = ["root=${runMount}/crun"]
+
+    [network]
+    # The default /etc/containers/networks sits on the read-only root.
+    network_config_dir = "${graphMount}/networks"
   '';
 
   defaultStorageConf = ''
     [storage]
     driver = "overlay"
-    # The guest root is READ-ONLY virtio-fs and podman's
-    # --read-only-tmpfs covers only /dev, /dev/shm, /run, /tmp,
-    # /var/tmp — so both roots are pinned onto tmpfs surfaces
-    # (the defaults would sit on the read-only root and every image
-    # pull would die with EROFS).
-    graphroot = "/var/tmp/containers/storage"
-    runroot = "/run/containers/storage"
+    # Guest-native tmpfs mounts, made by the podman wrapper: container
+    # storage cannot live on the virtio-fs share (chown, uids, xattrs).
+    graphroot = "${graphMount}/storage"
+    runroot = "${runMount}/storage"
   '';
+
+  wrapper = writeShellApplication {
+    name = "podman";
+    runtimeInputs = [
+      coreutils
+      util-linux
+    ];
+    text = ''
+      if [ "$(id -u)" -eq 0 ]; then
+        fail() {
+          echo "podman (mysbx krun wrapper): $*" >&2
+          echo "  nested podman storage must not live on the virtio-fs share (docs/design/backends.md D2)" >&2
+          exit 125
+        }
+        # A directory lock on the guest's own tmpfs: creates nothing, and
+        # keeps two first invocations from stacking tmpfs mounts.
+        { exec 9</dev/shm; } 2>/dev/null || fail "cannot open /dev/shm for the storage lock"
+        flock -w 60 9 || fail "cannot take the storage lock on /dev/shm"
+        for dir in ${lib.escapeShellArg graphMount} ${lib.escapeShellArg runMount}; do
+          if ! findmnt -rn -t tmpfs --mountpoint "$dir" >/dev/null; then
+            { mkdir -p "$dir" && mount -t tmpfs -o mode=0755 mysbx-podman-storage "$dir"; } \
+              || fail "cannot mount a guest tmpfs at $dir"
+          fi
+        done
+        exec 9<&-
+      fi
+      exec ${podman}/bin/podman "$@"
+    '';
+  };
 
   defaultPolicy = {
     default = [ { type = "insecureAcceptAnything"; } ];
@@ -114,12 +161,14 @@ let
 in
 runCommand "mysbx-krun-guest-conf"
   {
+    passthru = { inherit podman wrapper; };
     containersConfText = if containersConf == null then defaultContainersConf else containersConf;
     storageConfText = if storageConf == null then defaultStorageConf else storageConf;
     policyText = builtins.toJSON (if containersPolicy == null then defaultPolicy else containersPolicy);
   }
   ''
-    mkdir -p $out/etc/containers
+    mkdir -p $out/bin $out/etc/containers
+    ln -s ${wrapper}/bin/podman $out/bin/podman
     printf '%s\n' "$containersConfText" > $out/etc/containers/containers.conf
     printf '%s\n' "$storageConfText" > $out/etc/containers/storage.conf
     printf '%s\n' "$policyText" > $out/etc/containers/policy.json

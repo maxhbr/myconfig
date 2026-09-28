@@ -88,8 +88,9 @@ in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
   mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
 
-  # The nested-podman guest configuration tree (bd myconfig-6di.5.8):
-  # the bytes podman will read inside the krun guest. Static by
+  # The nested-podman guest tree (bd myconfig-6di.5.8): the storage
+  # wrapper at bin/podman (bd myconfig-6di.5.16) and the bytes podman
+  # will read inside the krun guest. Static by
   # design — the nested run itself is live validation (bd
   # myconfig-6di.5.7), which this sandbox cannot do without /dev/kvm.
   # The TOML files are PARSED and compared table by table: podman
@@ -112,14 +113,16 @@ in
             cgroup_manager = "cgroupfs";
             events_logger = "file";
             no_pivot_root = true;
+            tmp_dir = "/run/containers/libpod";
+            image_copy_tmp_dir = "storage";
+            runtimes_flags.crun = [ "root=/run/containers/crun" ];
           };
+          network.network_config_dir = "/var/tmp/containers/networks";
         };
         storage = {
           storage = {
             driver = "overlay";
-            # Both roots on tmpfs surfaces: podman's /var/lib default
-            # sits on the read-only root (--read-only-tmpfs covers only
-            # /dev, /dev/shm, /run, /tmp, /var/tmp).
+            # Below the guest tmpfs mounts of the podman wrapper.
             graphroot = "/var/tmp/containers/storage";
             runroot = "/run/containers/storage";
           };
@@ -155,6 +158,24 @@ in
       python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); sys.exit(0 if p["default"] == [{"type": "insecureAcceptAnything"}] else 1)' \
         "${guestConf}/etc/containers/policy.json" \
         || fail "policy.json must exist, parse as JSON and carry the default insecureAcceptAnything policy"
+      # bin/podman is the storage wrapper: it mounts guest tmpfs at
+      # both storage mounts as root, fails instead of falling back,
+      # and execs exactly the pinned podman.
+      wrapper="${guestConf}/bin/podman"
+      [ -x "$wrapper" ] || fail "bin/podman (the storage wrapper) is missing"
+      [ "$(readlink -f "$wrapper")" = "$(readlink -f "${guestConf.wrapper}/bin/podman")" ] \
+        || fail "bin/podman is not the storage wrapper"
+      for dir in /var/tmp/containers /run/containers; do
+        grep -qF "$dir" "$wrapper" || fail "the wrapper does not mount $dir"
+      done
+      grep -q 'mount -t tmpfs' "$wrapper" || fail "the wrapper must mount a guest tmpfs"
+      grep -q 'exit 125' "$wrapper" || fail "a failed mount must be an error, never a fallback"
+      grep -qF 'exec ${guestConf.podman}/bin/podman "$@"' "$wrapper" \
+        || fail "the wrapper must exec the pinned podman"
+      # The build user is not root: the pass-through path, end to end.
+      [ "$(id -u)" -ne 0 ] || fail "the check expects a non-root build user"
+      HOME=$TMPDIR "$wrapper" --version | grep -q '^podman version ${guestConf.podman.version}$' \
+        || fail "the wrapper does not pass through to the pinned podman as non-root"
       grep -q '^agent:100000:65536$' "${guestConf}/etc/subuid" \
         || fail "the subuid range for the guest-root user is missing"
       grep -q '^agent:100000:65536$' "${guestConf}/etc/subgid" \

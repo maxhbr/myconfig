@@ -77,19 +77,33 @@ Enable `myconfig.ai.dev.mysbx.krun.nestedPodman.enable`, rebuild,
 reload the image, and inside the sandbox:
 
 ```bash
+touch /tmp/m
 podman run --rm docker.io/library/alpine true
+# the storage wrapper mounted guest tmpfs (not virtiofs) for podman:
+grep -E ' /(var/tmp|run)/containers tmpfs ' /proc/mounts
+# nothing podman-owned was written to the virtio-fs share (-xdev skips
+# the guest tmpfs mounts):
+find /run /var/tmp /tmp -xdev -newer /tmp/m
 podman run --rm docker.io/library/alpine sh -c 'echo hi > /data && cat /data'
+# a non-root nested user writes inside its own (guest tmpfs) rootfs:
+podman run --rm --user 1000 docker.io/library/alpine sh -c 'touch /tmp/x && id -u'
 # egress + DNS from the nested container (netns = "host": the guest's TSI stack)
 podman run --rm docker.io/library/alpine wget -qO- https://cache.nixos.org/nix-cache-info
 podman run --rm docker.io/library/alpine nslookup cache.nixos.org
+# for the network = false step below (storage does not survive the VM):
+podman save -o alpine.tar docker.io/library/alpine
 ```
 
-Verify: the pull works (network shared), the run succeeds with
-`storage.conf`'s overlay driver on the `/var/tmp`+`/run` tmpfs
-roots, the nested container reaches the network and resolves names
-without any bridge, and with `network = false` in the sidecar the
-PULL fails honestly (the documented failure mode) while a local
-`podman run` of an already-pulled image still works. If egress
+Verify: the pull works (network shared), both `/proc/mounts` lines
+show `tmpfs`, `find` lists only `/run`, `/var/tmp` and the two
+mountpoint directories in them, the runs succeed with `storage.conf`'s overlay driver
+on those guest tmpfs mounts (no `EPERM` on layer creation), the
+non-root run prints `1000`, and the nested container reaches the
+network and resolves names without any bridge. Then set
+`network = false` in the sidecar and start a new run: a pull fails
+honestly (the documented failure mode), while
+`podman load -i alpine.tar && podman run --rm docker.io/library/alpine true`
+still works. If egress
 fails, record whether `podman run --network=pasta` works instead —
 that is the fallback the guest conf would switch to.
 

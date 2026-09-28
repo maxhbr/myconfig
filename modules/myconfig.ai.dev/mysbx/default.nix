@@ -776,8 +776,9 @@ in
           session finds it on `PATH` — the same payload the bwrap
           backend gets via `extraTools` — plus the nested-podman
           userspace of the podman-krun backend when
-          `krun.nestedPodman.enable` (bd myconfig-6di.5.8: podman and
-          its guest configuration tree, baked into the shared image).
+          `krun.nestedPodman.enable` (bd myconfig-6di.5.8: the podman
+          storage wrapper and its guest configuration tree, baked into
+          the shared image).
 
           Only takes effect while the gvisor tier module is enabled
           (`myconfig.ai.dev.gvisor-agent-sandbox.enable`): its
@@ -833,33 +834,25 @@ in
 
         packages = mkOption {
           type = types.listOf types.package;
-          # pkgs.podman's own passthru wiring already carries its
-          # helper closure (conmon, crun, catatonit, netavark, passt,
-          # aardvark-dns, fuse-overlayfs on its PATH via
-          # `--prefix PATH`) — baking the wrapped podman plus this
-          # list is the whole runtime story. fuse-overlayfs rides
-          # along in podman's binPath already; the guest conf below
-          # prefers the kernel overlay driver and leaves it the
-          # fallback.
-          default = [
-            pkgs.podman
-            (pkgs.callPackage ./nix/krun-guest-conf.nix { })
-          ];
-          defaultText = literalExpression ''
-            [ pkgs.podman
-              (pkgs.callPackage ./nix/krun-guest-conf.nix { })
-            ]
-          '';
+          # One tree: the guest configuration plus `bin/podman`, the
+          # storage wrapper around pkgs.podman (whose closure carries
+          # conmon, crun, netavark, passt, fuse-overlayfs). pkgs.podman
+          # itself is NOT listed: the image's buildEnv ignores
+          # collisions, so a second `bin/podman` could silently shadow
+          # the wrapper.
+          default = [ (pkgs.callPackage ./nix/krun-guest-conf.nix { }) ];
+          defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-conf.nix { }) ]";
           description = ''
             The nested-podman userspace baked into the agent image
             when `krun.nestedPodman.enable` — consumed through
             `gvisor.imagePackages` (the image is shared between both
             podman backends, so provisioning rides the same seam):
-            by default the wrapped `pkgs.podman` (its own closure
-            carries conmon, crun, netavark, passt and
-            fuse-overlayfs) plus the guest configuration tree
-            (./nix/krun-guest-conf.nix: containers.conf,
-            storage.conf, policy.json, /etc/subuid, /etc/subgid).
+            by default the guest tree of ./nix/krun-guest-conf.nix —
+            `bin/podman`, a wrapper that puts podman's state on
+            guest-native tmpfs and then execs `pkgs.podman`, plus
+            containers.conf, storage.conf, policy.json, /etc/subuid
+            and /etc/subgid. A different podman goes in as that
+            file's `podman` argument, never as a second list entry.
 
             Live validation of the nested run is bd
             myconfig-6di.5.7's runbook — the agent sandbox has no

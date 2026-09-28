@@ -513,28 +513,45 @@ Consequences, stated honestly:
   (shadow's packaging forces 0755, `security.wrappers` is a NixOS
   rootfs mechanism dockerTools has no equivalent of), and virtiofs
   would not carry the bit either. What ships instead (bd
-  myconfig-6di.5.8): the wrapped `pkgs.podman` — its own helper
-  closure carries conmon, crun, catatonit, netavark, passt,
-  aardvark-dns and fuse-overlayfs — plus a guest configuration tree
-  (`krun-guest-conf.nix`: `containers.conf` with
+  myconfig-6di.5.8): one guest tree (`krun-guest-conf.nix`) with
+  `bin/podman`, a storage wrapper around `pkgs.podman` — whose own
+  helper closure carries conmon, crun, catatonit, netavark, passt,
+  aardvark-dns and fuse-overlayfs — plus `containers.conf` with
   `events_logger="file"`, `cgroup_manager="cgroupfs"`,
-  `cgroups="disabled"`, `no_pivot_root=true`, and `netns="host"` —
-  the guest has no NIC, only loopback and TSI, so a netavark bridge +
-  NAT would have no egress interface and libkrunfw has no xtables
-  for netavark's iptables driver; nested containers share the
-  guest's stack and its exact egress; `storage.conf` with
-  the overlay driver and roots PINNED onto the tmpfs surfaces
-  `/var/tmp/containers/storage` + `/run/containers/storage` — podman's
-  `/var/lib` default sits on the read-only root, `--read-only-tmpfs`
-  covers only /dev, /dev/shm, /run, /tmp, /var/tmp; `policy.json`
+  `cgroups="disabled"`, `no_pivot_root=true`, `tmp_dir`,
+  `image_copy_tmp_dir`, crun's `--root` and the network config dir
+  below the guest tmpfs mounts, and `netns="host"` — the guest has
+  no NIC, only loopback and TSI, so a netavark bridge + NAT would
+  have no egress interface and libkrunfw has no xtables for
+  netavark's iptables driver; nested containers share the guest's
+  stack and its exact egress; `storage.conf` with the overlay
+  driver, `graphroot` `/var/tmp/containers/storage` and `runroot`
+  `/run/containers/storage`; `policy.json`
   with the NixOS/skopeo default `insecureAcceptAnything` — without
   any policy file containers/image refuses every pull;
-  `/etc/subuid`+`/etc/subgid` for the guest-root user), both baked
-  into the shared agent image via `krun.nestedPodman.{enable,packages}`
+  `/etc/subuid`+`/etc/subgid` for the guest-root user), baked into
+  the shared agent image via `krun.nestedPodman.{enable,packages}`
   (off by default — a gvisor-only host pays no podman closure).
-  Storage stays OFF virtio-fs: both roots on the container's tmpfs
-  surfaces (RAM-cost, sizeable via the krun limit pins, bd
-  myconfig-6di.5.6). Live validation is bd
+  Storage lives on GUEST-native tmpfs (bd myconfig-6di.5.16): every
+  mount of the outer argv — the read-only root and podman's
+  `--read-only-tmpfs` surfaces /run, /tmp, /var/tmp alike — is
+  applied host-side by crun and reaches the guest as ONE virtio-fs
+  share (libkrun's guest init mounts only /dev, /proc, /sys, cgroup2,
+  /dev/pts and /dev/shm). Container storage cannot live there: the
+  virtiofs server (libkrun passthrough.rs) forwards chown unchanged
+  to the unprivileged host process — EPERM for podman's layer
+  chowns — refuses to create files as any uid but 0 and its own,
+  and cannot set the trusted.* xattrs an overlayfs upper needs. The
+  wrapper therefore mounts a guest tmpfs at `/var/tmp/containers`
+  and `/run/containers` (as guest root, once per VM) before it
+  execs podman, and fails rather than falling back to virtio-fs.
+  RAM-cost: each tmpfs may take up to half the VM's memory (the
+  tmpfs default), sized via the krun limit pins (bd
+  myconfig-6di.5.6) — a large nested image needs a larger VM or
+  fails with ENOSPC. The storage is per-run: a new run is a new VM.
+  Residual limit: a nested container running as a non-root uid
+  cannot write to a virtio-fs path it is given (e.g. `-v` of the
+  workspace). Live validation is bd
   myconfig-6di.5.7's runbook (the agent sandbox has no /dev/kvm).
 - **Dropped: Nix builds inside the guest** (bd myconfig-6di.5.9,
   myconfig-6di.5.10). The local-overlay design (ro host store as the
@@ -567,12 +584,13 @@ Consequences, stated honestly:
   directly — `newuidmap` only exists to let an UNPRIVILEGED user
   write the MULTI-line maps out of `/etc/subuid` (nixos/programs/
   shadow.nix), which guest root needs no helper for. The residual
-  honest risk, unchanged: the guest's uid world is single-uid
-  (virtiofs `set_creds` maps every chown to the host user's uid),
-  so files a nested container writes to the SHARED mounts (the
-  workspace bind, state dirs) appear host-uid-owned — correct
-  behavior, but the nested pod's OVERLAY must not live on those
-  mounts (it does not: `/var`, bd myconfig-6di.5.8). Live
+  honest risk: the guest's uid world on virtio-fs is single-uid
+  (the server creates every file as the host user, refuses any
+  other creating uid than guest root, and a chown to another uid is
+  EPERM), so files a nested container writes to the SHARED mounts
+  (the workspace bind, state dirs) appear host-uid-owned — correct
+  behavior, but the nested pod's storage must not live on virtio-fs
+  at all (it does not: guest tmpfs, bd myconfig-6di.5.16). Live
   confirmation of a full nested `podman run` is bd
   myconfig-6di.5.7's runbook.
 

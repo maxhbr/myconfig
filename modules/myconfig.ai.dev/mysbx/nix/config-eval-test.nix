@@ -362,8 +362,9 @@ let
       "ok";
 
   # The nested-podman provisioning gate (bd myconfig-6di.5.8): the
-  # option default must fold the podman closure and the guest conf
-  # tree into `gvisor.imagePackages` when enabled, and fold NOTHING
+  # option default must fold the guest tree (the podman wrapper,
+  # carrying podman's closure, + the conf) into
+  # `gvisor.imagePackages` when enabled, and fold NOTHING
   # in when disabled — a gvisor-only host must not pull a podman
   # closure. Evaluated on the same module eval as the scenarios, so
   # the assertions fire at check-build time without ever building the
@@ -375,13 +376,17 @@ let
           { myconfig.ai.dev.mysbx.krun.nestedPodman.enable = true; }
         ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
       off = (evaluated [ ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
+      # pkgs.podman must NOT be listed next to the guest tree: its
+      # bin/podman could silently shadow the storage wrapper.
       hasPodman = pkgs.lib.any (p: p.pname or "" == "podman");
       hasGuestConf = pkgs.lib.any (p: p.name or "" == "mysbx-krun-guest-conf");
     in
-    if !(hasPodman on && hasGuestConf on) then
-      throw "mysbx generated-config test: krun.nestedPodman.enable did not fold podman + the guest conf into gvisor.imagePackages"
+    if !(hasGuestConf on) then
+      throw "mysbx generated-config test: krun.nestedPodman.enable did not fold the guest tree (podman wrapper + conf) into gvisor.imagePackages"
+    else if hasPodman on then
+      throw "mysbx generated-config test: pkgs.podman is listed next to the guest tree — its bin/podman would shadow the storage wrapper"
     else if (hasPodman off || hasGuestConf off) then
-      throw "mysbx generated-config test: a disabled krun.nestedPodman leaked podman or the guest conf into gvisor.imagePackages"
+      throw "mysbx generated-config test: a disabled krun.nestedPodman leaked podman or the guest tree into gvisor.imagePackages"
     else
       "ok";
 in
