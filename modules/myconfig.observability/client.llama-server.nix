@@ -4,7 +4,7 @@
 # Prometheus exporter for llama-server / llama-swap model state AND
 # token-generation timing metrics extracted from the systemd journal.
 #
-# Auto-enabled when ``myconfig.ai.llama-cpp.serviceVariant`` is set
+# Auto-enabled when ``myconfig.ai.llmops.llama-cpp.serviceVariant`` is set
 # (either ``"llama-server"`` or ``"llama-swap"``). Port and listen
 # address are derived from the service config so the user only needs
 # to declare the llama-cpp service — the exporter follows automatically.
@@ -53,21 +53,21 @@ let
   # imported) AND serviceVariant must be non-null.
   hasLlamaService =
     lib.hasAttrByPath [ "myconfig" "ai" "llama-cpp" ] config
-    && (config.myconfig.ai.llama-cpp.serviceVariant or null) != null;
+    && (config.myconfig.ai.llmops.llama-cpp.serviceVariant or null) != null;
 
   # Derived scrape target — maps ``0.0.0.0`` to ``localhost`` so the
   # exporter doesn't try to resolve the wildcard.
   resolvedScrapeHost =
     if hasLlamaService then
       let
-        addr = config.myconfig.ai.llama-cpp.serviceListenAddress or "127.0.0.1";
+        addr = config.myconfig.ai.llmops.llama-cpp.serviceListenAddress or "127.0.0.1";
       in
       if addr == "0.0.0.0" then "localhost" else addr
     else
       "localhost";
 
   resolvedScrapePort =
-    if hasLlamaService then config.myconfig.ai.llama-cpp.servicePort or 33656 else 33656;
+    if hasLlamaService then config.myconfig.ai.llmops.llama-cpp.servicePort or 33656 else 33656;
 
   pythonEnv = pkgs.python3.withPackages (
     ps: with ps; [
@@ -122,7 +122,7 @@ in
         ``serviceVariant = "llama-server"`` (single llama-server
         instance) and ``serviceVariant = "llama-swap"`` (llama-swap
         multiplexer) backends. Auto-enabled when
-        ``myconfig.ai.llama-cpp.serviceVariant`` is set (non-null).
+        ``myconfig.ai.llmops.llama-cpp.serviceVariant`` is set (non-null).
       '';
       default = false;
     };
@@ -133,7 +133,7 @@ in
       description = ''
         Hostname or IP of the llama-server / llama-swap instance to
         scrape. Auto-derived from
-        ``myconfig.ai.llama-cpp.serviceListenAddress`` (with
+        ``myconfig.ai.llmops.llama-cpp.serviceListenAddress`` (with
         ``0.0.0.0`` mapped to ``localhost``) when the service is
         present. Override to point at a container or remote instance.
       '';
@@ -144,7 +144,7 @@ in
       default = 33656;
       description = ''
         Port of the llama-server / llama-swap ``/v1/models`` endpoint.
-        Auto-derived from ``myconfig.ai.llama-cpp.servicePort`` when
+        Auto-derived from ``myconfig.ai.llmops.llama-cpp.servicePort`` when
         the service is present.
       '';
     };

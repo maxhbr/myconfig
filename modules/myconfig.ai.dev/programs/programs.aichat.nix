@@ -28,7 +28,7 @@
                   }) config.services.litellm.settings.model_list;
                 }
               ]
-              ++ lib.optionals (config.myconfig.ai.localModels != [ ]) (
+              ++ lib.optionals (config.myconfig.ai.llmops.localModels != [ ]) (
                 map (
                   model:
                   let
@@ -46,7 +46,7 @@
                     api_base = "http://${hostPort}/v1";
                     models = map (modelName: { name = modelName; }) modelNames;
                   }
-                ) config.myconfig.ai.localModels
+                ) config.myconfig.ai.llmops.localModels
               );
           };
         };

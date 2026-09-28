@@ -194,7 +194,7 @@ let
         else
           [ ]
       ) rawModels
-    ) osconfig.myconfig.ai.localModels
+    ) osconfig.myconfig.ai.llmops.localModels
   );
 in
 {
@@ -292,7 +292,7 @@ in
                 "edit" = "ask";
               };
               "provider" = lib.mkMerge [
-                (lib.mkIf (osconfig.myconfig.ai.localModels != [ ]) (
+                (lib.mkIf (osconfig.myconfig.ai.llmops.localModels != [ ]) (
                   builtins.listToAttrs (
                     lib.map (
                       model:
@@ -336,7 +336,7 @@ in
                           );
                         };
                       }
-                    ) osconfig.myconfig.ai.localModels
+                    ) osconfig.myconfig.ai.llmops.localModels
                   )
                 ))
                 (lib.mkIf osconfig.services.litellm.enable (

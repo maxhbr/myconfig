@@ -61,14 +61,15 @@ let
         # ... and the orca module, which `myconfig.ai.dev`'s own
         # import list carries on real hosts but a minimal eval does
         # not — the `muxOrca` scenario below needs
-        # `myconfig.ai.orca.package` to exist, which lives there
-        # (bd myconfig-1os). The module's desktop-app half is gated
-        # on `myconfig.desktop.enable`, which this minimal system
-        # does not define — so declare the umbrella options OFF and
-        # let the orca service half be what the scenario exercises.
+        # `myconfig.ai.dev.orca.package` to exist, which lives there
+        # (bd myconfig-1os). The module's mkIf gates read
+        # `myconfig.ai.dev.enable` and `myconfig.desktop.enable`,
+        # which this minimal system defines neither of — stub both
+        # OFF and let the orca service half be what the scenario
+        # exercises.
         ../../services.orca.nix
         {
-          options.myconfig.ai.enable = lib.mkOption {
+          options.myconfig.ai.dev.enable = lib.mkOption {
             type = lib.types.bool;
             default = false;
           };
@@ -226,9 +227,9 @@ let
     ];
     # ... and `orca` too (bd myconfig-1os): available when the orca
     # module is enabled (the package gate picks up
-    # `myconfig.ai.orca.package`), a refused EVAL otherwise.
+    # `myconfig.ai.dev.orca.package`), a refused EVAL otherwise.
     muxOrca = generated [
-      { myconfig.ai.orca.enable = true; }
+      { myconfig.ai.dev.orca.enable = true; }
       { myconfig.ai.dev.mysbx.config.multiplexer = "orca"; }
     ];
     # The nono backend (mysbx-rs/src/nono.rs): the selection reaches
@@ -340,6 +341,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       muxTmux
       muxOrca
       nonoBackend
+      allowlist
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
@@ -428,7 +430,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the tmux selection is missing" "$muxTmux"
     # ... `orca` with the orca module enabled (bd myconfig-1os): the
     # selection reaches the layer, and the package gate found the
-    # AppImage via `myconfig.ai.orca.package`.
+    # AppImage via `myconfig.ai.dev.orca.package`.
     grep -q '^multiplexer = "orca"$' "$muxOrca" \
       || fail "the orca selection is missing" "$muxOrca"
     # ... and the nono backend selection reaches the generated layer

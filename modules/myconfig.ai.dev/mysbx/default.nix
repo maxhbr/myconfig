@@ -12,7 +12,7 @@
 #
 # Like the other sandbox tiers, this module is OFF by default and enabled
 # explicitly per host — it is never switched on implicitly by the broad
-# `myconfig.ai.enable`.
+# `myconfig.ai.llmops.enable`.
 #
 # The module also generates the *user* configuration layer
 # (`~/.config/mysbx/config.toml`, see ./docs/design/config.md D6) from
@@ -516,8 +516,8 @@ in
       # mysbx host's closure to make a selection possible would be
       # the wrong default — the same reasoning as `aoe.package`.
       default =
-        if (config.myconfig.ai.orca.enable or false) then config.myconfig.ai.orca.package else null;
-      defaultText = literalExpression "config.myconfig.ai.orca.package (when that module is enabled, else null)";
+        if (config.myconfig.ai.dev.orca.enable or false) then config.myconfig.ai.dev.orca.package else null;
+      defaultText = literalExpression "config.myconfig.ai.dev.orca.package (when that module is enabled, else null)";
       description = ''
         The Orca AppImage package (../../services.orca.nix) that runs
         *inside* the sandbox when `config.multiplexer = "orca"`

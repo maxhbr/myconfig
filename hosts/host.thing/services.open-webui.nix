@@ -22,15 +22,15 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.open-webui;
+  cfg = config.myconfig.ai.llmops.open-webui;
 
   # `host` may be a wildcard (e.g. "0.0.0.0") for external exposure;
   # rewrite to localhost for in-host clients.
   litellmHost =
     if config.services.litellm.host == "0.0.0.0" then "localhost" else config.services.litellm.host;
   litellmUrl = "http://${litellmHost}:${toString config.services.litellm.port}/v1";
-  rtx5090Url = "http://127.0.0.1:${toString config.myconfig.ai.llama-cpp.servicePort}/v1";
-  gfx1151Url = "http://127.0.0.1:${toString config.containers.llama-cpp-33657.config.myconfig.ai.llama-cpp.servicePort}/v1";
+  rtx5090Url = "http://127.0.0.1:${toString config.myconfig.ai.llmops.llama-cpp.servicePort}/v1";
+  gfx1151Url = "http://127.0.0.1:${toString config.containers.llama-cpp-33657.config.myconfig.ai.llmops.llama-cpp.servicePort}/v1";
 
   connections = [
     {
@@ -50,7 +50,7 @@ let
   joinSemi = lib.concatMapStringsSep ";";
 in
 {
-  config = lib.mkIf (config.myconfig.ai.enable && cfg.enable) {
+  config = lib.mkIf (config.myconfig.ai.llmops.enable && cfg.enable) {
     services.open-webui.environment = {
       ENABLE_OPENAI_API = "True";
       OPENAI_API_BASE_URLS = joinSemi (c: c.url) connections;

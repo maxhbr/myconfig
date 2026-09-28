@@ -25,12 +25,12 @@
 # not upstream documentation guesses.
 #
 # This module intentionally does NOT try to auto-derive the scrape
-# target from ``myconfig.ai.llama-cpp``, unlike
+# target from ``myconfig.ai.llmops.llama-cpp``, unlike
 # ``client.llama-server.nix``: on `thing` the llama-swap instance for
 # gfx1151 runs inside a NixOS container
 # (``containers.llama-cpp-33657``) whose config tree lives at
 # ``config.containers.llama-cpp-33657.config.*``, not at the
-# top-level ``config.myconfig.ai.llama-cpp`` that
+# top-level ``config.myconfig.ai.llmops.llama-cpp`` that
 # ``client.llama-server.nix`` reads (that one is populated by the
 # host's *own* llama-cpp instance, e.g. rtx5090 on port 33656 — a
 # separate service from gfx1151). Since the container is configured

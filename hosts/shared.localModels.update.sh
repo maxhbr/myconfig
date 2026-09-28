@@ -36,7 +36,7 @@ declare -A CTX_SOURCE_URLS=(
 )
 
 # The upstream LiteLLM's own model registry. Unlike CTX_SOURCE_URLS this
-# reports the DECLARED budgets (from `myconfig.ai.localModels`, i.e. the
+# reports the DECLARED budgets (from `myconfig.ai.llmops.localModels`, i.e. the
 # llama-cpp module's `ctxSize`), so it works for every model regardless
 # of whether llama-swap currently has it loaded. See build_budget_map.
 LITELLM_INFO_URL="http://thing.wg0.maxhbr.local:4000/model/info"
@@ -165,7 +165,7 @@ ${models_nix}  ];
 in
 {
   config = {
-    myconfig.ai.localModels = [
+    myconfig.ai.llmops.localModels = [
       {
         name = "${name}.thing.wg0";
         inherit models;

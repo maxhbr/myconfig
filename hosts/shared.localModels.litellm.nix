@@ -27,7 +27,7 @@ let
 in
 {
   config = {
-    myconfig.ai.localModels = [
+    myconfig.ai.llmops.localModels = [
       {
         name = "litellm.thing.wg0";
         inherit models;

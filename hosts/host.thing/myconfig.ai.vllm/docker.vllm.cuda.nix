@@ -153,7 +153,7 @@ in
     # (and still downloaded) if its variant is ever dropped from this
     # file. Only the enabled variants are listed; the commented-out
     # ones would re-join here when re-enabled.
-    myconfig.ai.pull_models.models."/home/mhuber/models" = [
+    myconfig.ai.llmops.pull_models.models."/home/mhuber/models" = [
       "unsloth/Qwen3.8-27B-NVFP4" # vllmQwen38_27B_NVFP4
       "sakamakismile/Qwen3.8-27B-MTP-NVFP4" # vllmQwen38_27B_MTP_NVFP4
       "gittensor-model-hub/Qwen3.8-27B-NVFP4-RTX5090" # vllmQwen38_27B_NVFP4_Cuda

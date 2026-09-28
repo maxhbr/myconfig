@@ -53,7 +53,7 @@ in
     ./NanoKVM-USB.nix
     { myconfig.networking.forceConnectWifi.ssids = [ "Xvlcwkhgfq" ]; }
     # NOTE: f13 does NOT import ../shared.localModels.litellm.nix. That
-    # file registers thing's LiteLLM as myconfig.ai.localModels providers,
+    # file registers thing's LiteLLM as myconfig.ai.llmops.localModels providers,
     # which would create *direct* provider entries in the AI client configs
     # (aichat, opencode, pi-coding-agent, …) pointing at thing/vserver —
     # bypassing f13's own LiteLLM proxy at localhost:4000 and breaking for

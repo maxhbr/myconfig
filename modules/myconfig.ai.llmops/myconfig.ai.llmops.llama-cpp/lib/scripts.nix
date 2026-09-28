@@ -1,0 +1,586 @@
+# Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+#
+# Generators for the per-(model, device) `llama-server_*` and
+# `llama-bench_*` shell wrappers, plus the aggregate `llama-bench-all`
+# and `llama-bench_<device>` runners.
+#
+# These are pure functions: they take a `devices` lib (see ./devices.nix)
+# plus lib/pkgs and return derivations. They have no knowledge of
+# llama-swap or NixOS modules.
+{
+  lib,
+  pkgs,
+  devices,
+}:
+let
+  inherit (devices)
+    llamaServerFor
+    llamaBenchFor
+    envForDevice
+    deviceCliFlag
+    isMultiDevice
+    packageForDevice
+    backendForDevice
+    ;
+
+  # Build a shell application that launches llama-server for a specific
+  # (model, device) combo. Usage: `<script> <port> [extra-args...]`.
+  #
+  # When `device` is a comma-separated multi-device string (e.g.
+  # "Vulkan0,Vulkan1"), the script additionally passes `--split-mode layer`
+  # and `--tensor-split <model.tensorSplit>`.  `model.tensorSplit` must be
+  # non-null in that case; the assertion below enforces this at eval time.
+  mkLlamaScript =
+    {
+      model,
+      device,
+    }:
+    let
+      # Assert tensorSplit is set whenever a multi-device string is used.
+      _check =
+        if isMultiDevice device && model.tensorSplit == null then
+          builtins.throw "llama-cpp model '${model.name}': device '${device}' contains multiple devices (comma-separated) but `tensorSplit` is null. Set `tensorSplit` to a comma-separated ratio string (e.g. \"2,3\")."
+        else
+          null;
+
+      server =
+        if model.serverPackage != null then
+          lib.getExe' model.serverPackage "llama-server"
+        else
+          llamaServerFor device;
+      # Effective package (for the startup banner's version/rev). When a
+      # per-model fork is set, read its version/src; otherwise the
+      # device-default package.
+      pkg = model.serverPackage;
+      pkg' = if pkg != null then pkg else packageForDevice device;
+      versionStr = pkg'.version or "unknown";
+      srcRevStr = pkg'.src.rev or pkg'.src.tag or "unknown";
+      backendStr =
+        let
+          b = backendForDevice device;
+        in
+        if b == null then "unknown" else b;
+      # Apply the structured `noMmap` option on top of the free-form
+      # `params` list. null = pass params through as-is (legacy); true =
+      # ensure --no-mmap is present; false = strip --no-mmap so the
+      # model is served with mmap+mlock.
+      rawParams =
+        if model.noMmap == true then
+          model.params ++ (lib.optional (!lib.elem "--no-mmap" model.params) "--no-mmap")
+        else if model.noMmap == false then
+          lib.filter (p: p != "--no-mmap") model.params
+        else
+          model.params;
+      # llama.cpp 0.4.1 removed `--mlock` / `--no-mmap` in favour of
+      # `--load-mode`: `none` (read into RAM, no mlock) is the old
+      # `--no-mmap`; `mlock` (read into RAM + mlock) is the old
+      # `--mlock`. Translate any legacy `--no-mmap` param into the
+      # load-mode flag and drop it from the emitted command line.
+      wantsNoMmap = lib.elem "--no-mmap" rawParams;
+      effectiveParams = lib.filter (p: p != "--no-mmap") rawParams;
+      loadModeFlag = if wantsNoMmap then "--load-mode none" else "--load-mode mlock";
+      # Sanitise the device string for use in the script/package name:
+      # replace commas with dashes so "Vulkan0,Vulkan1" -> "Vulkan0-Vulkan1".
+      safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
+      safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
+      scriptName = "llama-server_${safeDevice}_${safeName}";
+      # Per-model extra env vars (attrsOf str) appended to the
+      # device-specific env exports. Converted to "KEY=VALUE" strings
+      # and run through the same export logic (no UNSET: prefix).
+      extraEnvList = lib.mapAttrsToList (k: v: "${k}=${v}") model.extraEnv;
+      envExports = lib.concatStringsSep "\n" (
+        map (
+          e: if lib.hasPrefix "UNSET:" e then "unset ${lib.removePrefix "UNSET:" e}" else "export ${e}"
+        ) (envForDevice device ++ extraEnvList)
+      );
+      # Startup banner: log the resolved llama.cpp revision, backend,
+      # device, model path/hash, cache type, context and effective
+      # mmap policy so an operator can verify which engine / flags a
+      # running llama-server actually started with (task item 7).
+      # The full effective command line is printed by `set -x` below.
+      noMmapRepr =
+        if model.noMmap == null then
+          "inherit(params)"
+        else if model.noMmap then
+          "true(--load-mode none)"
+        else
+          "false(mmap+mlock)";
+      loadModeRepr = if wantsNoMmap then "none" else "mlock";
+      banner = ''
+        echo "[llama-cpp] === startup banner ===" >&2
+        echo "[llama-cpp]   model:     ${model.name}" >&2
+        echo "[llama-cpp]   backend:   ${backendStr}" >&2
+        echo "[llama-cpp]   device:    ${device}" >&2
+        echo "[llama-cpp]   version:   ${versionStr}" >&2
+        echo "[llama-cpp]   srcRev:    ${srcRevStr}" >&2
+        echo "[llama-cpp]   modelPath: ${model.path}" >&2
+        echo "[llama-cpp]   sha256:    ${if model.sha256 != null then model.sha256 else "not pinned"}" >&2
+        echo "[llama-cpp]   cacheType: ${
+          if model.cacheType != null then model.cacheType else "default"
+        }" >&2
+        echo "[llama-cpp]   ctxSize:   ${
+          if model.ctxSize != null then toString model.ctxSize else "default"
+        }" >&2
+        echo "[llama-cpp]   parallel:  ${toString model.parallel}" >&2
+        echo "[llama-cpp]   noMmap:    ${noMmapRepr}" >&2
+        echo "[llama-cpp]   loadMode:  ${loadModeRepr}" >&2
+        echo "[llama-cpp]   serverPkg: ${
+          if model.serverPackage != null then
+            "fork:" + (model.serverPackage.name or "?")
+          else
+            "device-default"
+        }" >&2
+        echo "[llama-cpp] === effective flags (see set -x below) ===" >&2
+      '';
+      # `model.ctxSize` is the PER-REQUEST context. llama-server's
+      # `--ctx-size` is the whole KV cache and gets divided by the slot
+      # count unless the cache is unified, so scale it up only in the
+      # non-unified case. See the `ctxSize` option description.
+      ctxSizeFlag =
+        lib.optionalString (model.ctxSize != null)
+          "--ctx-size ${
+            toString (if model.kvUnified then model.ctxSize else model.ctxSize * model.parallel)
+          }";
+      cacheTypeFlag =
+        lib.optionalString (model.cacheType != null)
+          "--cache-type-k ${model.cacheType} --cache-type-v ${model.cacheType} --spec-draft-type-k ${model.cacheType} --spec-draft-type-v ${model.cacheType}";
+      parallelFlag = lib.optionalString (
+        model.parallel > 1
+      ) "--parallel ${toString model.parallel} --cont-batching";
+      kvUnifiedFlag = lib.optionalString model.kvUnified "--kv-unified";
+      aliasesFlag = lib.optionalString (
+        model.aliases != [ ]
+      ) "--alias ${lib.concatStringsSep "," model.aliases}";
+      # For multi-device, add --split-mode and --tensor-split.
+      multiDeviceFlags = lib.optionalString (isMultiDevice device) (
+        "--split-mode layer --tensor-split ${model.tensorSplit}"
+      );
+      paramsStr = lib.concatStringsSep " " (map lib.escapeShellArg effectiveParams);
+
+      # Optional `pull-models` metadata (see ./options.nix). When set, the
+      # generated script first checks whether `model.path` exists and, if
+      # not, fetches it via `hf download` (huggingface-hub) before starting
+      # llama-server. This mirrors the spec format and on-disk layout of
+      # the `myconfig.ai.llmops.pull_models` helper, but is scoped to this single
+      # model so the wrapper is self-contained and works even when that
+      # helper module is not enabled.
+      #
+      # `model.path` typically points at a read-only bind mount (e.g.
+      # /models) of the same backing volume that the writable
+      # `target_directory` (e.g. /home/mhuber/models) mounts, so a
+      # successful pull makes the file appear at `model.path` too.
+      pullModelsCfg = model.pull-models or null;
+      hasPullModels = pullModelsCfg != null;
+      hfPkg = pkgs.python3Packages.huggingface-hub;
+      # Shell-escaped writable download root. Only forced when
+      # `hasPullModels` (Nix laziness guards the `pullModelsCfg` access).
+      targetDirEsc = lib.optionalString hasPullModels (
+        lib.escapeShellArg (toString pullModelsCfg.target_directory)
+      );
+      # Shell snippet (empty when pull-models is unset) that, when the model
+      # file is missing, defines a `pull_model` helper and invokes it once
+      # per `hf_spec` entry. Spec parsing matches the `pull-models` helper:
+      #   "org/repo"          -> full repo    -> "<dir>/org-repo"
+      #   "org/repo/file.ext" -> single file  -> "<dir>/org-repo/file.ext"
+      #   "org/repo/subdir"   -> subdir/*     -> "<dir>/org-repo/subdir/..."
+      pullBlock = lib.optionalString hasPullModels ''
+        if [[ ! -e ${lib.escapeShellArg model.path} ]]; then
+          target_dir=${targetDirEsc}
+          if [[ ! -w "$target_dir" ]]; then
+            echo "[pull] model file not found at ${lib.escapeShellArg model.path} and target directory '$target_dir' is not writable; skipping pull" >&2
+          else
+            echo "[pull] model file not found at ${lib.escapeShellArg model.path}; pulling from HuggingFace into '$target_dir'..." >&2
+            pull_model() {
+              local target_dir="$1" spec="$2"
+              local slash_count org rest repo_id path_in_repo local_dir
+              slash_count=$(tr -cd '/' <<<"$spec" | wc -c)
+              if [[ "$slash_count" -eq 1 ]]; then
+                # "org/repo" -> full repo download into "<dir>/org-repo"
+                local_dir="$target_dir/''${spec//\//-}"
+                hf download "$spec" --include "*" --local-dir "$local_dir"
+              else
+                # "org/repo[/path/in/repo]" — repo_id is always the
+                # first two segments; the in-repo path may itself contain
+                # slashes (e.g. "org/repo/MTP/mtp-…​.gguf"). `hf download
+                # --include <path> --local-dir` preserves the repo-internal
+                # layout, so a nested file lands at "$local_dir/MTP/…​".
+                org="''${spec%%/*}"
+                rest="''${spec#"$org"/}"
+                repo_id="$org/''${rest%%/*}"
+                path_in_repo="''${rest#*/}"
+                local_dir="$target_dir/''${repo_id//\//-}"
+                if [[ "$path_in_repo" == *.* ]]; then
+                  hf download "$repo_id" --include "$path_in_repo" --local-dir "$local_dir"
+                else
+                  hf download "$repo_id" --include "$path_in_repo/*" --local-dir "$local_dir"
+                fi
+              fi
+            }
+            # Iterate the hf_spec list via an array so shellcheck does not
+            # flag SC2043 when a model has only a single spec.
+            hf_specs=( ${lib.concatStringsSep " " (map lib.escapeShellArg pullModelsCfg.hf_spec)} )
+            for spec in "''${hf_specs[@]}"; do
+              pull_model "$target_dir" "$spec"
+            done
+          fi
+        fi
+      '';
+    in
+    # Trigger the assertion by referencing _check (builtins.seq evaluates the
+    # first argument to WHNF before returning the second).
+    builtins.seq _check pkgs.writeShellApplication {
+      name = scriptName;
+      runtimeInputs = lib.optional hasPullModels hfPkg;
+      text = ''
+        ${envExports}
+        ${pullBlock}
+        ${banner}
+
+        set -x
+        ${server} \
+          ${deviceCliFlag device} \
+          --port "''${1:-22545}" \
+          -m ${lib.escapeShellArg model.path} \
+          --gpu-layers all \
+          --flash-attn on \
+          ${loadModeFlag} \
+          --metrics \
+          --no-webui \
+          --timeout 600 \
+          ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${kvUnifiedFlag} ${multiDeviceFlags} ${aliasesFlag} ${paramsStr} "''${@:2}"
+      '';
+    };
+
+  mkLlamaBenchScript =
+    {
+      model,
+      device,
+    }:
+    let
+      bench =
+        if model.serverPackage != null then
+          lib.getExe' model.serverPackage "llama-bench"
+        else
+          llamaBenchFor device;
+      safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
+      safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
+      scriptName = "llama-bench_${safeDevice}_${safeName}";
+      # Exported for capture_metadata's llama-server invocation. llama-bench
+      # itself uses the explicit -dev CLI flag (see bench() below).
+      extraEnvList = lib.mapAttrsToList (k: v: "${k}=${v}") model.extraEnv;
+      envExports = lib.concatStringsSep "\n" (
+        map (
+          e: if lib.hasPrefix "UNSET:" e then "unset ${lib.removePrefix "UNSET:" e}" else "export ${e}"
+        ) (envForDevice device ++ extraEnvList)
+      );
+      # Matching llama-server script — used to capture
+      # runtime metadata via /props before benchmarking.
+      serverScript = mkLlamaScript { inherit model device; };
+    in
+    pkgs.writeShellApplication {
+      name = scriptName;
+      runtimeInputs = [
+        pkgs.curl
+        pkgs.jq
+      ];
+      text = ''
+        ${envExports}
+        dir="$HOME/benchmarks/llama-bench/$(date +%Y-%m-%d)"
+        mkdir -p "$dir"
+        capture_metadata_port=22799
+
+        bench() (
+          set -x
+          ${bench} \
+            -m "${model.path}" \
+            -dev "${device}" \
+            -ngl 999 \
+            -fa 1 \
+            -d 0,8192,16384 `# ,4096,32768` \
+            -p 2048 \
+            -n 128 \
+            -ub 2048 \
+            -o csv -oe md
+        )
+
+        # Parameter sweep: find the best -b / -ub combination for prompt processing.
+        # Runs prompt-only (-p 4096 -n 0) at depth 8192 for each (B, UB) pair and
+        # writes results to a dedicated sweep CSV so the main per-device CSV stays
+        # clean and its column layout is not disturbed.
+        bench_sweep() {
+          local sweep_csv="$dir/${scriptName}.sweep.csv"
+          local header_written=0
+          for B in 1024 2048 4096 8192; do
+            for UB in 512 1024 2048; do
+              # UB must be <= B; skip invalid combos silently.
+              if (( UB > B )); then
+                continue
+              fi
+              echo "[sweep] b=$B ub=$UB" >&2
+              local out
+              # Capture CSV output; pass -d 8192 so depth is fixed for comparability.
+              out=$(
+                set -x
+                ${bench} \
+                  -m "${model.path}" \
+                  -dev "${device}" \
+                  -ngl 999 \
+                  -fa 1 \
+                  -d 8192 \
+                  -p 4096 \
+                  -n 0 \
+                  -b "$B" \
+                  -ub "$UB" \
+                  -o csv
+              )
+              if (( header_written == 0 )); then
+                printf '%s\n' "$out" >> "$sweep_csv"
+                header_written=1
+              else
+                # Strip the CSV header line for subsequent rows.
+                printf '%s\n' "$out" | tail -n +2 >> "$sweep_csv"
+              fi
+            done
+          done
+          echo "[sweep] results written to $sweep_csv" >&2
+        }
+
+        capture_metadata() {
+          local pp2048_at_8k="$1"
+          local tg128_at_8k="$2"
+          local tg128_at_16k="$3"
+
+          # --- Capture model metadata by briefly starting llama-server and querying /props ---
+          local props_json="$dir/${scriptName}.props.json"
+          local server_log="$dir/${scriptName}.server.log"
+          local server_pid=""
+
+          cleanup_server() {
+            if [[ -n "$server_pid" ]] && kill -0 "$server_pid" 2>/dev/null; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+            fi
+          }
+          trap cleanup_server RETURN
+
+          echo "[metadata] sleeping 2s before starting llama-server" >&2
+          sleep 2
+          echo "[metadata] starting llama-server on port $capture_metadata_port to capture /props" >&2
+          ${lib.getExe serverScript} "$capture_metadata_port" --no-warmup >"$server_log" 2>&1 &
+          server_pid=$!
+
+          # Wait until /props responds (or the server dies / we time out)
+          local waited=0
+          while (( waited < 120 )); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "[metadata] llama-server exited before becoming ready; see $server_log" >&2
+              return 1
+            fi
+            if curl -fsS "http://127.0.0.1:$capture_metadata_port/props" -o "$props_json" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+          done
+          if [[ ! -s "$props_json" ]]; then
+            echo "[metadata] failed to fetch /props within timeout" >&2
+            return 1
+          fi
+
+          # Pull the most interesting fields out of /props. The exact shape of
+          # /props varies between llama.cpp versions; use jq with // empty so
+          # missing fields just yield blanks.
+          local n_ctx model_path
+          n_ctx=$(jq -r '
+            (.default_generation_settings.n_ctx
+             // .default_generation_settings.params.n_ctx
+             // .n_ctx
+             // empty)' "$props_json")
+          model_path=$(jq -r '(.model_path // .default_generation_settings.model // empty)' "$props_json")
+
+          # <device>.metadata.csv: one row per script, deduped by script name. Written
+          # with jq -r @csv so embedded commas/quotes are escaped properly.
+          local meta="$dir/${device}.metadata.csv"
+          local header="timestamp,script,device,model,prompt ingestion speed,normal chat streaming speed,long-context streaming speed,n_ctx"
+          if [[ ! -f "$meta" ]]; then
+            printf '%s\n' "$header" > "$meta"
+          fi
+          # Drop any existing row for this script so we always reflect the
+          # latest captured values. The script name is the 2nd CSV column.
+          if grep -q ",\"${scriptName}\"," "$meta" 2>/dev/null; then
+            grep -v ",\"${scriptName}\"," "$meta" > "$meta.tmp" && mv "$meta.tmp" "$meta"
+          fi
+          local timestamp
+          timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          jq -rn \
+            --arg ts       "$timestamp" \
+            --arg script   "${scriptName}" \
+            --arg device   "${device}" \
+            --arg model    "${model.name}" \
+            --arg pp2048   "$pp2048_at_8k" \
+            --arg tg128_8k  "$tg128_at_8k" \
+            --arg tg128_16k "$tg128_at_16k" \
+            --arg n_ctx    "$n_ctx" \
+            '[$ts,$script,$device,$model,$pp2048,$tg128_8k,$tg128_16k,$n_ctx] | @csv' \
+            >> "$meta"
+
+          # Print a structured human-readable summary of the captured metadata
+          # to stderr so it shows up in the terminal next to the bench output.
+          {
+            printf '%s\n' "[metadata] ---- captured metadata ----"
+            printf '[metadata]   %-40s %s\n' \
+              "timestamp"                              "$timestamp" \
+              "script"                                 "${scriptName}" \
+              "device"                                 "${device}" \
+              "model"                                  "${model.name}" \
+              "model_path"                             "$model_path" \
+              "n_ctx"                                  "$n_ctx" \
+              "prompt ingestion speed(pp2048@8k)"      "$pp2048_at_8k" \
+              "normal chat streaming speed(tg128@8k)"   "$tg128_at_8k" \
+              "long-context streaming speed(tg128@16k)" "$tg128_at_16k"
+            printf '%s\n' "[metadata] ---------------------------"
+            printf '%s\n' "[metadata] wrote row for ${scriptName} to $meta"
+          } >&2
+        }
+
+        ###########################################################################################
+        ##  run  ##################################################################################
+        ###########################################################################################
+
+        echo "[bench] sleeping 2s before running llama-bench" >&2
+        sleep 2
+        # Results from all models on the same device are aggregated into a
+        # single per-device CSV. When the file already exists, strip the CSV
+        # header line emitted by llama-bench so we don't get repeated header
+        # rows. Stderr is tee'd to both the per-script log and the terminal.
+        csv="$dir/${device}.csv"
+        # shellcheck disable=SC2094
+        if [[ -f "$csv" ]]; then
+          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) | tee "$dir/${scriptName}.csv" | tail -n +2 >> "$csv"
+        else
+          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) | tee "$dir/${scriptName}.csv" >> "$csv"
+        fi
+
+        get_llama_bench_metric() {
+          local csv="''${1:?usage: get_llama_bench_metric CSV N_PROMPT N_GEN N_DEPTH}"
+          local want_n_prompt="''${2:?usage: get_llama_bench_metric CSV N_PROMPT N_GEN N_DEPTH}"
+          local want_n_gen="''${3:?usage: get_llama_bench_metric CSV N_PROMPT N_GEN N_DEPTH}"
+          local want_n_depth="''${4:?usage: get_llama_bench_metric CSV N_PROMPT N_GEN N_DEPTH}"
+
+          awk -F, \
+            -v want_n_prompt="$want_n_prompt" \
+            -v want_n_gen="$want_n_gen" \
+            -v want_n_depth="$want_n_depth" '
+        function trimq(s) {
+          gsub(/\r$/, "", s)
+          gsub(/^"|"$/, "", s)
+          return s
+        }
+
+        # Skip header and non-data lines.
+        $1 !~ /^"/ {
+          next
+        }
+
+        {
+          # Do not use header-derived column indexes with awk -F, here.
+          # This file contains quoted fields with commas, especially gpu_info:
+          #
+          #   "NVIDIA GeForce RTX 5090, Radeon 8060S Graphics ..."
+          #
+          # awk -F, is therefore not a real CSV parser and shifts all earlier columns.
+          # However, the fields we need are at the end and contain no commas:
+          #
+          #   n_prompt,n_gen,n_depth,test_time,avg_ns,stddev_ns,avg_ts,stddev_ts
+          #
+          n_prompt = trimq($(NF - 7)) + 0
+          n_gen    = trimq($(NF - 6)) + 0
+          n_depth  = trimq($(NF - 5)) + 0
+          avg_ts   = trimq($(NF - 1))
+
+          if (n_prompt == want_n_prompt && n_gen == want_n_gen && n_depth == want_n_depth) {
+            print avg_ts
+            found = 1
+            exit 0
+          }
+        }
+
+        END {
+          if (!found) {
+            printf "metric not found: n_prompt=%s n_gen=%s n_depth=%s in %s\n", want_n_prompt, want_n_gen, want_n_depth, FILENAME > "/dev/stderr"
+            exit 3
+          }
+        }
+        ' "$csv"
+        }
+
+        get_pp2048_at_8k() {
+          get_llama_bench_metric "$1" 2048 0 8192
+        }
+
+        get_tg128_at_8k() {
+          get_llama_bench_metric "$1" 0 128 8192
+        }
+
+        get_tg128_at_16k() {
+          get_llama_bench_metric "$1" 0 128 16384
+        }
+
+        pp2048_at_8k="$(get_pp2048_at_8k "$dir/${scriptName}.csv")"
+        tg128_at_8k="$(get_tg128_at_8k "$dir/${scriptName}.csv")"
+        tg128_at_16k="$(get_tg128_at_16k "$dir/${scriptName}.csv")"
+
+        # Try to capture metadata, but never block the benchmark on failures.
+        capture_metadata "$pp2048_at_8k" "$tg128_at_8k" "$tg128_at_16k" || echo "[metadata] capture failed; continuing with benchmark" >&2
+
+        # Run the -b / -ub parameter sweep for prompt-processing speed tuning.
+        # Failures are non-fatal so a sweep error never blocks the main result.
+        bench_sweep 2> >(tee -a "$dir/${scriptName}.log" >&2) || echo "[sweep] sweep failed; continuing" >&2
+
+        times
+      '';
+    };
+
+  # Build an aggregate "run every matching llama-bench script" wrapper.
+  # `scripts` is the list of script *names* to invoke; `runtimeInputs` is
+  # the list of script derivations that must be on PATH.
+  mkLlamaBenchAggregate =
+    {
+      name,
+      scripts,
+      runtimeInputs,
+    }:
+    pkgs.writeShellApplication {
+      inherit name runtimeInputs;
+      text = ''
+        dir="$HOME/benchmarks/llama-bench/$(date +%Y-%m-%d)"
+        mkdir -p "$dir"
+        log="$dir/${name}-$(date -u +%Y-%m-%dT%H-%M-%SZ).log"
+        echo "Logging combined output to $log"
+
+        # Tee all subsequent output (stdout+stderr) to the log file while still
+        # showing it on the terminal.
+        exec > >(tee -a "$log") 2>&1
+
+        scripts=(${lib.concatStringsSep " " scripts})
+        echo "Running ''${#scripts[@]} llama-bench script(s)..."
+        failed=()
+        for s in "''${scripts[@]}"; do
+          echo "=== Running $s ==="
+          if ! "$s" "$@"; then
+            echo "!!! $s failed" >&2
+            failed+=("$s")
+          fi
+        done
+        if (( ''${#failed[@]} > 0 )); then
+          echo "Failed scripts: ''${failed[*]}" >&2
+          exit 1
+        fi
+        echo "All llama-bench scripts completed successfully."
+      '';
+    };
+in
+{
+  inherit mkLlamaScript mkLlamaBenchScript mkLlamaBenchAggregate;
+}

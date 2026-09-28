@@ -22,7 +22,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.orca;
+  cfg = config.myconfig.ai.dev.orca;
 
   orcaVersion = "1.4.137";
 
@@ -82,7 +82,7 @@ let
       '';
 in
 {
-  options.myconfig.ai.orca = with lib; {
+  options.myconfig.ai.dev.orca = with lib; {
     enable = mkEnableOption "Orca package (AppImage + CLI wrappers)";
 
     service = with lib; {
@@ -137,14 +137,14 @@ in
     # GUI as a launchable application (via the .desktop entry) plus an
     # `orca` command on $PATH. The service (`orca serve`) is independent
     # and controlled by `service.enable` below.
-    (lib.mkIf (config.myconfig.ai.enable && config.myconfig.desktop.enable && cfg.enable) {
+    (lib.mkIf (config.myconfig.ai.dev.enable && config.myconfig.desktop.enable && cfg.enable) {
       home-manager.sharedModules = [
         { home.packages = [ orcaDesktopPkg ]; }
       ];
     })
 
     # --- CLI wrappers (service helpers) ---
-    (lib.mkIf (config.myconfig.ai.enable && (cfg.enable || cfg.service.enable)) {
+    (lib.mkIf (config.myconfig.ai.dev.enable && (cfg.enable || cfg.service.enable)) {
       home-manager.sharedModules = [
         {
           home.packages = with pkgs; [
@@ -177,7 +177,7 @@ in
     })
 
     # --- Systemd service ---
-    (lib.mkIf (config.myconfig.ai.enable && cfg.service.enable) {
+    (lib.mkIf (config.myconfig.ai.dev.enable && cfg.service.enable) {
       # --- System user / group ---
       users.groups.${cfg.group} = { };
       users.users.${cfg.user} = {

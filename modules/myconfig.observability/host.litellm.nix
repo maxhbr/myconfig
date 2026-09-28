@@ -7,7 +7,7 @@
 # any client where `services.litellm.enable = true` and
 # `myconfig.observability.client.enable = true` — the client module wraps the
 # litellm package with `prometheus_client` and registers the `prometheus`
-# callback (see modules/myconfig.ai/services.litellm.nix). The local vmagent
+# callback (see modules/myconfig.ai.llmops/services.litellm.nix). The local vmagent
 # on the client scrapes `http://<litellm host>:<port>/metrics/` (job=`litellm`,
 # note the trailing slash — the bare `/metrics` endpoint redirects with HTTP
 # 307) and remote-writes into the central VictoriaMetrics instance. vmagent
@@ -79,7 +79,7 @@
 # callback and need *no* database. Accordingly this module introduces no
 # PostgreSQL, Prisma, virtual-key, team, or spend-log configuration. Spend
 # logs remain disabled (services.litellm.settings.general_settings.
-# disable_spend_logs = true, set in modules/myconfig.ai/services.litellm.nix).
+# disable_spend_logs = true, set in modules/myconfig.ai.llmops/services.litellm.nix).
 {
   config,
   lib,

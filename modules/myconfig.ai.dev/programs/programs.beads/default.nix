@@ -27,7 +27,7 @@
 # persistent memory and issue tracking is part of every agentic coding
 # workflow and the cost is one small binary plus a generated config file.
 # The `enable` option itself still defaults to false, so a host without
-# `myconfig.ai.enable` never gets beads, and a host can opt out with
+# `myconfig.ai.llmops.enable` never gets beads, and a host can opt out with
 # `myconfig.ai.dev.beads.enable = false;`.
 #
 # Besides the `bd` binary this module ships two companions built with

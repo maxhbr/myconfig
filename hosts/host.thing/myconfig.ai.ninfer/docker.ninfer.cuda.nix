@@ -25,7 +25,7 @@ let
   # Public OpenAI-facing model id (the engine accepts exactly one).
   # Uses the generic "localhost:<port>" name so clients that address
   # the container port directly work without knowing the internal
-  # name: the { port = 22545; } entry in myconfig.ai.localModels
+  # name: the { port = 22545; } entry in myconfig.ai.llmops.localModels
   # (host.thing/default.nix) becomes the "localhost:22545" model on
   # http://localhost:22545/v1 in pi-coding-agent, mirroring the vLLM
   # variants that serve "localhost:$HOST_PORT" alongside their names.
@@ -88,7 +88,7 @@ in
     # Declared next to the variant above (rather than in
     # host.thing/default.nix) so this pull spec isn't silently left
     # behind (and still downloaded) if the variant is ever dropped.
-    myconfig.ai.pull_models.models."/home/mhuber/models" = [
+    myconfig.ai.llmops.pull_models.models."/home/mhuber/models" = [
       "neroued/Qwen3.8-27B-nvfp4-NInfer" # ninferQwen38_27B_NVFP4
     ];
 

@@ -9,7 +9,7 @@
     # open-webui, vmagent, …) reaches it through `localhost:4000`. The
     # firewall rule below restricts external exposure to wg0. This
     # overrides the 127.0.0.1 lib.mkForce in
-    # modules/myconfig.ai/services.litellm.nix.
+    # modules/myconfig.ai.llmops/services.litellm.nix.
     host = lib.mkOverride 49 "0.0.0.0";
     settings.router_settings = {
       model_group_alias = {

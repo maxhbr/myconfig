@@ -49,5 +49,5 @@ deleted and bd issue `myconfig-0rs` closed.
 ## Related
 
 - bd issue: `myconfig-0rs`
-- `modules/myconfig.ai/litellm.proxy.nix` (local-proxy `model_info`
+- `modules/myconfig.ai.llmops/litellm.proxy.nix` (local-proxy `model_info`
   plumbing, `mkForwardEntry`), already supports `contextWindow`.

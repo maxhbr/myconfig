@@ -22,7 +22,7 @@
       };
     }
     # NOTE: p14 does NOT import ../shared.localModels.{litellm,rtx5090,gfx1151}.nix.
-    # Those files register thing's model servers as myconfig.ai.localModels
+    # Those files register thing's model servers as myconfig.ai.llmops.localModels
     # providers, which would create *direct* provider entries in the AI client
     # configs (aichat, opencode, pi-coding-agent, …) pointing at thing/vserver —
     # bypassing p14's own LiteLLM proxy at localhost:4000. p14's local LiteLLM

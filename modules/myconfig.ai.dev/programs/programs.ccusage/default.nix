@@ -28,7 +28,7 @@
 # in ../default.nix): analyzing agent token usage and cost is part of every
 # agentic coding workflow and the cost is one small binary. The `enable`
 # option itself still defaults to false, so a host without
-# `myconfig.ai.enable` never gets ccusage, and a host can opt out with
+# `myconfig.ai.llmops.enable` never gets ccusage, and a host can opt out with
 # `myconfig.ai.dev.ccusage.enable = false;`.
 {
   config,

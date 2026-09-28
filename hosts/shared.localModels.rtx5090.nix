@@ -74,7 +74,7 @@ let
 in
 {
   config = {
-    myconfig.ai.localModels = [
+    myconfig.ai.llmops.localModels = [
       {
         name = "rtx5090.thing.wg0";
         inherit models;

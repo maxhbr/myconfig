@@ -45,7 +45,7 @@
     (
       { ... }:
       {
-        myconfig.ai.localModels = [
+        myconfig.ai.llmops.localModels = [
           {
             port = 22546;
           }
@@ -58,7 +58,7 @@
     # qwen4exp MTP for Qwen3.8-Flash-Next; see
     # doc/TODOs/drop-llama-cpp-pr-28243-pin-when-qwen4exp-mtp-merges.md
     ./nixpkgs.overlays.llama-cpp-pr-28243.nix
-    ./myconfig.ai.llama-cpp
+    ./myconfig.ai.llmops.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix
     ./myconfig.ai.vllm
     ./myconfig.ai.ninfer
@@ -126,34 +126,45 @@
         imagework.myphoto.enable = true;
       };
       ai = {
-        enable = true;
-        dev.pi-coding-agent = {
+        llmops = {
           enable = true;
-          litellmUrl = "http://localhost:4000";
+
+          pull_models = {
+            enable = true;
+            # Specs without a corresponding `myconfig.ai.llmops.llama-cpp.models`
+            # entry stay declared here. Everything that *is* served by
+            # llama-cpp is collected automatically from each model's
+            # `pull-models = { target_directory; hf_spec; }` (see
+            # ./myconfig.ai.llmops.llama-cpp.nix). The Docker/Podman-served vLLM
+            # and NInfer models declare their own `models` entries next to
+            # their variant definitions (./myconfig.ai.vllm/docker.vllm.cuda.nix,
+            # ./myconfig.ai.ninfer/docker.ninfer.cuda.nix) so a spec isn't
+            # silently left behind (and still downloaded) if its variant is
+            # ever dropped.
+          };
+          inference-cpp = {
+            enable = true;
+          };
+          comfyui = {
+            enable = true;
+          };
+          container = {
+            crawl4ai = {
+              enable = false;
+            };
+            headroom = {
+              enable = false;
+              targetApiUrl = "http://litellm.thing.wg0.maxhbr.local/v1";
+            };
+          };
         };
 
         # The `mysbx` sandboxing CLI (modules/myconfig.ai.dev/mysbx/README.md).
         # Like the other sandbox tiers it is enabled EXPLICITLY per host and
-        # never implicitly through the broad `myconfig.ai.enable`; it only
+        # never implicitly through the broad `myconfig.ai.llmops.enable`; it only
         # puts the CLI on PATH.
+        dev.enable = true;
         dev.mysbx.enable = true;
-
-        pull_models = {
-          enable = true;
-          # Specs without a corresponding `myconfig.ai.llama-cpp.models`
-          # entry stay declared here. Everything that *is* served by
-          # llama-cpp is collected automatically from each model's
-          # `pull-models = { target_directory; hf_spec; }` (see
-          # ./myconfig.ai.llama-cpp.nix). The Docker/Podman-served vLLM
-          # and NInfer models declare their own `models` entries next to
-          # their variant definitions (./myconfig.ai.vllm/docker.vllm.cuda.nix,
-          # ./myconfig.ai.ninfer/docker.ninfer.cuda.nix) so a spec isn't
-          # silently left behind (and still downloaded) if its variant is
-          # ever dropped.
-        };
-        inference-cpp = {
-          enable = true;
-        };
         dev.lmstudio = {
           enable = true;
         };
@@ -167,18 +178,6 @@
         # open-webui = {
         #   enable = true;
         # };
-        comfyui = {
-          enable = true;
-        };
-        container = {
-          crawl4ai = {
-            enable = false;
-          };
-          headroom = {
-            enable = false;
-            targetApiUrl = "http://litellm.thing.wg0.maxhbr.local/v1";
-          };
-        };
       };
       containers.n8n.enable = true;
       dev = {

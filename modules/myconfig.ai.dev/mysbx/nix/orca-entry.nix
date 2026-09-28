@@ -54,7 +54,7 @@
 #                        code (unset: loopback — right for a client
 #                        on the same host). A remote client needs the
 #                        LAN/Tailscale name here, exactly like
-#                        `myconfig.ai.orca.pairingAddress` host-side.
+#                        `myconfig.ai.dev.orca.pairingAddress` host-side.
 #
 # State: Orca keeps its profile under `$HOME/.config/{orca,Orca}` and
 # the appimage-run extraction cache under `$HOME/.cache/appimage-run`
@@ -90,7 +90,7 @@
   xvfb,
   # The Orca AppImage that runs inside the sandbox
   # (`myconfig.ai.dev.mysbx.orca.package`, normally
-  # `myconfig.ai.orca.package` of ../../services.orca.nix).
+  # `myconfig.ai.dev.orca.package` of ../../services.orca.nix).
   orca,
 }:
 let

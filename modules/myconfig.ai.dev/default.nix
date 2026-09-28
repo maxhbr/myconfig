@@ -4,11 +4,13 @@
 # myconfig.ai.dev — umbrella for the AI *developer tooling* split out of
 # myconfig.ai (beads bd: myconfig-e4j, option rename bd: myconfig-4so). This
 # module re-homes the dev tooling part of the former
-# modules/myconfig.ai/default.nix umbrella: the agent CLI programs
+# modules/myconfig.ai.llmops/default.nix umbrella: the agent CLI programs
 # (./programs/programs.*), the sandbox tiers, mysbx, workmux, skills and
 # hermes-agent. All options defined by this tree live under
-# `myconfig.ai.dev.*` and are gated behind `myconfig.ai.dev.enable` (which
-# itself defaults on wherever `myconfig.ai.enable` is set, see below).
+# `myconfig.ai.dev.*` and are gated behind `myconfig.ai.dev.enable`. The
+# `myconfig.ai.*` tree is now `myconfig.ai.llmops` (inference/services
+# tooling) and is completely orthogonal to this tree — no implied
+# enables in either direction.
 {
   config,
   myconfig,
@@ -24,12 +26,6 @@ in
     lib.mkEnableOption "myconfig.ai.dev (AI developer tooling: agent CLIs, sandbox tiers, mysbx, workmux, skills, hermes-agent)";
 
   imports = [
-    # dev tooling — the sandbox tiers were moved here by myconfig-e4j.3
-    # (./sandboxes/); mysbx and workmux were moved here by myconfig-e4j.4.
-    # The agent CLI programs were moved here by myconfig-e4j.2, and
-    # skills/, fns/ and hermes-agent by myconfig-e4j.5
-    # The host-side LiteLLM forwarder shared by the container sandbox tiers
-    # (the gvisor tier and mysbx's podman-gvisor backend)
     ./myconfig.ai.dev.litellm-forwarder.nix
 
     ./sandboxes/myconfig.ai.jail.nix
@@ -39,9 +35,6 @@ in
     ./sandboxes/myconfig.ai.qemu-agent-sandbox
     ./sandboxes/myconfig.ai.microvm
     ./sandboxes/myconfig.ai.gvisor-agent-sandbox
-
-    # orca runtime server / desktop app (moved here from
-    # ../myconfig.ai/ by bd: myconfig-zl0) — consumed by the dev side
     ./services.orca.nix
     ./mysbx
     ./hermes-agent
@@ -67,57 +60,39 @@ in
     ./myconfig.ai.workmux
   ];
 
-  # myconfig.ai.enable implies myconfig.ai.dev.enable (by default), so every
-  # existing host keeps its AI dev tooling. A host can still opt out per host
-  # with `myconfig.ai.dev.enable = false`. The wiring must stay OUTSIDE the
-  # mkIf gate below, otherwise it would be circular.
+  # `myconfig.ai.dev` is orthogonal to `myconfig.ai.llmops`: hosts opt in
+  # explicitly with `myconfig.ai.dev.enable = true` (the umbrella below then
+  # defaults the individual programs on).
   config = lib.mkMerge [
-    { myconfig.ai.dev.enable = lib.mkIf config.myconfig.ai.enable (lib.mkDefault true); }
-
     (lib.mkIf config.myconfig.ai.dev.enable {
       myconfig.dev.python.enable = true;
-      # workmux is a terminal-native companion to agentic coding; auto-enable
-      # it whenever the AI tooling, the dev profile, and tmux are all active.
-      # (ai is guaranteed by the surrounding mkIf.) Use mkDefault so a host
-      # can still turn it off explicitly.
-      myconfig.ai.dev.workmux.enable = lib.mkDefault (
-        config.myconfig.dev.enable && config.programs.tmux.enable
-      );
-      # nono-agent-sandbox provides `agent-nono-*` wrappers (like `agent-bubblewrap-*`)
-      # for running coding agents in the nono capability-based sandbox. Enable by
-      # default whenever myconfig.ai is enabled, but allow hosts to override.
-      myconfig.ai.dev.nono-agent-sandbox.enable = lib.mkDefault true;
-      # rtk is a plain CLI proxy that shrinks command output before an agent
-      # reads it (./programs/programs.rtk). It costs one small binary plus a handful of
-      # generated config files and benefits every coding agent on the host, so
-      # it is on by default wherever the AI tooling is; a host can still turn it
-      # off explicitly.
-      myconfig.ai.dev.rtk.enable = lib.mkDefault true;
-      # hunk is the review-first diff viewer for agent-authored changesets
-      # (./programs/programs.hunk). Reviewing what an agent wrote is part of every
-      # agentic coding workflow, and the cost is one small binary plus a
-      # generated config file, so it follows rtk and is on by default wherever
-      # the AI tooling is. `gitIntegration` stays off, so nothing changes for
-      # plain `git diff`. A host can still turn it off explicitly.
-      myconfig.ai.dev.hunk.enable = lib.mkDefault true;
-      # beads is the memory system for AI coding agents with graph-based issue
-      # tracking (./programs/programs.beads). Memory and issue tracking for agent
-      # workflows is part of every agentic coding workflow, and the cost is one
-      # small binary, so it follows rtk and hunk and is on by default wherever
-      # the AI tooling is. A host can still turn it off explicitly.
-      myconfig.ai.dev.beads.enable = lib.mkDefault true;
-      # agent-browser provides browser automation capabilities to AI agents
-      # (./programs/programs.agent-browser). Browser automation is a core capability
-      # for agentic coding workflows, so it follows rtk and hunk and is on by
-      # default wherever the AI tooling is. A host can still turn it off
-      # explicitly.
-      myconfig.ai.dev.agent-browser.enable = lib.mkDefault true;
-      # ccusage provides token usage and cost analysis for Claude Code
-      # sessions (./programs/programs.ccusage). Analyzing agent token usage is part of
-      # every agentic coding workflow, and the cost is one small binary, so
-      # it follows rtk, hunk and beads and is on by default wherever the AI
-      # tooling is. A host can still turn it off explicitly.
-      myconfig.ai.dev.ccusage.enable = lib.mkDefault true;
+      myconfig.ai.dev = {
+        opencode.enable = true;
+        pi-coding-agent = {
+          enable = true;
+          litellmUrl = "http://localhost:4000";
+          tokenSpeed.enable = true;
+        };
+        claude-code.enable = true;
+        codex.enable = true;
+        skills.enable = true;
+        agent-of-empires.enable = true;
+        gvisor-agent-sandbox = {
+          enable = true;
+          nix.enable = true;
+        };
+        mysbx = {
+          enable = true;
+          display.package = pkgs.waypipe;
+        };
+        workmux.enable = lib.mkDefault (config.myconfig.dev.enable && config.programs.tmux.enable);
+        nono-agent-sandbox.enable = lib.mkDefault true;
+        rtk.enable = lib.mkDefault true;
+        hunk.enable = lib.mkDefault true;
+        beads.enable = lib.mkDefault true;
+        agent-browser.enable = lib.mkDefault true;
+        ccusage.enable = lib.mkDefault true;
+      };
       home-manager.sharedModules = [
         {
           home.packages =

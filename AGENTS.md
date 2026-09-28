@@ -83,12 +83,12 @@ refactor did not alter behavior.
 
 ### Workflow
 1. Identify which hosts actually exercise the module being refactored
-   (grep for the option / import path, e.g. `myconfig.ai.llama-cpp`).
+   (grep for the option / import path, e.g. `myconfig.ai.llmops.llama-cpp`).
 2. Pick the smallest slice of `config` that captures the module's outputs.
    Common targets:
    - The service config it produces, e.g. `config.services.<name>.settings`
    - Generated `home.packages` names and outPaths
-   - `myconfig.ai.localModels` or similar registries it contributes to
+   - `myconfig.ai.llmops.localModels` or similar registries it contributes to
    - The full toplevel drv hash (coarse but exhaustive — see below)
 3. Save the baseline JSON to `/tmp/opencode/<task>/before-<host>.json`.
 4. Perform the refactor (split files, rename helpers, etc.).

@@ -16,7 +16,7 @@
   config = {
     myconfig.observability.client.llamaSwapMetrics = {
       enable = true;
-      scrapePort = config.containers.llama-cpp-33657.config.myconfig.ai.llama-cpp.servicePort;
+      scrapePort = config.containers.llama-cpp-33657.config.myconfig.ai.llmops.llama-cpp.servicePort;
     };
   };
 }

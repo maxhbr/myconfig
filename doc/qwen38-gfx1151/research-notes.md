@@ -113,7 +113,7 @@ references it via `serverPackage`.
 - Template version (line 1): `qwen3.8-froggeric-v22.3`
 - SHA-256: `6e1439c913ad7df4a966493ad70de7e7fc5a548d41bbe417c1571f766603629b`
   (verified by `sha256sum` of the vendored copy)
-- Vendored at: `modules/myconfig.ai/myconfig.ai.llama-cpp/templates/sharp.jinja`
+- Vendored at: `modules/myconfig.ai.llmops/myconfig.ai.llmops.llama-cpp/templates/sharp.jinja`
 - Provenance file: `modules/.../templates/sharp.jinja.provenance`
 
 ### Why

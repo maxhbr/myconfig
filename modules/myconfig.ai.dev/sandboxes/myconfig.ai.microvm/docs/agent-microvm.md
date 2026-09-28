@@ -63,7 +63,7 @@ while disabled: no microvm.nix host module, no bridge/firewall, no VM slots, no
 guest build, no Workmux agents.
 
 It is enabled **only per host, and explicitly** — never via the broad
-`myconfig.ai.enable`. On `f13` (`hosts/host.f13/ai.f13.nix`):
+`myconfig.ai.dev.enable`. On `f13` (`hosts/host.f13/ai.f13.nix`):
 
 ```nix
 myconfig.ai.microvm = {

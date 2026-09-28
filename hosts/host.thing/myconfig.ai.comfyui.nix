@@ -9,14 +9,12 @@
   ...
 }:
 {
-  config = lib.mkIf myconfig.ai.comfyui.enable {
+  config = lib.mkIf myconfig.ai.llmops.comfyui.enable {
     myconfig = {
-      ai = {
-        comfyui = {
-          cuda_version = "cu129";
-          rocm_version = "gfx1151";
-          userservice = true;
-        };
+      ai.llmops.comfyui = {
+        cuda_version = "cu129";
+        rocm_version = "gfx1151";
+        userservice = true;
       };
     };
     home-manager.sharedModules = [

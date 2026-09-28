@@ -9,7 +9,7 @@
 # LiteLLM via thing's Caddy reverse proxy
 # (litellm.thing.wg0.maxhbr.local). This is the counterpart to
 # hosts/shared.localModels.litellm.nix: instead of registering thing's
-# LiteLLM as *direct* myconfig.ai.localModels providers (which the AI
+# LiteLLM as *direct* myconfig.ai.llmops.localModels providers (which the AI
 # client configs would point at thing/vserver, bypassing any local
 # proxy), this deploys a *local* LiteLLM whose model_list forwards to the
 # same upstream. The two files share the model list defined in
@@ -43,7 +43,7 @@
 # ./shared.localModels.litellm.models.nix).
 { ... }:
 {
-  myconfig.ai.litellm.proxy = {
+  myconfig.ai.llmops.litellm.proxy = {
     enable = true;
     upstreamApiBase = "http://litellm.thing.wg0.maxhbr.local:80/v1";
     models = import ./shared.localModels.litellm.models.nix;

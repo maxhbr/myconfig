@@ -33,13 +33,19 @@ in
     # ];
     myconfig = {
       ai = {
-        enable = true;
-        container = {
-          nlm-ingestor = {
-            enable = false;
-          };
-          open-webui = {
-            enable = true;
+        # The dev tooling umbrella used to arrive implicitly with the broad
+        # `myconfig.ai.enable`; the trees are orthogonal now, so opt in
+        # explicitly (the microvm sandbox tier below needs it).
+        dev.enable = true;
+        llmops = {
+          enable = true;
+          container = {
+            nlm-ingestor = {
+              enable = false;
+            };
+            open-webui = {
+              enable = true;
+            };
           };
         };
       };

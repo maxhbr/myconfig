@@ -29,7 +29,7 @@
 #
 # Exposes `llama-cpp-pr-28243` on the host's pkgs.  GPU-flag overrides
 # are applied by the consumer
-# (hosts/host.thing/myconfig.ai.llama-cpp/default.nix:
+# (hosts/host.thing/myconfig.ai.llmops.llama-cpp/default.nix:
 # `patched-llama-cpp-pr-28243-pkg`) and stay out of this overlay.
 { ... }:
 let

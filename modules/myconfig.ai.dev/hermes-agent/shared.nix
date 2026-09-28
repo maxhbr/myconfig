@@ -86,7 +86,7 @@ let
               model = modelName;
               api_key = "local-key";
             }) modelNames
-          ) config.myconfig.ai.localModels;
+          ) config.myconfig.ai.llmops.localModels;
         in
         custom_local_providers;
       terminal.backend = "local";

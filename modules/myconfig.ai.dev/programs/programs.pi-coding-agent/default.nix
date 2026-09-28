@@ -156,7 +156,7 @@ let
   #
   # Two sources are merged (first occurrence wins, in source order):
   #
-  #  1. `myconfig.ai.localModels` — the per-backend registry (llama-cpp /
+  #  1. `myconfig.ai.llmops.localModels` — the per-backend registry (llama-cpp /
   #     llama-swap). Each model entry may carry a `contextWindow` field.
   #     This populates lookups for both the raw model name and the
   #     provider-prefixed form (`providerName:modelName`).
@@ -203,11 +203,11 @@ let
           else
             [ ]
         ) rawModels
-      ) osconfig.myconfig.ai.localModels;
+      ) osconfig.myconfig.ai.llmops.localModels;
 
       # Extract the context window from a litellm model_list entry. The
       # value lives in `litellm_params.max_input_tokens` (the
-      # auto-generated entries from modules/myconfig.ai/services.litellm.nix
+      # auto-generated entries from modules/myconfig.ai.llmops/services.litellm.nix
       # and the local-proxy entries from hosts/shared.litellm.proxy.nix
       # both put it there) or in `model_info.max_input_tokens` (the
       # local-proxy entries' `model_info` block, also written by
@@ -255,12 +255,12 @@ let
   #
   # Only LiteLLM `model_list` entries carry this information:
   #   - `litellm_params.max_tokens`  — written by
-  #     modules/myconfig.ai/services.litellm.nix for every auto-generated
+  #     modules/myconfig.ai.llmops/services.litellm.nix for every auto-generated
   #     local-model entry (`min (contextWindow / 4) 65536`);
   #   - `model_info.max_output_tokens` — written by
-  #     modules/myconfig.ai/litellm.proxy.nix when a forwarded model
+  #     modules/myconfig.ai.llmops/litellm.proxy.nix when a forwarded model
   #     declares `maxOutputTokens`.
-  # `myconfig.ai.localModels` has no equivalent field, so it contributes
+  # `myconfig.ai.llmops.localModels` has no equivalent field, so it contributes
   # nothing here; those models fall back to the derived default below.
   maxOutputTokensLookup =
     let
@@ -296,7 +296,7 @@ let
 
   # Fallback output budget for models that declare none: a quarter of the
   # context window, capped at 64k. This is the SAME formula
-  # modules/myconfig.ai/services.litellm.nix uses for its generated
+  # modules/myconfig.ai.llmops/services.litellm.nix uses for its generated
   # `litellm_params.max_tokens`, so a model resolved through either path
   # ends up with a consistent budget.
   deriveMaxOutputTokens = contextWindow: lib.min (contextWindow / 4) 65536;
@@ -388,7 +388,7 @@ let
       models = modelNames;
       inherit contextWindowLookup;
     }
-  ) osconfig.myconfig.ai.localModels;
+  ) osconfig.myconfig.ai.llmops.localModels;
 
   # `host` may be a wildcard (e.g. "0.0.0.0") for external exposure;
   # rewrite to localhost for in-host clients.
@@ -433,7 +433,7 @@ let
     # `model_list` contains one entry per DEPLOYMENT; a model group
     # with several deployments (e.g. a tng.nix pool like "GLM-5.3"
     # served by trustedtokens + skainet, or a plain alias emitted twice
-    # by modules/myconfig.ai/services.litellm.nix) repeats the same
+    # by modules/myconfig.ai.llmops/services.litellm.nix) repeats the same
     # `model_name`. Deduplicate so pi registers each model once.
     models = lib.unique (lib.map (m: m.model_name) osconfig.services.litellm.settings.model_list);
     inherit contextWindowLookup;

@@ -113,7 +113,7 @@ Sources: `../../fns/bubblewrap-app.nix`, `../../fns/bubblewrap-simple-app.nix`,
 
 | Axis | `bwrap-jail` | `bwrap-simple` | `nono` | `qemu` | `gvisor` | `microvm` | `mysbx` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Enable option | implicit with the agent modules | implicit | `myconfig.ai.nono-agent-sandbox.enable`, `mkDefault true` under `myconfig.ai.enable` | implicit with `pi`/`herdr` | `myconfig.ai.gvisor-agent-sandbox.enable`, default off | `myconfig.ai.microvm.enable`, default off | `myconfig.ai.mysbx.enable`, default off |
+| Enable option | implicit with the agent modules | implicit | `myconfig.ai.dev.nono-agent-sandbox.enable`, `mkDefault true` under `myconfig.ai.dev.enable` | implicit with `pi`/`herdr` | `myconfig.ai.dev.gvisor-agent-sandbox.enable`, default off | `myconfig.ai.dev.microvm.enable`, default off | `myconfig.ai.dev.mysbx.enable`, default off |
 | Enabled on | every AI host | every AI host | every AI host | every AI host | `f13` | `f13` | `f13` |
 | Written spec | module comments | none | module comments | `agent-qemu-pi.README.md` | `docs/spec.md` (authoritative) | 9 docs incl. architecture + security model | `docs/design/{cli,config}.md` (draft) |
 | Automated tests | eval only | eval only | eval only | eval only | cargo tests + executed CLI stub harness + completion check, in `nix flake check` | `tests/microvm.nix` + eval assertions | cargo tests over `tests/assets/{valid,invalid}` (config parsing only) |

@@ -5,10 +5,11 @@
   ...
 }:
 let
-  # `myconfig.ai.localModels` is NOT a dev-tooling option (it stays under
-  # `myconfig.ai`, see ../../myconfig.ai/myconfig.localModels.nix), so this
-  # binding intentionally reads the umbrella attrset.
-  cfg = config.myconfig.ai;
+  # `myconfig.ai.llmops.localModels` is NOT a dev-tooling option (it is
+  # defined by the llmops tree, see
+  # ../../myconfig.ai.llmops/myconfig.ai.llmops.localModels.nix), so this
+  # binding intentionally reads the llmops attrset.
+  cfg = config.myconfig.ai.llmops;
   generateModelConfig =
     model:
     let

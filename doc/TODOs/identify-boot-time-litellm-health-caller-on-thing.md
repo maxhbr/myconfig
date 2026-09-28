@@ -26,8 +26,8 @@ the `llama-cpp-33657` container. Root cause chain:
 health-probe on-demand local model backends", on `master`, branch
 `thing-litellm-fix` merged it earlier):
 
-- `modules/myconfig.ai/services.litellm.nix` +
-  `modules/myconfig.ai/litellm.proxy.nix`: every local/forwarded
+- `modules/myconfig.ai.llmops/services.litellm.nix` +
+  `modules/myconfig.ai.llmops/litellm.proxy.nix`: every local/forwarded
   deployment now carries
   `model_info.disable_background_health_check = true`, and
   `general_settings` sets
