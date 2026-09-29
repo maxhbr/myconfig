@@ -76,15 +76,16 @@ sudo_keepalive_stop() {
 #
 # Only the `sudo` invocations are privileged: this script keeps running as
 # the invoking user, and the refresh loop is a background job that does
-# nothing but extend the existing timestamp.
+# nothing but extend the existing timestamp. If priming fails, the run
+# continues without the keep-alive and the deploy prompts for the password.
 sudo_keepalive_start() {
     if [[ $EUID -eq 0 || -n $SUDO_KEEPALIVE_PID ]]; then
         return 0
     fi
     log_step "priming sudo credentials for the deploy at the end of this run"
     if ! sudo -v; then
-        log_error "could not obtain sudo credentials"
-        exit 1
+        log_warning "could not obtain sudo credentials, continuing without keep-alive; the deploy will ask for the password"
+        return 0
     fi
     local parent=$$
     while kill -0 "$parent" 2>/dev/null; do
