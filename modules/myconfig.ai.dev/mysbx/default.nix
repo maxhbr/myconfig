@@ -590,7 +590,7 @@ in
       # a Nix-built OCI image — the same image mechanism the
       # standalone gvisor tier uses
       # (../../sandboxes/myconfig.ai.gvisor-agent-sandbox/). The pins below are what
-      # `mysbx gvisor-load-image` loads and what
+      # `mysbx podman-load-image` loads and what
       # `backend = "podman-gvisor"` runs (MYSBX_GVISOR_TARBALL /
       # MYSBX_GVISOR_IMAGE / MYSBX_GVISOR_IMAGE_ID in ./nix/mysbx.nix).
       image = mkOption {
@@ -611,7 +611,7 @@ in
           pinned into the wrapper together with its reference and
           expected image ID. `null` pins nothing: `backend =
           "podman-gvisor"` is a refused run and
-          `mysbx gvisor-load-image` a usage error instead of both
+          `mysbx podman-load-image` a usage error instead of both
           inventing a `localhost/…` reference no registry serves.
 
           Defaults to the image of the gvisor tier module when that is

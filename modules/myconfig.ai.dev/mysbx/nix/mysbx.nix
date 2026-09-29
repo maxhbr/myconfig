@@ -210,9 +210,9 @@
   # absent one, so callers may pass a gated attrset unfiltered.
   muxEntries ? { },
   # The gVisor agent OCI image of the podman-gvisor backend
-  # (../docs/gvisor-load-image.md, bd myconfig-6di.1): `null` pins
+  # (../docs/podman-load-image.md, bd myconfig-6di.1): `null` pins
   # nothing — `backend = "podman-gvisor"` is a refused run and
-  # `mysbx gvisor-load-image` a usage error, never an invented
+  # `mysbx podman-load-image` a usage error, never an invented
   # `localhost/…` reference pulled from a registry that does not
   # exist (bd myconfig-xrt). The module layer defaults this to the
   # gvisor tier's effective image (same build the `agent-gvisor`
@@ -233,7 +233,7 @@
   # actually loaded.
   gvisorShell ? null,
   # The podman network spec of the podman-gvisor backend
-  # (`MYSBX_GVISOR_PASTA_SPEC`, ../docs/gvisor-load-image.md): a
+  # (`MYSBX_GVISOR_PASTA_SPEC`, ../docs/podman-load-image.md): a
   # `pasta:--map-guest-addr,<address>` spec that makes the host's
   # LiteLLM forwarder reachable from inside the container, the same
   # spec the gvisor tier bakes as `AGENT_GVISOR_NETWORK`. `null`
@@ -585,7 +585,7 @@ let
   # at build time — the same mechanism as the gvisor tier's
   # `agent-gvisor-image-id` derivation in
   # ../../sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/load-image.nix).
-  # `podman` runs the reference; `gvisor-load-image` compares IDs to
+  # `podman` runs the reference; `podman-load-image` compares IDs to
   # detect a stale build under the same tag. All three are LAZY — a
   # `null` gvisorImage must not force `imageName` on null.
   #

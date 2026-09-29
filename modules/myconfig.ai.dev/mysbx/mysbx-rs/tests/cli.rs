@@ -984,8 +984,8 @@ fn the_backend_flag_is_rejected_by_every_verb() {
         (vec!["--backend", "bubblewrap", "version"], "version"),
         (vec!["--backend", "bubblewrap", "help"], "help"),
         (
-            vec!["--backend", "bubblewrap", "gvisor-load-image"],
-            "gvisor-load-image",
+            vec!["--backend", "bubblewrap", "podman-load-image"],
+            "podman-load-image",
         ),
         (vec!["--backend", "bubblewrap", "gui"], "gui"),
     ] {
@@ -7221,43 +7221,43 @@ fn status_dry_run_prints_the_same_output() {
     assert_eq!(plain, dry, "--dry-run is a plain print");
 }
 
-// Tests for the `gvisor-load-image` subcommand
+// Tests for the `podman-load-image` subcommand
 #[test]
-fn gvisor_load_image_help_shows_usage() {
+fn podman_load_image_help_shows_usage() {
     // The --help flag prints usage and exits 0
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-help", &[]);
-    let (code, stdout, stderr) = run_binary_with(&inv, &["gvisor-load-image", "--help"]);
+    let (inv, _, _) = fixture_user_backend("podman-load-image-help", &[]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["podman-load-image", "--help"]);
     assert_eq!(code, 0, "stderr: {stderr}");
     assert!(stdout.contains("Usage:"), "stdout: {stdout}");
-    assert!(stdout.contains("gvisor-load-image"), "stdout: {stdout}");
+    assert!(stdout.contains("podman-load-image"), "stdout: {stdout}");
     assert!(stdout.contains("--force"), "stdout: {stdout}");
     assert!(stdout.contains("--test"), "stdout: {stdout}");
     assert!(stdout.contains("--image"), "stdout: {stdout}");
 }
 
 #[test]
-fn gvisor_load_image_unknown_option_is_usage_error() {
+fn podman_load_image_unknown_option_is_usage_error() {
     // Unknown options are usage errors (exit 2)
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-unknown", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["gvisor-load-image", "--unknown"]);
+    let (inv, _, _) = fixture_user_backend("podman-load-image-unknown", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["podman-load-image", "--unknown"]);
     assert_eq!(code, 2, "stderr: {stderr}");
     assert!(stderr.contains("unknown option"), "stderr: {stderr}");
 }
 
 #[test]
-fn gvisor_load_image_repeats_flag_is_usage_error() {
+fn podman_load_image_repeats_flag_is_usage_error() {
     // Repeated flags are usage errors
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-repeat", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["gvisor-load-image", "--force", "--force"]);
+    let (inv, _, _) = fixture_user_backend("podman-load-image-repeat", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["podman-load-image", "--force", "--force"]);
     assert_eq!(code, 2, "stderr: {stderr}");
     assert!(stderr.contains("repeated flag"), "stderr: {stderr}");
 }
 
 #[test]
-fn gvisor_load_image_verbose_is_refused() {
+fn podman_load_image_verbose_is_refused() {
     // --verbose is refused (no sandbox is started)
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-verbose", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["--verbose", "gvisor-load-image"]);
+    let (inv, _, _) = fixture_user_backend("podman-load-image-verbose", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--verbose", "podman-load-image"]);
     assert_eq!(code, 2, "stderr: {stderr}");
     assert!(
         stderr.contains("--verbose is not valid"),
@@ -7266,10 +7266,10 @@ fn gvisor_load_image_verbose_is_refused() {
 }
 
 #[test]
-fn gvisor_load_image_dry_run_is_refused() {
+fn podman_load_image_dry_run_is_refused() {
     // --dry-run is refused (no sandbox is started)
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-dry", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run", "gvisor-load-image"]);
+    let (inv, _, _) = fixture_user_backend("podman-load-image-dry", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run", "podman-load-image"]);
     assert_eq!(code, 2, "stderr: {stderr}");
     assert!(
         stderr.contains("--dry-run is not valid"),
@@ -7278,10 +7278,10 @@ fn gvisor_load_image_dry_run_is_refused() {
 }
 
 #[test]
-fn gvisor_load_image_image_requires_value() {
+fn podman_load_image_image_requires_value() {
     // --image without a value is a usage error
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-image-val", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["gvisor-load-image", "--image"]);
+    let (inv, _, _) = fixture_user_backend("podman-load-image-image-val", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["podman-load-image", "--image"]);
     assert_eq!(code, 2, "stderr: {stderr}");
     assert!(
         stderr.contains("--image requires a value"),
@@ -7290,15 +7290,15 @@ fn gvisor_load_image_image_requires_value() {
 }
 
 #[test]
-fn gvisor_load_image_with_image_ref() {
+fn podman_load_image_with_image_ref() {
     // A bare reference with no tarball pin is a REFUSED load now
     // (exit 2): no registry serves the Nix-built image, so the old
     // `podman pull` fallback could only fail against a registry named
     // `localhost` (bd myconfig-xrt).
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-ref", &[]);
+    let (inv, _, _) = fixture_user_backend("podman-load-image-ref", &[]);
     let (code, _, stderr) = run_binary_with(
         &inv,
-        &["gvisor-load-image", "--image", "localhost/test:latest"],
+        &["podman-load-image", "--image", "localhost/test:latest"],
     );
     assert_eq!(code, 2);
     assert!(
@@ -7308,11 +7308,11 @@ fn gvisor_load_image_with_image_ref() {
 }
 
 #[test]
-fn gvisor_load_image_without_any_pin_is_usage_error() {
+fn podman_load_image_without_any_pin_is_usage_error() {
     // No --image, no MYSBX_GVISOR_* pins: a usage error, never an
     // invented default reference (bd myconfig-xrt).
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-unpinned", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["gvisor-load-image"]);
+    let (inv, _, _) = fixture_user_backend("podman-load-image-unpinned", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["podman-load-image"]);
     assert_eq!(code, 2);
     assert!(stderr.contains("no image configured"), "stderr: {stderr}");
 }
@@ -7539,43 +7539,74 @@ fn podman_gvisor_multiplexer_without_image_entry_is_refused() {
 }
 
 #[test]
-fn gvisor_load_image_rejects_session_flag() {
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-session", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["--session", "test", "gvisor-load-image"]);
+fn podman_load_image_rejects_session_flag() {
+    let (inv, _, _) = fixture_user_backend("podman-load-image-session", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--session", "test", "podman-load-image"]);
     assert_eq!(code, 2);
-    assert!(stderr.contains("--session is not valid with `gvisor-load-image"));
+    assert!(stderr.contains("--session is not valid with `podman-load-image"));
 }
 
 #[test]
-fn gvisor_load_image_rejects_result_flag() {
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-result", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["--result", "gvisor-load-image"]);
+fn podman_load_image_rejects_result_flag() {
+    let (inv, _, _) = fixture_user_backend("podman-load-image-result", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--result", "podman-load-image"]);
     assert_eq!(code, 2);
-    assert!(stderr.contains("--result is not valid with `gvisor-load-image"));
+    assert!(stderr.contains("--result is not valid with `podman-load-image"));
 }
 
 #[test]
-fn gvisor_load_image_rejects_timeout_flag() {
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-timeout", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["--timeout", "5", "gvisor-load-image"]);
+fn podman_load_image_rejects_timeout_flag() {
+    let (inv, _, _) = fixture_user_backend("podman-load-image-timeout", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--timeout", "5", "podman-load-image"]);
     assert_eq!(code, 2);
-    assert!(stderr.contains("--timeout is not valid with `gvisor-load-image"));
+    assert!(stderr.contains("--timeout is not valid with `podman-load-image"));
 }
 
 #[test]
-fn gvisor_load_image_rejects_ro_flag() {
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-ro", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["--ro", "/tmp", "gvisor-load-image"]);
+fn podman_load_image_rejects_ro_flag() {
+    let (inv, _, _) = fixture_user_backend("podman-load-image-ro", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--ro", "/tmp", "podman-load-image"]);
     assert_eq!(code, 2);
-    assert!(stderr.contains("--ro is not valid with `gvisor-load-image"));
+    assert!(stderr.contains("--ro is not valid with `podman-load-image"));
 }
 
 #[test]
-fn gvisor_load_image_rejects_rw_flag() {
-    let (inv, _, _) = fixture_user_backend("gvisor-load-image-rw", &[]);
-    let (code, _, stderr) = run_binary_with(&inv, &["--rw", "/tmp", "gvisor-load-image"]);
+fn podman_load_image_rejects_rw_flag() {
+    let (inv, _, _) = fixture_user_backend("podman-load-image-rw", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--rw", "/tmp", "podman-load-image"]);
     assert_eq!(code, 2);
-    assert!(stderr.contains("--rw is not valid with `gvisor-load-image"));
+    assert!(stderr.contains("--rw is not valid with `podman-load-image"));
+}
+
+#[test]
+fn gvisor_load_image_alias_deprecated_notice() {
+    // The hidden alias dispatches to the same implementation with a
+    // one-line deprecation notice on stderr.
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-alias", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["gvisor-load-image"]);
+    assert_eq!(code, 2);
+    assert!(
+        stderr.contains("gvisor-load-image is deprecated; use podman-load-image"),
+        "stderr: {stderr}"
+    );
+    // the alias refusal still points at the same failure as the new name
+    assert!(stderr.contains("no image configured"), "stderr: {stderr}");
+}
+
+#[test]
+fn gvisor_load_image_alias_rejects_flags_with_notice() {
+    // The global flags are refused on the alias too, after the notice.
+    let (inv, _, _) = fixture_user_backend("gvisor-load-image-alias-dry", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run", "gvisor-load-image"]);
+    assert_eq!(code, 2);
+    assert!(
+        stderr.contains("gvisor-load-image is deprecated; use podman-load-image"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("--dry-run is not valid with `gvisor-load-image`"),
+        "stderr: {stderr}"
+    );
 }
 // ---- the nono backend (backends.md D1: bubblewrap with nono inside) ---------
 

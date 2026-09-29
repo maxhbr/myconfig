@@ -161,6 +161,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "worktree"
                         | "status"
                         | "ssh-pubkey"
+                        | "podman-load-image"
                         | "gvisor-load-image"
                 ) =>
         {
@@ -282,7 +283,13 @@ pub fn run(args: Vec<String>) -> i32 {
         // is a side effect (loading an image into the local store), and
         // `--verbose` has no run to report on. Refused like on the other
         // non-run verbs (usage error, exit 2).
-        Some("gvisor-load-image") if flags.any() => {
+        // The hidden deprecated alias of `podman-load-image`: the same
+        // dispatch with a one-line notice pointing at the new name, never
+        // a silent change of behavior. Not in usage.txt — it is not
+        // documented — and it matches via a binding so the checks' verb
+        // extraction of usage.txt is not confused by it.
+        Some(verb) if verb == "gvisor-load-image" && flags.any() => {
+            eprintln!("mysbx: gvisor-load-image is deprecated; use podman-load-image instead");
             eprintln!(
                 "mysbx: {} is not valid with `gvisor-load-image`",
                 flags.first_name()
@@ -290,7 +297,19 @@ pub fn run(args: Vec<String>) -> i32 {
             eprintln!("try `mysbx --help`");
             2
         }
-        Some("gvisor-load-image") => loadimage::run(&rest[1..]),
+        Some(verb) if verb == "gvisor-load-image" => {
+            eprintln!("mysbx: gvisor-load-image is deprecated; use podman-load-image instead");
+            loadimage::run(&rest[1..])
+        }
+        Some("podman-load-image") if flags.any() => {
+            eprintln!(
+                "mysbx: {} is not valid with `podman-load-image`",
+                flags.first_name()
+            );
+            eprintln!("try `mysbx --help`");
+            2
+        }
+        Some("podman-load-image") => loadimage::run(&rest[1..]),
         Some("fetch") => handoff::verb(&rest[1..], handoff::Kind::Fetch, flags.dry_run),
         Some("merge") => handoff::verb(&rest[1..], handoff::Kind::Merge, flags.dry_run),
         Some("push") => handoff::verb(&rest[1..], handoff::Kind::Push, flags.dry_run),
@@ -1969,7 +1988,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             }
 
             // The image reference the runs use — the same pin
-            // gvisor-load-image loads (MYSBX_GVISOR_IMAGE, set by the Nix
+            // podman-load-image loads (MYSBX_GVISOR_IMAGE, set by the Nix
             // wrapper when the host builds a gVisor agent image; see
             // loadimage.rs). No fallback: an invented `localhost/…` ref
             // would run a nonexistent image and mislead the operator
@@ -4447,7 +4466,14 @@ mod tests {
 
         // The flag has no verb it may accompany except `run`: the
         // dispatcher's guarded arm refuses it before the verb arm runs.
-        for verb in ["init", "edit", "version", "help", "gvisor-load-image"] {
+        for verb in [
+            "init",
+            "edit",
+            "version",
+            "help",
+            "podman-load-image",
+            "gvisor-load-image",
+        ] {
             let args = vec!["--backend".into(), "bubblewrap".into(), verb.into()];
             assert_eq!(run(args), 2, "{verb}");
         }

@@ -115,10 +115,10 @@ function __mysbx_in_init
     contains -- init (__mysbx_tokens)
 end
 
-function __mysbx_in_gvisor_load_image
+function __mysbx_in_podman_load_image
     __mysbx_past_dd
     and return 1
-    contains -- gvisor-load-image (__mysbx_tokens)
+    contains -- podman-load-image (__mysbx_tokens)
 end
 
 # After `merge NAME` (usage.txt): the strategy flags need the NAME,
@@ -322,7 +322,7 @@ complete -c mysbx -f -n '__mysbx_no_verb' -a session -d 'The session group: list
 complete -c mysbx -f -n '__mysbx_no_verb' -a worktree -d 'The worktree group: list | diff | hunk'
 complete -c mysbx -f -n '__mysbx_no_verb' -a status -d 'The one-command overview: init state, effective config, sessions, worktrees'
 complete -c mysbx -f -n '__mysbx_no_verb' -a ssh-pubkey -d 'Print the sandbox ssh keypair\'s public key (GitHub deploy key / gitolite keydir value)'
-complete -c mysbx -f -n '__mysbx_no_verb' -a gvisor-load-image -d 'Load the gVisor agent container image into Podman (--force, --test, --image <ref>)'
+complete -c mysbx -f -n '__mysbx_no_verb' -a podman-load-image -d 'Load the agent container image into Podman (--force, --test, --image <ref>)'
 
 # The session sub-verbs (workspace.md D7 — a closed group, not an open
 # tree).
@@ -380,12 +380,12 @@ complete -c mysbx -f -n '__mysbx_merge_named' -a '--' -d 'Everything after is gi
 # unmerged-work refusal).
 complete -c mysbx -n '__mysbx_in_destroy' -l force -d 'Destroy even when the session branch holds unmerged work'
 
-# `gvisor-load-image [--force|--test|--image <ref>]` (usage.txt): the
+# `podman-load-image [--force|--test|--image <ref>]` (usage.txt): the
 # flags of the Podman image verb, scoped to it like `session destroy`'s
 # --force is scoped to its verb.
-complete -c mysbx -n '__mysbx_in_gvisor_load_image' -l force -d 'Reload the image unconditionally'
-complete -c mysbx -n '__mysbx_in_gvisor_load_image' -l test -d 'Report the state without loading (exit 0 only when the loaded image is current)'
-complete -c mysbx -n '__mysbx_in_gvisor_load_image' -l image -x -d 'Image reference to load (overrides $MYSBX_GVISOR_IMAGE; the pinned tarball is still loaded)'
+complete -c mysbx -n '__mysbx_in_podman_load_image' -l force -d 'Reload the image unconditionally'
+complete -c mysbx -n '__mysbx_in_podman_load_image' -l test -d 'Report the state without loading (exit 0 only when the loaded image is current)'
+complete -c mysbx -n '__mysbx_in_podman_load_image' -l image -x -d 'Image reference to load (overrides $MYSBX_GVISOR_IMAGE; the pinned tarball is still loaded)'
 
 # The NAME position of the handoff verbs and of `session destroy` /
 # `session hunk`: the existing sessions of the registry (a new NAME is

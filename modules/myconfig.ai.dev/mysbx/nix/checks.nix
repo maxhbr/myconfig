@@ -636,7 +636,7 @@ in
         # verb-tail flags documented only inside the command
         # descriptions (`init --approve-git-dirs`,
         # `merge --no-ff|--ff|--squash`, `session destroy --force`,
-        # `gvisor-load-image --force|--test|--image`) — extracted,
+        # `podman-load-image --force|--test|--image`) — extracted,
         # like the verbs above
         opts=$(grep -oE -- '--[a-z][a-z-]*' "$usage" | sed 's/^--//' | sort -u)
         for opt in $opts; do

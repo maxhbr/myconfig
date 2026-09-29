@@ -1,7 +1,8 @@
 // Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! The `mysbx gvisor-load-image` subcommand: loads the gVisor agent
-//! container image into the caller's Podman store.
+//! The `mysbx podman-load-image` subcommand: loads the agent
+//! container image into the caller's Podman store — the image BOTH
+//! podman backends (`podman-gvisor` and `podman-krun`) run.
 //!
 //! This is a Rust reimplementation of the Nix-built
 //! `agent-gvisor-load-image` script, integrated into the mysbx CLI.
@@ -30,7 +31,7 @@
 //!
 //! ```bash
 //! # Check if image needs updating
-//! $ mysbx gvisor-load-image --test
+//! $ mysbx podman-load-image --test
 //! ## image:    /nix/store/...-agent-dev.tar.gz
 //! ## ref:      localhost/agent-dev:latest
 //! ## expected: sha256:abc123...
@@ -38,7 +39,7 @@
 //! ## state:    current
 //!
 //! # Load if needed
-//! $ mysbx gvisor-load-image
+//! $ mysbx podman-load-image
 //! ## image:    /nix/store/...-agent-dev.tar.gz
 //! ## ref:      localhost/agent-dev:latest
 //! ## expected: sha256:...
@@ -52,9 +53,11 @@ use std::process::Command;
 
 /// Usage text for the subcommand.
 const USAGE: &str = "\
-Usage: mysbx gvisor-load-image [--force|--test|--image <ref>|--help]
+Usage: mysbx podman-load-image [--force|--test|--image <ref>|--help]
 
-Loads the gVisor agent container image into the caller's Podman store.
+Loads the agent container image — the one BOTH podman backends
+(`podman-gvisor` and `podman-krun`) run — into the caller's Podman
+store.
 Without options it loads the image when it is missing or when the loaded
 one is a different build than the current artifact.
 
@@ -290,7 +293,7 @@ fn tarball_repo_tag(tarball_path: &str) -> Option<String> {
     Some(tag.to_string())
 }
 
-/// Run the gvisor-load-image subcommand.
+/// Run the podman-load-image subcommand.
 pub fn run(args: &[String]) -> i32 {
     let mut force = false;
     let mut test_mode = false;
@@ -301,7 +304,7 @@ pub fn run(args: &[String]) -> i32 {
         match args[i].as_str() {
             "--force" => {
                 if force {
-                    eprintln!("mysbx gvisor-load-image: repeated flag: --force");
+                    eprintln!("mysbx podman-load-image: repeated flag: --force");
                     eprintln!("{}", USAGE);
                     return 2;
                 }
@@ -309,7 +312,7 @@ pub fn run(args: &[String]) -> i32 {
             }
             "--test" => {
                 if test_mode {
-                    eprintln!("mysbx gvisor-load-image: repeated flag: --test");
+                    eprintln!("mysbx podman-load-image: repeated flag: --test");
                     eprintln!("{}", USAGE);
                     return 2;
                 }
@@ -317,12 +320,12 @@ pub fn run(args: &[String]) -> i32 {
             }
             "--image" => {
                 if image_override.is_some() {
-                    eprintln!("mysbx gvisor-load-image: repeated flag: --image");
+                    eprintln!("mysbx podman-load-image: repeated flag: --image");
                     eprintln!("{}", USAGE);
                     return 2;
                 }
                 if i + 1 >= args.len() {
-                    eprintln!("mysbx gvisor-load-image: --image requires a value");
+                    eprintln!("mysbx podman-load-image: --image requires a value");
                     eprintln!("  or set MYSBX_GVISOR_IMAGE (see --help)");
                     eprintln!("{}", USAGE);
                     return 2;
@@ -335,7 +338,7 @@ pub fn run(args: &[String]) -> i32 {
                 return 0;
             }
             other => {
-                eprintln!("mysbx gvisor-load-image: unknown option: {}", other);
+                eprintln!("mysbx podman-load-image: unknown option: {}", other);
                 eprintln!("{}", USAGE);
                 return 2;
             }
@@ -352,7 +355,7 @@ pub fn run(args: &[String]) -> i32 {
     let ref_name = match image_override.or_else(|| env_nonempty("MYSBX_GVISOR_IMAGE")) {
         Some(r) => r,
         None => {
-            eprintln!("mysbx gvisor-load-image: no image configured");
+            eprintln!("mysbx podman-load-image: no image configured");
             eprintln!(
                 "  the Nix wrapper pins MYSBX_GVISOR_TARBALL / _IMAGE / _IMAGE_ID \
                  when the host builds a gVisor agent image"
@@ -370,7 +373,7 @@ pub fn run(args: &[String]) -> i32 {
     // image never has.
     let tarball_path = tarball.as_deref().unwrap_or(&ref_name);
     if !Path::new(tarball_path).exists() {
-        eprintln!("mysbx gvisor-load-image: no image tarball to load");
+        eprintln!("mysbx podman-load-image: no image tarball to load");
         eprintln!(
             "  MYSBX_GVISOR_TARBALL is not set and {ref_name} is not a file; \
              pulling from a registry is not supported for the Nix-built \
@@ -405,7 +408,7 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("{} {} as {}", action, check.image, check.ref_name);
 
         if let Err(e) = load_image_from_tarball(tarball_path, &ref_name) {
-            eprintln!("mysbx gvisor-load-image: {}", e);
+            eprintln!("mysbx podman-load-image: {}", e);
             return 70; // Infrastructure error
         }
 
@@ -417,7 +420,7 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("{}", after_check.report());
 
         if after_check.state != ImageState::Current {
-            eprintln!("mysbx gvisor-load-image: load did not result in expected image");
+            eprintln!("mysbx podman-load-image: load did not result in expected image");
             return 70; // Infrastructure error
         }
     } else {
