@@ -203,7 +203,7 @@ wrapper, `nix/browser.nix`) goes on the bwrap/nono `PATH` through
 | `microvm` | host-side workmux `microvm-<agent>` panes. `agent-run herdr` in the guest | `microvm/workmux.nix`, `agents.nix` |
 | `mysbx/bubblewrap` | `multiplexer = tmux \| workmux \| herdr \| aoe \| orca \| none`. The socket is in `/mysbx-home/.mysbx-tmux`. `--multiplexer` sets it for one run. The generated user layer defaults to `workmux` | `config.md` D16/D17, `cli.md` D14 |
 | `mysbx/nono` | the same except `orca`. `--allow-unix-socket-dir-bind` + pathname AF_UNIX mediation (`backends.md` D1) | bd myconfig-6di.4.5, bd myconfig-peo (workmux sidebar, in progress) |
-| `mysbx/podman-gvisor`, `mysbx/podman-krun` | refused: no in-image entry (`MultiplexerUnavailable`). `orca` refused separately (bd myconfig-2m8) | `podman_gvisor.rs`, bd myconfig-3y2 |
+| `mysbx/podman-gvisor`, `mysbx/podman-krun` | refused: no in-image entry (`MultiplexerUnavailable`). `orca` refused separately (bd myconfig-2m8) | `podman_gvisor.rs`. Not planned: bd myconfig-3y2 closed, the multiplexer is a config choice |
 
 ## 13. Startup cost
 
@@ -259,7 +259,6 @@ arguments to the agent.
 | public egress without the host LAN / private ranges | `microvm` (every profile) | bd myconfig-fvi |
 | resource limits as config, and any limit on bwrap/nono | `microvm` `resourceClasses`, `qemu` `vcpu`/`mem` | bd myconfig-91j |
 | unattended / detached runs, attach to a running sandbox | `gvisor` `run --detach` + `shell`, `microvm` `submit` | bd myconfig-dys |
-| multiplexer sessions on the podman backends | `gvisor` (herdr `defaultCommand`) | bd myconfig-3y2 |
 | writable nix store on `podman-gvisor` | `gvisor` `nix.enable` / `--nix` | bd myconfig-9mh |
 | waypipe on `podman-krun` | — (no old tier has a display). Parity with the other mysbx backends | bd myconfig-ef6 |
 | state in clone sessions | `gvisor` per-session home, `microvm` `--persist-agent-state` | bd myconfig-9co |
