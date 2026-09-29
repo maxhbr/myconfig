@@ -231,9 +231,9 @@ in
       # carrying nothing but the provider's `baseURL` replaces that one
       # key and leaves the rest of the mounted configuration in place.
       #
-      # `gvisor.env` reaches that backend ALONE / the bubblewrap backend
+      # `podman.env` reaches that backend ALONE / the bubblewrap backend
       # shares the host network namespace, where the baked URL is right.
-      gvisor.env = lib.mkIf osconfig.myconfig.ai.dev.litellm-forwarder.enable {
+      podman.env = lib.mkIf osconfig.myconfig.ai.dev.litellm-forwarder.enable {
         OPENCODE_CONFIG_CONTENT = builtins.toJSON {
           provider."${osconfig.networking.hostName}-litellm".options.baseURL =
             osconfig.myconfig.ai.dev.litellm-forwarder.endpoint;

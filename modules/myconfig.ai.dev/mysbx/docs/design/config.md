@@ -1100,8 +1100,8 @@ On myconfig hosts the value is generated:
 `myconfig.ai.dev.mysbx.config.display` (`../../default.nix`) writes it
 into the user layer and defaults to `"off"`; the module pins waypipe
 when the host opts in (`display.package = pkgs.waypipe;`), threads it
-into the image of the podman-gvisor backend (`gvisor.waypipe` — the
-same store path, baked in via `gvisor.imagePackages`), and adds it to
+into the image of the podman-gvisor backend (`podman.waypipe` — the
+same store path, baked in via `podman.imagePackages`), and adds it to
 the sandbox `PATH` via `extraTools` so a payload can inspect the
 channel.
 

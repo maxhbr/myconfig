@@ -95,7 +95,7 @@
       pkgs.netavark
       # Host-side gVisor (runsc): mysbx registers runsc in
       # containers.conf by its CURRENT store path
-      # (modules/myconfig.ai.dev/mysbx/gvisor.nix, `runtimes.runsc`), and
+      # (modules/myconfig.ai.dev/mysbx/podman.nix, `runtimes.runsc`), and
       # a pin bump changes that path — a container created under the
       # old one then leaves podman erroring "runtime … is in use by a
       # container, but is not available" on every `podman ps`. A

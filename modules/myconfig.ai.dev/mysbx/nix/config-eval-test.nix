@@ -50,7 +50,7 @@ let
     extraModules:
     (lib.nixosSystem {
       inherit system;
-      # What the flake passes every host (../gvisor.nix reads `myconfig.user`).
+      # What the flake passes every host (../podman.nix reads `myconfig.user`).
       specialArgs.myconfig.user = "mhuber";
       modules = [
         inputs.home.nixosModules.home-manager
@@ -248,7 +248,7 @@ let
     ];
     # The nested-podman provisioning of the krun backend (bd
     # myconfig-6di.5.8): enabling it folds `krun.nestedPodman.packages`
-    # into `gvisor.imagePackages` — the shared-image seam. Evaluated
+    # into `podman.imagePackages` — the shared-image seam. Evaluated
     # gates (not TOML bytes — these are package lists): on = the podman
     # closure and the guest conf tree are IN; off = neither is.
     krunNestedOn = generated [
@@ -320,8 +320,8 @@ let
   # checked here like the assertions above.
   gvisorPinGate =
     let
-      gvisorOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.gvisor;
-      on = gvisorOf [
+      podmanOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.podman;
+      on = podmanOf [
         {
           myconfig.ai.dev.litellm-forwarder = {
             enable = true;
@@ -331,7 +331,7 @@ let
           };
         }
       ];
-      off = gvisorOf [ { } ];
+      off = podmanOf [ { } ];
     in
     if on.pastaSpec != "pasta:--map-guest-addr,10.99.0.1" then
       throw "mysbx generated-config test: the pasta spec does not map the forwarder address (got ${toString on.pastaSpec})"
@@ -366,7 +366,7 @@ let
   # The nested-podman provisioning gate (bd myconfig-6di.5.8): the
   # option default must fold the guest tree (the podman wrapper,
   # carrying podman's closure, + the conf) into
-  # `gvisor.imagePackages` when enabled, and fold NOTHING
+  # `podman.imagePackages` when enabled, and fold NOTHING
   # in when disabled — a gvisor-only host must not pull a podman
   # closure. Evaluated on the same module eval as the scenarios, so
   # the assertions fire at check-build time without ever building the
@@ -376,34 +376,34 @@ let
       on =
         (evaluated [
           { myconfig.ai.dev.mysbx.krun.nestedPodman.enable = true; }
-        ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
-      off = (evaluated [ ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
+        ]).myconfig.ai.dev.mysbx.podman.imagePackages;
+      off = (evaluated [ ]).myconfig.ai.dev.mysbx.podman.imagePackages;
       # pkgs.podman must NOT be listed next to the guest tree: its
       # bin/podman could silently shadow the storage wrapper.
       hasPodman = pkgs.lib.any (p: p.pname or "" == "podman");
       hasGuestConf = pkgs.lib.any (p: p.name or "" == "mysbx-krun-guest-conf");
     in
     if !(hasGuestConf on) then
-      throw "mysbx generated-config test: krun.nestedPodman.enable did not fold the guest tree (podman wrapper + conf) into gvisor.imagePackages"
+      throw "mysbx generated-config test: krun.nestedPodman.enable did not fold the guest tree (podman wrapper + conf) into podman.imagePackages"
     else if hasPodman on then
       throw "mysbx generated-config test: pkgs.podman is listed next to the guest tree — its bin/podman would shadow the storage wrapper"
     else if (hasPodman off || hasGuestConf off) then
-      throw "mysbx generated-config test: a disabled krun.nestedPodman leaked podman or the guest tree into gvisor.imagePackages"
+      throw "mysbx generated-config test: a disabled krun.nestedPodman leaked podman or the guest tree into podman.imagePackages"
     else
       "ok";
   # The guest nix provisioning (bd myconfig-pz6): `krun.nix.enable`
-  # folds the wrapper tree into `gvisor.imagePackages`, with the host's
+  # folds the wrapper tree into `podman.imagePackages`, with the host's
   # caches in its settings; disabled, nothing is folded in.
   krunNixGate =
     let
       onCfg = (evaluated [ { myconfig.ai.dev.mysbx.krun.nix.enable = true; } ]).myconfig.ai.dev.mysbx;
-      off = (evaluated [ ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
+      off = (evaluated [ ]).myconfig.ai.dev.mysbx.podman.imagePackages;
       hasGuestNix = pkgs.lib.any (p: p.name or "" == "mysbx-krun-guest-nix");
     in
-    if !(hasGuestNix onCfg.gvisor.imagePackages) then
-      throw "mysbx generated-config test: krun.nix.enable did not fold the guest nix wrappers into gvisor.imagePackages"
+    if !(hasGuestNix onCfg.podman.imagePackages) then
+      throw "mysbx generated-config test: krun.nix.enable did not fold the guest nix wrappers into podman.imagePackages"
     else if hasGuestNix off then
-      throw "mysbx generated-config test: a disabled krun.nix leaked the guest nix wrappers into gvisor.imagePackages"
+      throw "mysbx generated-config test: a disabled krun.nix leaked the guest nix wrappers into podman.imagePackages"
     else if !(pkgs.lib.hasInfix "substituters = " onCfg.krun.nix.settings) then
       throw "mysbx generated-config test: krun.nix.settings does not mirror the host substituters"
     else

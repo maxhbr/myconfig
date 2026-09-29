@@ -1,7 +1,7 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.dev.mysbx.gvisor — the container image of both podman
+# myconfig.ai.dev.mysbx.podman — the container image of both podman
 # backends (`podman-gvisor`, `podman-krun`) and the host setup they
 # need: rootless podman, the subordinate id ranges of the user, the
 # pinned gVisor (./nix/gvisor-overlay.nix) and its `runsc` runtime
@@ -55,16 +55,34 @@ let
     );
 in
 {
-  options.myconfig.ai.dev.mysbx.gvisor = with lib; {
+  imports =
+    map
+      (
+        name:
+        lib.mkRenamedOptionModule
+          [ "myconfig" "ai" "dev" "mysbx" "gvisor" name ]
+          [ "myconfig" "ai" "dev" "mysbx" "podman" name ]
+      )
+      [
+        "image"
+        "extraImagePackages"
+        "imagePackages"
+        "shell"
+        "waypipe"
+        "pastaSpec"
+        "env"
+      ];
+
+  options.myconfig.ai.dev.mysbx.podman = with lib; {
     image = mkOption {
       type = types.nullOr types.package;
       default = pkgs.callPackage ./nix/agent-image.nix {
-        extraPackages = cfg.gvisor.extraImagePackages;
+        extraPackages = cfg.podman.extraImagePackages;
         includeNixDB = cfg.krun.nix.enable;
       };
       defaultText = literalExpression ''
         pkgs.callPackage ./nix/agent-image.nix {
-          extraPackages = cfg.gvisor.extraImagePackages;
+          extraPackages = cfg.podman.extraImagePackages;
           includeNixDB = cfg.krun.nix.enable;
         }'';
       description = ''
@@ -85,12 +103,12 @@ in
         enabledAgentPackages
         ++ lib.optional (enabledAgentPackages != [ ]) pkgs.herdr
         ++ fishConveniencePackages
-        ++ cfg.gvisor.imagePackages
+        ++ cfg.podman.imagePackages
         ++ config.myconfig.ai.dev.sandboxTools.extraPackages;
       defaultText = literalExpression ''
         the enabled coding-agent CLIs (plus `pkgs.herdr` when there is
         one), the fish world of the home-manager user when fish is its
-        shell, `gvisor.imagePackages` and
+        shell, `podman.imagePackages` and
         `myconfig.ai.dev.sandboxTools.extraPackages`'';
       description = ''
         Packages baked into the default `image` on top of its base
@@ -104,7 +122,7 @@ in
   config = lib.mkMerge [
     # Not gated on `image`: that default reads `pkgs`.
     (lib.mkIf cfg.enable { nixpkgs.overlays = [ (import ./nix/gvisor-overlay.nix) ]; })
-    (lib.mkIf (cfg.enable && cfg.gvisor.image != null) {
+    (lib.mkIf (cfg.enable && cfg.podman.image != null) {
       virtualisation.podman.enable = true;
 
       # `--runtime=runsc` of the podman-gvisor backend; other containers

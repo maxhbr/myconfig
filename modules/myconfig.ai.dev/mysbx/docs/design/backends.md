@@ -557,7 +557,7 @@ Consequences, stated honestly:
   `krun.nix.enable`; live-validated on f13 by the probes of that
   bead). The argv is unchanged, and no host store is involved. The
   shared image carries guest-root `bin/nix*` wrappers
-  (`krun-guest-nix.nix`, through the `gvisor.imagePackages` seam).
+  (`krun-guest-nix.nix`, through the `podman.imagePackages` seam).
   The gvisor tier builds that image with its closure registered in
   `/nix/var/nix` (`imageIncludeNixDB`, dockerTools `includeNixDB`).
   On the first invocation in a VM, a wrapper does the following as

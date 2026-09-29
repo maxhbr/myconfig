@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # The agent container image of the mysbx podman backends, built with
-# dockerTools (see ../gvisor.nix).
+# dockerTools (see ../podman.nix).
 {
   lib,
   dockerTools,

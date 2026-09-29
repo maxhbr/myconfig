@@ -8,7 +8,7 @@ SPDX-License-Identifier: MIT
 Status: snapshot, checked against commit `5084135115` (2026-09-29).
 The `gvisor` tier (`agent-gvisor`) has since been removed (bd
 myconfig-e6z); its image, gVisor pin and podman host setup moved to
-[`../gvisor.nix`](../gvisor.nix). Its column is kept for the comparison.
+[`../podman.nix`](../podman.nix). Its column is kept for the comparison.
 
 This file compares `mysbx` with the sandbox tiers in
 [`../../sandboxes/`](../../sandboxes) and the bubblewrap jail wrappers in
@@ -85,7 +85,7 @@ run exits `70` before anything is created, including under `--dry-run`
 
 Model endpoint: bwrap/nono reach the loopback LiteLLM directly. The
 podman backends use `myconfig.ai.dev.litellm-forwarder` with
-`gvisor.pastaSpec` and `gvisor.env` (see `../README.md`, "Model endpoint
+`podman.pastaSpec` and `podman.env` (see `../README.md`, "Model endpoint
 under the podman-gvisor backend").
 
 ## 4. Credential handling
@@ -182,7 +182,7 @@ inside the sandbox.
 | `nono-tier`, `qemu`, `gvisor` | none (`qemu`: `graphics.enable = false`) | module sources |
 | `microvm` | none (graphics disabled) | `microvm/guest.nix` §5 |
 | `mysbx/bubblewrap`, `mysbx/nono` | `display = "waypipe"`: a per-run waypipe channel, guest socket `/mysbx-home/wayland-0`, the compositor socket never enters | `config.md` D18, bd myconfig-6di.4.6 |
-| `mysbx/podman-gvisor` | waypipe with the in-image binary (`gvisor.waypipe`) | `default.nix` |
+| `mysbx/podman-gvisor` | waypipe with the in-image binary (`podman.waypipe`) | `default.nix` |
 | `mysbx/podman-krun` | refused: AF_UNIX does not cross virtio-fs (bd myconfig-ef6) | `lib.rs` step 4d |
 
 `mysbx gui [ARG…]` opens a host alacritty window that runs the inner
@@ -225,7 +225,7 @@ No candidate has measured startup numbers in this repo. By mechanism:
 | `jail`, `mysbx/bubblewrap` | unprivileged user namespaces |
 | `nono-tier`, `mysbx/nono` | the above + a Landlock-capable kernel |
 | `qemu` | `/dev/kvm` for acceleration (TCG fallback). Rootless virtiofsd, no host config |
-| `gvisor`, `mysbx/podman-gvisor` | rootless podman, runsc registered in `containers.conf`, subuid/subgid (`autoSubUidGidRange`), all set by the gvisor tier module. `mysbx` also needs `gvisor.image` (null → refused) |
+| `gvisor`, `mysbx/podman-gvisor` | rootless podman, runsc registered in `containers.conf`, subuid/subgid (`autoSubUidGidRange`), all set by the gvisor tier module. `mysbx` also needs `podman.image` (null → refused) |
 | `mysbx/podman-krun` | the above image + rw `/dev/kvm` (the `kvm` group), checked before exec (`lib.rs` `kvm_available`). `--group-add=keep-groups` keeps the group for the VMM (bd myconfig-b5o) |
 | `microvm` | root for every command (`sudo agent-microvm`, `passwordlessControl`), root-owned `runtimeRoot`/`stateRoot`, bridge `agentbr0` + per-slot TAPs + firewall chains, a rebuild to change the pool |
 

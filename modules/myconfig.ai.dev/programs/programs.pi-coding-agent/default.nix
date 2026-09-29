@@ -1565,11 +1565,11 @@ in
       config.env.PI_JAIL_MARKER = "1";
       # The litellm endpoint of the podman-gvisor backend: pi's mounted
       # configuration names the host loopback, which inside a container
-      # is the container's own. `gvisor.env` reaches that backend ALONE
+      # is the container's own. `podman.env` reaches that backend ALONE
       # (the bubblewrap backend shares the host network namespace, where
       # the baked URL is right), and both generated extensions read the
       # variable (`litellmBaseUrlEnvVar` above).
-      gvisor.env = lib.mkIf osconfig.myconfig.ai.dev.litellm-forwarder.enable {
+      podman.env = lib.mkIf osconfig.myconfig.ai.dev.litellm-forwarder.enable {
         ${litellmBaseUrlEnvVar} = osconfig.myconfig.ai.dev.litellm-forwarder.endpoint;
       };
       # pi's session store, backed by `<repo>.mysbx/state/.pi/agent/sessions`

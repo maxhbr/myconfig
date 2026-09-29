@@ -2401,7 +2401,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 eprintln!(
                     "  {}",
                     if matches!(backend, "podman-gvisor" | "podman-krun") {
-                        "bake waypipe into the gvisor image (myconfig.ai.dev.mysbx.display.package threads it into gvisor.imagePackages)"
+                        "bake waypipe into the podman image (myconfig.ai.dev.mysbx.display.package threads it into podman.imagePackages)"
                     } else {
                         "install mysbx on a host that carries waypipe (myconfig.ai.dev.mysbx.display.package)"
                     }

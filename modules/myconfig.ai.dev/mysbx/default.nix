@@ -342,7 +342,7 @@ let
   // lib.optionalAttrs (cfg.config.listenPorts != [ ]) { listen-ports = cfg.config.listenPorts; };
 in
 {
-  imports = [ ./gvisor.nix ];
+  imports = [ ./podman.nix ];
 
   options.myconfig.ai.dev.mysbx = with lib; {
     enable = mkEnableOption "myconfig.ai.dev.mysbx";
@@ -359,17 +359,17 @@ in
         inherit (cfg) extraTools;
         inherit muxEntries;
         alacritty = cfg.terminal.package;
-        gvisorImage = cfg.gvisor.image;
-        gvisorShell = cfg.gvisor.shell;
-        gvisorPastaSpec = cfg.gvisor.pastaSpec;
-        gvisorEnv = cfg.gvisor.env;
+        podmanImage = cfg.podman.image;
+        podmanShell = cfg.podman.shell;
+        podmanPastaSpec = cfg.podman.pastaSpec;
+        podmanEnv = cfg.podman.env;
         krunRuntime = cfg.krun.runtime;
         waypipe = cfg.display.package;
-        gvisorWaypipe = cfg.gvisor.waypipe;
+        podmanWaypipe = cfg.podman.waypipe;
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; gvisorImage = cfg.gvisor.image; gvisorShell = cfg.gvisor.shell; gvisorPastaSpec = cfg.gvisor.pastaSpec; gvisorEnv = cfg.gvisor.env; krunRuntime = cfg.krun.runtime; waypipe = cfg.display.package; gvisorWaypipe = cfg.gvisor.waypipe; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -586,12 +586,12 @@ in
       };
     };
 
-    gvisor = {
+    podman = {
       # The interactive payload shell of the podman-gvisor backend (bd
       # myconfig-cew): the same shell the user logs into on the host,
-      # baked into the image by `gvisor.extraImagePackages` (which
+      # baked into the image by `podman.extraImagePackages` (which
       # carries the fish world of the home-manager user whenever
-      # `programs.fish.enable`, ./gvisor.nix). The image contains the
+      # `programs.fish.enable`, ./podman.nix). The image contains the
       # binary at its store path, and the read-only `~/.config/fish`
       # mount (`baselineMounts`) carries
       # the configuration, aliases and plugins — the image is
@@ -619,7 +619,7 @@ in
           the host). Pinned into the wrapper as `MYSBX_PODMAN_SHELL`.
 
           The default is the fish binary of the home-manager user's
-          `programs.fish.package` — `gvisor.image` bakes exactly
+          `programs.fish.package` — `podman.image` bakes exactly
           that package, so the store path resolves inside the
           container and the mounted `~/.config/fish` gives it the
           same aliases and configuration as on the host.
@@ -630,17 +630,17 @@ in
 
       # The waypipe binary INSIDE the podman-gvisor image (D18 on the
       # container backend): the store path of the waypipe binary as it
-      # exists inside `gvisorImage`, pinned as `MYSBX_PODMAN_WAYPIPE` for
+      # exists inside `podmanImage`, pinned as `MYSBX_PODMAN_WAYPIPE` for
       # the guest (server) end of the display channel. `null` pins
       # nothing — `display = "waypipe"` with `backend = "podman-gvisor"`
       # is a refused run.
       #
       # The default threads the SAME package as the host side: when
       # `display.package` is set, waypipe is baked into the image (via
-      # `gvisor.imagePackages`, which `gvisor.extraImagePackages`
+      # `podman.imagePackages`, which `podman.extraImagePackages`
       # folds in) and the store path —
       # `/nix/store/…-waypipe/bin/waypipe` — resolves inside the
-      # container exactly like `gvisor.shell` does.
+      # container exactly like `podman.shell` does.
       waypipe = mkOption {
         type = types.nullOr types.str;
         default = if cfg.display.package != null then "${cfg.display.package}/bin/waypipe" else null;
@@ -653,14 +653,14 @@ in
           container image, pinned into the wrapper as
           `MYSBX_PODMAN_WAYPIPE`. The default is the same package as
           the host side, baked into the image via
-          `gvisor.imagePackages`. `null` pins nothing: the selection
+          `podman.imagePackages`. `null` pins nothing: the selection
           is refused on this backend.
         '';
       };
 
       # The multiplexer binaries the podman-gvisor container needs (bd
       # myconfig-cew): the image is provisioned — via
-      # `gvisor.imagePackages`, which `gvisor.extraImagePackages`
+      # `podman.imagePackages`, which `podman.extraImagePackages`
       # folds into the image — with the binaries a PANE inside a container session
       # reaches for (`tmux` always, the selected multiplexer's own
       # tool). `buildEnv` links every baked package's `bin` into the
@@ -735,8 +735,8 @@ in
           ++ lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages;
         defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`";
         description = ''
-          Packages baked into the container image (`gvisor.image`, see
-          ./gvisor.nix) next to the enabled agents, the fish world and
+          Packages baked into the container image (`podman.image`, see
+          ./podman.nix) next to the enabled agents, the fish world and
           `sandboxTools` (bd myconfig-cew: the container must be
           provisioned with the tools). Defaults to the selected
           multiplexer's own tooling, so a pane inside a container
@@ -809,7 +809,7 @@ in
           description = ''
             The nested-podman userspace baked into the agent image
             when `krun.nestedPodman.enable` — consumed through
-            `gvisor.imagePackages` (the image is shared between both
+            `podman.imagePackages` (the image is shared between both
             podman backends, so provisioning rides the same seam):
             by default the guest tree of ./nix/krun-guest-conf.nix —
             `bin/podman`, a wrapper that puts podman's state on
@@ -834,7 +834,7 @@ in
           nix inside the podman-krun guest. Guest-root `bin/nix*` wrappers
           overlay the image's own /nix/store with a per-run upper layer on
           guest tmpfs, so new paths cost VM RAM (set `MYSBX_PODMAN_MEMORY`).
-          Also builds `gvisor.image` with a registered nix database
+          Also builds `podman.image` with a registered nix database
           (`includeNixDB`)'';
 
         package = mkOption {
@@ -878,7 +878,7 @@ in
           defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-nix.nix { nix = cfg.krun.nix.package; nixConfig = cfg.krun.nix.settings; }) ]";
           description = ''
             The guest nix userspace baked into the agent image when
-            `krun.nix.enable`, consumed through `gvisor.imagePackages`:
+            `krun.nix.enable`, consumed through `podman.imagePackages`:
             by default the wrapper tree of ./nix/krun-guest-nix.nix
             (high priority, so it wins the image's buildEnv collision
             against a plain `nix`).
@@ -1087,7 +1087,7 @@ in
 
               `waypipe` needs the wrapper pin, i.e. a non-null
               `display.package` (and, for the podman-gvisor backend, a
-              waypipe inside the image, `gvisor.waypipe`). An
+              waypipe inside the image, `podman.waypipe`). An
               unpinned selection is an evaluation error here, and a
               refused run for a sidecar that names one — never a
               silently headless sandbox.
@@ -1353,17 +1353,17 @@ in
         }
         {
           # Availability of the podman-gvisor image pin (D18): a
-          # `gvisor.waypipe` set by hand implies a waypipe package to
+          # `podman.waypipe` set by hand implies a waypipe package to
           # thread — the default derives the pin FROM the package, so
           # a non-null pin with a null package can only be a hand
           # override that would push nothing into the image and leave
           # the pinned path nonexistent inside it.
-          assertion = cfg.gvisor.waypipe == null || cfg.display.package != null;
+          assertion = cfg.podman.waypipe == null || cfg.display.package != null;
           message = ''
-            myconfig.ai.dev.mysbx.gvisor.waypipe is set, but
+            myconfig.ai.dev.mysbx.podman.waypipe is set, but
             myconfig.ai.dev.mysbx.display.package is null — the image
             needs the waypipe package baked in
-            (gvisor.imagePackages) for the pin to resolve inside it;
+            (podman.imagePackages) for the pin to resolve inside it;
             set display.package (pkgs.waypipe) too
             (docs/design/config.md D18).
           '';
@@ -1391,7 +1391,7 @@ in
     # The host side of model access for the podman-gvisor backend: the
     # shared port-scoped forwarder of
     # ../myconfig.ai.dev.litellm-forwarder.nix, whose advertised address
-    # `gvisor.pastaSpec` maps into the container. Gated on an image
+    # `podman.pastaSpec` maps into the container. Gated on an image
     # being available — that is what makes `backend = "podman-gvisor"`
     # runnable on this host at all — and on the host running LiteLLM.
     # The forwarder is socket-activated, so an enabled-but-unused one
@@ -1401,7 +1401,7 @@ in
     # network namespace, where `127.0.0.1:<litellm port>` is the proxy
     # itself.
     myconfig.ai.dev.litellm-forwarder.enable = lib.mkIf (
-      cfg.gvisor.image != null && config.services.litellm.enable
+      cfg.podman.image != null && config.services.litellm.enable
     ) true;
 
     # The endpoint as the CONTAINER sees it, for tools that read
@@ -1409,7 +1409,7 @@ in
     # configuration is a generated file add their own entries from their
     # own modules (../programs/programs.pi-coding-agent,
     # ../programs/programs.opencode).
-    myconfig.ai.dev.mysbx.gvisor.env = lib.mkIf litellmForwarder.enable {
+    myconfig.ai.dev.mysbx.podman.env = lib.mkIf litellmForwarder.enable {
       OPENAI_BASE_URL = litellmForwarder.endpoint;
     };
 

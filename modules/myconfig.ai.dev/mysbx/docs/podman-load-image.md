@@ -28,7 +28,7 @@ Without options, the command:
 
 ## Environment Variables
 
-The Nix wrapper pins all three when the host builds a gVisor agent image (`myconfig.ai.dev.mysbx.gvisor.image`, built by [`../gvisor.nix`](../gvisor.nix) unless set to `null`):
+The Nix wrapper pins all three when the host builds a gVisor agent image (`myconfig.ai.dev.mysbx.podman.image`, built by [`../podman.nix`](../podman.nix) unless set to `null`):
 
 - `MYSBX_PODMAN_TARBALL`: the docker-archive tarball to `podman load`
 - `MYSBX_PODMAN_IMAGE`: the image reference the runs use
@@ -59,7 +59,7 @@ back to the built-in defaults):
   (`myconfig.ai.dev.litellm-forwarder`): that translation is what makes
   the host's loopback-only proxy reachable from inside the container,
   which the container's own `127.0.0.1` is not. The option behind the
-  pin is `myconfig.ai.dev.mysbx.gvisor.pastaSpec`.
+  pin is `myconfig.ai.dev.mysbx.podman.pastaSpec`.
 
 `backend = "podman-krun"` (backends.md D2 — the same builder under a
 libkrun runtime) **runs** additionally read its OWN flag pins:
@@ -91,7 +91,7 @@ libkrun runtime) **runs** additionally read its OWN flag pins:
   LiteLLM forwarder here (`OPENAI_BASE_URL` plus the per-agent variables
   the generated pi/opencode configurations read), because that URL is
   correct only inside a container. The option behind the pin is
-  `myconfig.ai.dev.mysbx.gvisor.env`.
+  `myconfig.ai.dev.mysbx.podman.env`.
 - `MYSBX_PODMAN_SHELL` / `MYSBX_PODMAN_TOOLS_PATH`: the payload shell
   and the tool `PATH` — **paths inside the container image**, not
   host store paths (the backend mounts nothing from the host
