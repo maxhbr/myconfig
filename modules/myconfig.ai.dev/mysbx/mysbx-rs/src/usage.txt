@@ -8,6 +8,7 @@ Usage:
   mysbx session list | session destroy NAME [--force] | session hunk NAME
   mysbx worktree list | worktree diff NAME | worktree hunk NAME
   mysbx status
+  mysbx doctor [BACKEND...]
   mysbx ssh-pubkey
   mysbx [COMMAND]
 
@@ -168,6 +169,19 @@ Commands:
                 --verbose is refused (no run to report on) and
                 --dry-run is accepted as a plain print (the verb has
                 no side effects)
+  doctor [BACKEND...]
+                host health check of the configured backend, or of
+                each BACKEND named (bubblewrap, podman-gvisor, nono,
+                podman-krun): the runtime binaries the wrapper pins,
+                a throwaway sandbox start, the container image and
+                its freshness, /dev/kvm for podman-krun, the Landlock
+                ABI for nono, and the model endpoint through the
+                backend's network. One OK/WARN/FAIL line per check
+                with a fix hint and a final problem count. A FAIL
+                means the backend cannot start, a WARN does not stop
+                it (a stale image, an unreachable endpoint). Exits 1
+                when any check fails, 70 when the configuration
+                cannot be loaded. Global flags are refused
   ssh-pubkey   print the PUBLIC half of this repo's sandbox ssh
                 keypair (<repo>.mysbx/state/.ssh/id_ed25519.pub) —
                 the value to register as a GitHub deploy key or a

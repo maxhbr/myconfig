@@ -7231,6 +7231,324 @@ fn status_dry_run_prints_the_same_output() {
     assert_eq!(plain, dry, "--dry-run is a plain print");
 }
 
+// ---- the doctor verb ---------------------------------------------------------
+
+/// An executable `#!/bin/sh` stub at `dir/name` running `body`.
+fn doctor_stub(dir: &Path, name: &str, body: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(dir).unwrap();
+    let path = dir.join(name);
+    std::fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+/// `mysbx ARGS` with the pins the doctor reads cleared, then `envs` set.
+fn run_doctor(inv: &Invocation, args: &[&str], envs: &[(&str, &str)]) -> (i32, String, String) {
+    let mut cmd = spawn_with_args(inv, args);
+    for name in [
+        "MYSBX_FORWARD_ENV",
+        "MYSBX_KRUN_RUNTIME",
+        "MYSBX_KRUN_CGROUP_MANAGER",
+        "MYSBX_KRUN_RUNTIME_FLAGS",
+        "MYSBX_GVISOR_CGROUP_MANAGER",
+        "MYSBX_GVISOR_RUNTIME_FLAGS",
+    ] {
+        cmd.env_remove(name);
+    }
+    for name in mysbx::doctor::ENDPOINT_VARS {
+        cmd.env_remove(name);
+    }
+    for (key, value) in envs {
+        cmd.env(key, value);
+    }
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn doctor_passes_on_a_healthy_bubblewrap_host() {
+    let (inv, _, _) = fixture_user_backend("doctor-bwrap-ok", &[]);
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let record = base.join("bwrap-args");
+    let bwrap = doctor_stub(
+        &base.join("bin"),
+        "bwrap",
+        &format!("printf '%s\\n' \"$@\" > {}\n", record.display()),
+    );
+    let bwrap = bwrap.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[("MYSBX_BWRAP", bwrap.as_str()), ("MYSBX_SHELL", "/bin/sh")],
+    );
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(stdout.contains("== mysbx doctor =="), "{stdout}");
+    assert!(
+        stdout.contains("OK   backend: bubblewrap [configuration]"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("== bubblewrap =="), "{stdout}");
+    assert!(
+        stdout.contains(&format!("OK   bwrap binary: {bwrap}")),
+        "{stdout}"
+    );
+    assert!(stdout.contains("OK   startup probe: "), "{stdout}");
+    assert!(
+        stdout.contains("OK   model endpoint: not applicable"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("== other backends =="), "{stdout}");
+    assert!(stdout.contains("mysbx doctor: 0 problem(s)"), "{stdout}");
+    // The stub saw exactly the argv of the pure builder.
+    let recorded = std::fs::read_to_string(&record).unwrap();
+    let want = format!(
+        "{}\n",
+        mysbx::doctor::bwrap_probe_argv("/bin/sh").join("\n")
+    );
+    assert_eq!(recorded, want);
+}
+
+#[test]
+fn doctor_fails_when_bwrap_cannot_start_or_is_missing() {
+    let (inv, _, _) = fixture_user_backend("doctor-bwrap-broken", &[]);
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let bwrap = doctor_stub(
+        &base.join("bin"),
+        "bwrap",
+        "echo 'bwrap: setting up uid map: Permission denied' >&2\nexit 1\n",
+    );
+    let bwrap = bwrap.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[("MYSBX_BWRAP", bwrap.as_str()), ("MYSBX_SHELL", "/bin/sh")],
+    );
+    assert_eq!(code, 1, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains("FAIL startup probe: bwrap: setting up uid map: Permission denied — "),
+        "{stdout}"
+    );
+    assert!(stdout.contains("mysbx doctor: 1 problem(s)"), "{stdout}");
+
+    // A missing binary is its own FAIL, and the probe is not run.
+    let missing = base.join("bin").join("no-such-bwrap");
+    let missing = missing.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[("MYSBX_BWRAP", missing.as_str()), ("MYSBX_SHELL", "/bin/sh")],
+    );
+    assert_eq!(code, 1, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(stdout.contains("FAIL bwrap binary: "), "{stdout}");
+    assert!(
+        stdout.contains("MYSBX_BWRAP"),
+        "the hint names the pin: {stdout}"
+    );
+    assert!(!stdout.contains("startup probe"), "{stdout}");
+}
+
+#[test]
+fn doctor_without_a_backend_fails_unless_one_is_named() {
+    let (inv, _, _) = fixture("doctor-no-backend", &[]);
+    let (code, stdout, stderr) = run_doctor(&inv, &["doctor"], &[]);
+    assert_eq!(code, 1, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains("FAIL backend: no backend configured"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("== bubblewrap =="), "{stdout}");
+
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let bwrap = doctor_stub(&base.join("bin"), "bwrap", "exit 0\n");
+    let bwrap = bwrap.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_doctor(
+        &inv,
+        &["doctor", "bubblewrap"],
+        &[("MYSBX_BWRAP", bwrap.as_str()), ("MYSBX_SHELL", "/bin/sh")],
+    );
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains("OK   backend: bubblewrap [command line]"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn doctor_refuses_unknown_backends_and_global_flags() {
+    let (inv, _, _) = fixture_user_backend("doctor-usage", &[]);
+    let (code, _, stderr) = run_doctor(&inv, &["doctor", "bogus"], &[]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("unknown backend: bogus"), "{stderr}");
+    assert!(stderr.contains("usage: mysbx doctor"), "{stderr}");
+    for args in [
+        vec!["--dry-run", "doctor"],
+        vec!["--verbose", "doctor"],
+        vec!["--backend", "nono", "doctor"],
+        vec!["--session", "fix-1", "doctor"],
+    ] {
+        let (code, _, stderr) = run_doctor(&inv, &args, &[]);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("is not valid with `doctor`"),
+            "{args:?}: {stderr}"
+        );
+    }
+}
+
+/// A podman stub recording each invocation as one line (`$*`):
+/// `image inspect` prints `inspect_out` (or fails when it is `None`),
+/// the endpoint probe answers `HTTP 404`, everything else succeeds.
+fn podman_stub(base: &Path, record: &Path, inspect_out: Option<&str>) -> String {
+    let inspect = match inspect_out {
+        Some(out) => format!("echo '{out}'"),
+        None => "echo 'Error: no such image' >&2; exit 125".to_string(),
+    };
+    let body = format!(
+        "printf '%s\\n' \"$*\" >> {}\ncase \"$*\" in\n  'image inspect'*) {inspect} ;;\n  *curl*) printf 'HTTP 404' ;;\nesac\nexit 0\n",
+        record.display()
+    );
+    doctor_stub(&base.join("bin"), "podman", &body)
+        .to_string_lossy()
+        .into_owned()
+}
+
+const DOCTOR_IMAGE_ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+#[test]
+fn doctor_probes_a_healthy_podman_gvisor_host_with_the_exact_argv() {
+    let (inv, _, sidecar) = fixture("doctor-gvisor-ok", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let record = base.join("podman-args");
+    let loaded = format!("sha256:{DOCTOR_IMAGE_ID}");
+    let podman = podman_stub(&base, &record, Some(&loaded));
+    let spec = "pasta:--map-guest-addr,10.0.2.2";
+    let url = "http://10.0.2.2:4000/v1";
+    let pinned_env = format!("OPENAI_BASE_URL={url}");
+    let (code, stdout, stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[
+            ("MYSBX_PODMAN", podman.as_str()),
+            ("MYSBX_PODMAN_IMAGE", "localhost/agent:latest"),
+            ("MYSBX_PODMAN_IMAGE_ID", DOCTOR_IMAGE_ID),
+            ("MYSBX_GVISOR_CGROUP_MANAGER", "cgroupfs"),
+            ("MYSBX_GVISOR_RUNTIME_FLAGS", "ignore-cgroups"),
+            ("MYSBX_PODMAN_SHELL", "/bin/bash"),
+            ("MYSBX_PODMAN_ENV", pinned_env.as_str()),
+            ("MYSBX_PODMAN_PASTA_SPEC", spec),
+        ],
+    );
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(stdout.contains("== podman-gvisor =="), "{stdout}");
+    assert!(
+        stdout.contains("OK   OCI runtime: `runsc` is registered with podman"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("OK   image: localhost/agent:latest current (0123456789ab)"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("OK   startup probe: "), "{stdout}");
+    assert!(
+        stdout.contains(&format!(
+            "OK   model endpoint: OPENAI_BASE_URL={url} answered inside the container (HTTP 404)"
+        )),
+        "{stdout}"
+    );
+    assert!(stdout.contains("mysbx doctor: 0 problem(s)"), "{stdout}");
+
+    let rt = mysbx::doctor::podman_runtime(
+        false,
+        true,
+        None,
+        Some("cgroupfs"),
+        Some("ignore-cgroups"),
+    );
+    let probe = mysbx::doctor::PodmanProbe {
+        runtime: &rt,
+        krun: false,
+        image: "localhost/agent:latest",
+        shell: "/bin/bash",
+    };
+    let want = [
+        mysbx::doctor::runtime_info_argv("runsc").join(" "),
+        mysbx::doctor::image_id_argv("localhost/agent:latest").join(" "),
+        mysbx::doctor::startup_probe_argv(&probe).join(" "),
+        mysbx::doctor::endpoint_probe_argv(&probe, Some(spec), url).join(" "),
+    ];
+    let recorded = std::fs::read_to_string(&record).unwrap();
+    assert_eq!(recorded, format!("{}\n", want.join("\n")));
+}
+
+#[test]
+fn doctor_fails_on_an_absent_podman_image_and_warns_on_a_stale_one() {
+    let (inv, _, sidecar) = fixture("doctor-gvisor-image", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let record = base.join("podman-args");
+    let envs = |podman: &str| -> Vec<(String, String)> {
+        [
+            ("MYSBX_PODMAN", podman),
+            ("MYSBX_PODMAN_IMAGE", "localhost/agent:latest"),
+            ("MYSBX_PODMAN_IMAGE_ID", DOCTOR_IMAGE_ID),
+            ("MYSBX_GVISOR_CGROUP_MANAGER", "cgroupfs"),
+            ("MYSBX_GVISOR_RUNTIME_FLAGS", "ignore-cgroups"),
+        ]
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+    };
+
+    let podman = podman_stub(&base, &record, None);
+    let owned = envs(&podman);
+    let pairs: Vec<(&str, &str)> = owned
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    let (code, stdout, stderr) = run_doctor(&inv, &["doctor"], &pairs);
+    assert_eq!(code, 1, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains(
+            "FAIL image: localhost/agent:latest is not in the podman store — run: mysbx podman-load-image"
+        ),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("startup probe"), "{stdout}");
+    let recorded = std::fs::read_to_string(&record).unwrap();
+    assert!(
+        !recorded.lines().any(|l| l.contains(" run --rm ")),
+        "no container is started without the image: {recorded}"
+    );
+
+    let _ = std::fs::remove_file(&record);
+    let podman = podman_stub(&base, &record, Some("sha256:ffffffffffffffffffff"));
+    let owned = envs(&podman);
+    let pairs: Vec<(&str, &str)> = owned
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    let (code, stdout, stderr) = run_doctor(&inv, &["doctor"], &pairs);
+    assert_eq!(
+        code,
+        0,
+        "a stale image still starts: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stdout.contains("WARN image: localhost/agent:latest is stale"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("mysbx doctor: 0 problem(s), 1 warning(s)"),
+        "{stdout}"
+    );
+}
+
 // Tests for the `podman-load-image` subcommand
 #[test]
 fn podman_load_image_help_shows_usage() {

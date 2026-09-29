@@ -115,6 +115,12 @@ function __mysbx_in_init
     contains -- init (__mysbx_tokens)
 end
 
+function __mysbx_in_doctor
+    __mysbx_past_dd
+    and return 1
+    contains -- doctor (__mysbx_tokens)
+end
+
 function __mysbx_in_podman_load_image
     __mysbx_past_dd
     and return 1
@@ -321,6 +327,7 @@ complete -c mysbx -f -n '__mysbx_no_verb' -a help -d 'Print this help'
 complete -c mysbx -f -n '__mysbx_no_verb' -a session -d 'The session group: list | destroy | hunk'
 complete -c mysbx -f -n '__mysbx_no_verb' -a worktree -d 'The worktree group: list | diff | hunk'
 complete -c mysbx -f -n '__mysbx_no_verb' -a status -d 'The one-command overview: init state, effective config, sessions, worktrees'
+complete -c mysbx -f -n '__mysbx_no_verb' -a doctor -d 'Host health check of the configured backend (or the named ones)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a ssh-pubkey -d 'Print the sandbox ssh keypair\'s public key (GitHub deploy key / gitolite keydir value)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a podman-load-image -d 'Load the agent container image into Podman (--force, --test, --image <ref>)'
 
@@ -386,6 +393,10 @@ complete -c mysbx -n '__mysbx_in_destroy' -l force -d 'Destroy even when the ses
 complete -c mysbx -n '__mysbx_in_podman_load_image' -l force -d 'Reload the image unconditionally'
 complete -c mysbx -n '__mysbx_in_podman_load_image' -l test -d 'Report the state without loading (exit 0 only when the loaded image is current)'
 complete -c mysbx -n '__mysbx_in_podman_load_image' -l image -x -d 'Image reference to load (overrides $MYSBX_PODMAN_IMAGE; the pinned tarball is still loaded)'
+
+# `doctor [BACKEND...]`: the backends to check instead of the
+# configured one.
+complete -c mysbx -f -n '__mysbx_in_doctor' -a 'bubblewrap podman-gvisor nono podman-krun' -d 'Backend to check'
 
 # The NAME position of the handoff verbs and of `session destroy` /
 # `session hunk`: the existing sessions of the registry (a new NAME is

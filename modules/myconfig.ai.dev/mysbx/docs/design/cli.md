@@ -71,7 +71,8 @@ session noun group's worktree sibling `worktree list` /
 ([worktree.md](./worktree.md) W1 — the second D3 exception: read-only
 inspection of the host's workmux worktrees in `<repo>__worktrees`,
 host-side, no sandbox started), the host-side overview verb `status`
-(D19), the host-side keypair verb `ssh-pubkey`
+(D19), the host health check `doctor [BACKEND...]` (D20), the
+host-side keypair verb `ssh-pubkey`
 ([config.md](./config.md) D22 — prints the public half of the sandbox's
 generated ssh keypair, generating it when enabled and missing), the
 global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
@@ -660,6 +661,52 @@ list verbs set the same precedent. The run-scoped flags
 (`--backend`, `--multiplexer`, `--session`, `--ro`, `--rw`,
 `--result`, `--timeout`) are refused by the dispatcher's shared
 rejection arm, which lists `status` among its verbs.
+
+### D20: `mysbx doctor` checks that the backend can start
+
+`mysbx doctor [BACKEND...]` is the host health check. `status` (D19)
+lists the configuration; `doctor` probes it. It checks the configured
+backend (the merged `backend` of the layers of the repo the cwd
+resolves to, or of the user layer alone outside a repo), or each
+BACKEND named on the command line. The positional list lets an
+operator check a backend before configuring it.
+
+**Checks per backend** (`src/doctor.rs`):
+
+| Backend | Checks |
+| --- | --- |
+| `bubblewrap` | the `MYSBX_BWRAP` and `MYSBX_SHELL` pins are executable, `user.max_user_namespaces` (warning only), a throwaway `bwrap --unshare-all … -- <shell> -c 'exit 0'`, the model endpoint by a host-side TCP connect (the sandbox shares the host network) |
+| `nono` | the bubblewrap checks, the `MYSBX_NONO` pin, the `MYSBX_NONO_PROFILE` file (when it is a path), the kernel Landlock ABI |
+| `podman-gvisor` | the `MYSBX_PODMAN` binary, runsc registered with podman (`podman --runtime=runsc info`), the `MYSBX_PODMAN_IMAGE` image in the store and its ID against `MYSBX_PODMAN_IMAGE_ID`, a throwaway `podman run --rm --pull=never --network none` with the run's runtime, runtime flags and cgroup manager, the model endpoint by `curl` inside a container on the run's network (`MYSBX_PODMAN_PASTA_SPEC`) |
+| `podman-krun` | the podman checks with the `MYSBX_KRUN_RUNTIME` pin (executable, `--version` lists `+LIBKRUN`), `/dev/kvm` rw access (`kvm_available`), and the probes with the krun annotation and `--group-add=keep-groups` |
+
+**Output.** Stdout, `== section ==` headers, one line per check:
+`OK`, `WARN` or `FAIL`, the check name, the detail and, for `WARN` and
+`FAIL`, a remediation hint. The last line counts problems and
+warnings. A `FAIL` means the backend cannot start (a missing binary,
+a failed probe, an absent image, no `/dev/kvm` access). A `WARN` does
+not stop a run (a stale image, an unreachable model endpoint). A
+component the host does not have on purpose — no endpoint configured,
+the network denied, a backend that is not configured — is an `OK`
+line that says "not applicable", never a `FAIL`. Probes that depend
+on a failed check are not run.
+
+**Exit codes.** `0` without a `FAIL`, `1` with at least one, `2` for a
+wrong command line (an unknown BACKEND), `70` when the configuration
+cannot be loaded. `1` follows `podman-load-image --test`: the verb
+reports a verdict, it is not a payload.
+
+**Flags.** Every global flag is refused: the probes start containers,
+so `--dry-run` cannot promise no side effects, and `--verbose` has no
+run to report on. `--backend` is refused like on every non-run verb;
+the positional BACKEND list is the doctor's own selection.
+
+**Pure probe argv.** The probe argv builders (`bwrap_probe_argv`,
+`startup_probe_argv`, `endpoint_probe_argv`, `runtime_info_argv`,
+`image_id_argv`) are pure, and the tests assert their exact output
+against stubbed `bwrap`/`podman` binaries. The podman runtime
+settings (`podman_runtime`) mirror the ones `sandbox` in `lib.rs`
+computes for a run.
 
 ## Non-goals
 

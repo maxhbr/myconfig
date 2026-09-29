@@ -226,17 +226,17 @@ No candidate has measured startup numbers in this repo. By mechanism:
 | `nono-tier`, `mysbx/nono` | the above + a Landlock-capable kernel |
 | `qemu` | `/dev/kvm` for acceleration (TCG fallback). Rootless virtiofsd, no host config |
 | `gvisor`, `mysbx/podman-gvisor` | rootless podman, runsc registered in `containers.conf`, subuid/subgid (`autoSubUidGidRange`), all set by the gvisor tier module. `mysbx` also needs `podman.image` (null → refused) |
-| `mysbx/podman-krun` | the above image + rw `/dev/kvm` (the `kvm` group), checked before exec (`lib.rs` `kvm_available`). `--group-add=keep-groups` keeps the group for the VMM (bd myconfig-b5o) |
+| `mysbx/podman-krun` | the above image + rw `/dev/kvm` (the `kvm` group), checked before exec (`lib.rs` `kvm_available`) and by `mysbx doctor`. `--group-add=keep-groups` keeps the group for the VMM (bd myconfig-b5o) |
 | `microvm` | root for every command (`sudo agent-microvm`, `passwordlessControl`), root-owned `runtimeRoot`/`stateRoot`, bridge `agentbr0` + per-slot TAPs + firewall chains, a rebuild to change the pool |
 
 ## 15. CLI and contract
 
 | Axis | `gvisor` | `microvm` | `mysbx` |
 | --- | --- | --- | --- |
-| Verbs | `start list status run shell logs stop merge fetch push destroy doctor` | `run stop destroy status doctor capabilities list dashboard ssh console submit cancel recover usage workspace-remove` | bare = enter, `run -- CMD`, `gui`, `init`, `edit`, `fetch merge push diff`, `session …`, `worktree …`, `status`, `ssh-pubkey`, `podman-load-image` (`mysbx-rs/src/usage.txt`) |
+| Verbs | `start list status run shell logs stop merge fetch push destroy doctor` | `run stop destroy status doctor capabilities list dashboard ssh console submit cancel recover usage workspace-remove` | bare = enter, `run -- CMD`, `gui`, `init`, `edit`, `fetch merge push diff`, `session …`, `worktree …`, `status`, `doctor`, `ssh-pubkey`, `podman-load-image` (`mysbx-rs/src/usage.txt`) |
 | Unattended | `run --detach` | `submit` + JSON result | `run --result` writes `result.json`, no detach (bd myconfig-dys) |
 | Exit codes | non-zero on failure | `0/1/124/130/70` | `0/1/2/70/124/130/143` (`cli.md` D8, D17) |
-| Health check | `doctor` | `doctor` | `status` (config only), `podman-load-image --test` (bd myconfig-iyz) |
+| Health check | `doctor` | `doctor` | `doctor [BACKEND...]`: binaries, startup probe, image freshness, `/dev/kvm`, Landlock ABI, model endpoint (`cli.md` D20, bd myconfig-iyz) |
 | Completion | fish | none | fish (`mysbx-rs/completions/mysbx.fish`) |
 
 The jail, nono-tier and qemu wrappers take no flags and pass their
@@ -262,7 +262,6 @@ arguments to the agent.
 | writable nix store on `podman-gvisor` | `gvisor` `nix.enable` / `--nix` | bd myconfig-9mh |
 | waypipe on `podman-krun` | — (no old tier has a display). Parity with the other mysbx backends | bd myconfig-ef6 |
 | state in clone sessions | `gvisor` per-session home, `microvm` `--persist-agent-state` | bd myconfig-9co |
-| one-command host health check | `gvisor` / `microvm` `doctor` | bd myconfig-iyz |
 | containers removed after the run | `gvisor` `destroy` | bd myconfig-che |
 | native QEMU VM backend | `qemu`, `microvm` | bd myconfig-6di.6 (deferred fallback) |
 

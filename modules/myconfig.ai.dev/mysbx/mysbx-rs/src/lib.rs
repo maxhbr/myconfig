@@ -26,6 +26,7 @@
 
 pub mod bwrap;
 pub mod config;
+pub mod doctor;
 pub mod handoff;
 pub mod loadimage;
 pub mod merge;
@@ -160,6 +161,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "session"
                         | "worktree"
                         | "status"
+                        | "doctor"
                         | "ssh-pubkey"
                         | "podman-load-image"
                         | "gvisor-load-image"
@@ -333,6 +335,9 @@ pub fn run(args: Vec<String>) -> i32 {
         }
         Some("init") => init(&rest[1..]),
         Some("edit") => edit(&rest[1..]),
+        // `doctor` probes the backends host-side; the run-scoped flags and
+        // `--dry-run`/`--verbose` are refused by the arms above.
+        Some("doctor") => doctor::run(&rest[1..]),
         Some(other) => {
             eprintln!("mysbx: unknown command: {other}");
             eprintln!("try `mysbx --help`");
@@ -4669,6 +4674,7 @@ mod tests {
             "edit",
             "version",
             "help",
+            "doctor",
             "podman-load-image",
             "gvisor-load-image",
         ] {
@@ -4992,6 +4998,7 @@ mod tests {
             "version",
             "help",
             "status",
+            "doctor",
             "--dry-run",
             "--verbose",
             "--multiplexer",

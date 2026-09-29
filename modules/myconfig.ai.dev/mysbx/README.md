@@ -198,6 +198,31 @@ $ mysbx --verbose --dry-run
 
 Note that `[env]` values are printed verbatim and may be secrets.
 
+## Host health check
+
+`mysbx doctor` checks that the configured backend can start on this
+host; `mysbx doctor podman-krun` checks a named backend instead. It
+prints one `OK`/`WARN`/`FAIL` line per check with a fix hint, then a
+problem count, and exits `1` when a check fails:
+
+```
+$ mysbx doctor
+== mysbx doctor ==
+OK   configuration: repo /path/to/the/repo (sidecar inited)
+OK   backend: podman-krun [configuration]
+== podman-krun ==
+OK   podman binary: /run/current-system/sw/bin/podman
+FAIL /dev/kvm: not readable+writable for this user — add the user to the `kvm` group (or enable the seat udev ACL) and log in again
+OK   OCI runtime: /nix/store/…-crun/bin/crun (crun with +LIBKRUN)
+OK   image: localhost/agent-dev:latest current (0123456789ab)
+== other backends ==
+OK   not checked: bubblewrap, podman-gvisor, nono (not configured; check one with: mysbx doctor <backend>)
+mysbx doctor: 1 problem(s), 0 warning(s)
+```
+
+The checks per backend are listed in
+[`cli.md` D20](./docs/design/cli.md).
+
 ## The sidecar directory
 The `config.toml` file in the sidecar defines
 
