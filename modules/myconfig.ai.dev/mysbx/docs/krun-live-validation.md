@@ -106,7 +106,8 @@ that is the fallback the guest conf would switch to.
 
 ### 2.3 Nix inside the guest (bd myconfig-pz6)
 
-Enable `myconfig.ai.dev.mysbx.krun.nix.enable`, rebuild, reload the
+With `myconfig.ai.dev.mysbx.krun.nix.enable` (on by default under
+`myconfig.ai.dev`), rebuild, reload the
 image, and run `MYSBX_GVISOR_MEMORY=8g mysbx`. Then, inside the sandbox
 (as guest root):
 
