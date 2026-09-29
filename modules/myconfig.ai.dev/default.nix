@@ -85,6 +85,7 @@ in
           enable = true;
           display.package = pkgs.waypipe;
           krun.nestedPodman.enable = lib.mkDefault config.virtualisation.podman.enable;
+          krun.nix.enable = lib.mkDefault true;
           browser.enable = true;
         };
         workmux.enable = lib.mkDefault (config.myconfig.dev.enable && config.programs.tmux.enable);

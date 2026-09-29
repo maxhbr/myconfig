@@ -21,6 +21,10 @@
 #                 `--runtime=<that path>` — the runtime swap is the only
 #                 argv difference, so the dry run doubles as the swap proof.
 #
+#   mysbx-krun-guest-nix-test
+#                 the guest nix wrappers of the podman-krun backend
+#                 (./krun-guest-nix.nix, docs/design/backends.md D2).
+#
 #   mysbx-completions
 #                 the fish tab completion shipped by the package
 #                 (../mysbx-rs/completions/mysbx.fish, installed by
@@ -180,6 +184,59 @@ in
         || fail "the subuid range for the guest-root user is missing"
       grep -q '^agent:100000:65536$' "${guestConf}/etc/subgid" \
         || fail "the subgid range for the guest-root user is missing"
+      touch $out
+    '';
+
+  # The guest nix tree (bd myconfig-pz6, docs/design/backends.md D2):
+  # every nix entry point is the guest-root wrapper, the setup script
+  # overlays the image store on guest tmpfs and copies the registered
+  # database, a failure is exit 125, and the non-root path passes
+  # through. The wrappers must also win the image's collision-ignoring
+  # buildEnv against a plain nix. The mount itself is live validation.
+  mysbx-krun-guest-nix-test =
+    let
+      guestNix = pkgs.callPackage ../nix/krun-guest-nix.nix {
+        nixConfig = "substituters = https://cache.example";
+      };
+      imageRootLike = pkgs.buildEnv {
+        name = "mysbx-krun-guest-nix-test-root";
+        paths = [
+          guestNix.nix
+          guestNix
+        ];
+        pathsToLink = [ "/bin" ];
+        ignoreCollisions = true;
+      };
+    in
+    pkgs.runCommand "mysbx-krun-guest-nix-test" { } ''
+      fail() {
+        echo "mysbx-krun-guest-nix-test: $*" >&2
+        exit 1
+      }
+      setup="${guestNix.setup}/bin/mysbx-krun-nix-setup"
+      for name in ${pkgs.lib.concatStringsSep " " guestNix.names}; do
+        w="${guestNix}/bin/$name"
+        [ -x "$w" ] || fail "bin/$name is missing"
+        grep -qF "$setup" "$w" || fail "bin/$name does not run the setup"
+        grep -qF 'exec ${guestNix.nix}/bin/'"$name"' "$@"' "$w" \
+          || fail "bin/$name does not exec the pinned nix entry point"
+        for v in NIX_REMOTE=local NIX_STATE_DIR NIX_LOG_DIR NIX_CACHE_HOME TMPDIR; do
+          grep -qF "export $v" "$w" || fail "bin/$name does not export $v"
+        done
+        grep -qF 'substituters = https://cache.example' "$w" \
+          || fail "bin/$name does not carry the configured nix settings"
+        [ "$(readlink -f "${imageRootLike}/bin/$name")" = "$(readlink -f "$w")" ] \
+          || fail "bin/$name loses the buildEnv collision against the plain nix"
+      done
+      [ ! -e "${guestNix}/bin/nix-daemon" ] || fail "the guest has no daemon; bin/nix-daemon must not be wrapped"
+      grep -qF 'lowerdir=/nix/store,upperdir=' "$setup" || fail "the setup does not overlay the image store"
+      grep -q 'mount -t tmpfs' "$setup" || fail "the setup must mount a guest tmpfs"
+      grep -qF 'cp -R /nix/var/nix' "$setup" || fail "the setup must copy (not overlay) the image database"
+      grep -qF '/nix/var/nix/db/db.sqlite' "$setup" || fail "the setup must require the registered database"
+      grep -q 'exit 125' "$setup" || fail "a failed mount must be an error, never a fallback"
+      [ "$(id -u)" -ne 0 ] || fail "the check expects a non-root build user"
+      "${guestNix}/bin/nix" --version | grep -q '^nix (Nix) ${guestNix.nix.version}$' \
+        || fail "the wrapper does not pass through to the pinned nix as non-root"
       touch $out
     '';
 

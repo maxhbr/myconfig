@@ -91,10 +91,15 @@ let
   image =
     if cfg.image == null then
       null
-    else if cfg.extraImagePackages == [ ] then
+    else if cfg.extraImagePackages == [ ] && !cfg.imageIncludeNixDB then
       cfg.image
     else
-      cfg.image.override { extraPackages = cfg.extraImagePackages; };
+      cfg.image.override (
+        {
+          extraPackages = cfg.extraImagePackages;
+        }
+        // lib.optionalAttrs cfg.imageIncludeNixDB { includeNixDB = true; }
+      );
 
   # In-sandbox `nix.conf`, baked into `agent-gvisor` as
   # AGENT_GVISOR_NIX_CONFIG and passed into `--nix` sessions as NIX_CONFIG
@@ -213,6 +218,20 @@ in
         Nix-built OCI image used as sandbox base. Set to `null` to manage
         images entirely outside this module (then no
         `agent-gvisor-load-image` is installed either).
+      '';
+    };
+
+    imageIncludeNixDB = mkOption {
+      type = types.bool;
+      default =
+        config.myconfig.ai.dev.mysbx.enable or false && config.myconfig.ai.dev.mysbx.krun.nix.enable;
+      defaultText = literalExpression "myconfig.ai.dev.mysbx.enable && myconfig.ai.dev.mysbx.krun.nix.enable";
+      description = ''
+        Build `image` with its store closure registered in a nix database
+        at /nix/var/nix (dockerTools `includeNixDB`). The mysbx
+        podman-krun guest nix needs it: its wrappers copy that database
+        and never replace the registered image paths. `--nix` sessions of
+        this tier keep their own state on the session home and ignore it.
       '';
     };
 

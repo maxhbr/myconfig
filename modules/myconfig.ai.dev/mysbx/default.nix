@@ -766,8 +766,9 @@ in
           # backends, so provisioning rides this seam — appended only
           # when the host opts in, a gvisor-only host pays no podman
           # closure.
-          ++ lib.optionals cfg.krun.nestedPodman.enable cfg.krun.nestedPodman.packages;
-        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` when `krun.nestedPodman.enable`";
+          ++ lib.optionals cfg.krun.nestedPodman.enable cfg.krun.nestedPodman.packages
+          ++ lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages;
+        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`";
         description = ''
           Packages the gvisor tier bakes into the container image on
           behalf of mysbx (bd myconfig-cew: the container must be
@@ -778,7 +779,8 @@ in
           userspace of the podman-krun backend when
           `krun.nestedPodman.enable` (bd myconfig-6di.5.8: the podman
           storage wrapper and its guest configuration tree, baked into
-          the shared image).
+          the shared image), and the guest nix wrappers when
+          `krun.nix.enable` (bd myconfig-pz6).
 
           Only takes effect while the gvisor tier module is enabled
           (`myconfig.ai.dev.gvisor-agent-sandbox.enable`): its
@@ -857,6 +859,67 @@ in
             Live validation of the nested run is bd
             myconfig-6di.5.7's runbook — the agent sandbox has no
             /dev/kvm, so nothing here is executed at check time.
+          '';
+        };
+      };
+
+      nix = {
+        # Nix inside the krun guest (bd myconfig-pz6, backends.md D2):
+        # guest-root wrappers self-overlay the image's own /nix/store
+        # with an upper layer on guest tmpfs, next to a tmpfs copy of
+        # the registered image database. See ./nix/krun-guest-nix.nix.
+        enable = mkEnableOption ''
+          nix inside the podman-krun guest. Guest-root `bin/nix*` wrappers
+          overlay the image's own /nix/store with a per-run upper layer on
+          guest tmpfs, so new paths cost VM RAM (set `MYSBX_GVISOR_MEMORY`).
+          Also makes the gvisor tier build the shared image with a
+          registered nix database (`includeNixDB`)'';
+
+        package = mkOption {
+          type = types.package;
+          default = config.nix.package;
+          defaultText = literalExpression "config.nix.package";
+          description = ''
+            The nix the guest wrappers exec. Defaults to the host's
+            `nix.package`, like the gvisor tier's `nix.package`.
+          '';
+        };
+
+        settings = mkOption {
+          type = types.lines;
+          default = lib.concatStringsSep "\n" (
+            lib.optional (config.nix.settings.substituters or [ ] != [ ]) (
+              "substituters = " + lib.concatStringsSep " " config.nix.settings.substituters
+            )
+            ++ lib.optional (config.nix.settings.trusted-public-keys or [ ] != [ ]) (
+              "trusted-public-keys = " + lib.concatStringsSep " " config.nix.settings.trusted-public-keys
+            )
+          );
+          defaultText = literalExpression "the host's `nix.settings.substituters` and `trusted-public-keys`";
+          description = ''
+            `nix.conf` lines the guest wrappers append to their fixed
+            defaults (`build-users-group =`, `sandbox = false`, the
+            experimental features) in `NIX_CONFIG`. Mirrors the host's
+            caches by default: the guest store is per-run, so every run
+            substitutes again.
+          '';
+        };
+
+        packages = mkOption {
+          type = types.listOf types.package;
+          default = [
+            (pkgs.callPackage ./nix/krun-guest-nix.nix {
+              nix = cfg.krun.nix.package;
+              nixConfig = cfg.krun.nix.settings;
+            })
+          ];
+          defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-nix.nix { nix = cfg.krun.nix.package; nixConfig = cfg.krun.nix.settings; }) ]";
+          description = ''
+            The guest nix userspace baked into the agent image when
+            `krun.nix.enable`, consumed through `gvisor.imagePackages`:
+            by default the wrapper tree of ./nix/krun-guest-nix.nix
+            (high priority, so it wins the image's buildEnv collision
+            against a plain `nix`).
           '';
         };
       };

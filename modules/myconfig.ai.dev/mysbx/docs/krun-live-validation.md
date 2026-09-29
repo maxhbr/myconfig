@@ -49,9 +49,6 @@ validates; a FAIL line quotes the decision document
 
 ## 2. The manual probes (the parts a script cannot see)
 
-Nix builds inside the guest are not part of the krun variant
-(`docs/design/backends.md` D2, *Dropped*).
-
 ### 2.1 Mounts and state-dirs over virtio-fs (bd myconfig-6di.5.4)
 
 ```bash
@@ -107,7 +104,29 @@ still works. If egress
 fails, record whether `podman run --network=pasta` works instead —
 that is the fallback the guest conf would switch to.
 
-### 2.3 Limits as VM annotations (bd myconfig-6di.5.6)
+### 2.3 Nix inside the guest (bd myconfig-pz6)
+
+With `myconfig.ai.dev.mysbx.krun.nix.enable` (on by default under
+`myconfig.ai.dev`), rebuild, reload the
+image, and run `MYSBX_GVISOR_MEMORY=8g mysbx`. Then, inside the sandbox
+(as guest root):
+
+```bash
+readlink -f /bin/nix             # the mysbx-krun-guest-nix wrapper
+nix store info                   # Store URL: local
+grep ' /nix/store ' /proc/mounts # overlay, lowerdir=/nix/store,upperdir=/run/mysbx-nix/upper
+nix path-info --all | wc -l      # the registered image closure
+nix build nixpkgs#hello --no-link --print-out-paths
+nix run nixpkgs#hello
+df -h /run/mysbx-nix
+```
+
+Verify: every command succeeds. Only paths missing from the image are
+fetched (for example, glibc is reused from the image). With the
+default 1024 MiB VM, the first nix call warns about the VM size. With
+`network = false`, `nix build` fails on the fetch.
+
+### 2.4 Limits as VM annotations (bd myconfig-6di.5.6)
 
 Set `MYSBX_GVISOR_CPUS`/`MYSBX_GVISOR_MEMORY` on the host (the
 wrapper pins), and inside the sandbox:
@@ -117,7 +136,7 @@ nproc                            # == the annotation's whole vCPUs
 grep MemTotal /proc/meminfo      # ~= the annotation's MiB
 ```
 
-### 2.4 DNS over TSI (bd myconfig-6di.5.5)
+### 2.5 DNS over TSI (bd myconfig-6di.5.5)
 
 ```bash
 getent hosts cache.nixos.org     # the VMM resolves from the netns

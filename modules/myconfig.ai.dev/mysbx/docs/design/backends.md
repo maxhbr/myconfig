@@ -553,15 +553,44 @@ Consequences, stated honestly:
   cannot write to a virtio-fs path it is given (e.g. `-v` of the
   workspace). Live validation is bd
   myconfig-6di.5.7's runbook (the agent sandbox has no /dev/kvm).
-- **Dropped: Nix builds inside the guest** (bd myconfig-6di.5.9,
-  myconfig-6di.5.10). The local-overlay design (ro host store as the
-  overlay's lower layer, upper on a `/nix` tmpfs) cannot boot: the
-  agent image is a Nix-built image whose `/bin` entries (bash, mount,
-  any entry script) resolve through the image's OWN `/nix/store`,
-  and a tmpfs at `/nix` hides it before anything can run. The krun
-  variant ships no Nix story; a redesign would have to keep the
-  image closure reachable throughout bootstrap and be live-validated
-  first.
+- **Opt-in: Nix inside the guest** (bd myconfig-pz6,
+  `krun.nix.enable`; live-validated on f13 by the probes of that
+  bead). The argv is unchanged, and no host store is involved. The
+  shared image carries guest-root `bin/nix*` wrappers
+  (`krun-guest-nix.nix`, through the `gvisor.imagePackages` seam).
+  The gvisor tier builds that image with its closure registered in
+  `/nix/var/nix` (`imageIncludeNixDB`, dockerTools `includeNixDB`).
+  On the first invocation in a VM, a wrapper does the following as
+  guest root:
+  - It mounts a guest tmpfs at `/run/mysbx-nix`.
+  - It COPIES the image database there.
+  - It mounts an overlayfs over `/nix/store`. The lower layer is the
+    image's OWN store, and the upper layer is on the tmpfs.
+
+  Nix then runs single-user: `NIX_REMOTE=local`, state, logs,
+  `NIX_CACHE_HOME` and `TMPDIR` on the tmpfs, and `NIX_CONFIG` with
+  `build-users-group =`, `sandbox = false` and the host-mirrored
+  caches. Nothing is mounted before boot, so the image closure
+  resolves throughout. That is the wall that stopped the earlier
+  host-store design. Consequences:
+  - Image paths are immutable. Overlay copy-up of a lower entry fails
+    because virtiofs has no fileattr support (`EOPNOTSUPP`, logged
+    as `failed to retrieve lower fileattr`). The registered database
+    keeps nix from replacing them, and `nix store optimise` cannot
+    work. GC is safe: the copied gcroots keep the image closure, and
+    only upper-layer paths are deleted.
+  - Nix state cannot live on virtio-fs. The server forwards chown
+    unchanged (EPERM), and libgit2 refuses the host-uid-owned home
+    cache.
+  - The store is per-run and costs VM RAM. The tmpfs takes up to half
+    the VM memory, and the 1024 MiB crun default is too small for
+    dev shells, so the wrapper warns below 4 GiB. Set
+    `MYSBX_GVISOR_MEMORY` (8g or more for `nix develop`). Every run
+    substitutes again.
+  - Builds run as guest root without nix's own sandbox, so the VM is
+    the boundary. `network = false` makes substitution and fetches
+    fail. As any other uid (podman-gvisor, agent-gvisor), the
+    wrappers exec nix untouched.
 - **Secondary: nesting other sandboxes** — no guest compatibility
   probes, no work beyond what nested podman needs.
 - **Out of scope: nono inside krun** — the stock libkrunfw kernel
@@ -602,6 +631,6 @@ needs a booting microVM is collected in one runbook,
 ../../nix/krun-live-validation.sh (boot, guest kernel, exit codes,
 live-repo edit, ro rootfs, network=false) and the manual probes
 the script cannot see (mounts/state-dirs/uid over virtio-fs,
-nested podman, the VM annotations as nproc/MemTotal, DNS over
+nested podman, guest nix, the VM annotations as nproc/MemTotal, DNS over
 TSI). The agent sandbox has no /dev/kvm — the runbook is the
 handoff.
