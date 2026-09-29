@@ -589,7 +589,7 @@ both sources: a config layer naming an unknown backend and
 adds `(from --backend)` so the operator knows which layer to fix.
 Nothing falls back silently, whichever way an unknown value arrives.
 A missing value, a repeated flag or the flag on a verb with no run —
-`init`, `edit`, `version`, `help`, `gvisor-load-image` — is a usage
+`init`, `edit`, `version`, `help`, `podman-load-image` — is a usage
 error (`2`, D8), the same "is not valid with ``<verb>``" refusal the
 other run-scoped flags get. `gui` passes its tail verbatim (D15), so
 `mysbx gui --backend podman-gvisor` reaches the inner run.

@@ -180,8 +180,9 @@ Commands:
                 Takes no nested verbs;
                 --verbose is refused and --dry-run prints what
                 would happen without generating anything
-  gvisor-load-image
-                load the gVisor agent container image into Podman;
+  podman-load-image
+                load the agent container image (the one both podman backends,
+                `podman-gvisor` and `podman-krun`, run) into Podman;
                 supports `--force`, `--test`, `--image <ref>`, `--help`
   version       print the version
   help          print this help

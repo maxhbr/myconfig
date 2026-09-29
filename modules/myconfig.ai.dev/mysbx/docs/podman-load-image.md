@@ -1,16 +1,18 @@
-# mysbx gvisor-load-image
+# mysbx podman-load-image
 
-Load the gVisor agent container image into the caller's Podman store.
+Load the agent container image into the caller's Podman store.
 
 ## Synopsis
 
 ```
-mysbx gvisor-load-image [--force|--test|--image <ref>|--help]
+mysbx podman-load-image [--force|--test|--image <ref>|--help]
 ```
 
 ## Description
 
-This command loads the gVisor agent container image that mysbx uses when configured with the `podman-gvisor` backend. It is integrated into the mysbx CLI for convenience, providing the same functionality as the Nix-built `agent-gvisor-load-image` helper.
+This command loads the agent container image that mysbx uses when configured with a podman backend (`podman-gvisor` or `podman-krun`). It is integrated into the mysbx CLI for convenience, providing the same functionality as the Nix-built `agent-gvisor-load-image` helper.
+
+The former name `mysbx gvisor-load-image` is kept as a hidden deprecated alias: it dispatches to this command and prints a deprecation notice pointing at `podman-load-image`.
 
 Without options, the command:
 1. Checks if the image is present in the local Podman store, comparing image IDs (config-blob digests) rather than tags
@@ -144,7 +146,7 @@ run under the gvisor tier or bwrap instead.
 
 Example:
 ```bash
-mysbx gvisor-load-image
+mysbx podman-load-image
 ```
 
 ### Explicit tarball path
@@ -152,7 +154,7 @@ mysbx gvisor-load-image
 A path to an existing file is accepted via `--image`:
 
 ```bash
-mysbx gvisor-load-image --image /nix/store/...-agent-dev.tar.gz
+mysbx podman-load-image --image /nix/store/...-agent-dev.tar.gz
 ```
 
 ## Exit Codes
@@ -167,7 +169,7 @@ mysbx gvisor-load-image --image /nix/store/...-agent-dev.tar.gz
 ### Check if image is loaded
 
 ```bash
-$ mysbx gvisor-load-image --test
+$ mysbx podman-load-image --test
 ## image:    /nix/store/...-agent-dev.tar.gz
 ## ref:      localhost/agent-dev:latest
 ## expected: sha256:abc123...
@@ -178,7 +180,7 @@ $ mysbx gvisor-load-image --test
 ### Load the image
 
 ```bash
-$ mysbx gvisor-load-image
+$ mysbx podman-load-image
 ## image:    /nix/store/...-agent-dev.tar.gz
 ## ref:      localhost/agent-dev:latest
 ## expected: sha256:abc123...
@@ -195,44 +197,44 @@ loading /nix/store/...-agent-dev.tar.gz as localhost/agent-dev:latest (this may 
 ### Force reload
 
 ```bash
-$ mysbx gvisor-load-image --force
+$ mysbx podman-load-image --force
 ```
 
 ### Use custom image reference
 
 ```bash
-$ MYSBX_GVISOR_IMAGE=localhost/my-agent:dev mysbx gvisor-load-image
+$ MYSBX_GVISOR_IMAGE=localhost/my-agent:dev mysbx podman-load-image
 ```
 
 ## Integration and Workflow
 
 ### When to Run
 
-The `gvisor-load-image` command should be run:
+The `podman-load-image` command should be run:
 
-1. **Before starting mysbx with the podman-gvisor backend**: The image must be loaded before mysbx can use it
-2. **After rebuilding the agent image**: When the gVisor agent image is rebuilt, run this command to update the local copy
+1. **Before starting mysbx with a podman backend**: The image must be loaded before mysbx can use it
+2. **After rebuilding the agent image**: When the agent image is rebuilt, run this command to update the local copy
 3. **As part of setup**: Include it in your development environment setup script
 
-### Integration with podman-gvisor Backend
+### Integration with the podman backends
 
-When mysbx is configured with `backend = "podman-gvisor"` in your sidecar config, it expects the gVisor agent image to be available in the local Podman store. This command ensures that image is present and up-to-date.
+When mysbx is configured with `backend = "podman-gvisor"` or `backend = "podman-krun"` in your sidecar config, it expects the agent image to be available in the local Podman store. This command ensures that image is present and up-to-date. Both backends run the SAME image — the container image is runtime-agnostic.
 
 The workflow is:
 1. Configure your sidecar: `backend = "podman-gvisor"`
-2. Load the image: `mysbx gvisor-load-image`
+2. Load the image: `mysbx podman-load-image`
 3. Run mysbx normally: `mysbx` or `mysbx run -- CMD...`
 
 ### Automatic vs Manual
 
-The command is **manual** — it is not run automatically by mysbx. This gives you explicit control over when images are loaded. However, failing to run it when the image is missing will cause mysbx to fail when trying to start the gVisor backend.
+The command is **manual** — it is not run automatically by mysbx. This gives you explicit control over when images are loaded. However, failing to run it when the image is missing will cause mysbx to fail when trying to start the podman backend.
 
 ### What Happens If You Skip This Step
 
-If you skip running `gvisor-load-image` and the image is not present:
-- mysbx will fail to start the gVisor backend
+If you skip running `podman-load-image` and the image is not present:
+- mysbx will fail to start the podman backend
 - You'll see an error from podman indicating the image is missing
-- Run `mysbx gvisor-load-image` to resolve the issue
+- Run `mysbx podman-load-image` to resolve the issue
 
 ## Implementation Notes
 
@@ -253,4 +255,4 @@ The command does not start a sandbox and therefore rejects global flags like `--
 - `mysbx --help`: Main CLI help
 - `agent-gvisor-load-image(1)`: The Nix-built helper (when available)
 - `podman-load(1)`: Podman image loading
-- `mysbx` backend configuration: Set `backend = "podman-gvisor"` in your sidecar config to use the gVisor backend
+- `mysbx` backend configuration: Set `backend = "podman-gvisor"` or `backend = "podman-krun"` in your sidecar config to use a podman backend

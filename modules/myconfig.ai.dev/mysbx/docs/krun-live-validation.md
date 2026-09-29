@@ -22,7 +22,7 @@ test -r /dev/kvm && test -w /dev/kvm
 
 # the backend is configured and the image is loaded
 mysbx --dry-run          # backend = "podman-krun" in the sidecar
-mysbx gvisor-load-image  # the shared agent image, once per rebuild
+mysbx podman-load-image  # the shared agent image, once per rebuild
 ```
 
 The probes below assume the repo is a git checkout with a sidecar
