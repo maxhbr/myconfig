@@ -3539,6 +3539,9 @@ fn podman_params() -> PodmanParams<'static> {
         // The git trust file is opt-in per run (bd myconfig-zj2); the
         // krun tests that exercise it pass their own.
         git_trust: None,
+        // A fixed synthetic run id keeps the container name in the
+        // goldens deterministic.
+        run_id: 4242,
         pids_limit: None,
         memory: None,
         cpus: None,
@@ -3932,11 +3935,19 @@ fn podman_no_run_no_host_store_paths_in_payload() {
     }
 }
 
+/// The value following `flag` in `argv`.
+fn argv_value<'a>(argv: &'a [String], flag: &str) -> &'a str {
+    argv.iter()
+        .zip(argv.iter().skip(1))
+        .find(|(a, _)| a.as_str() == flag)
+        .map(|(_, v)| v.as_str())
+        .unwrap_or_else(|| panic!("argv must carry {flag}"))
+}
+
 #[test]
 fn podman_container_name_is_unique_per_repo_path() {
     // The container name must differ between two repos that share a
-    // basename — `--replace` would otherwise silently kill the
-    // sibling session's container (bd myconfig-wao).
+    // basename (bd myconfig-wao).
     let argv = podman_run_argv(
         &podman_base(true),
         &synth_repo(),
@@ -3945,15 +3956,10 @@ fn podman_container_name_is_unique_per_repo_path() {
         &podman_params(),
     )
     .unwrap();
-    let name = argv
-        .iter()
-        .zip(argv.iter().skip(1))
-        .find(|(a, _)| a.as_str() == "--name")
-        .map(|(_, n)| n.as_str())
-        .expect("argv must carry --name");
+    let name = argv_value(&argv, "--name");
     assert_eq!(
-        name, "mysbx-repo-6e89dfc8f9",
-        "basename plus path hash, got {name:?}"
+        name, "mysbx-repo-6e89dfc8f9-4242",
+        "basename, path hash and run id, got {name:?}"
     );
     // A repo with the SAME basename but a different path gets a
     // DIFFERENT container name.
@@ -3971,14 +3977,37 @@ fn podman_container_name_is_unique_per_repo_path() {
         &podman_params(),
     )
     .unwrap();
-    let name2 = argv2
-        .iter()
-        .zip(argv2.iter().skip(1))
-        .find(|(a, _)| a.as_str() == "--name")
-        .map(|(_, n)| n.as_str())
-        .expect("argv must carry --name");
-    assert_eq!(name2, "mysbx-repo-d133a1ae6c");
+    let name2 = argv_value(&argv2, "--name");
+    assert_eq!(name2, "mysbx-repo-d133a1ae6c-4242");
     assert_ne!(name, name2, "same basename, different path: must differ");
+}
+
+#[test]
+fn podman_parallel_runs_in_one_checkout_get_distinct_containers() {
+    // Two runs in the SAME checkout must not share a container name —
+    // `--replace` would otherwise kill the running one (bd
+    // myconfig-cad). They share the repo label, and each container
+    // removes itself on exit.
+    let run = |run_id| {
+        podman_run_argv(
+            &podman_base(true),
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env(&[]),
+            &PodmanParams {
+                run_id,
+                ..podman_params()
+            },
+        )
+        .unwrap()
+    };
+    let (first, second) = (run(100), run(200));
+    assert_eq!(argv_value(&first, "--name"), "mysbx-repo-6e89dfc8f9-100");
+    assert_eq!(argv_value(&second, "--name"), "mysbx-repo-6e89dfc8f9-200");
+    for argv in [&first, &second] {
+        assert_eq!(argv_value(argv, "--label"), "mysbx.repo=6e89dfc8f9");
+        assert!(argv.iter().any(|a| a == "--rm"), "argv must carry --rm");
+    }
 }
 
 #[test]

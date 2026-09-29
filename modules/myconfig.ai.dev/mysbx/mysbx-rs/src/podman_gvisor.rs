@@ -37,7 +37,8 @@
 //!    returned argv is arguments-only, like bwrap's (`--clearenv`
 //!    first there), because lib.rs prepends the backend binary itself
 //!    via `Command::new(MYSBX_PODMAN)`.
-//! 1. container identity: `--replace`, `--name`, `--hostname`, `--userns=keep-id`
+//! 1. container identity: `--replace`, `--rm`, `--name` (unique per
+//!    run), `--label mysbx.repo=<id>`, `--hostname`, `--userns=keep-id`
 //!    — plus the `run.oci.handler=krun` activation annotation when
 //!    `Params::krun` (without it crun silently runs a plain container,
 //!    no VM)
@@ -423,6 +424,10 @@ pub struct Params<'a> {
     /// matches) and the bind would be an infrastructure mount the
     /// backend never promised.
     pub git_trust: Option<GitTrust>,
+    /// The id of this run (the mysbx pid in lib.rs), the suffix that
+    /// makes the container name unique per run, so parallel runs in
+    /// one checkout coexist (bd myconfig-cad).
+    pub run_id: u32,
     /// Resource limits from configuration.
     /// Using Cow to allow both borrowed (from env vars) and owned strings.
     pub pids_limit: Option<Cow<'a, str>>,
@@ -510,6 +515,9 @@ pub fn podman_run_argv(
 
     argv.push("run".into());
     argv.push("--replace".into());
+    // The container is per run: `--rm` removes it when the payload
+    // exits, so finished runs leave nothing behind.
+    argv.push("--rm".into());
     // Stdio wiring (bd myconfig-jho): the run execs podman with
     // mysbx's own stdio, so the container must be attached the same
     // way — `--interactive` forwards stdin (without it podman closes
@@ -526,23 +534,27 @@ pub fn podman_run_argv(
     }
 
     // 1. container identity
-    // Container name: the repo basename PLUS a short hash of the repo
-    // root path. The basename alone collides between different repos
-    // that share one — and `--replace` then silently kills the sibling
-    // session's container. The hash makes the name unique per repo
-    // path (the gvisor tier's `repo_id` precedent: a stable digest of
-    // the repo path, not its contents — the container of a repo must
-    // keep its name across checkouts and rebuilds).
+    // Container name: the repo basename, a short hash of the repo root
+    // path, and the run id. The hash keeps repos that share a
+    // basename apart; the run id keeps parallel runs in ONE checkout
+    // apart — with a per-repo name `--replace` would silently kill the
+    // running sibling (bd myconfig-cad).
+    let repo_id = fnv1a10(&root);
     let container_name = format!(
-        "mysbx-{}-{}",
+        "mysbx-{}-{}-{}",
         repo.root
             .file_name()
             .unwrap_or_else(|| OsStr::new("unknown"))
             .to_string_lossy()
             .replace(|c: char| !c.is_alphanumeric(), "-"),
-        fnv1a10(&root)
+        repo_id,
+        params.run_id
     );
     argv.extend(["--name".into(), container_name]);
+    // The stable per-repo id as a label: the containers of one repo
+    // stay findable (`podman ps -a --filter label=mysbx.repo=<id>`),
+    // e.g. to remove leftovers of a killed run that `--rm` missed.
+    argv.extend(["--label".into(), format!("mysbx.repo={repo_id}")]);
     argv.extend(["--hostname".into(), "mysbx".into()]);
     argv.push("--userns=keep-id".into());
     // The VM's ON switch (bd myconfig-6di.5.4): crun runs the libkrun

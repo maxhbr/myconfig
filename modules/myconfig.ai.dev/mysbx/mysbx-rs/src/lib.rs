@@ -2314,6 +2314,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 network_spec,
                 extra_env: &gvisor_env,
                 git_trust: git_trust_params,
+                run_id: pid,
                 pids_limit,
                 memory,
                 cpus,
