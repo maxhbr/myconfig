@@ -4729,12 +4729,13 @@ fn podman_attached_run_wires_stdio() {
     )
     .unwrap();
     let run_at = argv.iter().position(|a| a == "run").expect("`run` in argv");
+    let name_at = argv.iter().position(|a| a == "--name").expect("`--name` in argv");
     assert!(
         argv.contains(&"--interactive".to_string()),
         "--interactive must wire the container's stdin: {argv:?}"
     );
     assert!(
-        argv[..run_at + 3].contains(&"--interactive".to_string()),
+        argv[run_at..name_at].contains(&"--interactive".to_string()),
         "--interactive belongs to the run flags right after `run`: {argv:?}"
     );
     assert!(
