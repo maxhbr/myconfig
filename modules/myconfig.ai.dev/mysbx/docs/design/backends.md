@@ -561,7 +561,17 @@ Consequences, stated honestly:
   and a tmpfs at `/nix` hides it before anything can run. The krun
   variant ships no Nix story; a redesign would have to keep the
   image closure reachable throughout bootstrap and be live-validated
-  first.
+  first. The candidate redesign (bd myconfig-tm2 → myconfig-pz6, evaluated from
+  static sources only) leaves the argv unchanged. A guest-root
+  wrapper self-overlays the image's OWN `/nix/store` (and an
+  `includeNixDB`-registered `/nix/var/nix`) after boot, with the
+  upper layer on a guest tmpfs. Nix then runs single-user
+  (`NIX_REMOTE=local`, `build-users-group =`, `sandbox = false`) and
+  substitutes from the host-mirrored caches. No host store is
+  involved, and nothing is hidden at any point. The upper layer
+  costs VM RAM: the 1024 MiB crun default is too small for dev
+  shells. It is implemented only after the f13 probe recorded in
+  that bead passes.
 - **Secondary: nesting other sandboxes** — no guest compatibility
   probes, no work beyond what nested podman needs.
 - **Out of scope: nono inside krun** — the stock libkrunfw kernel
