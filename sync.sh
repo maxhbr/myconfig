@@ -11,6 +11,8 @@
 #   3. `bd sync` the beads database (bd's own `sync.remote`, the same
 #      gitolite repository, under refs/dolt/*)
 #   4. prune the remote: delete branches that are fully merged into main
+#   5. on host f13 with main checked out: try `git push origin main`; a
+#      failure is reported, never fatal
 #
 # Pruning only deletes refs/heads/* whose tip is reachable from the remote
 # main, so no commit is lost. It never touches main, --keep branches, or
@@ -189,6 +191,15 @@ if "$do_prune"; then
         --format='%(refname:lstrip=3)' "refs/remotes/$remote/")
     if ((${#unmerged[@]})); then
         log "not merged into $branch, kept on $remote (${#unmerged[@]}): ${unmerged[*]}"
+    fi
+fi
+
+if [[ $(uname -n) == f13 && $(git symbolic-ref --short -q HEAD || true) == main ]]; then
+    if git remote get-url origin >/dev/null 2>&1; then
+        log "pushing main to origin"
+        run git push origin main || log "push to origin failed, continuing"
+    else
+        log "no git remote named 'origin', skipping push"
     fi
 fi
 
