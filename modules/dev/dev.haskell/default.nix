@@ -8,9 +8,20 @@
 }:
 let
   cfg = config.myconfig.dev.haskell;
+  ghc = pkgs.haskellPackages.ghcWithPackages (
+    hpkgs: with hpkgs; [
+      cabal-install
+      hoogle
+      hlint
+      ghcid
+    ]
+  );
 in
 {
   config = lib.mkIf cfg.enable {
+    # The ghc env already exposes hlint; a second one would collide in
+    # the strict mysbx tool env.
+    myconfig.ai.dev.sandboxTools.extraPackages = [ ghc ];
     home-manager.users.mhuber = {
       home.packages =
         with pkgs;
@@ -20,14 +31,7 @@ in
           haskell-language-server
         ]
         ++ (with haskellPackages; [
-          (ghcWithPackages (
-            hpkgs: with hpkgs; [
-              cabal-install
-              hoogle
-              hlint
-              ghcid
-            ]
-          ))
+          ghc
           hlint
           pandoc
         ]);

@@ -11,6 +11,12 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    # `ruby` already ships bin/rake; a second rake would collide in the
+    # strict mysbx tool env.
+    myconfig.ai.dev.sandboxTools.extraPackages = with pkgs; [
+      ruby
+      rubyPackages.rspec
+    ];
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [

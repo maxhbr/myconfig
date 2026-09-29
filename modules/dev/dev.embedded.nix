@@ -13,6 +13,8 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    # Build tooling only: the sandboxes see no serial or USB devices.
+    myconfig.ai.dev.sandboxTools.extraPackages = with pkgs; [ platformio-core ];
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [

@@ -12,6 +12,7 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    myconfig.ai.dev.sandboxTools.extraPackages = with pkgs; [ elixir ];
     home-manager.sharedModules = [ { home.packages = with pkgs; [ elixir ]; } ];
   };
 }

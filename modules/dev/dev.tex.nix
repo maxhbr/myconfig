@@ -21,6 +21,7 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    myconfig.ai.dev.sandboxTools.extraPackages = [ tex ];
     home-manager.users.mhuber = {
       home.packages = with pkgs; [ tex ];
       home.file = {

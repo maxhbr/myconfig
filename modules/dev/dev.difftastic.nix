@@ -1,6 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 {
+  pkgs,
   config,
   lib,
   ...
@@ -10,6 +11,7 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    myconfig.ai.dev.sandboxTools.extraPackages = with pkgs; [ difftastic ];
     home-manager.sharedModules = [
       {
         programs.difftastic = {

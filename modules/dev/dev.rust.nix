@@ -11,6 +11,14 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    # rustup downloads non-Nix toolchains, which do not run in the
+    # sandboxes; they get the nixpkgs toolchain instead.
+    myconfig.ai.dev.sandboxTools.extraPackages = with pkgs; [
+      cargo
+      rustc
+      rustfmt
+      clippy
+    ];
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [

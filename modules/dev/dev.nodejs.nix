@@ -11,6 +11,7 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    myconfig.ai.dev.sandboxTools.extraPackages = with pkgs; [ nodejs_latest ];
     home-manager.sharedModules = [ { home.packages = with pkgs; [ nodejs_latest ]; } ];
   };
 }
