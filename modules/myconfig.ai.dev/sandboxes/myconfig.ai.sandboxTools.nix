@@ -23,8 +23,8 @@
 #     passes it through to `mkSandboxedRunner`
 #     (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`),
 #     which folds it into the guest package set.
-#   * gVisor sandbox image — `myconfig.ai.dev.gvisor-agent-sandbox` appends the
-#     packages to its `extraImagePackages` default.
+#   * the mysbx container image — `myconfig.ai.dev.mysbx.gvisor.extraImagePackages`
+#     appends the packages (`mysbx/gvisor.nix`).
 #   * `mysbx` — `myconfig.ai.dev.mysbx` folds the packages into its
 #     `extraTools` (the dev-tool closure on the sandbox `PATH`,
 #     `toolsEnv` in `mysbx/nix/mysbx.nix`) and the env into the generated

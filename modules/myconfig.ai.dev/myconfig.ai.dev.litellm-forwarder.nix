@@ -56,10 +56,7 @@
 # gateway instead of being locally delivered — observed as
 # `curl: (7) ... after 0 ms`.
 #
-# Consumers of this module:
-#   * ./sandboxes/myconfig.ai.gvisor-agent-sandbox/litellm-endpoint.nix — the
-#     `agent-gvisor` tier, which additionally seeds sandbox homes with rewritten
-#     endpoints and relays the endpoint onto the sandbox's own loopback.
+# Consumer of this module:
 #   * ./mysbx/default.nix — the `podman-gvisor` backend of mysbx, which pins the
 #     pasta spec into the `mysbx` wrapper and hands the endpoint to the
 #     sandboxed agents as container environment.
@@ -86,9 +83,8 @@ in
         address that pasta's `--map-guest-addr` maps to the host's global
         address.
 
-        Off by default: the sandbox tiers that need it turn it on
-        (`myconfig.ai.dev.gvisor-agent-sandbox.litellm.enable` and the
-        `podman-gvisor` backend of `myconfig.ai.dev.mysbx`).
+        Off by default: the podman backends of `myconfig.ai.dev.mysbx`
+        turn it on.
       '';
     };
 

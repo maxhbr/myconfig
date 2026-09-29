@@ -330,7 +330,7 @@ the model key off the guest, needs a throwaway workspace, or is unattended.
 The only worthwhile cleanup is deduplicating the copy-pasted rationale text
 and the thrice-repeated "which coding-agent CLIs to bake in" logic
 (`../../programs/programs.herdr.nix`, `../../sandboxes/myconfig.ai.microvm/agents.nix`,
-`../../sandboxes/myconfig.ai.gvisor-agent-sandbox/default.nix`'s `agentPackagesByFlag`) —
+`../mysbx/gvisor.nix`'s `agentPackagesByFlag`) —
 a documentation/DRY change, not a behavior change.
 
 ## Choosing a tier
@@ -357,10 +357,9 @@ quick reference for which models a host serves.
 
 ## Related
 
-A fifth, container-based tier — rootless Podman with the **gVisor** runtime
-(`agent-gvisor`) — lives in
-[`../sandboxes/myconfig.ai.gvisor-agent-sandbox/`](../sandboxes/myconfig.ai.gvisor-agent-sandbox/)
-and enabled per host (`myconfig.ai.gvisor-agent-sandbox.enable`). In isolation
+Rootless Podman with the **gVisor** runtime is the `podman-gvisor` backend of
+[`mysbx`](../mysbx/) (the container image and the podman host setup are in
+[`../mysbx/gvisor.nix`](../mysbx/gvisor.nix)). In isolation
 strength it sits between the bubblewrap jail (tier 2) and the QEMU microVM
 (tier 3): like the jail it runs on the host kernel (no full VM), but `runsc`
 interposes a user-space kernel between the sandbox and the host kernel, which

@@ -1,8 +1,12 @@
+# Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+#
+# The agent container image of the mysbx podman backends, built with
+# dockerTools (see ../gvisor.nix).
 {
   lib,
   dockerTools,
   buildEnv,
-  writeTextFile,
   bashInteractive,
   cacert,
   coreutils-full,
@@ -76,28 +80,16 @@ let
     python3
     ripgrep
     shadow # getent, id helpers
-    socat # in-sandbox loopback relays, see ./agent-gvisor-init.sh
+    socat
     tig # git TUI next to `git`: reviewing the sandboxed checkout
     util-linux
     which
   ];
 
-  # Entrypoint wrapper: sets up the reverse port forwards a sandboxed agent
-  # needs (a gVisor loopback listener can only be opened from inside), then
-  # execs the payload. It must NOT carry a /nix/store shebang — the sandbox
-  # has no /nix — hence a plain `#!/bin/bash` script dropped into /bin.
-  initScript = writeTextFile {
-    name = "agent-gvisor-init";
-    destination = "/bin/agent-gvisor-init";
-    executable = true;
-    text = builtins.readFile ./agent-gvisor-init.sh;
-  };
-
-  rootPackages =
-    (if packages == null then defaultPackages else packages) ++ extraPackages ++ [ initScript ];
+  rootPackages = (if packages == null then defaultPackages else packages) ++ extraPackages;
 
   imageRoot = buildEnv {
-    name = "agent-gvisor-root";
+    name = "mysbx-agent-image-root";
     paths = rootPackages;
     pathsToLink = [
       "/bin"
@@ -155,6 +147,6 @@ dockerTools.buildLayeredImage (
     };
 
     # `imageName` and `imageTag` are exposed by dockerTools itself, so the
-    # session manager can derive the default image reference from this package.
+    # mysbx wrapper derives the pinned image reference from this package.
   }
 )

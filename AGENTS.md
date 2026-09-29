@@ -42,8 +42,8 @@ Run the full `nix flake check` only when:
 
 ### Formatting & Linting
 - `./nixfmtall.sh` - Format the tree (runs `nix fmt`): nixfmt-rfc-style for
-  `*.nix`, rustfmt (`--edition 2021`) for the Rust crates under `modules/`
-  (`mysbx/mysbx-rs`, `myconfig.ai.gvisor-agent-sandbox/rust`)
+  `*.nix`, rustfmt (`--edition 2021`) for the Rust crate under `modules/`
+  (`mysbx/mysbx-rs`)
 - `./nixfmtall.sh --check` - Check formatting without making changes
 - For shell scripts: `shfmt -d -s -i 4 -ci <file>` - Check shell script formatting (4 space indent)
 - `shellcheck -x <file>` - Lint shell scripts

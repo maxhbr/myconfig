@@ -34,7 +34,7 @@
 # - The tmpfs is RAM: it may take up to half the VM memory (tmpfs
 #   default). The wrapper warns when the VM is smaller than `minRamMib`.
 #
-# As any other uid (podman-gvisor, agent-gvisor), the wrappers exec nix
+# As any other uid (podman-gvisor), the wrappers exec nix
 # untouched.
 {
   lib,
@@ -174,8 +174,7 @@ runCommand "mysbx-krun-guest-nix"
         ;
     };
     # The image's buildEnv ignores collisions: the wrappers must win
-    # against a plain `nix` in the same image (the gvisor tier's
-    # `nix.enable`).
+    # against a plain `nix` in the same image.
     meta.priority = -10;
   }
   ''
