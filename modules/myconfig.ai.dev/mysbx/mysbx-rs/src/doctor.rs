@@ -153,7 +153,9 @@ pub fn render(sections: &[Section]) -> (Vec<String>, usize, usize) {
             lines.push(check.line());
         }
     }
-    lines.push(format!("mysbx doctor: {problems} problem(s), {warnings} warning(s)"));
+    lines.push(format!(
+        "mysbx doctor: {problems} problem(s), {warnings} warning(s)"
+    ));
     (lines, problems, warnings)
 }
 
@@ -502,10 +504,9 @@ pub fn image_check(image: &str, inspect: Result<&str, &str>, expected: Option<&s
                 short_id(loaded)
             ),
         ),
-        Some(expected) if expected == loaded => Check::ok(
-            "image",
-            format!("{image} current ({})", short_id(loaded)),
-        ),
+        Some(expected) if expected == loaded => {
+            Check::ok("image", format!("{image} current ({})", short_id(loaded)))
+        }
         Some(expected) => Check::warn(
             "image",
             format!(
@@ -535,7 +536,11 @@ fn landlock_abi() -> Option<i64> {
             LANDLOCK_CREATE_RULESET_VERSION,
         )
     };
-    if abi > 0 { Some(abi as i64) } else { None }
+    if abi > 0 {
+        Some(abi as i64)
+    } else {
+        None
+    }
 }
 
 /// Resolve `host` in a helper thread, bounded by `timeout`: a hanging
@@ -557,7 +562,10 @@ fn resolve_bounded(
     match rx.recv_timeout(timeout) {
         Ok(Ok(addrs)) => Ok(addrs),
         Ok(Err(e)) => Err(format!("cannot resolve {host}: {e}")),
-        Err(_) => Err(format!("resolving {host} timed out after {} s", timeout.as_secs())),
+        Err(_) => Err(format!(
+            "resolving {host} timed out after {} s",
+            timeout.as_secs()
+        )),
     }
 }
 
@@ -1158,7 +1166,10 @@ pub fn run(args: &[String]) -> i32 {
     let mut header = vec![scope];
     let from_command_line = !named.is_empty();
     let targets: Vec<String> = if from_command_line {
-        header.push(Check::ok("backend", format!("{} [command line]", named.join(", "))));
+        header.push(Check::ok(
+            "backend",
+            format!("{} [command line]", named.join(", ")),
+        ));
         named
     } else {
         match merged.backend.as_deref() {
@@ -1248,7 +1259,11 @@ pub fn run(args: &[String]) -> i32 {
     for line in &lines {
         println!("{line}");
     }
-    if problems > 0 { 1 } else { 0 }
+    if problems > 0 {
+        1
+    } else {
+        0
+    }
 }
 
 #[cfg(test)]

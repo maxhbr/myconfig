@@ -4729,7 +4729,10 @@ fn podman_attached_run_wires_stdio() {
     )
     .unwrap();
     let run_at = argv.iter().position(|a| a == "run").expect("`run` in argv");
-    let name_at = argv.iter().position(|a| a == "--name").expect("`--name` in argv");
+    let name_at = argv
+        .iter()
+        .position(|a| a == "--name")
+        .expect("`--name` in argv");
     assert!(
         argv.contains(&"--interactive".to_string()),
         "--interactive must wire the container's stdin: {argv:?}"

@@ -7363,7 +7363,10 @@ fn doctor_fails_when_bwrap_cannot_start_or_is_missing() {
     let (code, stdout, stderr) = run_doctor(
         &inv,
         &["doctor"],
-        &[("MYSBX_BWRAP", missing.as_str()), ("MYSBX_SHELL", "/bin/sh")],
+        &[
+            ("MYSBX_BWRAP", missing.as_str()),
+            ("MYSBX_SHELL", "/bin/sh"),
+        ],
     );
     assert_eq!(code, 1, "stdout: {stdout}\nstderr: {stderr}");
     assert!(stdout.contains("FAIL bwrap binary: "), "{stdout}");
@@ -7519,13 +7522,8 @@ fn doctor_probes_a_healthy_podman_gvisor_host_with_the_exact_argv() {
     );
     assert!(stdout.contains("mysbx doctor: 0 problem(s)"), "{stdout}");
 
-    let rt = mysbx::doctor::podman_runtime(
-        false,
-        true,
-        None,
-        Some("cgroupfs"),
-        Some("ignore-cgroups"),
-    );
+    let rt =
+        mysbx::doctor::podman_runtime(false, true, None, Some("cgroupfs"), Some("ignore-cgroups"));
     let probe = mysbx::doctor::PodmanProbe {
         runtime: &rt,
         krun: false,
@@ -7588,8 +7586,7 @@ fn doctor_fails_on_an_absent_podman_image_and_warns_on_a_stale_one() {
     let owned = gvisor_envs(&podman);
     let (code, stdout, stderr) = run_doctor(&inv, &["doctor"], &env_pairs(&owned));
     assert_eq!(
-        code,
-        0,
+        code, 0,
         "a stale image still starts: {stdout}\nstderr: {stderr}"
     );
     assert!(
@@ -7646,8 +7643,7 @@ fn doctor_warns_when_started_where_a_run_is_refused() {
         &[("MYSBX_BWRAP", bwrap.as_str()), ("MYSBX_SHELL", "/bin/sh")],
     );
     assert_eq!(
-        code,
-        0,
+        code, 0,
         "a WARN is not a problem: {stdout}\nstderr: {stderr}"
     );
     assert!(
