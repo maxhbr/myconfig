@@ -1412,10 +1412,11 @@ fn truncate_file(path: &std::path::Path, len: u64) -> std::io::Result<()> {
 ///
 /// The accepted race (bd myconfig-0pi's no-locking decision): a
 /// PARALLEL run whose guest has not yet made its first nix call
-/// still has its file NAMED — sweeping it turns that run's bind
-/// source into a missing path and its podman start fails visibly
-/// (never silent corruption; the window is create-to-first-nix,
-/// typically seconds of boot). The alternative — locking or
+/// still has its file NAMED — sweeping it surfaces in THAT run's
+/// first guest nix call, where the wrapper's `[ -f "$img" ]` guard
+/// refuses with the diagnosis (exit 125, never silent corruption;
+/// the window is create-to-first-nix, typically seconds of boot).
+/// The alternative — locking or
 /// liveness-probing — buys a longer window, not a closed one, at
 /// the cost of the crash-gap sweep that motivated the design.
 fn sweep_krun_scratch(dir: &std::path::Path) -> Result<(), String> {

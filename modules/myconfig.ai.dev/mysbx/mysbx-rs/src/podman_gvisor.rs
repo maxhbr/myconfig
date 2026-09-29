@@ -1747,7 +1747,7 @@ impl fmt::Display for Error {
                 f,
                 "the per-run scratch disk is a podman-krun story (bd \
                  myconfig-0pi): the guest nix wrapper loop-mounts it, and \
-                 the gvariant has no such wrapper — drop the scratch pin \
+                 the gvisor variant has no such wrapper — drop the scratch pin \
                  or switch the backend to `podman-krun`"
             ),
         }
