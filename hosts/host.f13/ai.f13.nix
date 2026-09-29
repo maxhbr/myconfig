@@ -16,34 +16,34 @@
         dev = {
           enable = true;
 
-          microvm = {
-            enable = true;
-            enabledAgents = [
-              "claude"
-              "codex"
-              "herdr"
-              "hermes"
-              "opencode"
-              "pi"
-            ];
-            resourceClasses = lib.mkForce {
-              small = {
-                count = 1;
-                vcpu = 2;
-                memoryMiB = 4096;
-              };
-              normal = {
-                count = 1;
-                vcpu = 4;
-                memoryMiB = 8192;
-              };
-            };
-            workspaceLayout = "beside-repo";
-            networkProfile = "proxy-only";
-            passwordlessControl = true;
-            sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
-            guestShellConvenience.enable = true;
-          };
+          # microvm = {
+          #   enable = false;
+          #   enabledAgents = [
+          #     "claude"
+          #     "codex"
+          #     "herdr"
+          #     "hermes"
+          #     "opencode"
+          #     "pi"
+          #   ];
+          #   resourceClasses = lib.mkForce {
+          #     small = {
+          #       count = 1;
+          #       vcpu = 2;
+          #       memoryMiB = 4096;
+          #     };
+          #     normal = {
+          #       count = 1;
+          #       vcpu = 4;
+          #       memoryMiB = 8192;
+          #     };
+          #   };
+          #   workspaceLayout = "beside-repo";
+          #   networkProfile = "proxy-only";
+          #   passwordlessControl = true;
+          #   sshPublicKeyFile = ./dedicated-agent-vm-key.pub;
+          #   guestShellConvenience.enable = true;
+          # };
         };
       };
     };
