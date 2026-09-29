@@ -78,7 +78,7 @@ in
         skills.enable = true;
         agent-of-empires.enable = true;
         gvisor-agent-sandbox = {
-          enable = true;
+          enable = false;
           nix.enable = true;
         };
         mysbx = {
