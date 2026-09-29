@@ -8884,6 +8884,12 @@ fn podman_krun_git_trust_names_exactly_the_bound_workspace_paths() {
         stdout.contains("GIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"),
         "GIT_CONFIG_GLOBAL is not exported: {stdout}"
     );
+    // The libgit2 half (bd myconfig-jn0): the exact-path system
+    // config, ro-bound where libgit2 and git read it.
+    assert!(
+        stdout.contains("/system-gitconfig,dst=/etc/gitconfig,ro"),
+        "the libgit2 trust file is not ro-bound at /etc/gitconfig: {stdout}"
+    );
     // The trust file was NOT written: a --dry-run creates nothing.
     assert!(
         !sidecar.join("gittrust").exists(),
@@ -8911,7 +8917,9 @@ fn podman_gvisor_carries_no_trust_file() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     assert!(
-        !stdout.contains("GIT_CONFIG_GLOBAL") && !stdout.contains("/etc/mysbx/gitconfig"),
+        !stdout.contains("GIT_CONFIG_GLOBAL")
+            && !stdout.contains("/etc/mysbx/gitconfig")
+            && !stdout.contains("/etc/gitconfig"),
         "no trust bind or env on the gvisor argv: {stdout}"
     );
     assert!(

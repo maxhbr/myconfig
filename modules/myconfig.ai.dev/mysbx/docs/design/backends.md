@@ -399,6 +399,26 @@ sources (bd myconfig-6di.5.4):
   operator-seeded `~/.gitconfig` stays reachable. The gvisor variant
   needs none of it (the keep-id user owns the mounts); a trust
   there is refused (`GitTrustOnGvisor`).
+- the libgit2 trust (bd myconfig-jn0) — nix fetches `git+file`
+  flakes through libgit2 (1.9.7, nix 2.34 `git-utils.cc`), which
+  still refused the repo (`not owned by current user`, error 7).
+  Verified against the sources: nix calls `git_repository_open`
+  without `GIT_REPOSITORY_OPEN_FROM_ENV`, so libgit2 ignores
+  `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` and reads only
+  `/etc/gitconfig`, `$HOME/.gitconfig` and the XDG file. Nix never
+  sets `GIT_OPT_SET_OWNER_VALIDATION`. libgit2 also matches
+  `safe.directory` by EXACT workdir path only, with no `/*` prefix
+  form (repository.c `validate_ownership_cb`). The builder
+  therefore binds a second per-run file (`gittrust/<pid>/
+  system-gitconfig`) read-only at `/etc/gitconfig`. It holds
+  exact entries for the repo root and each checkout (a directory
+  with a `.git`) that exists in the worktrees sibling at launch
+  (clone runs: the repo path only). It has no includes: git reads
+  it as system config next to the GIT_CONFIG_GLOBAL file. A
+  worktree created during the run is trusted by git (via `/*`)
+  but not by libgit2 until the next run. `$HOME` and
+  `XDG_CONFIG_HOME` are not redirected because nix reads its own
+  config and cache through them.
 
 The existing golden tests plus a before/after snapshot of the gvisor
 argv enforce the gvisor's byte-identity (see the tests of bd

@@ -266,10 +266,20 @@ fn state_parent_tmpfses(entries: &[String]) -> Vec<String> {
 /// entries for exactly the approved workspace paths — is produced by
 /// lib.rs from the same repo/workspace facts the section-5 binds use;
 /// the builder can only bind and point.
+///
+/// `host_system_file`/`container_system_file` carry the libgit2 half
+/// (bd myconfig-jn0): nix opens git+file flakes through libgit2 with
+/// `git_repository_open`, which ignores GIT_CONFIG_GLOBAL and matches
+/// `safe.directory` by exact path only (no `/*`). The second file
+/// names the approved workspace checkouts by exact path, has no
+/// includes, and is bound read-only at `/etc/gitconfig`, the system
+/// config both libgit2 and git read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitTrust {
     pub host_file: String,
     pub container_file: String,
+    pub host_system_file: String,
+    pub container_system_file: String,
 }
 
 /// Common parameters of every invocation that do not come from a
@@ -919,6 +929,12 @@ pub fn podman_run_argv(
     // the payload may steer).
     if let Some(gt) = &params.git_trust {
         bind_mount(&mut argv, &gt.host_file, &gt.container_file, false);
+        bind_mount(
+            &mut argv,
+            &gt.host_system_file,
+            &gt.container_system_file,
+            false,
+        );
     }
 
     // 7. environment

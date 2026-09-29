@@ -58,6 +58,9 @@ git status                       # bd myconfig-zj2: NO dubious-ownership
                                  # failure — the krun run's trust file
                                  # names the workspace for git's
                                  # protected config
+nix flake metadata .             # bd myconfig-jn0: NO "not owned by
+                                 # current user" — libgit2 reads the
+                                 # exact-path /etc/gitconfig
 touch /synth-marker && echo hi > $HOME/.cache/marker
 # from the HOST while the run is up:
 ls -l <repo>/.mysbx/state        # the state-dirs sidecar backing
