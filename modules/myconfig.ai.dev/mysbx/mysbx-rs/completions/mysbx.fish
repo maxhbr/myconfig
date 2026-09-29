@@ -385,7 +385,7 @@ complete -c mysbx -n '__mysbx_in_destroy' -l force -d 'Destroy even when the ses
 # --force is scoped to its verb.
 complete -c mysbx -n '__mysbx_in_podman_load_image' -l force -d 'Reload the image unconditionally'
 complete -c mysbx -n '__mysbx_in_podman_load_image' -l test -d 'Report the state without loading (exit 0 only when the loaded image is current)'
-complete -c mysbx -n '__mysbx_in_podman_load_image' -l image -x -d 'Image reference to load (overrides $MYSBX_GVISOR_IMAGE; the pinned tarball is still loaded)'
+complete -c mysbx -n '__mysbx_in_podman_load_image' -l image -x -d 'Image reference to load (overrides $MYSBX_PODMAN_IMAGE; the pinned tarball is still loaded)'
 
 # The NAME position of the handoff verbs and of `session destroy` /
 # `session hunk`: the existing sessions of the registry (a new NAME is

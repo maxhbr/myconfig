@@ -108,7 +108,7 @@ that is the fallback the guest conf would switch to.
 
 With `myconfig.ai.dev.mysbx.krun.nix.enable` (on by default under
 `myconfig.ai.dev`), rebuild, reload the
-image, and run `MYSBX_GVISOR_MEMORY=8g mysbx`. Then, inside the sandbox
+image, and run `MYSBX_PODMAN_MEMORY=8g mysbx`. Then, inside the sandbox
 (as guest root):
 
 ```bash
@@ -136,7 +136,7 @@ nix build --impure --no-link --print-out-paths --expr \
 
 ### 2.4 Limits as VM annotations (bd myconfig-6di.5.6)
 
-Set `MYSBX_GVISOR_CPUS`/`MYSBX_GVISOR_MEMORY` on the host (the
+Set `MYSBX_PODMAN_CPUS`/`MYSBX_PODMAN_MEMORY` on the host (the
 wrapper pins), and inside the sandbox:
 
 ```bash

@@ -616,7 +616,7 @@ in
           The shell the podman-gvisor backend's INTERACTIVE payload
           execs — a path INSIDE the container image (bd myconfig-cew:
           the container must be provisioned with the same shell as
-          the host). Pinned into the wrapper as `MYSBX_GVISOR_SHELL`.
+          the host). Pinned into the wrapper as `MYSBX_PODMAN_SHELL`.
 
           The default is the fish binary of the home-manager user's
           `programs.fish.package` — `gvisor.image` bakes exactly
@@ -630,7 +630,7 @@ in
 
       # The waypipe binary INSIDE the podman-gvisor image (D18 on the
       # container backend): the store path of the waypipe binary as it
-      # exists inside `gvisorImage`, pinned as `MYSBX_GVISOR_WAYPIPE` for
+      # exists inside `gvisorImage`, pinned as `MYSBX_PODMAN_WAYPIPE` for
       # the guest (server) end of the display channel. `null` pins
       # nothing — `display = "waypipe"` with `backend = "podman-gvisor"`
       # is a refused run.
@@ -651,7 +651,7 @@ in
           The waypipe binary the podman-gvisor backend's payload is
           wrapped in when `display = "waypipe"` — a path INSIDE the
           container image, pinned into the wrapper as
-          `MYSBX_GVISOR_WAYPIPE`. The default is the same package as
+          `MYSBX_PODMAN_WAYPIPE`. The default is the same package as
           the host side, baked into the image via
           `gvisor.imagePackages`. `null` pins nothing: the selection
           is refused on this backend.
@@ -686,7 +686,7 @@ in
           when that forwarder runs, else null'';
         description = ''
           The podman `--network` spec of the podman-gvisor backend,
-          pinned into the wrapper as `MYSBX_GVISOR_PASTA_SPEC`
+          pinned into the wrapper as `MYSBX_PODMAN_PASTA_SPEC`
           (`--set-default`, so an invocation can still override it).
 
           `null` leaves podman's default (shared) network, which
@@ -703,7 +703,7 @@ in
         description = ''
           Environment variables handed to the payload of the
           podman-gvisor backend ALONE, pinned into the wrapper as
-          `MYSBX_GVISOR_ENV` and emitted as `--env` after the config
+          `MYSBX_PODMAN_ENV` and emitted as `--env` after the config
           layers' `[env]` (so they win over a configured value) and
           before the sandbox's own `HOME`/`PATH`/XDG variables (which
           no pin can repoint).
@@ -833,7 +833,7 @@ in
         enable = mkEnableOption ''
           nix inside the podman-krun guest. Guest-root `bin/nix*` wrappers
           overlay the image's own /nix/store with a per-run upper layer on
-          guest tmpfs, so new paths cost VM RAM (set `MYSBX_GVISOR_MEMORY`).
+          guest tmpfs, so new paths cost VM RAM (set `MYSBX_PODMAN_MEMORY`).
           Also builds `gvisor.image` with a registered nix database
           (`includeNixDB`)'';
 

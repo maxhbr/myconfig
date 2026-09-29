@@ -70,7 +70,7 @@ in
       description = ''
         The Nix-built OCI image both podman backends run, pinned into the
         wrapper together with its reference and expected image ID
-        (MYSBX_GVISOR_TARBALL / _IMAGE / _IMAGE_ID, ./nix/mysbx.nix);
+        (MYSBX_PODMAN_TARBALL / _IMAGE / _IMAGE_ID, ./nix/mysbx.nix);
         `mysbx podman-load-image` loads it.
 
         `null` pins nothing and drops the podman host setup of this

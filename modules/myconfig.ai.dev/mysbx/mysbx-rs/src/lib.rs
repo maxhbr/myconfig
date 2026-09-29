@@ -1752,13 +1752,13 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // The waypipe pins (docs/design/config.md D18): the host-side
     // `waypipe client` binary, from this build's own closure, and —
     // for the podman-gvisor backend — the in-image `waypipe server`
-    // path (`MYSBX_GVISOR_WAYPIPE`, set by the wrapper when the image
+    // path (`MYSBX_PODMAN_WAYPIPE`, set by the wrapper when the image
     // carries waypipe; the container mounts nothing from the host
     // store, so the host pin cannot serve there). No fallback on
     // purpose: unset means "this build carries no display channel",
     // and a selected display is refused instead of running headless.
     let waypipe_client = env_opt("MYSBX_WAYPIPE");
-    let gvisor_waypipe = env_opt("MYSBX_GVISOR_WAYPIPE");
+    let gvisor_waypipe = env_opt("MYSBX_PODMAN_WAYPIPE");
     // `/bin/sh` for the sandbox (see [`bwrap::Params::bin_sh`]):
     // a pin like `MYSBX_NIX_CONF` — unset means "no `/bin/sh` bind",
     // never "the host's" (a host `/bin/sh` is outside mysbx's own
@@ -1785,8 +1785,8 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // `/bin/bash` (`Cmd`) and `/bin:/usr/bin` (`Env`), the same
     // userland agent-gvisor sessions run against. Both are
     // operator-overridable per invocation for other images.
-    let gvisor_shell = env_or("MYSBX_GVISOR_SHELL", "/bin/bash");
-    let gvisor_tools_path = env_or("MYSBX_GVISOR_TOOLS_PATH", "/bin:/usr/bin");
+    let gvisor_shell = env_or("MYSBX_PODMAN_SHELL", "/bin/bash");
+    let gvisor_tools_path = env_or("MYSBX_PODMAN_TOOLS_PATH", "/bin:/usr/bin");
     // Review-3 item 3: the trusted policy files of THIS run, handed to
     // the argv builder so it can refuse any `rw` bind that would expose
     // one to the payload.
@@ -1837,7 +1837,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // file is always `<dir>/waypipe.sock`). The backend picks which
     // guest binary wraps the payload: the host closure's waypipe for
     // bubblewrap (`MYSBX_WAYPIPE`, also the client), the in-image waypipe
-    // for podman-gvisor (`MYSBX_GVISOR_WAYPIPE`). A backend with no
+    // for podman-gvisor (`MYSBX_PODMAN_WAYPIPE`). A backend with no
     // guest binary pinned passes `None` and the argv builder refuses.
     let pid = std::process::id();
     let waypipe_socket_dir = repo.sidecar.join("waypipe").join(pid.to_string());
@@ -1964,6 +1964,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         "podman-gvisor" | "podman-krun" => {
             use std::borrow::Cow;
 
+            if refuse_renamed_podman_pins("mysbx") {
+                return 2;
+            }
+
             // The /dev/kvm doctor check of the krun variant (backends.md
             // D2, bd myconfig-6di.5.2): crun+libkrun starts each run as
             // a KVM microVM through `/dev/kvm`, and a user without rw
@@ -1988,19 +1992,19 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             }
 
             // The image reference the runs use — the same pin
-            // podman-load-image loads (MYSBX_GVISOR_IMAGE, set by the Nix
+            // podman-load-image loads (MYSBX_PODMAN_IMAGE, set by the Nix
             // wrapper when the host builds a gVisor agent image; see
             // loadimage.rs). No fallback: an invented `localhost/…` ref
             // would run a nonexistent image and mislead the operator
             // (bd myconfig-xrt). The krun variant runs the SAME image —
             // the container image is runtime-agnostic.
-            let Some(gvisor_image) = env_opt("MYSBX_GVISOR_IMAGE") else {
+            let Some(gvisor_image) = env_opt("MYSBX_PODMAN_IMAGE") else {
                 eprintln!("mysbx: {backend}: no container image configured");
                 eprintln!(
-                    "  the Nix wrapper pins MYSBX_GVISOR_IMAGE when the host \
+                    "  the Nix wrapper pins MYSBX_PODMAN_IMAGE when the host \
                      builds a gVisor agent image; an unwrapped build sets none"
                 );
-                eprintln!("  set MYSBX_GVISOR_IMAGE <ref>, or switch backends");
+                eprintln!("  set MYSBX_PODMAN_IMAGE <ref>, or switch backends");
                 return EXIT_INFRASTRUCTURE;
             };
 
@@ -2106,15 +2110,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // Resource limits (only applied when cgroups are enabled on
             // the gvisor variant; the krun variant maps them onto VM
             // annotations regardless, section 8 of the builder).
-            // SHARED pins (MYSBX_GVISOR_*): one "resource limits of
+            // SHARED pins (MYSBX_PODMAN_*): one "resource limits of
             // the sandbox" setting per host, consumed by both variants
             // — gvisor as cgroup flags, krun as VM annotations. What a
             // variant cannot express is refused by the builder, so
             // the sharing never becomes accept-and-ignore.
             // Using Cow to handle both borrowed and owned strings
-            let pids_limit = env_opt("MYSBX_GVISOR_PIDS_LIMIT").map(Cow::from);
-            let memory = env_opt("MYSBX_GVISOR_MEMORY").map(Cow::from);
-            let cpus = env_opt("MYSBX_GVISOR_CPUS").map(Cow::from);
+            let pids_limit = env_opt("MYSBX_PODMAN_PIDS_LIMIT").map(Cow::from);
+            let memory = env_opt("MYSBX_PODMAN_MEMORY").map(Cow::from);
+            let cpus = env_opt("MYSBX_PODMAN_CPUS").map(Cow::from);
 
             // Cgroups handling: when ignore-cgroups flag is set, skip resource limits
             let ignore_cgroups = runtime_flags.iter().any(|f| f == "ignore-cgroups");
@@ -2128,7 +2132,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 );
             }
 
-            // Backend-specific environment pins (MYSBX_GVISOR_ENV): a
+            // Backend-specific environment pins (MYSBX_PODMAN_ENV): a
             // space-separated list of `KEY=VALUE` entries the Nix
             // wrapper bakes for the podman-gvisor path alone — the
             // model endpoint the host's LiteLLM forwarder serves is
@@ -2137,14 +2141,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // the host loopback), so it cannot live in the config
             // `[env]` the other backends share. Entries without a `=` are
             // ignored rather than turned into an empty variable name.
-            let gvisor_env: Vec<String> = env_or("MYSBX_GVISOR_ENV", "")
+            let gvisor_env: Vec<String> = env_or("MYSBX_PODMAN_ENV", "")
                 .split_whitespace()
                 .filter(|entry| entry.contains('='))
                 .map(|entry| entry.to_owned())
                 .collect();
 
             // Network spec: explicit "none" when network is denied, otherwise podman default (shared)
-            let pasta_spec = env_opt("MYSBX_GVISOR_PASTA_SPEC");
+            let pasta_spec = env_opt("MYSBX_PODMAN_PASTA_SPEC");
             let network_spec: Option<&str> = if !merged.network {
                 Some("none")
             } else {
@@ -2389,7 +2393,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 eprintln!(
                     "mysbx: display = \"waypipe\" but this build pinned no waypipe {}",
                     if matches!(backend, "podman-gvisor" | "podman-krun") {
-                        "for the image (MYSBX_GVISOR_WAYPIPE)"
+                        "for the image (MYSBX_PODMAN_WAYPIPE)"
                     } else {
                         "client (MYSBX_WAYPIPE)"
                     }
@@ -2909,6 +2913,37 @@ fn collect_host_env(merged: &merge::Merged) -> bwrap::HostEnv {
 /// `std::env::var` with the empty-means-unset rule, for pins that have
 /// no fallback at all: `MYSBX_NIX_CONF` unset means "bind no nix
 /// configuration", never "bind the host's" (review-2 item 3).
+/// The pins both podman backends read, named `MYSBX_PODMAN_<suffix>`.
+/// They were `MYSBX_GVISOR_<suffix>`; a set old name is refused, so a
+/// limit or image pin is never silently dropped.
+pub const RENAMED_PODMAN_PINS: &[&str] = &[
+    "TARBALL",
+    "IMAGE",
+    "IMAGE_ID",
+    "MEMORY",
+    "CPUS",
+    "PIDS_LIMIT",
+    "ENV",
+    "PASTA_SPEC",
+    "SHELL",
+    "TOOLS_PATH",
+    "WAYPIPE",
+];
+
+/// Prints one line per set old `MYSBX_GVISOR_*` pin name (with the
+/// `prefix` of the caller) and returns whether any was set.
+pub(crate) fn refuse_renamed_podman_pins(prefix: &str) -> bool {
+    let mut found = false;
+    for suffix in RENAMED_PODMAN_PINS {
+        let old = format!("MYSBX_GVISOR_{suffix}");
+        if std::env::var_os(&old).is_some() {
+            eprintln!("{prefix}: {old} was renamed to MYSBX_PODMAN_{suffix}");
+            found = true;
+        }
+    }
+    found
+}
+
 fn env_opt(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
 }
@@ -3500,7 +3535,7 @@ fn start_waypipe_channel(
     // The host-side client binary: `MYSBX_WAYPIPE` — the wrapper's
     // host pin — with the PATH fallback of the unwrapped crate. The
     // guest server end is the backend's own pin (MYSBX_WAYPIPE under
-    // bwrap, MYSBX_GVISOR_WAYPIPE inside the podman-gvisor image);
+    // bwrap, MYSBX_PODMAN_WAYPIPE inside the podman-gvisor image);
     // the wrapper sets the host pin wherever it sets a guest one, so
     // a refused-for-lack-of-client run is one without waypipe at all.
     let client_bin = env_or("MYSBX_WAYPIPE", "waypipe");

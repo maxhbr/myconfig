@@ -30,9 +30,9 @@ Without options, the command:
 
 The Nix wrapper pins all three when the host builds a gVisor agent image (`myconfig.ai.dev.mysbx.gvisor.image`, built by [`../gvisor.nix`](../gvisor.nix) unless set to `null`):
 
-- `MYSBX_GVISOR_TARBALL`: the docker-archive tarball to `podman load`
-- `MYSBX_GVISOR_IMAGE`: the image reference the runs use
-- `MYSBX_GVISOR_IMAGE_ID`: the expected image ID (config-blob digest, extracted from the tarball at build time) — the staleness check
+- `MYSBX_PODMAN_TARBALL`: the docker-archive tarball to `podman load`
+- `MYSBX_PODMAN_IMAGE`: the image reference the runs use
+- `MYSBX_PODMAN_IMAGE_ID`: the expected image ID (config-blob digest, extracted from the tarball at build time) — the staleness check
 
 `--image` overrides the reference alone. With **no** pin and no `--image`, the command is a usage error (exit 2) instead of inventing a `localhost/...` reference: no registry serves the Nix-built image, so a `podman pull` fallback can never work.
 
@@ -49,9 +49,9 @@ back to the built-in defaults):
   fails with `cannot set up cgroup for root`); root default: none.
   The flag `ignore-cgroups` also disables the `--pids-limit` /
   `--memory` / `--cpus` argv entries: runsc would not enforce them.
-- `MYSBX_GVISOR_PIDS_LIMIT` / `MYSBX_GVISOR_MEMORY` / `MYSBX_GVISOR_CPUS`:
+- `MYSBX_PODMAN_PIDS_LIMIT` / `MYSBX_PODMAN_MEMORY` / `MYSBX_PODMAN_CPUS`:
   resource limits, only applied while cgroups are not ignored.
-- `MYSBX_GVISOR_PASTA_SPEC`: the pasta network spec used instead of the
+- `MYSBX_PODMAN_PASTA_SPEC`: the pasta network spec used instead of the
   default shared network (`network = false` still forces `none`).
   Pinned by the Nix wrapper with `--set-default` (so an invocation can
   still override it) as `pasta:--map-guest-addr,<address>` whenever the
@@ -73,7 +73,7 @@ libkrun runtime) **runs** additionally read its OWN flag pins:
   gvisor default would make crun die on an unknown flag. They are
   separate pins so an operator can configure one variant without
   breaking the other.
-- `MYSBX_GVISOR_PIDS_LIMIT` / `MYSBX_GVISOR_MEMORY` / `MYSBX_GVISOR_CPUS`:
+- `MYSBX_PODMAN_PIDS_LIMIT` / `MYSBX_PODMAN_MEMORY` / `MYSBX_PODMAN_CPUS`:
   SHARED with the gvisor variant (one "resource limits of the
   sandbox" setting per host) but mapped differently: the krun run
   turns them into the VM annotations `krun.cpus=<n>` / `krun.ram_mib=<m>`
@@ -83,7 +83,7 @@ libkrun runtime) **runs** additionally read its OWN flag pins:
   whole-VM "container"), a fractional CPU count (`krun.cpus` is a
   whole number of vCPUs, never rounded), a memory value below 128 MiB
   (crun silently defaults `krun.ram_mib <= 128`) or not a whole MiB.
-- `MYSBX_GVISOR_ENV`: space-separated `KEY=VALUE` environment pins for
+- `MYSBX_PODMAN_ENV`: space-separated `KEY=VALUE` environment pins for
   this backend alone, emitted as `--env` after the config layers' `[env]`
   (a pin wins over a configured value) and before the sandbox's own
   `HOME`/`PATH`/XDG variables (which no pin can repoint). Entries
@@ -92,14 +92,14 @@ libkrun runtime) **runs** additionally read its OWN flag pins:
   the generated pi/opencode configurations read), because that URL is
   correct only inside a container. The option behind the pin is
   `myconfig.ai.dev.mysbx.gvisor.env`.
-- `MYSBX_GVISOR_SHELL` / `MYSBX_GVISOR_TOOLS_PATH`: the payload shell
+- `MYSBX_PODMAN_SHELL` / `MYSBX_PODMAN_TOOLS_PATH`: the payload shell
   and the tool `PATH` — **paths inside the container image**, not
   host store paths (the backend mounts nothing from the host
   `/nix/store`, so the bwrap pins `MYSBX_SHELL`/`MYSBX_TOOLS_PATH`
   must not and do not reach this backend's argv; bd myconfig-wao).
   Defaults: `/bin/bash` and `/bin:/usr/bin`, the gVisor agent image's
   own OCI config (`Cmd` / `Env`) — the same userland the agent-gvisor
-  sessions run against. The Nix wrapper pins `MYSBX_GVISOR_SHELL` on
+  sessions run against. The Nix wrapper pins `MYSBX_PODMAN_SHELL` on
   fish hosts to the fish binary as it exists inside the image (bd
   myconfig-cew: the image is provisioned with the host user's fish
   world, so an interactive session lands in the same shell, aliases
@@ -201,7 +201,7 @@ $ mysbx podman-load-image --force
 ### Use custom image reference
 
 ```bash
-$ MYSBX_GVISOR_IMAGE=localhost/my-agent:dev mysbx podman-load-image
+$ MYSBX_PODMAN_IMAGE=localhost/my-agent:dev mysbx podman-load-image
 ```
 
 ## Integration and Workflow

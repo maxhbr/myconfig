@@ -316,7 +316,7 @@ in
         git -C "$repo" config user.name t
         touch "$repo/README"
         git -C "$repo" add . && git -C "$repo" commit -qm init
-        export MYSBX_GVISOR_IMAGE=localhost/test:latest
+        export MYSBX_PODMAN_IMAGE=localhost/test:latest
         # The canonicalization needs a HOME that exists (the check
         # sandbox has none — runCommand's user is /homeless-shelter).
         mkdir -p "$TMPDIR/home"

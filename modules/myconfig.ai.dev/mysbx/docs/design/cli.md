@@ -641,7 +641,7 @@ cannot compute, rather than guessing past a broken layer.
    indented under a `worktrees:` heading, or a short `worktrees:
    none` line.
 5. **the gvisor image pin**, when this build carries one
-   (`MYSBX_GVISOR_IMAGE` of the wrapper) — the trivial tail: the
+   (`MYSBX_PODMAN_IMAGE` of the wrapper) — the trivial tail: the
    pin is what a `podman-gvisor` run would consume.
 
 **Reuse, not duplication.** The session and worktree rows come from

@@ -144,7 +144,7 @@ under the podman-gvisor backend").
 | `gvisor` | `--memory --cpus --pids-limit` | not rootless: default runtime flag `ignore-cgroups` (`rust/src/state.rs`) |
 | `microvm` | `resourceClasses.<c>.{count,vcpu,memoryMiB}` + `hypervisorTasksMax/CPUWeight/IOWeight` | yes (VM + systemd) |
 | `mysbx/bubblewrap`, `mysbx/nono` | none | — |
-| `mysbx/podman-gvisor` | env pins `MYSBX_GVISOR_{MEMORY,CPUS,PIDS_LIMIT}` → podman flags | not rootless (`ignore-cgroups`). mysbx prints a warning (`lib.rs`) |
+| `mysbx/podman-gvisor` | env pins `MYSBX_PODMAN_{MEMORY,CPUS,PIDS_LIMIT}` → podman flags | not rootless (`ignore-cgroups`). mysbx prints a warning (`lib.rs`) |
 | `mysbx/podman-krun` | the same pins → `krun.cpus` / `krun.ram_mib` annotations. pids and fractional values refused | yes (VM, bd myconfig-6di.5.6) |
 
 No `mysbx` config key sets limits. That is bd myconfig-91j.

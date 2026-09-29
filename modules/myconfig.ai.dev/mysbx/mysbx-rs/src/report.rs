@@ -80,7 +80,7 @@ pub struct Report<'a> {
     /// nono run claiming a `bwrap:` binary would lie.
     pub backend: &'a str,
     /// The container image of a podman-gvisor run
-    /// (`MYSBX_GVISOR_IMAGE`). `None` on bubblewrap, where the line
+    /// (`MYSBX_PODMAN_IMAGE`). `None` on bubblewrap, where the line
     /// is not printed at all — a bwrap run has no image, and printing
     /// `(none)` for it would suggest a missing pin instead of an
     /// inapplicable one.

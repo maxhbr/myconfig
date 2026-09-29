@@ -232,7 +232,7 @@ pub enum Display {
     /// The display channel of D18: a per-run waypipe channel between
     /// a host `waypipe client` and the in-sandbox `waypipe server` that
     /// wraps the payload. Needs the waypipe pin (`MYSBX_WAYPIPE`, or
-    /// `MYSBX_GVISOR_WAYPIPE` under podman-gvisor); a selection without
+    /// `MYSBX_PODMAN_WAYPIPE` under podman-gvisor); a selection without
     /// one is a refused run.
     Waypipe,
 }

@@ -70,7 +70,7 @@
 //!    6b. krun only: the per-run git trust file, bound ro (bd
 //!    myconfig-zj2)
 //! 7. environment: host-forwarded first, then `cfg.env`, then the
-//!    backend pins of `MYSBX_GVISOR_ENV`, then infrastructure
+//!    backend pins of `MYSBX_PODMAN_ENV`, then infrastructure
 //!    variables (`HOME`, the XDG base dirs derived from it, `PATH`,
 //!    CA-bundle vars, `TMUX_TMPDIR` for a multiplexer session)
 //! 8. resource limits: `--pids-limit`, `--memory`, `--cpus` (when
@@ -317,7 +317,7 @@ pub struct Params<'a> {
     /// (bound rw at itself, so the in-container waypipe server finds
     /// the socket where the host client created it) and the guest
     /// `waypipe server` binary — a path INSIDE the container image
-    /// (`MYSBX_GVISOR_WAYPIPE`, pinned by the wrapper when the image
+    /// (`MYSBX_PODMAN_WAYPIPE`, pinned by the wrapper when the image
     /// carries waypipe). `None` when nothing is pinned: a selected
     /// display is a refused run ([`Error::DisplayUnavailable`]) — the
     /// container mounts nothing from the host `/nix/store`, so no
@@ -382,7 +382,7 @@ pub struct Params<'a> {
     /// `Some("none")` means no network, or a pasta spec for custom
     /// networking.
     pub network_spec: Option<&'a str>,
-    /// Backend-specific environment pins (`MYSBX_GVISOR_ENV`), each a
+    /// Backend-specific environment pins (`MYSBX_PODMAN_ENV`), each a
     /// `KEY=VALUE` string. They are emitted AFTER the config layers'
     /// `[env]` (so a pin wins over a configured value) and BEFORE the
     /// infrastructure variables (so no pin can repoint `HOME`, the XDG
@@ -906,7 +906,7 @@ pub fn podman_run_argv(
     for (key, value) in &cfg.env {
         argv.extend(["--env".into(), format!("{key}={value}")]);
     }
-    // Backend pins (MYSBX_GVISOR_ENV): after the layers, so a pin wins
+    // Backend pins (MYSBX_PODMAN_ENV): after the layers, so a pin wins
     // over a configured value, and before the infrastructure variables
     // below, which stay the last word on `HOME`/`PATH`/the XDG dirs.
     for entry in params.extra_env {
@@ -1450,7 +1450,7 @@ pub enum Error {
     /// A `state-dirs` entry would make [`MUX_SOCKET_DIR`] sidecar-backed.
     MuxSocketPersisted { entry: String },
     /// The configuration selects the waypipe display (D18) but this
-    /// build pinned no in-image waypipe (`MYSBX_GVISOR_WAYPIPE`). The
+    /// build pinned no in-image waypipe (`MYSBX_PODMAN_WAYPIPE`). The
     /// container mounts nothing from the host `/nix/store`, so no
     /// host pin could serve — the refusal names the image.
     DisplayUnavailable,
@@ -1535,7 +1535,7 @@ impl fmt::Display for Error {
             Error::DisplayUnavailable => write!(
                 f,
                 "display = \"waypipe\" but no in-image waypipe is pinned \
-                 (MYSBX_GVISOR_WAYPIPE) \u{2014} the container would run \
+                 (MYSBX_PODMAN_WAYPIPE) \u{2014} the container would run \
                  headless instead of getting its windows \
                  (docs/design/config.md D18); bake waypipe into the \
                  container image (myconfig.ai.dev.mysbx.display.package), \

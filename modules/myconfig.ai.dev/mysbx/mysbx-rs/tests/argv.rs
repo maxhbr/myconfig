@@ -3525,7 +3525,7 @@ fn podman_params() -> PodmanParams<'static> {
         ignore_cgroups: false,
         network_spec: None,
         // No backend env pins by default (an unwrapped build sets
-        // MYSBX_GVISOR_ENV nowhere); the pin tests pass their own.
+        // MYSBX_PODMAN_ENV nowhere); the pin tests pass their own.
         extra_env: &[],
         // The git trust file is opt-in per run (bd myconfig-zj2); the
         // krun tests that exercise it pass their own.
@@ -3764,7 +3764,7 @@ fn podman_config_env_cannot_repoint_the_xdg_base_dirs() {
 
 #[test]
 fn podman_backend_env_pins_win_over_the_config_layers() {
-    // MYSBX_GVISOR_ENV carries environment that is only correct under
+    // MYSBX_PODMAN_ENV carries environment that is only correct under
     // this backend (the container-side URL of the host's LiteLLM
     // forwarder): emitted after the layers, so a pin beats an `[env]`
     // entry of the same name.

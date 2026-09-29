@@ -149,7 +149,7 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
     // selected — whether this build could actually open it (the
     // wrapper's `MYSBX_WAYPIPE` pin; a run would refuse the selection
     // without it). The pin probed here is the BWRAP backend's; the
-    // podman-gvisor backend's image pin (`MYSBX_GVISOR_WAYPIPE`) is
+    // podman-gvisor backend's image pin (`MYSBX_PODMAN_WAYPIPE`) is
     // checked at run time by the refusal path, not here — status does
     // not know which backend a run will use.
     p(match merged.display {
@@ -220,7 +220,7 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
     // 5. the gvisor image pin, when this build carries one: the
     // trivial tail of D19 — the wrapper's pin, or its absence, is
     // what a `podman-gvisor` run would consume.
-    if let Ok(image) = std::env::var("MYSBX_GVISOR_IMAGE") {
+    if let Ok(image) = std::env::var("MYSBX_PODMAN_IMAGE") {
         if !image.is_empty() {
             p(format!("gvisor image:    {image} [wrapper pin]"));
         }

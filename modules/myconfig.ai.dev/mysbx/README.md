@@ -393,14 +393,14 @@ namespace, where the baked URLs are already right.
    `0.0.0.0:<forwardPort>` → `127.0.0.1:<port>`, socket-activated, and
    dropped by the firewall on every interface but `lo`. mysbx turns it
    on wherever `gvisor.image` is set and the host runs LiteLLM.
-2. The wrapper pins `MYSBX_GVISOR_PASTA_SPEC` as
+2. The wrapper pins `MYSBX_PODMAN_PASTA_SPEC` as
    `pasta:--map-guest-addr,<address>`
    (`myconfig.ai.dev.mysbx.gvisor.pastaSpec`), so the container's
    connections to that address land on the host's global address, where
    the forwarder listens. Only services bound to `0.0.0.0` are reachable
    that way — the host's other loopback-only services stay unreachable.
 3. The wrapper pins the endpoint as backend environment
-   (`MYSBX_GVISOR_ENV`, `myconfig.ai.dev.mysbx.gvisor.env`):
+   (`MYSBX_PODMAN_ENV`, `myconfig.ai.dev.mysbx.gvisor.env`):
    `OPENAI_BASE_URL` plus the variables the generated agent
    configurations read — `MYCONFIG_LITELLM_BASE_URL` for pi's provider
    extensions and `OPENCODE_CONFIG_CONTENT` for opencode's provider

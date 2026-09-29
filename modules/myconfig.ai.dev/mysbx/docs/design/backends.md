@@ -585,7 +585,7 @@ Consequences, stated honestly:
   - The store is per-run and costs VM RAM. The tmpfs takes up to half
     the VM memory, and the 1024 MiB crun default is too small for
     dev shells, so the wrapper warns below 4 GiB. Set
-    `MYSBX_GVISOR_MEMORY` (8g or more for `nix develop`). Every run
+    `MYSBX_PODMAN_MEMORY` (8g or more for `nix develop`). Every run
     substitutes again.
   - Builds run as guest root without nix's own sandbox, so the VM is
     the boundary. `network = false` makes substitution and fetches

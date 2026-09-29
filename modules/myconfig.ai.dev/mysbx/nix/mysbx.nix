@@ -47,7 +47,7 @@
 #                     the payload. Absent for hosts that carry no
 #                     waypipe — a config selecting it is a refused
 #                     run, never a silently headless one.
-#   MYSBX_GVISOR_WAYPIPE
+#   MYSBX_PODMAN_WAYPIPE
 #                     the waypipe binary INSIDE the podman-gvisor
 #                     image, the server end of the same channel on
 #                     the container backend. Absent = refused.
@@ -57,7 +57,7 @@
 #                     libkrun, the runtime a `backend =
 #                     "podman-krun"` run passes to `podman
 #                     --runtime`. Pinned with `--set-default`, an
-#                     operator knob like MYSBX_GVISOR_PASTA_SPEC;
+#                     operator knob like MYSBX_PODMAN_PASTA_SPEC;
 #                     absent = the crate's bare `crun` PATH fallback.
 #   MYSBX_WAYPIPE_SECCTX
 #                     NOT a wrapper pin — a deliberate operator
@@ -95,7 +95,7 @@
 #                     (`nono` via env_or) applies.
 #   MYSBX_NONO_PROFILE
 #                     NOT a closure path — an operator knob like
-#                     MYSBX_GVISOR_PASTA_SPEC: the nono profile of
+#                     MYSBX_PODMAN_PASTA_SPEC: the nono profile of
 #                     every `nono run` (the crate's `--profile`
 #                     flag). Pinned with `--set-default`, so an
 #                     invocation can still override it. Default
@@ -131,7 +131,7 @@
 #
 # All these pins are absolute store paths — nothing is left to host lookup.
 # (MYSBX_NONO_PROFILE is an operator knob among them, like
-# MYSBX_GVISOR_PASTA_SPEC.)
+# MYSBX_PODMAN_PASTA_SPEC.)
 {
   lib,
   rustPlatform,
@@ -218,7 +218,7 @@
   gvisorImage ? null,
   # The shell of the podman-gvisor backend's INTERACTIVE payload (bd
   # myconfig-cew): the store path of the fish binary as it exists INSIDE
-  # `gvisorImage`. The wrapper pins it as `MYSBX_GVISOR_SHELL` so a
+  # `gvisorImage`. The wrapper pins it as `MYSBX_PODMAN_SHELL` so a
   # container session lands in the same shell as the host — the image
   # carries fish and the plugin/alias closure of the host's rendered
   # `~/.config/fish`, which mysbx mounts read-only, so the binary path
@@ -231,7 +231,7 @@
   # actually loaded.
   gvisorShell ? null,
   # The podman network spec of the podman-gvisor backend
-  # (`MYSBX_GVISOR_PASTA_SPEC`, ../docs/podman-load-image.md): a
+  # (`MYSBX_PODMAN_PASTA_SPEC`, ../docs/podman-load-image.md): a
   # `pasta:--map-guest-addr,<address>` spec that makes the host's
   # LiteLLM forwarder reachable from inside the container. `null`
   # leaves podman's default (shared) network.
@@ -242,7 +242,7 @@
   # path that must match the build.
   gvisorPastaSpec ? null,
   # Backend-specific environment pins of the podman-gvisor backend
-  # (`MYSBX_GVISOR_ENV`): an attrset rendered as a space-separated
+  # (`MYSBX_PODMAN_ENV`): an attrset rendered as a space-separated
   # `KEY=VALUE` list. The container gets them as `--env` after the
   # config layers and before the sandbox's own infrastructure
   # variables (src/podman_gvisor.rs section 7). What belongs here is
@@ -264,7 +264,7 @@
   #
   # Pinned with `--set-default`, not `--set`: the variable stays an
   # operator knob (a runtime swap for debugging), the same reasoning
-  # as MYSBX_GVISOR_PASTA_SPEC.
+  # as MYSBX_PODMAN_PASTA_SPEC.
   krunRuntime ? null,
   # The waypipe binary of the HOST side of the display channel
   # (../docs/design/config.md D18, `display = "waypipe"`): the wrapper
@@ -274,7 +274,7 @@
   waypipe ? null,
   # The waypipe binary INSIDE the podman-gvisor image (D18 on the
   # container backend): the store path of the waypipe binary as it
-  # exists inside `gvisorImage`, pinned as `MYSBX_GVISOR_WAYPIPE` for
+  # exists inside `gvisorImage`, pinned as `MYSBX_PODMAN_WAYPIPE` for
   # the same refusal semantics as the bwrap-side `waypipe`. `null`
   # pins nothing — `display = "waypipe"` with `backend =
   # "podman-gvisor"` is refused.
@@ -586,12 +586,12 @@ let
   #
   # The shell pin (bd myconfig-cew) sits in its own optionalString:
   # it is meaningful even for a caller that builds its own image
-  # reference (MYSBX_GVISOR_IMAGE by hand), but a `null` pins nothing
+  # reference (MYSBX_PODMAN_IMAGE by hand), but a `null` pins nothing
   # and the crate's image-OCI default (`/bin/bash`) applies. The
   # container `PATH` needs NO pin: the image's buildEnv links every
   # baked package's `bin` into `/bin`, so the OCI `PATH=/bin:/usr/bin`
   # already covers the provisioned tools.
-  # The rendered `MYSBX_GVISOR_ENV` value (see the `gvisorEnv`
+  # The rendered `MYSBX_PODMAN_ENV` value (see the `gvisorEnv`
   # argument): `KEY=VALUE` entries, space-separated, in attribute
   # order. A value carrying whitespace cannot survive that encoding,
   # so refuse it here instead of shipping a truncated variable.
@@ -599,7 +599,7 @@ let
     lib.mapAttrsToList (
       name: value:
       if builtins.match ".*[[:space:]].*" value != null then
-        throw "mysbx: gvisorEnv.${name} must not contain whitespace (MYSBX_GVISOR_ENV is a space-separated list), got `${value}`"
+        throw "mysbx: gvisorEnv.${name} must not contain whitespace (MYSBX_PODMAN_ENV is a space-separated list), got `${value}`"
       else
         "${name}=${value}"
     ) gvisorEnv
@@ -607,9 +607,9 @@ let
 
   gvisorPins =
     lib.optionalString (gvisorImage != null) (
-      "--set MYSBX_GVISOR_TARBALL '${gvisorImage}' "
-      + "--set MYSBX_GVISOR_IMAGE '${gvisorImage.imageName}:${gvisorImage.imageTag}' "
-      + "--set MYSBX_GVISOR_IMAGE_ID \"$(cat ${
+      "--set MYSBX_PODMAN_TARBALL '${gvisorImage}' "
+      + "--set MYSBX_PODMAN_IMAGE '${gvisorImage.imageName}:${gvisorImage.imageTag}' "
+      + "--set MYSBX_PODMAN_IMAGE_ID \"$(cat ${
         runCommand "mysbx-gvisor-image-id"
           {
             nativeBuildInputs = [
@@ -627,11 +627,11 @@ let
           ''
       })\" "
     )
-    + lib.optionalString (gvisorShell != null) "--set MYSBX_GVISOR_SHELL '${gvisorShell}' "
+    + lib.optionalString (gvisorShell != null) "--set MYSBX_PODMAN_SHELL '${gvisorShell}' "
     + lib.optionalString (
       gvisorPastaSpec != null
-    ) "--set-default MYSBX_GVISOR_PASTA_SPEC '${gvisorPastaSpec}' "
-    + lib.optionalString (gvisorEnv != { }) "--set MYSBX_GVISOR_ENV '${gvisorEnvValue}' ";
+    ) "--set-default MYSBX_PODMAN_PASTA_SPEC '${gvisorPastaSpec}' "
+    + lib.optionalString (gvisorEnv != { }) "--set MYSBX_PODMAN_ENV '${gvisorEnvValue}' ";
   # The podman-krun runtime pin (backends.md D2): the crun+libkrun
   # store path `--runtime` gets on the krun variant. `--set-default`:
   # an invocation can still point MYSBX_KRUN_RUNTIME at any runtime.
@@ -643,7 +643,7 @@ let
   # paths — the wrapper idiom of every other pin.
   waypipePins =
     lib.optionalString (waypipe != null) "--set MYSBX_WAYPIPE '${lib.getExe waypipe}' "
-    + lib.optionalString (gvisorWaypipe != null) "--set MYSBX_GVISOR_WAYPIPE '${gvisorWaypipe}'";
+    + lib.optionalString (gvisorWaypipe != null) "--set MYSBX_PODMAN_WAYPIPE '${gvisorWaypipe}'";
   # The nono backend pins of the layered backend (bd
   # myconfig-6di.4.3): the binary (`--set`, an absolute store path
   # like every other closure pin) and the mysbx profile (the

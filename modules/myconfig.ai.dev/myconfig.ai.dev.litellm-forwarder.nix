@@ -20,7 +20,7 @@
 #
 #   2. The sandbox runs with a `pasta:--map-guest-addr,<address>` podman network
 #      spec (`AGENT_GVISOR_NETWORK` of the gvisor tier,
-#      `MYSBX_GVISOR_PASTA_SPEC` of mysbx's podman-gvisor backend).
+#      `MYSBX_PODMAN_PASTA_SPEC` of mysbx's podman-gvisor backend).
 #      `--map-guest-addr` translates <address> to the *guest's assigned address
 #      on the host* — by default the host's global address (the address on the
 #      default-route interface). That address IS on the interface pasta binds

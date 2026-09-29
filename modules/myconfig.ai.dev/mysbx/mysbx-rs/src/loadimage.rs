@@ -17,9 +17,9 @@
 //! host builds a gVisor agent image (nix/mysbx.nix, same mechanism as
 //! the gvisor tier's `agent-gvisor-load-image`):
 //!
-//! - `MYSBX_GVISOR_TARBALL` — the docker-archive tarball to `podman load`
-//! - `MYSBX_GVISOR_IMAGE`    — the reference the runs use (`podman run <ref>`)
-//! - `MYSBX_GVISOR_IMAGE_ID` — the expected image ID (config-blob digest,
+//! - `MYSBX_PODMAN_TARBALL` — the docker-archive tarball to `podman load`
+//! - `MYSBX_PODMAN_IMAGE`    — the reference the runs use (`podman run <ref>`)
+//! - `MYSBX_PODMAN_IMAGE_ID` — the expected image ID (config-blob digest,
 //!   extracted from the tarball at build time), so staleness is
 //!   detected by identity, not by tag
 //!
@@ -65,15 +65,15 @@ Options:
   --force   reload unconditionally
   --test    do not load anything; report the state and exit 0 only if the
             current artifact is already the loaded one (1 otherwise)
-  --image   image reference to load (overrides $MYSBX_GVISOR_IMAGE; the
+  --image   image reference to load (overrides $MYSBX_PODMAN_IMAGE; the
             tarball, when pinned, is still loaded rather than pulled)
   --help    show this text
 
 Environment (set by the Nix wrapper when the host builds a gVisor agent
 image — see nix/mysbx.nix):
-  MYSBX_GVISOR_TARBALL  docker-archive tarball to `podman load`
-  MYSBX_GVISOR_IMAGE    image reference the runs use
-  MYSBX_GVISOR_IMAGE_ID expected image ID (config-blob digest), used to
+  MYSBX_PODMAN_TARBALL  docker-archive tarball to `podman load`
+  MYSBX_PODMAN_IMAGE    image reference the runs use
+  MYSBX_PODMAN_IMAGE_ID expected image ID (config-blob digest), used to
                         detect a stale build under the same tag
 ";
 
@@ -200,7 +200,7 @@ fn get_loaded_image_id(image_ref: &str) -> Option<String> {
 /// Check the store's image behind `image_ref` against the build this
 /// mysbx was wrapped with.
 ///
-/// The expected ID comes from `MYSBX_GVISOR_IMAGE_ID` (extracted from
+/// The expected ID comes from `MYSBX_PODMAN_IMAGE_ID` (extracted from
 /// the tarball's manifest at BUILD time, the same mechanism as the
 /// gvisor tier's `agent-gvisor-image-id` derivation) — falling back to
 /// reading the tarball's manifest at run time when the pin is absent,
@@ -326,7 +326,7 @@ pub fn run(args: &[String]) -> i32 {
                 }
                 if i + 1 >= args.len() {
                     eprintln!("mysbx podman-load-image: --image requires a value");
-                    eprintln!("  or set MYSBX_GVISOR_IMAGE (see --help)");
+                    eprintln!("  or set MYSBX_PODMAN_IMAGE (see --help)");
                     eprintln!("{}", USAGE);
                     return 2;
                 }
@@ -351,13 +351,16 @@ pub fn run(args: &[String]) -> i32 {
     // pin there is nothing to load and no registry to pull from — the
     // old fallback pulled `localhost/agent-gvisor:latest` from a
     // registry literally named localhost (bd myconfig-xrt).
-    let tarball = env_nonempty("MYSBX_GVISOR_TARBALL");
-    let ref_name = match image_override.or_else(|| env_nonempty("MYSBX_GVISOR_IMAGE")) {
+    if crate::refuse_renamed_podman_pins("mysbx podman-load-image") {
+        return 2;
+    }
+    let tarball = env_nonempty("MYSBX_PODMAN_TARBALL");
+    let ref_name = match image_override.or_else(|| env_nonempty("MYSBX_PODMAN_IMAGE")) {
         Some(r) => r,
         None => {
             eprintln!("mysbx podman-load-image: no image configured");
             eprintln!(
-                "  the Nix wrapper pins MYSBX_GVISOR_TARBALL / _IMAGE / _IMAGE_ID \
+                "  the Nix wrapper pins MYSBX_PODMAN_TARBALL / _IMAGE / _IMAGE_ID \
                  when the host builds a gVisor agent image"
             );
             eprintln!("  pass --image <ref>, or set the variables, to load explicitly");
@@ -365,7 +368,7 @@ pub fn run(args: &[String]) -> i32 {
             return 2;
         }
     };
-    let expected = env_nonempty("MYSBX_GVISOR_IMAGE_ID");
+    let expected = env_nonempty("MYSBX_PODMAN_IMAGE_ID");
 
     // A tarball (pinned, or given via --image as an existing path) is
     // loaded; a bare reference with no tarball is refused — `podman
@@ -375,7 +378,7 @@ pub fn run(args: &[String]) -> i32 {
     if !Path::new(tarball_path).exists() {
         eprintln!("mysbx podman-load-image: no image tarball to load");
         eprintln!(
-            "  MYSBX_GVISOR_TARBALL is not set and {ref_name} is not a file; \
+            "  MYSBX_PODMAN_TARBALL is not set and {ref_name} is not a file; \
              pulling from a registry is not supported for the Nix-built \
              image (no registry serves it)"
         );

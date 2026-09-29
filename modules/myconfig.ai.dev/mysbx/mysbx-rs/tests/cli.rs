@@ -65,13 +65,13 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         // mysbx on PATH would otherwise leak its image pins into tests
         // that must exercise the UNPINNED refusal paths (bd
         // myconfig-xrt).
-        .env_remove("MYSBX_GVISOR_TARBALL")
-        .env_remove("MYSBX_GVISOR_IMAGE")
-        .env_remove("MYSBX_GVISOR_IMAGE_ID")
+        .env_remove("MYSBX_PODMAN_TARBALL")
+        .env_remove("MYSBX_PODMAN_IMAGE")
+        .env_remove("MYSBX_PODMAN_IMAGE_ID")
         .env_remove("MYSBX_GVISOR_RUNTIME_FLAGS")
         .env_remove("MYSBX_GVISOR_CGROUP_MANAGER")
-        .env_remove("MYSBX_GVISOR_SHELL")
-        .env_remove("MYSBX_GVISOR_TOOLS_PATH")
+        .env_remove("MYSBX_PODMAN_SHELL")
+        .env_remove("MYSBX_PODMAN_TOOLS_PATH")
         .env_remove("MYSBX_PODMAN")
         .env_remove("MYSBX_NONO")
         .env_remove("MYSBX_NONO_PROFILE")
@@ -80,7 +80,7 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         // mysbx on PATH would otherwise leak its display pins into
         // tests that must exercise the UNPINNED refusal path.
         .env_remove("MYSBX_WAYPIPE")
-        .env_remove("MYSBX_GVISOR_WAYPIPE")
+        .env_remove("MYSBX_PODMAN_WAYPIPE")
         .env_remove("MYSBX_WAYPIPE_SECCTX")
         // Keep the host's TERM & co. out of the result: the forwarded set
         // must come only from variables the test actually sets. The list
@@ -89,6 +89,10 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         ;
     for name in mysbx::FORWARDED_ENV_VARS {
         cmd.env_remove(name);
+    }
+    for suffix in mysbx::RENAMED_PODMAN_PINS {
+        cmd.env_remove(format!("MYSBX_PODMAN_{suffix}"));
+        cmd.env_remove(format!("MYSBX_GVISOR_{suffix}"));
     }
     cmd
 }
@@ -900,7 +904,7 @@ fn the_backend_flag_overrides_both_config_layers() {
         &inv,
         &["--backend", "podman-gvisor", "--verbose", "--dry-run"],
     );
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -7309,7 +7313,7 @@ fn podman_load_image_with_image_ref() {
 
 #[test]
 fn podman_load_image_without_any_pin_is_usage_error() {
-    // No --image, no MYSBX_GVISOR_* pins: a usage error, never an
+    // No --image, no MYSBX_PODMAN_* pins: a usage error, never an
     // invented default reference (bd myconfig-xrt).
     let (inv, _, _) = fixture_user_backend("podman-load-image-unpinned", &[]);
     let (code, _, stderr) = run_binary_with(&inv, &["podman-load-image"]);
@@ -7319,7 +7323,7 @@ fn podman_load_image_without_any_pin_is_usage_error() {
 
 #[test]
 fn podman_gvisor_backend_without_image_pin_is_refused() {
-    // backend = "podman-gvisor" with no MYSBX_GVISOR_IMAGE pin is a
+    // backend = "podman-gvisor" with no MYSBX_PODMAN_IMAGE pin is a
     // refused run (exit 70), never a run against an invented
     // `localhost/…` reference (bd myconfig-xrt).
     let (inv, repo, sidecar) = fixture("podman-gvisor-unpinned", &[]);
@@ -7333,6 +7337,40 @@ fn podman_gvisor_backend_without_image_pin_is_refused() {
 }
 
 #[test]
+fn podman_backends_refuse_the_old_gvisor_pin_names() {
+    // The shared pins are MYSBX_PODMAN_*; a set MYSBX_GVISOR_MEMORY
+    // must refuse (naming the new variable), not run without the limit.
+    for backend in ["podman-gvisor", "podman-krun"] {
+        let (inv, _repo, sidecar) = fixture(&format!("{backend}-old-pin"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\n"),
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+            .env("MYSBX_GVISOR_MEMORY", "8g");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert_eq!(out.status.code(), Some(2), "{backend} stderr: {stderr}");
+        assert!(
+            stderr.contains("MYSBX_GVISOR_MEMORY was renamed to MYSBX_PODMAN_MEMORY"),
+            "{backend} stderr: {stderr}"
+        );
+    }
+    let (inv, _, _) = fixture_user_backend("podman-load-image-old-pin", &[]);
+    let mut cmd = spawn_with_args(&inv, &["podman-load-image", "--test"]);
+    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert_eq!(out.status.code(), Some(2), "stderr: {stderr}");
+    assert!(
+        stderr.contains("MYSBX_GVISOR_IMAGE was renamed to MYSBX_PODMAN_IMAGE"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
 fn podman_gvisor_rootless_cgroup_env_overrides_defaults() {
     // The cgroup handling is operator-overridable per invocation: with
     // MYSBX_GVISOR_RUNTIME_FLAGS and MYSBX_GVISOR_CGROUP_MANAGER set,
@@ -7341,7 +7379,7 @@ fn podman_gvisor_rootless_cgroup_env_overrides_defaults() {
     let (inv, repo, sidecar) = fixture("podman-gvisor-cgroup-env", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
         .env("MYSBX_GVISOR_CGROUP_MANAGER", "systemd")
         .env("MYSBX_GVISOR_RUNTIME_FLAGS", "ignore-cgroups");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
@@ -7371,7 +7409,7 @@ fn podman_gvisor_payload_uses_the_image_userland_not_host_pins() {
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     // The host pins are set (as the wrapper does) and must be IGNORED
     // by this backend.
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
         .env("MYSBX_SHELL", "/nix/store/aaaa-bash/bin/bash")
         .env("MYSBX_TOOLS_PATH", "/nix/store/bbbb-tools/bin")
         .env("MYSBX_CA_BUNDLE", "/nix/store/cccc-cacert/ca-bundle.crt")
@@ -7411,7 +7449,7 @@ fn podman_gvisor_payload_uses_the_image_userland_not_host_pins() {
 
 #[test]
 fn podman_gvisor_shell_pin_replaces_the_payload_shell() {
-    // bd myconfig-cew: the wrapper pins `MYSBX_GVISOR_SHELL` to the
+    // bd myconfig-cew: the wrapper pins `MYSBX_PODMAN_SHELL` to the
     // fish binary AS IT EXISTS INSIDE THE IMAGE (the gvisor tier
     // bakes the host user's fish world, and the ro `~/.config/fish`
     // mount carries its configuration — so a container session lands
@@ -7424,8 +7462,8 @@ fn podman_gvisor_shell_pin_replaces_the_payload_shell() {
     let (inv, _repo, sidecar) = fixture("podman-gvisor-shell-pin", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
-        .env("MYSBX_GVISOR_SHELL", "/nix/store/eeee-fish/bin/fish");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+        .env("MYSBX_PODMAN_SHELL", "/nix/store/eeee-fish/bin/fish");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(out.status.code(), Some(0));
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -7441,8 +7479,8 @@ fn podman_gvisor_shell_pin_replaces_the_payload_shell() {
     // trailing blank), so the payload is the trailing slice after the
     // image reference — the argv IS the whole stdout here.
     let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "rg", "--version"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
-        .env("MYSBX_GVISOR_SHELL", "/nix/store/eeee-fish/bin/fish");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+        .env("MYSBX_PODMAN_SHELL", "/nix/store/eeee-fish/bin/fish");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(out.status.code(), Some(0));
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -7476,7 +7514,7 @@ fn verbose_podman_run_prints_the_executed_argv_and_wires_stdio() {
     let (inv, _, sidecar) = fixture("podman-gvisor-verbose-exec", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--verbose", "--multiplexer", "none"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
         .env("MYSBX_PODMAN", "/usr/bin/env");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -7524,7 +7562,7 @@ fn podman_gvisor_multiplexer_without_image_entry_is_refused() {
     )
     .unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
         // A HOST mux entry pin is set — and must not satisfy the
         // podman backend: a host store script cannot be the payload
         // of a container that mounts nothing from the host store.
@@ -7822,7 +7860,7 @@ fn podman_krun_network_false_is_enforced_like_gvisor() {
     )
     .unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -7866,12 +7904,12 @@ fn podman_krun_dry_run_swaps_the_runtime_keeps_the_layout() {
     // the pinned crun+libkrun path (MYSBX_KRUN_RUNTIME), plus the
     // enumerated D2 differences (the handler annotation — asserted
     // by its own test — and the dropped guest-unenforceable hardening
-    // flags). The same image pin (MYSBX_GVISOR_IMAGE) serves both
+    // flags). The same image pin (MYSBX_PODMAN_IMAGE) serves both
     // variants.
     let (inv, _, sidecar) = fixture("podman-krun-dry-run", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest").env(
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest").env(
         "MYSBX_KRUN_RUNTIME",
         "/nix/store/synth-crun-libkrun/bin/crun",
     );
@@ -7948,7 +7986,7 @@ fn podman_krun_dry_run_needs_no_kvm() {
     let (inv, _, sidecar) = fixture("podman-krun-dry-no-kvm", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -7962,7 +8000,7 @@ fn podman_krun_dry_run_needs_no_kvm() {
 
 #[test]
 fn podman_krun_limits_become_vm_annotations() {
-    // bd myconfig-6di.5.6: the SHARED limit pins (MYSBX_GVISOR_CPUS /
+    // bd myconfig-6di.5.6: the SHARED limit pins (MYSBX_PODMAN_CPUS /
     // _MEMORY — one "resource limits of the sandbox" setting per
     // host, both podman variants consume them) map onto krun VM
     // annotations on the dry-run argv: no cgroup flags, and a
@@ -7970,9 +8008,9 @@ fn podman_krun_limits_become_vm_annotations() {
     let (inv, _, sidecar) = fixture("podman-krun-limits", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
-        .env("MYSBX_GVISOR_CPUS", "2")
-        .env("MYSBX_GVISOR_MEMORY", "4g");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+        .env("MYSBX_PODMAN_CPUS", "2")
+        .env("MYSBX_PODMAN_MEMORY", "4g");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -7997,8 +8035,8 @@ fn podman_krun_limits_become_vm_annotations() {
     let (inv, _, sidecar) = fixture("podman-krun-pids", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest")
-        .env("MYSBX_GVISOR_PIDS_LIMIT", "512");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+        .env("MYSBX_PODMAN_PIDS_LIMIT", "512");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -8027,7 +8065,7 @@ fn podman_krun_dry_run_carries_the_handler_annotation() {
     let (inv, _, sidecar) = fixture("podman-krun-annotation", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -8602,7 +8640,7 @@ fn podman_krun_git_trust_names_exactly_the_bound_workspace_paths() {
     let (inv, repo, sidecar) = fixture("podman-krun-git-trust", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -8637,7 +8675,7 @@ fn podman_gvisor_carries_no_trust_file() {
     let (inv, _, sidecar) = fixture("podman-gvisor-git-trust", &[]);
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_GVISOR_IMAGE", "localhost/test:latest");
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),

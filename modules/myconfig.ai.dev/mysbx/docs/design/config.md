@@ -1071,7 +1071,7 @@ that wants a headless run on a graphical host.
 
 **Availability is checked, never fallen back on.** `waypipe` needs a
 pin from mysbx's own closure — `MYSBX_WAYPIPE` (the host-side client
-binary; on the podman-gvisor backend, `MYSBX_GVISOR_WAYPIPE` for the
+binary; on the podman-gvisor backend, `MYSBX_PODMAN_WAYPIPE` for the
 in-image server end), set by the wrapper (`../../nix/mysbx.nix`) from
 `myconfig.ai.dev.mysbx.display.package` (`../../default.nix`). A selection
 that is not pinned — an unwrapped build, a host that installs no

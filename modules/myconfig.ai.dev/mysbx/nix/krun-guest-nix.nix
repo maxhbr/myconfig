@@ -132,7 +132,7 @@ let
         mem=$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)
         if [ "''${mem:-0}" -lt ${toString minRamMib} ]; then
           echo "nix (mysbx krun wrapper): warning: the VM has ''${mem} MiB; new store paths live on tmpfs (at most half of it)." >&2
-          echo "  set MYSBX_GVISOR_MEMORY (e.g. 8g) for substitutions and dev shells" >&2
+          echo "  set MYSBX_PODMAN_MEMORY (e.g. 8g) for substitutions and dev shells" >&2
         fi
       fi
       exec 9<&-
