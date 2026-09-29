@@ -141,8 +141,8 @@ Commands:
                 `git -C <worktree> diff <base>...<branch>`. The base
                 is workmux's own record —
                 `branch.<branch>.workmux-base` of the host repo's
-                config — falling back to `master`, then `main`, then
-                the host repo's HEAD when no record exists; the base
+                config — falling back to `main`, then the host
+                repo's HEAD when no record exists; the base
                 that answered is reported to stderr. git's own exit
                 code and diagnostics pass through
   worktree hunk NAME

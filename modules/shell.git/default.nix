@@ -28,8 +28,8 @@ let
       cob = "checkout -b";
       f = "!f() { git fetch \${1:-\"--all\"}; }; f";
       fb = "!f() { git fetch --prune \${1:-\"--all\"}; }; f";
-      fum = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git fetch origin master:master; else git fetch upstream master:master; fi; }; f";
-      pum = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git pull --rebase=interactive origin master; else git pull --rebase=interactive upstream master; fi; }; f";
+      fum = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git fetch origin main:main; else git fetch upstream main:main; fi; }; f";
+      pum = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git pull --rebase=interactive origin main; else git pull --rebase=interactive upstream main; fi; }; f";
       up = "!git remote update -p; git merge --ff-only @{u}";
       cp = "cherry-pick";
 
@@ -39,17 +39,17 @@ let
       pullb = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git pull \"\${1:-origin}\" \"$branchname\"; fi; }; f";
 
       d = "diff";
-      dm = "diff master";
+      dm = "diff main";
       d0 = "diff HEAD";
       d1 = "diff HEAD~";
       d2 = "diff HEAD~2";
       d3 = "diff HEAD~3";
       d4 = "diff HEAD~4";
-      d1d = "diff master@{1day}...master";
-      d2d = "diff master@{2day}...master";
-      d3d = "diff master@{3day}...master";
-      d4d = "diff master@{4day}...master";
-      d1w = "diff master@{1week}...master";
+      d1d = "diff main@{1day}...main";
+      d2d = "diff main@{2day}...main";
+      d3d = "diff main@{3day}...main";
+      d4d = "diff main@{4day}...main";
+      d1w = "diff main@{1week}...main";
       dstaged = "diff --staged";
       ds = "diff --stat -r";
       ds0 = "diff --stat -r HEAD";
@@ -60,12 +60,12 @@ let
       dd = "diff --word-diff=color";
       dw = "diff --color-words=\"[^[:space:],;:_-]+\"";
       dt = "difftool --dir-diff";
-      dAncestor = "!f() { git diff $(git merge-base master HEAD); }; f";
-      dsAncestor = "!f() { git diff --stat $(git merge-base master HEAD); }; f";
+      dAncestor = "!f() { git diff $(git merge-base main HEAD); }; f";
+      dsAncestor = "!f() { git diff --stat $(git merge-base main HEAD); }; f";
       # See `git-branch-summary` (installed via home.packages below) and
       # modules/shell.git/docs/branch-diff.md for why this isn't just
       # another `dAncestor`-style alias: it auto-detects the base branch
-      # instead of hardcoding master.
+      # instead of hardcoding main.
       bs = "!git-branch-summary";
       changes = "diff --name-status -r";
       diffstat = "diff --stat -r";
@@ -74,9 +74,9 @@ let
       ri = "rebase --autosquash --interactive";
       rc = "rebase --continue";
       ra = "rebase --abort";
-      rMaster = "rebase --autosquash --interactive master";
-      rAncestor = "!f() { git rebase --autosquash --interactive $(git merge-base \${1:-master} HEAD); }; f";
-      rsAncestor = "!f() { git reset --soft $(git merge-base master HEAD); }; f";
+      rMain = "rebase --autosquash --interactive main";
+      rAncestor = "!f() { git rebase --autosquash --interactive $(git merge-base \${1:-main} HEAD); }; f";
+      rsAncestor = "!f() { git reset --soft $(git merge-base main HEAD); }; f";
 
       mkBundle = "!f() { git bundle create \"../$(basename $(pwd)).bundle\" --all; }; f";
       mkBundleDated = "!f() { git bundle create \"../$(date '+%Y-%m-%d')_$(basename $(pwd)).bundle\" --all; }; f";
@@ -118,8 +118,8 @@ let
                     }; f";
       remotes = "remote -v";
 
-      listMergedBranches = "!f() { git branch --merged master | grep -v \"* master\"; }; f";
-      listMergedBranchesAndDelete = "!f() { git branch --merged master | grep -v \"* master\" | xargs -n 1 git branch -d; }; f";
+      listMergedBranches = "!f() { git branch --merged main | grep -v \"* main\"; }; f";
+      listMergedBranchesAndDelete = "!f() { git branch --merged main | grep -v \"* main\" | xargs -n 1 git branch -d; }; f";
       # Pretty graphs
       lol = "log --graph --decorate --pretty=oneline --abbrev-commit";
       lola = "log --graph --decorate --pretty=oneline --abbrev-commit --all";
@@ -170,8 +170,8 @@ let
       sshow = "!f() { git stash show stash^{/$*} -p; }; f";
       sapply = "!f() { git stash apply stash^{/$*}; }; f";
       # git subtree:
-      sba = "!f() { git subtree add --prefix $2 $1 master --squash; }; f";
-      sbu = "!f() { git subtree pull --prefix $2 $1 master --squash; }; f";
+      sba = "!f() { git subtree add --prefix $2 $1 \${3:-main} --squash; }; f";
+      sbu = "!f() { git subtree pull --prefix $2 $1 \${3:-main} --squash; }; f";
       # testing:
       recap = "!f() { local default=$(git config user.email); git log --all --pretty=format:'%Cred%h%Creset - %s%Cgreen (%cr) %Cblue<%aN>' --no-merges --author=\${1:-$default} \${@:2}; }; f";
       incoming = "!git remote update -p; git log ..@{u}";
@@ -241,8 +241,8 @@ let
   # branch adds on top of its base -- the commits (base..HEAD) and, by
   # default, a combined diffstat (base...HEAD). Unlike the `dAncestor` /
   # `dsAncestor` aliases above, it auto-detects the base branch (origin's
-  # default branch, then "main", then "master") instead of hardcoding
-  # "master". See modules/shell.git/docs/branch-diff.md for the rationale.
+  # default branch, then "main") instead of hardcoding it. See
+  # modules/shell.git/docs/branch-diff.md for the rationale.
   gitBranchSummary = pkgs.writeShellApplication {
     name = "git-branch-summary";
     runtimeInputs = [ pkgs.git ];
@@ -255,7 +255,7 @@ let
       (base..HEAD) and, by default, a combined diffstat (base...HEAD).
 
         <base>        explicit base branch/ref; auto-detected if omitted
-                      (origin's default branch, then "main", then "master")
+                      (origin's default branch, then "main")
         --log         show only the commit log
         --stat        show only the diffstat
         --diff/--patch
@@ -280,7 +280,7 @@ let
       detect_base() {
           local sym candidate
           sym="$(git symbolic-ref --short --quiet refs/remotes/origin/HEAD 2>/dev/null || true)"
-          for candidate in "''${sym#origin/}" main master; do
+          for candidate in "''${sym#origin/}" main; do
               [ -n "$candidate" ] || continue
               if resolve_ref "$candidate"; then
                   return 0
@@ -321,7 +321,7 @@ let
           fi
       else
           if ! base="$(detect_base)"; then
-              echo "git-branch-summary: could not determine base branch (tried origin's default, main, master)" >&2
+              echo "git-branch-summary: could not determine base branch (tried origin's default, main)" >&2
               exit 1
           fi
       fi

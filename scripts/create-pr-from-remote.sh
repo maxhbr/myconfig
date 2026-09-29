@@ -2,7 +2,7 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Fetch a remote's master and create a GitHub PR to merge it into origin/master.
+# Fetch a remote's main and create a GitHub PR to merge it into origin/main.
 # Optionally excludes flake.lock changes to avoid merge conflicts.
 #
 # Usage: create-pr-from-remote.sh [REMOTE] [--include-flake-lock]
@@ -23,19 +23,19 @@ for arg in "$@"; do
     esac
 done
 
-BRANCH="merge/${REMOTE}-master"
+BRANCH="merge/${REMOTE}-main"
 TIMESTAMP="$(date +%Y-%m-%d-%H%M)"
 BRANCH="${BRANCH}-${TIMESTAMP}"
 
 echo "==> Fetching remote '${REMOTE}'..."
 git fetch "${REMOTE}"
 
-REMOTE_REF="${REMOTE}/master"
-LOCAL_MASTER="origin/master"
+REMOTE_REF="${REMOTE}/main"
+LOCAL_MAIN="origin/main"
 
 # Check if there are any differences
-if git diff --quiet "${LOCAL_MASTER}..${REMOTE_REF}" --; then
-    echo "No differences between ${LOCAL_MASTER} and ${REMOTE_REF}. Nothing to do."
+if git diff --quiet "${LOCAL_MAIN}..${REMOTE_REF}" --; then
+    echo "No differences between ${LOCAL_MAIN} and ${REMOTE_REF}. Nothing to do."
     exit 0
 fi
 
@@ -50,13 +50,13 @@ echo "==> Creating branch '${BRANCH}' from '${REMOTE_REF}'..."
 git checkout -b "${BRANCH}" "${REMOTE_REF}"
 
 if [[ ${INCLUDE_FLAKE_LOCK} == "false" ]]; then
-    # Reset flake.lock to the state on origin/master to avoid conflicts
-    if git diff --quiet "${LOCAL_MASTER}" "${REMOTE_REF}" -- flake.lock; then
+    # Reset flake.lock to the state on origin/main to avoid conflicts
+    if git diff --quiet "${LOCAL_MAIN}" "${REMOTE_REF}" -- flake.lock; then
         echo "==> flake.lock is identical, nothing to filter."
     else
-        echo "==> Resetting flake.lock to origin/master state..."
-        git checkout "${LOCAL_MASTER}" -- flake.lock
-        git commit -m "reset flake.lock to origin/master state"
+        echo "==> Resetting flake.lock to origin/main state..."
+        git checkout "${LOCAL_MAIN}" -- flake.lock
+        git commit -m "reset flake.lock to origin/main state"
     fi
 fi
 
@@ -65,14 +65,14 @@ git push -u origin "${BRANCH}"
 
 echo "==> Creating pull request..."
 gh pr create \
-    --base master \
+    --base main \
     --head "${BRANCH}" \
-    --title "Merge ${REMOTE}/master (${TIMESTAMP})" \
+    --title "Merge ${REMOTE}/main (${TIMESTAMP})" \
     --body "$(
         cat <<EOF
 ## Summary
 
-- Merge changes from \`${REMOTE}/master\` into \`master\`
+- Merge changes from \`${REMOTE}/main\` into \`main\`
 - Source remote: \`${REMOTE}\` (\`$(git remote get-url "${REMOTE}")\`)
 $(if [[ ${INCLUDE_FLAKE_LOCK} == "false" ]]; then echo "- **flake.lock changes excluded** to avoid merge conflicts"; fi)
 EOF

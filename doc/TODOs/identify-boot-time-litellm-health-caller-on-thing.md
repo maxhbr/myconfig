@@ -23,7 +23,7 @@ the `llama-cpp-33657` container. Root cause chain:
    Strix Halo unified memory → OOM at boot.
 
 **Repo-side fix already merged** (commit 277c2312c9 "litellm: never
-health-probe on-demand local model backends", on `master`, branch
+health-probe on-demand local model backends", on `main`, branch
 `thing-litellm-fix` merged it earlier):
 
 - `modules/myconfig.ai.llmops/services.litellm.nix` +

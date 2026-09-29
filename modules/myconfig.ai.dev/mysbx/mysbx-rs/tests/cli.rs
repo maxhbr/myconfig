@@ -6861,7 +6861,7 @@ fn a_session_hunk_started_inside_a_session_clone_is_refused() {
 // ---- the worktree noun group (docs/design/worktree.md W1-W5) ---------
 
 /// A git fixture with a workmux-style worktrees sibling: a real repo
-/// with one commit on `master`, plus `<repo>__worktrees/<handle>` —
+/// with one commit on `main`, plus `<repo>__worktrees/<handle>` —
 /// a real LINKED worktree on its own branch (created with
 /// `git worktree add`, exactly what `workmux add` runs), with the
 /// workmux base record written like workmux writes it

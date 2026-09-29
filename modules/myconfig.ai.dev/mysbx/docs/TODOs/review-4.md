@@ -2,9 +2,9 @@
 
 Repository: <https://github.com/maxhbr/myconfig>
 
-Review baseline: `master` at `415c27495b8114b737575196dcaff39816ace404`.
+Review baseline: `main` at `415c27495b8114b737575196dcaff39816ace404`.
 
-Before editing, update to the latest `master`, record the exact base SHA, and verify that each finding still applies. Preserve all unrelated work that landed after this review, especially the recent state-directory and OpenCode changes. Follow the repository's `AGENTS.md`, work on a feature branch/worktree, and keep the changes reviewable—preferably one focused commit per item.
+Before editing, update to the latest `main`, record the exact base SHA, and verify that each finding still applies. Preserve all unrelated work that landed after this review, especially the recent state-directory and OpenCode changes. Follow the repository's `AGENTS.md`, work on a feature branch/worktree, and keep the changes reviewable—preferably one focused commit per item.
 
 All four findings below still apply at the review baseline. Items 1 and 2 are security blockers. Item 4 is now a Nix-generation coverage and override-semantics issue; runtime ripgrep activation itself is already fixed.
 
@@ -206,4 +206,4 @@ Return:
 3. the regression tests added for each item;
 4. all validation commands with pass/fail/skip status;
 5. any remaining security assumptions or known limitations; and
-6. a short note if any item was already fixed differently on newer `master`, with evidence rather than duplicating or reverting that work.
+6. a short note if any item was already fixed differently on newer `main`, with evidence rather than duplicating or reverting that work.

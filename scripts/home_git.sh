@@ -13,13 +13,13 @@ init_secrets_git() (
     local SECRETS_GIT_DIR="$1"
     mkdir -p "$SECRETS_GIT_DIR"
     cd "$SECRETS_GIT_DIR"
-    git init --bare
+    git init --bare --initial-branch=main
     cd $(mktemp -d)
     git clone "$SECRETS_GIT_DIR" .
     touch README.md
     git add README.md
     git commit -am "initial commit"
-    git push origin master
+    git push origin HEAD:main
 )
 
 setup_on_demand() {

@@ -108,7 +108,7 @@ marking entries without a `.git` pointer as debris; `diff` shows the
 THREE-DOT diff `<base>...<branch>` — the changes since the worktree
 diverged from its base, where the base is workmux's own
 `branch.<branch>.workmux-base` record of the host repo's config,
-falling back to `master`, `main`, then the host HEAD; and `hunk`
+falling back to `main`, then the host HEAD; and `hunk`
 opens that same range in the interactive `hunk` diff viewer (exec'd,
 its exit code propagates). All three start no sandbox; `--dry-run`
 prints the exact commands instead. Creating, merging and removing

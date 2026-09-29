@@ -21,7 +21,7 @@ directly in the main checkout can be moved into its own worktree.
               you want mid-work), not from the default branch.
               If omitted, the currently checked out branch is used; this is
               an error when the current branch is the default branch
-              (origin's HEAD, else "main", else "master").
+              (origin's HEAD, else "main").
 
   -h, --help  Show this help.
 
@@ -86,7 +86,7 @@ worktree_of_branch() {
 detect_default_branch() {
     local sym candidate
     sym="$(git symbolic-ref --short --quiet refs/remotes/origin/HEAD 2>/dev/null || true)"
-    for candidate in "${sym#origin/}" main master; do
+    for candidate in "${sym#origin/}" main; do
         [ -n "$candidate" ] || continue
         if branch_exists "$candidate" ||
             git show-ref --verify --quiet "refs/remotes/origin/$candidate"; then
@@ -124,7 +124,7 @@ repo_root="$(main_worktree)"
 
 default_branch="$(detect_default_branch || true)"
 [ -n "$default_branch" ] ||
-    die "could not determine the default branch (tried origin's HEAD, main, master)"
+    die "could not determine the default branch (tried origin's HEAD, main)"
 
 current_branch="$(git symbolic-ref --short --quiet HEAD || true)"
 

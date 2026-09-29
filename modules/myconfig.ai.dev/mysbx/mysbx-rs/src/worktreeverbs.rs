@@ -32,7 +32,7 @@
 //!   base — the same semantic as `mysbx diff` (workspace.md D6),
 //!   applied to worktrees. The base is workmux's own record,
 //!   `branch.<branch>.workmux-base` of the host repo's config, with
-//!   the master/main/HEAD fallback chain for a worktree no workmux
+//!   the main/HEAD fallback chain for a worktree no workmux
 //!   base names; the fallback that fired is reported to stderr, so a
 //!   configured base is never confused with a guessed one.
 //! - **`hunk NAME`** — the same three-dot range in the interactive
@@ -191,12 +191,12 @@ pub fn base_argv(repo: &Repo, branch: &str) -> Vec<String> {
 }
 
 /// The fallback chain of W3, tried in order when no `workmux-base`
-/// key names the base: the FIRST of `master`, `main`, `HEAD` that the
-/// HOST REPO resolves. A repo whose main branch is neither spelling
-/// falls back to its own HEAD — the diff is then against the current
-/// checkout, the same anchor `git diff`'s three-dot form uses when no
-/// other end is named.
-pub const BASE_FALLBACKS: &[&str] = &["master", "main", "HEAD"];
+/// key names the base: `main` when the HOST REPO resolves it, else
+/// its `HEAD`. A repo without a `main` branch falls back to its own
+/// HEAD — the diff is then against the current checkout, the same
+/// anchor `git diff`'s three-dot form uses when no other end is
+/// named.
+pub const BASE_FALLBACKS: &[&str] = &["main", "HEAD"];
 
 /// The base branch of `branch` (W3): the workmux record when it
 /// exists, the first fallback the host repo resolves otherwise. The
@@ -714,13 +714,13 @@ mod tests {
         // base does not have" — the base's own drift is not the
         // worktree's work.
         assert_eq!(
-            count_argv(Path::new("/synth/repo__worktrees/fix-1"), "master", "fix-1"),
+            count_argv(Path::new("/synth/repo__worktrees/fix-1"), "main", "fix-1"),
             vec![
                 "-C".to_string(),
                 "/synth/repo__worktrees/fix-1".to_string(),
                 "rev-list".to_string(),
                 "--count".to_string(),
-                "master..fix-1".to_string(),
+                "main..fix-1".to_string(),
             ]
         );
     }
@@ -731,12 +731,12 @@ mod tests {
         // divergence, not the base's own drift (the same semantic as
         // `mysbx diff`, workspace.md D6).
         assert_eq!(
-            diff_argv(Path::new("/synth/repo__worktrees/fix-1"), "master", "fix-1"),
+            diff_argv(Path::new("/synth/repo__worktrees/fix-1"), "main", "fix-1"),
             vec![
                 "-C".to_string(),
                 "/synth/repo__worktrees/fix-1".to_string(),
                 "diff".to_string(),
-                "master...fix-1".to_string(),
+                "main...fix-1".to_string(),
             ]
         );
     }
@@ -746,8 +746,8 @@ mod tests {
         // W4: `hunk diff <base>...<branch>` — the same range the
         // diff verb shows, in the interactive viewer.
         assert_eq!(
-            hunk_argv("master", "fix-1"),
-            vec!["diff".to_string(), "master...fix-1".to_string()]
+            hunk_argv("main", "fix-1"),
+            vec!["diff".to_string(), "main...fix-1".to_string()]
         );
     }
 

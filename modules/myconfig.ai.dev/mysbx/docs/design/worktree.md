@@ -77,13 +77,13 @@ worktree's pointer) to be a worktree — an entry without one is debris
 and marked as such, per the `session list` incomplete-inventory
 precedent.
 
-### W3: The base branch is `branch.<branch>.workmux-base` — master is the fallback
+### W3: The base branch is `branch.<branch>.workmux-base` — main is the fallback
 
 The three-dot diff needs the *other* end, and "the base branch" is
 workmux's own concept: `workmux add` records it as
 `branch.<branch>.workmux-base` in the repository config, and
-`workmux merge` reads exactly that key (with a local `main` fallback we
-do NOT adopt — see below). `mysbx worktree diff NAME` therefore:
+`workmux merge` reads exactly that key (with a local `main` fallback,
+the same one this chain uses). `mysbx worktree diff NAME` therefore:
 
 1. resolves the worktree's checked-out branch
    (`git -C <worktree> symbolic-ref --short HEAD`),
@@ -91,14 +91,12 @@ do NOT adopt — see below). `mysbx worktree diff NAME` therefore:
    (`git -C <repo> config --get branch.<branch>.workmux-base`) — the
    host repo's config, where workmux wrote it, not the worktree's own
    view,
-3. falls back to `master`, then `main`, then `HEAD` of the main
-   checkout — the first that resolves — when no `workmux-base` key
+3. falls back to `main`, then `HEAD` of the main checkout — the
+   first that resolves — when no `workmux-base` key
    exists (a worktree added by hand, or by an older workmux).
 
 The fallback chain names the base it used, so the operator can tell a
-configured base from a guessed one. workmux's own `main` fallback is
-not adopted because this repository's main branch is `master` — the
-chain covers both spellings instead.
+configured base from a guessed one.
 
 ### W4: `hunk` is exec'd, its binary never invented
 

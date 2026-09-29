@@ -25,10 +25,10 @@ built-ins are not the gap.
 
 ## The actual gap: base-branch auto-detection
 
-Every existing merge-base alias hardcodes `master` as the base
+Every existing merge-base alias hardcodes `main` as the base
 (`dAncestor`, `dsAncestor`; `rAncestor` at least accepts an override
 argument). That's a real ergonomic gap for the *current* task: figuring out
-whether the base is `main`, `master`, or something else, and typing it every
+whether the base is `main` or something else, and typing it every
 time. A one-liner doesn't fix that — you still have to know/type the base
 name.
 
@@ -37,9 +37,9 @@ name.
 Add `git branch-summary` (short alias `git bs`): a thin wrapper that
 
 1. auto-detects the base branch — tries origin's default branch
-   (`git symbolic-ref refs/remotes/origin/HEAD`), then `main`, then
-   `master`, resolving against `origin/<name>` first and falling back to
-   the local branch of that name; an explicit `<base>` argument overrides
+   (`git symbolic-ref refs/remotes/origin/HEAD`), then `main`, resolving
+   against `origin/<name>` first and falling back to the local branch of
+   that name; an explicit `<base>` argument overrides
    detection entirely;
 2. by default prints the commits (`log <base>..HEAD`) plus a combined
    diffstat (`diff --stat <base>...HEAD`) in one view;
