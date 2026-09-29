@@ -147,12 +147,12 @@ whole disk scratch; a NO-GO reverts the default pin to tmpfs):
 #     then inside the sandbox:
 ls /dev/loop*                    # losetup --find needs loop-control support
 # (b) the disk scratch in action: on the HOST, before the run,
-ls -l <repo>/.mysbx/scratch/     # empty; a real run creates <pid>.img here
+ls -l <repo>.mysbx/scratch/     # empty; a real run creates <pid>.img here
 #     then start `mysbx` and, inside the sandbox (first nix call):
 df -T /run/mysbx-nix              # Type: ext4 (NOT tmpfs), the loop device
 losetup -a                        # /dev/loopN: [9995]:<pid>.img (deleted) — the attach worked, the path is GONE
 #     and on the HOST while the run is up:
-ls -l <repo>/.mysbx/scratch/     # EMPTY: the guest wrapper removed its own file after the attach
+ls -l <repo>.mysbx/scratch/     # EMPTY: the guest wrapper removed its own file after the attach
 # (c) the crash gap: kill the VM (pkill the podman run from the
 #     host), confirm the stale file stays named, then start the next
 #     run — its startup sweep must leave the dir empty again before
