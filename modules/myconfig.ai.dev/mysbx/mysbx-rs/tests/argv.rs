@@ -3537,8 +3537,10 @@ fn podman_params() -> PodmanParams<'static> {
         // MYSBX_PODMAN_ENV nowhere); the pin tests pass their own.
         extra_env: &[],
         // The git trust file is opt-in per run (bd myconfig-zj2); the
-        // krun tests that exercise it pass their own.
+        // krun tests that exercise it pass their own. Same for the
+        // scratch disk (bd myconfig-0pi).
         git_trust: None,
+        krun_scratch: None,
         pids_limit: None,
         memory: None,
         cpus: None,
@@ -4809,6 +4811,105 @@ fn podman_krun_golden_minimal_config() {
     .unwrap();
     assert_eq!(argv[0], format!("--runtime={KRUN_RUNTIME}"));
     assert_golden("podman-krun-minimal.txt", &argv);
+}
+
+#[test]
+fn podman_krun_golden_scratch_disk() {
+    // The per-run scratch disk of a krun + guest-nix run (bd
+    // myconfig-0pi): the sparse host file the crate truncated under
+    // `<sidecar>/scratch/` binds rw at the fixed infrastructure path
+    // (section 6c, after the git trust bind), and the env names the
+    // CONTAINER path — set last, after every config `[env]` entry,
+    // so no layer can repoint the scratch. The gvisor argv stays
+    // byte-identical (its own golden): the scratch is opt-in per
+    // build, a `Some` on the gvisor variant is refused by its own
+    // test below.
+    let mut params = podman_params();
+    params.runtime = KRUN_RUNTIME;
+    params.krun = true;
+    params.git_trust = Some(mysbx::podman_gvisor::GitTrust {
+        host_file: "/synth/repo.mysbx/gittrust/4711/gitconfig".into(),
+        container_file: "/etc/mysbx/gitconfig".into(),
+    });
+    params.krun_scratch = Some(mysbx::podman_gvisor::KrunScratch {
+        host_file: "/synth/repo.mysbx/scratch/4711.img".into(),
+        container_file: mysbx::podman_gvisor::KRUN_SCRATCH_IMG.into(),
+    });
+    let argv = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    // The bind: rw, at the fixed path, after the ro git trust bind.
+    let trust_bind = argv
+        .iter()
+        .position(|a| a == "type=bind,src=/synth/repo.mysbx/gittrust/4711/gitconfig,dst=/etc/mysbx/gitconfig,ro")
+        .expect("the git trust bind");
+    let scratch_bind = argv
+        .iter()
+        .position(|a| {
+            *a == format!(
+                "type=bind,src=/synth/repo.mysbx/scratch/4711.img,dst={},rw",
+                mysbx::podman_gvisor::KRUN_SCRATCH_IMG
+            )
+        })
+        .expect("the scratch bind");
+    assert!(
+        scratch_bind > trust_bind,
+        "the scratch bind comes after the git trust bind"
+    );
+    // The env: the container path, the LAST --env of the argv (after
+    // GIT_CONFIG_GLOBAL when both are present).
+    let scratch_env = argv
+        .iter()
+        .position(|a| {
+            *a == format!(
+                "MYSBX_KRUN_SCRATCH_IMG={}",
+                mysbx::podman_gvisor::KRUN_SCRATCH_IMG
+            )
+        })
+        .expect("the scratch env");
+    assert_eq!(
+        scratch_env % 2,
+        0,
+        "the env value sits after its --env flag"
+    );
+    let last_env = argv.iter().rposition(|a| a == "--env").unwrap();
+    assert_eq!(
+        scratch_env,
+        last_env + 1,
+        "the scratch env is the last --env: {argv:?}"
+    );
+    assert_golden("podman-krun-scratch.txt", &argv);
+}
+
+#[test]
+fn podman_krun_scratch_on_gvisor_is_refused() {
+    // The scratch disk is a krun-only story (bd myconfig-0pi): the
+    // loop-mount machinery lives in the krun guest's nix wrappers,
+    // and a bind on the gvisor variant would be infrastructure
+    // nothing consumes — refused, never accepted and silently
+    // mounted (the same refusal shape as GitTrustOnGvisor).
+    let mut params = podman_params();
+    params.krun_scratch = Some(mysbx::podman_gvisor::KrunScratch {
+        host_file: "/synth/repo.mysbx/scratch/4711.img".into(),
+        container_file: mysbx::podman_gvisor::KRUN_SCRATCH_IMG.into(),
+    });
+    let err = podman_run_argv(
+        &podman_base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, mysbx::podman_gvisor::Error::KrunScratchOnGvisor),
+        "{err:?}"
+    );
 }
 
 #[test]

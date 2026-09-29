@@ -266,6 +266,15 @@
   # operator knob (a runtime swap for debugging), the same reasoning
   # as MYSBX_PODMAN_PASTA_SPEC.
   krunRuntime ? null,
+  # The size cap of the per-run scratch disk of a krun + guest-nix run
+  # (bd myconfig-0pi): the wrapper pins it as
+  # MYSBX_KRUN_SCRATCH_SIZE, and the crate truncates a per-run
+  # SPARSE file under `<sidecar>/scratch/` to it before the exec —
+  # disk-backed, never tmpfs. `null` pins nothing: the guest nix
+  # wrapper then announces its tmpfs fallback. Set by default.nix
+  # when `krun.nix.enable` (the same host that bakes the loop-mounting
+  # wrapper into the image).
+  krunScratchSize ? null,
   # The waypipe binary of the HOST side of the display channel
   # (../docs/design/config.md D18, `display = "waypipe"`): the wrapper
   # pins it as `MYSBX_WAYPIPE`, and a run that selects waypipe without
@@ -635,9 +644,18 @@ let
   # The podman-krun runtime pin (backends.md D2): the crun+libkrun
   # store path `--runtime` gets on the krun variant. `--set-default`:
   # an invocation can still point MYSBX_KRUN_RUNTIME at any runtime.
-  krunPins = lib.optionalString (
-    krunRuntime != null
-  ) "--set-default MYSBX_KRUN_RUNTIME '${krunRuntime}/bin/crun' ";
+  krunPins =
+    lib.optionalString (
+      krunRuntime != null
+    ) "--set-default MYSBX_KRUN_RUNTIME '${krunRuntime}/bin/crun' "
+    # The per-run scratch disk of the krun + guest-nix run (bd
+    # myconfig-0pi): the size cap the crate truncates its sparse
+    # file to. `--set-default`: an invocation can shrink or drop it
+    # (an empty value falls back to the announced tmpfs scratch),
+    # the same operator-knob reasoning as the runtime pin.
+    + lib.optionalString (
+      krunScratchSize != null
+    ) "--set-default MYSBX_KRUN_SCRATCH_SIZE '${krunScratchSize}'";
   # The display-channel pins (D18): the host-side client binary and
   # the in-image server binary. Both optional, both absolute store
   # paths — the wrapper idiom of every other pin.

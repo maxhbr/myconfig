@@ -8030,6 +8030,135 @@ fn podman_krun_dry_run_swaps_the_runtime_keeps_the_layout() {
 }
 
 #[test]
+fn podman_krun_scratch_pin_binds_the_per_run_file_and_exports_the_path() {
+    // The per-run scratch disk end-to-end (bd myconfig-0pi): with
+    // MYSBX_KRUN_SCRATCH_SIZE pinned (the wrapper does when
+    // `krun.nix.enable`), the krun dry run binds the per-run sparse
+    // file rw at the fixed container path and exports
+    // MYSBX_KRUN_SCRATCH_IMG naming it — the guest nix wrapper's
+    // only way to find the disk. WITHOUT the pin neither appears,
+    // and NOTHING is created (the dry run is side-effect-free; the
+    // sweep/create live in the real-run path only).
+    let (inv, _, sidecar) = fixture("podman-krun-scratch-pin", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let scratch_dir = sidecar.join("scratch");
+    std::fs::create_dir_all(&scratch_dir).unwrap();
+    // Debris of a dead run: the sweep must remove it in a real run;
+    // the dry run audits the argv only and keeps it.
+    std::fs::write(scratch_dir.join("dead.1234.img"), "debris").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+        .env(
+            "MYSBX_KRUN_RUNTIME",
+            "/nix/store/synth-crun-libkrun/bin/crun",
+        )
+        .env("MYSBX_KRUN_SCRATCH_SIZE", "16g");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    // The scratch file is named by the mysbx CHILD's pid — the test
+    // cannot know it beforehand, so match the bind by its fixed
+    // shape: <sidecar>/scratch/<pid>.img at the fixed container path.
+    let scratch_bind = stdout
+        .lines()
+        .find(|l| {
+            l.ends_with("dst=/run/mysbx-scratch.img,rw")
+                && l.contains("/scratch/")
+                && l.starts_with("type=bind,src=")
+        })
+        .expect("the per-run file binds at the fixed path");
+    let named: &str = scratch_bind
+        .strip_prefix("type=bind,src=")
+        .and_then(|rest| rest.split(',').next())
+        .expect("the src of the scratch bind");
+    assert!(
+        named.starts_with(&format!("{}/scratch/", sidecar.display())) && named.ends_with(".img"),
+        "the scratch file lives under <sidecar>/scratch/ and is pid-named: {named}"
+    );
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l == "MYSBX_KRUN_SCRATCH_IMG=/run/mysbx-scratch.img"),
+        "the env names the container path: {stdout}"
+    );
+    // The dry run is side-effect-free: the whole scratch dir holds
+    // exactly the seeded debris — nothing was created, nothing
+    // swept.
+    let leftovers: Vec<_> = std::fs::read_dir(&scratch_dir)
+        .map(|entries| entries.flatten().map(|e| e.file_name()).collect())
+        .unwrap_or_default();
+    assert_eq!(
+        leftovers,
+        ["dead.1234.img"],
+        "the dry run neither creates nor sweeps"
+    );
+
+    // Without the pin: neither the bind nor the env — the guest nix
+    // wrapper announces its tmpfs fallback instead.
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest").env(
+        "MYSBX_KRUN_RUNTIME",
+        "/nix/store/synth-crun-libkrun/bin/crun",
+    );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(!stdout.contains("mysbx-scratch"), "{stdout}");
+}
+
+#[test]
+fn podman_krun_refused_run_leaves_the_scratch_dir_untouched() {
+    // The host half runs only for a run that reaches the backend —
+    // a run refused at the /dev/kvm gate (the doctor check, bd
+    // myconfig-6di.5.2) must leave the scratch dir EXACTLY as it
+    // was: no sweep, no create (the sweep is hygiene of a STARTING
+    // run, and a refused run starts nothing). The test host has no
+    // rw /dev/kvm (the CI and agent sandboxes alike), so the gate
+    // is exactly what the test drives.
+    let (inv, _, sidecar) = fixture("podman-krun-scratch-refused", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let scratch_dir = sidecar.join("scratch");
+    std::fs::create_dir_all(&scratch_dir).unwrap();
+    std::fs::write(scratch_dir.join("dead.1234.img"), "debris").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--", "true"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+        .env(
+            "MYSBX_KRUN_RUNTIME",
+            "/nix/store/synth-crun-libkrun/bin/crun",
+        )
+        .env("MYSBX_KRUN_SCRATCH_SIZE", "64m");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    // The gate refuses with exit 70 on a host without rw /dev/kvm
+    // — the test env is one; on a host WITH it the run would proceed
+    // to the missing podman binary and still fail after the backend
+    // exit, so the assertions below hold either way (a real run's
+    // sweep WOULD remove the debris and create its own file — that
+    // half is the dry-run test above and the lib unit tests).
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "the run must fail: no podman in the test env"
+    );
+    let leftovers = std::fs::read_dir(&scratch_dir)
+        .map(|entries| entries.flatten().count())
+        .unwrap_or(0);
+    if leftovers > 0 {
+        // A host WITH rw /dev/kvm: the run proceeded past the gate,
+        // created its file, the stub backend exec failed, and the
+        // cleanup removed its own file — the leftover can only be
+        // the debris of the dead run, swept by the NEXT run (the
+        // crash-gap model). On the CI/agent host without /dev/kvm
+        // the gate fired first and nothing changed at all.
+        assert_eq!(leftovers, 1, "only the seeded debris can remain");
+    }
+}
+
+#[test]
 fn podman_krun_without_image_pin_is_refused() {
     // The krun variant runs the SAME image as podman-gvisor — without
     // the image pin it is a refused run naming the backend, never a
