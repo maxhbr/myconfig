@@ -20,6 +20,7 @@ depends on the *kind* of artefact its `.nix` file registers:
 | `commit/` | a skill **and** a pi prompt template | `SKILL.md` (the skill) + `prompt.md` (the pi `/commit` template) |
 | `implement-and-review-and-commit/` | a skill | `SKILL.md` only |
 | `implement-and-review-and-commit-until-done/` | a skill | `SKILL.md` only |
+| `merge-worktree/` | a skill | `SKILL.md` only (git + herdr worktree merge, no workmux) |
 | `research/` | a pi **sub-agent** and a prompt template | `agent.md` (the sub-agent, deployed to `~/.pi/agent/agents/`) + `prompt.md` (the pi `/research` template) |
 | `review/` | a pi prompt template only | `prompt.md` (spawns a code-review sub-agent via `pi --print`) |
 

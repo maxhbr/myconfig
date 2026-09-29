@@ -93,6 +93,7 @@ in
     ./grafana-core.nix
     ./implement-and-review-and-commit.nix
     ./implement-and-review-and-commit-until-done.nix
+    ./merge-worktree.nix
     # ./playwright-cli.nix
     ./research.nix
     ./review.nix
