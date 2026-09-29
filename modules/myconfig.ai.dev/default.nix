@@ -84,6 +84,8 @@ in
         mysbx = {
           enable = true;
           display.package = pkgs.waypipe;
+          krun.nestedPodman.enable = lib.mkDefault config.virtualisation.podman.enable;
+          browser.enable = true;
         };
         workmux.enable = lib.mkDefault (config.myconfig.dev.enable && config.programs.tmux.enable);
         nono-agent-sandbox.enable = lib.mkDefault true;
