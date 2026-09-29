@@ -94,6 +94,12 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         cmd.env_remove(format!("MYSBX_PODMAN_{suffix}"));
         cmd.env_remove(format!("MYSBX_GVISOR_{suffix}"));
     }
+    // The multiplexer entry pins (host and in-image) are wrapper-
+    // provided too: the refusal tests need them unset.
+    for mux in ["TMUX", "WORKMUX", "HERDR", "AOE", "ORCA"] {
+        cmd.env_remove(format!("MYSBX_MUX_ENTRY_{mux}"));
+        cmd.env_remove(format!("MYSBX_PODMAN_MUX_ENTRY_{mux}"));
+    }
     cmd
 }
 
@@ -7664,7 +7670,7 @@ fn podman_gvisor_multiplexer_without_image_entry_is_refused() {
     assert_eq!(out.status.code(), Some(70));
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(
-        stderr.contains("no entry is pinned"),
+        stderr.contains("no in-image entry is pinned (MYSBX_PODMAN_MUX_ENTRY_TMUX"),
         "the refusal must name the missing pin: {stderr}"
     );
 }
@@ -8027,6 +8033,133 @@ fn podman_krun_dry_run_swaps_the_runtime_keeps_the_layout() {
         "the same image pin serves the krun variant: {stdout}"
     );
     assert_eq!(lines[lines.len() - 1], "/bin/bash");
+}
+
+#[test]
+fn podman_multiplexer_runs_the_in_image_entry_on_both_backends() {
+    // bd myconfig-55u: the podman backends start a session from the
+    // entry baked into the image (`MYSBX_PODMAN_MUX_ENTRY_*`). The
+    // tmux socket dir is the home one on gvisor and the guest's
+    // /dev/shm on krun (virtio-fs files are host-uid-owned while the
+    // krun payload is guest root, so tmux refuses a dir there).
+    for (backend, mux, var, entry, socket_dir) in [
+        (
+            "podman-gvisor",
+            "tmux",
+            "MYSBX_PODMAN_MUX_ENTRY_TMUX",
+            "/nix/store/aaaa-mysbx-tmux-entry/bin/mysbx-tmux-entry",
+            "/mysbx-home/.mysbx-tmux",
+        ),
+        (
+            "podman-krun",
+            "herdr",
+            "MYSBX_PODMAN_MUX_ENTRY_HERDR",
+            "/nix/store/aaaa-mysbx-herdr-entry/bin/mysbx-herdr-entry",
+            "/dev/shm/mysbx-tmux",
+        ),
+    ] {
+        let (inv, _, sidecar) = fixture(&format!("podman-mux-{backend}"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\nmultiplexer = \"{mux}\"\n"),
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+            .env(var, entry)
+            // The host pin is NOT the podman payload.
+            .env(
+                format!("MYSBX_MUX_ENTRY_{}", mux.to_uppercase()),
+                "/nix/store/host-only-entry",
+            );
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(0), "{backend}: {stderr}");
+        let lines: Vec<&str> = stdout.lines().collect();
+        assert_eq!(
+            lines[lines.len() - 1],
+            entry,
+            "{backend}: the in-image entry is the payload: {stdout}"
+        );
+        assert_eq!(
+            lines[lines.len() - 2],
+            "localhost/test:latest",
+            "{backend}: {stdout}"
+        );
+        assert!(
+            lines.contains(&format!("TMUX_TMPDIR={socket_dir}").as_str()),
+            "{backend}: the socket dir: {stdout}"
+        );
+        assert!(
+            !stdout.contains("host-only-entry"),
+            "{backend}: the host pin stays out: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn podman_multiplexer_without_in_image_entry_is_refused() {
+    // Only the in-image pin serves the podman backends: a host-only
+    // `MYSBX_MUX_ENTRY_*` (a store path the container does not mount)
+    // is still a refused run naming the missing podman pin, and the
+    // pin of ANOTHER multiplexer does not start this one.
+    for backend in ["podman-gvisor", "podman-krun"] {
+        let (inv, _, sidecar) = fixture(&format!("podman-mux-unpinned-{backend}"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\nmultiplexer = \"workmux\"\n"),
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+            .env("MYSBX_MUX_ENTRY_WORKMUX", "/nix/store/host-workmux-entry")
+            .env("MYSBX_PODMAN_MUX_ENTRY_TMUX", "/nix/store/aaaa-tmux-entry");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(
+            out.status.code(),
+            Some(mysbx::EXIT_INFRASTRUCTURE),
+            "{backend}: {stderr}"
+        );
+        assert!(
+            stderr.contains("MYSBX_PODMAN_MUX_ENTRY_WORKMUX"),
+            "{backend}: the refusal names the in-image pin: {stderr}"
+        );
+        assert!(!stdout.contains("entry"), "{backend}: no argv: {stdout}");
+    }
+}
+
+#[test]
+fn podman_krun_refuses_a_mount_over_the_guest_mux_socket_dir() {
+    // The krun socket dir must stay guest-native: a mount at, above
+    // or below /dev/shm/mysbx-tmux would put it on virtio-fs.
+    for dest in ["/dev/shm", "/dev/shm/mysbx-tmux/x"] {
+        let (inv, _, sidecar) = fixture("podman-krun-mux-socket-mount", &[]);
+        let host = sidecar.join("host-dir");
+        std::fs::create_dir_all(&host).unwrap();
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!(
+                "backend = \"podman-krun\"\nmultiplexer = \"tmux\"\n\
+                 [[mounts]]\npath = \"{}\"\ndest = \"{dest}\"\nmode = \"ro\"\n",
+                host.display()
+            ),
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+            .env("MYSBX_PODMAN_MUX_ENTRY_TMUX", "/nix/store/aaaa-tmux-entry");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(
+            out.status.code(),
+            Some(mysbx::EXIT_INFRASTRUCTURE),
+            "{dest}: {stderr}"
+        );
+        assert!(stderr.contains("/dev/shm/mysbx-tmux"), "{dest}: {stderr}");
+    }
 }
 
 #[test]

@@ -1636,9 +1636,8 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // and syscall surface the runtime actually touches (the waypipe
     // audit of bd myconfig-6di.4.6 covered waypipe's syscalls, never
     // Electron's) — so the session would die mid-startup, a broken
-    // half-run discovered only after the fact; the podman-gvisor
-    // backend already refuses every multiplexer by its image-pin
-    // rule, and even an in-image orca entry could not run: the image
+    // half-run discovered only after the fact; and on the podman
+    // backends even an in-image orca entry could not run: the image
     // carries no AppImage runtime, no Xvfb, no Electron closure, and
     // runsc has no X/display story. A selection a backend cannot
     // deliver is refused here — exit 70, before the session clone (a
@@ -1675,10 +1674,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // over, a virtio-fs bind is a different mount path than runsc's
     // gofer, and a feature that cannot be verified is never accepted
     // and silently ignored (the same rule every backend follows).
-    // Multiplexer sessions need no arm here: the argv builder's
-    // image-pin rule (`MultiplexerUnavailable`) refuses them — an
-    // in-image entry script is the prerequisite for a session on
-    // BOTH podman backends. AF_UNIX-over-virtio-fs is why the
+    // Multiplexer sessions need no arm here: they run the in-image
+    // entry script (`MYSBX_PODMAN_MUX_ENTRY_*`), whose sockets stay
+    // guest-internal (the tmux socket dir is the guest's /dev/shm on
+    // krun, podman_gvisor.rs `KRUN_MUX_SOCKET_DIR`); an unpinned one
+    // is refused by the argv builder (`MultiplexerUnavailable`).
+    // AF_UNIX-over-virtio-fs is why the
     // socket-touching features stay refused on krun (verified
     // against the libkrun sources in bd myconfig-6di.5.4): the
     // virtiofs server passes INODES (passthrough.rs forwards
@@ -1780,6 +1781,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // instead of quietly starting a plain shell where a session was
     // asked for.
     let mux_entry = merged.multiplexer.entry_var().and_then(env_opt);
+    // The podman backends' counterpart: the entry baked into the image
+    // (`MYSBX_PODMAN_MUX_ENTRY_*`) — the host store path of
+    // `mux_entry` is not mounted there.
+    let podman_mux_entry = merged.multiplexer.podman_entry_var().and_then(env_opt);
     // The waypipe pins (docs/design/config.md D18): the host-side
     // `waypipe client` binary, from this build's own closure, and —
     // for the podman-gvisor backend — the in-image `waypipe server`
@@ -1926,7 +1931,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     let report_waypipe: Option<bwrap::Waypipe<'_>> = waypipe_params.clone();
     let (report_shell, report_tools_path, report_mux_entry) =
         if matches!(backend, "podman-gvisor" | "podman-krun") {
-            (gvisor_shell.clone(), gvisor_tools_path.clone(), None)
+            (
+                gvisor_shell.clone(),
+                gvisor_tools_path.clone(),
+                podman_mux_entry.clone(),
+            )
         } else {
             (shell.clone(), tools_path.clone(), mux_entry.clone())
         };
@@ -2213,17 +2222,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // bwrap pins: `MYSBX_SHELL` & co. name host `/nix/store`
             // paths this backend deliberately does not mount, so the
             // container would die with `no such file or directory` on
-            // the first run. `MYSBX_MUX_ENTRY_*` likewise stays out: a
-            // host store entry script cannot be the payload here —
-            // until an image ships one, a selected multiplexer is
-            // refused by the argv builder
-            // (`MultiplexerUnavailable`), the same refusal a bwrap host
-            // without that multiplexer gets.
+            // the first run. The multiplexer entry is likewise the
+            // in-image pin (`MYSBX_PODMAN_MUX_ENTRY_*`), never the host
+            // `MYSBX_MUX_ENTRY_*`; unpinned, the argv builder refuses
+            // the session (`MultiplexerUnavailable`).
             let params = podman_gvisor::Params {
                 shell: &gvisor_shell,
                 tools_path: &gvisor_tools_path,
                 policy_paths: &policy_paths,
-                mux_entry: None,
+                mux_entry: podman_mux_entry.as_deref(),
                 waypipe: waypipe_params.clone(),
                 workspace: match &session {
                     Some(s) => crate::bwrap::Workspace::Clone { clone: &s.clone },

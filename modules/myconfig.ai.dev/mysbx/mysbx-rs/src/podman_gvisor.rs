@@ -74,7 +74,8 @@
 //! 7. environment: host-forwarded first, then `cfg.env`, then the
 //!    backend pins of `MYSBX_PODMAN_ENV`, then infrastructure
 //!    variables (`HOME`, the XDG base dirs derived from it, `PATH`,
-//!    CA-bundle vars, `TMUX_TMPDIR` for a multiplexer session)
+//!    CA-bundle vars, `TMUX_TMPDIR` for a multiplexer session —
+//!    [`MUX_SOCKET_DIR`] on gvisor, [`KRUN_MUX_SOCKET_DIR`] on krun)
 //! 8. resource limits: `--pids-limit`, `--memory`, `--cpus` (when
 //!    cgroups are not ignored)
 //! 9. network: `--network` spec (shared by default, or `none` / pasta
@@ -160,6 +161,16 @@ pub const CONTAINER_HOME: &str = "/mysbx-home";
 /// pane that runs plain `tmux` inside such a session lands on this
 /// private socket instead of the host default `/tmp/tmux-<uid>`.
 pub const MUX_SOCKET_DIR: &str = "/mysbx-home/.mysbx-tmux";
+
+/// The podman-krun counterpart of [`MUX_SOCKET_DIR`]: a directory on
+/// the guest's own `/dev/shm` tmpfs. Every podman mount — the home
+/// tmpfs included — reaches a krun guest over virtio-fs, where each
+/// file is owned by the host user while the payload runs as guest
+/// root, so tmux refuses a `TMUX_TMPDIR` there ("unsafe
+/// permissions"). `/dev/shm` is guest-native and root-owned inside
+/// the VM; no host path reaches it unless a mount lands at or above
+/// it, which [`check_mux_socket`] refuses on krun.
+pub const KRUN_MUX_SOCKET_DIR: &str = "/dev/shm/mysbx-tmux";
 
 /// The `WAYLAND_DISPLAY` name the guest waypipe server presents its
 /// fake compositor socket under (docs/design/config.md D18), the same
@@ -302,17 +313,17 @@ pub struct Params<'a> {
     /// by when the merged configuration selects one
     /// (docs/design/config.md D17, cli.md D11) — the entry of THAT
     /// multiplexer, resolved by the caller from
-    /// [`Multiplexer::entry_var`], or `None` when this build pinned
-    /// none for it.
+    /// [`Multiplexer::podman_entry_var`], or `None` when this build
+    /// pinned none for it.
     ///
-    /// Like [`Params::shell`] this is a path INSIDE the container,
-    /// pinned by the Nix wrapper (`MYSBX_MUX_ENTRY_*`). No image ships
-    /// one today, so a selected multiplexer is a refused run
-    /// ([`Error::MultiplexerUnavailable`]) — the same refusal
-    /// semantics as a bwrap host that carries no multiplexer: never a
-    /// silent plain shell, because the operator asked for a session
-    /// and getting a bare shell instead would be discovered only after
-    /// the work was done in the wrong place.
+    /// Like [`Params::shell`] this is a path INSIDE the container: the
+    /// entry script baked into the image, pinned by the Nix wrapper as
+    /// [`Multiplexer::podman_entry_var`] (`MYSBX_PODMAN_MUX_ENTRY_*`).
+    /// `None` is a refused run ([`Error::MultiplexerUnavailable`]) —
+    /// the same refusal semantics as a bwrap host that carries no
+    /// multiplexer: never a silent plain shell, because the operator
+    /// asked for a session and getting a bare shell instead would be
+    /// discovered only after the work was done in the wrong place.
     pub mux_entry: Option<&'a str>,
     /// The **waypipe channel** of a run whose merged `display` is
     /// `waypipe` (docs/design/config.md D18): the host socket directory
@@ -441,7 +452,7 @@ pub fn podman_run_argv(
         Multiplexer::None
     };
     if mux.starts_a_session() {
-        check_mux_socket(&cfg.mounts, &effective_state_dirs)?;
+        check_mux_socket(&cfg.mounts, &effective_state_dirs, params.krun)?;
         if params.mux_entry.is_none() {
             return Err(Error::MultiplexerUnavailable { multiplexer: mux });
         }
@@ -976,7 +987,12 @@ pub fn podman_run_argv(
     ]);
     argv.extend(["--env".into(), format!("PATH={}", params.tools_path)]);
     if mux.starts_a_session() {
-        argv.extend(["--env".into(), format!("TMUX_TMPDIR={MUX_SOCKET_DIR}")]);
+        let dir = if params.krun {
+            KRUN_MUX_SOCKET_DIR
+        } else {
+            MUX_SOCKET_DIR
+        };
+        argv.extend(["--env".into(), format!("TMUX_TMPDIR={dir}")]);
     }
     // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run (D18):
     // infrastructure like `HOME`, anchoring the guest waypipe
@@ -1289,10 +1305,22 @@ fn check_dest(dest: &str) -> Option<&'static str> {
     None
 }
 
-/// Check multiplexer socket isolation (same as bwrap).
-fn check_mux_socket(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error> {
+/// Check multiplexer socket isolation (same as bwrap). On krun the
+/// socket lives at [`KRUN_MUX_SOCKET_DIR`] as well, so no mount may
+/// land at, below or above that directory either.
+fn check_mux_socket(mounts: &[Mount], state_dirs: &[String], krun: bool) -> Result<(), Error> {
     for m in mounts {
         let dest = m.dest.as_deref().unwrap_or(&m.path);
+        if krun {
+            let norm = normalize(dest);
+            let krun_dir = Path::new(KRUN_MUX_SOCKET_DIR);
+            if norm.starts_with(krun_dir) || (krun_dir.starts_with(&norm) && norm != Path::new("/"))
+            {
+                return Err(Error::KrunMuxSocketDest {
+                    dest: dest.to_string(),
+                });
+            }
+        }
         if dest == MUX_SOCKET_DIR || dest.starts_with(&format!("{MUX_SOCKET_DIR}/")) {
             return Err(Error::MuxSocketDest {
                 dest: dest.to_string(),
@@ -1474,6 +1502,8 @@ pub enum Error {
     MultiplexerUnavailable { multiplexer: Multiplexer },
     /// A mount `dest` is related to [`MUX_SOCKET_DIR`].
     MuxSocketDest { dest: String },
+    /// A krun mount `dest` is at, below or above [`KRUN_MUX_SOCKET_DIR`].
+    KrunMuxSocketDest { dest: String },
     /// A `state-dirs` entry would make [`MUX_SOCKET_DIR`] sidecar-backed.
     MuxSocketPersisted { entry: String },
     /// The configuration selects the waypipe display (D18) but this
@@ -1544,10 +1574,17 @@ impl fmt::Display for Error {
             }
             Error::MultiplexerUnavailable { multiplexer } => write!(
                 f,
-                "multiplexer {multiplexer} is selected but no entry is pinned \
-                 (the container image carries no in-image entry script; \
-                 MYSBX_MUX_ENTRY_* names a host store path this backend \
-                 mounts nothing of)"
+                "multiplexer {multiplexer} is selected but no in-image entry is \
+                 pinned ({var}; bake the entry into the podman image via \
+                 myconfig.ai.dev.mysbx.podman.muxEntries)",
+                var = multiplexer
+                    .podman_entry_var()
+                    .unwrap_or("MYSBX_PODMAN_MUX_ENTRY_*"),
+            ),
+            Error::KrunMuxSocketDest { dest } => write!(
+                f,
+                "mount dest {dest} is at, below or above the podman-krun \
+                 multiplexer socket directory {KRUN_MUX_SOCKET_DIR}"
             ),
             Error::MuxSocketDest { dest } => write!(
                 f,

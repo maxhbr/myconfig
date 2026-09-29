@@ -899,6 +899,15 @@ and orca too, uniformly: one code path, and a pane running plain
 `tmux` inside a herdr or orca session lands
 on the same private socket rather than on `/tmp/tmux-<uid>`.
 
+The podman backends run the same entry scripts, baked into the image
+(`podman.muxEntries` → `MYSBX_PODMAN_MUX_ENTRY_<VALUE>`, bd
+myconfig-55u). podman-krun is the one exception to the socket path:
+its payload is guest root while every podman mount reaches the guest
+over virtio-fs as host-uid-owned files, and tmux refuses a
+`TMUX_TMPDIR` it does not own. There `TMUX_TMPDIR` is the guest-native
+`/dev/shm/mysbx-tmux` (`podman_gvisor.rs::KRUN_MUX_SOCKET_DIR`), and a
+mount at, below or above it is refused as well.
+
 **`herdr` places worktrees in the workmux sibling (D13).** herdr's
 own worktree option (`[worktrees] directory`) is a single global root
 with no per-repo placeholders — on the host that is why

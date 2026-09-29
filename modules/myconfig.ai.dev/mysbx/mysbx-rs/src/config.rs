@@ -141,6 +141,21 @@ impl Multiplexer {
         }
     }
 
+    /// The wrapper variable pinning this multiplexer's entry script
+    /// INSIDE the podman image — the payload of both podman backends,
+    /// which mount nothing of the host store the
+    /// [`Multiplexer::entry_var`] path lives in.
+    pub fn podman_entry_var(self) -> Option<&'static str> {
+        match self {
+            Multiplexer::None => None,
+            Multiplexer::Tmux => Some("MYSBX_PODMAN_MUX_ENTRY_TMUX"),
+            Multiplexer::Workmux => Some("MYSBX_PODMAN_MUX_ENTRY_WORKMUX"),
+            Multiplexer::Herdr => Some("MYSBX_PODMAN_MUX_ENTRY_HERDR"),
+            Multiplexer::Aoe => Some("MYSBX_PODMAN_MUX_ENTRY_AOE"),
+            Multiplexer::Orca => Some("MYSBX_PODMAN_MUX_ENTRY_ORCA"),
+        }
+    }
+
     /// Whether this choice replaces the interactive shell with an
     /// entry of its own.
     pub fn starts_a_session(self) -> bool {
@@ -1010,6 +1025,18 @@ mod tests {
             }
         }
         assert_eq!(seen.len(), 5);
+    }
+
+    #[test]
+    fn podman_entry_variables_mirror_the_bwrap_pins() {
+        for name in Multiplexer::NAMES {
+            let m = Multiplexer::parse(name, "test").unwrap();
+            assert_eq!(
+                m.podman_entry_var().map(str::to_string),
+                m.entry_var()
+                    .map(|v| v.replace("MYSBX_MUX_ENTRY_", "MYSBX_PODMAN_MUX_ENTRY_")),
+            );
+        }
     }
 
     #[test]

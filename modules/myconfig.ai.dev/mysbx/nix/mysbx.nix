@@ -51,6 +51,11 @@
 #                     the waypipe binary INSIDE the podman-gvisor
 #                     image, the server end of the same channel on
 #                     the container backend. Absent = refused.
+#   MYSBX_PODMAN_MUX_ENTRY_TMUX / _WORKMUX / _HERDR / _AOE / _ORCA
+#                     the entry scripts INSIDE the podman image, the
+#                     multiplexer payload of both podman backends
+#                     (same scripts as MYSBX_MUX_ENTRY_*, baked into
+#                     the image). Absent = refused.
 #   MYSBX_KRUN_RUNTIME
 #                     the podman-krun backend's OCI runtime (docs/
 #                     design/backends.md D2): crun built against
@@ -208,6 +213,11 @@
   # rather than a silent bare shell. A `null` value is treated like an
   # absent one, so callers may pass a gated attrset unfiltered.
   muxEntries ? { },
+  # The entry scripts baked into `podmanImage` (the module layer's
+  # `podman.muxEntries`), same shape as `muxEntries`. Each becomes the
+  # `MYSBX_PODMAN_MUX_ENTRY_<VALUE>` pin of both podman backends; the
+  # store path is the same inside the image as on the host.
+  podmanMuxEntries ? { },
   # The gVisor agent OCI image of the podman-gvisor backend
   # (../docs/podman-load-image.md, bd myconfig-6di.1): `null` pins
   # nothing — `backend = "podman-gvisor"` is a refused run and
@@ -561,6 +571,12 @@ let
       name: entry: "--set MYSBX_MUX_ENTRY_${lib.toUpper name} '${lib.getExe entry}'"
     ) (lib.filterAttrs (_: entry: entry != null) muxEntries)
   );
+  # The in-image counterpart (`config.rs::Multiplexer::podman_entry_var`).
+  podmanMuxEntryPins = lib.concatStringsSep " \\\n      " (
+    lib.mapAttrsToList (
+      name: entry: "--set MYSBX_PODMAN_MUX_ENTRY_${lib.toUpper name} '${lib.getExe entry}'"
+    ) (lib.filterAttrs (_: entry: entry != null) podmanMuxEntries)
+  );
   # The `mysbx gui` terminal pin (docs/design/cli.md D15): an absolute
   # store path, the same wrapper idiom as MYSBX_BWRAP. Empty when the
   # caller passes no alacritty — the fallback PATH lookup of the
@@ -688,6 +704,7 @@ symlinkJoin {
       --set MYSBX_NIX_CONF '${sandboxNixConf}' \
       --set MYSBX_CA_BUNDLE '${caBundle}' \
       ${muxEntryPins} \
+      ${podmanMuxEntryPins} \
       ${terminalPin} \
       ${podmanPins} \
       ${krunPins} \

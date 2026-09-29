@@ -124,11 +124,14 @@ the exec; podman's own stderr and exit code surface unchanged
 (the exec inherits the streams), and a backend that cannot be
 started at all is reported with exit 70.
 
-The multiplexer integration is **not available** under this backend
-yet: no image ships an in-image entry script, so a config selecting
-`multiplexer = "…"` is a refused run naming the missing pin (the same
-refusal a bwrap host without that multiplexer gets) — never a silent
-plain shell. The TLS trust anchors come from the image itself (its
+The multiplexer integration runs the entry script baked into the
+image: `myconfig.ai.dev.mysbx.podman.muxEntries` (default: every
+available entry except orca) is folded into `podman.imagePackages` and
+pinned as `MYSBX_PODMAN_MUX_ENTRY_<VALUE>`. A multiplexer without such
+a pin is a refused run naming the missing pin (the same refusal a bwrap
+host without that multiplexer gets) — never a silent plain shell. The
+private socket dir is `/mysbx-home/.mysbx-tmux` under podman-gvisor and
+the guest's `/dev/shm/mysbx-tmux` under podman-krun. The TLS trust anchors come from the image itself (its
 OCI env pins `SSL_CERT_FILE` & co.), not from a host CA-bundle bind.
 
 **No writable nix store under `podman-gvisor`**: neither the host

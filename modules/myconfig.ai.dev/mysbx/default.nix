@@ -369,10 +369,11 @@ in
         krunRuntime = cfg.krun.runtime;
         waypipe = cfg.display.package;
         podmanWaypipe = cfg.podman.waypipe;
+        podmanMuxEntries = cfg.podman.muxEntries;
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -661,17 +662,27 @@ in
         '';
       };
 
-      # The multiplexer binaries the podman-gvisor container needs (bd
-      # myconfig-cew): the image is provisioned — via
-      # `podman.imagePackages`, which `podman.extraImagePackages`
-      # folds into the image — with the binaries a PANE inside a container session
-      # reaches for (`tmux` always, the selected multiplexer's own
-      # tool). `buildEnv` links every baked package's `bin` into the
-      # image `/bin`, so the OCI `PATH=/bin:/usr/bin` of the image
-      # covers them and no PATH override is needed. The ENTRY scripts
-      # stay host pins (`MYSBX_MUX_ENTRY_*`, bwrap only): a selected
-      # multiplexer under podman-gvisor remains a refused run until
-      # an image ships one.
+      # The multiplexer entry scripts baked into the podman image
+      # (via `podman.imagePackages`) and pinned as
+      # `MYSBX_PODMAN_MUX_ENTRY_<VALUE>` for both podman backends. The
+      # store path is the same inside the image as on the host.
+      muxEntries = mkOption {
+        type = types.attrsOf types.package;
+        default = lib.filterAttrs (name: entry: entry != null && name != "orca") muxEntries;
+        defaultText = literalExpression ''
+          every available multiplexer entry except orca (its
+          appimage-run FHS env and loopback pairing endpoint are not
+          verified inside a container)'';
+        description = ''
+          The multiplexer entry scripts the podman backends can start,
+          keyed by the `multiplexer` value. Each is baked into
+          `podman.image` (through `podman.imagePackages`) and pinned
+          into the wrapper as `MYSBX_PODMAN_MUX_ENTRY_<VALUE>`. A
+          multiplexer without an entry here is a refused run on both
+          podman backends.
+        '';
+      };
+
       pastaSpec = mkOption {
         type = types.nullOr types.str;
         # The host's LiteLLM proxy binds 127.0.0.1 only, and inside a
@@ -728,6 +739,7 @@ in
         type = types.listOf types.package;
         default =
           selectedMuxTools
+          ++ builtins.attrValues cfg.podman.muxEntries
           ++ lib.optionals (cfg.display.package != null) [ cfg.display.package ]
           # The nested-podman userspace of the krun backend (bd
           # myconfig-6di.5.8): the image is SHARED between both podman
@@ -736,7 +748,7 @@ in
           # closure.
           ++ lib.optionals cfg.krun.nestedPodman.enable cfg.krun.nestedPodman.packages
           ++ lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages;
-        defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`";
+        defaultText = literalExpression "the selected multiplexer's tools, the `podman.muxEntries` scripts, plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`";
         description = ''
           Packages baked into the container image (`podman.image`, see
           ./podman.nix) next to the enabled agents, the fish world and
@@ -744,7 +756,8 @@ in
           provisioned with the tools). Defaults to the selected
           multiplexer's own tooling, so a pane inside a container
           session finds it on `PATH` — the same payload the bwrap
-          backend gets via `extraTools` — plus the nested-podman
+          backend gets via `extraTools` — the `podman.muxEntries`
+          entry scripts, plus the nested-podman
           userspace of the podman-krun backend when
           `krun.nestedPodman.enable` (bd myconfig-6di.5.8: the podman
           storage wrapper and its guest configuration tree, baked into

@@ -203,7 +203,7 @@ wrapper, `nix/browser.nix`) goes on the bwrap/nono `PATH` through
 | `microvm` | host-side workmux `microvm-<agent>` panes. `agent-run herdr` in the guest | `microvm/workmux.nix`, `agents.nix` |
 | `mysbx/bubblewrap` | `multiplexer = tmux \| workmux \| herdr \| aoe \| orca \| none`. The socket is in `/mysbx-home/.mysbx-tmux`. `--multiplexer` sets it for one run. The generated user layer defaults to `workmux` | `config.md` D16/D17, `cli.md` D14 |
 | `mysbx/nono` | the same except `orca`. `--allow-unix-socket-dir-bind` + pathname AF_UNIX mediation (`backends.md` D1) | bd myconfig-6di.4.5, bd myconfig-peo (workmux sidebar, in progress) |
-| `mysbx/podman-gvisor`, `mysbx/podman-krun` | refused: no in-image entry (`MultiplexerUnavailable`). `orca` refused separately (bd myconfig-2m8) | `podman_gvisor.rs`. Not planned: bd myconfig-3y2 closed, the multiplexer is a config choice |
+| `mysbx/podman-gvisor`, `mysbx/podman-krun` | `tmux \| workmux \| herdr \| aoe \| none`, from entries baked into the image (`podman.muxEntries`, bd myconfig-55u). Socket in `/mysbx-home/.mysbx-tmux` (gvisor) or `/dev/shm/mysbx-tmux` (krun). `orca` refused (bd myconfig-2m8) | `podman_gvisor.rs`. Not planned: bd myconfig-3y2 closed, the multiplexer is a config choice |
 
 ## 13. Startup cost
 

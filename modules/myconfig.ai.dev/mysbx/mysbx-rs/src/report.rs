@@ -455,9 +455,16 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     } else {
         match r.payload {
             Payload::Shell => {
-                p(format!(
-                    "multiplexer:    {mux} — private socket dir {MUX_SOCKET_DIR} (inside the sandbox home tmpfs; no host tmux server is reachable)"
-                ));
+                if r.backend == "podman-krun" {
+                    p(format!(
+                        "multiplexer:    {mux} — private socket dir {} (the guest's own /dev/shm tmpfs; no host tmux server is reachable)",
+                        crate::podman_gvisor::KRUN_MUX_SOCKET_DIR
+                    ));
+                } else {
+                    p(format!(
+                        "multiplexer:    {mux} — private socket dir {MUX_SOCKET_DIR} (inside the sandbox home tmpfs; no host tmux server is reachable)"
+                    ));
+                }
                 p(format!(
                     "  entry:        {}",
                     r.params
