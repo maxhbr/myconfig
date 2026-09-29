@@ -389,6 +389,23 @@ let
       throw "mysbx generated-config test: a disabled krun.nestedPodman leaked podman or the guest tree into gvisor.imagePackages"
     else
       "ok";
+  # The guest nix provisioning (bd myconfig-pz6): `krun.nix.enable`
+  # folds the wrapper tree into `gvisor.imagePackages`, with the host's
+  # caches in its settings; disabled, nothing is folded in.
+  krunNixGate =
+    let
+      onCfg = (evaluated [ { myconfig.ai.dev.mysbx.krun.nix.enable = true; } ]).myconfig.ai.dev.mysbx;
+      off = (evaluated [ ]).myconfig.ai.dev.mysbx.gvisor.imagePackages;
+      hasGuestNix = pkgs.lib.any (p: p.name or "" == "mysbx-krun-guest-nix");
+    in
+    if !(hasGuestNix onCfg.gvisor.imagePackages) then
+      throw "mysbx generated-config test: krun.nix.enable did not fold the guest nix wrappers into gvisor.imagePackages"
+    else if hasGuestNix off then
+      throw "mysbx generated-config test: a disabled krun.nix leaked the guest nix wrappers into gvisor.imagePackages"
+    else if !(pkgs.lib.hasInfix "substituters = " onCfg.krun.nix.settings) then
+      throw "mysbx generated-config test: krun.nix.settings does not mirror the host substituters"
+    else
+      "ok";
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -419,6 +436,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       gvisorPinGate
       krunPinGate
       krunNestedPodmanGate
+      krunNixGate
       ;
   }
   ''

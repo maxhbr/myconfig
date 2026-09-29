@@ -41,6 +41,8 @@
   # Convenience: add packages (for example a coding-agent CLI) without
   # restating the whole default list.
   extraPackages ? [ ],
+  # Register the image closure in /nix/var/nix/db (mysbx krun guest nix).
+  includeNixDB ? false,
 }:
 
 let
@@ -108,48 +110,51 @@ let
     ignoreCollisions = true;
   };
 in
-dockerTools.buildLayeredImage {
-  name = imageName;
-  tag = imageTag;
+dockerTools.buildLayeredImage (
+  lib.optionalAttrs includeNixDB { inherit includeNixDB; }
+  // {
+    name = imageName;
+    tag = imageTag;
 
-  contents = [
-    imageRoot
-    dockerTools.usrBinEnv # /usr/bin/env
-    dockerTools.binSh # /bin/sh
-    dockerTools.caCertificates # /etc/ssl/certs/ca-bundle.crt
-    dockerTools.fakeNss # minimal /etc/passwd, /etc/group, /etc/nsswitch.conf
-  ];
-
-  # Runs in the customisation layer root, so paths are relative.
-  extraCommands = ''
-    mkdir -p workspace tmp
-    mkdir -p home/agent/.cache home/agent/.config home/agent/.local/state
-    chmod 1777 tmp
-    chmod -R 0777 home/agent
-  '';
-
-  config = {
-    Cmd = [ "/bin/bash" ];
-    WorkingDir = "/workspace";
-    Env = [
-      "PATH=/bin:/usr/bin"
-      "HOME=/home/agent"
-      "XDG_CONFIG_HOME=/home/agent/.config"
-      "XDG_CACHE_HOME=/home/agent/.cache"
-      "XDG_STATE_HOME=/home/agent/.local/state"
-      "SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
-      "GIT_SSL_CAINFO=/etc/ssl/certs/ca-bundle.crt"
-      "NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
-      "LANG=C.UTF-8"
-      "TERM=xterm-256color"
-      "PAGER=less"
+    contents = [
+      imageRoot
+      dockerTools.usrBinEnv # /usr/bin/env
+      dockerTools.binSh # /bin/sh
+      dockerTools.caCertificates # /etc/ssl/certs/ca-bundle.crt
+      dockerTools.fakeNss # minimal /etc/passwd, /etc/group, /etc/nsswitch.conf
     ];
-    Labels = {
-      "org.opencontainers.image.title" = "agent-dev";
-      "org.opencontainers.image.description" = "Generic coding-agent sandbox image, built with Nix";
-    };
-  };
 
-  # `imageName` and `imageTag` are exposed by dockerTools itself, so the
-  # session manager can derive the default image reference from this package.
-}
+    # Runs in the customisation layer root, so paths are relative.
+    extraCommands = ''
+      mkdir -p workspace tmp
+      mkdir -p home/agent/.cache home/agent/.config home/agent/.local/state
+      chmod 1777 tmp
+      chmod -R 0777 home/agent
+    '';
+
+    config = {
+      Cmd = [ "/bin/bash" ];
+      WorkingDir = "/workspace";
+      Env = [
+        "PATH=/bin:/usr/bin"
+        "HOME=/home/agent"
+        "XDG_CONFIG_HOME=/home/agent/.config"
+        "XDG_CACHE_HOME=/home/agent/.cache"
+        "XDG_STATE_HOME=/home/agent/.local/state"
+        "SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
+        "GIT_SSL_CAINFO=/etc/ssl/certs/ca-bundle.crt"
+        "NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
+        "LANG=C.UTF-8"
+        "TERM=xterm-256color"
+        "PAGER=less"
+      ];
+      Labels = {
+        "org.opencontainers.image.title" = "agent-dev";
+        "org.opencontainers.image.description" = "Generic coding-agent sandbox image, built with Nix";
+      };
+    };
+
+    # `imageName` and `imageTag` are exposed by dockerTools itself, so the
+    # session manager can derive the default image reference from this package.
+  }
+)
