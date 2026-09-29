@@ -20,6 +20,10 @@ let
   models = [
     "InternScience-Agents-A1-Q4_K_M"
     "InternScience-Agents-A1-Q4_K_M-mmproj"
+    "Nex-N2.5-mini-Q4_K_L"
+    "Nex-N2.5-mini-Q4_K_L-mmproj"
+    "Nex-N2.5-mini-Q5_K_M"
+    "Nex-N2.5-mini-Q5_K_M-mmproj"
     "Qwen3.5-9B-Q5_K_M"
     "Qwen3.6-35B-A3B-UD-Q5_K_XL"
     "Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP"

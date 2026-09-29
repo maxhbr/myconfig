@@ -29,6 +29,16 @@
   }
   "gfx1151:InternScience-Agents-A1-Q8_0"
   {
+    name = "gfx1151:MiMo-V2.6-Flash-RL-IQ2_S";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:MiMo-V2.6-Flash-RL-IQ2_S-dry";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
     name = "gfx1151:MiniMax-M2.7-UD-IQ4_NL";
     contextWindow = 131072;
     maxOutputTokens = 32768;
@@ -75,9 +85,10 @@
   }
   "gfx1151:NVIDIA-Nemotron-3-Nano-Omni-Q8_0"
   "gfx1151:NVIDIA-Nemotron-3-Super-120B-A12B-Q5_K_M"
-  "gfx1151:Nex-N2.5-mini-Q4_K_M"
+  "gfx1151:Nex-N2.5-mini-Q4_K_L"
   "gfx1151:Nex-N2.5-mini-Q5_K_M"
-  "gfx1151:Nex-N2.5-mini-Q6_K"
+  "gfx1151:Nex-N2.5-mini-Q6_K_L"
+  "gfx1151:Nex-N2.5-mini-Q6_K_L-mmproj"
   "gfx1151:Ornith-1.0-35B-Q8_0"
   {
     name = "gfx1151:Qwen3-235B-A22B-Instruct-Q2_K_L";
@@ -335,6 +346,16 @@
   }
   "gfx1151:ROCm0:InternScience-Agents-A1-Q8_0"
   {
+    name = "gfx1151:ROCm0:MiMo-V2.6-Flash-RL-IQ2_S";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:MiMo-V2.6-Flash-RL-IQ2_S-dry";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
     name = "gfx1151:ROCm0:MiniMax-M2.7-UD-IQ4_NL";
     contextWindow = 131072;
     maxOutputTokens = 32768;
@@ -381,9 +402,10 @@
   }
   "gfx1151:ROCm0:NVIDIA-Nemotron-3-Nano-Omni-Q8_0"
   "gfx1151:ROCm0:NVIDIA-Nemotron-3-Super-120B-A12B-Q5_K_M"
-  "gfx1151:ROCm0:Nex-N2.5-mini-Q4_K_M"
+  "gfx1151:ROCm0:Nex-N2.5-mini-Q4_K_L"
   "gfx1151:ROCm0:Nex-N2.5-mini-Q5_K_M"
-  "gfx1151:ROCm0:Nex-N2.5-mini-Q6_K"
+  "gfx1151:ROCm0:Nex-N2.5-mini-Q6_K_L"
+  "gfx1151:ROCm0:Nex-N2.5-mini-Q6_K_L-mmproj"
   "gfx1151:ROCm0:Ornith-1.0-35B-Q8_0"
   {
     name = "gfx1151:ROCm0:Qwen3-235B-A22B-Instruct-Q2_K_L";
@@ -751,6 +773,10 @@
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
+  "rtx5090:Nex-N2.5-mini-Q4_K_L"
+  "rtx5090:Nex-N2.5-mini-Q4_K_L-mmproj"
+  "rtx5090:Nex-N2.5-mini-Q5_K_M"
+  "rtx5090:Nex-N2.5-mini-Q5_K_M-mmproj"
   {
     name = "rtx5090:Qwen3.5-9B-Q5_K_M";
     contextWindow = 262144;
