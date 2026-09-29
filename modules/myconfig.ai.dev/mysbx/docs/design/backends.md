@@ -587,6 +587,15 @@ Consequences, stated honestly:
     dev shells, so the wrapper warns below 4 GiB. Set
     `MYSBX_PODMAN_MEMORY` (8g or more for `nix develop`). Every run
     substitutes again.
+    Candidate to remove the RAM cost (bd myconfig-0pi, not yet
+    probed): a per-run sparse ext4 file on disk, one per run and
+    never reused or shared, e.g. `<repo>.mysbx/scratch/<run-id>.img`.
+    The guest wrapper loop-mounts it as the scratch and unlinks the
+    path at once, so the space is freed when the VM exits, and
+    mysbx sweeps leftovers at startup. ext4 is the guest kernel's
+    own filesystem, so chown and overlay xattrs work; virtio-fs
+    carries only the file's bytes. The alternative is a libkrun
+    virtio-blk disk, if crun's krun handler can attach one.
   - Builds run as guest root without nix's own sandbox, so the VM is
     the boundary. `network = false` makes substitution and fetches
     fail. As any other uid (podman-gvisor, agent-gvisor), the

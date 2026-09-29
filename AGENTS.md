@@ -187,7 +187,7 @@ diverged when it does change — use the JSON snapshot to localise diffs.
 - **Create commits if you are on a worktree or a feature branch that matches
   the current task.** In that case, committing finished and validated work is
   expected.
-- **Do not automatically commit on `master`/`main`.** On those branches, leave
+- **Do not automatically commit on `main`.** On those branches, leave
   the changes in the working tree and let the user decide.
 - Check the current branch first (e.g. `git branch --show-current`) before
   deciding whether to commit.

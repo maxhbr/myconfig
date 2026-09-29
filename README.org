@@ -38,16 +38,16 @@ $ cat .git/config
 	url = https://github.com/maxhbr/myconfig
 	pushurl = git@github.com:maxhbr/myconfig.git
 	fetch = +refs/heads/*:refs/remotes/origin/*
-[branch "master"]
+[branch "main"]
 	remote = origin
-	merge = refs/heads/master
+	merge = refs/heads/main
 	pushRemote = origin
 [...]
 #+END_SRC
 
 ** For shallow cloning:
 #+BEGIN_SRC bash
-$ git clone --depth 1 "https://github.com/maxhbr/myconfig" --branch "master" --single-branch "$HOME/myconfig"
+$ git clone --depth 1 "https://github.com/maxhbr/myconfig" --branch "main" --single-branch "$HOME/myconfig"
 #+END_SRC
 
 * License
