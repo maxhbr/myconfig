@@ -367,13 +367,17 @@ in
         podmanPastaSpec = cfg.podman.pastaSpec;
         podmanEnv = cfg.podman.env;
         krunRuntime = cfg.krun.runtime;
+        # The per-run scratch disk (bd myconfig-0pi): pinned only
+        # when the guest nix wrappers are baked into the image —
+        # otherwise nothing in the guest would consume the file.
+        krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null;
         waypipe = cfg.display.package;
         podmanWaypipe = cfg.podman.waypipe;
         podmanMuxEntries = cfg.podman.muxEntries;
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -880,6 +884,31 @@ in
             experimental features) in `NIX_CONFIG`. Mirrors the host's
             caches by default: the guest store is per-run, so every run
             substitutes again.
+          '';
+        };
+
+        scratchSize = mkOption {
+          type = types.str;
+          default = "32g";
+          description = ''
+            The size cap of the per-run scratch disk (bd
+            myconfig-0pi): the wrapper pins it as
+            `MYSBX_KRUN_SCRATCH_SIZE` and the crate truncates a
+            per-run SPARSE file under `<repo>.mysbx/scratch/` to it
+            before the exec. The guest nix wrapper loop-mounts that
+            file as a disk-backed ext4 — the nix scratch (overlay
+            upper/work, state, logs, cache, TMPDIR) stops costing VM
+            RAM. The file is sparse: creation costs no disk space,
+            only the guest's writes fill it. A podman `--memory`-shaped
+            value (bytes or K/M/G suffix).
+
+            The disk-backed scratch needs the guest's loop + ext4
+            support (libkrunfw kernel) — validated by the live probes
+            of bd myconfig-0pi's runbook. When the kernel cannot
+            attach the loop device, the guest wrapper refuses the nix
+            call with the diagnosis instead of silently falling back.
+            The tmpfs fallback stays for runs WITHOUT the pin and
+            announces itself.
           '';
         };
 

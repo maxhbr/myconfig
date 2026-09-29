@@ -419,6 +419,18 @@ sources (bd myconfig-6di.5.4):
   but not by libgit2 until the next run. `$HOME` and
   `XDG_CONFIG_HOME` are not redirected because nix reads its own
   config and cache through them.
+- the per-run scratch disk (bd myconfig-0pi) — opt-in per build
+  (the wrapper pins `MYSBX_KRUN_SCRATCH_SIZE` when
+  `krun.nix.enable`): the host truncates one SPARSE file per run
+  under `<repo>.mysbx/scratch/<pid>.img` to the cap, binds it rw at
+  `/run/mysbx-scratch.img` and exports
+  `MYSBX_KRUN_SCRATCH_IMG=/run/mysbx-scratch.img` (the LAST `--env`,
+  after every config `[env]` — no layer can repoint the scratch at a
+  path it mounts). The guest nix wrapper loop-mounts it as a
+  disk-backed ext4 nix scratch; see the nix scope decision below
+  for the full consequences. A `Some` on the gvisor variant is
+  refused (`KrunScratchOnGvisor`) — the loop-mount machinery lives
+  in the krun guest's wrappers.
 
 The existing golden tests plus a before/after snapshot of the gvisor
 argv enforce the gvisor's byte-identity (see the tests of bd
@@ -582,10 +594,13 @@ Consequences, stated honestly:
   `/nix/var/nix` (`imageIncludeNixDB`, dockerTools `includeNixDB`).
   On the first invocation in a VM, a wrapper does the following as
   guest root:
-  - It mounts a guest tmpfs at `/run/mysbx-nix`.
+  - It mounts the nix scratch at `/run/mysbx-nix`: the disk-backed
+    ext4 of the per-run scratch file when the run provides one
+    (`MYSBX_KRUN_SCRATCH_IMG`, bd myconfig-0pi — loop-mounted, see
+    the consequences below), a guest tmpfs otherwise.
   - It COPIES the image database there.
   - It mounts an overlayfs over `/nix/store`. The lower layer is the
-    image's OWN store, and the upper layer is on the tmpfs.
+    image's OWN store, and the upper layer is on the scratch.
 
   Nix then runs single-user: `NIX_REMOTE=local`, state, logs,
   `NIX_CACHE_HOME` and `TMPDIR` on the tmpfs, and `NIX_CONFIG` with
@@ -606,16 +621,40 @@ Consequences, stated honestly:
     the VM memory, and the 1024 MiB crun default is too small for
     dev shells, so the wrapper warns below 4 GiB. Set
     `MYSBX_PODMAN_MEMORY` (8g or more for `nix develop`). Every run
-    substitutes again.
-    Candidate to remove the RAM cost (bd myconfig-0pi, not yet
-    probed): a per-run sparse ext4 file on disk, one per run and
-    never reused or shared, e.g. `<repo>.mysbx/scratch/<run-id>.img`.
-    The guest wrapper loop-mounts it as the scratch and unlinks the
-    path at once, so the space is freed when the VM exits, and
-    mysbx sweeps leftovers at startup. ext4 is the guest kernel's
-    own filesystem, so chown and overlay xattrs work; virtio-fs
-    carries only the file's bytes. The alternative is a libkrun
-    virtio-blk disk, if crun's krun handler can attach one.
+    substitutes again. The RAM cost is REMOVED by the per-run
+    scratch disk (bd myconfig-0pi, `krun.nix.scratchSize`, on by
+    default with `krun.nix.enable`): the host truncates one SPARSE
+    file per run under `<repo>.mysbx/scratch/<pid>.img` to the size
+    cap (`MYSBX_KRUN_SCRATCH_SIZE`, a podman `--memory`-shaped
+    value, default 32g — creation costs no disk space, only the
+    guest's writes fill it), binds it over virtio-fs at
+    `/run/mysbx-scratch.img` and names it in the payload env
+    (`MYSBX_KRUN_SCRATCH_IMG`, the last `--env`, after every
+    config layer). The guest wrapper attaches it to a loop device
+    (`losetup --find --show`), `mkfs.ext4`s it and mounts it as the
+    nix scratch — the ext4 is the GUEST KERNEL's own filesystem:
+    chown, overlay xattrs and whiteouts work natively, nothing is
+    proxied over the virtiofs xattr surface — then REMOVES the path
+    right after the attach: the open loop device keeps the inode
+    alive, the space frees itself when the VM dies, and the host's
+    next-run sweep (`mysbx` removes everything still named under
+    `<repo>.mysbx/scratch/` before creating its own file — a live
+    run's name is already gone) never mistakes a live run for
+    debris. The crash gap (a VM dies, or a run never calls nix): the
+    pid-named file stays until the next krun run sweeps it; a
+    `--result` run also removes its own file after the backend
+    exits. The tmpfs stays as the FALLBACK for runs without the pin
+    and ANNOUNCES itself ("refuse or announce, never silently
+    switch"); a run whose kernel cannot attach the loop device
+    fails the nix call with the diagnosis (exit 125). The
+    virtio-blk alternative was REJECTED by probe (e) of bd
+    myconfig-0pi: crun's krun handler parses no disk annotation and
+    never calls `krun_add_disk` (verified against crun 1.30 and
+    upstream main; libkrun's `blk` feature is off in nixpkgs), so
+    the loop mount over the sidecar bind is the mechanism. Live
+    probes (loop module + ext4 in the libkrunfw guest, mount +
+    unlink-while-attached, speed vs tmpfs): bd myconfig-0pi's
+    runbook, ../krun-live-validation.md.
   - Builds run as guest root without nix's own sandbox, so the VM is
     the boundary. `network = false` makes substitution and fetches
     fail. As any other uid (podman-gvisor, agent-gvisor), the

@@ -107,7 +107,7 @@ still works. If egress
 fails, record whether `podman run --network=pasta` works instead —
 that is the fallback the guest conf would switch to.
 
-### 2.3 Nix inside the guest (bd myconfig-pz6)
+### 2.3 Nix inside the guest (bd myconfig-pz6, bd myconfig-0pi)
 
 With `myconfig.ai.dev.mysbx.krun.nix.enable` (on by default under
 `myconfig.ai.dev`), rebuild, reload the
@@ -136,6 +136,50 @@ and a build from the image closure still works:
 nix build --impure --no-link --print-out-paths --expr \
   'derivation { name = "t"; system = builtins.currentSystem; builder = "/bin/sh"; args = [ "-c" "echo ok > $out" ]; }'
 ```
+
+#### 2.3.1 The disk-backed nix scratch (bd myconfig-0pi)
+
+The probes that CANNOT run without a booting VM — the agent sandbox
+records them here, f13 runs them (probe (a) answers the GO/NO-GO of the
+whole disk scratch; a NO-GO reverts the default pin to tmpfs):
+
+```bash
+# (a) the guest kernel has the loop module and ext4: from the HOST,
+#     check libkrunfw's kernel config for CONFIG_BLK_DEV_LOOP=y and
+#     CONFIG_EXT4_FS=y (the store path the pinned libkrunfw carries),
+#     then inside the sandbox:
+ls /dev/loop*                    # losetup --find needs loop-control support
+# (b) the disk scratch in action: on the HOST, before the run,
+ls -l <repo>/.mysbx/scratch/     # empty; a real run creates <pid>.img here
+#     then start `mysbx` and, inside the sandbox (first nix call):
+df -T /run/mysbx-nix              # Type: ext4 (NOT tmpfs), the loop device
+losetup -a                        # /dev/loopN: [9995]:<pid>.img (deleted) — the attach worked, the path is GONE
+#     and on the HOST while the run is up:
+ls -l <repo>/.mysbx/scratch/     # EMPTY: the guest wrapper removed its own file after the attach
+# (c) the crash gap: kill the VM (pkill the podman run from the
+#     host), confirm the stale file stays named, then start the next
+#     run — its startup sweep must leave the dir empty again before
+#     its own file appears
+# (d) probe (c) of the ORIGINAL plan, restated for the loop path: the
+#     mount keeps working after the guest's rm — run nix build INSIDE
+#     the same VM after the `losetup -a` above showed `(deleted)`, and
+#     confirm host `du` shows the space freed after the VM exits
+# (e) a rough speed comparison: `nix build nixpkgs#hello` timed with
+#     the scratch pin dropped (tmpfs) vs set (ext4) — the disk buys
+#     RAM headroom, the tmpfs buys speed; record both timings
+# (f) the announced fallback: run with MYSBX_KRUN_SCRATCH_SIZE set to
+#     an empty value — the first nix call must PRINT the tmpfs warning
+#     line and /run/mysbx-nix must be tmpfs again
+```
+
+Verify: (b) is the core contract — ext4 on the loop device, the
+host-side name gone while the mount lives, the state copy and the
+overlay on top of it. A failure of (a) (no loop module) or of (d)
+(the unlink breaks the mount — virtiofsd would NOT keep the
+unlinked-open file alive) is a NO-GO: set
+`myconfig.ai.dev.mysbx.krun.nix.scratchSize` aside (pin the env var to
+empty) and record the finding on bd myconfig-0pi — the tmpfs fallback
+stays the mechanism, announced as ever.
 
 ### 2.4 Limits as VM annotations (bd myconfig-6di.5.6)
 

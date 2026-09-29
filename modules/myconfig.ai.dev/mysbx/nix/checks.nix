@@ -228,7 +228,25 @@ in
       done
       [ ! -e "${guestNix}/bin/nix-daemon" ] || fail "the guest has no daemon; bin/nix-daemon must not be wrapped"
       grep -qF 'lowerdir=/nix/store,upperdir=' "$setup" || fail "the setup does not overlay the image store"
-      grep -q 'mount -t tmpfs' "$setup" || fail "the setup must mount a guest tmpfs"
+      grep -q 'mount -t tmpfs' "$setup" || fail "the setup must keep the tmpfs fallback"
+      # The disk-backed scratch of bd myconfig-0pi: the setup
+      # loop-mounts MYSBX_KRUN_SCRATCH_IMG when the run provides it,
+      # mkfs.ext4's it (e2fsprogs in the image via
+      # krun.nix.packages), removes the path right after the attach
+      # (the open loop device keeps the inode alive), and ANNOUNCES
+      # the tmpfs fallback — never a silent switch.
+      grep -qF 'MYSBX_KRUN_SCRATCH_IMG' "$setup" \
+        || fail "the setup does not read MYSBX_KRUN_SCRATCH_IMG (bd myconfig-0pi)"
+      grep -qF 'losetup --find --show' "$setup" \
+        || fail "the scratch path does not attach a loop device"
+      grep -qF 'mkfs.ext4 -q -F' "$setup" \
+        || fail "the scratch path does not mkfs.ext4 the loop device (e2fsprogs)"
+      grep -qF 'mount -t ext4' "$setup" \
+        || fail "the scratch path does not mount the ext4 at the scratch"
+      grep -qF 'rm -f "$img"' "$setup" \
+        || fail "the setup must remove the image path right after the loop attach"
+      grep -qF 'no scratch disk provided' "$setup" \
+        || fail "the tmpfs fallback is not announced (bd myconfig-0pi: refuse or announce, never silently switch)"
       grep -qF '${guestNix.copyState}/bin/mysbx-krun-nix-copy-state /nix/var/nix' "$setup" \
         || fail "the setup must copy (not overlay) the image database"
       # The image's big-lock/reserved are unreadable to guest root.

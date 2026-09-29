@@ -72,6 +72,9 @@
 //!    `--mount type=bind,src=HOST,dst=DEST,ro|rw`
 //!    6b. krun only: the per-run git trust file, bound ro (bd
 //!    myconfig-zj2)
+//!    6c. krun only: the per-run scratch disk, a sparse host file
+//!    bound rw (bd myconfig-0pi; the guest nix wrapper loop-mounts it
+//!    as the disk-backed nix scratch)
 //! 7. environment: host-forwarded first, then `cfg.env`, then the
 //!    backend pins of `MYSBX_PODMAN_ENV`, then infrastructure
 //!    variables (`HOME`, the XDG base dirs derived from it, `PATH`,
@@ -283,6 +286,32 @@ pub struct GitTrust {
     pub container_system_file: String,
 }
 
+/// The per-run scratch disk of a krun run (bd myconfig-0pi): the
+/// host-side SPARSE file mysbx truncated to the size cap under
+/// `<sidecar>/scratch/`, bound rw at the container path, and the
+/// container path the payload env's MYSBX_KRUN_SCRATCH_IMG names.
+/// The guest nix wrapper loop-mounts it (losetup + mkfs.ext4) as the
+/// disk-backed nix scratch — overlay upper/work, state, logs, cache
+/// and TMPDIR — and unlinks the path right after the attach, so the
+/// open loop device (not a live host path) keeps the file alive and
+/// the space frees itself when the VM dies. A `None` on the gvisor
+/// variant is the only working shape: `Some` there is a refused run
+/// ([`Error::KrunScratchOnGvisor`]) — the guest-loop machinery is
+/// krun's story and the bind would be infrastructure the backend
+/// never promised (the same refusal shape as [`GitTrust`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KrunScratch {
+    pub host_file: String,
+    pub container_file: String,
+}
+
+/// The in-container path the scratch image file binds at (bd
+/// myconfig-0pi): an infrastructure path in the same class as
+/// `/etc/mysbx/gitconfig` (bd myconfig-zj2) — fixed, never
+/// configurable, so the guest wrapper and this builder agree on one
+/// spelling without threading a second variable.
+pub const KRUN_SCRATCH_IMG: &str = "/run/mysbx-scratch.img";
+
 /// Common parameters of every invocation that do not come from a
 /// configuration layer. Unlike bwrap's `Params` — whose shell and
 /// dev-tool `PATH` are HOST store paths the wrapper pins from its own
@@ -428,6 +457,13 @@ pub struct Params<'a> {
     /// makes the container name unique per run, so parallel runs in
     /// one checkout coexist (bd myconfig-cad).
     pub run_id: u32,
+    /// The per-run scratch disk of a krun run (bd myconfig-0pi): the
+    /// sparse host file bound rw at [`KRUN_SCRATCH_IMG`], exported as
+    /// the payload env's MYSBX_KRUN_SCRATCH_IMG. `None` on the gvisor
+    /// variant is the only working shape — `Some` there is a refused
+    /// run ([`Error::KrunScratchOnGvisor`]), the same refusal as
+    /// [`Params::git_trust`].
+    pub krun_scratch: Option<KrunScratch>,
     /// Resource limits from configuration.
     /// Using Cow to allow both borrowed (from env vars) and owned strings.
     pub pids_limit: Option<Cow<'a, str>>,
@@ -488,6 +524,13 @@ pub fn podman_run_argv(
     // that grants nothing and widens the audit surface.
     if params.git_trust.is_some() && !params.krun {
         return Err(Error::GitTrustOnGvisor);
+    }
+    // The scratch disk is a krun-only story too (bd myconfig-0pi): the
+    // loop-mount machinery it feeds lives in the krun guest's nix
+    // wrappers, and a bind on the gvisor variant would be
+    // infrastructure nothing consumes — refused, never mounted.
+    if params.krun_scratch.is_some() && !params.krun {
+        return Err(Error::KrunScratchOnGvisor);
     }
 
     // 0. podman run with global args — ARGS ONLY, no program name:
@@ -949,6 +992,23 @@ pub fn podman_run_argv(
         );
     }
 
+    // 6c. the per-run scratch disk (bd myconfig-0pi): the sparse host
+    // file bound rw at the fixed infrastructure path — a per-RUN
+    // file, never shared between parallel runs (no locking, no stale
+    // overlay after an image rebuild, no GC), exactly like the git
+    // trust file of 6b and the waypipe token dir. The bind is
+    // `--userns=keep-id`'s ordinary rw bind of a host file over
+    // virtio-fs — the file's BYTES cross, never a live device; the
+    // guest wrapper turns them into a real block device (losetup)
+    // and the guest kernel's OWN ext4 on it (docs/design/backends.md
+    // D2): chown, overlay xattrs and whiteouts work there natively,
+    // nothing is proxied over the virtiofs xattr surface. The
+    // payload cannot redirect the path — the env var below names it
+    // last, the same class as GIT_CONFIG_GLOBAL.
+    if let Some(scratch) = &params.krun_scratch {
+        bind_mount(&mut argv, &scratch.host_file, &scratch.container_file, true);
+    }
+
     // 7. environment
     for (key, value) in host_env {
         argv.extend(["--env".into(), format!("{key}={value}")]);
@@ -1041,6 +1101,19 @@ pub fn podman_run_argv(
         argv.extend([
             "--env".into(),
             format!("GIT_CONFIG_GLOBAL={}", gt.container_file),
+        ]);
+    }
+    // The scratch disk's container path (bd myconfig-0pi): set LAST,
+    // after every config `[env]` entry, like GIT_CONFIG_GLOBAL — the
+    // guest nix wrapper reads it to find the file to loop-mount, and
+    // no configuration layer may repoint the scratch at a path a
+    // layer mounts. An unset variable IS the announced tmpfs
+    // fallback of the guest wrapper: a run without the pin announces
+    // it, never silently switching (bd myconfig-0pi's rule).
+    if let Some(scratch) = &params.krun_scratch {
+        argv.extend([
+            "--env".into(),
+            format!("MYSBX_KRUN_SCRATCH_IMG={}", scratch.container_file),
         ]);
     }
 
@@ -1562,6 +1635,12 @@ pub enum Error {
     /// would widen the audit surface for nothing. Refused — never
     /// accepted and silently mounted.
     GitTrustOnGvisor,
+    /// The scratch disk was asked for on the gvisor variant (bd
+    /// myconfig-0pi): the loop-mount machinery lives in the krun
+    /// guest's nix wrappers and the bind would be infrastructure
+    /// nothing consumes. Refused — never accepted and silently
+    /// mounted.
+    KrunScratchOnGvisor,
 }
 
 impl fmt::Display for Error {
@@ -1663,6 +1742,13 @@ impl fmt::Display for Error {
                  user, whose uid already owns the repo mounts — the \
                  dubious-ownership trust cannot exist there. Switch the \
                  backend to `podman-krun`"
+            ),
+            Error::KrunScratchOnGvisor => write!(
+                f,
+                "the per-run scratch disk is a podman-krun story (bd \
+                 myconfig-0pi): the guest nix wrapper loop-mounts it, and \
+                 the gvariant has no such wrapper — drop the scratch pin \
+                 or switch the backend to `podman-krun`"
             ),
         }
     }
