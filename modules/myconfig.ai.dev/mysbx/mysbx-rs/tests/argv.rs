@@ -4443,6 +4443,95 @@ fn podman_state_parent_tmpfses_dedupe_entries_sharing_a_parent() {
     );
 }
 
+const HERDR_TMPFS: &str = "type=tmpfs,dst=/mysbx-home/.config/herdr";
+
+fn podman_mounts_for(cfg: &Merged, krun: bool) -> Vec<String> {
+    let mut params = podman_params();
+    params.krun = krun;
+    let argv =
+        podman_run_argv(cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params).unwrap();
+    podman_mount_specs(&argv)
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn podman_herdr_config_dir_is_a_tmpfs_on_both_backends() {
+    // `.config` is an engine-created, root-owned mountpoint dir, so
+    // herdr cannot create `$XDG_CONFIG_HOME/herdr` itself; the tmpfs
+    // lands before every bind, and `.config` gets none.
+    let cfg = podman_base(true);
+    for krun in [false, true] {
+        let mounts = podman_mounts_for(&cfg, krun);
+        let herdr = mounts
+            .iter()
+            .position(|m| m == HERDR_TMPFS)
+            .unwrap_or_else(|| panic!("herdr tmpfs (krun={krun}): {mounts:?}"));
+        let first_bind = mounts
+            .iter()
+            .position(|m| m.starts_with("type=bind,"))
+            .expect("a bind");
+        assert!(herdr < first_bind, "herdr tmpfs precedes binds: {mounts:?}");
+        assert!(
+            !mounts
+                .iter()
+                .any(|m| m == "type=tmpfs,dst=/mysbx-home/.config"),
+            ".config itself stays without tmpfs: {mounts:?}"
+        );
+    }
+}
+
+#[test]
+fn podman_herdr_tmpfs_yields_to_configured_content_at_or_above_it() {
+    // A mount or state entry at or above the herdr dir keeps its content
+    // visible; one below it lands on top of the tmpfs.
+    let mut cfg = podman_base(true);
+    cfg.mounts.push(make_mount(
+        "/synth/herdr",
+        Some("/mysbx-home/.config/herdr"),
+        Mode::Ro,
+    ));
+    assert!(!podman_mounts_for(&cfg, false)
+        .iter()
+        .any(|m| m == HERDR_TMPFS));
+
+    let mut cfg = podman_base(true);
+    cfg.mounts.push(make_mount(
+        "/synth/config",
+        Some("/mysbx-home/.config"),
+        Mode::Ro,
+    ));
+    assert!(!podman_mounts_for(&cfg, false)
+        .iter()
+        .any(|m| m == HERDR_TMPFS));
+
+    let mut cfg = podman_base(true);
+    cfg.state_dirs.push(".config/herdr".to_string());
+    assert!(!podman_mounts_for(&cfg, true)
+        .iter()
+        .any(|m| m == HERDR_TMPFS));
+
+    let mut cfg = podman_base(true);
+    cfg.state_dirs.push(".config/herdr/sessions".to_string());
+    let mounts = podman_mounts_for(&cfg, false);
+    assert_eq!(
+        mounts.iter().filter(|m| *m == HERDR_TMPFS).count(),
+        1,
+        "the state-parent tmpfs is the herdr tmpfs, emitted once: {mounts:?}"
+    );
+
+    let mut cfg = podman_base(true);
+    cfg.mounts.push(make_mount(
+        "/synth/herdr.toml",
+        Some("/mysbx-home/.config/herdr/config.toml"),
+        Mode::Ro,
+    ));
+    assert!(podman_mounts_for(&cfg, false)
+        .iter()
+        .any(|m| m == HERDR_TMPFS));
+}
+
 #[test]
 fn podman_mount_dest_on_the_container_home_is_refused() {
     // The one-directional home guard of bwrap (review-2 item 5), now

@@ -518,7 +518,12 @@ container user and the shell died on its first XDG write below it
 (fish `EACCES` on `$XDG_DATA_HOME/fish`). The parent tmpfs mounts are
 emitted before every bind too, so `state-dirs` entries below them
 still land on top; `.config` deliberately gets none — the ro
-host-config seed mount stays the visibly-read-only surface.
+host-config seed mount stays the visibly-read-only surface. The one
+exception below it is herdr's config/socket dir `.config/herdr`, which
+gets its own tmpfs on both podman backends (herdr must create it on its
+first start; on krun the virtiofs server behind guest root hits the same
+root-owned `.config`). A configured mount or `state-dirs` entry at or
+above that path suppresses it.
 
 The row above is the shape of EVERY backend (backends.md D1, bd
 myconfig-6di.4): the layered nono backend runs the payload inside a

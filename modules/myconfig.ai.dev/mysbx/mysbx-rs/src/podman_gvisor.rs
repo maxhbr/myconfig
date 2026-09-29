@@ -60,7 +60,9 @@
 //!    lives below the home (the same root-owned-mountpoint failure,
 //!    generalized from the XDG pair: tmpfs the DEEPEST state
 //!    ancestor, never the read-only config surface — bd
-//!    myconfig-ixz)
+//!    myconfig-ixz) — plus one tmpfs at herdr's own config/socket
+//!    dir [`HERDR_SOCKET_DIR`] (the `.config` mountpoint itself
+//!    stays read-only; see [`herdr_tmpfs_wanted`])
 //! 5. workspace bind: the repo (or clone) mounted at its own path
 //!    (config.md D13, workspace.md D3), plus git metadata dirs when
 //!    approved, plus the worktrees sibling when it exists, plus
@@ -105,7 +107,7 @@
 //! as your uid with a bind-mounted CWD" — this backend proves the seam
 //! is general.
 
-use crate::bwrap::{Payload, PolicyPath, Waypipe, Workspace};
+use crate::bwrap::{Payload, PolicyPath, Waypipe, Workspace, HERDR_SOCKET_DIR};
 use crate::config::{Mode, Mount, Multiplexer};
 use crate::merge::Merged;
 use crate::repo::Repo;
@@ -680,8 +682,17 @@ pub fn podman_run_argv(
     // engines' parents-first sorts (the state-dirs nesting
     // validators of config.rs are untouched: no entry may nest
     // inside another, so at most one tmpfs dest per subtree spine).
-    for dest in state_parent_tmpfses(&effective_state_dirs) {
-        tmpfs_mount(&mut argv, &dest);
+    let parent_tmpfses = state_parent_tmpfses(&effective_state_dirs);
+    for dest in &parent_tmpfses {
+        tmpfs_mount(&mut argv, dest);
+    }
+    // herdr's config/socket dir: herdr creates `$XDG_CONFIG_HOME/herdr`
+    // on its first start, but `.config` is an engine-created, root-owned
+    // mountpoint dir (the ro config binds live under it), so the mkdir
+    // fails with EACCES — for the keep-id user on gvisor and for the
+    // virtiofs server (host uid) behind guest root on krun.
+    if herdr_tmpfs_wanted(&cfg.mounts, &effective_state_dirs, &parent_tmpfses) {
+        tmpfs_mount(&mut argv, HERDR_SOCKET_DIR);
     }
 
     // 5. workspace bind
@@ -1183,6 +1194,22 @@ fn bind_mount(argv: &mut Vec<String>, src: &str, dest: &str, rw: bool) {
         "--mount".into(),
         format!("type=bind,src={src},dst={dest},{mode}"),
     ]);
+}
+
+/// Whether section 4 mounts the tmpfs at [`HERDR_SOCKET_DIR`]: not when
+/// a configured mount or `state-dirs` entry lands at or above it (that
+/// content must stay visible, not be shadowed by an empty tmpfs), and
+/// not when a state-parent tmpfs already sits exactly there.
+fn herdr_tmpfs_wanted(mounts: &[Mount], state_dirs: &[String], parent_tmpfses: &[String]) -> bool {
+    let herdr = Path::new(HERDR_SOCKET_DIR);
+    let covers = |dest: PathBuf| herdr.starts_with(&dest);
+    !(mounts
+        .iter()
+        .any(|m| covers(normalize(m.dest.as_deref().unwrap_or(&m.path))))
+        || state_dirs
+            .iter()
+            .any(|e| covers(normalize(&format!("{CONTAINER_HOME}/{e}"))))
+        || parent_tmpfses.iter().any(|d| normalize(d) == herdr))
 }
 
 /// Add a tmpfs mount to the argv (section 4): the container home —

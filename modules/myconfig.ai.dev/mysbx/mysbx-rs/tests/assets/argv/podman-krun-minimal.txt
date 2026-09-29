@@ -22,6 +22,8 @@ type=tmpfs,dst=/mysbx-home/.local/share
 --mount
 type=tmpfs,dst=/mysbx-home/.local/state
 --mount
+type=tmpfs,dst=/mysbx-home/.config/herdr
+--mount
 type=bind,src=/synth/repo,dst=/synth/repo,rw
 --mount
 type=bind,src=/synth/repo.mysbx/state/.ssh,dst=/mysbx-home/.ssh,rw
