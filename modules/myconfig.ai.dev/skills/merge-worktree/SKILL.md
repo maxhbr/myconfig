@@ -1,6 +1,6 @@
 ---
 name: merge-worktree
-description: Commit, rebase and fast-forward-merge the current git worktree branch into its local base branch, then clean up the worktree (herdr-style `<repo>__worktrees/<name>` layout). Plain git plus the optional herdr CLI; does not need workmux. Use when the user says "merge", "merge this worktree", "finish this branch", or passes flags like --keep / --no-verify.
+description: Commit, rebase and fast-forward-merge the current git worktree branch into its local base branch, then clean up the worktree (herdr-style `<repo>__worktrees/<name>` layout). Plain git plus the optional herdr CLI; does not need workmux. Use when the user says "merge-worktree", "merge this worktree" or "finish this branch" and workmux is not in use for it, or passes flags like --keep / --no-verify.
 ---
 
 # Merge worktree
@@ -36,7 +36,7 @@ Uses only `git` and, when available, `herdr`. Never calls `workmux`.
 ```bash
 branch=$(git branch --show-current)          # empty = detached HEAD: stop
 wt=$(git rev-parse --show-toplevel)
-main_wt=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+main_wt=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /, ""); print; exit}')
 ```
 
 Stop if `branch` is empty or `wt` equals `main_wt` (you are in the main
@@ -57,7 +57,7 @@ Then check it:
 
 - `git show-ref --verify --quiet "refs/heads/$base"` must succeed. The base
   is always a LOCAL branch. Do not create it from a remote (for example from
-  a remote whose `HEAD` still points to `master`).
+  a stale remote `HEAD`).
 - If rule 3 and rule 4 disagree (the main checkout is on something other
   than `main` and no explicit/configured base exists), ask the user.
 
@@ -90,7 +90,7 @@ Find where the base is checked out:
 
 ```bash
 base_wt=$(git worktree list --porcelain \
-  | awk -v b="refs/heads/$base" '/^worktree /{p=$2} $0=="branch " b {print p}')
+  | awk -v b="refs/heads/$base" '/^worktree /{p=substr($0, 10)} $0=="branch " b {print p}')
 ```
 
 - **Base checked out in a worktree** (usually the main checkout):
