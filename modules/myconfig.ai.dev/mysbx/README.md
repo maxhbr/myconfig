@@ -448,11 +448,11 @@ enabled it adds its binary to the sandbox `PATH` via
 `myconfig.ai.dev.sandboxTools.extraPackages` hook, which mysbx honours
 like every other tier — and mounts its home-manager-managed
 configuration (`~/.pi/agent/{extensions,agents,prompts,themes,keybindings.json}`
-and `~/.agents/skills`) read-only below `/mysbx-home`. Its state
-directory `~/.pi` is neither mounted nor persisted: it dies with the
-tmpfs home on purpose — it holds sessions *and* credentials in one
-tree, so persisting it per repository would need the two split apart
-first. Until then a sandboxed `pi` starts fresh every run.
+and `~/.agents/skills`) read-only below `/mysbx-home`. Of its state
+directory `~/.pi` only `.pi/agent/sessions` is persisted, as a
+`state-dirs` entry in `<repo>.mysbx/state/`; `settings.json`,
+`auth.json` and `trust.json` stay in the tmpfs home, so no pi
+credential reaches the sidecar.
 `opencode` ([`programs.opencode`](../../programs/programs.opencode/default.nix)) is wired
 in the same way: its binary goes on the sandbox `PATH` and its generated
 configuration (`~/.config/opencode` plus `~/.config/mcp`) is mounted
@@ -462,9 +462,9 @@ it is declared as mysbx `state-dirs` (config.md D15) and persists per
 repository in `<repo>.mysbx/state/`. The host's own opencode state and
 auth files stay out of the sandbox, so a sandboxed session starts
 unauthenticated and talks to the local LiteLLM / llama.cpp providers.
-That is the difference to `pi` above: opencode keeps its sessions and
-its credentials in separate paths, so the session state can be
-persisted without the credentials following it.
+Like pi, opencode keeps its sessions and its credentials in separate
+paths, so the session state can be persisted without the credentials
+following it.
 
 `hunk` ([`programs.hunk`](../../programs/programs.hunk/default.nix)) follows the same
 pattern for the *reviewing* side: on hosts with `myconfig.ai.hunk.enable`
