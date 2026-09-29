@@ -131,16 +131,6 @@
 
           pull_models = {
             enable = true;
-            # Specs without a corresponding `myconfig.ai.llmops.llama-cpp.models`
-            # entry stay declared here. Everything that *is* served by
-            # llama-cpp is collected automatically from each model's
-            # `pull-models = { target_directory; hf_spec; }` (see
-            # ./myconfig.ai.llmops.llama-cpp.nix). The Docker/Podman-served vLLM
-            # and NInfer models declare their own `models` entries next to
-            # their variant definitions (./myconfig.ai.vllm/docker.vllm.cuda.nix,
-            # ./myconfig.ai.ninfer/docker.ninfer.cuda.nix) so a spec isn't
-            # silently left behind (and still downloaded) if its variant is
-            # ever dropped.
           };
           inference-cpp = {
             enable = true;
@@ -159,10 +149,6 @@
           };
         };
 
-        # The `mysbx` sandboxing CLI (modules/myconfig.ai.dev/mysbx/README.md).
-        # Like the other sandbox tiers it is enabled EXPLICITLY per host and
-        # never implicitly through the broad `myconfig.ai.llmops.enable`; it only
-        # puts the CLI on PATH.
         dev.enable = true;
         dev.mysbx.enable = true;
         dev.lmstudio = {
@@ -179,7 +165,7 @@
         #   enable = true;
         # };
       };
-      containers.n8n.enable = true;
+      containers.n8n.enable = false;
       dev = {
         core.enable = true;
         difftastic.enable = true;
