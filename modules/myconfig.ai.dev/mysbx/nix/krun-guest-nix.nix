@@ -19,10 +19,11 @@
 # over virtio-fs and names it in `MYSBX_KRUN_SCRATCH_IMG`; the setup
 # loop-mounts it (losetup + mkfs.ext4 — the guest kernel's OWN
 # filesystem: chown, overlay xattrs and whiteouts work natively,
-# nothing is proxied over the virtiofs xattr surface) and REMOVES the
-# path right after the attach: the open loop device keeps the inode
-# alive, the space frees itself when the VM dies, and the host's
-# next-run sweep never sees a live run's file. Without the variable
+# nothing is proxied over the virtiofs xattr surface) and tries to
+# remove the path right after the attach, so the space frees itself
+# when the VM dies. The removal is best-effort (the path is a bind
+# target and may be busy): the host removes the file after a waited
+# run, and the next run sweeps files whose mysbx pid is gone. Without the variable
 # the setup mounts a guest tmpfs instead — ANNOUNCED, never a silent
 # switch (the refuse-or-announce rule of bd myconfig-0pi).
 #
@@ -150,13 +151,12 @@ let
           # run's size cap and nothing else ever wrote it.
           loop=$(losetup --find --show "$img") \
             || fail "cannot attach $img to a loop device (the guest kernel needs the loop module)"
-          # Remove the path IMMEDIATELY after the attach (bd
-          # myconfig-0pi): the open loop device keeps the inode alive,
-          # so the ext4 keeps working while nothing can re-open or
-          # re-share the file — and the host's next-run sweep of
-          # <sidecar>/scratch/ never mistakes a live run for debris.
-          rm -f "$img" \
-            || echo "nix (mysbx krun wrapper): warning: could not remove the scratch image path $img" >&2
+          # Best-effort removal right after the attach: the open loop
+          # device keeps the inode alive and the space frees when the
+          # VM dies. A busy bind target keeps its name; the host then
+          # cleans up (after a waited run, or the next run's pid-based
+          # sweep), so a failure here is not an error.
+          rm -f "$img" 2>/dev/null || true
           mkfs.ext4 -q -F "$loop" \
             || fail "cannot create an ext4 filesystem on $loop (the scratch disk is per-run; a leftover is impossible)"
           mkdir -p "$scratch" || fail "cannot create the scratch mountpoint $scratch"

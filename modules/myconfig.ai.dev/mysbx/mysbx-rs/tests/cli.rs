@@ -8604,7 +8604,7 @@ fn podman_krun_scratch_pin_binds_the_per_run_file_and_exports_the_path() {
     std::fs::create_dir_all(&scratch_dir).unwrap();
     // Debris of a dead run: the sweep must remove it in a real run;
     // the dry run audits the argv only and keeps it.
-    std::fs::write(scratch_dir.join("dead.1234.img"), "debris").unwrap();
+    std::fs::write(scratch_dir.join("4194305.img"), "debris").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
         .env(
@@ -8653,7 +8653,7 @@ fn podman_krun_scratch_pin_binds_the_per_run_file_and_exports_the_path() {
         .unwrap_or_default();
     assert_eq!(
         leftovers,
-        ["dead.1234.img"],
+        ["4194305.img"],
         "the dry run neither creates nor sweeps"
     );
 
@@ -8683,7 +8683,7 @@ fn podman_krun_refused_run_leaves_the_scratch_dir_untouched() {
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let scratch_dir = sidecar.join("scratch");
     std::fs::create_dir_all(&scratch_dir).unwrap();
-    std::fs::write(scratch_dir.join("dead.1234.img"), "debris").unwrap();
+    std::fs::write(scratch_dir.join("4194305.img"), "debris").unwrap();
     let mut cmd = spawn_with_args(&inv, &["run", "--", "true"]);
     cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
         .env(

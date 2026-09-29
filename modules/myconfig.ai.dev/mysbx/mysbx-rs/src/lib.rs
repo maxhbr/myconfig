@@ -1359,13 +1359,13 @@ fn create_krun_scratch(file: &std::path::Path, size_pin: &str) -> Result<(), Str
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("cannot create the scratch directory {}: {e}", dir.display()))?;
     }
-    std::fs::OpenOptions::new()
+    let f = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(file)
         .map_err(|e| format!("cannot create the scratch file {}: {e}", file.display()))?;
-    // truncate(2) to the cap on the fresh file: the sparse form.
-    if let Err(e) = truncate_file(file, bytes) {
+    // ftruncate(2) to the cap on the fresh file: the sparse form.
+    if let Err(e) = f.set_len(bytes) {
         let _ = std::fs::remove_file(file);
         return Err(format!(
             "cannot size the scratch file {}: {e}",
@@ -1375,50 +1375,14 @@ fn create_krun_scratch(file: &std::path::Path, size_pin: &str) -> Result<(), Str
     Ok(())
 }
 
-/// `truncate(2)` without pulling a dependency into the zero-dep
-/// crate: the raw libc symbol, the same idiom as `libc_geteuid`.
-fn libc_truncate(path: &std::ffi::CStr, len: i64) -> i32 {
-    extern "C" {
-        fn truncate(path: *const i8, length: i64) -> i32;
-    }
-    // SAFETY: `path` is a valid NUL-terminated C string and `truncate`
-    // only operates on the named file; the caller owns both.
-    unsafe { truncate(path.as_ptr(), len) }
-}
-
-/// `truncate(2)` on a path, the zero-dep idiom of the other libc
-/// wrappers above (bd myconfig-0pi: sizing the per-run scratch
-/// file).
-fn truncate_file(path: &std::path::Path, len: u64) -> std::io::Result<()> {
-    use std::os::unix::ffi::OsStrExt;
-    let c = std::ffi::CString::new(path.as_os_str().as_bytes())
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
-    let rc = libc_truncate(&c, len as i64);
-    if rc == 0 {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
-}
-
 /// Sweep the scratch dir of dead runs (bd myconfig-0pi's crash gap):
-/// a live run's guest wrapper UNLINKS its own file right after the
-/// loop attach (the open loop device keeps the inode alive), so any
-/// file still NAMED under `<sidecar>/scratch/` at the start of a run
-/// is debris — its VM is gone (a new run is a new VM). Removed
-/// before this run creates its own. Unreadable entries do not fail
-/// the run (the sweep is best-effort hygiene, the fresh file is
-/// pid-named and cannot collide with debris).
-///
-/// The accepted race (bd myconfig-0pi's no-locking decision): a
-/// PARALLEL run whose guest has not yet made its first nix call
-/// still has its file NAMED — sweeping it surfaces in THAT run's
-/// first guest nix call, where the wrapper's `[ -f "$img" ]` guard
-/// refuses with the diagnosis (exit 125, never silent corruption;
-/// the window is create-to-first-nix, typically seconds of boot).
-/// The alternative — locking or
-/// liveness-probing — buys a longer window, not a closed one, at
-/// the cost of the crash-gap sweep that motivated the design.
+/// remove every `<pid>.img` whose mysbx process is gone. The pid is
+/// the mysbx process, which stays alive for the whole run in both
+/// run modes (exec keeps the pid; `--result` waits), so a parallel
+/// run's file is never swept, whether or not its guest already
+/// unlinked the name. Names that do not parse as `<pid>.img` are not
+/// ours and stay. Removal errors do not fail the run: the fresh file
+/// is pid-named and cannot collide with debris.
 fn sweep_krun_scratch(dir: &std::path::Path) -> Result<(), String> {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
@@ -1432,7 +1396,13 @@ fn sweep_krun_scratch(dir: &std::path::Path) -> Result<(), String> {
         }
     };
     for entry in entries.flatten() {
-        let _ = std::fs::remove_file(entry.path());
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(Ok(stale_pid)) = name.strip_suffix(".img").map(str::parse::<u32>) else {
+            continue;
+        };
+        if pid_gone(stale_pid) {
+            let _ = std::fs::remove_file(entry.path());
+        }
     }
     Ok(())
 }
@@ -2343,13 +2313,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             //
             // NOT on tmpfs: the file lives in the sidecar, next to
             // the state tree — the whole point is that the bytes
-            // reach the DISK, not the RAM. The sweep first: a live
-            // run has its file unlinked by the guest wrapper right
-            // after the loop attach (the open device keeps the
-            // inode alive), so anything still NAMED under
-            // `<sidecar>/scratch/` is debris of a crashed run —
-            // remove it before this run creates its own. A --dry-run
-            // audits the bind + env and creates NOTHING.
+            // reach the DISK, not the RAM. The sweep first: it
+            // removes the files of runs whose mysbx pid is gone
+            // (crashed or exec-mode runs), never a live parallel
+            // run's. A --dry-run audits the bind + env and creates
+            // NOTHING.
             let krun_scratch_params = if backend == "podman-krun" {
                 match env_opt("MYSBX_KRUN_SCRATCH_SIZE") {
                     Some(size) => {
@@ -2776,11 +2744,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
             }
             // The per-run scratch file (bd myconfig-0pi): the guest
-            // wrapper already unlinked the name after the loop
-            // attach — this is the belt-and-braces removal of a run
-            // whose payload never called nix (the file was never
-            // mounted, so the name is still there). Removing a name
-            // that no longer exists is a no-op.
+            // wrapper's rm after the loop attach is best-effort, and a
+            // payload that never called nix never attached it. A name
+            // that is already gone makes this a no-op.
             if let Some(f) = &krun_scratch_file {
                 let _ = std::fs::remove_file(f);
             }
@@ -3792,23 +3758,27 @@ fn ensure_waypipe_token_dir(repo: &repo::Repo, dir: &std::path::Path) -> Result<
             let Ok(stale_pid) = name.parse::<u32>() else {
                 continue;
             };
-            if stale_pid == 0 || stale_pid == std::process::id() {
-                continue;
-            }
-            // `kill(pid, 0)` probes existence without signalling, but
-            // the status alone cannot tell gone (ESRCH) from alive-but
-            // -not-signalable (EPERM, another user's process): only
-            // errno does, and errno is meaningful ONLY on a `-1`
-            // status. Sweep on ESRCH ONLY — an alive owner keeps its
-            // directory, even when the pid was reused.
-            let gone = unsafe { libc_kill_status(stale_pid as i32, 0) } == -1
-                && unsafe { *libc_errno_location() } == ESRCH;
-            if gone {
+            if pid_gone(stale_pid) {
                 let _ = std::fs::remove_dir_all(entry.path());
             }
         }
     }
     Ok(())
+}
+
+/// Whether `pid` names no live process — the owner probe of the
+/// pid-named per-run debris sweeps (waypipe token dirs, krun scratch
+/// files). `kill(pid, 0)` probes existence without signalling, but
+/// the status alone cannot tell gone (ESRCH) from alive-but-not-
+/// signalable (EPERM, another user's process): only errno does, and
+/// errno is meaningful ONLY on a `-1` status. Gone on ESRCH ONLY — an
+/// alive owner keeps its debris, even when the pid was reused. `0`
+/// (process-group semantics) and this process are never gone.
+fn pid_gone(pid: u32) -> bool {
+    if pid == 0 || pid == std::process::id() || pid > i32::MAX as u32 {
+        return false;
+    }
+    unsafe { libc_kill_status(pid as i32, 0) == -1 && *libc_errno_location() == ESRCH }
 }
 
 /// Start the host side of the waypipe channel (docs/design/config.md
@@ -4541,13 +4511,24 @@ mod tests {
         // run's file is never silently reused.
         create_krun_scratch(&file, "64m")
             .expect_err("the second create must refuse the existing name");
-        // The sweep: dead runs' named files are removed, the
-        // directory itself survives, a missing dir is fine.
-        std::fs::write(base.join("scratch").join("dead.1.img"), "debris").unwrap();
-        std::fs::create_dir(base.join("scratch").join("a-subdir")).unwrap();
-        sweep_krun_scratch(&base.join("scratch")).expect("the sweep");
-        assert!(!base.join("scratch").join("dead.1.img").exists());
-        assert!(base.join("scratch").exists(), "the dir survives the sweep");
+        // The sweep: only files of gone pids are removed. A pid above
+        // the kernel's PID_MAX_LIMIT (4194304) never exists; the
+        // parent (the test harness) is alive, like a parallel run
+        // whose guest has not unlinked its file yet. Names that are
+        // not `<pid>.img` are not ours.
+        let scratch = base.join("scratch");
+        let dead = scratch.join("4194305.img");
+        let live = scratch.join(format!("{}.img", unsafe { libc_getppid() }));
+        let foreign = scratch.join("dead.1.img");
+        for f in [&dead, &live, &foreign] {
+            std::fs::write(f, "debris").unwrap();
+        }
+        std::fs::create_dir(scratch.join("a-subdir")).unwrap();
+        sweep_krun_scratch(&scratch).expect("the sweep");
+        assert!(!dead.exists(), "a gone pid's file is swept");
+        assert!(live.exists(), "a live run's file is never swept");
+        assert!(foreign.exists(), "a foreign name stays");
+        assert!(scratch.join("a-subdir").exists());
         sweep_krun_scratch(&base.join("scratch").join("missing"))
             .expect("a missing dir is nothing to sweep");
         let _ = std::fs::remove_dir_all(&base);

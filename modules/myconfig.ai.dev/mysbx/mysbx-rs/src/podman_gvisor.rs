@@ -292,9 +292,9 @@ pub struct GitTrust {
 /// container path the payload env's MYSBX_KRUN_SCRATCH_IMG names.
 /// The guest nix wrapper loop-mounts it (losetup + mkfs.ext4) as the
 /// disk-backed nix scratch — overlay upper/work, state, logs, cache
-/// and TMPDIR — and unlinks the path right after the attach, so the
-/// open loop device (not a live host path) keeps the file alive and
-/// the space frees itself when the VM dies. A `None` on the gvisor
+/// and TMPDIR — and tries to unlink the path right after the attach
+/// (best-effort; mysbx's pid-based sweep and the waited-run cleanup
+/// cover a name that stays). A `None` on the gvisor
 /// variant is the only working shape: `Some` there is a refused run
 /// ([`Error::KrunScratchOnGvisor`]) — the guest-loop machinery is
 /// krun's story and the bind would be infrastructure the backend

@@ -155,11 +155,12 @@ ls -l <repo>.mysbx/scratch/     # empty; a real run creates <pid>.img here
 df -T /run/mysbx-nix              # Type: ext4 (NOT tmpfs), the loop device
 losetup -a                        # /dev/loopN: [9995]:<pid>.img (deleted) — the attach worked, the path is GONE
 #     and on the HOST while the run is up:
-ls -l <repo>.mysbx/scratch/     # EMPTY: the guest wrapper removed its own file after the attach
+ls -l <repo>.mysbx/scratch/     # EMPTY if the guest's best-effort rm worked; <pid>.img if the
+                                # bind target was busy (record which — both are correct)
 # (c) the crash gap: kill the VM (pkill the podman run from the
 #     host), confirm the stale file stays named, then start the next
-#     run — its startup sweep must leave the dir empty again before
-#     its own file appears
+#     run — its startup sweep must remove the dead pid's file; with a
+#     SECOND run still up, its <pid>.img must survive the sweep
 # (d) probe (c) of the ORIGINAL plan, restated for the loop path: the
 #     mount keeps working after the guest's rm — run nix build INSIDE
 #     the same VM after the `losetup -a` above showed `(deleted)`, and
@@ -173,8 +174,7 @@ ls -l <repo>.mysbx/scratch/     # EMPTY: the guest wrapper removed its own file 
 ```
 
 Verify: (b) is the core contract — ext4 on the loop device, the
-host-side name gone while the mount lives, the state copy and the
-overlay on top of it. A failure of (a) (no loop module) or of (d)
+state copy and the overlay on top of it. A failure of (a) (no loop module) or of (d)
 (the unlink breaks the mount — virtiofsd would NOT keep the
 unlinked-open file alive) is a NO-GO: set
 `myconfig.ai.dev.mysbx.krun.nix.scratchSize` aside (pin the env var to

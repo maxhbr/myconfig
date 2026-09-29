@@ -634,16 +634,15 @@ Consequences, stated honestly:
     (`losetup --find --show`), `mkfs.ext4`s it and mounts it as the
     nix scratch — the ext4 is the GUEST KERNEL's own filesystem:
     chown, overlay xattrs and whiteouts work natively, nothing is
-    proxied over the virtiofs xattr surface — then REMOVES the path
-    right after the attach: the open loop device keeps the inode
-    alive, the space frees itself when the VM dies, and the host's
-    next-run sweep (`mysbx` removes everything still named under
-    `<repo>.mysbx/scratch/` before creating its own file — a live
-    run's name is already gone) never mistakes a live run for
-    debris. The crash gap (a VM dies, or a run never calls nix): the
-    pid-named file stays until the next krun run sweeps it; a
-    `--result` run also removes its own file after the backend
-    exits. The tmpfs stays as the FALLBACK for runs without the pin
+    proxied over the virtiofs xattr surface — then tries to remove
+    the path right after the attach, so the space frees itself when
+    the VM dies. That removal is best-effort (the path is a bind
+    target and may be busy) and nothing depends on it: a `--result`
+    run removes its own file after the backend exits, and every run
+    first sweeps `<repo>.mysbx/scratch/<pid>.img` files whose mysbx
+    pid is gone (crashed or exec-mode runs). The mysbx pid lives for
+    the whole run in both run modes, so a parallel run's file is
+    never swept. The tmpfs stays as the FALLBACK for runs without the pin
     and ANNOUNCES itself ("refuse or announce, never silently
     switch"); a run whose kernel cannot attach the loop device
     fails the nix call with the diagnosis (exit 125). The
