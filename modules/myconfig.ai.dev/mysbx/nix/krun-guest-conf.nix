@@ -148,6 +148,13 @@ let
               || fail "cannot mount a guest tmpfs at $dir"
           fi
         done
+        # Podman's image-copy temp dir lands on the FIRST pull, before
+        # containers/storage creates the store: `image_copy_tmp_dir =
+        # "storage"` resolves to graphroot/tmp, and os.MkdirTemp fails
+        # with ENoent when the parent does not exist yet. The wrapper
+        # owns the guest state, so it pre-creates the temp parents.
+        mkdir -p "${graphMount}/storage/tmp" "${runMount}/libpod" "${runMount}/crun" \
+          || fail "cannot create the podman state directories on the guest tmpfs"
         exec 9<&-
       fi
       exec ${podman}/bin/podman "$@"
