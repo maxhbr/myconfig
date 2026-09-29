@@ -675,21 +675,33 @@ operator check a backend before configuring it.
 
 | Backend | Checks |
 | --- | --- |
-| `bubblewrap` | the `MYSBX_BWRAP` and `MYSBX_SHELL` pins are executable, `user.max_user_namespaces` (warning only), a throwaway `bwrap --unshare-all … -- <shell> -c 'exit 0'`, the model endpoint by a host-side TCP connect (the sandbox shares the host network) |
+| `bubblewrap` | the `MYSBX_BWRAP` and `MYSBX_SHELL` pins are executable, `user.max_user_namespaces` (warning only), a throwaway `bwrap --unshare-all [--share-net] … -- <shell> -c 'exit 0'` (`--share-net` when the run shares the network), the model endpoint by a host-side TCP connect (the sandbox shares the host network) |
 | `nono` | the bubblewrap checks, the `MYSBX_NONO` pin, the `MYSBX_NONO_PROFILE` file (when it is a path), the kernel Landlock ABI |
 | `podman-gvisor` | the `MYSBX_PODMAN` binary, runsc registered with podman (`podman --runtime=runsc info`), the `MYSBX_PODMAN_IMAGE` image in the store and its ID against `MYSBX_PODMAN_IMAGE_ID`, a throwaway `podman run --rm --pull=never --network none` with the run's runtime, runtime flags and cgroup manager, the model endpoint by `curl` inside a container on the run's network (`MYSBX_PODMAN_PASTA_SPEC`) |
-| `podman-krun` | the podman checks with the `MYSBX_KRUN_RUNTIME` pin (executable, `--version` lists `+LIBKRUN`), `/dev/kvm` rw access (`kvm_available`), and the probes with the krun annotation and `--group-add=keep-groups` |
+| `podman-krun` | the podman checks with the `MYSBX_KRUN_RUNTIME` pin, or `crun` on PATH (executable, `--version` lists `+LIBKRUN`), `/dev/kvm` rw access (`kvm_available`), and the probes with the krun annotation and `--group-add=keep-groups` |
 
 **Output.** Stdout, `== section ==` headers, one line per check:
-`OK`, `WARN` or `FAIL`, the check name, the detail and, for `WARN` and
+`OK`, `WARN`, `FAIL` or `SKIP`, the check name, the detail and, for `WARN` and
 `FAIL`, a remediation hint. The last line counts problems and
 warnings. A `FAIL` means the backend cannot start (a missing binary,
 a failed probe, an absent image, no `/dev/kvm` access). A `WARN` does
 not stop a run (a stale image, an unreachable model endpoint). A
 component the host does not have on purpose — no endpoint configured,
 the network denied, a backend that is not configured — is an `OK`
-line that says "not applicable", never a `FAIL`. Probes that depend
-on a failed check are not run.
+line that says "not applicable", never a `FAIL`. A probe that depends
+on a failed check is not run; its `SKIP` line names the failed checks
+and is not counted. A `podman image inspect` error other than an
+unknown image is reported as it is, without the load-image hint.
+
+**Timeouts.** Every probe command is killed after 30 s and reported
+as timed out; the endpoint's host name resolution is bounded to 5 s.
+The in-container `curl` keeps its own `--max-time 5`.
+
+**Where it runs.** Outside a repo (the home directory, `/`) the user
+layer alone is checked, as an `OK` line. Where a run is refused
+(inside a session clone, a forbidden git dir, a repo containing the
+home) the user layer is checked too, but the configuration line is a
+`WARN` naming the refusal.
 
 **Exit codes.** `0` without a `FAIL`, `1` with at least one, `2` for a
 wrong command line (an unknown BACKEND), `70` when the configuration

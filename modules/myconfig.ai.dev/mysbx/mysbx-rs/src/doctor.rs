@@ -15,7 +15,12 @@
 //! (a stale image, an unreachable model endpoint). Components the host
 //! does not have on purpose (no endpoint configured, the network
 //! denied, a backend that is not configured) are reported as not
-//! applicable, never as a failure.
+//! applicable, never as a failure. A probe that depends on a failed
+//! check is a `SKIP` line naming what it depends on.
+//!
+//! Every probe command is bounded by [`PROBE_TIMEOUT`], the endpoint's
+//! name resolution by [`RESOLVE_TIMEOUT`]; a timeout is reported like
+//! a failed probe.
 //!
 //! Exit codes: `0` no `FAIL`, `1` at least one `FAIL`, `2` usage
 //! error, `70` when the configuration cannot be loaded.
@@ -29,9 +34,11 @@ use crate::merge;
 use crate::repo;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 const USAGE_DOCTOR: &str = "usage: mysbx doctor [BACKEND...]";
 
@@ -45,11 +52,19 @@ pub const ENDPOINT_VARS: &[&str] = &["OPENAI_BASE_URL", "ANTHROPIC_BASE_URL"];
 /// reachable; the URL travels as `$0`, so it needs no quoting.
 pub const CURL_CMD: &str = "curl -sS -o /dev/null --max-time 5 -w 'HTTP %{http_code}' \"$0\"";
 
+/// The upper bound of one probe command; a krun startup boots a VM.
+pub const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The upper bound of the endpoint's host name resolution.
+pub const RESOLVE_TIMEOUT: Duration = Duration::from_secs(5);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
     Ok,
     Warn,
     Fail,
+    /// Not run because a check it depends on failed; not counted.
+    Skip,
 }
 
 /// One check result: one output line.
@@ -80,6 +95,16 @@ impl Check {
         }
     }
 
+    /// A probe that was not run because `blockers` failed.
+    pub fn skip(name: &str, blockers: &[&str]) -> Check {
+        Check {
+            level: Level::Skip,
+            name: name.to_owned(),
+            detail: format!("not run (depends on: {})", blockers.join(", ")),
+            hint: None,
+        }
+    }
+
     pub fn fail(name: &str, detail: impl Into<String>, hint: impl Into<String>) -> Check {
         Check {
             level: Level::Fail,
@@ -95,6 +120,7 @@ impl Check {
             Level::Ok => "OK  ",
             Level::Warn => "WARN",
             Level::Fail => "FAIL",
+            Level::Skip => "SKIP",
         };
         match &self.hint {
             Some(hint) => format!("{tag} {}: {} — {hint}", self.name, self.detail),
@@ -122,7 +148,7 @@ pub fn render(sections: &[Section]) -> (Vec<String>, usize, usize) {
             match check.level {
                 Level::Fail => problems += 1,
                 Level::Warn => warnings += 1,
-                Level::Ok => {}
+                Level::Ok | Level::Skip => {}
             }
             lines.push(check.line());
         }
@@ -160,11 +186,14 @@ fn is_executable(path: &Path) -> bool {
 }
 
 /// The bwrap startup probe (args only, no program name): a throwaway
-/// sandbox with the namespaces a run unshares, running `shell -c
-/// 'exit 0'`.
-pub fn bwrap_probe_argv(shell: &str) -> Vec<String> {
-    [
-        "--unshare-all",
+/// sandbox with the namespaces a run unshares — `--share-net` when the
+/// run shares the network — running `shell -c 'exit 0'`.
+pub fn bwrap_probe_argv(shell: &str, share_net: bool) -> Vec<String> {
+    let mut argv = vec!["--unshare-all".to_owned()];
+    if share_net {
+        argv.push("--share-net".to_owned());
+    }
+    for arg in [
         "--die-with-parent",
         "--ro-bind",
         "/",
@@ -177,10 +206,10 @@ pub fn bwrap_probe_argv(shell: &str) -> Vec<String> {
         shell,
         "-c",
         "exit 0",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect()
+    ] {
+        argv.push(arg.to_owned());
+    }
+    argv
 }
 
 /// The OCI runtime settings of a podman backend run.
@@ -436,16 +465,32 @@ fn short_id(id: &str) -> &str {
     id.get(..12).unwrap_or(id)
 }
 
-/// The image check of the podman backends: `loaded` is the image ID
-/// `podman image inspect` printed (`None` when the image is absent),
-/// `expected` the `MYSBX_PODMAN_IMAGE_ID` pin.
-pub fn image_check(image: &str, loaded: Option<&str>, expected: Option<&str>) -> Check {
-    let Some(loaded) = loaded else {
-        return Check::fail(
-            "image",
-            format!("{image} is not in the podman store"),
-            "run: mysbx podman-load-image",
-        );
+/// Whether a `podman image inspect` error says the image is absent.
+fn image_unknown(error: &str) -> bool {
+    let error = error.to_ascii_lowercase();
+    error.contains("image not known") || error.contains("no such image")
+}
+
+/// The image check of the podman backends: `inspect` is the image ID
+/// `podman image inspect` printed, or its error line when it failed;
+/// `expected` is the `MYSBX_PODMAN_IMAGE_ID` pin.
+pub fn image_check(image: &str, inspect: Result<&str, &str>, expected: Option<&str>) -> Check {
+    let loaded = match inspect {
+        Ok(loaded) => loaded,
+        Err(error) if image_unknown(error) => {
+            return Check::fail(
+                "image",
+                format!("{image} is not in the podman store ({error})"),
+                "run: mysbx podman-load-image",
+            );
+        }
+        Err(error) => {
+            return Check::fail(
+                "image",
+                format!("`podman image inspect {image}` failed: {error}"),
+                "check that podman works for this user (podman info)",
+            );
+        }
     };
     let loaded = loaded.trim();
     let loaded = loaded.strip_prefix("sha256:").unwrap_or(loaded);
@@ -493,11 +538,32 @@ fn landlock_abi() -> Option<i64> {
     if abi > 0 { Some(abi as i64) } else { None }
 }
 
+/// Resolve `host` in a helper thread, bounded by `timeout`: a hanging
+/// resolver leaves the thread behind instead of blocking the doctor.
+fn resolve_bounded(
+    host: &str,
+    port: u16,
+    timeout: Duration,
+) -> Result<Vec<std::net::SocketAddr>, String> {
+    use std::net::ToSocketAddrs;
+    let (tx, rx) = mpsc::channel();
+    let owned = host.to_owned();
+    std::thread::spawn(move || {
+        let resolved = (owned.as_str(), port)
+            .to_socket_addrs()
+            .map(|addrs| addrs.collect::<Vec<_>>());
+        let _ = tx.send(resolved);
+    });
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(addrs)) => Ok(addrs),
+        Ok(Err(e)) => Err(format!("cannot resolve {host}: {e}")),
+        Err(_) => Err(format!("resolving {host} timed out after {} s", timeout.as_secs())),
+    }
+}
+
 fn tcp_reachable(host: &str, port: u16) -> Result<(), String> {
-    use std::net::{TcpStream, ToSocketAddrs};
-    let addrs = (host, port)
-        .to_socket_addrs()
-        .map_err(|e| format!("cannot resolve {host}: {e}"))?;
+    use std::net::TcpStream;
+    let addrs = resolve_bounded(host, port, RESOLVE_TIMEOUT)?;
     let mut last = format!("{host} resolves to no address");
     for addr in addrs {
         match TcpStream::connect_timeout(&addr, Duration::from_secs(3)) {
@@ -511,22 +577,89 @@ fn tcp_reachable(host: &str, port: u16) -> Result<(), String> {
 /// The outcome of one probe command.
 struct Probe {
     ok: bool,
+    timed_out: bool,
     stdout: String,
     stderr: String,
 }
 
+impl Probe {
+    /// The detail of a failed probe: the timeout, or the last line of
+    /// its stderr.
+    fn error(&self) -> String {
+        if self.timed_out {
+            format!("timed out after {} s", PROBE_TIMEOUT.as_secs())
+        } else {
+            error_line(&self.stderr)
+        }
+    }
+}
+
+/// Read `pipe` to its end in a helper thread; the receiver gets the
+/// bytes once the pipe closes.
+fn read_pipe<R: Read + Send + 'static>(pipe: Option<R>) -> mpsc::Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel();
+    if let Some(mut pipe) = pipe {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = pipe.read_to_end(&mut buf);
+            let _ = tx.send(buf);
+        });
+    }
+    rx
+}
+
+/// Run one probe command bounded by [`PROBE_TIMEOUT`]; a command that
+/// outlives it is killed. Output a detached grandchild keeps open is
+/// given a short grace period, then dropped.
 fn run_probe(bin: &Path, argv: &[String]) -> Probe {
-    match Command::new(bin).args(argv).stdin(Stdio::null()).output() {
-        Ok(out) => Probe {
-            ok: out.status.success(),
-            stdout: String::from_utf8_lossy(&out.stdout).trim().to_owned(),
-            stderr: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
-        },
-        Err(e) => Probe {
-            ok: false,
-            stdout: String::new(),
-            stderr: format!("cannot run {}: {e}", bin.display()),
-        },
+    let spawned = Command::new(bin)
+        .args(argv)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
+    let mut child = match spawned {
+        Ok(child) => child,
+        Err(e) => {
+            return Probe {
+                ok: false,
+                timed_out: false,
+                stdout: String::new(),
+                stderr: format!("cannot run {}: {e}", bin.display()),
+            };
+        }
+    };
+    let stdout = read_pipe(child.stdout.take());
+    let stderr = read_pipe(child.stderr.take());
+    let deadline = Instant::now() + PROBE_TIMEOUT;
+    let (ok, timed_out) = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break (status.success(), false),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break (false, true);
+            }
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break (false, false);
+            }
+        }
+    };
+    let grace = Duration::from_secs(2);
+    let text = |rx: mpsc::Receiver<Vec<u8>>| {
+        let bytes = rx.recv_timeout(grace).unwrap_or_default();
+        String::from_utf8_lossy(&bytes).trim().to_owned()
+    };
+    Probe {
+        ok,
+        timed_out,
+        stdout: text(stdout),
+        stderr: text(stderr),
     }
 }
 
@@ -574,8 +707,9 @@ fn binary_check(
 }
 
 /// bwrap binary, sandbox shell, user namespaces and the startup
-/// probe — shared by the bubblewrap and nono backends.
-fn bwrap_checks(checks: &mut Vec<Check>) {
+/// probe — shared by the bubblewrap and nono backends. `share_net` is
+/// the run's network sense.
+fn bwrap_checks(checks: &mut Vec<Check>, share_net: bool) {
     let bwrap = binary_check(
         checks,
         "bwrap binary",
@@ -594,22 +728,33 @@ fn bwrap_checks(checks: &mut Vec<Check>) {
     if let Some(check) = userns_check(userns.as_deref()) {
         checks.push(check);
     }
-    if let (Some(bwrap), Some(shell)) = (bwrap, shell) {
-        let probe = run_probe(&bwrap, &bwrap_probe_argv(&shell.to_string_lossy()));
-        checks.push(if probe.ok {
-            Check::ok(
-                "startup probe",
-                "a throwaway bwrap sandbox started and exited 0",
-            )
-        } else {
-            Check::fail(
-                "startup probe",
-                error_line(&probe.stderr),
-                "bwrap cannot create its namespaces: check unprivileged user namespaces \
-                 and that no outer sandbox forbids nesting",
-            )
-        });
-    }
+    let (bwrap, shell) = match (bwrap, shell) {
+        (Some(bwrap), Some(shell)) => (bwrap, shell),
+        (bwrap, _) => {
+            let blocker = if bwrap.is_none() {
+                "bwrap binary"
+            } else {
+                "sandbox shell"
+            };
+            checks.push(Check::skip("startup probe", &[blocker]));
+            return;
+        }
+    };
+    let argv = bwrap_probe_argv(&shell.to_string_lossy(), share_net);
+    let probe = run_probe(&bwrap, &argv);
+    checks.push(if probe.ok {
+        Check::ok(
+            "startup probe",
+            "a throwaway bwrap sandbox started and exited 0",
+        )
+    } else {
+        Check::fail(
+            "startup probe",
+            probe.error(),
+            "bwrap cannot create its namespaces: check unprivileged user namespaces \
+             and that no outer sandbox forbids nesting",
+        )
+    });
 }
 
 /// nono binary, profile and Landlock.
@@ -695,7 +840,10 @@ fn podman_checks(
     forwarded: &[(String, String)],
 ) {
     let krun = backend == "podman-krun";
+    // The names of the failed checks the startup probe depends on.
+    let mut blockers: Vec<&str> = Vec::new();
     if crate::refuse_renamed_podman_pins("mysbx doctor") {
+        blockers.push("pins");
         checks.push(Check::fail(
             "pins",
             "an old MYSBX_GVISOR_* pin is set (named on stderr)",
@@ -709,11 +857,15 @@ fn podman_checks(
         "podman",
         "install podman (NixOS: virtualisation.podman.enable) or set MYSBX_PODMAN",
     );
+    if podman.is_none() {
+        blockers.push("podman binary");
+    }
 
-    let mut startable = podman.is_some();
     if krun {
         let check = kvm_check(Path::new("/dev/kvm").exists(), crate::kvm_available());
-        startable &= check.level == Level::Ok;
+        if check.level != Level::Ok {
+            blockers.push("/dev/kvm");
+        }
         checks.push(check);
     }
 
@@ -734,59 +886,67 @@ fn podman_checks(
         runtime_flags.as_deref(),
     );
 
-    if rt.runtime.contains('/') {
-        if !is_executable(Path::new(&rt.runtime)) {
-            startable = false;
-            checks.push(Check::fail(
+    let runtime_check = if krun {
+        let path_var = std::env::var_os("PATH");
+        match resolve_executable(&rt.runtime, path_var.as_deref()) {
+            None => Check::fail(
                 "OCI runtime",
-                format!("{} is not executable", rt.runtime),
+                format!(
+                    "`{}` is not an executable file (MYSBX_KRUN_RUNTIME or PATH)",
+                    rt.runtime
+                ),
                 "point MYSBX_KRUN_RUNTIME at crun built with libkrun \
                  (myconfig.ai.dev.mysbx.krun.runtime)",
-            ));
-        } else if krun {
-            let version = run_probe(Path::new(&rt.runtime), &["--version".to_owned()]);
-            if version.ok && version.stdout.contains("+LIBKRUN") {
-                checks.push(Check::ok(
-                    "OCI runtime",
-                    format!("{} (crun with +LIBKRUN)", rt.runtime),
-                ));
-            } else {
-                startable = false;
-                checks.push(Check::fail(
-                    "OCI runtime",
-                    format!("{} --version does not list +LIBKRUN", rt.runtime),
-                    "pin a crun built with libkrun (myconfig.ai.dev.mysbx.krun.runtime)",
-                ));
+            ),
+            Some(path) => {
+                let version = run_probe(&path, &["--version".to_owned()]);
+                if version.ok && version.stdout.contains("+LIBKRUN") {
+                    Check::ok(
+                        "OCI runtime",
+                        format!("{} (crun with +LIBKRUN)", path.display()),
+                    )
+                } else if version.ok {
+                    Check::fail(
+                        "OCI runtime",
+                        format!("{} --version does not list +LIBKRUN", path.display()),
+                        "pin a crun built with libkrun (myconfig.ai.dev.mysbx.krun.runtime)",
+                    )
+                } else {
+                    Check::fail(
+                        "OCI runtime",
+                        format!("{} --version failed: {}", path.display(), version.error()),
+                        "pin a crun built with libkrun (myconfig.ai.dev.mysbx.krun.runtime)",
+                    )
+                }
             }
-        } else {
-            checks.push(Check::ok("OCI runtime", rt.runtime.clone()));
         }
     } else if let Some(podman) = &podman {
         let info = run_probe(podman, &runtime_info_argv(&rt.runtime));
         if info.ok {
-            checks.push(Check::ok(
+            Check::ok(
                 "OCI runtime",
                 format!("`{}` is registered with podman", rt.runtime),
-            ));
+            )
         } else {
-            startable = false;
-            checks.push(Check::fail(
+            Check::fail(
                 "OCI runtime",
-                format!(
-                    "`{}` is not usable: {}",
-                    rt.runtime,
-                    error_line(&info.stderr)
-                ),
+                format!("`{}` is not usable: {}", rt.runtime, info.error()),
                 "register it in containers.conf (NixOS: \
                  virtualisation.containers.containersConf.settings.engine.runtimes)",
-            ));
+            )
         }
+    } else {
+        Check::skip("OCI runtime", &["podman binary"])
+    };
+    if runtime_check.level == Level::Fail {
+        blockers.push("OCI runtime");
     }
+    checks.push(runtime_check);
 
     let image = crate::env_opt("MYSBX_PODMAN_IMAGE");
     match (&image, &podman) {
         (None, _) => {
-            startable = false;
+            blockers.push("image");
             checks.push(Check::fail(
                 "image",
                 "no image pinned (MYSBX_PODMAN_IMAGE)",
@@ -796,47 +956,56 @@ fn podman_checks(
         }
         (Some(image), Some(podman)) => {
             let inspect = run_probe(podman, &image_id_argv(image));
-            let loaded = if inspect.ok {
-                Some(inspect.stdout.as_str())
+            let error = inspect.error();
+            let result = if inspect.ok {
+                Ok(inspect.stdout.as_str())
             } else {
-                None
+                Err(error.as_str())
             };
             let expected = crate::env_opt("MYSBX_PODMAN_IMAGE_ID");
-            let check = image_check(image, loaded, expected.as_deref());
-            startable &= check.level != Level::Fail;
+            let check = image_check(image, result, expected.as_deref());
+            if check.level == Level::Fail {
+                blockers.push("image");
+            }
             checks.push(check);
         }
-        (Some(_), None) => {}
+        (Some(_), None) => checks.push(Check::skip("image", &["podman binary"])),
     }
 
-    let (Some(podman), Some(image), true) = (&podman, &image, startable) else {
-        return;
+    let started = match (&podman, &image, blockers.is_empty()) {
+        (Some(podman), Some(image), true) => {
+            let shell = crate::env_or("MYSBX_PODMAN_SHELL", "/bin/bash");
+            let probe = PodmanProbe {
+                runtime: &rt,
+                krun,
+                image: image.as_str(),
+                shell: shell.as_str(),
+            };
+            let started = run_probe(podman, &startup_probe_argv(&probe));
+            if started.ok {
+                checks.push(Check::ok(
+                    "startup probe",
+                    "a throwaway container started and exited 0",
+                ));
+                Some(shell)
+            } else {
+                let hint = if krun {
+                    "try the run by hand; common causes: /dev/kvm reachable only through a \
+                     group, missing /etc/subuid and /etc/subgid ranges"
+                } else {
+                    "common causes: the systemd cgroup manager (`Access denied`: set \
+                     MYSBX_GVISOR_CGROUP_MANAGER=cgroupfs), runsc without the ignore-cgroups \
+                     runtime flag, missing /etc/subuid and /etc/subgid ranges"
+                };
+                checks.push(Check::fail("startup probe", started.error(), hint));
+                None
+            }
+        }
+        _ => {
+            checks.push(Check::skip("startup probe", &blockers));
+            None
+        }
     };
-    let shell = crate::env_or("MYSBX_PODMAN_SHELL", "/bin/bash");
-    let probe = PodmanProbe {
-        runtime: &rt,
-        krun,
-        image: image.as_str(),
-        shell: shell.as_str(),
-    };
-    let started = run_probe(podman, &startup_probe_argv(&probe));
-    if started.ok {
-        checks.push(Check::ok(
-            "startup probe",
-            "a throwaway container started and exited 0",
-        ));
-    } else {
-        let hint = if krun {
-            "try the run by hand; common causes: /dev/kvm reachable only through a group, \
-             missing /etc/subuid and /etc/subgid ranges"
-        } else {
-            "common causes: the systemd cgroup manager (`Access denied`: set \
-             MYSBX_GVISOR_CGROUP_MANAGER=cgroupfs), runsc without the ignore-cgroups \
-             runtime flag, missing /etc/subuid and /etc/subgid ranges"
-        };
-        checks.push(Check::fail("startup probe", error_line(&started.stderr), hint));
-        return;
-    }
 
     if !merged.network {
         checks.push(Check::ok(
@@ -859,11 +1028,19 @@ fn podman_checks(
         ));
         return;
     };
+    let (Some(shell), Some(podman), Some(image)) = (started, &podman, &image) else {
+        checks.push(Check::skip("model endpoint", &["startup probe"]));
+        return;
+    };
+    let probe = PodmanProbe {
+        runtime: &rt,
+        krun,
+        image: image.as_str(),
+        shell: shell.as_str(),
+    };
     let network = crate::env_opt("MYSBX_PODMAN_PASTA_SPEC");
-    let answer = run_probe(
-        podman,
-        &endpoint_probe_argv(&probe, network.as_deref(), &url),
-    );
+    let argv = endpoint_probe_argv(&probe, network.as_deref(), &url);
+    let answer = run_probe(podman, &argv);
     checks.push(if answer.ok {
         Check::ok(
             "model endpoint",
@@ -875,7 +1052,7 @@ fn podman_checks(
     } else {
         Check::warn(
             "model endpoint",
-            format!("{var}={url}: {}", error_line(&answer.stderr)),
+            format!("{var}={url}: {}", answer.error()),
             "the container reaches the host proxy through pasta --map-guest-addr and the \
              LiteLLM forwarder: check MYSBX_PODMAN_PASTA_SPEC and that the forwarder \
              socket and the proxy are up",
@@ -883,10 +1060,12 @@ fn podman_checks(
     });
 }
 
-/// The effective configuration and a line describing where it came
+/// The effective configuration and the check describing where it came
 /// from: the repo the cwd resolves to, or the user layer alone when
-/// there is none.
-fn effective_config() -> Result<(merge::Merged, String), String> {
+/// there is none. A directory a run refuses (inside a session clone, a
+/// forbidden git dir, a repo containing the home) is a `WARN`; the
+/// home directory and `/` are "no repo here".
+fn effective_config() -> Result<(merge::Merged, Check), String> {
     let home_os = std::env::var_os("HOME").unwrap_or_default();
     let home = Path::new(&home_os);
     let xdg = std::env::var("XDG_CONFIG_HOME").ok();
@@ -907,7 +1086,8 @@ fn effective_config() -> Result<(merge::Merged, String), String> {
             } else {
                 "sidecar not inited, user layer only"
             };
-            Ok((merged, format!("repo {} ({state})", repo.root.display())))
+            let scope = format!("repo {} ({state})", repo.root.display());
+            Ok((merged, Check::ok("configuration", scope)))
         }
         Err(err) => {
             let user_path = merge::user_config_path(home, xdg.as_deref());
@@ -918,7 +1098,18 @@ fn effective_config() -> Result<(merge::Merged, String), String> {
             };
             let merged = merge::merge(user, Config::default(), &user_path, &user_path, home)
                 .map_err(|e| e.to_string())?;
-            Ok((merged, format!("user layer only (no repo: {err})")))
+            let check = match err {
+                repo::Error::HomeDir(_) | repo::Error::RootDir => Check::ok(
+                    "configuration",
+                    format!("user layer only (no repo here: {err})"),
+                ),
+                _ => Check::warn(
+                    "configuration",
+                    format!("user layer only: {err}"),
+                    "a run from this directory is refused; run doctor from the repository",
+                ),
+            };
+            Ok((merged, check))
         }
     }
 }
@@ -936,6 +1127,11 @@ pub fn run(args: &[String]) -> i32 {
                     BACKENDS.join(", ")
                 );
                 return 0;
+            }
+            option if option.starts_with('-') => {
+                eprintln!("mysbx doctor: unknown option: {option}");
+                eprintln!("{USAGE_DOCTOR}");
+                return 2;
             }
             name if BACKENDS.contains(&name) => {
                 if !named.iter().any(|n| n == name) {
@@ -959,8 +1155,9 @@ pub fn run(args: &[String]) -> i32 {
         }
     };
 
-    let mut header = vec![Check::ok("configuration", scope)];
-    let targets: Vec<String> = if !named.is_empty() {
+    let mut header = vec![scope];
+    let from_command_line = !named.is_empty();
+    let targets: Vec<String> = if from_command_line {
         header.push(Check::ok("backend", format!("{} [command line]", named.join(", "))));
         named
     } else {
@@ -1007,11 +1204,11 @@ pub fn run(args: &[String]) -> i32 {
         let mut checks = Vec::new();
         match backend.as_str() {
             "bubblewrap" => {
-                bwrap_checks(&mut checks);
+                bwrap_checks(&mut checks, merged.network);
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }
             "nono" => {
-                bwrap_checks(&mut checks);
+                bwrap_checks(&mut checks, merged.network);
                 nono_checks(&mut checks);
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }
@@ -1032,10 +1229,17 @@ pub fn run(args: &[String]) -> i32 {
             title: "other backends".to_owned(),
             checks: vec![Check::ok(
                 "not checked",
-                format!(
-                    "{} (not configured; check one with: mysbx doctor <backend>)",
-                    others.join(", ")
-                ),
+                if from_command_line {
+                    format!(
+                        "{} (check one with: mysbx doctor <backend>)",
+                        others.join(", ")
+                    )
+                } else {
+                    format!(
+                        "{} (not configured; check one with: mysbx doctor <backend>)",
+                        others.join(", ")
+                    )
+                },
             )],
         });
     }
@@ -1062,6 +1266,10 @@ mod tests {
         assert_eq!(
             Check::fail("c", "broken", "do y").line(),
             "FAIL c: broken — do y"
+        );
+        assert_eq!(
+            Check::skip("d", &["x", "y"]).line(),
+            "SKIP d: not run (depends on: x, y)"
         );
     }
 
@@ -1095,24 +1303,28 @@ mod tests {
 
     #[test]
     fn bwrap_probe_argv_is_exact() {
-        assert_eq!(
-            bwrap_probe_argv("/bin/sh"),
-            s(&[
-                "--unshare-all",
-                "--die-with-parent",
-                "--ro-bind",
-                "/",
-                "/",
-                "--proc",
-                "/proc",
-                "--dev",
-                "/dev",
-                "--",
-                "/bin/sh",
-                "-c",
-                "exit 0",
-            ])
-        );
+        let tail = [
+            "--die-with-parent",
+            "--ro-bind",
+            "/",
+            "/",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--",
+            "/bin/sh",
+            "-c",
+            "exit 0",
+        ];
+        // network = false: every namespace unshared
+        let mut want = s(&["--unshare-all"]);
+        want.extend(s(&tail));
+        assert_eq!(bwrap_probe_argv("/bin/sh", false), want);
+        // network = true: the run's --share-net right after --unshare-all
+        let mut want = s(&["--unshare-all", "--share-net"]);
+        want.extend(s(&tail));
+        assert_eq!(bwrap_probe_argv("/bin/sh", true), want);
     }
 
     #[test]
@@ -1300,18 +1512,27 @@ mod tests {
     #[test]
     fn image_check_reports_absent_stale_and_current() {
         let id = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        let absent = image_check("img", None, Some(id));
+        let absent = image_check("img", Err("Error: img: image not known"), Some(id));
         assert_eq!(absent.level, Level::Fail);
+        assert!(absent.detail.contains("image not known"));
         assert!(absent.hint.unwrap().contains("mysbx podman-load-image"));
+        // any other inspect error names the error, not the load verb
+        let broken = image_check("img", Err("Error: database is locked"), Some(id));
+        assert_eq!(broken.level, Level::Fail);
+        assert!(broken.detail.contains("database is locked"));
+        assert!(!broken.hint.unwrap().contains("podman-load-image"));
+        let timed_out = image_check("img", Err("timed out after 30 s"), None);
+        assert!(!timed_out.hint.unwrap().contains("podman-load-image"));
         let loaded = format!("sha256:{id}\n");
         assert_eq!(
-            image_check("img", Some(&loaded), Some(id)).line(),
+            image_check("img", Ok(loaded.as_str()), Some(id)).line(),
             "OK   image: img current (0123456789ab)"
         );
-        let stale = image_check("img", Some(&loaded), Some("ffffffffffffffff"));
+        let stale = image_check("img", Ok(loaded.as_str()), Some("ffffffffffffffff"));
         assert_eq!(stale.level, Level::Warn);
         assert!(stale.detail.contains("stale"), "{}", stale.detail);
-        assert_eq!(image_check("img", Some(&loaded), None).level, Level::Ok);
+        let unpinned = image_check("img", Ok(loaded.as_str()), None);
+        assert_eq!(unpinned.level, Level::Ok);
     }
 
     #[test]

@@ -177,7 +177,8 @@ Commands:
                 its freshness, /dev/kvm for podman-krun, the Landlock
                 ABI for nono, and the model endpoint through the
                 backend's network. One OK/WARN/FAIL line per check
-                with a fix hint and a final problem count. A FAIL
+                with a fix hint (SKIP for a probe whose dependency
+                failed) and a final problem count. A FAIL
                 means the backend cannot start, a WARN does not stop
                 it (a stale image, an unreachable endpoint). Exits 1
                 when any check fails, 70 when the configuration

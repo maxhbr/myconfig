@@ -215,6 +215,8 @@ OK   podman binary: /run/current-system/sw/bin/podman
 FAIL /dev/kvm: not readable+writable for this user — add the user to the `kvm` group (or enable the seat udev ACL) and log in again
 OK   OCI runtime: /nix/store/…-crun/bin/crun (crun with +LIBKRUN)
 OK   image: localhost/agent-dev:latest current (0123456789ab)
+SKIP startup probe: not run (depends on: /dev/kvm)
+OK   model endpoint: not applicable: none of OPENAI_BASE_URL, ANTHROPIC_BASE_URL is configured
 == other backends ==
 OK   not checked: bubblewrap, podman-gvisor, nono (not configured; check one with: mysbx doctor <backend>)
 mysbx doctor: 1 problem(s), 0 warning(s)
