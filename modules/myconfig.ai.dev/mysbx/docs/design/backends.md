@@ -563,9 +563,14 @@ Consequences, stated honestly:
   image closure reachable throughout bootstrap and be live-validated
   first. The candidate redesign (bd myconfig-tm2 → myconfig-pz6, evaluated from
   static sources only) leaves the argv unchanged. A guest-root
-  wrapper self-overlays the image's OWN `/nix/store` (and an
-  `includeNixDB`-registered `/nix/var/nix`) after boot, with the
-  upper layer on a guest tmpfs. Nix then runs single-user
+  wrapper self-overlays the image's OWN `/nix/store` after boot, with
+  the upper layer on a guest tmpfs; the f13 probe confirms that the
+  mount works on the virtio-fs lower. Copy-up of a lower entry fails
+  (virtiofs has no fileattr support: `EOPNOTSUPP`). Image paths must
+  therefore stay untouched: they are registered valid
+  (`includeNixDB`), the database is COPIED to the tmpfs rather than
+  overlaid, and nix's fetcher cache lives on the tmpfs too (libgit2
+  refuses the host-uid-owned virtio-fs home). Nix then runs single-user
   (`NIX_REMOTE=local`, `build-users-group =`, `sandbox = false`) and
   substitutes from the host-mirrored caches. No host store is
   involved, and nothing is hidden at any point. The upper layer
