@@ -64,6 +64,9 @@ fn base(network: bool) -> Merged {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        memory: None,
+        cpus: None,
+        pids_limit: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -834,6 +837,9 @@ fn golden_both_layers_contribute_mounts() {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        memory: None,
+        cpus: None,
+        pids_limit: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -1174,6 +1180,9 @@ fn mount_order_is_preserved() {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        memory: None,
+        cpus: None,
+        pids_limit: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -3549,6 +3558,9 @@ fn podman_base(network: bool) -> Merged {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        memory: None,
+        cpus: None,
+        pids_limit: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -4034,6 +4046,9 @@ fn podman_mount_order_is_preserved() {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        memory: None,
+        cpus: None,
+        pids_limit: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -5000,6 +5015,9 @@ fn nono_base(network: bool) -> Merged {
         allow_domains: Vec::new(),
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
+        memory: None,
+        cpus: None,
+        pids_limit: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }

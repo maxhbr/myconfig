@@ -163,6 +163,15 @@ pub struct Merged {
     /// bd myconfig-mo3.1): same concatenation and dedup rule as
     /// [`Merged::connect_ports`].
     pub listen_ports: Vec<u16>,
+    /// Resource limits (`memory`, `cpus`, `pids-limit`,
+    /// docs/design/config.md D23): each from the sidecar when it
+    /// decided, else from the user layer — like `multiplexer`, no
+    /// narrowing rule, a limit grants no host access. `None` when
+    /// neither layer set it. The `MYSBX_PODMAN_*` env pins override
+    /// them per invocation (lib.rs).
+    pub memory: Option<String>,
+    pub cpus: Option<String>,
+    pub pids_limit: Option<u32>,
 }
 
 impl Merged {
@@ -686,6 +695,11 @@ pub fn merge(
         allow_domains,
         connect_ports,
         listen_ports,
+        // Resource limits (D23): the later layer wins, like
+        // `multiplexer`.
+        memory: sidecar.memory.or(user.memory),
+        cpus: sidecar.cpus.or(user.cpus),
+        pids_limit: sidecar.pids_limit.or(user.pids_limit),
     })
 }
 
@@ -1028,6 +1042,34 @@ mod tests {
         s.network = Some(true);
         let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert!(merged.network);
+    }
+
+    #[test]
+    fn resource_limits_come_from_the_sidecar_else_the_user_layer() {
+        // config.md D23: like `multiplexer`, the sidecar wins per key.
+        let m = merge(
+            cfg("memory = \"8g\"\ncpus = 4\npids-limit = 100\n"),
+            cfg("memory = \"2g\"\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(m.memory.as_deref(), Some("2g"));
+        assert_eq!(m.cpus.as_deref(), Some("4"));
+        assert_eq!(m.pids_limit, Some(100));
+        let none = merge(
+            Config::default(),
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(
+            (none.memory, none.cpus, none.pids_limit),
+            (None, None, None)
+        );
     }
 
     #[test]

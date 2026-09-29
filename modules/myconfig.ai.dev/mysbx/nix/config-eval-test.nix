@@ -273,6 +273,16 @@ let
         myconfig.ai.dev.mysbx.config.listenPorts = [ 8080 ];
       }
     ];
+    # The D23 resource-limit keys (bd myconfig-91j).
+    limits = generated [
+      {
+        myconfig.ai.dev.mysbx.config = {
+          memory = "8g";
+          cpus = 4;
+          pidsLimit = 1024;
+        };
+      }
+    ];
     # The sandbox's own ssh keypair is unconditional (../docs/design/
     # config.md D22): the option is gone, and the generated layer
     # never carries an `ssh-key` key — the crate refuses one as
@@ -430,6 +440,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       krunBackend
       krunNestedOn
       allowlist
+      limits
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
@@ -549,6 +560,15 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the listenPorts seed is missing/mistyped" "$allowlist"
     if grep -q '^allow-domains' "$nonoBackend"; then
       fail "an empty allowDomains leaked a key" "$nonoBackend"
+    fi
+
+    # ... the D23 limit keys reach the layer; unset options leave
+    # them out.
+    grep -q '^memory = "8g"$' "$limits" || fail "the memory seed is missing" "$limits"
+    grep -q '^cpus = 4$' "$limits" || fail "the cpus seed is missing" "$limits"
+    grep -q '^pids-limit = 1024$' "$limits" || fail "the pidsLimit seed is missing" "$limits"
+    if grep -qE '^(memory|cpus|pids-limit) ' "$nonoBackend"; then
+      fail "an unset limit option leaked a key" "$nonoBackend"
     fi
 
     # 6a. the sandbox ssh keypair (D22) is unconditional: the option

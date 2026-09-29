@@ -408,6 +408,18 @@ pub struct Config {
     /// bd myconfig-mo3.1): same backend-agnostic declaration as
     /// [`Config::allow_domains`].
     pub listen_ports: Vec<u16>,
+    /// Memory limit of the sandbox (`memory`, podman `--memory`
+    /// grammar: bytes or a `b`/`k`/`m`/`g` suffix, e.g. `"8g"`).
+    /// `None` means "not decided by this layer"; the sidecar wins
+    /// when both layers decide (D23). Only the podman backends
+    /// enforce it; the others warn.
+    pub memory: Option<String>,
+    /// CPU limit (`cpus`, a positive number; podman `--cpus`, or
+    /// the whole vCPUs of a krun VM). Same layering as `memory`.
+    pub cpus: Option<String>,
+    /// Process limit (`pids-limit`, podman `--pids-limit`). Same
+    /// layering as `memory`; only `podman-gvisor` enforces it.
+    pub pids_limit: Option<u32>,
 }
 
 impl Default for Config {
@@ -425,6 +437,9 @@ impl Default for Config {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
+            memory: None,
+            cpus: None,
+            pids_limit: None,
         }
     }
 }
@@ -511,6 +526,9 @@ impl Config {
                 "allow-domains" => config.allow_domains = allow_domains(value)?,
                 "connect-ports" => config.connect_ports = ports(value, "connect-ports")?,
                 "listen-ports" => config.listen_ports = ports(value, "listen-ports")?,
+                "memory" => config.memory = Some(memory(value)?),
+                "cpus" => config.cpus = Some(cpus(value)?),
+                "pids-limit" => config.pids_limit = Some(pids_limit(value)?),
                 // The config key D22 replaced: the sandbox's own SSH
                 // keypair is ALWAYS generated now, so the key decides
                 // nothing anymore. A config written for the old schema
@@ -652,6 +670,61 @@ fn allow_domains(value: &Value) -> Result<Vec<String>, Error> {
             Ok(domain.to_owned())
         })
         .collect()
+}
+
+/// Parse `memory`: a string in podman's `--memory` grammar — a whole
+/// number of bytes, optionally with a `b`, `k`, `m` or `g` suffix
+/// (any case), e.g. `"8g"`, `"512m"`.
+fn memory(value: &Value) -> Result<String, Error> {
+    let raw = string(value, "memory")?;
+    let lower = raw.to_ascii_lowercase();
+    let digits = lower.strip_suffix(['b', 'k', 'm', 'g']).unwrap_or(&lower);
+    match digits.parse::<u64>() {
+        Ok(n) if n > 0 => Ok(raw.to_owned()),
+        _ => Err(Error::Schema(format!(
+            "memory: expected a size like \"8g\" or \"512m\" \
+             (a positive number of bytes with an optional b/k/m/g suffix), found {raw:?}"
+        ))),
+    }
+}
+
+/// Parse `cpus`: a positive integer or float, kept as the string
+/// podman's `--cpus` takes.
+fn cpus(value: &Value) -> Result<String, Error> {
+    let n = match value {
+        Value::Integer(i) => *i as f64,
+        Value::Float(f) => *f,
+        other => {
+            return Err(Error::Schema(format!(
+                "cpus: expected a number, found {}",
+                other.type_name()
+            )))
+        }
+    };
+    if !(n.is_finite() && n > 0.0) {
+        return Err(Error::Schema(format!(
+            "cpus: expected a positive number, found {n}"
+        )));
+    }
+    Ok(match value {
+        Value::Integer(i) => i.to_string(),
+        _ => n.to_string(),
+    })
+}
+
+/// Parse `pids-limit`: a positive integer.
+fn pids_limit(value: &Value) -> Result<u32, Error> {
+    let n = value.as_integer().ok_or_else(|| {
+        Error::Schema(format!(
+            "pids-limit: expected an integer, found {}",
+            value.type_name()
+        ))
+    })?;
+    u32::try_from(n).ok().filter(|n| *n > 0).ok_or_else(|| {
+        Error::Schema(format!(
+            "pids-limit: expected a positive integer, found {n}"
+        ))
+    })
 }
 
 /// Parse a port list, `connect-ports` or `listen-ports`
@@ -1145,6 +1218,37 @@ mod tests {
         let c = Config::parse("connect-ports = [1, 65535]\nlisten-ports = [1]\n").unwrap();
         assert_eq!(c.connect_ports, vec![1, 65535]);
         assert_eq!(c.listen_ports, vec![1]);
+    }
+
+    #[test]
+    fn resource_limits_parse() {
+        let c = Config::parse("memory = \"8g\"\ncpus = 4\npids-limit = 512\n").unwrap();
+        assert_eq!(c.memory.as_deref(), Some("8g"));
+        assert_eq!(c.cpus.as_deref(), Some("4"));
+        assert_eq!(c.pids_limit, Some(512));
+        let c = Config::parse("memory = \"1073741824\"\ncpus = 1.5\n").unwrap();
+        assert_eq!(c.memory.as_deref(), Some("1073741824"));
+        assert_eq!(c.cpus.as_deref(), Some("1.5"));
+        assert_eq!(Config::parse("").unwrap().memory, None);
+    }
+
+    #[test]
+    fn resource_limits_reject_wrong_shapes() {
+        for (body, key) in [
+            ("memory = 8", "memory"),
+            ("memory = \"8x\"", "memory"),
+            ("memory = \"0\"", "memory"),
+            ("memory = \"g\"", "memory"),
+            ("cpus = \"4\"", "cpus"),
+            ("cpus = 0", "cpus"),
+            ("cpus = -1.5", "cpus"),
+            ("pids-limit = 0", "pids-limit"),
+            ("pids-limit = 1.5", "pids-limit"),
+            ("pids-limit = \"512\"", "pids-limit"),
+        ] {
+            let e = Config::parse(&format!("{body}\n")).unwrap_err();
+            assert!(e.to_string().starts_with(key), "{body}: {e}");
+        }
     }
 
     #[test]

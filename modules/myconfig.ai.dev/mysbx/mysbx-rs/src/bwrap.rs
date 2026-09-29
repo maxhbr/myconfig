@@ -2161,6 +2161,9 @@ mod tests {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
+            memory: None,
+            cpus: None,
+            pids_limit: None,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         }

@@ -73,7 +73,8 @@ config that can execute is config that can escape.
 - which sandbox-home subdirectories persist across runs
   (`state-dirs`, see D15): entries backed by the sidecar's `state/`
   tree
-- the backend and its resource limits
+- the backend and its resource limits (`memory`, `cpus`, `pids-limit`,
+  see D23)
 - network policy (`network = false` is the deny switch; the network is
   shared by default; the per-domain/port allowlist keys of D21;
   `egress = "proxy-only"` is the stricter profile in D20, off unless a
@@ -1300,3 +1301,38 @@ a layer to decide.
 
 In a CLONE run the key is not handled (workspace.md D4): no
 generation, no bind — a session clone starts without the repo's key.
+
+### D23: resource limits are config keys; a backend that cannot enforce one warns
+
+Three top-level keys (bd myconfig-91j):
+
+```toml
+memory = "8g"        # podman --memory grammar: bytes, or a b/k/m/g suffix
+cpus = 4             # a positive number (integer or float)
+pids-limit = 1024    # a positive integer
+```
+
+**Merge**: per key, the sidecar wins when it sets the key, else the
+user layer — like `multiplexer` (D17). A limit grants no host access,
+so there is no narrowing rule. The `MYSBX_PODMAN_MEMORY`/`_CPUS`/
+`_PIDS_LIMIT` environment pins override the merged value for one
+invocation.
+
+**Enforcement** is per backend. A key the backend cannot enforce is a
+WARNING on stderr (`the <backend> backend does not enforce …;
+ignored`), not a refusal: the user layer sets limits host-wide, and a
+bubblewrap run must not fail over a limit meant for the podman
+backends. The dry run prints the same warning.
+
+| backend | `memory` | `cpus` | `pids-limit` |
+| --- | --- | --- | --- |
+| `podman-krun` | VM size (`krun.ram_mib`, > 128 MiB) | whole vCPUs (`krun.cpus`; a fraction is refused) | warned, dropped |
+| `podman-gvisor` | `--memory` | `--cpus` | `--pids-limit` |
+| `bubblewrap`, `nono` | warned | warned | warned |
+
+Under rootless podman-gvisor, runsc runs with `ignore-cgroups` by
+default and the existing "limits not enforced, the runtime ignores
+cgroups" warning applies. A `MYSBX_PODMAN_PIDS_LIMIT` pin on
+podman-krun is still refused (backends.md D2): an explicit
+per-invocation request is not silently dropped.
+

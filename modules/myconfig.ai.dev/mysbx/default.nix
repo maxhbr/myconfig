@@ -339,7 +339,10 @@ let
   # a sidecar adds domains without restating the host-wide ones.
   // lib.optionalAttrs (cfg.config.allowDomains != [ ]) { allow-domains = cfg.config.allowDomains; }
   // lib.optionalAttrs (cfg.config.connectPorts != [ ]) { connect-ports = cfg.config.connectPorts; }
-  // lib.optionalAttrs (cfg.config.listenPorts != [ ]) { listen-ports = cfg.config.listenPorts; };
+  // lib.optionalAttrs (cfg.config.listenPorts != [ ]) { listen-ports = cfg.config.listenPorts; }
+  // lib.optionalAttrs (cfg.config.memory != null) { inherit (cfg.config) memory; }
+  // lib.optionalAttrs (cfg.config.cpus != null) { inherit (cfg.config) cpus; }
+  // lib.optionalAttrs (cfg.config.pidsLimit != null) { pids-limit = cfg.config.pidsLimit; };
 in
 {
   imports = [ ./podman.nix ];
@@ -1249,6 +1252,42 @@ in
               WITHOUT a domain/connect restriction are refused (with
               only listen ports nono reports "outbound allowed", bd
               myconfig-a14) — seed a real restriction, not port noise.
+            '';
+          };
+
+          memory = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "8g";
+            description = ''
+              Host-wide `memory` limit (./docs/design/config.md D23),
+              podman `--memory` grammar. Enforced by the podman backends
+              (a krun VM size, a cgroup limit under podman-gvisor when
+              cgroups are active); the other backends warn. A sidecar
+              value wins; `MYSBX_PODMAN_MEMORY` overrides both.
+            '';
+          };
+
+          cpus = mkOption {
+            type = types.nullOr (types.either types.ints.positive types.float);
+            default = null;
+            example = 4;
+            description = ''
+              Host-wide `cpus` limit (./docs/design/config.md D23). A krun
+              VM needs a whole number. Same layering as `memory`
+              (`MYSBX_PODMAN_CPUS`).
+            '';
+          };
+
+          pidsLimit = mkOption {
+            type = types.nullOr types.ints.positive;
+            default = null;
+            example = 1024;
+            description = ''
+              Host-wide `pids-limit` (./docs/design/config.md D23). Only
+              podman-gvisor enforces it (with cgroups); the other
+              backends warn. Same layering as `memory`
+              (`MYSBX_PODMAN_PIDS_LIMIT`).
             '';
           };
         };

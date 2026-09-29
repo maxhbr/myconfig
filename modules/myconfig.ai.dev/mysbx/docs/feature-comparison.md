@@ -143,11 +143,11 @@ under the podman-gvisor backend").
 | `qemu` | VM `vcpu` (default 4) / `mem` | yes (VM) |
 | `gvisor` | `--memory --cpus --pids-limit` | not rootless: default runtime flag `ignore-cgroups` (`rust/src/state.rs`) |
 | `microvm` | `resourceClasses.<c>.{count,vcpu,memoryMiB}` + `hypervisorTasksMax/CPUWeight/IOWeight` | yes (VM + systemd) |
-| `mysbx/bubblewrap`, `mysbx/nono` | none | — |
-| `mysbx/podman-gvisor` | env pins `MYSBX_PODMAN_{MEMORY,CPUS,PIDS_LIMIT}` → podman flags | not rootless (`ignore-cgroups`). mysbx prints a warning (`lib.rs`) |
-| `mysbx/podman-krun` | the same pins → `krun.cpus` / `krun.ram_mib` annotations. pids and fractional values refused | yes (VM, bd myconfig-6di.5.6) |
+| `mysbx/bubblewrap`, `mysbx/nono` | none; set limit keys print a warning (`config.md` D23) | — |
+| `mysbx/podman-gvisor` | keys `memory`/`cpus`/`pids-limit` (`config.md` D23), overridden by the env pins `MYSBX_PODMAN_{MEMORY,CPUS,PIDS_LIMIT}` → podman flags | not rootless (`ignore-cgroups`). mysbx prints a warning (`lib.rs`) |
+| `mysbx/podman-krun` | the same keys and pins → `krun.cpus` / `krun.ram_mib` annotations. A `pids-limit` key is warned and dropped, the pin and fractional cpus are refused | yes (VM, bd myconfig-6di.5.6) |
 
-No `mysbx` config key sets limits. That is bd myconfig-91j.
+The config keys are `config.md` D23 (bd myconfig-91j).
 
 ## 9. Nix inside the sandbox
 
@@ -257,7 +257,7 @@ arguments to the agent.
 | --- | --- | --- |
 | model key never inside the sandbox (proxy-only egress) | `microvm` `networkProfile = "proxy-only"` | bd myconfig-mo3.2, bd myconfig-t24. podman side bd myconfig-6di.3 |
 | public egress without the host LAN / private ranges | `microvm` (every profile) | bd myconfig-fvi |
-| resource limits as config, and any limit on bwrap/nono | `microvm` `resourceClasses`, `qemu` `vcpu`/`mem` | bd myconfig-91j |
+| any limit on bwrap/nono (the config keys exist, `config.md` D23) | `microvm` `resourceClasses`, `qemu` `vcpu`/`mem` | bd myconfig-cea |
 | unattended / detached runs, attach to a running sandbox | `gvisor` `run --detach` + `shell`, `microvm` `submit` | bd myconfig-dys |
 | writable nix store on `podman-gvisor` | `gvisor` `nix.enable` / `--nix` | bd myconfig-9mh |
 | waypipe on `podman-krun` | — (no old tier has a display). Parity with the other mysbx backends | bd myconfig-ef6 |

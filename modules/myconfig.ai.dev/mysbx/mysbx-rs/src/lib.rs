@@ -1540,6 +1540,37 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // session clone (a broken configuration must create nothing)
     // and BEFORE the `--dry-run` early return, so a dry run audits
     // the refusal too.
+    // Resource limits (config.md D23) the selected backend cannot
+    // enforce: a warning, not a refusal — the user layer sets them
+    // host-wide, and a bubblewrap run must not fail over a limit
+    // meant for the podman backends. `pids-limit` on podman-krun is
+    // dropped below, where the krun limits are mapped.
+    let unenforced_limits: Vec<&str> = match backend {
+        "podman-gvisor" => Vec::new(),
+        "podman-krun" => [merged.pids_limit.is_some().then_some("pids-limit")]
+            .into_iter()
+            .flatten()
+            .collect(),
+        _ => [
+            merged.memory.is_some().then_some("memory"),
+            merged.cpus.is_some().then_some("cpus"),
+            merged.pids_limit.is_some().then_some("pids-limit"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
+    };
+    if !unenforced_limits.is_empty() {
+        eprintln!(
+            "mysbx: warning: the `{backend}` backend does not enforce {}; ignored",
+            unenforced_limits
+                .iter()
+                .map(|k| format!("`{k}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
     let allowlist_keys: Vec<&str> = [
         (!merged.allow_domains.is_empty()).then_some("allow-domains"),
         (!merged.connect_ports.is_empty()).then_some("connect-ports"),
@@ -2116,9 +2147,19 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // variant cannot express is refused by the builder, so
             // the sharing never becomes accept-and-ignore.
             // Using Cow to handle both borrowed and owned strings
-            let pids_limit = env_opt("MYSBX_PODMAN_PIDS_LIMIT").map(Cow::from);
-            let memory = env_opt("MYSBX_PODMAN_MEMORY").map(Cow::from);
-            let cpus = env_opt("MYSBX_PODMAN_CPUS").map(Cow::from);
+            // The env pins override the config keys (config.md D23)
+            // per invocation. A configured `pids-limit` on krun was
+            // warned about above and is dropped; the env pin still
+            // reaches the builder, which refuses it.
+            let pids_limit = env_opt("MYSBX_PODMAN_PIDS_LIMIT")
+                .or_else(|| merged.pids_limit.filter(|_| !krun).map(|n| n.to_string()))
+                .map(Cow::from);
+            let memory = env_opt("MYSBX_PODMAN_MEMORY")
+                .or_else(|| merged.memory.clone())
+                .map(Cow::from);
+            let cpus = env_opt("MYSBX_PODMAN_CPUS")
+                .or_else(|| merged.cpus.clone())
+                .map(Cow::from);
 
             // Cgroups handling: when ignore-cgroups flag is set, skip resource limits
             let ignore_cgroups = runtime_flags.iter().any(|f| f == "ignore-cgroups");

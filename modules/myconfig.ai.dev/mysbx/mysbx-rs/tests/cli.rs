@@ -7370,6 +7370,99 @@ fn podman_backends_refuse_the_old_gvisor_pin_names() {
     );
 }
 
+/// Dry run of `config` (the sidecar) with extra env; (code, stdout, stderr).
+fn dry_run_with(name: &str, config: &str, env: &[(&str, &str)]) -> (i32, String, String) {
+    let (inv, _repo, sidecar) = fixture(name, &[]);
+    std::fs::write(sidecar.join("config.toml"), config).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn config_limits_warn_on_backends_that_cannot_enforce_them() {
+    // config.md D23: a limit the backend cannot enforce is a warning,
+    // never a refusal.
+    for backend in ["bubblewrap", "nono"] {
+        let (code, _, stderr) = dry_run_with(
+            &format!("limits-{backend}"),
+            &format!(
+                "backend = \"{backend}\"\nnetwork = false\nmemory = \"8g\"\ncpus = 2\npids-limit = 512\n"
+            ),
+            &[],
+        );
+        assert_eq!(code, 0, "{backend} stderr: {stderr}");
+        assert!(
+            stderr.contains(&format!(
+                "warning: the `{backend}` backend does not enforce `memory`, `cpus`, `pids-limit`; ignored"
+            )),
+            "{backend} stderr: {stderr}"
+        );
+    }
+    // No limit, no warning.
+    let (code, _, stderr) = dry_run_with("limits-none", "backend = \"bubblewrap\"\n", &[]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(!stderr.contains("does not enforce"), "stderr: {stderr}");
+}
+
+#[test]
+fn config_limits_reach_the_krun_vm_and_pids_limit_is_warned() {
+    let img = ("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
+    let (code, stdout, stderr) = dry_run_with(
+        "limits-krun",
+        "backend = \"podman-krun\"\nmemory = \"8g\"\ncpus = 4\npids-limit = 512\n",
+        &[img],
+    );
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.lines().any(|l| l == "krun.ram_mib=8192"), "{stdout}");
+    assert!(stdout.lines().any(|l| l == "krun.cpus=4"), "{stdout}");
+    assert!(
+        stderr
+            .contains("warning: the `podman-krun` backend does not enforce `pids-limit`; ignored"),
+        "stderr: {stderr}"
+    );
+    // The env pin overrides the config key.
+    let (code, stdout, stderr) = dry_run_with(
+        "limits-krun-env",
+        "backend = \"podman-krun\"\nmemory = \"8g\"\n",
+        &[img, ("MYSBX_PODMAN_MEMORY", "2g")],
+    );
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.lines().any(|l| l == "krun.ram_mib=2048"), "{stdout}");
+}
+
+#[test]
+fn config_limits_reach_podman_gvisor_with_cgroups() {
+    let (code, stdout, stderr) = dry_run_with(
+        "limits-gvisor",
+        "backend = \"podman-gvisor\"\nmemory = \"8g\"\ncpus = 1.5\npids-limit = 512\n",
+        &[
+            ("MYSBX_PODMAN_IMAGE", "localhost/test:latest"),
+            ("MYSBX_GVISOR_RUNTIME_FLAGS", "debug"),
+        ],
+    );
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    for (flag, value) in [
+        ("--memory", "8g"),
+        ("--cpus", "1.5"),
+        ("--pids-limit", "512"),
+    ] {
+        assert!(
+            lines.windows(2).any(|w| w[0] == flag && w[1] == value),
+            "{flag} {value} missing: {stdout}"
+        );
+    }
+    assert!(!stderr.contains("does not enforce"), "stderr: {stderr}");
+}
+
 #[test]
 fn podman_gvisor_rootless_cgroup_env_overrides_defaults() {
     // The cgroup handling is operator-overridable per invocation: with
