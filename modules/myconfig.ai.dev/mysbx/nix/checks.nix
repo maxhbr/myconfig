@@ -190,7 +190,7 @@ in
   # The guest nix tree (bd myconfig-pz6, docs/design/backends.md D2):
   # every nix entry point is the guest-root wrapper, the setup script
   # overlays the image store on guest tmpfs and copies the registered
-  # database, a failure is exit 125, and the non-root path passes
+  # database (skipping the unreadable lock files), a failure is exit 125, and the non-root path passes
   # through. The wrappers must also win the image's collision-ignoring
   # buildEnv against a plain nix. The mount itself is live validation.
   mysbx-krun-guest-nix-test =
@@ -231,7 +231,27 @@ in
       [ ! -e "${guestNix}/bin/nix-daemon" ] || fail "the guest has no daemon; bin/nix-daemon must not be wrapped"
       grep -qF 'lowerdir=/nix/store,upperdir=' "$setup" || fail "the setup does not overlay the image store"
       grep -q 'mount -t tmpfs' "$setup" || fail "the setup must mount a guest tmpfs"
-      grep -qF 'cp -R /nix/var/nix' "$setup" || fail "the setup must copy (not overlay) the image database"
+      grep -qF '${guestNix.copyState}/bin/mysbx-krun-nix-copy-state /nix/var/nix' "$setup" \
+        || fail "the setup must copy (not overlay) the image database"
+      # The image's big-lock/reserved are unreadable to guest root.
+      src="$TMPDIR/var-nix"
+      mkdir -p "$src"/db "$src"/gcroots/docker "$src"/profiles/per-user "$src"/temproots
+      for f in db.sqlite db.sqlite-wal db.sqlite-shm schema; do echo "$f" > "$src/db/$f"; done
+      touch "$src"/db/big-lock "$src"/db/reserved
+      chmod 000 "$src"/db/big-lock "$src"/db/reserved
+      ln -s /nix/store/00000000000000000000000000000000-x "$src"/gcroots/docker/x
+      "${guestNix.copyState}/bin/mysbx-krun-nix-copy-state" "$src" "$TMPDIR/state" \
+        || fail "the copy fails on an unreadable lock file in the database dir"
+      for f in db.sqlite db.sqlite-wal db.sqlite-shm schema; do
+        [ "$(cat "$TMPDIR/state/db/$f")" = "$f" ] || fail "the copy lost db/$f"
+      done
+      [ ! -e "$TMPDIR/state/db/big-lock" ] && [ ! -e "$TMPDIR/state/db/reserved" ] \
+        || fail "the copy must skip db/big-lock and db/reserved"
+      [ -L "$TMPDIR/state/gcroots/docker/x" ] && [ -d "$TMPDIR/state/profiles/per-user" ] \
+        && [ -d "$TMPDIR/state/temproots" ] || fail "the copy lost the state layout outside db/"
+      chmod 000 "$src"/db/db.sqlite
+      ! "${guestNix.copyState}/bin/mysbx-krun-nix-copy-state" "$src" "$TMPDIR/state2" 2>/dev/null \
+        || fail "an unreadable db.sqlite must fail the copy"
       grep -qF '/nix/var/nix/db/db.sqlite' "$setup" || fail "the setup must require the registered database"
       grep -q 'exit 125' "$setup" || fail "a failed mount must be an error, never a fallback"
       [ "$(id -u)" -ne 0 ] || fail "the check expects a non-root build user"

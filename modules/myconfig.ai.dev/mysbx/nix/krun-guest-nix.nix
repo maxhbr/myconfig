@@ -8,8 +8,8 @@
 #
 # As guest root, the first wrapper invocation of a VM (under a lock on
 # the guest's /dev/shm) mounts a guest tmpfs at `scratch`. It copies the
-# image's registered database (`/nix/var/nix`, from dockerTools
-# `includeNixDB`) into that tmpfs, then mounts an overlayfs over
+# image's nix state (`/nix/var/nix`, from dockerTools `includeNixDB`)
+# into that tmpfs, then mounts an overlayfs over
 # `/nix/store` whose lower layer is the image's OWN store and whose
 # upper layer lives on the tmpfs. Nix then runs single-user against
 # that store, with state, logs, cache and TMPDIR on the tmpfs.
@@ -27,6 +27,10 @@
 # - Nix state on virtio-fs fails: the virtiofs server forwards chown
 #   unchanged (EPERM), and libgit2 refuses the host-uid-owned home
 #   cache. Hence state, logs, cache and TMPDIR live on the tmpfs.
+# - The image's `db/big-lock` and `db/reserved` are 0600 and owned by an
+#   image uid that guest root cannot read through virtio-fs. They carry
+#   no data (a lock file and reserved disk space) and nix recreates
+#   both, so the copy skips them.
 # - The tmpfs is RAM: it may take up to half the VM memory (tmpfs
 #   default). The wrapper warns when the VM is smaller than `minRamMib`.
 #
@@ -71,6 +75,30 @@ let
     ++ lib.optional (nixConfig != "") nixConfig
   );
 
+  # Copies nix state dir SRC to DST, without `db/big-lock` and
+  # `db/reserved`.
+  copyState = writeShellApplication {
+    name = "mysbx-krun-nix-copy-state";
+    runtimeInputs = [ coreutils ];
+    text = ''
+      src=$1
+      dst=$2
+      mkdir -p "$dst/db"
+      for f in "$src"/*; do
+        [ -e "$f" ] || continue
+        [ "''${f##*/}" != db ] || continue
+        cp -R "$f" "$dst/"
+      done
+      for f in "$src"/db/*; do
+        [ -e "$f" ] || continue
+        case "''${f##*/}" in
+          big-lock | reserved) continue ;;
+        esac
+        cp -R "$f" "$dst/db/"
+      done
+    '';
+  };
+
   setup = writeShellApplication {
     name = "mysbx-krun-nix-setup";
     runtimeInputs = [
@@ -96,7 +124,8 @@ let
         fi
         rm -rf "$scratch/state" "$scratch/upper" "$scratch/work"
         mkdir -p "$scratch"/{upper,work,tmp,cache,log} || fail "cannot create the store dirs in $scratch"
-        cp -R /nix/var/nix "$scratch/state" || fail "cannot copy the image nix database to $scratch/state"
+        ${copyState}/bin/mysbx-krun-nix-copy-state /nix/var/nix "$scratch/state" \
+          || fail "cannot copy the image nix database to $scratch/state"
         mount -t overlay mysbx-nix-store \
           -o "lowerdir=/nix/store,upperdir=$scratch/upper,workdir=$scratch/work" /nix/store \
           || fail "cannot mount the overlay over /nix/store"
@@ -139,6 +168,7 @@ runCommand "mysbx-krun-guest-nix"
       inherit
         nix
         setup
+        copyState
         names
         defaultNixConfig
         ;

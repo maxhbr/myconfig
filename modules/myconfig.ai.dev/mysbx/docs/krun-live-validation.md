@@ -116,6 +116,7 @@ readlink -f /bin/nix             # the mysbx-krun-guest-nix wrapper
 nix store info                   # Store URL: local
 grep ' /nix/store ' /proc/mounts # overlay, lowerdir=/nix/store,upperdir=/run/mysbx-nix/upper
 nix path-info --all | wc -l      # the registered image closure
+ls -l /run/mysbx-nix/state/db    # db.sqlite and schema copied; big-lock/reserved owned by root (recreated)
 nix build nixpkgs#hello --no-link --print-out-paths
 nix run nixpkgs#hello
 df -h /run/mysbx-nix
@@ -123,8 +124,15 @@ df -h /run/mysbx-nix
 
 Verify: every command succeeds. Only paths missing from the image are
 fetched (for example, glibc is reused from the image). With the
-default 1024 MiB VM, the first nix call warns about the VM size. With
-`network = false`, `nix build` fails on the fetch.
+default 1024 MiB VM, the first nix call warns about the VM size.
+
+With `network = false`, `nix build nixpkgs#hello` fails on the fetch,
+and a build from the image closure still works:
+
+```bash
+nix build --impure --no-link --print-out-paths --expr \
+  'derivation { name = "t"; system = builtins.currentSystem; builder = "/bin/sh"; args = [ "-c" "echo ok > $out" ]; }'
+```
 
 ### 2.4 Limits as VM annotations (bd myconfig-6di.5.6)
 
