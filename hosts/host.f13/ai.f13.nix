@@ -15,6 +15,7 @@
         llmops.enable = true;
         dev = {
           enable = true;
+          mysbx.config.memory = lib.mkDefault "8g";
 
           # microvm = {
           #   enable = false;

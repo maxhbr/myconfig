@@ -151,6 +151,7 @@
 
         dev.enable = true;
         dev.mysbx.enable = true;
+        dev.mysbx.config.memory = lib.mkDefault "8g";
         dev.lmstudio = {
           enable = true;
         };
