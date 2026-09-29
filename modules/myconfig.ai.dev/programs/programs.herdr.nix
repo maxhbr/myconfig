@@ -640,9 +640,9 @@ let
   # The coding-agent CLIs this repo can install on the host, mapped from
   # their `myconfig.ai.<name>.enable` flag to the package attribute the
   # matching host wrapper uses. Mirrors the `agentPackagesByFlag` set in
-  # modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/default.nix so the
-  # `agent-qemu-herdr` guest carries exactly the same agents the host (and
-  # the gVisor sandbox image) offers.
+  # modules/myconfig.ai.dev/mysbx/gvisor.nix so the `agent-qemu-herdr` guest
+  # carries exactly the same agents the host (and the mysbx container
+  # image) offers.
   agentPackagesByFlag = {
     pi-coding-agent = pkgs.nixos-unstable.pi-coding-agent;
     opencode = pkgs.opencode;

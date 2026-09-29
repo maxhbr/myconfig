@@ -1,12 +1,13 @@
 # Drop the gVisor version override once nixpkgs ships gVisor ≥ 2026-06-05
 
 Introduced by commit `8c960494ea` ("gvisor-agent-sandbox: bump gVisor to
-20260817.0 to fix SIGWINCH on pty resize").
+20260817.0 to fix SIGWINCH on pty resize"); the overlay moved to mysbx
+with bd myconfig-e6z.
 
 ## What to remove
 
 The `version` / `src` / `vendorHash` / `patches = [ ]` override in
-`modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/overlay.nix`
+`modules/myconfig.ai.dev/mysbx/nix/gvisor-overlay.nix`
 pins gVisor `20260817.0` (`b1b561450fc2f05b9626b7e269c08fbc9f5029ff`,
 "Merge release-20260817.0-38-ged1b001b8 (automated)" on the synthetic
 `go` branch) ahead of nixpkgs, which still ships `20260406.0`
@@ -16,7 +17,7 @@ pins gVisor `20260817.0` (`b1b561450fc2f05b9626b7e269c08fbc9f5029ff`,
 When removing the override:
 
 - Keep the `gvisor-remove-p2p-addresses.patch` patch (it is not upstream,
-  see `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/docs/debug-runsc-tun0-netns.md`
+  see `modules/myconfig.ai.dev/mysbx/docs/debug-runsc-tun0-netns.md`
   and `doc/TODOs/` — it must continue to apply; verify hunks still match).
 - Drop the `patches = [ ];` reset only if nixpkgs' `fix-go-mod-tidy.diff`
   still applies to whatever gVisor revision nixpkgs ships at that point
@@ -30,7 +31,7 @@ delivery on PTY window size change (TIOCSWINSZ)", fixes
 google/gvisor#13317). Without it, `lineDiscipline.setWindowSize`
 (`pkg/sentry/fsimpl/devpts/line_discipline.go`) only stores the new
 window size and never sends `SIGWINCH` to the pty's foreground process
-group. Consequence inside `agent-gvisor` sandboxes: when the host
+group. Consequence inside mysbx `podman-gvisor` sandboxes: when the host
 terminal (foot) is resized, herdr resizes each pane pty correctly
 (`TIOCGWINSZ` returns the new size), but the program in the pane
 (pi, shells, editors) never gets `SIGWINCH` and keeps rendering at the
@@ -52,9 +53,7 @@ grep -E 'version =|rev =|patches' "$(./get_input.sh nixpkgs)/pkgs/by-name/gv/gvi
    `grep -c SIGWINCH` in `pkg/sentry/fsimpl/devpts/line_discipline.go`
    of the pinned source (the upstream fix adds exactly one).
 2. Rebuild and restart the sandbox, then inside a herdr pane run the
-   in-guest reproduction from
-   `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/docs/` (or a
-   simple `python3` openpty test): `TIOCSWINSZ` on the master must
+   a simple `python3` openpty test: `TIOCSWINSZ` on the master must
    deliver `SIGWINCH` to the foreground process group.
 3. End-to-end: resize the host foot window and confirm the TUI inside
    the herdr pane re-renders at the new width.
@@ -66,7 +65,7 @@ Still blocked — do not touch the overlay yet.
 Verified:
 
 - Override is still present and unchanged in
-  `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/overlay.nix`
+  `modules/myconfig.ai.dev/mysbx/nix/gvisor-overlay.nix`
   (pins `20260817.0` / `b1b561450fc2f05b9626b7e269c08fbc9f5029ff`, resets
   `patches`, re-adds `./patches/gvisor-remove-p2p-addresses.patch`, which
   still exists).

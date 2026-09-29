@@ -389,8 +389,7 @@ nothing there. Three pieces close that gap, all of them scoped to the
 namespace, where the baked URLs are already right.
 
 1. The host runs the shared port-scoped forwarder
-   (`myconfig.ai.dev.litellm-forwarder`, also used by the
-   [`agent-gvisor` tier](../sandboxes/myconfig.ai.gvisor-agent-sandbox/README.md)):
+   (`myconfig.ai.dev.litellm-forwarder`):
    `0.0.0.0:<forwardPort>` → `127.0.0.1:<port>`, socket-activated, and
    dropped by the firewall on every interface but `lo`. mysbx turns it
    on wherever `gvisor.image` is set and the host runs LiteLLM.

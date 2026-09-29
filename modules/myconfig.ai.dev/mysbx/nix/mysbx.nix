@@ -9,8 +9,7 @@
 # The final package keeps the crate's `pname`/`version` (name
 # `mysbx-0.1.0`) so `./build-pkg-for-host.sh mysbx-0.1.0 <host>` keeps
 # finding it in `home.packages`. It symlinks the crate's `bin/` mirror and
-# re-wraps the binary (same `makeBinaryWrapper` idiom as
-# ../../sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/agent-gvisor.nix) with the three
+# re-wraps the binary (`makeBinaryWrapper`) with the three
 # `MYSBX_*` pin variables the Rust CLI reads (src/lib.rs `env_or` calls):
 #
 #   MYSBX_BWRAP       the bubblewrap backend binary (plan.md: "The base")
@@ -214,9 +213,8 @@
   # nothing — `backend = "podman-gvisor"` is a refused run and
   # `mysbx podman-load-image` a usage error, never an invented
   # `localhost/…` reference pulled from a registry that does not
-  # exist (bd myconfig-xrt). The module layer defaults this to the
-  # gvisor tier's effective image (same build the `agent-gvisor`
-  # sessions run).
+  # exist (bd myconfig-xrt). The module layer defaults this to
+  # `myconfig.ai.dev.mysbx.gvisor.image` (../gvisor.nix).
   gvisorImage ? null,
   # The shell of the podman-gvisor backend's INTERACTIVE payload (bd
   # myconfig-cew): the store path of the fish binary as it exists INSIDE
@@ -235,8 +233,7 @@
   # The podman network spec of the podman-gvisor backend
   # (`MYSBX_GVISOR_PASTA_SPEC`, ../docs/podman-load-image.md): a
   # `pasta:--map-guest-addr,<address>` spec that makes the host's
-  # LiteLLM forwarder reachable from inside the container, the same
-  # spec the gvisor tier bakes as `AGENT_GVISOR_NETWORK`. `null`
+  # LiteLLM forwarder reachable from inside the container. `null`
   # leaves podman's default (shared) network.
   #
   # Pinned with `--set-default`, not `--set`: the variable is also an
@@ -374,7 +371,7 @@ let
     cargoLock.lockFile = ../mysbx-rs/Cargo.lock;
 
     # The test suite runs in `nix/checks.nix`; keep it out of every
-    # production host rebuild, like agent-gvisor does.
+    # production host rebuild.
     doCheck = false;
 
     meta = {
@@ -582,9 +579,7 @@ let
   completions = ../mysbx-rs/completions/mysbx.fish;
   # The podman-gvisor pins: the image tarball, the reference runs use,
   # and the expected image ID (the config-blob digest, extracted ONCE
-  # at build time — the same mechanism as the gvisor tier's
-  # `agent-gvisor-image-id` derivation in
-  # ../../sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/load-image.nix).
+  # at build time).
   # `podman` runs the reference; `podman-load-image` compares IDs to
   # detect a stale build under the same tag. All three are LAZY — a
   # `null` gvisorImage must not force `imageName` on null.
@@ -703,7 +698,7 @@ symlinkJoin {
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
     # sync with the CLI surface by the `mysbx-completions` check in
-    # checks.nix), the same idiom as agent-gvisor.nix. The crate stays
+    # checks.nix). The crate stays
     # zero-dependency: this is a plain fish script, not clap-generated.
     # The vendor path is the one `installShellFiles --fish` uses and
     # fish's NixOS integration collects.

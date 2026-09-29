@@ -550,21 +550,19 @@
           } [ ];
 
           # `nix fmt` / `./nixfmtall.sh` — nixfmt for Nix, rustfmt for the
-          # hand-written Rust crates in `modules/`
-          # (`myconfig.ai.dev/mysbx/mysbx-rs`, the
-          # `myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/rust`
-          # rewrite). `nixfmt-tree`
+          # hand-written Rust crate in `modules/`
+          # (`myconfig.ai.dev/mysbx/mysbx-rs`). `nixfmt-tree`
           # is a treefmt wrapper that ships the nixfmt entry; the override
           # adds the formatter binary and its treefmt entry.
           #
           # `rustfmt` is invoked directly instead of `cargo fmt`: treefmt
-          # hands a formatter the FILES it should format, and neither crate
-          # is a member of a root workspace (each is its own Cargo project,
-          # built by its own `nix/*.nix`), so there is no single manifest
+          # hands a formatter the FILES it should format, and the crate is
+          # not a member of a root workspace (it is its own Cargo project,
+          # built by its own `nix/*.nix`), so there is no manifest
           # `cargo fmt` could be pointed at. `--edition` must then be given
           # explicitly — without a manifest rustfmt falls back to its own
-          # default edition and misparses edition-specific syntax. Both
-          # crates are `edition = "2021"`; a crate on another edition needs
+          # default edition and misparses edition-specific syntax. The
+          # crate is `edition = "2021"`; a crate on another edition needs
           # its own entry (or a `rustfmt.toml` next to it), not a change of
           # this one.
           formatter = nixpkgs.legacyPackages.${system}.nixfmt-tree.override {
@@ -626,13 +624,6 @@
                   # wrapper (`git-branch-to-worktree`); shfmt is not covered
                   # by writeShellApplication's own shellcheck pass.
                   "modules/shell.git/bin/git-branch-to-worktree.sh"
-                  # The Rust agent-gvisor rewrite: its CLI harness and the
-                  # POSIX-sh git/podman recording stubs shared by the cargo
-                  # tests (include_str!) and the harness. Executed via bash /
-                  # the tested binary, so nothing else gates them.
-                  "modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/tests/agent-gvisor-cli-harness.sh"
-                  "modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/rust/tests/stubs/git.sh"
-                  "modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/rust/tests/stubs/podman.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {
@@ -660,13 +651,6 @@
           # KVM/network runtime proof (see tests/microvm.nix header).
           // lib.optionalAttrs (system == "x86_64-linux") (
             import ./tests/microvm.nix { inherit self inputs system; }
-          )
-          // lib.optionalAttrs (system == "x86_64-linux") (
-            # Rust agent-gvisor parity suite + CLI harness
-            # (modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox).
-            import ./modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix {
-              inherit self inputs system;
-            }
           )
           // lib.optionalAttrs (system == "x86_64-linux") (
             # Rust mysbx cargo test suite (modules/myconfig.ai.dev/mysbx).

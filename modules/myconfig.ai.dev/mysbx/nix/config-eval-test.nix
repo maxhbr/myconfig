@@ -50,6 +50,8 @@ let
     extraModules:
     (lib.nixosSystem {
       inherit system;
+      # What the flake passes every host (../gvisor.nix reads `myconfig.user`).
+      specialArgs.myconfig.user = "mhuber";
       modules = [
         inputs.home.nixosModules.home-manager
         ../../sandboxes/myconfig.ai.sandboxTools.nix

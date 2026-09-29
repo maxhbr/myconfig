@@ -58,8 +58,8 @@ On the guest `PATH`:
 
 - `herdr` (the agent multiplexer the user is dropped into).
 - The coding-agent CLIs that are enabled on the **building** host — the same
-  set the gVisor sandbox image bakes in (see
-  `modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/default.nix`,
+  set the mysbx container image bakes in (see
+  `modules/myconfig.ai.dev/mysbx/gvisor.nix`,
   `agentPackagesByFlag`): `pi-coding-agent`, `opencode`, `claude-code`,
   `codex`, `github-copilot-cli`, `qwen-code`. Only agents whose
   `myconfig.ai.<name>.enable` flag is true on the host are included, so the

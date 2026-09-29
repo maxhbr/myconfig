@@ -5,7 +5,7 @@
 #
 # `mysbx` is the successor experiment to the other sandboxing tiers in this
 # repo (`myconfig.ai.dev.jail`, `myconfig.ai.dev.nono-agent-sandbox`,
-# `myconfig.ai.dev.gvisor-agent-sandbox`, `myconfig.ai.dev.microvm`): a single CLI
+# `myconfig.ai.dev.microvm`): a single CLI
 # that owns the sidecar directory next to a repository and drives the
 # underlying backend (bubblewrap by default, podman-gvisor and nono
 # alongside; qemu/microvm later).
@@ -342,6 +342,8 @@ let
   // lib.optionalAttrs (cfg.config.listenPorts != [ ]) { listen-ports = cfg.config.listenPorts; };
 in
 {
+  imports = [ ./gvisor.nix ];
+
   options.myconfig.ai.dev.mysbx = with lib; {
     enable = mkEnableOption "myconfig.ai.dev.mysbx";
 
@@ -585,48 +587,13 @@ in
     };
 
     gvisor = {
-      # The podman-gvisor backend (mysbx-rs/src/podman_gvisor.rs, bd
-      # myconfig-6di.1) runs rootless podman with the runsc runtime and
-      # a Nix-built OCI image — the same image mechanism the
-      # standalone gvisor tier uses
-      # (../../sandboxes/myconfig.ai.gvisor-agent-sandbox/). The pins below are what
-      # `mysbx podman-load-image` loads and what
-      # `backend = "podman-gvisor"` runs (MYSBX_GVISOR_TARBALL /
-      # MYSBX_GVISOR_IMAGE / MYSBX_GVISOR_IMAGE_ID in ./nix/mysbx.nix).
-      image = mkOption {
-        type = types.nullOr types.package;
-        # Gated on the gvisor tier module being ENABLED: the image is a
-        # multi-hundred-MB OCI build, and pulling it into every mysbx
-        # host's closure — including headless hosts that will never
-        # configure `backend = "podman-gvisor"` — is the wrong
-        # default, the same reasoning as `aoe.package`.
-        default =
-          if (config.myconfig.ai.dev.gvisor-agent-sandbox.enable or false) then
-            config.myconfig.ai.dev.gvisor-agent-sandbox.effectiveImage
-          else
-            null;
-        defaultText = literalExpression "the gvisor tier's image (when that module is enabled, else null)";
-        description = ''
-          The Nix-built OCI image the podman-gvisor backend runs,
-          pinned into the wrapper together with its reference and
-          expected image ID. `null` pins nothing: `backend =
-          "podman-gvisor"` is a refused run and
-          `mysbx podman-load-image` a usage error instead of both
-          inventing a `localhost/…` reference no registry serves.
-
-          Defaults to the image of the gvisor tier module when that is
-          enabled on the host — the exact package `agent-gvisor`
-          sessions run, so both tiers share one build.
-        '';
-      };
-
       # The interactive payload shell of the podman-gvisor backend (bd
       # myconfig-cew): the same shell the user logs into on the host,
-      # baked into the image by the gvisor tier's
-      # `extraImagePackages` (which carries the fish world of the
-      # home-manager user whenever `programs.fish.enable`). The image
-      # contains the binary at its store path, and the read-only
-      # `~/.config/fish` mount (the tier's `baselineMounts`) carries
+      # baked into the image by `gvisor.extraImagePackages` (which
+      # carries the fish world of the home-manager user whenever
+      # `programs.fish.enable`, ./gvisor.nix). The image contains the
+      # binary at its store path, and the read-only `~/.config/fish`
+      # mount (`baselineMounts`) carries
       # the configuration, aliases and plugins — the image is
       # provisioned so the mounted symlinks resolve (every path the
       # rendered config names is in the image closure).
@@ -652,8 +619,8 @@ in
           the host). Pinned into the wrapper as `MYSBX_GVISOR_SHELL`.
 
           The default is the fish binary of the home-manager user's
-          `programs.fish.package` — the gvisor tier's image bakes
-          exactly that package, so the store path resolves inside the
+          `programs.fish.package` — `gvisor.image` bakes exactly
+          that package, so the store path resolves inside the
           container and the mounted `~/.config/fish` gives it the
           same aliases and configuration as on the host.
 
@@ -670,8 +637,8 @@ in
       #
       # The default threads the SAME package as the host side: when
       # `display.package` is set, waypipe is baked into the image (via
-      # `gvisor.imagePackages`, which the gvisor tier's
-      # `extraImagePackages` default folds in) and the store path —
+      # `gvisor.imagePackages`, which `gvisor.extraImagePackages`
+      # folds in) and the store path —
       # `/nix/store/…-waypipe/bin/waypipe` — resolves inside the
       # container exactly like `gvisor.shell` does.
       waypipe = mkOption {
@@ -692,9 +659,9 @@ in
       };
 
       # The multiplexer binaries the podman-gvisor container needs (bd
-      # myconfig-cew): the image is provisioned — via this option, which
-      # the gvisor tier's `extraImagePackages` default folds into the
-      # image — with the binaries a PANE inside a container session
+      # myconfig-cew): the image is provisioned — via
+      # `gvisor.imagePackages`, which `gvisor.extraImagePackages`
+      # folds into the image — with the binaries a PANE inside a container session
       # reaches for (`tmux` always, the selected multiplexer's own
       # tool). `buildEnv` links every baked package's `bin` into the
       # image `/bin`, so the OCI `PATH=/bin:/usr/bin` of the image
@@ -708,9 +675,7 @@ in
         # container that address is the CONTAINER's loopback, so the
         # sandbox needs the shared forwarder of
         # ../myconfig.ai.dev.litellm-forwarder.nix plus pasta's
-        # `--map-guest-addr` translation of its advertised address —
-        # the same spec the gvisor tier bakes as
-        # `AGENT_GVISOR_NETWORK`.
+        # `--map-guest-addr` translation of its advertised address.
         default =
           let
             fwd = config.myconfig.ai.dev.litellm-forwarder;
@@ -770,8 +735,9 @@ in
           ++ lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages;
         defaultText = literalExpression "the selected multiplexer's tools plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`";
         description = ''
-          Packages the gvisor tier bakes into the container image on
-          behalf of mysbx (bd myconfig-cew: the container must be
+          Packages baked into the container image (`gvisor.image`, see
+          ./gvisor.nix) next to the enabled agents, the fish world and
+          `sandboxTools` (bd myconfig-cew: the container must be
           provisioned with the tools). Defaults to the selected
           multiplexer's own tooling, so a pane inside a container
           session finds it on `PATH` — the same payload the bwrap
@@ -781,10 +747,6 @@ in
           storage wrapper and its guest configuration tree, baked into
           the shared image), and the guest nix wrappers when
           `krun.nix.enable` (bd myconfig-pz6).
-
-          Only takes effect while the gvisor tier module is enabled
-          (`myconfig.ai.dev.gvisor-agent-sandbox.enable`): its
-          `extraImagePackages` default consumes this option.
         '';
       };
     };
@@ -872,8 +834,8 @@ in
           nix inside the podman-krun guest. Guest-root `bin/nix*` wrappers
           overlay the image's own /nix/store with a per-run upper layer on
           guest tmpfs, so new paths cost VM RAM (set `MYSBX_GVISOR_MEMORY`).
-          Also makes the gvisor tier build the shared image with a
-          registered nix database (`includeNixDB`)'';
+          Also builds `gvisor.image` with a registered nix database
+          (`includeNixDB`)'';
 
         package = mkOption {
           type = types.package;
@@ -881,7 +843,7 @@ in
           defaultText = literalExpression "config.nix.package";
           description = ''
             The nix the guest wrappers exec. Defaults to the host's
-            `nix.package`, like the gvisor tier's `nix.package`.
+            `nix.package`.
           '';
         };
 
@@ -935,10 +897,8 @@ in
       # inside the package file.
       package = mkOption {
         type = types.nullOr types.package;
-        # Unlike `gvisor.image` (gated on the gvisor tier module — a
-        # multi-hundred-MB OCI build), nono is a plain nixpkgs
-        # package, so it defaults to `pkgs.nono` directly, the same
-        # shape as the display/waypipe option defaulting to a
+        # A plain nixpkgs package, so it defaults to `pkgs.nono`
+        # directly, the same shape as the display/waypipe option defaulting to a
         # package.
         default = pkgs.nono;
         defaultText = literalExpression "pkgs.nono";
@@ -1445,8 +1405,7 @@ in
     ) true;
 
     # The endpoint as the CONTAINER sees it, for tools that read
-    # `OPENAI_BASE_URL` (the same variable the gvisor tier writes into
-    # `~/.config/agent-gvisor/litellm.env`). The agent CLIs whose model
+    # `OPENAI_BASE_URL`. The agent CLIs whose model
     # configuration is a generated file add their own entries from their
     # own modules (../programs/programs.pi-coding-agent,
     # ../programs/programs.opencode).

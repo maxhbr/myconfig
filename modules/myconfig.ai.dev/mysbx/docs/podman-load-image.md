@@ -10,7 +10,7 @@ mysbx podman-load-image [--force|--test|--image <ref>|--help]
 
 ## Description
 
-This command loads the agent container image that mysbx uses when configured with a podman backend (`podman-gvisor` or `podman-krun`). It is integrated into the mysbx CLI for convenience, providing the same functionality as the Nix-built `agent-gvisor-load-image` helper.
+This command loads the agent container image that mysbx uses when configured with a podman backend (`podman-gvisor` or `podman-krun`).
 
 The former name `mysbx gvisor-load-image` is kept as a hidden deprecated alias: it dispatches to this command and prints a deprecation notice pointing at `podman-load-image`.
 
@@ -28,7 +28,7 @@ Without options, the command:
 
 ## Environment Variables
 
-The Nix wrapper pins all three when the host builds a gVisor agent image (`myconfig.ai.dev.mysbx.gvisor.image` — by default the gvisor tier's image when that module is enabled):
+The Nix wrapper pins all three when the host builds a gVisor agent image (`myconfig.ai.dev.mysbx.gvisor.image`, built by [`../gvisor.nix`](../gvisor.nix) unless set to `null`):
 
 - `MYSBX_GVISOR_TARBALL`: the docker-archive tarball to `podman load`
 - `MYSBX_GVISOR_IMAGE`: the image reference the runs use
@@ -131,12 +131,10 @@ refusal a bwrap host without that multiplexer gets) — never a silent
 plain shell. The TLS trust anchors come from the image itself (its
 OCI env pins `SSL_CERT_FILE` & co.), not from a host CA-bundle bind.
 
-**No nix inside the sandbox**: the backend supports no nix — neither
-the host daemon socket (the daemon-dir guard refuses it under a
-denied network, like bwrap) nor a writable in-container store. The
-gvisor tier's `--nix` volume mechanism is deliberately out of scope
-here; the image ships no `nix` binary, and payloads that need one must
-run under the gvisor tier or bwrap instead.
+**No writable nix store under `podman-gvisor`**: neither the host
+daemon socket (the daemon-dir guard refuses it under a denied network,
+like bwrap) nor a writable in-container store. Payloads that need nix
+run under `podman-krun` (`krun.nix`, `design/backends.md` D2) or bwrap.
 
 ## Image Sources
 
@@ -238,7 +236,7 @@ If you skip running `podman-load-image` and the image is not present:
 
 ## Implementation Notes
 
-This command is a Rust reimplementation of the Nix-built `agent-gvisor-load-image` script, integrated into the mysbx CLI. It follows the same semantics:
+The command:
 
 - Compares image IDs (digests) rather than tags to detect stale images
 - Supports `--test` mode for CI/CD pipelines
@@ -253,6 +251,5 @@ The command does not start a sandbox and therefore rejects global flags like `--
 ## See Also
 
 - `mysbx --help`: Main CLI help
-- `agent-gvisor-load-image(1)`: The Nix-built helper (when available)
 - `podman-load(1)`: Podman image loading
 - `mysbx` backend configuration: Set `backend = "podman-gvisor"` or `backend = "podman-krun"` in your sidecar config to use a podman backend

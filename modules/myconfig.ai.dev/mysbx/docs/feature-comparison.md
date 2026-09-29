@@ -6,6 +6,9 @@ SPDX-License-Identifier: MIT
 # Feature comparison: `mysbx` vs. the older sandbox tiers
 
 Status: snapshot, checked against commit `5084135115` (2026-09-29).
+The `gvisor` tier (`agent-gvisor`) has since been removed (bd
+myconfig-e6z); its image, gVisor pin and podman host setup moved to
+[`../gvisor.nix`](../gvisor.nix). Its column is kept for the comparison.
 
 This file compares `mysbx` with the sandbox tiers in
 [`../../sandboxes/`](../../sandboxes) and the bubblewrap jail wrappers in

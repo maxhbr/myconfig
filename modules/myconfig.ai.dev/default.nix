@@ -34,7 +34,6 @@ in
     ./sandboxes/myconfig.ai.sandboxTools.nix
     ./sandboxes/myconfig.ai.qemu-agent-sandbox
     ./sandboxes/myconfig.ai.microvm
-    ./sandboxes/myconfig.ai.gvisor-agent-sandbox
     ./services.orca.nix
     ./mysbx
     ./hermes-agent
@@ -77,10 +76,6 @@ in
         codex.enable = true;
         skills.enable = true;
         agent-of-empires.enable = true;
-        gvisor-agent-sandbox = {
-          enable = false;
-          nix.enable = true;
-        };
         mysbx = {
           enable = true;
           display.package = pkgs.waypipe;

@@ -1,13 +1,6 @@
+# Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 final: prev: {
-  # Rootless session manager for Podman + gVisor agent sandboxes.
-  agent-gvisor = final.callPackage ./agent-gvisor.nix { };
-
-  # The agent container image, built by Nix instead of a Containerfile.
-  agent-gvisor-image = final.callPackage ./agent-image.nix { };
-
-  # Helper that loads `agent-gvisor-image` into the caller's Podman store.
-  agent-gvisor-load-image = final.callPackage ./load-image.nix { };
-
   # gVisor, bumped ahead of nixpkgs (which still ships 20260406.0) to the
   # release-20260817.0 content on the synthetic `go` branch, plus the
   # point-to-point address fix.

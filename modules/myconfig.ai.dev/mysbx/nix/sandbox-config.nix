@@ -24,9 +24,7 @@
 # unaffected either way: it ro-binds the host /nix, so both spellings
 # resolve there.)
 #
-# The copy semantics follow the seed.rs precedent
-# (../../sandboxes/myconfig.ai.gvisor-agent-sandbox/rust/src/seed.rs —
-# "Files are copies, not symlinks, because the sandbox has no /nix").
+# Files are copies, not symlinks, because the sandbox has no /nix.
 #
 # Consumed like ./mux-entry-lib.nix — a plain function file, no NixOS
 # option machinery. A `myconfig.ai.dev.mysbx.helpers` option was

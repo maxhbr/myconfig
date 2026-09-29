@@ -30,8 +30,7 @@
 #                 (../mysbx-rs/completions/mysbx.fish, installed by
 #                 ./mysbx.nix): installed byte-for-byte, parses as fish,
 #                 and every subcommand and option of usage.txt is
-#                 completed. Same pattern as the gvisor tier's
-#                 `agent-gvisor-completions` check.
+#                 completed.
 #
 #   mysbx-herdr-entry-test
 #                 static-contract check of the herdr entry script
@@ -43,8 +42,7 @@
 #                 and it must never create the sibling — mysbx's D13
 #                 guard. Bash-syntax checked with `bash -n`.
 #
-# Wired into `nix flake check` for `x86_64-linux` in `flake.nix`, following
-# ../../sandboxes/myconfig.ai.gvisor-agent-sandbox/nix/checks.nix.
+# Wired into `nix flake check` for `x86_64-linux` in `flake.nix`.
 #
 # Deliberately NOT a check here (mvp-6, "Explicitly not in this item"):
 # bubblewrap is not on the test PATH. The two real-execution tests in
@@ -79,7 +77,7 @@ let
   wrapped = pkgs.runCommand "mysbx-wrapped-content" { } ''
     cat "${pkgNono}/bin/mysbx" > $out
   '';
-  # Known and accepted (same property as the gvisor tier's check): CI
+  # Known and accepted: CI
   # tests this crate from the locked `inputs.nixpkgs`, which can differ
   # slightly from the host-eval nixpkgs the wrapped binary on a host
   # was built with. The crate is dependency-free, so the drift surface
@@ -87,7 +85,7 @@ let
 in
 {
   # The crate itself, with `doCheck = true`: `cargo test` in the build
-  # sandbox. Same pattern as the gvisor tier's `agent-gvisor-tests`.
+  # sandbox.
   # The generator, evaluated: what a host actually gets in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
   mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
@@ -942,7 +940,7 @@ in
     # D1-D5) drive the REAL git — the creation decision probes refs
     # and HEAD, which no stub can model — so the test phase needs it
     # on PATH, and real git needs a committer identity and a locked
-    # config (same pattern as the gvisor tier's agent-gvisor-tests).
+    # config.
     # `openssh` is the `ssh-keygen` of the now-UNCONDITIONAL sandbox
     # keypair (docs/design/config.md D22): every live run generates
     # one host-side, and the unwrapped crate's PATH fallback must find
