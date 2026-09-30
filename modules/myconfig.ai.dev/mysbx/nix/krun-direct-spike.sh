@@ -69,16 +69,16 @@ run() {
         "$launcher/bin/mysbx-krun" "$@"
 }
 
-# 1. boot + toolchain from the host store, no OCI image (the epic's
-# core claim): share virtiofs tags on the guest tmpfs, because virtiofs
-# cannot be nested below the root virtiofs mount.
+# 1. boot smoke test: use the static BusyBox applet so this probe does
+# not depend on a dynamically linked host-store executable. The store
+# share is exercised by the following payload probes.
 run \
     --rootfs "$rootfs" \
     --init /bin/spike-init \
     --ro-share "store@/tmp/mysbx-shares/store=/nix/store" \
     --rw-share "repo@/tmp/mysbx-shares/repo=$work/repo" \
-    -- /nix/store/*-coreutils-*/bin/true
-pass "1 boot: the payload ran /nix/store/.../true from the host store"
+    -- /bin/busybox true
+pass "1 boot: the BusyBox true applet ran in the guest"
 
 # 2. ro/rw enforcement: a write to the ro store share must fail, a
 # write through the rw repo share must reach the host dir.
