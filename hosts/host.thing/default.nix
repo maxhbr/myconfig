@@ -170,6 +170,7 @@
       dev = {
         core.enable = true;
         difftastic.enable = true;
+        rust.enable = true;
       };
       virtualisation.enable = true;
     };
