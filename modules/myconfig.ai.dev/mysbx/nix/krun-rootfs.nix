@@ -71,228 +71,228 @@ let
   # legacy MYSBX_KRUN_SHARES env route remains for cmdline-sized
   # debug runs.
   mysbxInit = ''
-        #!/bin/busybox sh
-        set -eu
+    #!/bin/busybox sh
+    set -eu
 
-        # No PATH in the guest env (the launcher passes an explicit envp
-        # only) and nothing else is mounted — every applet is invoked
-        # through the static busybox at $BB, never by bare name.
-        BB=/bin/busybox
+    # No PATH in the guest env (the launcher passes an explicit envp
+    # only) and nothing else is mounted — every applet is invoked
+    # through the static busybox at $BB, never by bare name.
+    BB=/bin/busybox
 
-        fail() {
-            echo "mysbx-init: $*" >&2
-            exit 125
-        }
+    fail() {
+        echo "mysbx-init: $*" >&2
+        exit 125
+    }
 
-        # The trace of last resort (live debugging, bd myconfig-2n8):
-        # the guest console carries every step when the wrapper or the
-        # user sets MYSBX_KRUN_TRACE=1 — a silent hang otherwise leaves
-        # nothing to diagnose. Defined BEFORE the first step call: sh
-        # runs top to bottom, a call above the definition would try an
-        # external `step` and die under set -eu before the first mount
-        # (the fourth live finding). Cost when off: one [ -n ] test.
-        trace="''${MYSBX_KRUN_TRACE:-}"
-        step() {
-            [ -n "$trace" ] || return 0
-            "$BB" echo "mysbx-init: $*"
-        }
+    # The trace of last resort (live debugging, bd myconfig-2n8):
+    # the guest console carries every step when the wrapper or the
+    # user sets MYSBX_KRUN_TRACE=1 — a silent hang otherwise leaves
+    # nothing to diagnose. Defined BEFORE the first step call: sh
+    # runs top to bottom, a call above the definition would try an
+    # external `step` and die under set -eu before the first mount
+    # (the fourth live finding). Cost when off: one [ -n ] test.
+    trace="''${MYSBX_KRUN_TRACE:-}"
+    step() {
+        [ -n "$trace" ] || return 0
+        "$BB" echo "mysbx-init: $*"
+    }
 
-        # The guest's writable scratch: the root is a READ-ONLY virtiofs
-        # share, so nothing below / may change — /tmp is where every
-        # writable thing lives, the share mounts included (finding 9:
-        # a second virtiofs device cannot nest below the root share,
-        # EBUSY).
-        step "mounting the guest tmpfs on /tmp"
-        "$BB" mount -t tmpfs tmpfs /tmp \
-            || fail "cannot mount the guest tmpfs on /tmp"
-        "$BB" mkdir -p /tmp/mysbx-shares /tmp/mysbx-home \
-            || fail "cannot create the tmpfs roots"
-        # The sandbox home's tree (config.md D14): the baked /mysbx-home
-        # symlink resolves here. The XDG parents exist for tools that
-        # write before reading $XDG_* (the payload env names these paths);
-        # the mux socket dir is the same MUX_SOCKET_DIR the env's
-        # TMUX_TMPDIR names (config.md D16/D17) — tmpfs, so guest-internal
-        # sockets work and never touch a host-shared surface.
-        "$BB" mkdir -p /tmp/mysbx-home/.local/share /tmp/mysbx-home/.local/state \
-            /tmp/mysbx-home/.config /tmp/mysbx-home/.cache \
-            /tmp/mysbx-home/.mysbx-tmux \
-            || fail "cannot create the sandbox home tree"
+    # The guest's writable scratch: the root is a READ-ONLY virtiofs
+    # share, so nothing below / may change — /tmp is where every
+    # writable thing lives, the share mounts included (finding 9:
+    # a second virtiofs device cannot nest below the root share,
+    # EBUSY).
+    step "mounting the guest tmpfs on /tmp"
+    "$BB" mount -t tmpfs tmpfs /tmp \
+        || fail "cannot mount the guest tmpfs on /tmp"
+    "$BB" mkdir -p /tmp/mysbx-shares /tmp/mysbx-home \
+        || fail "cannot create the tmpfs roots"
+    # The sandbox home's tree (config.md D14): the baked /mysbx-home
+    # symlink resolves here. The XDG parents exist for tools that
+    # write before reading $XDG_* (the payload env names these paths);
+    # the mux socket dir is the same MUX_SOCKET_DIR the env's
+    # TMUX_TMPDIR names (config.md D16/D17) — tmpfs, so guest-internal
+    # sockets work and never touch a host-shared surface.
+    "$BB" mkdir -p /tmp/mysbx-home/.local/share /tmp/mysbx-home/.local/state \
+        /tmp/mysbx-home/.config /tmp/mysbx-home/.cache \
+        /tmp/mysbx-home/.mysbx-tmux \
+        || fail "cannot create the sandbox home tree"
 
-        # A tmpfs at the FIRST component of a sandbox path outside /tmp
-        # and the home: the ro root can hold no new entries, but mounting
-        # a tmpfs OVER a root-share subdirectory is fine (libkrun's own
-        # implicit init mounts devtmpfs/proc/sysfs exactly that way; the
-        # EBUSY of finding 9 is virtiofs-on-virtiofs only). The first
-        # component of a share's sandbox path carries nothing but the
-        # rootfs skeleton below it, so covering it costs no content —
-        # and the share's link then lives on writable tmpfs. Mounted
-        # once per component, shared by every share under it.
-        tmpfs_first_components=""
-        mounted_devices=""
-        manifest_chdir=""
+    # A tmpfs at the FIRST component of a sandbox path outside /tmp
+    # and the home: the ro root can hold no new entries, but mounting
+    # a tmpfs OVER a root-share subdirectory is fine (libkrun's own
+    # implicit init mounts devtmpfs/proc/sysfs exactly that way; the
+    # EBUSY of finding 9 is virtiofs-on-virtiofs only). The first
+    # component of a share's sandbox path carries nothing but the
+    # rootfs skeleton below it, so covering it costs no content —
+    # and the share's link then lives on writable tmpfs. Mounted
+    # once per component, shared by every share under it.
+    tmpfs_first_components=""
+    mounted_devices=""
+    manifest_chdir=""
 
-        # The MANIFEST route (the cmdline budget finding, bd
-        # myconfig-2n8's seventh): the launcher wrote env/share/chdir
-        # records into the ro stage device; the cmdline carries only the
-        # pointer. Mount stage-ro NOW — every share's link target
-        # resolves through it — read the file, and apply the env lines
-        # at once (the init's OWN steps use none of them; the payload
-        # inherits everything through exec).
-        manifest="''${MYSBX_KRUN_MANIFEST:-}"
-        if [ -n "$manifest" ]; then
-            mtag=''${manifest%%':'*}
-            mslot=''${manifest#*':'}
-            step "reading the manifest (device $mtag, slot $mslot)"
-            mpoint=/tmp/mysbx-shares/$mtag
-            "$BB" mkdir -p "$mpoint" \
-                || fail "cannot create the manifest mountpoint $mpoint"
-            "$BB" mount -t virtiofs -o ro "$mtag" "$mpoint" \
-                || fail "cannot mount the manifest device $mtag"
-            mounted_devices=" $mounted_devices $mtag "
-            mpath=$mpoint/$mslot
-            [ -f "$mpath" ] || fail "the manifest $mpath does not exist"
-            # One record per line, tab-separated fields, base64 values:
-            # a base64 value never contains a tab, the field split is
-            # unambiguous.
-            while IFS="	" read -r rkind r2 r3 r4 r5; do
-                [ -n "$rkind" ] || continue
-                case "$rkind" in
-                    env)
-                        # r2 KEY, r3 base64(value)
-                        val=$(printf '%s' "$r3" | "$BB" base64 -d) \
-                            || fail "cannot decode the manifest env $r2"
-                        export "$r2=$val"
-                        ;;
-                    share)
-                        # r2 DEVICE, r3 SLOT, r4 DEST, r5 ro|rw
-                        [ -n "$r5" ] || fail "manifest share record $r2:$r3 is short a mode"
-                        share_records="''${share_records:-}
+    # The MANIFEST route (the cmdline budget finding, bd
+    # myconfig-2n8's seventh): the launcher wrote env/share/chdir
+    # records into the ro stage device; the cmdline carries only the
+    # pointer. Mount stage-ro NOW — every share's link target
+    # resolves through it — read the file, and apply the env lines
+    # at once (the init's OWN steps use none of them; the payload
+    # inherits everything through exec).
+    manifest="''${MYSBX_KRUN_MANIFEST:-}"
+    if [ -n "$manifest" ]; then
+        mtag=''${manifest%%':'*}
+        mslot=''${manifest#*':'}
+        step "reading the manifest (device $mtag, slot $mslot)"
+        mpoint=/tmp/mysbx-shares/$mtag
+        "$BB" mkdir -p "$mpoint" \
+            || fail "cannot create the manifest mountpoint $mpoint"
+        "$BB" mount -t virtiofs -o ro "$mtag" "$mpoint" \
+            || fail "cannot mount the manifest device $mtag"
+        mounted_devices=" $mounted_devices $mtag "
+        mpath=$mpoint/$mslot
+        [ -f "$mpath" ] || fail "the manifest $mpath does not exist"
+        # One record per line, tab-separated fields, base64 values:
+        # a base64 value never contains a tab, the field split is
+        # unambiguous.
+        while IFS="	" read -r rkind r2 r3 r4 r5; do
+            [ -n "$rkind" ] || continue
+            case "$rkind" in
+                env)
+                    # r2 KEY, r3 base64(value)
+                    val=$(printf '%s' "$r3" | "$BB" base64 -d) \
+                        || fail "cannot decode the manifest env $r2"
+                    export "$r2=$val"
+                    ;;
+                share)
+                    # r2 DEVICE, r3 SLOT, r4 DEST, r5 ro|rw
+                    [ -n "$r5" ] || fail "manifest share record $r2:$r3 is short a mode"
+                    share_records="''${share_records:-}
     $r2 $r3 $r4 $r5"
-                        ;;
-                    chdir)
-                        # r2 base64(dir) — applied AFTER the shares exist
-                        manifest_chdir=$(printf '%s' "$r2" | "$BB" base64 -d) \
-                            || fail "cannot decode the manifest chdir"
-                        ;;
+                    ;;
+                chdir)
+                    # r2 base64(dir) — applied AFTER the shares exist
+                    manifest_chdir=$(printf '%s' "$r2" | "$BB" base64 -d) \
+                        || fail "cannot decode the manifest chdir"
+                    ;;
+                *)
+                    fail "unknown manifest record: $rkind"
+                    ;;
+            esac
+        done < "$mpath"
+    fi
+
+    # Each share: one "DEVICE SLOT SANDBOX_PATH ro|rw" record — the
+    # manifest's share lines above, or the legacy
+    # MYSBX_KRUN_SHARES env (';'-separated, cmdline-sized debug
+    # runs only — the seventh live finding killed that route for
+    # real configs). Each device is mounted ONCE under
+    # /tmp/mysbx-shares keyed by its tag; the SLOT is the share's
+    # dir inside it, and the SANDBOX path is a link at the device
+    # mount's slot — the payload's contract is the sandbox layout,
+    # the tmpfs placement is this init's.
+    share_records="''${share_records:-}"
+    if [ -z "$manifest" ]; then
+        shares="''${MYSBX_KRUN_SHARES:-}"
+        while [ -n "$shares" ]; do
+            entry=''${shares%%';'*}
+            [ "$shares" = "$entry" ] && shares= || shares=''${shares#*';'}
+            [ -n "$entry" ] || continue
+            share_records="$share_records
+    $entry"
+        done
+    fi
+    # The records as a FILE, read with input redirection (NOT a
+    # pipeline: the `while` of a pipeline runs in a SUBSHELL, and a
+    # mount done there must not be relied on — the live sim showed
+    # the device mount vanishing with the subshell on one host).
+    # Redirection keeps the loop — and every mount it performs — in
+    # THIS shell.
+    records_file=/tmp/mysbx-share-records
+    printf '%s\n' "$share_records" > "$records_file"
+    while IFS=" " read -r tag slot sandbox mode; do
+        [ -n "$tag" ] || continue
+        mountpoint=/tmp/mysbx-shares/$tag
+        step "placing share $sandbox (device $tag, slot $slot, $mode)"
+        case " $mounted_devices " in
+            *" $tag "*) ;;
+            *)
+                step "mounting device $tag ($mode) at $mountpoint"
+                "$BB" mkdir -p "$mountpoint" \
+                    || fail "cannot create the mountpoint $mountpoint"
+                if [ "$mode" = ro ]; then
+                    "$BB" mount -t virtiofs -o ro "$tag" "$mountpoint" \
+                        || fail "cannot mount the virtiofs tag $tag at $mountpoint (ro)"
+                else
+                    "$BB" mount -t virtiofs "$tag" "$mountpoint" \
+                        || fail "cannot mount the virtiofs tag $tag at $mountpoint (rw)"
+                fi
+                mounted_devices=" $mounted_devices $tag "
+                ;;
+        esac
+        sharetarget=$mountpoint/$slot
+        # The sandbox path already links at the mount (the rootfs
+        # baked /nix/store and /mysbx-home): nothing to place.
+        [ "$(  "$BB" readlink "$sandbox" || true)" = "$sharetarget" ] && continue
+        # Where does the link live? /tmp/... for tmpfs-rooted paths,
+        # /mysbx-home/... for the home's state shares (through the
+        # baked /mysbx-home link), a fresh tmpfs at the FIRST
+        # component for everything else (the ro root can hold no new
+        # entries; mounting a tmpfs OVER a root-share subdirectory is
+        # fine — libkrun's own implicit init mounts devtmpfs/proc/
+        # sysfs exactly that way, the EBUSY of the spike's finding 9
+        # is virtiofs-on-virtiofs only). The parents of the link are
+        case "$sandbox" in
+            /tmp/*|/mysbx-home/*)
+                linktarget=$sandbox
+                ;;
+            /*/*)
+                first=''${sandbox#/}
+                first=/''${first%%/*}
+                case " $tmpfs_first_components " in
+                    *" $first "*) ;;
                     *)
-                        fail "unknown manifest record: $rkind"
+                        "$BB" mount -t tmpfs tmpfs "$first" \
+                            || fail "cannot mount the tmpfs for $sandbox"
+                        tmpfs_first_components=" $tmpfs_first_components $first "
                         ;;
                 esac
-            done < "$mpath"
-        fi
+                # The parents of the link live ON the tmpfs just
+                # mounted at $first — creating the real parent path
+                # after the mount writes into the tmpfs.
+                "$BB" mkdir -p "$(  "$BB" dirname "$sandbox")" \
+                    || fail "cannot create the parents of $sandbox"
+                linktarget=$sandbox
+                ;;
+            *)
+                fail "the share path $sandbox cannot be placed (a krun mount dest needs a parent)"
+                ;;
+        esac
+        # A state share may collide with an XDG dir the home tree
+        # just created (.cache and friends): the share REPLACES it,
+        # like the bwrap backend's later bind replaces the tmpfs dir.
+        [ -e "$linktarget" ] && "$BB" rm -rf "$linktarget"
+        step "linked $sandbox at $sharetarget"
+        "$BB" ln -sfn "$sharetarget" "$linktarget" \
+            || fail "cannot link $sandbox at $sharetarget"
+    done < "$records_file"
+    "$BB" rm -f "$records_file"
 
-        # Each share: one "DEVICE SLOT SANDBOX_PATH ro|rw" record — the
-        # manifest's share lines above, or the legacy
-        # MYSBX_KRUN_SHARES env (';'-separated, cmdline-sized debug
-        # runs only — the seventh live finding killed that route for
-        # real configs). Each device is mounted ONCE under
-        # /tmp/mysbx-shares keyed by its tag; the SLOT is the share's
-        # dir inside it, and the SANDBOX path is a link at the device
-        # mount's slot — the payload's contract is the sandbox layout,
-        # the tmpfs placement is this init's.
-        share_records="''${share_records:-}"
-        if [ -z "$manifest" ]; then
-            shares="''${MYSBX_KRUN_SHARES:-}"
-            while [ -n "$shares" ]; do
-                entry=''${shares%%';'*}
-                [ "$shares" = "$entry" ] && shares= || shares=''${shares#*';'}
-                [ -n "$entry" ] || continue
-                share_records="$share_records
-    $entry"
-            done
-        fi
-        # The records as a FILE, read with input redirection (NOT a
-        # pipeline: the `while` of a pipeline runs in a SUBSHELL, and a
-        # mount done there must not be relied on — the live sim showed
-        # the device mount vanishing with the subshell on one host).
-        # Redirection keeps the loop — and every mount it performs — in
-        # THIS shell.
-        records_file=/tmp/mysbx-share-records
-        printf '%s\n' "$share_records" > "$records_file"
-        while IFS=" " read -r tag slot sandbox mode; do
-            [ -n "$tag" ] || continue
-            mountpoint=/tmp/mysbx-shares/$tag
-            step "placing share $sandbox (device $tag, slot $slot, $mode)"
-            case " $mounted_devices " in
-                *" $tag "*) ;;
-                *)
-                    step "mounting device $tag ($mode) at $mountpoint"
-                    "$BB" mkdir -p "$mountpoint" \
-                        || fail "cannot create the mountpoint $mountpoint"
-                    if [ "$mode" = ro ]; then
-                        "$BB" mount -t virtiofs -o ro "$tag" "$mountpoint" \
-                            || fail "cannot mount the virtiofs tag $tag at $mountpoint (ro)"
-                    else
-                        "$BB" mount -t virtiofs "$tag" "$mountpoint" \
-                            || fail "cannot mount the virtiofs tag $tag at $mountpoint (rw)"
-                    fi
-                    mounted_devices=" $mounted_devices $tag "
-                    ;;
-            esac
-            sharetarget=$mountpoint/$slot
-            # The sandbox path already links at the mount (the rootfs
-            # baked /nix/store and /mysbx-home): nothing to place.
-            [ "$(  "$BB" readlink "$sandbox" || true)" = "$sharetarget" ] && continue
-            # Where does the link live? /tmp/... for tmpfs-rooted paths,
-            # /mysbx-home/... for the home's state shares (through the
-            # baked /mysbx-home link), a fresh tmpfs at the FIRST
-            # component for everything else (the ro root can hold no new
-            # entries; mounting a tmpfs OVER a root-share subdirectory is
-            # fine — libkrun's own implicit init mounts devtmpfs/proc/
-            # sysfs exactly that way, the EBUSY of the spike's finding 9
-            # is virtiofs-on-virtiofs only). The parents of the link are
-            case "$sandbox" in
-                /tmp/*|/mysbx-home/*)
-                    linktarget=$sandbox
-                    ;;
-                /*/*)
-                    first=''${sandbox#/}
-                    first=/''${first%%/*}
-                    case " $tmpfs_first_components " in
-                        *" $first "*) ;;
-                        *)
-                            "$BB" mount -t tmpfs tmpfs "$first" \
-                                || fail "cannot mount the tmpfs for $sandbox"
-                            tmpfs_first_components=" $tmpfs_first_components $first "
-                            ;;
-                    esac
-                    # The parents of the link live ON the tmpfs just
-                    # mounted at $first — creating the real parent path
-                    # after the mount writes into the tmpfs.
-                    "$BB" mkdir -p "$(  "$BB" dirname "$sandbox")" \
-                        || fail "cannot create the parents of $sandbox"
-                    linktarget=$sandbox
-                    ;;
-                *)
-                    fail "the share path $sandbox cannot be placed (a krun mount dest needs a parent)"
-                    ;;
-            esac
-            # A state share may collide with an XDG dir the home tree
-            # just created (.cache and friends): the share REPLACES it,
-            # like the bwrap backend's later bind replaces the tmpfs dir.
-            [ -e "$linktarget" ] && "$BB" rm -rf "$linktarget"
-            step "linked $sandbox at $sharetarget"
-            "$BB" ln -sfn "$sharetarget" "$linktarget" \
-                || fail "cannot link $sandbox at $sharetarget"
-        done < "$records_file"
-        "$BB" rm -f "$records_file"
+    # The payload is our own argv: $1 the path (absolute, no PATH
+    # lookup needed), $2.. its arguments, exactly as krun_set_exec
+    # carried them.
+    [ "$#" -gt 0 ] || fail "no payload in argv — the krun_set_exec args did not reach the guest init"
 
-        # The payload is our own argv: $1 the path (absolute, no PATH
-        # lookup needed), $2.. its arguments, exactly as krun_set_exec
-        # carried them.
-        [ "$#" -gt 0 ] || fail "no payload in argv — the krun_set_exec args did not reach the guest init"
+    # The workdir, applied AFTER the shares exist (the manifest's
+    # chdir record — the cmdline route had /init.krun chdir BEFORE
+    # the workspace share was mounted, silently landing at /).
+    if [ -n "$manifest_chdir" ]; then
+        step "chdir to the workspace: $manifest_chdir"
+        cd "$manifest_chdir" \
+            || fail "cannot chdir to the workdir $manifest_chdir"
+    fi
 
-        # The workdir, applied AFTER the shares exist (the manifest's
-        # chdir record — the cmdline route had /init.krun chdir BEFORE
-        # the workspace share was mounted, silently landing at /).
-        if [ -n "$manifest_chdir" ]; then
-            step "chdir to the workspace: $manifest_chdir"
-            cd "$manifest_chdir" \
-                || fail "cannot chdir to the workdir $manifest_chdir"
-        fi
-
-        step "exec-ing the payload: $1"
-        exec "$@"
+    step "exec-ing the payload: $1"
+    exec "$@"
   '';
 in
 runCommand "mysbx-krun-rootfs"
@@ -328,4 +328,13 @@ runCommand "mysbx-krun-rootfs"
     ln -s ${bash}/bin/sh $out/bin/sh
     printf '%s' "$initText" > $out/bin/mysbx-init
     chmod +x $out/bin/mysbx-init
+    # The shebang guard (the eighth live finding): an indented
+    # Nix string strips only the MINIMAL common indent of its
+    # lines, so mixed indents leave leading spaces before the
+    # shebang — the kernel then refuses it, the execvp ENOEXEC
+    # fallback chases /bin/sh (a dangling store symlink at that
+    # point), and the guest dies with a bare 127. The build
+    # refuses that init.
+    [ "$(head -c 2 $out/bin/mysbx-init)" = "#!" ] \
+        || { echo "mysbx-krun-rootfs: the init lost its shebang (mixed indent?)" >&2; exit 1; }
   ''
