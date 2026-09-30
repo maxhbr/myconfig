@@ -72,6 +72,19 @@ let
         exit 125
     }
 
+    # The trace of last resort (live debugging, bd myconfig-2n8):
+    # the guest console carries every step when the wrapper or the
+    # user sets MYSBX_KRUN_TRACE=1 — a silent hang otherwise leaves
+    # nothing to diagnose. Defined BEFORE the first step call: sh
+    # runs top to bottom, a call above the definition would try an
+    # external `step` and die under set -eu before the first mount
+    # (the fourth live finding). Cost when off: one [ -n ] test.
+    trace="''${MYSBX_KRUN_TRACE:-}"
+    step() {
+        [ -n "$trace" ] || return 0
+        "$BB" echo "mysbx-init: $*"
+    }
+
     # The guest's writable scratch: the root is a READ-ONLY virtiofs
     # share, so nothing below / may change — /tmp is where every
     # writable thing lives, the share mounts included (finding 9:
@@ -114,16 +127,6 @@ let
     # dir inside it, and the SANDBOX path is a link at the device
     # mount's slot — the payload's contract is the sandbox layout,
     # the tmpfs placement is this init's.
-    # The trace of last resort (live debugging, bd myconfig-2n8): the
-    # guest console carries every step when the wrapper or the user
-    # sets MYSBX_KRUN_TRACE=1 — a silent hang otherwise leaves
-    # nothing to diagnose. Cost when off: one [ -n ] test per step.
-    trace="''${MYSBX_KRUN_TRACE:-}"
-    step() {
-        [ -n "$trace" ] || return 0
-        "$BB" echo "mysbx-init: $*"
-    }
-
     shares="''${MYSBX_KRUN_SHARES:-}"
     while [ -n "$shares" ]; do
         entry=''${shares%%';'*}
