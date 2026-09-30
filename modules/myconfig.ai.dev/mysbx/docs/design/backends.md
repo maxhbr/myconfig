@@ -805,8 +805,12 @@ shares: mysbx builds one per-run tree per access mode under
 host dir into its slot, and each tree is ONE virtiofs device
 (`stage-ro`, read-only; `stage-rw`, read-write — the mode is the
 device's, enforced by the virtiofs server end to end). The store
-share keeps its own device (the rootfs's baked `/nix/store` link
-targets its mount). The device count is a CONSTANT 3 whatever the
-config mounts; `MYSBX_KRUN_SHARES` carries `DEVICE SLOT DEST
-ro|rw` entries and the init mounts each device once, linking each
-dest at `<device-mount>/<slot>`.
+share rides in the ro tree like every other ro share (the rootfs's
+baked `/nix/store` link targets
+`/tmp/mysbx-shares/stage-ro/store`), so the device count is a
+CONSTANT 2 whatever the config mounts; `MYSBX_KRUN_SHARES` carries
+`DEVICE SLOT DEST ro|rw` entries and the init mounts each device
+once, linking each dest at `<device-mount>/<slot>`. The guest init
+traces every step to the console when the host sets
+`MYSBX_KRUN_TRACE=1` (a silent hang leaves diagnosable evidence —
+the live-run finding of bd myconfig-2n8).

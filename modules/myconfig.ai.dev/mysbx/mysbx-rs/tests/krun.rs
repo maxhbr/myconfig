@@ -339,17 +339,17 @@ fn the_store_share_is_first_and_ro_the_workspace_rw() {
         &Payload::Shell,
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
     );
-    // Section 3 order: the store's own device first, the staged
-    // trees next, the store share first, workspace rw second. The
-    // sandbox paths are the destinations the payload contract
-    // promises; the guest mount root never appears in the argv (the
-    // init derives it from the device tag).
+    // Section 3 order: the staged devices (one per access mode),
+    // the store share first (a ro slot like every other), workspace
+    // rw second. The sandbox paths are the destinations the payload
+    // contract promises; the guest mount root never appears in the
+    // argv (the init derives it from the device tag).
     assert_eq!(argv[8], "--ro-device");
-    assert_eq!(argv[9], "store=/nix/store");
+    assert_eq!(argv[9], "stage-ro=/mysbx-krun-stage/ro");
     assert_eq!(argv[10], "--rw-device");
     assert_eq!(argv[11], "stage-rw=/mysbx-krun-stage/rw");
     assert_eq!(argv[12], "--ro-share");
-    assert_eq!(argv[13], "store:store@/nix/store ro");
+    assert_eq!(argv[13], "stage-ro:store@/nix/store ro");
     assert_eq!(argv[14], "--rw-share");
     assert_eq!(argv[15], "stage-rw:workspace@/home/synth/repo rw");
     assert!(!argv.iter().any(|a| a.contains(GUEST_SHARE_ROOT)));
