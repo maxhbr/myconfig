@@ -130,7 +130,7 @@ fn golden_one_ro_mount() {
 fn golden_one_rw_mount_with_explicit_dest() {
     let mut cfg = base(true);
     cfg.mounts
-        .push(make_mount("/synth/data", Some("/data"), Mode::Rw));
+        .push(make_mount("/synth/data", Some("/srv/data"), Mode::Rw));
     let argv = run(
         &cfg,
         &synth_repo(),
@@ -367,3 +367,55 @@ fn params_owned<'a>(
 }
 
 use std::path::Path;
+
+#[test]
+fn a_root_level_mount_dest_is_refused() {
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/data"), Mode::Rw));
+    let host_env = BTreeMap::new();
+    let err = krun_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    )
+    .unwrap_err();
+    assert!(matches!(err, mysbx::krun::Error::RootLevelDest { dest } if dest == "/data"));
+}
+
+#[test]
+fn a_baked_link_path_dest_is_refused() {
+    // /nix/store: the store share's contract path — a configured
+    // mount cannot replace it (a mount UNDER it is fine).
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/nix/store"), Mode::Rw));
+    let host_env = BTreeMap::new();
+    let err = krun_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    )
+    .unwrap_err();
+    assert!(matches!(err, mysbx::krun::Error::ProtectedDest { dest: d } if d == "/nix/store"));
+    // /mysbx-home is a single-component path: the root-level
+    // refusal fires first (its link would sit on the ro root
+    // anyway, and the init's case analysis never reaches a
+    // protected-path check for it).
+    cfg.mounts.clear();
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/mysbx-home"), Mode::Rw));
+    let err = krun_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    )
+    .unwrap_err();
+    assert!(matches!(err, mysbx::krun::Error::RootLevelDest { dest: d } if d == "/mysbx-home"));
+}

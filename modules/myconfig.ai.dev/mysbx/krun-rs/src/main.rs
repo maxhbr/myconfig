@@ -94,6 +94,7 @@ struct KrunApi {
         shm_size: u64,
         read_only: bool,
     ) -> c_int,
+    krun_set_workdir: unsafe extern "C" fn(ctx_id: c_uint, c_workdir_path: *const c_char) -> c_int,
     krun_set_exec: unsafe extern "C" fn(
         ctx_id: c_uint,
         c_exec_path: *const c_char,
@@ -163,6 +164,12 @@ unsafe fn load_api() -> Result<KrunApi, String> {
                 ) -> c_int,
             >(sym(b"krun_add_virtiofs3")?)
         },
+        krun_set_workdir: unsafe {
+            std::mem::transmute::<
+                *mut (),
+                unsafe extern "C" fn(ctx_id: c_uint, c_workdir_path: *const c_char) -> c_int,
+            >(sym(b"krun_set_workdir")?)
+        },
         krun_set_exec: unsafe {
             std::mem::transmute::<
                 *mut (),
@@ -196,10 +203,13 @@ extern "C" {
 
 struct Share {
     tag: String,
-    /// The in-guest destination the tag must be mounted at — carried
-    /// through to the guest via MYSBX_KRUN_SHARES, so the guest entry
-    /// script knows where each tag belongs (the kernel only names
-    /// devices, the guest must place them).
+    /// The SANDBOX path the payload must see the share at — carried
+    /// through to the guest via MYSBX_KRUN_SHARES, so the guest
+    /// entry script knows where each tag belongs. The GUEST mount
+    /// itself lives under /tmp/mysbx-shares keyed by the tag (a
+    /// virtiofs device cannot nest below the ro root share — EBUSY,
+    /// the spike's finding 9); the entry script mounts the tag
+    /// there and links this path at the mount.
     dest: String,
     host_dir: PathBuf,
     read_only: bool,
@@ -217,6 +227,10 @@ struct Config {
     init: Option<String>,
     shares: Vec<Share>,
     env: Vec<(String, String)>,
+    /// The payload's working directory, handed to krun_set_workdir
+    /// (bwrap's --chdir equivalent). Defaults to `/` — the spec
+    /// always carries the workspace path.
+    workdir: PathBuf,
     payload: Vec<String>,
 }
 
@@ -224,7 +238,7 @@ fn usage() -> ! {
     eprintln!(
         "usage: mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--init PATH] \
          [--ro-share TAG@DEST=DIR] [--rw-share TAG@DEST=DIR] [--env K=V]... \
-         -- CMD [ARGS...]"
+         [--chdir DIR] -- CMD [ARGS...]"
     );
     std::process::exit(2);
 }
@@ -244,6 +258,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         init: None,
         shares: Vec::new(),
         env: Vec::new(),
+        workdir: PathBuf::from("/"),
         payload: Vec::new(),
     };
     let mut it = args.by_ref().peekable();
@@ -285,6 +300,12 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                     .split_once('=')
                     .ok_or_else(|| format!("--env expects K=V, got `{value}`"))?;
                 cfg.env.push((k.to_owned(), v.to_owned()));
+            }
+            "--chdir" => {
+                cfg.workdir = PathBuf::from(
+                    it.next()
+                        .ok_or_else(|| "missing value for --chdir".to_owned())?,
+                )
             }
             "--" => {
                 cfg.payload.extend(it.by_ref());
@@ -433,6 +454,13 @@ fn main() {
         if let Some(disable) = api.krun_disable_implicit_vsock {
             check((disable)(ctx), "krun_disable_implicit_vsock");
         }
+        // The payload's working directory (krun_set_workdir, the
+        // spec's --chdir): the workspace path, where every other
+        // backend's payload starts too.
+        check(
+            (api.krun_set_workdir)(ctx, cstr(&cfg.workdir).as_ptr()),
+            "krun_set_workdir",
+        );
         // ALWAYS an explicit envp: envp=NULL makes libkrun inherit
         // the launcher's whole environment (env::vars() of
         // krun_set_exec), which under bwrap is exactly what the
@@ -502,6 +530,23 @@ mod tests {
         .unwrap();
         assert_eq!(exec_spec(&with_init).0, "/init");
         assert_eq!(exec_spec(&with_init).1, ["/init", "/bin/sh", "-c", "true"]);
+    }
+
+    #[test]
+    fn chdir_defaults_to_root_and_parses() {
+        let cfg = parse(&["--rootfs", "/root", "--", "/bin/true"]).unwrap();
+        assert_eq!(cfg.workdir, std::path::Path::new("/"));
+        let cfg = parse(&[
+            "--rootfs",
+            "/root",
+            "--chdir",
+            "/workspace",
+            "--",
+            "/bin/true",
+        ])
+        .unwrap();
+        assert_eq!(cfg.workdir, std::path::Path::new("/workspace"));
+        assert!(parse(&["--rootfs", "/root", "--chdir", "--"]).is_err());
     }
 
     #[test]

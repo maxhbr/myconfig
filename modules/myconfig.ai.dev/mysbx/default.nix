@@ -371,13 +371,18 @@ in
         # when the guest nix wrappers are baked into the image —
         # otherwise nothing in the guest would consume the file.
         krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null;
+        # The direct-libkrun backend (bd myconfig-dak.4): the
+        # launcher and the guest rootfs, pinned as
+        # MYSBX_KRUN_LAUNCHER/MYSBX_KRUN_ROOTFS.
+        krunLauncher = cfg.krun.direct.launcher;
+        krunRootfs = cfg.krun.direct.rootfs;
         waypipe = cfg.display.package;
         podmanWaypipe = cfg.podman.waypipe;
         podmanMuxEntries = cfg.podman.muxEntries;
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = cfg.krun.direct.launcher; krunRootfs = cfg.krun.direct.rootfs; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -801,6 +806,51 @@ in
           whose PATH `crun` lacks libkrun gets crun's own refusal,
           never a silently unsandboxed run.
         '';
+      };
+
+      # The DIRECT-libkrun backend (mysbx-rs/src/krun.rs,
+      # docs/design/backends.md D3, bd myconfig-dak): `backend =
+      # "krun"` execs bwrap → mysbx-krun → VM with no podman, no
+      # crun and no OCI image — the launcher drives libkrun directly,
+      # the guest rootfs is a Nix-built plain directory, and the host
+      # /nix/store rides in as one read-only virtiofs share. Requires
+      # rw /dev/kvm like the podman-krun variant.
+      direct = {
+        launcher = mkOption {
+          type = types.package;
+          default = pkgs.callPackage ./nix/krun-launcher.nix {
+            # The libkrun the runs dlopen. The DEFAULT nixpkgs build
+            # has no net/blk symbols (bd myconfig-dak.1 finding 1);
+            # dak.6/.7 pass an override { withNet = true; withBlk =
+            # true; } here without touching any other file.
+            inherit (pkgs) libkrun;
+          };
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-launcher.nix { inherit (pkgs) libkrun; }";
+          description = ''
+            The mysbx-krun launcher of the direct-libkrun backend —
+            the zero-dependency Rust binary (../krun-rs) that
+            dlopens the pinned libkrun at runtime and
+            krun_start_enter()s the VM. Pinned into the wrapper as
+            MYSBX_KRUN_LAUNCHER.
+          '';
+        };
+
+        rootfs = mkOption {
+          type = types.package;
+          default = pkgs.callPackage ./nix/krun-rootfs.nix {
+            # The STATIC busybox of the guest entry — pkgsStatic, not
+            # the dynamic busybox of the package set.
+            busyboxStatic = pkgs.pkgsStatic.busybox;
+          };
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; }";
+          description = ''
+            The guest rootfs of the direct-libkrun backend —
+            the Nix-built plain directory (./nix/krun-rootfs.nix)
+            with the baked guest init, the static busybox entry
+            path and the shell symlinks (backends.md D3). Pinned
+            into the wrapper as MYSBX_KRUN_ROOTFS.
+          '';
+        };
       };
 
       nestedPodman = {
