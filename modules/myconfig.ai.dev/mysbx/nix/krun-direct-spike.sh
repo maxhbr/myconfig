@@ -97,7 +97,7 @@ run \
     --init /bin/spike-init \
     --ro-share "store@/tmp/mysbx-shares/store=/nix/store" \
     --rw-share "repo@/tmp/mysbx-shares/repo=$work/repo" \
-    -- /bin/sh -c 'touch /tmp/mysbx-shares/repo/marker'
+    -- /bin/sh -c '/bin/busybox touch /tmp/mysbx-shares/repo/marker'
 [ -e "$work/repo/marker" ] || fail "2 rw share" "the write through the rw share did not reach the host"
 pass "2 rw share: the repo write reached the host directory"
 
