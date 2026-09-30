@@ -7743,6 +7743,122 @@ fn podman_load_image_with_image_ref() {
     );
 }
 
+const LOAD_OLD_ID: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+const LOAD_NEW_ID: &str = "2222222222222222222222222222222222222222222222222222222222222222";
+
+/// `mysbx podman-load-image ARGS` against a stateful podman stub:
+/// `image inspect` answers `loaded_before` (None: no such image) until
+/// `load` ran, then the new ID; `rmi` runs `rmi_body`. Returns the exit
+/// code, stderr and the recorded podman invocations.
+fn run_load_image(
+    name: &str,
+    args: &[&str],
+    loaded_before: Option<&str>,
+    rmi_body: &str,
+) -> (i32, String, Vec<String>) {
+    let (inv, _, _) = fixture_user_backend(name, &[]);
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let record = base.join("podman-args");
+    let marker = base.join("podman-loaded");
+    let before = match loaded_before {
+        Some(id) => format!("echo 'sha256:{id}'"),
+        None => "echo 'Error: no such image' >&2; exit 125".to_string(),
+    };
+    let body = format!(
+        "printf '%s\\n' \"$*\" >> {record}\n\
+         case \"$*\" in\n\
+         \x20 'image inspect'*) if [ -e {marker} ]; then echo 'sha256:{LOAD_NEW_ID}'; else {before}; fi ;;\n\
+         \x20 'load '*) : > {marker} ;;\n\
+         \x20 'rmi '*) {rmi_body} ;;\n\
+         esac\n\
+         exit 0\n",
+        record = record.display(),
+        marker = marker.display(),
+    );
+    let podman = doctor_stub(&base.join("bin"), "podman", &body);
+    let tarball = base.join("agent.tar");
+    std::fs::write(&tarball, "not a real archive").unwrap();
+    let mut full = vec!["podman-load-image"];
+    full.extend_from_slice(args);
+    let out = spawn_with_args(&inv, &full)
+        .env("MYSBX_PODMAN", &podman)
+        .env("MYSBX_PODMAN_TARBALL", &tarball)
+        .env("MYSBX_PODMAN_IMAGE", "localhost/agent:latest")
+        .env("MYSBX_PODMAN_IMAGE_ID", LOAD_NEW_ID)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    let calls = std::fs::read_to_string(&record)
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+        calls,
+    )
+}
+
+#[test]
+fn podman_load_image_removes_the_replaced_stale_image_by_id() {
+    let (code, stderr, calls) =
+        run_load_image("podman-load-image-rmi", &[], Some(LOAD_OLD_ID), "exit 0");
+    assert_eq!(code, 0, "{stderr}");
+    assert!(calls.iter().any(|c| c.starts_with("load ")), "{calls:?}");
+    assert_eq!(
+        calls.last().map(String::as_str),
+        Some(format!("rmi {LOAD_OLD_ID}").as_str()),
+        "the old ID is removed after the verified load: {calls:?}"
+    );
+    assert!(
+        stderr.contains(&format!("removed the replaced image sha256:{LOAD_OLD_ID}")),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn podman_load_image_keeps_a_replaced_image_podman_refuses_to_remove() {
+    let (code, stderr, calls) = run_load_image(
+        "podman-load-image-rmi-refused",
+        &[],
+        Some(LOAD_OLD_ID),
+        "echo 'Error: image is in use by a container' >&2; exit 2",
+    );
+    assert_eq!(code, 0, "a refused removal is not a failed load: {stderr}");
+    assert!(calls.contains(&format!("rmi {LOAD_OLD_ID}")), "{calls:?}");
+    assert!(
+        stderr.contains(&format!(
+            "kept the replaced image sha256:{LOAD_OLD_ID}: Error: image is in use by a container"
+        )),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn podman_load_image_removes_nothing_without_a_replaced_build() {
+    // Absent before the load, and a forced reload of the current
+    // build: no other image to remove.
+    for (name, args, before) in [
+        ("podman-load-image-absent", &[][..], None),
+        (
+            "podman-load-image-force",
+            &["--force"][..],
+            Some(LOAD_NEW_ID),
+        ),
+    ] {
+        let (code, stderr, calls) = run_load_image(name, args, before, "exit 0");
+        assert_eq!(code, 0, "{name}: {stderr}");
+        assert!(
+            calls.iter().any(|c| c.starts_with("load ")),
+            "{name}: {calls:?}"
+        );
+        assert!(
+            !calls.iter().any(|c| c.starts_with("rmi")),
+            "{name}: {calls:?}"
+        );
+    }
+}
+
 #[test]
 fn podman_load_image_without_any_pin_is_usage_error() {
     // No --image, no MYSBX_PODMAN_* pins: a usage error, never an

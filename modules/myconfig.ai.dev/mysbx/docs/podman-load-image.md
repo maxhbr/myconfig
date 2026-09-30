@@ -18,6 +18,10 @@ Without options, the command:
 1. Checks if the image is present in the local Podman store, comparing image IDs (config-blob digests) rather than tags
 2. If missing or stale (different build), loads the tarball with `podman load`
 3. Reports the state after loading
+4. If the load replaced a stale build, removes that build by its image ID
+   (`podman rmi <id>`, never forced). Podman refuses an image a container
+   still uses or one that carries other tags; the command then keeps it,
+   says so, and still exits 0
 
 ## Options
 
@@ -33,6 +37,7 @@ The Nix wrapper pins all three when the host builds a gVisor agent image (`mycon
 - `MYSBX_PODMAN_TARBALL`: the docker-archive tarball to `podman load`
 - `MYSBX_PODMAN_IMAGE`: the image reference the runs use
 - `MYSBX_PODMAN_IMAGE_ID`: the expected image ID (config-blob digest, extracted from the tarball at build time) — the staleness check
+- `MYSBX_PODMAN`: the podman binary (not pinned; fallback: `podman` on PATH)
 
 `--image` overrides the reference alone. With **no** pin and no `--image`, the command is a usage error (exit 2) instead of inventing a `localhost/...` reference: no registry serves the Nix-built image, so a `podman pull` fallback can never work.
 

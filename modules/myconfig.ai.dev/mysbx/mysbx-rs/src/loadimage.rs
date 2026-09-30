@@ -8,7 +8,9 @@
 //! `agent-gvisor-load-image` script, integrated into the mysbx CLI.
 //! It supports the same modes:
 //!
-//! - Default: load the image when missing or stale (different build)
+//! - Default: load the image when missing or stale (different build);
+//!   after a successful load that replaced a stale build, remove the
+//!   replaced image by its ID
 //! - `--force`: reload unconditionally
 //! - `--test`: report state without loading (exit 0 if current, 1 otherwise)
 //! - `--help`: show usage
@@ -59,7 +61,9 @@ Loads the agent container image — the one BOTH podman backends
 (`podman-gvisor` and `podman-krun`) run — into the caller's Podman
 store.
 Without options it loads the image when it is missing or when the loaded
-one is a different build than the current artifact.
+one is a different build than the current artifact. After a successful
+load it removes the replaced build by its ID (`podman rmi`, never forced:
+an image a container still uses, or that has other tags, is kept).
 
 Options:
   --force   reload unconditionally
@@ -75,6 +79,7 @@ image — see nix/mysbx.nix):
   MYSBX_PODMAN_IMAGE    image reference the runs use
   MYSBX_PODMAN_IMAGE_ID expected image ID (config-blob digest), used to
                         detect a stale build under the same tag
+  MYSBX_PODMAN          the podman binary (fallback: `podman`)
 ";
 
 /// State of the image in the Podman store.
@@ -183,7 +188,7 @@ fn extract_image_id_from_tarball(tarball_path: &str) -> Option<String> {
 /// Get the image ID of a loaded image in Podman store.
 /// Returns None if the image is not present.
 fn get_loaded_image_id(image_ref: &str) -> Option<String> {
-    let output = Command::new("podman")
+    let output = Command::new(podman_bin())
         .args(["image", "inspect", "--format", "{{.Id}}", image_ref])
         .output()
         .ok()?;
@@ -236,7 +241,7 @@ fn check_tarball_image(
 /// the load so the store serves it under BOTH.
 fn load_image_from_tarball(tarball_path: &str, image_ref: &str) -> Result<(), String> {
     eprintln!("loading {} (this may take a moment)...", image_ref);
-    let output = Command::new("podman")
+    let output = Command::new(podman_bin())
         .args(["load", "--input", tarball_path])
         .output()
         .map_err(|e| format!("failed to run podman load: {}", e))?;
@@ -248,7 +253,7 @@ fn load_image_from_tarball(tarball_path: &str, image_ref: &str) -> Result<(), St
 
     if let Some(tagged) = tarball_repo_tag(tarball_path) {
         if tagged != image_ref {
-            let tag = Command::new("podman")
+            let tag = Command::new(podman_bin())
                 .args(["tag", &tagged, image_ref])
                 .output()
                 .map_err(|e| format!("failed to run podman tag: {}", e))?;
@@ -259,6 +264,21 @@ fn load_image_from_tarball(tarball_path: &str, image_ref: &str) -> Result<(), St
         }
     }
 
+    Ok(())
+}
+
+/// Remove the build a load replaced, by its image ID. Never forced:
+/// podman refuses an image a container still uses or one that carries
+/// other tags, and that refusal is returned for the caller to report.
+fn remove_image(id: &str) -> Result<(), String> {
+    let output = Command::new(podman_bin())
+        .args(["rmi", id])
+        .output()
+        .map_err(|e| format!("failed to run podman rmi: {}", e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(stderr.trim().to_string());
+    }
     Ok(())
 }
 
@@ -426,6 +446,23 @@ pub fn run(args: &[String]) -> i32 {
             eprintln!("mysbx podman-load-image: load did not result in expected image");
             return 70; // Infrastructure error
         }
+
+        // The replaced build is untagged now; remove it so every load
+        // does not leave a dangling image behind. A refusal is not a
+        // failed load.
+        if let Some(old) = check
+            .loaded
+            .as_deref()
+            .filter(|old| Some(*old) != after_check.loaded.as_deref())
+        {
+            match remove_image(old) {
+                Ok(()) => eprintln!("removed the replaced image sha256:{}", old),
+                Err(e) => eprintln!(
+                    "mysbx podman-load-image: kept the replaced image sha256:{}: {}",
+                    old, e
+                ),
+            }
+        }
     } else {
         eprintln!(
             "{} is already current; pass --force to reload",
@@ -434,6 +471,12 @@ pub fn run(args: &[String]) -> i32 {
     }
 
     0
+}
+
+/// The podman binary: `MYSBX_PODMAN`, the same pin runs and `doctor`
+/// use, falling back to `podman` on PATH.
+fn podman_bin() -> String {
+    env_nonempty("MYSBX_PODMAN").unwrap_or_else(|| "podman".to_string())
 }
 
 /// `std::env::var` with the empty-means-unset rule, the same one
