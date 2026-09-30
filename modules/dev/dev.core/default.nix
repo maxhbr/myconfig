@@ -31,6 +31,7 @@ in
               my-meld
               # diffoscope
               gnumake
+              just
               cmake
               automake
               cloc
