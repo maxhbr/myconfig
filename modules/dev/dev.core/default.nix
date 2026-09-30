@@ -9,6 +9,38 @@
 let
   cfg = config.myconfig.dev;
   cropLog = with pkgs; writeScriptBin "cropLog.hs" (lib.fileContents ./cropLog.hs);
+  cq = pkgs.writeShellScriptBin "cq" ''
+    # Run jq against a CSV file via csvjson.
+    # Usage:
+    #   cq file.csv '<jq filter>'
+    #   cat data.csv | cq '<jq filter>'
+    set -euo pipefail
+    if [[ $# -ge 1 && -f "$1" ]]; then
+      ${pkgs.csvkit}/bin/csvjson "$1" | ${pkgs.jq}/bin/jq "$${@:2}"
+    else
+      ${pkgs.csvkit}/bin/csvjson - | ${pkgs.jq}/bin/jq "$@"
+    fi
+  '';
+  # The CLI tools of this module that are also useful inside the mysbx
+  # sandbox. Left out: the GUI tools, pass-git-helper (needs the host's
+  # pass store) and cropLog (fetches ghc via nix-shell at run time).
+  sandboxCliTools = with pkgs; [
+    gh
+    gnumake
+    just
+    cmake
+    automake
+    cloc
+    jq
+    yq
+    csvkit
+    cq
+    mercurial
+    gnuplot
+    plantuml
+    graphviz
+    darcs
+  ];
 in
 {
   config = lib.mkIf cfg.enable {
@@ -21,6 +53,12 @@ in
         });
       })
     ];
+    myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
+      extraTools = sandboxCliTools;
+      # mkOptionDefault merges with the option's default list instead of
+      # replacing it.
+      podman.imagePackages = lib.mkOptionDefault sandboxCliTools;
+    };
     home-manager.sharedModules = [
       {
         programs.gh.enable = true;
@@ -39,18 +77,7 @@ in
               jq
               yq
               csvkit
-              (writeShellScriptBin "cq" ''
-                # Run jq against a CSV file via csvjson.
-                # Usage:
-                #   cq file.csv '<jq filter>'
-                #   cat data.csv | cq '<jq filter>'
-                set -euo pipefail
-                if [[ $# -ge 1 && -f "$1" ]]; then
-                  ${pkgs.csvkit}/bin/csvjson "$1" | ${pkgs.jq}/bin/jq "$${@:2}"
-                else
-                  ${pkgs.csvkit}/bin/csvjson - | ${pkgs.jq}/bin/jq "$@"
-                fi
-              '')
+              cq
               cropLog
               mercurial
               gnuplot
