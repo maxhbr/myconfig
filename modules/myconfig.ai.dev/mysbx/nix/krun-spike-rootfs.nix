@@ -61,6 +61,11 @@ let
     #!/bin/busybox sh
     set -eu
 
+    # No PATH in the guest env (the launcher passes an explicit envp
+    # only) and nothing else is mounted — every applet is invoked
+    # through the static busybox at $BB, never by bare name.
+    BB=/bin/busybox
+
     fail() {
         echo "spike-init: $*" >&2
         exit 125
@@ -69,13 +74,15 @@ let
     # The guest's writable scratch (bd myconfig-dak.5's "tmpfs home"):
     # the root is a READ-ONLY virtiofs share, so every share
     # mountpoint below /tmp would die with EROFS without this.
-    mount -t tmpfs tmpfs /tmp \
+    "$BB" mount -t tmpfs tmpfs /tmp \
         || fail "cannot mount the guest tmpfs on /tmp"
 
     # Each launcher --ro-share/--rw-share TAG@DEST=HOSTDIR becomes one
     # "TAG DEST ro|rw" entry here; the launcher owns the encoding,
     # this script only consumes it. Only busybox applets from here on
-    # (mkdir, mount) — the store is not visible yet.
+    # (mkdir, mount), each invoked through the static busybox at
+    # /bin/busybox: the guest env carries no PATH, a bare applet name
+    # is unresolvable there.
     shares="''${MYSBX_KRUN_SHARES:-}"
     while [ -n "$shares" ]; do
         entry=''${shares%%';'*}
@@ -85,13 +92,13 @@ let
         rest=''${entry#*' '}
         dest=''${rest%%' '*}
         mode=''${rest#*' '}
-        mkdir -p "$dest" \
+        "$BB" mkdir -p "$dest" \
             || fail "cannot create the mountpoint $dest"
         if [ "$mode" = ro ]; then
-            mount -t virtiofs -o ro "$tag" "$dest" \
+            "$BB" mount -t virtiofs -o ro "$tag" "$dest" \
                 || fail "cannot mount the virtiofs tag $tag at $dest (ro)"
         else
-            mount -t virtiofs "$tag" "$dest" \
+            "$BB" mount -t virtiofs "$tag" "$dest" \
                 || fail "cannot mount the virtiofs tag $tag at $dest (rw)"
         fi
     done
