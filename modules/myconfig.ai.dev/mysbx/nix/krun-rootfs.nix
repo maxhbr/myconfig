@@ -191,6 +191,12 @@ runCommand "mysbx-krun-rootfs"
   }
   ''
     mkdir -p $out/bin $out/dev $out/proc $out/sys $out/tmp $out/nix
+    # The share-root mountpoints (the crate's BAKED_SHARE_ROOTS —
+    # keep the two lists identical): the guest init places a share
+    # below one of these by mounting a tmpfs OVER the component,
+    # which needs the mountpoint on the ro root; the builder refuses
+    # a dest below anything else (never a run-time ENOENT).
+    mkdir -p $out/etc $out/home $out/srv $out/mnt $out/media $out/opt $out/data
     # The baked links of the fixed sandbox paths (the ro root can
     # hold no new entries at run time): the store share's and the
     # tmpfs home's contract paths.

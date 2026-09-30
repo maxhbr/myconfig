@@ -9,11 +9,11 @@
 --ro-share
 store@/nix/store=/nix/store
 --rw-share
-workspace@/synth/repo=/synth/repo
+workspace@/home/synth/repo=/home/synth/repo
 --rw-share
-state--ssh@/mysbx-home/.ssh=/synth/repo.mysbx/state/.ssh
+state--ssh@/mysbx-home/.ssh=/home/synth/repo.mysbx/state/.ssh
 --rw-share
-state--cache@/mysbx-home/.cache=/synth/repo.mysbx/state/.cache
+state--cache@/mysbx-home/.cache=/home/synth/repo.mysbx/state/.cache
 --env
 HOME=/mysbx-home
 --env
@@ -27,6 +27,6 @@ XDG_DATA_HOME=/mysbx-home/.local/share
 --env
 PATH=/synth/bin
 --chdir
-/synth/repo
+/home/synth/repo
 --
 /synth/shell

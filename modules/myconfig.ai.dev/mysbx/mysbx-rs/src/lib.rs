@@ -2551,6 +2551,65 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 );
                 return EXIT_INFRASTRUCTURE;
             };
+            // The guest-root git trust (bd myconfig-zj2, the direct
+            // backend's twin of the podman arm's files): the payload
+            // runs as GUEST ROOT over virtiofs files that keep their
+            // host uid, so git refuses every ordinary command with
+            // `dubious ownership` without it. The SAME two per-run
+            // files, the SAME trusted-path computation — the krun
+            // builder turns them into two ro shares instead of two
+            // podman binds. A --dry-run audits the argv (shares +
+            // GIT_CONFIG_GLOBAL) and creates NOTHING; the cleanup of
+            // a real waited run is the podman arm's own model
+            // (pid-named dir, swept by the next run otherwise).
+            let krun_git_trust;
+            let krun_git_trust_paths: Option<(String, String)> = if !dry_run {
+                let trusted = match podman_trusted_git_paths(&repo, workspace.clone()) {
+                    Ok(paths) => paths,
+                    Err(e) => {
+                        eprintln!("mysbx: {e}");
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                };
+                let libgit2_trusted = libgit2_trusted_paths(&repo, workspace.clone());
+                let dir = repo.sidecar.join("gittrust").join(pid.to_string());
+                let file = dir.join("gitconfig");
+                let system_file = dir.join("system-gitconfig");
+                if let Err(e) = std::fs::create_dir_all(&dir) {
+                    eprintln!(
+                        "mysbx: cannot create the git trust directory {}: {e}",
+                        dir.display()
+                    );
+                    return EXIT_INFRASTRUCTURE;
+                }
+                if let Err(e) = std::fs::write(&file, git_trust_text(&trusted)) {
+                    eprintln!(
+                        "mysbx: cannot write the git trust file {}: {e}",
+                        file.display()
+                    );
+                    return EXIT_INFRASTRUCTURE;
+                }
+                if let Err(e) = std::fs::write(&system_file, libgit2_trust_text(&libgit2_trusted)) {
+                    eprintln!(
+                        "mysbx: cannot write the git trust file {}: {e}",
+                        system_file.display()
+                    );
+                    let _ = std::fs::remove_dir_all(&dir);
+                    return EXIT_INFRASTRUCTURE;
+                }
+                let global_host = file.to_string_lossy().into_owned();
+                let system_host = system_file.to_string_lossy().into_owned();
+                git_trust_file = Some(file.clone());
+                Some((global_host, system_host))
+            } else {
+                None
+            };
+            krun_git_trust = krun_git_trust_paths
+                .as_ref()
+                .map(|(global_host, system_host)| krun::GitTrust {
+                    global_host,
+                    system_host,
+                });
             // The multiplexer entry pin of the guest: the SAME host
             // store path the bwrap tier pins (MYSBX_MUX_ENTRY_*) —
             // unlike the podman image, the krun guest sees the host
@@ -2565,6 +2624,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 workspace: workspace.clone(),
                 memory: merged.memory.clone().map(Cow::from),
                 cpus: merged.cpus.clone().map(Cow::from),
+                git_trust: krun_git_trust.as_ref(),
             };
             let krun_argv = match krun::krun_argv(&merged, &repo, &payload, &host_env, &krun_params)
             {
