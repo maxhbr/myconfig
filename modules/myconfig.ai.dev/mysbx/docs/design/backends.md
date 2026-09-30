@@ -764,6 +764,25 @@ What the guest may read is decided entirely by the SPEC's shares:
   let the guest write the HOST store and read every path the
   daemon can see — strictly more than the ro share grants. In-guest
   nix (above) is the only nix story.
+- **The guest-root git trust rides in as two ro shares (bd
+  myconfig-dak.5).** The payload runs as guest root over virtiofs
+  files that keep their host uid, so the SAME `dubious ownership`
+  refusal fires as under podman-krun (D2's zj2/jn0 model): mysbx
+  writes the same two per-run sidecar files (`gittrust/<pid>/
+  gitconfig` + `system-gitconfig`) and shares them read-only at the
+  same container paths — `GIT_CONFIG_GLOBAL` points at
+  `/etc/mysbx/gitconfig` (set last, after every config `[env]`),
+  and libgit2's system scope reads `/etc/gitconfig`. Both live
+  below `/etc`, one of the rootfs's baked share roots.
+- **Share destinations are constrained to the rootfs's baked
+  share roots** (`/etc`, `/home`, `/srv`, `/mnt`, `/media`, `/opt`,
+  `/data`, plus the tmpfs/home/store special cases `/tmp`,
+  `/mysbx-home`, `/nix`): the guest init places a share below a
+  first path component by mounting a tmpfs OVER it, which needs
+  the mountpoint to exist on the read-only root — a dest below
+  anything else is a builder refusal (`UnknownShareRoot`), never
+  a run-time ENOENT the init cannot diagnose. The repo itself
+  runs under the same first-component check.
 
 The KrunSpec builder (dak.3) turns the merged config into exactly
 this: cpus, ram, the rootfs pin, one ro store share, one rw

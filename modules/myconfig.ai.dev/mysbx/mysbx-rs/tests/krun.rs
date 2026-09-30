@@ -22,8 +22,8 @@ use std::path::PathBuf;
 /// A synthetic repo (paths need not exist — the builder is pure).
 fn synth_repo() -> Repo {
     Repo {
-        root: PathBuf::from("/synth/repo"),
-        sidecar: PathBuf::from("/synth/repo.mysbx"),
+        root: PathBuf::from("/home/synth/repo"),
+        sidecar: PathBuf::from("/home/synth/repo.mysbx"),
         git_dirs: Vec::new(),
         worktrees: None,
     }
@@ -73,6 +73,7 @@ fn params<'a>(
         workspace,
         memory: None,
         cpus: None,
+        git_trust: None,
     }
 }
 
@@ -116,7 +117,8 @@ fn golden_minimal_config() {
 #[test]
 fn golden_one_ro_mount() {
     let mut cfg = base(true);
-    cfg.mounts.push(make_mount("/synth/data", None, Mode::Ro));
+    cfg.mounts
+        .push(make_mount("/home/synth/data", None, Mode::Ro));
     let argv = run(
         &cfg,
         &synth_repo(),
@@ -344,7 +346,7 @@ fn the_store_share_is_first_and_ro_the_workspace_rw() {
     assert_eq!(argv[8], "--ro-share");
     assert_eq!(argv[9], "store@/nix/store=/nix/store");
     assert_eq!(argv[10], "--rw-share");
-    assert_eq!(argv[11], "workspace@/synth/repo=/synth/repo");
+    assert_eq!(argv[11], "workspace@/home/synth/repo=/home/synth/repo");
     assert!(!argv.iter().any(|a| a.contains(GUEST_SHARE_ROOT)));
 }
 
@@ -363,6 +365,7 @@ fn params_owned<'a>(
         workspace,
         memory: None,
         cpus: None,
+        git_trust: None,
     }
 }
 
@@ -418,4 +421,69 @@ fn a_baked_link_path_dest_is_refused() {
     )
     .unwrap_err();
     assert!(matches!(err, mysbx::krun::Error::RootLevelDest { dest: d } if d == "/mysbx-home"));
+}
+
+#[test]
+fn git_trust_adds_two_ro_shares_and_the_env_pin() {
+    let cfg = base(true);
+    let trust = mysbx::krun::GitTrust {
+        global_host: "/synth/sidecar/gittrust/42/gitconfig",
+        system_host: "/synth/sidecar/gittrust/42/system-gitconfig",
+    };
+    let mut p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    p.git_trust = Some(&trust);
+    let argv = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &BTreeMap::new(), &p).unwrap();
+    let text = argv.join("\n");
+    // Two ro shares at the podman contract's paths, ro enforced:
+    assert!(text.contains(
+        "--ro-share\ngittrust-global@/etc/mysbx/gitconfig=/synth/sidecar/gittrust/42/gitconfig"
+    ));
+    assert!(text.contains(
+        "--ro-share\ngittrust-system@/etc/gitconfig=/synth/sidecar/gittrust/42/system-gitconfig"
+    ));
+    // GIT_CONFIG_GLOBAL last of the env, after PATH:
+    assert!(text.contains("--env\nGIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"));
+    let env_block = text
+        .split("--env\n")
+        .skip(1)
+        .map(|s| s.lines().next().unwrap_or(""))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        env_block[env_block.len() - 1],
+        "GIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"
+    );
+    // The bwrap wrap must make both host files visible:
+    let dirs = mysbx::krun::share_host_dirs(&cfg, &synth_repo(), &p);
+    assert!(dirs.contains(&"/synth/sidecar/gittrust/42/gitconfig".to_owned()));
+    assert!(dirs.contains(&"/synth/sidecar/gittrust/42/system-gitconfig".to_owned()));
+}
+
+#[test]
+fn a_dest_below_an_unbaked_share_root_is_refused() {
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/var/lib/data"), Mode::Ro));
+    let err = krun_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &BTreeMap::new(),
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, mysbx::krun::Error::UnknownShareRoot { dest, root } if dest == "/var/lib/data" && root == "/var")
+    );
+    // A dest below a BAKED root passes the guard:
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/srv/data"), Mode::Ro));
+    assert!(krun_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &BTreeMap::new(),
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    )
+    .is_ok());
 }

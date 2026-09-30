@@ -148,6 +148,26 @@ pub struct Params<'a> {
     /// cannot express is refused, never rounded.
     pub memory: Option<Cow<'a, str>>,
     pub cpus: Option<Cow<'a, str>>,
+    /// The guest-root git trust (bd myconfig-zj2's krun twin, bd
+    /// myconfig-dak.5): the payload runs as GUEST ROOT over
+    /// virtiofs files that keep their host uid, so every ordinary
+    /// git command dies with `dubious ownership` without it.
+    /// `Some` adds two ro shares — the per-run global config at
+    /// `/etc/mysbx/gitconfig` (`GIT_CONFIG_GLOBAL`) and the libgit2
+    /// system config at `/etc/gitconfig` (bd myconfig-jn0) — and
+    /// sets `GIT_CONFIG_GLOBAL` last, after every config `[env]`.
+    /// `None` (a `--dry-run`, an unwrapped build) shares no trust.
+    pub git_trust: Option<&'a GitTrust<'a>>,
+}
+
+/// The two host files of a run's git trust (the podman arm's
+/// `gittrust/<pid>/` pair): the global config (`git_trust_text`'s
+/// exact-path entries plus the in-sandbox user-config includes) and
+/// the libgit2 system config (`libgit2_trust_text`'s exact entries
+/// only). Bound read-only as virtiofs shares, never writable.
+pub struct GitTrust<'a> {
+    pub global_host: &'a str,
+    pub system_host: &'a str,
 }
 
 /// What the direct-krun builder refuses — each a configuration a
@@ -187,6 +207,12 @@ pub enum Error {
     /// (`/mysbx-home/.cache`, the state-dirs model) but never
     /// replace one of the two roots.
     ProtectedDest { dest: String },
+    /// A configured mount's dest sits below a first path component
+    /// the rootfs bakes no mountpoint for: the init can only place a
+    /// share by mounting a tmpfs OVER the first component (the ro
+    /// root cannot grow the mountpoint at run time), so an unbaked
+    /// root is a build-time refusal, never a run-time ENOENT.
+    UnknownShareRoot { dest: String, root: String },
 }
 
 impl std::fmt::Display for Error {
@@ -210,6 +236,11 @@ impl std::fmt::Display for Error {
             Error::ProtectedDest { dest } => write!(
                 f,
                 "the mount dest `{dest}` collides with a fixed sandbox path (/nix/store, /mysbx-home) — a share may live below the home, never replace one of its roots"
+            ),
+            Error::UnknownShareRoot { dest, root } => write!(
+                f,
+                "the mount dest `{dest}` sits below `{root}/`, a first path component the guest rootfs bakes no mountpoint for (the init mounts a tmpfs over it to place the share; the read-only root cannot grow one at run time) — move it below one of the baked roots: {}",
+                BAKED_SHARE_ROOTS.join(", ")
             ),
         }
     }
@@ -237,19 +268,39 @@ struct Share {
 /// path may live BELOW the home but never replace one of the roots.
 const BAKED_LINK_PATHS: [&str; 2] = ["/nix/store", "/mysbx-home"];
 
+/// The first path components the rootfs bakes MOUNTPOINT dirs for
+/// (nix/krun-rootfs.nix's baked list — the same names): the init
+/// places a share below one of them by mounting a tmpfs over the
+/// component, which needs the mountpoint to exist on the ro root.
+/// A dest below anything else is refused (`UnknownShareRoot`):
+/// never a run-time ENOENT the init cannot diagnose. `/etc` carries
+/// the git trust; `/home` the live repo; the rest are the common
+/// mount targets of the config layers.
+const BAKED_SHARE_ROOTS: [&str; 7] = ["/etc", "/home", "/srv", "/mnt", "/media", "/opt", "/data"];
+
+/// The sandbox path of the git trust's global config — the same
+/// container path the podman variant binds (`GIT_CONFIG_GLOBAL`, bd
+/// myconfig-zj2), reached here as an ro virtiofs share.
+const GIT_TRUST_GLOBAL_DEST: &str = "/etc/mysbx/gitconfig";
+/// The sandbox path of the libgit2 system config — git's own system
+/// scope, which libgit2 reads INSTEAD of `GIT_CONFIG_GLOBAL` (bd
+/// myconfig-jn0).
+const GIT_TRUST_SYSTEM_DEST: &str = "/etc/gitconfig";
+
 /// Whether the guest can place a share at `sandbox_path`: it must
 /// have a parent (the link lives on the parent's surface — the
-/// tmpfs the init mounts at the first component), and it must not
-/// collide with the baked links. The WORKSPACE share skips this
-/// check (the repo path is config-independent: the merge refused a
-/// repo at a baked path long ago, and a repo below /tmp would be
-/// refused at discovery); the check is for CONFIGURED mounts, whose
-/// dests are free-form.
+/// tmpfs the init mounts at the first component), it must not
+/// collide with the baked links, and its FIRST component must be a
+/// root the rootfs bakes a mountpoint for (the init's tmpfs-over-
+/// first-component needs the mountpoint on the ro root). The
+/// WORKSPACE share runs only the first-component half (the repo
+/// path is config-independent: the merge refused a repo at a baked
+/// path long ago, and a repo below /tmp would be refused at
+/// discovery); the full check is for CONFIGURED mounts, whose dests
+/// are free-form.
 fn check_share_dest(sandbox_path: &str) -> Result<(), Error> {
-    let parent = std::path::Path::new(sandbox_path)
-        .parent()
-        .and_then(|p| p.to_str())
-        .unwrap_or("");
+    let path = std::path::Path::new(sandbox_path);
+    let parent = path.parent().and_then(|p| p.to_str()).unwrap_or("");
     if parent.is_empty() || parent == "/" {
         return Err(Error::RootLevelDest {
             dest: sandbox_path.to_owned(),
@@ -259,6 +310,36 @@ fn check_share_dest(sandbox_path: &str) -> Result<(), Error> {
         if sandbox_path == baked {
             return Err(Error::ProtectedDest {
                 dest: sandbox_path.to_owned(),
+            });
+        }
+    }
+    check_share_root(sandbox_path)
+}
+
+/// The first-component half of [`check_share_dest`] — the one the
+/// workspace share runs too: the init places EVERY non-baked share
+/// by mounting a tmpfs over its first component, so a repo below an
+/// unbaked root is as unplaceable as a configured mount dest.
+fn check_share_root(sandbox_path: &str) -> Result<(), Error> {
+    let path = std::path::Path::new(sandbox_path);
+    // Paths below /tmp and the home need no first-component
+    // mountpoint (their surfaces are already tmpfs).
+    if let (Some(_), Some(first)) = (
+        path.strip_prefix("/").ok(),
+        path.strip_prefix("/")
+            .ok()
+            .and_then(|p| p.components().next())
+            .and_then(|c| c.as_os_str().to_str())
+            .map(|c| format!("/{c}")),
+    ) {
+        if first != "/tmp"
+            && first != "/mysbx-home"
+            && first != "/nix"
+            && !BAKED_SHARE_ROOTS.contains(&first.as_str())
+        {
+            return Err(Error::UnknownShareRoot {
+                dest: sandbox_path.to_owned(),
+                root: first,
             });
         }
     }
@@ -316,6 +397,13 @@ pub fn share_host_dirs(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<St
                 .to_string_lossy()
                 .into_owned(),
         );
+    }
+    // The git trust files (a ro share's host dir like any other —
+    // the virtiofs server opens them through this view; the shares'
+    // OWN ro flag enforces the read-only side).
+    if let Some(trust) = params.git_trust {
+        dirs.push(trust.global_host.to_owned());
+        dirs.push(trust.system_host.to_owned());
     }
     dirs.dedup();
     dirs
@@ -395,6 +483,13 @@ pub fn krun_argv(
         Workspace::Live => repo.root.clone(),
         Workspace::Clone { clone } => clone.to_path_buf(),
     };
+    // The workspace share runs the first-component half of the dest
+    // check too: the init places the SANDBOX path (the repo's own
+    // path — the clone remap binds the clone there), so a repo
+    // below an unbaked root is a refusal, never a run-time ENOENT.
+    // The other halves (parent, baked links) are the merge's own
+    // old guarantees.
+    check_share_root(&repo.root.to_string_lossy())?;
     shares.push(Share {
         tag: "workspace".to_owned(),
         host_dir: workspace_dir.to_string_lossy().into_owned(),
@@ -416,6 +511,24 @@ pub fn krun_argv(
             host_dir,
             sandbox_path: format!("/mysbx-home/{entry}"),
             read_only: false,
+        });
+    }
+    // The git trust (bd myconfig-zj2's krun twin): the SAME two
+    // per-run files the podman arm binds — here as ro virtiofs
+    // shares at the same container paths, so a repo checked out at
+    // a different path still trusts exactly what THIS run shares.
+    if let Some(trust) = params.git_trust {
+        shares.push(Share {
+            tag: "gittrust-global".to_owned(),
+            host_dir: trust.global_host.to_owned(),
+            sandbox_path: GIT_TRUST_GLOBAL_DEST.to_owned(),
+            read_only: true,
+        });
+        shares.push(Share {
+            tag: "gittrust-system".to_owned(),
+            host_dir: trust.system_host.to_owned(),
+            sandbox_path: GIT_TRUST_SYSTEM_DEST.to_owned(),
+            read_only: true,
         });
     }
 
@@ -515,6 +628,19 @@ fn sandbox_env(
     // backend's own ordering: the tool closure is this wrapper's
     // pin, and no later entry may repoint it.
     env.push(("PATH".to_owned(), params.tools_path.to_owned()));
+    // The git trust's global config (bd myconfig-zj2): set after
+    // PATH, the LAST entry of the block — git reads
+    // `safe.directory` only from the protected system+global scope,
+    // and the config `[env]` layers must not be able to repoint the
+    // trust anchor. The file is the `gittrust-global` share at
+    // `/etc/mysbx/gitconfig`, written by this run for exactly the
+    // paths it shares.
+    if params.git_trust.is_some() {
+        env.push((
+            "GIT_CONFIG_GLOBAL".to_owned(),
+            GIT_TRUST_GLOBAL_DEST.to_owned(),
+        ));
+    }
     env
 }
 
