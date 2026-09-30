@@ -701,3 +701,73 @@ the script cannot see (mounts/state-dirs/uid over virtio-fs,
 nested podman, guest nix, the VM annotations as nproc/MemTotal, DNS over
 TSI). The agent sandbox has no /dev/kvm — the runbook is the
 handoff.
+
+### D3: The direct `krun` backend shares the whole host store read-only; the rootfs bakes nothing but the guest init (bd myconfig-dak.2)
+
+`backend = "krun"` (bd myconfig-dak, spike bd myconfig-dak.1 —
+live-proven on f13: bwrap → mysbx-krun → VM, boot 282 ms warm)
+drives libkrun DIRECTLY, with no podman, no crun, no OCI image:
+mysbx builds a KrunSpec, a small launcher binary (dlopen of the
+pinned libkrun, `MYSBX_KRUN_LIB` — the spike's `krun-rs`) runs
+under bwrap so the host-side virtiofs server can only open what
+the bwrap argv left visible, and a Nix-built PLAIN DIRECTORY is
+the rootfs (read-only via `krun_add_virtiofs3(KRUN_FS_ROOT_TAG)`).
+What the guest may read is decided entirely by the SPEC's shares:
+
+- **The host store, whole, read-only (option (a) of the epic).** One
+  `--ro-share` of `/nix/store` gives the guest every store path;
+  the bwrap backends already grant exactly this visibility
+  (`--ro-bind /nix/store /nix/store`), so the direct backend is
+  no more permissive than the tier it replaces — the virtiofs
+  server enforces the ro flag, the guest kernel cannot remount it.
+  Per-run toolchains therefore need NO config surface at all:
+  whatever the host builds is already visible; a repo that wants a
+  specific toolchain just runs its store path. This is also the
+  SPIKE-PROVEN layout (probes 1–3: store binaries ran, the ro
+  share refused writes, the rw repo share reached the host).
+  Option (b) — a per-run bwrap view sharing only the closure of
+  the rootfs + configured tools — is REJECTED as the default: the
+  closure must be recomputed per run (a nix call inside `mysbx
+  run`), a missing path in the view is a runtime ENOENT with no
+  diagnosis, and the visible-store premise of the bwrap tier is
+  not actually improved (the whole store is already readable).
+  A per-run `[tools]` list (option (c)) remains a FUTURE config
+  key: it can only NARROW (bind specific closures when a host
+  wants the store hidden), never widen — the whole-store default
+  is what the spike validated.
+- **Rootfs contents (what is baked vs. shared):** the rootfs bakes
+  ONLY what must exist before any share is mounted — the static
+  busybox of the guest entry (shebang + applet invocation: the
+  store share is not mounted yet when the init starts, so a
+  store-symlinked shell dangles — spike finding 10), the guest
+  init itself (bd myconfig-dak.5), `/bin/sh` + `/bin/bash` store
+  symlinks valid once the store share is up, empty mountpoints
+  (`dev`, `proc`, `sys`, `tmp`), and a `/nix/store` SYMLINK into
+  the share mount on the guest tmpfs (spike finding 9: a second
+  virtiofs device nested below the root virtiofs returns EBUSY —
+  `/tmp/mysbx-shares/store` is the only working placement, the
+  rootfs symlink keeps `/nix/store` paths resolving). NO
+  toolchain, NO image userland: everything else resolves through
+  the read-only store share. The rootfs derivation is therefore
+  host-independent — one rootfs serves every repo and every
+  toolchain set, built once by the Nix wrapper (dak.4).
+- **In-guest nix on top:** the same overlay-on-scratch model as the
+  podman-krun guest (`krun-guest-nix.nix`, backends.md D2's scope
+  decision): the guest nix wrapper overlays the (now host-shared,
+  read-only) `/nix/store` with an upper layer on the per-run
+  scratch — dak.7's virtio-blk disk when enabled, the guest tmpfs
+  otherwise (the same announced-fallback contract as the
+  podman-krun variant). New store paths cost scratch space, not
+  host store writes: the host share is ro and stays ro.
+- **The host nix daemon socket is NEVER shared.** The direct backend
+  keeps the gvisor/krun refusal: a shared daemon socket would
+  let the guest write the HOST store and read every path the
+  daemon can see — strictly more than the ro share grants. In-guest
+  nix (above) is the only nix story.
+
+The KrunSpec builder (dak.3) turns the merged config into exactly
+this: cpus, ram, the rootfs pin, one ro store share, one rw
+workspace share per the merged mounts' live/clone layout, the
+state-dirs shares, env, and the payload argv. The scratch disk
+(dak.7), passt (dak.6), overlay files (dak.8) and waypipe/vsock
+(dak.9) extend the spec; none of them re-open the store question.
