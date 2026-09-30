@@ -122,6 +122,14 @@ struct KrunApi {
     // TSI by default when no net device is configured; disabling the
     // implicit vsock is the only honest `network = false` there.
     krun_disable_implicit_vsock: Option<unsafe extern "C" fn(ctx_id: c_uint) -> c_int>,
+    // Optional (only in builds with the logger wired): directs
+    // libkrun's own log (the VMM's error! calls — otherwise INVISIBLE,
+    // the live findings' diagnosis gap) to a raw fd. Level 4 = debug
+    // when the trace is on, 1 = error otherwise; the style and
+    // options constants are krun_init_log's (auto, honor RUST_LOG).
+    krun_init_log: Option<
+        unsafe extern "C" fn(target_fd: c_int, level: u32, style: u32, options: u32) -> c_int,
+    >,
 }
 
 unsafe fn load_api() -> Result<KrunApi, String> {
@@ -204,6 +212,17 @@ unsafe fn load_api() -> Result<KrunApi, String> {
         },
         krun_disable_implicit_vsock: sym(b"krun_disable_implicit_vsock").ok().map(|p| unsafe {
             std::mem::transmute::<*mut (), unsafe extern "C" fn(ctx_id: c_uint) -> c_int>(p)
+        }),
+        krun_init_log: sym(b"krun_init_log").ok().map(|p| unsafe {
+            std::mem::transmute::<
+                *mut (),
+                unsafe extern "C" fn(
+                    target_fd: c_int,
+                    level: u32,
+                    style: u32,
+                    options: u32,
+                ) -> c_int,
+            >(p)
         }),
     })
 }
@@ -530,6 +549,19 @@ fn main() {
         }
         rc
     };
+
+    // libkrun's own log, redirected to stderr BEFORE anything else:
+    // every error! of the VMM (device attach failures, build_microvm
+    // diagnoses — the -22 live finding was a silent IrqsExhausted)
+    // is otherwise invisible, and the trace half doubles its level
+    // to debug so a hang shows the boot's own story.
+    if let Some(init_log) = api.krun_init_log {
+        let trace = std::env::var("MYSBX_KRUN_TRACE").is_ok_and(|v| !v.is_empty());
+        // Level: 1 = error, 4 = debug. Style 0 = auto, options 0 =
+        // honor RUST_LOG when the host sets it (the trace's own
+        // escalation path).
+        let _ = unsafe { (init_log)(2, if trace { 4 } else { 1 }, 0, 0) };
+    }
 
     unsafe {
         let ctx = check((api.krun_create_ctx)(), "krun_create_ctx") as c_uint;
