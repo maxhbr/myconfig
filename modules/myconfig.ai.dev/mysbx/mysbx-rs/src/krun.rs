@@ -105,6 +105,33 @@ pub const GUEST_STORE: &str = "/tmp/mysbx-shares/store";
 /// the tag at [`GUEST_STORE`] and links `/nix/store` at it.
 pub const STORE_TAG: &str = "store";
 
+/// The device tags of the two STAGED share devices (live finding,
+/// first wrapped run): every krun_add_virtiofs3 tag is a full
+/// virtiofs device, and libkrun's MMIO budget is 11 slots
+/// (arch IRQ_BASE=5..IRQ_MAX=15) minus balloon, rng, the implicit
+/// console and the implicit vsock — about 6 fs slots total. One
+/// share per device cannot scale; instead the caller stages every
+/// share's host dir inside ONE tree per access mode and shares the
+/// whole tree as ONE device. The device count is constant, the
+/// share count is not.
+pub const STAGE_RO_TAG: &str = "stage-ro";
+pub const STAGE_RW_TAG: &str = "stage-rw";
+
+/// The host-side root of the per-run staging trees (inside the
+/// bwrap view, never shared into the guest as a sandbox path):
+/// `<STAGE_ROOT>/<ro|rw>/<slot>` is the slot dir of one share, the
+/// place bwrap binds the share's host dir at. The trees live in the
+/// sidecar (`<sidecar>/krun-stage/<pid>/…`), the same per-run
+/// lifecycle as the git trust files.
+pub const STAGE_ROOT: &str = "/mysbx-krun-stage";
+
+/// The guest-side mount of the ro staging device. All ro shares'
+/// sandbox paths link at `<GUEST_STAGE_RO>/<slot>`.
+pub const GUEST_STAGE_RO: &str = "/tmp/mysbx-shares/stage-ro";
+
+/// The guest-side mount of the rw staging device.
+pub const GUEST_STAGE_RW: &str = "/tmp/mysbx-shares/stage-rw";
+
 /// The default vCPU count of a run (the spike's launcher default;
 /// `cpus` in the config overrides it).
 pub const DEFAULT_CPUS: u32 = 2;
@@ -246,20 +273,21 @@ impl std::fmt::Display for Error {
     }
 }
 
-/// One virtiofs share: a host directory, a virtiofs tag, and the
-/// SANDBOX path the payload must see it at — which is also the
-/// share's `--ro-share/--rw-share` destination. The guest init
-/// (bd myconfig-dak.5) mounts every tag under [`GUEST_SHARE_ROOT`]
-/// keyed by tag (it derives the mountpoint from the tag — nesting a
-/// virtiofs device under another virtiofs mount returns EBUSY, spike
-/// finding 9, so nothing ever mounts at the sandbox path directly)
-/// and then links the sandbox path at the mount, so the payload's
-/// contract is the SANDBOX layout, the tmpfs placement is the
-/// init's. The `MYSBX_KRUN_SHARES` encoding the launcher hands the
-/// init is one `TAG SANDBOX_PATH ro|rw` entry per share.
+/// One virtiofs share: a SLOT inside its access mode's staging
+/// device and the SANDBOX path the payload must see it at. The
+/// guest init (bd myconfig-dak.5) mounts each DEVICE once, under
+/// [`GUEST_SHARE_ROOT`] keyed by the device tag (nesting a virtiofs
+/// device under another virtiofs mount returns EBUSY, spike finding
+/// 9, so nothing ever mounts at the sandbox path directly), and then
+/// links each sandbox path at `<device-mount>/<slot>`, so the
+/// payload's contract is the SANDBOX layout, the tmpfs placement is
+/// the init's. The `MYSBX_KRUN_SHARES` encoding the launcher hands
+/// the init is one `DEVICE SLOT SANDBOX_PATH ro|rw` entry per share.
 struct Share {
-    tag: String,
-    host_dir: String,
+    /// The share's slot inside its device's staging tree — distinct
+    /// per share (a digest of the sandbox path, like the podman
+    /// container names).
+    slot: String,
     sandbox_path: String,
     read_only: bool,
 }
@@ -364,49 +392,61 @@ struct Spec {
     payload: Vec<String>,
 }
 
-/// The host directories a run's shares name — the ONLY paths the
-/// bwrap wrapper around the launcher must leave visible (backends.md
-/// D3's chain: the virtiofs server opens through the bwrap view, so
-/// a share no bwrap bind covers dies with ENOENT at boot). The
-/// launcher binary's path, the rootfs and /nix/store are pinned by
-/// the wrapper, not config-derived. Returned in share order,
-/// deduplicated — the same host dir may back more than one share
-/// (a `ro` and a `rw` view of one path cannot exist, but a state
-/// entry and a mount may name one).
-pub fn share_host_dirs(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<String> {
-    // /nix/store is NOT here: the bwrap wrap already --ro-binds it
-    // for the launcher's own runtime (its bash wrapper, libkrun.so,
-    // the rootfs symlinks), and that same bind serves the store
-    // share's host dir — the virtiofs server opens through it, the
-    // ro flag is enforced by the SERVER (the spike runbook's proven
-    // chain, probe 2).
-    let mut dirs: Vec<String> = Vec::new();
+/// The staging-tree BINDS of a run's shares — one `(host_dir,
+/// mode, slot)` triple per NON-STORE share (backends.md D3's
+/// chain: the caller creates `<stage>/<ro|rw>/<slot>` and bwrap
+/// binds the host dir into it, the staging tree then being the ONE
+/// virtiofs device per access mode; the slot budget — see
+/// STAGE_RO_TAG). The store share is NOT here: the bwrap wrap
+/// already --ro-binds /nix/store for the launcher's own runtime
+/// (its bash wrapper, libkrun.so, the rootfs symlinks), and the
+/// store share's own device consumes it through that bind.
+pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(String, bool, String)> {
+    let mut binds: Vec<(String, bool, String)> = Vec::new();
     let workspace_dir = match &params.workspace {
         Workspace::Live => repo.root.clone(),
         Workspace::Clone { clone } => clone.to_path_buf(),
     };
-    dirs.push(workspace_dir.to_string_lossy().into_owned());
+    binds.push((
+        workspace_dir.to_string_lossy().into_owned(),
+        false,
+        "workspace".to_owned(),
+    ));
     for mount in &cfg.mounts {
-        dirs.push(mount.path.clone());
+        let sandbox_path = mount.dest.clone().unwrap_or_else(|| mount.path.clone());
+        let read_only = matches!(mount.mode, crate::config::Mode::Ro);
+        binds.push((
+            mount.path.clone(),
+            read_only,
+            format!("m-{}", fnv1a10(&sandbox_path)),
+        ));
     }
     for entry in cfg.effective_state_dirs() {
-        dirs.push(
+        binds.push((
             repo.sidecar
                 .join("state")
                 .join(&entry)
                 .to_string_lossy()
                 .into_owned(),
-        );
+            false,
+            state_tag(&entry),
+        ));
     }
-    // The git trust files (a ro share's host dir like any other —
-    // the virtiofs server opens them through this view; the shares'
-    // OWN ro flag enforces the read-only side).
+    // The git trust files (ro slots like any other — the staging
+    // device's OWN ro flag enforces the read-only side end to end).
     if let Some(trust) = params.git_trust {
-        dirs.push(trust.global_host.to_owned());
-        dirs.push(trust.system_host.to_owned());
+        binds.push((
+            trust.global_host.to_owned(),
+            true,
+            "gittrust-global".to_owned(),
+        ));
+        binds.push((
+            trust.system_host.to_owned(),
+            true,
+            "gittrust-system".to_owned(),
+        ));
     }
-    dirs.dedup();
-    dirs
+    binds
 }
 
 pub fn krun_argv(
@@ -473,16 +513,16 @@ pub fn krun_argv(
     // The SANDBOX path is what the payload contract promises; the
     // GUEST mount lives under GUEST_SHARE_ROOT (spike finding 9),
     // and the guest init (bd myconfig-dak.5) links one at the other.
+    // The store share keeps its own DEVICE (the rootfs's baked
+    // /nix/store link targets it); every other share is a SLOT in
+    // one of the two staging devices (the slot budget — see
+    // STAGE_RO_TAG), so the device count is a constant 3 regardless
+    // of how many mounts a config carries.
     let mut shares: Vec<Share> = vec![Share {
-        tag: STORE_TAG.to_owned(),
-        host_dir: "/nix/store".to_owned(),
+        slot: "store".to_owned(),
         sandbox_path: "/nix/store".to_owned(),
         read_only: true,
     }];
-    let workspace_dir = match &params.workspace {
-        Workspace::Live => repo.root.clone(),
-        Workspace::Clone { clone } => clone.to_path_buf(),
-    };
     // The workspace share runs the first-component half of the dest
     // check too: the init places the SANDBOX path (the repo's own
     // path — the clone remap binds the clone there), so a repo
@@ -491,8 +531,7 @@ pub fn krun_argv(
     // old guarantees.
     check_share_root(&repo.root.to_string_lossy())?;
     shares.push(Share {
-        tag: "workspace".to_owned(),
-        host_dir: workspace_dir.to_string_lossy().into_owned(),
+        slot: "workspace".to_owned(),
         sandbox_path: repo.root.to_string_lossy().into_owned(),
         read_only: false,
     });
@@ -500,33 +539,25 @@ pub fn krun_argv(
         shares.push(share_of_mount(mount)?);
     }
     for entry in cfg.effective_state_dirs() {
-        let host_dir = repo
-            .sidecar
-            .join("state")
-            .join(&entry)
-            .to_string_lossy()
-            .into_owned();
         shares.push(Share {
-            tag: state_tag(&entry),
-            host_dir,
+            slot: state_tag(&entry),
             sandbox_path: format!("/mysbx-home/{entry}"),
             read_only: false,
         });
     }
     // The git trust (bd myconfig-zj2's krun twin): the SAME two
-    // per-run files the podman arm binds — here as ro virtiofs
-    // shares at the same container paths, so a repo checked out at
-    // a different path still trusts exactly what THIS run shares.
-    if let Some(trust) = params.git_trust {
+    // per-run files the podman arm binds — here as ro slots in the
+    // staging device, at the same container paths, so a repo
+    // checked out at a different path still trusts exactly what
+    // THIS run shares.
+    if params.git_trust.is_some() {
         shares.push(Share {
-            tag: "gittrust-global".to_owned(),
-            host_dir: trust.global_host.to_owned(),
+            slot: "gittrust-global".to_owned(),
             sandbox_path: GIT_TRUST_GLOBAL_DEST.to_owned(),
             read_only: true,
         });
         shares.push(Share {
-            tag: "gittrust-system".to_owned(),
-            host_dir: trust.system_host.to_owned(),
+            slot: "gittrust-system".to_owned(),
             sandbox_path: GIT_TRUST_SYSTEM_DEST.to_owned(),
             read_only: true,
         });
@@ -663,14 +694,13 @@ fn share_of_mount(mount: &crate::config::Mount) -> Result<Share, Error> {
     let sandbox_path = mount.dest.clone().unwrap_or_else(|| mount.path.clone());
     check_share_dest(&sandbox_path)?;
     let read_only = matches!(mount.mode, crate::config::Mode::Ro);
-    // The tag must not contain whitespace or `;` (the
+    // The slot must not contain whitespace or `;` (the
     // MYSBX_KRUN_SHARES encoding is `;`-separated) and must be a
     // stable identity of the share across runs — a digest of the
     // sandbox path always satisfies both.
-    let tag = format!("mount-{}", fnv1a10(&sandbox_path));
+    let slot = format!("m-{}", fnv1a10(&sandbox_path));
     Ok(Share {
-        tag,
-        host_dir: mount.path.clone(),
+        slot,
         sandbox_path,
         read_only,
     })
@@ -721,23 +751,53 @@ fn render(spec: &Spec) -> Vec<String> {
     // 2. the guest init
     argv.push("--init".to_owned());
     argv.push(spec.init.clone());
-    // 3. the shares: TAG@SANDBOX_PATH=HOST_DIR. The sandbox path is
-    // the share's destination — the payload's contract — and the
-    // guest init mounts the tag under GUEST_SHARE_ROOT keyed by the
-    // tag, then links the sandbox path at the mount (spike finding
-    // 9: nothing may mount at the sandbox path directly, it sits on
-    // the ro root virtiofs). The launcher derives
-    // MYSBX_KRUN_SHARES (`TAG SANDBOX_PATH ro|rw;…`) from these
-    // flags, and the init consumes it.
+    // 3. the devices and their shares. The DEVICES are the staged
+    // trees (one per access mode — the slot budget, STAGE_RO_TAG's
+    // docs) plus the store's own device; the SHARES name a slot in
+    // their device and the sandbox path — the payload's contract.
+    // The guest init mounts each device under GUEST_SHARE_ROOT
+    // keyed by its tag, then links each share's sandbox path at
+    // <device-mount>/<slot> (spike finding 9: nothing may mount at
+    // the sandbox path directly, it sits on the ro root virtiofs).
+    // The launcher derives MYSBX_KRUN_SHARES
+    // (`DEVICE SLOT SANDBOX_PATH ro|rw;…`) from these flags, and
+    // the init consumes it.
+    // The store's own device (the rootfs's baked /nix/store link
+    // targets its guest mount), then the staged trees as needed.
+    argv.push("--ro-device".to_owned());
+    argv.push(format!("{STORE_TAG}=/nix/store"));
+    let ro_slots = spec
+        .shares
+        .iter()
+        .filter(|s| s.read_only && s.slot != "store")
+        .count();
+    let rw_slots = spec.shares.iter().filter(|s| !s.read_only).count();
+    if ro_slots > 0 {
+        argv.push("--ro-device".to_owned());
+        argv.push(format!("{STAGE_RO_TAG}={}/ro", STAGE_ROOT));
+    }
+    if rw_slots > 0 {
+        argv.push("--rw-device".to_owned());
+        argv.push(format!("{STAGE_RW_TAG}={}/rw", STAGE_ROOT));
+    }
     for share in &spec.shares {
+        let device = if share.slot == "store" && share.read_only {
+            STORE_TAG
+        } else if share.read_only {
+            STAGE_RO_TAG
+        } else {
+            STAGE_RW_TAG
+        };
         argv.push(if share.read_only {
             "--ro-share".to_owned()
         } else {
             "--rw-share".to_owned()
         });
         argv.push(format!(
-            "{}@{}={}",
-            share.tag, share.sandbox_path, share.host_dir
+            "{device}:{}@{} {}",
+            share.slot,
+            share.sandbox_path,
+            if share.read_only { "ro" } else { "rw" }
         ));
     }
     // 4. the environment

@@ -2067,6 +2067,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // file would be pure leftovers). The cleanup of a REAL waited
     // run happens after the backend exits, from this same Option.
     let mut git_trust_file: Option<std::path::PathBuf> = None;
+    // The per-run krun staging tree (bd myconfig-xpq): the host-side
+    // root of the two staged virtiofs devices, created inside the
+    // krun arm and cleaned up with the git trust dir's lifecycle.
+    let mut krun_stage_dir: Option<std::path::PathBuf> = None;
     // The per-run scratch file of a krun + guest-nix run (bd
     // myconfig-0pi), same lifecycle as the git trust file above:
     // written inside the podman arm, cleaned up after a waited run,
@@ -2663,8 +2667,40 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 "--proc".into(),
                 "/proc".into(),
             ];
-            for dir in krun::share_host_dirs(&merged, &repo, &krun_params) {
-                argv.extend(["--bind".into(), dir.clone(), dir]);
+            // The staging trees (the slot budget's grouping, bd
+            // myconfig-xpq): one tree per access mode under the
+            // sidecar, every non-store share's host dir bound into
+            // its slot, the whole tree bound at the launcher-view
+            // STAGE_ROOT. A --dry-run audits the argv and creates
+            // NOTHING; a real run creates the pid-named tree like
+            // the git trust dir (an exec run cannot clean up — the
+            // next run's sweep removes it).
+            let krun_stage_root = repo.sidecar.join("krun-stage").join(pid.to_string());
+            if !dry_run {
+                if let Err(e) = std::fs::create_dir_all(krun_stage_root.join("ro"))
+                    .and_then(|()| std::fs::create_dir_all(krun_stage_root.join("rw")))
+                {
+                    eprintln!(
+                        "mysbx: cannot create the krun stage dir {}: {e}",
+                        krun_stage_root.display()
+                    );
+                    return EXIT_INFRASTRUCTURE;
+                }
+                krun_stage_dir = Some(krun_stage_root.clone());
+            }
+            // The tree itself rides into the launcher view rw (the
+            // ro half's slots are --ro-bound into it below; the
+            // tree's directories are the launcher's, the share
+            // modes are enforced by the DEVICE flags).
+            argv.push("--bind".into());
+            argv.push(krun_stage_root.to_string_lossy().into_owned());
+            argv.push(krun::STAGE_ROOT.to_owned());
+            for (host_dir, read_only, slot) in krun::stage_binds(&merged, &repo, &krun_params) {
+                let mode = if read_only { "ro" } else { "rw" };
+                let dest = format!("{}/{mode}/{slot}", krun::STAGE_ROOT);
+                argv.push((if read_only { "--ro-bind" } else { "--bind" }).into());
+                argv.push(host_dir);
+                argv.push(dest);
             }
             argv.push("--".into());
             argv.extend(inner_argv);
@@ -2919,6 +2955,13 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // pid-scoped dir is the waypipe debris model.
             if let Some(f) = &git_trust_file {
                 let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
+            }
+            // The per-run krun staging tree (bd myconfig-xpq): the
+            // binds pointed INTO it, so nothing in it outlives the
+            // run as data — same pid-named lifecycle as the trust
+            // dir, swept by the next run otherwise.
+            if let Some(d) = &krun_stage_dir {
+                let _ = std::fs::remove_dir_all(d);
             }
             // The per-run scratch file (bd myconfig-0pi): the guest
             // wrapper's rm after the loop attach is best-effort, and a

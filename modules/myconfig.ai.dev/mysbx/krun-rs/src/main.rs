@@ -45,16 +45,32 @@
 // - Exit codes: the implicit init maps workload exit to the
 //   KRUN_EXIT_CODE_IOCTL on the root virtiofs; krun_start_enter
 //   returns it to the caller. 125/126/127 are init-level errors.
+// - The DEVICE-SLOT BUDGET (live finding, first wrapped run):
+//   every krun_add_virtiofs3 tag is a full virtiofs device, and
+//   libkrun's MMIO budget is 11 slots (arch IRQ_BASE=5..
+//   IRQ_MAX=15) minus balloon, rng, the implicit console and the
+//   implicit vsock — about 6 fs slots TOTAL. One share per device
+//   therefore cannot scale beyond a handful of mounts. The
+//   interface is GROUPED instead: --ro-device/--rw-device declare
+//   one virtiofs DEVICE per access mode (the caller stages every
+//   share's host dir inside it, one slot dir per share), and
+//   --ro-share/--rw-share declare each share's SLOT and sandbox
+//   dest inside its device. The device count is constant, the
+//   share count is not.
 //
-// Usage (spike interface — argv and env, no TOML):
+// Usage (grouped interface — argv and env, no TOML):
 //
-//   mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--ro-share TAG=DIR]
-//              [--rw-share TAG=DIR] [--env K=V]... -- CMD [ARGS...]
+//   mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--init PATH]
+//              [--ro-device TAG=DIR] [--rw-device TAG=DIR]
+//              [--ro-share TAG:SLOT@DEST] [--rw-share TAG:SLOT@DEST]
+//              [--env K=V]... [--chdir DIR] -- CMD [ARGS...]
 //
 // The rootfs is shared READ-ONLY (the root of a sandbox is never
-// writable from inside). Extra virtiofs tags carry their own ro/rw
-// flag — enforced by the virtiofs server itself, which is the point
-// of the direct backend (backends.md D2's per-share enforcement).
+// writable from inside). The devices carry their own ro/rw flag —
+// enforced by the virtiofs server itself, which is the point of the
+// direct backend (backends.md D2's per-share enforcement): a share
+// in the ro device is read-only end to end, a share in the rw
+// device writable end to end.
 //
 // No passt for the spike's first step: the launcher never calls a
 // net API and, when the lib carries the implicit-vsock symbol (a
@@ -201,18 +217,30 @@ extern "C" {
 // argv/env plumbing
 // ---------------------------------------------------------------------------
 
-struct Share {
+struct Device {
     tag: String,
-    /// The SANDBOX path the payload must see the share at — carried
-    /// through to the guest via MYSBX_KRUN_SHARES, so the guest
-    /// entry script knows where each tag belongs. The GUEST mount
-    /// itself lives under /tmp/mysbx-shares keyed by the tag (a
-    /// virtiofs device cannot nest below the ro root share — EBUSY,
-    /// the spike's finding 9); the entry script mounts the tag
-    /// there and links this path at the mount.
-    dest: String,
     host_dir: PathBuf,
     read_only: bool,
+}
+
+struct Share {
+    /// The DEVICE tag the share lives in — one virtiofs device per
+    /// access mode (see the module docs' slot budget), its host dir
+    /// a staging tree the caller built.
+    tag: String,
+    /// The share's SLOT inside its device's staging tree — the
+    /// guest entry script links the dest at
+    /// <device-mount>/<slot>, so two shares of one device need
+    /// distinct slots. Carried through MYSBX_KRUN_SHARES.
+    slot: String,
+    /// The SANDBOX path the payload must see the share at — carried
+    /// through to the guest via MYSBX_KRUN_SHARES, so the guest
+    /// entry script knows where each share belongs. The GUEST mount
+    /// itself lives under /tmp/mysbx-shares keyed by the device tag
+    /// (a virtiofs device cannot nest below the ro root share —
+    /// EBUSY, the spike's finding 9); the entry script mounts the
+    /// device there and links this path at the mount's slot.
+    dest: String,
 }
 
 struct Config {
@@ -225,6 +253,7 @@ struct Config {
     /// guest placement as MYSBX_KRUN_SHARES in the envp. None execs
     /// the payload directly.
     init: Option<String>,
+    devices: Vec<Device>,
     shares: Vec<Share>,
     env: Vec<(String, String)>,
     /// The payload's working directory, handed to krun_set_workdir
@@ -237,7 +266,8 @@ struct Config {
 fn usage() -> ! {
     eprintln!(
         "usage: mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--init PATH] \
-         [--ro-share TAG@DEST=DIR] [--rw-share TAG@DEST=DIR] [--env K=V]... \
+         [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
+         [--ro-share TAG:SLOT@DEST] [--rw-share TAG:SLOT@DEST] [--env K=V]... \
          [--chdir DIR] -- CMD [ARGS...]"
     );
     std::process::exit(2);
@@ -256,6 +286,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         ram_mib: 2048,
         rootfs: PathBuf::new(),
         init: None,
+        devices: Vec::new(),
         shares: Vec::new(),
         env: Vec::new(),
         workdir: PathBuf::from("/"),
@@ -290,6 +321,8 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                         .ok_or_else(|| "missing value for --init".to_owned())?,
                 )
             }
+            "--ro-device" => add_device(&mut cfg, true, &mut it)?,
+            "--rw-device" => add_device(&mut cfg, false, &mut it)?,
             "--ro-share" => add_share(&mut cfg, true, &mut it)?,
             "--rw-share" => add_share(&mut cfg, false, &mut it)?,
             "--env" => {
@@ -320,6 +353,31 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
     Ok(cfg)
 }
 
+fn add_device(
+    cfg: &mut Config,
+    read_only: bool,
+    it: &mut std::iter::Peekable<impl Iterator<Item = String>>,
+) -> Result<(), String> {
+    let value = it
+        .next()
+        .ok_or_else(|| "missing value for device".to_owned())?;
+    let (tag, dir) = value
+        .split_once('=')
+        .ok_or_else(|| format!("device expects TAG=DIR, got `{value}`"))?;
+    if tag.is_empty() || dir.is_empty() {
+        return Err(format!("device expects TAG=DIR, got `{value}`"));
+    }
+    if tag.chars().any(|c| c.is_whitespace() || c == ';') {
+        return Err("device tags cannot contain whitespace or `;`".to_owned());
+    }
+    cfg.devices.push(Device {
+        tag: tag.to_owned(),
+        host_dir: PathBuf::from(dir),
+        read_only,
+    });
+    Ok(())
+}
+
 fn add_share(
     cfg: &mut Config,
     read_only: bool,
@@ -328,25 +386,52 @@ fn add_share(
     let value = it
         .next()
         .ok_or_else(|| "missing value for share".to_owned())?;
-    let (spec, dir) = value
-        .split_once('=')
-        .ok_or_else(|| format!("share expects TAG@DEST=DIR, got `{value}`"))?;
-    let (tag, dest) = spec
+    let (spec, mode) = value
+        .split_once(' ')
+        .ok_or_else(|| format!("share expects TAG:SLOT@DEST ro|rw, got `{value}`"))?;
+    if mode != "ro" && mode != "rw" {
+        return Err(format!("share mode must be `ro` or `rw`, got `{mode}`"));
+    }
+    let (tags, dest) = spec
         .split_once('@')
-        .ok_or_else(|| format!("share expects TAG@DEST=DIR, got `{value}`"))?;
-    if tag.is_empty() || dest.is_empty() || dir.is_empty() {
-        return Err(format!("share expects TAG@DEST=DIR, got `{value}`"));
+        .ok_or_else(|| format!("share expects TAG:SLOT@DEST ro|rw, got `{value}`"))?;
+    let (tag, slot) = tags
+        .split_once(':')
+        .ok_or_else(|| format!("share expects TAG:SLOT@DEST ro|rw, got `{value}`"))?;
+    if tag.is_empty() || slot.is_empty() || dest.is_empty() {
+        return Err(format!("share expects TAG:SLOT@DEST ro|rw, got `{value}`"));
     }
     if tag.chars().any(|c| c.is_whitespace() || c == ';')
+        || slot.chars().any(|c| c.is_whitespace() || c == ';')
         || dest.chars().any(|c| c.is_whitespace() || c == ';')
     {
-        return Err("share tag and destination cannot contain whitespace or `;`".to_owned());
+        return Err("share tag, slot and destination cannot contain whitespace or `;`".to_owned());
+    }
+    let want_ro = mode == "ro";
+    if want_ro != read_only {
+        return Err(format!(
+            "share `{value}` declares mode {mode} under the {} flag",
+            if read_only {
+                "--ro-share"
+            } else {
+                "--rw-share"
+            }
+        ));
+    }
+    if !cfg
+        .devices
+        .iter()
+        .any(|d| d.tag == tag && d.read_only == want_ro)
+    {
+        return Err(format!(
+            "share `{value}` names device `{tag}` ({mode}), which no --{}-device declared",
+            if read_only { "ro" } else { "rw" }
+        ));
     }
     cfg.shares.push(Share {
         tag: tag.to_owned(),
+        slot: slot.to_owned(),
         dest: dest.to_owned(),
-        host_dir: PathBuf::from(dir),
-        read_only,
     });
     Ok(())
 }
@@ -372,15 +457,25 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
     };
     let mut env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
     if !cfg.shares.is_empty() {
+        // One "DEVICE SLOT DEST ro|rw" entry per share: the guest
+        // entry script mounts each DEVICE once (under
+        // /tmp/mysbx-shares keyed by the device tag) and links each
+        // DEST at <device-mount>/<slot>. The mode is the DEVICE's —
+        // a share is exactly as writable as its device.
         let shares = cfg
             .shares
             .iter()
             .map(|s| {
                 format!(
-                    "{} {} {}",
+                    "{} {} {} {}",
                     s.tag,
+                    s.slot,
                     s.dest,
-                    if s.read_only { "ro" } else { "rw" }
+                    cfg.devices
+                        .iter()
+                        .find(|d| d.tag == s.tag)
+                        .map(|d| if d.read_only { "ro" } else { "rw" })
+                        .unwrap_or("rw")
                 )
             })
             .collect::<Vec<_>>()
@@ -455,14 +550,14 @@ fn main() {
             ),
             "krun_add_virtiofs3(/dev/root)",
         );
-        for share in &cfg.shares {
+        for device in &cfg.devices {
             check(
                 (api.krun_add_virtiofs3)(
                     ctx,
-                    cstr(&share.tag).as_ptr(),
-                    cstr(&share.host_dir).as_ptr(),
+                    cstr(&device.tag).as_ptr(),
+                    cstr(&device.host_dir).as_ptr(),
                     0,
-                    share.read_only,
+                    device.read_only,
                 ),
                 "krun_add_virtiofs3",
             );
@@ -572,14 +667,18 @@ mod tests {
     }
 
     #[test]
-    fn encodes_share_modes_and_environment() {
+    fn encodes_devices_slots_and_environment() {
         let cfg = parse(&[
             "--rootfs",
             "/root",
+            "--ro-device",
+            "stage-ro=/stage/ro",
+            "--rw-device",
+            "stage-rw=/stage/rw",
             "--ro-share",
-            "ro@/ro=/host-ro",
+            "stage-ro:store@/nix/store ro",
             "--rw-share",
-            "rw@/rw=/host-rw",
+            "stage-rw:repo@/home/synth/repo rw",
             "--env",
             "KEY=value",
             "--",
@@ -588,17 +687,66 @@ mod tests {
         .unwrap();
         let env = exec_spec(&cfg).2;
         assert!(env.contains(&"KEY=value".to_owned()));
-        assert!(env.contains(&"MYSBX_KRUN_SHARES=ro /ro ro;rw /rw rw".to_owned()));
+        assert!(env.contains(
+            &"MYSBX_KRUN_SHARES=stage-ro store /nix/store ro;stage-rw repo /home/synth/repo rw"
+                .to_owned()
+        ));
+    }
+
+    #[test]
+    fn the_device_count_is_the_virtiofs_budget_not_the_shares() {
+        // The slot-budget regression guard (live finding): the
+        // launcher registers ONE krun_add_virtiofs3 per device, so a
+        // config with many shares still builds few devices.
+        let mut args: Vec<String> = vec![
+            "--rootfs".into(),
+            "/root".into(),
+            "--ro-device".into(),
+            "stage-ro=/stage/ro".into(),
+            "--rw-device".into(),
+            "stage-rw=/stage/rw".into(),
+        ];
+        for i in 0..10 {
+            if i % 2 == 0 {
+                args.push("--ro-share".into());
+                args.push(format!("stage-ro:s{i}@/srv/m{i} ro"));
+            } else {
+                args.push("--rw-share".into());
+                args.push(format!("stage-rw:s{i}@/srv/m{i} rw"));
+            }
+        }
+        args.push("--".into());
+        args.push("/bin/true".into());
+        let cfg = parse(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>()).unwrap();
+        assert_eq!(cfg.devices.len(), 2);
+        assert_eq!(cfg.shares.len(), 10);
+        // The guest encoding: one entry per share, the device count
+        // nowhere in it — mounting is per device, linking per slot.
+        let env = exec_spec(&cfg).2;
+        let shares = env.last().unwrap();
+        assert_eq!(shares.matches(';').count(), 9);
     }
 
     #[test]
     fn rejects_ambiguous_share_delimiters() {
         for value in [
-            "bad tag@/dest=/host",
-            "tag@/bad dest=/host",
-            "tag@/dest;bad=/host",
+            "bad tag@/dest ro",
+            "tag@/bad dest ro",
+            "tag:/slot@/dest;bad ro",
+            "stage-ro:/slot@/dest rw", // mode mismatch with --ro-share
+            "nodev:/slot@/dest ro",    // undeclared device
         ] {
-            assert!(parse(&["--rootfs", "/root", "--ro-share", value, "--", "/bin/true"]).is_err());
+            assert!(parse(&[
+                "--rootfs",
+                "/root",
+                "--ro-device",
+                "stage-ro=/stage/ro",
+                "--ro-share",
+                value,
+                "--",
+                "/bin/true"
+            ])
+            .is_err());
         }
     }
 }

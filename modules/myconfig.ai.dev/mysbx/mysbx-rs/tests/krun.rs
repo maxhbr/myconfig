@@ -339,14 +339,19 @@ fn the_store_share_is_first_and_ro_the_workspace_rw() {
         &Payload::Shell,
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
     );
-    // Section 3 order: store ro first, workspace rw second. The
+    // Section 3 order: the store's own device first, the staged
+    // trees next, the store share first, workspace rw second. The
     // sandbox paths are the destinations the payload contract
     // promises; the guest mount root never appears in the argv (the
-    // init derives it from the tag).
-    assert_eq!(argv[8], "--ro-share");
-    assert_eq!(argv[9], "store@/nix/store=/nix/store");
-    assert_eq!(argv[10], "--rw-share");
-    assert_eq!(argv[11], "workspace@/home/synth/repo=/home/synth/repo");
+    // init derives it from the device tag).
+    assert_eq!(argv[8], "--ro-device");
+    assert_eq!(argv[9], "store=/nix/store");
+    assert_eq!(argv[10], "--rw-device");
+    assert_eq!(argv[11], "stage-rw=/mysbx-krun-stage/rw");
+    assert_eq!(argv[12], "--ro-share");
+    assert_eq!(argv[13], "store:store@/nix/store ro");
+    assert_eq!(argv[14], "--rw-share");
+    assert_eq!(argv[15], "stage-rw:workspace@/home/synth/repo rw");
     assert!(!argv.iter().any(|a| a.contains(GUEST_SHARE_ROOT)));
 }
 
@@ -435,12 +440,8 @@ fn git_trust_adds_two_ro_shares_and_the_env_pin() {
     let argv = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &BTreeMap::new(), &p).unwrap();
     let text = argv.join("\n");
     // Two ro shares at the podman contract's paths, ro enforced:
-    assert!(text.contains(
-        "--ro-share\ngittrust-global@/etc/mysbx/gitconfig=/synth/sidecar/gittrust/42/gitconfig"
-    ));
-    assert!(text.contains(
-        "--ro-share\ngittrust-system@/etc/gitconfig=/synth/sidecar/gittrust/42/system-gitconfig"
-    ));
+    assert!(text.contains("--ro-share\nstage-ro:gittrust-global@/etc/mysbx/gitconfig ro"));
+    assert!(text.contains("--ro-share\nstage-ro:gittrust-system@/etc/gitconfig ro"));
     // GIT_CONFIG_GLOBAL last of the env, after PATH:
     assert!(text.contains("--env\nGIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"));
     let env_block = text
@@ -452,10 +453,18 @@ fn git_trust_adds_two_ro_shares_and_the_env_pin() {
         env_block[env_block.len() - 1],
         "GIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"
     );
-    // The bwrap wrap must make both host files visible:
-    let dirs = mysbx::krun::share_host_dirs(&cfg, &synth_repo(), &p);
-    assert!(dirs.contains(&"/synth/sidecar/gittrust/42/gitconfig".to_owned()));
-    assert!(dirs.contains(&"/synth/sidecar/gittrust/42/system-gitconfig".to_owned()));
+    // The staging binds must carry both host files into the ro tree:
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    assert!(binds.contains(&(
+        "/synth/sidecar/gittrust/42/gitconfig".to_owned(),
+        true,
+        "gittrust-global".to_owned()
+    )));
+    assert!(binds.contains(&(
+        "/synth/sidecar/gittrust/42/system-gitconfig".to_owned(),
+        true,
+        "gittrust-system".to_owned()
+    )));
 }
 
 #[test]

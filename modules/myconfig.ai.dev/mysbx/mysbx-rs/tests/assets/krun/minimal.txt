@@ -6,12 +6,16 @@
 /synth/rootfs
 --init
 /bin/mysbx-init
+--ro-device
+store=/nix/store
+--rw-device
+stage-rw=/mysbx-krun-stage/rw
 --ro-share
-store@/nix/store=/nix/store
+store:store@/nix/store ro
 --rw-share
-workspace@/home/synth/repo=/home/synth/repo
+stage-rw:workspace@/home/synth/repo rw
 --rw-share
-state--ssh@/mysbx-home/.ssh=/home/synth/repo.mysbx/state/.ssh
+stage-rw:state--ssh@/mysbx-home/.ssh rw
 --env
 HOME=/mysbx-home
 --env

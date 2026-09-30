@@ -51,7 +51,8 @@ let
   # VM: /init.krun replaces its own argv[0] with KRUN_INIT and
   # execvp()s it with the krun_set_exec argv vector — the payload
   # path arrives as $1, its arguments as $2.. The launcher's explicit
-  # envp carries MYSBX_KRUN_SHARES ("TAG SANDBOX_PATH ro|rw;...").
+  # envp carries MYSBX_KRUN_SHARES ("DEVICE SLOT SANDBOX_PATH
+  # ro|rw;..." — bd myconfig-xpq's grouped devices).
   # Failures exit 125 (libkrun's own "init cannot set up the
   # environment" code, so a failure reaches the caller as an
   # infrastructure error, not a payload one). POSIX sh ONLY — the
@@ -101,35 +102,53 @@ let
     # and the share's link then lives on writable tmpfs. Mounted
     # once per component, shared by every share under it.
     tmpfs_first_components=""
+    mounted_devices=""
 
-    # Each share: the launcher encoded one "TAG SANDBOX_PATH ro|rw"
-    # entry per --ro-share/--rw-share. The tag names the virtiofs
-    # device the guest kernel exposed; it is mounted under
-    # /tmp/mysbx-shares keyed by the tag, and the SANDBOX path is a
-    # link at the mount — the payload's contract is the sandbox
-    # layout, the tmpfs placement is this init's.
+    # Each share: the launcher encoded one "DEVICE SLOT SANDBOX_PATH
+    # ro|rw" entry per --ro-share/--rw-share (bd myconfig-xpq: the
+    # DEVICE count is the virtiofs slot budget, so shares group into
+    # staged devices; the tag names the virtiofs device the guest
+    # kernel exposed). Each device is mounted ONCE under
+    # /tmp/mysbx-shares keyed by its tag; the SLOT is the share's
+    # dir inside it, and the SANDBOX path is a link at the device
+    # mount's slot — the payload's contract is the sandbox layout,
+    # the tmpfs placement is this init's.
     shares="''${MYSBX_KRUN_SHARES:-}"
     while [ -n "$shares" ]; do
         entry=''${shares%%';'*}
         [ "$shares" = "$entry" ] && shares= || shares=''${shares#*';'}
         [ -n "$entry" ] || continue
+        # One "DEVICE SLOT DEST ro|rw" entry per share (bd
+        # myconfig-xpq): the DEVICE is the virtiofs tag (one per
+        # access mode — the staged trees — plus the store's own),
+        # mounted ONCE below; the SLOT is the share's dir inside it,
+        # the DEST the payload's sandbox path.
         tag=''${entry%%' '*}
         rest=''${entry#*' '}
+        slot=''${rest%%' '*}
+        rest=''${rest#*' '}
         sandbox=''${rest%%' '*}
         mode=''${rest#*' '}
         mountpoint=/tmp/mysbx-shares/$tag
-        "$BB" mkdir -p "$mountpoint" \
-            || fail "cannot create the mountpoint $mountpoint"
-        if [ "$mode" = ro ]; then
-            "$BB" mount -t virtiofs -o ro "$tag" "$mountpoint" \
-                || fail "cannot mount the virtiofs tag $tag at $mountpoint (ro)"
-        else
-            "$BB" mount -t virtiofs "$tag" "$mountpoint" \
-                || fail "cannot mount the virtiofs tag $tag at $mountpoint (rw)"
-        fi
+        case " $mounted_devices " in
+            *" $tag "*) ;;
+            *)
+                "$BB" mkdir -p "$mountpoint" \
+                    || fail "cannot create the mountpoint $mountpoint"
+                if [ "$mode" = ro ]; then
+                    "$BB" mount -t virtiofs -o ro "$tag" "$mountpoint" \
+                        || fail "cannot mount the virtiofs tag $tag at $mountpoint (ro)"
+                else
+                    "$BB" mount -t virtiofs "$tag" "$mountpoint" \
+                        || fail "cannot mount the virtiofs tag $tag at $mountpoint (rw)"
+                fi
+                mounted_devices=" $mounted_devices $tag "
+                ;;
+        esac
+        sharetarget=$mountpoint/$slot
         # The sandbox path already links at the mount (the rootfs
         # baked /nix/store and /mysbx-home): nothing to place.
-        [ "$(  "$BB" readlink "$sandbox" || true)" = "$mountpoint" ] && continue
+        [ "$(  "$BB" readlink "$sandbox" || true)" = "$sharetarget" ] && continue
         # Where does the link live? /tmp/... for tmpfs-rooted paths,
         # /mysbx-home/... for the home's state shares (through the
         # baked /mysbx-home link), a fresh tmpfs at the FIRST
@@ -168,8 +187,8 @@ let
         # just created (.cache and friends): the share REPLACES it,
         # like the bwrap backend's later bind replaces the tmpfs dir.
         [ -e "$linktarget" ] && "$BB" rm -rf "$linktarget"
-        "$BB" ln -sfn "$mountpoint" "$linktarget" \
-            || fail "cannot link $sandbox at $mountpoint"
+        "$BB" ln -sfn "$sharetarget" "$linktarget" \
+            || fail "cannot link $sandbox at $sharetarget"
     done
 
     # The payload is our own argv: $1 the path (absolute, no PATH
