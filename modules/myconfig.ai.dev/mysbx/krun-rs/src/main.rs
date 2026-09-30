@@ -230,6 +230,13 @@ fn usage() -> ! {
 }
 
 fn parse_args(args: impl Iterator<Item = String>) -> Config {
+    parse_args_result(args).unwrap_or_else(|e| {
+        eprintln!("mysbx-krun: {e}");
+        usage()
+    })
+}
+
+fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, String> {
     let mut cfg = Config {
         cpus: 2,
         ram_mib: 2048,
@@ -239,68 +246,88 @@ fn parse_args(args: impl Iterator<Item = String>) -> Config {
         env: Vec::new(),
         payload: Vec::new(),
     };
-    let mut it = args.peekable();
+    let mut it = args.by_ref().peekable();
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--cpus" => {
                 cfg.cpus = it
                     .next()
-                    .unwrap_or_else(|| usage())
+                    .ok_or_else(|| "missing value for --cpus".to_owned())?
                     .parse()
-                    .unwrap_or_else(|_| usage())
+                    .map_err(|_| "invalid value for --cpus".to_owned())?
             }
             "--ram" => {
                 cfg.ram_mib = it
                     .next()
-                    .unwrap_or_else(|| usage())
+                    .ok_or_else(|| "missing value for --ram".to_owned())?
                     .parse()
-                    .unwrap_or_else(|_| usage())
+                    .map_err(|_| "invalid value for --ram".to_owned())?
             }
-            "--rootfs" => cfg.rootfs = PathBuf::from(it.next().unwrap_or_else(|| usage())),
-            "--init" => cfg.init = Some(it.next().unwrap_or_else(|| usage())),
-            "--ro-share" => add_share(&mut cfg, true, &mut it),
-            "--rw-share" => add_share(&mut cfg, false, &mut it),
+            "--rootfs" => {
+                cfg.rootfs = PathBuf::from(
+                    it.next()
+                        .ok_or_else(|| "missing value for --rootfs".to_owned())?,
+                )
+            }
+            "--init" => {
+                cfg.init = Some(
+                    it.next()
+                        .ok_or_else(|| "missing value for --init".to_owned())?,
+                )
+            }
+            "--ro-share" => add_share(&mut cfg, true, &mut it)?,
+            "--rw-share" => add_share(&mut cfg, false, &mut it)?,
             "--env" => {
-                let value = it.next().unwrap_or_else(|| usage());
-                let (k, v) = value.split_once('=').unwrap_or_else(|| {
-                    eprintln!("mysbx-krun: --env expects K=V, got `{value}`");
-                    usage();
-                });
+                let value = it
+                    .next()
+                    .ok_or_else(|| "missing value for --env".to_owned())?;
+                let (k, v) = value
+                    .split_once('=')
+                    .ok_or_else(|| format!("--env expects K=V, got `{value}`"))?;
                 cfg.env.push((k.to_owned(), v.to_owned()));
             }
             "--" => {
                 cfg.payload.extend(it.by_ref());
                 break;
             }
-            _ => usage(),
+            _ => return Err(format!("unknown argument `{arg}`")),
         }
     }
     if cfg.rootfs.as_os_str().is_empty() || cfg.payload.is_empty() {
-        usage();
+        return Err("--rootfs and a payload are required".to_owned());
     }
-    cfg
+    Ok(cfg)
 }
 
 fn add_share(
     cfg: &mut Config,
     read_only: bool,
     it: &mut std::iter::Peekable<impl Iterator<Item = String>>,
-) {
-    let value = it.next().unwrap_or_else(|| usage());
-    let (spec, dir) = value.split_once('=').unwrap_or_else(|| {
-        eprintln!("mysbx-krun: share expects TAG@DEST=DIR, got `{value}`");
-        usage();
-    });
-    let (tag, dest) = spec.split_once('@').unwrap_or_else(|| {
-        eprintln!("mysbx-krun: share expects TAG@DEST=DIR, got `{value}`");
-        usage();
-    });
+) -> Result<(), String> {
+    let value = it
+        .next()
+        .ok_or_else(|| "missing value for share".to_owned())?;
+    let (spec, dir) = value
+        .split_once('=')
+        .ok_or_else(|| format!("share expects TAG@DEST=DIR, got `{value}`"))?;
+    let (tag, dest) = spec
+        .split_once('@')
+        .ok_or_else(|| format!("share expects TAG@DEST=DIR, got `{value}`"))?;
+    if tag.is_empty() || dest.is_empty() || dir.is_empty() {
+        return Err(format!("share expects TAG@DEST=DIR, got `{value}`"));
+    }
+    if tag.chars().any(|c| c.is_whitespace() || c == ';')
+        || dest.chars().any(|c| c.is_whitespace() || c == ';')
+    {
+        return Err("share tag and destination cannot contain whitespace or `;`".to_owned());
+    }
     cfg.shares.push(Share {
         tag: tag.to_owned(),
         dest: dest.to_owned(),
         host_dir: PathBuf::from(dir),
         read_only,
     });
+    Ok(())
 }
 
 /// NUL-terminated C strings for krun_set_exec's argv/envp arrays —
@@ -310,6 +337,36 @@ fn c_strings(items: &[String]) -> Vec<CString> {
         .iter()
         .map(|s| CString::new(s.as_str()).unwrap())
         .collect()
+}
+
+fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
+    let exec_path = cfg.init.clone().unwrap_or_else(|| cfg.payload[0].clone());
+    let argv = match &cfg.init {
+        Some(_) => {
+            let mut argv = vec![exec_path.clone()];
+            argv.extend(cfg.payload.iter().cloned());
+            argv
+        }
+        None => cfg.payload.clone(),
+    };
+    let mut env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
+    if !cfg.shares.is_empty() {
+        let shares = cfg
+            .shares
+            .iter()
+            .map(|s| {
+                format!(
+                    "{} {} {}",
+                    s.tag,
+                    s.dest,
+                    if s.read_only { "ro" } else { "rw" }
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        env.push(format!("MYSBX_KRUN_SHARES={shares}"));
+    }
+    (exec_path, argv, env)
 }
 
 fn main() {
@@ -392,34 +449,8 @@ fn main() {
         // entry script sees payload at $1..), without it
         // [payload0, payload0, args...] so the overwrite keeps the
         // payload path at argv[0].
-        let init = cfg.init.clone();
-        let exec_path = init.clone().unwrap_or_else(|| cfg.payload[0].clone());
-        let argv_vec: Vec<String> = match &init {
-            Some(_) => {
-                let mut v = vec![exec_path.clone()];
-                v.extend(cfg.payload.iter().cloned());
-                v
-            }
-            None => cfg.payload.clone(),
-        };
+        let (exec_path, argv_vec, env) = exec_spec(&cfg);
         let argv = c_strings(&argv_vec);
-        let mut env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
-        if !cfg.shares.is_empty() {
-            let shares = cfg
-                .shares
-                .iter()
-                .map(|s| {
-                    format!(
-                        "{} {} {}",
-                        s.tag,
-                        s.dest,
-                        if s.read_only { "ro" } else { "rw" }
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(";");
-            env.push(format!("MYSBX_KRUN_SHARES={shares}"));
-        }
         let envp = c_strings(&env);
         let mut argv_ptrs: Vec<*const c_char> = argv.iter().map(|s| s.as_ptr()).collect();
         argv_ptrs.push(std::ptr::null());
@@ -437,10 +468,70 @@ fn main() {
         // krun_start_enter runs the VM and returns the payload's exit
         // code (via the init's KRUN_EXIT_CODE_IOCTL) — propagation is
         // the whole exit-code story of the spike.
-        std::process::exit((api.krun_start_enter)(ctx));
+        std::process::exit(check((api.krun_start_enter)(ctx), "krun_start_enter"));
     }
 }
 
 fn cstr(s: impl AsRef<std::path::Path>) -> CString {
     CString::new(s.as_ref().to_string_lossy().as_bytes()).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<Config, String> {
+        parse_args_result(args.iter().map(|arg| (*arg).to_owned()))
+    }
+
+    #[test]
+    fn requires_rootfs_and_payload() {
+        assert!(parse(&["--"]).is_err());
+        assert!(parse(&["--rootfs", "/root", "--"]).is_err());
+        assert!(parse(&["--rootfs", "/root", "--", "/bin/true"]).is_ok());
+    }
+
+    #[test]
+    fn builds_init_and_direct_argv_layouts() {
+        let direct = parse(&["--rootfs", "/root", "--", "/bin/sh", "-c", "true"]).unwrap();
+        assert_eq!(exec_spec(&direct).1, ["/bin/sh", "-c", "true"]);
+
+        let with_init = parse(&[
+            "--rootfs", "/root", "--init", "/init", "--", "/bin/sh", "-c", "true",
+        ])
+        .unwrap();
+        assert_eq!(exec_spec(&with_init).0, "/init");
+        assert_eq!(exec_spec(&with_init).1, ["/init", "/bin/sh", "-c", "true"]);
+    }
+
+    #[test]
+    fn encodes_share_modes_and_environment() {
+        let cfg = parse(&[
+            "--rootfs",
+            "/root",
+            "--ro-share",
+            "ro@/ro=/host-ro",
+            "--rw-share",
+            "rw@/rw=/host-rw",
+            "--env",
+            "KEY=value",
+            "--",
+            "/bin/true",
+        ])
+        .unwrap();
+        let env = exec_spec(&cfg).2;
+        assert!(env.contains(&"KEY=value".to_owned()));
+        assert!(env.contains(&"MYSBX_KRUN_SHARES=ro /ro ro;rw /rw rw".to_owned()));
+    }
+
+    #[test]
+    fn rejects_ambiguous_share_delimiters() {
+        for value in [
+            "bad tag@/dest=/host",
+            "tag@/bad dest=/host",
+            "tag@/dest;bad=/host",
+        ] {
+            assert!(parse(&["--rootfs", "/root", "--ro-share", value, "--", "/bin/true"]).is_err());
+        }
+    }
 }

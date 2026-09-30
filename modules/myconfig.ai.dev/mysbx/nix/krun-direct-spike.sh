@@ -121,7 +121,7 @@ run \
     --rootfs "$rootfs" \
     --init /bin/spike-init \
     --ro-share "store@/nix/store=/nix/store" \
-    -- /bin/true
+    -- /bin/busybox true
 end=$(date +%s%N)
 ms=$(((end - start) / 1000000))
 printf 'INFO 4 boot time: %s ms (direct libkrun, one-shot true)\n' "$ms"
