@@ -29,7 +29,14 @@
 // - krun_set_exec with envp=NULL inherits the WHOLE host environment
 //   (src/libkrun krun_set_exec reads env::vars()). The launcher
 //   ALWAYS passes an explicit envp — the caller's --env entries plus
-//   nothing. That is the spike's "explicit envp" requirement.
+//   the shares' guest placement. That is the spike's "explicit envp"
+//   requirement.
+// - krun_set_exec's argv rides the kernel cmdline behind " -- " and
+//   arrives as the guest INIT's argv; /init.krun then overwrites
+//   argv[0] with KRUN_INIT (the exec_path) and execvp()s the vector.
+//   argv[0] is therefore a placeholder the init consumes: with
+//   --init the entry script sees the payload as $1.. and execs it;
+//   without it argv[0] doubles as the payload path.
 // - The implicit init (/init.krun) mounts devtmpfs/proc/sysfs/cgroup2
 //   but mounts NO extra virtiofs tags; the guest payload is expected
 //   to do that (or the rootfs carries a custom init — bd
@@ -202,9 +209,11 @@ struct Config {
     cpus: u8,
     ram_mib: u32,
     rootfs: PathBuf,
-    /// A guest entry script the exec_path shifts to (krun_set_exec's
-    /// exec_path), receiving the payload as MYSBX_KRUN_PAYLOAD. None
-    /// execs the payload directly.
+    /// A guest entry script used as krun_set_exec's exec_path. It
+    /// receives the payload as its argv ($1.. — the cmdline "--"
+    /// vector with argv[0] replaced by this script) and the shares'
+    /// guest placement as MYSBX_KRUN_SHARES in the envp. None execs
+    /// the payload directly.
     init: Option<String>,
     shares: Vec<Share>,
     env: Vec<(String, String)>,
@@ -372,12 +381,28 @@ fn main() {
         // krun_set_exec), which under bwrap is exactly what the
         // caller did not ask for. The shares' guest placement rides
         // along as MYSBX_KRUN_SHARES (one "TAG DEST ro|rw" entry per
-        // --ro-share/--rw-share, ';'-separated), and --init shifts the
-        // exec_path to a guest entry script that consumes it and
-        // execs the payload named by MYSBX_KRUN_PAYLOAD.
+        // --ro-share/--rw-share, ';'-separated).
+        //
+        // The argv contract of krun_set_exec: the vector lands on the
+        // kernel cmdline behind " -- " and becomes the guest INIT's
+        // argv, whose argv[0] /init.krun overwrites with KRUN_INIT
+        // (the exec_path). So argv[0] is a placeholder the init
+        // consumes: with --init the vector is [init, payload...]
+        // (init.c exec_argv[0] = KRUN_INIT, argv[1..] forwarded — the
+        // entry script sees payload at $1..), without it
+        // [payload0, payload0, args...] so the overwrite keeps the
+        // payload path at argv[0].
         let init = cfg.init.clone();
         let exec_path = init.clone().unwrap_or_else(|| cfg.payload[0].clone());
-        let argv = c_strings(&cfg.payload);
+        let argv_vec: Vec<String> = match &init {
+            Some(_) => {
+                let mut v = vec![exec_path.clone()];
+                v.extend(cfg.payload.iter().cloned());
+                v
+            }
+            None => cfg.payload.clone(),
+        };
+        let argv = c_strings(&argv_vec);
         let mut env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
         if !cfg.shares.is_empty() {
             let shares = cfg
@@ -394,9 +419,6 @@ fn main() {
                 .collect::<Vec<_>>()
                 .join(";");
             env.push(format!("MYSBX_KRUN_SHARES={shares}"));
-        }
-        if init.is_some() {
-            env.push(format!("MYSBX_KRUN_PAYLOAD={}", cfg.payload[0]));
         }
         let envp = c_strings(&env);
         let mut argv_ptrs: Vec<*const c_char> = argv.iter().map(|s| s.as_ptr()).collect();

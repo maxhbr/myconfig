@@ -91,7 +91,7 @@ run \
     --ro-share "store@/nix/store=/nix/store" \
     --rw-share "repo@$work/repo=$work/repo" \
     -- /bin/sh -c "touch $work/repo/marker"
-[ -e "$work/marker" ] || fail "2 rw share" "the write through the rw share did not reach the host"
+[ -e "$work/repo/marker" ] || fail "2 rw share" "the write through the rw share did not reach the host"
 pass "2 rw share: the repo write reached the host directory"
 
 # 3. exit code propagation (the spike's core question 3): libkrun's
