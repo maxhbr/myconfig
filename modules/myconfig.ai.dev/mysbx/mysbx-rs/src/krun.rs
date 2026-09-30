@@ -95,15 +95,14 @@ pub type HostEnv = std::collections::BTreeMap<String, String>;
 /// controls.
 pub const GUEST_SHARE_ROOT: &str = "/tmp/mysbx-shares";
 
-/// The tag-keyed guest mountpoint of the ro host store share: the
-/// rootfs's `/nix/store` is a symlink to this path, so store paths
-/// resolve unchanged once the init mounted the share.
-pub const GUEST_STORE: &str = "/tmp/mysbx-shares/store";
-
-/// The virtiofs tag of the read-only host store share. Tags name the
-/// virtiofs device the guest kernel exposes; the guest init mounts
-/// the tag at [`GUEST_STORE`] and links `/nix/store` at it.
-pub const STORE_TAG: &str = "store";
+/// The guest-side link target of the ro host store share: the share
+/// is the `store` SLOT of the staged ro device (the rootfs's
+/// `/nix/store` is a symlink to this path, so store paths resolve
+/// unchanged once the init mounted the device). The store needs no
+/// device of its own — grouping it with the other ro shares keeps
+/// the device count at two, and `/nix/store` is ro exactly like
+/// every other ro share.
+pub const GUEST_STORE: &str = "/tmp/mysbx-shares/stage-ro/store";
 
 /// The device tags of the two STAGED share devices (live finding,
 /// first wrapped run): every krun_add_virtiofs3 tag is a full
@@ -393,16 +392,19 @@ struct Spec {
 }
 
 /// The staging-tree BINDS of a run's shares — one `(host_dir,
-/// mode, slot)` triple per NON-STORE share (backends.md D3's
-/// chain: the caller creates `<stage>/<ro|rw>/<slot>` and bwrap
-/// binds the host dir into it, the staging tree then being the ONE
-/// virtiofs device per access mode; the slot budget — see
-/// STAGE_RO_TAG). The store share is NOT here: the bwrap wrap
-/// already --ro-binds /nix/store for the launcher's own runtime
-/// (its bash wrapper, libkrun.so, the rootfs symlinks), and the
-/// store share's own device consumes it through that bind.
+/// mode, slot)` triple per share (backends.md D3's chain: the
+/// caller creates `<stage>/<ro|rw>/<slot>` and bwrap binds the
+/// host dir into it, the staging tree then being the ONE virtiofs
+/// device per access mode; the slot budget — see STAGE_RO_TAG).
+/// The store share rides in the ro tree like every other ro share:
+/// the wrap's own --ro-bind /nix/store (the launcher's runtime)
+/// already grants the visibility, this bind only adds the slot.
 pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(String, bool, String)> {
     let mut binds: Vec<(String, bool, String)> = Vec::new();
+    // The store share's slot: a ro bind of /nix/store into the ro
+    // tree — the same source the wrap's own --ro-bind /nix/store
+    // serves, so this adds no new visibility, only the slot view.
+    binds.push(("/nix/store".to_owned(), true, "store".to_owned()));
     let workspace_dir = match &params.workspace {
         Workspace::Live => repo.root.clone(),
         Workspace::Clone { clone } => clone.to_path_buf(),
@@ -473,7 +475,17 @@ pub fn krun_argv(
     // then the config layers, then the infrastructure block last —
     // see sandbox_env): the launcher's --env IS the sandbox
     // environment.
-    let env = sandbox_env(cfg, host_env, params, mux);
+    let mut env = sandbox_env(cfg, host_env, params, mux);
+    // The guest init's trace switch (bd myconfig-2n8's live
+    // debugging): set on the HOST it rides along as a plain entry,
+    // so a silent guest hang leaves console evidence of every init
+    // step. A config `[env]` layer may override or drop it — it is
+    // a debugging aid, not an infrastructure pin.
+    if let Ok(trace) = std::env::var("MYSBX_KRUN_TRACE") {
+        if !env.iter().any(|(k, _)| k == "MYSBX_KRUN_TRACE") {
+            env.push(("MYSBX_KRUN_TRACE".to_owned(), trace));
+        }
+    }
 
     // 0. VM size: the config's resource limits (config.md D23)
     // override the defaults through the same grammar the
@@ -753,24 +765,18 @@ fn render(spec: &Spec) -> Vec<String> {
     argv.push(spec.init.clone());
     // 3. the devices and their shares. The DEVICES are the staged
     // trees (one per access mode — the slot budget, STAGE_RO_TAG's
-    // docs) plus the store's own device; the SHARES name a slot in
-    // their device and the sandbox path — the payload's contract.
-    // The guest init mounts each device under GUEST_SHARE_ROOT
-    // keyed by its tag, then links each share's sandbox path at
-    // <device-mount>/<slot> (spike finding 9: nothing may mount at
-    // the sandbox path directly, it sits on the ro root virtiofs).
-    // The launcher derives MYSBX_KRUN_SHARES
+    // docs); the SHARES name a slot in their device and the sandbox
+    // path — the payload's contract. The guest init mounts each
+    // device under GUEST_SHARE_ROOT keyed by its tag, then links
+    // each share's sandbox path at <device-mount>/<slot> (spike
+    // finding 9: nothing may mount at the sandbox path directly, it
+    // sits on the ro root virtiofs). The launcher derives
+    // MYSBX_KRUN_SHARES
     // (`DEVICE SLOT SANDBOX_PATH ro|rw;…`) from these flags, and
-    // the init consumes it.
-    // The store's own device (the rootfs's baked /nix/store link
-    // targets its guest mount), then the staged trees as needed.
-    argv.push("--ro-device".to_owned());
-    argv.push(format!("{STORE_TAG}=/nix/store"));
-    let ro_slots = spec
-        .shares
-        .iter()
-        .filter(|s| s.read_only && s.slot != "store")
-        .count();
+    // the init consumes it. The store share is a SLOT of the ro
+    // device like every other ro share (the rootfs's baked
+    // /nix/store link targets GUEST_STORE) — two devices total.
+    let ro_slots = spec.shares.iter().filter(|s| s.read_only).count();
     let rw_slots = spec.shares.iter().filter(|s| !s.read_only).count();
     if ro_slots > 0 {
         argv.push("--ro-device".to_owned());
@@ -781,9 +787,7 @@ fn render(spec: &Spec) -> Vec<String> {
         argv.push(format!("{STAGE_RW_TAG}={}/rw", STAGE_ROOT));
     }
     for share in &spec.shares {
-        let device = if share.slot == "store" && share.read_only {
-            STORE_TAG
-        } else if share.read_only {
+        let device = if share.read_only {
             STAGE_RO_TAG
         } else {
             STAGE_RW_TAG

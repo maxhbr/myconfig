@@ -7,11 +7,11 @@
 --init
 /bin/mysbx-init
 --ro-device
-store=/nix/store
+stage-ro=/mysbx-krun-stage/ro
 --rw-device
 stage-rw=/mysbx-krun-stage/rw
 --ro-share
-store:store@/nix/store ro
+stage-ro:store@/nix/store ro
 --rw-share
 stage-rw:workspace@/home/synth/repo rw
 --rw-share

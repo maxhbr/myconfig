@@ -77,6 +77,7 @@ let
     # writable thing lives, the share mounts included (finding 9:
     # a second virtiofs device cannot nest below the root share,
     # EBUSY).
+    step "mounting the guest tmpfs on /tmp"
     "$BB" mount -t tmpfs tmpfs /tmp \
         || fail "cannot mount the guest tmpfs on /tmp"
     "$BB" mkdir -p /tmp/mysbx-shares /tmp/mysbx-home \
@@ -113,6 +114,16 @@ let
     # dir inside it, and the SANDBOX path is a link at the device
     # mount's slot — the payload's contract is the sandbox layout,
     # the tmpfs placement is this init's.
+    # The trace of last resort (live debugging, bd myconfig-2n8): the
+    # guest console carries every step when the wrapper or the user
+    # sets MYSBX_KRUN_TRACE=1 — a silent hang otherwise leaves
+    # nothing to diagnose. Cost when off: one [ -n ] test per step.
+    trace="''${MYSBX_KRUN_TRACE:-}"
+    step() {
+        [ -n "$trace" ] || return 0
+        "$BB" echo "mysbx-init: $*"
+    }
+
     shares="''${MYSBX_KRUN_SHARES:-}"
     while [ -n "$shares" ]; do
         entry=''${shares%%';'*}
@@ -130,9 +141,11 @@ let
         sandbox=''${rest%%' '*}
         mode=''${rest#*' '}
         mountpoint=/tmp/mysbx-shares/$tag
+        step "placing share $sandbox (device $tag, slot $slot, $mode)"
         case " $mounted_devices " in
             *" $tag "*) ;;
             *)
+                step "mounting device $tag ($mode) at $mountpoint"
                 "$BB" mkdir -p "$mountpoint" \
                     || fail "cannot create the mountpoint $mountpoint"
                 if [ "$mode" = ro ]; then
@@ -187,6 +200,7 @@ let
         # just created (.cache and friends): the share REPLACES it,
         # like the bwrap backend's later bind replaces the tmpfs dir.
         [ -e "$linktarget" ] && "$BB" rm -rf "$linktarget"
+        step "linked $sandbox at $sharetarget"
         "$BB" ln -sfn "$sharetarget" "$linktarget" \
             || fail "cannot link $sandbox at $sharetarget"
     done
@@ -196,6 +210,8 @@ let
     # carried them. krun_set_workdir already placed us in the
     # workspace (the spec's --chdir).
     [ "$#" -gt 0 ] || fail "no payload in argv — the krun_set_exec args did not reach the guest init"
+
+    step "exec-ing the payload: $1"
     exec "$@"
   '';
 in
@@ -219,7 +235,7 @@ runCommand "mysbx-krun-rootfs"
     # The baked links of the fixed sandbox paths (the ro root can
     # hold no new entries at run time): the store share's and the
     # tmpfs home's contract paths.
-    ln -s /tmp/mysbx-shares/store $out/nix/store
+    ln -s /tmp/mysbx-shares/stage-ro/store $out/nix/store
     ln -s /tmp/mysbx-home $out/mysbx-home
     # The entry path: STATIC busybox (sh, mount, mkdir, ln, rm),
     # runnable with nothing else mounted. A real copy, not a symlink:
