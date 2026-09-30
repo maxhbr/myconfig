@@ -11,7 +11,7 @@ store@/nix/store=/nix/store
 --rw-share
 workspace@/synth/repo=/synth/repo
 --rw-share
-mount-2e61291ce2@/data=/synth/data
+mount-3d446ac1e1@/srv/data=/synth/data
 --rw-share
 state--ssh@/mysbx-home/.ssh=/synth/repo.mysbx/state/.ssh
 --env

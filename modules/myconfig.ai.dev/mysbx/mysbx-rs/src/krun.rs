@@ -60,6 +60,18 @@
 //!    overwrites argv[0] with KRUN_INIT, so the guest entry sees
 //!    the payload at `$1..` and `exec "\"$@\"`s it (spike finding 11).
 //!
+//! Exit codes (cli.md D8): a plain run EXECs bwrap → launcher →
+//! VM, so the payload's own code propagates unchanged through every
+//! link (live-proven: the spike's exit-42 probe). The links' OWN
+//! codes are disjoint from mysbx's `70` by construction: bwrap
+//! exits 125 on setup failure, the launcher exits 2 on a usage
+//! error and 125 on a libkrun setup failure, and libkrun's implicit
+//! init maps its own setup failures to 125 and the payload's exec
+//! failure to 126/127 — the same values a payload may exit itself,
+//! which is exactly the bwrap backend's property and needs no
+//! remapping: mysbx exited before them, its own `70` never rides
+//! the chain.
+//!
 //! Refusals, shaped like the podman ones (`Error` below): a config a
 //! VM cannot enforce is refused, never accepted-and-ignored — the
 //! same rule as every backend. The builder is pure (no canonicalization,
@@ -160,6 +172,21 @@ pub enum Error {
         raw: String,
         why: &'static str,
     },
+    /// A configured mount's `dest` (or same-path source) the guest
+    /// cannot place: a single-component absolute path (`/data`) —
+    /// its link would have to sit on the READ-ONLY root virtiofs
+    /// (no new entries, EROFS) and no second virtiofs device may
+    /// nest below the root share (EBUSY, spike finding 9). Paths
+    /// with a parent get a tmpfs at their first component; paths
+    /// at the root itself are refused, never silently mis-placed.
+    RootLevelDest { dest: String },
+    /// A mount's `dest` collides with the fixed sandbox paths the
+    /// rootfs bakes links for (config.md D14/D15): /nix/store and
+    /// /mysbx-home are the store share's and the tmpfs home's
+    /// contract paths — a share may live UNDER the home
+    /// (`/mysbx-home/.cache`, the state-dirs model) but never
+    /// replace one of the two roots.
+    ProtectedDest { dest: String },
 }
 
 impl std::fmt::Display for Error {
@@ -176,6 +203,14 @@ impl std::fmt::Display for Error {
             Error::KrunLimit { key, raw, why } => {
                 write!(f, "{key} = `{raw}` is not {why}")
             }
+            Error::RootLevelDest { dest } => write!(
+                f,
+                "the mount dest `{dest}` sits at the guest root, where the krun backend cannot place a share (the ro root virtiofs takes no new entries and no second virtiofs device may nest below it) — move it below a parent path"
+            ),
+            Error::ProtectedDest { dest } => write!(
+                f,
+                "the mount dest `{dest}` collides with a fixed sandbox path (/nix/store, /mysbx-home) — a share may live below the home, never replace one of its roots"
+            ),
         }
     }
 }
@@ -184,7 +219,7 @@ impl std::fmt::Display for Error {
 /// SANDBOX path the payload must see it at — which is also the
 /// share's `--ro-share/--rw-share` destination. The guest init
 /// (bd myconfig-dak.5) mounts every tag under [`GUEST_SHARE_ROOT`]
-/// keyeÃ by tag (it derives the mountpoint from the tag — nesting a
+/// keyed by tag (it derives the mountpoint from the tag — nesting a
 /// virtiofs device under another virtiofs mount returns EBUSY, spike
 /// finding 9, so nothing ever mounts at the sandbox path directly)
 /// and then links the sandbox path at the mount, so the payload's
@@ -196,6 +231,38 @@ struct Share {
     host_dir: String,
     sandbox_path: String,
     read_only: bool,
+}
+
+/// The fixed sandbox paths the rootfs bakes links for — a share's
+/// path may live BELOW the home but never replace one of the roots.
+const BAKED_LINK_PATHS: [&str; 2] = ["/nix/store", "/mysbx-home"];
+
+/// Whether the guest can place a share at `sandbox_path`: it must
+/// have a parent (the link lives on the parent's surface — the
+/// tmpfs the init mounts at the first component), and it must not
+/// collide with the baked links. The WORKSPACE share skips this
+/// check (the repo path is config-independent: the merge refused a
+/// repo at a baked path long ago, and a repo below /tmp would be
+/// refused at discovery); the check is for CONFIGURED mounts, whose
+/// dests are free-form.
+fn check_share_dest(sandbox_path: &str) -> Result<(), Error> {
+    let parent = std::path::Path::new(sandbox_path)
+        .parent()
+        .and_then(|p| p.to_str())
+        .unwrap_or("");
+    if parent.is_empty() || parent == "/" {
+        return Err(Error::RootLevelDest {
+            dest: sandbox_path.to_owned(),
+        });
+    }
+    for baked in BAKED_LINK_PATHS {
+        if sandbox_path == baked {
+            return Err(Error::ProtectedDest {
+                dest: sandbox_path.to_owned(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// The built spec — sections in fixed order (the module docs), the
@@ -335,7 +402,7 @@ pub fn krun_argv(
         read_only: false,
     });
     for mount in &cfg.mounts {
-        shares.push(share_of_mount(mount));
+        shares.push(share_of_mount(mount)?);
     }
     for entry in cfg.effective_state_dirs() {
         let host_dir = repo
@@ -466,20 +533,21 @@ fn state_tag(entry: &str) -> String {
     tag
 }
 
-fn share_of_mount(mount: &crate::config::Mount) -> Share {
+fn share_of_mount(mount: &crate::config::Mount) -> Result<Share, Error> {
     let sandbox_path = mount.dest.clone().unwrap_or_else(|| mount.path.clone());
+    check_share_dest(&sandbox_path)?;
     let read_only = matches!(mount.mode, crate::config::Mode::Ro);
     // The tag must not contain whitespace or `;` (the
     // MYSBX_KRUN_SHARES encoding is `;`-separated) and must be a
     // stable identity of the share across runs — a digest of the
     // sandbox path always satisfies both.
     let tag = format!("mount-{}", fnv1a10(&sandbox_path));
-    Share {
+    Ok(Share {
         tag,
         host_dir: mount.path.clone(),
         sandbox_path,
         read_only,
-    }
+    })
 }
 
 /// First 10 hex chars of the FNV-1a 64 hash of `path` — the same

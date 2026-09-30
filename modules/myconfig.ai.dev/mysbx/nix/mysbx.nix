@@ -313,6 +313,18 @@
   # a `pkgs.` reference, keeps this file evaluable against any nixpkgs
   # revision the caller brings.
   ssh-keygen ? null,
+  # The direct-libkrun backend (docs/design/backends.md D3, bd
+  # myconfig-dak.4): the launcher binary (../krun-rs, packaged by
+  # ./krun-launcher.nix — zero-dependency Rust, dlopen of the pinned
+  # libkrun at runtime) and the guest rootfs (./krun-rootfs.nix — the
+  # plain directory with the baked guest init). `null` pins nothing
+  # and `backend = "krun"` runs are refused with a naming message
+  # (the same contract as the podman image pin). Parameters, not
+  # `pkgs.` references, so a host pins exactly the libkrun build its
+  # runs need (dak.6/.7 pass a withNet/withBlk override through
+  # krun-launcher.nix's `libkrun` argument).
+  krunLauncher ? null,
+  krunRootfs ? null,
 }:
 
 let
@@ -703,6 +715,17 @@ let
   # nothing — the fallback PATH lookup of the unwrapped crate applies.
   sshKeygenPins =
     if ssh-keygen != null then "--set MYSBX_SSH_KEYGEN '${ssh-keygen}/bin/ssh-keygen'" else "";
+  # The direct-libkrun backend's pins (backends.md D3, bd
+  # myconfig-dak.4): the launcher binary and the guest rootfs, both
+  # absolute store paths (`--set`, the closure-pin idiom of every
+  # other backend pin — no PATH fallback exists for a launcher a
+  # host did not build, and an invented path would run nothing). A
+  # `krun` run without them is refused by the crate.
+  krunDirectPins =
+    lib.optionalString (
+      krunLauncher != null
+    ) "--set MYSBX_KRUN_LAUNCHER '${krunLauncher}/bin/mysbx-krun' "
+    + lib.optionalString (krunRootfs != null) "--set MYSBX_KRUN_ROOTFS '${krunRootfs}'";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -729,7 +752,8 @@ symlinkJoin {
       ${waypipePins} \
       ${nonoPins} \
       ${nonoEnvPins} \
-      ${sshKeygenPins}
+      ${sshKeygenPins} \
+      ${krunDirectPins}
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
     # sync with the CLI surface by the `mysbx-completions` check in
