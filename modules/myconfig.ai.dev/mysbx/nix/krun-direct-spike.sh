@@ -21,7 +21,10 @@
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-repo=$(cd "$here/../.." && pwd)
+# <root>/modules/myconfig.ai.dev/mysbx/nix/ -> four levels up is the
+# flake root (the getFlake below needs it; the nix files are reached
+# by absolute path, so a dirty checkout is fine).
+repo=$(cd "$here/../../.."/.. && pwd)
 
 fail() {
     printf 'FAIL %s — %s\n' "$1" "$2" >&2
