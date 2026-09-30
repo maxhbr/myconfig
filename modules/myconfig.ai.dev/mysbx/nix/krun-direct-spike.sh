@@ -59,7 +59,7 @@ run() {
         --dev-bind /dev/kvm /dev/kvm \
         --proc /proc \
         --clearenv \
-        "$launcher" "$@"
+        "$launcher/bin/mysbx-krun" "$@"
 }
 
 # 1. boot + toolchain from the host store, no OCI image (the epic's
