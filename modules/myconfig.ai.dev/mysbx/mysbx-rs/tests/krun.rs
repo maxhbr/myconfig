@@ -348,10 +348,15 @@ fn the_store_share_is_first_and_ro_the_workspace_rw() {
     assert_eq!(argv[9], "stage-ro=/mysbx-krun-stage/ro");
     assert_eq!(argv[10], "--rw-device");
     assert_eq!(argv[11], "stage-rw=/mysbx-krun-stage/rw");
-    assert_eq!(argv[12], "--ro-share");
-    assert_eq!(argv[13], "stage-ro:store@/nix/store ro");
-    assert_eq!(argv[14], "--rw-share");
-    assert_eq!(argv[15], "stage-rw:workspace@/home/synth/repo rw");
+    // The manifest pointer (the cmdline-budget finding): the
+    // launcher assembles env/shares/chdir into this file instead of
+    // the kernel cmdline.
+    assert_eq!(argv[12], "--manifest");
+    assert_eq!(argv[13], "/mysbx-krun-stage/ro/manifest");
+    assert_eq!(argv[14], "--ro-share");
+    assert_eq!(argv[15], "stage-ro:store@/nix/store ro");
+    assert_eq!(argv[16], "--rw-share");
+    assert_eq!(argv[17], "stage-rw:workspace@/home/synth/repo rw");
     assert!(!argv.iter().any(|a| a.contains(GUEST_SHARE_ROOT)));
 }
 

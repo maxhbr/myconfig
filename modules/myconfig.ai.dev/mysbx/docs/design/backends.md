@@ -808,9 +808,29 @@ device's, enforced by the virtiofs server end to end). The store
 share rides in the ro tree like every other ro share (the rootfs's
 baked `/nix/store` link targets
 `/tmp/mysbx-shares/stage-ro/store`), so the device count is a
-CONSTANT 2 whatever the config mounts; `MYSBX_KRUN_SHARES` carries
-`DEVICE SLOT DEST ro|rw` entries and the init mounts each device
-once, linking each dest at `<device-mount>/<slot>`. The guest init
-traces every step to the console when the host sets
-`MYSBX_KRUN_TRACE=1` (a silent hang leaves diagnosable evidence —
-the live-run finding of bd myconfig-2n8).
+CONSTANT 2 whatever the config mounts; the share records carry
+`DEVICE SLOT DEST ro|rw` and the init mounts each device once,
+linking each dest at `<device-mount>/<slot>`. The guest init traces
+every step to the console when the host sets `MYSBX_KRUN_TRACE=1`
+(a silent hang leaves diagnosable evidence — the live-run finding
+of bd myconfig-2n8).
+
+**The kernel cmdline budget moves env and shares into a manifest
+(the seventh live finding, the root cause of every wrapped hang
+since grouping).** The x86 guest kernel copies exactly
+`COMMAND_LINE_SIZE` = 2048 bytes of the cmdline libkrun builds
+(`head64.c copy_bootdata`; libkrun's own 64 KiB `CMDLINE_MAX_SIZE`
+never reaches the kernel), and the real config's env+shares block
+measured 3075 bytes — the tail, the `--` payload argv included,
+silently never booted. The spike's ~600-byte cmdline is why the
+spike worked. The cmdline now carries only structurally tiny
+things (`KRUN_INIT`, the `--` payload argv, the manifest pointer);
+env, shares and the workdir ride as records in a MANIFEST FILE the
+launcher writes into the ro stage tree (`<STAGE_ROOT>/ro/manifest`,
+tab-separated, values base64 — arbitrary bytes survive), the guest
+init mounts `stage-ro` FIRST, reads it, applies the env, places the
+shares, chdirs (the manifest's `chdir` record also fixes the
+pre-existing `krun_set_workdir` bug: `/init.krun` consumed
+`KRUN_WORKDIR` before the workspace share existed, silently landing
+at `/`), then execs the payload. The share loop reads its records
+from a file with redirection, never a pipeline subshell.
