@@ -563,14 +563,14 @@ const MANIFEST_SLOT: &str = "manifest";
 
 fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
     let exec_path = cfg.init.clone().unwrap_or_else(|| cfg.payload[0].clone());
-    let argv = match &cfg.init {
-        Some(_) => {
-            let mut argv = vec![exec_path.clone()];
-            argv.extend(cfg.payload.iter().cloned());
-            argv
-        }
-        None => cfg.payload.clone(),
-    };
+    // krun_set_exec's argv vector rides the cmdline behind " -- "
+    // and becomes the guest init's argv: /init.krun OVERWRITES
+    // argv[0] with KRUN_INIT itself (init.c exec_argv[0] =
+    // clone_str(krun_init)) and forwards the REST. The vector
+    // therefore carries the payload ONLY — a leading placeholder
+    // (the tenth live finding) would arrive as the init's $1 and
+    // make it exec ITSELF.
+    let argv = cfg.payload.clone();
     // With a manifest, only the manifest pointer rides the cmdline
     // (plus the trace flag — the init's EARLY steps and the
     // launcher's own log level need it before the file is read):
@@ -867,7 +867,10 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(exec_spec(&with_init).0, "/init");
-        assert_eq!(exec_spec(&with_init).1, ["/init", "/bin/sh", "-c", "true"]);
+        // NO placeholder: /init.krun replaces argv[0] with KRUN_INIT
+        // itself; a leading placeholder would arrive as the init's
+        // $1 (the tenth live finding — the init exec'd ITSELF).
+        assert_eq!(exec_spec(&with_init).1, ["/bin/sh", "-c", "true"]);
     }
 
     #[test]
