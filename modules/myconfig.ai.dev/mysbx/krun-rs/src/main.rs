@@ -189,6 +189,11 @@ extern "C" {
 
 struct Share {
     tag: String,
+    /// The in-guest destination the tag must be mounted at — carried
+    /// through to the guest via MYSBX_KRUN_SHARES, so the guest entry
+    /// script knows where each tag belongs (the kernel only names
+    /// devices, the guest must place them).
+    dest: String,
     host_dir: PathBuf,
     read_only: bool,
 }
@@ -197,6 +202,10 @@ struct Config {
     cpus: u8,
     ram_mib: u32,
     rootfs: PathBuf,
+    /// A guest entry script the exec_path shifts to (krun_set_exec's
+    /// exec_path), receiving the payload as MYSBX_KRUN_PAYLOAD. None
+    /// execs the payload directly.
+    init: Option<String>,
     shares: Vec<Share>,
     env: Vec<(String, String)>,
     payload: Vec<String>,
@@ -204,8 +213,8 @@ struct Config {
 
 fn usage() -> ! {
     eprintln!(
-        "usage: mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR \
-         [--ro-share TAG=DIR] [--rw-share TAG=DIR] [--env K=V]... \
+        "usage: mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--init PATH] \
+         [--ro-share TAG@DEST=DIR] [--rw-share TAG@DEST=DIR] [--env K=V]... \
          -- CMD [ARGS...]"
     );
     std::process::exit(2);
@@ -216,6 +225,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Config {
         cpus: 2,
         ram_mib: 2048,
         rootfs: PathBuf::new(),
+        init: None,
         shares: Vec::new(),
         env: Vec::new(),
         payload: Vec::new(),
@@ -238,6 +248,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Config {
                     .unwrap_or_else(|_| usage())
             }
             "--rootfs" => cfg.rootfs = PathBuf::from(it.next().unwrap_or_else(|| usage())),
+            "--init" => cfg.init = Some(it.next().unwrap_or_else(|| usage())),
             "--ro-share" => add_share(&mut cfg, true, &mut it),
             "--rw-share" => add_share(&mut cfg, false, &mut it),
             "--env" => {
@@ -267,12 +278,17 @@ fn add_share(
     it: &mut std::iter::Peekable<impl Iterator<Item = String>>,
 ) {
     let value = it.next().unwrap_or_else(|| usage());
-    let (tag, dir) = value.split_once('=').unwrap_or_else(|| {
-        eprintln!("mysbx-krun: share expects TAG=DIR, got `{value}`");
+    let (spec, dir) = value.split_once('=').unwrap_or_else(|| {
+        eprintln!("mysbx-krun: share expects TAG@DEST=DIR, got `{value}`");
+        usage();
+    });
+    let (tag, dest) = spec.split_once('@').unwrap_or_else(|| {
+        eprintln!("mysbx-krun: share expects TAG@DEST=DIR, got `{value}`");
         usage();
     });
     cfg.shares.push(Share {
         tag: tag.to_owned(),
+        dest: dest.to_owned(),
         host_dir: PathBuf::from(dir),
         read_only,
     });
@@ -354,10 +370,34 @@ fn main() {
         // ALWAYS an explicit envp: envp=NULL makes libkrun inherit
         // the launcher's whole environment (env::vars() of
         // krun_set_exec), which under bwrap is exactly what the
-        // caller did not ask for.
-        let argv0 = cfg.payload[0].clone();
+        // caller did not ask for. The shares' guest placement rides
+        // along as MYSBX_KRUN_SHARES (one "TAG DEST ro|rw" entry per
+        // --ro-share/--rw-share, ';'-separated), and --init shifts the
+        // exec_path to a guest entry script that consumes it and
+        // execs the payload named by MYSBX_KRUN_PAYLOAD.
+        let init = cfg.init.clone();
+        let exec_path = init.clone().unwrap_or_else(|| cfg.payload[0].clone());
         let argv = c_strings(&cfg.payload);
-        let env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
+        let mut env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
+        if !cfg.shares.is_empty() {
+            let shares = cfg
+                .shares
+                .iter()
+                .map(|s| {
+                    format!(
+                        "{} {} {}",
+                        s.tag,
+                        s.dest,
+                        if s.read_only { "ro" } else { "rw" }
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(";");
+            env.push(format!("MYSBX_KRUN_SHARES={shares}"));
+        }
+        if init.is_some() {
+            env.push(format!("MYSBX_KRUN_PAYLOAD={}", cfg.payload[0]));
+        }
         let envp = c_strings(&env);
         let mut argv_ptrs: Vec<*const c_char> = argv.iter().map(|s| s.as_ptr()).collect();
         argv_ptrs.push(std::ptr::null());
@@ -366,7 +406,7 @@ fn main() {
         check(
             (api.krun_set_exec)(
                 ctx,
-                cstr(&argv0).as_ptr(),
+                cstr(&exec_path).as_ptr(),
                 argv_ptrs.as_ptr(),
                 envp_ptrs.as_ptr(),
             ),
