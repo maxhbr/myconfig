@@ -550,18 +550,63 @@ fn main() {
         rc
     };
 
+    // The trace flag: the bwrap chain hands the launcher a --clearenv
+    // environment, so the HOST's MYSBX_KRUN_TRACE never reaches
+    // this process — only the config-side --env entry does (the
+    // sixth live finding: the flag sat in config.toml, the launcher
+    // never saw it). Both routes checked.
+    let trace = std::env::var("MYSBX_KRUN_TRACE").is_ok_and(|v| !v.is_empty())
+        || cfg
+            .env
+            .iter()
+            .any(|(k, v)| k == "MYSBX_KRUN_TRACE" && !v.is_empty());
+
     // libkrun's own log, redirected to stderr BEFORE anything else:
     // every error! of the VMM (device attach failures, build_microvm
     // diagnoses — the -22 live finding was a silent IrqsExhausted)
     // is otherwise invisible, and the trace half doubles its level
     // to debug so a hang shows the boot's own story.
     if let Some(init_log) = api.krun_init_log {
-        let trace = std::env::var("MYSBX_KRUN_TRACE").is_ok_and(|v| !v.is_empty());
         // Level: 1 = error, 4 = debug. Style 0 = auto, options 0 =
         // honor RUST_LOG when the host sets it (the trace's own
         // escalation path).
         let _ = unsafe { (init_log)(2, if trace { 4 } else { 1 }, 0, 0) };
     }
+
+    // The banner (the sixth live finding: a hung run printed NOTHING,
+    // leaving no way to tell a dead launcher from a dead console):
+    // stderr, unconditional — one line per boot, trace adds the
+    // device and share list.
+    eprintln!(
+        "mysbx-krun: booting {} cpus {} MiB rootfs={} init={}",
+        cfg.cpus,
+        cfg.ram_mib,
+        cfg.rootfs.display(),
+        cfg.init.clone().unwrap_or_default(),
+    );
+    if trace {
+        for d in &cfg.devices {
+            eprintln!(
+                "mysbx-krun: device {} = {} ({})",
+                d.tag,
+                d.host_dir.display(),
+                if d.read_only { "ro" } else { "rw" }
+            );
+        }
+        for s in &cfg.shares {
+            eprintln!("mysbx-krun: share {}:{}@{}", s.tag, s.slot, s.dest);
+        }
+    }
+    eprintln!(
+        "mysbx-krun: stdio is {}",
+        if std::io::IsTerminal::is_terminal(&std::io::stdin())
+            && std::io::IsTerminal::is_terminal(&std::io::stdout())
+        {
+            "a terminal (console wiring: hvc0 <-> fds)"
+        } else {
+            "NOT a terminal (console wiring: pipes, the krun-stdin/-stdout virtio ports)"
+        }
+    );
 
     unsafe {
         let ctx = check((api.krun_create_ctx)(), "krun_create_ctx") as c_uint;
