@@ -40,8 +40,15 @@ launcher=$(nix build --impure --no-link --print-out-paths --expr '
     '"$repo"'/modules/myconfig.ai.dev/mysbx/nix/krun-launcher.nix { }')
 
 rootfs=$(nix build --impure --no-link --print-out-paths --expr '
-  (builtins.getFlake "git+file://'"$repo"'").inputs.nixpkgs.legacyPackages.x86_64-linux.callPackage
-    '"$repo"'/modules/myconfig.ai.dev/mysbx/nix/krun-spike-rootfs.nix { }')
+  let
+    np = (builtins.getFlake "git+file://'"$repo"'").inputs.nixpkgs.legacyPackages.x86_64-linux;
+  in
+  np.callPackage
+    '"$repo"'/modules/myconfig.ai.dev/mysbx/nix/krun-spike-rootfs.nix {
+      # The STATIC busybox of the guest entry — pkgsStatic, not the
+      # dynamic busybox of the package set.
+      busyboxStatic = np.pkgsStatic.busybox;
+    }')
 
 work=$(mktemp -d /tmp/mysbx-krun-spike.XXXXXX)
 trap 'rm -rf "$work"' EXIT
