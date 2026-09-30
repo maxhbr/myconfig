@@ -243,6 +243,12 @@ let
         # is virtiofs-on-virtiofs only). The parents of the link are
         case "$sandbox" in
             /tmp/*|/mysbx-home/*)
+                # The parents on the tmpfs (the ninth live finding:
+                # the home tree creates only the XDG roots — a share
+                # below a DEEPER path, .config/workmux/config.yaml,
+                # needs its parents created, `ln` does not).
+                "$BB" mkdir -p "$(  "$BB" dirname "$sandbox")" \
+                    || fail "cannot create the parents of $sandbox"
                 linktarget=$sandbox
                 ;;
             /*/*)
