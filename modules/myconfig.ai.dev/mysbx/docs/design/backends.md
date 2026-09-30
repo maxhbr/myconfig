@@ -790,3 +790,23 @@ workspace share per the merged mounts' live/clone layout, the
 state-dirs shares, env, and the payload argv. The scratch disk
 (dak.7), passt (dak.6), overlay files (dak.8) and waypipe/vsock
 (dak.9) extend the spec; none of them re-open the store question.
+
+**The virtiofs device budget groups the shares (bd
+myconfig-xpq, live finding of the first wrapped run).** Every
+`krun_add_virtiofs3` tag is a FULL virtiofs device, and libkrun's
+MMIO budget is 11 slots (arch IRQ_BASE=5..IRQ_MAX=15) minus
+balloon, rng, the implicit console and the implicit vsock — about 6
+fs slots total. One share per device exhausts them at ~6 mounts
+(`IrqsExhausted` → `build_microvm` Err → `krun_start_enter`
+returns -EINVAL, with no message: the `error!` macro needs a
+logger nothing initializes). The backend therefore STAGES the
+shares: mysbx builds one per-run tree per access mode under
+`<sidecar>/krun-stage/<pid>/{ro,rw}/`, bwrap binds each share's
+host dir into its slot, and each tree is ONE virtiofs device
+(`stage-ro`, read-only; `stage-rw`, read-write — the mode is the
+device's, enforced by the virtiofs server end to end). The store
+share keeps its own device (the rootfs's baked `/nix/store` link
+targets its mount). The device count is a CONSTANT 3 whatever the
+config mounts; `MYSBX_KRUN_SHARES` carries `DEVICE SLOT DEST
+ro|rw` entries and the init mounts each device once, linking each
+dest at `<device-mount>/<slot>`.
