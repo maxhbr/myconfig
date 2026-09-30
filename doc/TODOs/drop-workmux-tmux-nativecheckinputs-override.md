@@ -51,3 +51,15 @@ without tmux.
 
   must complete including its `cargo test` run (check the log for
   `remove_uses_context_repository_not_process_cwd ... ok`).
+
+## Flaky test skip (`checkFlags`)
+
+Both overrides also pass
+`--skip=multiplexer::tmux::tests::run_shell_preserves_literal_tmux_formats`
+(`src/multiplexer/tmux.rs`). That test returns early without tmux, so it
+only runs because of the tmux override, and it races: it stops polling as
+soon as `format-output` exists, but the shell's `>` creates the file before
+`printf` writes to it (failed on `builder.workstation` with workmux
+`761ad3b`; the same test passed at `1d5e7da`). Drop the skip together with
+the tmux override, or earlier once upstream waits for the file's content
+instead of its existence.

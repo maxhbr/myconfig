@@ -42,6 +42,12 @@ let
   # once upstream adds tmux to the check inputs itself.
   workmuxPkg = inputs.workmux.packages.${pkgs.system}.default.overrideAttrs (old: {
     nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ pkgs.tmux ];
+    # With tmux present this upstream test runs, and it is racy: it
+    # polls only until the output file exists, which the shell's `>`
+    # creates before printf writes to it.
+    checkFlags = (old.checkFlags or [ ]) ++ [
+      "--skip=multiplexer::tmux::tests::run_shell_preserves_literal_tmux_formats"
+    ];
   });
   # The workmux flake input also provides its source tree, from which the
   # per-agent status-tracking extensions/plugins are deployed verbatim (the

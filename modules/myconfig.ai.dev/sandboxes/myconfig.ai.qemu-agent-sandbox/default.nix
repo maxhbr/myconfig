@@ -22,6 +22,12 @@ let
   # builders), so the runner must pin the same store path.
   workmuxPackage = inputs.workmux.packages.${system}.default.overrideAttrs (old: {
     nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ pkgs.tmux ];
+    # With tmux present this upstream test runs, and it is racy: it
+    # polls only until the output file exists, which the shell's `>`
+    # creates before printf writes to it.
+    checkFlags = (old.checkFlags or [ ]) ++ [
+      "--skip=multiplexer::tmux::tests::run_shell_preserves_literal_tmux_formats"
+    ];
   });
   runnerExpression = pkgs.writeText "qemu-agent-sandbox-runner.nix" ''
     let
