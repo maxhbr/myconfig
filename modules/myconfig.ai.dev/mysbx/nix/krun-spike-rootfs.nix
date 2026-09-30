@@ -1,42 +1,11 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# The spike rootfs of the direct-libkrun backend (bd myconfig-dak.1):
-# a PLAIN DIRECTORY built by Nix, no OCI image, no tar. libkrun shares
-# it read-only over virtiofs (KRUN_FS_ROOT_TAG) and boots it with its
-# implicit /init.krun, which mounts devtmpfs/proc/sysfs and execs the
-# payload configured by krun_set_exec — for the spike that is
-# bin/spike-init below.
+# Direct-libkrun spike rootfs: a plain directory shared read-only over
+# virtiofs. The static BusyBox entry mounts /tmp and configured shares,
+# then executes the payload; payload shells are store symlinks usable
+# after the /nix/store share is mounted.
 #
-# What is inside and why:
-#
-# - bin/spike-init: the guest entry (bd myconfig-dak.5's precursor).
-#   libkrun's implicit init mounts NO extra virtiofs tags — the guest
-#   kernel exposes each tag as a virtiofs device, and someone inside
-#   must mount it. spike-init mounts a guest tmpfs on /tmp (the ro
-#   root cannot take the share mountpoints below it — EROFS), mounts
-#   each share the launcher hands over (the MYSBX_KRUN_SHARES encoding
-#   of the --ro-share/--rw-share flags, see ../krun-rs), then execs
-#   its own argv ($1..: krun_set_exec's payload vector — /init.krun
-#   overwrites the vector's argv[0] with KRUN_INIT and forwards the
-#   rest unmodified). Its shebang is the STATIC busybox sh, and every builtin
-#   it uses is a busybox applet: the entry must run BEFORE the host
-#   /nix/store share is mounted, so a store-symlinked shell would
-#   dangle (the first live spike run died exactly there).
-# - bin/busybox: the static multi-call binary, carrying sh, mount,
-#   mkdir, touch — the whole entry path, self-contained.
-# - bin/bash, bin/sh: store symlinks for the PAYLOAD (bash needs its
-#   libc on the store share, which spike-init has just mounted).
-# - nix/store, dev, proc, sys, tmp: EMPTY directories — mountpoints.
-#   The launcher shares the host /nix/store read-only as a second
-#   virtiofs tag and spike-init mounts it over nix/store, so a payload
-#   runs a toolchain STRAIGHT from the host store without any image
-#   bake — the epic's core claim (bd myconfig-dak.2's option (a)).
-#
-# The spike runbook (nix/krun-direct-spike.sh) builds this tree and
-# the launcher, wraps the launcher in bwrap with only /dev/kvm, this
-# rootfs, /nix/store and the payload directory visible, and times the
-# boot against podman-krun.
 {
   runCommand,
   # The STATIC busybox of the guest entry: pkgsStatic so spike-init
@@ -110,7 +79,6 @@ let
     # $1 the path (absolute, no PATH lookup needed), $2.. its
     # arguments, exactly as krun_set_exec carried them.
     [ "$#" -gt 0 ] || fail "no payload in argv — the krun_set_exec args did not reach the guest init"
-    shift
     exec "$@"
   '';
 in
