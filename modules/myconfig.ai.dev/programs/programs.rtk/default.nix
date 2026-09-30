@@ -123,9 +123,16 @@ in
       };
     };
 
+    # Sandbox tiers: the agents' rewritten commands call `rtk`, so it has
+    # to be on the PATH wherever the agent runs.
+    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
+    # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
+    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners, the
+    # podman image and mysbx).
+    myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
+
     # mysbx tier integration (../../mysbx), following the pattern of
-    # ../programs.opencode/default.nix: put `rtk` on the sandbox PATH so the
-    # agents' rewritten commands resolve inside the sandbox too, mount the
+    # ../programs.opencode/default.nix: mount the
     # generated config read-only under the sandbox home (`HOME` is
     # `/mysbx-home` there) — from a self-contained store tree of
     # dereferenced copies built by the shared `../../mysbx/nix/sandbox-
@@ -139,7 +146,6 @@ in
     # are non-empty, so home-manager always writes
     # `~/.config/rtk/config.toml`.
     myconfig.ai.dev.mysbx = lib.mkIf aiCfg.mysbx.enable {
-      extraTools = [ cfg.package ];
       config.mounts =
         (sandboxConfigLib.mkSandboxConfig {
           homeFile = hmHomeFile;
