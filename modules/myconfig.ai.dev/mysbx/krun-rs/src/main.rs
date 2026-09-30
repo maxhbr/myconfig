@@ -393,6 +393,28 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
 fn main() {
     let cfg = parse_args(std::env::args().skip(1));
 
+    // The /dev/kvm pre-flight (the spike's finding 7): libkrun's
+    // KvmContext::new() PANICS — abort, no return code to map —
+    // when it cannot open /dev/kvm, and a panic in krun_start_enter
+    // crosses a `extern "C"` boundary into `panic cannot unwind`.
+    // A real O_RDWR open here turns that abort into a diagnosable
+    // 125 with a message naming the cause — critical under bwrap,
+    // where the pre-flight of the mysbx wrapper runs on the HOST
+    // and a shadowed bind would otherwise abort here with nothing
+    // but a Rust backtrace.
+    if let Err(e) = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/kvm")
+    {
+        eprintln!("mysbx-krun: cannot open /dev/kvm read-write: {e}");
+        eprintln!(
+            "  the direct libkrun backend starts every run as a KVM microVM; \
+             inside this sandbox /dev/kvm is not visible or not writable"
+        );
+        std::process::exit(EXIT_SETUP);
+    }
+
     // dlopen with RTLD_NOW|RTLD_GLOBAL: libkrun dlopen()s its own
     // libkrunfw (the guest-kernel blob) lazily, and the global
     // namespace lets that resolve against the same handle.

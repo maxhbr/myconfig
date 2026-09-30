@@ -2640,7 +2640,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // bind per share's host dir (the virtiofs server opens
             // through this view; ro/rw is enforced by the SERVER per
             // share, the bwrap bind only needs to make the path
-            // VISIBLE — exactly the spike runbook's chain).
+            // VISIBLE — exactly the spike runbook's chain, argv order
+            // included: --dev would SHADOW --dev-bind /dev/kvm if it
+            // followed it, and the launcher would abort in libkrun's
+            // KvmContext with a /dev/kvm it cannot see (finding 7).
+            // No --dev, no --tmpfs /tmp: the spike chain proved the
+            // launcher needs neither).
             let mut inner_argv: Vec<String> = Vec::with_capacity(krun_argv.len() + 1);
             inner_argv.push(krun_launcher.clone());
             inner_argv.extend(krun_argv);
@@ -2657,10 +2662,6 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 "/dev/kvm".into(),
                 "--proc".into(),
                 "/proc".into(),
-                "--dev".into(),
-                "/dev".into(),
-                "--tmpfs".into(),
-                "/tmp".into(),
             ];
             for dir in krun::share_host_dirs(&merged, &repo, &krun_params) {
                 argv.extend(["--bind".into(), dir.clone(), dir]);
