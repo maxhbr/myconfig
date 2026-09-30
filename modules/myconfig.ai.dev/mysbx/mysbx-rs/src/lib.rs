@@ -28,6 +28,7 @@ pub mod bwrap;
 pub mod config;
 pub mod doctor;
 pub mod handoff;
+pub mod krun;
 pub mod loadimage;
 pub mod merge;
 pub mod nono;
@@ -572,7 +573,7 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                     Some((v, _)) => v,
                     None => {
                         eprintln!(
-                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
+                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
                         );
                         eprintln!("try `mysbx --help`");
                         return Err(2);
@@ -775,7 +776,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                     Some(v) => v.clone(),
                     None => {
                         eprintln!(
-                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
+                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
                         );
                         eprintln!("usage: {RUN_USAGE}");
                         return 2;
@@ -1531,10 +1532,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     if let Some(name) = &flags.backend {
         if !matches!(
             name.as_str(),
-            "bubblewrap" | "podman-gvisor" | "nono" | "podman-krun"
+            "bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun"
         ) {
             eprintln!(
-                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
+                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -1661,18 +1662,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // `merged.backend` alike; the flag's own refusal one merge above
     // echoed it early, this arm is the authoritative one.
     let backend = match merged.backend.as_deref() {
-        Some("bubblewrap" | "podman-gvisor" | "nono" | "podman-krun") => {
+        Some("bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun") => {
             merged.backend.as_deref().unwrap()
         }
         Some(other) => {
             eprintln!(
-                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
+                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
             );
             return EXIT_INFRASTRUCTURE;
         }
         None => {
             eprintln!(
-                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"`, `backend = \"nono\"` or `backend = \"podman-krun\"` in the user or sidecar config"
+                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"`, `backend = \"nono\"`, `backend = \"podman-krun\"` or `backend = \"krun\"` in the user or sidecar config"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -1698,7 +1699,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // dropped below, where the krun limits are mapped.
     let unenforced_limits: Vec<&str> = match backend {
         "podman-gvisor" => Vec::new(),
-        "podman-krun" => [merged.pids_limit.is_some().then_some("pids-limit")]
+        // The direct krun backend enforces memory/cpus (they size the
+        // VM itself, krun.rs) and REFUSES pids-limit in the builder
+        // (no pids controller is wired for a whole VM) — no warning
+        // arm, the builder's refusal is the audit.
+        "podman-krun" | "krun" => [merged.pids_limit.is_some().then_some("pids-limit")]
             .into_iter()
             .flatten()
             .collect(),
@@ -2495,6 +2500,117 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             let podman_bin = env_or("MYSBX_PODMAN", "podman");
             // podman's --env flags own the environment.
             (podman_bin, argv, Some(gvisor_image))
+        }
+        // The direct-libkrun backend (backends.md D3, bd
+        // myconfig-dak.3/.4): bwrap wraps the mysbx-krun launcher
+        // (nix/krun-launcher.nix, dlopen of the pinned libkrun) with
+        // only the rootfs, the host store and the shares' host
+        // directories visible — the same chain the spike proved live
+        // on f13 (bd myconfig-dak.1) — and the launcher starts the
+        // VM. The KrunSpec argv (krun.rs) is the launcher's, and it
+        // is the INNER argv: the outer argv here is bwrap's, so the
+        // `--dry-run` audit shows both layers, like the nono
+        // backend's (backends.md D1).
+        "krun" => {
+            use std::borrow::Cow;
+
+            // The /dev/kvm pre-flight (the spike's finding 7: libkrun
+            // ABORTS — exit 134, no return code to map — when
+            // /dev/kvm cannot be opened; the check is the same real
+            // O_RDWR probe the podman-krun variant runs, never a
+            // mode-bit guess). Refused before the argv and before
+            // the `--dry-run` return, so a dry run audits it too.
+            if !dry_run && !kvm_available() {
+                eprintln!("mysbx: krun: /dev/kvm is not readable+writable for this user");
+                eprintln!(
+                    "  the direct libkrun backend starts every run as a KVM microVM through /dev/kvm; \
+                     a host without rw access cannot run this backend"
+                );
+                eprintln!(
+                    "  add the user to the `kvm` group (or enable the seat udev ACL), \
+                     or switch the backend to `bubblewrap` or `podman-gvisor`"
+                );
+                return EXIT_INFRASTRUCTURE;
+            }
+            // The launcher and rootfs pins of the Nix wrapper
+            // (dak.4's packaging): no fallbacks — an unwrapped
+            // build has no launcher binary to find on a PATH.
+            let Some(krun_launcher) = env_opt("MYSBX_KRUN_LAUNCHER") else {
+                eprintln!("mysbx: krun: no launcher configured");
+                eprintln!(
+                    "  the Nix wrapper pins MYSBX_KRUN_LAUNCHER when the host \
+                     builds the mysbx-krun launcher; an unwrapped build sets none"
+                );
+                return EXIT_INFRASTRUCTURE;
+            };
+            let Some(krun_rootfs) = env_opt("MYSBX_KRUN_ROOTFS") else {
+                eprintln!("mysbx: krun: no rootfs configured");
+                eprintln!(
+                    "  the Nix wrapper pins MYSBX_KRUN_ROOTFS when the host \
+                     builds the krun guest rootfs; an unwrapped build sets none"
+                );
+                return EXIT_INFRASTRUCTURE;
+            };
+            // The multiplexer entry pin of the guest: the SAME host
+            // store path the bwrap tier pins (MYSBX_MUX_ENTRY_*) —
+            // unlike the podman image, the krun guest sees the host
+            // store through the ro share, so the entry resolves like
+            // every other store binary.
+            let krun_params = krun::Params {
+                rootfs: &krun_rootfs,
+                shell: &shell,
+                tools_path: &tools_path,
+                ca_bundle: ca_bundle.as_deref(),
+                mux_entry: mux_entry.as_deref(),
+                workspace: workspace.clone(),
+                memory: merged.memory.clone().map(Cow::from),
+                cpus: merged.cpus.clone().map(Cow::from),
+            };
+            let krun_argv = match krun::krun_argv(&merged, &repo, &payload, &host_env, &krun_params)
+            {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            };
+            // The bwrap wrap: --ro-bind /nix/store (the launcher's
+            // own runtime — its bash wrapper, libkrun.so, the rootfs
+            // symlinks), the rootfs directory, /dev/kvm, and one rw
+            // bind per share's host dir (the virtiofs server opens
+            // through this view; ro/rw is enforced by the SERVER per
+            // share, the bwrap bind only needs to make the path
+            // VISIBLE — exactly the spike runbook's chain).
+            let mut inner_argv: Vec<String> = Vec::with_capacity(krun_argv.len() + 1);
+            inner_argv.push(krun_launcher.clone());
+            inner_argv.extend(krun_argv);
+            let mut argv: Vec<String> = vec![
+                "--clearenv".into(),
+                "--ro-bind".into(),
+                "/nix/store".into(),
+                "/nix/store".into(),
+                "--ro-bind".into(),
+                krun_rootfs.clone(),
+                krun_rootfs.clone(),
+                "--dev-bind".into(),
+                "/dev/kvm".into(),
+                "/dev/kvm".into(),
+                "--proc".into(),
+                "/proc".into(),
+                "--dev".into(),
+                "/dev".into(),
+                "--tmpfs".into(),
+                "/tmp".into(),
+            ];
+            for dir in krun::share_host_dirs(&merged, &repo, &krun_params) {
+                argv.extend(["--bind".into(), dir.clone(), dir]);
+            }
+            argv.push("--".into());
+            argv.extend(inner_argv);
+            let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
+            // bwrap's --clearenv owns the host-side environment; the
+            // launcher's --env flags own the payload's.
+            (bwrap_bin, argv, None::<String>)
         }
         "nono" => {
             // The layered backend of docs/design/backends.md D1:
