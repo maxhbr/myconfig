@@ -88,7 +88,10 @@ runCommand "mysbx-krun-spike-rootfs"
     spikeInitText = spikeInit;
   }
   ''
-    mkdir -p $out/bin $out/nix/store $out/dev $out/proc $out/sys $out/tmp
+    mkdir -p $out/bin $out/nix $out/dev $out/proc $out/sys $out/tmp
+    # virtiofs cannot be nested below the root virtiofs mount; share
+    # destinations live on the guest tmpfs and /nix/store points there.
+    ln -s /tmp/mysbx-shares/store $out/nix/store
     # The entry path: STATIC busybox (sh, mkdir, mount), runnable
     # with nothing else mounted. A real copy, not a symlink: the
     # store share covers $out/nix/store only, but the file must also

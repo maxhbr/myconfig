@@ -70,13 +70,13 @@ run() {
 }
 
 # 1. boot + toolchain from the host store, no OCI image (the epic's
-# core claim): the payload runs a store binary through the /nix/store
-# virtiofs share spike-init mounted.
+# core claim): share virtiofs tags on the guest tmpfs, because virtiofs
+# cannot be nested below the root virtiofs mount.
 run \
     --rootfs "$rootfs" \
     --init /bin/spike-init \
-    --ro-share "store@/nix/store=/nix/store" \
-    --rw-share "repo@$work/repo=$work/repo" \
+    --ro-share "store@/tmp/mysbx-shares/store=/nix/store" \
+    --rw-share "repo@/tmp/mysbx-shares/repo=$work/repo" \
     -- /nix/store/*-coreutils-*/bin/true
 pass "1 boot: the payload ran /nix/store/.../true from the host store"
 
@@ -85,9 +85,9 @@ pass "1 boot: the payload ran /nix/store/.../true from the host store"
 if run \
     --rootfs "$rootfs" \
     --init /bin/spike-init \
-    --ro-share "store@/nix/store=/nix/store" \
-    --rw-share "repo@$work/repo=$work/repo" \
-    -- /bin/sh -c ': > /nix/store/PROBE' 2>/dev/null; then
+    --ro-share "store@/tmp/mysbx-shares/store=/nix/store" \
+    --rw-share "repo@/tmp/mysbx-shares/repo=$work/repo" \
+    -- /bin/sh -c ': > /tmp/mysbx-shares/store/PROBE' 2>/dev/null; then
     fail "2 ro share" "a write to the read-only /nix/store share succeeded"
 fi
 pass "2 ro share: the store share refused the write"
@@ -95,9 +95,9 @@ pass "2 ro share: the store share refused the write"
 run \
     --rootfs "$rootfs" \
     --init /bin/spike-init \
-    --ro-share "store@/nix/store=/nix/store" \
-    --rw-share "repo@$work/repo=$work/repo" \
-    -- /bin/sh -c "touch $work/repo/marker"
+    --ro-share "store@/tmp/mysbx-shares/store=/nix/store" \
+    --rw-share "repo@/tmp/mysbx-shares/repo=$work/repo" \
+    -- /bin/sh -c 'touch /tmp/mysbx-shares/repo/marker'
 [ -e "$work/repo/marker" ] || fail "2 rw share" "the write through the rw share did not reach the host"
 pass "2 rw share: the repo write reached the host directory"
 
@@ -108,7 +108,7 @@ rc=0
 run \
     --rootfs "$rootfs" \
     --init /bin/spike-init \
-    --ro-share "store@/nix/store=/nix/store" \
+    --ro-share "store@/tmp/mysbx-shares/store=/nix/store" \
     -- /bin/sh -c 'exit 42' || rc=$?
 [ "$rc" -eq 42 ] || fail "3 exit code" "payload exit 42 arrived as $rc"
 pass "3 exit code propagation: 42"
@@ -120,7 +120,7 @@ start=$(date +%s%N)
 run \
     --rootfs "$rootfs" \
     --init /bin/spike-init \
-    --ro-share "store@/nix/store=/nix/store" \
+    --ro-share "store@/tmp/mysbx-shares/store=/nix/store" \
     -- /bin/busybox true
 end=$(date +%s%N)
 ms=$(((end - start) / 1000000))
