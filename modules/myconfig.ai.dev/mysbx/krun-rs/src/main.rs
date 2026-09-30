@@ -37,6 +37,22 @@
 //   argv[0] is therefore a placeholder the init consumes: with
 //   --init the entry script sees the payload as $1.. and execs it;
 //   without it argv[0] doubles as the payload path.
+// - THE CMDLINE BUDGET (the seventh live finding, the root cause of
+//   every wrapped hang since grouping): the x86 guest kernel copies
+//   exactly COMMAND_LINE_SIZE = 2048 bytes of the cmdline libkrun
+//   builds (head64.c copy_bootdata; libkrun's own CMDLINE_MAX_SIZE
+//   of 64 KiB never reaches the kernel), and a real config's env +
+//   shares block measured 3075 bytes — the tail, the `--` payload
+//   argv included, silently never booted. The spike's ~600-byte
+//   cmdline is why the spike worked. The channel therefore carries
+//   ONLY what is structurally tiny: KRUN_INIT, KRUN_WORKDIR, the
+//   -- payload argv, and the manifest pointer. Shares and env live
+//   in a MANIFEST FILE the launcher writes into the ro stage device
+//   (a path the init mounts before reading); its lines are
+//   tab-separated records, values base64 (arbitrary bytes survive):
+//     env<TAB>KEY<TAB>base64(value)
+//     share<TAB>DEVICE<TAB>SLOT<TAB>DEST<TAB>ro|rw
+//     chdir<TAB>base64(dir)
 // - The implicit init (/init.krun) mounts devtmpfs/proc/sysfs/cgroup2
 //   but mounts NO extra virtiofs tags; the guest payload is expected
 //   to do that (or the rootfs carries a custom init — bd
@@ -275,6 +291,12 @@ struct Config {
     devices: Vec<Device>,
     shares: Vec<Share>,
     env: Vec<(String, String)>,
+    /// The MANIFEST carrying the shares (and the env when the
+    /// cmdline would overflow — see the module docs' budget
+    /// finding). A HOST-side file the launcher writes before
+    /// krun_start_enter; the guest init reads it from the ro stage
+    /// device. When set, --ro-share/--rw-share must be absent.
+    manifest: Option<PathBuf>,
     /// The payload's working directory, handed to krun_set_workdir
     /// (bwrap's --chdir equivalent). Defaults to `/` — the spec
     /// always carries the workspace path.
@@ -286,8 +308,9 @@ fn usage() -> ! {
     eprintln!(
         "usage: mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--init PATH] \
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
-         [--ro-share TAG:SLOT@DEST] [--rw-share TAG:SLOT@DEST] [--env K=V]... \
-         [--chdir DIR] -- CMD [ARGS...]"
+         [--manifest FILE] [--env K=V]... [--chdir DIR] -- CMD [ARGS...] \
+  (the manifest FILE carries the shares; --ro-share/--rw-share remain \
+   accepted for cmdline-sized debug runs)"
     );
     std::process::exit(2);
 }
@@ -308,6 +331,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         devices: Vec::new(),
         shares: Vec::new(),
         env: Vec::new(),
+        manifest: None,
         workdir: PathBuf::from("/"),
         payload: Vec::new(),
     };
@@ -344,6 +368,17 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
             "--rw-device" => add_device(&mut cfg, false, &mut it)?,
             "--ro-share" => add_share(&mut cfg, true, &mut it)?,
             "--rw-share" => add_share(&mut cfg, false, &mut it)?,
+            // The manifest PATH is where the launcher WRITES the
+            // assembled records (inside the ro stage device's dir,
+            // which the caller staged and bwrap bound); the shares
+            // and env flags are the INPUT — exactly the argv of the
+            // pre-manifest interface, so callers change nothing.
+            "--manifest" => {
+                let path = it
+                    .next()
+                    .ok_or_else(|| "missing value for --manifest".to_owned())?;
+                cfg.manifest = Some(PathBuf::from(path));
+            }
             "--env" => {
                 let value = it
                     .next()
@@ -464,6 +499,68 @@ fn c_strings(items: &[String]) -> Vec<CString> {
         .collect()
 }
 
+/// base64 (standard, padded) of arbitrary bytes — the manifest's
+/// value encoding: env values and the chdir path may contain any
+/// byte; the guest init decodes with busybox `base64 -d`.
+fn b64(data: &str) -> String {
+    // No external crate (the launcher is dependency-free by design):
+    // the standard alphabet, by hand. Only needed for the manifest.
+    const TBL: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let bytes = data.as_bytes();
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        out.push(TBL[(n >> 18 & 63) as usize] as char);
+        out.push(TBL[(n >> 12 & 63) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            TBL[(n >> 6 & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TBL[(n & 63) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+/// The manifest text (module docs): tab-separated records, values
+/// base64. One `env` line per env entry, one `share` line per
+/// share, one optional `chdir` line.
+fn manifest_text(cfg: &Config) -> String {
+    let mut lines = String::new();
+    for (k, v) in &cfg.env {
+        lines.push_str(&format!("env\t{k}\t{}\n", b64(v)));
+    }
+    for s in &cfg.shares {
+        let mode = cfg
+            .devices
+            .iter()
+            .find(|d| d.tag == s.tag)
+            .map(|d| if d.read_only { "ro" } else { "rw" })
+            .unwrap_or("rw");
+        lines.push_str(&format!(
+            "share\t{}\t{}\t{}\t{}\n",
+            s.tag, s.slot, s.dest, mode
+        ));
+    }
+    if cfg.workdir.as_os_str() != "/" {
+        lines.push_str(&format!("chdir\t{}\n", b64(&cfg.workdir.to_string_lossy())));
+    }
+    lines
+}
+
+/// The manifest's SLOT inside the ro stage device (a fixed name —
+/// the init reads it at a known path once stage-ro is mounted).
+const MANIFEST_SLOT: &str = "manifest";
+
 fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
     let exec_path = cfg.init.clone().unwrap_or_else(|| cfg.payload[0].clone());
     let argv = match &cfg.init {
@@ -474,33 +571,52 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
         }
         None => cfg.payload.clone(),
     };
-    let mut env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
-    if !cfg.shares.is_empty() {
-        // One "DEVICE SLOT DEST ro|rw" entry per share: the guest
-        // entry script mounts each DEVICE once (under
-        // /tmp/mysbx-shares keyed by the device tag) and links each
-        // DEST at <device-mount>/<slot>. The mode is the DEVICE's —
-        // a share is exactly as writable as its device.
-        let shares = cfg
-            .shares
-            .iter()
-            .map(|s| {
-                format!(
-                    "{} {} {} {}",
-                    s.tag,
-                    s.slot,
-                    s.dest,
-                    cfg.devices
-                        .iter()
-                        .find(|d| d.tag == s.tag)
-                        .map(|d| if d.read_only { "ro" } else { "rw" })
-                        .unwrap_or("rw")
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(";");
-        env.push(format!("MYSBX_KRUN_SHARES={shares}"));
-    }
+    // With a manifest, only the manifest pointer rides the cmdline
+    // (plus the trace flag — the init's EARLY steps and the
+    // launcher's own log level need it before the file is read):
+    // env and shares are read from the file (the budget finding).
+    // Without a manifest, the legacy envp route remains for
+    // cmdline-sized debug runs.
+    let env: Vec<String> = match &cfg.manifest {
+        Some(_) => {
+            let mut env = vec![format!("MYSBX_KRUN_MANIFEST=stage-ro:{MANIFEST_SLOT}")];
+            if let Some((_, v)) = cfg.env.iter().find(|(k, _)| k == "MYSBX_KRUN_TRACE") {
+                env.push(format!("MYSBX_KRUN_TRACE={v}"));
+            }
+            env
+        }
+        None => {
+            let mut env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            if !cfg.shares.is_empty() {
+                // One "DEVICE SLOT DEST ro|rw" entry per share: the
+                // guest entry script mounts each DEVICE once (under
+                // /tmp/mysbx-shares keyed by the device tag) and
+                // links each DEST at <device-mount>/<slot>. The mode
+                // is the DEVICE's — a share is exactly as writable
+                // as its device.
+                let shares = cfg
+                    .shares
+                    .iter()
+                    .map(|s| {
+                        format!(
+                            "{} {} {} {}",
+                            s.tag,
+                            s.slot,
+                            s.dest,
+                            cfg.devices
+                                .iter()
+                                .find(|d| d.tag == s.tag)
+                                .map(|d| if d.read_only { "ro" } else { "rw" })
+                                .unwrap_or("rw")
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(";");
+                env.push(format!("MYSBX_KRUN_SHARES={shares}"));
+            }
+            env
+        }
+    };
     (exec_path, argv, env)
 }
 
@@ -650,11 +766,17 @@ fn main() {
         }
         // The payload's working directory (krun_set_workdir, the
         // spec's --chdir): the workspace path, where every other
-        // backend's payload starts too.
-        check(
-            (api.krun_set_workdir)(ctx, cstr(&cfg.workdir).as_ptr()),
-            "krun_set_workdir",
-        );
+        // backend's payload starts too. In manifest mode the
+        // workdir rides as a `chdir` record the init applies AFTER
+        // the shares exist (the cmdline route had /init.krun chdir
+        // BEFORE the workspace share was mounted — silently landing
+        // at / — plus it spent cmdline bytes, the budget finding).
+        if cfg.manifest.is_none() {
+            check(
+                (api.krun_set_workdir)(ctx, cstr(&cfg.workdir).as_ptr()),
+                "krun_set_workdir",
+            );
+        }
         // ALWAYS an explicit envp: envp=NULL makes libkrun inherit
         // the launcher's whole environment (env::vars() of
         // krun_set_exec), which under bwrap is exactly what the
@@ -671,6 +793,28 @@ fn main() {
         // entry script sees payload at $1..), without it
         // [payload0, payload0, args...] so the overwrite keeps the
         // payload path at argv[0].
+        // The manifest (the budget finding): its records live in a
+        // HOST file inside the ro stage device's directory, which
+        // the caller staged — the launcher only writes the records.
+        if let Some(manifest) = &cfg.manifest {
+            if !cfg
+                .devices
+                .iter()
+                .any(|d| d.read_only && d.tag == "stage-ro")
+            {
+                eprintln!("mysbx-krun: --manifest needs a stage-ro --ro-device to reach the guest");
+                std::process::exit(EXIT_SETUP);
+            }
+            let text = manifest_text(&cfg);
+            if let Err(e) = std::fs::write(manifest, &text) {
+                eprintln!(
+                    "mysbx-krun: cannot write the manifest {}: {e}",
+                    manifest.display()
+                );
+                std::process::exit(EXIT_SETUP);
+            }
+        }
+
         let (exec_path, argv_vec, env) = exec_spec(&cfg);
         let argv = c_strings(&argv_vec);
         let envp = c_strings(&env);
@@ -768,6 +912,67 @@ mod tests {
             &"MYSBX_KRUN_SHARES=stage-ro store /nix/store ro;stage-rw repo /home/synth/repo rw"
                 .to_owned()
         ));
+    }
+
+    #[test]
+    fn the_manifest_replaces_the_cmdline_env_and_shares() {
+        // The cmdline-budget regression guard (seventh live
+        // finding): with --manifest the envp carries ONLY the
+        // pointer, and the manifest text carries everything else —
+        // the cmdline stays under COMMAND_LINE_SIZE regardless of
+        // the share and env count.
+        let cfg = parse(&[
+            "--rootfs",
+            "/root",
+            "--ro-device",
+            "stage-ro=/stage/ro",
+            "--rw-device",
+            "stage-rw=/stage/rw",
+            "--manifest",
+            "/stage/ro/manifest",
+            "--env",
+            "KEY=a value with spaces and 'quotes'",
+            "--chdir",
+            "/home/synth/repo",
+            "--",
+            "/bin/true",
+        ])
+        .unwrap();
+        let env = exec_spec(&cfg).2;
+        assert_eq!(env.len(), 1);
+        assert_eq!(env[0], "MYSBX_KRUN_MANIFEST=stage-ro:manifest");
+        let text = manifest_text(&cfg);
+        assert!(text.contains(&format!(
+            "env\tKEY\t{}\n",
+            b64("a value with spaces and 'quotes'")
+        )));
+        assert!(text.starts_with("env\t"));
+        assert!(text.contains("chdir\t"));
+    }
+
+    #[test]
+    fn the_manifest_combines_with_the_share_and_env_flags() {
+        // The manifest flag names the OUTPUT file; the share/env
+        // flags are the INPUT it absorbs — the argv interface is
+        // exactly the pre-manifest one.
+        let cfg = parse(&[
+            "--rootfs",
+            "/root",
+            "--ro-device",
+            "stage-ro=/stage/ro",
+            "--manifest",
+            "/stage/ro/manifest",
+            "--ro-share",
+            "stage-ro:x@/x ro",
+            "--env",
+            "A=b",
+            "--",
+            "/bin/true",
+        ])
+        .unwrap();
+        let text = manifest_text(&cfg);
+        assert!(text.contains("share\tstage-ro\tx\t/x\tro\n"));
+        assert!(text.contains("env\tA\t"));
     }
 
     #[test]

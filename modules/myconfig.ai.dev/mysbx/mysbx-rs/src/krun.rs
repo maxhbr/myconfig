@@ -124,6 +124,11 @@ pub const STAGE_RW_TAG: &str = "stage-rw";
 /// lifecycle as the git trust files.
 pub const STAGE_ROOT: &str = "/mysbx-krun-stage";
 
+/// The manifest's slot inside the ro stage tree (krun-rootfs.nix's
+/// guest init reads it at GUEST_STAGE_RO/manifest; the launcher
+/// writes the records there — the cmdline-budget finding).
+pub const MANIFEST_SLOT: &str = "manifest";
+
 /// The guest-side mount of the ro staging device. All ro shares'
 /// sandbox paths link at `<GUEST_STAGE_RO>/<slot>`.
 pub const GUEST_STAGE_RO: &str = "/tmp/mysbx-shares/stage-ro";
@@ -770,12 +775,18 @@ fn render(spec: &Spec) -> Vec<String> {
     // device under GUEST_SHARE_ROOT keyed by its tag, then links
     // each share's sandbox path at <device-mount>/<slot> (spike
     // finding 9: nothing may mount at the sandbox path directly, it
-    // sits on the ro root virtiofs). The launcher derives
-    // MYSBX_KRUN_SHARES
-    // (`DEVICE SLOT SANDBOX_PATH ro|rw;…`) from these flags, and
-    // the init consumes it. The store share is a SLOT of the ro
-    // device like every other ro share (the rootfs's baked
+    // sits on the ro root virtiofs). The store share is a SLOT of
+    // the ro device like every other ro share (the rootfs's baked
     // /nix/store link targets GUEST_STORE) — two devices total.
+    // THE MANIFEST (the seventh live finding, the x86 2048-byte
+    // COMMAND_LINE_SIZE): env, shares and chdir no longer ride the
+    // kernel cmdline — the launcher assembles the records from
+    // these same flags and writes the file into the ro stage tree
+    // (bound rw at STAGE_ROOT for the write; the virtiofs device
+    // serves it read-only to the guest), the cmdline carries only
+    // the pointer, and the guest init reads it right after mounting
+    // stage-ro. The --env/--ro-share/--rw-share flags are the
+    // launcher's INPUT; nothing about the argv interface changes.
     let ro_slots = spec.shares.iter().filter(|s| s.read_only).count();
     let rw_slots = spec.shares.iter().filter(|s| !s.read_only).count();
     if ro_slots > 0 {
@@ -785,6 +796,10 @@ fn render(spec: &Spec) -> Vec<String> {
     if rw_slots > 0 {
         argv.push("--rw-device".to_owned());
         argv.push(format!("{STAGE_RW_TAG}={}/rw", STAGE_ROOT));
+    }
+    if ro_slots > 0 {
+        argv.push("--manifest".to_owned());
+        argv.push(format!("{STAGE_ROOT}/ro/{}", MANIFEST_SLOT));
     }
     for share in &spec.shares {
         let device = if share.read_only {

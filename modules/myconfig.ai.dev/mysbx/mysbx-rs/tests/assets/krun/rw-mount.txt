@@ -10,6 +10,8 @@
 stage-ro=/mysbx-krun-stage/ro
 --rw-device
 stage-rw=/mysbx-krun-stage/rw
+--manifest
+/mysbx-krun-stage/ro/manifest
 --ro-share
 stage-ro:store@/nix/store ro
 --rw-share
