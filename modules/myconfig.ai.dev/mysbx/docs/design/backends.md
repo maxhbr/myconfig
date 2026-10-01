@@ -834,3 +834,57 @@ pre-existing `krun_set_workdir` bug: `/init.krun` consumed
 `KRUN_WORKDIR` before the workspace share existed, silently landing
 at `/`), then execs the payload. The share loop reads its records
 from a file with redirection, never a pipeline subshell.
+
+### D6: The direct krun backend's network is libkrun's TSI vsock proxy; `network = false` disables it (bd myconfig-dak.6)
+
+The direct backend adds NO net device — not passt, not a TAP. Its
+network model is the one bd myconfig-6di.5.5 verified for
+`podman-krun`, taken to its source:
+
+- **`network = true` (shared) is libkrun's IMPLICIT VSOCK with
+  TSI** — Transparent Socket Impersonation. With no net device
+  configured, libkrun attaches a vsock device with
+  `TsiFlags::HIJACK_INET` (lib.rs: with `feature = "net"` the
+  heuristic is `net.list.is_empty() && legacy_net_cfg.is_none()`;
+  WITHOUT the feature — the stock nixpkgs build — `enable_tsi` is
+  unconditionally `true`), the guest kernel boots with `tsi_hijack`
+  on its cmdline, and every AF_INET/AF_INET6 socket the guest opens
+  is proxied: the vsock muxer performs the connection from the VMM's
+  own network namespace. The VMM is the mysbx-krun launcher process,
+  inside the bwrap sandbox — which, with the network shared, shares
+  the HOST netns. The guest therefore has exactly the host's
+  egress: DNS, direct connects, everything. This is the same
+  semantics podman-krun gives its containers (D2's verified model),
+  with one fewer layer (no OCI runtime in between).
+- **DNS needs a guest resolver file.** The TSI proxy dials, but
+  nothing writes `/etc/resolv.conf` inside the guest (libkrun's
+  DHCP path is for net devices; TSI has none). The guest init
+  therefore writes one from the manifest: the wrapper reads the
+  HOST's `/etc/resolv.conf` and hands its contents through the
+  manifest (`MYSBX_KRUN_RESOLV`), the init writes it to
+  `/etc/resolv.conf` before the payload execs. The host's resolver
+  addresses are exactly what the TSI proxy can reach (it dials from
+  the host netns), so resolution and connects agree.
+- **`network = false` kills the vsock entirely.** The launcher
+  calls `krun_disable_implicit_vsock` (present in the stock lib —
+  the vsock is NOT net-gated, only the net devices are), which sets
+  `VsockConfig::Disabled`: no vsock device is attached, `tsi_hijack`
+  never reaches the cmdline, and the guest kernel has NO socket
+  path to the host at all — stricter than an empty netns, which
+  would still have loopback. The bwrap chain additionally
+  `--unshare-net`s, so the launcher process itself has no netns
+  either: neither the VMM nor the guest could dial out even if a
+  future libkrun version re-introduced a path. Defense in depth,
+  both layers.
+- **`krun_set_passt_fd` is out of the first cut.** The symbol needs
+  libkrun built `withNet` (nixpkgs `libkrun.override { withNet =
+  true; }`), which the wrapped package does not pin. A net-enabled
+  libkrun would allow a passt fd instead of TSI (per-connection
+  NAT from the host's pasta) — the podman-gvisor-shaped egress with
+  `--map-guest-addr` support for the LiteLLM forwarder. Until the
+  wrapper pins one, `network = shared` means TSI, and the port
+  mapping entries (`listen-ports`/`allow-domains`/`connect-ports`)
+  stay refused exactly as on the other VM backends (config.md D21):
+  TSI is an unfiltered proxy — any AF_INET connect the guest makes,
+  the VMM dials — no per-domain or per-port hook exists in the
+  muxer, and honesty refuses what cannot be enforced.
