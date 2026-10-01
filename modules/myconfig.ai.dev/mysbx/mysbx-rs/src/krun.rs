@@ -443,7 +443,12 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
     ));
     for mount in &cfg.mounts {
         let sandbox_path = mount.dest.clone().unwrap_or_else(|| mount.path.clone());
-        let read_only = matches!(mount.mode, crate::config::Mode::Ro);
+        // The forced-ro downgrade of a clone run (workspace.md D4):
+        // every `[[mounts]]` entry — rw ones included — lands in the
+        // ro staging tree, because the session clone is the only
+        // writable bind of a clone run.
+        let read_only = matches!(mount.mode, crate::config::Mode::Ro)
+            || matches!(params.workspace, Workspace::Clone { .. });
         binds.push((
             mount.path.clone(),
             read_only,
@@ -546,7 +551,8 @@ pub fn krun_argv(
     //   clone, seen at the repo's own path — the same remap the
     //   other backends bind),
     // - every configured mount, at its sandbox destination (ro/rw as
-    //   declared — the virtiofs server enforces it),
+    //   declared, or forced ro in a clone run — workspace.md D4; the
+    //   virtiofs server enforces it),
     // - every state-dir backing store, rw, at its sandbox path
     //   (config.md D15; the implicit .ssh of the unconditional
     //   keypair included via effective_state_dirs).
@@ -577,7 +583,7 @@ pub fn krun_argv(
         read_only: false,
     });
     for mount in &cfg.mounts {
-        shares.push(share_of_mount(mount)?);
+        shares.push(share_of_mount(mount, &params.workspace)?);
     }
     if matches!(params.workspace, Workspace::Live) {
         for entry in cfg.effective_state_dirs() {
@@ -759,10 +765,15 @@ fn state_tag(entry: &str) -> String {
     tag
 }
 
-fn share_of_mount(mount: &crate::config::Mount) -> Result<Share, Error> {
+fn share_of_mount(mount: &crate::config::Mount, workspace: &Workspace) -> Result<Share, Error> {
     let sandbox_path = mount.dest.clone().unwrap_or_else(|| mount.path.clone());
     check_share_dest(&sandbox_path)?;
-    let read_only = matches!(mount.mode, crate::config::Mode::Ro);
+    // The forced-ro downgrade of a clone run (workspace.md D4):
+    // every `[[mounts]]` entry — rw ones included — is shared
+    // read-only, because the session clone is the only writable
+    // bind of a clone run.
+    let read_only = matches!(mount.mode, crate::config::Mode::Ro)
+        || matches!(workspace, Workspace::Clone { .. });
     // The slot must not contain whitespace or `;` (the
     // MYSBX_KRUN_SHARES encoding is `;`-separated) and must be a
     // stable identity of the share across runs — a digest of the

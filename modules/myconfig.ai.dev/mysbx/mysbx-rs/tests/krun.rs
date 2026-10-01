@@ -188,6 +188,58 @@ fn golden_clone_session() {
 }
 
 #[test]
+fn clone_run_forces_configured_rw_mounts_read_only() {
+    // workspace.md D4: in a clone run EVERY configured mount is
+    // read-only — the session clone is the only writable bind.
+    // Both halves of the backend's mount plumbing must carry the
+    // downgrade: the staging binds (which tree a host dir lands in)
+    // and the shares (the payload's contract).
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/srv/data"), Mode::Rw));
+    let clone_path = Path::new("/synth/repo.mysbx/clones/s1");
+    let p = params(
+        "/synth/rootfs",
+        "/synth/shell",
+        None,
+        Workspace::Clone { clone: clone_path },
+    );
+    let argv = run(&cfg, &synth_repo(), &Payload::Shell, &p);
+    // The share rides the RO staging device, marked ro:
+    assert!(argv
+        .windows(4)
+        .any(|w| w[0] == "--ro-share" && w[1].starts_with("stage-ro:m-")));
+    assert!(!argv
+        .windows(2)
+        .any(|w| w[0] == "--rw-share" && w[1].starts_with("stage-rw:m-")));
+    // The staging bind carries the same downgrade:
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    let (bind, ro, slot) = binds
+        .iter()
+        .find(|(_, _, slot)| slot.starts_with("m-"))
+        .expect("the configured mount's staging bind");
+    assert_eq!(bind, "/synth/data");
+    assert!(ro, "a configured rw mount is ro in a clone run");
+    assert!(slot.starts_with("m-"));
+
+    // The same config stays writable in a live run:
+    let p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    let argv = run(&cfg, &synth_repo(), &Payload::Shell, &p);
+    assert!(argv
+        .windows(4)
+        .any(|w| w[0] == "--rw-share" && w[1].starts_with("stage-rw:m-")));
+    assert!(!argv
+        .windows(2)
+        .any(|w| w[0] == "--ro-share" && w[1].starts_with("stage-ro:m-")));
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    let (_, ro, _) = binds
+        .iter()
+        .find(|(_, _, slot)| slot.starts_with("m-"))
+        .expect("the configured mount's staging bind");
+    assert!(!ro, "the same mount stays rw in a live run");
+}
+
+#[test]
 fn golden_multiplexer_session() {
     let mut cfg = base(true);
     cfg.multiplexer = Multiplexer::Tmux;

@@ -1395,7 +1395,6 @@ fn sweep_krun_scratch(dir: &std::path::Path) -> Result<(), String> {
                 dir.display()
             ))
         }
-
     };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -1413,7 +1412,12 @@ fn sweep_krun_run_dirs(dir: &std::path::Path) -> Result<(), String> {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(format!("cannot read krun run directory {}: {e}", dir.display())),
+        Err(e) => {
+            return Err(format!(
+                "cannot read krun run directory {}: {e}",
+                dir.display()
+            ))
+        }
     };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -2666,7 +2670,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 Err(e) => {
                     eprintln!("mysbx: {e}");
                     if let Some(f) = &git_trust_file {
-                        let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
+                        let _ = std::fs::remove_dir_all(
+                            f.parent().expect("trust file lives in its dir"),
+                        );
                     }
                     return EXIT_INFRASTRUCTURE;
                 }
@@ -2727,7 +2733,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                         krun_stage_root.display()
                     );
                     if let Some(f) = &git_trust_file {
-                        let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
+                        let _ = std::fs::remove_dir_all(
+                            f.parent().expect("trust file lives in its dir"),
+                        );
                     }
                     return EXIT_INFRASTRUCTURE;
                 }
