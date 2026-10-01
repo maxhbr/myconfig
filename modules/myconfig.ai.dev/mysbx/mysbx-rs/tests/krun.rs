@@ -12,7 +12,9 @@
 
 use mysbx::bwrap::{Payload, Workspace};
 use mysbx::config::{Mode, Mount, Multiplexer};
-use mysbx::krun::{krun_argv, Params, DEFAULT_CPUS, DEFAULT_RAM_MIB, GUEST_SHARE_ROOT};
+use mysbx::krun::{
+    krun_argv, Params, DEFAULT_CPUS, DEFAULT_RAM_MIB, GUEST_SHARE_ROOT, SCRATCH_IMG,
+};
 use mysbx::merge::Merged;
 use mysbx::repo::Repo;
 use std::borrow::Cow;
@@ -74,6 +76,7 @@ fn params<'a>(
         memory: None,
         cpus: None,
         git_trust: None,
+        scratch: None,
     }
 }
 
@@ -185,6 +188,39 @@ fn golden_clone_session() {
         ),
     );
     assert_golden("clone-session.txt", &argv);
+}
+
+#[test]
+fn a_scratch_param_renders_the_flag_and_the_announcement() {
+    // The scratch disk (bd myconfig-dak.7): the flag names the
+    // launcher-view SCRATCH_IMG, and the PRESENCE announcement rides
+    // the manifest env (the init identifies the disk as the only
+    // /dev/vd*, never by name). Without the param neither appears.
+    let mut p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    p.scratch = Some(SCRATCH_IMG);
+    let argv = run(&base(true), &synth_repo(), &Payload::Shell, &p);
+    let i = argv
+        .iter()
+        .position(|a| a == "--scratch")
+        .expect("the --scratch flag");
+    assert_eq!(argv[i + 1], SCRATCH_IMG);
+    let j = argv
+        .windows(2)
+        .position(|w| w[0] == "--env" && w[1] == "MYSBX_KRUN_SCRATCH=1")
+        .expect("the manifest env announcement");
+    // The announcement rides AFTER the network flag section, before
+    // --chdir (render order: cpus/ram, rootfs, init, devices,
+    // manifest, shares, envs, network, scratch, chdir, payload).
+    assert!(argv[i + 1..j].iter().all(|a| a != "--chdir"));
+    // Without the param: no flag, no announcement.
+    let argv = run(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    assert!(!argv.iter().any(|a| a == "--scratch"));
+    assert!(!argv.windows(2).any(|w| w[1] == "MYSBX_KRUN_SCRATCH=1"));
 }
 
 #[test]
@@ -456,6 +492,7 @@ fn params_owned<'a>(
         memory: None,
         cpus: None,
         git_trust: None,
+        scratch: None,
     }
 }
 

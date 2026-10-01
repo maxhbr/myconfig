@@ -2648,6 +2648,36 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     global_host,
                     system_host,
                 });
+            // The per-run scratch disk of the DIRECT krun backend (bd
+            // myconfig-dak.7, backends.md D7): the SAME sidecar file
+            // contract as podman-krun's (bd myconfig-0pi) — one
+            // sparse raw file per run under `<sidecar>/scratch/`,
+            // swept of dead-run debris first, never reused — but a
+            // REAL virtio-blk attach (krun_add_disk2), not the
+            // loop-mount of the crun-constrained podman arm. The
+            // same MYSBX_KRUN_SCRATCH_SIZE pin drives both: the
+            // host that opts into guest nix names one size. The
+            // bwrap tier binds the file at krun::SCRATCH_IMG below.
+            // A --dry-run audits the flags and creates NOTHING.
+            let krun_scratch_params_direct = match env_opt("MYSBX_KRUN_SCRATCH_SIZE") {
+                Some(size) => {
+                    let dir = repo.sidecar.join("scratch");
+                    if !dry_run {
+                        if let Err(msg) = sweep_krun_scratch(&dir) {
+                            eprintln!("mysbx: {msg}");
+                            return EXIT_INFRASTRUCTURE;
+                        }
+                        let file = dir.join(format!("{pid}.img"));
+                        if let Err(msg) = create_krun_scratch(&file, &size) {
+                            eprintln!("mysbx: {msg}");
+                            return EXIT_INFRASTRUCTURE;
+                        }
+                        krun_scratch_file = Some(file.clone());
+                    }
+                    Some(krun::SCRATCH_IMG.to_owned())
+                }
+                None => None,
+            };
             // The multiplexer entry pin of the guest: the SAME host
             // store path the bwrap tier pins (MYSBX_MUX_ENTRY_*) —
             // unlike the podman image, the krun guest sees the host
@@ -2663,6 +2693,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 memory: merged.memory.clone().map(Cow::from),
                 cpus: merged.cpus.clone().map(Cow::from),
                 git_trust: krun_git_trust.as_ref(),
+                scratch: krun_scratch_params_direct.as_deref(),
             };
             let krun_argv = match krun::krun_argv(&merged, &repo, &payload, &host_env, &krun_params)
             {
@@ -2748,6 +2779,20 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             argv.push("--bind".into());
             argv.push(krun_stage_root.to_string_lossy().into_owned());
             argv.push(krun::STAGE_ROOT.to_owned());
+            // The scratch file rides in rw-bound at the fixed
+            // launcher-view SCRATCH_IMG (the launcher opens it
+            // host-side for krun_add_disk2 — the attach is rw by
+            // design, the bwrap bind must let libkrun open it
+            // O_RDWR). The bind names the file the run would have
+            // created — the SAME pid-named path — so a --dry-run
+            // audits the full chain (the audit contract: the argv
+            // of a dry run is the argv of the real one).
+            if krun_scratch_params_direct.is_some() {
+                let file = repo.sidecar.join("scratch").join(format!("{pid}.img"));
+                argv.push("--bind".into());
+                argv.push(file.to_string_lossy().into_owned());
+                argv.push(krun::SCRATCH_IMG.to_owned());
+            }
             for (host_dir, read_only, slot) in krun::stage_binds(&merged, &repo, &krun_params) {
                 let mode = if read_only { "ro" } else { "rw" };
                 let dest = format!("{}/{mode}/{slot}", krun::STAGE_ROOT);
@@ -3022,10 +3067,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             if let Some(d) = &krun_stage_dir {
                 let _ = std::fs::remove_dir_all(d);
             }
-            // The per-run scratch file (bd myconfig-0pi): the guest
-            // wrapper's rm after the loop attach is best-effort, and a
-            // payload that never called nix never attached it. A name
-            // that is already gone makes this a no-op.
+            // The per-run scratch file (bd myconfig-0pi, and the
+            // direct arm's twin, bd myconfig-dak.7): the podman
+            // guest's rm after the loop attach is best-effort, and a
+            // payload that never called nix never attached it. A
+            // name that is already gone makes this a no-op.
             if let Some(f) = &krun_scratch_file {
                 let _ = std::fs::remove_file(f);
             }

@@ -129,6 +129,14 @@ pub const STAGE_ROOT: &str = "/mysbx-krun-stage";
 /// writes the records there — the cmdline-budget finding).
 pub const MANIFEST_SLOT: &str = "manifest";
 
+/// The scratch disk's fixed LAUNCHER-VIEW path (bd myconfig-dak.7):
+/// lib.rs creates the per-run sparse file under
+/// `<sidecar>/scratch/` and bwrap binds it HERE; the launcher's
+/// --scratch takes this path and krun_add_disk2 attaches the file
+/// behind it. A launcher-view constant, like STAGE_ROOT — the
+/// guest sees only the virtio-blk device, never this path.
+pub const SCRATCH_IMG: &str = "/mysbx-krun-scratch.img";
+
 /// The guest-side mount of the ro staging device. All ro shares'
 /// sandbox paths link at `<GUEST_STAGE_RO>/<slot>`.
 pub const GUEST_STAGE_RO: &str = "/tmp/mysbx-shares/stage-ro";
@@ -189,6 +197,13 @@ pub struct Params<'a> {
     /// sets `GIT_CONFIG_GLOBAL` last, after every config `[env]`.
     /// `None` (a `--dry-run`, an unwrapped build) shares no trust.
     pub git_trust: Option<&'a GitTrust<'a>>,
+    /// The per-run nix scratch disk (bd myconfig-dak.7, backends.md
+    /// D7): the LAUNCHER-VIEW path of the host-side sparse raw file
+    /// (lib.rs creates it under `<sidecar>/scratch/` and bwrap
+    /// binds it at [`SCRATCH_IMG`] — the same fixed-guest-path
+    /// shape as the git trust files). `None` attaches no disk: the
+    /// run keeps the plain ro store share, no silent RAM fallback.
+    pub scratch: Option<&'a str>,
 }
 
 /// The two host files of a run's git trust (the podman arm's
@@ -416,6 +431,10 @@ struct Spec {
     /// dials from the launcher's netns), `false` disables it — no
     /// socket path to the host at all.
     network: bool,
+    /// The scratch disk's launcher-view path (bd myconfig-dak.7):
+    /// the launcher attaches the file with krun_add_disk2 and
+    /// announces the disk in the manifest env so the init finds it.
+    scratch: Option<String>,
 }
 
 /// The staging-tree BINDS of a run's shares — one `(host_dir,
@@ -639,6 +658,7 @@ pub fn krun_argv(
         workdir: repo.root.to_string_lossy().into_owned(),
         payload: payload_argv,
         network: cfg.network,
+        scratch: params.scratch.map(str::to_owned),
     };
     Ok(render(&spec))
 }
@@ -896,6 +916,19 @@ fn render(spec: &Spec) -> Vec<String> {
     if !spec.network {
         argv.push("--network".to_owned());
         argv.push("none".to_owned());
+    }
+    // 4c. the scratch disk (bd myconfig-dak.7, backends.md D7): the
+    // launcher attaches the file krun_add_disk2 (a REAL virtio-blk
+    // device) and the init mkfs+mounts it as the nix scratch. The
+    // flag takes the LAUNCHER-VIEW path (lib.rs bwrap-binds the
+    // sidecar file at [`SCRATCH_IMG`]); the PRESENCE announcement
+    // (`MYSBX_KRUN_SCRATCH=1`) rides the manifest env — the init
+    // identifies the disk as the only /dev/vd*, never by name.
+    if let Some(scratch) = &spec.scratch {
+        argv.push("--scratch".to_owned());
+        argv.push(scratch.clone());
+        argv.push("--env".to_owned());
+        argv.push("MYSBX_KRUN_SCRATCH=1".to_owned());
     }
     // 5. the working directory (bwrap's --chdir equivalent:
     // `krun_set_workdir`)
