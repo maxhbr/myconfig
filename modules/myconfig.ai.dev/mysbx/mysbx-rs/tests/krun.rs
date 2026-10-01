@@ -332,6 +332,31 @@ fn env_order_is_forwarded_then_config_then_infrastructure() {
 }
 
 #[test]
+fn network_none_names_the_flag_shared_is_silent() {
+    // bd myconfig-dak.6: `none` is the only mode the argv names —
+    // shared is the launcher's default (the implicit vsock's TSI).
+    let denied = run(
+        &base(false),
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    let i = denied
+        .iter()
+        .position(|a| a == "--network")
+        .expect("the denied run names --network none");
+    assert_eq!(denied[i + 1], "none");
+
+    let shared = run(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    assert!(!shared.iter().any(|a| a == "--network"));
+}
+
+#[test]
 fn the_store_share_is_first_and_ro_the_workspace_rw() {
     let argv = run(
         &base(true),
