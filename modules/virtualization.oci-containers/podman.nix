@@ -27,7 +27,10 @@
                 };
                 services.podman.settings.containers.engine = {
                   image_copy_tmp_dir = "/persistent/cache/${config.home.username}-podman-tmp";
-                  tmp_dir = "/persistent/cache/${config.home.username}-podman-tmp";
+                  # tmp_dir must live on storage wiped at boot: podman caches
+                  # the system boot ID in $tmp_dir/alive and refuses to run if
+                  # that file (and its stale boot ID) survives a reboot.
+                  tmp_dir = "/run/user/${toString nixosConfig.users.users.${config.home.username}.uid}/podman-tmp";
                 };
               }
             )
