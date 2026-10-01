@@ -16,8 +16,6 @@ stage-rw=/mysbx-krun-stage/rw
 stage-ro:store@/nix/store ro
 --rw-share
 stage-rw:workspace@/home/synth/repo rw
---rw-share
-stage-rw:state--ssh@/mysbx-home/.ssh rw
 --env
 HOME=/mysbx-home
 --env
