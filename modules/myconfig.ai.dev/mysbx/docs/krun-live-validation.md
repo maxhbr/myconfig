@@ -207,3 +207,38 @@ Append the results (host, date, kernel, PASS/FAIL per section) to
 this file's sibling `krun-validation-log.md` (create it on the first
 run). A FAIL invalidates the corresponding D2 row — file a bead
 against the decision document, not against this runbook.
+
+## 3. The direct backend's scratch disk (bd myconfig-dak.7, backends.md D7)
+
+The probes a host with rw `/dev/kvm` runs for the DIRECT `krun`
+backend's nix scratch — the virtio-blk half this agent sandbox could
+not mount (host policy refuses ext4/overlay in the sandbox; the
+guest kernel carries `EXT4_FS`/`OVERLAY_FS`/`VIRTIO_BLK` all `=y`).
+
+Preconditions: the host pins `MYSBX_KRUN_SCRATCH_SIZE` (the Nix
+wrapper sets it with `krun.nix.enable` — the SAME knob drives the
+podman image's guest nix and the direct backend's scratch file; a
+direct-only host sets the flag and the podman image is merely
+passed, never built) and the direct launcher pin builds `withBlk`
+(the default since bd myconfig-dak.7's first commit).
+
+1. The announcement round-trip:
+
+       ./nix/krun-direct-spike.sh  # or a plain run of the wrapped mysbx
+       # inside the guest:
+       ls /dev/vd*                 # exactly one device
+       mount | grep mysbx-nix      # the ext4 scratch
+       mount | grep 'overlay.*store-upper'   # the store overlay
+
+2. Write-through: `touch /nix/store/probe` succeeds (the overlay's
+   upper layer), and the file is GONE after the VM exits (the
+   per-run scratch file is removed — nothing persists).
+
+3. The honest absence: a run WITHOUT the size pin has no /dev/vd*,
+   no overlay — the plain ro store share, writes to /nix/store
+   fail EROFS.
+
+4. RAM relief: `df /nix/store` shows the scratch ext4's size cap
+   (not the VM's RAM-backed tmpfs); a `nix build` fills the disk,
+   not the memory (watch the guest's MemAvailable).
+

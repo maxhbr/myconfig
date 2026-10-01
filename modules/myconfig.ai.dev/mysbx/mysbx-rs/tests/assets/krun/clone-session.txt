@@ -1,0 +1,38 @@
+--cpus
+2
+--ram
+2048
+--rootfs
+/synth/rootfs
+--init
+/bin/mysbx-init
+--ro-device
+stage-ro=/mysbx-krun-stage/ro
+--rw-device
+stage-rw=/mysbx-krun-stage/rw
+--manifest
+/mysbx-krun-stage/ro/manifest
+--ro-share
+stage-ro:store@/nix/store ro
+--rw-share
+stage-rw:workspace@/home/synth/repo rw
+--env
+HOME=/mysbx-home
+--env
+XDG_CONFIG_HOME=/mysbx-home/.config
+--env
+XDG_CACHE_HOME=/mysbx-home/.cache
+--env
+XDG_STATE_HOME=/mysbx-home/.local/state
+--env
+XDG_DATA_HOME=/mysbx-home/.local/share
+--env
+PATH=/synth/bin
+--env
+MYSBX_KRUN_RESOLV=nameserver 10.0.0.53
+options edns0
+
+--chdir
+/home/synth/repo
+--
+/synth/shell

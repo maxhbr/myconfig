@@ -28,6 +28,7 @@ pub mod bwrap;
 pub mod config;
 pub mod doctor;
 pub mod handoff;
+pub mod krun;
 pub mod loadimage;
 pub mod merge;
 pub mod nono;
@@ -572,7 +573,7 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                     Some((v, _)) => v,
                     None => {
                         eprintln!(
-                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
+                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
                         );
                         eprintln!("try `mysbx --help`");
                         return Err(2);
@@ -775,7 +776,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                     Some(v) => v.clone(),
                     None => {
                         eprintln!(
-                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
+                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
                         );
                         eprintln!("usage: {RUN_USAGE}");
                         return 2;
@@ -1407,6 +1408,29 @@ fn sweep_krun_scratch(dir: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
+fn sweep_krun_run_dirs(dir: &std::path::Path) -> Result<(), String> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => {
+            return Err(format!(
+                "cannot read krun run directory {}: {e}",
+                dir.display()
+            ))
+        }
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(stale_pid) = name.parse::<u32>().ok() else {
+            continue;
+        };
+        if pid_gone(stale_pid) {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+    Ok(())
+}
+
 /// The shared pipeline of the bare form and `run`: resolve the repo, run
 /// the guards, require an initialized sidecar, load and merge both layers,
 /// check the backend, build the argv — then print it (`--dry-run`) or exec
@@ -1531,10 +1555,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     if let Some(name) = &flags.backend {
         if !matches!(
             name.as_str(),
-            "bubblewrap" | "podman-gvisor" | "nono" | "podman-krun"
+            "bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun"
         ) {
             eprintln!(
-                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
+                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -1661,18 +1685,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // `merged.backend` alike; the flag's own refusal one merge above
     // echoed it early, this arm is the authoritative one.
     let backend = match merged.backend.as_deref() {
-        Some("bubblewrap" | "podman-gvisor" | "nono" | "podman-krun") => {
+        Some("bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun") => {
             merged.backend.as_deref().unwrap()
         }
         Some(other) => {
             eprintln!(
-                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`"
+                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
             );
             return EXIT_INFRASTRUCTURE;
         }
         None => {
             eprintln!(
-                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"`, `backend = \"nono\"` or `backend = \"podman-krun\"` in the user or sidecar config"
+                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"`, `backend = \"nono\"`, `backend = \"podman-krun\"` or `backend = \"krun\"` in the user or sidecar config"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -1698,7 +1722,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // dropped below, where the krun limits are mapped.
     let unenforced_limits: Vec<&str> = match backend {
         "podman-gvisor" => Vec::new(),
-        "podman-krun" => [merged.pids_limit.is_some().then_some("pids-limit")]
+        // The direct krun backend enforces memory/cpus (they size the
+        // VM itself, krun.rs) and REFUSES pids-limit in the builder
+        // (no pids controller is wired for a whole VM) — no warning
+        // arm, the builder's refusal is the audit.
+        "podman-krun" | "krun" => [merged.pids_limit.is_some().then_some("pids-limit")]
             .into_iter()
             .flatten()
             .collect(),
@@ -2062,6 +2090,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // file would be pure leftovers). The cleanup of a REAL waited
     // run happens after the backend exits, from this same Option.
     let mut git_trust_file: Option<std::path::PathBuf> = None;
+    // The per-run krun staging tree (bd myconfig-xpq): the host-side
+    // root of the two staged virtiofs devices, created inside the
+    // krun arm and cleaned up with the git trust dir's lifecycle.
+    let mut krun_stage_dir: Option<std::path::PathBuf> = None;
     // The per-run scratch file of a krun + guest-nix run (bd
     // myconfig-0pi), same lifecycle as the git trust file above:
     // written inside the podman arm, cleaned up after a waited run,
@@ -2496,6 +2528,285 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // podman's --env flags own the environment.
             (podman_bin, argv, Some(gvisor_image))
         }
+        // The direct-libkrun backend (backends.md D3, bd
+        // myconfig-dak.3/.4): bwrap wraps the mysbx-krun launcher
+        // (nix/krun-launcher.nix, dlopen of the pinned libkrun) with
+        // only the rootfs, the host store and the shares' host
+        // directories visible — the same chain the spike proved live
+        // on f13 (bd myconfig-dak.1) — and the launcher starts the
+        // VM. The KrunSpec argv (krun.rs) is the launcher's, and it
+        // is the INNER argv: the outer argv here is bwrap's, so the
+        // `--dry-run` audit shows both layers, like the nono
+        // backend's (backends.md D1).
+        "krun" => {
+            use std::borrow::Cow;
+
+            // The /dev/kvm pre-flight (the spike's finding 7: libkrun
+            // ABORTS — exit 134, no return code to map — when
+            // /dev/kvm cannot be opened; the check is the same real
+            // O_RDWR probe the podman-krun variant runs, never a
+            // mode-bit guess). Refused before the argv and before
+            // the `--dry-run` return, so a dry run audits it too.
+            if !dry_run && !kvm_available() {
+                eprintln!("mysbx: krun: /dev/kvm is not readable+writable for this user");
+                eprintln!(
+                    "  the direct libkrun backend starts every run as a KVM microVM through /dev/kvm; \
+                     a host without rw access cannot run this backend"
+                );
+                eprintln!(
+                    "  add the user to the `kvm` group (or enable the seat udev ACL), \
+                     or switch the backend to `bubblewrap` or `podman-gvisor`"
+                );
+                return EXIT_INFRASTRUCTURE;
+            }
+            // The launcher and rootfs pins of the Nix wrapper
+            // (dak.4's packaging): no fallbacks — an unwrapped
+            // build has no launcher binary to find on a PATH.
+            let Some(krun_launcher) = env_opt("MYSBX_KRUN_LAUNCHER") else {
+                eprintln!("mysbx: krun: no launcher configured");
+                eprintln!(
+                    "  the Nix wrapper pins MYSBX_KRUN_LAUNCHER when the host \
+                     builds the mysbx-krun launcher; an unwrapped build sets none"
+                );
+                return EXIT_INFRASTRUCTURE;
+            };
+            let Some(krun_rootfs) = env_opt("MYSBX_KRUN_ROOTFS") else {
+                eprintln!("mysbx: krun: no rootfs configured");
+                eprintln!(
+                    "  the Nix wrapper pins MYSBX_KRUN_ROOTFS when the host \
+                     builds the krun guest rootfs; an unwrapped build sets none"
+                );
+                return EXIT_INFRASTRUCTURE;
+            };
+            if !dry_run {
+                for dir in [
+                    repo.sidecar.join("gittrust"),
+                    repo.sidecar.join("krun-stage"),
+                ] {
+                    if let Err(msg) = sweep_krun_run_dirs(&dir) {
+                        eprintln!("mysbx: {msg}");
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                }
+            }
+            // The guest-root git trust (bd myconfig-zj2, the direct
+            // backend's twin of the podman arm's files): the payload
+            // runs as GUEST ROOT over virtiofs files that keep their
+            // host uid, so git refuses every ordinary command with
+            // `dubious ownership` without it. The SAME two per-run
+            // files, the SAME trusted-path computation — the krun
+            // builder turns them into two ro shares instead of two
+            // podman binds. A --dry-run audits the argv (shares +
+            // GIT_CONFIG_GLOBAL) and creates NOTHING; the cleanup of
+            // a real waited run is the podman arm's own model
+            // (pid-named dir, swept by the next run otherwise).
+            let krun_git_trust;
+            let krun_git_trust_paths: Option<(String, String)> = if !dry_run {
+                let trusted = match podman_trusted_git_paths(&repo, workspace.clone()) {
+                    Ok(paths) => paths,
+                    Err(e) => {
+                        eprintln!("mysbx: {e}");
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                };
+                let libgit2_trusted = libgit2_trusted_paths(&repo, workspace.clone());
+                let dir = repo.sidecar.join("gittrust").join(pid.to_string());
+                let file = dir.join("gitconfig");
+                let system_file = dir.join("system-gitconfig");
+                if let Err(e) = std::fs::create_dir_all(&dir) {
+                    eprintln!(
+                        "mysbx: cannot create the git trust directory {}: {e}",
+                        dir.display()
+                    );
+                    return EXIT_INFRASTRUCTURE;
+                }
+                if let Err(e) = std::fs::write(&file, git_trust_text(&trusted)) {
+                    eprintln!(
+                        "mysbx: cannot write the git trust file {}: {e}",
+                        file.display()
+                    );
+                    return EXIT_INFRASTRUCTURE;
+                }
+                if let Err(e) = std::fs::write(&system_file, libgit2_trust_text(&libgit2_trusted)) {
+                    eprintln!(
+                        "mysbx: cannot write the git trust file {}: {e}",
+                        system_file.display()
+                    );
+                    let _ = std::fs::remove_dir_all(&dir);
+                    return EXIT_INFRASTRUCTURE;
+                }
+                let global_host = file.to_string_lossy().into_owned();
+                let system_host = system_file.to_string_lossy().into_owned();
+                git_trust_file = Some(file.clone());
+                Some((global_host, system_host))
+            } else {
+                None
+            };
+            krun_git_trust = krun_git_trust_paths
+                .as_ref()
+                .map(|(global_host, system_host)| krun::GitTrust {
+                    global_host,
+                    system_host,
+                });
+            // The per-run scratch disk of the DIRECT krun backend (bd
+            // myconfig-dak.7, backends.md D7): the SAME sidecar file
+            // contract as podman-krun's (bd myconfig-0pi) — one
+            // sparse raw file per run under `<sidecar>/scratch/`,
+            // swept of dead-run debris first, never reused — but a
+            // REAL virtio-blk attach (krun_add_disk2), not the
+            // loop-mount of the crun-constrained podman arm. The
+            // same MYSBX_KRUN_SCRATCH_SIZE pin drives both: the
+            // host that opts into guest nix names one size. The
+            // bwrap tier binds the file at krun::SCRATCH_IMG below.
+            // A --dry-run audits the flags and creates NOTHING.
+            let krun_scratch_params_direct = match env_opt("MYSBX_KRUN_SCRATCH_SIZE") {
+                Some(size) => {
+                    let dir = repo.sidecar.join("scratch");
+                    if !dry_run {
+                        if let Err(msg) = sweep_krun_scratch(&dir) {
+                            eprintln!("mysbx: {msg}");
+                            return EXIT_INFRASTRUCTURE;
+                        }
+                        let file = dir.join(format!("{pid}.img"));
+                        if let Err(msg) = create_krun_scratch(&file, &size) {
+                            eprintln!("mysbx: {msg}");
+                            return EXIT_INFRASTRUCTURE;
+                        }
+                        krun_scratch_file = Some(file.clone());
+                    }
+                    Some(krun::SCRATCH_IMG.to_owned())
+                }
+                None => None,
+            };
+            // The multiplexer entry pin of the guest: the SAME host
+            // store path the bwrap tier pins (MYSBX_MUX_ENTRY_*) —
+            // unlike the podman image, the krun guest sees the host
+            // store through the ro share, so the entry resolves like
+            // every other store binary.
+            let krun_params = krun::Params {
+                rootfs: &krun_rootfs,
+                shell: &shell,
+                tools_path: &tools_path,
+                ca_bundle: ca_bundle.as_deref(),
+                mux_entry: mux_entry.as_deref(),
+                workspace: workspace.clone(),
+                memory: merged.memory.clone().map(Cow::from),
+                cpus: merged.cpus.clone().map(Cow::from),
+                git_trust: krun_git_trust.as_ref(),
+                scratch: krun_scratch_params_direct.as_deref(),
+            };
+            let krun_argv = match krun::krun_argv(&merged, &repo, &payload, &host_env, &krun_params)
+            {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    if let Some(f) = &git_trust_file {
+                        let _ = std::fs::remove_dir_all(
+                            f.parent().expect("trust file lives in its dir"),
+                        );
+                    }
+                    return EXIT_INFRASTRUCTURE;
+                }
+            };
+            // The bwrap wrap: --ro-bind /nix/store (the launcher's
+            // own runtime — its bash wrapper, libkrun.so, the rootfs
+            // symlinks), the rootfs directory, /dev/kvm, and one rw
+            // bind per share's host dir (the virtiofs server opens
+            // through this view; ro/rw is enforced by the SERVER per
+            // share, the bwrap bind only needs to make the path
+            // VISIBLE — exactly the spike runbook's chain, argv order
+            // included: --dev would SHADOW --dev-bind /dev/kvm if it
+            // followed it, and the launcher would abort in libkrun's
+            // KvmContext with a /dev/kvm it cannot see (finding 7).
+            // No --dev, no --tmpfs /tmp: the spike chain proved the
+            // launcher needs neither).
+            let mut inner_argv: Vec<String> = Vec::with_capacity(krun_argv.len() + 1);
+            inner_argv.push(krun_launcher.clone());
+            inner_argv.extend(krun_argv);
+            let mut argv: Vec<String> = vec![
+                "--clearenv".into(),
+                "--ro-bind".into(),
+                "/nix/store".into(),
+                "/nix/store".into(),
+                "--ro-bind".into(),
+                krun_rootfs.clone(),
+                krun_rootfs.clone(),
+                "--dev-bind".into(),
+                "/dev/kvm".into(),
+                "/dev/kvm".into(),
+                "--proc".into(),
+                "/proc".into(),
+            ];
+            // network = false (bd myconfig-dak.6): the guest layer is
+            // the launcher's --network none (the vsock disabled — no
+            // socket path at all), and this HOST layer takes the
+            // launcher's own netns away too — the TSI proxy would
+            // otherwise still dial from a netns that has a route.
+            // Both layers, defense in depth.
+            if !merged.network {
+                argv.push("--unshare-net".into());
+            }
+            // The staging trees (the slot budget's grouping, bd
+            // myconfig-xpq): one tree per access mode under the
+            // sidecar, every non-store share's host dir bound into
+            // its slot, the whole tree bound at the launcher-view
+            // STAGE_ROOT. A --dry-run audits the argv and creates
+            // NOTHING; a real run creates the pid-named tree like
+            // the git trust dir (an exec run cannot clean up — the
+            // next run's sweep removes it).
+            let krun_stage_root = repo.sidecar.join("krun-stage").join(pid.to_string());
+            if !dry_run {
+                if let Err(e) = std::fs::create_dir_all(krun_stage_root.join("ro"))
+                    .and_then(|()| std::fs::create_dir_all(krun_stage_root.join("rw")))
+                {
+                    eprintln!(
+                        "mysbx: cannot create the krun stage dir {}: {e}",
+                        krun_stage_root.display()
+                    );
+                    if let Some(f) = &git_trust_file {
+                        let _ = std::fs::remove_dir_all(
+                            f.parent().expect("trust file lives in its dir"),
+                        );
+                    }
+                    return EXIT_INFRASTRUCTURE;
+                }
+                krun_stage_dir = Some(krun_stage_root.clone());
+            }
+            // The tree itself rides into the launcher view rw (the
+            // ro half's slots are --ro-bound into it below; the
+            // tree's directories are the launcher's, the share
+            // modes are enforced by the DEVICE flags).
+            argv.push("--bind".into());
+            argv.push(krun_stage_root.to_string_lossy().into_owned());
+            argv.push(krun::STAGE_ROOT.to_owned());
+            // The scratch file rides in rw-bound at the fixed
+            // launcher-view SCRATCH_IMG (the launcher opens it
+            // host-side for krun_add_disk2 — the attach is rw by
+            // design, the bwrap bind must let libkrun open it
+            // O_RDWR). The bind names the file the run would have
+            // created — the SAME pid-named path — so a --dry-run
+            // audits the full chain (the audit contract: the argv
+            // of a dry run is the argv of the real one).
+            if krun_scratch_params_direct.is_some() {
+                let file = repo.sidecar.join("scratch").join(format!("{pid}.img"));
+                argv.push("--bind".into());
+                argv.push(file.to_string_lossy().into_owned());
+                argv.push(krun::SCRATCH_IMG.to_owned());
+            }
+            for (host_dir, read_only, slot) in krun::stage_binds(&merged, &repo, &krun_params) {
+                let mode = if read_only { "ro" } else { "rw" };
+                let dest = format!("{}/{mode}/{slot}", krun::STAGE_ROOT);
+                argv.push((if read_only { "--ro-bind" } else { "--bind" }).into());
+                argv.push(host_dir);
+                argv.push(dest);
+            }
+            argv.push("--".into());
+            argv.extend(inner_argv);
+            let bwrap_bin = env_or("MYSBX_BWRAP", "bwrap");
+            // bwrap's --clearenv owns the host-side environment; the
+            // launcher's --env flags own the payload's.
+            (bwrap_bin, argv, None::<String>)
+        }
         "nono" => {
             // The layered backend of docs/design/backends.md D1:
             // bubblewrap builds the filesystem view exactly as the
@@ -2707,6 +3018,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 let _ = child.wait();
             }
             eprintln!("mysbx: cannot exec {backend_bin}: {e}");
+            if let Some(f) = &git_trust_file {
+                let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
+            }
+            if let Some(d) = &krun_stage_dir {
+                let _ = std::fs::remove_dir_all(d);
+            }
             EXIT_INFRASTRUCTURE
         }
         RunMode::Result => {
@@ -2743,10 +3060,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             if let Some(f) = &git_trust_file {
                 let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
             }
-            // The per-run scratch file (bd myconfig-0pi): the guest
-            // wrapper's rm after the loop attach is best-effort, and a
-            // payload that never called nix never attached it. A name
-            // that is already gone makes this a no-op.
+            // The per-run krun staging tree (bd myconfig-xpq): the
+            // binds pointed INTO it, so nothing in it outlives the
+            // run as data — same pid-named lifecycle as the trust
+            // dir, swept by the next run otherwise.
+            if let Some(d) = &krun_stage_dir {
+                let _ = std::fs::remove_dir_all(d);
+            }
+            // The per-run scratch file (bd myconfig-0pi, and the
+            // direct arm's twin, bd myconfig-dak.7): the podman
+            // guest's rm after the loop attach is best-effort, and a
+            // payload that never called nix never attached it. A
+            // name that is already gone makes this a no-op.
             if let Some(f) = &krun_scratch_file {
                 let _ = std::fs::remove_file(f);
             }
