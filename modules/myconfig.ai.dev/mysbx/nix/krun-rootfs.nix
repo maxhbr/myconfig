@@ -404,6 +404,11 @@ runCommand "mysbx-krun-rootfs"
     # which needs the mountpoint on the ro root; the builder refuses
     # a dest below anything else (never a run-time ENOENT).
     mkdir -p $out/etc $out/home $out/srv $out/mnt $out/media $out/opt $out/data
+    # The scratch disk's mountpoint (bd myconfig-dak.7, backends.md
+    # D7): the ro root can hold no new entries at run time, so the
+    # ext4's target is baked here — the live run's finding (mkdir
+    # EROFS).
+    mkdir -p $out/mysbx-nix
     # The baked links of the fixed sandbox paths (the ro root can
     # hold no new entries at run time): the store share's and the
     # tmpfs home's contract paths.
