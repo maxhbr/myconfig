@@ -31,7 +31,9 @@ XDG_DATA_HOME=/mysbx-home/.local/share
 --env
 PATH=/synth/bin
 --env
-MYSBX_KRUN_RESOLV=bmFtZXNlcnZlciAxNjkuMjU0LjEuMQpuYW1lc2VydmVyIDE5Mi4xNjguMS4xCm5hbWVzZXJ2ZXIgOC44LjguOApuYW1lc2VydmVyIDguOC40LjQKbmFtZXNlcnZlciAxMC4xOTkuMTk5LjEKb3B0aW9ucyBlZG5zMAo=
+MYSBX_KRUN_RESOLV=nameserver 10.0.0.53
+options edns0
+
 --chdir
 /home/synth/repo
 --
