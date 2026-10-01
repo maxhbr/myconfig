@@ -888,3 +888,52 @@ network model is the one bd myconfig-6di.5.5 verified for
   TSI is an unfiltered proxy — any AF_INET connect the guest makes,
   the VMM dials — no per-domain or per-port hook exists in the
   muxer, and honesty refuses what cannot be enforced.
+
+### D7: The direct krun backend's nix scratch is a virtio-blk disk the guest init owns (bd myconfig-dak.7)
+
+The direct backend does not inherit D2's loop-mount workaround: the
+launcher owns the libkrun context, so the disk is attached as a REAL
+virtio-blk device — no loop module, no losetup, no unlink-while-attached
+race (bd myconfig-0pi's probes were podman-krun's constraint: crun's
+krun handler cannot attach disks, and that is exactly what the direct
+backend removes).
+
+- **The host half creates one sparse raw file per run**, under
+  `<repo>.mysbx/scratch/<pid>.img`, truncated to the size cap — the
+  SAME file contract as the podman-krun scratch (bd myconfig-0pi):
+  never reused, never shared between parallel runs, swept at startup
+  of files whose mysbx pid is gone. Creation costs no disk space;
+  only the guest's writes fill it.
+- **The launcher attaches it with `krun_add_disk2(ctx, "scratch",
+  path, KRUN_DISK_FORMAT_RAW, false)`.** RAW, always: the image is
+  mkfs'd by the guest itself, so nothing needs probing — and the
+  libkrun security note forbids re-probing an image a guest could
+  write (a guest with full write access to a raw image could recast
+  it as qcow2 and reference host files). The format is pinned by
+  knowledge, not by data. `krun_add_disk2` needs libkrun built with
+  the `blk` feature — the wrapper's pinned libkrun takes
+  `override { withBlk = true; }` (the same seam as dak.6's deferred
+  `withNet`; a run whose lib lacks the symbol is refused with the
+  diagnosis, never silently without a scratch).
+- **The guest init finds the device** (`/dev/vd*` by its stable
+  `block_id`), `mkfs.ext4 -q -F`s it ONCE per run (the file is
+  per-run, never reused — no stale fs ever survives), and mounts it
+  as the nix scratch root: the overlay upper/work over the read-only
+  host store share, nix state, logs, cache and `TMPDIR` all on the
+  ext4 — the guest kernel's OWN filesystem, chown and overlay
+  xattrs/whiteouts work natively, nothing over the virtiofs xattr
+  surface.
+- **The `/nix` placement is deliberate (bd myconfig-anw).** The
+  generic share placement refuses `/nix` roots (a tmpfs at `/nix`
+  hides the baked `/nix/store` link); the scratch overlay lives
+  there anyway, by its own rule: the init mounts the overlay at
+  `/nix/store` itself, ON TOP of the baked link's target — the
+  store share stays the lower layer, the scratch the upper. No
+  generic tmpfs ever mounts at `/nix`. A run without a scratch
+  keeps the plain ro store share (no silent RAM fallback — the
+  refusal or announcement rule of D2 applies unchanged).
+- **The host file is unlinked after the backend exits** (`--result`
+  mode removes its own; the startup sweep takes crashed/exec-mode
+  runs') — the virtio-blk fd keeps nothing alive past the VM, the
+  sweep is the only reclamation, same contract as podman-krun.
+

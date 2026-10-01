@@ -820,12 +820,14 @@ in
           type = types.package;
           default = pkgs.callPackage ./nix/krun-launcher.nix {
             # The libkrun the runs dlopen. The DEFAULT nixpkgs build
-            # has no net/blk symbols (bd myconfig-dak.1 finding 1);
-            # dak.6/.7 pass an override { withNet = true; withBlk =
-            # true; } here without touching any other file.
-            inherit (pkgs) libkrun;
+            # has no blk symbols (bd myconfig-dak.1 finding 1); the
+            # scratch disk needs krun_add_disk2, so the pin builds
+            # with the blk feature (backends.md D7, bd
+            # myconfig-dak.7). The launcher refuses a run whose lib
+            # lacks the symbol.
+            libkrun = pkgs.libkrun.override { withBlk = true; };
           };
-          defaultText = literalExpression "pkgs.callPackage ./nix/krun-launcher.nix { inherit (pkgs) libkrun; }";
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-launcher.nix { libkrun = pkgs.libkrun.override { withBlk = true; }; }";
           description = ''
             The mysbx-krun launcher of the direct-libkrun backend —
             the zero-dependency Rust binary (../krun-rs) that
