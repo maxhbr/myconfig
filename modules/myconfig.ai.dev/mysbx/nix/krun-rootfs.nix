@@ -283,6 +283,31 @@ let
     done < "$records_file"
     "$BB" rm -f "$records_file"
 
+    # The guest resolver (bd myconfig-dak.6, backends.md D6): TSI
+    # dials from the launcher's netns — the HOST netns — so the
+    # host's resolver addresses are exactly what the proxy can
+    # reach. Nothing else writes /etc/resolv.conf inside the guest
+    # (TSI has no net device, no DHCP); the manifest's env is the
+    # transport. The share loop's tmpfs-at-/etc (when it ran) is
+    # already in place; on a rootfs without /etc shares this mounts
+    # the component first. After the resolver exists, nothing must
+    # mount over /etc.
+    if [ -n "''${MYSBX_KRUN_RESOLV:-}" ]; then
+        step "writing /etc/resolv.conf from the host resolver"
+        # /etc is the ro root's share-root unless a share below it
+        # already tmpfs'd it: probe writability, mount when ro.
+        if ! "$BB" touch /etc/.mysbx-resolv-probe 2>/dev/null; then
+            "$BB" mount -t tmpfs tmpfs /etc \
+                || fail "cannot mount the tmpfs for /etc (the resolver)"
+        else
+            "$BB" rm -f /etc/.mysbx-resolv-probe
+        fi
+        # The env record was ALREADY decoded by the loader (every
+        # manifest env line exports plain text) — write verbatim.
+        printf '%s\n' "$MYSBX_KRUN_RESOLV" > /etc/resolv.conf \
+            || fail "cannot write /etc/resolv.conf"
+    fi
+
     # The payload is our own argv: $1 the path (absolute, no PATH
     # lookup needed), $2.. its arguments, exactly as krun_set_exec
     # carried them.
