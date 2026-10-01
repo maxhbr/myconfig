@@ -843,8 +843,12 @@ in
             # The STATIC busybox of the guest entry — pkgsStatic, not
             # the dynamic busybox of the package set.
             busyboxStatic = pkgs.pkgsStatic.busybox;
+            # The scratch formatter (bd myconfig-dak.7, backends.md
+            # D7): the static mkfs.ext4 the init runs before any
+            # store share is visible.
+            e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs;
           };
-          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; }";
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs; }";
           description = ''
             The guest rootfs of the direct-libkrun backend —
             the Nix-built plain directory (./nix/krun-rootfs.nix)

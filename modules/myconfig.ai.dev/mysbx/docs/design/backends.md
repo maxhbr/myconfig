@@ -931,12 +931,18 @@ backend removes).
 - **The `/nix` placement is deliberate (bd myconfig-anw).** The
   generic share placement refuses `/nix` roots (a tmpfs at `/nix`
   hides the baked `/nix/store` link); the scratch overlay lives
-  there anyway, by its own rule: the init mounts the overlay at
-  `/nix/store` itself, ON TOP of the baked link's target — the
-  store share stays the lower layer, the scratch the upper. No
-  generic tmpfs ever mounts at `/nix`. A run without a scratch
-  keeps the plain ro store share (no silent RAM fallback — the
-  refusal or announcement rule of D2 applies unchanged).
+  there anyway, by its own rule — and the baked link is a SYMLINK
+  into the stage tree, where a mount through the link lands at the
+  link's TARGET (the sim's finding: an overlay bound at
+  `/nix/store` would shadow the whole ro stage device's mount).
+  The init therefore mounts a tmpfs at `/nix` (the scratch's OWN
+  placement, after every share — no share ever lives below
+  `/nix`), creates the real `/nix/store` dir on it, and mounts the
+  overlay there with `lowerdir` naming the share's backing path
+  directly. The store share stays the lower layer, the scratch the
+  upper. A run without a scratch keeps the plain ro store share
+  (no silent RAM fallback — the refusal or announcement rule of D2
+  applies unchanged).
 - **The host file is unlinked after the backend exits** (`--result`
   mode removes its own; the startup sweep takes crashed/exec-mode
   runs') — the virtio-blk fd keeps nothing alive past the VM, the

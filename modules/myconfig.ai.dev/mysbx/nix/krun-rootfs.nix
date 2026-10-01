@@ -43,6 +43,10 @@
   # dynamic bash below is for the payload only, usable only after the
   # store share is mounted).
   busyboxStatic,
+  # The STATIC mkfs.ext4 of the scratch half (bd myconfig-dak.7,
+  # backends.md D7): the init formats the per-run virtio-blk device
+  # BEFORE any store path is visible — pkgsStatic, like busybox.
+  e2fsprogsStatic,
   bash,
 }:
 let
@@ -308,6 +312,63 @@ let
             || fail "cannot write /etc/resolv.conf"
     fi
 
+    # The scratch disk (bd myconfig-dak.7, backends.md D7): a REAL
+    # virtio-blk device the launcher attached (krun_add_disk2), the
+    # per-run raw file — no stale fs ever survives to be probed.
+    # Identified by PRESENCE, never by name: the block_id names the
+    # MMIO slot host-side, it is no serial the guest reads; the
+    # scratch is the ONLY /dev/vd*. The manifest env announces it
+    # (MYSBX_KRUN_SCRATCH=1); a run without it keeps the plain ro
+    # store share — no silent RAM fallback.
+    #
+    # The disk becomes the nix scratch: the ext4 carries the overlay
+    # upper/work over the ro store share, nix state, logs, cache and
+    # TMPDIR — the guest kernel's OWN filesystem (chown and overlay
+    # xattrs work natively, nothing over the virtiofs xattr
+    # surface). The /nix placement is DELIBERATE (bd
+    # myconfig-anw): the overlay mounts at /nix/store itself, ON
+    # TOP of the store share's mount — no generic tmpfs ever mounts
+    # at /nix, the baked link stays the lower layer's path.
+    if [ "''${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then
+        # The device: the only /dev/vd* (the root is virtiofs, not
+        # blk; no other disk ever attaches).
+        dev=$(  "$BB" ls /dev/vd* 2>/dev/null) \
+            || fail "MYSBX_KRUN_SCRATCH=1 but no /dev/vd* device — the disk did not attach"
+        [ "$(  printf '%s\n' "$dev" | "$BB" wc -l)" -eq 1 ] \
+            || fail "MYSBX_KRUN_SCRATCH=1 but more than one /dev/vd* device: $dev"
+        step "formatting $dev as the nix scratch (ext4)"
+        /bin/mkfs.ext4 -q -F "$dev" \
+            || fail "cannot mkfs.ext4 the scratch device $dev"
+        # The mountpoints: the scratch root and the overlay's work
+        # parent live ON the disk; the overlay target is /nix/store
+        # itself (the baked link's dest — mounting over a symlink
+        # fails, so bind it to itself first, a no-op mountpoint
+        # maker).
+        "$BB" mkdir -p /mysbx-nix
+        "$BB" mount -t ext4 "$dev" /mysbx-nix \
+            || fail "cannot mount the scratch $dev at /mysbx-nix"
+        "$BB" mkdir -p /mysbx-nix/store-upper /mysbx-nix/store-work \
+            || fail "cannot create the overlay dirs on the scratch"
+        # /nix/store is a baked SYMLINK into the stage tree, and a
+        # mount THROUGH a symlink lands at the link's TARGET — on
+        # the share mount that shadows the whole stage device's
+        # tree. The overlay needs a REAL mountpoint at the link's
+        # PATH. The tmpfs at /nix SHADOWS the baked link — nothing
+        # of the ro root is visible under it, no removal needed;
+        # the real dir lives on the tmpfs, then the overlay mounts
+        # at the link's own path. The lowerdir names the SHARE's
+        # backing path directly.
+        "$BB" mount -t tmpfs tmpfs /nix \
+            || fail "cannot mount the tmpfs for /nix (the overlay's mountpoint root)"
+        "$BB" mkdir -p /nix/store \
+            || fail "cannot create the real /nix/store mountpoint"
+        "$BB" mount -t overlay overlay \
+            -o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper,workdir=/mysbx-nix/store-work \
+            /nix/store \
+            || fail "cannot mount the store overlay (scratch upper)"
+        step "the nix scratch is $dev at /mysbx-nix; the store overlay is up"
+    fi
+
     # The payload is our own argv: $1 the path (absolute, no PATH
     # lookup needed), $2.. its arguments, exactly as krun_set_exec
     # carried them.
@@ -353,6 +414,10 @@ runCommand "mysbx-krun-rootfs"
     # the store share covers $out/nix/store only, but the file must
     # also survive a launcher run that shares NO store tag.
     cp ${busyboxStatic}/bin/busybox $out/bin/busybox
+    # The scratch disk's formatter (bd myconfig-dak.7): a REAL copy
+    # like busybox itself — it must run before any store share is
+    # mounted.
+    cp ${e2fsprogsStatic}/sbin/mkfs.ext4 $out/bin/mkfs.ext4
     # The payload's shells: store symlinks, valid once mysbx-init has
     # mounted the store share.
     ln -s ${bash}/bin/bash $out/bin/bash
