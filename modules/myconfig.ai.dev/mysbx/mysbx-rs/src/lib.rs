@@ -2667,6 +2667,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 "--proc".into(),
                 "/proc".into(),
             ];
+            // network = false (bd myconfig-dak.6): the guest layer is
+            // the launcher's --network none (the vsock disabled — no
+            // socket path at all), and this HOST layer takes the
+            // launcher's own netns away too — the TSI proxy would
+            // otherwise still dial from a netns that has a route.
+            // Both layers, defense in depth.
+            if !merged.network {
+                argv.push("--unshare-net".into());
+            }
             // The staging trees (the slot budget's grouping, bd
             // myconfig-xpq): one tree per access mode under the
             // sidecar, every non-store share's host dir bound into

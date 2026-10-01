@@ -394,6 +394,11 @@ struct Spec {
     /// The launcher maps it onto `krun_set_workdir`.
     workdir: String,
     payload: Vec<String>,
+    /// The merged config's `network` (bd myconfig-dak.6, backends.md
+    /// D6): `true` keeps libkrun's implicit vsock (the TSI proxy
+    /// dials from the launcher's netns), `false` disables it — no
+    /// socket path to the host at all.
+    network: bool,
 }
 
 /// The staging-tree BINDS of a run's shares — one `(host_dir,
@@ -606,6 +611,7 @@ pub fn krun_argv(
         // way.
         workdir: repo.root.to_string_lossy().into_owned(),
         payload: payload_argv,
+        network: cfg.network,
     };
     Ok(render(&spec))
 }
@@ -823,6 +829,16 @@ fn render(spec: &Spec) -> Vec<String> {
     for (k, v) in &spec.env {
         argv.push("--env".to_owned());
         argv.push(format!("{k}={v}"));
+    }
+    // 4b. the network (bd myconfig-dak.6): `none` is the only mode
+    // the argv must NAME — shared is the launcher's default (the
+    // implicit vsock's TSI). `none` disables the vsock in the
+    // launcher AND unshares the net around the whole chain (lib.rs's
+    // bwrap --unshare-net): neither the VMM nor the guest could
+    // dial out.
+    if !spec.network {
+        argv.push("--network".to_owned());
+        argv.push("none".to_owned());
     }
     // 5. the working directory (bwrap's --chdir equivalent:
     // `krun_set_workdir`)
