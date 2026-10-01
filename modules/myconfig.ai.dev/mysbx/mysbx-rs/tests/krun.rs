@@ -427,6 +427,27 @@ fn a_root_level_mount_dest_is_refused() {
 }
 
 #[test]
+fn a_nix_root_dest_is_refused() {
+    // /nix's only surface is the store share's slot: the generic
+    // placement would mount a tmpfs over /nix and hide the baked
+    // /nix/store link, killing every store-backed payload. A dest
+    // below /nix/store itself stays fine (the store share IS it).
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/data", Some("/nix/var"), Mode::Ro));
+    std::env::set_var("MYSBX_RESOLV_SOURCE", "tests/assets/krun/resolv.conf");
+    let err = krun_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &BTreeMap::new(),
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    )
+    .unwrap_err();
+    assert!(matches!(err, mysbx::krun::Error::NixShareRoot { dest } if dest == "/nix/var"));
+}
+
+#[test]
 fn a_baked_link_path_dest_is_refused() {
     // /nix/store: the store share's contract path — a configured
     // mount cannot replace it (a mount UNDER it is fine).

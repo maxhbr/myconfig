@@ -244,6 +244,13 @@ pub enum Error {
     /// root cannot grow the mountpoint at run time), so an unbaked
     /// root is a build-time refusal, never a run-time ENOENT.
     UnknownShareRoot { dest: String, root: String },
+
+    /// A configured mount's dest sits below /nix: the init's only
+    /// placement for it is a tmpfs OVER /nix, which hides the baked
+    /// /nix/store link and every store-backed payload with it. The
+    /// store share IS the /nix surface (dak.7's scratch store will
+    /// need a deliberate placement of its own, not this hole).
+    NixShareRoot { dest: String },
 }
 
 impl std::fmt::Display for Error {
@@ -267,6 +274,10 @@ impl std::fmt::Display for Error {
             Error::ProtectedDest { dest } => write!(
                 f,
                 "the mount dest `{dest}` collides with a fixed sandbox path (/nix/store, /mysbx-home) — a share may live below the home, never replace one of its roots"
+            ),
+            Error::NixShareRoot { dest } => write!(
+                f,
+                "the mount dest `{dest}` sits below /nix, whose only surface is the store share — placing anything else there would mount a tmpfs over /nix and hide the baked /nix/store link, breaking every store-backed payload"
             ),
             Error::UnknownShareRoot { dest, root } => write!(
                 f,
@@ -364,10 +375,16 @@ fn check_share_root(sandbox_path: &str) -> Result<(), Error> {
             .and_then(|c| c.as_os_str().to_str())
             .map(|c| format!("/{c}")),
     ) {
-        if first != "/tmp"
-            && first != "/mysbx-home"
-            && first != "/nix"
-            && !BAKED_SHARE_ROOTS.contains(&first.as_str())
+        if first == "/nix" {
+            // The store share's slot is the /nix surface; a tmpfs
+            // at /nix (the generic placement) would hide the baked
+            // /nix/store link — a refusal, not a silent kill of
+            // every store-backed payload (review finding).
+            return Err(Error::NixShareRoot {
+                dest: sandbox_path.to_owned(),
+            });
+        }
+        if first != "/tmp" && first != "/mysbx-home" && !BAKED_SHARE_ROOTS.contains(&first.as_str())
         {
             return Err(Error::UnknownShareRoot {
                 dest: sandbox_path.to_owned(),
