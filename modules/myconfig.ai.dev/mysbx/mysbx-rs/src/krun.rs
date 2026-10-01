@@ -433,16 +433,18 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
             format!("m-{}", fnv1a10(&sandbox_path)),
         ));
     }
-    for entry in cfg.effective_state_dirs() {
-        binds.push((
-            repo.sidecar
-                .join("state")
-                .join(&entry)
-                .to_string_lossy()
-                .into_owned(),
-            false,
-            state_tag(&entry),
-        ));
+    if matches!(params.workspace, Workspace::Live) {
+        for entry in cfg.effective_state_dirs() {
+            binds.push((
+                repo.sidecar
+                    .join("state")
+                    .join(&entry)
+                    .to_string_lossy()
+                    .into_owned(),
+                false,
+                state_tag(&entry),
+            ));
+        }
     }
     // The git trust files (ro slots like any other — the staging
     // device's OWN ro flag enforces the read-only side end to end).
@@ -560,12 +562,14 @@ pub fn krun_argv(
     for mount in &cfg.mounts {
         shares.push(share_of_mount(mount)?);
     }
-    for entry in cfg.effective_state_dirs() {
-        shares.push(Share {
-            slot: state_tag(&entry),
-            sandbox_path: format!("/mysbx-home/{entry}"),
-            read_only: false,
-        });
+    if matches!(params.workspace, Workspace::Live) {
+        for entry in cfg.effective_state_dirs() {
+            shares.push(Share {
+                slot: state_tag(&entry),
+                sandbox_path: format!("/mysbx-home/{entry}"),
+                read_only: false,
+            });
+        }
     }
     // The git trust (bd myconfig-zj2's krun twin): the SAME two
     // per-run files the podman arm binds — here as ro slots in the
