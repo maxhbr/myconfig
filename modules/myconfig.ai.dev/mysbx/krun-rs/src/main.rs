@@ -138,6 +138,18 @@ struct KrunApi {
     // TSI by default when no net device is configured; disabling the
     // implicit vsock is the only honest `network = false` there.
     krun_disable_implicit_vsock: Option<unsafe extern "C" fn(ctx_id: c_uint) -> c_int>,
+    // Optional (blk-feature-gated): the scratch disk (bd
+    // myconfig-dak.7). A lib WITHOUT the symbol refuses a --scratch
+    // run — never a silent run without the disk.
+    krun_add_disk2: Option<
+        unsafe extern "C" fn(
+            ctx_id: c_uint,
+            c_block_id: *const c_char,
+            c_disk_path: *const c_char,
+            disk_format: u32,
+            read_only: bool,
+        ) -> c_int,
+    >,
     // Optional (only in builds with the logger wired): directs
     // libkrun's own log (the VMM's error! calls — otherwise INVISIBLE,
     // the live findings' diagnosis gap) to a raw fd. Level 4 = debug
@@ -229,6 +241,18 @@ unsafe fn load_api() -> Result<KrunApi, String> {
         krun_disable_implicit_vsock: sym(b"krun_disable_implicit_vsock").ok().map(|p| unsafe {
             std::mem::transmute::<*mut (), unsafe extern "C" fn(ctx_id: c_uint) -> c_int>(p)
         }),
+        krun_add_disk2: sym(b"krun_add_disk2").ok().map(|p| unsafe {
+            std::mem::transmute::<
+                *mut (),
+                unsafe extern "C" fn(
+                    ctx_id: c_uint,
+                    c_block_id: *const c_char,
+                    c_disk_path: *const c_char,
+                    disk_format: u32,
+                    read_only: bool,
+                ) -> c_int,
+            >(p)
+        }),
         krun_init_log: sym(b"krun_init_log").ok().map(|p| unsafe {
             std::mem::transmute::<
                 *mut (),
@@ -306,6 +330,15 @@ struct Config {
     /// (bwrap's --chdir equivalent). Defaults to `/` — the spec
     /// always carries the workspace path.
     workdir: PathBuf,
+    /// The per-run nix scratch disk (bd myconfig-dak.7, backends.md
+    /// D7): a HOST-side sparse raw file attached as a real
+    /// virtio-blk device (`krun_add_disk2`, RAW — the guest init
+    /// mkfs.ext4s and mounts it; the libkrun security note forbids
+    /// re-probing an image a guest could write). The block id is
+    /// `scratch`, stable for the init to find. None attaches no
+    /// disk — a run without the scratch keeps the plain ro store
+    /// share.
+    scratch: Option<PathBuf>,
     payload: Vec<String>,
 }
 
@@ -313,7 +346,8 @@ fn usage() -> ! {
     eprintln!(
         "usage: mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--init PATH] \
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
-         [--manifest FILE] [--network shared|none] [--env K=V]... \
+         [--manifest FILE] [--network shared|none] \
+         [--scratch FILE] [--env K=V]... \
          [--chdir DIR] -- CMD [ARGS...] \
   (the manifest FILE carries the shares; --ro-share/--rw-share remain \
    accepted for cmdline-sized debug runs)"
@@ -340,6 +374,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         manifest: None,
         network: true,
         workdir: PathBuf::from("/"),
+        scratch: None,
         payload: Vec::new(),
     };
     let mut it = args.by_ref().peekable();
@@ -397,6 +432,12 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                         return Err(format!("network expects `shared` or `none`, got `{other}`"))
                     }
                 };
+            }
+            "--scratch" => {
+                cfg.scratch = Some(PathBuf::from(
+                    it.next()
+                        .ok_or_else(|| "missing value for --scratch".to_owned())?,
+                ))
             }
             "--env" => {
                 let value = it
@@ -579,6 +620,10 @@ fn manifest_text(cfg: &Config) -> String {
 /// The manifest's SLOT inside the ro stage device (a fixed name —
 /// the init reads it at a known path once stage-ro is mounted).
 const MANIFEST_SLOT: &str = "manifest";
+
+/// The scratch disk's BLOCK ID (a fixed name — the guest init finds
+/// the device by it, bd myconfig-dak.7).
+const SCRATCH_BLOCK_ID: &str = "scratch";
 
 fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
     let exec_path = cfg.init.clone().unwrap_or_else(|| cfg.payload[0].clone());
@@ -774,6 +819,39 @@ fn main() {
                 "krun_add_virtiofs3",
             );
         }
+        // The scratch disk (bd myconfig-dak.7, backends.md D7):
+        // the per-run sparse raw file attaches as a REAL virtio-blk
+        // device. RAW always — the mkfs is the guest init's own (the
+        // file is per-run, nothing to probe), and libkrun's security
+        // note forbids re-probing an image a guest could have
+        // written (a guest with full write access could recast a raw
+        // file as qcow2 and reference host files). The symbol is
+        // blk-feature-gated; its absence is REFUSED, never a silent
+        // run without the disk.
+        if let Some(scratch) = &cfg.scratch {
+            match api.krun_add_disk2 {
+                Some(add_disk2) => {
+                    const KRUN_DISK_FORMAT_RAW: u32 = 0;
+                    check(
+                        (add_disk2)(
+                            ctx,
+                            cstr(SCRATCH_BLOCK_ID).as_ptr(),
+                            cstr(scratch).as_ptr(),
+                            KRUN_DISK_FORMAT_RAW,
+                            false,
+                        ),
+                        "krun_add_disk2",
+                    );
+                }
+                None => {
+                    eprintln!(
+                        "mysbx-krun: --scratch but libkrun has no \
+                         krun_add_disk2 (blk feature) — the scratch disk cannot attach"
+                    );
+                    std::process::exit(EXIT_SETUP);
+                }
+            }
+        }
         // The network mode (bd myconfig-dak.6): `none` disables the
         // implicit vsock — no vsock device, no tsi_hijack on the
         // guest cmdline, NO socket path to the host (the stock
@@ -893,6 +971,25 @@ mod tests {
         assert!(parse(&["--"]).is_err());
         assert!(parse(&["--rootfs", "/root", "--"]).is_err());
         assert!(parse(&["--rootfs", "/root", "--", "/bin/true"]).is_ok());
+    }
+
+    #[test]
+    fn scratch_parses_a_path() {
+        // --scratch names the HOST-side sparse raw file (bd
+        // myconfig-dak.7); without it no disk attaches.
+        let with = parse(&[
+            "--rootfs",
+            "/root",
+            "--scratch",
+            "/scratch/s.img",
+            "--",
+            "/bin/true",
+        ])
+        .unwrap();
+        assert_eq!(with.scratch, Some(PathBuf::from("/scratch/s.img")));
+        let without = parse(&["--rootfs", "/root", "--", "/bin/true"]).unwrap();
+        assert_eq!(without.scratch, None);
+        assert!(parse(&["--rootfs", "/root", "--scratch", "--", "/bin/true"]).is_err());
     }
 
     #[test]

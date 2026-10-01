@@ -915,9 +915,14 @@ backend removes).
   `override { withBlk = true; }` (the same seam as dak.6's deferred
   `withNet`; a run whose lib lacks the symbol is refused with the
   diagnosis, never silently without a scratch).
-- **The guest init finds the device** (`/dev/vd*` by its stable
-  `block_id`), `mkfs.ext4 -q -F`s it ONCE per run (the file is
-  per-run, never reused — no stale fs ever survives), and mounts it
+- **The guest init finds the device by PRESENCE, not by name**: the
+  `block_id` names the MMIO slot host-side (libkrun's device
+  registry), it is NOT a serial the guest reads — the scratch is
+  the only virtio-blk device, so it is the only `/dev/vd*`. The run
+  announces the scratch in the manifest env
+  (`MYSBX_KRUN_SCRATCH=1`); the init then `mkfs.ext4 -q -F`s the
+  one `/dev/vd*` ONCE per run (the file is per-run, never reused —
+  no stale fs ever survives) and mounts it
   as the nix scratch root: the overlay upper/work over the read-only
   host store share, nix state, logs, cache and `TMPDIR` all on the
   ext4 — the guest kernel's OWN filesystem, chown and overlay
