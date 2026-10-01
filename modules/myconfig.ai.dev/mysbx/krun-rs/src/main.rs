@@ -297,6 +297,11 @@ struct Config {
     /// krun_start_enter; the guest init reads it from the ro stage
     /// device. When set, --ro-share/--rw-share must be absent.
     manifest: Option<PathBuf>,
+    /// The network mode (bd myconfig-dak.6, backends.md D6):
+    /// `true` keeps libkrun's implicit vsock (TSI dials from this
+    /// netns), `false` disables the vsock — no socket path to the
+    /// host at all. Defaults to shared.
+    network: bool,
     /// The payload's working directory, handed to krun_set_workdir
     /// (bwrap's --chdir equivalent). Defaults to `/` — the spec
     /// always carries the workspace path.
@@ -308,7 +313,8 @@ fn usage() -> ! {
     eprintln!(
         "usage: mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--init PATH] \
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
-         [--manifest FILE] [--env K=V]... [--chdir DIR] -- CMD [ARGS...] \
+         [--manifest FILE] [--network shared|none] [--env K=V]... \
+         [--chdir DIR] -- CMD [ARGS...] \
   (the manifest FILE carries the shares; --ro-share/--rw-share remain \
    accepted for cmdline-sized debug runs)"
     );
@@ -332,6 +338,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         shares: Vec::new(),
         env: Vec::new(),
         manifest: None,
+        network: true,
         workdir: PathBuf::from("/"),
         payload: Vec::new(),
     };
@@ -378,6 +385,18 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                     .next()
                     .ok_or_else(|| "missing value for --manifest".to_owned())?;
                 cfg.manifest = Some(PathBuf::from(path));
+            }
+            "--network" => {
+                let value = it
+                    .next()
+                    .ok_or_else(|| "missing value for --network".to_owned())?;
+                cfg.network = match value.as_str() {
+                    "shared" => true,
+                    "none" => false,
+                    other => {
+                        return Err(format!("network expects `shared` or `none`, got `{other}`"))
+                    }
+                };
             }
             "--env" => {
                 let value = it
@@ -755,14 +774,27 @@ fn main() {
                 "krun_add_virtiofs3",
             );
         }
-        // No network: when the lib knows the implicit vsock (a
-        // net-enabled build), kill it — that is the only way a run
-        // with no net device is honest about having no network. A
-        // default nixpkgs build has the symbol absent and no TSI
-        // either (verified: no krun_add_net_*/krun_set_passt_fd
-        // symbols in the plain lib), so nothing is needed there.
-        if let Some(disable) = api.krun_disable_implicit_vsock {
-            check((disable)(ctx), "krun_disable_implicit_vsock");
+        // The network mode (bd myconfig-dak.6): `none` disables the
+        // implicit vsock — no vsock device, no tsi_hijack on the
+        // guest cmdline, NO socket path to the host (the stock
+        // nixpkgs libkrun enables TSI even without its net feature,
+        // so shared is the default the caller need not name). The
+        // symbol is present in the stock lib (the vsock is not
+        // net-gated); its absence in some other build cannot honor
+        // `none` and is REFUSED — an unfilterable TSI proxy is
+        // exactly what `network = false` forbids.
+        if !cfg.network {
+            match api.krun_disable_implicit_vsock {
+                Some(disable) => {
+                    check((disable)(ctx), "krun_disable_implicit_vsock");
+                }
+                None => {
+                    eprintln!(
+                        "mysbx-krun: --network none but libkrun has no                          krun_disable_implicit_vsock — TSI cannot be disabled"
+                    );
+                    std::process::exit(EXIT_SETUP);
+                }
+            }
         }
         // The payload's working directory (krun_set_workdir, the
         // spec's --chdir): the workspace path, where every other
@@ -951,6 +983,36 @@ mod tests {
         )));
         assert!(text.starts_with("env\t"));
         assert!(text.contains("chdir\t"));
+    }
+
+    #[test]
+    fn network_defaults_to_shared_and_parses_both_modes() {
+        // The default is SHARED (bd myconfig-dak.6): the implicit
+        // vsock's TSI is the guest's egress; the caller names
+        // `none` only to disable it.
+        assert!(
+            parse(&["--rootfs", "/root", "--", "/bin/true"])
+                .unwrap()
+                .network
+        );
+        assert!(
+            !parse(&["--rootfs", "/root", "--network", "none", "--", "/bin/true"])
+                .unwrap()
+                .network
+        );
+        assert!(
+            parse(&[
+                "--rootfs",
+                "/root",
+                "--network",
+                "shared",
+                "--",
+                "/bin/true"
+            ])
+            .unwrap()
+            .network
+        );
+        assert!(parse(&["--rootfs", "/root", "--network", "off", "--", "/bin/true"]).is_err());
     }
 
     #[test]
