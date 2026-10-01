@@ -1395,6 +1395,7 @@ fn sweep_krun_scratch(dir: &std::path::Path) -> Result<(), String> {
                 dir.display()
             ))
         }
+
     };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -1403,6 +1404,24 @@ fn sweep_krun_scratch(dir: &std::path::Path) -> Result<(), String> {
         };
         if pid_gone(stale_pid) {
             let _ = std::fs::remove_file(entry.path());
+        }
+    }
+    Ok(())
+}
+
+fn sweep_krun_run_dirs(dir: &std::path::Path) -> Result<(), String> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("cannot read krun run directory {}: {e}", dir.display())),
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(stale_pid) = name.parse::<u32>().ok() else {
+            continue;
+        };
+        if pid_gone(stale_pid) {
+            let _ = std::fs::remove_dir_all(entry.path());
         }
     }
     Ok(())
@@ -2555,6 +2574,17 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 );
                 return EXIT_INFRASTRUCTURE;
             };
+            if !dry_run {
+                for dir in [
+                    repo.sidecar.join("gittrust"),
+                    repo.sidecar.join("krun-stage"),
+                ] {
+                    if let Err(msg) = sweep_krun_run_dirs(&dir) {
+                        eprintln!("mysbx: {msg}");
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                }
+            }
             // The guest-root git trust (bd myconfig-zj2, the direct
             // backend's twin of the podman arm's files): the payload
             // runs as GUEST ROOT over virtiofs files that keep their
@@ -2635,6 +2665,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 Ok(a) => a,
                 Err(e) => {
                     eprintln!("mysbx: {e}");
+                    if let Some(f) = &git_trust_file {
+                        let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
+                    }
                     return EXIT_INFRASTRUCTURE;
                 }
             };
@@ -2693,6 +2726,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                         "mysbx: cannot create the krun stage dir {}: {e}",
                         krun_stage_root.display()
                     );
+                    if let Some(f) = &git_trust_file {
+                        let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
+                    }
                     return EXIT_INFRASTRUCTURE;
                 }
                 krun_stage_dir = Some(krun_stage_root.clone());
@@ -2929,6 +2965,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 let _ = child.wait();
             }
             eprintln!("mysbx: cannot exec {backend_bin}: {e}");
+            if let Some(f) = &git_trust_file {
+                let _ = std::fs::remove_dir_all(f.parent().expect("trust file lives in its dir"));
+            }
+            if let Some(d) = &krun_stage_dir {
+                let _ = std::fs::remove_dir_all(d);
+            }
             EXIT_INFRASTRUCTURE
         }
         RunMode::Result => {
