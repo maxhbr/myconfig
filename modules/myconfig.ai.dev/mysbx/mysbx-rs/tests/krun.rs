@@ -99,6 +99,9 @@ fn assert_golden(rel: &str, argv: &[String]) {
 }
 
 fn run(cfg: &Merged, repo: &Repo, payload: &Payload, params: &Params<'_>) -> Vec<String> {
+    // The resolver fixture pins the goldens — the host's real
+    // /etc/resolv.conf differs per machine (bd myconfig-dak.6).
+    std::env::set_var("MYSBX_RESOLV_SOURCE", "tests/assets/krun/resolv.conf");
     let host_env = BTreeMap::new();
     krun_argv(cfg, repo, payload, &host_env, params).expect("the argv builds")
 }

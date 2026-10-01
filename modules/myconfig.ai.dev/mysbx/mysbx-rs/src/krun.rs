@@ -699,8 +699,16 @@ fn sandbox_env(
     // network = false has no resolver to reach and the entry would
     // advertise one.
     if cfg.network {
-        if let Ok(host_resolv) = std::fs::read_to_string("/etc/resolv.conf") {
-            env.push(("MYSBX_KRUN_RESOLV".to_owned(), b64(&host_resolv)));
+        // The tests pin the resolver source to a fixture — the host
+        // file itself differs per machine (bd myconfig-dak.6).
+        let source =
+            std::env::var("MYSBX_RESOLV_SOURCE").unwrap_or_else(|_| "/etc/resolv.conf".to_owned());
+        if let Ok(host_resolv) = std::fs::read_to_string(source) {
+            // RAW: the launcher's manifest_text b64-encodes every env
+            // value itself — a second encode here would hand the guest
+            // base64 text as its resolver file (live-run finding on
+            // 'thing', bd myconfig-dak.6).
+            env.push(("MYSBX_KRUN_RESOLV".to_owned(), host_resolv));
         }
     }
     // The git trust's global config stays the block's LAST entry
@@ -713,36 +721,6 @@ fn sandbox_env(
         ));
     }
     env
-}
-
-/// base64 (standard, padded) of arbitrary bytes — the manifest's
-/// env-value encoding, same alphabet the launcher's manifest uses.
-/// The crate is dependency-free by design; the alphabet by hand.
-pub(crate) fn b64(data: &str) -> String {
-    const TBL: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let bytes = data.as_bytes();
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let b = [
-            chunk[0],
-            *chunk.get(1).unwrap_or(&0),
-            *chunk.get(2).unwrap_or(&0),
-        ];
-        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-        out.push(TBL[(n >> 18 & 63) as usize] as char);
-        out.push(TBL[(n >> 12 & 63) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            TBL[(n >> 6 & 63) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            TBL[(n & 63) as usize] as char
-        } else {
-            '='
-        });
-    }
-    out
 }
 
 /// The virtiofs tag of a state-dir backing share — deterministic per
