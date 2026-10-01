@@ -321,8 +321,9 @@
   # and `backend = "krun"` runs are refused with a naming message
   # (the same contract as the podman image pin). Parameters, not
   # `pkgs.` references, so a host pins exactly the libkrun build its
-  # runs need (dak.6/.7 pass a withNet/withBlk override through
-  # krun-launcher.nix's `libkrun` argument).
+  # runs need (the direct launcher's default pin builds withBlk for
+  # the scratch disk, backends.md D7; a host overrides the
+  # krun-launcher.nix `libkrun` argument to change it).
   krunLauncher ? null,
   krunRootfs ? null,
 }:
