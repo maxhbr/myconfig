@@ -383,6 +383,31 @@ let
             || fail "cannot chdir to the workdir $manifest_chdir"
     fi
 
+    # The fd ceiling (bd myconfig-mnr): the payload execs as PID 1
+    # of the VM with the kernel's default RLIMIT_NOFILE (soft 1024)
+    # — on the bwrap backends it would inherit the host session's
+    # limits, here nothing raises them, and a big-repo libgit2 walk
+    # (nix flake check on the workspace share) dies with EMFILE at
+    # 1024. Raise the hard ceiling first (the soft one cannot exceed
+    # it), then the soft, best-effort: the payload must still run on
+    # a kernel with a smaller nr_open, so a refusal is a WARNING plus
+    # whatever limit stands, never a dead guest.
+    # ulimit is an ash BUILTIN (not a busybox applet), so the
+    # calls go to the shell itself — no $BB prefix here. As the VM's
+    # root the hard raise reaches nr_open (1048576); a constrained
+    # kernel keeps its own hard ceiling, and the soft then goes to
+    # THAT — still a raise, never the 1024 default.
+    nofile_target=1048576
+    ulimit -Hn "$nofile_target" 2>/dev/null \
+        || "$BB" echo "mysbx-init: WARNING: cannot raise the hard fd limit to $nofile_target (keeping $(ulimit -Hn))"
+    if ulimit -n "$nofile_target" 2>/dev/null; then
+        step "fd ceiling raised to $(ulimit -n)"
+    elif ulimit -n "$(ulimit -Hn)" 2>/dev/null; then
+        "$BB" echo "mysbx-init: WARNING: fd ceiling capped at the hard limit $(ulimit -n)"
+    else
+        "$BB" echo "mysbx-init: WARNING: cannot raise the soft fd limit (keeping $(ulimit -n))"
+    fi
+
     step "exec-ing the payload: $1"
     exec "$@"
   '';
