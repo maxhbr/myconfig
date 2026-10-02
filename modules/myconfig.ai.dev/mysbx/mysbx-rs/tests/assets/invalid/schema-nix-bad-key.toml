@@ -1,0 +1,5 @@
+# nix.conf keys are `name = value` directives: a key carrying `=` or
+# `#` would smuggle a second directive or a comment into the
+# generated NIX_CONFIG file (docs/design/config.md, [nix]).
+[nix]
+"experimental-features = flakes" = "smuggled"

@@ -329,6 +329,10 @@ let
     env = cfg.config.env;
     "forward-env" = cfg.forwardedEnvVars;
   }
+  # [nix] only when declared: a host that configures nothing nixy
+  # leaves the sandbox on nix's own defaults (plus the wrapper's
+  # /etc/nix/nix.conf pin).
+  // lib.optionalAttrs (cfg.config.nix != { }) { nix = cfg.config.nix; }
   // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
   // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; }
   // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; }
@@ -1241,6 +1245,20 @@ in
             type = types.attrsOf types.str;
             default = { };
             description = "Environment variables forwarded into the sandbox.";
+          };
+          nix = mkOption {
+            type = types.attrsOf types.str;
+            default = { };
+            example = {
+              experimental-features = "nix-command flakes";
+            };
+            description = ''
+              Nix settings forwarded into the sandbox (the `[nix]`
+              table, ./docs/design/config.md): setting name → value,
+              rendered by mysbx as the sandbox's `NIX_CONFIG` — which
+              nix reads in addition to its conf files, so this composes
+              with the wrapper's own `/etc/nix/nix.conf` pin.
+            '';
           };
           gitDirs = mkOption {
             type = types.listOf (types.addCheck types.str (p: p != ""));

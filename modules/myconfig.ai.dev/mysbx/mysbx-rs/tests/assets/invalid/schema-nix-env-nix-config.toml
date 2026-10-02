@@ -1,0 +1,5 @@
+# NIX_CONFIG is mysbx-generated from the [nix] table: a hand-set entry
+# would fight the generated one for the same slot. Write [nix] settings
+# instead (bd myconfig-j23).
+[env]
+NIX_CONFIG = "hand-rolled"

@@ -622,6 +622,7 @@ mod tests {
                 },
             ],
             env,
+            nix: BTreeMap::new(),
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
             forward_env: Vec::new(),

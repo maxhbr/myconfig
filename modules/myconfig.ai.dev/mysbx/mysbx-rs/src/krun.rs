@@ -719,6 +719,13 @@ fn sandbox_env(
     for (k, v) in &cfg.env {
         env.push((k.clone(), v.clone()));
     }
+    // The `[nix]` table as NIX_CONFIG (bd myconfig-j23): the direct
+    // guest's ONLY nix configuration — there is no /etc/nix/nix.conf
+    // pin here, the rootfs bakes none. Set after `[env]`, before
+    // the infrastructure block, like on every backend.
+    if let Some(nix_config) = cfg.nix_config() {
+        env.push(("NIX_CONFIG".to_owned(), nix_config));
+    }
     // The infrastructure block, set after every layer (config.md
     // D14): HOME names the guest tmpfs the init created, the XDG
     // base dirs derive from it, PATH names the tool closure — all

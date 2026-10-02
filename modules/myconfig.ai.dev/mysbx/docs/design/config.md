@@ -80,6 +80,8 @@ config that can execute is config that can escape.
   `egress = "proxy-only"` is the stricter profile in D20, off unless a
   layer sets it)
 - environment forwarded into the sandbox (`[env]`)
+- nix settings forwarded into the sandbox (`[nix]`, D24): rendered as
+  the sandbox's `NIX_CONFIG`
 - which terminal multiplexer the interactive payload is
   (`multiplexer`, see D17) — the one key where the sidecar overrides
   the user config's value outright, because it grants no host access
@@ -1350,3 +1352,45 @@ cgroups" warning applies. A `MYSBX_PODMAN_PIDS_LIMIT` pin on
 podman-krun is still refused (backends.md D2): an explicit
 per-invocation request is not silently dropped.
 
+
+### D24: nix settings are a `[nix]` table, not `[env]` `NIX_CONFIG`
+
+Nix inside the sandbox is a first-class concern of the sandbox, not a
+generic environment variable: the sandbox owns which nix configuration
+the payload's nix sees (experimental features, build users, sandboxing
+— the settings that make single-user nix work at all inside the box),
+exactly like it owns `HOME` and `PATH` (D14). A hand-rolled
+`[env] NIX_CONFIG` is therefore REFUSED at the schema edge with a
+message naming the replacement — the `workmux` treatment — because two
+spellings of the same slot (the generated one and the hand-set one,
+the later `--setenv` silently winning) is exactly the ambiguity strict
+parsing exists to prevent (D11).
+
+The table is setting-name → string:
+
+```toml
+[nix]
+experimental-features = "nix-command flakes"
+build-users-group = ""      # single-user nix: no build users in the box
+```
+
+Merged and rendered like `[env]` (bd myconfig-j23):
+
+- both layers declare; the sidecar may introduce keys the user config
+  does not set, and must not override user-set ones (the D7 asymmetry)
+- the backends render the merged table as `NIX_CONFIG` — `key = value`
+  lines, newline-separated — set after the `[env]` layer and before
+  the infrastructure variables, so no layer can repoint it
+- nix reads `NIX_CONFIG` in addition to its conf files: on the bwrap
+  backends it composes with the wrapper-pinned `/etc/nix/nix.conf`
+  (which stays the place for store-path pins), and on the direct-krun
+  guest it is the only nix configuration there is — the rootfs bakes
+  no `/etc/nix/nix.conf`
+- a host (or repo) that declares nothing gets no `NIX_CONFIG` at all:
+  nix runs on its defaults plus whatever the backend pins
+
+Key grammar: a name must be a usable nix.conf directive name — empty,
+`-`-prefixed, or one containing `=`/`#`/`;` is refused at parse time
+(a value smuggling a second directive or a comment would corrupt the
+generated file). Values are taken verbatim: a value is one setting's
+value, not a file format.

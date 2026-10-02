@@ -120,6 +120,10 @@ pub struct Merged {
     /// sidecar-only variables (overrides were rejected before this value
     /// existed).
     pub env: BTreeMap<String, String>,
+    /// Effective nix settings (the `[nix]` table): user-config
+    /// entries plus accepted sidecar entries — the same asymmetry as
+    /// `env` (overrides rejected before this value existed).
+    pub nix: BTreeMap<String, String>,
     /// Host directories approved as git metadata targets (review-2
     /// item 1): a repo-writable `.git` FILE may only cause a bind
     /// when its resolved target is at or below one of these. Both
@@ -175,6 +179,28 @@ pub struct Merged {
 }
 
 impl Merged {
+    /// The merged `[nix]` settings as a `NIX_CONFIG` value — `key =
+    /// value` lines, NEWLINE-separated (nix reads the variable IN
+    /// ADDITION to its conf files, so on the bwrap backends this
+    /// composes with the wrapper-pinned `/etc/nix/nix.conf`). Empty
+    /// when neither layer declared anything — no `NIX_CONFIG` is
+    /// set at all then, so nix runs on its defaults (plus the pin).
+    /// The key grammar was validated at the schema edge
+    /// (config.rs `nix_settings`), the values are taken verbatim —
+    /// a value is one nix setting's value, not a file format.
+    pub fn nix_config(&self) -> Option<String> {
+        if self.nix.is_empty() {
+            return None;
+        }
+        Some(
+            self.nix
+                .iter()
+                .map(|(k, v)| format!("{k} = {v}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    }
+
     /// The state-directory entries a run actually binds: the merged
     /// `state-dirs` declarations, plus the implicit `.ssh` entry of
     /// the sandbox's own SSH keypair (docs/design/config.md D22) — a
@@ -543,6 +569,29 @@ pub fn merge(
     for (key, value) in &user.env {
         env.insert(key.clone(), value.clone());
     }
+
+    // nix: the same asymmetry as env (D7) — the sidecar may
+    // introduce settings, it must not override user-set ones.
+    let mut nix = BTreeMap::new();
+    for (key, value) in &user.nix {
+        nix.insert(key.clone(), value.clone());
+    }
+    for (key, value) in &sidecar.nix {
+        if let Some(user_value) = user.nix.get(key) {
+            return Err(Error::EnvOverride {
+                key: format!("nix.{key}"),
+                message: format!(
+                    "{}: [nix] {} = {:?} overrides the user config {}, which sets it to {:?} — the sidecar may introduce new settings but must not override user-set ones (docs/design/config.md D7)",
+                    sidecar_file.display(),
+                    key,
+                    value,
+                    user_file.display(),
+                    user_value,
+                ),
+            });
+        }
+        nix.insert(key.clone(), value.clone());
+    }
     for (key, value) in &sidecar.env {
         if let Some(user_value) = user.env.get(key) {
             return Err(Error::EnvOverride {
@@ -558,6 +607,29 @@ pub fn merge(
             });
         }
         env.insert(key.clone(), value.clone());
+    }
+
+    // nix: the same asymmetry as env (D7) — the sidecar may
+    // introduce settings, it must not override user-set ones.
+    let mut nix = BTreeMap::new();
+    for (key, value) in &user.nix {
+        nix.insert(key.clone(), value.clone());
+    }
+    for (key, value) in &sidecar.nix {
+        if let Some(user_value) = user.nix.get(key) {
+            return Err(Error::EnvOverride {
+                key: format!("nix.{key}"),
+                message: format!(
+                    "{}: [nix] {} = {:?} overrides the user config {}, which sets it to {:?} — the sidecar may introduce new settings but must not override user-set ones (docs/design/config.md D7)",
+                    sidecar_file.display(),
+                    key,
+                    value,
+                    user_file.display(),
+                    user_value,
+                ),
+            });
+        }
+        nix.insert(key.clone(), value.clone());
     }
 
     // mounts: both layers declare directly (D7 — the sidecar is
@@ -689,6 +761,7 @@ pub fn merge(
         display: sidecar.display.or(user.display).unwrap_or(Display::Off),
         mounts,
         env,
+        nix,
         git_dirs: approved_git_dirs,
         state_dirs,
         forward_env,
@@ -952,6 +1025,63 @@ mod tests {
         assert_eq!(merged.env.len(), 2);
         assert_eq!(merged.env.get("SIDECAR_NEW").unwrap(), "invented");
         assert_eq!(merged.env.get("USER_ONLY").unwrap(), "u");
+    }
+
+    #[test]
+    fn nix_settings_merge_and_the_sidecar_cannot_override() {
+        // The [nix] table (bd myconfig-j23): the same D7 asymmetry as
+        // [env] — the sidecar introduces, it must not override.
+        let mut u = Config::default();
+        u.nix.insert(
+            "experimental-features".to_owned(),
+            "nix-command flakes".to_owned(),
+        );
+        let s = cfg("[nix]\nsandbox = \"false\"\n");
+        let m = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
+        assert_eq!(m.nix.len(), 2);
+        assert_eq!(m.nix["sandbox"], "false");
+
+        // the override refusal, with the [nix] spelling in the message
+        let mut u = Config::default();
+        u.nix.insert("sandbox".to_owned(), "true".to_owned());
+        let s = cfg("[nix]\nsandbox = \"false\"\n");
+        let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
+        match e {
+            Error::EnvOverride { ref key, .. } => assert_eq!(key, "nix.sandbox"),
+            other => panic!("wrong error: {other}"),
+        }
+    }
+
+    #[test]
+    fn nix_config_renders_setting_lines_and_none_when_empty() {
+        let mut u = Config::default();
+        u.nix.insert(
+            "experimental-features".to_owned(),
+            "nix-command flakes".to_owned(),
+        );
+        u.nix.insert("build-users-group".to_owned(), String::new());
+        let m = merge(
+            u,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(
+            m.nix_config(),
+            Some("build-users-group = \nexperimental-features = nix-command flakes".to_owned())
+        );
+        // no [nix] entries at all: no NIX_CONFIG, nix runs on defaults
+        let m = merge(
+            Config::default(),
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(m.nix_config(), None);
     }
 
     #[test]

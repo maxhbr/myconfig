@@ -37,6 +37,7 @@ fn base(network: bool) -> Merged {
         network,
         mounts: Vec::new(),
         env: BTreeMap::new(),
+        nix: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
@@ -188,6 +189,43 @@ fn golden_clone_session() {
         ),
     );
     assert_golden("clone-session.txt", &argv);
+}
+
+#[test]
+fn nix_settings_render_as_the_guests_only_nix_config() {
+    // The [nix] table (bd myconfig-j23): on the direct-krun guest
+    // NIX_CONFIG is the ONLY nix configuration — there is no
+    // /etc/nix/nix.conf pin, the rootfs bakes none. It lands after
+    // the [env] layer and before the infrastructure block, like on
+    // every backend.
+    let mut cfg = base(true);
+    cfg.env.insert("EDITOR".into(), "repo-nvim".into());
+    cfg.nix
+        .insert("experimental-features".into(), "nix-command flakes".into());
+    let mut host_env = std::collections::BTreeMap::new();
+    host_env.insert("TERM".into(), "xterm-256color".into());
+    let argv = krun_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    )
+    .unwrap();
+    let envs: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--env")
+        .map(|w| w[1].as_str())
+        .collect();
+    let editor = envs.iter().position(|e| e.starts_with("EDITOR="));
+    let nix = envs
+        .iter()
+        .position(|e| e.starts_with("NIX_CONFIG=experimental-features = nix-command flakes"));
+    let home = envs.iter().position(|e| e.starts_with("HOME="));
+    let (Some(editor), Some(nix), Some(home)) = (editor, nix, home) else {
+        panic!("missing env entries: {envs:?}");
+    };
+    assert!(editor < nix && nix < home, "{envs:?}");
 }
 
 #[test]
