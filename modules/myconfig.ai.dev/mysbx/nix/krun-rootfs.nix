@@ -215,6 +215,9 @@ let
     printf '%s\n' "$share_records" > "$records_file"
     while IFS=" " read -r tag slot sandbox mode; do
         [ -n "$tag" ] || continue
+        # The LINKLESS shares (bd myconfig-j23): consumed directly at
+        # their backing path, never linked into the sandbox layout.
+        [ "$sandbox" = "-" ] && continue
         mountpoint=/tmp/mysbx-shares/$tag
         step "placing share $sandbox (device $tag, slot $slot, $mode)"
         case " $mounted_devices " in
@@ -366,6 +369,66 @@ let
             -o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper,workdir=/mysbx-nix/store-work \
             /nix/store \
             || fail "cannot mount the store overlay (scratch upper)"
+
+        # The guest nix state (bd myconfig-j23): the db copy the
+        # podman image bakes via includeNixDB, done here because the
+        # direct rootfs carries none. The LINKLESS nix-var share
+        # (stage-ro, the network gate's twin of the bwrap tier's
+        # /nix/var/nix bind) holds the HOST's db; copying it
+        # registers every shared store path as valid, so the guest's
+        # single-user nix never re-adds — the live fchmodat2 crash
+        # was exactly a re-add deleting a lower-layer entry through
+        # the overlay. big-lock/reserved are 0600 root-owned on the
+        # host and carry no data (a lock and reserved space); nix
+        # recreates both.
+        if [ -d /tmp/mysbx-shares/stage-ro/nix-var ]; then
+            step "copying the host nix db to the scratch"
+            "$BB" mkdir -p /mysbx-nix/state/db \
+                || fail "cannot create the nix state dir on the scratch"
+            for f in /tmp/mysbx-shares/stage-ro/nix-var/*; do
+                [ -e "$f" ] || continue
+                case "''${f##*/}" in
+                    db) continue ;;
+                esac
+                "$BB" cp -R "$f" /mysbx-nix/state/ \
+                    || fail "cannot copy the nix state entry ''${f##*/}"
+            done
+            for f in /tmp/mysbx-shares/stage-ro/nix-var/db/*; do
+                [ -e "$f" ] || continue
+                case "''${f##*/}" in
+                    big-lock | reserved) continue ;;
+                esac
+                "$BB" cp -R "$f" /mysbx-nix/state/db/ \
+                    || fail "cannot copy the nix db entry ''${f##*/}"
+            done
+        else
+            step "no nix-var share — the guest nix db starts empty"
+        fi
+        "$BB" mkdir -p /mysbx-nix/log /mysbx-nix/cache /mysbx-nix/tmp \
+            || fail "cannot create the nix log/cache/tmp dirs on the scratch"
+        # The single-user nix environment (the podman image's
+        # wrapper env, the direct twin): NIX_REMOTE=local (no daemon
+        # in the VM), state/log/cache/TMPDIR on the scratch. NIX_CONFIG
+        # composes defaults FIRST so a config [nix] layer (the
+        # manifest env) overrides them.
+        export NIX_REMOTE=local
+        export NIX_STATE_DIR=/mysbx-nix/state
+        export NIX_LOG_DIR=/mysbx-nix/log
+        export NIX_CACHE_HOME=/mysbx-nix/cache
+        export TMPDIR=/mysbx-nix/tmp
+        # One directive per line, built by append so no literal
+        # newline ever sits at a column the indented-string
+        # stripping would mangle (the shebang guard's own rule).
+        nix_config_defaults="build-users-group ="
+        nix_config_defaults="$nix_config_defaults
+    sandbox = false"
+        nix_config_defaults="$nix_config_defaults
+    experimental-features = nix-command flakes"
+        if [ -n "''${NIX_CONFIG:-}" ]; then
+            nix_config_defaults="$nix_config_defaults
+    $NIX_CONFIG"
+        fi
+        export NIX_CONFIG="$nix_config_defaults"
         step "the nix scratch is $dev at /mysbx-nix; the store overlay is up"
     fi
 

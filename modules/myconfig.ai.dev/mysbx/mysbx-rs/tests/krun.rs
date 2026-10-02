@@ -258,6 +258,45 @@ fn backing_paths_map_every_share_to_its_staging_slot() {
 }
 
 #[test]
+fn the_nix_var_share_rides_only_with_network_and_scratch() {
+    // bd myconfig-j23: the host nix db ride-along — a LINKLESS ro
+    // slot the init consumes (no sandbox link, NOLINK_DEST), gated
+    // on the network (the bwrap tier's /nix/var/nix bind gate) and
+    // the scratch (no writable surface, no guest nix state).
+    let cfg = base(true); // base: network shared
+    let p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    assert!(
+        !mysbx::krun::stage_binds(&cfg, &synth_repo(), &p)
+            .iter()
+            .any(|(_, _, slot)| slot == "nix-var"),
+        "no scratch: no nix-var share"
+    );
+    let p = Params {
+        scratch: Some("/synth/scratch.img"),
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    let (src, ro, _) = binds
+        .iter()
+        .find(|(_, _, slot)| slot == "nix-var")
+        .expect("scratch + network: the nix-var share");
+    assert_eq!(src, "/nix/var/nix");
+    assert!(ro, "the db ride-along is read-only");
+    // the argv twin renders it LINKLESS:
+    let host_env = std::collections::BTreeMap::new();
+    let argv = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env, &p).unwrap();
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--ro-share" && w[1] == "stage-ro:nix-var@- ro"));
+    // network = false: no share, even with a scratch
+    let cfg = base(false);
+    let argv = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env, &p).unwrap();
+    assert!(!argv
+        .windows(2)
+        .any(|w| w[0] == "--ro-share" && w[1].starts_with("stage-ro:nix-var")));
+}
+
+#[test]
 fn a_scratch_param_renders_the_flag_and_the_announcement() {
     // The scratch disk (bd myconfig-dak.7): the flag names the
     // launcher-view SCRATCH_IMG, and the PRESENCE announcement rides

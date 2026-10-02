@@ -95,6 +95,14 @@ pub type HostEnv = std::collections::BTreeMap<String, String>;
 /// controls.
 pub const GUEST_SHARE_ROOT: &str = "/tmp/mysbx-shares";
 
+/// The sandbox-path sentinel of a LINKLESS share (bd myconfig-j23):
+/// a share the init consumes directly at its staging slot — no
+/// sandbox link is placed. The host nix db ride-along
+/// (`nix-var`) is the first: the init copies the db onto the
+/// scratch, the payload must not see /nix/var/nix as sandbox
+/// layout.
+pub const NOLINK_DEST: &str = "-";
+
 /// The guest-side link target of the ro host store share: the share
 /// is the `store` SLOT of the staged ro device (the rootfs's
 /// `/nix/store` is a symlink to this path, so store paths resolve
@@ -501,6 +509,19 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
             "gittrust-system".to_owned(),
         ));
     }
+    // The host nix db ride-along (bd myconfig-j23): a LINKLESS ro
+    // slot — the init copies the database onto the scratch before
+    // the payload execs, so the guest's single-user nix registers
+    // the shared store's paths as valid and never re-adds (the live
+    // fchmodat2 crash: deleting a lower-layer path through the
+    // overlay). Gated on the SAME two conditions as the story
+    // itself: the network (the bwrap tier binds /nix/var/nix only
+    // when shared — review-2 item 3's daemon-socket reasoning) and
+    // the scratch (the db copy needs a writable surface; without
+    // one there is no guest nix state at all).
+    if cfg.network && params.scratch.is_some() {
+        binds.push(("/nix/var/nix".to_owned(), true, "nix-var".to_owned()));
+    }
     binds
 }
 
@@ -552,6 +573,15 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
         shares.push(Share {
             slot: "gittrust-system".to_owned(),
             sandbox_path: GIT_TRUST_SYSTEM_DEST.to_owned(),
+            read_only: true,
+        });
+    }
+    // The host nix db ride-along (bd myconfig-j23) — the argv twin
+    // of the stage_binds entry, same gate, LINKLESS (NOLINK_DEST).
+    if cfg.network && params.scratch.is_some() {
+        shares.push(Share {
+            slot: "nix-var".to_owned(),
+            sandbox_path: NOLINK_DEST.to_owned(),
             read_only: true,
         });
     }
