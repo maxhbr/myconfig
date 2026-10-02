@@ -107,6 +107,71 @@ const FS_ROOT_TAG: &str = "/dev/root";
 /// verbatim — mysbx's own error mapping is the backend's business.
 const EXIT_SETUP: i32 = 125;
 
+// The fd ceiling of the LAUNCHER itself (bd myconfig-mnr, the host
+// half): libkrun runs its virtiofs server in THIS process, and every
+// file the guest opens is a host fd here — the guest kernel's page
+// cache holds fids far longer than any single process would, so a
+// big-repo walk inside the VM exhausts the HOST's soft nofile even
+// though the guest-side raise succeeded. The launcher usually runs
+// at the invoking session's limit (systemd default: 1024). Zero
+// dependencies by design, so the raw setrlimit(2) surface is
+// declared here like the libkrun symbols: rlimit is { cur, max },
+// both u64.
+const RLIMIT_NOFILE: c_int = 7;
+const RLIM_INFINITY: u64 = u64::MAX;
+
+#[repr(C)]
+struct Rlimit {
+    cur: u64,
+    max: u64,
+}
+
+unsafe extern "C" {
+    fn getrlimit(resource: c_int, rlim: *mut Rlimit) -> c_int;
+    fn setrlimit(resource: c_int, rlim: *const Rlimit) -> c_int;
+}
+
+/// The host-side fd ceiling raise (bd myconfig-mnr): hard first (the
+/// soft cannot exceed it), then the soft, best-effort — a constrained
+/// session keeps its own ceiling and the soft then goes to THAT
+/// (still a raise over 1024), every refusal is a WARNING, the run
+/// never dies over limits. Returns the (soft, hard) pair that stands
+/// after the attempt.
+fn raise_nofile() -> (u64, u64) {
+    unsafe {
+        let mut rlim = Rlimit { cur: 0, max: 0 };
+        if getrlimit(RLIMIT_NOFILE, &mut rlim) != 0 {
+            return (0, 0);
+        }
+        let hard_before = rlim.max;
+        if rlim.max < RLIM_INFINITY {
+            rlim.max = RLIM_INFINITY;
+            if setrlimit(RLIMIT_NOFILE, &rlim) != 0 {
+                rlim.max = hard_before; // the raise failed; keep what stands
+                eprintln!(
+                    "mysbx-krun: WARNING: cannot raise the hard fd limit to infinity (keeping {hard_before})"
+                );
+            }
+        }
+        // re-read after the hard attempt so the soft raise uses
+        // whatever ceiling actually stands
+        if getrlimit(RLIMIT_NOFILE, &mut rlim) != 0 {
+            return (0, 0);
+        }
+        if rlim.cur < rlim.max {
+            let soft_before = rlim.cur;
+            rlim.cur = rlim.max;
+            if setrlimit(RLIMIT_NOFILE, &rlim) != 0 {
+                rlim.cur = soft_before;
+                eprintln!(
+                    "mysbx-krun: WARNING: cannot raise the soft fd limit (keeping {soft_before})"
+                );
+            }
+        }
+        (rlim.cur, rlim.max)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // dlopen'd libkrun. Resolving the symbols at runtime (not link time)
 // keeps the binary portable across libkrun FEATURE SETS: the default
@@ -687,6 +752,8 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
 fn main() {
     let cfg = parse_args(std::env::args().skip(1));
 
+    raise_nofile();
+
     // The /dev/kvm pre-flight (the spike's finding 7): libkrun's
     // KvmContext::new() PANICS — abort, no return code to map —
     // when it cannot open /dev/kvm, and a panic in krun_start_enter
@@ -960,6 +1027,37 @@ fn cstr(s: impl AsRef<std::path::Path>) -> CString {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn raising_nofile_lifts_the_soft_limit_to_the_hard_one() {
+        // bd myconfig-mnr: the launcher hosts libkrun's virtiofs
+        // server — every guest file handle is a HOST fd here — so the
+        // soft limit must not stay at a session's 1024. The raise is
+        // best-effort: this test only pins that the soft limit ends
+        // at (or above) what it was, and at the hard ceiling when the
+        // kernel allows the raises (the CI/sandbox case is the
+        // capped-hard one, where soft == hard afterwards).
+        let before = unsafe {
+            let mut rlim = Rlimit { cur: 0, max: 0 };
+            assert_eq!(getrlimit(RLIMIT_NOFILE, &mut rlim), 0);
+            (rlim.cur, rlim.max)
+        };
+        let (soft, hard) = raise_nofile();
+        assert!(
+            soft >= before.0,
+            "the soft limit must not drop: {before:?} -> ({soft}, {hard})"
+        );
+        assert!(
+            hard >= before.1,
+            "the hard limit must not drop: {before:?} -> ({soft}, {hard})"
+        );
+        assert!(
+            soft == hard,
+            "best effort: soft should reach the hard ceiling ({soft} vs {hard})"
+        );
+    }
+
     use super::*;
 
     fn parse(args: &[&str]) -> Result<Config, String> {
