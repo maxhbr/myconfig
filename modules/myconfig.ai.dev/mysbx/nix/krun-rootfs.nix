@@ -378,21 +378,17 @@ let
         # registers every shared store path as valid, so the guest's
         # single-user nix never re-adds — the live fchmodat2 crash
         # was exactly a re-add deleting a lower-layer entry through
-        # the overlay. big-lock/reserved are 0600 root-owned on the
-        # host and carry no data (a lock and reserved space); nix
-        # recreates both.
-        if [ -d /tmp/mysbx-shares/stage-ro/nix-var ]; then
+        # the overlay. ONLY the db: the image's var copy may take the
+        # whole tree, but a HOST's live var also carries builds/
+        # (0700 per-build log dirs owned by root/nixbld, unreadable
+        # through the share) and profiles/gcroots/temproots session
+        # state the guest never needs — the single-user nix creates
+        # its own. big-lock/reserved are 0600 root-owned and carry
+        # no data (a lock and reserved space); nix recreates both.
+        if [ -d /tmp/mysbx-shares/stage-ro/nix-var/db ]; then
             step "copying the host nix db to the scratch"
             "$BB" mkdir -p /mysbx-nix/state/db \
                 || fail "cannot create the nix state dir on the scratch"
-            for f in /tmp/mysbx-shares/stage-ro/nix-var/*; do
-                [ -e "$f" ] || continue
-                case "''${f##*/}" in
-                    db) continue ;;
-                esac
-                "$BB" cp -R "$f" /mysbx-nix/state/ \
-                    || fail "cannot copy the nix state entry ''${f##*/}"
-            done
             for f in /tmp/mysbx-shares/stage-ro/nix-var/db/*; do
                 [ -e "$f" ] || continue
                 case "''${f##*/}" in
@@ -402,7 +398,7 @@ let
                     || fail "cannot copy the nix db entry ''${f##*/}"
             done
         else
-            step "no nix-var share — the guest nix db starts empty"
+            step "no nix-var db — the guest nix db starts empty"
         fi
         "$BB" mkdir -p /mysbx-nix/log /mysbx-nix/cache /mysbx-nix/tmp \
             || fail "cannot create the nix log/cache/tmp dirs on the scratch"
