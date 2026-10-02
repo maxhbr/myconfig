@@ -13,7 +13,7 @@
 use mysbx::bwrap::{Payload, Workspace};
 use mysbx::config::{Mode, Mount, Multiplexer};
 use mysbx::krun::{
-    krun_argv, Params, DEFAULT_CPUS, DEFAULT_RAM_MIB, GUEST_SHARE_ROOT, SCRATCH_IMG,
+    backing_paths, krun_argv, Params, DEFAULT_CPUS, DEFAULT_RAM_MIB, GUEST_SHARE_ROOT, SCRATCH_IMG,
 };
 use mysbx::merge::Merged;
 use mysbx::repo::Repo;
@@ -188,6 +188,35 @@ fn golden_clone_session() {
         ),
     );
     assert_golden("clone-session.txt", &argv);
+}
+
+#[test]
+fn backing_paths_map_every_share_to_its_staging_slot() {
+    // bd myconfig-n4b: the trust texts must name the share BACKING
+    // paths too (nix's libgit2 realpaths the symlinked workspace).
+    // The map: the workspace at its repo path, a mount at its dest,
+    // the store, and the trust files — each <GUEST_SHARE_ROOT>/
+    // <stage-device>/<slot>.
+    let mut cfg = base(true);
+    cfg.mounts
+        .push(make_mount("/synth/git", Some("/srv/gitdir"), Mode::Rw));
+    let p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    let map = backing_paths(&cfg, &synth_repo(), &p).expect("the backing map");
+    let lookup = |sandbox: &str| {
+        map.iter()
+            .find(|(s, _)| s == sandbox)
+            .map(|(_, b)| b.clone())
+            .unwrap_or_else(|| panic!("no backing path for {sandbox}"))
+    };
+    assert_eq!(lookup("/nix/store"), "/tmp/mysbx-shares/stage-ro/store");
+    assert_eq!(
+        lookup("/home/synth/repo"),
+        "/tmp/mysbx-shares/stage-rw/workspace"
+    );
+    assert_eq!(
+        lookup("/srv/gitdir"),
+        "/tmp/mysbx-shares/stage-rw/m-7a9d67a26a"
+    );
 }
 
 #[test]

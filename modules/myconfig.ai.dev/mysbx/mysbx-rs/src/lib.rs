@@ -1220,6 +1220,24 @@ fn podman_trusted_git_paths(
     Ok(paths)
 }
 
+/// The BACKING-path variants of a krun run's trusted paths (bd
+/// myconfig-n4b): the guest init links each sandbox path at its
+/// staging device's slot, and nix's libgit2 fetcher REALPATHS the
+/// symlink before its safe.directory comparison — so every trusted
+/// path that IS a share gains its backing spelling in both trust
+/// files. The map is krun::backing_paths' (sandbox -> backing).
+fn krun_trusted_with_backing(paths: &[String], backing: &[(String, String)]) -> Vec<String> {
+    let mut out = paths.to_vec();
+    for p in paths {
+        if let Some((_, b)) = backing.iter().find(|(sandbox, _)| sandbox == p) {
+            if !out.contains(b) {
+                out.push(b.clone());
+            }
+        }
+    }
+    out
+}
+
 /// The libgit2 trust paths of a run (bd myconfig-jn0): the checkouts
 /// the run binds, by exact path. libgit2 compares `safe.directory`
 /// only exactly against the workdir (repository.c
@@ -2285,6 +2303,39 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     }
                 };
                 let libgit2_trusted = libgit2_trusted_paths(&repo, workspace.clone());
+                // The share BACKING variants (bd myconfig-n4b): the
+                // init links each sandbox path at its staging
+                // device's slot, and nix's libgit2 fetcher REALPATHs
+                // the symlink before its safe.directory comparison —
+                // the live finding on 'thing'. Both trust files name
+                // both spellings of every trusted path that IS a
+                // share: the same exact-path trust, two views of one
+                // tree. The params carry the run's WORKSPACE (the
+                // share layout's only input that matters here); the
+                // dummy strings fill fields backing_paths never
+                // reads, and git_trust is None because the trust
+                // files themselves are never trusted paths.
+                let trust_params = krun::Params {
+                    rootfs: "",
+                    shell: "",
+                    tools_path: "",
+                    ca_bundle: None,
+                    mux_entry: None,
+                    workspace: workspace.clone(),
+                    memory: None,
+                    cpus: None,
+                    git_trust: None,
+                    scratch: None,
+                };
+                let backing = match krun::backing_paths(&merged, &repo, &trust_params) {
+                    Ok(map) => map,
+                    Err(e) => {
+                        eprintln!("mysbx: {e}");
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                };
+                let trusted = krun_trusted_with_backing(&trusted, &backing);
+                let libgit2_trusted = krun_trusted_with_backing(&libgit2_trusted, &backing);
                 let dir = repo.sidecar.join("gittrust").join(pid.to_string());
                 let file = dir.join("gitconfig");
                 let system_file = dir.join("system-gitconfig");
@@ -2610,6 +2661,39 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     }
                 };
                 let libgit2_trusted = libgit2_trusted_paths(&repo, workspace.clone());
+                // The share BACKING variants (bd myconfig-n4b): the
+                // init links each sandbox path at its staging
+                // device's slot, and nix's libgit2 fetcher REALPATHs
+                // the symlink before its safe.directory comparison —
+                // the live finding on 'thing'. Both trust files name
+                // both spellings of every trusted path that IS a
+                // share: the same exact-path trust, two views of one
+                // tree. The params carry the run's WORKSPACE (the
+                // share layout's only input that matters here); the
+                // dummy strings fill fields backing_paths never
+                // reads, and git_trust is None because the trust
+                // files themselves are never trusted paths.
+                let trust_params = krun::Params {
+                    rootfs: "",
+                    shell: "",
+                    tools_path: "",
+                    ca_bundle: None,
+                    mux_entry: None,
+                    workspace: workspace.clone(),
+                    memory: None,
+                    cpus: None,
+                    git_trust: None,
+                    scratch: None,
+                };
+                let backing = match krun::backing_paths(&merged, &repo, &trust_params) {
+                    Ok(map) => map,
+                    Err(e) => {
+                        eprintln!("mysbx: {e}");
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                };
+                let trusted = krun_trusted_with_backing(&trusted, &backing);
+                let libgit2_trusted = krun_trusted_with_backing(&libgit2_trusted, &backing);
                 let dir = repo.sidecar.join("gittrust").join(pid.to_string());
                 let file = dir.join("gitconfig");
                 let system_file = dir.join("system-gitconfig");
@@ -4708,6 +4792,39 @@ mod tests {
             podman_trusted_git_paths(&synth_git_trust_repo(), bwrap::Workspace::Clone { clone })
                 .expect("the clone trust set");
         assert_eq!(paths, ["/synth/repo", "/synth/repo/*"]);
+    }
+
+    #[test]
+    fn krun_trusted_paths_gain_their_backing_spellings() {
+        // bd myconfig-n4b: nix's libgit2 fetcher REALPATHS the
+        // symlinked workspace before the safe.directory comparison,
+        // so a trusted path that IS a share must appear under its
+        // backing spelling too. Unshared paths are untouched, the
+        // original spelling stays first, no duplicates.
+        let paths = vec![
+            "/synth/repo".to_owned(),
+            "/synth/repo/*".to_owned(),
+            "/synth/unshared-gitdir".to_owned(),
+        ];
+        let backing = vec![
+            (
+                "/nix/store".to_owned(),
+                "/tmp/mysbx-shares/stage-ro/store".to_owned(),
+            ),
+            (
+                "/synth/repo".to_owned(),
+                "/tmp/mysbx-shares/stage-rw/workspace".to_owned(),
+            ),
+        ];
+        assert_eq!(
+            krun_trusted_with_backing(&paths, &backing),
+            [
+                "/synth/repo",
+                "/synth/repo/*",
+                "/synth/unshared-gitdir",
+                "/tmp/mysbx-shares/stage-rw/workspace",
+            ]
+        );
     }
 
     #[test]

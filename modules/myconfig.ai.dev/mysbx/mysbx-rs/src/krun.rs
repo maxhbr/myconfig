@@ -504,6 +504,88 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
     binds
 }
 
+/// The run's shares — the exact list [`krun_argv`] renders (store,
+/// workspace, mounts, state dirs, the two trust files). Extracted so
+/// the trust computation can map a SANDBOX path to its BACKING path
+/// without re-deriving the layout (bd myconfig-n4b).
+fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Share>, Error> {
+    let mut shares: Vec<Share> = vec![Share {
+        slot: "store".to_owned(),
+        sandbox_path: "/nix/store".to_owned(),
+        read_only: true,
+    }];
+    // The workspace share runs the first-component half of the dest
+    // check too: the init places the SANDBOX path (the repo's own
+    // path — the clone remap binds the clone there), so a repo
+    // below an unbaked root is a refusal, never a run-time ENOENT.
+    // The other halves (parent, baked links) are the merge's own
+    // old guarantees.
+    check_share_root(&repo.root.to_string_lossy())?;
+    shares.push(Share {
+        slot: "workspace".to_owned(),
+        sandbox_path: repo.root.to_string_lossy().into_owned(),
+        read_only: false,
+    });
+    for mount in &cfg.mounts {
+        shares.push(share_of_mount(mount, &params.workspace)?);
+    }
+    if matches!(params.workspace, Workspace::Live) {
+        for entry in cfg.effective_state_dirs() {
+            shares.push(Share {
+                slot: state_tag(&entry),
+                sandbox_path: format!("/mysbx-home/{entry}"),
+                read_only: false,
+            });
+        }
+    }
+    // The git trust (bd myconfig-zj2's krun twin): the SAME two
+    // per-run files the podman arm binds — here as ro slots in the
+    // staging device, at the same container paths, so a repo
+    // checked out at a different path still trusts exactly what
+    // THIS run shares.
+    if params.git_trust.is_some() {
+        shares.push(Share {
+            slot: "gittrust-global".to_owned(),
+            sandbox_path: GIT_TRUST_GLOBAL_DEST.to_owned(),
+            read_only: true,
+        });
+        shares.push(Share {
+            slot: "gittrust-system".to_owned(),
+            sandbox_path: GIT_TRUST_SYSTEM_DEST.to_owned(),
+            read_only: true,
+        });
+    }
+    Ok(shares)
+}
+
+/// The GUEST-side backing path of every share — `<GUEST_SHARE_ROOT>/
+/// <stage-device>/<slot>` (the init mounts each device there and
+/// links each sandbox path at its slot). nix's libgit2 fetcher
+/// REALPATHs a symlinked workspace before its `safe.directory`
+/// comparison (live finding on 'thing', bd myconfig-n4b), so the
+/// trust texts must name the BACKING path too — exact paths only,
+/// never a bare `*`.
+pub fn backing_paths(
+    cfg: &Merged,
+    repo: &Repo,
+    params: &Params<'_>,
+) -> Result<Vec<(String, String)>, Error> {
+    Ok(krun_shares(cfg, repo, params)?
+        .into_iter()
+        .map(|s| {
+            let device = if s.read_only {
+                STAGE_RO_TAG
+            } else {
+                STAGE_RW_TAG
+            };
+            (
+                s.sandbox_path,
+                format!("{GUEST_SHARE_ROOT}/{device}/{}", s.slot),
+            )
+        })
+        .collect())
+}
+
 pub fn krun_argv(
     cfg: &Merged,
     repo: &Repo,
@@ -584,52 +666,7 @@ pub fn krun_argv(
     // one of the two staging devices (the slot budget — see
     // STAGE_RO_TAG), so the device count is a constant 3 regardless
     // of how many mounts a config carries.
-    let mut shares: Vec<Share> = vec![Share {
-        slot: "store".to_owned(),
-        sandbox_path: "/nix/store".to_owned(),
-        read_only: true,
-    }];
-    // The workspace share runs the first-component half of the dest
-    // check too: the init places the SANDBOX path (the repo's own
-    // path — the clone remap binds the clone there), so a repo
-    // below an unbaked root is a refusal, never a run-time ENOENT.
-    // The other halves (parent, baked links) are the merge's own
-    // old guarantees.
-    check_share_root(&repo.root.to_string_lossy())?;
-    shares.push(Share {
-        slot: "workspace".to_owned(),
-        sandbox_path: repo.root.to_string_lossy().into_owned(),
-        read_only: false,
-    });
-    for mount in &cfg.mounts {
-        shares.push(share_of_mount(mount, &params.workspace)?);
-    }
-    if matches!(params.workspace, Workspace::Live) {
-        for entry in cfg.effective_state_dirs() {
-            shares.push(Share {
-                slot: state_tag(&entry),
-                sandbox_path: format!("/mysbx-home/{entry}"),
-                read_only: false,
-            });
-        }
-    }
-    // The git trust (bd myconfig-zj2's krun twin): the SAME two
-    // per-run files the podman arm binds — here as ro slots in the
-    // staging device, at the same container paths, so a repo
-    // checked out at a different path still trusts exactly what
-    // THIS run shares.
-    if params.git_trust.is_some() {
-        shares.push(Share {
-            slot: "gittrust-global".to_owned(),
-            sandbox_path: GIT_TRUST_GLOBAL_DEST.to_owned(),
-            read_only: true,
-        });
-        shares.push(Share {
-            slot: "gittrust-system".to_owned(),
-            sandbox_path: GIT_TRUST_SYSTEM_DEST.to_owned(),
-            read_only: true,
-        });
-    }
+    let shares = krun_shares(cfg, repo, params)?;
 
     // 5. the payload: the mux entry of a session, else the shell of
     // an interactive run, else the command verbatim.
