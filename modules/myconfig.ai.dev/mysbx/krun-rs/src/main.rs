@@ -653,14 +653,25 @@ fn add_device(
     Ok(())
 }
 
-/// The ONLY fs tag an overlay file may register on today: the root
-/// device (include/libkrun.h's KRUN_FS_ROOT_TAG, the same constant
-/// krun.rs's FS_ROOT_TAG mirrors).
-const OVERLAY_FS_TAG: &str = "/dev/root";
+/// The DEDICATED virtual device overlay files register on (bd
+/// myconfig-dak.8): a NULL-fs device — `krun_add_virtiofs3` with a
+/// NULL host path maps to NullFs (libkrun lib.rs: "NULL path means
+/// NullFs"; worker.rs: NullFs + AugmentFs) — whose tree is VIRTUAL
+/// ONLY. `krun_fs_add_overlay_file`'s contract ("all intermediate
+/// dirs must already exist", resolved against the device's OWN
+/// virtual entries, never the rootfs's real dirs) is met by
+/// ROOT-LEVEL file names with no intermediate dirs at all. A
+/// dedicated device also avoids the virtual-/etc trap: a virtual
+/// dir named `etc` on the root device would intercept EVERY /etc
+/// lookup (AugmentFs::lookup delegates a miss inside a virtual
+/// tree with the VIRTUAL parent ino, which the inner fs never saw
+/// — EBADF), hiding ca-bundle/passwd. The share records name the
+/// SAME tag, so the init mounts + links exactly like any share.
+const OVERLAY_FS_TAG: &str = "trustfs";
 
 /// `--krun-overlay FS_TAG@PATH:OCTAL_MODE:B64` — decode + validate
-/// (the guest path must not begin with '/', the tag must name the
-/// root device, the base64 must decode). The one_shot flag is
+/// (the guest path must be ONE device-root name of the trustfs
+/// virtual device, the base64 must decode). The one_shot flag is
 /// always false: a config file the payload's git reads REPEATEDLY
 /// must survive more than one lookup.
 fn add_overlay(cfg: &mut Config, value: &str) -> Result<(), String> {
@@ -668,10 +679,9 @@ fn add_overlay(cfg: &mut Config, value: &str) -> Result<(), String> {
     let (tags, rest) = value
         .split_once('@')
         .ok_or_else(|| format!("--krun-overlay expects FS@PATH:MODE:B64, got `{value}`"))?;
-    if tags != OVERLAY_FS_TAG.trim_start_matches('/') && tags != OVERLAY_FS_TAG {
+    if tags != OVERLAY_FS_TAG {
         return Err(format!(
-            "--krun-overlay: the fs tag must be `{OVERLAY_FS_TAG}`
-, got `{tags}`"
+            "--krun-overlay: the fs tag must be `{OVERLAY_FS_TAG}`, got `{tags}`"
         ));
     }
     let (path, meta) = rest
@@ -692,11 +702,12 @@ fn add_overlay(cfg: &mut Config, value: &str) -> Result<(), String> {
             "--krun-overlay: the path is device-relative ({OVERLAY_FS_TAG}'s tree), got `{path}` — drop the leading slash"
         ));
     }
-    if path.is_empty() || path.contains("..") {
-        return Err(
-            "--krun-overlay: the path must be a non-empty device-relative name without `..`"
-                .to_owned(),
-        );
+    if path.is_empty() || path.contains("..") || path.contains('/') {
+        return Err(format!(
+            "--krun-overlay: the path must be ONE device-root name ({OVERLAY_FS_TAG}'s \
+             virtual tree has no directories — the intermediate-dir contract needs \
+             every parent to be a prior overlay dir), got `{path}`"
+        ));
     }
     let decoded = unb64(data)?;
     if decoded.is_empty() {
@@ -799,7 +810,7 @@ fn unb64(text: &str) -> Result<Vec<u8>, String> {
         .copied()
         .filter(|c| *c != b'\n' && *c != b'\r' && *c != b' ')
         .collect();
-    if trimmed.len() % 4 != 0 {
+    if !trimmed.len().is_multiple_of(4) {
         return Err(format!(
             "krun-overlay: the data is not valid base64 ({} bytes, not a multiple of 4)",
             trimmed.len()
@@ -885,7 +896,10 @@ fn manifest_text(cfg: &Config) -> String {
             .iter()
             .find(|d| d.tag == s.tag)
             .map(|d| if d.read_only { "ro" } else { "rw" })
-            .unwrap_or("rw");
+            // The trustfs virtual device is not in devices (the
+            // launcher adds it itself, NULL-fs, read-only — bd
+            // myconfig-dak.8).
+            .unwrap_or(if s.tag == OVERLAY_FS_TAG { "ro" } else { "rw" });
         lines.push_str(&format!(
             "share\t{}\t{}\t{}\t{}\n",
             s.tag, s.slot, s.dest, mode
@@ -951,7 +965,10 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
                                 .iter()
                                 .find(|d| d.tag == s.tag)
                                 .map(|d| if d.read_only { "ro" } else { "rw" })
-                                .unwrap_or("rw")
+                                // The trustfs virtual device is not in
+                                // devices (the launcher adds it itself,
+                                // NULL-fs, read-only — bd myconfig-dak.8).
+                                .unwrap_or(if s.tag == OVERLAY_FS_TAG { "ro" } else { "rw" })
                         )
                     })
                     .collect::<Vec<_>>()
@@ -1076,16 +1093,40 @@ fn main() {
             (api.krun_set_vm_config)(ctx, cfg.cpus, cfg.ram_mib),
             "krun_set_vm_config",
         );
-        // The overlay files (bd myconfig-dak.8): pointer NOT copied
-        // by the lib — the pointers alias cfg.overlays' Vecs, which
-        // live in main's frame past krun_start_enter (the VM's whole
+        // The overlays' VIRTUAL DEVICE first (bd myconfig-dak.8, the
+        // review's findings 1+2): krun_add_virtiofs3 with a NULL
+        // host path maps to NullFs — and fs_add_overlay_entry
+        // matches the device by fs_id, so the registration must come
+        // AFTER the device exists. A dedicated virtual tree
+        // sidesteps the rootfs-bake trap (real dirs are invisible to
+        // the overlay resolver) and the virtual-/etc shadowing trap.
+        // The files' pointers alias cfg.overlays' Vecs, which live
+        // in main's frame past krun_start_enter (the VM's whole
         // lifetime). one_shot=false: the payload's git reads its
-        // config file REPEATEDLY.
+        // config file REPEATEDLY. A symbol-less lib gets the
+        // krun_add_disk2 treatment: REFUSED (exit 125), never a
+        // silent run — the trust files would exist nowhere.
         if !cfg.overlays.is_empty() {
-            let add_file = api.krun_fs_add_overlay_file.expect(
-                "the caller passed --krun-overlay but the loaded libkrun lacks \
-                 krun_fs_add_overlay_file — a build too old for the feature",
+            check(
+                (api.krun_add_virtiofs3)(
+                    ctx,
+                    cstr(OVERLAY_FS_TAG).as_ptr(),
+                    std::ptr::null(),
+                    0,
+                    true,
+                ),
+                "krun_add_virtiofs3(trustfs)",
             );
+            let add_file = match api.krun_fs_add_overlay_file {
+                Some(sym) => sym,
+                None => {
+                    eprintln!(
+                        "mysbx-krun: the run carries --krun-overlay files but the loaded libkrun \
+                         has no krun_fs_add_overlay_file — the lib build is too old for the feature"
+                    );
+                    std::process::exit(EXIT_SETUP);
+                }
+            };
             for o in &cfg.overlays {
                 check(
                     (add_file)(
@@ -1276,13 +1317,13 @@ mod tests {
         // grammar must be byte-blind and refuse malformed input at
         // the parse edge (exit 2, never a half-registered VM).
         let payload = "safe.directory = /tmp/x\n[include]\n\tpath = y\n";
-        let value = format!("dev/root@etc/mysbx/gitconfig:0100644:{}", b64(payload));
+        let value = format!("trustfs@gitconfig:0100644:{}", b64(payload));
         let mut cfg = test_cfg();
         add_overlay(&mut cfg, &value).expect("the flag parses");
         assert_eq!(cfg.overlays.len(), 1);
         let o = &cfg.overlays[0];
         assert_eq!(o.fs_tag, OVERLAY_FS_TAG);
-        assert_eq!(o.path, "etc/mysbx/gitconfig");
+        assert_eq!(o.path, "gitconfig");
         assert_eq!(o.mode, 0o100644);
         assert_eq!(o.data, payload.as_bytes());
         assert!(!o.data.is_empty());

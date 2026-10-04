@@ -563,6 +563,22 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
             read_only: true,
         });
     }
+    // The git trust's GUEST VIEW (bd myconfig-dak.8): two shares of
+    // the TRUSTFS virtual device — the content is the launcher's
+    // in-memory overlay files (never host files, so no stage bind),
+    // the init mounts + links them at the podman contract's paths.
+    if params.git_trust.is_some() {
+        shares.push(Share {
+            slot: "gittrust-global".to_owned(),
+            sandbox_path: GIT_TRUST_GLOBAL_DEST.to_owned(),
+            read_only: true,
+        });
+        shares.push(Share {
+            slot: "gittrust-system".to_owned(),
+            sandbox_path: GIT_TRUST_SYSTEM_DEST.to_owned(),
+            read_only: true,
+        });
+    }
     Ok(shares)
 }
 
@@ -581,17 +597,24 @@ pub fn backing_paths(
     Ok(krun_shares(cfg, repo, params)?
         .into_iter()
         .map(|s| {
-            let device = if s.read_only {
-                STAGE_RO_TAG
-            } else {
-                STAGE_RW_TAG
-            };
+            let device = share_device(&s);
             (
                 s.sandbox_path,
                 format!("{GUEST_SHARE_ROOT}/{device}/{}", s.slot),
             )
         })
         .collect())
+}
+
+/// The device tag a share's guest mount lives under: the two
+/// staging devices by access mode, the trustfs virtual device for
+/// the trust overlay shares (bd myconfig-dak.8).
+fn share_device(share: &Share) -> &'static str {
+    match share.slot.as_str() {
+        "gittrust-global" | "gittrust-system" => "trustfs",
+        _ if share.read_only => STAGE_RO_TAG,
+        _ => STAGE_RW_TAG,
+    }
 }
 
 pub fn krun_argv(
@@ -710,35 +733,22 @@ pub fn krun_argv(
 }
 
 /// The `--krun-overlay` flags of the run's git trust (bd
-/// myconfig-dak.8): both configs registered as IN-MEMORY overlay
-/// files on the ROOT device (timestamps/paths device-relative —
-/// `etc/mysbx/gitconfig`, `etc/gitconfig`), content BASE64. Order:
-/// the SYSTEM config first, then the GLOBAL (system ones must exist
-/// the moment GIT_CONFIG_GLOBAL adds its `include`d file — no such
-/// dependency across these two, but the stable order is the pins').
+/// myconfig-dak.8): both configs as IN-MEMORY overlay files on the
+/// run's DEDICATED virtual device (`trustfs`, a NullFs the launcher
+/// adds — the root device's real dirs are INVISIBLE to the overlay
+/// resolver, and a virtual `etc` there would shadow the whole real
+/// /etc), so the names are the device's ROOT-LEVEL files
+/// (`system-gitconfig`, `gitconfig`) with content BASE64. The two
+/// SHARE records with the same tag make the guest see them at the
+/// podman contract's paths: /etc/gitconfig and
+/// GIT_CONFIG_GLOBAL's /etc/mysbx/gitconfig.
 pub fn trust_overlays(trust: &GitTrust) -> Vec<(String, u32, String)> {
     [
-        (
-            GIT_TRUST_SYSTEM_DEST.trim_start_matches('/').to_owned(),
-            0o100644_u32,
-            std::mem::take(&mut String::new()),
-        ),
-        (
-            GIT_TRUST_GLOBAL_DEST.trim_start_matches('/').to_owned(),
-            0o100644_u32,
-            String::new(),
-        ),
+        (&trust.system_text, "system-gitconfig"),
+        (&trust.global_text, "gitconfig"),
     ]
     .into_iter()
-    .enumerate()
-    .map(|(i, (path, mode, _))| {
-        let text = if i == 0 {
-            &trust.system_text
-        } else {
-            &trust.global_text
-        };
-        (path, mode, b64_str(text))
-    })
+    .map(|(text, name)| (name.to_owned(), 0o100644_u32, b64_str(text)))
     .collect()
 }
 
@@ -1010,11 +1020,7 @@ fn render(spec: &Spec) -> Vec<String> {
         argv.push(format!("{STAGE_ROOT}/ro/{}", MANIFEST_SLOT));
     }
     for share in &spec.shares {
-        let device = if share.read_only {
-            STAGE_RO_TAG
-        } else {
-            STAGE_RW_TAG
-        };
+        let device = share_device(share);
         argv.push(if share.read_only {
             "--ro-share".to_owned()
         } else {
@@ -1034,13 +1040,17 @@ fn render(spec: &Spec) -> Vec<String> {
     }
     // 3b. the overlay files (bd myconfig-dak.8): the git trust's two
     // configs, registered by the launcher as IN-MEMORY files on the
-    // root device — no sidecar dir, no stage slot, no init
-    // placement. The texts ride the argv BASE64 (one token each;
-    // the launcher decodes and owns the bytes for the VM's whole
-    // lifetime, the lib registers them by pointer).
+    // run's DEDICATED virtual device (trustfs — the root device's
+    // real dirs are invisible to the overlay resolver's virtual-
+    // entry walk, and a virtual `etc` there would shadow the real
+    // one). The SHARE records below (gittrust-global/-system slots
+    // carrying the trustfs tag) make the init mount + link them at
+    // the podman contract's paths. No sidecar dir, no stage bind.
+    // The texts ride the argv BASE64 (one token each; the launcher
+    // decodes and owns the bytes for the VM's whole lifetime).
     for (path, mode, data) in &spec.overlays {
         argv.push("--krun-overlay".to_owned());
-        argv.push(format!("dev/root@{path}:{mode:o}:{data}"));
+        argv.push(format!("trustfs@{path}:{mode:o}:{data}"));
     }
     // 4b. the network (bd myconfig-dak.6): `none` is the only mode
     // the argv must NAME — shared is the launcher's default (the

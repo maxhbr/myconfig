@@ -287,6 +287,32 @@ fn backing_paths_map_every_share_to_its_staging_slot() {
         lookup("/srv/gitdir"),
         "/tmp/mysbx-shares/stage-rw/m-7a9d67a26a"
     );
+    // The trustfs shares back at the VIRTUAL device's root (bd
+    // myconfig-dak.8): the run's git-trust shares, when the config
+    // carries a git trust.
+    let trust = mysbx::krun::GitTrust {
+        global_text: String::new(),
+        system_text: String::new(),
+    };
+    let p = Params {
+        git_trust: Some(&trust),
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let map = backing_paths(&cfg, &synth_repo(), &p).expect("the backing map");
+    let lookup_b = |sandbox: &str| {
+        map.iter()
+            .find(|(s, _)| s == sandbox)
+            .map(|(_, b)| b.clone())
+            .unwrap_or_else(|| panic!("no backing path for {sandbox}"))
+    };
+    assert_eq!(
+        lookup_b("/etc/mysbx/gitconfig"),
+        "/tmp/mysbx-shares/trustfs/gittrust-global"
+    );
+    assert_eq!(
+        lookup_b("/etc/gitconfig"),
+        "/tmp/mysbx-shares/trustfs/gittrust-system"
+    );
 }
 
 #[test]
@@ -730,7 +756,7 @@ fn git_trust_registers_two_overlay_files_and_the_env_pin() {
     // uses — pinning the RENDERING, not the encoder).
     for (path, mode, data) in mysbx::krun::trust_overlays(&trust) {
         assert!(
-            text.contains(&format!("--krun-overlay\ndev/root@{path}:{mode:o}:{data}")),
+            text.contains(&format!("--krun-overlay\ntrustfs@{path}:{mode:o}:{data}")),
             "the overlay flag of {path}: {text}"
         );
     }
@@ -745,18 +771,25 @@ fn git_trust_registers_two_overlay_files_and_the_env_pin() {
         env_block[env_block.len() - 1],
         "GIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"
     );
-    // NO stage slots exist for the trust files (the overlay files
-    // replaced them):
+    // The trust files' GUEST VIEW: two SHARES of the trustfs virtual
+    // device (the init mounts + links them at the podman contract's
+    // paths):
+    assert!(
+        text.contains("--ro-share\ntrustfs:gittrust-global@/etc/mysbx/gitconfig ro"),
+        "the global config's share record: {text}"
+    );
+    assert!(
+        text.contains("--ro-share\ntrustfs:gittrust-system@/etc/gitconfig ro"),
+        "the system config's share record: {text}"
+    );
+    // But NO stage-slot bind exists (the content is in-memory, no
+    // host files to stage):
     let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
     assert!(
         !binds
             .iter()
             .any(|(_, _, slot)| slot.starts_with("gittrust")),
-        "the trust files are no stage slots anymore: {binds:?}"
-    );
-    assert!(
-        !text.contains("gittrust"),
-        "the argv carries no gittrust share: {text}"
+        "the trust files carry no stage bind: {binds:?}"
     );
 }
 

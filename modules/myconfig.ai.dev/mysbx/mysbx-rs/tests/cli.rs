@@ -8754,6 +8754,42 @@ fn podman_multiplexer_without_in_image_entry_is_refused() {
 }
 
 #[test]
+fn the_direct_krun_backend_writes_no_sidecar_trust_files() {
+    // bd myconfig-dak.8's acceptance: the git trust rides as
+    // IN-MEMORY overlay files (the launcher's trustfs NullFs device)
+    // — NO `gittrust/<pid>/` dir under the sidecar, on a dry run or
+    // a real run. (The podman-krun arm keeps its per-run files: the
+    // hoisted sweep's coverage there is
+    // the_hoisted_sweep_cleans_both_krun_backends_debris.)
+    let (inv, _, sidecar) = fixture("krun-no-trust-files", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
+    // The pins the run needs to reach the dry-run audit: launcher
+    // + rootfs (the arm refuses a missing pin).
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_KRUN_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap().to_string());
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout_lossy = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        stdout_lossy.contains("--krun-overlay"),
+        "the dry run audits the overlay flags: {stdout_lossy}"
+    );
+    assert!(
+        !sidecar.join("gittrust").exists(),
+        "the dry run wrote no sidecar trust dir"
+    );
+}
+
+#[test]
 fn the_hoisted_sweep_cleans_both_krun_backends_debris() {
     // bd myconfig-6xl: the per-run dir sweep is HOISTED above the arm
     // dispatch, so a podman-krun run reclaims gittrust/<pid>/ debris

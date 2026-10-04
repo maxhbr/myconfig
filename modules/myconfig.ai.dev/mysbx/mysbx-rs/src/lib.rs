@@ -2667,7 +2667,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // backend's pair. A --dry-run audits the argv (the
             // overlay flags + GIT_CONFIG_GLOBAL) and creates
             // NOTHING.
-            let krun_git_trust_paths: Option<(String, String)> = if !dry_run {
+            let krun_git_trust_paths: Option<(String, String)> = {
+                // The computation is PURE (no files): a --dry-run
+                // audits the rendered overlay flags with the SAME
+                // content a real run would register (the
+                // no-sidecar-files contract makes the old !dry_run
+                // gate meaningless for this backend).
                 let trusted = match podman_trusted_git_paths(&repo, workspace.clone()) {
                     Ok(paths) => paths,
                     Err(e) => {
@@ -2720,8 +2725,6 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     git_trust_text(&trusted),
                     libgit2_trust_text(&libgit2_trusted),
                 ))
-            } else {
-                None
             };
             let krun_git_trust: Option<krun::GitTrust> =
                 krun_git_trust_paths
