@@ -17,7 +17,7 @@ let
   # and on newer systemd versions aborts the session.
   # See https://github.com/niri-wm/niri/issues/254
   # Use the upstream niri flake package (github:niri-wm/niri).
-  niri = inputs.niri.packages.${pkgs.system}.niri.overrideAttrs (old: {
+  niri = inputs.niri.packages.${pkgs.stdenv.hostPlatform.system}.niri.overrideAttrs (old: {
     postInstall = (old.postInstall or "") + ''
       if [ -e "$out/bin/niri-session" ]; then
         substituteInPlace "$out/bin/niri-session" \
@@ -120,7 +120,7 @@ in
         };
         # nixpkgs.overlays = [
         #   (_: _: {
-        #     niri = inputs.niri.packages.${pkgs.system}.niri;
+        #     niri = inputs.niri.packages.${pkgs.stdenv.hostPlatform.system}.niri;
         #   })
         # ];
         home-manager.sharedModules = [

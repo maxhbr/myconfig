@@ -40,15 +40,17 @@ let
   # matching upstream's CONTRIBUTING.md ("tmux (required for tests)").
   # TODO (doc/TODOs/drop-workmux-tmux-nativecheckinputs-override.md): remove
   # once upstream adds tmux to the check inputs itself.
-  workmuxPkg = inputs.workmux.packages.${pkgs.system}.default.overrideAttrs (old: {
-    nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ pkgs.tmux ];
-    # With tmux present this upstream test runs, and it is racy: it
-    # polls only until the output file exists, which the shell's `>`
-    # creates before printf writes to it.
-    checkFlags = (old.checkFlags or [ ]) ++ [
-      "--skip=multiplexer::tmux::tests::run_shell_preserves_literal_tmux_formats"
-    ];
-  });
+  workmuxPkg =
+    inputs.workmux.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs
+      (old: {
+        nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ pkgs.tmux ];
+        # With tmux present this upstream test runs, and it is racy: it
+        # polls only until the output file exists, which the shell's `>`
+        # creates before printf writes to it.
+        checkFlags = (old.checkFlags or [ ]) ++ [
+          "--skip=multiplexer::tmux::tests::run_shell_preserves_literal_tmux_formats"
+        ];
+      });
   # The workmux flake input also provides its source tree, from which the
   # per-agent status-tracking extensions/plugins are deployed verbatim (the
   # same files `workmux setup` would copy).

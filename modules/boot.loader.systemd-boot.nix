@@ -10,7 +10,7 @@
       efi.canTouchEfiVariables = true;
       systemd-boot = {
         editor = false;
-        memtest86.enable = pkgs.stdenv.isLinux && pkgs.stdenv.isx86_64;
+        memtest86.enable = pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64;
       };
     };
   };

@@ -28,7 +28,7 @@
 }:
 let
   cfg = config.myconfig.ai.dev.agent-of-empires;
-  aoePkgs = inputs.agent-of-empires.packages.${pkgs.system};
+  aoePkgs = inputs.agent-of-empires.packages.${pkgs.stdenv.hostPlatform.system};
 in
 {
   options.myconfig = with lib; {
@@ -48,7 +48,7 @@ in
       package = mkOption {
         type = types.package;
         default = if cfg.web then aoePkgs.aoe-with-web else aoePkgs.default;
-        defaultText = literalExpression "inputs.agent-of-empires.packages.\${pkgs.system}.default";
+        defaultText = literalExpression "inputs.agent-of-empires.packages.\${pkgs.stdenv.hostPlatform.system}.default";
         description = "The agent-of-empires package to install.";
       };
     };

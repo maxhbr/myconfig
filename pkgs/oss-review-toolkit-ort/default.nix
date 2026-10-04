@@ -62,7 +62,10 @@ let
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
     outputHash =
-      if stdenv.system == "x86_64-linux" then installFixedOutputSha256 else throw "Unsupported platform";
+      if stdenv.hostPlatform.system == "x86_64-linux" then
+        installFixedOutputSha256
+      else
+        throw "Unsupported platform";
   };
 
 in

@@ -779,7 +779,7 @@ rec {
               #     type = "indirect";
               #   };
               # }) (inputs // { nixpkgs = inputs.master; });
-              nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
+              nix.settings.nix-path = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
                 nixpkgs = "${inputs.nixpkgs}/";
                 nixos = "${self}/";
                 home-manager = "${inputs.home}/";

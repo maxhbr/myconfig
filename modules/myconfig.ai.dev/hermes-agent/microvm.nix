@@ -62,7 +62,7 @@ let
   cfg = config.myconfig.ai.dev.hermes;
 
   # The hermes CLI binary (same package the native backend installs).
-  hermesPkg = inputs.hermes-agent.packages.${pkgs.system}.default;
+  hermesPkg = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   # Host-side wrapper that runs the hermes CLI against the gateway running
   # inside the microvm. The gateway exposes an OpenAI-compatible API
