@@ -208,7 +208,7 @@ this file's sibling `krun-validation-log.md` (create it on the first
 run). A FAIL invalidates the corresponding D2 row — file a bead
 against the decision document, not against this runbook.
 
-## 3. The direct backend's scratch disk (bd myconfig-dak.7, backends.md D7)
+## 4. The direct backend's scratch disk (bd myconfig-dak.7, backends.md D7)
 
 The probes a host with rw `/dev/kvm` runs for the DIRECT `krun`
 backend's nix scratch — the virtio-blk half this agent sandbox could
@@ -242,3 +242,55 @@ passed, never built) and the direct launcher pin builds `withBlk`
    (not the VM's RAM-backed tmpfs); a `nix build` fills the disk,
    not the memory (watch the guest's MemAvailable).
 
+## 5. The direct backend's guest nix (bd myconfig-j23, live on 'thing')
+
+The chain this section validates was driven END TO END by a real
+`nix flake check` of a large flake inside the direct-krun guest —
+each stage below was a live failure first, then a fix, then live
+evidence. The host-side setup: a sidecar (or user-layer) `[nix]`
+table carrying at least
+
+```toml
+[nix]
+experimental-features = "nix-command flakes"
+```
+
+1. **Trust (bd myconfig-n4b):** the fetch must get PAST libgit2's
+   safe.directory check. The trust files name BOTH spellings of the
+   workspace — the sandbox path and the share backing path
+   `/tmp/mysbx-shares/stage-rw/workspace` — because nix's libgit2
+   fetcher REALPATHS the workspace symlink before the comparison.
+   Failure shape if broken: `repository path ... is not owned by
+   current user`.
+
+2. **fd ceilings, both halves (bd myconfig-mnr):** a big-repo walk
+   dies with `Too many open files (libgit2 error code = 2)` when
+   EITHER ceiling stays at a session default. The guest init raises
+   the VM's PID-1 limits (probe: `ulimit -n` inside the guest shows
+   1048576), and the launcher raises ITS OWN — libkrun's virtiofs
+   server runs in the launcher process, every guest file handle is
+   a HOST fd there. The launcher's raise announces itself on
+   stderr when the hard ceiling refuses infinity (a WARNING, never
+   a dead run).
+
+3. **The db copy (bd myconfig-j23):** with the scratch present and
+   the network shared, the init copies the HOST's
+   `/nix/var/nix/db` (db.sqlite + schema only — big-lock/reserved
+   skipped, 0600 daemon-owned files nix recreates; the whole-`var`
+   pattern would die on the 0700 root/nixbld builds/ tree) onto
+   `/mysbx-nix/state`. Every shared store path registers as valid,
+   so the guest's single-user nix never re-adds an existing path —
+   the failure shape was `fchmodat2 ...: Operation not supported`
+   on a lower-layer store entry.
+
+4. **The single-user environment:** inside the guest, `nix flake
+   check` runs to completion and reports the SAME findings the host
+   reports — infrastructure-transparent. `NIX_STATE_DIR` etc. live
+   on the scratch (`/mysbx-nix`), `NIX_CONFIG` composes the init's
+   defaults (build-users-group/sandbox=false/experimental-features)
+   FIRST so a `[nix]` layer overrides them.
+
+The PASS line for this section: `nix flake check` (or any real
+flake command) inside the sandbox reports flake findings, never
+infrastructure errors. Recorded live on 'thing' 2026-10-02, all
+stages PASS.

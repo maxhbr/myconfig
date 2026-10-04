@@ -835,6 +835,20 @@ pre-existing `krun_set_workdir` bug: `/init.krun` consumed
 at `/`), then execs the payload. The share loop reads its records
 from a file with redirection, never a pipeline subshell.
 
+`mysbx doctor krun` (bd myconfig-dak.10) covers the backend's own
+refusal surface host-side and CHEAP: `/dev/kvm`, the launcher pin
+(`MYSBX_KRUN_LAUNCHER`, NO PATH fallback — the run path has none,
+and doctor must not be greener than the run), the rootfs pin
+(set AND shaped: a directory with `bin/mysbx-init`), and a
+launcher self-probe (an invalid flag must reach argument parsing
+and print the launcher's own unknown-argument wording — the probe
+fails by design, exit 2, only the wording is matched).
+Deliberately NO VM boot: doctor pays milliseconds, the full boot
+is the runbook's probe. The live validation of the whole chain —
+shares, trust, network, scratch, guest nix — is recorded in
+../krun-live-validation.md (§4, §5; the guest-nix chain driven
+end-to-end by a real `nix flake check` on 'thing', 2026-10-02).
+
 ### D6: The direct krun backend's network is libkrun's TSI vsock proxy; `network = false` disables it (bd myconfig-dak.6)
 
 The direct backend adds NO net device — not passt, not a TAP. Its
