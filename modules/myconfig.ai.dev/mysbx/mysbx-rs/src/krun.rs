@@ -837,8 +837,15 @@ fn sandbox_env(
         }
     }
     // The git trust's global config stays the block's LAST entry
-    // (its docs: no layer may repoint the anchor) — the resolv line
-    // rides BEFORE it.
+    // (its docs: no layer may repoint the anchor). bd myconfig-7gv:
+    // the guarantee is the VALUE, not always the position — a layer
+    // that names GIT_CONFIG_GLOBAL in `[env]` inserts the entry at
+    // the config-layer position (set-since keeps the first slot;
+    // config.md D14 keeps such entries legal, intentionally not an
+    // error), and the resolv line may then ride after it. No
+    // current consumer depends on the position, and the VALUE is
+    // always the anchor: set() overwrites the config-layer entry
+    // with GIT_TRUST_GLOBAL_DEST.
     if params.git_trust.is_some() {
         set("GIT_CONFIG_GLOBAL", GIT_TRUST_GLOBAL_DEST.to_owned());
     }

@@ -601,7 +601,11 @@ variables at host content would widen the sandbox's trust anchors to
 whatever the host has there. All are therefore emitted *after* `[env]`,
 and bubblewrap lets the later `--setenv` win: an `[env] HOME` (or
 `PATH`, or `SSL_CERT_FILE`) entry parses and appears in `--dry-run`,
-but never reaches the payload. `--verbose`
+but never reaches the payload — mysbx's value always wins (bd
+myconfig-7gv). Its argv POSITION may shift when a layer names an
+infrastructure variable (the krun environment builder keeps the
+first insertion's slot), and no consumer depends on positions.
+`--verbose`
 marks such an entry `[config, ignored — set by mysbx]` rather than
 pretending it applies. This is not an error, on purpose: rejecting it
 would turn a harmless (often inherited) config into a hard failure of
