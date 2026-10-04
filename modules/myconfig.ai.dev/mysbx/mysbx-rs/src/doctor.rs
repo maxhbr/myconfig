@@ -43,7 +43,7 @@ use std::time::{Duration, Instant};
 const USAGE_DOCTOR: &str = "usage: mysbx doctor [BACKEND...]";
 
 /// The backends the doctor knows, the same set the run pipeline accepts.
-pub const BACKENDS: &[&str] = &["bubblewrap", "podman-gvisor", "nono", "podman-krun"];
+pub const BACKENDS: &[&str] = &["bubblewrap", "podman-gvisor", "nono", "podman-krun", "krun"];
 
 /// The variables that name a model endpoint, in lookup order.
 pub const ENDPOINT_VARS: &[&str] = &["OPENAI_BASE_URL", "ANTHROPIC_BASE_URL"];
@@ -426,6 +426,34 @@ pub fn kvm_check(exists: bool, rw: bool) -> Check {
         )
     } else {
         Check::ok("/dev/kvm", "readable+writable")
+    }
+}
+
+/// The direct-krun rootfs check: the `MYSBX_KRUN_ROOTFS` pin is a
+/// directory whose `bin/mysbx-init` entry the VM boots. `None` is
+/// "no pin" (an unwrapped build — a blocker, the run refuses a
+/// missing launcher too), a path that is not the expected shape
+/// fails with the hint.
+pub fn krun_rootfs_check(rootfs: Option<PathBuf>) -> Check {
+    match rootfs {
+        None => Check::fail(
+            "rootfs",
+            "no rootfs pinned (MYSBX_KRUN_ROOTFS)",
+            "the Nix wrapper pins it when the host builds the direct backend \
+             (myconfig.ai.dev.mysbx.krun.direct.rootfs), or set MYSBX_KRUN_ROOTFS",
+        ),
+        Some(path) if path.is_dir() && path.join("bin/mysbx-init").is_file() => {
+            Check::ok("rootfs", path.display().to_string())
+        }
+        Some(path) => Check::fail(
+            "rootfs",
+            format!(
+                "`{}` is not a krun rootfs (expected a directory with bin/mysbx-init)",
+                path.display()
+            ),
+            "rebuild the rootfs (myconfig.ai.dev.mysbx.krun.direct.rootfs) or fix the \
+             MYSBX_KRUN_ROOTFS pin",
+        ),
     }
 }
 
@@ -839,6 +867,82 @@ fn host_endpoint_check(
     });
 }
 
+/// The direct-libkrun backend's checks: `/dev/kvm`, the launcher
+/// pin, the rootfs pin, and a launcher self-probe. Deliberately NO
+/// VM boot (backends.md D3): doctor stays host-side and cheap — the
+/// full boot is the live-validation runbook's probe, not a doctor
+/// one; a VM here would pay seconds per doctor call for checks the
+/// pins already answer. Also no model-endpoint check: the guest
+/// reaches it through the same shared host network the shell
+/// already probes elsewhere, and nothing krun-specific gates it
+/// (the four checks above are the run's own refusal surface).
+fn krun_checks(checks: &mut Vec<Check>) {
+    // The same /dev/kvm requirement as the podman-krun variant.
+    checks.push(kvm_check(
+        Path::new("/dev/kvm").exists(),
+        crate::kvm_available(),
+    ));
+    // The launcher pin with NO PATH fallback — the run path has
+    // none either (an unwrapped build has no launcher binary to
+    // find on a PATH, and a foreign mysbx-krun there would make
+    // doctor green where the run refuses). Doctor and run agree.
+    let launcher = match crate::env_opt("MYSBX_KRUN_LAUNCHER") {
+        Some(pin) => match resolve_executable(&pin, std::env::var_os("PATH").as_deref()) {
+            Some(path) => {
+                checks.push(Check::ok("launcher", path.display().to_string()));
+                Some(path)
+            }
+            None => {
+                checks.push(Check::fail(
+                    "launcher",
+                    format!("`{pin}` is not an executable file (MYSBX_KRUN_LAUNCHER)"),
+                    "the Nix wrapper pins it when the host builds the direct backend \
+                     (myconfig.ai.dev.mysbx.krun.direct.launcher), or set MYSBX_KRUN_LAUNCHER",
+                ));
+                None
+            }
+        },
+        None => {
+            checks.push(Check::fail(
+                "launcher",
+                "no launcher pinned (MYSBX_KRUN_LAUNCHER)",
+                "the Nix wrapper pins it when the host builds the direct backend \
+                 (myconfig.ai.dev.mysbx.krun.direct.launcher), or set MYSBX_KRUN_LAUNCHER",
+            ));
+            None
+        }
+    };
+    // The rootfs pin: a directory, not a binary.
+    let rootfs = crate::env_opt("MYSBX_KRUN_ROOTFS").map(PathBuf::from);
+    checks.push(krun_rootfs_check(rootfs));
+    // The launcher self-probe: an invalid flag makes the launcher
+    // print its usage — proof the binary loads and reaches argument
+    // parsing. The probe FAILS BY DESIGN (the launcher exits 2 on
+    // an unknown argument): only the stderr wording is matched, the
+    // exit code is deliberately not consulted. The launcher's
+    // libkrun dlopen happens AFTER argument parsing (load_api in
+    // main), so this proves the binary, never pays the dlopen. A
+    // missing launcher is skipped, never failed.
+    match &launcher {
+        Some(bin) => {
+            let probe = run_probe(bin, &["--doctor-probe-invalid".to_owned()]);
+            if probe.stderr.contains("unknown argument") {
+                checks.push(Check::ok(
+                    "launcher probe",
+                    "the launcher runs and reaches argument parsing",
+                ));
+            } else {
+                checks.push(Check::fail(
+                    "launcher probe",
+                    probe.error(),
+                    "run the launcher with no arguments: it prints its usage",
+                ));
+            }
+        }
+        None => checks.push(Check::skip("launcher probe", &["launcher"])),
+    }
+}
+
 /// podman binary, OCI runtime, `/dev/kvm` (krun), image, startup probe
 /// and the model endpoint through the run's network.
 fn podman_checks(
@@ -1223,6 +1327,7 @@ pub fn run(args: &[String]) -> i32 {
                 nono_checks(&mut checks);
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }
+            "krun" => krun_checks(&mut checks),
             _ => podman_checks(&mut checks, backend, &merged, &forwarded),
         }
         sections.push(Section {
@@ -1272,6 +1377,45 @@ mod tests {
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn backends_cover_the_direct_krun_backend() {
+        // bd myconfig-dak.10: `mysbx doctor krun` must be a named
+        // backend — the direct-libkrun backend has no podman, no
+        // image; its doctor section is its own.
+        assert!(BACKENDS.contains(&"krun"));
+    }
+
+    #[test]
+    fn krun_rootfs_check_names_all_three_states() {
+        // No pin: a blocker-grade FAIL naming the pin (an unwrapped
+        // build has no rootfs to find, the run refuses it too).
+        assert_eq!(
+            krun_rootfs_check(None).level,
+            Level::Fail,
+            "no MYSBX_KRUN_ROOTFS pin must fail"
+        );
+        // A rootfs-shaped directory: OK.
+        let suffix = std::process::id();
+        let tmp = std::env::temp_dir().join(format!("mysbx-doctor-rootfs-ok-{suffix}"));
+        std::fs::create_dir_all(tmp.join("bin")).unwrap();
+        std::fs::write(tmp.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+        assert_eq!(
+            krun_rootfs_check(Some(tmp.clone())).level,
+            Level::Ok,
+            "a directory with bin/mysbx-init must pass"
+        );
+        // Present but the wrong shape: FAIL with the expected shape.
+        let bare = std::env::temp_dir().join(format!("mysbx-doctor-rootfs-bare-{suffix}"));
+        std::fs::create_dir_all(&bare).unwrap();
+        assert_eq!(
+            krun_rootfs_check(Some(bare.clone())).level,
+            Level::Fail,
+            "a directory without bin/mysbx-init must fail"
+        );
+        std::fs::remove_dir_all(tmp).unwrap();
+        std::fs::remove_dir_all(&bare).unwrap();
     }
 
     #[test]

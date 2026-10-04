@@ -7406,10 +7406,90 @@ fn doctor_without_a_backend_fails_unless_one_is_named() {
         "{stdout}"
     );
     assert!(
-        stdout.contains("OK   not checked: podman-gvisor, nono, podman-krun (check one with"),
+        stdout.contains("OK   not checked: podman-gvisor, nono, podman-krun, krun (check one with"),
         "{stdout}"
     );
     assert!(!stdout.contains("not configured"), "{stdout}");
+}
+
+#[test]
+fn doctor_routes_the_krun_backend_away_from_the_podman_checks() {
+    // bd myconfig-dak.10: the direct-libkrun backend's doctor
+    // section is its OWN — the podman checks (binary, runtime,
+    // image) would be wrong answers for a backend that runs no
+    // podman at all. A stub launcher prints the launcher's own
+    // unknown-argument wording so the probe passes.
+    let (inv, _, sidecar) = fixture("doctor-krun-routing", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    // The stub reproduces the launcher's unknown-argument wording
+    // (what the probe matches on); the backtick/quote dance keeps
+    // /bin/sh happy inside the single-quoted echo.
+    let launcher = doctor_stub(
+        &base,
+        "mysbx-krun-stub",
+        "echo \"mysbx-krun: unknown argument '--doctor-probe-invalid'\" >&2\nexit 2",
+    );
+    let rootfs = base.join("krun-rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let (code, stdout, _stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[
+            ("MYSBX_KRUN_LAUNCHER", launcher.to_str().unwrap()),
+            ("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap()),
+        ],
+    );
+    // The exit is NOT asserted 0: this host has no /dev/kvm, and
+    // doctor correctly FAILS that check — the test pins the ROUTING
+    // and the krun checks' shape, not the host's KVM.
+    assert_ne!(
+        code, 0,
+        "the /dev/kvm failure must make doctor report: {stdout}"
+    );
+    assert!(stdout.contains("== krun =="), "{stdout}");
+    assert!(
+        stdout.contains("OK   launcher probe: the launcher runs and reaches argument parsing"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("OK   rootfs: "), "{stdout}");
+    // NOT the podman section's checks:
+    assert!(!stdout.contains("OCI runtime"), "{stdout}");
+    assert!(!stdout.contains("image"), "{stdout}");
+    assert!(!stdout.contains("startup probe"), "{stdout}");
+    // and the launcher check has no PATH-fallback pass (bd
+    // myconfig-dak.10 review finding 1): the pin resolves, but a
+    // MISSING pin must fail even with mysbx-krun on PATH — pinned
+    // by the stub's own name below.
+    // With a bare `mysbx-krun` ON PATH and NO pin, the check must
+    // STILL fail — the run path has no PATH fallback either (the
+    // review's finding 1: doctor must not be greener than the run).
+    let stub_on_path = base.join("path-stub");
+    let _ = doctor_stub(
+        &stub_on_path,
+        "mysbx-krun",
+        "echo 'not the launcher' >&2\nexit 1",
+    );
+    // PATH entries are separate join arguments — join_paths
+    // refuses a `:`-embedded entry.
+    let path_with_stub = std::env::join_paths(&[
+        stub_on_path.clone(),
+        std::path::PathBuf::from("/usr/bin"),
+        std::path::PathBuf::from("/bin"),
+    ])
+    .unwrap();
+    let (code, stdout, _stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[("PATH", path_with_stub.to_str().unwrap())],
+    );
+    assert_ne!(code, 0, "no pin: the launcher check must fail: {stdout}");
+    assert!(
+        stdout.contains("FAIL launcher: no launcher pinned (MYSBX_KRUN_LAUNCHER)"),
+        "{stdout}"
+    );
+    std::fs::remove_dir_all(stub_on_path).unwrap();
 }
 
 #[test]
