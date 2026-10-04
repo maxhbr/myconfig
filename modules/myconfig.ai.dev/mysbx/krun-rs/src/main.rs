@@ -92,8 +92,10 @@
 // net API and, when the lib carries the implicit-vsock symbol (a
 // net-enabled build adds TSI by default), it DISABLES the implicit
 // vsock so a run with no net device is honest about having no
-// network. The default nixpkgs build has neither the symbol nor TSI,
-// so nothing is needed there.
+// network. Both nixpkgs libkrun builds the wrapper pins (the stock
+// one and the withBlk one) carry the symbol — verified with nm -D
+// (bd myconfig-au2); only `--network none` CONSUMES it, a shared run
+// boots without touching the symbol at all.
 
 use std::ffi::{c_char, c_int, c_uchar, c_uint, CString};
 use std::path::PathBuf;
@@ -924,10 +926,15 @@ fn main() {
         // guest cmdline, NO socket path to the host (the stock
         // nixpkgs libkrun enables TSI even without its net feature,
         // so shared is the default the caller need not name). The
-        // symbol is present in the stock lib (the vsock is not
-        // net-gated); its absence in some other build cannot honor
-        // `none` and is REFUSED — an unfilterable TSI proxy is
-        // exactly what `network = false` forbids.
+        // symbol is present in the stock lib AND the withBlk pin (the
+        // vsock is not net-gated — nm -D verified, bd myconfig-au2);
+        // its absence in some other build cannot honor `none` and is
+        // REFUSED — an unfilterable TSI proxy is exactly what
+        // `network = false` forbids. A SHARED run never consumes the
+        // symbol: the vsock is the IMPLICIT device — attached unless
+        // disabled — so a symbol-less lib simply keeps TSI on, and the
+        // shared semantics hold unchanged (bd myconfig-au2: no
+        // warning here, silent is CORRECT, not fail-closed-by-accident).
         if !cfg.network {
             match api.krun_disable_implicit_vsock {
                 Some(disable) => {
@@ -935,7 +942,7 @@ fn main() {
                 }
                 None => {
                     eprintln!(
-                        "mysbx-krun: --network none but libkrun has no                          krun_disable_implicit_vsock — TSI cannot be disabled"
+                        "mysbx-krun: --network none but libkrun has no krun_disable_implicit_vsock — TSI cannot be disabled"
                     );
                     std::process::exit(EXIT_SETUP);
                 }
