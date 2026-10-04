@@ -75,6 +75,13 @@ mkdir -p "$WORK"
 STUBS="$WORK/stubs"
 mkdir -p "$STUBS"
 
+# bwrap refuses to bind over a SYMLINK destination, and the launcher's
+# `iptables` may be one (nixpkgs ships it as iptables -> xtables-nft-multi).
+# Resolve it first: exec follows the symlink at call time, so binding the stub
+# over the RESOLVED path intercepts the same `iptables` invocation the
+# launcher makes.
+IPTABLES_BIND_TARGET="$(readlink -f "$IPTABLES_TARGET")"
+
 if ! "$BWRAP" --unshare-user --uid 0 --gid 0 --tmpfs / --ro-bind /nix /nix \
     --proc /proc --dev /dev -- "$BASH_BIN" -c true 2>"$WORK/bwrap.err"; then
     skip_all "bwrap cannot create a user namespace here: $(cat "$WORK/bwrap.err")"
@@ -200,7 +207,7 @@ run_doctor() {
         --bind "$STUBS/systemctl" "$SYSTEMCTL_TARGET" \
         --bind "$STUBS/curl" "$CURL_TARGET" \
         --bind "$STUBS/ip" "$IP_TARGET" \
-        --bind "$STUBS/iptables" "$IPTABLES_TARGET" \
+        --bind "$STUBS/iptables" "$IPTABLES_BIND_TARGET" \
         --setenv DOCTOR_RULE_PRESENT "$rule_present" \
         --setenv DOCTOR_IPTABLES_C_LOG "$WORK/iptables-c-$scenario.log" \
         --setenv HOME "$WORK" \
