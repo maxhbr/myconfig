@@ -71,14 +71,56 @@ let
 
   # --- shared eval helpers ------------------------------------------------
 
-  # The enabled reference host. In this flake `test-f13` IS the f13 config
-  # (generated from `nixosConfigurationsGen.host-f13`), and the microvm
-  # feature is enabled there via hosts/host.f13/ai.f13.nix.
-  enabledCfg = self.nixosConfigurations.test-f13.config;
+  # The ENABLED reference host: `test-f13` (which IS the f13 config, generated
+  # from `nixosConfigurationsGen.host-f13`) with the reference microvm
+  # configuration layered on top. The real f13 host disabled the feature
+  # (hosts/host.f13/ai.f13.nix); the reference shape the suite asserts against
+  # lives HERE, on the test host, so the checks stay independent of whether a
+  # real machine currently runs the tier. `extendModules` starts from the
+  # unmodified host, so every assertion of `microvm-eval-disabled` still
+  # inspects the real f13 defaults.
+  #
+  # The module args (`agentRegistry` etc.) are read from the same evaluation.
+  refHost = self.nixosConfigurations.test-f13.extendModules {
+    modules = [
+      {
+        myconfig.ai.dev.microvm = {
+          enable = true;
+          enabledAgents = [
+            "claude"
+            "codex"
+            "herdr"
+            "hermes"
+            "opencode"
+            "pi"
+          ];
+          resourceClasses = lib.mkForce {
+            small = {
+              count = 1;
+              vcpu = 2;
+              memoryMiB = 4096;
+            };
+            normal = {
+              count = 1;
+              vcpu = 4;
+              memoryMiB = 8192;
+            };
+          };
+          workspaceLayout = "beside-repo";
+          networkProfile = "proxy-only";
+          passwordlessControl = true;
+          sshPublicKeyFile = ../hosts/host.f13/dedicated-agent-vm-key.pub;
+          guestShellConvenience.enable = true;
+        };
+      }
+    ];
+  };
+  enabledCfg = refHost.config;
 
-  # The SAME host, but with the feature force-disabled. Using extendModules
-  # isolates the single variable (`enable`) so any config difference is
-  # attributable purely to the feature toggle, not to a different host.
+  # The unmodified host (feature disabled): the DISABLED-reference side of the
+  # suite. Using extendModules isolates the single variable (`enable`) so any
+  # config difference is attributable purely to the feature toggle, not to a
+  # different host.
   disabledCfg =
     (self.nixosConfigurations.test-f13.extendModules {
       modules = [ { myconfig.ai.dev.microvm.enable = lib.mkForce false; } ];
@@ -91,7 +133,7 @@ let
     (import ../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/slots.nix { inherit lib; }).mkSlots
       resourceClasses;
   # The EFFECTIVE resource-class table of the reference host (ticket 5 A).
-  resourceClasses = self.nixosConfigurations.test-f13._module.args.agentResourceClasses;
+  resourceClasses = refHost._module.args.agentResourceClasses;
   # The reference slot every guest-level check inspects: the first slot of the
   # first class, taken from the generated pool rather than hardcoded.
   refSlot = lib.head enabledSlots;
@@ -144,17 +186,17 @@ let
   # re-instantiate the registry with different context (endpoint / model).
   # (`nixosSystem` exposes module args on the TOP-LEVEL attrset, not under
   # `.config`, which strips `_module`.)
-  agentRegistry = self.nixosConfigurations.test-f13._module.args.agentRegistry;
+  agentRegistry = refHost._module.args.agentRegistry;
 
   # The ONE definition of the per-slot SSH host-key paths (hostkeys.nix), for
   # the same reason: the checks must not hardcode a second copy of them.
-  hostKeys = self.nixosConfigurations.test-f13._module.args.agentHostKeys;
+  hostKeys = refHost._module.args.agentHostKeys;
 
   # Likewise the ONE definition of the batch-job format / paths (job.nix).
-  jobs = self.nixosConfigurations.test-f13._module.args.agentJobs;
+  jobs = refHost._module.args.agentJobs;
 
   # ... and of the task-scoped agent-state paths (state.nix).
-  agentStatePaths = self.nixosConfigurations.test-f13._module.args.agentState;
+  agentStatePaths = refHost._module.args.agentState;
 
   # Slot counts to exercise. Includes small pools, pools with index >= 10
   # (which exercise 2-hex-digit MAC formatting, e.g. i=10 → ...:1a), and the
@@ -329,7 +371,7 @@ let
   failedAssertions =
     mods:
     let
-      cfg = (self.nixosConfigurations.test-f13.extendModules { modules = mods; }).config;
+      cfg = (refHost.extendModules { modules = mods; }).config;
     in
     map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
   # True iff `mods` is REJECTED: either it fails at the option-TYPE level
@@ -497,8 +539,8 @@ let
 
   # The module's own path/layout definitions of the REFERENCE host, so no check
   # carries a second copy of them.
-  session = self.nixosConfigurations.test-f13._module.args.agentSession;
-  seed = self.nixosConfigurations.test-f13._module.args.agentConfigSeed;
+  session = refHost._module.args.agentSession;
+  seed = refHost._module.args.agentConfigSeed;
   launcherPkg = findPkg enabledCfg.environment.systemPackages "agent-microvm";
 
   # --- (l4) the parameterised host-submit harness ------------------------
@@ -511,7 +553,7 @@ let
         if layout == microvmOpts.workspaceLayout then
           enabledCfg
         else
-          (self.nixosConfigurations.test-f13.extendModules {
+          (refHost.extendModules {
             modules = [ { myconfig.ai.dev.microvm.workspaceLayout = lib.mkForce layout; } ];
           }).config;
       opts = cfgForLayout.myconfig.ai.dev.microvm;
@@ -2313,7 +2355,7 @@ in
         {
           # POSITIVE control for the check above: the reference host DOES.
           assertion = lib.any (e: lib.hasInfix "agent-microvm-provision-hostkeys" e) (
-            hostExecStartsOf self.nixosConfigurations.test-f13
+            hostExecStartsOf refHost
           );
           message = "positive control: the default host must run the host-key generator";
         }
@@ -2918,9 +2960,9 @@ in
       ivHost = interactiveVsockHost;
       ivGuest = capGuestOf ivHost;
 
-      # ... and the `tap` reference (the enabled f13 host), for the positive
+      # ... and the `tap` reference (the enabled reference host), for the positive
       # controls.
-      tapNet = self.nixosConfigurations.test-f13._module.args.agentNetwork;
+      tapNet = refHost._module.args.agentNetwork;
 
       forwarderUnit = slotName: "agent-litellm-vsock-${slotName}";
       forwarderPath = slotName: "${microvmOpts.stateRoot}/${slotName}/notify.vsock_${vsockPort}";
@@ -3209,7 +3251,7 @@ in
           message = "a two-slot vsock host must declare one forwarder per slot, each on its OWN socket path";
         }
         {
-          assertion = vsockSocketsOf self.nixosConfigurations.test-f13 == [ ];
+          assertion = vsockSocketsOf refHost == [ ];
           message = "positive control: the reference (tap) host must declare no AF_VSOCK forwarder at all";
         }
 
@@ -4668,7 +4710,7 @@ in
       # option's effect if f13 switches layout.
       variant =
         layout:
-        self.nixosConfigurations.test-f13.extendModules {
+        refHost.extendModules {
           modules = [ { myconfig.ai.dev.microvm.workspaceLayout = lib.mkForce layout; } ];
         };
       centralSys = variant "central";
@@ -4996,7 +5038,7 @@ in
       # `failedAssertions` above about eval cost).
       variant =
         profile:
-        (self.nixosConfigurations.test-f13.extendModules {
+        (refHost.extendModules {
           modules = [
             {
               myconfig.ai.dev.microvm = {
