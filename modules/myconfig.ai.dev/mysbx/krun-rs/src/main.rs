@@ -940,12 +940,6 @@ fn main() {
                     std::process::exit(EXIT_SETUP);
                 }
             }
-        } else if api.krun_disable_implicit_vsock.is_none() {
-            eprintln!(
-                "mysbx-krun: --network shared but libkrun has no \
-                 krun_disable_implicit_vsock capability marker"
-            );
-            std::process::exit(EXIT_SETUP);
         }
         // The payload's working directory (krun_set_workdir, the
         // spec's --chdir): the workspace path, where every other

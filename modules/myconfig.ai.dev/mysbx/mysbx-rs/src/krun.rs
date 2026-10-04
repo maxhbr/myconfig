@@ -743,18 +743,25 @@ fn sandbox_env(
     mux: Multiplexer,
 ) -> Vec<(String, String)> {
     let mut env: Vec<(String, String)> = Vec::new();
+    let mut set = |key: &str, value: String| {
+        if let Some((_, existing)) = env.iter_mut().find(|(name, _)| name == key) {
+            *existing = value;
+        } else {
+            env.push((key.to_owned(), value));
+        }
+    };
     for (k, v) in host_env {
-        env.push((k.clone(), v.clone()));
+        set(k, v.clone());
     }
     for (k, v) in &cfg.env {
-        env.push((k.clone(), v.clone()));
+        set(k, v.clone());
     }
     // The `[nix]` table as NIX_CONFIG (bd myconfig-j23): the direct
     // guest's ONLY nix configuration — there is no /etc/nix/nix.conf
     // pin here, the rootfs bakes none. Set after `[env]`, before
     // the infrastructure block, like on every backend.
     if let Some(nix_config) = cfg.nix_config() {
-        env.push(("NIX_CONFIG".to_owned(), nix_config));
+        set("NIX_CONFIG", nix_config);
     }
     // The infrastructure block, set after every layer (config.md
     // D14): HOME names the guest tmpfs the init created, the XDG
@@ -764,29 +771,29 @@ fn sandbox_env(
     // it. Values are the bwrap backend's own constants: the guest
     // init (bd myconfig-dak.5) recreates the same layout inside the
     // VM (tmpfs home, state shares linked under it).
-    env.push(("HOME".to_owned(), crate::bwrap::SANDBOX_HOME.to_owned()));
-    env.push((
-        "XDG_CONFIG_HOME".to_owned(),
+    set("HOME", crate::bwrap::SANDBOX_HOME.to_owned());
+    set(
+        "XDG_CONFIG_HOME",
         format!("{}/.config", crate::bwrap::SANDBOX_HOME),
-    ));
-    env.push((
-        "XDG_CACHE_HOME".to_owned(),
+    );
+    set(
+        "XDG_CACHE_HOME",
         format!("{}/.cache", crate::bwrap::SANDBOX_HOME),
-    ));
-    env.push((
-        "XDG_STATE_HOME".to_owned(),
+    );
+    set(
+        "XDG_STATE_HOME",
         format!("{}/.local/state", crate::bwrap::SANDBOX_HOME),
-    ));
-    env.push((
-        "XDG_DATA_HOME".to_owned(),
+    );
+    set(
+        "XDG_DATA_HOME",
         format!("{}/.local/share", crate::bwrap::SANDBOX_HOME),
-    ));
+    );
     // The CA-bundle pins (bd myconfig-938): a host STORE path, so it
     // resolves inside the guest through the ro store share like
     // every other tool.
     if let Some(ca_bundle) = params.ca_bundle {
         for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
-            env.push((key.to_owned(), ca_bundle.to_owned()));
+            set(key, ca_bundle.to_owned());
         }
     }
     // The mux socket dir (config.md D16/D17): a directory inside the
@@ -794,15 +801,12 @@ fn sandbox_env(
     // virtiofs share (a host socket cannot cross virtiofs, the
     // spike's finding), never on a host-shared location.
     if mux.starts_a_session() {
-        env.push((
-            "TMUX_TMPDIR".to_owned(),
-            crate::bwrap::MUX_SOCKET_DIR.to_owned(),
-        ));
+        set("TMUX_TMPDIR", crate::bwrap::MUX_SOCKET_DIR.to_owned());
     }
     // PATH LAST of the infrastructure block, like the bwrap
     // backend's own ordering: the tool closure is this wrapper's
     // pin, and no later entry may repoint it.
-    env.push(("PATH".to_owned(), params.tools_path.to_owned()));
+    set("PATH", params.tools_path.to_owned());
     // The git trust's global config (bd myconfig-zj2): set after
     // PATH, the LAST entry of the block — git reads
     // `safe.directory` only from the protected system+global scope,
@@ -829,17 +833,14 @@ fn sandbox_env(
             // value itself — a second encode here would hand the guest
             // base64 text as its resolver file (live-run finding on
             // 'thing', bd myconfig-dak.6).
-            env.push(("MYSBX_KRUN_RESOLV".to_owned(), host_resolv));
+            set("MYSBX_KRUN_RESOLV", host_resolv);
         }
     }
     // The git trust's global config stays the block's LAST entry
     // (its docs: no layer may repoint the anchor) — the resolv line
     // rides BEFORE it.
     if params.git_trust.is_some() {
-        env.push((
-            "GIT_CONFIG_GLOBAL".to_owned(),
-            GIT_TRUST_GLOBAL_DEST.to_owned(),
-        ));
+        set("GIT_CONFIG_GLOBAL", GIT_TRUST_GLOBAL_DEST.to_owned());
     }
     env
 }

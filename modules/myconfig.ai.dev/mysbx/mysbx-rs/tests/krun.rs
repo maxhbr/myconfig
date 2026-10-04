@@ -229,6 +229,38 @@ fn nix_settings_render_as_the_guests_only_nix_config() {
 }
 
 #[test]
+fn infrastructure_environment_values_replace_lower_precedence_duplicates() {
+    let mut cfg = base(true);
+    cfg.env.insert("HOME".into(), "/config-home".into());
+    cfg.env.insert("PATH".into(), "/config-path".into());
+    let mut host_env = std::collections::BTreeMap::new();
+    host_env.insert("HOME".into(), "/host-home".into());
+    host_env.insert("PATH".into(), "/host-path".into());
+    let argv = krun_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    )
+    .unwrap();
+    let envs: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--env")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert_eq!(envs.iter().filter(|e| e.starts_with("HOME=")).count(), 1);
+    assert_eq!(
+        envs.iter().find(|e| e.starts_with("HOME=")),
+        Some(&"HOME=/mysbx-home")
+    );
+    assert_eq!(
+        envs.iter().find(|e| e.starts_with("PATH=")),
+        Some(&"PATH=/synth/bin")
+    );
+}
+
+#[test]
 fn backing_paths_map_every_share_to_its_staging_slot() {
     // bd myconfig-n4b: the trust texts must name the share BACKING
     // paths too (nix's libgit2 realpaths the symlinked workspace).
