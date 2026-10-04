@@ -109,6 +109,38 @@ const FS_ROOT_TAG: &str = "/dev/root";
 /// verbatim — mysbx's own error mapping is the backend's business.
 const EXIT_SETUP: i32 = 125;
 
+/// The network/symbol decision at VM setup (bd myconfig-dak.6, the
+///odule doc's net section): `--network none` must disable the
+/// implicit TSI vsock — possible only when the lib carries
+/// [`crate::KrunApi::krun_disable_implicit_vsock`]. A shared run
+/// NEVER consumes the symbol: the vsock is the implicit device
+/// (attached unless disabled), so a symbol-less lib keeps TSI on
+/// and the shared semantics hold unchanged.
+///
+/// Extracted pure so the four combinations are unit-pinned: the
+/// `--network none` WITH-symbol call, the `--network none`
+/// symbol-less REFUSAL (exit 125, the bd myconfig-rrg regression
+/// guard), and the two shared modes that proceed without touching
+/// the symbol.
+fn vsock_decision(network_shared: bool, symbol_present: bool) -> VsockDecision {
+    if network_shared {
+        VsockDecision::KeepTsi
+    } else if symbol_present {
+        VsockDecision::DisableTsi
+    } else {
+        VsockDecision::RefusedNoSymbol
+    }
+}
+
+enum VsockDecision {
+    /// Shared network: the implicit vsock stays attached (TSI on).
+    KeepTsi,
+    /// `--network none` with the symbol: the run disables the vsock.
+    DisableTsi,
+    /// `--network none` without the symbol: the run is refused.
+    RefusedNoSymbol,
+}
+
 // The fd ceiling of the LAUNCHER itself (bd myconfig-mnr, the host
 // half): libkrun runs its virtiofs server in THIS process, and every
 // file the guest opens is a host fd here — the guest kernel's page
@@ -935,17 +967,19 @@ fn main() {
         // disabled — so a symbol-less lib simply keeps TSI on, and the
         // shared semantics hold unchanged (bd myconfig-au2: no
         // warning here, silent is CORRECT, not fail-closed-by-accident).
-        if !cfg.network {
-            match api.krun_disable_implicit_vsock {
-                Some(disable) => {
-                    check((disable)(ctx), "krun_disable_implicit_vsock");
-                }
-                None => {
-                    eprintln!(
-                        "mysbx-krun: --network none but libkrun has no krun_disable_implicit_vsock — TSI cannot be disabled"
-                    );
-                    std::process::exit(EXIT_SETUP);
-                }
+        match vsock_decision(cfg.network, api.krun_disable_implicit_vsock.is_some()) {
+            VsockDecision::KeepTsi => {}
+            VsockDecision::DisableTsi => {
+                let disable = api
+                    .krun_disable_implicit_vsock
+                    .expect("vsock_decision returned DisableTsi with the symbol set");
+                check((disable)(ctx), "krun_disable_implicit_vsock");
+            }
+            VsockDecision::RefusedNoSymbol => {
+                eprintln!(
+                    "mysbx-krun: --network none but libkrun has no krun_disable_implicit_vsock — TSI cannot be disabled"
+                );
+                std::process::exit(EXIT_SETUP);
             }
         }
         // The payload's working directory (krun_set_workdir, the
@@ -1029,6 +1063,25 @@ fn cstr(s: impl AsRef<std::path::Path>) -> CString {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vsock_decision_pins_all_four_combinations() {
+        // bd myconfig-ot1, the rrg regression guard: reintroducing
+        // the refusal that also swallowed SHARED runs (bd
+        // myconfig-rrg) would flip a shared+no-symbol case to
+        // RefusedNoSymbol — this pin catches it.
+        use VsockDecision::*;
+        assert!(matches!(vsock_decision(true, true), KeepTsi));
+        assert!(
+            matches!(vsock_decision(true, false), KeepTsi),
+            "a shared run proceeds on a symbol-less lib (the rrg fix)"
+        );
+        assert!(matches!(vsock_decision(false, true), DisableTsi));
+        assert!(
+            matches!(vsock_decision(false, false), RefusedNoSymbol),
+            "none on a symbol-less lib stays refused"
+        );
+    }
 
     #[test]
     fn raising_nofile_lifts_the_soft_limit_to_the_hard_one() {
