@@ -488,6 +488,12 @@ runCommand "mysbx-krun-rootfs"
     # which needs the mountpoint on the ro root; the builder refuses
     # a dest below anything else (never a run-time ENOENT).
     mkdir -p $out/etc $out/home $out/srv $out/mnt $out/media $out/opt $out/data
+    # The git trust's overlay parent (bd myconfig-dak.8): the trust
+    # configs register as IN-MEMORY overlay files on the root device
+    # (krun_fs_add_overlay_file), whose INTERMEDIATE dirs must exist
+    # in the device's tree — `etc` is baked above, `etc/mysbx` is
+    # this line.
+    mkdir -p $out/etc/mysbx
     # The scratch disk's mountpoint (bd myconfig-dak.7, backends.md
     # D7): the ro root can hold no new entries at run time, so the
     # ext4's target is baked here — the live run's finding (mkdir

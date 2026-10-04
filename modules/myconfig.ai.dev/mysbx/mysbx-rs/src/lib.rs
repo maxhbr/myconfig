@@ -2659,14 +2659,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // backend's twin of the podman arm's files): the payload
             // runs as GUEST ROOT over virtiofs files that keep their
             // host uid, so git refuses every ordinary command with
-            // `dubious ownership` without it. The SAME two per-run
-            // files, the SAME trusted-path computation — the krun
-            // builder turns them into two ro shares instead of two
-            // podman binds. A --dry-run audits the argv (shares +
-            // GIT_CONFIG_GLOBAL) and creates NOTHING; the cleanup of
-            // a real waited run is the podman arm's own model
-            // (pid-named dir, swept by the next run otherwise).
-            let krun_git_trust;
+            // `dubious ownership` without it. The SAME trusted-path
+            // computation as the podman arm, but the content rides
+            // IN MEMORY: bd myconfig-dak.8 registers the two configs
+            // as root-device overlay files from the argv — no
+            // sidecar dir, no per-run files, no sweep for this
+            // backend's pair. A --dry-run audits the argv (the
+            // overlay flags + GIT_CONFIG_GLOBAL) and creates
+            // NOTHING.
             let krun_git_trust_paths: Option<(String, String)> = if !dry_run {
                 let trusted = match podman_trusted_git_paths(&repo, workspace.clone()) {
                     Ok(paths) => paths,
@@ -2709,44 +2709,27 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 };
                 let trusted = krun_trusted_with_backing(&trusted, &backing);
                 let libgit2_trusted = krun_trusted_with_backing(&libgit2_trusted, &backing);
-                let dir = repo.sidecar.join("gittrust").join(pid.to_string());
-                let file = dir.join("gitconfig");
-                let system_file = dir.join("system-gitconfig");
-                if let Err(e) = std::fs::create_dir_all(&dir) {
-                    eprintln!(
-                        "mysbx: cannot create the git trust directory {}: {e}",
-                        dir.display()
-                    );
-                    return EXIT_INFRASTRUCTURE;
-                }
-                if let Err(e) = std::fs::write(&file, git_trust_text(&trusted)) {
-                    eprintln!(
-                        "mysbx: cannot write the git trust file {}: {e}",
-                        file.display()
-                    );
-                    return EXIT_INFRASTRUCTURE;
-                }
-                if let Err(e) = std::fs::write(&system_file, libgit2_trust_text(&libgit2_trusted)) {
-                    eprintln!(
-                        "mysbx: cannot write the git trust file {}: {e}",
-                        system_file.display()
-                    );
-                    let _ = std::fs::remove_dir_all(&dir);
-                    return EXIT_INFRASTRUCTURE;
-                }
-                let global_host = file.to_string_lossy().into_owned();
-                let system_host = system_file.to_string_lossy().into_owned();
-                git_trust_file = Some(file.clone());
-                Some((global_host, system_host))
+                // bd myconfig-dak.8: the texts stay IN MEMORY — the
+                // git trust rides the ROOT DEVICE as overlay files
+                // the launcher registers from the argv (b64). No
+                // sidecar dir, no per-run files, no sweep for this
+                // backend's pair. A --dry-run renders the same flags
+                // and creates nothing (the texts are values, not
+                // files).
+                Some((
+                    git_trust_text(&trusted),
+                    libgit2_trust_text(&libgit2_trusted),
+                ))
             } else {
                 None
             };
-            krun_git_trust = krun_git_trust_paths
-                .as_ref()
-                .map(|(global_host, system_host)| krun::GitTrust {
-                    global_host,
-                    system_host,
-                });
+            let krun_git_trust: Option<krun::GitTrust> =
+                krun_git_trust_paths
+                    .as_ref()
+                    .map(|(global_text, system_text)| krun::GitTrust {
+                        global_text: global_text.clone(),
+                        system_text: system_text.clone(),
+                    });
             // The per-run scratch disk of the DIRECT krun backend (bd
             // myconfig-dak.7, backends.md D7): the SAME sidecar file
             // contract as podman-krun's (bd myconfig-0pi) — one

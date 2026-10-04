@@ -257,6 +257,23 @@ struct KrunApi {
     krun_init_log: Option<
         unsafe extern "C" fn(target_fd: c_int, level: u32, style: u32, options: u32) -> c_int,
     >,
+    // Optional (bd myconfig-dak.8, the git trust's overlay files):
+    // a file backed by HOST MEMORY, registered on a virtiofs device
+    // — no host file, no share slot, no init placement. The data
+    // pointer is NOT copied by the lib: the launcher keeps the
+    // decoded bytes in its own Vec (cfg.overlays) across
+    // krun_start_enter, which spans the VM's whole lifetime.
+    krun_fs_add_overlay_file: Option<
+        unsafe extern "C" fn(
+            ctx_id: c_uint,
+            c_fs_tag: *const c_char,
+            c_path: *const c_char,
+            data: *const u8,
+            data_len: usize,
+            mode: u32,
+            one_shot: bool,
+        ) -> c_int,
+    >,
 }
 
 unsafe fn load_api() -> Result<KrunApi, String> {
@@ -352,6 +369,20 @@ unsafe fn load_api() -> Result<KrunApi, String> {
                 ) -> c_int,
             >(p)
         }),
+        krun_fs_add_overlay_file: sym(b"krun_fs_add_overlay_file").ok().map(|p| unsafe {
+            std::mem::transmute::<
+                *mut (),
+                unsafe extern "C" fn(
+                    ctx_id: c_uint,
+                    c_fs_tag: *const c_char,
+                    c_path: *const c_char,
+                    data: *const u8,
+                    data_len: usize,
+                    mode: u32,
+                    one_shot: bool,
+                ) -> c_int,
+            >(p)
+        }),
         krun_init_log: sym(b"krun_init_log").ok().map(|p| unsafe {
             std::mem::transmute::<
                 *mut (),
@@ -401,6 +432,20 @@ struct Share {
     dest: String,
 }
 
+struct OverlayFile {
+    /// The virtiofs tag the file registers on — the root device for
+    /// the guest-nix story; extending this to the stage devices is a
+    /// follow-up when a use asks for it.
+    fs_tag: &'static str,
+    /// The guest path INSIDE the device's tree — "etc/gitconfig" is
+    /// /etc/gitconfig on the rootfs device (no leading slash).
+    path: String,
+    /// File mode bits (0100644 = a regular file).
+    mode: u32,
+    /// Content the launcher owns; registered by pointer.
+    data: Vec<u8>,
+}
+
 struct Config {
     cpus: u8,
     ram_mib: u32,
@@ -414,6 +459,11 @@ struct Config {
     devices: Vec<Device>,
     shares: Vec<Share>,
     env: Vec<(String, String)>,
+    /// The overlay files (bd myconfig-dak.8): (fs_tag, path, mode,
+    /// decoded bytes). The BYTES must outlive krun_start_enter — cfg
+    /// lives in main's frame, the registered pointers point into
+    /// these Vecs, the lib does not copy.
+    overlays: Vec<OverlayFile>,
     /// The MANIFEST carrying the shares (and the env when the
     /// cmdline would overflow — see the module docs' budget
     /// finding). A HOST-side file the launcher writes before
@@ -447,7 +497,7 @@ fn usage() -> ! {
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
          [--manifest FILE] [--network shared|none] \
          [--scratch FILE] [--env K=V]... \
-         [--chdir DIR] -- CMD [ARGS...] \
+         [--krun-overlay TAG@PATH:MODE:B64]... [--chdir DIR] -- CMD [ARGS...] \
   (the manifest FILE carries the shares; --ro-share/--rw-share remain \
    accepted for cmdline-sized debug runs)"
     );
@@ -470,6 +520,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         devices: Vec::new(),
         shares: Vec::new(),
         env: Vec::new(),
+        overlays: Vec::new(),
         manifest: None,
         network: true,
         workdir: PathBuf::from("/"),
@@ -547,6 +598,17 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                     .ok_or_else(|| format!("--env expects K=V, got `{value}`"))?;
                 cfg.env.push((k.to_owned(), v.to_owned()));
             }
+            // An overlay file (bd myconfig-dak.8): value is
+            // FS_TAG@PATH:MODE:B64 — the launcher registers the
+            // DECODED bytes on the device, so a per-run file needs
+            // NO host file, no stage slot, no init placement. The
+            // only fs_tag today is the root device ("/dev/root").
+            "--krun-overlay" => {
+                let value = it
+                    .next()
+                    .ok_or_else(|| "missing value for --krun-overlay".to_owned())?;
+                add_overlay(&mut cfg, &value)?;
+            }
             "--chdir" => {
                 cfg.workdir = PathBuf::from(
                     it.next()
@@ -587,6 +649,64 @@ fn add_device(
         tag: tag.to_owned(),
         host_dir: PathBuf::from(dir),
         read_only,
+    });
+    Ok(())
+}
+
+/// The ONLY fs tag an overlay file may register on today: the root
+/// device (include/libkrun.h's KRUN_FS_ROOT_TAG, the same constant
+/// krun.rs's FS_ROOT_TAG mirrors).
+const OVERLAY_FS_TAG: &str = "/dev/root";
+
+/// `--krun-overlay FS_TAG@PATH:OCTAL_MODE:B64` — decode + validate
+/// (the guest path must not begin with '/', the tag must name the
+/// root device, the base64 must decode). The one_shot flag is
+/// always false: a config file the payload's git reads REPEATEDLY
+/// must survive more than one lookup.
+fn add_overlay(cfg: &mut Config, value: &str) -> Result<(), String> {
+    const FILE_MODE: u32 = 0o100644;
+    let (tags, rest) = value
+        .split_once('@')
+        .ok_or_else(|| format!("--krun-overlay expects FS@PATH:MODE:B64, got `{value}`"))?;
+    if tags != OVERLAY_FS_TAG.trim_start_matches('/') && tags != OVERLAY_FS_TAG {
+        return Err(format!(
+            "--krun-overlay: the fs tag must be `{OVERLAY_FS_TAG}`
+, got `{tags}`"
+        ));
+    }
+    let (path, meta) = rest
+        .split_once(':')
+        .ok_or_else(|| format!("--krun-overlay expects {tags}PATH:MODE:B64, got `{value}`"))?;
+    let (mode, data) = meta
+        .split_once(':')
+        .ok_or_else(|| format!("--krun-overlay expects {tags}PATH:MODE:B64, got `{value}`"))?;
+    let mode: u32 = u32::from_str_radix(mode, 8)
+        .map_err(|_| format!("--krun-overlay: the mode must be octal, got `{mode}`"))?;
+    if mode != FILE_MODE {
+        return Err(format!(
+            "--krun-overlay: the mode must be {FILE_MODE:o} (a regular 0644 file), got {mode:o}"
+        ));
+    }
+    if path.starts_with('/') {
+        return Err(format!(
+            "--krun-overlay: the path is device-relative ({OVERLAY_FS_TAG}'s tree), got `{path}` — drop the leading slash"
+        ));
+    }
+    if path.is_empty() || path.contains("..") {
+        return Err(
+            "--krun-overlay: the path must be a non-empty device-relative name without `..`"
+                .to_owned(),
+        );
+    }
+    let decoded = unb64(data)?;
+    if decoded.is_empty() {
+        return Err("--krun-overlay: the data must not be empty".to_owned());
+    }
+    cfg.overlays.push(OverlayFile {
+        fs_tag: OVERLAY_FS_TAG,
+        path: path.to_owned(),
+        mode,
+        data: decoded,
     });
     Ok(())
 }
@@ -656,6 +776,67 @@ fn c_strings(items: &[String]) -> Vec<CString> {
         .iter()
         .map(|s| CString::new(s.as_str()).unwrap())
         .collect()
+}
+
+/// The inverse of [`b64`]: decoded BINARY (overlay
+/// file content rides argv b64 — the trust text has newlines argv
+/// can carry but keeping it b64 keeps the flag grammar byte-blind).
+/// Non-base64 input (length % 4 != 0 or an off-alphabet char) is an
+/// error — malformed argv, exit 2.
+fn unb64(text: &str) -> Result<Vec<u8>, String> {
+    const REV: fn(u8) -> Option<u8> = |c: u8| match c {
+        b'A'..=b'Z' => Some(c - b'A'),
+        b'a'..=b'z' => Some(c - b'a' + 26),
+        b'0'..=b'9' => Some(c - b'0' + 52),
+        b'+' => Some(62),
+        b'/' => Some(63),
+        b'=' => None,
+        _ => None,
+    };
+    let trimmed: Vec<u8> = text
+        .as_bytes()
+        .iter()
+        .copied()
+        .filter(|c| *c != b'\n' && *c != b'\r' && *c != b' ')
+        .collect();
+    if trimmed.len() % 4 != 0 {
+        return Err(format!(
+            "krun-overlay: the data is not valid base64 ({} bytes, not a multiple of 4)",
+            trimmed.len()
+        ));
+    }
+    let mut out = Vec::with_capacity(trimmed.len() / 4 * 3);
+    for chunk in trimmed.chunks(4) {
+        let mut vals = [0u8; 4];
+        let mut pad = 0usize;
+        for (slot, c) in chunk.iter().enumerate() {
+            match REV(*c) {
+                Some(v) => vals[slot] = v,
+                None if *c == b'=' && slot >= 2 => {
+                    pad += 1;
+                    vals[slot] = 0;
+                }
+                None => {
+                    return Err(format!(
+                        "krun-overlay: invalid base64 character {}:{}",
+                        *c, slot
+                    ))
+                }
+            }
+        }
+        let n = (u32::from(vals[0]) << 18)
+            | (u32::from(vals[1]) << 12)
+            | (u32::from(vals[2]) << 6)
+            | u32::from(vals[3]);
+        out.push((n >> 16) as u8);
+        if pad < 2 {
+            out.push((n >> 8) as u8);
+        }
+        if pad < 1 {
+            out.push(n as u8);
+        }
+    }
+    Ok(out)
 }
 
 /// base64 (standard, padded) of arbitrary bytes — the manifest's
@@ -895,6 +1076,31 @@ fn main() {
             (api.krun_set_vm_config)(ctx, cfg.cpus, cfg.ram_mib),
             "krun_set_vm_config",
         );
+        // The overlay files (bd myconfig-dak.8): pointer NOT copied
+        // by the lib — the pointers alias cfg.overlays' Vecs, which
+        // live in main's frame past krun_start_enter (the VM's whole
+        // lifetime). one_shot=false: the payload's git reads its
+        // config file REPEATEDLY.
+        if !cfg.overlays.is_empty() {
+            let add_file = api.krun_fs_add_overlay_file.expect(
+                "the caller passed --krun-overlay but the loaded libkrun lacks \
+                 krun_fs_add_overlay_file — a build too old for the feature",
+            );
+            for o in &cfg.overlays {
+                check(
+                    (add_file)(
+                        ctx,
+                        cstr(o.fs_tag).as_ptr(),
+                        cstr(&o.path).as_ptr(),
+                        o.data.as_ptr(),
+                        o.data.len(),
+                        o.mode,
+                        false,
+                    ),
+                    "krun_fs_add_overlay_file",
+                );
+            }
+        }
         // The root: READ-ONLY by design — a sandbox root the payload
         // could write is no sandbox root. krun_add_virtiofs3's flag
         // makes the VIRTIOFS SERVER enforce it, not the guest kernel.
@@ -1063,6 +1269,67 @@ fn cstr(s: impl AsRef<std::path::Path>) -> CString {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlay_flag_round_trips_and_refuses_the_bad_spellings() {
+        // bd myconfig-dak.8: the trust text rides argv b64 — the
+        // grammar must be byte-blind and refuse malformed input at
+        // the parse edge (exit 2, never a half-registered VM).
+        let payload = "safe.directory = /tmp/x\n[include]\n\tpath = y\n";
+        let value = format!("dev/root@etc/mysbx/gitconfig:0100644:{}", b64(payload));
+        let mut cfg = test_cfg();
+        add_overlay(&mut cfg, &value).expect("the flag parses");
+        assert_eq!(cfg.overlays.len(), 1);
+        let o = &cfg.overlays[0];
+        assert_eq!(o.fs_tag, OVERLAY_FS_TAG);
+        assert_eq!(o.path, "etc/mysbx/gitconfig");
+        assert_eq!(o.mode, 0o100644);
+        assert_eq!(o.data, payload.as_bytes());
+        assert!(!o.data.is_empty());
+
+        // the refusals: wrong tag, leading slash, bad mode, bad b64,
+        // empty content
+        let good = |spec: &str, data: &str| format!("dev/root@{spec}:{data}");
+        let mut cfg = test_cfg();
+        assert!(add_overlay(&mut cfg, "etc/root@p:0100644:AAAA").is_err());
+        let mut cfg = test_cfg();
+        assert!(add_overlay(&mut cfg, &good("/abs", "0100644:AAAA")).is_err());
+        let mut cfg = test_cfg();
+        assert!(
+            add_overlay(&mut cfg, &good("p", "040755:AAAA")).is_err(),
+            "the dir mode is not a file mode"
+        );
+        let mut cfg = test_cfg();
+        assert!(
+            add_overlay(&mut cfg, &good("p", "0100644:AB*D")).is_err(),
+            "the b64 is malformed"
+        );
+        let mut cfg = test_cfg();
+        assert!(
+            add_overlay(&mut cfg, &good("p", "0100644:")).is_err(),
+            "empty content"
+        );
+        let mut cfg = test_cfg();
+        assert!(add_overlay(&mut cfg, "dev/root@../escape:0100644:AAAA").is_err());
+    }
+
+    fn test_cfg() -> Config {
+        Config {
+            cpus: 2,
+            ram_mib: 2048,
+            rootfs: PathBuf::new(),
+            init: None,
+            devices: Vec::new(),
+            shares: Vec::new(),
+            env: Vec::new(),
+            overlays: Vec::new(),
+            manifest: None,
+            network: true,
+            workdir: PathBuf::from("/"),
+            scratch: None,
+            payload: Vec::new(),
+        }
+    }
 
     #[test]
     fn vsock_decision_pins_all_four_combinations() {

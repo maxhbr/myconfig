@@ -199,12 +199,13 @@ pub struct Params<'a> {
     /// myconfig-dak.5): the payload runs as GUEST ROOT over
     /// virtiofs files that keep their host uid, so every ordinary
     /// git command dies with `dubious ownership` without it.
-    /// `Some` adds two ro shares — the per-run global config at
-    /// `/etc/mysbx/gitconfig` (`GIT_CONFIG_GLOBAL`) and the libgit2
-    /// system config at `/etc/gitconfig` (bd myconfig-jn0) — and
-    /// sets `GIT_CONFIG_GLOBAL` last, after every config `[env]`.
-    /// `None` (a `--dry-run`, an unwrapped build) shares no trust.
-    pub git_trust: Option<&'a GitTrust<'a>>,
+    /// `Some` adds two in-memory overlay files on the root device —
+    /// the per-run global config at `/etc/mysbx/gitconfig`
+    /// (`GIT_CONFIG_GLOBAL`) and the libgit2 system config at
+    /// `/etc/gitconfig` (bd myconfig-jn0) — and sets
+    /// `GIT_CONFIG_GLOBAL` last, after every config `[env]`.
+    /// `None` (a `--dry-run`, an unwrapped build) trusts nothing.
+    pub git_trust: Option<&'a GitTrust>,
     /// The per-run nix scratch disk (bd myconfig-dak.7, backends.md
     /// D7): the LAUNCHER-VIEW path of the host-side sparse raw file
     /// (lib.rs creates it under `<sidecar>/scratch/` and bwrap
@@ -214,14 +215,17 @@ pub struct Params<'a> {
     pub scratch: Option<&'a str>,
 }
 
-/// The two host files of a run's git trust (the podman arm's
-/// `gittrust/<pid>/` pair): the global config (`git_trust_text`'s
-/// exact-path entries plus the in-sandbox user-config includes) and
-/// the libgit2 system config (`libgit2_trust_text`'s exact entries
-/// only). Bound read-only as virtiofs shares, never writable.
-pub struct GitTrust<'a> {
-    pub global_host: &'a str,
-    pub system_host: &'a str,
+/// The two trust TEXTS of a run's git trust (bd myconfig-dak.8):
+/// the global config (`git_trust_text`'s exact-path entries plus the
+/// in-sandbox user-config includes) and the libgit2 system config
+/// (`libgit2_trust_text`'s exact entries only). Registered as
+/// IN-MEMORY overlay files on the root device
+/// (`krun_fs_add_overlay_file`) — no host file, no sidecar dir, no
+/// stage slot, no init placement; the launcher owns the bytes for
+/// the VM's whole lifetime.
+pub struct GitTrust {
+    pub global_text: String,
+    pub system_text: String,
 }
 
 /// What the direct-krun builder refuses — each a configuration a
@@ -443,6 +447,11 @@ struct Spec {
     /// the launcher attaches the file with krun_add_disk2 and
     /// announces the disk in the manifest env so the init finds it.
     scratch: Option<String>,
+    /// The in-memory overlay files (bd myconfig-dak.8): (guest path,
+    /// octal file mode, b64 content) triples the launcher registers
+    /// on the ROOT device. The git trust is the first consumer — no
+    /// sidecar file, no stage slot, no init placement.
+    overlays: Vec<(String, u32, String)>,
 }
 
 /// The staging-tree BINDS of a run's shares — one `(host_dir,
@@ -495,20 +504,6 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
             ));
         }
     }
-    // The git trust files (ro slots like any other — the staging
-    // device's OWN ro flag enforces the read-only side end to end).
-    if let Some(trust) = params.git_trust {
-        binds.push((
-            trust.global_host.to_owned(),
-            true,
-            "gittrust-global".to_owned(),
-        ));
-        binds.push((
-            trust.system_host.to_owned(),
-            true,
-            "gittrust-system".to_owned(),
-        ));
-    }
     // The host nix db ride-along (bd myconfig-j23): a LINKLESS ro
     // slot — the init copies the database onto the scratch before
     // the payload execs, so the guest's single-user nix registers
@@ -558,23 +553,6 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
                 read_only: false,
             });
         }
-    }
-    // The git trust (bd myconfig-zj2's krun twin): the SAME two
-    // per-run files the podman arm binds — here as ro slots in the
-    // staging device, at the same container paths, so a repo
-    // checked out at a different path still trusts exactly what
-    // THIS run shares.
-    if params.git_trust.is_some() {
-        shares.push(Share {
-            slot: "gittrust-global".to_owned(),
-            sandbox_path: GIT_TRUST_GLOBAL_DEST.to_owned(),
-            read_only: true,
-        });
-        shares.push(Share {
-            slot: "gittrust-system".to_owned(),
-            sandbox_path: GIT_TRUST_SYSTEM_DEST.to_owned(),
-            read_only: true,
-        });
     }
     // The host nix db ride-along (bd myconfig-j23) — the argv twin
     // of the stage_binds entry, same gate, LINKLESS (NOLINK_DEST).
@@ -726,8 +704,73 @@ pub fn krun_argv(
         payload: payload_argv,
         network: cfg.network,
         scratch: params.scratch.map(str::to_owned),
+        overlays: params.git_trust.map(trust_overlays).unwrap_or_default(),
     };
     Ok(render(&spec))
+}
+
+/// The `--krun-overlay` flags of the run's git trust (bd
+/// myconfig-dak.8): both configs registered as IN-MEMORY overlay
+/// files on the ROOT device (timestamps/paths device-relative —
+/// `etc/mysbx/gitconfig`, `etc/gitconfig`), content BASE64. Order:
+/// the SYSTEM config first, then the GLOBAL (system ones must exist
+/// the moment GIT_CONFIG_GLOBAL adds its `include`d file — no such
+/// dependency across these two, but the stable order is the pins').
+pub fn trust_overlays(trust: &GitTrust) -> Vec<(String, u32, String)> {
+    [
+        (
+            GIT_TRUST_SYSTEM_DEST.trim_start_matches('/').to_owned(),
+            0o100644_u32,
+            std::mem::take(&mut String::new()),
+        ),
+        (
+            GIT_TRUST_GLOBAL_DEST.trim_start_matches('/').to_owned(),
+            0o100644_u32,
+            String::new(),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(i, (path, mode, _))| {
+        let text = if i == 0 {
+            &trust.system_text
+        } else {
+            &trust.global_text
+        };
+        (path, mode, b64_str(text))
+    })
+    .collect()
+}
+
+/// Base64 (standard, padded) of arbitrary bytes — the
+/// `--krun-overlay` flag's value encoding: the trust texts carry
+/// any bytes, the argv must be ONE token. Hand-rolled like the
+/// launcher's decoder: the crate is dependency-free.
+fn b64_str(data: &str) -> String {
+    const TBL: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let bytes = data.as_bytes();
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b = [
+            chunk[0],
+            chunk.get(1).copied().unwrap_or(0),
+            chunk.get(2).copied().unwrap_or(0),
+        ];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        out.push(TBL[(n >> 18 & 63) as usize] as char);
+        out.push(TBL[(n >> 12 & 63) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            TBL[(n >> 6 & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TBL[(n & 63) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
 }
 
 /// The sandbox environment of a run — the exact entries and order
@@ -988,6 +1031,16 @@ fn render(spec: &Spec) -> Vec<String> {
     for (k, v) in &spec.env {
         argv.push("--env".to_owned());
         argv.push(format!("{k}={v}"));
+    }
+    // 3b. the overlay files (bd myconfig-dak.8): the git trust's two
+    // configs, registered by the launcher as IN-MEMORY files on the
+    // root device — no sidecar dir, no stage slot, no init
+    // placement. The texts ride the argv BASE64 (one token each;
+    // the launcher decodes and owns the bytes for the VM's whole
+    // lifetime, the lib registers them by pointer).
+    for (path, mode, data) in &spec.overlays {
+        argv.push("--krun-overlay".to_owned());
+        argv.push(format!("dev/root@{path}:{mode:o}:{data}"));
     }
     // 4b. the network (bd myconfig-dak.6): `none` is the only mode
     // the argv must NAME — shared is the launcher's default (the

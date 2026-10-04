@@ -710,20 +710,31 @@ fn a_baked_link_path_dest_is_refused() {
 }
 
 #[test]
-fn git_trust_adds_two_ro_shares_and_the_env_pin() {
+fn git_trust_registers_two_overlay_files_and_the_env_pin() {
+    // bd myconfig-dak.8: the trust rides the ROOT DEVICE as
+    // IN-MEMORY overlay files — the renderer emits the
+    // --krun-overlay flags (b64 contents), the env pin stays, and
+    // NO stage slot exists for either file.
     let cfg = base(true);
     let trust = mysbx::krun::GitTrust {
-        global_host: "/synth/sidecar/gittrust/42/gitconfig",
-        system_host: "/synth/sidecar/gittrust/42/system-gitconfig",
+        global_text: "safe.directory = /tmp/mysbx-shares/stage-rw/workspace\n".to_owned(),
+        system_text: "safe.directory = /tmp/mysbx-shares/stage-rw/workspace\n".to_owned(),
     };
     let mut p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
     p.git_trust = Some(&trust);
     let argv = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &BTreeMap::new(), &p).unwrap();
     let text = argv.join("\n");
-    // Two ro shares at the podman contract's paths, ro enforced:
-    assert!(text.contains("--ro-share\nstage-ro:gittrust-global@/etc/mysbx/gitconfig ro"));
-    assert!(text.contains("--ro-share\nstage-ro:gittrust-system@/etc/gitconfig ro"));
-    // GIT_CONFIG_GLOBAL last of the env, after PATH:
+    // The overlay flags name the root device and the device-relative
+    // destinations; the contents are the b64 of the texts (the
+    // expected triples come from the SAME pub helper the builder
+    // uses — pinning the RENDERING, not the encoder).
+    for (path, mode, data) in mysbx::krun::trust_overlays(&trust) {
+        assert!(
+            text.contains(&format!("--krun-overlay\ndev/root@{path}:{mode:o}:{data}")),
+            "the overlay flag of {path}: {text}"
+        );
+    }
+    // GIT_CONFIG_GLOBAL still the env block's LAST entry, after PATH:
     assert!(text.contains("--env\nGIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"));
     let env_block = text
         .split("--env\n")
@@ -734,18 +745,19 @@ fn git_trust_adds_two_ro_shares_and_the_env_pin() {
         env_block[env_block.len() - 1],
         "GIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig"
     );
-    // The staging binds must carry both host files into the ro tree:
+    // NO stage slots exist for the trust files (the overlay files
+    // replaced them):
     let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
-    assert!(binds.contains(&(
-        "/synth/sidecar/gittrust/42/gitconfig".to_owned(),
-        true,
-        "gittrust-global".to_owned()
-    )));
-    assert!(binds.contains(&(
-        "/synth/sidecar/gittrust/42/system-gitconfig".to_owned(),
-        true,
-        "gittrust-system".to_owned()
-    )));
+    assert!(
+        !binds
+            .iter()
+            .any(|(_, _, slot)| slot.starts_with("gittrust")),
+        "the trust files are no stage slots anymore: {binds:?}"
+    );
+    assert!(
+        !text.contains("gittrust"),
+        "the argv carries no gittrust share: {text}"
+    );
 }
 
 #[test]
