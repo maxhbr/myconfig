@@ -762,14 +762,30 @@ fn add_share(
             }
         ));
     }
-    if !cfg
-        .devices
-        .iter()
-        .any(|d| d.tag == tag && d.read_only == want_ro)
+    // The share must name a device the caller explicitly declared --
+    // EXCEPT the launcher's own virtual overlay device (bd
+    // myconfig-dak.8): `trustfs` carries no `--ro-device` — the
+    // launcher adds it itself (NULL host path → NullFs) from the
+    // --krun-overlay flags, its read-only flag is hardcoded at that
+    // addition, and its ro content lives in host memory, so there is
+    // nothing a host dir could declare. The ro check still applies:
+    // a share naming trustfs in a RW position would brief the guest
+    // init to mount+link rw what the device serves read-only — the
+    // init then writes nowhere anyway, but the lie is refused.
+    if tag != OVERLAY_FS_TAG
+        && !cfg
+            .devices
+            .iter()
+            .any(|d| d.tag == tag && d.read_only == want_ro)
     {
         return Err(format!(
             "share `{value}` names device `{tag}` ({mode}), which no --{}-device declared",
             if read_only { "ro" } else { "rw" }
+        ));
+    }
+    if tag == OVERLAY_FS_TAG && !want_ro {
+        return Err(format!(
+            "share `{value}` declares the overlay device `{OVERLAY_FS_TAG}` rw — its content is launcher-owned memory served read-only"
         ));
     }
     cfg.shares.push(Share {
@@ -1638,6 +1654,45 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn the_trustfs_overlay_device_needs_no_ro_device_declaration() {
+        // bd myconfig-dak.8's live finding: the share validation
+        // demanded a --ro-device for the launcher-internal virtual
+        // device — every real run refused before the VM started. The
+        // device is launcher-owned (added from the --krun-overlay
+        // flags, NULL host path → NullFs), so only the RW lie is
+        // still refused, and undeclared EXTERNAL devices keep the
+        // strict check.
+        let cfg = parse(&[
+            "--rootfs",
+            "/root",
+            "--krun-overlay",
+            "trustfs@gitconfig:0100644:QUJD",
+            "--ro-share",
+            "trustfs:gitconfig@/etc/mysbx/gitconfig ro",
+            "--",
+            "/bin/true",
+        ])
+        .expect("the trustfs share with no --ro-device passes");
+        assert!(cfg.shares.iter().any(|s| s.tag == "trustfs"));
+        assert!(cfg.overlays.iter().any(|o| o.path == "gitconfig"));
+        // the rw lie:
+        assert!(parse(&[
+            "--rootfs",
+            "/root",
+            "--krun-overlay",
+            "trustfs@gitconfig:0100644:QUJD",
+            "--rw-share",
+            "trustfs:gitconfig@/etc/mysbx/gitconfig rw",
+            "--",
+            "/bin/true"
+        ])
+        .is_err());
+        // the undeclared EXTERNAL device stays refused (the original
+        // guard's contract, case-verified via rejects_ambiguous_
+        // share_delimiters' nodev entry).
+    }
+
     fn rejects_ambiguous_share_delimiters() {
         for value in [
             "bad tag@/dest ro",
