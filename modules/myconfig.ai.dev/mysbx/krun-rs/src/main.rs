@@ -1333,13 +1333,13 @@ mod tests {
         // grammar must be byte-blind and refuse malformed input at
         // the parse edge (exit 2, never a half-registered VM).
         let payload = "safe.directory = /tmp/x\n[include]\n\tpath = y\n";
-        let value = format!("trustfs@gitconfig:0100644:{}", b64(payload));
+        let value = format!("trustfs@gittrust-global:0100644:{}", b64(payload));
         let mut cfg = test_cfg();
         add_overlay(&mut cfg, &value).expect("the flag parses");
         assert_eq!(cfg.overlays.len(), 1);
         let o = &cfg.overlays[0];
         assert_eq!(o.fs_tag, OVERLAY_FS_TAG);
-        assert_eq!(o.path, "gitconfig");
+        assert_eq!(o.path, "gittrust-global");
         assert_eq!(o.mode, 0o100644);
         assert_eq!(o.data, payload.as_bytes());
         assert!(!o.data.is_empty());
@@ -1667,7 +1667,7 @@ mod tests {
             "--rootfs",
             "/root",
             "--krun-overlay",
-            "trustfs@gitconfig:0100644:QUJD",
+            "trustfs@gittrust-global:0100644:QUJD",
             "--ro-share",
             "trustfs:gitconfig@/etc/mysbx/gitconfig ro",
             "--",
@@ -1675,13 +1675,13 @@ mod tests {
         ])
         .expect("the trustfs share with no --ro-device passes");
         assert!(cfg.shares.iter().any(|s| s.tag == "trustfs"));
-        assert!(cfg.overlays.iter().any(|o| o.path == "gitconfig"));
+        assert!(cfg.overlays.iter().any(|o| o.path == "gittrust-global"));
         // the rw lie:
         assert!(parse(&[
             "--rootfs",
             "/root",
             "--krun-overlay",
-            "trustfs@gitconfig:0100644:QUJD",
+            "trustfs@gittrust-global:0100644:QUJD",
             "--rw-share",
             "trustfs:gitconfig@/etc/mysbx/gitconfig rw",
             "--",

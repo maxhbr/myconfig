@@ -743,9 +743,14 @@ pub fn krun_argv(
 /// podman contract's paths: /etc/gitconfig and
 /// GIT_CONFIG_GLOBAL's /etc/mysbx/gitconfig.
 pub fn trust_overlays(trust: &GitTrust) -> Vec<(String, u32, String)> {
+    // The overlay file's device-tree name IS the share's SLOT: the
+    // init links the sandbox path at <GUEST_SHARE_ROOT>/trustfs/
+    // <slot>, so the virtual tree must carry the SAME names the
+    // share records name (the slot-file mismatch was the live
+    // finding: dangling /etc/gitconfig → libgit2 error 7 again).
     [
-        (&trust.system_text, "system-gitconfig"),
-        (&trust.global_text, "gitconfig"),
+        (&trust.system_text, "gittrust-system"),
+        (&trust.global_text, "gittrust-global"),
     ]
     .into_iter()
     .map(|(text, name)| (name.to_owned(), 0o100644_u32, b64_str(text)))
