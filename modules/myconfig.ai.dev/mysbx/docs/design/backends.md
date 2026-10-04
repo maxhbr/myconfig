@@ -962,3 +962,36 @@ backend removes).
   runs') — the virtio-blk fd keeps nothing alive past the VM, the
   sweep is the only reclamation, same contract as podman-krun.
 
+### D8: `podman-krun` is superseded by `krun` in principle; kept until the head-to-head retires it (bd myconfig-dak.10)
+
+The epic's closing decision. The direct backend now covers
+everything `podman-krun` does, with the same verified semantics
+and one fewer layer between mysbx and the VM:
+
+| | `podman-krun` (D2) | `krun` (D3) |
+| --- | --- | --- |
+| layers to the VM | mysbx → podman → crun (OCI config) → libkrun → VM | mysbx → bwrap → launcher → libkrun → VM |
+| filesystem contract | crun prepares an OCI rootfs host-side; libkrun shares it | the spec's shares ARE the guest layout; a plain directory rootfs |
+| network | TSI via crun's krun handler (D2) | TSI directly, `network = false` kills the vsock (D6) |
+| nix scratch | the podman image's wrapper tree (krun-guest-nix.nix) | the init's virtio-blk + db copy (D7, bd myconfig-j23) |
+| image | one OCI image per toolchain pin, loaded per host (`podman-load-image`) | none — the ro host store share IS the visibility (D3) |
+| boot | image + OCI machinery in the path | 282 ms warm (the spike's probe 4, f13) |
+
+The remaining `podman-krun` argument was its maturity — the
+krun-guest-nix wrapper tree and the D2 verification — and dak.10's
+live chain on 'thing' closed that gap: the direct backend's guest
+nix now runs a real `nix flake check` end-to-end
+(../krun-live-validation.md §5), the surface podman-krun was the
+only one to have.
+
+DECISION: no new feature work lands on `podman-krun` — every
+krun-behavior fix lands on the direct backend first (the fd
+ceilings, the trust spellings, the db copy all did). The variant
+STAYS until the head-to-head on f13 records its timing against
+the spike's numbers (`nix/krun-direct-spike.sh` probe 4 vs `time
+mysbx run -- true` under `backend = "podman-krun"`) and one host
+cycle runs the direct backend as its default; retiring the
+variant is then a small PR (drop the crun pin, the image build,
+the podman-krun arm of `podman_checks`), not a redesign. The f13
+runbook pass remains the open acceptance item — recorded in
+../krun-validation-log.md when it runs.
