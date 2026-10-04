@@ -7406,10 +7406,90 @@ fn doctor_without_a_backend_fails_unless_one_is_named() {
         "{stdout}"
     );
     assert!(
-        stdout.contains("OK   not checked: podman-gvisor, nono, podman-krun (check one with"),
+        stdout.contains("OK   not checked: podman-gvisor, nono, podman-krun, krun (check one with"),
         "{stdout}"
     );
     assert!(!stdout.contains("not configured"), "{stdout}");
+}
+
+#[test]
+fn doctor_routes_the_krun_backend_away_from_the_podman_checks() {
+    // bd myconfig-dak.10: the direct-libkrun backend's doctor
+    // section is its OWN — the podman checks (binary, runtime,
+    // image) would be wrong answers for a backend that runs no
+    // podman at all. A stub launcher prints the launcher's own
+    // unknown-argument wording so the probe passes.
+    let (inv, _, sidecar) = fixture("doctor-krun-routing", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    // The stub reproduces the launcher's unknown-argument wording
+    // (what the probe matches on); the backtick/quote dance keeps
+    // /bin/sh happy inside the single-quoted echo.
+    let launcher = doctor_stub(
+        &base,
+        "mysbx-krun-stub",
+        "echo \"mysbx-krun: unknown argument '--doctor-probe-invalid'\" >&2\nexit 2",
+    );
+    let rootfs = base.join("krun-rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let (code, stdout, _stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[
+            ("MYSBX_KRUN_LAUNCHER", launcher.to_str().unwrap()),
+            ("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap()),
+        ],
+    );
+    // The exit is NOT asserted 0: this host has no /dev/kvm, and
+    // doctor correctly FAILS that check — the test pins the ROUTING
+    // and the krun checks' shape, not the host's KVM.
+    assert_ne!(
+        code, 0,
+        "the /dev/kvm failure must make doctor report: {stdout}"
+    );
+    assert!(stdout.contains("== krun =="), "{stdout}");
+    assert!(
+        stdout.contains("OK   launcher probe: the launcher runs and reaches argument parsing"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("OK   rootfs: "), "{stdout}");
+    // NOT the podman section's checks:
+    assert!(!stdout.contains("OCI runtime"), "{stdout}");
+    assert!(!stdout.contains("image"), "{stdout}");
+    assert!(!stdout.contains("startup probe"), "{stdout}");
+    // and the launcher check has no PATH-fallback pass (bd
+    // myconfig-dak.10 review finding 1): the pin resolves, but a
+    // MISSING pin must fail even with mysbx-krun on PATH — pinned
+    // by the stub's own name below.
+    // With a bare `mysbx-krun` ON PATH and NO pin, the check must
+    // STILL fail — the run path has no PATH fallback either (the
+    // review's finding 1: doctor must not be greener than the run).
+    let stub_on_path = base.join("path-stub");
+    let _ = doctor_stub(
+        &stub_on_path,
+        "mysbx-krun",
+        "echo 'not the launcher' >&2\nexit 1",
+    );
+    // PATH entries are separate join arguments — join_paths
+    // refuses a `:`-embedded entry.
+    let path_with_stub = std::env::join_paths(&[
+        stub_on_path.clone(),
+        std::path::PathBuf::from("/usr/bin"),
+        std::path::PathBuf::from("/bin"),
+    ])
+    .unwrap();
+    let (code, stdout, _stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[("PATH", path_with_stub.to_str().unwrap())],
+    );
+    assert_ne!(code, 0, "no pin: the launcher check must fail: {stdout}");
+    assert!(
+        stdout.contains("FAIL launcher: no launcher pinned (MYSBX_KRUN_LAUNCHER)"),
+        "{stdout}"
+    );
+    std::fs::remove_dir_all(stub_on_path).unwrap();
 }
 
 #[test]
@@ -8671,6 +8751,93 @@ fn podman_multiplexer_without_in_image_entry_is_refused() {
         );
         assert!(!stdout.contains("entry"), "{backend}: no argv: {stdout}");
     }
+}
+
+#[test]
+fn the_direct_krun_backend_writes_no_sidecar_trust_files() {
+    // bd myconfig-dak.8's acceptance: the git trust rides as
+    // IN-MEMORY overlay files (the launcher's trustfs NullFs device)
+    // — NO `gittrust/<pid>/` dir under the sidecar, on a dry run or
+    // a real run. (The podman-krun arm keeps its per-run files: the
+    // hoisted sweep's coverage there is
+    // the_hoisted_sweep_cleans_both_krun_backends_debris.)
+    let (inv, _, sidecar) = fixture("krun-no-trust-files", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
+    // The pins the run needs to reach the dry-run audit: launcher
+    // + rootfs (the arm refuses a missing pin).
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_KRUN_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap().to_string());
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout_lossy = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        stdout_lossy.contains("--krun-overlay"),
+        "the dry run audits the overlay flags: {stdout_lossy}"
+    );
+    assert!(
+        !sidecar.join("gittrust").exists(),
+        "the dry run wrote no sidecar trust dir"
+    );
+}
+
+#[test]
+fn the_hoisted_sweep_cleans_both_krun_backends_debris() {
+    // bd myconfig-6xl: the per-run dir sweep is HOISTED above the arm
+    // dispatch, so a podman-krun run reclaims gittrust/<pid>/ debris
+    // even when THAT run later refuses in its own arm (here: the
+    // sandbox has no /dev/kvm, the podman-krun arm's first real-run
+    // refusal). A LIVE pid's dir is never touched; a non-pid name is
+    // untouched; a dry run sweeps nothing.
+    let (inv, _, sidecar) = fixture("krun-sweep-hoisted", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let gittrust = sidecar.join("gittrust");
+    let dead_dir = gittrust.join("2147483647"); // > i32::MAX: pid_gone is true
+    std::fs::create_dir_all(&dead_dir).unwrap();
+    std::fs::write(dead_dir.join("gitconfig"), "stale").unwrap();
+    let live_dir = gittrust.join(std::process::id().to_string());
+    std::fs::create_dir_all(&live_dir).unwrap();
+    let named_dir = gittrust.join("not-a-pid");
+    std::fs::create_dir_all(&named_dir).unwrap();
+
+    // Real run (NOT --dry-run): the podman-krun arm refuses on kvm,
+    // AFTER the sweep ran.
+    let mut cmd = spawn_with_args(&inv, &["run", "--", "/bin/true"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "the run must refuse in this environment"
+    );
+    assert!(!dead_dir.exists(), "the dead-pid debris was swept");
+    assert!(
+        live_dir.exists(),
+        "a LIVE parallel run's dir is never removed"
+    );
+    assert!(named_dir.exists(), "a non-pid name is untouched");
+    std::fs::remove_dir_all(&live_dir).unwrap();
+    std::fs::remove_dir_all(&named_dir).unwrap();
+
+    // The DRY run of the same config sweeps NOTHING (the sweep is
+    // !dry_run-gated): re-seed (the real run above already swept the
+    // first debris — the assert proved it gone), dry-run, assert the
+    // debris survives.
+    std::fs::create_dir_all(&dead_dir).unwrap();
+    std::fs::write(dead_dir.join("gitconfig"), "still-stale").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert!(out.status.code().is_some(), "the dry run exits: {out:?}");
+    assert!(dead_dir.exists(), "the dry run swept nothing");
+    std::fs::remove_dir_all(&dead_dir).unwrap();
 }
 
 #[test]

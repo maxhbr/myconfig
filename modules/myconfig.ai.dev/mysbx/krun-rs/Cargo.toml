@@ -1,0 +1,15 @@
+[package]
+name = "mysbx-krun"
+version = "0.1.0"
+edition = "2021"
+description = "mysbx krun backend: direct libkrun launcher (spike, bd myconfig-dak.1)"
+license = "MIT"
+
+# Zero dependencies by design, like the main mysbx crate: the libkrun
+# API surface is ~25 flat C functions, dlopen'd via raw extern "C"
+# declarations against the pinned 1.19 header (libkrun.h of the nixpkgs
+# input). No bindgen, no libc crate.
+
+[[bin]]
+name = "mysbx-krun"
+path = "src/main.rs"

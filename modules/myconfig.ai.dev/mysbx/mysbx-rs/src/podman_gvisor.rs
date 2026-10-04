@@ -1016,6 +1016,11 @@ pub fn podman_run_argv(
     for (key, value) in &cfg.env {
         argv.extend(["--env".into(), format!("{key}={value}")]);
     }
+    // The `[nix]` table as NIX_CONFIG (bd myconfig-j23): after
+    // `[env]`, before the pins and the infrastructure variables.
+    if let Some(nix_config) = cfg.nix_config() {
+        argv.extend(["--env".into(), format!("NIX_CONFIG={nix_config}")]);
+    }
     // Backend pins (MYSBX_PODMAN_ENV): after the layers, so a pin wins
     // over a configured value, and before the infrastructure variables
     // below, which stay the last word on `HOME`/`PATH`/the XDG dirs.

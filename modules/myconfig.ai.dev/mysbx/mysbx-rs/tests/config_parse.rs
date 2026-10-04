@@ -54,6 +54,9 @@ fn every_asset_is_exercised() {
         "invalid/schema-empty-domain.toml",
         "invalid/schema-env-eq-key.toml",
         "invalid/schema-env-flag-key.toml",
+        "invalid/schema-nix-bad-key.toml",
+        "invalid/schema-nix-env-nix-config.toml",
+        "invalid/schema-nix-comment-value.toml",
         "invalid/schema-missing-mount-path.toml",
         "invalid/schema-port-out-of-range.toml",
         "invalid/schema-relative-dest.toml",
@@ -126,6 +129,12 @@ fn full_config() {
     assert_eq!(c.env.len(), 2);
     assert_eq!(c.env["TERM"], "xterm-256color");
     assert_eq!(c.env["LANG"], "C.UTF-8");
+
+    // [nix] (bd myconfig-j23): setting name → value, stored verbatim
+    // for the backends to render as NIX_CONFIG.
+    assert_eq!(c.nix.len(), 2);
+    assert_eq!(c.nix["experimental-features"], "nix-command flakes");
+    assert_eq!(c.nix["sandbox"], "false");
 
     // state-dirs (D15): home-relative entries, stored verbatim — the
     // host backing store is synthesized from the sidecar at run time.
@@ -216,6 +225,10 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         ),
         ("invalid/schema-state-dirs-climbing.toml", "sandbox home"),
         (
+            "invalid/schema-nix-env-nix-config.toml",
+            "write `[nix]` settings instead of setting the variable",
+        ),
+        (
             "invalid/schema-missing-mount-path.toml",
             "missing required key `path`",
         ),
@@ -249,6 +262,18 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         (
             "invalid/schema-env-eq-key.toml",
             "is not a usable variable name",
+        ),
+        (
+            "invalid/schema-nix-bad-key.toml",
+            "is not a usable nix setting name",
+        ),
+        (
+            "invalid/schema-nix-comment-value.toml",
+            "single directive-free line",
+        ),
+        (
+            "invalid/schema-nix-env-nix-config.toml",
+            "write `[nix]` settings instead of setting the variable",
         ),
         (
             "invalid/schema-empty-domain.toml",

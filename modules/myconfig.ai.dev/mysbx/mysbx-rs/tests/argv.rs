@@ -58,6 +58,7 @@ fn base(network: bool) -> Merged {
         network,
         mounts: Vec::new(),
         env: BTreeMap::new(),
+        nix: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
@@ -731,6 +732,22 @@ fn golden_env_entry() {
 }
 
 #[test]
+fn golden_nix_config_entry() {
+    // The [nix] table (bd myconfig-j23): rendered as NIX_CONFIG after
+    // the [env] section and before the infrastructure variables —
+    // pinned here by position, between the last [env] setenv and the
+    // HOME/PATH infrastructure block.
+    let mut cfg = base(true);
+    cfg.env.insert("EDITOR".into(), "repo-nvim".into());
+    cfg.nix
+        .insert("experimental-features".into(), "nix-command flakes".into());
+    cfg.nix.insert("build-users-group".into(), String::new());
+    let host = host_env(&[("TERM", "xterm-256color")]);
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host, &params()).unwrap();
+    assert_golden("nix-config-entry.txt", &argv);
+}
+
+#[test]
 fn golden_ripgrep_config_path_activation() {
     // Review-3 item 6: the file mount alone is inert — Home Manager
     // activates `~/.config/ripgrep/ripgreprc` through
@@ -831,6 +848,7 @@ fn golden_both_layers_contribute_mounts() {
             ("EDITOR".to_string(), "user-nvim".to_string()), // user layer
             ("PROJECT".to_string(), "demo".to_string()),     // sidecar may introduce
         ]),
+        nix: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
@@ -1174,6 +1192,7 @@ fn mount_order_is_preserved() {
             make_mount("/synth/other", None, Mode::Rw),
         ],
         env: BTreeMap::new(),
+        nix: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
@@ -3557,6 +3576,7 @@ fn podman_base(network: bool) -> Merged {
         network,
         mounts: Vec::new(),
         env: BTreeMap::new(),
+        nix: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
@@ -4071,6 +4091,7 @@ fn podman_mount_order_is_preserved() {
             make_mount("/synth/other", None, Mode::Rw),
         ],
         env: BTreeMap::new(),
+        nix: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),
@@ -5234,6 +5255,7 @@ fn nono_base(network: bool) -> Merged {
         network,
         mounts: Vec::new(),
         env: BTreeMap::new(),
+        nix: BTreeMap::new(),
         git_dirs: Vec::new(),
         state_dirs: Vec::new(),
         forward_env: Vec::new(),

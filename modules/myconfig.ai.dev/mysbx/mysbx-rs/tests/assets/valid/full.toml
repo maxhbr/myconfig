@@ -45,3 +45,10 @@ mode = "rw"
 [env]
 TERM = "xterm-256color"
 LANG = "C.UTF-8"
+
+# Nix settings forwarded into the sandbox (bd myconfig-j23): the
+# backends render the table as NIX_CONFIG, which nix reads in addition
+# to its conf files.
+[nix]
+experimental-features = "nix-command flakes"
+sandbox = "false"

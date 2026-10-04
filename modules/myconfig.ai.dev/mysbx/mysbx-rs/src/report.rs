@@ -383,6 +383,14 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                 p(format!("image:          {image}"));
             }
         }
+        // The direct-libkrun backend (backends.md D3): layered like
+        // nono — bwrap builds the host-side view, the mysbx-krun
+        // launcher inside it starts the VM — so the label names the
+        // chain, exactly like the nono line does.
+        "krun" => p(format!(
+            "krun:           {} (layered — bwrap builds the view, mysbx-krun starts the VM)",
+            r.bwrap_bin
+        )),
         "nono" => p(format!(
             "nono:           {} (layered — bwrap builds the view, nono runs inside)",
             r.bwrap_bin
@@ -614,6 +622,7 @@ mod tests {
                 },
             ],
             env,
+            nix: BTreeMap::new(),
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
             forward_env: Vec::new(),

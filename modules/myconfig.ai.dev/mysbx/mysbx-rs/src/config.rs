@@ -371,6 +371,15 @@ pub struct Config {
     pub mounts: Vec<Mount>,
     /// Environment forwarded into the sandbox.
     pub env: BTreeMap<String, String>,
+    /// Nix settings forwarded into the sandbox (the `[nix]` table):
+    /// setting name → value, rendered as `nix.conf` lines — on the
+    /// bwrap backends as `NIX_CONFIG` (read IN ADDITION to the
+    /// wrapper-pinned `/etc/nix/nix.conf`), on the direct-krun guest
+    /// as the only nix configuration it has (bd myconfig-j23). The
+    /// same layer rules as `[env]`: both layers declare, the sidecar
+    /// may introduce keys the user config does not set but must not
+    /// override user-set ones (D7).
+    pub nix: BTreeMap<String, String>,
     /// Host directories whose git metadata a repo's `.git` FILE may
     /// point at — the approval list for the external git-dir binds
     /// (review-2 item 1). Written as host paths in the same three
@@ -446,6 +455,7 @@ impl Default for Config {
             display: None,
             mounts: Vec::new(),
             env: BTreeMap::new(),
+            nix: BTreeMap::new(),
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
             forward_env: Vec::new(),
@@ -535,6 +545,14 @@ impl Config {
                 }
                 "mounts" => config.mounts = mounts(value)?,
                 "env" => config.env = env(table(value, "env")?)?,
+                // nix settings have their own table (bd
+                // myconfig-j23): NIX_CONFIG is mysbx-generated
+                // infrastructure, not a variable a layer may set —
+                // a hand-set `[env] NIX_CONFIG` would fight the
+                // generated one for the same slot (the last `--setenv`
+                // wins, silently), so it is an unknown-key-style
+                // refusal naming the replacement.
+                "nix" => config.nix = nix_settings(table(value, "nix")?)?,
                 "git-dirs" => config.git_dirs = git_dirs(value)?,
                 "state-dirs" => config.state_dirs = state_dirs(value)?,
                 "forward-env" => config.forward_env = forward_env(value)?,
@@ -834,6 +852,40 @@ fn state_dir_path(path: &str, at: &str) -> Result<String, Error> {
     Ok(path.to_owned())
 }
 
+/// The `[nix]` table: nix setting names → values. A key must be a
+/// usable setting name — `nix.conf` keys are `identifier = value`
+/// lines, so the same refusal reasons as the `[env]` key check apply,
+/// plus nix's own grammar (no `#`/`;`: a value smuggling a comment
+/// or a second directive would corrupt the generated file).
+fn nix_settings(t: &Table) -> Result<BTreeMap<String, String>, Error> {
+    let mut out = BTreeMap::new();
+    for (key, value) in t {
+        if key.is_empty()
+            || key.starts_with('-')
+            || key.contains('=')
+            || key.contains('#')
+            || key.contains(';')
+        {
+            return Err(Error::Schema(format!(
+                "nix.{key:?} is not a usable nix setting name"
+            )));
+        }
+        let value = string(value, &format!("nix.{key}"))?;
+        // nix parses NIX_CONFIG as a config FILE: a newline in a
+        // value would smuggle a second directive (or a `#` comment
+        // would eat the rest of a line). One setting, one line —
+        // strict parsing (D11), at the schema edge.
+        if value.contains('\n') || value.contains('\r') || value.contains('#') {
+            return Err(Error::Schema(format!(
+                "nix.{key}: the value must be a single directive-free line — \
+                 found a newline or a `#` in {value:?}"
+            )));
+        }
+        out.insert(key.clone(), value.to_owned());
+    }
+    Ok(out)
+}
+
 fn env(t: &Table) -> Result<BTreeMap<String, String>, Error> {
     let mut out = BTreeMap::new();
     for (key, value) in t {
@@ -847,6 +899,18 @@ fn env(t: &Table) -> Result<BTreeMap<String, String>, Error> {
             return Err(Error::Schema(format!(
                 "env key {key:?} is not a usable variable name"
             )));
+        }
+        // NIX_CONFIG is mysbx-generated from the `[nix]` table (bd
+        // myconfig-j23): a hand-set entry would fight the generated
+        // one for the same slot (the later --setenv wins, silently).
+        // The `workmux` treatment: FAIL, and say the replacement.
+        if key == "NIX_CONFIG" {
+            return Err(Error::Schema(
+                "env.NIX_CONFIG is mysbx-generated from the [nix] table \
+                 (bd myconfig-j23): write `[nix]` settings instead of \
+                 setting the variable"
+                    .to_owned(),
+            ));
         }
         out.insert(
             key.clone(),

@@ -11,7 +11,7 @@
 # home-manager closure.
 #
 # Usage:
-#   ./build-pkg-for-host.sh <pkg-name> [<hostname>]
+#   ./build-pkg-for-host.sh <pkg-name> [<hostname>] [-- <args...>]
 #
 # Arguments:
 #   <pkg-name>  Name of the package as it appears in `home.packages`
@@ -22,6 +22,12 @@
 #               against (defaults to the current machine's hostname). The
 #               script builds against the `test-<hostname>` key in
 #               `self.nixosConfigurations`.
+#   -- <args...>  If a `--` separator followed by arguments is given, the
+#               built package's main binary is executed with these
+#               arguments instead of only printing the output path. The
+#               binary is picked from `<out>/bin/`: the single executable
+#               there, or the one matching the package name (with any
+#               version suffix stripped).
 #
 # Examples:
 #   # Build agent-bubblewrap-pi as configured for the current host:
@@ -29,6 +35,9 @@
 #
 #   # Build the pi-bwrap wrapper as configured for host f13:
 #   ./build-pkg-for-host.sh pi-bwrap f13
+#
+#   # Build mysbx and run its binary with arguments:
+#   ./build-pkg-for-host.sh mysbx-0.1.0 -- --backend krun --multiplexer none
 #
 # Notes:
 #   * Hard-coded user is `mhuber` (matches `flake.lib.nix`).
@@ -41,13 +50,29 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
-    echo "Usage: $(basename "$0") <pkg-name> [<hostname>]" >&2
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $(basename "$0") <pkg-name> [<hostname>] [-- <args...>]" >&2
     exit 1
 fi
 
 pkg_name="$1"
-short_host="${2:-$(hostname 2>/dev/null || cat /proc/sys/kernel/hostname)}"
+shift
+
+short_host=""
+if [ "$#" -gt 0 ] && [ "$1" != "--" ]; then
+    short_host="$1"
+    shift
+fi
+
+run_args=()
+if [ "$#" -gt 0 ] && [ "$1" = "--" ]; then
+    shift
+    run_args=("$@")
+fi
+
+if [ -z "${short_host}" ]; then
+    short_host="$(hostname 2>/dev/null || cat /proc/sys/kernel/hostname)"
+fi
 
 if [ "${short_host}" = "jail" ]; then
     echo "Refusing to build for host 'jail' (jailed environment); pass an explicit <hostname>." >&2
@@ -58,11 +83,12 @@ host_name="test-${short_host}"
 
 echo "==> Building home-manager package '${pkg_name}' for host '${host_name}'"
 
-exec nix build \
-    --no-write-lock-file \
-    --no-link \
-    --print-out-paths \
-    --impure \
+nix_build_cmd=(
+    nix build
+    --no-write-lock-file
+    --no-link
+    --print-out-paths
+    --impure
     --expr "
 let
   flake = builtins.getFlake (\"git+file://\" + toString ${SCRIPT_DIR});
@@ -75,3 +101,52 @@ in
   else
     builtins.head matches
 "
+)
+
+if [ "${#run_args[@]}" -eq 0 ]; then
+    exec "${nix_build_cmd[@]}"
+fi
+
+out_path="$("${nix_build_cmd[@]}")"
+
+# Find the binary to run: either the single executable in bin/, or the one
+# matching the package name (with any version suffix stripped).
+bin_dir="${out_path}/bin"
+if [ ! -d "${bin_dir}" ]; then
+    echo "ERROR: package '${pkg_name}' has no bin/ directory (${out_path})" >&2
+    exit 1
+fi
+
+candidates=()
+for f in "${bin_dir}"/*; do
+    if [ -f "$f" ] && [ -x "$f" ]; then
+        candidates+=("$f")
+    fi
+done
+
+base_name_no_version="$(echo "${pkg_name}" | sed -E 's/-[0-9].*$//')"
+
+binary=""
+if [ "${#candidates[@]}" -eq 1 ]; then
+    binary="${candidates[0]}"
+else
+    for c in "${candidates[@]}"; do
+        b="$(basename "$c")"
+        if [ "${b}" = "${pkg_name}" ] || [ "${b}" = "${base_name_no_version}" ]; then
+            binary="$c"
+            break
+        fi
+    done
+fi
+
+if [ -z "${binary}" ]; then
+    echo "ERROR: could not identify the main binary of '${pkg_name}'." >&2
+    echo "Executables in ${bin_dir}:" >&2
+    for c in "${candidates[@]}"; do
+        echo "  $(basename "$c")" >&2
+    done
+    exit 1
+fi
+
+echo "==> Running: ${binary} ${run_args[*]}"
+exec "${binary}" "${run_args[@]}"

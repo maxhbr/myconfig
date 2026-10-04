@@ -1,0 +1,5 @@
+# nix parses NIX_CONFIG as a config file: a `#` in a value would eat
+# the rest of the line (or smuggle one). Values are single
+# directive-free lines (docs/design/config.md D24).
+[nix]
+experimental-features = "nix-command flakes # smuggled comment"

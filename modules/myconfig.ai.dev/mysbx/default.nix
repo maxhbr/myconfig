@@ -329,6 +329,10 @@ let
     env = cfg.config.env;
     "forward-env" = cfg.forwardedEnvVars;
   }
+  # [nix] only when declared: a host that configures nothing nixy
+  # leaves the sandbox on nix's own defaults (plus the wrapper's
+  # /etc/nix/nix.conf pin).
+  // lib.optionalAttrs (cfg.config.nix != { }) { nix = cfg.config.nix; }
   // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
   // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; }
   // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; }
@@ -371,13 +375,18 @@ in
         # when the guest nix wrappers are baked into the image —
         # otherwise nothing in the guest would consume the file.
         krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null;
+        # The direct-libkrun backend (bd myconfig-dak.4): the
+        # launcher and the guest rootfs, pinned as
+        # MYSBX_KRUN_LAUNCHER/MYSBX_KRUN_ROOTFS.
+        krunLauncher = cfg.krun.direct.launcher;
+        krunRootfs = cfg.krun.direct.rootfs;
         waypipe = cfg.display.package;
         podmanWaypipe = cfg.podman.waypipe;
         podmanMuxEntries = cfg.podman.muxEntries;
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = cfg.krun.direct.launcher; krunRootfs = cfg.krun.direct.rootfs; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -803,6 +812,57 @@ in
         '';
       };
 
+      # The DIRECT-libkrun backend (mysbx-rs/src/krun.rs,
+      # docs/design/backends.md D3, bd myconfig-dak): `backend =
+      # "krun"` execs bwrap → mysbx-krun → VM with no podman, no
+      # crun and no OCI image — the launcher drives libkrun directly,
+      # the guest rootfs is a Nix-built plain directory, and the host
+      # /nix/store rides in as one read-only virtiofs share. Requires
+      # rw /dev/kvm like the podman-krun variant.
+      direct = {
+        launcher = mkOption {
+          type = types.package;
+          default = pkgs.callPackage ./nix/krun-launcher.nix {
+            # The libkrun the runs dlopen. The DEFAULT nixpkgs build
+            # has no blk symbols (bd myconfig-dak.1 finding 1); the
+            # scratch disk needs krun_add_disk2, so the pin builds
+            # with the blk feature (backends.md D7, bd
+            # myconfig-dak.7). The launcher refuses a run whose lib
+            # lacks the symbol.
+            libkrun = pkgs.libkrun.override { withBlk = true; };
+          };
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-launcher.nix { libkrun = pkgs.libkrun.override { withBlk = true; }; }";
+          description = ''
+            The mysbx-krun launcher of the direct-libkrun backend —
+            the zero-dependency Rust binary (../krun-rs) that
+            dlopens the pinned libkrun at runtime and
+            krun_start_enter()s the VM. Pinned into the wrapper as
+            MYSBX_KRUN_LAUNCHER.
+          '';
+        };
+
+        rootfs = mkOption {
+          type = types.package;
+          default = pkgs.callPackage ./nix/krun-rootfs.nix {
+            # The STATIC busybox of the guest entry — pkgsStatic, not
+            # the dynamic busybox of the package set.
+            busyboxStatic = pkgs.pkgsStatic.busybox;
+            # The scratch formatter (bd myconfig-dak.7, backends.md
+            # D7): the static mkfs.ext4 the init runs before any
+            # store share is visible.
+            e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs;
+          };
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs; }";
+          description = ''
+            The guest rootfs of the direct-libkrun backend —
+            the Nix-built plain directory (./nix/krun-rootfs.nix)
+            with the baked guest init, the static busybox entry
+            path and the shell symlinks (backends.md D3). Pinned
+            into the wrapper as MYSBX_KRUN_ROOTFS.
+          '';
+        };
+      };
+
       nestedPodman = {
         # Nested rootless podman inside the krun guest (bd
         # myconfig-6di.5.8, backends.md D2's scope decision). The
@@ -1185,6 +1245,20 @@ in
             type = types.attrsOf types.str;
             default = { };
             description = "Environment variables forwarded into the sandbox.";
+          };
+          nix = mkOption {
+            type = types.attrsOf types.str;
+            default = { };
+            example = {
+              experimental-features = "nix-command flakes";
+            };
+            description = ''
+              Nix settings forwarded into the sandbox (the `[nix]`
+              table, ./docs/design/config.md): setting name → value,
+              rendered by mysbx as the sandbox's `NIX_CONFIG` — which
+              nix reads in addition to its conf files, so this composes
+              with the wrapper's own `/etc/nix/nix.conf` pin.
+            '';
           };
           gitDirs = mkOption {
             type = types.listOf (types.addCheck types.str (p: p != ""));

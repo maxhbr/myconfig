@@ -701,3 +701,305 @@ the script cannot see (mounts/state-dirs/uid over virtio-fs,
 nested podman, guest nix, the VM annotations as nproc/MemTotal, DNS over
 TSI). The agent sandbox has no /dev/kvm — the runbook is the
 handoff.
+
+### D3: The direct `krun` backend shares the whole host store read-only; the rootfs bakes nothing but the guest init (bd myconfig-dak.2)
+
+`backend = "krun"` (bd myconfig-dak, spike bd myconfig-dak.1 —
+live-proven on f13: bwrap → mysbx-krun → VM, boot 282 ms warm)
+drives libkrun DIRECTLY, with no podman, no crun, no OCI image:
+mysbx builds a KrunSpec, a small launcher binary (dlopen of the
+pinned libkrun, `MYSBX_KRUN_LIB` — the spike's `krun-rs`) runs
+under bwrap so the host-side virtiofs server can only open what
+the bwrap argv left visible, and a Nix-built PLAIN DIRECTORY is
+the rootfs (read-only via `krun_add_virtiofs3(KRUN_FS_ROOT_TAG)`).
+What the guest may read is decided entirely by the SPEC's shares:
+
+- **The host store, whole, read-only (option (a) of the epic).** One
+  `--ro-share` of `/nix/store` gives the guest every store path;
+  the bwrap backends already grant exactly this visibility
+  (`--ro-bind /nix/store /nix/store`), so the direct backend is
+  no more permissive than the tier it replaces — the virtiofs
+  server enforces the ro flag, the guest kernel cannot remount it.
+  Per-run toolchains therefore need NO config surface at all:
+  whatever the host builds is already visible; a repo that wants a
+  specific toolchain just runs its store path. This is also the
+  SPIKE-PROVEN layout (probes 1–3: store binaries ran, the ro
+  share refused writes, the rw repo share reached the host).
+  Option (b) — a per-run bwrap view sharing only the closure of
+  the rootfs + configured tools — is REJECTED as the default: the
+  closure must be recomputed per run (a nix call inside `mysbx
+  run`), a missing path in the view is a runtime ENOENT with no
+  diagnosis, and the visible-store premise of the bwrap tier is
+  not actually improved (the whole store is already readable).
+  A per-run `[tools]` list (option (c)) remains a FUTURE config
+  key: it can only NARROW (bind specific closures when a host
+  wants the store hidden), never widen — the whole-store default
+  is what the spike validated.
+- **Rootfs contents (what is baked vs. shared):** the rootfs bakes
+  ONLY what must exist before any share is mounted — the static
+  busybox of the guest entry (shebang + applet invocation: the
+  store share is not mounted yet when the init starts, so a
+  store-symlinked shell dangles — spike finding 10), the guest
+  init itself (bd myconfig-dak.5), `/bin/sh` + `/bin/bash` store
+  symlinks valid once the store share is up, empty mountpoints
+  (`dev`, `proc`, `sys`, `tmp`), and a `/nix/store` SYMLINK into
+  the share mount on the guest tmpfs (spike finding 9: a second
+  virtiofs device nested below the root virtiofs returns EBUSY —
+  `/tmp/mysbx-shares/store` is the only working placement, the
+  rootfs symlink keeps `/nix/store` paths resolving). NO
+  toolchain, NO image userland: everything else resolves through
+  the read-only store share. The rootfs derivation is therefore
+  host-independent — one rootfs serves every repo and every
+  toolchain set, built once by the Nix wrapper (dak.4).
+- **In-guest nix on top:** the same overlay-on-scratch model as the
+  podman-krun guest (`krun-guest-nix.nix`, backends.md D2's scope
+  decision): the guest nix wrapper overlays the (now host-shared,
+  read-only) `/nix/store` with an upper layer on the per-run
+  scratch — dak.7's virtio-blk disk when enabled, the guest tmpfs
+  otherwise (the same announced-fallback contract as the
+  podman-krun variant). New store paths cost scratch space, not
+  host store writes: the host share is ro and stays ro.
+- **The host nix daemon socket is NEVER shared.** The direct backend
+  keeps the gvisor/krun refusal: a shared daemon socket would
+  let the guest write the HOST store and read every path the
+  daemon can see — strictly more than the ro share grants. In-guest
+  nix (above) is the only nix story.
+- **The guest-root git trust rides in as two IN-MEMORY overlay
+  files (bd myconfig-dak.5 → dak.8).** The payload runs as guest
+  root over virtiofs files that keep their host uid, so the SAME
+  `dubious ownership` refusal fires as under podman-krun (D2's
+  zj2/jn0 model): mysbx computes the same two trust texts
+  (`GIT_CONFIG_GLOBAL`'s target at `/etc/mysbx/gitconfig`, set
+  last after every config `[env]`; libgit2's system scope reads
+  `/etc/gitconfig`), but renders them as `--krun-overlay
+  dev/root@<path>:0100644:<b64>` — the launcher decodes the
+  content and registers it with `krun_fs_add_overlay_file` on the
+  root device. NO sidecar files, NO `gittrust/<pid>/` debris, no
+  stage slots, no init placement: the pointers alias
+  launcher-owned Vecs that live across `krun_start_enter` (the
+  VM's whole lifetime). The rootfs bakes `etc/mysbx` (the overlay
+  path's intermediate dir must exist in the device tree). The
+  first-cut's sidecar-file route and its sweep are now
+  PODMAN-KRUN's only shape (bd myconfig-6xl hoisted the sweep so
+  that arm's debris is reclaimed too).
+- **Share destinations are constrained to the rootfs's baked
+  share roots** (`/etc`, `/home`, `/srv`, `/mnt`, `/media`, `/opt`,
+  `/data`, plus the tmpfs/home/store special cases `/tmp`,
+  `/mysbx-home`, `/nix`): the guest init places a share below a
+  first path component by mounting a tmpfs OVER it, which needs
+  the mountpoint to exist on the read-only root — a dest below
+  anything else is a builder refusal (`UnknownShareRoot`), never
+  a run-time ENOENT the init cannot diagnose. The repo itself
+  runs under the same first-component check.
+
+The KrunSpec builder (dak.3) turns the merged config into exactly
+this: cpus, ram, the rootfs pin, one ro store share, one rw
+workspace share per the merged mounts' live/clone layout, the
+state-dirs shares, env, and the payload argv. The scratch disk
+(dak.7), passt (dak.6), overlay files (dak.8) and waypipe/vsock
+(dak.9) extend the spec; none of them re-open the store question.
+
+**The virtiofs device budget groups the shares (bd
+myconfig-xpq, live finding of the first wrapped run).** Every
+`krun_add_virtiofs3` tag is a FULL virtiofs device, and libkrun's
+MMIO budget is 11 slots (arch IRQ_BASE=5..IRQ_MAX=15) minus
+balloon, rng, the implicit console and the implicit vsock — about 6
+fs slots total. One share per device exhausts them at ~6 mounts
+(`IrqsExhausted` → `build_microvm` Err → `krun_start_enter`
+returns -EINVAL, with no message: the `error!` macro needs a
+logger nothing initializes). The backend therefore STAGES the
+shares: mysbx builds one per-run tree per access mode under
+`<sidecar>/krun-stage/<pid>/{ro,rw}/`, bwrap binds each share's
+host dir into its slot, and each tree is ONE virtiofs device
+(`stage-ro`, read-only; `stage-rw`, read-write — the mode is the
+device's, enforced by the virtiofs server end to end). The store
+share rides in the ro tree like every other ro share (the rootfs's
+baked `/nix/store` link targets
+`/tmp/mysbx-shares/stage-ro/store`), so the device count is a
+CONSTANT 2 whatever the config mounts; the share records carry
+`DEVICE SLOT DEST ro|rw` and the init mounts each device once,
+linking each dest at `<device-mount>/<slot>`. The guest init traces
+every step to the console when the host sets `MYSBX_KRUN_TRACE=1`
+(a silent hang leaves diagnosable evidence — the live-run finding
+of bd myconfig-2n8).
+
+**The kernel cmdline budget moves env and shares into a manifest
+(the seventh live finding, the root cause of every wrapped hang
+since grouping).** The x86 guest kernel copies exactly
+`COMMAND_LINE_SIZE` = 2048 bytes of the cmdline libkrun builds
+(`head64.c copy_bootdata`; libkrun's own 64 KiB `CMDLINE_MAX_SIZE`
+never reaches the kernel), and the real config's env+shares block
+measured 3075 bytes — the tail, the `--` payload argv included,
+silently never booted. The spike's ~600-byte cmdline is why the
+spike worked. The cmdline now carries only structurally tiny
+things (`KRUN_INIT`, the `--` payload argv, the manifest pointer);
+env, shares and the workdir ride as records in a MANIFEST FILE the
+launcher writes into the ro stage tree (`<STAGE_ROOT>/ro/manifest`,
+tab-separated, values base64 — arbitrary bytes survive), the guest
+init mounts `stage-ro` FIRST, reads it, applies the env, places the
+shares, chdirs (the manifest's `chdir` record also fixes the
+pre-existing `krun_set_workdir` bug: `/init.krun` consumed
+`KRUN_WORKDIR` before the workspace share existed, silently landing
+at `/`), then execs the payload. The share loop reads its records
+from a file with redirection, never a pipeline subshell.
+
+`mysbx doctor krun` (bd myconfig-dak.10) covers the backend's own
+refusal surface host-side and CHEAP: `/dev/kvm`, the launcher pin
+(`MYSBX_KRUN_LAUNCHER`, NO PATH fallback — the run path has none,
+and doctor must not be greener than the run), the rootfs pin
+(set AND shaped: a directory with `bin/mysbx-init`), and a
+launcher self-probe (an invalid flag must reach argument parsing
+and print the launcher's own unknown-argument wording — the probe
+fails by design, exit 2, only the wording is matched).
+Deliberately NO VM boot: doctor pays milliseconds, the full boot
+is the runbook's probe. The live validation of the whole chain —
+shares, trust, network, scratch, guest nix — is recorded in
+../krun-live-validation.md (§4, §5; the guest-nix chain driven
+end-to-end by a real `nix flake check` on 'thing', 2026-10-02).
+
+### D6: The direct krun backend's network is libkrun's TSI vsock proxy; `network = false` disables it (bd myconfig-dak.6)
+
+The direct backend adds NO net device — not passt, not a TAP. Its
+network model is the one bd myconfig-6di.5.5 verified for
+`podman-krun`, taken to its source:
+
+- **`network = true` (shared) is libkrun's IMPLICIT VSOCK with
+  TSI** — Transparent Socket Impersonation. With no net device
+  configured, libkrun attaches a vsock device with
+  `TsiFlags::HIJACK_INET` (lib.rs: with `feature = "net"` the
+  heuristic is `net.list.is_empty() && legacy_net_cfg.is_none()`;
+  WITHOUT the feature — the stock nixpkgs build — `enable_tsi` is
+  unconditionally `true`), the guest kernel boots with `tsi_hijack`
+  on its cmdline, and every AF_INET/AF_INET6 socket the guest opens
+  is proxied: the vsock muxer performs the connection from the VMM's
+  own network namespace. The VMM is the mysbx-krun launcher process,
+  inside the bwrap sandbox — which, with the network shared, shares
+  the HOST netns. The guest therefore has exactly the host's
+  egress: DNS, direct connects, everything. This is the same
+  semantics podman-krun gives its containers (D2's verified model),
+  with one fewer layer (no OCI runtime in between).
+- **DNS needs a guest resolver file.** The TSI proxy dials, but
+  nothing writes `/etc/resolv.conf` inside the guest (libkrun's
+  DHCP path is for net devices; TSI has none). The guest init
+  therefore writes one from the manifest: the wrapper reads the
+  HOST's `/etc/resolv.conf` and hands its contents through the
+  manifest (`MYSBX_KRUN_RESOLV`), the init writes it to
+  `/etc/resolv.conf` before the payload execs. The host's resolver
+  addresses are exactly what the TSI proxy can reach (it dials from
+  the host netns), so resolution and connects agree.
+- **`network = false` kills the vsock entirely.** The launcher
+  calls `krun_disable_implicit_vsock` (present in the stock lib —
+  the vsock is NOT net-gated, only the net devices are), which sets
+  `VsockConfig::Disabled`: no vsock device is attached, `tsi_hijack`
+  never reaches the cmdline, and the guest kernel has NO socket
+  path to the host at all — stricter than an empty netns, which
+  would still have loopback. The bwrap chain additionally
+  `--unshare-net`s, so the launcher process itself has no netns
+  either: neither the VMM nor the guest could dial out even if a
+  future libkrun version re-introduced a path. Defense in depth,
+  both layers.
+- **`krun_set_passt_fd` is out of the first cut.** The symbol needs
+  libkrun built `withNet` (nixpkgs `libkrun.override { withNet =
+  true; }`), which the wrapped package does not pin. A net-enabled
+  libkrun would allow a passt fd instead of TSI (per-connection
+  NAT from the host's pasta) — the podman-gvisor-shaped egress with
+  `--map-guest-addr` support for the LiteLLM forwarder. Until the
+  wrapper pins one, `network = shared` means TSI, and the port
+  mapping entries (`listen-ports`/`allow-domains`/`connect-ports`)
+  stay refused exactly as on the other VM backends (config.md D21):
+  TSI is an unfiltered proxy — any AF_INET connect the guest makes,
+  the VMM dials — no per-domain or per-port hook exists in the
+  muxer, and honesty refuses what cannot be enforced.
+
+### D7: The direct krun backend's nix scratch is a virtio-blk disk the guest init owns (bd myconfig-dak.7)
+
+The direct backend does not inherit D2's loop-mount workaround: the
+launcher owns the libkrun context, so the disk is attached as a REAL
+virtio-blk device — no loop module, no losetup, no unlink-while-attached
+race (bd myconfig-0pi's probes were podman-krun's constraint: crun's
+krun handler cannot attach disks, and that is exactly what the direct
+backend removes).
+
+- **The host half creates one sparse raw file per run**, under
+  `<repo>.mysbx/scratch/<pid>.img`, truncated to the size cap — the
+  SAME file contract as the podman-krun scratch (bd myconfig-0pi):
+  never reused, never shared between parallel runs, swept at startup
+  of files whose mysbx pid is gone. Creation costs no disk space;
+  only the guest's writes fill it.
+- **The launcher attaches it with `krun_add_disk2(ctx, "scratch",
+  path, KRUN_DISK_FORMAT_RAW, false)`.** RAW, always: the image is
+  mkfs'd by the guest itself, so nothing needs probing — and the
+  libkrun security note forbids re-probing an image a guest could
+  write (a guest with full write access to a raw image could recast
+  it as qcow2 and reference host files). The format is pinned by
+  knowledge, not by data. `krun_add_disk2` needs libkrun built with
+  the `blk` feature — the wrapper's pinned libkrun takes
+  `override { withBlk = true; }` (the same seam as dak.6's deferred
+  `withNet`; a run whose lib lacks the symbol is refused with the
+  diagnosis, never silently without a scratch).
+- **The guest init finds the device by PRESENCE, not by name**: the
+  `block_id` names the MMIO slot host-side (libkrun's device
+  registry), it is NOT a serial the guest reads — the scratch is
+  the only virtio-blk device, so it is the only `/dev/vd*`. The run
+  announces the scratch in the manifest env
+  (`MYSBX_KRUN_SCRATCH=1`); the init then `mkfs.ext4 -q -F`s the
+  one `/dev/vd*` ONCE per run (the file is per-run, never reused —
+  no stale fs ever survives) and mounts it
+  as the nix scratch root: the overlay upper/work over the read-only
+  host store share, nix state, logs, cache and `TMPDIR` all on the
+  ext4 — the guest kernel's OWN filesystem, chown and overlay
+  xattrs/whiteouts work natively, nothing over the virtiofs xattr
+  surface.
+- **The `/nix` placement is deliberate (bd myconfig-anw).** The
+  generic share placement refuses `/nix` roots (a tmpfs at `/nix`
+  hides the baked `/nix/store` link); the scratch overlay lives
+  there anyway, by its own rule — and the baked link is a SYMLINK
+  into the stage tree, where a mount through the link lands at the
+  link's TARGET (the sim's finding: an overlay bound at
+  `/nix/store` would shadow the whole ro stage device's mount).
+  The init therefore mounts a tmpfs at `/nix` (the scratch's OWN
+  placement, after every share — no share ever lives below
+  `/nix`), creates the real `/nix/store` dir on it, and mounts the
+  overlay there with `lowerdir` naming the share's backing path
+  directly. The store share stays the lower layer, the scratch the
+  upper. A run without a scratch keeps the plain ro store share
+  (no silent RAM fallback — the refusal or announcement rule of D2
+  applies unchanged).
+- **The host file is unlinked after the backend exits** (`--result`
+  mode removes its own; the startup sweep takes crashed/exec-mode
+  runs') — the virtio-blk fd keeps nothing alive past the VM, the
+  sweep is the only reclamation, same contract as podman-krun.
+
+### D8: `podman-krun` is superseded by `krun` in principle; kept until the head-to-head retires it (bd myconfig-dak.10)
+
+The epic's closing decision. The direct backend now covers
+everything `podman-krun` does, with the same verified semantics
+and one fewer layer between mysbx and the VM:
+
+| | `podman-krun` (D2) | `krun` (D3) |
+| --- | --- | --- |
+| layers to the VM | mysbx → podman → crun (OCI config) → libkrun → VM | mysbx → bwrap → launcher → libkrun → VM |
+| filesystem contract | crun prepares an OCI rootfs host-side; libkrun shares it | the spec's shares ARE the guest layout; a plain directory rootfs |
+| network | TSI via crun's krun handler (D2) | TSI directly, `network = false` kills the vsock (D6) |
+| nix scratch | the podman image's wrapper tree (krun-guest-nix.nix) | the init's virtio-blk + db copy (D7, bd myconfig-j23) |
+| image | one OCI image per toolchain pin, loaded per host (`podman-load-image`) | none — the ro host store share IS the visibility (D3) |
+| boot | image + OCI machinery in the path | 282 ms warm (the spike's probe 4, f13) |
+
+The remaining `podman-krun` argument was its maturity — the
+krun-guest-nix wrapper tree and the D2 verification — and dak.10's
+live chain on 'thing' closed that gap: the direct backend's guest
+nix now runs a real `nix flake check` end-to-end
+(../krun-live-validation.md §5), the surface podman-krun was the
+only one to have.
+
+DECISION: no new feature work lands on `podman-krun` — every
+krun-behavior fix lands on the direct backend first (the fd
+ceilings, the trust spellings, the db copy all did). The variant
+STAYS until the head-to-head on f13 records its timing against
+the spike's numbers (`nix/krun-direct-spike.sh` probe 4 vs `time
+mysbx run -- true` under `backend = "podman-krun"`) and one host
+cycle runs the direct backend as its default; retiring the
+variant is then a small PR (drop the crun pin, the image build,
+the podman-krun arm of `podman_checks`), not a redesign. The f13
+runbook pass remains the open acceptance item — recorded in
+../krun-validation-log.md when it runs.

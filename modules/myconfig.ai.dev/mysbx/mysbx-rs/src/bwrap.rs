@@ -1017,6 +1017,15 @@ pub fn bwrap_argv(
             argv.push(key.clone());
             argv.push(value.clone());
         }
+        // The `[nix]` table as NIX_CONFIG (bd myconfig-j23): after
+        // `[env]`, so a hand-set `[env] NIX_CONFIG` — refused at the
+        // schema edge — could not repoint it anyway; before the
+        // infrastructure variables, which stay the last word.
+        if let Some(nix_config) = cfg.nix_config() {
+            argv.push("--setenv".into());
+            argv.push("NIX_CONFIG".into());
+            argv.push(nix_config);
+        }
         // `HOME` and `PATH` are infrastructure, not configuration: they name
         // paths this builder created (the tmpfs of section 3, the tool
         // closure of `params`), so a layer that could repoint them would
@@ -1144,6 +1153,9 @@ pub fn bwrap_argv(
         }
         for (key, value) in &cfg.env {
             argv.push(format!("{key}={value}"));
+        }
+        if let Some(nix_config) = cfg.nix_config() {
+            argv.push(format!("NIX_CONFIG={nix_config}"));
         }
         argv.push(format!("HOME={SANDBOX_HOME}"));
         argv.push(format!("PATH={}", params.tools_path));
@@ -2155,6 +2167,7 @@ mod tests {
             network: true,
             mounts: Vec::new(),
             env: BTreeMap::new(),
+            nix: BTreeMap::new(),
             git_dirs: Vec::new(),
             state_dirs: Vec::new(),
             forward_env: Vec::new(),
