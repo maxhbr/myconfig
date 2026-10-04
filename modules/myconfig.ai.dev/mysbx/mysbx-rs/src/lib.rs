@@ -1949,6 +1949,32 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         }
     }
 
+    // 4g. the krun backends' per-run dir sweep (bd myconfig-6xl):
+    // BOTH krun variants write pid-named per-run dirs under the
+    // sidecar — `gittrust/<pid>/` on podman-krun AND the direct
+    // backend, plus `krun-stage/<pid>/` on the direct one — and the
+    // previous placement (inside the direct arm only) left
+    // podman-krun's debris reclaimed only when a later DIRECT run
+    // happened along. Hoisted ABOVE the arm dispatch so either
+    // variant's next run sweeps its own and the sibling's debris:
+    // the lifecycle comment's claim ("swept by the next run")
+    // becomes true for both. Same probe semantics as before — a
+    // pid-named dir is removed only when `pid_gone` says the pid is
+    // gone (ESRCH): a LIVE parallel run's dirs are never touched,
+    // and the sweep is !dry_run-gated (a dry run creates and
+    // removes nothing).
+    if matches!(backend, "podman-krun" | "krun") && !dry_run {
+        for dir in [
+            repo.sidecar.join("gittrust"),
+            repo.sidecar.join("krun-stage"),
+        ] {
+            if let Err(msg) = sweep_krun_run_dirs(&dir) {
+                eprintln!("mysbx: {msg}");
+                return EXIT_INFRASTRUCTURE;
+            }
+        }
+    }
+
     // 5. the argv — its single source is `bwrap::bwrap_argv` (mvp-4).
     let host_env = collect_host_env(&merged);
     // Without the Nix wrapper (item 6 pins MYSBX_SHELL and
@@ -2629,17 +2655,6 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 );
                 return EXIT_INFRASTRUCTURE;
             };
-            if !dry_run {
-                for dir in [
-                    repo.sidecar.join("gittrust"),
-                    repo.sidecar.join("krun-stage"),
-                ] {
-                    if let Err(msg) = sweep_krun_run_dirs(&dir) {
-                        eprintln!("mysbx: {msg}");
-                        return EXIT_INFRASTRUCTURE;
-                    }
-                }
-            }
             // The guest-root git trust (bd myconfig-zj2, the direct
             // backend's twin of the podman arm's files): the payload
             // runs as GUEST ROOT over virtiofs files that keep their

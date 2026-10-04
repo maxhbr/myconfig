@@ -8754,6 +8754,57 @@ fn podman_multiplexer_without_in_image_entry_is_refused() {
 }
 
 #[test]
+fn the_hoisted_sweep_cleans_both_krun_backends_debris() {
+    // bd myconfig-6xl: the per-run dir sweep is HOISTED above the arm
+    // dispatch, so a podman-krun run reclaims gittrust/<pid>/ debris
+    // even when THAT run later refuses in its own arm (here: the
+    // sandbox has no /dev/kvm, the podman-krun arm's first real-run
+    // refusal). A LIVE pid's dir is never touched; a non-pid name is
+    // untouched; a dry run sweeps nothing.
+    let (inv, _, sidecar) = fixture("krun-sweep-hoisted", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
+    let gittrust = sidecar.join("gittrust");
+    let dead_dir = gittrust.join("2147483647"); // > i32::MAX: pid_gone is true
+    std::fs::create_dir_all(&dead_dir).unwrap();
+    std::fs::write(dead_dir.join("gitconfig"), "stale").unwrap();
+    let live_dir = gittrust.join(std::process::id().to_string());
+    std::fs::create_dir_all(&live_dir).unwrap();
+    let named_dir = gittrust.join("not-a-pid");
+    std::fs::create_dir_all(&named_dir).unwrap();
+
+    // Real run (NOT --dry-run): the podman-krun arm refuses on kvm,
+    // AFTER the sweep ran.
+    let mut cmd = spawn_with_args(&inv, &["run", "--", "/bin/true"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "the run must refuse in this environment"
+    );
+    assert!(!dead_dir.exists(), "the dead-pid debris was swept");
+    assert!(
+        live_dir.exists(),
+        "a LIVE parallel run's dir is never removed"
+    );
+    assert!(named_dir.exists(), "a non-pid name is untouched");
+    std::fs::remove_dir_all(&live_dir).unwrap();
+    std::fs::remove_dir_all(&named_dir).unwrap();
+
+    // The DRY run of the same config sweeps NOTHING (the sweep is
+    // !dry_run-gated): re-seed (the real run above already swept the
+    // first debris — the assert proved it gone), dry-run, assert the
+    // debris survives.
+    std::fs::create_dir_all(&dead_dir).unwrap();
+    std::fs::write(dead_dir.join("gitconfig"), "still-stale").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert!(out.status.code().is_some(), "the dry run exits: {out:?}");
+    assert!(dead_dir.exists(), "the dry run swept nothing");
+    std::fs::remove_dir_all(&dead_dir).unwrap();
+}
+
+#[test]
 fn podman_krun_refuses_a_mount_over_the_guest_mux_socket_dir() {
     // The krun socket dir must stay guest-native: a mount at, above
     // or below /dev/shm/mysbx-tmux would put it on virtio-fs.
