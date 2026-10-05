@@ -109,6 +109,20 @@ What the MVP does buy over the existing `agent-bubblewrap-*` wrappers: the
 confinement is **data** (two TOML files) instead of Nix call sites, it is
 **inspectable** (`--dry-run`), and it is **testable** (one pure function).
 
+### Security floor
+
+The confinement level the shipped backends reach is the intended level and
+must be kept — it is a floor, not a snapshot. For the VM-level backends
+(`podman-krun`, `krun`) that means concretely: the payload runs under its
+own guest kernel (no kernel shared with the host), every host path reaches
+the guest only as a virtio-fs share whose `ro`/`rw` flag the host side
+enforces (the guest cannot widen it), and no host device is passed through
+— the guest has no `/dev/kvm` and exposes no virtualization extensions, so
+a payload cannot nest a further VM. A nested `mysbx` inside a krun guest is
+therefore a container backend (`bubblewrap`, `nono`, `podman-gvisor`),
+never a VM backend. A change that weakens any of the above is a regression,
+not an acceptable trade; the update rule at the end of this file applies.
+
 ### Work items
 
 Ordered; each is independently reviewable.
