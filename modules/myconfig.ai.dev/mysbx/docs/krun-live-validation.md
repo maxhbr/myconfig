@@ -32,8 +32,16 @@ The probes below assume the repo is a git checkout with a sidecar
 ## 1. The scripted smoke (automated)
 
 ```bash
-./nix/krun-live-validation.sh /path/to/repo
+./nix/krun-live-validation.sh /path/to/repo              # the podman-krun variant (D2)
+MYSBX=<fresh-mysbx> ./nix/krun-live-validation.sh /path/to/repo krun   # the direct backend (D3)
 ```
+
+The optional second argument selects the variant under test: probe
+6's scratch sidecar then sets the matching `backend`, and probe 7
+audits the variant's OWN dry-run surface (the podman VM
+annotations, or the direct backend's launcher flags — cpus/ram/
+rootfs/ro-device/ro-share). The direct variant's §4/§5 probes stay
+manual (below).
 
 Covers, in order: boot (a one-shot `true`), guest-kernel proof
 (`uname -r`), exit-code propagation (`exit 42`), live-repo edit

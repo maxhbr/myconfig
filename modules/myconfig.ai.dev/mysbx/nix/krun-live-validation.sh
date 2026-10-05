@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
-# krun-live-validation — the scripted half of the podman-krun live
-# validation runbook (bd myconfig-6di.5.7, docs/krun-live-validation.md).
+# krun-live-validation — the scripted half of the krun live
+# validation runbooks (bd myconfig-6di.5.7 for the podman-krun
+# variant, bd myconfig-dak.10's §4/§5 for the direct one,
+# docs/krun-live-validation.md).
 #
-# Run ON f13 (a host with rw /dev/kvm) from the repo checkout:
+# Run ON a host with rw /dev/kvm from the repo checkout:
 #
-#   ./nix/krun-live-validation.sh <repo>
+#   MYSBX=<path-to-mysbx> ./nix/krun-live-validation.sh <repo> [BACKEND]
+#
+# BACKEND selects the krun variant under test: "podman-krun" (the
+# default, matching the runbook's D2 probes) or "krun" (the direct
+# backend — probes 1-5 are shape-equivalent, probe 6's scratch
+# sidecar then sets backend = "krun", and probe 7 audits the
+# BACKEND'S OWN dry-run surface: the podman VM annotations for
+# podman-krun, the launcher flags for krun).
 #
 # Each probe prints PASS/FAIL and names the bd decision it validates;
 # the first FAIL exits non-zero. The script is deliberately dumb:
@@ -13,12 +22,21 @@
 # runbook §0).
 set -euo pipefail
 
-repo=${1:?usage: krun-live-validation.sh <repo>}
+repo=${1:?usage: krun-live-validation.sh <repo> [podman-krun|krun]}
+backend=${2:-podman-krun}
+case "$backend" in
+    podman-krun | krun) ;;
+    *) echo "usage: krun-live-validation.sh <repo> [podman-krun|krun]" >&2; exit 2 ;;
+esac
 mysbx=${MYSBX:-mysbx}
+# The fail() hint names the variant's runbook section: D2 for the
+# podman-krun variant, D3 for the direct backend.
+fail_section=$([ "$backend" = krun ] && printf 'D3' || printf 'D2')
 
 fail() {
     printf 'FAIL %s — %s\n' "$1" "$2" >&2
-    printf '  see docs/krun-live-validation.md and docs/design/backends.md D2\n' >&2
+    printf '  see docs/krun-live-validation.md and docs/design/backends.md %s\n' \
+        "$fail_section" >&2
     exit 1
 }
 
@@ -28,13 +46,15 @@ pass() {
 
 # The sandbox form every probe uses: a one-shot run in the repo.
 run() {
-    (cd "$repo" && "$mysbx" run -- "$@")
+    (cd "$repo" && "$mysbx" run --backend "$backend" -- "$@")
 }
 
 cd "$repo"
 
-# 1. boot: a one-shot true (bd myconfig-6di.5.2 — the runtime swap
-# boots a KVM microVM through the pinned crun+libkrun)
+# 1. boot: a one-shot true (bd myconfig-6di.5.2 for podman-krun —
+# the runtime swap boots a KVM microVM through the pinned
+# crun+libkrun; bd myconfig-dak.1 for krun direct — the launcher
+# boots the VM itself)
 run true
 pass "1 boot: a one-shot true"
 
@@ -69,13 +89,17 @@ if run sh -c ': > /PROBE' 2>/dev/null; then
 fi
 pass "5 ro rootfs: / is not writable"
 
-# 6. network=false enforcement (bd myconfig-6di.5.5 — the VMM dials
-# from the empty netns; no route, no resolver). A positive control in
+# 6. network=false enforcement (bd myconfig-6di.5.5 for podman-krun
+# — the VMM dials from the empty netns; bd myconfig-dak.6 for krun
+# — the vsock is DISABLED, no socket path at all). A positive control in
 # the repo first, so a host without egress does not pass as
-# enforcement; then a scratch repo whose sidecar sets network = false,
-# so the repo's own configuration is not touched. Each payload prints
-# its curl exit code: a run mysbx refused prints nothing, and that is
-# a FAIL, not a denial.
+# enforcement; then a scratch repo whose sidecar sets network = false
+# (and the matching backend), so the repo's own configuration is not
+# touched. The positive control runs with the REPO's default backend
+# on purpose: it proves the HOST has egress, nothing about a backend
+# — only the scratch-repo denials below exercise the variant under
+# test. Each payload prints its curl exit code: a run mysbx refused
+# prints nothing, and that is a FAIL, not a denial.
 curl_rc() {
     local dir=$1 url=$2
     # shellcheck disable=SC2016 # $1/$? expand inside the sandbox
@@ -102,7 +126,7 @@ git -C "$netrepo" -c user.name=probe -c user.email=probe@invalid \
 (cd "$netrepo" && "$mysbx" init >/dev/null)
 # A plain repo needs no git-dir approvals, so the generated sidecar
 # config can be replaced wholesale.
-printf 'backend = "podman-krun"\nnetwork = false\n' >"$netrepo.mysbx/config.toml"
+printf 'backend = "%s"\nnetwork = false\n' "$backend" >"$netrepo.mysbx/config.toml"
 for url in https://cache.nixos.org/nix-cache-info http://1.1.1.1/; do
     rc=$(curl_rc "$netrepo" "$url" || true)
     [ -n "$rc" ] || fail "6 network=false" "the network=false run did not start ($url)"
@@ -110,13 +134,44 @@ for url in https://cache.nixos.org/nix-cache-info http://1.1.1.1/; do
     pass "6 network=false: $url denied (curl exit $rc)"
 done
 
-# 7. the krun feature dry-runs: the annotations this backend adds are
-# on the audit surface (bd myconfig-6di.5.4/.6)
-dry=$("$mysbx" --dry-run)
-printf '%s\n' "$dry" | grep -q -- '--annotation' ||
-    fail "7 krun annotations" "the dry run carries no --annotation"
-printf '%s\n' "$dry" | grep -q 'run.oci.handler=krun' ||
-    fail "7 krun annotations" "the handler annotation is missing"
-pass "7 krun annotations on the dry run"
+# 7. the krun variant's dry-run audit surface: the flags that NAME
+# the machinery under test (bd myconfig-6di.5.4/.6 for podman-krun
+# — the OCI annotations crun turns into VM behavior; bd
+# myconfig-dak.3/dak.10 for krun — the launcher flags the golden
+# tests pin).
+dry=$("$mysbx" run --backend "$backend" --dry-run -- true)
+case "$backend" in
+    podman-krun)
+        printf '%s\n' "$dry" | grep -q -- '--annotation' ||
+            fail "7 krun $backend annotations" "the dry run carries no --annotation"
+        printf '%s\n' "$dry" | grep -q 'run.oci.handler=krun' ||
+            fail "7 krun $backend annotations" "the handler annotation is missing"
+        printf '%s\n' "$dry" | grep -q 'run.oci.keep_original_groups' ||
+            printf 'INFO 7 the keep_original_groups annotation is absent (keep-id semantics changed since bd myconfig-6di.5.4)\n'
+        pass "7 krun annotations on the dry run: run.oci.handler=krun"
+        ;;
+    krun)
+        # The launcher flags: VM size first (the config limits DO
+        # apply to the VM, bd myconfig-6di.5.6's direct twin), the
+        # rootfs + init pins, the staged devices of the shares.
+        printf '%s\n' "$dry" | grep -q -- '--cpus' ||
+            fail "7 krun flags" "the dry run carries no --cpus"
+        printf '%s\n' "$dry" | grep -q -- '--ram' ||
+            fail "7 krun flags" "the dry run carries no --ram"
+        printf '%s\n' "$dry" | grep -q -- '--rootfs' ||
+            fail "7 krun flags" "the dry run carries no --rootfs"
+        printf '%s\n' "$dry" | grep -q -- '--ro-device' ||
+            fail "7 krun flags" "the dry run carries no --ro-device (the staged share tree)"
+        printf '%s\n' "$dry" | grep -q -- '--ro-share' ||
+            fail "7 krun flags" "the dry run carries no --ro-share (the store share)"
+        # network = shared is the launcher default: --network rides
+        # ONLY on None runs — the same honesty on both variants (bd
+        # myconfig-dak.6).
+        if printf '%s\n' "$dry" | grep -q -- '--network none'; then
+            printf 'INFO 7 the dry run carries --network none (a network=false layer?)\n'
+        fi
+        pass "7 krun flags on the dry run: launcher argv surface (cpus/ram/rootfs/shares)"
+        ;;
+esac
 
-printf 'krun live validation: all probes passed\n'
+printf 'krun live validation (%s): all probes passed\n' "$backend"
