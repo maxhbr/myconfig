@@ -167,6 +167,5 @@ case "$backend" in
         ;;
 esac
 
-printf 'krun live validation ($backend): all probes passed\n'
 
-printf 'krun live validation: all probes passed\n'
+printf 'krun live validation (%s): all probes passed\n' "$backend"
