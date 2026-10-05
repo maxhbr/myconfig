@@ -16,6 +16,7 @@
   config = {
     myconfig.ai.dev.hermes = {
       enable = true;
+      model.default = "hermes";
       hassUrl = "http://hass.nuc.wg0.maxhbr.local";
       telegram = {
         enable = true;

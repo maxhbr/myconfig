@@ -7,7 +7,7 @@
   # it to /run/forgejo-hermes-agent-token for the agent to use (see
   # modules/myconfig.forgejo.client.nix).
   myconfig.forgejo.client = {
-    enable = true;
+    enable = false; # TODO: this currently fails
     apiBase = "http://${myconfig.metadatalib.getWgIp "thing"}:3000";
     tokens = {
       "hermes-agent" = { };
