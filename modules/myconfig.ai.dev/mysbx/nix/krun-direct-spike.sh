@@ -48,6 +48,7 @@ rootfs=$(nix build --impure --no-link --print-out-paths --expr '
       # The STATIC busybox of the guest entry — pkgsStatic, not the
       # dynamic busybox of the package set.
       busyboxStatic = np.pkgsStatic.busybox;
+      coreutils = np.coreutils;
     }')
 
 work=$(mktemp -d /tmp/mysbx-krun-spike.XXXXXX)

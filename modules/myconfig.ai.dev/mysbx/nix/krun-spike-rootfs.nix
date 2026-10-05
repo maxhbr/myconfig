@@ -14,6 +14,9 @@
   # store share is mounted.
   busyboxStatic,
   bash,
+  # The `env` of the /usr/bin/env shebangs — the real rootfs's twin
+  # (krun-rootfs.nix), so a spike payload matches a real run.
+  coreutils,
 }:
 let
   # The guest entry script. It runs as the first process of the
@@ -101,6 +104,9 @@ runCommand "mysbx-krun-spike-rootfs"
     # mounted the store share.
     ln -s ${bash}/bin/bash $out/bin/bash
     ln -s ${bash}/bin/sh $out/bin/sh
+    # The /usr/bin/env shebangs (the real rootfs's twin).
+    mkdir -p $out/usr/bin
+    ln -s ${coreutils}/bin/env $out/usr/bin/env
     printf '%s' "$spikeInitText" > $out/bin/spike-init
     chmod +x $out/bin/spike-init
   ''

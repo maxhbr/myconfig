@@ -43,6 +43,14 @@
   # dynamic bash below is for the payload only, usable only after the
   # store share is mounted).
   busyboxStatic,
+  # The coreutils `env` of the `/usr/bin/env` shebangs: a store
+  # symlink like bin/bash — a repo script's `#!/usr/bin/env bash`
+  # must resolve once the store share is mounted, and no guest
+  # component provides `/usr/bin` (the bwrap tier binds the host's;
+  # the podman image bakes dockerTools.usrBinEnv). The rootfs bakes
+  # the same contract the base table's `/usr/bin` row names
+  # (docs/plan.md, base table).
+  coreutils,
   # The STATIC mkfs.ext4 of the scratch half (bd myconfig-dak.7,
   # backends.md D7): the init formats the per-run virtio-blk device
   # BEFORE any store path is visible — pkgsStatic, like busybox.
@@ -541,6 +549,10 @@ runCommand "mysbx-krun-rootfs"
     # mounted the store share.
     ln -s ${bash}/bin/bash $out/bin/bash
     ln -s ${bash}/bin/sh $out/bin/sh
+    # The `/usr/bin/env` shebangs (docs/plan.md, base table row
+    # `/usr/bin` ro): same store-symlink contract as the shells.
+    mkdir -p $out/usr/bin
+    ln -s ${coreutils}/bin/env $out/usr/bin/env
     printf '%s' "$initText" > $out/bin/mysbx-init
     chmod +x $out/bin/mysbx-init
     # The shebang guard (the eighth live finding): an indented
