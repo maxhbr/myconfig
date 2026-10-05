@@ -304,15 +304,38 @@ let
         # /etc is the ro root's share-root unless a share below it
         # already tmpfs'd it: probe writability, mount when ro.
         if ! "$BB" touch /etc/.mysbx-resolv-probe 2>/dev/null; then
+            # Copy the baked /etc/hosts before the tmpfs hides the
+            # ro root's /etc: the guest has no other source of the
+            # localhost → 127.0.0.1 mapping, and without it Node.js
+            # fetch() fails with getaddrinfo ENOTFOUND localhost
+            # (curl resolves localhost itself, so it masked the gap).
+            hosts_backup=/tmp/.mysbx-etc-hosts
+            "$BB" cp /etc/hosts "$hosts_backup" 2>/dev/null || rm -f "$hosts_backup"
             "$BB" mount -t tmpfs tmpfs /etc \
                 || fail "cannot mount the tmpfs for /etc (the resolver)"
+            [ -f "$hosts_backup" ] && "$BB" cp "$hosts_backup" /etc/hosts || true
+            "$BB" rm -f "$hosts_backup"
         else
             "$BB" rm -f /etc/.mysbx-resolv-probe
+        fi
+        # Ensure /etc/hosts exists on the (possibly tmpfs-backed)
+        # /etc: the share loop may have mounted a tmpfs over /etc
+        # before this code ran, hiding the baked file. The guest
+        # has no other source of the localhost → 127.0.0.1 mapping.
+        if [ ! -f /etc/hosts ]; then
+            printf '127.0.0.1 localhost\n::1 localhost\n' > /etc/hosts \
+                || fail "cannot write /etc/hosts"
         fi
         # The env record was ALREADY decoded by the loader (every
         # manifest env line exports plain text) — write verbatim.
         printf '%s\n' "$MYSBX_KRUN_RESOLV" > /etc/resolv.conf \
             || fail "cannot write /etc/resolv.conf"
+    else
+        # No resolver to write, but /etc/hosts may still be missing
+        # if the share loop mounted a tmpfs over /etc.
+        if [ ! -f /etc/hosts ]; then
+            printf '127.0.0.1 localhost\n::1 localhost\n' > /etc/hosts 2>/dev/null || true
+        fi
     fi
 
     # The scratch disk (bd myconfig-dak.7, backends.md D7): a REAL
@@ -488,6 +511,13 @@ runCommand "mysbx-krun-rootfs"
     # which needs the mountpoint on the ro root; the builder refuses
     # a dest below anything else (never a run-time ENOENT).
     mkdir -p $out/etc $out/home $out/srv $out/mnt $out/media $out/opt $out/data
+    # The localhost → 127.0.0.1 mapping: the guest has no DHCP, no
+    # nsswitch beyond the busybox defaults, and no other source of
+    # this mapping. Without it Node.js fetch('http://localhost:…')
+    # fails with getaddrinfo ENOTFOUND (curl resolves localhost itself
+    # and masked the gap). The init copies this file to the /etc
+    # tmpfs when it mounts one for resolv.conf.
+    printf '127.0.0.1 localhost\n::1 localhost\n' > $out/etc/hosts
     # The scratch disk's mountpoint (bd myconfig-dak.7, backends.md
     # D7): the ro root can hold no new entries at run time, so the
     # ext4's target is baked here — the live run's finding (mkdir
