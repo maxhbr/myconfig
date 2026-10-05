@@ -43,7 +43,7 @@
     },
     "litellm-grafana-dashboard": {
         "cargoLock": null,
-        "date": "2026-09-28",
+        "date": "2026-10-05",
         "extract": null,
         "name": "litellm-grafana-dashboard",
         "passthru": null,
@@ -52,13 +52,13 @@
             "name": "litellm-grafana-dashboard.json",
             "sha256": "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=",
             "type": "url",
-            "url": "https://raw.githubusercontent.com/BerriAI/litellm/2c9b0e00acaf2d7cebc962bc9cf6a861796b5c68/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
+            "url": "https://raw.githubusercontent.com/BerriAI/litellm/02f61c9c420b9aa9de10ff673098ad7132b78f5b/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
         },
-        "version": "2c9b0e00acaf2d7cebc962bc9cf6a861796b5c68"
+        "version": "02f61c9c420b9aa9de10ff673098ad7132b78f5b"
     },
     "pi-token-speed": {
         "cargoLock": null,
-        "date": "2026-09-13",
+        "date": "2026-10-03",
         "extract": null,
         "name": "pi-token-speed",
         "passthru": null,
@@ -70,16 +70,16 @@
             "name": null,
             "owner": "gsanhueza",
             "repo": "pi-token-speed",
-            "rev": "2c7e5be62ffdc88e417394611498410acdce847d",
-            "sha256": "sha256-5qrkxL0Ae3MhNbtNKS675Ju175EEPMCpdiWuB1UBSTQ=",
+            "rev": "b708faf217fb139c51cf8f8df0ca9c4050e489c8",
+            "sha256": "sha256-o58k3OJQPVTQ5rSGvpk+bnCdFz6e28IE9lZY949nQa0=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "2c7e5be62ffdc88e417394611498410acdce847d"
+        "version": "b708faf217fb139c51cf8f8df0ca9c4050e489c8"
     },
     "simple-english": {
         "cargoLock": null,
-        "date": "2026-09-16",
+        "date": "2026-09-30",
         "extract": null,
         "name": "simple-english",
         "passthru": null,
@@ -91,11 +91,11 @@
             "name": null,
             "owner": "AminBlg",
             "repo": "SimpleEnglish",
-            "rev": "79b590fc8596523d92c26b1ea7e33236606ef069",
-            "sha256": "sha256-CPD3x2wcU7INpOpqn0Hg4iY9gB1BAfuHU8e9w//s1sA=",
+            "rev": "32ea2d3f4404bfbff162c1861e5ae4f1bcc628b3",
+            "sha256": "sha256-mWs9n465FMiMcyxD9diTV6olXWuTy2wW+bZ475Vc3to=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "79b590fc8596523d92c26b1ea7e33236606ef069"
+        "version": "32ea2d3f4404bfbff162c1861e5ae4f1bcc628b3"
     }
 }
