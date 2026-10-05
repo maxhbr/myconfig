@@ -626,6 +626,11 @@
                   # The direct-libkrun spike runbook (bd myconfig-dak.1): a
                   # plain script executed by a human on a KVM host (f13).
                   "modules/myconfig.ai.dev/mysbx/nix/krun-direct-spike.sh"
+                  # The krun live-validation suite (podman-krun + the
+                  # direct backend, docs/krun-live-validation.md): same
+                  # category — a plain script executed by a human on a
+                  # KVM host.
+                  "modules/myconfig.ai.dev/mysbx/nix/krun-live-validation.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {

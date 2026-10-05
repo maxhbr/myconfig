@@ -29,10 +29,14 @@ case "$backend" in
     *) echo "usage: krun-live-validation.sh <repo> [podman-krun|krun]" >&2; exit 2 ;;
 esac
 mysbx=${MYSBX:-mysbx}
+# The fail() hint names the variant's runbook section: D2 for the
+# podman-krun variant, D3 for the direct backend.
+fail_section=$([ "$backend" = krun ] && printf 'D3' || printf 'D2')
 
 fail() {
     printf 'FAIL %s — %s\n' "$1" "$2" >&2
-    printf '  see docs/krun-live-validation.md and docs/design/backends.md D2\n' >&2
+    printf '  see docs/krun-live-validation.md and docs/design/backends.md %s\n' \
+        "$fail_section" >&2
     exit 1
 }
 
@@ -89,10 +93,13 @@ pass "5 ro rootfs: / is not writable"
 # — the VMM dials from the empty netns; bd myconfig-dak.6 for krun
 # — the vsock is DISABLED, no socket path at all). A positive control in
 # the repo first, so a host without egress does not pass as
-# enforcement; then a scratch repo whose sidecar sets network = false,
-# so the repo's own configuration is not touched. Each payload prints
-# its curl exit code: a run mysbx refused prints nothing, and that is
-# a FAIL, not a denial.
+# enforcement; then a scratch repo whose sidecar sets network = false
+# (and the matching backend), so the repo's own configuration is not
+# touched. The positive control runs with the REPO's default backend
+# on purpose: it proves the HOST has egress, nothing about a backend
+# — only the scratch-repo denials below exercise the variant under
+# test. Each payload prints its curl exit code: a run mysbx refused
+# prints nothing, and that is a FAIL, not a denial.
 curl_rc() {
     local dir=$1 url=$2
     # shellcheck disable=SC2016 # $1/$? expand inside the sandbox
@@ -166,6 +173,5 @@ case "$backend" in
         pass "7 krun flags on the dry run: launcher argv surface (cpus/ram/rootfs/shares)"
         ;;
 esac
-
 
 printf 'krun live validation (%s): all probes passed\n' "$backend"
