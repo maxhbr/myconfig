@@ -172,9 +172,10 @@ Commands:
   doctor [BACKEND...]
                 host health check of the configured backend, or of
                 each BACKEND named (bubblewrap, podman-gvisor, nono,
-                podman-krun): the runtime binaries the wrapper pins,
-                a throwaway sandbox start, the container image and
-                its freshness, /dev/kvm for podman-krun, the Landlock
+                podman-krun, krun): the runtime binaries the wrapper
+                pins, a throwaway sandbox start, the container image
+                and its freshness, /dev/kvm for the VM backends, the
+                launcher and rootfs pins for `krun`, the Landlock
                 ABI for nono, and the model endpoint through the
                 backend's network. One OK/WARN/FAIL line per check
                 with a fix hint (SKIP for a probe whose dependency
@@ -242,19 +243,20 @@ Options:
                 the sandbox backend of THIS run, overriding the
                 `backend` of the config layers for one invocation —
                 the next run uses the configuration again. <name> is
-                one of: bubblewrap, podman-gvisor, nono, podman-krun
-                (the same accepted set the pipeline enforces on the
-                configuration); anything else is a refused run
+                one of: bubblewrap, podman-gvisor, nono, podman-krun,
+                krun (the same accepted set the pipeline enforces on
+                the configuration); anything else is a refused run
                 (exit 70) naming the set, never a silent fallback —
                 and neither layer has to name a backend for the flag
                 to select one. `podman-krun` is `podman-gvisor` under
                 the OCI runtime crun built against libkrun — a
-                rootless KVM microVM per run, and it needs /dev/kvm
-                access (a refused run without it). First cut:
-                waypipe display and multiplexer sessions are
-                refused — `docs/design/backends.md` D2). Valid
-                before the verb and after it for `run`; every other
-                verb rejects it
+                rootless KVM microVM per run; `krun` drives libkrun
+                DIRECTLY (no podman, no OCI image — the read-only
+                host store IS the toolchain story, bd
+                myconfig-dak/D3). Either VM backend needs /dev/kvm
+                access (a refused run without it). Valid before the
+                verb and after it for `run`; every other verb
+                rejects it
   --session <name>
                 run in the named session's clone (the clone mode of
                 docs/design/workspace.md): the session's standalone
