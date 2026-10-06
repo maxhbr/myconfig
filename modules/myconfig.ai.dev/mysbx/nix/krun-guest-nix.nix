@@ -61,6 +61,18 @@
   e2fsprogs,
   util-linux,
   gawk,
+  # The db-reconcile step's sqlite: the copied image db asserts
+  # validity of paths the STORE SHARE may no longer carry (a host
+  # rebuild re-stages the share while a VM lives) or carries as a
+  # symlink (the flake-source poisoning, doc/TODOs/
+  # krun-guest-flake-source-symlink.md). Reconcile deletes those
+  # rows so the guest nix re-fetches instead of trusting a
+  # stale/poisoned registration. nix store delete cannot do this:
+  # its liveness semantics refuse live-referenced rows and its
+  # unlink of an overlay lower-layer entry crashes (fchmodat2,
+  # bd myconfig-mxu) — a direct db delete never touches the store
+  # tree at all.
+  sqlite,
   nix,
   scratch ? "/run/mysbx-nix",
   nixConfig ? "",
@@ -117,6 +129,11 @@ let
     '';
   };
 
+  # The reconcile's SELECT, shell-quoted by Nix: the text is a
+  # Nix indented string whose '' rules make inlined SQL quoting
+  # error-prone (the rootfs's own comment) — generate it instead.
+  reconcileSelect = lib.strings.escapeShellArg "SELECT path FROM ValidPaths WHERE path LIKE '/nix/store/%'";
+
   setup = writeShellApplication {
     name = "mysbx-krun-nix-setup";
     runtimeInputs = [
@@ -124,6 +141,7 @@ let
       util-linux
       gawk
       e2fsprogs
+      sqlite
     ];
     text = ''
       scratch=${lib.escapeShellArg scratch}
@@ -174,6 +192,49 @@ let
         mkdir -p "$scratch"/{upper,work,tmp,cache,log} || fail "cannot create the store dirs in $scratch"
         ${copyState}/bin/mysbx-krun-nix-copy-state /nix/var/nix "$scratch/state" \
           || fail "cannot copy the image nix database to $scratch/state"
+        # The db reconcile (bd myconfig-mxu): the copied db is a
+        # SNAPSHOT of host state, the store's lower layer is the
+        # LIVE share — a host rebuild or an in-session fetch can
+        # diverge the two. A row whose store path is missing (the
+        # host GC'd/re-staged it away) or is a symlink (the
+        # poisoning, doc/TODOs/krun-guest-flake-source-symlink.md)
+        # is a promise the store cannot keep: every later eval that
+        # trusts the row dies ("is a symlink" / "Stale file
+        # handle"), and nix's own re-add of the lower-layer entry
+        # crashes (fchmodat2). Delete those rows BEFORE the overlay
+        # is mounted and any payload nix runs; the guest nix then
+        # re-registers or re-fetches on demand. The path test lives
+        # in shell — sqlite cannot stat paths, and the test must
+        # catch a DANGLING poisoned symlink ([ -e ] is false for
+        # it) as well as a missing path. `nix store delete` cannot
+        # do this job: liveness semantics refuse rows held by live
+        # processes and its store-tree unlink is exactly the
+        # lower-layer crash.
+        doomed=$(
+          sqlite3 "$scratch/state/db/db.sqlite" \
+            ${reconcileSelect} \
+            | while IFS= read -r p; do
+                if [ ! -e "$p" ] || [ -L "$p" ]; then
+                  printf '%s\n' "$p"
+                fi
+              done
+        )
+        if [ -n "$doomed" ]; then
+          # One DELETE per path in a single sqlite session; the
+          # Refs/DerivationOutputs rows follow through nix's own
+          # foreign-key handling — the ValidPaths row is what
+          # decides validity. A store path's name carries no SQL
+          # quote (the store alphabet is a-z0-9._+-), so the path
+          # needs no escaping in the quoted literal.
+          n=$(printf '%s\n' "$doomed" | wc -l)
+          echo "nix (mysbx krun wrapper): reconciling the db — $n registered store path(s) missing or symlinked, dropping their rows" >&2
+          { printf 'BEGIN;\n'; \
+            while IFS= read -r p; do
+              printf "DELETE FROM ValidPaths WHERE path = '%s';\n" "$p"
+            done <<<"$doomed"; \
+            printf 'COMMIT;\n'; } \
+            | sqlite3 "$scratch/state/db/db.sqlite"
+        fi
         mount -t overlay mysbx-nix-store \
           -o "lowerdir=/nix/store,upperdir=$scratch/upper,workdir=$scratch/work" /nix/store \
           || fail "cannot mount the overlay over /nix/store"
