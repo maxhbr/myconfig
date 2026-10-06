@@ -341,6 +341,7 @@ in
             }
           '';
         };
+        printing.enable = true;
         messengers.enable = true;
         obs.enable = true;
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
