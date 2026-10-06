@@ -572,6 +572,26 @@ let
         "$BB" echo "mysbx-init: WARNING: cannot raise the soft fd limit (keeping $(ulimit -n))"
     fi
 
+    # The store-share degradation probe (bd myconfig-mxu): the
+    # payload's every shell spawn goes through bin/bash and bin/sh,
+    # store symlinks valid only while the share carries their
+    # targets — the live mxu failure had exactly these die mid-
+    # session (spawn /bin/bash ENOENT, every command after it).
+    # The init cannot fix a degraded share (the fix is a VM
+    # refresh), but it can refuse to exec a payload whose shell
+    # already dangles, naming the cause — a launch-time ENOENT with
+    # a diagnosis beats a session that dies on its first command
+    # with none. This runs AFTER the store overlay (a scratch-
+    # carried bash would resolve through the upper layer too).
+    # The shell's test builtin follows symlinks: -x on a link
+    # whose target is gone is false (the db reconcile's own
+    # property — "[ -e ] is FALSE for a dangling symlink"), so
+    # this needs no readlink.
+    for probe in /bin/bash /bin/sh /usr/bin/env; do
+        [ -x "$probe" ] \
+            || fail "the store share lost $probe — the baked symlink's target does not resolve; refresh the sandbox (the mxu degradation)"
+    done
+
     step "exec-ing the payload: $1"
     exec "$@"
   '';
@@ -641,6 +661,11 @@ runCommand "mysbx-krun-rootfs"
         || { echo "mysbx-krun-rootfs: init does not remove surviving referrers" >&2; exit 1; }
     grep -qF 'PRAGMA foreign_key_check;' $out/bin/mysbx-init \
         || { echo "mysbx-krun-rootfs: init does not verify sqlite foreign keys" >&2; exit 1; }
+    # The degradation probe (bd myconfig-mxu): the init must refuse
+    # a payload whose baked store symlinks dangle — a launch-time
+    # diagnosis instead of the live mid-session ENOENT.
+    grep -qF 'the store share lost' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the store-share degradation probe" >&2; exit 1; }
     # The shebang guard (the eighth live finding): an indented
     # Nix string strips only the MINIMAL common indent of its
     # lines, so mixed indents leave leading spaces before the
