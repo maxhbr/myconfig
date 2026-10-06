@@ -1,0 +1,87 @@
+--- a/src/devices/src/virtio/fs/device.rs
++++ b/src/devices/src/virtio/fs/device.rs
+@@ -88,6 +88,9 @@
+             root_dir,
+             semantics,
+             attr_timeout,
++            // Linux virtiofs drops idle dentries only for an exactly-zero timeout.
++            #[cfg(target_os = "linux")]
++            entry_timeout: Duration::ZERO,
+             ..Default::default()
+         });
+ 
+@@ -250,3 +253,7 @@
+         true
+     }
+ }
++
++#[cfg(all(test, target_os = "linux"))]
++#[path = "idle_inode_tests.rs"]
++mod idle_inode_tests;
+--- /dev/null
++++ b/src/devices/src/virtio/fs/idle_inode_tests.rs
+@@ -0,0 +1,64 @@
++use super::*;
++use crate::virtio::fs::filesystem::{Context, FileSystem, FsOptions};
++use crate::virtio::fs::fuse::{EntryOut, ROOT_ID};
++use crate::virtio::fs::inode_alloc::InodeAllocator;
++use std::ffi::CStr;
++
++#[test]
++fn idle_inode_device_replies_disable_entry_retention() {
++    for read_only in [false, true] {
++        for semantics in [
++            PermissionSemantics::LinuxComplete,
++            PermissionSemantics::LinuxSimplified,
++        ] {
++            let device = Fs::new(
++                "idle-inode-test".into(),
++                semantics,
++                Some("/".into()),
++                Arc::new(AtomicI32::new(0)),
++                read_only,
++                Vec::new(),
++            )
++            .unwrap();
++            let cfg = device.passthrough_cfg.clone().unwrap();
++            assert_eq!(cfg.entry_timeout, Duration::ZERO);
++            let expected_attr = if matches!(semantics, PermissionSemantics::LinuxSimplified) {
++                Duration::ZERO
++            } else {
++                Duration::from_secs(5)
++            };
++            assert_eq!(cfg.attr_timeout, expected_attr);
++            let fs = passthrough::PassthroughFs::new(cfg, Arc::new(InodeAllocator::new())).unwrap();
++            fs.init(FsOptions::empty()).unwrap();
++            let ctx = Context {
++                uid: unsafe { libc::geteuid() },
++                gid: unsafe { libc::getegid() },
++                pid: unsafe { libc::getpid() },
++            };
++            let entry = fs
++                .lookup(ctx, ROOT_ID, CStr::from_bytes_with_nul(b".\0").unwrap())
++                .unwrap();
++            let out = EntryOut::from(entry);
++            assert_eq!((out.entry_valid, out.entry_valid_nsec), (0, 0));
++            assert_eq!(out.attr_valid, expected_attr.as_secs());
++            fs.forget(ctx, out.nodeid, 1);
++            // The root reference must remain usable after the temporary lookup is forgotten.
++            fs.getattr(ctx, ROOT_ID, None).unwrap();
++            fs.destroy();
++        }
++    }
++}
++
++#[test]
++fn idle_inode_virtual_device_stays_without_passthrough() {
++    let device = Fs::new(
++        "virtual-test".into(),
++        PermissionSemantics::LinuxComplete,
++        None,
++        Arc::new(AtomicI32::new(0)),
++        true,
++        Vec::new(),
++    )
++    .unwrap();
++    assert!(device.passthrough_cfg.is_none());
++}

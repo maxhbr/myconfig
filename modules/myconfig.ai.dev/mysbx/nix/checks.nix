@@ -93,6 +93,11 @@ in
   # The launcher's patched library runs real passthrough/server tests without KVM.
   mysbx-libkrun-readdirplus-test = pkgs.callPackage ./libkrun.nix { };
 
+  mysbx-krun-fd-monitor-test = pkgs.runCommand "mysbx-krun-fd-monitor-test" { } ''
+    ${pkgs.python3}/bin/python3 ${./krun-fd-stress.py} --self-test
+    touch $out
+  '';
+
   # The nested-podman guest tree (bd myconfig-6di.5.8): the storage
   # wrapper at bin/podman (bd myconfig-6di.5.16) and the bytes podman
   # will read inside the krun guest. Static by

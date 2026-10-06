@@ -277,9 +277,9 @@ experimental-features = "nix-command flakes"
    the VM's PID-1 limits (probe: `ulimit -n` inside the guest shows
    1048576), and the launcher raises ITS OWN — libkrun's virtiofs
    server runs in the launcher process, every guest file handle is
-   a HOST fd there. The launcher's raise announces itself on
-   stderr when the hard ceiling refuses infinity (a WARNING, never
-   a dead run).
+   a HOST fd there. The launcher prints its soft and hard limits
+   on stderr. It refuses to start below 65536. A refused raise of
+   the hard limit also prints a warning.
 
 3. **The db copy (bd myconfig-j23):** with the scratch present and
    the network shared, the init copies the HOST's
@@ -302,3 +302,37 @@ The PASS line for this section: `nix flake check` (or any real
 flake command) inside the sandbox reports flake findings, never
 infrastructure errors. Recorded live on 'thing' 2026-10-02, all
 stages PASS.
+
+## 6. The direct backend's host fd retention (bd myconfig-dj4)
+
+A file descriptor (fd) is an open reference to a file.
+An inode identifies one filesystem object.
+The direct launcher keeps one host fd for each inode that the guest still references.
+
+The patched library sets Linux virtiofs entry timeouts to exactly zero.
+This lets the guest kernel discard directory entries after their last use.
+The library keeps live inode references until the guest sends `FORGET`.
+Attribute timeouts stay unchanged, and extra lookup requests cost some performance.
+Open files and memory mappings can still exhaust the host limit.
+
+On f13 or another host with writable `/dev/kvm`, rebuild the direct launcher.
+Use a rebuilt `mysbx` wrapper that includes Python 3 in the guest.
+Run this command from the configuration repository:
+
+```bash
+MYSBX=/path/to/rebuilt/mysbx python3 \
+  modules/myconfig.ai.dev/mysbx/nix/krun-fd-stress.py /path/to/test/repo
+```
+
+The probe creates 100000 files in a temporary directory inside the test repository.
+It reads each file during three walks in one guest session.
+It sets the launcher's soft and hard fd limits to 65536.
+It samples the launcher's host fd count every 0.1 seconds.
+It stops the test if a sample exceeds 8192 fds or the guest fails.
+It does not walk `/nix/store` or clear guest caches.
+
+The probe prints the log path and removes its temporary files after the test.
+Exit 77 means that the host lacks access to `/dev/kvm`, not that the probe passed.
+A `PASS` result reports the largest fd sample for this workload.
+Record the result, host, kernel, and library version on `myconfig-dj4`.
+Repeat normal long-lived agent workloads before closing the issue.
