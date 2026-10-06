@@ -270,6 +270,26 @@ in
       ! "${guestNix.copyState}/bin/mysbx-krun-nix-copy-state" "$src" "$TMPDIR/state2" 2>/dev/null \
         || fail "an unreadable db.sqlite must fail the copy"
       grep -qF '/nix/var/nix/db/db.sqlite' "$setup" || fail "the setup must require the registered database"
+      # The db reconcile (bd myconfig-mxu): the setup must prune
+      # copied-db rows whose store path the image store cannot
+      # keep (missing or a symlink — a dangling poisoned link prunes
+      # too, [ -e ] is false for it), BEFORE the overlay is mounted
+      # and any payload nix runs.
+      grep -qF 'SELECT path FROM ValidPaths WHERE path LIKE' "$setup" \
+        || fail "the setup does not enumerate the copied db's store paths (the reconcile's SELECT)"
+      grep -qF 'DELETE FROM ValidPaths WHERE path =' "$setup" \
+        || fail "the setup does not drop the doomed rows (the reconcile's DELETE)"
+      grep -qF -- '-L "$p"' "$setup" \
+        || fail "the reconcile must test for symlinked store paths, not only missing ones"
+      grep -qF 'reconciling the db' "$setup" \
+        || fail "the reconcile must announce how many rows it drops (refuse or announce)"
+      # ...and in order: after copyState, before the overlay mount.
+      copy_line=$(grep -n 'mysbx-krun-nix-copy-state /nix/var/nix' "$setup" | head -1 | cut -d: -f1)
+      doomed_line=$(grep -n 'doomed=\$' "$setup" | head -1 | cut -d: -f1)
+      overlay_line=$(grep -n 'mount -t overlay' "$setup" | head -1 | cut -d: -f1)
+      [ -n "$copy_line" ] && [ -n "$doomed_line" ] && [ -n "$overlay_line" ] \
+        && [ "$copy_line" -lt "$doomed_line" ] && [ "$doomed_line" -lt "$overlay_line" ] \
+        || fail "the reconcile must run after copyState and before the overlay mount"
       grep -q 'exit 125' "$setup" || fail "a failed mount must be an error, never a fallback"
       [ "$(id -u)" -ne 0 ] || fail "the check expects a non-root build user"
       "${guestNix}/bin/nix" --version | grep -q '^nix (Nix) ${guestNix.nix.version}$' \
