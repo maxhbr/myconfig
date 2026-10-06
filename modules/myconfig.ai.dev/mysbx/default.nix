@@ -851,11 +851,15 @@ in
             # D7): the static mkfs.ext4 the init runs before any
             # store share is visible.
             e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs;
+            # The db reconcile's static sqlite3 (bd myconfig-mxu):
+            # the init prunes copied-db rows the staged share cannot
+            # keep, before any store path is visible.
+            sqliteStatic = pkgs.pkgsStatic.sqlite.bin;
             # The `env` of the /usr/bin/env shebangs (the podman
             # image's usrBinEnv twin).
             coreutils = pkgs.coreutils;
           };
-          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs; coreutils = pkgs.coreutils; }";
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs; sqliteStatic = pkgs.pkgsStatic.sqlite.bin; coreutils = pkgs.coreutils; }";
           description = ''
             The guest rootfs of the direct-libkrun backend —
             the Nix-built plain directory (./nix/krun-rootfs.nix)
@@ -980,10 +984,11 @@ in
           default = [
             (pkgs.callPackage ./nix/krun-guest-nix.nix {
               nix = cfg.krun.nix.package;
+              sqlite = pkgs.sqlite;
               nixConfig = cfg.krun.nix.settings;
             })
           ];
-          defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-nix.nix { nix = cfg.krun.nix.package; nixConfig = cfg.krun.nix.settings; }) ]";
+          defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-nix.nix { nix = cfg.krun.nix.package; sqlite = pkgs.sqlite; nixConfig = cfg.krun.nix.settings; }) ]";
           description = ''
             The guest nix userspace baked into the agent image when
             `krun.nix.enable`, consumed through `podman.imagePackages`:

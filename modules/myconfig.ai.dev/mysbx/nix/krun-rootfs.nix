@@ -38,6 +38,10 @@
 # rootfs therefore serves every repo and every toolchain set.
 {
   runCommand,
+  # escapeShellArg of the reconcile SQL below: the init text is a
+  # Nix indented string whose '' rules make inlined SQL quoting
+  # error-prone — the quoted SQL is generated here instead.
+  lib,
   # The STATIC busybox of the guest entry: pkgsStatic so mysbx-init
   # and every applet it invokes run without any store path (the
   # dynamic bash below is for the payload only, usable only after the
@@ -55,9 +59,24 @@
   # backends.md D7): the init formats the per-run virtio-blk device
   # BEFORE any store path is visible — pkgsStatic, like busybox.
   e2fsprogsStatic,
+  # The STATIC sqlite3 of the db reconcile (bd myconfig-mxu): the
+  # init runs before any store path is visible, yet must prune the
+  # copied host db of rows whose store path the staged share no
+  # longer carries (host rebuild restage) or carries as a symlink
+  # (the flake-source poisoning, doc/TODOs/
+  # krun-guest-flake-source-symlink.md). A real copy, like busybox
+  # and mkfs.ext4 — pkgsStatic so it works store-free.
+  sqliteStatic,
   bash,
 }:
 let
+  # The db reconcile's SQL, shell-quoted by Nix (the init text
+  # below interpolates it verbatim): the pattern needs SQL single
+  # quotes, which the indented-string '' rules make painful to
+  # inline — generating the quoting here keeps the init readable.
+  # A store path's name carries no quote, so no escaping of VALUES
+  # is needed (only the LIKE pattern here is a literal).
+  reconcileSelect = lib.strings.escapeShellArg "SELECT path FROM ValidPaths WHERE path LIKE '/nix/store/%'";
   # The guest entry script (bd myconfig-dak.5). It runs as the first
   # process of the payload (after /init.krun forked), as root, in the
   # VM: /init.krun replaces its own argv[0] with KRUN_INIT and
@@ -431,6 +450,61 @@ let
         else
             step "no nix-var db — the guest nix db starts empty"
         fi
+        # The db reconcile (bd myconfig-mxu, the direct twin of the
+        # podman setup wrapper's step): the copied db is a SNAPSHOT
+        # of host state, the staged store share is LIVE — a host
+        # rebuild restaging the share leaves rows for paths the
+        # share no longer carries, and an in-session fetch once
+        # registered a flake source as a store SYMLINK
+        # (doc/TODOs/krun-guest-flake-source-symlink.md). Both
+        # divergences break every later eval that trusts the row
+        # ("is a symlink" / "Stale file handle") and nix's re-add
+        # of the lower-layer entry crashes (fchmodat2). Prune the
+        # rows the share cannot keep — paths are tested against
+        # the MOUNTED share (this runs after the store overlay is
+        # up, so a symlink in the overlay's upper layer is caught
+        # too), BEFORE the payload execs. POSIX sh + the baked
+        # static sqlite3 (bin/sqlite3, a real copy like busybox):
+        # [ -e ] is FALSE for a dangling symlink, so both poison
+        # shapes (dangling and live-target) prune, as does a plain
+        # missing path. `nix store delete` cannot do this job
+        # (liveness semantics, plus its store-tree unlink is
+        # exactly the lower-layer crash).
+        if [ -f /mysbx-nix/state/db/db.sqlite ]; then
+            registered_file=/mysbx-nix/registered-paths.txt
+            doomed_file=/mysbx-nix/doomed-paths.txt
+            /bin/sqlite3 /mysbx-nix/state/db/db.sqlite \
+                ${reconcileSelect} \
+                > "$registered_file" \
+                || fail "cannot enumerate registered store paths in the copied nix database"
+            : > "$doomed_file"
+            while IFS= read -r p; do
+                case "$p" in /nix/store/*) ;; *) continue ;; esac
+                if [ ! -e "$p" ] || [ -L "$p" ]; then
+                    printf '%s\n' "$p" >> "$doomed_file"
+                fi
+            done < "$registered_file"
+            "$BB" rm -f "$registered_file"
+            n_doomed=$("$BB" wc -l < "$doomed_file")
+            if [ "$n_doomed" -gt 0 ]; then
+                step "reconciling the db: $n_doomed registered store path(s) missing or symlinked, dropping their rows"
+                {
+                    printf 'PRAGMA foreign_keys=ON;\nBEGIN;\n'
+                    while IFS= read -r p; do
+                        [ -n "$p" ] || continue
+                        printf "DELETE FROM Refs WHERE reference = (SELECT id FROM ValidPaths WHERE path = '%s');\n" "$p"
+                        printf "DELETE FROM ValidPaths WHERE path = '%s';\n" "$p"
+                    done < "$doomed_file"
+                    printf 'COMMIT;\n'
+                } | /bin/sqlite3 -bail /mysbx-nix/state/db/db.sqlite \
+                    || fail "cannot reconcile dependent rows in the copied nix database"
+            fi
+            "$BB" rm -f "$doomed_file"
+            fk_violations=$(/bin/sqlite3 /mysbx-nix/state/db/db.sqlite 'PRAGMA foreign_key_check;') \
+                || fail "cannot check foreign keys in the copied nix database"
+            [ -z "$fk_violations" ] \
+                || fail "foreign-key violations remain in the copied nix database"
+        fi
         "$BB" mkdir -p /mysbx-nix/log /mysbx-nix/cache /mysbx-nix/tmp \
             || fail "cannot create the nix log/cache/tmp dirs on the scratch"
         # The single-user nix environment (the podman image's
@@ -545,6 +619,10 @@ runCommand "mysbx-krun-rootfs"
     # like busybox itself — it must run before any store share is
     # mounted.
     cp ${e2fsprogsStatic}/sbin/mkfs.ext4 $out/bin/mkfs.ext4
+    # The db reconcile's static sqlite3 (bd myconfig-mxu): same
+    # real-copy contract — the init runs it before the store share
+    # is mounted.
+    cp ${sqliteStatic}/bin/sqlite3 $out/bin/sqlite3
     # The payload's shells: store symlinks, valid once mysbx-init has
     # mounted the store share.
     ln -s ${bash}/bin/bash $out/bin/bash
@@ -555,6 +633,14 @@ runCommand "mysbx-krun-rootfs"
     ln -s ${coreutils}/bin/env $out/usr/bin/env
     printf '%s' "$initText" > $out/bin/mysbx-init
     chmod +x $out/bin/mysbx-init
+    grep -qF 'cannot enumerate registered store paths' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init does not check the sqlite query status" >&2; exit 1; }
+    grep -qF 'PRAGMA foreign_keys=ON' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init does not enable sqlite foreign keys" >&2; exit 1; }
+    grep -qF 'DELETE FROM Refs WHERE reference =' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init does not remove surviving referrers" >&2; exit 1; }
+    grep -qF 'PRAGMA foreign_key_check;' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init does not verify sqlite foreign keys" >&2; exit 1; }
     # The shebang guard (the eighth live finding): an indented
     # Nix string strips only the MINIMAL common indent of its
     # lines, so mixed indents leave leading spaces before the
