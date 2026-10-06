@@ -331,6 +331,13 @@ It samples the launcher's host fd count every 0.1 seconds.
 It stops the test if a sample exceeds 8192 fds or the guest fails.
 It does not walk `/nix/store` or clear guest caches.
 
+The guest prints its kernel version and a start marker before the first walk.
+On a budget failure, the probe writes an fd snapshot to the terminal and the log.
+It groups fds by location (fixture, store, or other), object type, and `O_PATH` flag.
+`O_PATH` fds hold metadata references; other fds are grouped as handles.
+The snapshot is not atomic, and it includes fds opened during guest startup.
+Exceeding the probe budget does not by itself mean `EMFILE` or unbounded growth.
+
 The probe prints the log path and removes its temporary files after the test.
 Exit 77 means that the host lacks access to `/dev/kvm`, not that the probe passed.
 A `PASS` result reports the largest fd sample for this workload.

@@ -2,12 +2,16 @@
 """Run a controlled shared-tree walk and measure the host launcher's fd count."""
 
 import argparse
+import base64
+from collections import Counter
 import math
 import os
 from pathlib import Path
 import resource
 import select
+import shlex
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -15,6 +19,7 @@ import time
 import unittest
 
 NOFILE = 65536
+STORE_ROOTS = ("/nix/store", "/mysbx-krun-stage/ro/store")
 GUEST = r"""
 import os
 import sys
@@ -23,6 +28,7 @@ def fail(error):
     raise error
 
 root, rounds, expected = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+print(f"guest: kernel={os.uname().release}; starting {rounds} walks of {expected} files", flush=True)
 for round in range(rounds):
     count = 0
     for directory, _, files in os.walk(root, onerror=fail):
@@ -35,6 +41,13 @@ for round in range(rounds):
         raise RuntimeError(f"walk returned {count} files, expected {expected}")
     print(f"round {round + 1}: read {count} files", flush=True)
 """
+
+
+def guest_argv(root, rounds, files):
+    # Libkrun transports argv through a printable-ASCII, double-quoted command line.
+    encoded = base64.b64encode(GUEST.encode("utf-8")).decode("ascii")
+    code = f"exec(__import__('base64').b64decode('{encoded}'))"
+    return ["python3", "-c", code, str(root), str(rounds), str(files)]
 
 
 def is_launcher(command):
@@ -104,6 +117,42 @@ def stop(proc, launcher_fd=None):
             raise RuntimeError("the test launcher did not stop")
 
 
+def fd_scope(target, data):
+    if f"/{data.parent.name}/" in target:
+        return "fixture"
+    if any(target == root or target.startswith(root + "/") for root in STORE_ROOTS):
+        return "store"
+    return "other"
+
+
+def fd_snapshot(pid, data, proc_root=Path("/proc")):
+    process = proc_root / str(pid)
+    names = list((process / "fd").iterdir())
+    counts, examples = Counter(), {}
+    for descriptor in names:
+        try:
+            target = os.readlink(descriptor)
+            mode = descriptor.stat().st_mode
+            info = (process / "fdinfo" / descriptor.name).read_text()
+            flags = next(int(line.split()[1], 8) for line in info.splitlines()
+                         if line.startswith("flags:"))
+        except (OSError, ValueError, StopIteration):
+            counts[("unreadable or gone", "unknown", "unknown")] += 1
+            continue
+        scope = fd_scope(target, data)
+        kind = "directory" if stat.S_ISDIR(mode) else (
+            "file" if stat.S_ISREG(mode) else "other"
+        )
+        access = "O_PATH" if flags & os.O_PATH else "handle"
+        key = (scope, kind, access)
+        counts[key] += 1
+        examples.setdefault(key, target)
+    lines = [f"fd snapshot: pid={pid}; listed={len(names)} (live, non-atomic)"]
+    for key, count in sorted(counts.items()):
+        lines.append(f"  {' '.join(key)}: {count}; example={examples.get(key, '-')!r}")
+    return "\n".join(lines)
+
+
 def run(args):
     if not os.access("/dev/kvm", os.R_OK | os.W_OK):
         print(
@@ -134,10 +183,11 @@ def run(args):
         with os.fdopen(log_fd, "w") as log:
             proc = subprocess.Popen(
                 [
-                    args.mysbx, "run", "--backend", "krun", "--", "python3", "-c",
-                    GUEST, str(data.relative_to(repo)), str(args.rounds), str(args.files),
+                    args.mysbx, "run", "--backend", "krun", "--",
+                    *guest_argv(data.relative_to(repo), args.rounds, args.files),
                 ],
                 cwd=repo,
+                stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
@@ -177,6 +227,12 @@ def run(args):
                         except (FileNotFoundError, ProcessLookupError):
                             pass
                         if peak > args.fd_budget:
+                            try:
+                                snapshot = fd_snapshot(launcher, data)
+                            except OSError as error:
+                                snapshot = f"fd snapshot unavailable: {error}"
+                            print(snapshot, file=sys.stderr, flush=True)
+                            print(snapshot, file=log, flush=True)
                             raise RuntimeError(
                                 f"launcher fd count {peak} exceeded budget {args.fd_budget}"
                             )
@@ -199,6 +255,73 @@ def run(args):
 
 
 class MonitorTests(unittest.TestCase):
+    def test_guest_commandline(self):
+        argv = guest_argv(Path(".mysbx-fd-stress-test/data"), 3, 100000)
+        # Match libkrun's collapse_str_array and kernel::cmdline constraints.
+        serialized = " ".join(f'"{arg}"' for arg in argv)
+        self.assertTrue(all(" " <= char <= "~" for char in serialized))
+        self.assertNotIn('"', argv[2])
+        self.assertEqual(shlex.split(serialized), argv)
+
+    def test_guest_walks_and_content_check(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            data.mkdir()
+            fixture = data / "file"
+            fixture.write_bytes(b"probe\n")
+            argv = guest_argv(Path("data"), 3, 1)
+            argv[0] = sys.executable
+            result = subprocess.run(
+                argv, cwd=root, capture_output=True, text=True, timeout=10,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                result.stdout,
+                f"guest: kernel={os.uname().release}; starting 3 walks of 1 files\n"
+                "round 1: read 1 files\nround 2: read 1 files\nround 3: read 1 files\n",
+            )
+            fixture.write_bytes(b"corrupt")
+            result = subprocess.run(
+                argv, cwd=root, capture_output=True, text=True, timeout=10,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unexpected fixture content", result.stderr)
+
+    def test_fd_store_scope(self):
+        data = Path("/repo/.mysbx-fd-stress-test/data")
+        for root in STORE_ROOTS:
+            with self.subTest(root=root):
+                self.assertEqual(fd_scope(root, data), "store")
+                self.assertEqual(fd_scope(root + "/package/file", data), "store")
+                self.assertEqual(fd_scope(root + "-other/package", data), "other")
+        self.assertEqual(fd_scope(str(data / "file"), data), "fixture")
+
+    def test_fd_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "fixture" / "data"
+            data.mkdir(parents=True)
+            source = data / "file"
+            source.write_bytes(b"probe\n")
+            process = root / "12"
+            (process / "fd").mkdir(parents=True)
+            (process / "fdinfo").mkdir()
+            for name, target, flags in [
+                ("0", source, os.O_PATH),
+                ("1", data, os.O_PATH),
+                ("2", Path("/dev/null"), os.O_RDWR),
+                ("3", root / "missing", os.O_PATH),
+            ]:
+                (process / "fd" / name).symlink_to(target)
+                (process / "fdinfo" / name).write_text(f"flags:\t{flags:o}\n")
+            snapshot = fd_snapshot(12, data, root)
+            self.assertIn("listed=4", snapshot)
+            self.assertIn("fixture file O_PATH: 1", snapshot)
+            self.assertIn("fixture directory O_PATH: 1", snapshot)
+            self.assertIn("other other handle: 1", snapshot)
+            self.assertIn("unreadable or gone unknown unknown: 1", snapshot)
+
     def test_launcher_identity(self):
         self.assertTrue(is_launcher(b"/nix/store/x/bin/.mysbx-krun-wrapped\0--rootfs\0/x\0"))
         self.assertTrue(is_launcher(b"/nix/store/x/bin/mysbx-krun\0--rootfs\0/x\0"))
