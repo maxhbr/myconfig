@@ -1,0 +1,487 @@
+--- a/src/devices/src/virtio/fs/filesystem.rs
++++ b/src/devices/src/virtio/fs/filesystem.rs
+@@ -1017,7 +1017,10 @@
+     ///
+     /// Unlike `readdir`, the lookup count for `Inode`s associated with the returned directory
+     /// entries **IS** affected by this method (since it returns an `Entry` for each `DirEntry`).
+-    /// The count for each `Inode` should be increased by 1.
++    /// The count for each `Inode` should be increased by 1 only when `add_entry` returns
++    /// `Ok(n)` with `n > 0`. The file system must undo the current lookup if the callback
++    /// returns `Ok(0)` or an error. Previously accepted entries remain owned by the caller,
++    /// even if this method later fails; the caller must forget them if it discards the reply.
+     ///
+     /// File systems that implement this method should enable the `FsOptions::DO_READDIRPLUS`
+     /// feature when supported by the kernel. The kernel will not call this method unless that
+--- a/src/devices/src/virtio/fs/linux/passthrough.rs
++++ b/src/devices/src/virtio/fs/linux/passthrough.rs
+@@ -1135,7 +1135,13 @@
+             let name = unsafe { CStr::from_bytes_with_nul_unchecked(dir_entry.name) };
+             let entry = self.lookup(ctx, inode, name)?;
+ 
+-            add_entry(dir_entry, entry)
++            let looked_up = entry.inode;
++            let result = add_entry(dir_entry, entry);
++            if !matches!(result, Ok(n) if n > 0) {
++                // The caller only owns lookup references for entries it accepted.
++                self.forget(ctx, looked_up, 1);
++            }
++            result
+         })
+     }
+ 
+@@ -2303,3 +2309,7 @@
+         Ok(())
+     }
+ }
++
++#[cfg(test)]
++#[path = "readdirplus_tests.rs"]
++pub(crate) mod readdirplus_tests;
+--- a/src/devices/src/virtio/fs/macos/passthrough.rs
++++ b/src/devices/src/virtio/fs/macos/passthrough.rs
+@@ -1600,7 +1600,13 @@
+             let name = unsafe { CStr::from_bytes_with_nul_unchecked(dir_entry.name) };
+             let entry = self.lookup(ctx, inode, name)?;
+ 
+-            add_entry(dir_entry, entry)
++            let looked_up = entry.inode;
++            let result = add_entry(dir_entry, entry);
++            if !matches!(result, Ok(n) if n > 0) {
++                // The caller only owns lookup references for entries it accepted.
++                self.forget(ctx, looked_up, 1);
++            }
++            result
+         })
+     }
+ 
+--- a/src/devices/src/virtio/fs/server.rs
++++ b/src/devices/src/virtio/fs/server.rs
+@@ -995,6 +995,7 @@
+         // Skip over enough bytes for the header.
+         let mut cursor = w.split_at(size_of::<OutHeader>()).unwrap();
+ 
++        let mut lookups = Vec::new();
+         let res = if plus {
+             self.fs.readdirplus(
+                 Context::from(in_header),
+@@ -1002,7 +1003,14 @@
+                 fh.into(),
+                 size,
+                 offset,
+-                |d, e| add_dirent(&mut cursor, size, d, Some(e)),
++                |d, e| {
++                    let inode = e.inode;
++                    let written = add_dirent(&mut cursor, size, d, Some(e))?;
++                    if written > 0 {
++                        lookups.push((inode.into(), 1));
++                    }
++                    Ok(written)
++                },
+             )
+         } else {
+             self.fs.readdir(
+@@ -1016,6 +1024,8 @@
+         };
+ 
+         if let Err(e) = res {
++            // An error reply discards even the entries already added to the buffer.
++            self.fs.batch_forget(Context::from(in_header), lookups);
+             reply_error(e, in_header.unique, w)
+         } else {
+             // Don't use `reply_ok` because we need to set a custom size length for the
+@@ -1026,7 +1036,10 @@
+                 unique: in_header.unique,
+             };
+ 
+-            w.write_all(out.as_slice()).map_err(Error::EncodeMessage)?;
++            if let Err(e) = w.write_all(out.as_slice()) {
++                self.fs.batch_forget(Context::from(in_header), lookups);
++                return Err(Error::EncodeMessage(e));
++            }
+             Ok(out.len as usize)
+         }
+     }
+@@ -1665,3 +1678,7 @@
+ 
+     Ok(extensions)
+ }
++
++#[cfg(all(test, target_os = "linux"))]
++#[path = "readdirplus_tests.rs"]
++mod readdirplus_tests;
+--- /dev/null
++++ b/src/devices/src/virtio/fs/linux/readdirplus_tests.rs
+@@ -0,0 +1,160 @@
++use super::*;
++use crate::virtio::fs::filesystem::{Context, FileSystem, FsOptions};
++use std::path::PathBuf;
++
++pub(crate) struct Fixture {
++    pub fs: PassthroughFs,
++    pub handle: u64,
++    pub offset: u64,
++    root: PathBuf,
++    keys: Vec<InodeAltKey>,
++}
++
++pub(crate) fn ctx() -> Context {
++    Context {
++        uid: unsafe { libc::geteuid() },
++        gid: unsafe { libc::getegid() },
++        pid: unsafe { libc::getpid() },
++    }
++}
++
++impl Fixture {
++    pub fn new() -> Self {
++        static NEXT: AtomicU64 = AtomicU64::new(0);
++        let root = std::env::temp_dir().join(format!(
++            "krun-readdirplus-{}-{}",
++            std::process::id(),
++            NEXT.fetch_add(1, Ordering::Relaxed)
++        ));
++        std::fs::create_dir(&root).unwrap();
++        for name in ["alpha", "bravo", "charlie", "delta"] {
++            std::fs::write(root.join(name), b"test").unwrap();
++        }
++        let mut paths = vec![root.clone(), root.parent().unwrap().to_path_buf()];
++        paths.extend(std::fs::read_dir(&root).unwrap().map(|p| p.unwrap().path()));
++        let keys = paths
++            .iter()
++            .map(|path| {
++                let (st, mnt_id) = statx(&File::open(path).unwrap()).unwrap();
++                InodeAltKey {
++                    ino: st.st_ino,
++                    dev: st.st_dev,
++                    mnt_id,
++                }
++            })
++            .collect();
++        let fs = PassthroughFs::new(
++            Config {
++                root_dir: root.to_str().unwrap().into(),
++                ..Default::default()
++            },
++            Arc::new(InodeAllocator::new()),
++        )
++        .unwrap();
++        fs.init(FsOptions::empty()).unwrap();
++        let handle = fs
++            .opendir(ctx(), fuse::ROOT_ID, libc::O_RDONLY as u32)
++            .unwrap()
++            .0
++            .unwrap();
++        // Start just before the first non-dot entry.
++        let mut offset = 0;
++        fs.readdir(ctx(), fuse::ROOT_ID, handle, 4096, 0, |d| {
++            if d.name == b"." || d.name == b".." {
++                offset = d.offset;
++                Ok(1)
++            } else {
++                Ok(0)
++            }
++        })
++        .unwrap();
++        Self {
++            fs,
++            handle,
++            offset,
++            root,
++            keys,
++        }
++    }
++
++    pub fn snapshot(&self) -> (BTreeMap<u64, u64>, usize) {
++        let refs = {
++            let inodes = self.fs.inodes.read().unwrap();
++            self.keys
++                .iter()
++                .filter_map(|key| {
++                    inodes
++                        .get_alt(key)
++                        .map(|d| (d.inode, d.refcount.load(Ordering::Relaxed)))
++                })
++                .collect()
++        };
++        let fds = std::fs::read_dir("/proc/self/fd")
++            .unwrap()
++            .filter_map(|p| std::fs::read_link(p.ok()?.path()).ok())
++            .filter(|p| p.starts_with(&self.root))
++            .count();
++        (refs, fds)
++    }
++}
++
++impl Drop for Fixture {
++    fn drop(&mut self) {
++        self.fs
++            .releasedir(ctx(), fuse::ROOT_ID, 0, self.handle)
++            .unwrap();
++        self.fs.destroy();
++        std::fs::remove_dir_all(&self.root).unwrap();
++    }
++}
++
++#[test]
++fn readdirplus_rejected_first_entry() {
++    let f = Fixture::new();
++    let before = f.snapshot();
++    let mut calls = 0;
++    f.fs.readdirplus(ctx(), fuse::ROOT_ID, f.handle, 4096, f.offset, |_, _| {
++        calls += 1;
++        Ok(0)
++    })
++    .unwrap();
++    assert_eq!(calls, 1);
++    assert_eq!(f.snapshot(), before);
++}
++
++#[test]
++fn readdirplus_callback_error_releases_current_lookup() {
++    let f = Fixture::new();
++    let before = f.snapshot();
++    let err =
++        f.fs.readdirplus(ctx(), fuse::ROOT_ID, f.handle, 4096, f.offset, |_, _| {
++            Err(io::Error::from_raw_os_error(libc::EIO))
++        })
++        .unwrap_err();
++    assert_eq!(err.raw_os_error(), Some(libc::EIO));
++    assert_eq!(f.snapshot(), before);
++}
++
++#[test]
++fn readdirplus_accepted_then_full_preserves_live_references() {
++    let f = Fixture::new();
++    let before = f.snapshot();
++    let mut accepted = None;
++    let mut calls = 0;
++    f.fs.readdirplus(ctx(), fuse::ROOT_ID, f.handle, 4096, f.offset, |_, e| {
++        calls += 1;
++        if accepted.is_none() {
++            accepted = Some(e.inode);
++            Ok(160)
++        } else {
++            Ok(0)
++        }
++    })
++    .unwrap();
++    assert_eq!(calls, 2);
++    let inode = accepted.unwrap();
++    let old = before.0.get(&inode).copied().unwrap_or(0);
++    assert_eq!(f.snapshot().0[&inode], old + 1);
++    f.fs.forget(ctx(), inode, 1);
++    assert_eq!(f.snapshot(), before);
++}
+--- /dev/null
++++ b/src/devices/src/virtio/fs/readdirplus_tests.rs
+@@ -0,0 +1,210 @@
++use super::super::linux::passthrough::readdirplus_tests::{ctx, Fixture};
++use super::*;
++use crate::virtio::descriptor_utils::{create_descriptor_chain, DescriptorType};
++use vm_memory::{Bytes, GuestAddress, GuestMemoryMmap};
++
++#[derive(Clone, Copy)]
++enum Failure {
++    None,
++    Callback,
++    AfterEntries,
++}
++
++struct TestFs {
++    fixture: Fixture,
++    failure: Failure,
++}
++
++impl FileSystem for TestFs {
++    type Inode = u64;
++    type Handle = u64;
++
++    fn forget(&self, ctx: Context, inode: u64, count: u64) {
++        self.fixture.fs.forget(ctx, inode, count);
++    }
++
++    fn readdirplus<F>(
++        &self,
++        ctx: Context,
++        inode: u64,
++        handle: u64,
++        size: u32,
++        offset: u64,
++        mut add: F,
++    ) -> io::Result<()>
++    where
++        F: FnMut(DirEntry, Entry) -> io::Result<usize>,
++    {
++        let mut calls = 0;
++        self.fixture
++            .fs
++            .readdirplus(ctx, inode, handle, size, offset, |d, e| {
++                calls += 1;
++                if matches!(self.failure, Failure::Callback) && calls == 2 {
++                    Err(io::Error::from_raw_os_error(libc::EIO))
++                } else {
++                    add(d, e)
++                }
++            })?;
++        if matches!(self.failure, Failure::AfterEntries) {
++            Err(io::Error::from_raw_os_error(libc::EIO))
++        } else {
++            Ok(())
++        }
++    }
++}
++
++fn request(
++    server: &Server<TestFs>,
++    size: u32,
++    offset: u64,
++) -> (OutHeader, Vec<(u64, u64, Vec<u8>)>) {
++    let memory = GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x10000)]).unwrap();
++    let input = ReadIn {
++        fh: server.fs.fixture.handle,
++        size,
++        offset,
++        ..Default::default()
++    };
++    let chain = create_descriptor_chain(
++        &memory,
++        GuestAddress(0),
++        GuestAddress(0x1000),
++        vec![(DescriptorType::Readable, size_of::<ReadIn>() as u32)],
++        0,
++    )
++    .unwrap();
++    memory.write_obj(input, GuestAddress(0x1000)).unwrap();
++    let reader = Reader::new(&memory, chain).unwrap();
++    let chain = create_descriptor_chain(
++        &memory,
++        GuestAddress(0x100),
++        GuestAddress(0x2000),
++        vec![
++            (DescriptorType::Writable, size_of::<OutHeader>() as u32),
++            (DescriptorType::Writable, size),
++        ],
++        0,
++    )
++    .unwrap();
++    let writer = Writer::new(&memory, chain).unwrap();
++    let header = InHeader {
++        nodeid: ROOT_ID,
++        unique: 42,
++        uid: ctx().uid,
++        gid: ctx().gid,
++        pid: ctx().pid as u32,
++        ..Default::default()
++    };
++    let len = server.do_readdir(header, reader, writer, true).unwrap();
++    let out: OutHeader = memory.read_obj(GuestAddress(0x2000)).unwrap();
++    assert_eq!(len, out.len as usize);
++    assert_eq!(out.unique, 42);
++    let mut pos = size_of::<OutHeader>();
++    let mut entries = Vec::new();
++    while pos < len {
++        let entry: EntryOut = memory.read_obj(GuestAddress(0x2000 + pos as u64)).unwrap();
++        pos += size_of::<EntryOut>();
++        let dirent: Dirent = memory.read_obj(GuestAddress(0x2000 + pos as u64)).unwrap();
++        let mut name = vec![0; dirent.namelen as usize];
++        memory
++            .read_slice(
++                &mut name,
++                GuestAddress(0x2000 + (pos + size_of::<Dirent>()) as u64),
++            )
++            .unwrap();
++        pos += (size_of::<Dirent>() + name.len() + 7) & !7;
++        entries.push((entry.nodeid, dirent.off, name));
++    }
++    assert_eq!(pos, len);
++    (out, entries)
++}
++
++fn server(failure: Failure) -> Server<TestFs> {
++    Server::new(TestFs {
++        fixture: Fixture::new(),
++        failure,
++    })
++}
++
++#[test]
++fn readdirplus_server_full_first_entry() {
++    let s = server(Failure::None);
++    let before = s.fs.fixture.snapshot();
++    let (out, entries) = request(&s, 128, s.fs.fixture.offset);
++    assert_eq!(out.error, 0);
++    assert!(entries.is_empty());
++    assert_eq!(s.fs.fixture.snapshot(), before);
++}
++
++#[test]
++fn readdirplus_server_accepted_then_callback_error() {
++    let s = server(Failure::Callback);
++    let before = s.fs.fixture.snapshot();
++    // Keep a pre-existing guest reference: double-FORGET must not consume it.
++    let name = CString::new("alpha").unwrap();
++    let entry = s.fs.fixture.fs.lookup(ctx(), ROOT_ID, &name).unwrap();
++    let live = s.fs.fixture.snapshot();
++    let (out, entries) = request(&s, 4096, s.fs.fixture.offset);
++    assert_eq!(out.error, -libc::EIO);
++    assert!(entries.is_empty());
++    assert_eq!(s.fs.fixture.snapshot(), live);
++    s.fs.fixture.fs.forget(ctx(), entry.inode, 1);
++    assert_eq!(s.fs.fixture.snapshot(), before);
++}
++
++#[test]
++fn readdirplus_server_whole_request_error_discards_entries() {
++    let s = server(Failure::AfterEntries);
++    let before = s.fs.fixture.snapshot();
++    let (out, entries) = request(&s, 4096, s.fs.fixture.offset);
++    assert_eq!(out.error, -libc::EIO);
++    assert!(entries.is_empty());
++    assert_eq!(s.fs.fixture.snapshot(), before);
++}
++
++#[test]
++fn readdirplus_server_pagination_and_guest_forget_balance() {
++    let s = server(Failure::None);
++    let before = s.fs.fixture.snapshot();
++    for _ in 0..20 {
++        let mut offset = s.fs.fixture.offset;
++        let mut returned = Vec::new();
++        let mut names = Vec::new();
++        for page in 0..10 {
++            // Exactly one entry fits: every non-final page rejects the next lookup.
++            let (out, entries) = request(&s, 160, offset);
++            assert_eq!(out.error, 0);
++            if entries.is_empty() {
++                break;
++            }
++            assert!(page < 9, "pagination did not terminate");
++            assert_eq!(entries.len(), 1);
++            for (inode, next, name) in entries {
++                offset = next;
++                returned.push(inode);
++                if name != b"." && name != b".." {
++                    names.push(name);
++                }
++            }
++        }
++        names.sort();
++        assert_eq!(
++            names,
++            vec![
++                b"alpha".to_vec(),
++                b"bravo".to_vec(),
++                b"charlie".to_vec(),
++                b"delta".to_vec()
++            ]
++        );
++        assert_eq!(
++            s.fs.fixture.snapshot().0.values().sum::<u64>(),
++            before.0.values().sum::<u64>() + returned.len() as u64
++        );
++        for inode in returned {
++            s.fs.fixture.fs.forget(ctx(), inode, 1);
++        }
++        assert_eq!(s.fs.fixture.snapshot(), before);
++    }
++}

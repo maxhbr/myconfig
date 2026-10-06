@@ -90,6 +90,9 @@ in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
   mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
 
+  # The launcher's patched library runs real passthrough/server tests without KVM.
+  mysbx-libkrun-readdirplus-test = pkgs.callPackage ./libkrun.nix { };
+
   # The nested-podman guest tree (bd myconfig-6di.5.8): the storage
   # wrapper at bin/podman (bd myconfig-6di.5.16) and the bytes podman
   # will read inside the krun guest. Static by

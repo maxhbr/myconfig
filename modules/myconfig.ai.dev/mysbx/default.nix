@@ -829,9 +829,9 @@ in
             # with the blk feature (backends.md D7, bd
             # myconfig-dak.7). The launcher refuses a run whose lib
             # lacks the symbol.
-            libkrun = pkgs.libkrun.override { withBlk = true; };
+            libkrun = pkgs.callPackage ./nix/libkrun.nix { };
           };
-          defaultText = literalExpression "pkgs.callPackage ./nix/krun-launcher.nix { libkrun = pkgs.libkrun.override { withBlk = true; }; }";
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-launcher.nix { libkrun = pkgs.callPackage ./nix/libkrun.nix { }; }";
           description = ''
             The mysbx-krun launcher of the direct-libkrun backend —
             the zero-dependency Rust binary (../krun-rs) that
