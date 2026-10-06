@@ -37,3 +37,4 @@ misc/semi-safe-keypair
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+.nix-profile
