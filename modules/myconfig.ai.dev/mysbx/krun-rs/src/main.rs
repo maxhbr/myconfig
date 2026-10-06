@@ -206,6 +206,27 @@ fn raise_nofile() -> (u64, u64) {
     }
 }
 
+const NOFILE_FLOOR: u64 = 65536;
+
+/// The raise's gate (bd myconfig-dj4): prints the standing pair so a
+/// live wedge can name the ceiling the run actually got (the
+/// recurrence's triage gap — nothing on record said what the
+/// launcher had), and refuses below the floor — a low ceiling
+/// guarantees the EMFILE, refusing it makes the cause diagnosable
+/// at launch instead of mid-session.
+fn ensure_nofile(soft: u64, hard: u64) {
+    eprintln!("mysbx-krun: fd ceiling soft={soft} hard={hard}");
+    if soft < NOFILE_FLOOR || hard < NOFILE_FLOOR {
+        eprintln!(
+            "mysbx-krun: the fd ceiling after the raise is below {NOFILE_FLOOR} — the launcher \
+             hosts libkrun's virtiofs server (every guest file handle is a host fd), so a \
+             real session WILL exhaust it (EMFILE mid-run). Check the session's \
+             RLIMIT_NOFILE (systemd LimitNOFILE / the invoking unit's LimitNOFILE)"
+        );
+        std::process::exit(EXIT_SETUP);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // dlopen'd libkrun. Resolving the symbols at runtime (not link time)
 // keeps the binary portable across libkrun FEATURE SETS: the default
@@ -1000,7 +1021,8 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
 fn main() {
     let cfg = parse_args(std::env::args().skip(1));
 
-    raise_nofile();
+    let (soft, hard) = raise_nofile();
+    ensure_nofile(soft, hard);
 
     // The /dev/kvm pre-flight (the spike's finding 7): libkrun's
     // KvmContext::new() PANICS — abort, no return code to map —
@@ -1434,6 +1456,16 @@ mod tests {
             soft == hard,
             "best effort: soft should reach the hard ceiling ({soft} vs {hard})"
         );
+        // bd myconfig-dj4: the gate prints the standing pair, so a
+        // runner that cannot host a session dies at launch with a
+        // named cause instead of wedging mid-run on EMFILE. The
+        // floor itself is only testable where the raise FAILS to
+        // lift (a constrained sandbox); here the pair must simply
+        // pass the gate when the raise worked, and the test pins
+        // that a successful raise always satisfies it.
+        if soft >= NOFILE_FLOOR && hard >= NOFILE_FLOOR {
+            ensure_nofile(soft, hard); // must not exit
+        }
     }
 
     use super::*;
