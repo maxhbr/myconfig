@@ -1967,6 +1967,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         for dir in [
             repo.sidecar.join("gittrust"),
             repo.sidecar.join("krun-stage"),
+            // The GC-root dirs (bd myconfig-mxu): the same
+            // pid-named debris contract — a crashed exec run's
+            // roots are released by the next run.
+            repo.sidecar.join("gcroots"),
         ] {
             if let Err(msg) = sweep_krun_run_dirs(&dir) {
                 eprintln!("mysbx: {msg}");
@@ -2144,6 +2148,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // swept by the next run otherwise (an exec-mode run cannot clean
     // up — the pid-named file is the waypipe debris model).
     let mut krun_scratch_file: Option<std::path::PathBuf> = None;
+    // The per-run GC-root dir of a krun run (bd myconfig-mxu): the
+    // session-lifetime store pins above, same lifecycle as the
+    // staging tree — cleaned up after a waited run, swept by the
+    // next run otherwise.
+    let mut krun_gcroot_dir: Option<std::path::PathBuf> = None;
     let waypipe_params: Option<bwrap::Waypipe<'_>> = if merged.display.is_waypipe() {
         // Under podman-krun a waypipe display is refused upstream
         // (step 4d, first cut) — the krun arm of this conditional is
@@ -2655,6 +2664,34 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 );
                 return EXIT_INFRASTRUCTURE;
             };
+            // The session-lifetime GC roots (bd myconfig-mxu): the
+            // guest sees the LIVE host store, so pin every store
+            // path this run resolves through it — the launcher and
+            // rootfs (the VM's own two inputs), the shell, tools
+            // tree, mux entry and waypipe client the payload PATH
+            // carries, and the /bin/sh, nix.conf and ca-bundle
+            // binds. Skipped by a --dry-run like every sidecar
+            // write (the audit contract).
+            if !dry_run {
+                let mut krun_pins = vec![
+                    krun_launcher.clone(),
+                    krun_rootfs.clone(),
+                    shell.clone(),
+                    tools_path.clone(),
+                ];
+                krun_pins.extend(mux_entry.iter().cloned());
+                krun_pins.extend(waypipe_client.iter().cloned());
+                krun_pins.extend(bin_sh.iter().cloned());
+                krun_pins.extend(nix_conf.iter().cloned());
+                krun_pins.extend(ca_bundle.iter().cloned());
+                match ensure_krun_gc_roots(&repo, pid, &krun_pins) {
+                    Ok(dir) => krun_gcroot_dir = Some(dir),
+                    Err(msg) => {
+                        eprintln!("mysbx: {msg}");
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                }
+            }
             // The guest-root git trust (bd myconfig-zj2, the direct
             // backend's twin of the podman arm's files): the payload
             // runs as GUEST ROOT over virtiofs files that keep their
@@ -3109,6 +3146,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             if let Some(d) = &krun_stage_dir {
                 let _ = std::fs::remove_dir_all(d);
             }
+            // The GC roots die with the failed run (bd
+            // myconfig-mxu): the VM never started, the pins never
+            // became live dependencies.
+            if let Some(d) = &krun_gcroot_dir {
+                let _ = std::fs::remove_dir_all(d);
+            }
             EXIT_INFRASTRUCTURE
         }
         RunMode::Result => {
@@ -3150,6 +3193,13 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // run as data — same pid-named lifecycle as the trust
             // dir, swept by the next run otherwise.
             if let Some(d) = &krun_stage_dir {
+                let _ = std::fs::remove_dir_all(d);
+            }
+            // The GC roots of a finished run (bd myconfig-mxu): the
+            // VM is gone, the pins are no longer live dependencies
+            // — release them so GC reclaims store paths only a dead
+            // session kept alive (the sweep owns crashed exec runs).
+            if let Some(d) = &krun_gcroot_dir {
                 let _ = std::fs::remove_dir_all(d);
             }
             // The per-run scratch file (bd myconfig-0pi, and the
@@ -4189,6 +4239,66 @@ fn pid_gone(pid: u32) -> bool {
         return false;
     }
     unsafe { libc_kill_status(pid as i32, 0) == -1 && *libc_errno_location() == ESRCH }
+}
+
+/// The krun session-lifetime GC roots (bd myconfig-mxu): the guest
+/// sees the LIVE host store through the ro share, but nothing keeps
+/// the store paths a run DEPENDS on alive for the VM's lifetime — a
+/// host rebuild or `nix store gc` evicts them and the live guest
+/// serves ESTALE/ENOENT (the live failure: `/bin/bash`, a baked
+/// store symlink, died mid-session). The fix pins every store path
+/// the run references as an indirect GC root inside the sidecar:
+/// `gcroots/<pid>/<hash>` symlinks, registered with the host's
+/// `nix-store --add-root … --indirect -r` so they land in the
+/// daemon's auto-gcroots. Removing the sidecar symlink (the waited
+/// run's cleanup, or the `gcroots` pass of [`sweep_krun_run_dirs`] of a
+/// crashed exec) releases the root — nothing outlives the session.
+/// Best-effort by design: a host without a `nix-store` on PATH (or a
+/// failed registration) is a WARNING, never a dead run — the roots
+/// are protection against a race, not a precondition of the backend.
+fn ensure_krun_gc_roots(
+    repo: &repo::Repo,
+    pid: u32,
+    pins: &[String],
+) -> Result<std::path::PathBuf, String> {
+    let dir = repo.sidecar.join("gcroots").join(pid.to_string());
+    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    let nix_store = env_or("MYSBX_NIX_STORE", "nix-store");
+    for pin in pins {
+        // Only real host store paths are rootable — a bare fallback
+        // like `/bin/sh` (the unwrapped build) is skipped, not an
+        // error: there is nothing to keep alive.
+        if !pin.starts_with("/nix/store/") {
+            continue;
+        }
+        // The root NAME is the pin's fnv1a digest (the same stable
+        // digest krun.rs names share tags with) — no quoting
+        // problems, and re-runs overwrite the same root.
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        for byte in pin.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        let root = dir.join(format!("{hash:016x}"));
+        let out = std::process::Command::new(&nix_store)
+            .arg("--add-root")
+            .arg(&root)
+            .arg("--indirect")
+            .arg("-r")
+            .arg(pin)
+            .stderr(std::process::Stdio::null())
+            .output();
+        match out {
+            Ok(o) if o.status.success() => {}
+            // A missing nix-store or a failed registration: warn and
+            // keep going — see the doc comment's best-effort rule.
+            _ => eprintln!(
+                "mysbx: WARNING: cannot GC-root {pin} for this run — a host rebuild \
+                 may evict it mid-session (bd myconfig-mxu)"
+            ),
+        }
+    }
+    Ok(dir)
 }
 
 /// Start the host side of the waypipe channel (docs/design/config.md
