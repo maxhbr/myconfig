@@ -471,29 +471,39 @@ let
         # (liveness semantics, plus its store-tree unlink is
         # exactly the lower-layer crash).
         if [ -f /mysbx-nix/state/db/db.sqlite ]; then
+            registered_file=/mysbx-nix/registered-paths.txt
             doomed_file=/mysbx-nix/doomed-paths.txt
-            : > "$doomed_file"
             /bin/sqlite3 /mysbx-nix/state/db/db.sqlite \
                 ${reconcileSelect} \
-                | while IFS= read -r p; do
-                    case "$p" in /nix/store/*) ;; *) continue ;; esac
-                    if [ ! -e "$p" ] || [ -L "$p" ]; then
-                        printf '%s\n' "$p" >> "$doomed_file"
-                    fi
-                done
+                > "$registered_file" \
+                || fail "cannot enumerate registered store paths in the copied nix database"
+            : > "$doomed_file"
+            while IFS= read -r p; do
+                case "$p" in /nix/store/*) ;; *) continue ;; esac
+                if [ ! -e "$p" ] || [ -L "$p" ]; then
+                    printf '%s\n' "$p" >> "$doomed_file"
+                fi
+            done < "$registered_file"
+            "$BB" rm -f "$registered_file"
             n_doomed=$("$BB" wc -l < "$doomed_file")
             if [ "$n_doomed" -gt 0 ]; then
                 step "reconciling the db: $n_doomed registered store path(s) missing or symlinked, dropping their rows"
-                while IFS= read -r p; do
-                    [ -n "$p" ] || continue
-                    # A store path's name carries no SQL quote (the
-                    # store alphabet is a-z0-9._+-), so no escaping
-                    # is needed — and writing one would need Nix's
-                    # indented-string ''' escaping of the sed text.
-                    printf "DELETE FROM ValidPaths WHERE path = '%s';\n" "$p"
-                done < "$doomed_file" | /bin/sqlite3 /mysbx-nix/state/db/db.sqlite
+                {
+                    printf 'PRAGMA foreign_keys=ON;\nBEGIN;\n'
+                    while IFS= read -r p; do
+                        [ -n "$p" ] || continue
+                        printf "DELETE FROM Refs WHERE reference = (SELECT id FROM ValidPaths WHERE path = '%s');\n" "$p"
+                        printf "DELETE FROM ValidPaths WHERE path = '%s';\n" "$p"
+                    done < "$doomed_file"
+                    printf 'COMMIT;\n'
+                } | /bin/sqlite3 -bail /mysbx-nix/state/db/db.sqlite \
+                    || fail "cannot reconcile dependent rows in the copied nix database"
             fi
             "$BB" rm -f "$doomed_file"
+            fk_violations=$(/bin/sqlite3 /mysbx-nix/state/db/db.sqlite 'PRAGMA foreign_key_check;') \
+                || fail "cannot check foreign keys in the copied nix database"
+            [ -z "$fk_violations" ] \
+                || fail "foreign-key violations remain in the copied nix database"
         fi
         "$BB" mkdir -p /mysbx-nix/log /mysbx-nix/cache /mysbx-nix/tmp \
             || fail "cannot create the nix log/cache/tmp dirs on the scratch"
@@ -623,6 +633,14 @@ runCommand "mysbx-krun-rootfs"
     ln -s ${coreutils}/bin/env $out/usr/bin/env
     printf '%s' "$initText" > $out/bin/mysbx-init
     chmod +x $out/bin/mysbx-init
+    grep -qF 'cannot enumerate registered store paths' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init does not check the sqlite query status" >&2; exit 1; }
+    grep -qF 'PRAGMA foreign_keys=ON' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init does not enable sqlite foreign keys" >&2; exit 1; }
+    grep -qF 'DELETE FROM Refs WHERE reference =' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init does not remove surviving referrers" >&2; exit 1; }
+    grep -qF 'PRAGMA foreign_key_check;' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init does not verify sqlite foreign keys" >&2; exit 1; }
     # The shebang guard (the eighth live finding): an indented
     # Nix string strips only the MINIMAL common indent of its
     # lines, so mixed indents leave leading spaces before the

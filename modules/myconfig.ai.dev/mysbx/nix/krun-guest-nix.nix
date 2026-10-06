@@ -210,31 +210,37 @@ let
         # do this job: liveness semantics refuse rows held by live
         # processes and its store-tree unlink is exactly the
         # lower-layer crash.
-        doomed=$(
-          sqlite3 "$scratch/state/db/db.sqlite" \
-            ${reconcileSelect} \
-            | while IFS= read -r p; do
-                if [ ! -e "$p" ] || [ -L "$p" ]; then
-                  printf '%s\n' "$p"
-                fi
-              done
-        )
-        if [ -n "$doomed" ]; then
-          # One DELETE per path in a single sqlite session; the
-          # Refs/DerivationOutputs rows follow through nix's own
-          # foreign-key handling — the ValidPaths row is what
-          # decides validity. A store path's name carries no SQL
-          # quote (the store alphabet is a-z0-9._+-), so the path
-          # needs no escaping in the quoted literal.
-          n=$(printf '%s\n' "$doomed" | wc -l)
+        registered="$scratch/tmp/registered-paths.txt"
+        doomed="$scratch/tmp/doomed-paths.txt"
+        sqlite3 "$scratch/state/db/db.sqlite" ${reconcileSelect} > "$registered" \
+          || fail "cannot enumerate registered store paths in the copied nix database"
+        while IFS= read -r p; do
+          if [ ! -e "$p" ] || [ -L "$p" ]; then
+            printf '%s\n' "$p"
+          fi
+        done < "$registered" > "$doomed"
+        rm -f "$registered"
+        if [ -s "$doomed" ]; then
+          # Remove incoming Refs as well as each doomed ValidPaths row.
+          # Foreign-key cascades remove outgoing Refs and
+          # DerivationOutputs. A store path's name carries no SQL
+          # quote (the store alphabet is a-z0-9._+-).
+          n=$(wc -l < "$doomed")
           echo "nix (mysbx krun wrapper): reconciling the db — $n registered store path(s) missing or symlinked, dropping their rows" >&2
-          { printf 'BEGIN;\n'; \
+          { printf 'PRAGMA foreign_keys=ON;\nBEGIN;\n'; \
             while IFS= read -r p; do
+              printf "DELETE FROM Refs WHERE reference = (SELECT id FROM ValidPaths WHERE path = '%s');\n" "$p"
               printf "DELETE FROM ValidPaths WHERE path = '%s';\n" "$p"
-            done <<<"$doomed"; \
+            done < "$doomed"; \
             printf 'COMMIT;\n'; } \
-            | sqlite3 "$scratch/state/db/db.sqlite"
+            | sqlite3 -bail "$scratch/state/db/db.sqlite" \
+            || fail "cannot reconcile dependent rows in the copied nix database"
         fi
+        rm -f "$doomed"
+        fk_violations=$(sqlite3 "$scratch/state/db/db.sqlite" 'PRAGMA foreign_key_check;') \
+          || fail "cannot check foreign keys in the copied nix database"
+        [ -z "$fk_violations" ] \
+          || fail "foreign-key violations remain in the copied nix database"
         mount -t overlay mysbx-nix-store \
           -o "lowerdir=/nix/store,upperdir=$scratch/upper,workdir=$scratch/work" /nix/store \
           || fail "cannot mount the overlay over /nix/store"

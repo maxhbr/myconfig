@@ -279,6 +279,14 @@ in
         || fail "the setup does not enumerate the copied db's store paths (the reconcile's SELECT)"
       grep -qF 'DELETE FROM ValidPaths WHERE path =' "$setup" \
         || fail "the setup does not drop the doomed rows (the reconcile's DELETE)"
+      grep -qF 'PRAGMA foreign_keys=ON' "$setup" \
+        || fail "the reconcile does not enable SQLite foreign keys before its transaction"
+      grep -qF 'DELETE FROM Refs WHERE reference =' "$setup" \
+        || fail "the reconcile does not remove references from surviving referrers"
+      grep -qF 'PRAGMA foreign_key_check;' "$setup" \
+        || fail "the reconcile does not check foreign-key integrity"
+      grep -qF 'foreign-key violations remain' "$setup" \
+        || fail "the reconcile does not fail on foreign-key violations"
       grep -qF -- '-L "$p"' "$setup" \
         || fail "the reconcile must test for symlinked store paths, not only missing ones"
       grep -qF 'reconciling the db' "$setup" \
