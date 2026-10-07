@@ -93,6 +93,11 @@ in
   # The launcher's patched library runs real passthrough/server tests without KVM.
   mysbx-libkrun-readdirplus-test = pkgs.callPackage ./libkrun.nix { };
 
+  # The rootfs builder exercises its generated init with the baked static tools:
+  # copied-db safety and validation before the fresh store overlay is mounted.
+  mysbx-krun-rootfs-test =
+    self.nixosConfigurations.test-f13.config.myconfig.ai.dev.mysbx.krun.direct.rootfs;
+
   mysbx-krun-fd-monitor-test = pkgs.runCommand "mysbx-krun-fd-monitor-test" { } ''
     ${pkgs.python3}/bin/python3 ${./krun-fd-stress.py} --self-test
     touch $out

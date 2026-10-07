@@ -67,6 +67,7 @@
   # krun-guest-flake-source-symlink.md). A real copy, like busybox
   # and mkfs.ext4 — pkgsStatic so it works store-free.
   sqliteStatic,
+  python3,
   bash,
 }:
 let
@@ -378,10 +379,9 @@ let
     # upper/work over the ro store share, nix state, logs, cache and
     # TMPDIR — the guest kernel's OWN filesystem (chown and overlay
     # xattrs work natively, nothing over the virtiofs xattr
-    # surface). The /nix placement is DELIBERATE (bd
-    # myconfig-anw): the overlay mounts at /nix/store itself, ON
-    # TOP of the store share's mount — no generic tmpfs ever mounts
-    # at /nix, the baked link stays the lower layer's path.
+    # surface). The overlay mounts at /nix/store itself. Until db
+    # validation finishes, the baked /nix/store link exposes the
+    # bare read-only share; a tmpfs then supplies a real mountpoint.
     if [ "''${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then
         # The device: the only /dev/vd* (the root is virtiofs, not
         # blk; no other disk ever attaches).
@@ -392,33 +392,11 @@ let
         step "formatting $dev as the nix scratch (ext4)"
         /bin/mkfs.ext4 -q -F "$dev" \
             || fail "cannot mkfs.ext4 the scratch device $dev"
-        # The mountpoints: the scratch root and the overlay's work
-        # parent live ON the disk; the overlay target is /nix/store
-        # itself (the baked link's dest — mounting over a symlink
-        # fails, so bind it to itself first, a no-op mountpoint
-        # maker).
+        # The copied database and the overlay's upper/work live on
+        # the freshly formatted disk.
         "$BB" mkdir -p /mysbx-nix
         "$BB" mount -t ext4 "$dev" /mysbx-nix \
             || fail "cannot mount the scratch $dev at /mysbx-nix"
-        "$BB" mkdir -p /mysbx-nix/store-upper /mysbx-nix/store-work \
-            || fail "cannot create the overlay dirs on the scratch"
-        # /nix/store is a baked SYMLINK into the stage tree, and a
-        # mount THROUGH a symlink lands at the link's TARGET — on
-        # the share mount that shadows the whole stage device's
-        # tree. The overlay needs a REAL mountpoint at the link's
-        # PATH. The tmpfs at /nix SHADOWS the baked link — nothing
-        # of the ro root is visible under it, no removal needed;
-        # the real dir lives on the tmpfs, then the overlay mounts
-        # at the link's own path. The lowerdir names the SHARE's
-        # backing path directly.
-        "$BB" mount -t tmpfs tmpfs /nix \
-            || fail "cannot mount the tmpfs for /nix (the overlay's mountpoint root)"
-        "$BB" mkdir -p /nix/store \
-            || fail "cannot create the real /nix/store mountpoint"
-        "$BB" mount -t overlay overlay \
-            -o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper,workdir=/mysbx-nix/store-work \
-            /nix/store \
-            || fail "cannot mount the store overlay (scratch upper)"
 
         # The guest nix state (bd myconfig-j23): the db copy the
         # podman image bakes via includeNixDB, done here because the
@@ -460,17 +438,18 @@ let
         # divergences break every later eval that trusts the row
         # ("is a symlink" / "Stale file handle") and nix's re-add
         # of the lower-layer entry crashes (fchmodat2). Prune the
-        # rows the share cannot keep — paths are tested against
-        # the MOUNTED share (this runs after the store overlay is
-        # up, so a symlink in the overlay's upper layer is caught
-        # too), BEFORE the payload execs. POSIX sh + the baked
-        # static sqlite3 (bin/sqlite3, a real copy like busybox):
+        # rows the share cannot keep against the bare mounted ro
+        # share, before overlay dentries can retain its inodes.
+        # The freshly formatted scratch has no upper entries, so
+        # the baked /nix/store link sees the same paths. POSIX sh +
+        # the baked static sqlite3 (a real copy like busybox):
         # [ -e ] is FALSE for a dangling symlink, so both poison
         # shapes (dangling and live-target) prune, as does a plain
         # missing path. `nix store delete` cannot do this job
         # (liveness semantics, plus its store-tree unlink is
         # exactly the lower-layer crash).
         if [ -f /mysbx-nix/state/db/db.sqlite ]; then
+            step "validating the copied nix db against the read-only store share"
             registered_file=/mysbx-nix/registered-paths.txt
             doomed_file=/mysbx-nix/doomed-paths.txt
             /bin/sqlite3 /mysbx-nix/state/db/db.sqlite \
@@ -504,7 +483,30 @@ let
                 || fail "cannot check foreign keys in the copied nix database"
             [ -z "$fk_violations" ] \
                 || fail "foreign-key violations remain in the copied nix database"
+            step "copied nix db validation complete"
         fi
+
+        "$BB" mkdir -p /mysbx-nix/store-upper /mysbx-nix/store-work \
+            || fail "cannot create the overlay dirs on the scratch"
+        # /nix/store is a baked SYMLINK into the stage tree, and a
+        # mount THROUGH a symlink lands at the link's TARGET — on
+        # the share mount that shadows the whole stage device's
+        # tree. The overlay needs a REAL mountpoint at the link's
+        # PATH. The tmpfs at /nix SHADOWS the baked link — nothing
+        # of the ro root is visible under it, no removal needed;
+        # the real dir lives on the tmpfs, then the overlay mounts
+        # at the link's own path. The lowerdir names the SHARE's
+        # backing path directly.
+        "$BB" mount -t tmpfs tmpfs /nix \
+            || fail "cannot mount the tmpfs for /nix (the overlay's mountpoint root)"
+        "$BB" mkdir -p /nix/store \
+            || fail "cannot create the real /nix/store mountpoint"
+        step "mounting the store overlay (fresh scratch upper)"
+        "$BB" mount -t overlay overlay \
+            -o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper,workdir=/mysbx-nix/store-work \
+            /nix/store \
+            || fail "cannot mount the store overlay (scratch upper)"
+
         "$BB" mkdir -p /mysbx-nix/log /mysbx-nix/cache /mysbx-nix/tmp \
             || fail "cannot create the nix log/cache/tmp dirs on the scratch"
         # The single-user nix environment (the podman image's
@@ -604,6 +606,7 @@ runCommand "mysbx-krun-rootfs"
     # $(...), so bash would re-parse it. The env-var route hands the
     # bytes through verbatim (the spike rootfs's own pattern).
     initText = mysbxInit;
+    nativeBuildInputs = [ python3 ];
   }
   ''
     mkdir -p $out/bin $out/dev $out/proc $out/sys $out/tmp $out/nix
@@ -653,6 +656,7 @@ runCommand "mysbx-krun-rootfs"
     ln -s ${coreutils}/bin/env $out/usr/bin/env
     printf '%s' "$initText" > $out/bin/mysbx-init
     chmod +x $out/bin/mysbx-init
+    python3 ${./krun-rootfs-test.py} "$out"
     grep -qF 'cannot enumerate registered store paths' $out/bin/mysbx-init \
         || { echo "mysbx-krun-rootfs: init does not check the sqlite query status" >&2; exit 1; }
     grep -qF 'PRAGMA foreign_keys=ON' $out/bin/mysbx-init \

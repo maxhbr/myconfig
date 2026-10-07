@@ -331,6 +331,17 @@ It samples the launcher's host fd count every 0.1 seconds.
 It stops the test if a sample exceeds 8192 fds or the guest fails.
 It does not walk `/nix/store` or clear guest caches.
 
+Keep scratch and networking enabled for the normal startup test (`myconfig-8u0`).
+The launcher shares the host Nix database only when both are enabled.
+The shared database must contain `db.sqlite` to exercise reconciliation.
+With `MYSBX_KRUN_TRACE=1`, expect these init markers before the guest start marker:
+`validating the copied nix db against the read-only store share`,
+`copied nix db validation complete`, then
+`mounting the store overlay (fresh scratch upper)`.
+The init checks the copied database through the bare read-only share before mounting the overlay.
+Each run formats a fresh scratch disk, so its writable store layer starts empty.
+A run without scratch does not test this startup path.
+
 The guest prints its kernel version and a start marker before the first walk.
 On a budget failure, the probe writes an fd snapshot to the terminal and the log.
 It groups fds by location (fixture, store, or other), object type, and `O_PATH` flag.
