@@ -543,10 +543,22 @@ let
     # The workdir, applied AFTER the shares exist (the manifest's
     # chdir record — the cmdline route had /init.krun chdir BEFORE
     # the workspace share was mounted, silently landing at /).
+    # PWD follows (bd myconfig-mr4): the workspace share's sandbox
+    # path is a SYMLINK at the backing mount (finding 9 — no
+    # virtiofs device may nest below the root share), and a shell
+    # that starts with NO usable PWD derives one from getcwd() —
+    # the PHYSICAL backing path. busybox ash also exports a LOGICAL
+    # PWD after its own cd, but a payload whose PWD arrives unset
+    # (or already physical) still starts in the backing spelling.
+    # Exporting PWD=$manifest_chdir after the cd pins the sandbox
+    # path in the exec environment; getcwd()/pwd -P keep reporting
+    # the backing path — kernel-true and honest, the parity claim
+    # is only about the spelling tools read from $PWD.
     if [ -n "$manifest_chdir" ]; then
         step "chdir to the workspace: $manifest_chdir"
         cd "$manifest_chdir" \
             || fail "cannot chdir to the workdir $manifest_chdir"
+        export PWD="$manifest_chdir"
     fi
 
     # The fd ceiling (bd myconfig-mnr): the payload execs as PID 1
