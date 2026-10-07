@@ -30,9 +30,10 @@ let
 in
 {
   options.myconfig.desktop.audio.easyeffects = with lib; {
-    enable = mkEnableOption "EasyEffects (PipeWire audio effects)" // {
-      default = config.services.pipewire.enable;
-    };
+    enable = mkEnableOption "EasyEffects (PipeWire audio effects)";
+    # // {
+    #   default = config.services.pipewire.enable;
+    # };
 
     autostart = mkOption {
       type = types.bool;
