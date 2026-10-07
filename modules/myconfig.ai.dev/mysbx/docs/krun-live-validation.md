@@ -209,6 +209,31 @@ and with `network = false` in the sidecar, the same command must
 FAIL (no route) — probe 6 of the script asserts the denial with
 curl.
 
+### 2.6 PWD parity with the other backends (bd myconfig-mr4)
+
+The workspace share's sandbox path is a SYMLINK at the virtiofs
+backing mount (finding 9), so the kernel's `getcwd()` honestly
+reports the backing spelling — `pwd -P` KEEPS reporting it, that is
+kernel-true and not a bug. The parity claim is only about `$PWD`,
+the spelling tools read:
+
+```bash
+# interactive shell in the VM, started in the repo:
+printf 'PWD=%s\n' "$PWD"           # == the repo path, NOT
+                                 # /tmp/mysbx-shares/stage-rw/...
+pwd -P                             # the backing path — expected
+pwd                                # == $PWD (the logical spelling)
+# a multiplexer pane too (herdr/tmux/workmux sessions inherit the
+# init's export through the entry script):
+#   echo "$PWD" in a pane == the repo path
+```
+
+Verify: `$PWD` and `pwd` report the repo path — the same spelling
+bwrap and podman start the payload with — in the interactive shell
+AND inside multiplexer panes. `pwd -P` reports the backing path and
+that is correct (no structural mount change hides it; the fix
+exports the spelling in the guest init after the manifest chdir).
+
 ## 3. Recording
 
 Append the results (host, date, kernel, PASS/FAIL per section) to
