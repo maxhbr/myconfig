@@ -14,7 +14,19 @@
      /// feature when supported by the kernel. The kernel will not call this method unless that
 --- a/src/devices/src/virtio/fs/linux/passthrough.rs
 +++ b/src/devices/src/virtio/fs/linux/passthrough.rs
-@@ -1135,7 +1135,13 @@
+@@ -650,7 +650,10 @@
+                 .position(|&a| a == 0)
+                 .expect("LinuxDirent64 name not NUL-terminated");
+             let name = &name[..term];
+-            let res = if name.starts_with(CURRENT_DIR_CSTR) || name.starts_with(PARENT_DIR_CSTR) {
++            // `name` is trimmed at the first NUL above, so compare the
++            // trimmed bytes exactly; the NUL-terminated `_CSTR` constants
++            // never match a trimmed name.
++            let res = if *name == CURRENT_DIR_CSTR[..1] || *name == PARENT_DIR_CSTR[..2] {
+                 // We don't want to report the "." and ".." entries. However, returning `Ok(0)` will
+                 // break the loop so return `Ok` with a non-zero value instead.
+                 Ok(1)
+@@ -1135,7 +1138,13 @@
              let name = unsafe { CStr::from_bytes_with_nul_unchecked(dir_entry.name) };
              let entry = self.lookup(ctx, inode, name)?;
  
@@ -29,7 +41,7 @@
          })
      }
  
-@@ -2303,3 +2309,7 @@
+@@ -2303,3 +2312,7 @@
          Ok(())
      }
  }
@@ -111,7 +123,7 @@
 +mod readdirplus_tests;
 --- /dev/null
 +++ b/src/devices/src/virtio/fs/linux/readdirplus_tests.rs
-@@ -0,0 +1,160 @@
+@@ -0,0 +1,205 @@
 +use super::*;
 +use crate::virtio::fs::filesystem::{Context, FileSystem, FsOptions};
 +use std::path::PathBuf;
@@ -144,6 +156,8 @@
 +        for name in ["alpha", "bravo", "charlie", "delta"] {
 +            std::fs::write(root.join(name), b"test").unwrap();
 +        }
++        // A dot-prefixed file: readdirplus must still deliver it.
++        std::fs::write(root.join(".hidden"), b"test").unwrap();
 +        let mut paths = vec![root.clone(), root.parent().unwrap().to_path_buf()];
 +        paths.extend(std::fs::read_dir(&root).unwrap().map(|p| p.unwrap().path()));
 +        let keys = paths
@@ -272,9 +286,52 @@
 +    f.fs.forget(ctx(), inode, 1);
 +    assert_eq!(f.snapshot(), before);
 +}
++
++// The dot-entry regression (bd myconfig-a93): do_readdir must skip the "."
++// and ".." entries itself, so readdirplus never performs (and never leaks)
++// lookups for them. The guest kernel's fuse_direntplus_link ignores exact
++// dot/dotdot entries without taking the lookup reference, so a reference
++// delivered for them would never be balanced by a FORGET.
++#[test]
++fn readdirplus_skips_dot_entries_before_lookup() {
++    let f = Fixture::new();
++    let before = f.snapshot();
++    let mut seen = Vec::new();
++    // Walk the ENTIRE directory from offset 0, i.e. including the "."
++    // and ".." entries, accepting every delivered entry like the guest.
++    f.fs.readdirplus(ctx(), fuse::ROOT_ID, f.handle, 4096, 0, |d, e| {
++        seen.push((d.name.to_vec(), e.inode));
++        Ok(160)
++    })
++    .unwrap();
++    let names: Vec<&[u8]> = seen.iter().map(|(n, _)| n.as_slice()).collect();
++    assert!(
++        !names
++            .iter()
++            .any(|n| n == b"." || n == b".." || n == b".\0" || n == b"..\0"),
++        "dot entries must be skipped before lookup: got {names:?}"
++    );
++    // Ordinary dot-prefixed files must survive.
++    assert!(names.contains(&b".hidden".to_vec().as_slice()), "{names:?}");
++    // Every DELIVERED entry's lookup reference must be balanced by one
++    // guest FORGET (a guest-faithful simulation: the guest only forgets
++    // the entries it linked, i.e. the ones the server delivered).
++    let after = f.snapshot();
++    for (_, inode) in &seen {
++        f.fs.forget(ctx(), *inode, 1);
++    }
++    assert_eq!(f.snapshot(), before, "delivered lookups must balance");
++    // And no reference may have been taken for the skipped dot entries:
++    // the root inode is in every snapshot key set; its refcount must be
++    // unchanged apart from the delivered entries we already forgot.
++    assert!(
++        after.0.values().sum::<u64>() == before.0.values().sum::<u64>() + seen.len() as u64,
++        "unbalanced references: before {before:?} after-walk {after:?}"
++    );
++}
 --- /dev/null
 +++ b/src/devices/src/virtio/fs/readdirplus_tests.rs
-@@ -0,0 +1,210 @@
+@@ -0,0 +1,260 @@
 +use super::super::linux::passthrough::readdirplus_tests::{ctx, Fixture};
 +use super::*;
 +use crate::virtio::descriptor_utils::{create_descriptor_chain, DescriptorType};
@@ -469,6 +526,7 @@
 +        assert_eq!(
 +            names,
 +            vec![
++                b".hidden".to_vec(),
 +                b"alpha".to_vec(),
 +                b"bravo".to_vec(),
 +                b"charlie".to_vec(),
@@ -484,4 +542,53 @@
 +        }
 +        assert_eq!(s.fs.fixture.snapshot(), before);
 +    }
++}
++
++// The dot-entry regression (bd myconfig-a93): readdirplus replies
++// must never contain "." or "..", because the guest kernel ignores
++// those entries WITHOUT taking (or ever FORGETting) their lookup
++// references — every delivered dot entry would leak a host inode
++// reference. Ordinary dot-prefixed files must still be delivered.
++#[test]
++fn readdirplus_server_dots_never_reach_the_guest() {
++    let s = server(Failure::None);
++    let before = s.fs.fixture.snapshot();
++    // Start at offset 0 so the first page covers the "." and ".."
++    // entries the host readdir stream yields.
++    let mut offset = 0;
++    let mut names = Vec::new();
++    let mut nodes = Vec::new();
++    for page in 0..10 {
++        let (out, entries) = request(&s, 4096, offset);
++        assert_eq!(out.error, 0);
++        if entries.is_empty() {
++            break;
++        }
++        assert!(page < 9, "pagination did not terminate");
++        for (inode, next, name) in entries {
++            assert!(
++                name != b"." && name != b".." && name != b".\0" && name != b"..\0",
++                "dot entry reached the guest: {name:?}"
++            );
++            offset = next;
++            nodes.push(inode);
++            names.push(name);
++        }
++    }
++    names.sort();
++    assert_eq!(
++        names,
++        vec![
++            b".hidden".to_vec(),
++            b"alpha".to_vec(),
++            b"bravo".to_vec(),
++            b"charlie".to_vec(),
++            b"delta".to_vec()
++        ]
++    );
++    // Guest-faithful: the guest only FORGETs what the server delivered.
++    for inode in nodes {
++        s.fs.fixture.fs.forget(ctx(), inode, 1);
++    }
++    assert_eq!(s.fs.fixture.snapshot(), before);
 +}
