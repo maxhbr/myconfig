@@ -23,6 +23,10 @@ stage-rw:state--ssh@/mysbx-home/.ssh rw
 --env
 HOME=/mysbx-home
 --env
+MYSBX_BACKEND=krun
+--env
+MYSBX_MULTIPLEXER=none
+--env
 XDG_CONFIG_HOME=/mysbx-home/.config
 --env
 XDG_CACHE_HOME=/mysbx-home/.cache

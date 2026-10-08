@@ -611,6 +611,13 @@ pretending it applies. This is not an error, on purpose: rejecting it
 would turn a harmless (often inherited) config into a hard failure of
 every run, and the report already says what happens.
 
+`MYSBX_BACKEND` and `MYSBX_MULTIPLEXER` are the same kind of
+infrastructure (bd myconfig-3nn): they report the merged `backend`
+and `multiplexer` this run was built from, so an in-sandbox agent
+learns its confinement and its session payload from the environment
+instead of probing `PATH` side effects. Emitted after `[env]` on
+every backend, like `HOME` and `PATH` above.
+
 ### D15: `state-dirs` — persisted sandbox-home subdirectories, backed by the sidecar
 
 `state-dirs` is a list of paths **relative to the sandbox home** whose

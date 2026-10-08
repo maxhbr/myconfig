@@ -1035,6 +1035,22 @@ pub fn podman_run_argv(
     // `/etc/ssl/certs/ca-bundle.crt`), and a host store path would
     // not exist inside the container anyway (bd myconfig-wao).
     argv.extend(["--env".into(), format!("HOME={CONTAINER_HOME}")]);
+    // The sandbox's own identity (bd myconfig-3nn): the merged
+    // backend and multiplexer of this run, set with the
+    // infrastructure block after the layers so no config entry can
+    // spoof them — the same class as `HOME`, and the values are what
+    // the merged configuration decided, never hardcoded here.
+    argv.extend([
+        "--env".into(),
+        format!(
+            "MYSBX_BACKEND={}",
+            cfg.backend.as_deref().unwrap_or_default()
+        ),
+    ]);
+    argv.extend([
+        "--env".into(),
+        format!("MYSBX_MULTIPLEXER={}", cfg.multiplexer.name()),
+    ]);
     // The XDG base dirs are infrastructure like `HOME` (config.md D14):
     // they are derived FROM it, and re-anchoring them matters ONLY under
     // this backend — bubblewrap's `HOME` is already its own tmpfs,

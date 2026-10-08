@@ -38,6 +38,10 @@ type=bind,src=/synth/data/configs,dst=/inside/x,ro
 --env
 HOME=/mysbx-home
 --env
+MYSBX_BACKEND=podman-gvisor
+--env
+MYSBX_MULTIPLEXER=none
+--env
 XDG_CONFIG_HOME=/mysbx-home/.config
 --env
 XDG_CACHE_HOME=/mysbx-home/.cache

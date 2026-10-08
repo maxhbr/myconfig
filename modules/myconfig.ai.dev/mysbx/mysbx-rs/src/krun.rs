@@ -830,6 +830,11 @@ fn sandbox_env(
     // init (bd myconfig-dak.5) recreates the same layout inside the
     // VM (tmpfs home, state shares linked under it).
     set("HOME", crate::bwrap::SANDBOX_HOME.to_owned());
+    // The sandbox's own identity (bd myconfig-3nn): the merged backend
+    // and multiplexer of this run, set inside the infrastructure
+    // block after every layer so no config entry can spoof them.
+    set("MYSBX_BACKEND", cfg.backend.clone().unwrap_or_default());
+    set("MYSBX_MULTIPLEXER", cfg.multiplexer.name().to_owned());
     set(
         "XDG_CONFIG_HOME",
         format!("{}/.config", crate::bwrap::SANDBOX_HOME),

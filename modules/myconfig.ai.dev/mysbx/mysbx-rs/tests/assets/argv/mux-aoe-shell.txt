@@ -54,6 +54,12 @@ HOME
 PATH
 /synth/bin
 --setenv
+MYSBX_BACKEND
+bubblewrap
+--setenv
+MYSBX_MULTIPLEXER
+aoe
+--setenv
 TMUX_TMPDIR
 /mysbx-home/.mysbx-tmux
 --chdir

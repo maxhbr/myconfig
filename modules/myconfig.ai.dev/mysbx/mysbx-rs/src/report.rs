@@ -353,6 +353,18 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // the same value between nono and the payload.
     p(format!("  HOME={SANDBOX_HOME}  [sandbox home]"));
     p(format!("  PATH={}  [tools]", r.params.tools_path));
+    // The sandbox's own identity (bd myconfig-3nn): the merged
+    // backend and multiplexer, exported to the payload as
+    // MYSBX_BACKEND / MYSBX_MULTIPLEXER — reported here like HOME and
+    // PATH so the operator sees what the in-sandbox agent reads.
+    p(format!(
+        "  MYSBX_BACKEND={}  [merged backend]",
+        r.merged.backend.as_deref().unwrap_or_default()
+    ));
+    p(format!(
+        "  MYSBX_MULTIPLEXER={}  [merged multiplexer]",
+        r.merged.multiplexer.name()
+    ));
     // The pinned CA bundle belongs in the report for the same reason
     // as the nix.conf and `/bin/sh` lines below: which trust anchors
     // the sandbox's TLS tools use — the wrapper's own `nss-cacert`, or
@@ -574,6 +586,8 @@ fn infrastructure(key: &str, display_on: bool) -> bool {
     // any other.
     key == "HOME"
         || key == "PATH"
+        || key == "MYSBX_BACKEND"
+        || key == "MYSBX_MULTIPLEXER"
         || key == "SSL_CERT_FILE"
         || key == "GIT_SSL_CAINFO"
         || key == "NIX_SSL_CERT_FILE"

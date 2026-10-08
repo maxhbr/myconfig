@@ -57,6 +57,12 @@ HOME
 PATH
 /synth/bin
 --setenv
+MYSBX_BACKEND
+bubblewrap
+--setenv
+MYSBX_MULTIPLEXER
+none
+--setenv
 XDG_RUNTIME_DIR
 /mysbx-home
 --chdir

@@ -375,6 +375,28 @@ sandbox, and `workmux add` inside it fails with a filesystem error
 naming the path. A sidecar `[[mounts]]` entry is therefore only
 needed to bind a worktrees directory that lives somewhere else.
 
+## The sandbox identity variables (`MYSBX_BACKEND`, `MYSBX_MULTIPLEXER`)
+
+Every sandbox exports two environment variables that say what it is
+(bd myconfig-3nn) — the machine-readable answer to "which backend am I
+confined by, and which multiplexer was I built for?":
+
+- `MYSBX_BACKEND` — the backend selected for this run
+  (`bubblewrap`, `podman-gvisor`, `podman-krun`, `nono`, `krun`), the
+  merged value of `backend` (a `--backend` flag writes the same slot).
+- `MYSBX_MULTIPLEXER` — the multiplexer the configuration selected
+  (`tmux`, `workmux`, `herdr`, `aoe`, `orca`, `none`), the merged value
+  of `multiplexer` — the CONFIG's choice, so a one-shot
+  `mysbx run -- CMD` reports it even though it starts no session.
+
+Both are infrastructure, set after `[env]` like `HOME` and `PATH`
+(`docs/design/config.md` D14): a config layer that spells them out
+shows up in the `--dry-run` audit but never reaches the payload — the
+values always match the configuration that produced the sandbox, on
+every backend (bubblewrap's `--setenv`, the podman backends'
+`--env`, the nono payload-env segment, and the krun manifest's env
+block).
+
 ## The display channel (`display`)
 
 `display = "off" | "waypipe"` in a configuration layer selects how a

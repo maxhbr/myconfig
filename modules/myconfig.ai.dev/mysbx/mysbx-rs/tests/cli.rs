@@ -1811,14 +1811,45 @@ fn dry_run_run_form_is_never_a_multiplexer_session() {
 
         std::fs::write(
             inv.xdg.join("mysbx").join("config.toml"),
-            "backend = \"bubblewrap\"\n",
+            "backend = \"bubblewrap\"\nmultiplexer = \"none\"\n",
         )
         .unwrap();
         let (code, without, stderr) = run_binary(&inv);
         assert_eq!(code, 0, "{mux}: stderr: {stderr}");
+        // cli.md D11 byte-compat, minus the identity variable (bd
+        // myconfig-3nn): MYSBX_MULTIPLEXER names the CONFIG's choice,
+        // so it is the one expected difference between a config that
+        // selects a session and one that selects none — everything
+        // else must stay byte-identical.
+        let strip_mux = |argv: &str| -> String {
+            argv.split('\n')
+                .filter(|l| {
+                    !matches!(
+                        *l,
+                        "MYSBX_MULTIPLEXER"
+                            | "none"
+                            | "tmux"
+                            | "workmux"
+                            | "herdr"
+                            | "aoe"
+                            | "orca"
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
         assert_eq!(
-            with, without,
+            strip_mux(&with),
+            strip_mux(&without),
             "{mux}: the run form must not change with a multiplexer"
+        );
+        assert!(
+            without.contains("MYSBX_MULTIPLEXER\nnone\n"),
+            "{mux}: {without}"
+        );
+        assert!(
+            with.contains(&format!("MYSBX_MULTIPLEXER\n{mux}\n")),
+            "{mux}: {with}"
         );
     }
 }

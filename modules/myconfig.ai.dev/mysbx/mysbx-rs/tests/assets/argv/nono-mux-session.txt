@@ -88,5 +88,7 @@ TMPDIR
 NONO_NO_UPDATE_CHECK
 HOME=/mysbx-home
 PATH=/synth/bin
+MYSBX_BACKEND=nono
+MYSBX_MULTIPLEXER=tmux
 TMUX_TMPDIR=/mysbx-home/.mysbx-tmux
 /synth/bin/mysbx-tmux-entry

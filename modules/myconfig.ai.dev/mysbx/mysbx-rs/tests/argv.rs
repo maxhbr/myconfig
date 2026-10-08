@@ -931,7 +931,17 @@ fn golden_multiplexer_interactive_sessions() {
         // puts anything there — the regression guard for "never
         // host-shared", for every multiplexer.
         let keys = setenv_keys(&argv);
-        assert_eq!(keys, vec!["HOME", "PATH", "TMUX_TMPDIR"], "{mux}");
+        assert_eq!(
+            keys,
+            vec![
+                "HOME",
+                "PATH",
+                "MYSBX_BACKEND",
+                "MYSBX_MULTIPLEXER",
+                "TMUX_TMPDIR"
+            ],
+            "{mux}"
+        );
         let i = argv.iter().position(|a| a == "TMUX_TMPDIR").unwrap();
         assert_eq!(argv[i + 1], format!("{SANDBOX_HOME}/.mysbx-tmux"));
         for (src, dest) in bind_pairs(&argv) {
@@ -955,7 +965,10 @@ fn golden_multiplexer_interactive_sessions() {
 fn the_run_form_is_byte_identical_for_every_multiplexer() {
     // cli.md D11: the integration is interactive-only, so a one-shot
     // `run` argv must not change at all, whichever multiplexer a layer
-    // selected.
+    // selected — except the identity pair (bd myconfig-3nn):
+    // MYSBX_MULTIPLEXER names the CONFIG's selection, so the sandbox
+    // an agent inspects reports the multiplexer it was built for,
+    // whatever payload form runs in it.
     let payload = Payload::Command(vec!["ls".into(), "-x".into()]);
     let without = bwrap_argv(
         &base(true),
@@ -965,6 +978,21 @@ fn the_run_form_is_byte_identical_for_every_multiplexer() {
         &params(),
     )
     .unwrap();
+    // The identity-free view of the `none` argv — the byte-compat
+    // baseline every multiplexer must match.
+    let strip_mux = |argv: &[String]| -> String {
+        argv.iter()
+            .filter(|a| {
+                !matches!(
+                    a.as_str(),
+                    "MYSBX_MULTIPLEXER" | "none" | "tmux" | "workmux" | "herdr" | "aoe" | "orca"
+                )
+            })
+            .map(|a| a.as_str())
+            .chain(std::iter::once("\n"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
     for mux in [
         Multiplexer::Tmux,
         Multiplexer::Workmux,
@@ -978,7 +1006,10 @@ fn the_run_form_is_byte_identical_for_every_multiplexer() {
         let mut on = base(true);
         on.multiplexer = mux;
         let with = bwrap_argv(&on, &synth_repo(), &payload, &host_env(&[]), &p).unwrap();
-        assert_eq!(rendered(&with), rendered(&without), "{mux}");
+        assert_eq!(strip_mux(&with), strip_mux(&without), "{mux}");
+        // The one allowed difference: the identity value itself.
+        let i = with.iter().position(|a| a == "MYSBX_MULTIPLEXER").unwrap();
+        assert_eq!(with[i + 1], mux.name());
     }
 }
 
@@ -1245,8 +1276,16 @@ fn forward_only_set_host_variables() {
         setenv_keys(&argv),
         // HostEnv is a BTreeMap: keys come in sorted order (deterministic,
         // which is what a golden argv needs). The infrastructure pair
-        // `HOME`, `PATH` always last (config.md D14).
-        vec!["LC_ALL", "TERM", "HOME", "PATH"],
+        // `HOME`, `PATH` always last, then the identity pair
+        // `MYSBX_BACKEND`, `MYSBX_MULTIPLEXER` (bd myconfig-3nn).
+        vec![
+            "LC_ALL",
+            "TERM",
+            "HOME",
+            "PATH",
+            "MYSBX_BACKEND",
+            "MYSBX_MULTIPLEXER",
+        ],
     );
 }
 
@@ -1261,8 +1300,18 @@ fn env_precedence_host_then_config_then_path() {
     let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host, &params()).unwrap();
     assert_eq!(
         setenv_keys(&argv),
-        // host keys sorted (BTreeMap), then [env], then HOME and PATH
-        vec!["EDITOR", "TERM", "PROJECT", "TERM", "HOME", "PATH"],
+        // host keys sorted (BTreeMap), then [env], then HOME and PATH,
+        // then the identity pair (bd myconfig-3nn)
+        vec![
+            "EDITOR",
+            "TERM",
+            "PROJECT",
+            "TERM",
+            "HOME",
+            "PATH",
+            "MYSBX_BACKEND",
+            "MYSBX_MULTIPLEXER",
+        ],
     );
     // The later TERM value really is the [env] one.
     let vals: Vec<&str> = argv
@@ -1371,20 +1420,33 @@ fn config_env_cannot_repoint_home_or_path() {
     .unwrap();
     assert_eq!(
         setenv_keys(&argv),
-        vec!["HOME", "PATH", "HOME", "PATH"],
-        "[env] entries first, the infrastructure pair last"
+        vec![
+            "HOME",
+            "PATH",
+            "HOME",
+            "PATH",
+            "MYSBX_BACKEND",
+            "MYSBX_MULTIPLEXER",
+        ],
+        "[env] entries first, the infrastructure pair and the identity pair last"
     );
     let n = argv.len();
-    // … and the last pair really carries mysbx's values.
+    // … and the last block really carries mysbx's values.
     assert_eq!(
-        &argv[n - 10..n - 4],
+        &argv[n - 16..n - 4],
         &[
             "--setenv",
             "HOME",
             SANDBOX_HOME,
             "--setenv",
             "PATH",
-            "/synth/bin"
+            "/synth/bin",
+            "--setenv",
+            "MYSBX_BACKEND",
+            "bubblewrap",
+            "--setenv",
+            "MYSBX_MULTIPLEXER",
+            "none",
         ]
     );
 }
@@ -3456,7 +3518,16 @@ fn window_mode_sets_no_session_name_env() {
     let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
     // TMUX_TMPDIR is set, but MYSBX_SESSION_NAME is not.
     let keys = setenv_keys(&argv);
-    assert_eq!(keys, vec!["HOME", "PATH", "TMUX_TMPDIR"]);
+    assert_eq!(
+        keys,
+        vec![
+            "HOME",
+            "PATH",
+            "MYSBX_BACKEND",
+            "MYSBX_MULTIPLEXER",
+            "TMUX_TMPDIR"
+        ]
+    );
     assert!(!argv.iter().any(|a| a == "MYSBX_SESSION_NAME"));
 }
 
@@ -3474,7 +3545,14 @@ fn session_mode_sets_session_name_env() {
     let keys = setenv_keys(&argv);
     assert_eq!(
         keys,
-        vec!["HOME", "PATH", "TMUX_TMPDIR", "MYSBX_SESSION_NAME"]
+        vec![
+            "HOME",
+            "PATH",
+            "MYSBX_BACKEND",
+            "MYSBX_MULTIPLEXER",
+            "TMUX_TMPDIR",
+            "MYSBX_SESSION_NAME",
+        ]
     );
     let i = argv
         .iter()
@@ -3505,7 +3583,14 @@ fn session_name_env_works_for_all_multiplexers() {
         let keys = setenv_keys(&argv);
         assert_eq!(
             keys,
-            vec!["HOME", "PATH", "TMUX_TMPDIR", "MYSBX_SESSION_NAME"],
+            vec![
+                "HOME",
+                "PATH",
+                "MYSBX_BACKEND",
+                "MYSBX_MULTIPLEXER",
+                "TMUX_TMPDIR",
+                "MYSBX_SESSION_NAME",
+            ],
             "{mux}"
         );
         let i = argv
@@ -6659,6 +6744,12 @@ fn nono_two_environments_the_env_segment_applies_the_payload_env() {
         "TERM=cfg-wins",
         "HOME=/mysbx-home",
         "PATH=/synth/bin",
+        // The identity pair (bd myconfig-3nn) rides the payload env
+        // segment like HOME/PATH: the nono backend's `--setenv` set
+        // carries only nono's own infrastructure, so these must be
+        // assignments, not --setenv.
+        "MYSBX_BACKEND=nono",
+        "MYSBX_MULTIPLEXER=none",
     ];
     assert_eq!(assignments, expected, "the payload env, in order: {argv:?}");
     assert_eq!(argv[argv.len() - 1], "/synth/bin/bash");
@@ -6803,6 +6894,8 @@ fn nono_no_env_binary_no_payload_env_vars_still_runs() {
             "NONO_NO_UPDATE_CHECK",
             "HOME=/mysbx-home",
             "PATH=/synth/bin",
+            "MYSBX_BACKEND=nono",
+            "MYSBX_MULTIPLEXER=none",
             "/synth/bin/bash",
         ],
         "the minimal env-segment: {argv:?}"

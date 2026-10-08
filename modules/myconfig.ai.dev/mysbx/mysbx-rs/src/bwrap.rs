@@ -1037,6 +1037,24 @@ pub fn bwrap_argv(
         argv.push("--setenv".into());
         argv.push("PATH".into());
         argv.push(params.tools_path.into());
+        // The sandbox's own identity (bd myconfig-3nn): which backend
+        // and which multiplexer this run was built for — the merged
+        // configuration's values, set with the infrastructure block
+        // so a config layer cannot spoof them (`[env]` shows up in
+        // `--dry-run` but never reaches the payload). An in-sandbox
+        // agent reads them instead of probing PATH side effects.
+        // MYSBX_BACKEND comes from the layer that decided the backend
+        // (or the `--backend` flag, which writes the same slot),
+        // MYSBX_MULTIPLEXER from the merged `multiplexer` — the
+        // config's value, not the payload-form `mux` (a one-shot
+        // `run -- CMD` starts no session, but the sandbox it runs in
+        // is still the one the multiplexer was selected for).
+        argv.push("--setenv".into());
+        argv.push("MYSBX_BACKEND".into());
+        argv.push(cfg.backend.as_deref().unwrap_or_default().to_owned());
+        argv.push("--setenv".into());
+        argv.push("MYSBX_MULTIPLEXER".into());
+        argv.push(cfg.multiplexer.name().into());
         // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run is
         // infrastructure for the same reason as `HOME` and `PATH`
         // (docs/design/config.md D18): it anchors the guest waypipe
@@ -1159,6 +1177,15 @@ pub fn bwrap_argv(
         }
         argv.push(format!("HOME={SANDBOX_HOME}"));
         argv.push(format!("PATH={}", params.tools_path));
+        // The sandbox's identity mirrors the pure-bwrap shape (bd
+        // myconfig-3nn): the segment is the payload environment, so
+        // the two variables ride here — set after `HOME`/`PATH`, so
+        // no layer can repoint them.
+        argv.push(format!(
+            "MYSBX_BACKEND={}",
+            cfg.backend.as_deref().unwrap_or_default()
+        ));
+        argv.push(format!("MYSBX_MULTIPLEXER={}", cfg.multiplexer.name()));
         if let Some(ca_bundle) = params.ca_bundle {
             for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
                 argv.push(format!("{key}={ca_bundle}"));
@@ -2368,10 +2395,73 @@ mod tests {
         assert_eq!(argv[setenvs[5]], "--setenv");
         assert_eq!(argv[setenvs[5] + 1], "PATH");
         assert_eq!(argv[setenvs[5] + 2], "/synth/bin");
+        // … then the identity variables (bd myconfig-3nn): MYSBX_BACKEND
+        // and MYSBX_MULTIPLEXER follow PATH, before the `--chdir` and
+        // payload sections.
+        assert_eq!(argv[setenvs[6]], "--setenv");
+        assert_eq!(argv[setenvs[6] + 1], "MYSBX_BACKEND");
+        assert_eq!(argv[setenvs[6] + 2], "bubblewrap");
+        assert_eq!(argv[setenvs[7]], "--setenv");
+        assert_eq!(argv[setenvs[7] + 1], "MYSBX_MULTIPLEXER");
+        assert_eq!(argv[setenvs[7] + 2], "none");
         assert_eq!(
-            argv.len() - setenvs[5] - 3,
+            argv.len() - setenvs[7] - 3,
             4, // --chdir /synth/repo -- /synth/bin/bash
-            "nothing after PATH but --chdir, -- and the payload"
+            "nothing after the identity vars but --chdir, -- and the payload"
+        );
+    }
+
+    #[test]
+    fn the_sandbox_identity_variables_follow_the_merged_config() {
+        // bd myconfig-3nn: MYSBX_BACKEND and MYSBX_MULTIPLEXER expose
+        // what the merged configuration decided — set with the
+        // infrastructure block (after `HOME`/`PATH`), so no layer can
+        // spoof them, and read from the merged values, never
+        // hardcoded. Every multiplexer spelling must round-trip.
+        let (repo, mut cfg, mut p) = shell_repo_defaults();
+        cfg.multiplexer = Multiplexer::Herdr;
+        p.mux_entry = Some("/synth/bin/mysbx-herdr-entry");
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let identity = |argv: &[String], key: &str| -> String {
+            argv.windows(3)
+                .find(|w| w[0] == "--setenv" && w[1] == key)
+                .map(|w| w[2].clone())
+                .unwrap_or_else(|| panic!("missing --setenv {key}"))
+        };
+        assert_eq!(identity(&argv, "MYSBX_BACKEND"), "bubblewrap");
+        assert_eq!(identity(&argv, "MYSBX_MULTIPLEXER"), "herdr");
+        // Infrastructure position: after HOME, before TMUX_TMPDIR —
+        // a later `--setenv` wins, so `[env]` entries never reach the
+        // payload with these names.
+        let home = pos(&argv, "HOME");
+        let backend = pos(&argv, "MYSBX_BACKEND");
+        let mux = pos(&argv, "MYSBX_MULTIPLEXER");
+        let tmux_dir = pos(&argv, "TMUX_TMPDIR");
+        assert!(home < backend && backend < mux && mux < tmux_dir);
+        // And `[env]` cannot override them: the same name from a layer
+        // appears EARLIER in the argv, and bwrap keeps the last one.
+        let mut layered = cfg.clone();
+        layered
+            .env
+            .insert("MYSBX_MULTIPLEXER".to_string(), "spoofed".to_string());
+        let argv = bwrap_argv(&layered, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let last = argv
+            .windows(3)
+            .rposition(|w| w[0] == "--setenv" && w[1] == "MYSBX_MULTIPLEXER")
+            .expect("the infrastructure entry exists");
+        // The LAST entry is the infrastructure one and carries the
+        // merged value — bwrap keeps the last `--setenv`, so the
+        // payload sees `herdr`, never the layer's `spoofed`.
+        assert_eq!(argv[last + 2], "herdr");
+        let first = argv
+            .windows(3)
+            .position(|w| w[0] == "--setenv" && w[1] == "MYSBX_MULTIPLEXER")
+            .expect("the layer entry exists");
+        assert!(first < last, "the infrastructure entry must win");
+        assert_eq!(
+            argv[first + 2],
+            "spoofed",
+            "the layer entry stays visible in the argv audit"
         );
     }
 
@@ -2783,16 +2873,38 @@ mod tests {
 
     #[test]
     fn the_multiplexer_does_not_touch_the_run_form() {
-        // cli.md D11: `run -- CMD` is a one-shot; the argv must be
-        // byte-identical to the `multiplexer = "none"` one.
+        // cli.md D11: `run -- CMD` is a one-shot; the session side of
+        // the multiplexer (payload swap, TMUX_TMPDIR, the socket
+        // guards) must not apply. The identity variables are NOT part
+        // of that claim (bd myconfig-3nn): MYSBX_MULTIPLEXER names the
+        // CONFIG's selection — the sandbox is the one the multiplexer
+        // was selected for, whatever payload form runs in it — so the
+        // two argvs differ in exactly those two `--setenv` values.
         let (repo, cfg, p) = mux_defaults();
         let payload = Payload::Command(vec!["ls".into()]);
         let with = bwrap_argv(&cfg, &repo, &payload, &HostEnv::new(), &p).unwrap();
         let mut off = cfg.clone();
         off.multiplexer = Multiplexer::None;
         let without = bwrap_argv(&off, &repo, &payload, &HostEnv::new(), &p).unwrap();
-        assert_eq!(with, without);
         assert!(!with.contains(&"TMUX_TMPDIR".to_string()));
+        assert!(!without.contains(&"TMUX_TMPDIR".to_string()));
+        // Both argvs run the same payload …
+        assert_eq!(&with[with.len() - 2..], &["--", "ls"]);
+        assert_eq!(&without[without.len() - 2..], &["--", "ls"]);
+        // … and differ ONLY in the MYSBX_MULTIPLEXER value.
+        let strip = |argv: &[String]| -> Vec<String> {
+            argv.iter()
+                .filter(|a| *a != "MYSBX_MULTIPLEXER" && *a != "workmux" && *a != "none")
+                .cloned()
+                .collect()
+        };
+        assert_eq!(strip(&with), strip(&without));
+        let identity = |argv: &[String], value: &str| {
+            argv.windows(3)
+                .any(|w| w[0] == "--setenv" && w[1] == "MYSBX_MULTIPLEXER" && w[2] == value)
+        };
+        assert!(identity(&with, "workmux"));
+        assert!(identity(&without, "none"));
     }
 
     #[test]

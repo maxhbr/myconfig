@@ -54,6 +54,12 @@ HOME
 PATH
 /synth/bin
 --setenv
+MYSBX_BACKEND
+bubblewrap
+--setenv
+MYSBX_MULTIPLEXER
+none
+--setenv
 SSL_CERT_FILE
 /nix/store/aaaa-nss-cacert/etc/ssl/certs/ca-bundle.crt
 --setenv

@@ -31,6 +31,12 @@ HOME
 --setenv
 PATH
 /synth/bin
+--setenv
+MYSBX_BACKEND
+bubblewrap
+--setenv
+MYSBX_MULTIPLEXER
+none
 --chdir
 /synth/repo
 --
