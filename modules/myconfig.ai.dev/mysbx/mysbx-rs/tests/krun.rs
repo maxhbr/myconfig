@@ -822,3 +822,43 @@ fn a_dest_below_an_unbaked_share_root_is_refused() {
     )
     .is_ok());
 }
+
+#[test]
+fn the_chdir_record_carries_the_repo_root_verbatim() {
+    // bd myconfig-mr4: the manifest's chdir record is what the guest
+    // init cd's into AND (since the fix) what it exports as PWD, so
+    // the record must carry the repo root's OWN spelling. The builder
+    // is pure — it never rewrites the root — so a logical (symlinked)
+    // repo.root spelling reaches the guest unchanged, and the guest's
+    // payload then starts with the sandbox path in $PWD instead of the
+    // virtiofs backing path.
+    let argv = run(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    let chdir = argv
+        .windows(2)
+        .find(|w| w[0] == "--chdir")
+        .map(|w| &w[1])
+        .expect("the --chdir flag");
+    assert_eq!(chdir, "/home/synth/repo");
+    // A differently spelled root flows through the same way — the
+    // regression guard of the parity fix: the builder must not
+    // canonicalize the root into the backing spelling.
+    let mut repo = synth_repo();
+    repo.root = PathBuf::from("/home/synth/repo-linked");
+    let argv = run(
+        &base(true),
+        &repo,
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    let chdir = argv
+        .windows(2)
+        .find(|w| w[0] == "--chdir")
+        .map(|w| &w[1])
+        .expect("the --chdir flag");
+    assert_eq!(chdir, "/home/synth/repo-linked");
+}

@@ -114,6 +114,56 @@ class InitTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_chdir_exports_the_logical_pwd(self):
+        # bd myconfig-mr4: the workspace share's sandbox path is a SYMLINK
+        # at the virtiofs backing mount (finding 9), so a payload shell
+        # that starts without a usable $PWD derives one from getcwd() --
+        # the PHYSICAL backing path. The init must therefore pin the
+        # chdir record's spelling in the exec environment: cd through
+        # the symlink, then export PWD=<the record>. This executes the
+        # REAL generated init text (cd + export + a probe payload)
+        # under the baked static busybox, with the symlinked layout the
+        # guest builds, and checks both the exported PWD and the
+        # physical getcwd a tool still honestly reports.
+        start = INIT.index('if [ -n "$manifest_chdir" ]; then')
+        end = INIT.index("\nfi\n", start) + len("\nfi\n")
+        block = INIT[start:end]
+        self.assertIn('export PWD="$manifest_chdir"', block,
+                      "the init lost the PWD export of the parity fix")
+        self.assertLess(INIT.index('cd "$manifest_chdir"'),
+                         INIT.index('export PWD="$manifest_chdir"'),
+                         "the PWD export must follow the cd")
+        backing = self.base / "stage-rw/workspace"
+        backing.mkdir(parents=True)
+        logical = self.base / "home/synth/repo"
+        logical.parent.mkdir(parents=True)
+        os.symlink(backing, logical)
+        payload = (
+            "set -eu\n"
+            'BB=%s\n'
+            'manifest_chdir=%s\n'
+            'fail() { echo "mysbx-init: $*" >&2; exit 125; }\n'
+            'step() { echo "mysbx-init: $*"; }\n'
+            + block
+            + '\n[ "$PWD" = "$1" ] || { echo "PWD=$PWD want=$1" >&2; exit 9; }\n'
+            '\n[ "$(pwd -P)" = "$2" ] || { echo "pwdP=$(pwd -P) want=$2" >&2; exit 9; }\n'
+            'echo "mysbx-test: PWD=$PWD physical=$(pwd -P)"\n'
+        ) % (
+            shlex.quote(str(ROOTFS / "bin/busybox")),
+            shlex.quote(str(logical)),
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", payload, "sh",
+             str(logical), str(backing)],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: PWD=%s" % logical, result.stdout)
+        self.assertIn("physical=%s" % backing, result.stdout)
+
     def test_reconcile_precedes_overlay_setup(self):
         phases = [
             'done < "$records_file"',

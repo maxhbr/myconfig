@@ -47,3 +47,35 @@ document, not the runbook.
 
 dak.10's scripted acceptance: COMPLETE (both variants smoke-pass on
 a real /dev/kvm host).
+
+## 2026-10-07, no-KVM sandbox — the PWD parity fix (bd myconfig-mr4)
+
+No host run: this sandbox has no `/dev/kvm`, so §2.6's live probes
+are NOT yet run. What IS verified here, without a VM:
+
+- the diagnosis was re-examined against the built rootfs
+  (nix build of `krun.direct.rootfs` passes, its
+  krun-rootfs-test.py included):
+  - busybox ash 1.37.0 `cd` KEEPS `$PWD` logical through the
+    workspace symlink — the original root-cause note ("busybox cd
+    updates $PWD to the physical path") was wrong in detail;
+  - bash 5.3 keeps an inherited logical `$PWD`; it derives the
+    PHYSICAL spelling from `getcwd()` only when `$PWD` is absent or
+    names another directory;
+  - `/init.krun` and libkrun 1.19.5 never set `PWD` at all
+    (verified in the binaries' strings).
+- the fix (guest init: `export PWD=$manifest_chdir` after the
+  manifest chdir) is exercised by the rootfs build's own validation:
+  the new `test_chdir_exports_the_logical_pwd` runs the REAL
+  generated init block under the baked busybox with the symlinked
+  guest layout and asserts `PWD`=<logical>, `pwd -P`=<backing>.
+  All 11 rootfs tests pass; the cargo krun suite (26) and argv
+  suite (199) pass; the krun golden fixtures are unchanged (no argv
+  change).
+- the mux paths were checked by simulation: the tmux entry started
+  with the init's exported PWD keeps the logical spelling in panes
+  (bash validates an inherited PWD that names the same directory).
+
+Remaining, real-KVM only: run §2.6 of the runbook on 'thing' or
+f13 — the interactive `$PWD`, a mux pane's `$PWD`, and `pwd -P`
+inside a real guest — and append the block here.
