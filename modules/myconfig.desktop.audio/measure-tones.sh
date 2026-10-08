@@ -47,6 +47,8 @@ Options:
   --normalize MIN MAX
   --silence-threshold DBFS
   --min-response-span DB
+      Minimum frequency-response span required separately in each of
+      left, right, and stereo modes. Default: 3.0 dB
   --sources all|default|"SOURCE1,SOURCE2,..."
   --list-sources
   --help
@@ -150,7 +152,7 @@ echo "Measurements:        $MEASUREMENTS per frequency and channel mode"
 echo "Tone level:          $LEVEL"
 echo "Normalization:       ${NORM_MIN}-${NORM_MAX} Hz, independently per mic/mode"
 echo "Silence threshold:   ${SILENCE_THRESHOLD_DBFS} dBFS"
-echo "Min response span:   ${MIN_RESPONSE_SPAN_DB} dB"
+echo "Min response span:   ${MIN_RESPONSE_SPAN_DB} dB per playback mode"
 echo
 echo "Candidate capture sources:"
 for i in "${!SOURCES[@]}"; do
@@ -291,30 +293,73 @@ for i in "${!SOURCES[@]}"; do
 done
 
 # Reject silent or non-responsive pseudo-inputs.
+#
+# IMPORTANT: responsiveness is tested *inside each playback mode*.
+# A bogus input can otherwise pass validation if, for example, it reports one
+# constant value for mono playback and a different constant value for stereo.
+# Such an input has a large span across modes, but zero frequency response
+# within every mode.  We therefore require every mode to contain enough usable
+# frequency points AND to show at least MIN_RESPONSE_SPAN_DB of variation over
+# frequency.
 ACTIVE="${TMPDIR}/active.tsv"
 : > "$ACTIVE"
-NUM_POINTS=$(( ${#FREQUENCIES[@]} * ${#MODES[@]} ))
-MIN_ACTIVE_POINTS="$(awk -v n="$NUM_POINTS" -v fraction="$MIN_ACTIVE_FRACTION" 'BEGIN { x=n*fraction; printf "%d", (int(x)==x ? x : int(x)+1) }')"
+NUM_FREQS=${#FREQUENCIES[@]}
+NUM_POINTS=$(( NUM_FREQS * ${#MODES[@]} ))
+MIN_ACTIVE_FREQS="$(awk -v n="$NUM_FREQS" -v fraction="$MIN_ACTIVE_FRACTION" 'BEGIN { x=n*fraction; printf "%d", (int(x)==x ? x : int(x)+1) }')"
 
 echo
-echo "Source validation:"
+echo "Source validation (frequency response checked independently per L/R/stereo mode):"
 ACTIVE_COUNT=0
 for i in "${!SOURCES[@]}"; do
     mic=$((i + 1))
     source="${SOURCES[$i]}"
-    usable="$(awk -F '\t' -v m="$mic" '$1 == m { n++ } END { print n + 0 }' "$SUMMARY")"
-    response_span="$(awk -F '\t' -v m="$mic" '$1 == m { if (!seen || $5 < min) min=$5; if (!seen || $5 > max) max=$5; seen=1 } END { if (!seen) print 0; else printf "%.3f", max-min }' "$SUMMARY")"
-    enough_data="$(awk -v u="$usable" -v min="$MIN_ACTIVE_POINTS" 'BEGIN { print (u >= min ? 1 : 0) }')"
-    responsive="$(awk -v s="$response_span" -v min="$MIN_RESPONSE_SPAN_DB" 'BEGIN { print (s >= min ? 1 : 0) }')"
 
-    if (( enough_data && responsive )); then
-        printf '%d\t%s\t%d\t%s\n' "$mic" "$source" "$usable" "$response_span" >> "$ACTIVE"
+    all_modes_ok=1
+    total_usable=0
+    min_mode_span=""
+    diagnostics=""
+
+    for mode in "${MODES[@]}"; do
+        usable_mode="$(awk -F '\t' -v m="$mic" -v mode="$mode" '$1 == m && $3 == mode { n++ } END { print n + 0 }' "$SUMMARY")"
+
+        span_mode="$(awk -F '\t' -v m="$mic" -v mode="$mode" '
+            $1 == m && $3 == mode {
+                if (!seen || $5 < min) min=$5
+                if (!seen || $5 > max) max=$5
+                seen=1
+            }
+            END {
+                if (!seen) print 0
+                else printf "%.3f", max-min
+            }
+        ' "$SUMMARY")"
+
+        total_usable=$((total_usable + usable_mode))
+
+        if [[ -z "$min_mode_span" ]]; then
+            min_mode_span="$span_mode"
+        else
+            min_mode_span="$(awk -v a="$min_mode_span" -v b="$span_mode" 'BEGIN { printf "%.3f", (a < b ? a : b) }')"
+        fi
+
+        enough_mode="$(awk -v u="$usable_mode" -v min="$MIN_ACTIVE_FREQS" 'BEGIN { print (u >= min ? 1 : 0) }')"
+        responsive_mode="$(awk -v s="$span_mode" -v min="$MIN_RESPONSE_SPAN_DB" 'BEGIN { print (s >= min ? 1 : 0) }')"
+
+        if (( ! enough_mode || ! responsive_mode )); then
+            all_modes_ok=0
+        fi
+
+        diagnostics+="${mode}=${usable_mode}/${NUM_FREQS},span=${span_mode}dB  "
+    done
+
+    if (( all_modes_ok )); then
+        # Keep the ACTIVE file format stable for the rest of the script:
+        # mic, source, total usable points, minimum per-mode response span.
+        printf '%d\t%s\t%d\t%s\n' "$mic" "$source" "$total_usable" "$min_mode_span" >> "$ACTIVE"
         ACTIVE_COUNT=$((ACTIVE_COUNT + 1))
-        printf '  Mic %-2d ACTIVE    %2d/%d points   span=%6.2f dB  %s\n' "$mic" "$usable" "$NUM_POINTS" "$response_span" "$source"
-    elif (( ! enough_data )); then
-        printf '  Mic %-2d EXCLUDED  %2d/%d points   insufficient data  %s\n' "$mic" "$usable" "$NUM_POINTS" "$source"
+        printf '  Mic %-2d ACTIVE    %s%s\n' "$mic" "$diagnostics" "$source"
     else
-        printf '  Mic %-2d EXCLUDED  %2d/%d points   span=%6.2f dB < %.2f dB  %s\n' "$mic" "$usable" "$NUM_POINTS" "$response_span" "$MIN_RESPONSE_SPAN_DB" "$source"
+        printf '  Mic %-2d EXCLUDED  %s%s\n' "$mic" "$diagnostics" "$source"
     fi
 done
 
