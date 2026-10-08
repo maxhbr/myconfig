@@ -913,10 +913,12 @@ enum RunMode {
 /// The terminal is pinned by the Nix wrapper as `MYSBX_TERMINAL`
 /// (the `alacritty` of `myconfig.ai.mysbx.terminal.package`); the
 /// `alacritty` fallback keeps a plain `cargo run` working unwrapped,
-/// like `MYSBX_BWRAP`'s `bwrap` fallback. `--working-directory` and
-/// `--command` are alacritty's own options — the terminal is a GUI
-/// program, so this is one place the crate knowingly names another
-/// program's command line rather than re-exec'ing itself.
+/// like `MYSBX_BWRAP`'s `bwrap` fallback. `--working-directory`,
+/// `--hold` and `--command` are alacritty's own options — the terminal
+/// is a GUI program, so this is one place the crate knowingly names
+/// another program's command line rather than re-exec'ing itself.
+/// `--hold` keeps the window open after the inner mysbx exits, so the
+/// log it printed stays readable instead of vanishing with the window.
 ///
 /// The `gui` form waits for neither the sandbox nor the terminal: it
 /// forks ([`gui_detached`]) and the parent returns as soon as the
@@ -962,6 +964,12 @@ fn gui(flags: Flags, args: &[String]) -> i32 {
     let mut cmd = std::process::Command::new(&terminal);
     cmd.arg("--working-directory")
         .arg(&cwd)
+        // `--hold` keeps the window open after the inner mysbx exits,
+        // so the sandbox's own output (an interactive run's final
+        // lines, a refused backend's error) stays readable instead of
+        // vanishing with the window. Alacritty's own option, like the
+        // two around it.
+        .arg("--hold")
         .arg("--command")
         .arg(&self_exe)
         .args(args)

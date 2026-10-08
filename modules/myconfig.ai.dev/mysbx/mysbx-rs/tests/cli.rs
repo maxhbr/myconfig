@@ -4202,6 +4202,13 @@ fn gui_passes_the_tail_verbatim_to_a_mysbx_in_the_cwd() {
         "the stub's argv is the terminal's: {recorded}"
     );
     assert_eq!(lines.next(), Some(repo.to_str().unwrap()));
+    // The window must not close under the log: `--hold` keeps it open
+    // after the inner mysbx exits.
+    assert_eq!(
+        lines.next(),
+        Some("--hold"),
+        "the argv pins --hold: {recorded}"
+    );
     assert_eq!(lines.next(), Some("--command"));
     let inner = lines.next().unwrap();
     // The inner mysbx is THIS mysbx: the wrapped binary the test drives,
@@ -4385,7 +4392,7 @@ fn gui_detaches_and_returns_before_the_terminal_exits() {
     // does arrive, with the D15 window content — the stub's argv.
     let recorded = wait_for_file(&out);
     assert!(
-        recorded.contains("--command") && recorded.contains("mysbx"),
+        recorded.contains("--command") && recorded.contains("--hold") && recorded.contains("mysbx"),
         "the terminal ran the same mysbx: {recorded}"
     );
 }

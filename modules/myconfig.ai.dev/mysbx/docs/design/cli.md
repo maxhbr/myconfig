@@ -402,7 +402,9 @@ D5/D8), and the error names the accepted set.
 
 `mysbx gui ARG...` starts the terminal emulator (alacritty, pinned by the
 Nix wrapper as `MYSBX_TERMINAL` from `myconfig.ai.mysbx.terminal.package`)
-with `--working-directory` on the current directory and `--command` on
+with `--working-directory` on the current directory, `--hold` (so the
+window stays open after the inner mysbx exits and its log remains
+readable) and `--command` on
 this same `mysbx` — by absolute path, `current_exe`, never a PATH lookup —
 with the whole argument tail passed through verbatim. `mysbx gui ARG1
 ARG2` therefore becomes `mysbx ARG1 ARG2` in the window.
@@ -431,7 +433,7 @@ through.
 **The terminal is pinned, not looked up.** `MYSBX_TERMINAL` is an
 absolute store path under Nix (the same wrapper idiom as `MYSBX_BWRAP`);
 the `alacritty` fallback serves a plain `cargo run`, like `bwrap` does.
-`--working-directory` and `--command` are alacritty's own options — the
+`--working-directory`, `--hold` and `--command` are alacritty's own options — the
 one place the crate knowingly names another program's command line. A
 terminal that cannot be started is a runtime failure (`1`) naming it.
 
