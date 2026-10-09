@@ -326,7 +326,7 @@ in
             "niri"
             # "niri-plain"
             "labwc"
-            # "river"
+            "river"
             # "plasma6"
             # "dwl"
             # "qtile"
