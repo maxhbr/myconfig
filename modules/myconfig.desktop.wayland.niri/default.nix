@@ -16,8 +16,9 @@ let
   # without an explicit variable list. That bare form is deprecated by systemd
   # and on newer systemd versions aborts the session.
   # See https://github.com/niri-wm/niri/issues/254
-  # Use the upstream niri flake package (github:niri-wm/niri).
-  niri = inputs.niri.packages.${pkgs.stdenv.hostPlatform.system}.niri.overrideAttrs (old: {
+  # Build upstream niri against the host libc so it can load the system Mesa driver.
+  niriPkgs = pkgs.extend inputs.niri.overlays.default;
+  niri = niriPkgs.niri.overrideAttrs (old: {
     postInstall = (old.postInstall or "") + ''
       if [ -e "$out/bin/niri-session" ]; then
         substituteInPlace "$out/bin/niri-session" \
@@ -191,9 +192,8 @@ in
               '';
             in
             {
-              home.sessionVariables = {
-                DISPLAY = ":0";
-              };
+              # Let niri's integrated Xwayland-satellite manage DISPLAY.
+              # A global DISPLAY also makes TTY launches select the nested backend.
               home.packages = [
                 niri
                 niri-xwayland-satellite
@@ -213,7 +213,6 @@ in
                         cat <<EOF >$out/config.kdl
                         environment {
                             QT_QPA_PLATFORM "wayland"
-                            DISPLAY "${config.home.sessionVariables.DISPLAY}"
                             ELECTRON_OZONE_PLATFORM_HINT "${nixosConfig.environment.sessionVariables.ELECTRON_OZONE_PLATFORM_HINT}"
                         }
 
