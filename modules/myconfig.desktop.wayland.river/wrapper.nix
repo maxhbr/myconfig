@@ -8,7 +8,7 @@
   extraSessionCommands ? "",
   dbus,
   withGtkWrapper ? false,
-  wrapGAppsHook,
+  wrapGAppsHook3,
   gdk-pixbuf,
   glib,
   gtk3,
@@ -45,7 +45,7 @@ symlinkJoin {
   paths = (optional withBaseWrapper baseWrapper) ++ [ river ] ++ extraPaths;
 
   strictDeps = false;
-  nativeBuildInputs = [ makeWrapper ] ++ (optional withGtkWrapper wrapGAppsHook);
+  nativeBuildInputs = [ makeWrapper ] ++ (optional withGtkWrapper wrapGAppsHook3);
 
   buildInputs = optionals withGtkWrapper [
     gdk-pixbuf
@@ -67,9 +67,13 @@ symlinkJoin {
   '';
 
   passthru = {
-    inherit (river.passthru) tests;
     providedSessions = [ "river" ];
   };
 
-  inherit (river) meta man;
+  meta = (river.meta or { }) // {
+    # the symlinkJoin only has the `out` output; upstream meta lists
+    # out+man which makes `nix build` fail with "bad 'meta.outputsToInstall'"
+    outputsToInstall = [ "out" ];
+  };
+  inherit (river) man;
 }
