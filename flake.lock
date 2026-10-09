@@ -48,11 +48,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1791470452,
-        "narHash": "sha256-hSwQ73CkBloZJ+7ZX2mMllq9OvkXMGecCGlRDj0LMKU=",
+        "lastModified": 1791547987,
+        "narHash": "sha256-MW9NzsBVVIrNu2YMBb92c7400nXGUFmy6ruOaYmlF0I=",
         "owner": "agent-of-empires",
         "repo": "agent-of-empires",
-        "rev": "efc8edc5fa1e93275414c6f6f268a55cbb91e18e",
+        "rev": "fd56b2690729fb17fa30a819d6d0d330542143f9",
         "type": "github"
       },
       "original": {
@@ -404,11 +404,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1791532294,
-        "narHash": "sha256-RWDyyPFCbKqRpOkRwdvwrYkNOodg+jGbIICmmgTUgIQ=",
+        "lastModified": 1791556453,
+        "narHash": "sha256-sMmxoxLZMma8VaUuNhSNod/eEiWhaCCigOXgeLv75E0=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "86305a791e801671413f715d6861643990d69236",
+        "rev": "0a5f130dc0db8399a6f4981c8e6d99784c1ea99f",
         "type": "github"
       },
       "original": {
@@ -421,11 +421,11 @@
     "mattpocock-skills": {
       "flake": false,
       "locked": {
-        "lastModified": 1791449074,
-        "narHash": "sha256-1QwFBwG+gORvDvW4HM0LrZlHZKmKtWr7pUHU0MAXF2Y=",
+        "lastModified": 1791543409,
+        "narHash": "sha256-NljCSZNI3sZ+vbCw7pRdrwR7try4BxOFp4gdjuWYtzs=",
         "owner": "mattpocock",
         "repo": "skills",
-        "rev": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+        "rev": "49dd158d1076134a641b33efb035946536778336",
         "type": "github"
       },
       "original": {
@@ -442,11 +442,11 @@
         "spectrum": "spectrum"
       },
       "locked": {
-        "lastModified": 1791472515,
-        "narHash": "sha256-U9djtZHWp7NmK4umatdJaS11cgAUDtWPsAx4iljkcRY=",
+        "lastModified": 1791551030,
+        "narHash": "sha256-jTx3O3MKqPjv+cDfBFQ5zlKECBEwzF91scC+mSumZyE=",
         "owner": "astro",
         "repo": "microvm.nix",
-        "rev": "45c1f41ed587b0be10afeb7c253b68f6d9dfff68",
+        "rev": "f13928fe9900e91709d7ce581eefa47eaafa79e1",
         "type": "github"
       },
       "original": {
@@ -759,11 +759,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1791532625,
-        "narHash": "sha256-orKNWhlzkQoQoqGqCzwvMbzginSISqhU4i4ZavjVtV4=",
+        "lastModified": 1791556608,
+        "narHash": "sha256-9mqux7N7UAWgyg9Yic4mPD37sgajnDBf9gsCLDeChPo=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "f8dd0d8a8a176614dc0d7999af91ecd93664fb15",
+        "rev": "f501c178c638dee73c1dc1a1ed7f7f4a1be576d0",
         "type": "github"
       },
       "original": {
