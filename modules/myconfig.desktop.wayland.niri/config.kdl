@@ -534,6 +534,7 @@ binds {
     Mod+S { focus-workspace 6; }
     Mod+N { focus-workspace 7; }
     Mod+R { focus-workspace 8; }
+    Mod+T { focus-workspace 9; }
     Mod+Ctrl+U { move-column-to-workspace 1; }
     Mod+Ctrl+I { move-column-to-workspace 2; }
     Mod+Ctrl+A { move-column-to-workspace 3; }
