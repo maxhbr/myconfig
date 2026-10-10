@@ -57,12 +57,13 @@ let
       }
       ''
         mkdir -p $out/bin
-        substituteAllInPlace $src
-        substituteInPlace $src \
+        # the store path is read-only, work on a copy in the build dir
+        cp $src init
+        chmod +w init
+        substituteInPlace init \
           --replace-fail "@@river-extra-init@@" ${lib.escapeShellArg additionalInit}
-        install -m755 $src $out/bin/init
-        shellcheck -x $out/bin/init
-        mv $out/bin/init $out/bin/river-init
+        install -m755 init $out/bin/river-init
+        shellcheck -x $out/bin/river-init
       '';
   uwsmCfg = cfg.desktop.wayland.uwsm;
   # Compositor entrypoint used when running river under uwsm.
