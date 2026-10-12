@@ -12,13 +12,6 @@
 # https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF
 {
   modelsPullDir,
-  # PR-28243 build (qwen4exp MTP graph + cross-model tensor borrowing)
-  # used by the `-MTP` entries below. A stock build — including the
-  # stock nixpkgs llama-cpp that serves the non-MTP entries — has no
-  # MTP graph for `qwen4exp` and cannot use the draft heads at all;
-  # see nixpkgs.overlays.llama-cpp-pr-28243.nix and the requirements
-  # section of the unsloth MTP README.
-  mtpServerPackage,
 }:
 let
   # `sequential` — serve a single request at a time.
@@ -68,13 +61,17 @@ let
   # serialised `parallel = 1` + explicit `--parallel 1` (same reason as
   # `sequential_variant` above).
   #
+  # Self-contained heads only: the `shared-` files omit `token_embd`,
+  # which llama.cpp requires in every GGUF — cross-model tensor
+  # borrowing (`borrow_shared_tensor`) was dropped when PR #28243 was
+  # superseded by the merged #29761 implementation.
+  #
   # Same standalone-entry shape as the `Qwen3.8-27B-MTP-*` models in
   # Qwen3.8-27B.nix: the entry re-declares the base shard spec in its own
   # self-contained `pull-models` (the merged list in default.nix is
   # de-duplicated, so nothing is downloaded twice).
   mk_mtp_model = quant: mtpFile: {
     name = "Qwen3.8-Flash-Next-UD-${quant}-MTP";
-    serverPackage = mtpServerPackage;
     path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-${quant}/Qwen3.8-Flash-Next-UD-${quant}-00001-of-0000${
       if quant == "IQ4_XS" then "3" else "4"
     }.gguf";
@@ -167,20 +164,14 @@ in
     }
     # MTP speculative decoding of the same two shards.
     #
-    # Head choice per the README's "Which file" table: the
-    # `shared-Q4_K_M` head is the recommended small pairing (1.78 GB,
-    # ~2 points less acceptance than shared-Q8_0's 66.1%); it borrows
-    # the token embedding and output projection from the target model.
-    # For the UD-IQ4_XS main the *self-contained* Q4_K_M head (2.60 GB)
-    # is used instead, so the two entries exercise both flavours the
-    # repo ships at Q4_K_M. A `shared-` head logs one harmless error
-    # line at startup (the automatic memory fit sizes the draft in
-    # isolation, so the borrowing measurement fails and the fit
-    # proceeds without the draft's memory); the 124 GiB GTT/TTM pool of
-    # the gfx1151 host has ample headroom for the uncounted ~1.8 GB.
+    # Head choice per the README's "Which file" table: Q4_K_M is the
+    # recommended small pairing. The self-contained head (2.60 GB) is
+    # used for both quantisations — the `shared-` head cannot load
+    # (see `mk_mtp_model` above). The 124 GiB GTT/TTM pool of the
+    # gfx1151 host has ample headroom for the extra ~0.8 GB.
     # No deliberate `ctxSize` / `cacheType` retuning: same GGUF defaults
     # as the non-MTP entries.
     (mk_mtp_model "IQ4_XS" "mtp-Qwen3.8-Flash-Next-Q4_K_M.gguf")
-    (mk_mtp_model "Q4_K_XL" "mtp-Qwen3.8-Flash-Next-shared-Q4_K_M.gguf")
+    (mk_mtp_model "Q4_K_XL" "mtp-Qwen3.8-Flash-Next-Q4_K_M.gguf")
   ];
 }

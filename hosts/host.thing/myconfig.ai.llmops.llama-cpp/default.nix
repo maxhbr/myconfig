@@ -24,12 +24,12 @@ let
     sharpTemplate = ../../../modules/myconfig.ai.llmops/myconfig.ai.llmops.llama-cpp/templates/sharp.jinja;
   };
   hy3 = import ./Hy3-Q2_K_L.nix { inherit modelsPullDir; };
-  # The `-MTP` entries need the PR-28243 build: mainline has no MTP
-  # graph for `qwen4exp` yet (see
-  # doc/TODOs/drop-llama-cpp-pr-28243-pin-when-qwen4exp-mtp-merges.md).
+  # The `-MTP` entries need a llama.cpp build with the qwen4exp MTP
+  # graph — mainline ships it since the merge of #29761 (llama.cpp
+  # v0.6.0), which the pinned nixpkgs already builds, so the stock
+  # build is used everywhere.
   qwen38_flash_next = import ./Qwen3.8-Flash-Next.nix {
     inherit modelsPullDir;
-    mtpServerPackage = patched-llama-cpp-pr-28243-pkg;
   };
   nex_n25_mini = import ./Nex-N2.5-mini.nix { inherit modelsPullDir; };
   # Helper to set the llama-swap group on a list of models.
@@ -165,19 +165,6 @@ let
           && !(lib.hasInfix "NVFP4" m.name)
         ) rtxModels
       );
-
-  # PR-28243 patched build for qwen4exp MTP (Qwen3.8-Flash-Next
-  # speculative decoding). Only the `-MTP` Flash-Next entries need
-  # this — it is set per-model via the `serverPackage` option so the
-  # rest of the host keeps the stock nixpkgs build. The MTP entries
-  # run on Vulkan0/ROCm0 (container llama-swap) and Vulkan1 (host
-  # scriptOnlyModels), never on CUDA, so ROCm+Vulkan suffices.
-  patched-llama-cpp-pr-28243-pkg = pkgs.llama-cpp-pr-28243.override {
-    rocmSupport = true;
-    vulkanSupport = true;
-    cudaSupport = false;
-    blasSupport = false;
-  };
 
   gfx-llama-cpp-config = {
     serviceVariant = "llama-swap";
