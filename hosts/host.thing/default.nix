@@ -55,9 +55,6 @@
         ];
       }
     )
-    # qwen4exp MTP for Qwen3.8-Flash-Next; see
-    # doc/TODOs/drop-llama-cpp-pr-28243-pin-when-qwen4exp-mtp-merges.md
-    ./nixpkgs.overlays.llama-cpp-pr-28243.nix
     ./myconfig.ai.llmops.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix
     ./myconfig.ai.vllm
