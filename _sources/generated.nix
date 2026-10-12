@@ -32,13 +32,13 @@
   };
   litellm-grafana-dashboard = {
     pname = "litellm-grafana-dashboard";
-    version = "02f61c9c420b9aa9de10ff673098ad7132b78f5b";
+    version = "7efce7f8e05e58fb86e006a6427ab39b6db467fb";
     src = fetchurl {
-      url = "https://raw.githubusercontent.com/BerriAI/litellm/02f61c9c420b9aa9de10ff673098ad7132b78f5b/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
+      url = "https://raw.githubusercontent.com/BerriAI/litellm/7efce7f8e05e58fb86e006a6427ab39b6db467fb/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
       name = "litellm-grafana-dashboard.json";
       sha256 = "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=";
     };
-    date = "2026-10-05";
+    date = "2026-10-12";
   };
   pi-token-speed = {
     pname = "pi-token-speed";
@@ -54,14 +54,14 @@
   };
   simple-english = {
     pname = "simple-english";
-    version = "32ea2d3f4404bfbff162c1861e5ae4f1bcc628b3";
+    version = "a6fcb4fde098b33617cc1578d151ebf58774b883";
     src = fetchFromGitHub {
       owner = "AminBlg";
       repo = "SimpleEnglish";
-      rev = "32ea2d3f4404bfbff162c1861e5ae4f1bcc628b3";
+      rev = "a6fcb4fde098b33617cc1578d151ebf58774b883";
       fetchSubmodules = false;
-      sha256 = "sha256-mWs9n465FMiMcyxD9diTV6olXWuTy2wW+bZ475Vc3to=";
+      sha256 = "sha256-p1ffLp/3Yg1yBfCikBwua3ieVBCNyZfTZH6GBAxNREA=";
     };
-    date = "2026-09-30";
+    date = "2026-10-05";
   };
 }
