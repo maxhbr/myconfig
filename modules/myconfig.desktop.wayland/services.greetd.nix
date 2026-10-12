@@ -9,6 +9,7 @@ let
   cfg = config.myconfig;
   user = myconfig.user;
   selectedSessions = cfg.desktop.wayland.selectedSessions;
+  persistentCacheDir = "/persistent/cache";
   cmd_for_session = session: cfg.desktop.wayland.sessions."${session}".command;
   cmd0 = if selectedSessions == [ ] then "tmux" else cmd_for_session (lib.elemAt selectedSessions 0);
   sessionStarters = pkgs.symlinkJoin {
@@ -34,7 +35,7 @@ in
         let
           tuigreetSettings = {
             default_session = {
-              command = "${pkgs.tuigreet}/bin/tuigreet --width 120 --remember --remember-session --sessions /etc/greetd/wayland-sessions/ --time --cmd '${cmd0}'";
+              command = "${pkgs.tuigreet}/bin/tuigreet --width 120 --remember --remember-session --sessions /etc/greetd/wayland-sessions/ --time --background doom --cmd '${cmd0}'";
               user = "greeter";
             };
           };
@@ -72,6 +73,22 @@ in
       system.nixos.tags = [ (lib.elemAt selectedSessions 0) ];
 
       home-manager.sharedModules = [ { home.packages = with pkgs; [ sessionStarters ]; } ];
+
+      # tuigreet stores its remembered session/user state in
+      # /var/cache/tuigreet/{lastsession,lastuser,...}, which lives on the
+      # tmpfs root on impermanence hosts and would be wiped on every boot.
+      environment.persistence."${persistentCacheDir}" =
+        lib.mkIf config.myconfig.persistence.impermanence.enable
+          {
+            directories = [
+              {
+                directory = "/var/cache/tuigreet";
+                user = "greeter";
+                group = "greeter";
+                mode = "0755";
+              }
+            ];
+          };
 
       services.greetd = {
         enable = true;
