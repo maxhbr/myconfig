@@ -185,7 +185,15 @@ in
                 pkgs.writeShellScriptBin scriptName ''
                   set -euo pipefail
                   set -x
+                  # the new alacritty window is its own terminal, not a tmux
+                  # pane — drop the inherited tmux markers so the et script
+                  # does not refuse to run and tools inside see the truth
+                  unset TMUX TMUX_P
+                  # --hold keeps the window open after the session ends, so
+                  # the last output (connection errors, exit status) stays
+                  # readable instead of vanishing with the window
                   exec alacritty -v \
+                          --hold \
                           --title "${name}" \
                           --class "Alacritty:${name}" \
                           --command "${tmuxSessionScript}" "$@"
@@ -206,7 +214,9 @@ in
                 in
                 pkgs.writeShellScriptBin scriptName ''
                   set -euo pipefail
+                  unset TMUX TMUX_P
                   exec alacritty -v \
+                          --hold \
                           --title "${name}" \
                           --class "Alacritty:${name}" \
                           --command "${lib.getExe sshScript}" "$@"
