@@ -29,16 +29,6 @@
   }
   "gfx1151:InternScience-Agents-A1-Q8_0"
   {
-    name = "gfx1151:MiMo-V2.6-Flash-RL-IQ2_S";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:MiMo-V2.6-Flash-RL-IQ2_S-dry";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
     name = "gfx1151:MiniMax-M2.7-UD-IQ4_NL";
     contextWindow = 131072;
     maxOutputTokens = 32768;
@@ -345,16 +335,6 @@
     maxOutputTokens = 65536;
   }
   "gfx1151:ROCm0:InternScience-Agents-A1-Q8_0"
-  {
-    name = "gfx1151:ROCm0:MiMo-V2.6-Flash-RL-IQ2_S";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:ROCm0:MiMo-V2.6-Flash-RL-IQ2_S-dry";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
   {
     name = "gfx1151:ROCm0:MiniMax-M2.7-UD-IQ4_NL";
     contextWindow = 131072;
