@@ -623,6 +623,10 @@
                   # wrapper (`git-branch-to-worktree`); shfmt is not covered
                   # by writeShellApplication's own shellcheck pass.
                   "modules/shell.git/bin/git-branch-to-worktree.sh"
+                  # litellm smoke-test harness: standalone script embedded into a
+                  # writeShellApplication wrapper (`litellm-smoke-test`); shfmt is
+                  # not covered by writeShellApplication's own shellcheck pass.
+                  "modules/myconfig.ai.llmops/bin/litellm-smoke-test.sh"
                   # The direct-libkrun spike runbook (bd myconfig-dak.1): a
                   # plain script executed by a human on a KVM host (f13).
                   "modules/myconfig.ai.dev/mysbx/nix/krun-direct-spike.sh"

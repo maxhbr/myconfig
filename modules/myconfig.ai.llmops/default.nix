@@ -27,6 +27,7 @@ in
     ./container.open-webui.nix
     ./services.litellm.nix
     ./litellm.proxy.nix
+    ./litellm.smoke-test.nix
     ./services.open-webui.nix
     ./services.searxng.nix
     ./services.tabby.nix

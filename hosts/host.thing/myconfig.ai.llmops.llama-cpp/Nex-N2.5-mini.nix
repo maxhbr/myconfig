@@ -13,9 +13,11 @@
 #
 # The GGUF repo ships optional `mmproj-nex-agi_Nex-N2.5-mini-f16.gguf`
 # and `mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf` vision projectors and
-# embeds the upstream chat template. Three quantised files are pulled
-# for this host (Q4_K_L and Q5_K_M on both backends, Q6_K_L on AMD
-# only); the repository also ships lower-precision and Q8 variants.
+# embeds the upstream chat template. Three quantisations are declared
+# here; Q4_K_L and Q6_K_L are currently served (Q4_K_L on both
+# backends, Q6_K_L on AMD only). Q5_K_M is disabled for now: it no
+# longer fits the available GPU memory.
+# The repository also ships lower-precision and Q8 variants.
 # The bf16 projector is pulled alongside every quantisation and each
 # entry gets a `:mmproj` variant (auto-generated, see lib/variants.nix)
 # serving the same GGUF plus
@@ -29,8 +31,8 @@
 # startup banner for provenance but NOT verified at runtime.
 #
 # Served on gfx1151 (Vulkan0/ROCm0, container llama-cpp) and on the RTX
-# backend (CUDA0/Vulkan0). Q4_K_L and Q5_K_M are available on both
-# backends; Q6_K_L is AMD-only. No deliberate `cacheType`
+# backend (CUDA0/Vulkan0). Q4_K_L is available on both backends;
+# Q6_K_L is AMD-only. No deliberate `cacheType`
 # retuning: leave the GGUF defaults and retune for the target GPU after
 # the first serving test.
 { modelsPullDir }:
@@ -59,22 +61,24 @@ let
     };
     ttl = 1800;
   };
-  q5 = {
-    name = "Nex-N2.5-mini-Q5_K_M";
-    path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q5_K_M.gguf";
-    pull-models = {
-      target_directory = modelsPullDir;
-      hf_spec = [
-        "bartowski/nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q5_K_M.gguf"
-        "bartowski/nex-agi_Nex-N2.5-mini-GGUF/mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf"
-      ];
-    };
-    sha256 = "2c1d8f13ceeb010cce801b733138559c4964475b";
-    variants = {
-      mmproj = mmprojVariant;
-    };
-    ttl = 1800;
-  };
+  # Q5_K_M is disabled: too large for the available GPU memory.
+  # The definition is kept below for when it fits again.
+  # q5 = {
+  #   name = "Nex-N2.5-mini-Q5_K_M";
+  #   path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q5_K_M.gguf";
+  #   pull-models = {
+  #     target_directory = modelsPullDir;
+  #     hf_spec = [
+  #       "bartowski/nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q5_K_M.gguf"
+  #       "bartowski/nex-agi_Nex-N2.5-mini-GGUF/mmproj-nex-agi_Nex-N2.5-mini-bf16.gguf"
+  #     ];
+  #   };
+  #   sha256 = "2c1d8f13ceeb010cce801b733138559c4964475b";
+  #   variants = {
+  #     mmproj = mmprojVariant;
+  #   };
+  #   ttl = 1800;
+  # };
   # q6 = {
   #    name = "Nex-N2.5-mini-Q6_K";
   #    path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q6_K.gguf";
@@ -104,8 +108,5 @@ let
 in
 {
   amdModels = [ q6 ];
-  rtxModels = [
-    q4
-    q5
-  ];
+  rtxModels = [ q4 ];
 }
